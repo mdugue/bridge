@@ -45,3 +45,6 @@ next-env.d.ts
 /test-results/
 /blob-report/
 /playwright/.cache/
+
+# POC tile data copied from data/ by scripts/prepare-data.ts
+/public/data/
