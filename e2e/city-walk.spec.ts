@@ -24,6 +24,9 @@ test("city page serves the viewer shell", async ({ page }) => {
 });
 
 test("city walk renders buildings, terrain and shadows", async ({ page }) => {
+  // Software-rendered WebGL plus the post-processing stack (SSAO, tilt-shift)
+  // makes every frame expensive on CI machines without a GPU.
+  test.setTimeout(240_000);
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   page.on("pageerror", (err) => pageErrors.push(String(err)));
@@ -52,8 +55,9 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     timeout: 120_000,
   });
 
-  // Renderer booted -> exactly one sized canvas.
-  const canvas = page.locator("canvas");
+  // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
+  // 2D canvases of its own; three.js tags its canvas with data-engine).
+  const canvas = page.locator("canvas[data-engine]");
   await expect(canvas).toBeVisible({ timeout: 60_000 });
   const box = await canvas.boundingBox();
   expect(box?.width ?? 0).toBeGreaterThan(0);
@@ -107,6 +111,27 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     buildingsBefore,
     { timeout: 30_000 }
   );
+
+  // Minimap teleport: the map is 192 px over the 2 km tile, so clicking
+  // (48, 48) must land the player near 412500 E / 5657500 N (quarter tile
+  // from the north-west corner).
+  await page.getByTestId("minimap").click({ position: { x: 48, y: 48 } });
+  const pose = await page.evaluate(() => window.__poc?.getPose?.());
+  expect(pose?.epsgX ?? 0).toBeGreaterThan(412_450);
+  expect(pose?.epsgX ?? 0).toBeLessThan(412_550);
+  expect(pose?.epsgY ?? 0).toBeGreaterThan(5_657_450);
+  expect(pose?.epsgY ?? 0).toBeLessThan(5_657_550);
+
+  // Style + tilt-shift toggles must not produce shader/render errors
+  // (caught by the console assertions below after a few frames).
+  await page.evaluate(() => {
+    window.__poc?.setStyle?.("clay");
+    window.__poc?.setStyle?.("standard");
+    window.__poc?.setStyle?.("ghost");
+    window.__poc?.setTiltShift?.(false);
+    window.__poc?.setTiltShift?.(true);
+  });
+  await page.waitForTimeout(500);
 
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);

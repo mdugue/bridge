@@ -5,6 +5,9 @@
  * touch `window` — the hook cannot leak into production.
  */
 
+import type { PlayerPose } from "./create-app";
+import type { CityStyleId } from "./visual-style";
+
 interface Xyz {
   x: number;
   y: number;
@@ -15,16 +18,24 @@ export interface PocDebugInfo {
   buildingCount: number;
   /** Demolishes the building under the screen-center crosshair. */
   demolishAtCrosshair?: () => void;
-  /** Teleports the camera (world/Y-up coordinates). */
+  /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
+  /** Current player pose in EPSG coordinates. */
+  getPose?: () => PlayerPose;
   /** Inserts the prescribed building (marker box without a glTF). */
   insertBuilding?: () => void;
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
   offset?: { cx: number; cy: number };
   ready: boolean;
+  /** Switches the city rendering style. */
+  setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
+  /** Toggles the tilt-shift miniature blur. */
+  setTiltShift?: (enabled: boolean) => void;
   shadowsEnabled: boolean;
+  /** Drops the player at EPSG coordinates, standing on the terrain. */
+  teleportTo?: (epsgX: number, epsgY: number) => void;
   terrainVertexCount: number;
 }
 

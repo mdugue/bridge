@@ -2,6 +2,7 @@ import {
   ACESFilmicToneMapping,
   Box3,
   Color,
+  Euler,
   Fog,
   Group,
   type Object3D,
@@ -19,7 +20,9 @@ import {
   utmToLatLng,
 } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
+import { buildingFootprints, type FootprintRect } from "@/lib/city/minimap";
 import { recenterOffset } from "@/lib/city/recenter";
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { CityJsonDocument } from "@/lib/city/types";
 import {
   type CityLayer,
@@ -30,14 +33,22 @@ import {
 } from "./city-layer";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createInsertedBuilding } from "./inserted-building";
+import { createPostStack } from "./post-stack";
 import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
+import {
+  applyCityStyle,
+  type CityStyleId,
+  createStyleResources,
+} from "./visual-style";
 
 const EYE_HEIGHT = 1.7;
 /** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
 const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 const SKY_COLOR = 0x9f_b6_cc;
+/** Default rendering style — the "context frame" ambition. */
+export const DEFAULT_CITY_STYLE: CityStyleId = "ghost";
 
 export interface CityWalkStats {
   buildingCount: number;
@@ -82,15 +93,21 @@ export interface CityWalkHandle {
    * Switches to fly mode so the ground clamp doesn't drag the camera down.
    */
   flyTo: (position: Xyz, lookAt: Xyz) => void;
+  /** current Building footprints (EPSG) — shrinks when demolishing */
+  getFootprints: () => FootprintRect[];
   getMovementMode: () => MovementMode;
   getPose: () => PlayerPose;
   insertBuilding: () => Promise<void>;
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
   setMovementMode: (mode: MovementMode) => void;
+  setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
+  setTiltShift: (enabled: boolean) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
+  /** DGM extent in EPSG coordinates — the minimap frame */
+  terrainBounds: TerrainBounds;
 }
 
 interface Xyz {
@@ -242,6 +259,12 @@ async function bootApp(
   const sunRig = createSunRig(scene, worldBounds, tileLatLng(cityData, offset));
   sunRig.update(opts.initialDate);
 
+  opts.onProgress?.("Preparing render styles…");
+  const styleResources = createStyleResources();
+  let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
+  applyCityStyle(cityLayer.group, currentStyle, styleResources);
+  const postStack = createPostStack(renderer, scene, camera);
+
   // Spawn at the recenter point (= world origin), standing on the terrain.
   const groundY = terrain.heightAt(offset.cx, offset.cy) ?? worldBounds.min.y;
   camera.position.set(0, groundY + EYE_HEIGHT, 0);
@@ -291,6 +314,8 @@ async function bootApp(
       return;
     }
     cityLayer = demolishObject(cityLayer, world, objectId);
+    // The reload produces bare loader meshes — re-dress them.
+    applyCityStyle(cityLayer.group, currentStyle, styleResources);
     emitStats();
   };
 
@@ -340,6 +365,7 @@ async function bootApp(
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
+    postStack.setSize(container.clientWidth, container.clientHeight);
   });
   resizeObserver.observe(container);
 
@@ -347,18 +373,24 @@ async function bootApp(
   let poseDue = 0;
   renderer.setAnimationLoop((time) => {
     timer.update(time);
-    movement.update(Math.min(timer.getDelta(), 0.05));
+    const dt = Math.min(timer.getDelta(), 0.05);
+    movement.update(dt);
     if (opts.onPose && timer.getElapsed() >= poseDue) {
       poseDue = timer.getElapsed() + 0.1;
       opts.onPose(getPose());
     }
-    renderer.render(scene, camera);
+    postStack.render(dt);
   });
 
   emitStats();
 
   return {
     setSun: (date) => sunRig.update(date),
+    setStyle: (style) => {
+      currentStyle = style;
+      applyCityStyle(cityLayer.group, style, styleResources);
+    },
+    setTiltShift: (enabled) => postStack.setTiltShift(enabled),
     insertBuilding,
     demolishAtCrosshair,
     flyTo: (position, lookAt) => {
@@ -377,12 +409,21 @@ async function bootApp(
         (ground ?? worldBounds.min.y) + EYE_HEIGHT,
         pos.z
       );
+      // Level the view (keep the compass heading, drop pitch/roll) — after
+      // an aerial pose the player would otherwise stare at the ground.
+      const level = new Euler(0, 0, 0, "YXZ");
+      level.setFromQuaternion(camera.quaternion);
+      level.x = 0;
+      level.z = 0;
+      camera.quaternion.setFromEuler(level);
       camera.updateMatrixWorld(true);
       opts.onPose?.(getPose());
     },
     getPose,
     getMovementMode: () => movement.getMode(),
     setMovementMode,
+    getFootprints: () => buildingFootprints(cityLayer.data),
+    terrainBounds: terrain.bounds,
     offset,
     dispose: () => {
       disposed = true;
@@ -392,7 +433,9 @@ async function bootApp(
       document.removeEventListener("keyup", onKeyUp);
       renderer.domElement.removeEventListener("click", onClick);
       controls.dispose();
+      postStack.dispose();
       disposeObject3D(scene);
+      styleResources.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     },

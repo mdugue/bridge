@@ -1,13 +1,44 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { format } from "date-fns";
+import { CalendarIcon, HousePlusIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
+import { Kbd } from "@/components/ui/kbd";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { FootprintRect } from "@/lib/city/minimap";
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
+  DEFAULT_CITY_STYLE,
+  type PlayerPose,
 } from "./create-app";
+import type { MovementMode } from "./fps-movement";
+import { Minimap } from "./minimap";
 import { updatePocDebug } from "./poc-debug";
+import { DEFAULT_TILT_SHIFT } from "./post-stack";
 import type { SunState } from "./sun-rig";
+import type { CityStyleId } from "./visual-style";
 
 interface Props {
   /** URL of the CityJSON tile, served from /public */
@@ -31,17 +62,9 @@ const INITIAL_MINUTES = 14 * 60;
 const MINUTES_STEP = 5;
 const LAST_MINUTE = 24 * 60 - MINUTES_STEP;
 
-function toDateInputValue(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/** Local-time instant from the date input value + minutes-of-day slider. */
-function composeDate(dateStr: string, minutes: number): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1, 0, minutes);
+/** Local-time instant from a calendar day + minutes-of-day slider. */
+function composeDate(day: Date, minutes: number): Date {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes);
 }
 
 function formatMinutes(minutes: number): string {
@@ -49,6 +72,12 @@ function formatMinutes(minutes: number): string {
   const m = String(minutes % 60).padStart(2, "0");
   return `${h}:${m}`;
 }
+
+const STYLE_LABELS: Record<CityStyleId, string> = {
+  standard: "Standard",
+  ghost: "Ghost",
+  clay: "Clay",
+};
 
 export default function CityWalk({
   citySrc,
@@ -58,6 +87,7 @@ export default function CityWalk({
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
+  const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
 
   const [status, setStatus] = useState<Status>({
     phase: "loading",
@@ -65,8 +95,20 @@ export default function CityWalk({
   });
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   const [sun, setSun] = useState<SunState | null>(null);
-  const [dateStr, setDateStr] = useState(() => toDateInputValue(INITIAL_DATE));
+  const [day, setDay] = useState(INITIAL_DATE);
   const [minutes, setMinutes] = useState(INITIAL_MINUTES);
+  const [style, setStyle] = useState<CityStyleId>(DEFAULT_CITY_STYLE);
+  const [tiltShift, setTiltShift] = useState(DEFAULT_TILT_SHIFT);
+  const [mode, setMode] = useState<MovementMode>("walk");
+  const [footprints, setFootprints] = useState<FootprintRect[]>([]);
+  const [bounds, setBounds] = useState<TerrainBounds | null>(null);
+
+  const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
+    poseListeners.current.add(cb);
+    return () => {
+      poseListeners.current.delete(cb);
+    };
+  }, []);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -83,7 +125,7 @@ export default function CityWalk({
       demSrc,
       demTfwSrc,
       insertedModelUrl,
-      initialDate: composeDate(toDateInputValue(INITIAL_DATE), INITIAL_MINUTES),
+      initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
       onProgress: (message) => {
         if (!cancelled) {
@@ -91,9 +133,24 @@ export default function CityWalk({
         }
       },
       onStats: (s) => {
+        if (cancelled) {
+          return;
+        }
+        setStats(s);
+        updatePocDebug({ ready: true, ...s });
+        const h = handleRef.current;
+        if (h) {
+          setFootprints(h.getFootprints());
+        }
+      },
+      onModeChange: (m) => {
         if (!cancelled) {
-          setStats(s);
-          updatePocDebug({ ready: true, ...s });
+          setMode(m);
+        }
+      },
+      onPose: (pose) => {
+        for (const cb of poseListeners.current) {
+          cb(pose);
         }
       },
     })
@@ -104,13 +161,17 @@ export default function CityWalk({
         }
         handle = h;
         handleRef.current = h;
-        setSun(
-          h.setSun(composeDate(toDateInputValue(INITIAL_DATE), INITIAL_MINUTES))
-        );
+        setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
+        setFootprints(h.getFootprints());
+        setBounds(h.terrainBounds);
         updatePocDebug({
           offset: h.offset,
           flyTo: h.flyTo,
           demolishAtCrosshair: h.demolishAtCrosshair,
+          getPose: h.getPose,
+          teleportTo: h.teleportTo,
+          setStyle: h.setStyle,
+          setTiltShift: h.setTiltShift,
           insertBuilding: () => {
             h.insertBuilding().catch(() => {
               // glTF failure is non-fatal; the box fallback can't fail
@@ -142,12 +203,10 @@ export default function CityWalk({
     };
   }, [citySrc, demSrc, demTfwSrc, insertedModelUrl]);
 
-  const updateSun = (nextDateStr: string, nextMinutes: number) => {
-    setDateStr(nextDateStr);
+  const updateSun = (nextDay: Date, nextMinutes: number) => {
+    setDay(nextDay);
     setMinutes(nextMinutes);
-    const state = handleRef.current?.setSun(
-      composeDate(nextDateStr, nextMinutes)
-    );
+    const state = handleRef.current?.setSun(composeDate(nextDay, nextMinutes));
     if (state) {
       setSun(state);
     }
@@ -160,20 +219,20 @@ export default function CityWalk({
       {status.phase === "loading" && (
         <output
           aria-live="polite"
-          className="absolute inset-0 flex items-center justify-center bg-slate-900/70 text-lg text-white"
+          className="absolute inset-0 flex items-center justify-center gap-3 bg-slate-900/70 text-lg text-white"
         >
+          <Spinner />
           {status.message}
         </output>
       )}
 
       {status.phase === "error" && (
-        <div
-          className="absolute inset-x-8 top-8 rounded-lg border border-red-400 bg-red-950/90 p-4 text-red-100 text-sm"
-          role="alert"
-        >
-          <p className="mb-1 font-semibold">Failed to start the city viewer</p>
-          <p className="break-words">{status.message}</p>
-        </div>
+        <Alert className="absolute inset-x-8 top-8" variant="destructive">
+          <AlertTitle>Failed to start the city viewer</AlertTitle>
+          <AlertDescription className="break-words">
+            {status.message}
+          </AlertDescription>
+        </Alert>
       )}
 
       {status.phase === "ready" && (
@@ -181,65 +240,159 @@ export default function CityWalk({
           {/* crosshair */}
           <div
             aria-hidden
-            className="absolute top-1/2 left-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
+            className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
           />
 
-          <div className="pointer-events-none absolute top-3 left-3 max-w-xs rounded-lg bg-black/60 p-3 text-white text-xs leading-5">
-            <p>
-              Click the view to capture the mouse · <b>WASD</b> walk ·{" "}
-              <b>Space/Shift</b> up/down · <b>R</b> demolish the building under
-              the crosshair · <b>B</b> insert a building · <b>Esc</b> release
-            </p>
-            {stats && (
-              <p className="mt-1 text-white/70">
-                {stats.buildingCount} buildings ·{" "}
-                {stats.terrainVertexCount.toLocaleString()} terrain vertices
+          <Card className="pointer-events-none absolute top-3 left-3 max-w-xs gap-0 py-3">
+            <CardContent className="flex flex-col gap-2 px-4 text-xs leading-5">
+              <p>
+                Click the view to capture the mouse · <Kbd>WASD</Kbd> move ·{" "}
+                <Kbd>Shift</Kbd> sprint · <Kbd>F</Kbd> walk/fly ·{" "}
+                <Kbd>Space</Kbd>/<Kbd>Shift</Kbd> up/down in fly mode ·{" "}
+                <Kbd>R</Kbd> demolish under crosshair · <Kbd>B</Kbd> insert
+                building · <Kbd>Esc</Kbd> release
               </p>
-            )}
-          </div>
+              {stats && (
+                <p className="text-muted-foreground">
+                  {stats.buildingCount} buildings ·{" "}
+                  {stats.terrainVertexCount.toLocaleString()} terrain vertices ·{" "}
+                  {mode === "walk" ? "walking" : "flying"}
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
-          <div className="absolute top-3 right-3 w-64 rounded-lg bg-black/60 p-3 text-white text-xs leading-5">
-            <p className="mb-2 font-semibold">Sun & shadows</p>
-            <label className="mb-2 block">
-              Date
-              <input
-                className="mt-1 block w-full rounded bg-white/10 px-2 py-1 text-white"
-                onChange={(e) => updateSun(e.target.value, minutes)}
-                type="date"
-                value={dateStr}
+          <Card className="absolute top-3 right-3 w-72 gap-0 py-4">
+            <CardContent className="px-4">
+              <FieldGroup className="gap-4">
+                <Field>
+                  <FieldLabel htmlFor="sun-date">Date</FieldLabel>
+                  <Popover>
+                    <PopoverTrigger
+                      render={
+                        <Button
+                          className="w-full justify-start font-normal"
+                          id="sun-date"
+                          variant="outline"
+                        />
+                      }
+                    >
+                      <CalendarIcon data-icon="inline-start" />
+                      {format(day, "PPP")}
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        onSelect={(d) => d && updateSun(d, minutes)}
+                        selected={day}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="sun-time">
+                    Time of day · {formatMinutes(minutes)}
+                  </FieldLabel>
+                  <Slider
+                    id="sun-time"
+                    max={LAST_MINUTE}
+                    min={0}
+                    onValueChange={(value) =>
+                      updateSun(
+                        day,
+                        Number(Array.isArray(value) ? value[0] : value)
+                      )
+                    }
+                    step={MINUTES_STEP}
+                    value={[minutes]}
+                  />
+                  <FieldDescription>
+                    {sun
+                      ? `Sun altitude ${sun.altitudeDeg.toFixed(1)}°${
+                          sun.aboveHorizon ? "" : " — below horizon (night)"
+                        }`
+                      : "Sun position unknown"}
+                  </FieldDescription>
+                </Field>
+
+                <FieldSeparator />
+
+                <Field>
+                  <FieldLabel htmlFor="city-style">Building style</FieldLabel>
+                  <ToggleGroup
+                    className="w-full"
+                    id="city-style"
+                    onValueChange={(value: string[]) => {
+                      const next = value[0] as CityStyleId | undefined;
+                      if (next) {
+                        setStyle(next);
+                        handleRef.current?.setStyle(next);
+                      }
+                    }}
+                    value={[style]}
+                    variant="outline"
+                  >
+                    {(Object.keys(STYLE_LABELS) as CityStyleId[]).map((id) => (
+                      <ToggleGroupItem className="flex-1" key={id} value={id}>
+                        {STYLE_LABELS[id]}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </Field>
+
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="tilt-shift">
+                    Miniature look (tilt-shift)
+                  </FieldLabel>
+                  <Switch
+                    checked={tiltShift}
+                    id="tilt-shift"
+                    onCheckedChange={(checked) => {
+                      setTiltShift(checked);
+                      handleRef.current?.setTiltShift(checked);
+                    }}
+                  />
+                </Field>
+
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor="fly-mode">Fly mode (F)</FieldLabel>
+                  <Switch
+                    checked={mode === "fly"}
+                    id="fly-mode"
+                    onCheckedChange={(checked) =>
+                      handleRef.current?.setMovementMode(
+                        checked ? "fly" : "walk"
+                      )
+                    }
+                  />
+                </Field>
+
+                <Button
+                  onClick={() => {
+                    handleRef.current?.insertBuilding().catch(() => {
+                      // glTF failure is non-fatal; the box fallback can't fail
+                    });
+                  }}
+                  variant="secondary"
+                >
+                  <HousePlusIcon data-icon="inline-start" />
+                  Insert building (B)
+                </Button>
+              </FieldGroup>
+            </CardContent>
+          </Card>
+
+          {bounds && (
+            <div className="absolute right-3 bottom-3">
+              <Minimap
+                bounds={bounds}
+                footprints={footprints}
+                onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
+                subscribePose={subscribePose}
               />
-            </label>
-            <label className="block">
-              Time of day · {formatMinutes(minutes)}
-              <input
-                className="mt-1 block w-full"
-                max={LAST_MINUTE}
-                min={0}
-                onChange={(e) => updateSun(dateStr, Number(e.target.value))}
-                step={MINUTES_STEP}
-                type="range"
-                value={minutes}
-              />
-            </label>
-            <p className="mt-2 text-white/70">
-              {sun
-                ? `Sun altitude ${sun.altitudeDeg.toFixed(1)}°${
-                    sun.aboveHorizon ? "" : " — below horizon (night)"
-                  }`
-                : "Sun position unknown"}
-            </p>
-            <button
-              className="mt-2 w-full rounded bg-white/15 px-2 py-1 font-medium hover:bg-white/25"
-              onClick={() => {
-                handleRef.current?.insertBuilding().catch(() => {
-                  // glTF failure is non-fatal; the box fallback can't fail
-                });
-              }}
-              type="button"
-            >
-              Insert building (B)
-            </button>
-          </div>
+            </div>
+          )}
         </>
       )}
     </div>

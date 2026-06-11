@@ -97,6 +97,44 @@ async function resolveBounds(
   );
 }
 
+/**
+ * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
+ * major) drawn in the fragment shader. The geometry lives in the Z-up data
+ * frame, so `position.z` IS the absolute elevation.
+ */
+function createTerrainMaterial(): MeshStandardMaterial {
+  const material = new MeshStandardMaterial({
+    color: 0xad_b2_9e,
+    roughness: 1,
+  });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying float vElevation;"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvElevation = position.z;"
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying float vElevation;"
+      )
+      .replace(
+        "vec4 diffuseColor = vec4( diffuse, opacity );",
+        `float minorD = vElevation / 2.0;
+         float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
+         float majorD = vElevation / 10.0;
+         float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / fwidth( majorD ), 1.0 );
+         float ink = clamp( minor * 0.14 + major * 0.2, 0.0, 0.34 );
+         vec4 diffuseColor = vec4( mix( diffuse, vec3( 0.18, 0.2, 0.24 ), ink ), opacity );`
+      );
+  };
+  return material;
+}
+
 export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   const n = opts.targetSize ?? DEFAULT_TARGET_SIZE;
 
@@ -130,10 +168,7 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
 
-  const mesh = new Mesh(
-    geometry,
-    new MeshStandardMaterial({ color: 0x6b_7a_4f, roughness: 1 })
-  );
+  const mesh = new Mesh(geometry, createTerrainMaterial());
   mesh.name = "terrain";
   mesh.castShadow = true;
   mesh.receiveShadow = true;

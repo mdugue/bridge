@@ -1,5 +1,7 @@
 import type { Box3, Scene } from "three";
-import { DirectionalLight, HemisphereLight, Vector3 } from "three";
+import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
+import { Sky } from "three/examples/jsm/objects/Sky.js";
+import { atmosphereAt } from "@/lib/city/atmosphere";
 import { sunDirectionWorld } from "@/lib/city/sun";
 
 export interface SunState {
@@ -8,16 +10,32 @@ export interface SunState {
 }
 
 export interface SunRig {
-  /** Re-aims sun + shadow camera for the given instant. */
+  /** Re-aims sun, sky dome, fog and fill light for the given instant. */
   update: (date: Date) => SunState;
 }
 
 const SUN_INTENSITY = 2.4;
 const SHADOW_MAP_SIZE = 2048;
 
+function createSkyDome(scene: Scene): Sky {
+  const sky = new Sky();
+  // Inside the camera far plane (6000) but beyond the fog end.
+  sky.scale.setScalar(4500);
+  const u = sky.material.uniforms;
+  u.turbidity.value = 6;
+  u.rayleigh.value = 1.6;
+  u.mieCoefficient.value = 0.004;
+  u.mieDirectionalG.value = 0.75;
+  scene.add(sky);
+  return sky;
+}
+
 /**
- * Directional sun light with an orthographic shadow camera sized to the
- * whole scene. `worldBounds` is in scene (Y-up) coordinates.
+ * Sun + atmosphere rig: directional light with an orthographic shadow camera
+ * sized to the whole scene, a physical sky dome fed the same sun direction,
+ * and fog/hemisphere colors interpolated from the time-of-day palette so the
+ * whole frame stays in tune with the slider. `worldBounds` is in scene
+ * (Y-up) coordinates.
  */
 export function createSunRig(
   scene: Scene,
@@ -29,6 +47,8 @@ export function createSunRig(
 
   const hemisphere = new HemisphereLight(0xbf_d4_e6, 0x4a_5a_3a, 0.7);
   scene.add(hemisphere);
+
+  const sky = createSkyDome(scene);
 
   const sun = new DirectionalLight(0xff_f4_e0, SUN_INTENSITY);
   sun.castShadow = true;
@@ -60,11 +80,26 @@ export function createSunRig(
     sun.intensity = SUN_INTENSITY * Math.min(1, Math.max(dir.y, 0) * 5);
     // Generous fill so shadowed facades stay readable at street level.
     hemisphere.intensity = 0.45 + 0.6 * Math.max(dir.y, 0);
-    return {
-      altitudeDeg:
-        (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI,
-      aboveHorizon,
-    };
+
+    // Sky dome follows the same sun; fog + fill colors follow the palette.
+    (sky.material.uniforms.sunPosition.value as Vector3).set(
+      dir.x,
+      dir.y,
+      dir.z
+    );
+    const altitudeDeg =
+      (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI;
+    const palette = atmosphereAt(altitudeDeg);
+    if (scene.fog instanceof Fog) {
+      scene.fog.color.set(palette.fog);
+    }
+    if (scene.background instanceof Color) {
+      scene.background.set(palette.fog);
+    }
+    hemisphere.color.set(palette.hemiSky);
+    hemisphere.groundColor.set(palette.hemiGround);
+
+    return { altitudeDeg, aboveHorizon };
   };
 
   return { update };
