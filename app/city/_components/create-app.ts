@@ -1,14 +1,15 @@
 import {
   ACESFilmicToneMapping,
   Box3,
-  Clock,
   Color,
   Fog,
   Group,
   type Object3D,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   Scene,
+  Timer,
+  Vector3,
   WebGLRenderer,
 } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
@@ -17,6 +18,7 @@ import {
   FALLBACK_LAT_LNG,
   utmToLatLng,
 } from "@/lib/city/crs";
+import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { recenterOffset } from "@/lib/city/recenter";
 import type { CityJsonDocument } from "@/lib/city/types";
 import {
@@ -26,7 +28,7 @@ import {
   demolishObject,
   pickCityObjectId,
 } from "./city-layer";
-import { createFpsMovement } from "./fps-movement";
+import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createInsertedBuilding } from "./inserted-building";
 import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
@@ -43,6 +45,14 @@ export interface CityWalkStats {
   terrainVertexCount: number;
 }
 
+/** Player pose for the minimap: EPSG position + compass heading. */
+export interface PlayerPose {
+  epsgX: number;
+  epsgY: number;
+  /** radians, 0 = north, clockwise positive (towards east) */
+  heading: number;
+}
+
 export interface CityWalkOptions {
   citySrc: string;
   container: HTMLElement;
@@ -51,6 +61,9 @@ export interface CityWalkOptions {
   initialDate: Date;
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
+  onModeChange?: (mode: MovementMode) => void;
+  /** throttled (~10 Hz) player pose updates for the minimap */
+  onPose?: (pose: PlayerPose) => void;
   onProgress?: (message: string) => void;
   onStats?: (stats: CityWalkStats) => void;
   /**
@@ -64,12 +77,20 @@ export interface CityWalkOptions {
 export interface CityWalkHandle {
   demolishAtCrosshair: () => void;
   dispose: () => void;
-  /** Teleports the camera (world/Y-up coords) — used by tests and QA. */
+  /**
+   * Teleports the camera (world/Y-up coords) — used by tests and QA.
+   * Switches to fly mode so the ground clamp doesn't drag the camera down.
+   */
   flyTo: (position: Xyz, lookAt: Xyz) => void;
+  getMovementMode: () => MovementMode;
+  getPose: () => PlayerPose;
   insertBuilding: () => Promise<void>;
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
+  setMovementMode: (mode: MovementMode) => void;
   setSun: (date: Date) => SunState;
+  /** Drops the player at EPSG coordinates, standing on the terrain. */
+  teleportTo: (epsgX: number, epsgY: number) => void;
 }
 
 interface Xyz {
@@ -83,7 +104,7 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
+  renderer.shadowMap.type = PCFShadowMap;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
   container.appendChild(renderer.domElement);
@@ -227,7 +248,34 @@ async function bootApp(
   camera.lookAt(0, groundY + EYE_HEIGHT, -100);
 
   const controls = new PointerLockControls(camera, renderer.domElement);
-  const movement = createFpsMovement(camera);
+  const groundHeight = (x: number, z: number) => {
+    const epsg = worldToEpsg(x, z, offset);
+    return terrain.heightAt(epsg.x, epsg.y);
+  };
+  const movement = createFpsMovement(camera, {
+    groundHeight,
+    eyeHeight: EYE_HEIGHT,
+  });
+
+  const setMovementMode = (mode: MovementMode) => {
+    movement.setMode(mode);
+    if (mode === "walk") {
+      movement.snapToGround();
+    }
+    opts.onModeChange?.(mode);
+  };
+
+  const heading = new Vector3();
+  const getPose = (): PlayerPose => {
+    camera.getWorldDirection(heading);
+    const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
+    return {
+      epsgX: epsg.x,
+      epsgY: epsg.y,
+      // world: north = -Z, east = +X -> compass heading clockwise from north
+      heading: Math.atan2(heading.x, -heading.z),
+    };
+  };
 
   const emitStats = () => {
     opts.onStats?.({
@@ -278,6 +326,9 @@ async function bootApp(
     if (e.code === "KeyB") {
       insertBuildingNow();
     }
+    if (e.code === "KeyF") {
+      setMovementMode(movement.getMode() === "walk" ? "fly" : "walk");
+    }
   };
   const onKeyUp = (e: KeyboardEvent) => movement.release(e.code);
   const onClick = () => controls.lock();
@@ -292,9 +343,15 @@ async function bootApp(
   });
   resizeObserver.observe(container);
 
-  const clock = new Clock();
-  renderer.setAnimationLoop(() => {
-    movement.update(Math.min(clock.getDelta(), 0.05));
+  const timer = new Timer();
+  let poseDue = 0;
+  renderer.setAnimationLoop((time) => {
+    timer.update(time);
+    movement.update(Math.min(timer.getDelta(), 0.05));
+    if (opts.onPose && timer.getElapsed() >= poseDue) {
+      poseDue = timer.getElapsed() + 0.1;
+      opts.onPose(getPose());
+    }
     renderer.render(scene, camera);
   });
 
@@ -305,12 +362,27 @@ async function bootApp(
     insertBuilding,
     demolishAtCrosshair,
     flyTo: (position, lookAt) => {
+      setMovementMode("fly");
       camera.position.set(position.x, position.y, position.z);
       camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
       // Refresh matrixWorld now: callers may raycast (demolish) before the
       // next rendered frame would otherwise update it.
       camera.updateMatrixWorld(true);
     },
+    teleportTo: (epsgX, epsgY) => {
+      const pos = epsgToWorld(epsgX, epsgY, offset);
+      const ground = terrain.heightAt(epsgX, epsgY);
+      camera.position.set(
+        pos.x,
+        (ground ?? worldBounds.min.y) + EYE_HEIGHT,
+        pos.z
+      );
+      camera.updateMatrixWorld(true);
+      opts.onPose?.(getPose());
+    },
+    getPose,
+    getMovementMode: () => movement.getMode(),
+    setMovementMode,
     offset,
     dispose: () => {
       disposed = true;
