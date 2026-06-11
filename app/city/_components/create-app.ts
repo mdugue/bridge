@@ -31,6 +31,7 @@ import {
   demolishObject,
   pickCityObjectId,
 } from "./city-layer";
+import { createCityCollider } from "./collision";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createInsertedBuilding } from "./inserted-building";
 import { createPostStack } from "./post-stack";
@@ -275,9 +276,12 @@ async function bootApp(
     const epsg = worldToEpsg(x, z, offset);
     return terrain.heightAt(epsg.x, epsg.y);
   };
+  // Wall collision against the CURRENT city group (demolish swaps it).
+  const collider = createCityCollider(() => cityLayer.group);
   const movement = createFpsMovement(camera, {
     groundHeight,
     eyeHeight: EYE_HEIGHT,
+    resolveStep: collider.resolveStep,
   });
 
   const setMovementMode = (mode: MovementMode) => {

@@ -15,6 +15,11 @@ export interface FpsMovementOptions {
   eyeHeight: number;
   /** ground elevation (world Y) at world (x, z); null = off the terrain */
   groundHeight: (x: number, z: number) => number | null;
+  /**
+   * Optional wall collision (walk mode only): receives the current position
+   * and the proposed horizontal step, returns the step to actually apply.
+   */
+  resolveStep?: (position: Vector3, displacement: Vector3) => Vector3;
 }
 
 export interface FpsMovement {
@@ -41,28 +46,32 @@ export function createFpsMovement(
   const keys = new Set<string>();
   const forward = new Vector3();
   const right = new Vector3();
+  const displacement = new Vector3();
   let mode: MovementMode = "walk";
 
   const shiftHeld = () => keys.has("ShiftLeft") || keys.has("ShiftRight");
 
-  const moveHorizontally = (step: number) => {
+  /** Accumulates the proposed horizontal step into `displacement`. */
+  const horizontalStep = (step: number): Vector3 => {
     camera.getWorldDirection(forward);
     forward.y = 0;
     forward.normalize();
     right.crossVectors(forward, camera.up).normalize();
 
+    displacement.set(0, 0, 0);
     if (keys.has("KeyW")) {
-      camera.position.addScaledVector(forward, step);
+      displacement.addScaledVector(forward, step);
     }
     if (keys.has("KeyS")) {
-      camera.position.addScaledVector(forward, -step);
+      displacement.addScaledVector(forward, -step);
     }
     if (keys.has("KeyD")) {
-      camera.position.addScaledVector(right, step);
+      displacement.addScaledVector(right, step);
     }
     if (keys.has("KeyA")) {
-      camera.position.addScaledVector(right, -step);
+      displacement.addScaledVector(right, -step);
     }
+    return displacement;
   };
 
   const clampToGround = (dt: number) => {
@@ -81,12 +90,17 @@ export function createFpsMovement(
   const update = (dt: number) => {
     if (mode === "walk") {
       const step = WALK_SPEED * (shiftHeld() ? SPRINT_FACTOR : 1) * dt;
-      moveHorizontally(step);
+      const proposed = horizontalStep(step);
+      const applied = options.resolveStep
+        ? options.resolveStep(camera.position, proposed)
+        : proposed;
+      camera.position.add(applied);
       clampToGround(dt);
       return;
     }
+    // Fly mode is deliberately collision-free (QA, aerial shots).
     const step = FLY_SPEED * dt;
-    moveHorizontally(step);
+    camera.position.add(horizontalStep(step));
     if (keys.has("Space")) {
       camera.position.y += step;
     }
