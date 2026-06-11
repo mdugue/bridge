@@ -34,16 +34,18 @@ export function createStyleResources(): StyleResources {
     roughness: 0.45,
     metalness: 0,
     transparent: true,
-    opacity: 0.85,
-    depthWrite: false,
+    opacity: 0.92,
+    // Mostly-opaque ghost: writing depth stops interior faces and farther
+    // buildings from bleeding through, and lets the AO pass see the city.
+    depthWrite: true,
   });
-  // Fresnel-weighted opacity: airy in the center, defined at grazing angles —
-  // the classic architecture-massing read, without true transmission costs.
+  // Fresnel-weighted opacity: a hint of translucency face-on, solid at
+  // grazing angles — massing-model read without true transmission costs.
   ghost.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
       `float ghostFresnel = pow( 1.0 - abs( dot( normalize( vNormal ), normalize( vViewPosition ) ) ), 1.6 );
-       vec4 diffuseColor = vec4( diffuse, opacity * ( 0.4 + 0.6 * ghostFresnel ) );`
+       vec4 diffuseColor = vec4( diffuse, opacity * ( 0.78 + 0.22 * ghostFresnel ) );`
     );
   };
 
