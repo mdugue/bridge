@@ -1,0 +1,46 @@
+name: PR title
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+# A separate workflow from ci.yml because the trigger is different
+# (`pull_request_target` so the title check still runs on PRs from forks)
+# and because the check should not be cancelled by ci.yml's concurrency group.
+jobs:
+  semantic:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # The conventional-commits types used in this repo's history.
+          # `chore` and `style` are kept so housekeeping PRs still pass; tighten
+          # later if you want to force everything into feat/fix/refactor.
+          types: |
+            feat
+            fix
+            refactor
+            perf
+            docs
+            test
+            build
+            ci
+            chore
+            style
+            revert
+          # Don't require a scope — the project is small enough that titles
+          # like `feat: add visibility toggles` read fine without one.
+          requireScope: false
+          # Subject must start lowercase ("add foo") not uppercase ("Add foo")
+          # so messages match the existing repo style.
+          subjectPattern: ^[a-z].+$
+          subjectPatternError: |
+            The PR title's subject (after the `type:` prefix) must start with
+            a lowercase letter — e.g. `feat: add background photo upload`.

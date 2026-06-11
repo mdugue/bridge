@@ -5,5 +5,129 @@
     "ultracite/biome/react",
     "ultracite/biome/next",
     "ultracite/biome/vitest"
+  ],
+  "overrides": [
+    {
+      "includes": ["data/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      // Auto-generated from Strava's OpenAPI spec (`bun run strava:types`).
+      // Machine output — don't lint or format it; regenerate instead.
+      "includes": ["lib/strava-api.generated.ts"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      // Vendored agent skills installed via `npx skills add` and pinned by
+      // skills-lock.json. Third-party content (some entries are symlinks) —
+      // don't lint or format it; re-add/update instead.
+      "includes": ["skills/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      // Theme cards are faithful ports of design prototypes; loosen the
+      // rules that punish their seeded arrays, sport-branch density,
+      // and 1080×1350 inline layout styles.
+      "includes": ["components/themes/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          },
+          "style": {
+            "useAtIndex": "off"
+          },
+          "performance": {
+            "noBarrelFile": "off",
+            "noReExportAll": "off"
+          }
+        }
+      }
+    },
+    {
+      // Bun unit tests (`*.test.ts`, colocated next to source). Inline regex
+      // assertions read more clearly and the hoisting perf gain is irrelevant
+      // in a test process — same rationale as the e2e block below.
+      "includes": ["**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "useTopLevelRegex": "off"
+          }
+        }
+      }
+    },
+    {
+      // E2E specs read more clearly with inline regex assertions; the
+      // perf gain from hoisting them is irrelevant in a test process.
+      "includes": ["e2e/**", "playwright.config.ts"],
+      "javascript": {
+        // `Bun` is used by the test mock server (e2e/strava-mock.ts);
+        // declared inline in the file for TS, declared here for biome.
+        "globals": ["Bun"]
+      },
+      "linter": {
+        "rules": {
+          "performance": {
+            "useTopLevelRegex": "off"
+          },
+          "style": {
+            "noNestedTernary": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["components/ui/**", "hooks/use-mobile.ts"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useFocusableInteractive": "off",
+            "useSemanticElements": "off",
+            "noStaticElementInteractions": "off",
+            "noNoninteractiveElementInteractions": "off",
+            "noSvgWithoutTitle": "off",
+            "useKeyWithClickEvents": "off",
+            "useAriaPropsForRole": "off",
+            "noLabelWithoutControl": "off",
+            "noRedundantRoles": "off"
+          },
+          "correctness": {
+            "noNestedComponentDefinitions": "off",
+            "useUniqueElementIds": "off",
+            "useExhaustiveDependencies": "off"
+          },
+          "performance": {
+            "noNamespaceImport": "off",
+            "noBarrelFile": "off",
+            "noReExportAll": "off"
+          },
+          "style": {
+            "useConsistentTypeDefinitions": "off",
+            "noNestedTernary": "off",
+            "useNamingConvention": "off",
+            "useComponentExportOnlyModules": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off",
+            "noExplicitAny": "off",
+            "noDoubleEquals": "off",
+            "noDocumentCookie": "off"
+          },
+          "security": {
+            "noDangerouslySetInnerHtml": "off"
+          },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    }
   ]
 }

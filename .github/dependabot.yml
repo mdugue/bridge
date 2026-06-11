@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # bun.lock + package.json — Dependabot reads npm-style manifests regardless
+  # of which install tool the project uses.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns: [next, "@next/*", eslint-config-next]
+      react:
+        patterns: [react, react-dom, "@types/react", "@types/react-dom"]
+      tailwind:
+        patterns: [tailwindcss, "@tailwindcss/*", tw-animate-css]
+      shadcn:
+        patterns: [shadcn, "@base-ui/*"]
+      lint-and-format:
+        patterns: [eslint, eslint-*, biome, "@biomejs/*", ultracite]
+      types:
+        patterns: ["@types/*"]
+        exclude-patterns: ["@types/react*"]
+
+  # Keep Actions and the `oven-sh/setup-bun` pin fresh.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3

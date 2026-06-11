@@ -1,6 +1,6 @@
-import { Slider as SliderPrimitive } from "@base-ui/react/slider"
+import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function Slider({
   className,
@@ -14,39 +14,39 @@ function Slider({
     ? value
     : Array.isArray(defaultValue)
       ? defaultValue
-      : [min, max]
+      : [min, max];
 
   return (
     <SliderPrimitive.Root
-      className={cn("data-horizontal:w-full data-vertical:h-full", className)}
+      className={cn("data-vertical:h-full data-horizontal:w-full", className)}
       data-slot="slider"
       defaultValue={defaultValue}
-      value={value}
-      min={min}
       max={max}
+      min={min}
       thumbAlignment="edge"
+      value={value}
       {...props}
     >
-      <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
+      <SliderPrimitive.Control className="relative flex w-full touch-none select-none items-center data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col data-disabled:opacity-50">
         <SliderPrimitive.Track
+          className="relative grow select-none overflow-hidden bg-input/50 data-horizontal:h-0.5 data-vertical:h-full data-horizontal:w-full data-vertical:w-0.5"
           data-slot="slider-track"
-          className="relative grow overflow-hidden bg-input/50 select-none data-horizontal:h-0.5 data-horizontal:w-full data-vertical:h-full data-vertical:w-0.5"
         >
           <SliderPrimitive.Indicator
+            className="select-none bg-primary data-horizontal:h-full data-vertical:w-full"
             data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
           />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
           <SliderPrimitive.Thumb
+            className="block size-3 shrink-0 select-none border-none bg-primary transition-colors hover:ring-2 hover:ring-ring/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
             data-slot="slider-thumb"
             key={index}
-            className="block size-3 shrink-0 border-none bg-primary transition-colors select-none hover:ring-2 hover:ring-ring/30 focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
           />
         ))}
       </SliderPrimitive.Control>
     </SliderPrimitive.Root>
-  )
+  );
 }
 
-export { Slider }
+export { Slider };
