@@ -26,6 +26,11 @@ export interface FpsMovement {
   getMode: () => MovementMode;
   press: (code: string) => void;
   release: (code: string) => void;
+  /**
+   * Analog move input from the virtual joystick: x = strafe right,
+   * y = forward, both in [-1, 1]. Adds to whatever keys contribute.
+   */
+  setAnalog: (x: number, y: number) => void;
   setMode: (mode: MovementMode) => void;
   /** Snaps the eye onto the ground at the current spot (used by teleports). */
   snapToGround: () => void;
@@ -48,6 +53,8 @@ export function createFpsMovement(
   const right = new Vector3();
   const displacement = new Vector3();
   let mode: MovementMode = "walk";
+  let analogX = 0;
+  let analogY = 0;
 
   const shiftHeld = () => keys.has("ShiftLeft") || keys.has("ShiftRight");
 
@@ -70,6 +77,10 @@ export function createFpsMovement(
     }
     if (keys.has("KeyA")) {
       displacement.addScaledVector(right, -step);
+    }
+    if (analogX !== 0 || analogY !== 0) {
+      displacement.addScaledVector(forward, step * analogY);
+      displacement.addScaledVector(right, step * analogX);
     }
     return displacement;
   };
@@ -113,6 +124,10 @@ export function createFpsMovement(
     update,
     press: (code) => keys.add(code),
     release: (code) => keys.delete(code),
+    setAnalog: (x, y) => {
+      analogX = Math.min(Math.max(x, -1), 1);
+      analogY = Math.min(Math.max(y, -1), 1);
+    },
     getMode: () => mode,
     setMode: (next) => {
       mode = next;

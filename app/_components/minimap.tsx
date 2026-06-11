@@ -10,8 +10,8 @@ import {
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { PlayerPose } from "./create-app";
 
-/** CSS pixels; canvases are scaled by devicePixelRatio for crispness. */
-const SIZE = 192;
+/** Default CSS pixel size; canvases are scaled by devicePixelRatio. */
+const DEFAULT_SIZE = 192;
 
 // Canvas drawing colors — scene content like the 3D view, not themable chrome.
 const PAPER = "#f7f5f0";
@@ -23,14 +23,19 @@ interface MinimapProps {
   bounds: TerrainBounds;
   footprints: FootprintRect[];
   onTeleport: (epsgX: number, epsgY: number) => void;
+  /** CSS pixel edge length (square); smaller on phones */
+  size?: number;
   /** subscribe to throttled pose updates; returns an unsubscribe fn */
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
 }
 
-function setupCanvas(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+function setupCanvas(
+  canvas: HTMLCanvasElement,
+  size: number
+): CanvasRenderingContext2D {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = SIZE * dpr;
-  canvas.height = SIZE * dpr;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("2D canvas unsupported");
@@ -48,6 +53,7 @@ export function Minimap({
   bounds,
   footprints,
   onTeleport,
+  size = DEFAULT_SIZE,
   subscribePose,
 }: MinimapProps) {
   const staticRef = useRef<HTMLCanvasElement>(null);
@@ -59,15 +65,15 @@ export function Minimap({
     if (!canvas) {
       return;
     }
-    const ctx = setupCanvas(canvas);
+    const ctx = setupCanvas(canvas, size);
     ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.fillRect(0, 0, size, size);
     ctx.strokeStyle = FRAME;
-    ctx.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
+    ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
     ctx.fillStyle = INK;
     for (const rect of footprints) {
-      const a = epsgToMapPx(rect.minX, rect.maxY, bounds, SIZE);
-      const b = epsgToMapPx(rect.maxX, rect.minY, bounds, SIZE);
+      const a = epsgToMapPx(rect.minX, rect.maxY, bounds, size);
+      const b = epsgToMapPx(rect.maxX, rect.minY, bounds, size);
       ctx.fillRect(
         a.px,
         a.py,
@@ -75,7 +81,7 @@ export function Minimap({
         Math.max(b.py - a.py, 1.2)
       );
     }
-  }, [footprints, bounds]);
+  }, [footprints, bounds, size]);
 
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {
@@ -83,10 +89,10 @@ export function Minimap({
     if (!canvas) {
       return;
     }
-    const ctx = setupCanvas(canvas);
+    const ctx = setupCanvas(canvas, size);
     return subscribePose((pose) => {
-      ctx.clearRect(0, 0, SIZE, SIZE);
-      const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, SIZE);
+      ctx.clearRect(0, 0, size, size);
+      const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, size);
       ctx.save();
       ctx.translate(px, py);
       // Heading: 0 = north = canvas "up", clockwise positive.
@@ -103,7 +109,7 @@ export function Minimap({
       ctx.fill();
       ctx.restore();
     });
-  }, [subscribePose, bounds]);
+  }, [subscribePose, bounds, size]);
 
   return (
     <Card className="pointer-events-auto gap-2 py-3">
@@ -122,22 +128,22 @@ export function Minimap({
               e.clientX - rect.left,
               e.clientY - rect.top,
               bounds,
-              SIZE
+              size
             );
             onTeleport(x, y);
           }}
-          style={{ width: SIZE, height: SIZE }}
+          style={{ width: size, height: size }}
           type="button"
         >
           <canvas
             className="absolute inset-0"
             ref={staticRef}
-            style={{ width: SIZE, height: SIZE }}
+            style={{ width: size, height: size }}
           />
           <canvas
             className="absolute inset-0"
             ref={overlayRef}
-            style={{ width: SIZE, height: SIZE }}
+            style={{ width: size, height: size }}
           />
         </button>
       </CardContent>

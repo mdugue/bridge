@@ -13,7 +13,7 @@ test.use({
 });
 
 test("city page serves the viewer shell", async ({ page }) => {
-  await page.goto("/city");
+  await page.goto("/");
   // Either the loading overlay, the ready HUD, or a loud error — never blank.
   await expect(
     page
@@ -36,7 +36,7 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     }
   });
 
-  await page.goto("/city");
+  await page.goto("/");
 
   const webglAvailable = await page.evaluate(() => {
     const probe = document.createElement("canvas");
@@ -138,4 +138,110 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
 
   // Visual artifact for humans; not asserted on.
   await page.screenshot({ path: "test-results/city-walk-smoke.png" });
+});
+
+test.describe("mobile", () => {
+  // Phone emulation: Chromium maps isMobile+hasTouch to coarse-pointer
+  // media queries, which is what the touch UI keys off.
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  test("touch UI: joystick, drawer, drag-look, double-tap travel", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
+      timeout: 120_000,
+    });
+
+    // Touch chrome instead of keyboard hints.
+    await expect(page.getByTestId("joystick")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Scene settings" })
+    ).toBeVisible();
+    await expect(page.getByText("WASD")).toHaveCount(0);
+
+    // One-finger drag turns the view (synthetic touch pointer events; the
+    // canvas handler ignores mouse pointers).
+    const headingBefore = await page.evaluate(
+      () => window.__poc?.getPose?.().heading ?? 0
+    );
+    await page.evaluate(() => {
+      const canvas = document.querySelector("canvas[data-engine]");
+      if (!canvas) {
+        throw new Error("no WebGL canvas");
+      }
+      const fire = (type: string, x: number) =>
+        canvas.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: 42,
+            pointerType: "touch",
+            isPrimary: true,
+            bubbles: true,
+            clientX: x,
+            clientY: 400,
+          })
+        );
+      fire("pointerdown", 200);
+      for (let i = 1; i <= 5; i++) {
+        fire("pointermove", 200 + i * 20);
+      }
+      fire("pointerup", 300);
+    });
+    const headingAfter = await page.evaluate(
+      () => window.__poc?.getPose?.().heading ?? 0
+    );
+    expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
+
+    // Double-tap on the ground ahead travels there. Synthetic events with
+    // back-to-back timestamps: under software rendering the main thread is
+    // busy for >320 ms between two real taps, which a real device never is.
+    const poseBefore = await page.evaluate(() => window.__poc?.getPose?.());
+    await page.evaluate(() => {
+      const canvas = document.querySelector("canvas[data-engine]");
+      if (!canvas) {
+        throw new Error("no WebGL canvas");
+      }
+      const fire = (type: string, pointerId: number) =>
+        canvas.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId,
+            pointerType: "touch",
+            isPrimary: true,
+            bubbles: true,
+            clientX: 195,
+            clientY: 650,
+          })
+        );
+      fire("pointerdown", 50);
+      fire("pointerup", 50);
+      fire("pointerdown", 51);
+      fire("pointerup", 51);
+    });
+    await page.waitForFunction(
+      (before) => {
+        const pose = window.__poc?.getPose?.();
+        if (!(pose && before)) {
+          return false;
+        }
+        return (
+          Math.abs(pose.epsgX - before.epsgX) > 1 ||
+          Math.abs(pose.epsgY - before.epsgY) > 1
+        );
+      },
+      poseBefore,
+      { timeout: 15_000 }
+    );
+
+    // Drawer opens with the scene settings (generous timeout: the main
+    // thread shares time with software-rendered frames).
+    await page.getByRole("button", { name: "Scene settings" }).tap();
+    await expect(page.getByText("Building style")).toBeVisible({
+      timeout: 30_000,
+    });
+  });
 });

@@ -8,8 +8,10 @@ import {
   type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
+  Raycaster,
   Scene,
   Timer,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from "three";
@@ -23,6 +25,7 @@ import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { buildingFootprints, type FootprintRect } from "@/lib/city/minimap";
 import { recenterOffset } from "@/lib/city/recenter";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { clampPitch, nextFov } from "@/lib/city/touch";
 import type { CityJsonDocument } from "@/lib/city/types";
 import {
   type CityLayer,
@@ -38,6 +41,7 @@ import { createPostStack } from "./post-stack";
 import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
+import { attachTouchControls } from "./touch-controls";
 import {
   applyCityStyle,
   type CityStyleId,
@@ -45,6 +49,8 @@ import {
 } from "./visual-style";
 
 const EYE_HEIGHT = 1.7;
+/** rad per CSS px of touch drag — full phone-width swipe ≈ 90° */
+const TOUCH_LOOK_SPEED = 0.004;
 /** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
 const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 const SKY_COLOR = 0x9f_b6_cc;
@@ -101,6 +107,8 @@ export interface CityWalkHandle {
   insertBuilding: () => Promise<void>;
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
+  /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
+  setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
   setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
@@ -125,6 +133,9 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
   renderer.shadowMap.type = PCFShadowMap;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
+  // Touch gestures (look/pinch/double-tap) need the browser to keep its
+  // hands off scrolling and double-tap zoom on the canvas.
+  renderer.domElement.style.touchAction = "none";
   container.appendChild(renderer.domElement);
   return renderer;
 }
@@ -304,6 +315,61 @@ async function bootApp(
     };
   };
 
+  const teleportTo = (epsgX: number, epsgY: number) => {
+    const pos = epsgToWorld(epsgX, epsgY, offset);
+    const ground = terrain.heightAt(epsgX, epsgY);
+    camera.position.set(
+      pos.x,
+      (ground ?? worldBounds.min.y) + EYE_HEIGHT,
+      pos.z
+    );
+    // Level the view (keep the compass heading, drop pitch/roll) — after
+    // an aerial pose the player would otherwise stare at the ground.
+    const level = new Euler(0, 0, 0, "YXZ");
+    level.setFromQuaternion(camera.quaternion);
+    level.x = 0;
+    level.z = 0;
+    camera.quaternion.setFromEuler(level);
+    camera.updateMatrixWorld(true);
+    opts.onPose?.(getPose());
+  };
+
+  // --- street-view-style touch controls (mobile) ------------------------
+  const lookEuler = new Euler(0, 0, 0, "YXZ");
+  let pinchStartFov = camera.fov;
+  const tapRaycaster = new Raycaster();
+  tapRaycaster.firstHitOnly = true;
+  const detachTouch = attachTouchControls(renderer.domElement, {
+    onLook: (dx, dy) => {
+      lookEuler.setFromQuaternion(camera.quaternion);
+      // "Grab the world": dragging right rotates the view left.
+      lookEuler.y += dx * TOUCH_LOOK_SPEED;
+      lookEuler.x = clampPitch(lookEuler.x + dy * TOUCH_LOOK_SPEED);
+      lookEuler.z = 0;
+      camera.quaternion.setFromEuler(lookEuler);
+    },
+    onPinchStart: () => {
+      pinchStartFov = camera.fov;
+    },
+    onPinch: (ratio) => {
+      camera.fov = nextFov(pinchStartFov, ratio);
+      camera.updateProjectionMatrix();
+    },
+    onDoubleTap: (ndcX, ndcY) => {
+      // Travel to the tapped spot on the terrain.
+      if (!terrain.mesh.geometry.boundsTree) {
+        // Lazy: ~500k triangles, only pay the BVH build when actually used.
+        terrain.mesh.geometry.computeBoundsTree();
+      }
+      tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
+      const hit = tapRaycaster.intersectObject(terrain.mesh, false)[0];
+      if (hit) {
+        const epsg = worldToEpsg(hit.point.x, hit.point.z, offset);
+        teleportTo(epsg.x, epsg.y);
+      }
+    },
+  });
+
   const emitStats = () => {
     opts.onStats?.({
       buildingCount: countBuildings(cityLayer.data),
@@ -360,7 +426,16 @@ async function bootApp(
     }
   };
   const onKeyUp = (e: KeyboardEvent) => movement.release(e.code);
-  const onClick = () => controls.lock();
+  // Pointer lock is a mouse concept; on touch-first devices a tap fires a
+  // synthetic click and the lock request would just error out.
+  const allowPointerLock = !window.matchMedia(
+    "(pointer: coarse) and (hover: none)"
+  ).matches;
+  const onClick = () => {
+    if (allowPointerLock) {
+      controls.lock();
+    }
+  };
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
   renderer.domElement.addEventListener("click", onClick);
@@ -405,27 +480,11 @@ async function bootApp(
       // next rendered frame would otherwise update it.
       camera.updateMatrixWorld(true);
     },
-    teleportTo: (epsgX, epsgY) => {
-      const pos = epsgToWorld(epsgX, epsgY, offset);
-      const ground = terrain.heightAt(epsgX, epsgY);
-      camera.position.set(
-        pos.x,
-        (ground ?? worldBounds.min.y) + EYE_HEIGHT,
-        pos.z
-      );
-      // Level the view (keep the compass heading, drop pitch/roll) — after
-      // an aerial pose the player would otherwise stare at the ground.
-      const level = new Euler(0, 0, 0, "YXZ");
-      level.setFromQuaternion(camera.quaternion);
-      level.x = 0;
-      level.z = 0;
-      camera.quaternion.setFromEuler(level);
-      camera.updateMatrixWorld(true);
-      opts.onPose?.(getPose());
-    },
+    teleportTo,
     getPose,
     getMovementMode: () => movement.getMode(),
     setMovementMode,
+    setMoveInput: movement.setAnalog,
     getFootprints: () => buildingFootprints(cityLayer.data),
     terrainBounds: terrain.bounds,
     offset,
@@ -433,6 +492,7 @@ async function bootApp(
       disposed = true;
       renderer.setAnimationLoop(null);
       resizeObserver.disconnect();
+      detachTouch();
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("keyup", onKeyUp);
       renderer.domElement.removeEventListener("click", onClick);

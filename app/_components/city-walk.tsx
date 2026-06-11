@@ -1,12 +1,25 @@
 "use client";
 
 import { format } from "date-fns";
-import { CalendarIcon, HousePlusIcon } from "lucide-react";
+import {
+  CalendarIcon,
+  HammerIcon,
+  HousePlusIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 import {
   Field,
   FieldDescription,
@@ -24,6 +37,7 @@ import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import type { FootprintRect } from "@/lib/city/minimap";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -38,6 +52,7 @@ import { Minimap } from "./minimap";
 import { updatePocDebug } from "./poc-debug";
 import { DEFAULT_TILT_SHIFT } from "./post-stack";
 import type { SunState } from "./sun-rig";
+import { VirtualJoystick } from "./virtual-joystick";
 import type { CityStyleId } from "./visual-style";
 
 interface Props {
@@ -88,6 +103,7 @@ export default function CityWalk({
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
+  const coarse = useCoarsePointer();
 
   const [status, setStatus] = useState<Status>({
     phase: "loading",
@@ -212,6 +228,122 @@ export default function CityWalk({
     }
   };
 
+  const insertBuilding = () => {
+    handleRef.current?.insertBuilding().catch(() => {
+      // glTF failure is non-fatal; the box fallback can't fail
+    });
+  };
+
+  // Shared between the desktop card and the mobile bottom drawer.
+  const controlsFields = (
+    <FieldGroup className="gap-4">
+      <Field>
+        <FieldLabel htmlFor="sun-date">Date</FieldLabel>
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                className="w-full justify-start font-normal"
+                id="sun-date"
+                variant="outline"
+              />
+            }
+          >
+            <CalendarIcon data-icon="inline-start" />
+            {format(day, "PPP")}
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <Calendar
+              mode="single"
+              onSelect={(d) => d && updateSun(d, minutes)}
+              selected={day}
+            />
+          </PopoverContent>
+        </Popover>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="sun-time">
+          Time of day · {formatMinutes(minutes)}
+        </FieldLabel>
+        <Slider
+          id="sun-time"
+          max={LAST_MINUTE}
+          min={0}
+          onValueChange={(value) =>
+            updateSun(day, Number(Array.isArray(value) ? value[0] : value))
+          }
+          step={MINUTES_STEP}
+          value={[minutes]}
+        />
+        <FieldDescription>
+          {sun
+            ? `Sun altitude ${sun.altitudeDeg.toFixed(1)}°${
+                sun.aboveHorizon ? "" : " — below horizon (night)"
+              }`
+            : "Sun position unknown"}
+        </FieldDescription>
+      </Field>
+
+      <FieldSeparator />
+
+      <Field>
+        <FieldLabel htmlFor="city-style">Building style</FieldLabel>
+        <ToggleGroup
+          className="w-full"
+          id="city-style"
+          onValueChange={(value: string[]) => {
+            const next = value[0] as CityStyleId | undefined;
+            if (next) {
+              setStyle(next);
+              handleRef.current?.setStyle(next);
+            }
+          }}
+          value={[style]}
+          variant="outline"
+        >
+          {(Object.keys(STYLE_LABELS) as CityStyleId[]).map((id) => (
+            <ToggleGroupItem className="flex-1" key={id} value={id}>
+              {STYLE_LABELS[id]}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Field>
+
+      <Field orientation="horizontal">
+        <FieldLabel htmlFor="tilt-shift">
+          Miniature look (tilt-shift)
+        </FieldLabel>
+        <Switch
+          checked={tiltShift}
+          id="tilt-shift"
+          onCheckedChange={(checked) => {
+            setTiltShift(checked);
+            handleRef.current?.setTiltShift(checked);
+          }}
+        />
+      </Field>
+
+      <Field orientation="horizontal">
+        <FieldLabel htmlFor="fly-mode">
+          {coarse ? "Fly mode" : "Fly mode (F)"}
+        </FieldLabel>
+        <Switch
+          checked={mode === "fly"}
+          id="fly-mode"
+          onCheckedChange={(checked) =>
+            handleRef.current?.setMovementMode(checked ? "fly" : "walk")
+          }
+        />
+      </Field>
+
+      <Button onClick={insertBuilding} variant="secondary">
+        <HousePlusIcon data-icon="inline-start" />
+        {coarse ? "Insert building" : "Insert building (B)"}
+      </Button>
+    </FieldGroup>
+  );
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-900">
       <div className="absolute inset-0" ref={mountRef} />
@@ -243,152 +375,93 @@ export default function CityWalk({
             className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
           />
 
-          <Card className="pointer-events-none absolute top-3 left-3 max-w-xs gap-0 py-3">
-            <CardContent className="flex flex-col gap-2 px-4 text-xs leading-5">
-              <p>
-                Click the view to capture the mouse · <Kbd>WASD</Kbd> move ·{" "}
-                <Kbd>Shift</Kbd> sprint · <Kbd>F</Kbd> walk/fly ·{" "}
-                <Kbd>Space</Kbd>/<Kbd>Shift</Kbd> up/down in fly mode ·{" "}
-                <Kbd>R</Kbd> demolish under crosshair · <Kbd>B</Kbd> insert
-                building · <Kbd>Esc</Kbd> release
-              </p>
-              {stats && (
-                <p className="text-muted-foreground">
-                  {stats.buildingCount} buildings ·{" "}
-                  {stats.terrainVertexCount.toLocaleString()} terrain vertices ·{" "}
-                  {mode === "walk" ? "walking" : "flying"}
+          {!coarse && (
+            <Card className="pointer-events-none absolute top-3 left-3 max-w-xs gap-0 py-3">
+              <CardContent className="flex flex-col gap-2 px-4 text-xs leading-5">
+                <p>
+                  Click the view to capture the mouse · <Kbd>WASD</Kbd> move ·{" "}
+                  <Kbd>Shift</Kbd> sprint · <Kbd>F</Kbd> walk/fly ·{" "}
+                  <Kbd>Space</Kbd>/<Kbd>Shift</Kbd> up/down in fly mode ·{" "}
+                  <Kbd>R</Kbd> demolish under crosshair · <Kbd>B</Kbd> insert
+                  building · <Kbd>Esc</Kbd> release
                 </p>
-              )}
-            </CardContent>
-          </Card>
+                {stats && (
+                  <p className="text-muted-foreground">
+                    {stats.buildingCount} buildings ·{" "}
+                    {stats.terrainVertexCount.toLocaleString()} terrain vertices
+                    · {mode === "walk" ? "walking" : "flying"}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          <Card className="absolute top-3 right-3 w-72 gap-0 py-4">
-            <CardContent className="px-4">
-              <FieldGroup className="gap-4">
-                <Field>
-                  <FieldLabel htmlFor="sun-date">Date</FieldLabel>
-                  <Popover>
-                    <PopoverTrigger
-                      render={
-                        <Button
-                          className="w-full justify-start font-normal"
-                          id="sun-date"
-                          variant="outline"
-                        />
-                      }
-                    >
-                      <CalendarIcon data-icon="inline-start" />
-                      {format(day, "PPP")}
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        onSelect={(d) => d && updateSun(d, minutes)}
-                        selected={day}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="sun-time">
-                    Time of day · {formatMinutes(minutes)}
-                  </FieldLabel>
-                  <Slider
-                    id="sun-time"
-                    max={LAST_MINUTE}
-                    min={0}
-                    onValueChange={(value) =>
-                      updateSun(
-                        day,
-                        Number(Array.isArray(value) ? value[0] : value)
-                      )
-                    }
-                    step={MINUTES_STEP}
-                    value={[minutes]}
-                  />
-                  <FieldDescription>
-                    {sun
-                      ? `Sun altitude ${sun.altitudeDeg.toFixed(1)}°${
-                          sun.aboveHorizon ? "" : " — below horizon (night)"
-                        }`
-                      : "Sun position unknown"}
-                  </FieldDescription>
-                </Field>
-
-                <FieldSeparator />
-
-                <Field>
-                  <FieldLabel htmlFor="city-style">Building style</FieldLabel>
-                  <ToggleGroup
-                    className="w-full"
-                    id="city-style"
-                    onValueChange={(value: string[]) => {
-                      const next = value[0] as CityStyleId | undefined;
-                      if (next) {
-                        setStyle(next);
-                        handleRef.current?.setStyle(next);
-                      }
-                    }}
-                    value={[style]}
-                    variant="outline"
-                  >
-                    {(Object.keys(STYLE_LABELS) as CityStyleId[]).map((id) => (
-                      <ToggleGroupItem className="flex-1" key={id} value={id}>
-                        {STYLE_LABELS[id]}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                </Field>
-
-                <Field orientation="horizontal">
-                  <FieldLabel htmlFor="tilt-shift">
-                    Miniature look (tilt-shift)
-                  </FieldLabel>
-                  <Switch
-                    checked={tiltShift}
-                    id="tilt-shift"
-                    onCheckedChange={(checked) => {
-                      setTiltShift(checked);
-                      handleRef.current?.setTiltShift(checked);
-                    }}
-                  />
-                </Field>
-
-                <Field orientation="horizontal">
-                  <FieldLabel htmlFor="fly-mode">Fly mode (F)</FieldLabel>
-                  <Switch
-                    checked={mode === "fly"}
-                    id="fly-mode"
-                    onCheckedChange={(checked) =>
-                      handleRef.current?.setMovementMode(
-                        checked ? "fly" : "walk"
-                      )
-                    }
-                  />
-                </Field>
-
+          {coarse ? (
+            <Drawer>
+              <DrawerTrigger asChild>
                 <Button
-                  onClick={() => {
-                    handleRef.current?.insertBuilding().catch(() => {
-                      // glTF failure is non-fatal; the box fallback can't fail
-                    });
-                  }}
+                  aria-label="Scene settings"
+                  className="absolute top-3 right-3 shadow-md"
+                  size="icon"
                   variant="secondary"
                 >
-                  <HousePlusIcon data-icon="inline-start" />
-                  Insert building (B)
+                  <SlidersHorizontalIcon />
                 </Button>
-              </FieldGroup>
-            </CardContent>
-          </Card>
+              </DrawerTrigger>
+              <DrawerContent>
+                <DrawerHeader>
+                  <DrawerTitle>Scene settings</DrawerTitle>
+                  <DrawerDescription>
+                    Drag to look around · joystick to walk · double-tap the
+                    ground to travel there · pinch to zoom
+                  </DrawerDescription>
+                </DrawerHeader>
+                <div className="overflow-y-auto px-4 pb-8">
+                  {controlsFields}
+                </div>
+              </DrawerContent>
+            </Drawer>
+          ) : (
+            <Card className="absolute top-3 right-3 w-72 gap-0 py-4">
+              <CardContent className="px-4">{controlsFields}</CardContent>
+            </Card>
+          )}
+
+          {coarse && (
+            <>
+              <div className="absolute bottom-8 left-5">
+                <VirtualJoystick
+                  onChange={(x, y) => handleRef.current?.setMoveInput(x, y)}
+                />
+              </div>
+              <div className="absolute right-3 bottom-8 flex flex-col gap-2">
+                <Button
+                  onClick={() => handleRef.current?.demolishAtCrosshair()}
+                  size="sm"
+                  variant="secondary"
+                >
+                  <HammerIcon data-icon="inline-start" />
+                  Demolish
+                </Button>
+                <Button onClick={insertBuilding} size="sm" variant="secondary">
+                  <HousePlusIcon data-icon="inline-start" />
+                  Insert
+                </Button>
+              </div>
+            </>
+          )}
 
           {bounds && (
-            <div className="absolute right-3 bottom-3">
+            <div
+              className={
+                coarse ? "absolute top-16 right-3" : "absolute right-3 bottom-3"
+              }
+            >
               <Minimap
                 bounds={bounds}
                 footprints={footprints}
                 onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
+                size={coarse ? 120 : 192}
                 subscribePose={subscribePose}
               />
             </div>
