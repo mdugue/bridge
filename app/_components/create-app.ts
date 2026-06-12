@@ -6,7 +6,7 @@ import {
   Fog,
   Group,
   type Object3D,
-  PCFShadowMap,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   Raycaster,
   Scene,
@@ -53,6 +53,11 @@ import {
 } from "./visual-style";
 
 const EYE_HEIGHT = 1.7;
+/**
+ * Vertical FOV. 55° (~85° horizontal at 16:9) reads like a natural human
+ * walking perspective; wider than ~60° starts to feel fisheye/distorted.
+ */
+const DEFAULT_FOV = 55;
 /** rad per CSS px of touch drag — full phone-width swipe ≈ 90° */
 const TOUCH_LOOK_SPEED = 0.004;
 /** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
@@ -85,6 +90,8 @@ export interface CityWalkOptions {
   initialDate: Date;
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
+  /** optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
+  landcoverSrc?: string;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -153,7 +160,7 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFShadowMap;
+  renderer.shadowMap.type = PCFSoftShadowMap;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
   // Touch gestures (look/pinch/double-tap) need the browser to keep its
@@ -250,7 +257,7 @@ async function bootApp(
   let disposed = false;
 
   const camera = new PerspectiveCamera(
-    70,
+    DEFAULT_FOV,
     container.clientWidth / Math.max(container.clientHeight, 1),
     0.3,
     6000
@@ -283,6 +290,7 @@ async function bootApp(
   const terrain = await loadTerrain({
     url: opts.demSrc,
     tfwUrl: opts.demTfwSrc,
+    landcoverUrl: opts.landcoverSrc,
     offset,
     signal: opts.signal,
   });
@@ -488,6 +496,8 @@ async function bootApp(
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     movement.update(dt);
+    // Keep the (small, sharp) shadow frustum centered on the player.
+    sunRig.follow(camera.position);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(getPose());

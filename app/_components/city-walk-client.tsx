@@ -22,6 +22,7 @@ export function CityWalkClient() {
       citySrc={`/data/lod2_${TILE}.city.json`}
       demSrc={`/data/dgm1_${TILE}.tif`}
       demTfwSrc={`/data/dgm1_${TILE}.tfw`}
+      landcoverSrc={`/data/landcover_${TILE}.png`}
     />
   );
 }

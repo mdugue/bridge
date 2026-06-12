@@ -21,6 +21,9 @@ const copies: [string, string][] = [
     `data/dgm/dgm1_${TILE}_tiff/dgm1_${TILE}.tfw`,
     `public/data/dgm1_${TILE}.tfw`,
   ],
+  // Land-cover splatmap baked offline by scripts/extract-dlm.sh from the
+  // ATKIS Basis-DLM. Small + committed; the raw ~5 GB download is not.
+  [`data/dlm/landcover_${TILE}.png`, `public/data/landcover_${TILE}.png`],
 ];
 
 for (const [src, dest] of copies) {

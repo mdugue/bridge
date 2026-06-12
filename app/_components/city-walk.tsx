@@ -77,6 +77,8 @@ interface Props {
   demTfwSrc?: string;
   /** Optional glTF/GLB to insert; falls back to a marker box */
   insertedModelUrl?: string;
+  /** Optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
+  landcoverSrc?: string;
 }
 
 type Status =
@@ -111,6 +113,7 @@ export default function CityWalk({
   citySrc,
   demSrc,
   demTfwSrc,
+  landcoverSrc,
   insertedModelUrl,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -172,6 +175,7 @@ export default function CityWalk({
       citySrc,
       demSrc,
       demTfwSrc,
+      landcoverSrc,
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
@@ -256,7 +260,7 @@ export default function CityWalk({
       handleRef.current = null;
       handle?.dispose();
     };
-  }, [citySrc, demSrc, demTfwSrc, insertedModelUrl]);
+  }, [citySrc, demSrc, demTfwSrc, landcoverSrc, insertedModelUrl]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);

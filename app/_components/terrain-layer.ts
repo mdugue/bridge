@@ -4,6 +4,10 @@ import {
   BufferGeometry,
   Mesh,
   MeshStandardMaterial,
+  NearestFilter,
+  NoColorSpace,
+  type Texture,
+  TextureLoader,
 } from "three";
 import {
   buildTerrainGeometryData,
@@ -25,6 +29,8 @@ export interface TerrainLayer {
 }
 
 export interface TerrainOptions {
+  /** optional ATKIS land-cover splatmap (PNG), tinted per surface class */
+  landcoverUrl?: string;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** aborts the raster download */
@@ -33,6 +39,25 @@ export interface TerrainOptions {
   /** .tfw sidecar fallback, used only when the GeoTIFF has no embedded georef */
   tfwUrl?: string;
   url: string;
+}
+
+/**
+ * Loads the land-cover splatmap as a NEAREST-filtered data texture (class ids
+ * must not be interpolated) in linear space (the red channel is a class id,
+ * not a colour). Non-fatal: a failure just falls back to the flat sage ground.
+ */
+async function loadSplatTexture(url: string): Promise<Texture | null> {
+  try {
+    const texture = await new TextureLoader().loadAsync(url);
+    texture.magFilter = NearestFilter;
+    texture.minFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.flipY = false;
+    texture.colorSpace = NoColorSpace;
+    return texture;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchArrayBuffer(
@@ -97,39 +122,93 @@ async function resolveBounds(
   );
 }
 
+/** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
+export interface SplatLayer {
+  bounds: TerrainBounds;
+  offset: { cx: number; cy: number };
+  texture: Texture;
+}
+
+/**
+ * Stylized colour per land-cover class id (see scripts/extract-dlm.sh).
+ * Kept muted to sit beside the paper-sage palette and the contour ink.
+ */
+const TERRAIN_PALETTE = /* glsl */ `
+  vec3 terrainPalette( float cls ) {
+    if ( cls < 0.5 ) return vec3( 0.679, 0.698, 0.620 ); // 0 background (base sage)
+    if ( cls < 1.5 ) return vec3( 0.706, 0.761, 0.522 ); // 1 farmland / meadow
+    if ( cls < 2.5 ) return vec3( 0.286, 0.471, 0.310 ); // 2 forest
+    if ( cls < 3.5 ) return vec3( 0.451, 0.612, 0.408 ); // 3 copse
+    if ( cls < 4.5 ) return vec3( 0.800, 0.760, 0.690 ); // 4 built-up
+    if ( cls < 5.5 ) return vec3( 0.490, 0.396, 0.396 ); // 5 railway
+    if ( cls < 6.5 ) return vec3( 0.804, 0.706, 0.518 ); // 6 path
+    if ( cls < 7.5 ) return vec3( 0.255, 0.263, 0.302 ); // 7 road
+    return vec3( 0.353, 0.588, 0.784 );                  // 8 water
+  }
+`;
+
 /**
  * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
  * major) drawn in the fragment shader. The geometry lives in the Z-up data
  * frame, so `position.z` IS the absolute elevation.
+ *
+ * When a `splat` is given, the base diffuse comes from the ATKIS land-cover
+ * class at each fragment (streets, water, meadow, …) instead of the flat
+ * sage; the contour ink is composited on top exactly as before. UVs are
+ * derived from the recentered world XY and the tile bounds — the terrain
+ * geometry carries no uv attribute.
  */
-function createTerrainMaterial(): MeshStandardMaterial {
+function createTerrainMaterial(splat?: SplatLayer): MeshStandardMaterial {
   const material = new MeshStandardMaterial({
     color: 0xad_b2_9e,
     roughness: 1,
   });
   material.onBeforeCompile = (shader) => {
+    const hasSplat = splat !== undefined;
+    if (splat) {
+      const [minX, minY, maxX, maxY] = splat.bounds;
+      // Recentered tile origin (north-west corner) + size; v grows southward.
+      shader.uniforms.uSplat = { value: splat.texture };
+      shader.uniforms.uSplatOrigin = {
+        value: [minX - splat.offset.cx, maxY - splat.offset.cy],
+      };
+      shader.uniforms.uSplatSize = { value: [maxX - minX, maxY - minY] };
+    }
+
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nvarying float vElevation;"
+        `#include <common>
+         varying float vElevation;
+         ${hasSplat ? "varying vec2 vSplatUv;\nuniform vec2 uSplatOrigin;\nuniform vec2 uSplatSize;" : ""}`
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvElevation = position.z;"
+        `#include <begin_vertex>
+         vElevation = position.z;
+         ${hasSplat ? "vSplatUv = vec2( ( position.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - position.y ) / uSplatSize.y );" : ""}`
       );
+
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nvarying float vElevation;"
+        `#include <common>
+         varying float vElevation;
+         ${hasSplat ? `varying vec2 vSplatUv;\nuniform sampler2D uSplat;\n${TERRAIN_PALETTE}` : ""}`
       )
       .replace(
         "vec4 diffuseColor = vec4( diffuse, opacity );",
-        `float minorD = vElevation / 2.0;
+        `${
+          hasSplat
+            ? "vec3 baseCol = terrainPalette( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) );"
+            : "vec3 baseCol = diffuse;"
+        }
+         float minorD = vElevation / 2.0;
          float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
          float majorD = vElevation / 10.0;
          float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / fwidth( majorD ), 1.0 );
          float ink = clamp( minor * 0.14 + major * 0.2, 0.0, 0.34 );
-         vec4 diffuseColor = vec4( mix( diffuse, vec3( 0.18, 0.2, 0.24 ), ink ), opacity );`
+         vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.18, 0.2, 0.24 ), ink ), opacity );`
       );
   };
   return material;
@@ -168,7 +247,14 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
 
-  const mesh = new Mesh(geometry, createTerrainMaterial());
+  const splatTexture = opts.landcoverUrl
+    ? await loadSplatTexture(opts.landcoverUrl)
+    : null;
+  const splat: SplatLayer | undefined = splatTexture
+    ? { texture: splatTexture, bounds, offset: opts.offset }
+    : undefined;
+
+  const mesh = new Mesh(geometry, createTerrainMaterial(splat));
   mesh.name = "terrain";
   mesh.castShadow = true;
   mesh.receiveShadow = true;
