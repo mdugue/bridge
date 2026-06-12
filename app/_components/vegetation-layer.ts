@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  Color,
   CylinderGeometry,
   Group,
   IcosahedronGeometry,
@@ -122,20 +123,33 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
   mesh.computeBoundingSphere();
 }
 
-/** Low-poly trunk + crown, one shared transform per tree. */
+/**
+ * Soft poetic tree: a slim trunk and a rounded, smooth-shaded crown in muted
+ * sage, slightly translucent so silhouettes feather against the backdrop.
+ * Each crown gets a gentle per-tree colour nudge so a row never reads as a
+ * uniform clone stamp. One shared transform drives trunk + crown.
+ */
 function buildTrees(trees: Placement[]): InstancedMesh[] {
-  const trunkGeo = new CylinderGeometry(0.12, 0.18, TRUNK_H, 5);
+  const trunkGeo = new CylinderGeometry(0.1, 0.16, TRUNK_H, 6);
   trunkGeo.translate(0, TRUNK_H / 2, 0);
-  const crownGeo = new IcosahedronGeometry(CROWN_R, 0);
-  crownGeo.translate(0, TRUNK_H + CROWN_R * 0.55, 0);
+  // detail 1 = rounder than a raw icosahedron; egg shape, sitting on the trunk.
+  const crownGeo = new IcosahedronGeometry(CROWN_R, 1);
+  crownGeo.scale(1, 1.15, 1);
+  crownGeo.translate(0, TRUNK_H + CROWN_R * 0.5, 0);
+
   const trunks = new InstancedMesh(
     trunkGeo,
-    new MeshStandardMaterial({ color: 0x6b_57_42, roughness: 1 }),
+    new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 }),
     trees.length
   );
   const crowns = new InstancedMesh(
     crownGeo,
-    new MeshStandardMaterial({ color: 0x4f_74_45, roughness: 1 }),
+    new MeshStandardMaterial({
+      color: 0xa6_bf_92,
+      roughness: 1,
+      transparent: true,
+      opacity: 0.9,
+    }),
     trees.length
   );
   trunks.castShadow = true;
@@ -143,6 +157,17 @@ function buildTrees(trees: Placement[]): InstancedMesh[] {
   crowns.receiveShadow = true;
   writeInstances(trunks, trees);
   writeInstances(crowns, trees);
+
+  // Per-tree pastel sage variation (hue + value), deterministic.
+  const col = new Color();
+  for (let i = 0; i < trees.length; i++) {
+    const v = hash(trees[i].x * 0.3 + trees[i].z * 0.7) - 0.5;
+    col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
+    crowns.setColorAt(i, col);
+  }
+  if (crowns.instanceColor) {
+    crowns.instanceColor.needsUpdate = true;
+  }
   return [trunks, crowns];
 }
 
