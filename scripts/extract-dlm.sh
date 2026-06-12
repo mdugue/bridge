@@ -121,20 +121,24 @@ if [ -f "$SRC/veg04_l.shp" ]; then
   echo "wrote $VEGROWS"
 fi
 
-# --- soft pastel RGB splatmap (the version the terrain actually samples) -----
-# Bakes the curated pastel palette into an RGB image and feathers the class
-# boundaries with a Gaussian blur. The terrain samples THIS with LINEAR +
-# mipmaps + anisotropy, so boundaries stay soft at any angle (no NEAREST
-# stair-stepping) and read as gentle pastel transitions.
+# --- pastel RGBA splatmap (the version the terrain + water actually sample) --
+# RGB = curated pastel palette; A = water coverage. Both blurred only lightly:
+# the terrain and water sample this with LINEAR + mipmaps + anisotropy, so the
+# GPU anti-aliases boundaries at grazing angles (no NEAREST stair-steps) WITHOUT
+# needing heavy pre-blur — keeping roads crisp. The water plane reads coverage
+# from the alpha channel and smoothsteps it for a clean, straight shoreline.
 #
-# Tune the softness with LANDCOVER_BLUR (pixels at ${RES} px ~ metres):
-#   LANDCOVER_BLUR=4 bash scripts/extract-dlm.sh 33412_5656
-BLUR="${LANDCOVER_BLUR:-2.5}"
+# Tune crispness with LANDCOVER_BLUR (px @ ${RES}); water edge with WATER_BLUR:
+#   LANDCOVER_BLUR=0.4 WATER_BLUR=1.2 bash scripts/extract-dlm.sh 33412_5656
+BLUR="${LANDCOVER_BLUR:-0.8}"
+WBLUR="${WATER_BLUR:-1.0}"
 RGB="$OUTDIR/landcover_rgb_${TILE}_${SUFFIX}.png"
-python3 - "$OUTDIR/$NAME.png" "$RGB" "$BLUR" <<'PY'
+python3 - "$OUTDIR/$NAME.png" "$RGB" "$BLUR" "$WBLUR" <<'PY'
 import sys
 from PIL import Image, ImageFilter
-src, dst, blur = sys.argv[1], sys.argv[2], float(sys.argv[3])
+src, dst, blur, wblur = (
+    sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
+)
 # Curated pastel earth-tone palette (high value, low saturation, analogous)
 PAL = {
     0: (230, 224, 209),  # background  warm pale taupe
@@ -148,16 +152,22 @@ PAL = {
     8: (164, 192, 209),  # water       dusty blue
 }
 cls = Image.open(src).convert("L")
-rgb = Image.new("RGB", cls.size)
-sp, dp = cls.load(), rgb.load()
 w, h = cls.size
+rgb = Image.new("RGB", (w, h))
+alpha = Image.new("L", (w, h))
+sp, dp, ap = cls.load(), rgb.load(), alpha.load()
 for y in range(h):
     for x in range(w):
-        dp[x, y] = PAL.get(sp[x, y], PAL[0])
+        c = sp[x, y]
+        dp[x, y] = PAL.get(c, PAL[0])
+        ap[x, y] = 255 if c == 8 else 0  # water coverage
 if blur > 0:
     rgb = rgb.filter(ImageFilter.GaussianBlur(blur))
+if wblur > 0:
+    alpha = alpha.filter(ImageFilter.GaussianBlur(wblur))
+rgb.putalpha(alpha)
 rgb.save(dst)
-print(f"wrote {dst} (blur {blur})")
+print(f"wrote {dst} (rgb blur {blur}, water blur {wblur})")
 PY
 
 cat > "$OUTDIR/$NAME.json" <<JSON

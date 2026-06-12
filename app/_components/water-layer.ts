@@ -37,15 +37,15 @@ export function createWaterLayer(
     polygonOffsetUnits: -1,
   });
 
-  const splatWidth =
-    (splat.texture.image as { width?: number } | undefined)?.width ?? 2048;
-  const texel = 1 / splatWidth;
+  // Sample the LINEAR + mipmapped + anisotropic colour splat's ALPHA channel
+  // for water coverage — the GPU anti-aliases the shoreline at grazing angles,
+  // unlike the NEAREST class raster which stair-stepped.
+  const maskTexture = splat.colorTexture ?? splat.texture;
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.uSplat = { value: splat.texture };
+    shader.uniforms.uSplat = { value: maskTexture };
     shader.uniforms.uTime = uTime;
     shader.uniforms.uOrigin = { value: origin };
     shader.uniforms.uSize = { value: size };
-    shader.uniforms.uTexel = { value: texel };
 
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -70,21 +70,15 @@ export function createWaterLayer(
          varying vec2 vSplatUv;
          varying vec2 vWorldXY;
          uniform sampler2D uSplat;
-         uniform float uTime;
-         uniform float uTexel;`
+         uniform float uTime;`
       )
-      // Mask to water (class 8). The class raster is NEAREST, so a single tap
-      // stair-steps at the shoreline; a 5-tap coverage straightens (anti-
-      // aliases) the edge into the fragment alpha without blurring it.
+      // Water coverage = the splat's alpha channel, sampled LINEAR + mipmapped
+      // + anisotropic, so the shoreline is hardware anti-aliased (straight, no
+      // stair-steps). smoothstep keeps the transition tight, not blurry.
       .replace(
         "#include <map_fragment>",
         `#include <map_fragment>
-         float wcov = step( 7.5, texture2D( uSplat, vSplatUv ).r * 255.0 );
-         wcov += step( 7.5, texture2D( uSplat, vSplatUv + vec2( uTexel, 0.0 ) ).r * 255.0 );
-         wcov += step( 7.5, texture2D( uSplat, vSplatUv - vec2( uTexel, 0.0 ) ).r * 255.0 );
-         wcov += step( 7.5, texture2D( uSplat, vSplatUv + vec2( 0.0, uTexel ) ).r * 255.0 );
-         wcov += step( 7.5, texture2D( uSplat, vSplatUv - vec2( 0.0, uTexel ) ).r * 255.0 );
-         wcov *= 0.2;
+         float wcov = smoothstep( 0.35, 0.65, texture2D( uSplat, vSplatUv ).a );
          if ( wcov <= 0.0 ) discard;
          diffuseColor.a *= wcov;`
       )

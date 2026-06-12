@@ -81,7 +81,7 @@ async function loadColorSplat(url: string): Promise<Texture | null> {
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
-    texture.anisotropy = 8;
+    texture.anisotropy = 16;
     texture.flipY = false;
     texture.colorSpace = SRGBColorSpace;
     return texture;
