@@ -52,9 +52,11 @@ function parseCity(
 
 export function createCityLayer(
   data: CityJsonDocument,
-  world: Group
+  world: Group,
+  /** shared recenter matrix; pass the primary tile's so neighbours align */
+  sharedMatrix: Matrix4 | null = null
 ): CityLayer {
-  const { group, matrix } = parseCity(data, null);
+  const { group, matrix } = parseCity(data, sharedMatrix);
   world.add(group);
   return { data, group, matrix };
 }

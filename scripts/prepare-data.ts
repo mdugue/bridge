@@ -6,31 +6,37 @@
 import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const TILE = "33412_5656_2_sn";
-
-const copies: [string, string][] = [
-  [
-    `data/cityjson/lod2_${TILE}.city.json`,
-    `public/data/lod2_${TILE}.city.json`,
-  ],
-  [
-    `data/dgm/dgm1_${TILE}_tiff/dgm1_${TILE}.tif`,
-    `public/data/dgm1_${TILE}.tif`,
-  ],
-  [
-    `data/dgm/dgm1_${TILE}_tiff/dgm1_${TILE}.tfw`,
-    `public/data/dgm1_${TILE}.tfw`,
-  ],
-  // Land-cover splatmap baked offline by scripts/extract-dlm.sh from the
-  // ATKIS Basis-DLM. Small + committed; the raw ~5 GB download is not.
-  [`data/dlm/landcover_${TILE}.png`, `public/data/landcover_${TILE}.png`],
-  [
-    `data/dlm/landcover_rgb_${TILE}.png`,
-    `public/data/landcover_rgb_${TILE}.png`,
-  ],
-  [`data/dlm/vegrows_${TILE}.geojson`, `public/data/vegrows_${TILE}.geojson`],
-  [`data/dlm/canopy_${TILE}.geojson`, `public/data/canopy_${TILE}.geojson`],
+// The 2 x 2 block loaded by city-walk-client.tsx. Land-cover/canopy are baked
+// offline (scripts/extract-dlm.sh + extract-canopy.sh); the raw downloads stay
+// gitignored, only these small per-tile outputs are committed + copied.
+const TILES = [
+  "33412_5656_2_sn",
+  "33410_5656_2_sn",
+  "33410_5658_2_sn",
+  "33412_5658_2_sn",
 ];
+
+const copies: [string, string][] = TILES.flatMap((tile) => [
+  [
+    `data/cityjson/lod2_${tile}.city.json`,
+    `public/data/lod2_${tile}.city.json`,
+  ],
+  [
+    `data/dgm/dgm1_${tile}_tiff/dgm1_${tile}.tif`,
+    `public/data/dgm1_${tile}.tif`,
+  ],
+  [
+    `data/dgm/dgm1_${tile}_tiff/dgm1_${tile}.tfw`,
+    `public/data/dgm1_${tile}.tfw`,
+  ],
+  [`data/dlm/landcover_${tile}.png`, `public/data/landcover_${tile}.png`],
+  [
+    `data/dlm/landcover_rgb_${tile}.png`,
+    `public/data/landcover_rgb_${tile}.png`,
+  ],
+  [`data/dlm/vegrows_${tile}.geojson`, `public/data/vegrows_${tile}.geojson`],
+  [`data/dlm/canopy_${tile}.geojson`, `public/data/canopy_${tile}.geojson`],
+]);
 
 for (const [src, dest] of copies) {
   const srcPath = join(process.cwd(), src);

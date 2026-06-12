@@ -48,6 +48,7 @@ import {
   DEFAULT_ATMOSPHERE,
   DEFAULT_CITY_STYLE,
   type PlayerPose,
+  type TileSrc,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
@@ -74,6 +75,8 @@ interface Props {
   demSrc: string;
   /** URL of the .tfw sidecar (georef fallback) */
   demTfwSrc?: string;
+  /** Neighbouring tiles rendered around the primary one for context */
+  extraTiles?: TileSrc[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
   insertedModelUrl?: string;
   /** Optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
@@ -116,6 +119,7 @@ export default function CityWalk({
   demTfwSrc,
   landcoverSrc,
   vegetationSrc,
+  extraTiles,
   insertedModelUrl,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -179,6 +183,7 @@ export default function CityWalk({
       demTfwSrc,
       landcoverSrc,
       vegetationSrc,
+      extraTiles,
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
@@ -273,6 +278,7 @@ export default function CityWalk({
     demTfwSrc,
     landcoverSrc,
     vegetationSrc,
+    extraTiles,
     insertedModelUrl,
   ]);
 

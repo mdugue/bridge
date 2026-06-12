@@ -83,11 +83,22 @@ export interface PlayerPose {
   heading: number;
 }
 
+/** A neighbouring tile loaded for visual context (no collision/demolish). */
+export interface TileSrc {
+  citySrc: string;
+  demSrc: string;
+  demTfwSrc?: string;
+  landcoverSrc?: string;
+  vegetationSrc?: string;
+}
+
 export interface CityWalkOptions {
   citySrc: string;
   container: HTMLElement;
   demSrc: string;
   demTfwSrc?: string;
+  /** neighbouring tiles rendered around the primary one for context */
+  extraTiles?: TileSrc[];
   initialDate: Date;
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
@@ -289,34 +300,82 @@ async function bootApp(
   let cityLayer: CityLayer = createCityLayer(cityData, world);
   const offset = recenterOffset(cityLayer.matrix);
 
+  // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
+  const loadTileScene = async (tile: TileSrc): Promise<TerrainLayer> => {
+    const t = await loadTerrain({
+      url: tile.demSrc,
+      tfwUrl: tile.demTfwSrc,
+      landcoverUrl: tile.landcoverSrc,
+      offset,
+      signal: opts.signal,
+    });
+    world.add(t.mesh);
+    if (t.water) {
+      world.add(t.water.mesh);
+    }
+    if (tile.vegetationSrc) {
+      const vegetation = await loadVegetation(tile.vegetationSrc, {
+        offset,
+        heightAt: t.heightAt,
+        canopyUrl: tile.vegetationSrc.replace("vegrows_", "canopy_"),
+        signal: opts.signal,
+      });
+      // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
+      scene.add(vegetation);
+    }
+    return t;
+  };
+
   opts.onProgress?.("Loading DGM terrain…");
-  const terrain = await loadTerrain({
-    url: opts.demSrc,
-    tfwUrl: opts.demTfwSrc,
-    landcoverUrl: opts.landcoverSrc,
-    offset,
-    signal: opts.signal,
+  const terrain = await loadTileScene({
+    citySrc: opts.citySrc,
+    demSrc: opts.demSrc,
+    demTfwSrc: opts.demTfwSrc,
+    landcoverSrc: opts.landcoverSrc,
+    vegetationSrc: opts.vegetationSrc,
   });
   ensureAlive();
   assertCityOnTerrain(offset, terrain);
-  world.add(terrain.mesh);
-  if (terrain.water) {
-    world.add(terrain.water.mesh);
+
+  // Neighbouring tiles: buildings share the primary recenter matrix so they
+  // line up; terrain/water/trees load the same way. Collision and demolish
+  // stay on the primary tile (these are passive visual context).
+  const terrains: TerrainLayer[] = [terrain];
+  const extraCities: CityLayer[] = [];
+  for (const tile of opts.extraTiles ?? []) {
+    opts.onProgress?.("Loading neighbouring tiles…");
+    const data = await fetchCityJson(tile.citySrc, opts.signal);
+    ensureAlive();
+    extraCities.push(createCityLayer(data, world, cityLayer.matrix));
+    terrains.push(await loadTileScene(tile));
+    ensureAlive();
   }
 
-  if (opts.vegetationSrc) {
-    opts.onProgress?.("Planting hedges & tree rows…");
-    const vegetation = await loadVegetation(opts.vegetationSrc, {
-      offset,
-      heightAt: terrain.heightAt,
-      // DOM1-derived area canopy sits next to the rows GeoJSON.
-      canopyUrl: opts.vegetationSrc.replace("vegrows_", "canopy_"),
-      signal: opts.signal,
-    });
-    // Y-up scene frame (like the inserted building), NOT the Z-up `world`
-    // group: the placements already use world coords (x, elevation, -north).
-    scene.add(vegetation);
-  }
+  // First terrain that covers (x, y) wins; null only when off every tile.
+  const heightAt = (x: number, y: number): number | null => {
+    for (const t of terrains) {
+      const h = t.heightAt(x, y);
+      if (h !== null) {
+        return h;
+      }
+    }
+    return null;
+  };
+  const terrainMeshes = terrains.map((t) => t.mesh);
+  const unionBounds: TerrainBounds = terrains.reduce<TerrainBounds>(
+    (acc, t) => [
+      Math.min(acc[0], t.bounds[0]),
+      Math.min(acc[1], t.bounds[1]),
+      Math.max(acc[2], t.bounds[2]),
+      Math.max(acc[3], t.bounds[3]),
+    ],
+    [
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]
+  );
 
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
@@ -329,17 +388,20 @@ async function bootApp(
   setEdgeResolution(styleResources, drawingBuffer.x, drawingBuffer.y);
   let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
   applyCityStyle(cityLayer.group, currentStyle, styleResources);
+  for (const c of extraCities) {
+    applyCityStyle(c.group, currentStyle, styleResources);
+  }
   const postStack = createPostStack(renderer, scene, camera);
 
   // Spawn at the recenter point (= world origin), standing on the terrain.
-  const groundY = terrain.heightAt(offset.cx, offset.cy) ?? worldBounds.min.y;
+  const groundY = heightAt(offset.cx, offset.cy) ?? worldBounds.min.y;
   camera.position.set(0, groundY + EYE_HEIGHT, 0);
   camera.lookAt(0, groundY + EYE_HEIGHT, -100);
 
   const controls = new PointerLockControls(camera, renderer.domElement);
   const groundHeight = (x: number, z: number) => {
     const epsg = worldToEpsg(x, z, offset);
-    return terrain.heightAt(epsg.x, epsg.y);
+    return heightAt(epsg.x, epsg.y);
   };
   // Wall collision against the CURRENT city group (demolish swaps it).
   const collider = createCityCollider(() => cityLayer.group);
@@ -371,7 +433,7 @@ async function bootApp(
 
   const teleportTo = (epsgX: number, epsgY: number) => {
     const pos = epsgToWorld(epsgX, epsgY, offset);
-    const ground = terrain.heightAt(epsgX, epsgY);
+    const ground = heightAt(epsgX, epsgY);
     camera.position.set(
       pos.x,
       (ground ?? worldBounds.min.y) + EYE_HEIGHT,
@@ -410,13 +472,15 @@ async function bootApp(
       camera.updateProjectionMatrix();
     },
     onDoubleTap: (ndcX, ndcY) => {
-      // Travel to the tapped spot on the terrain.
-      if (!terrain.mesh.geometry.boundsTree) {
-        // Lazy: ~500k triangles, only pay the BVH build when actually used.
-        terrain.mesh.geometry.computeBoundsTree();
+      // Travel to the tapped spot on any tile's terrain.
+      for (const mesh of terrainMeshes) {
+        if (!mesh.geometry.boundsTree) {
+          // Lazy: only pay the BVH build when travel is actually used.
+          mesh.geometry.computeBoundsTree();
+        }
       }
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
-      const hit = tapRaycaster.intersectObject(terrain.mesh, false)[0];
+      const hit = tapRaycaster.intersectObjects(terrainMeshes, false)[0];
       if (hit) {
         const epsg = worldToEpsg(hit.point.x, hit.point.z, offset);
         teleportTo(epsg.x, epsg.y);
@@ -455,7 +519,7 @@ async function bootApp(
       scene.remove(inserted);
       disposeObject3D(inserted);
     }
-    const ground = terrain.heightAt(at.x, at.y) ?? worldBounds.min.y;
+    const ground = heightAt(at.x, at.y) ?? worldBounds.min.y;
     // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
     obj.position.set(at.x - offset.cx, ground, -(at.y - offset.cy));
     scene.add(obj);
@@ -509,7 +573,7 @@ async function bootApp(
   const updateFocus = () => {
     focusRaycaster.setFromCamera(new Vector2(0, 0), camera);
     const hit = focusRaycaster.intersectObjects(
-      [cityLayer.group, terrain.mesh],
+      [cityLayer.group, ...terrainMeshes],
       true
     )[0];
     postStack.setFocusTarget(hit?.point ?? null);
@@ -584,8 +648,11 @@ async function bootApp(
     getMovementMode: () => movement.getMode(),
     setMovementMode,
     setMoveInput: movement.setAnalog,
-    getFootprints: () => buildingFootprints(cityLayer.data),
-    terrainBounds: terrain.bounds,
+    getFootprints: () => [
+      ...buildingFootprints(cityLayer.data),
+      ...extraCities.flatMap((c) => buildingFootprints(c.data)),
+    ],
+    terrainBounds: unionBounds,
     offset,
     dispose: () => {
       disposed = true;

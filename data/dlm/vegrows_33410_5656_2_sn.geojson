@@ -1,0 +1,17 @@
+{
+"type": "FeatureCollection",
+"name": "SELECT",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::25833" } },
+"xy_coordinate_resolution": 0.01,
+"features": [
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[410704.82,5657836.32],[410707.78,5657831.46],[410764.35,5657749.88],[410837.51,5657639.19],[410863.28,5657594.4],[410881.46,5657562.07],[410888.43,5657525.3],[410892.23,5657485.37],[410893.71,5657446.07],[410891.81,5657423.46],[410883.36,5657392.61]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[411133.76,5656181.3],[411152.94,5656103.25]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[411243.19,5656085.23],[411261.18,5656003.95]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[411156.91,5655992.78],[411136.73,5656077.78]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[411227.52,5656158.68],[411241.49,5656093.06]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[411157.57,5656087.7],[411179.4,5655998.74]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[410022.37,5658894.03],[410525.74,5658146.48],[410636.04,5657980.85]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[410610.79,5657974.51],[410631.29,5657950.21],[410686.65,5657866.11],[410697.68,5657848.03]]}},
+{"type":"Feature","properties":{"kind":"treerow"},"geometry":{"type":"LineString","coordinates":[[410898.81,5657367.31],[410911.47,5657395.42],[410918.22,5657471.62],[410907.51,5657534.73],[410892.82,5657582.75],[410874.96,5657622.44],[410836.46,5657681.97],[410750.74,5657816.51],[410652.32,5657961.37],[410636.04,5657980.85]]}}
+]
+}
