@@ -79,6 +79,8 @@ interface Props {
   insertedModelUrl?: string;
   /** Optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
   landcoverSrc?: string;
+  /** Optional ATKIS veg04 GeoJSON for hedges + tree rows */
+  vegetationSrc?: string;
 }
 
 type Status =
@@ -114,6 +116,7 @@ export default function CityWalk({
   demSrc,
   demTfwSrc,
   landcoverSrc,
+  vegetationSrc,
   insertedModelUrl,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -176,6 +179,7 @@ export default function CityWalk({
       demSrc,
       demTfwSrc,
       landcoverSrc,
+      vegetationSrc,
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
@@ -260,7 +264,14 @@ export default function CityWalk({
       handleRef.current = null;
       handle?.dispose();
     };
-  }, [citySrc, demSrc, demTfwSrc, landcoverSrc, insertedModelUrl]);
+  }, [
+    citySrc,
+    demSrc,
+    demTfwSrc,
+    landcoverSrc,
+    vegetationSrc,
+    insertedModelUrl,
+  ]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);

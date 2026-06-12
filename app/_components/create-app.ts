@@ -43,6 +43,7 @@ import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
 import { attachTouchControls } from "./touch-controls";
+import { loadVegetation } from "./vegetation-layer";
 import {
   applyCityStyle,
   type CityStyleId,
@@ -103,6 +104,8 @@ export interface CityWalkOptions {
    * tile data and leave a second canvas around until then).
    */
   signal?: AbortSignal;
+  /** optional ATKIS veg04 GeoJSON for hedges + tree rows */
+  vegetationSrc?: string;
 }
 
 export interface CityWalkHandle {
@@ -299,6 +302,16 @@ async function bootApp(
   world.add(terrain.mesh);
   if (terrain.water) {
     world.add(terrain.water.mesh);
+  }
+
+  if (opts.vegetationSrc) {
+    opts.onProgress?.("Planting hedges & tree rows…");
+    const vegetation = await loadVegetation(opts.vegetationSrc, {
+      offset,
+      heightAt: terrain.heightAt,
+      signal: opts.signal,
+    });
+    world.add(vegetation);
   }
 
   world.updateMatrixWorld(true);

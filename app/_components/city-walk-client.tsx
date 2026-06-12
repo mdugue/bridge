@@ -23,6 +23,7 @@ export function CityWalkClient() {
       demSrc={`/data/dgm1_${TILE}.tif`}
       demTfwSrc={`/data/dgm1_${TILE}.tfw`}
       landcoverSrc={`/data/landcover_${TILE}.png`}
+      vegetationSrc={`/data/vegrows_${TILE}.geojson`}
     />
   );
 }

@@ -24,6 +24,7 @@ const copies: [string, string][] = [
   // Land-cover splatmap baked offline by scripts/extract-dlm.sh from the
   // ATKIS Basis-DLM. Small + committed; the raw ~5 GB download is not.
   [`data/dlm/landcover_${TILE}.png`, `public/data/landcover_${TILE}.png`],
+  [`data/dlm/vegrows_${TILE}.geojson`, `public/data/vegrows_${TILE}.geojson`],
 ];
 
 for (const [src, dest] of copies) {

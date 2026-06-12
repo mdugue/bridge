@@ -107,6 +107,20 @@ burn stream_buf 8  # streams (buffered)
 gdal_translate -q -of PNG -ot Byte "$TIF" "$OUTDIR/$NAME.png"
 rm -f "$OUTDIR/$NAME.png.aux.xml"
 
+# --- hedges & tree rows (veg04 lines) as a small GeoJSON --------------------
+# Kept in the native CRS (RFC7946=NO) so the client works in EPSG:25833 like
+# the rest of the scene; coordinates rounded to centimetre to stay tiny.
+VEGROWS="$OUTDIR/vegrows_${TILE}_${SUFFIX}.geojson"
+rm -f "$VEGROWS"
+if [ -f "$SRC/veg04_l.shp" ]; then
+  ogr2ogr -f GeoJSON -lco RFC7946=NO -lco COORDINATE_PRECISION=2 \
+    -spat "$XMIN" "$YMIN" "$XMAX" "$YMAX" -dialect SQLITE \
+    -sql "SELECT CASE WHEN BWS='1100' THEN 'hedge' ELSE 'treerow' END AS kind, geometry
+          FROM veg04_l" \
+    "$VEGROWS" "$SRC/veg04_l.shp" 2>/dev/null || true
+  echo "wrote $VEGROWS"
+fi
+
 cat > "$OUTDIR/$NAME.json" <<JSON
 {
   "tile": "${TILE}_${SUFFIX}",
