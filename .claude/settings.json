@@ -1,9 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "WebSearch",
-      "WebFetch(domain:www.geodaten.sachsen.de)"
-    ]
+    "allow": ["WebSearch", "WebFetch(domain:www.geodaten.sachsen.de)"]
   },
   "hooks": {
     "PostToolUse": [
