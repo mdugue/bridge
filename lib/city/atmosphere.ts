@@ -68,3 +68,22 @@ export function atmosphereAt(altitudeDeg: number): AtmospherePalette {
   const last = STOPS.at(-1) as Stop;
   return { fog: last.fog, hemiSky: last.hemiSky, hemiGround: last.hemiGround };
 }
+
+/** Fog range at zero atmosphere (barely any haze). */
+const FOG_CLEAR = { near: 1200, far: 4000 };
+/** Fog range at full atmosphere (thick haze right in front of you). */
+const FOG_DENSE = { near: 40, far: 450 };
+
+/**
+ * Fog near/far for an "atmosphere" amount t in [0, 1]. Interpolates
+ * exponentially — perceptually, haze density needs the range to shrink
+ * multiplicatively, otherwise nothing changes until the very top of the
+ * slider.
+ */
+export function fogRangeFor(t: number): { far: number; near: number } {
+  const k = Math.min(Math.max(t, 0), 1);
+  return {
+    near: FOG_CLEAR.near * (FOG_DENSE.near / FOG_CLEAR.near) ** k,
+    far: FOG_CLEAR.far * (FOG_DENSE.far / FOG_CLEAR.far) ** k,
+  };
+}

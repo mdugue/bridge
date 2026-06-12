@@ -44,13 +44,14 @@ import {
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
+  DEFAULT_ATMOSPHERE,
   DEFAULT_CITY_STYLE,
   type PlayerPose,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
 import { updatePocDebug } from "./poc-debug";
-import { DEFAULT_TILT_SHIFT } from "./post-stack";
+import { DEFAULT_DEPTH_GRADING, DEFAULT_DOF } from "./post-stack";
 import type { SunState } from "./sun-rig";
 import { VirtualJoystick } from "./virtual-joystick";
 import type { CityStyleId } from "./visual-style";
@@ -114,7 +115,13 @@ export default function CityWalk({
   const [day, setDay] = useState(INITIAL_DATE);
   const [minutes, setMinutes] = useState(INITIAL_MINUTES);
   const [style, setStyle] = useState<CityStyleId>(DEFAULT_CITY_STYLE);
-  const [tiltShift, setTiltShift] = useState(DEFAULT_TILT_SHIFT);
+  const [dof, setDof] = useState(DEFAULT_DOF);
+  const [fogAmount, setFogAmount] = useState(
+    Math.round(DEFAULT_ATMOSPHERE * 100)
+  );
+  const [grading, setGrading] = useState(
+    Math.round(DEFAULT_DEPTH_GRADING * 100)
+  );
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintRect[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -187,7 +194,9 @@ export default function CityWalk({
           getPose: h.getPose,
           teleportTo: h.teleportTo,
           setStyle: h.setStyle,
-          setTiltShift: h.setTiltShift,
+          setDepthOfField: h.setDepthOfField,
+          setAtmosphere: h.setAtmosphere,
+          setDepthGrading: h.setDepthGrading,
           insertBuilding: () => {
             h.insertBuilding().catch(() => {
               // glTF failure is non-fatal; the box fallback can't fail
@@ -311,16 +320,48 @@ export default function CityWalk({
       </Field>
 
       <Field orientation="horizontal">
-        <FieldLabel htmlFor="tilt-shift">
-          Miniature look (tilt-shift)
-        </FieldLabel>
+        <FieldLabel htmlFor="depth-of-field">Depth of field</FieldLabel>
         <Switch
-          checked={tiltShift}
-          id="tilt-shift"
+          checked={dof}
+          id="depth-of-field"
           onCheckedChange={(checked) => {
-            setTiltShift(checked);
-            handleRef.current?.setTiltShift(checked);
+            setDof(checked);
+            handleRef.current?.setDepthOfField(checked);
           }}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="atmosphere">Fog · {fogAmount}%</FieldLabel>
+        <Slider
+          id="atmosphere"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setFogAmount(next);
+            handleRef.current?.setAtmosphere(next / 100);
+          }}
+          step={5}
+          value={[fogAmount]}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="depth-grading">
+          Depth color · warm near, cool far · {grading}%
+        </FieldLabel>
+        <Slider
+          id="depth-grading"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setGrading(next);
+            handleRef.current?.setDepthGrading(next / 100);
+          }}
+          step={5}
+          value={[grading]}
         />
       </Field>
 

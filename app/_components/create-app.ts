@@ -16,6 +16,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
+import { fogRangeFor } from "@/lib/city/atmosphere";
 import {
   epsgCodeFromReferenceSystem,
   FALLBACK_LAT_LNG,
@@ -56,6 +57,8 @@ const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 const SKY_COLOR = 0x9f_b6_cc;
 /** Default rendering style — the "context frame" ambition. */
 export const DEFAULT_CITY_STYLE: CityStyleId = "ghost";
+/** Default fog amount (0..1); ~the look the POC always had. */
+export const DEFAULT_ATMOSPHERE = 0.35;
 
 export interface CityWalkStats {
   buildingCount: number;
@@ -107,12 +110,17 @@ export interface CityWalkHandle {
   insertBuilding: () => Promise<void>;
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
+  /** fog amount 0..1 (0 = clear day, 1 = thick painterly haze) */
+  setAtmosphere: (amount: number) => void;
+  /** warm-near/cool-far color grading intensity 0..1 */
+  setDepthGrading: (intensity: number) => void;
+  /** photographic depth of field with crosshair autofocus */
+  setDepthOfField: (enabled: boolean) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
   setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
-  setTiltShift: (enabled: boolean) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -203,7 +211,8 @@ export async function createCityWalkApp(
   const renderer = createRenderer(opts.container);
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
-  scene.fog = new Fog(SKY_COLOR, 600, 2600);
+  const fogRange = fogRangeFor(DEFAULT_ATMOSPHERE);
+  scene.fog = new Fog(SKY_COLOR, fogRange.near, fogRange.far);
 
   try {
     return await bootApp(opts, renderer, scene);
@@ -448,15 +457,29 @@ async function bootApp(
   });
   resizeObserver.observe(container);
 
+  // Crosshair autofocus for the photographic DoF (throttled like the pose).
+  const focusRaycaster = new Raycaster();
+  focusRaycaster.firstHitOnly = true;
+  focusRaycaster.far = 4000;
+  const updateFocus = () => {
+    focusRaycaster.setFromCamera(new Vector2(0, 0), camera);
+    const hit = focusRaycaster.intersectObjects(
+      [cityLayer.group, terrain.mesh],
+      true
+    )[0];
+    postStack.setFocusTarget(hit?.point ?? null);
+  };
+
   const timer = new Timer();
-  let poseDue = 0;
+  let tickDue = 0;
   renderer.setAnimationLoop((time) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     movement.update(dt);
-    if (opts.onPose && timer.getElapsed() >= poseDue) {
-      poseDue = timer.getElapsed() + 0.1;
-      opts.onPose(getPose());
+    if (timer.getElapsed() >= tickDue) {
+      tickDue = timer.getElapsed() + 0.1;
+      opts.onPose?.(getPose());
+      updateFocus();
     }
     postStack.render(dt);
   });
@@ -469,7 +492,15 @@ async function bootApp(
       currentStyle = style;
       applyCityStyle(cityLayer.group, style, styleResources);
     },
-    setTiltShift: (enabled) => postStack.setTiltShift(enabled),
+    setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
+    setDepthGrading: (intensity) => postStack.setDepthGrading(intensity),
+    setAtmosphere: (amount) => {
+      if (scene.fog instanceof Fog) {
+        const range = fogRangeFor(amount);
+        scene.fog.near = range.near;
+        scene.fog.far = range.far;
+      }
+    },
     insertBuilding,
     demolishAtCrosshair,
     flyTo: (position, lookAt) => {

@@ -24,7 +24,7 @@ test("city page serves the viewer shell", async ({ page }) => {
 });
 
 test("city walk renders buildings, terrain and shadows", async ({ page }) => {
-  // Software-rendered WebGL plus the post-processing stack (SSAO, tilt-shift)
+  // Software-rendered WebGL plus the post-processing stack (SSAO, DoF)
   // makes every frame expensive on CI machines without a GPU.
   test.setTimeout(240_000);
   const pageErrors: string[] = [];
@@ -122,14 +122,18 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   expect(pose?.epsgY ?? 0).toBeGreaterThan(5_657_450);
   expect(pose?.epsgY ?? 0).toBeLessThan(5_657_550);
 
-  // Style + tilt-shift toggles must not produce shader/render errors
-  // (caught by the console assertions below after a few frames).
+  // Style, DoF and atmosphere controls must not produce shader/render
+  // errors (caught by the console assertions below after a few frames).
   await page.evaluate(() => {
     window.__poc?.setStyle?.("clay");
     window.__poc?.setStyle?.("standard");
     window.__poc?.setStyle?.("ghost");
-    window.__poc?.setTiltShift?.(false);
-    window.__poc?.setTiltShift?.(true);
+    window.__poc?.setDepthOfField?.(false);
+    window.__poc?.setDepthOfField?.(true);
+    window.__poc?.setAtmosphere?.(1);
+    window.__poc?.setAtmosphere?.(0.35);
+    window.__poc?.setDepthGrading?.(1);
+    window.__poc?.setDepthGrading?.(0.5);
   });
   await page.waitForTimeout(500);
 

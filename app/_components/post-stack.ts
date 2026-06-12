@@ -1,29 +1,40 @@
 import { N8AOPostPass } from "n8ao";
 import {
+  DepthOfFieldEffect,
   EffectComposer,
   EffectPass,
   RenderPass,
   SMAAEffect,
-  TiltShiftEffect,
   VignetteEffect,
 } from "postprocessing";
 import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
-import { HalfFloatType, Vector2 } from "three";
+import { HalfFloatType, Vector2, Vector3 } from "three";
+import { DepthGradingEffect } from "./depth-grading-effect";
 
-/** The chosen DoF flavor: a horizontal focus band, miniature-model look. */
-export const DEFAULT_TILT_SHIFT = true;
+/** Photographic depth of field (autofocus on the crosshair) — default on. */
+export const DEFAULT_DOF = true;
+/** Default warm-near/cool-far grading intensity (0..1). */
+export const DEFAULT_DEPTH_GRADING = 0.5;
+
+/** Focus fallback when the crosshair rests on the sky. */
+const HYPERFOCAL_M = 600;
 
 export interface PostStack {
   dispose: () => void;
   render: (deltaSeconds: number) => void;
+  /** 0..1 — strength of the warm-near/cool-far depth grade */
+  setDepthGrading: (intensity: number) => void;
+  setDepthOfField: (enabled: boolean) => void;
+  /** world-space point under the crosshair; null = nothing hit (sky) */
+  setFocusTarget: (point: Vector3 | null) => void;
   setSize: (width: number, height: number) => void;
-  setTiltShift: (enabled: boolean) => void;
 }
 
 /**
- * postprocessing-based pipeline: render -> N8AO (grounding/clay feel) ->
- * tilt-shift band blur (toggleable) -> SMAA + vignette. The composer bypasses
- * the renderer's MSAA, so SMAA carries the antialiasing.
+ * postprocessing pipeline: render -> N8AO (grounding/clay feel) ->
+ * photographic DoF (toggleable, crosshair autofocus) -> SMAA + depth
+ * grading + vignette. The composer bypasses the renderer's MSAA, so SMAA
+ * carries the antialiasing.
  */
 export function createPostStack(
   renderer: WebGLRenderer,
@@ -43,26 +54,45 @@ export function createPostStack(
   ao.setQualityMode(navigator.webdriver ? "Performance" : "Medium");
   composer.addPass(ao);
 
-  const tiltShiftPass = new EffectPass(
-    camera,
-    new TiltShiftEffect({ focusArea: 0.35, feather: 0.25 })
-  );
-  tiltShiftPass.enabled = DEFAULT_TILT_SHIFT;
-  composer.addPass(tiltShiftPass);
+  // Photographic DoF: assigning `target` enables built-in autofocus.
+  const focusPoint = new Vector3(0, 0, -HYPERFOCAL_M);
+  const dof = new DepthOfFieldEffect(camera, {
+    focusRange: 90,
+    bokehScale: 2.4,
+    resolutionScale: 0.5,
+  });
+  dof.target = focusPoint;
+  const dofPass = new EffectPass(camera, dof);
+  dofPass.enabled = DEFAULT_DOF;
+  composer.addPass(dofPass);
 
+  const grading = new DepthGradingEffect();
+  grading.setIntensity(DEFAULT_DEPTH_GRADING);
   composer.addPass(
     new EffectPass(
       camera,
       new SMAAEffect(),
+      grading,
       new VignetteEffect({ offset: 0.28, darkness: 0.5 })
     )
   );
 
+  const viewDir = new Vector3();
   return {
     render: (deltaSeconds) => composer.render(deltaSeconds),
     setSize: (width, height) => composer.setSize(width, height),
-    setTiltShift: (enabled) => {
-      tiltShiftPass.enabled = enabled;
+    setDepthOfField: (enabled) => {
+      dofPass.enabled = enabled;
+    },
+    setDepthGrading: (intensity) => grading.setIntensity(intensity),
+    setFocusTarget: (point) => {
+      if (point) {
+        focusPoint.copy(point);
+        return;
+      }
+      // Sky under the crosshair: relax toward a far focus.
+      camera.getWorldDirection(viewDir);
+      focusPoint.copy(camera.position).addScaledVector(viewDir, HYPERFOCAL_M);
     },
     dispose: () => composer.dispose(),
   };

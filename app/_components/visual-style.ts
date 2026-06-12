@@ -34,18 +34,19 @@ export function createStyleResources(): StyleResources {
     roughness: 0.45,
     metalness: 0,
     transparent: true,
-    opacity: 0.92,
-    // Mostly-opaque ghost: writing depth stops interior faces and farther
+    opacity: 0.96,
+    // Near-opaque ghost: writing depth stops interior faces and farther
     // buildings from bleeding through, and lets the AO pass see the city.
     depthWrite: true,
   });
-  // Fresnel-weighted opacity: a hint of translucency face-on, solid at
-  // grazing angles — massing-model read without true transmission costs.
+  // Fresnel as a COLOR rim (porcelain sheen at grazing angles) with only a
+  // whisper of extra translucency face-on. Earlier versions modulated alpha
+  // hard, which read as glass — pale fills over a pale sky vanish fast.
   ghost.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `float ghostFresnel = pow( 1.0 - abs( dot( normalize( vNormal ), normalize( vViewPosition ) ) ), 1.6 );
-       vec4 diffuseColor = vec4( diffuse, opacity * ( 0.78 + 0.22 * ghostFresnel ) );`
+      `float ghostFresnel = pow( 1.0 - abs( dot( normalize( vNormal ), normalize( vViewPosition ) ) ), 2.0 );
+       vec4 diffuseColor = vec4( diffuse * ( 1.0 + 0.16 * ghostFresnel ), opacity * ( 0.95 + 0.05 * ghostFresnel ) );`
     );
   };
 
@@ -94,6 +95,11 @@ function buildEdges(mesh: Mesh, material: LineBasicMaterial): LineSegments {
   welded.dispose();
   const lines = new LineSegments(edges, material);
   lines.name = "city-edges";
+  // Render AFTER all (transparent) building fills so hidden edges are
+  // depth-tested away — otherwise lines of occluded buildings draw through
+  // walls and the whole city reads as x-ray glass no matter how opaque the
+  // fills are.
+  lines.renderOrder = 1;
   // Decoration only: keep the demolish raycast off ~100k line segments.
   lines.raycast = () => {
     // intentionally empty

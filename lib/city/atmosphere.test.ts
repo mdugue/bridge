@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { atmosphereAt, lerpHexColor } from "./atmosphere";
+import { atmosphereAt, fogRangeFor, lerpHexColor } from "./atmosphere";
 
 test("lerpHexColor blends channel-wise and clamps t", () => {
   expect(lerpHexColor("#000000", "#ffffff", 0.5)).toBe("#808080");
@@ -32,4 +32,20 @@ test("day fog is brighter than night fog", () => {
   const day = Number.parseInt(atmosphereAt(45).fog.slice(1, 3), 16);
   const night = Number.parseInt(atmosphereAt(-18).fog.slice(1, 3), 16);
   expect(day).toBeGreaterThan(night);
+});
+
+test("fogRangeFor: more atmosphere pulls the fog closer, clamped to [0,1]", () => {
+  const clear = fogRangeFor(0);
+  const mid = fogRangeFor(0.5);
+  const dense = fogRangeFor(1);
+  expect(mid.near).toBeLessThan(clear.near);
+  expect(dense.near).toBeLessThan(mid.near);
+  expect(mid.far).toBeLessThan(clear.far);
+  expect(dense.far).toBeLessThan(mid.far);
+  // Always a valid range.
+  for (const r of [clear, mid, dense]) {
+    expect(r.far).toBeGreaterThan(r.near);
+  }
+  expect(fogRangeFor(-5)).toEqual(clear);
+  expect(fogRangeFor(5)).toEqual(dense);
 });

@@ -27,12 +27,16 @@ export interface PocDebugInfo {
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
   offset?: { cx: number; cy: number };
   ready: boolean;
+  /** Sets the fog amount (0..1). */
+  setAtmosphere?: (amount: number) => void;
+  /** Sets the warm-near/cool-far grading intensity (0..1). */
+  setDepthGrading?: (intensity: number) => void;
+  /** Toggles the photographic depth of field. */
+  setDepthOfField?: (enabled: boolean) => void;
   /** Switches the city rendering style. */
   setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
-  /** Toggles the tilt-shift miniature blur. */
-  setTiltShift?: (enabled: boolean) => void;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;
