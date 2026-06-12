@@ -15,8 +15,12 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   // Build once and serve in CI; use the dev server locally for fast iteration.
+  // NEXT_PUBLIC_POC_DEBUG exposes the window.__poc smoke-test hook in the CI
+  // build (dev builds expose it automatically; real prod builds never do).
   webServer: {
-    command: process.env.CI ? "bun run build && bun run start" : "bun run dev",
+    command: process.env.CI
+      ? "NEXT_PUBLIC_POC_DEBUG=1 bun run build && bun run start"
+      : "bun run dev",
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

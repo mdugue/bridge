@@ -1,0 +1,179 @@
+diff --git a/src/base/CityJSONLoader.js b/src/base/CityJSONLoader.js
+index 768e1e772f0fdef14e75cf8d820b51a533a8e5aa..ec074abd2eb840082104b7583d2a777f0e1acb24 100644
+--- a/src/base/CityJSONLoader.js
++++ b/src/base/CityJSONLoader.js
+@@ -4,7 +4,6 @@ import {
+ 	BufferGeometry,
+ 	Group,
+ 	Matrix4 } from 'three';
+-import { CityJSONWorkerParser } from '../parsers/CityJSONWorkerParser';
+ 
+ export class CityJSONLoader {
+ 
+@@ -14,7 +13,7 @@ export class CityJSONLoader {
+ 		this.scene = new Group();
+ 		this.matrix = null;
+ 		this.boundingBox = null;
+-		this.parser = parser || new CityJSONWorkerParser();
++		this.parser = parser;
+ 
+ 	}
+ 
+diff --git a/src/helpers/TextureManager.js b/src/helpers/TextureManager.js
+index 8dc481c2f711f8048e2763b6694972e35c2d6955..ba574985fb2143c9dd111e1b6f1f38f16f7bf783 100644
+--- a/src/helpers/TextureManager.js
++++ b/src/helpers/TextureManager.js
+@@ -1,9 +1,9 @@
+ import { Texture } from "three";
+-import { sRGBEncoding } from "three";
++import { SRGBColorSpace } from "three";
+ import { ShaderLib } from "three";
+ import { RepeatWrapping } from "three";
+ import { TextureLoader } from "three";
+-import { CityObjectsMaterial } from "../materials/CityObjectsMaterial";
++import { CityObjectsMaterial } from "../materials/CityObjectsMaterial.js";
+ 
+ export class TextureManager {
+ 
+@@ -95,7 +95,7 @@ export class TextureManager {
+ 
+ 		new TextureLoader().load( url, ( tex => {
+ 
+-			tex.encoding = sRGBEncoding;
++			tex.colorSpace = SRGBColorSpace;
+ 			tex.wrapS = RepeatWrapping;
+ 			tex.wrapT = RepeatWrapping;
+ 
+@@ -142,7 +142,7 @@ export class TextureManager {
+ 
+ 						const tex = new Texture( evt.target );
+ 
+-						tex.encoding = sRGBEncoding;
++						tex.colorSpace = SRGBColorSpace;
+ 						tex.wrapS = RepeatWrapping;
+ 						tex.wrapT = RepeatWrapping;
+ 						tex.needsUpdate = true;
+diff --git a/src/index.js b/src/index.js
+index fbfb72ccac09453d717bfb92bd616beda61c7234..097308e98c6179c5990ee5ee753c5828e7b1a7d3 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1,5 +1,4 @@
+ import { CityJSONLoader } from './base/CityJSONLoader.js';
+-import { CityJSONWorkerParser } from './parsers/CityJSONWorkerParser.js';
+ import { CityJSONParser } from './parsers/CityJSONParser.js';
+ import { ChunkParser } from './parsers/helpers/ChunkParser.js';
+ 
+@@ -17,7 +16,6 @@ import { TextureManager } from './helpers/TextureManager.js';
+ 
+ export {
+ 	CityJSONLoader,
+-	CityJSONWorkerParser,
+ 	CityJSONParser,
+ 	ChunkParser,
+ 
+diff --git a/src/materials/CityObjectsLineMaterial.js b/src/materials/CityObjectsLineMaterial.js
+index a0d99460cb732a18fbcca0642b223f2d8c10b107..bf6551a68ae2ce6fce5b794b564054ee7ff1f222 100644
+--- a/src/materials/CityObjectsLineMaterial.js
++++ b/src/materials/CityObjectsLineMaterial.js
+@@ -1,8 +1,8 @@
+ import { ShaderChunk, ShaderLib,
+ 		 UniformsLib,
+ 		 UniformsUtils } from "three";
+-import 'three/examples/jsm/lines/LineMaterial';
+-import { CityObjectsBaseMaterial } from "./CityObjectsBaseMaterial";
++import 'three/examples/jsm/lines/LineMaterial.js';
++import { CityObjectsBaseMaterial } from "./CityObjectsBaseMaterial.js";
+ 
+ export class CityObjectsLineMaterial extends CityObjectsBaseMaterial {
+ 
+diff --git a/src/materials/CityObjectsMaterial.js b/src/materials/CityObjectsMaterial.js
+index a8ab88c47c386dea7055d8b6a37203633741b105..5b1432c92a27629902de4728d733bd3a1c572991 100644
+--- a/src/materials/CityObjectsMaterial.js
++++ b/src/materials/CityObjectsMaterial.js
+@@ -1,5 +1,5 @@
+ import { ShaderChunk, UniformsLib, UniformsUtils } from "three";
+-import { CityObjectsBaseMaterial } from "./CityObjectsBaseMaterial";
++import { CityObjectsBaseMaterial } from "./CityObjectsBaseMaterial.js";
+ 
+ export class CityObjectsMaterial extends CityObjectsBaseMaterial {
+ 
+diff --git a/src/materials/CityObjectsPointsMaterial.js b/src/materials/CityObjectsPointsMaterial.js
+index f9033b9caa4cb819b0f5bdc51d10c6ee4f26c9c0..dec6c05f4f24bd4737966f5a2e726316fca0342c 100644
+--- a/src/materials/CityObjectsPointsMaterial.js
++++ b/src/materials/CityObjectsPointsMaterial.js
+@@ -2,8 +2,8 @@ import { ShaderChunk,
+ 		 ShaderLib,
+ 		 UniformsLib,
+ 		 UniformsUtils } from "three";
+-import 'three/examples/jsm/lines/LineMaterial';
+-import { CityObjectsBaseMaterial } from "./CityObjectsBaseMaterial";
++import 'three/examples/jsm/lines/LineMaterial.js';
++import { CityObjectsBaseMaterial } from "./CityObjectsBaseMaterial.js";
+ 
+ export class CityObjectsPointsMaterial extends CityObjectsBaseMaterial {
+ 
+diff --git a/src/objects/CityObjectsLines.js b/src/objects/CityObjectsLines.js
+index 316830ba3168b3d04fa72af78f10b2eb66d2038a..b0efc324529fce1d75930ad8c3539f147ca3473b 100644
+--- a/src/objects/CityObjectsLines.js
++++ b/src/objects/CityObjectsLines.js
+@@ -1,6 +1,6 @@
+ import { InstancedBufferAttribute } from 'three';
+-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2';
+-import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry';
++import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
++import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+ 
+ function removeDuplicates( array ) {
+ 
+diff --git a/src/parsers/CityJSONParser.js b/src/parsers/CityJSONParser.js
+index 8357211b0dd3015f352b1e13d2031c5cab5be0e6..6e18ec6380e0777c18e231461ebbb5b0c699d83a 100644
+--- a/src/parsers/CityJSONParser.js
++++ b/src/parsers/CityJSONParser.js
+@@ -1,16 +1,16 @@
+ import { Matrix4, ShaderLib } from 'three';
+ import { defaultObjectColors, defaultSemanticsColors } from '../defaults/colors.js';
+-import { POINTS, LINES, TRIANGLES } from './geometry/GeometryData';
+-import 'three/examples/jsm/lines/LineMaterial';
++import { POINTS, LINES, TRIANGLES } from './geometry/GeometryData.js';
++import 'three/examples/jsm/lines/LineMaterial.js';
+ import { CityObjectsMaterial } from '../materials/CityObjectsMaterial.js';
+ import { CityObjectsMesh } from '../objects/CityObjectsMesh.js';
+ import { CityObjectsLines } from '../objects/CityObjectsLines.js';
+ import { CityObjectsPoints } from '../objects/CityObjectsPoints.js';
+ import { CityObjectsLineMaterial } from '../materials/CityObjectsLineMaterial.js';
+ import { CityObjectsPointsMaterial } from '../materials/CityObjectsPointsMaterial.js';
+-import { TriangleParser } from './geometry/TriangleParser';
+-import { LineParser } from './geometry/LineParser';
+-import { PointParser } from './geometry/PointParser';
++import { TriangleParser } from './geometry/TriangleParser.js';
++import { LineParser } from './geometry/LineParser.js';
++import { PointParser } from './geometry/PointParser.js';
+ import { CityObjectsInstancedMesh } from '../objects/CityObjectsInstancedMesh.js';
+ import { ChunkParser } from './helpers/ChunkParser.js';
+ 
+diff --git a/src/parsers/CityJSONWorkerParser.js b/src/parsers/CityJSONWorkerParser.js
+index c4e5825b8ef5b3a7310bdd6ab3004ea3dc41aee3..dbf632d91d9487ccb2eeeb3515d061ca430378f7 100644
+--- a/src/parsers/CityJSONWorkerParser.js
++++ b/src/parsers/CityJSONWorkerParser.js
+@@ -1,16 +1,16 @@
+ import { Matrix4, ShaderLib } from 'three';
+ import { defaultObjectColors, defaultSemanticsColors } from '../defaults/colors.js';
+-import { POINTS, LINES, TRIANGLES } from './geometry/GeometryData';
+-import 'three/examples/jsm/lines/LineMaterial';
++import { POINTS, LINES, TRIANGLES } from './geometry/GeometryData.js';
++import 'three/examples/jsm/lines/LineMaterial.js';
+ import { CityObjectsMaterial } from '../materials/CityObjectsMaterial.js';
+ import { CityObjectsMesh } from '../objects/CityObjectsMesh.js';
+ import { CityObjectsLines } from '../objects/CityObjectsLines.js';
+ import { CityObjectsPoints } from '../objects/CityObjectsPoints.js';
+ import { CityObjectsLineMaterial } from '../materials/CityObjectsLineMaterial.js';
+ import { CityObjectsPointsMaterial } from '../materials/CityObjectsPointsMaterial.js';
+-import { TriangleParser } from './geometry/TriangleParser';
+-import { LineParser } from './geometry/LineParser';
+-import { PointParser } from './geometry/PointParser';
++import { TriangleParser } from './geometry/TriangleParser.js';
++import { LineParser } from './geometry/LineParser.js';
++import { PointParser } from './geometry/PointParser.js';
+ import { CityObjectsInstancedMesh } from '../objects/CityObjectsInstancedMesh.js';
+ 
+ export class CityJSONWorkerParser {
