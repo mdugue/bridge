@@ -15,6 +15,7 @@ import {
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
 import { tfwToBounds } from "@/lib/city/tfw";
+import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /** Downsample target (N x N). 512 is plenty for a POC. */
 const DEFAULT_TARGET_SIZE = 512;
@@ -26,6 +27,8 @@ export interface TerrainLayer {
   heightAt: (x: number, y: number) => number | null;
   mesh: Mesh;
   vertexCount: number;
+  /** animated water surface, present only when a splatmap was loaded */
+  water?: WaterLayer;
 }
 
 export interface TerrainOptions {
@@ -259,10 +262,14 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 
+  // Water re-uses the terrain geometry, masked to the water class.
+  const water = splat ? createWaterLayer(geometry, splat) : undefined;
+
   return {
     mesh,
     vertexCount: positions.length / 3,
     bounds,
+    water,
     heightAt: (x, y) =>
       sampleHeightfield({ elevations, n, bounds, nodata }, x, y),
   };

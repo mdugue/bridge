@@ -297,6 +297,9 @@ async function bootApp(
   ensureAlive();
   assertCityOnTerrain(offset, terrain);
   world.add(terrain.mesh);
+  if (terrain.water) {
+    world.add(terrain.water.mesh);
+  }
 
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
@@ -496,6 +499,7 @@ async function bootApp(
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     movement.update(dt);
+    terrain.water?.setTime(timer.getElapsed());
     // Keep the (small, sharp) shadow frustum centered on the player.
     sunRig.follow(camera.position);
     if (timer.getElapsed() >= tickDue) {
