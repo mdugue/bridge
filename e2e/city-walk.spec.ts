@@ -122,6 +122,39 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   expect(pose?.epsgY ?? 0).toBeGreaterThan(5_657_450);
   expect(pose?.epsgY ?? 0).toBeLessThan(5_657_550);
 
+  // Desktop grab-look: a primary-button mouse drag turns the view — no
+  // pointer lock needed by default (immersive mode is opt-in).
+  const headingBefore = await page.evaluate(
+    () => window.__poc?.getPose?.().heading ?? 0
+  );
+  await page.evaluate(() => {
+    const canvas = document.querySelector("canvas[data-engine]");
+    if (!canvas) {
+      throw new Error("no WebGL canvas");
+    }
+    const fire = (type: string, x: number) =>
+      canvas.dispatchEvent(
+        new PointerEvent(type, {
+          pointerId: 7,
+          pointerType: "mouse",
+          isPrimary: true,
+          button: 0,
+          bubbles: true,
+          clientX: x,
+          clientY: 300,
+        })
+      );
+    fire("pointerdown", 400);
+    for (let i = 1; i <= 5; i++) {
+      fire("pointermove", 400 + i * 20);
+    }
+    fire("pointerup", 500);
+  });
+  const headingAfter = await page.evaluate(
+    () => window.__poc?.getPose?.().heading ?? 0
+  );
+  expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
+
   // Style, DoF and atmosphere controls must not produce shader/render
   // errors (caught by the console assertions below after a few frames).
   await page.evaluate(() => {

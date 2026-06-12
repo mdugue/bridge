@@ -1,13 +1,13 @@
 import { isDoubleTap, type TapSample } from "@/lib/city/touch";
 
 /**
- * Street-view-style touch gestures on the WebGL canvas, via Pointer Events
- * (touch pointers only — mouse keeps the pointer-lock scheme):
- *  - one-finger drag: look around ("grab the world")
- *  - two-finger pinch: zoom (FOV)
- *  - double-tap: travel to the tapped spot
- * The element must have `touch-action: none` so the browser doesn't consume
- * the gestures for scrolling/zooming.
+ * Street-view-style canvas gestures via Pointer Events, for touch AND mouse:
+ *  - one-pointer drag: look around ("grab the world")
+ *  - two-finger pinch: zoom (FOV) — touch only
+ *  - double-tap / double-click: travel to the tapped spot
+ * Mouse pointers are ignored while pointer lock is active (immersive mode
+ * routes mouse-look through PointerLockControls instead). The element must
+ * have `touch-action: none` so the browser doesn't consume the gestures.
  */
 
 export interface TouchControlsCallbacks {
@@ -32,6 +32,14 @@ interface PointerState {
   y: number;
 }
 
+function acceptsPointer(e: PointerEvent): boolean {
+  if (e.pointerType === "touch" || e.pointerType === "pen") {
+    return true;
+  }
+  // Mouse: primary button only, and never while pointer-locked (immersive).
+  return e.button === 0 && document.pointerLockElement === null;
+}
+
 export function attachTouchControls(
   element: HTMLElement,
   callbacks: TouchControlsCallbacks
@@ -47,7 +55,7 @@ export function attachTouchControls(
   };
 
   const onPointerDown = (e: PointerEvent) => {
-    if (e.pointerType !== "touch") {
+    if (!acceptsPointer(e)) {
       return;
     }
     try {

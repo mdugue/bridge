@@ -101,6 +101,8 @@ export interface CityWalkOptions {
 export interface CityWalkHandle {
   demolishAtCrosshair: () => void;
   dispose: () => void;
+  /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
+  enterImmersive: () => void;
   /**
    * Teleports the camera (world/Y-up coords) — used by tests and QA.
    * Switches to fly mode so the ground clamp doesn't drag the camera down.
@@ -448,19 +450,16 @@ async function bootApp(
     }
   };
   const onKeyUp = (e: KeyboardEvent) => movement.release(e.code);
-  // Pointer lock is a mouse concept; on touch-first devices a tap fires a
-  // synthetic click and the lock request would just error out.
-  const allowPointerLock = !window.matchMedia(
-    "(pointer: coarse) and (hover: none)"
-  ).matches;
-  const onClick = () => {
-    if (allowPointerLock) {
-      controls.lock();
-    }
+  // Mouse wheel zooms like pinch (FOV); immersive pointer lock is opt-in
+  // via the handle, so plain clicks/drags stay free for grab-look.
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    camera.fov = nextFov(camera.fov, e.deltaY < 0 ? 1.05 : 1 / 1.05);
+    camera.updateProjectionMatrix();
   };
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
-  renderer.domElement.addEventListener("click", onClick);
+  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
   const resizeObserver = new ResizeObserver(() => {
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
@@ -526,6 +525,7 @@ async function bootApp(
     },
     insertBuilding,
     demolishAtCrosshair,
+    enterImmersive: () => controls.lock(),
     flyTo: (position, lookAt) => {
       setMovementMode("fly");
       camera.position.set(position.x, position.y, position.z);
@@ -549,7 +549,7 @@ async function bootApp(
       detachTouch();
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("keyup", onKeyUp);
-      renderer.domElement.removeEventListener("click", onClick);
+      renderer.domElement.removeEventListener("wheel", onWheel);
       controls.dispose();
       postStack.dispose();
       disposeObject3D(scene);

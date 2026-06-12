@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import {
   CalendarIcon,
+  FullscreenIcon,
   HammerIcon,
   HousePlusIcon,
   SlidersHorizontalIcon,
@@ -86,7 +87,7 @@ type Status =
 // Evaluated once in the browser (the component is loaded with ssr: false).
 const INITIAL_DATE = new Date();
 const INITIAL_MINUTES = 14 * 60;
-const MINUTES_STEP = 5;
+const MINUTES_STEP = 1;
 const LAST_MINUTE = 24 * 60 - MINUTES_STEP;
 
 /** Local-time instant from a calendar day + minutes-of-day slider. */
@@ -362,7 +363,7 @@ export default function CityWalk({
             setTransparency((prev) => ({ ...prev, [style]: next }));
             handleRef.current?.setBuildingTransparency(next / 100);
           }}
-          step={5}
+          step={1}
           value={[transparency[style]]}
         />
         <FieldDescription>
@@ -384,7 +385,7 @@ export default function CityWalk({
             setEdges(next);
             handleRef.current?.setEdges(next / 100);
           }}
-          step={5}
+          step={1}
           value={[edges]}
         />
       </Field>
@@ -433,7 +434,7 @@ export default function CityWalk({
             setContact(next);
             handleRef.current?.setContactShadows(next / 100);
           }}
-          step={5}
+          step={1}
           value={[contact]}
         />
       </Field>
@@ -449,7 +450,7 @@ export default function CityWalk({
             setGrain(next);
             handleRef.current?.setPaperGrain(next / 100);
           }}
-          step={5}
+          step={1}
           value={[grain]}
         />
       </Field>
@@ -477,7 +478,7 @@ export default function CityWalk({
             setFogAmount(next);
             handleRef.current?.setAtmosphere(next / 100);
           }}
-          step={5}
+          step={1}
           value={[fogAmount]}
         />
       </Field>
@@ -495,7 +496,7 @@ export default function CityWalk({
             setGrading(next);
             handleRef.current?.setDepthGrading(next / 100);
           }}
-          step={5}
+          step={1}
           value={[grading]}
         />
       </Field>
@@ -517,6 +518,16 @@ export default function CityWalk({
         <HousePlusIcon data-icon="inline-start" />
         {coarse ? "Insert building" : "Insert building (B)"}
       </Button>
+
+      {!coarse && (
+        <Button
+          onClick={() => handleRef.current?.enterImmersive()}
+          variant="outline"
+        >
+          <FullscreenIcon data-icon="inline-start" />
+          Immersive mode · Esc exits
+        </Button>
+      )}
     </FieldGroup>
   );
 
@@ -555,11 +566,13 @@ export default function CityWalk({
             <Card className="pointer-events-none absolute top-3 left-3 max-w-xs gap-0 py-3">
               <CardContent className="flex flex-col gap-2 px-4 text-xs leading-5">
                 <p>
-                  Click the view to capture the mouse · <Kbd>WASD</Kbd> move ·{" "}
+                  Drag the view to look around · <Kbd>WASD</Kbd> or joystick to
+                  move · double-click the ground to travel · scroll to zoom ·{" "}
                   <Kbd>Shift</Kbd> sprint · <Kbd>F</Kbd> walk/fly ·{" "}
                   <Kbd>Space</Kbd>/<Kbd>Shift</Kbd> up/down in fly mode ·{" "}
                   <Kbd>R</Kbd> demolish under crosshair · <Kbd>B</Kbd> insert
-                  building · <Kbd>Esc</Kbd> release
+                  building · Immersive mode locks the mouse (<Kbd>Esc</Kbd>{" "}
+                  exits)
                 </p>
                 {stats && (
                   <p className="text-muted-foreground">
@@ -603,28 +616,27 @@ export default function CityWalk({
             </Card>
           )}
 
+          <div className="absolute bottom-8 left-5">
+            <VirtualJoystick
+              onChange={(x, y) => handleRef.current?.setMoveInput(x, y)}
+            />
+          </div>
+
           {coarse && (
-            <>
-              <div className="absolute bottom-8 left-5">
-                <VirtualJoystick
-                  onChange={(x, y) => handleRef.current?.setMoveInput(x, y)}
-                />
-              </div>
-              <div className="absolute right-3 bottom-8 flex flex-col gap-2">
-                <Button
-                  onClick={() => handleRef.current?.demolishAtCrosshair()}
-                  size="sm"
-                  variant="secondary"
-                >
-                  <HammerIcon data-icon="inline-start" />
-                  Demolish
-                </Button>
-                <Button onClick={insertBuilding} size="sm" variant="secondary">
-                  <HousePlusIcon data-icon="inline-start" />
-                  Insert
-                </Button>
-              </div>
-            </>
+            <div className="absolute right-3 bottom-8 flex flex-col gap-2">
+              <Button
+                onClick={() => handleRef.current?.demolishAtCrosshair()}
+                size="sm"
+                variant="secondary"
+              >
+                <HammerIcon data-icon="inline-start" />
+                Demolish
+              </Button>
+              <Button onClick={insertBuilding} size="sm" variant="secondary">
+                <HousePlusIcon data-icon="inline-start" />
+                Insert
+              </Button>
+            </div>
           )}
 
           {bounds && (
