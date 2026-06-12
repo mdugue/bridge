@@ -663,6 +663,7 @@ export default function CityWalk({
               <Minimap
                 bounds={bounds}
                 footprints={footprints}
+                landcoverSrc={landcoverSrc}
                 onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
                 size={coarse ? 120 : 192}
                 subscribePose={subscribePose}
