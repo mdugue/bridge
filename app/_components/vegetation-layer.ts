@@ -125,16 +125,18 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
 
 /**
  * Soft poetic tree: a slim trunk and a rounded, smooth-shaded crown in muted
- * sage, slightly translucent so silhouettes feather against the backdrop.
- * Each crown gets a gentle per-tree colour nudge so a row never reads as a
- * uniform clone stamp. One shared transform drives trunk + crown.
+ * sage. The crown is a higher-subdivision sphere so its contour reads as round
+ * (matching the soft shading rather than fighting it) and stays opaque — the
+ * earlier translucency read as noise. Each crown gets a gentle per-tree colour
+ * nudge so a row never reads as a uniform clone stamp. One shared transform
+ * drives trunk + crown.
  */
 function buildTrees(trees: Placement[]): InstancedMesh[] {
   const trunkGeo = new CylinderGeometry(0.1, 0.16, TRUNK_H, 6);
   trunkGeo.translate(0, TRUNK_H / 2, 0);
-  // detail 1 = rounder than a raw icosahedron; egg shape, sitting on the trunk.
-  const crownGeo = new IcosahedronGeometry(CROWN_R, 1);
-  crownGeo.scale(1, 1.15, 1);
+  // detail 2 = round contour; gentle egg shape, sitting on the trunk.
+  const crownGeo = new IcosahedronGeometry(CROWN_R, 2);
+  crownGeo.scale(1, 1.12, 1);
   crownGeo.translate(0, TRUNK_H + CROWN_R * 0.5, 0);
 
   const trunks = new InstancedMesh(
@@ -144,12 +146,7 @@ function buildTrees(trees: Placement[]): InstancedMesh[] {
   );
   const crowns = new InstancedMesh(
     crownGeo,
-    new MeshStandardMaterial({
-      color: 0xa6_bf_92,
-      roughness: 1,
-      transparent: true,
-      opacity: 0.9,
-    }),
+    new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 }),
     trees.length
   );
   trunks.castShadow = true;
