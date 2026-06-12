@@ -22,15 +22,15 @@ const PLAYER = "#2563eb";
 // Muted map tints per land-cover class id (see scripts/extract-dlm.sh), a touch
 // lighter than the 3D palette so the ink footprints stay legible on top.
 const MAP_PALETTE: [number, number, number][] = [
-  [239, 237, 231], // 0 background
-  [205, 217, 168], // 1 farmland
-  [143, 178, 136], // 2 forest
-  [169, 195, 156], // 3 copse
-  [231, 224, 212], // 4 built-up
-  [185, 169, 169], // 5 railway
-  [227, 207, 160], // 6 path
-  [199, 201, 207], // 7 road
-  [158, 195, 224], // 8 water
+  [230, 224, 209], // 0 background  warm pale taupe
+  [197, 211, 170], // 1 farmland    soft sage
+  [150, 176, 138], // 2 forest      muted moss
+  [175, 195, 158], // 3 copse       light moss
+  [228, 219, 203], // 4 built-up    warm pale clay
+  [197, 183, 178], // 5 railway     dusty mauve
+  [224, 205, 168], // 6 path        pale warm sand
+  [200, 200, 206], // 7 road        soft grey-lavender
+  [164, 192, 209], // 8 water       dusty blue
 ];
 
 /**

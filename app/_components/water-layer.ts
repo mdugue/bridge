@@ -26,11 +26,11 @@ export function createWaterLayer(
   const size = [maxX - minX, maxY - minY];
 
   const material = new MeshStandardMaterial({
-    color: 0x3f_6f_a8,
-    roughness: 0.22,
+    color: 0x86_a8_c4,
+    roughness: 0.3,
     metalness: 0,
     transparent: true,
-    opacity: 0.82,
+    opacity: 0.8,
     // Pull slightly towards camera so it never z-fights the shared terrain.
     polygonOffset: true,
     polygonOffsetFactor: -1,

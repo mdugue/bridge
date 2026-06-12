@@ -2,10 +2,13 @@ import { fromArrayBuffer, type GeoTIFFImage } from "geotiff";
 import {
   BufferAttribute,
   BufferGeometry,
+  LinearFilter,
+  LinearMipmapLinearFilter,
   Mesh,
   MeshStandardMaterial,
   NearestFilter,
   NoColorSpace,
+  SRGBColorSpace,
   type Texture,
   TextureLoader,
 } from "three";
@@ -19,6 +22,9 @@ import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /** Downsample target (N x N). 512 is plenty for a POC. */
 const DEFAULT_TARGET_SIZE = 512;
+
+/** Filename token swapped to find the RGB splat next to the class-id one. */
+const LANDCOVER_PREFIX = /landcover_/;
 
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
@@ -61,6 +67,31 @@ async function loadSplatTexture(url: string): Promise<Texture | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Loads the pre-baked pastel RGB splatmap (the colours the terrain shows).
+ * LINEAR + mipmaps + anisotropy let the GPU filter it smoothly, so class
+ * boundaries no longer stair-step at grazing angles. Colour data → sRGB.
+ */
+async function loadColorSplat(url: string): Promise<Texture | null> {
+  try {
+    const texture = await new TextureLoader().loadAsync(url);
+    texture.magFilter = LinearFilter;
+    texture.minFilter = LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = 8;
+    texture.flipY = false;
+    texture.colorSpace = SRGBColorSpace;
+    return texture;
+  } catch {
+    return null;
+  }
+}
+
+/** Derives the RGB splatmap URL from the class-id URL (…/landcover_X → …_rgb_X). */
+function colorSplatUrl(classUrl: string): string {
+  return classUrl.replace(LANDCOVER_PREFIX, "landcover_rgb_");
 }
 
 async function fetchArrayBuffer(
@@ -128,7 +159,10 @@ async function resolveBounds(
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
 export interface SplatLayer {
   bounds: TerrainBounds;
+  /** pre-baked pastel RGB colours; sampled LINEAR for soft transitions */
+  colorTexture?: Texture;
   offset: { cx: number; cy: number };
+  /** class-id raster (NEAREST); used by the water mask */
   texture: Texture;
 }
 
@@ -156,10 +190,11 @@ const TERRAIN_PALETTE = /* glsl */ `
  * frame, so `position.z` IS the absolute elevation.
  *
  * When a `splat` is given, the base diffuse comes from the ATKIS land-cover
- * class at each fragment (streets, water, meadow, …) instead of the flat
- * sage; the contour ink is composited on top exactly as before. UVs are
- * derived from the recentered world XY and the tile bounds — the terrain
- * geometry carries no uv attribute.
+ * at each fragment (streets, water, meadow, …) instead of the flat sage; the
+ * contour ink is composited on top. Prefers the pre-baked pastel RGB splat
+ * (LINEAR, soft boundaries) and falls back to the in-shader class palette.
+ * UVs are derived from the recentered world XY and the tile bounds — the
+ * terrain geometry carries no uv attribute.
  */
 function createTerrainMaterial(splat?: SplatLayer): MeshStandardMaterial {
   const material = new MeshStandardMaterial({
@@ -168,15 +203,24 @@ function createTerrainMaterial(splat?: SplatLayer): MeshStandardMaterial {
   });
   material.onBeforeCompile = (shader) => {
     const hasSplat = splat !== undefined;
+    const hasColor = splat?.colorTexture !== undefined;
     if (splat) {
       const [minX, minY, maxX, maxY] = splat.bounds;
       // Recentered tile origin (north-west corner) + size; v grows southward.
-      shader.uniforms.uSplat = { value: splat.texture };
+      shader.uniforms.uSplat = {
+        value: splat.colorTexture ?? splat.texture,
+      };
       shader.uniforms.uSplatOrigin = {
         value: [minX - splat.offset.cx, maxY - splat.offset.cy],
       };
       shader.uniforms.uSplatSize = { value: [maxX - minX, maxY - minY] };
     }
+
+    // Base colour: sample the RGB splat directly, or map the class id via the
+    // fallback palette.
+    const baseColExpr = hasColor
+      ? "vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;"
+      : "vec3 baseCol = terrainPalette( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) );";
 
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -197,21 +241,17 @@ function createTerrainMaterial(splat?: SplatLayer): MeshStandardMaterial {
         "#include <common>",
         `#include <common>
          varying float vElevation;
-         ${hasSplat ? `varying vec2 vSplatUv;\nuniform sampler2D uSplat;\n${TERRAIN_PALETTE}` : ""}`
+         ${hasSplat ? `varying vec2 vSplatUv;\nuniform sampler2D uSplat;\n${hasColor ? "" : TERRAIN_PALETTE}` : ""}`
       )
       .replace(
         "vec4 diffuseColor = vec4( diffuse, opacity );",
-        `${
-          hasSplat
-            ? "vec3 baseCol = terrainPalette( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) );"
-            : "vec3 baseCol = diffuse;"
-        }
+        `${hasSplat ? baseColExpr : "vec3 baseCol = diffuse;"}
          float minorD = vElevation / 2.0;
          float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
          float majorD = vElevation / 10.0;
          float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / fwidth( majorD ), 1.0 );
-         float ink = clamp( minor * 0.14 + major * 0.2, 0.0, 0.34 );
-         vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.18, 0.2, 0.24 ), ink ), opacity );`
+         float ink = clamp( minor * 0.10 + major * 0.15, 0.0, 0.26 );
+         vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
       );
   };
   return material;
@@ -250,11 +290,19 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
 
-  const splatTexture = opts.landcoverUrl
-    ? await loadSplatTexture(opts.landcoverUrl)
-    : null;
+  const [splatTexture, colorTexture] = opts.landcoverUrl
+    ? await Promise.all([
+        loadSplatTexture(opts.landcoverUrl),
+        loadColorSplat(colorSplatUrl(opts.landcoverUrl)),
+      ])
+    : [null, null];
   const splat: SplatLayer | undefined = splatTexture
-    ? { texture: splatTexture, bounds, offset: opts.offset }
+    ? {
+        texture: splatTexture,
+        colorTexture: colorTexture ?? undefined,
+        bounds,
+        offset: opts.offset,
+      }
     : undefined;
 
   const mesh = new Mesh(geometry, createTerrainMaterial(splat));
