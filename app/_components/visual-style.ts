@@ -103,8 +103,10 @@ export function createStyleResources(): StyleResources {
     color: 0xec_e7_df,
     roughness: 1,
     metalness: 0,
-    transparent: DEFAULT_CLAY_TRANSPARENCY > 0,
+    // Hash-dithered transparency (see setCityTransparency) — opaque-pass
+    // compositing keeps occlusion correct on the batched mesh.
     opacity: 1 - DEFAULT_CLAY_TRANSPARENCY,
+    alphaHash: DEFAULT_CLAY_TRANSPARENCY > 0,
   });
   clay.onBeforeCompile = (shader) => injectToon(shader, toonBands);
 
@@ -135,7 +137,18 @@ export function createStyleResources(): StyleResources {
 
 /**
  * Transparency for the ACTIVE style, 0 (solid) .. 1 (fully see-through).
- * Ghost maps it to frosted transmission; clay to plain alpha.
+ *
+ * Ghost maps it to frosted transmission (stable, but only the backdrop
+ * shows through). Clay uses hash-dithered transparency (`alphaHash`):
+ * stochastic coverage composited in the OPAQUE pass with full depth
+ * testing, so buildings behind buildings, backsides and roofs all occlude
+ * correctly — the batched mesh makes sorted alpha blending impossible.
+ *
+ * NOTE on needsUpdate: three bakes an OPAQUE define (alpha forced to 1)
+ * and the alpha-hash/transmission code paths into the compiled program.
+ * Crossing the on/off boundary without flagging needsUpdate leaves the
+ * stale program running until something else (e.g. the sun light count
+ * changing at sunrise) happens to force a rebuild.
  */
 export function setCityTransparency(
   resources: StyleResources,
@@ -144,12 +157,22 @@ export function setCityTransparency(
 ): void {
   const t = Math.min(Math.max(transparency, 0), 1);
   if (style === "ghost") {
+    const wasTransmissive = resources.ghost.transmission > 0;
     resources.ghost.transmission = t;
+    if (t > 0 !== wasTransmissive) {
+      resources.ghost.needsUpdate = true;
+    }
     return;
   }
   if (style === "clay") {
-    resources.clay.opacity = 1 - t;
-    resources.clay.transparent = t > 0;
+    const clay = resources.clay;
+    const wasHashed = clay.alphaHash;
+    clay.opacity = 1 - t;
+    clay.alphaHash = t > 0;
+    clay.transparent = false;
+    if (clay.alphaHash !== wasHashed) {
+      clay.needsUpdate = true;
+    }
   }
 }
 

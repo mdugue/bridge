@@ -136,6 +136,11 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     window.__poc?.setDepthGrading?.(0.5);
     window.__poc?.setBuildingTransparency?.(0.8);
     window.__poc?.setBuildingTransparency?.(0.45);
+    // Clay's alpha-hash path recompiles when crossing 0 — exercise it.
+    window.__poc?.setStyle?.("clay");
+    window.__poc?.setBuildingTransparency?.(0.5);
+    window.__poc?.setBuildingTransparency?.(0);
+    window.__poc?.setStyle?.("ghost");
     window.__poc?.setToonBands?.(4);
     window.__poc?.setToonBands?.(0);
     window.__poc?.setEdges?.(0);
