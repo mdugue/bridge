@@ -65,7 +65,6 @@ import {
   DEFAULT_CLAY_TRANSPARENCY,
   DEFAULT_EDGE_OPACITY,
   DEFAULT_GHOST_TRANSPARENCY,
-  DEFAULT_TOON_BANDS,
 } from "./visual-style";
 
 interface Props {
@@ -148,7 +147,6 @@ export default function CityWalk({
     }
   );
   const [edges, setEdges] = useState(Math.round(DEFAULT_EDGE_OPACITY * 100));
-  const [toonBands, setToonBands] = useState(DEFAULT_TOON_BANDS);
   const [contact, setContact] = useState(
     Math.round(DEFAULT_CONTACT_SHADOWS * 100)
   );
@@ -156,6 +154,7 @@ export default function CityWalk({
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintRect[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
+  const [fps, setFps] = useState<number | null>(null);
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -199,6 +198,11 @@ export default function CityWalk({
           setFootprints(h.getFootprints());
         }
       },
+      onFps: (value) => {
+        if (!cancelled) {
+          setFps(value);
+        }
+      },
       onModeChange: (m) => {
         if (!cancelled) {
           setMode(m);
@@ -231,7 +235,6 @@ export default function CityWalk({
           setAtmosphere: h.setAtmosphere,
           setDepthGrading: h.setDepthGrading,
           setBuildingTransparency: h.setBuildingTransparency,
-          setToonBands: h.setToonBands,
           setEdges: h.setEdges,
           setContactShadows: h.setContactShadows,
           setPaperGrain: h.setPaperGrain,
@@ -405,35 +408,6 @@ export default function CityWalk({
         />
       </Field>
 
-      <Field>
-        <FieldLabel htmlFor="toon-bands">Toon shading</FieldLabel>
-        <ToggleGroup
-          className="w-full"
-          id="toon-bands"
-          onValueChange={(value: string[]) => {
-            const next = value[0];
-            if (next !== undefined) {
-              const bands = Number(next);
-              setToonBands(bands);
-              handleRef.current?.setToonBands(bands);
-            }
-          }}
-          value={[String(toonBands)]}
-          variant="outline"
-        >
-          {[0, 3, 4, 6].map((bands) => (
-            <ToggleGroupItem
-              className="flex-1"
-              key={bands}
-              value={String(bands)}
-            >
-              {bands === 0 ? "Off" : `${bands}`}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-        <FieldDescription>Gradient-mapped light bands</FieldDescription>
-      </Field>
-
       <FieldSeparator />
 
       <Field>
@@ -579,7 +553,7 @@ export default function CityWalk({
 
           {/* FPS readout — always visible */}
           <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/55 px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
-            {stats ? Math.round(stats.fps) : "–"} FPS
+            {fps === null ? "–" : Math.round(fps)} FPS
           </div>
 
           {!coarse && (

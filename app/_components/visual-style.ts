@@ -1,17 +1,14 @@
-import type {
-  Group,
-  Material,
-  Mesh,
-  WebGLProgramParametersWithUniforms,
-} from "three";
+import type { Group, Material, Mesh } from "three";
 import {
   BufferGeometry,
   EdgesGeometry,
-  LineBasicMaterial,
-  LineSegments,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
+  Vector2,
 } from "three";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /**
@@ -26,66 +23,29 @@ export type CityStyleId = "standard" | "ghost" | "clay";
 export const CITY_STYLE_IDS: CityStyleId[] = ["standard", "ghost", "clay"];
 
 /** Transparency defaults per style (0 = solid, 1 = fully see-through). */
-export const DEFAULT_GHOST_TRANSPARENCY = 0.35;
+export const DEFAULT_GHOST_TRANSPARENCY = 0.05;
 export const DEFAULT_CLAY_TRANSPARENCY = 0;
 export const DEFAULT_EDGE_OPACITY = 0.7;
-/** 0 = smooth shading; >= 2 = gradient-mapped toon bands. */
-export const DEFAULT_TOON_BANDS = 0;
+/** Ink edge width in device pixels (fat lines — real, continuous width). */
+const EDGE_LINEWIDTH = 2.2;
 
 export interface StyleResources {
   clay: MeshStandardMaterial;
   dispose: () => void;
-  edgeLines: LineBasicMaterial;
+  /** fat-line ink material; width needs a resolution (see setEdgeResolution) */
+  edgeLines: LineMaterial;
   /** mutated by setEdgeOpacity; applyCityStyle reads it for visibility */
   edgesVisible: boolean;
   ghost: MeshPhysicalMaterial;
-  /** shared uniform driving the toon banding in ghost + clay shaders */
-  toonBands: { value: number };
 }
 
 const EDGE_THRESHOLD_DEG = 30;
 
-/**
- * Gradient-mapped toon banding, injected into the lit materials and driven
- * by a shared uniform — toggling does not recompile shaders. Quantizes the
- * final lit luminance (in gamma space, so bands are perceptually even)
- * while preserving hue.
- */
-const TOON_CHUNK = /* glsl */ `
-  if ( toonBands >= 1.5 ) {
-    float toonLuma = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-    float toonGamma = pow( max( toonLuma, 0.0 ), 0.4545 );
-    float toonQuant = ( floor( toonGamma * toonBands ) + 0.5 ) / toonBands;
-    float toonTarget = pow( toonQuant, 2.2 );
-    outgoingLight *= toonTarget / max( toonLuma, 1e-5 );
-  }
-`;
-
-function injectToon(
-  shader: WebGLProgramParametersWithUniforms,
-  toonBands: { value: number }
-): void {
-  shader.uniforms.toonBands = toonBands;
-  shader.fragmentShader = shader.fragmentShader
-    .replace("#include <common>", "#include <common>\nuniform float toonBands;")
-    .replace(
-      "#include <opaque_fragment>",
-      `${TOON_CHUNK}\n#include <opaque_fragment>`
-    );
-}
-
 /** Shared materials, created once per app instance. */
 export function createStyleResources(): StyleResources {
-  const toonBands = { value: DEFAULT_TOON_BANDS };
-
   // Frosted glass: `transmission` samples a blurred buffer of the scene
   // BEHIND (terrain, sky, hero models — other transmissive buildings are
-  // excluded), so what shows through is stable under camera motion. This
-  // replaces the depthWrite-transparency approach whose visibility of
-  // occluded walls flipped with draw order while moving.
-  // Dense, milky glass: high roughness + low specular kill the glassy
-  // shine; thickness + attenuation give the body density so transmitted
-  // bright sky doesn't wash the buildings out.
+  // excluded), so what shows through is stable under camera motion.
   const ghost = new MeshPhysicalMaterial({
     color: 0xdf_e5_e9,
     roughness: 0.8,
@@ -97,7 +57,6 @@ export function createStyleResources(): StyleResources {
     attenuationColor: 0xb8_c4_cc,
     attenuationDistance: 12,
   });
-  ghost.onBeforeCompile = (shader) => injectToon(shader, toonBands);
 
   const clay = new MeshStandardMaterial({
     color: 0xec_e7_df,
@@ -108,12 +67,21 @@ export function createStyleResources(): StyleResources {
     opacity: 1 - DEFAULT_CLAY_TRANSPARENCY,
     alphaHash: DEFAULT_CLAY_TRANSPARENCY > 0,
   });
-  clay.onBeforeCompile = (shader) => injectToon(shader, toonBands);
 
-  const edgeLines = new LineBasicMaterial({
+  // Fat ink lines: real screen-space width (LineBasicMaterial ignores width
+  // on most platforms). polygonOffset pulls them a hair towards the camera so
+  // they don't z-fight the wall they sit on — that fighting is what made the
+  // thin lines look broken / dashed.
+  const edgeLines = new LineMaterial({
     color: 0x2f_35_40,
+    linewidth: EDGE_LINEWIDTH,
+    worldUnits: false,
     transparent: true,
     opacity: DEFAULT_EDGE_OPACITY,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+    resolution: new Vector2(window.innerWidth, window.innerHeight),
   });
 
   // Shared across reloads — disposeObject3D must not free them mid-session.
@@ -126,7 +94,6 @@ export function createStyleResources(): StyleResources {
     clay,
     edgeLines,
     edgesVisible: DEFAULT_EDGE_OPACITY > 0,
-    toonBands,
     dispose: () => {
       ghost.dispose();
       clay.dispose();
@@ -176,11 +143,6 @@ export function setCityTransparency(
   }
 }
 
-/** 0 disables toon banding; 2..6 are sensible band counts. */
-export function setToonBands(resources: StyleResources, bands: number): void {
-  resources.toonBands.value = bands;
-}
-
 /** Ink edge strength; 0 hides the lines entirely (via applyCityStyle). */
 export function setEdgeOpacity(
   resources: StyleResources,
@@ -190,12 +152,22 @@ export function setEdgeOpacity(
   resources.edgesVisible = opacity > 0.01;
 }
 
+/** Fat lines need the drawing-buffer size to compute their pixel width. */
+export function setEdgeResolution(
+  resources: StyleResources,
+  width: number,
+  height: number
+): void {
+  resources.edgeLines.resolution.set(width, height);
+}
+
 /**
  * Ink outline for one batched city mesh. The loader geometry is non-indexed
  * (flat-shaded), so EdgesGeometry would treat every triangle edge as a
- * boundary — weld a positions-only copy first.
+ * boundary — weld a positions-only copy first, then promote to fat-line
+ * geometry.
  */
-function buildEdges(mesh: Mesh, material: LineBasicMaterial): LineSegments {
+function buildEdges(mesh: Mesh, material: LineMaterial): LineSegments2 {
   const positionsOnly = new BufferGeometry();
   positionsOnly.setAttribute(
     "position",
@@ -204,13 +176,14 @@ function buildEdges(mesh: Mesh, material: LineBasicMaterial): LineSegments {
   const welded = mergeVertices(positionsOnly, 1e-4);
   const edges = new EdgesGeometry(welded, EDGE_THRESHOLD_DEG);
   welded.dispose();
-  const lines = new LineSegments(edges, material);
+  const lineGeo = new LineSegmentsGeometry().fromEdgesGeometry(edges);
+  edges.dispose();
+  const lines = new LineSegments2(lineGeo, material);
   lines.name = "city-edges";
   // Render AFTER all building fills so hidden edges are depth-tested away —
-  // otherwise lines of occluded buildings draw through walls and the whole
-  // city reads as x-ray glass no matter how opaque the fills are.
+  // otherwise occluded edges draw through walls and the city reads x-ray.
   lines.renderOrder = 1;
-  // Decoration only: keep the demolish raycast off ~100k line segments.
+  // Decoration only: keep the demolish raycast off the line segments.
   lines.raycast = () => {
     // intentionally empty
   };
@@ -220,7 +193,7 @@ function buildEdges(mesh: Mesh, material: LineBasicMaterial): LineSegments {
 interface StyledCityMesh extends Mesh {
   isCityObjectMesh?: boolean;
   userData: {
-    edges?: LineSegments;
+    edges?: LineSegments2;
     originalMaterial?: Material | Material[];
   };
 }

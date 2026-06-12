@@ -45,8 +45,6 @@ export interface PocDebugInfo {
   setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
-  /** 0 = smooth shading; 2..6 = gradient-mapped toon bands. */
-  setToonBands?: (bands: number) => void;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;

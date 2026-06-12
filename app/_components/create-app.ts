@@ -50,7 +50,7 @@ import {
   createStyleResources,
   setCityTransparency,
   setEdgeOpacity,
-  setToonBands,
+  setEdgeResolution,
 } from "./visual-style";
 
 const EYE_HEIGHT = 1.7;
@@ -71,8 +71,6 @@ export const DEFAULT_ATMOSPHERE = 0.35;
 
 export interface CityWalkStats {
   buildingCount: number;
-  /** exponentially-smoothed frames per second */
-  fps: number;
   shadowsEnabled: boolean;
   terrainVertexCount: number;
 }
@@ -95,6 +93,8 @@ export interface CityWalkOptions {
   insertedModelUrl?: string;
   /** optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
   landcoverSrc?: string;
+  /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
+  onFps?: (fps: number) => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -146,8 +146,6 @@ export interface CityWalkHandle {
   setPaperGrain: (intensity: number) => void;
   setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
-  /** 0 = smooth shading; 2..6 = gradient-mapped toon bands */
-  setToonBands: (bands: number) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -325,6 +323,8 @@ async function bootApp(
 
   opts.onProgress?.("Preparing render styles…");
   const styleResources = createStyleResources();
+  const drawingBuffer = renderer.getDrawingBufferSize(new Vector2());
+  setEdgeResolution(styleResources, drawingBuffer.x, drawingBuffer.y);
   let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
   applyCityStyle(cityLayer.group, currentStyle, styleResources);
   const postStack = createPostStack(renderer, scene, camera);
@@ -426,7 +426,6 @@ async function bootApp(
   const emitStats = () => {
     opts.onStats?.({
       buildingCount: countBuildings(cityLayer.data),
-      fps,
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
     });
@@ -496,6 +495,8 @@ async function bootApp(
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
     postStack.setSize(container.clientWidth, container.clientHeight);
+    const buf = renderer.getDrawingBufferSize(new Vector2());
+    setEdgeResolution(styleResources, buf.x, buf.y);
   });
   resizeObserver.observe(container);
 
@@ -514,6 +515,7 @@ async function bootApp(
 
   const timer = new Timer();
   let tickDue = 0;
+  let fpsDue = 0;
   renderer.setAnimationLoop((time) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
@@ -528,7 +530,12 @@ async function bootApp(
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(getPose());
       updateFocus();
-      emitStats();
+    }
+    // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
+    // emit (which refreshes footprints and would re-flash the minimap).
+    if (timer.getElapsed() >= fpsDue) {
+      fpsDue = timer.getElapsed() + 0.5;
+      opts.onFps?.(fps);
     }
     postStack.render(dt);
   });
@@ -547,7 +554,6 @@ async function bootApp(
     setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),
     setBuildingTransparency: (transparency) =>
       setCityTransparency(styleResources, currentStyle, transparency),
-    setToonBands: (bands) => setToonBands(styleResources, bands),
     setEdges: (opacity) => {
       setEdgeOpacity(styleResources, opacity);
       // Visibility of the (lazily built) edge overlays follows the flag.
