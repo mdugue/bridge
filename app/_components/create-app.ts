@@ -311,7 +311,9 @@ async function bootApp(
       heightAt: terrain.heightAt,
       signal: opts.signal,
     });
-    world.add(vegetation);
+    // Y-up scene frame (like the inserted building), NOT the Z-up `world`
+    // group: the placements already use world coords (x, elevation, -north).
+    scene.add(vegetation);
   }
 
   world.updateMatrixWorld(true);
