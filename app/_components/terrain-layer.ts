@@ -20,8 +20,9 @@ import {
 import { tfwToBounds } from "@/lib/city/tfw";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
-/** Downsample target (N x N). 512 is plenty for a POC. */
-const DEFAULT_TARGET_SIZE = 512;
+/** Downsample target (N x N). 1024 over a 2 km tile ≈ 2 m — fine enough that
+ * the terrain silhouette no longer reads as coarse polygonal steps. */
+const DEFAULT_TARGET_SIZE = 1024;
 
 /** Filename token swapped to find the RGB splat next to the class-id one. */
 const LANDCOVER_PREFIX = /landcover_/;
