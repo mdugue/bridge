@@ -71,7 +71,7 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   // Demolish end to end: hover the camera over a real building, aim straight
   // down and trigger the crosshair demolition — the building count must drop.
   const cityDoc = (await (
-    await page.request.get("/data/lod1_33412_5656_2_sn.city.json")
+    await page.request.get("/data/lod2_33412_5656_2_sn.city.json")
   ).json()) as {
     CityObjects: Record<
       string,

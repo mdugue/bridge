@@ -10,8 +10,8 @@ const TILE = "33412_5656_2_sn";
 
 const copies: [string, string][] = [
   [
-    `data/cityjson/lod1_${TILE}.city.json`,
-    `public/data/lod1_${TILE}.city.json`,
+    `data/cityjson/lod2_${TILE}.city.json`,
+    `public/data/lod2_${TILE}.city.json`,
   ],
   [
     `data/dgm/dgm1_${TILE}_tiff/dgm1_${TILE}.tif`,

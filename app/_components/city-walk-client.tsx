@@ -19,7 +19,7 @@ const TILE = "33412_5656_2_sn";
 export function CityWalkClient() {
   return (
     <CityWalk
-      citySrc={`/data/lod1_${TILE}.city.json`}
+      citySrc={`/data/lod2_${TILE}.city.json`}
       demSrc={`/data/dgm1_${TILE}.tif`}
       demTfwSrc={`/data/dgm1_${TILE}.tfw`}
     />
