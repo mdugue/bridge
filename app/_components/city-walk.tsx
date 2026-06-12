@@ -51,10 +51,21 @@ import {
 import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
 import { updatePocDebug } from "./poc-debug";
-import { DEFAULT_DEPTH_GRADING, DEFAULT_DOF } from "./post-stack";
+import {
+  DEFAULT_CONTACT_SHADOWS,
+  DEFAULT_DEPTH_GRADING,
+  DEFAULT_DOF,
+  DEFAULT_PAPER_GRAIN,
+} from "./post-stack";
 import type { SunState } from "./sun-rig";
 import { VirtualJoystick } from "./virtual-joystick";
-import type { CityStyleId } from "./visual-style";
+import {
+  type CityStyleId,
+  DEFAULT_CLAY_TRANSPARENCY,
+  DEFAULT_EDGE_OPACITY,
+  DEFAULT_GHOST_TRANSPARENCY,
+  DEFAULT_TOON_BANDS,
+} from "./visual-style";
 
 interface Props {
   /** URL of the CityJSON tile, served from /public */
@@ -122,6 +133,19 @@ export default function CityWalk({
   const [grading, setGrading] = useState(
     Math.round(DEFAULT_DEPTH_GRADING * 100)
   );
+  const [transparency, setTransparency] = useState<Record<CityStyleId, number>>(
+    {
+      standard: 0,
+      ghost: Math.round(DEFAULT_GHOST_TRANSPARENCY * 100),
+      clay: Math.round(DEFAULT_CLAY_TRANSPARENCY * 100),
+    }
+  );
+  const [edges, setEdges] = useState(Math.round(DEFAULT_EDGE_OPACITY * 100));
+  const [toonBands, setToonBands] = useState(DEFAULT_TOON_BANDS);
+  const [contact, setContact] = useState(
+    Math.round(DEFAULT_CONTACT_SHADOWS * 100)
+  );
+  const [grain, setGrain] = useState(Math.round(DEFAULT_PAPER_GRAIN * 100));
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintRect[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -197,6 +221,11 @@ export default function CityWalk({
           setDepthOfField: h.setDepthOfField,
           setAtmosphere: h.setAtmosphere,
           setDepthGrading: h.setDepthGrading,
+          setBuildingTransparency: h.setBuildingTransparency,
+          setToonBands: h.setToonBands,
+          setEdges: h.setEdges,
+          setContactShadows: h.setContactShadows,
+          setPaperGrain: h.setPaperGrain,
           insertBuilding: () => {
             h.insertBuilding().catch(() => {
               // glTF failure is non-fatal; the box fallback can't fail
@@ -317,6 +346,112 @@ export default function CityWalk({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="building-transparency">
+          Transparency · {transparency[style]}%
+        </FieldLabel>
+        <Slider
+          disabled={style === "standard"}
+          id="building-transparency"
+          max={90}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setTransparency((prev) => ({ ...prev, [style]: next }));
+            handleRef.current?.setBuildingTransparency(next / 100);
+          }}
+          step={5}
+          value={[transparency[style]]}
+        />
+        <FieldDescription>
+          {style === "ghost"
+            ? "Frosted glass — the backdrop shows through blurred"
+            : "Plain see-through"}
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="ink-edges">Ink edges · {edges}%</FieldLabel>
+        <Slider
+          disabled={style === "standard"}
+          id="ink-edges"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setEdges(next);
+            handleRef.current?.setEdges(next / 100);
+          }}
+          step={5}
+          value={[edges]}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="toon-bands">Toon shading</FieldLabel>
+        <ToggleGroup
+          className="w-full"
+          id="toon-bands"
+          onValueChange={(value: string[]) => {
+            const next = value[0];
+            if (next !== undefined) {
+              const bands = Number(next);
+              setToonBands(bands);
+              handleRef.current?.setToonBands(bands);
+            }
+          }}
+          value={[String(toonBands)]}
+          variant="outline"
+        >
+          {[0, 3, 4, 6].map((bands) => (
+            <ToggleGroupItem
+              className="flex-1"
+              key={bands}
+              value={String(bands)}
+            >
+              {bands === 0 ? "Off" : `${bands}`}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        <FieldDescription>Gradient-mapped light bands</FieldDescription>
+      </Field>
+
+      <FieldSeparator />
+
+      <Field>
+        <FieldLabel htmlFor="contact-shadows">
+          Contact shadows · {contact}%
+        </FieldLabel>
+        <Slider
+          id="contact-shadows"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setContact(next);
+            handleRef.current?.setContactShadows(next / 100);
+          }}
+          step={5}
+          value={[contact]}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="paper-grain">Paper grain · {grain}%</FieldLabel>
+        <Slider
+          id="paper-grain"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setGrain(next);
+            handleRef.current?.setPaperGrain(next / 100);
+          }}
+          step={5}
+          value={[grain]}
+        />
       </Field>
 
       <Field orientation="horizontal">
@@ -463,7 +598,7 @@ export default function CityWalk({
               </DrawerContent>
             </Drawer>
           ) : (
-            <Card className="absolute top-3 right-3 w-72 gap-0 py-4">
+            <Card className="absolute top-3 right-3 max-h-[calc(100dvh-1.5rem)] w-72 gap-0 overflow-y-auto py-4">
               <CardContent className="px-4">{controlsFields}</CardContent>
             </Card>
           )}

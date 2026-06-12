@@ -134,6 +134,16 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     window.__poc?.setAtmosphere?.(0.35);
     window.__poc?.setDepthGrading?.(1);
     window.__poc?.setDepthGrading?.(0.5);
+    window.__poc?.setBuildingTransparency?.(0.8);
+    window.__poc?.setBuildingTransparency?.(0.45);
+    window.__poc?.setToonBands?.(4);
+    window.__poc?.setToonBands?.(0);
+    window.__poc?.setEdges?.(0);
+    window.__poc?.setEdges?.(0.7);
+    window.__poc?.setContactShadows?.(1);
+    window.__poc?.setContactShadows?.(0.5);
+    window.__poc?.setPaperGrain?.(1);
+    window.__poc?.setPaperGrain?.(0.25);
   });
   await page.waitForTimeout(500);
 

@@ -1,9 +1,15 @@
-import type { Group, Material, Mesh } from "three";
+import type {
+  Group,
+  Material,
+  Mesh,
+  WebGLProgramParametersWithUniforms,
+} from "three";
 import {
   BufferGeometry,
   EdgesGeometry,
   LineBasicMaterial,
   LineSegments,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
 } from "three";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -12,54 +18,100 @@ import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
  * City rendering styles. Picking/demolish read geometry attributes, not
  * materials, so the loader meshes can carry any material we like:
  *  - standard: the loader's per-type CityObjectsMaterial (LoD colors)
- *  - ghost: translucent fresnel "massing" — context frame for hero buildings
- *  - clay: opaque archviz clay + ink edges
+ *  - ghost: frosted-glass massing (physical transmission — the backdrop
+ *    shows through blurred, consistently; never order-dependent popping)
+ *  - clay: archviz clay with adjustable plain transparency
  */
 export type CityStyleId = "standard" | "ghost" | "clay";
 export const CITY_STYLE_IDS: CityStyleId[] = ["standard", "ghost", "clay"];
+
+/** Transparency defaults per style (0 = solid, 1 = fully see-through). */
+export const DEFAULT_GHOST_TRANSPARENCY = 0.35;
+export const DEFAULT_CLAY_TRANSPARENCY = 0;
+export const DEFAULT_EDGE_OPACITY = 0.7;
+/** 0 = smooth shading; >= 2 = gradient-mapped toon bands. */
+export const DEFAULT_TOON_BANDS = 0;
 
 export interface StyleResources {
   clay: MeshStandardMaterial;
   dispose: () => void;
   edgeLines: LineBasicMaterial;
-  ghost: MeshStandardMaterial;
+  /** mutated by setEdgeOpacity; applyCityStyle reads it for visibility */
+  edgesVisible: boolean;
+  ghost: MeshPhysicalMaterial;
+  /** shared uniform driving the toon banding in ghost + clay shaders */
+  toonBands: { value: number };
 }
 
 const EDGE_THRESHOLD_DEG = 30;
 
+/**
+ * Gradient-mapped toon banding, injected into the lit materials and driven
+ * by a shared uniform — toggling does not recompile shaders. Quantizes the
+ * final lit luminance (in gamma space, so bands are perceptually even)
+ * while preserving hue.
+ */
+const TOON_CHUNK = /* glsl */ `
+  if ( toonBands >= 1.5 ) {
+    float toonLuma = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
+    float toonGamma = pow( max( toonLuma, 0.0 ), 0.4545 );
+    float toonQuant = ( floor( toonGamma * toonBands ) + 0.5 ) / toonBands;
+    float toonTarget = pow( toonQuant, 2.2 );
+    outgoingLight *= toonTarget / max( toonLuma, 1e-5 );
+  }
+`;
+
+function injectToon(
+  shader: WebGLProgramParametersWithUniforms,
+  toonBands: { value: number }
+): void {
+  shader.uniforms.toonBands = toonBands;
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", "#include <common>\nuniform float toonBands;")
+    .replace(
+      "#include <opaque_fragment>",
+      `${TOON_CHUNK}\n#include <opaque_fragment>`
+    );
+}
+
 /** Shared materials, created once per app instance. */
 export function createStyleResources(): StyleResources {
-  const ghost = new MeshStandardMaterial({
-    color: 0xe6_ed_f3,
-    roughness: 0.45,
+  const toonBands = { value: DEFAULT_TOON_BANDS };
+
+  // Frosted glass: `transmission` samples a blurred buffer of the scene
+  // BEHIND (terrain, sky, hero models — other transmissive buildings are
+  // excluded), so what shows through is stable under camera motion. This
+  // replaces the depthWrite-transparency approach whose visibility of
+  // occluded walls flipped with draw order while moving.
+  // Dense, milky glass: high roughness + low specular kill the glassy
+  // shine; thickness + attenuation give the body density so transmitted
+  // bright sky doesn't wash the buildings out.
+  const ghost = new MeshPhysicalMaterial({
+    color: 0xdf_e5_e9,
+    roughness: 0.8,
     metalness: 0,
-    transparent: true,
-    opacity: 0.96,
-    // Near-opaque ghost: writing depth stops interior faces and farther
-    // buildings from bleeding through, and lets the AO pass see the city.
-    depthWrite: true,
+    specularIntensity: 0.4,
+    transmission: DEFAULT_GHOST_TRANSPARENCY,
+    ior: 1.2,
+    thickness: 8,
+    attenuationColor: 0xb8_c4_cc,
+    attenuationDistance: 12,
   });
-  // Fresnel as a COLOR rim (porcelain sheen at grazing angles) with only a
-  // whisper of extra translucency face-on. Earlier versions modulated alpha
-  // hard, which read as glass — pale fills over a pale sky vanish fast.
-  ghost.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `float ghostFresnel = pow( 1.0 - abs( dot( normalize( vNormal ), normalize( vViewPosition ) ) ), 2.0 );
-       vec4 diffuseColor = vec4( diffuse * ( 1.0 + 0.16 * ghostFresnel ), opacity * ( 0.95 + 0.05 * ghostFresnel ) );`
-    );
-  };
+  ghost.onBeforeCompile = (shader) => injectToon(shader, toonBands);
 
   const clay = new MeshStandardMaterial({
     color: 0xec_e7_df,
     roughness: 1,
     metalness: 0,
+    transparent: DEFAULT_CLAY_TRANSPARENCY > 0,
+    opacity: 1 - DEFAULT_CLAY_TRANSPARENCY,
   });
+  clay.onBeforeCompile = (shader) => injectToon(shader, toonBands);
 
   const edgeLines = new LineBasicMaterial({
     color: 0x2f_35_40,
     transparent: true,
-    opacity: 0.7,
+    opacity: DEFAULT_EDGE_OPACITY,
   });
 
   // Shared across reloads — disposeObject3D must not free them mid-session.
@@ -71,12 +123,48 @@ export function createStyleResources(): StyleResources {
     ghost,
     clay,
     edgeLines,
+    edgesVisible: DEFAULT_EDGE_OPACITY > 0,
+    toonBands,
     dispose: () => {
       ghost.dispose();
       clay.dispose();
       edgeLines.dispose();
     },
   };
+}
+
+/**
+ * Transparency for the ACTIVE style, 0 (solid) .. 1 (fully see-through).
+ * Ghost maps it to frosted transmission; clay to plain alpha.
+ */
+export function setCityTransparency(
+  resources: StyleResources,
+  style: CityStyleId,
+  transparency: number
+): void {
+  const t = Math.min(Math.max(transparency, 0), 1);
+  if (style === "ghost") {
+    resources.ghost.transmission = t;
+    return;
+  }
+  if (style === "clay") {
+    resources.clay.opacity = 1 - t;
+    resources.clay.transparent = t > 0;
+  }
+}
+
+/** 0 disables toon banding; 2..6 are sensible band counts. */
+export function setToonBands(resources: StyleResources, bands: number): void {
+  resources.toonBands.value = bands;
+}
+
+/** Ink edge strength; 0 hides the lines entirely (via applyCityStyle). */
+export function setEdgeOpacity(
+  resources: StyleResources,
+  opacity: number
+): void {
+  resources.edgeLines.opacity = Math.min(Math.max(opacity, 0), 1);
+  resources.edgesVisible = opacity > 0.01;
 }
 
 /**
@@ -95,10 +183,9 @@ function buildEdges(mesh: Mesh, material: LineBasicMaterial): LineSegments {
   welded.dispose();
   const lines = new LineSegments(edges, material);
   lines.name = "city-edges";
-  // Render AFTER all (transparent) building fills so hidden edges are
-  // depth-tested away — otherwise lines of occluded buildings draw through
-  // walls and the whole city reads as x-ray glass no matter how opaque the
-  // fills are.
+  // Render AFTER all building fills so hidden edges are depth-tested away —
+  // otherwise lines of occluded buildings draw through walls and the whole
+  // city reads as x-ray glass no matter how opaque the fills are.
   lines.renderOrder = 1;
   // Decoration only: keep the demolish raycast off ~100k line segments.
   lines.raycast = () => {
@@ -138,7 +225,7 @@ export function applyCityStyle(
       mesh.material = style === "ghost" ? resources.ghost : resources.clay;
     }
 
-    const wantEdges = style !== "standard";
+    const wantEdges = style !== "standard" && resources.edgesVisible;
     if (wantEdges && !mesh.userData.edges) {
       mesh.userData.edges = buildEdges(mesh, resources.edgeLines);
       mesh.add(mesh.userData.edges);

@@ -29,14 +29,24 @@ export interface PocDebugInfo {
   ready: boolean;
   /** Sets the fog amount (0..1). */
   setAtmosphere?: (amount: number) => void;
+  /** Sets the active style's transparency (0..1). */
+  setBuildingTransparency?: (transparency: number) => void;
+  /** Sets the soft contact-shadow (SSAO) strength (0..1). */
+  setContactShadows?: (strength: number) => void;
   /** Sets the warm-near/cool-far grading intensity (0..1). */
   setDepthGrading?: (intensity: number) => void;
   /** Toggles the photographic depth of field. */
   setDepthOfField?: (enabled: boolean) => void;
+  /** Sets the ink edge opacity (0..1); 0 hides the overlay. */
+  setEdges?: (opacity: number) => void;
+  /** Sets the paper-grain intensity (0..1). */
+  setPaperGrain?: (intensity: number) => void;
   /** Switches the city rendering style. */
   setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
+  /** 0 = smooth shading; 2..6 = gradient-mapped toon bands. */
+  setToonBands?: (bands: number) => void;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;

@@ -47,6 +47,9 @@ import {
   applyCityStyle,
   type CityStyleId,
   createStyleResources,
+  setCityTransparency,
+  setEdgeOpacity,
+  setToonBands,
 } from "./visual-style";
 
 const EYE_HEIGHT = 1.7;
@@ -112,15 +115,25 @@ export interface CityWalkHandle {
   offset: { cx: number; cy: number };
   /** fog amount 0..1 (0 = clear day, 1 = thick painterly haze) */
   setAtmosphere: (amount: number) => void;
+  /** transparency 0..1 of the ACTIVE style (ghost: frosted, clay: alpha) */
+  setBuildingTransparency: (transparency: number) => void;
+  /** soft contact-shadow (SSAO) strength 0..1; 0 disables the pass */
+  setContactShadows: (strength: number) => void;
   /** warm-near/cool-far color grading intensity 0..1 */
   setDepthGrading: (intensity: number) => void;
   /** photographic depth of field with crosshair autofocus */
   setDepthOfField: (enabled: boolean) => void;
+  /** ink edge opacity 0..1; 0 hides the edge overlay */
+  setEdges: (opacity: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
+  /** paper-grain overlay intensity 0..1 */
+  setPaperGrain: (intensity: number) => void;
   setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
+  /** 0 = smooth shading; 2..6 = gradient-mapped toon bands */
+  setToonBands: (bands: number) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -494,6 +507,16 @@ async function bootApp(
     },
     setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
     setDepthGrading: (intensity) => postStack.setDepthGrading(intensity),
+    setContactShadows: (strength) => postStack.setContactShadows(strength),
+    setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),
+    setBuildingTransparency: (transparency) =>
+      setCityTransparency(styleResources, currentStyle, transparency),
+    setToonBands: (bands) => setToonBands(styleResources, bands),
+    setEdges: (opacity) => {
+      setEdgeOpacity(styleResources, opacity);
+      // Visibility of the (lazily built) edge overlays follows the flag.
+      applyCityStyle(cityLayer.group, currentStyle, styleResources);
+    },
     setAtmosphere: (amount) => {
       if (scene.fog instanceof Fog) {
         const range = fogRangeFor(amount);
