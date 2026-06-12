@@ -29,6 +29,7 @@ const copies: [string, string][] = [
     `public/data/landcover_rgb_${TILE}.png`,
   ],
   [`data/dlm/vegrows_${TILE}.geojson`, `public/data/vegrows_${TILE}.geojson`],
+  [`data/dlm/canopy_${TILE}.geojson`, `public/data/canopy_${TILE}.geojson`],
 ];
 
 for (const [src, dest] of copies) {

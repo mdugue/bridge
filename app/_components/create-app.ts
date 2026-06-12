@@ -309,6 +309,8 @@ async function bootApp(
     const vegetation = await loadVegetation(opts.vegetationSrc, {
       offset,
       heightAt: terrain.heightAt,
+      // DOM1-derived area canopy sits next to the rows GeoJSON.
+      canopyUrl: opts.vegetationSrc.replace("vegrows_", "canopy_"),
       signal: opts.signal,
     });
     // Y-up scene frame (like the inserted building), NOT the Z-up `world`

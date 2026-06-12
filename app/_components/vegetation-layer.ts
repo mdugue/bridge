@@ -11,6 +11,8 @@ import {
 
 /** Recenter offset + ground lookup shared with the terrain. */
 export interface VegetationContext {
+  /** optional canopy GeoJSON (points with an "h" height) from DOM1 */
+  canopyUrl?: string;
   heightAt: (x: number, y: number) => number | null;
   offset: { cx: number; cy: number };
   signal?: AbortSignal;
@@ -21,12 +23,19 @@ interface LineFeature {
   properties: { kind: "hedge" | "treerow" };
 }
 
+interface PointFeature {
+  geometry: { coordinates: [number, number]; type: "Point" };
+  properties: { h: number };
+}
+
 const TREE_SPACING = 9; // metres between trees along a row
 const HEDGE_SPACING = 1.1; // metres between hedge segments
 const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
 const HEDGE_H = 1.3;
 const HEDGE_W = 0.9;
+/** Approx visual height of an unscaled tree; canopy scale = h / this. */
+const BASE_TREE_H = 5.8;
 
 /** Deterministic [0,1) jitter so the layer rebuilds identically. */
 function hash(i: number): number {
@@ -182,11 +191,59 @@ function buildHedges(hedges: Placement[]): InstancedMesh {
   return mesh;
 }
 
+async function fetchFeatures<T>(
+  url: string,
+  signal?: AbortSignal
+): Promise<T[]> {
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      return [];
+    }
+    const data = (await res.json()) as { features?: T[] };
+    return data.features ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Canopy points (DOM1-derived) → height-scaled tree placements. */
+function collectCanopy(
+  features: PointFeature[],
+  ctx: VegetationContext
+): Placement[] {
+  const { cx, cy } = ctx.offset;
+  const out: Placement[] = [];
+  for (const f of features) {
+    if (f.geometry?.type !== "Point") {
+      continue;
+    }
+    const [ex, ey] = f.geometry.coordinates;
+    const ground = ctx.heightAt(ex, ey);
+    if (ground === null) {
+      continue;
+    }
+    const seed = ex * 0.13 + ey * 0.07;
+    out.push({
+      x: ex - cx,
+      y: ground,
+      z: -(ey - cy),
+      rot: hash(seed * 1.7) * Math.PI,
+      // Scale the whole tree to the measured canopy height (± a touch).
+      s:
+        Math.min(Math.max(f.properties.h / BASE_TREE_H, 0.5), 7) *
+        (0.9 + hash(seed) * 0.2),
+    });
+  }
+  return out;
+}
+
 /**
- * Builds stylized hedges and tree rows from the ATKIS veg04 GeoJSON. Trees are
- * a low-poly trunk + crown; hedges a run of small boxes. Everything is drawn
- * with InstancedMeshes so thousands of plants stay cheap. Each plant is
- * dropped onto the terrain via `heightAt`; points off the tile are skipped.
+ * Builds stylized vegetation from the ATKIS veg04 rows GeoJSON (hedges + tree
+ * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
+ * their measured height). Everything is drawn with InstancedMeshes so tens of
+ * thousands of plants stay cheap; each is dropped onto the terrain via
+ * `heightAt` and points off the tile are skipped.
  *
  * Non-fatal: any failure resolves to an empty group so the scene still loads.
  */
@@ -197,19 +254,15 @@ export async function loadVegetation(
   const group = new Group();
   group.name = "vegetation";
 
-  let features: LineFeature[];
-  try {
-    const res = await fetch(url, { signal: ctx.signal });
-    if (!res.ok) {
-      return group;
-    }
-    const data = (await res.json()) as { features: LineFeature[] };
-    features = data.features ?? [];
-  } catch {
-    return group;
-  }
+  const [rowFeatures, canopyFeatures] = await Promise.all([
+    fetchFeatures<LineFeature>(url, ctx.signal),
+    ctx.canopyUrl
+      ? fetchFeatures<PointFeature>(ctx.canopyUrl, ctx.signal)
+      : Promise.resolve([]),
+  ]);
 
-  const { trees, hedges } = collectPlacements(features, ctx);
+  const { trees, hedges } = collectPlacements(rowFeatures, ctx);
+  trees.push(...collectCanopy(canopyFeatures, ctx));
   if (trees.length > 0) {
     group.add(...buildTrees(trees));
   }
