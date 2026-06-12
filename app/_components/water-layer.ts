@@ -37,11 +37,15 @@ export function createWaterLayer(
     polygonOffsetUnits: -1,
   });
 
+  const splatWidth =
+    (splat.texture.image as { width?: number } | undefined)?.width ?? 2048;
+  const texel = 1 / splatWidth;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSplat = { value: splat.texture };
     shader.uniforms.uTime = uTime;
     shader.uniforms.uOrigin = { value: origin };
     shader.uniforms.uSize = { value: size };
+    shader.uniforms.uTexel = { value: texel };
 
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -66,13 +70,23 @@ export function createWaterLayer(
          varying vec2 vSplatUv;
          varying vec2 vWorldXY;
          uniform sampler2D uSplat;
-         uniform float uTime;`
+         uniform float uTime;
+         uniform float uTexel;`
       )
-      // Mask to water (class 8) — discard everything else.
+      // Mask to water (class 8). The class raster is NEAREST, so a single tap
+      // stair-steps at the shoreline; a 5-tap coverage straightens (anti-
+      // aliases) the edge into the fragment alpha without blurring it.
       .replace(
         "#include <map_fragment>",
         `#include <map_fragment>
-         if ( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) < 7.5 ) discard;`
+         float wcov = step( 7.5, texture2D( uSplat, vSplatUv ).r * 255.0 );
+         wcov += step( 7.5, texture2D( uSplat, vSplatUv + vec2( uTexel, 0.0 ) ).r * 255.0 );
+         wcov += step( 7.5, texture2D( uSplat, vSplatUv - vec2( uTexel, 0.0 ) ).r * 255.0 );
+         wcov += step( 7.5, texture2D( uSplat, vSplatUv + vec2( 0.0, uTexel ) ).r * 255.0 );
+         wcov += step( 7.5, texture2D( uSplat, vSplatUv - vec2( 0.0, uTexel ) ).r * 255.0 );
+         wcov *= 0.2;
+         if ( wcov <= 0.0 ) discard;
+         diffuseColor.a *= wcov;`
       )
       // Stylized ripples: perturb the shading normal with crossing sine waves.
       .replace(
