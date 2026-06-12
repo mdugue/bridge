@@ -577,6 +577,11 @@ export default function CityWalk({
             className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
           />
 
+          {/* FPS readout — always visible */}
+          <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/55 px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
+            {stats ? Math.round(stats.fps) : "–"} FPS
+          </div>
+
           {!coarse && (
             <Card className="pointer-events-none absolute top-3 left-3 max-w-xs gap-0 py-3">
               <CardContent className="flex flex-col gap-2 px-4 text-xs leading-5">

@@ -71,6 +71,8 @@ export const DEFAULT_ATMOSPHERE = 0.35;
 
 export interface CityWalkStats {
   buildingCount: number;
+  /** exponentially-smoothed frames per second */
+  fps: number;
   shadowsEnabled: boolean;
   terrainVertexCount: number;
 }
@@ -420,9 +422,11 @@ async function bootApp(
     },
   });
 
+  let fps = 0;
   const emitStats = () => {
     opts.onStats?.({
       buildingCount: countBuildings(cityLayer.data),
+      fps,
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
     });
@@ -513,6 +517,9 @@ async function bootApp(
   renderer.setAnimationLoop((time) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
+    if (dt > 0) {
+      fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
+    }
     movement.update(dt);
     terrain.water?.setTime(timer.getElapsed());
     // Keep the (small, sharp) shadow frustum centered on the player.
@@ -521,6 +528,7 @@ async function bootApp(
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(getPose());
       updateFocus();
+      emitStats();
     }
     postStack.render(dt);
   });
