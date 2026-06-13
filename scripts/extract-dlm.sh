@@ -130,7 +130,7 @@ fi
 #
 # Tune crispness with LANDCOVER_BLUR (px @ ${RES}); water edge with WATER_BLUR:
 #   LANDCOVER_BLUR=0.4 WATER_BLUR=1.2 bash scripts/extract-dlm.sh 33412_5656
-BLUR="${LANDCOVER_BLUR:-0.8}"
+BLUR="${LANDCOVER_BLUR:-0.3}"
 WBLUR="${WATER_BLUR:-1.0}"
 RGB="$OUTDIR/landcover_rgb_${TILE}_${SUFFIX}.png"
 python3 - "$OUTDIR/$NAME.png" "$RGB" "$BLUR" "$WBLUR" <<'PY'
