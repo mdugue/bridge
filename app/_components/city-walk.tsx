@@ -64,7 +64,6 @@ import { VirtualJoystick } from "./virtual-joystick";
 import {
   type CityStyleId,
   DEFAULT_CLAY_TRANSPARENCY,
-  DEFAULT_EDGE_OPACITY,
   DEFAULT_GHOST_TRANSPARENCY,
 } from "./visual-style";
 
@@ -150,7 +149,6 @@ export default function CityWalk({
       clay: Math.round(DEFAULT_CLAY_TRANSPARENCY * 100),
     }
   );
-  const [edges, setEdges] = useState(Math.round(DEFAULT_EDGE_OPACITY * 100));
   const [contact, setContact] = useState(
     Math.round(DEFAULT_CONTACT_SHADOWS * 100)
   );
@@ -158,7 +156,12 @@ export default function CityWalk({
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintRect[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
+  const [landcoverTiles, setLandcoverTiles] = useState<
+    { bounds: TerrainBounds; src: string }[]
+  >([]);
   const [fps, setFps] = useState<number | null>(null);
+  /** Minimap edge length in CSS px; user-adjustable. */
+  const [minimapSize, setMinimapSize] = useState(coarse ? 120 : 192);
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -229,6 +232,7 @@ export default function CityWalk({
         setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
+        setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({
           offset: h.offset,
           flyTo: h.flyTo,
@@ -240,7 +244,6 @@ export default function CityWalk({
           setAtmosphere: h.setAtmosphere,
           setDepthGrading: h.setDepthGrading,
           setBuildingTransparency: h.setBuildingTransparency,
-          setEdges: h.setEdges,
           setContactShadows: h.setContactShadows,
           setPaperGrain: h.setPaperGrain,
           insertBuilding: () => {
@@ -397,23 +400,6 @@ export default function CityWalk({
         </FieldDescription>
       </Field>
 
-      <Field>
-        <FieldLabel htmlFor="ink-edges">Ink edges · {edges}%</FieldLabel>
-        <Slider
-          disabled={style === "standard"}
-          id="ink-edges"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setEdges(next);
-            handleRef.current?.setEdges(next / 100);
-          }}
-          step={1}
-          value={[edges]}
-        />
-      </Field>
-
       <FieldSeparator />
 
       <Field>
@@ -448,6 +434,32 @@ export default function CityWalk({
           step={1}
           value={[grain]}
         />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="minimap-size">Minimap size</FieldLabel>
+        <ToggleGroup
+          className="w-full"
+          id="minimap-size"
+          onValueChange={(value: string[]) => {
+            const next = value[0];
+            if (next) {
+              setMinimapSize(Number(next));
+            }
+          }}
+          value={[String(minimapSize)]}
+          variant="outline"
+        >
+          {[
+            ["S", 120],
+            ["M", 192],
+            ["L", 280],
+          ].map(([label, px]) => (
+            <ToggleGroupItem className="flex-1" key={px} value={String(px)}>
+              {label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </Field>
 
       <Field orientation="horizontal">
@@ -648,9 +660,9 @@ export default function CityWalk({
               <Minimap
                 bounds={bounds}
                 footprints={footprints}
-                landcoverSrc={landcoverSrc}
+                landcoverTiles={landcoverTiles}
                 onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
-                size={coarse ? 120 : 192}
+                size={minimapSize}
                 subscribePose={subscribePose}
               />
             </div>

@@ -66,8 +66,8 @@ function colorizeLandcover(
 interface MinimapProps {
   bounds: TerrainBounds;
   footprints: FootprintRect[];
-  /** optional land-cover splatmap (PNG) drawn as the map background */
-  landcoverSrc?: string;
+  /** per-tile land-cover class PNGs + their EPSG bounds, drawn as background */
+  landcoverTiles?: { bounds: TerrainBounds; src: string }[];
   onTeleport: (epsgX: number, epsgY: number) => void;
   /** CSS pixel edge length (square); smaller on phones */
   size?: number;
@@ -98,7 +98,7 @@ function setupCanvas(
 export function Minimap({
   bounds,
   footprints,
-  landcoverSrc,
+  landcoverTiles,
   onTeleport,
   size = DEFAULT_SIZE,
   subscribePose,
@@ -106,21 +106,29 @@ export function Minimap({
   const staticRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
 
-  // Static layer: land-cover base + tile frame + footprints. Redrawn after
-  // demolish, and again once the land-cover image has loaded.
+  // Static layer: per-tile land-cover background + frame + footprints. Redrawn
+  // after demolish and again as each tile's image decodes.
   useEffect(() => {
     const canvas = staticRef.current;
     if (!canvas) {
       return;
     }
     const ctx = setupCanvas(canvas, size);
+    const tiles = landcoverTiles ?? [];
+    const decoded = new Map<string, HTMLCanvasElement>();
 
-    const paint = (base?: CanvasImageSource) => {
-      if (base) {
-        ctx.drawImage(base, 0, 0, size, size);
-      } else {
-        ctx.fillStyle = PAPER;
-        ctx.fillRect(0, 0, size, size);
+    const repaint = () => {
+      ctx.fillStyle = PAPER;
+      ctx.fillRect(0, 0, size, size);
+      // Each tile drawn into its own sub-rect of the (union) bounds.
+      for (const tile of tiles) {
+        const cv = decoded.get(tile.src);
+        if (!cv) {
+          continue;
+        }
+        const a = epsgToMapPx(tile.bounds[0], tile.bounds[3], bounds, size);
+        const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
+        ctx.drawImage(cv, a.px, a.py, b.px - a.px, b.py - a.py);
       }
       ctx.strokeStyle = FRAME;
       ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
@@ -137,22 +145,22 @@ export function Minimap({
       }
     };
 
-    paint(); // paper base immediately; swap in the land-cover once decoded
-    if (!landcoverSrc) {
-      return;
-    }
+    repaint(); // paper + footprints immediately; tiles fill in as they decode
     let cancelled = false;
-    const img = new Image();
-    img.onload = () => {
-      if (!cancelled) {
-        paint(colorizeLandcover(img, size));
-      }
-    };
-    img.src = landcoverSrc;
+    for (const tile of tiles) {
+      const img = new Image();
+      img.onload = () => {
+        if (!cancelled) {
+          decoded.set(tile.src, colorizeLandcover(img, 256));
+          repaint();
+        }
+      };
+      img.src = tile.src;
+    }
     return () => {
       cancelled = true;
     };
-  }, [footprints, bounds, size, landcoverSrc]);
+  }, [footprints, bounds, size, landcoverTiles]);
 
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {

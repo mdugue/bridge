@@ -143,8 +143,9 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
 function buildTrees(trees: Placement[]): InstancedMesh[] {
   const trunkGeo = new CylinderGeometry(0.1, 0.16, TRUNK_H, 6);
   trunkGeo.translate(0, TRUNK_H / 2, 0);
-  // detail 2 = round contour; gentle egg shape, sitting on the trunk.
-  const crownGeo = new IcosahedronGeometry(CROWN_R, 2);
+  // detail 1 keeps a round-enough contour at a quarter of detail 2's triangles
+  // (≈80 vs 320) — a big saving across tens of thousands of canopy trees.
+  const crownGeo = new IcosahedronGeometry(CROWN_R, 1);
   crownGeo.scale(1, 1.12, 1);
   crownGeo.translate(0, TRUNK_H + CROWN_R * 0.5, 0);
 

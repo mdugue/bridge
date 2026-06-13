@@ -174,8 +174,6 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     window.__poc?.setBuildingTransparency?.(0.5);
     window.__poc?.setBuildingTransparency?.(0);
     window.__poc?.setStyle?.("ghost");
-    window.__poc?.setEdges?.(0);
-    window.__poc?.setEdges?.(0.7);
     window.__poc?.setContactShadows?.(1);
     window.__poc?.setContactShadows?.(0.5);
     window.__poc?.setPaperGrain?.(1);

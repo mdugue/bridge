@@ -49,8 +49,6 @@ import {
   type CityStyleId,
   createStyleResources,
   setCityTransparency,
-  setEdgeOpacity,
-  setEdgeResolution,
 } from "./visual-style";
 
 const EYE_HEIGHT = 1.7;
@@ -65,7 +63,10 @@ const TOUCH_LOOK_SPEED = 0.004;
 const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 const SKY_COLOR = 0x9f_b6_cc;
 /** Default rendering style — the "context frame" ambition. */
-export const DEFAULT_CITY_STYLE: CityStyleId = "ghost";
+// Clay is OPAQUE — ghost uses MeshPhysicalMaterial.transmission, which makes
+// three re-render the whole scene into a transmission buffer every frame
+// (≈ 2x cost). Default to the cheap opaque style; ghost stays a choice.
+export const DEFAULT_CITY_STYLE: CityStyleId = "clay";
 /** Default fog amount (0..1); ~the look the POC always had. */
 export const DEFAULT_ATMOSPHERE = 0.35;
 
@@ -136,6 +137,8 @@ export interface CityWalkHandle {
   getMovementMode: () => MovementMode;
   getPose: () => PlayerPose;
   insertBuilding: () => Promise<void>;
+  /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
+  landcoverTiles: { bounds: TerrainBounds; src: string }[];
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
   /** fog amount 0..1 (0 = clear day, 1 = thick painterly haze) */
@@ -148,8 +151,6 @@ export interface CityWalkHandle {
   setDepthGrading: (intensity: number) => void;
   /** photographic depth of field with crosshair autofocus */
   setDepthOfField: (enabled: boolean) => void;
-  /** ink edge opacity 0..1; 0 hides the edge overlay */
-  setEdges: (opacity: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
@@ -301,12 +302,16 @@ async function bootApp(
   const offset = recenterOffset(cityLayer.matrix);
 
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
-  const loadTileScene = async (tile: TileSrc): Promise<TerrainLayer> => {
+  const loadTileScene = async (
+    tile: TileSrc,
+    targetSize?: number
+  ): Promise<TerrainLayer> => {
     const t = await loadTerrain({
       url: tile.demSrc,
       tfwUrl: tile.demTfwSrc,
       landcoverUrl: tile.landcoverSrc,
       offset,
+      targetSize,
       signal: opts.signal,
     });
     world.add(t.mesh);
@@ -347,7 +352,8 @@ async function bootApp(
     const data = await fetchCityJson(tile.citySrc, opts.signal);
     ensureAlive();
     extraCities.push(createCityLayer(data, world, cityLayer.matrix));
-    terrains.push(await loadTileScene(tile));
+    // Neighbours are background — half-resolution terrain (~4 m) is plenty.
+    terrains.push(await loadTileScene(tile, 512));
     ensureAlive();
   }
 
@@ -377,6 +383,20 @@ async function bootApp(
     ]
   );
 
+  // Per-tile land-cover PNGs + bounds so the minimap can place each correctly.
+  const landcoverTiles: { bounds: TerrainBounds; src: string }[] = [];
+  if (opts.landcoverSrc) {
+    landcoverTiles.push({ src: opts.landcoverSrc, bounds: terrain.bounds });
+  }
+  (opts.extraTiles ?? []).forEach((t, i) => {
+    if (t.landcoverSrc) {
+      landcoverTiles.push({
+        src: t.landcoverSrc,
+        bounds: terrains[i + 1].bounds,
+      });
+    }
+  });
+
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
   const sunRig = createSunRig(scene, worldBounds, tileLatLng(cityData, offset));
@@ -384,8 +404,6 @@ async function bootApp(
 
   opts.onProgress?.("Preparing render styles…");
   const styleResources = createStyleResources();
-  const drawingBuffer = renderer.getDrawingBufferSize(new Vector2());
-  setEdgeResolution(styleResources, drawingBuffer.x, drawingBuffer.y);
   let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
   applyCityStyle(cityLayer.group, currentStyle, styleResources);
   for (const c of extraCities) {
@@ -561,8 +579,6 @@ async function bootApp(
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
     postStack.setSize(container.clientWidth, container.clientHeight);
-    const buf = renderer.getDrawingBufferSize(new Vector2());
-    setEdgeResolution(styleResources, buf.x, buf.y);
   });
   resizeObserver.observe(container);
 
@@ -620,11 +636,6 @@ async function bootApp(
     setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),
     setBuildingTransparency: (transparency) =>
       setCityTransparency(styleResources, currentStyle, transparency),
-    setEdges: (opacity) => {
-      setEdgeOpacity(styleResources, opacity);
-      // Visibility of the (lazily built) edge overlays follows the flag.
-      applyCityStyle(cityLayer.group, currentStyle, styleResources);
-    },
     setAtmosphere: (amount) => {
       if (scene.fog instanceof Fog) {
         const range = fogRangeFor(amount);
@@ -652,6 +663,7 @@ async function bootApp(
       ...buildingFootprints(cityLayer.data),
       ...extraCities.flatMap((c) => buildingFootprints(c.data)),
     ],
+    landcoverTiles,
     terrainBounds: unionBounds,
     offset,
     dispose: () => {

@@ -1,23 +1,13 @@
 import type { Group, Material, Mesh } from "three";
-import {
-  BufferGeometry,
-  EdgesGeometry,
-  MeshPhysicalMaterial,
-  MeshStandardMaterial,
-  Vector2,
-} from "three";
-import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
-import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { MeshPhysicalMaterial, MeshStandardMaterial } from "three";
 
 /**
  * City rendering styles. Picking/demolish read geometry attributes, not
  * materials, so the loader meshes can carry any material we like:
  *  - standard: the loader's per-type CityObjectsMaterial (LoD colors)
  *  - ghost: frosted-glass massing (physical transmission — the backdrop
- *    shows through blurred, consistently; never order-dependent popping)
- *  - clay: archviz clay with adjustable plain transparency
+ *    shows through blurred; EXPENSIVE, re-renders the scene each frame)
+ *  - clay: archviz clay with adjustable plain transparency (opaque, cheap)
  */
 export type CityStyleId = "standard" | "ghost" | "clay";
 export const CITY_STYLE_IDS: CityStyleId[] = ["standard", "ghost", "clay"];
@@ -25,27 +15,17 @@ export const CITY_STYLE_IDS: CityStyleId[] = ["standard", "ghost", "clay"];
 /** Transparency defaults per style (0 = solid, 1 = fully see-through). */
 export const DEFAULT_GHOST_TRANSPARENCY = 0.05;
 export const DEFAULT_CLAY_TRANSPARENCY = 0;
-export const DEFAULT_EDGE_OPACITY = 0.7;
-/** Ink edge width in device pixels (fat lines — real, continuous width). */
-const EDGE_LINEWIDTH = 2.2;
 
 export interface StyleResources {
   clay: MeshStandardMaterial;
   dispose: () => void;
-  /** fat-line ink material; width needs a resolution (see setEdgeResolution) */
-  edgeLines: LineMaterial;
-  /** mutated by setEdgeOpacity; applyCityStyle reads it for visibility */
-  edgesVisible: boolean;
   ghost: MeshPhysicalMaterial;
 }
-
-const EDGE_THRESHOLD_DEG = 30;
 
 /** Shared materials, created once per app instance. */
 export function createStyleResources(): StyleResources {
   // Frosted glass: `transmission` samples a blurred buffer of the scene
-  // BEHIND (terrain, sky, hero models — other transmissive buildings are
-  // excluded), so what shows through is stable under camera motion.
+  // BEHIND, so what shows through is stable under camera motion.
   const ghost = new MeshPhysicalMaterial({
     color: 0xdf_e5_e9,
     roughness: 0.8,
@@ -68,36 +48,16 @@ export function createStyleResources(): StyleResources {
     alphaHash: DEFAULT_CLAY_TRANSPARENCY > 0,
   });
 
-  // Fat ink lines: real screen-space width (LineBasicMaterial ignores width
-  // on most platforms). polygonOffset pulls them a hair towards the camera so
-  // they don't z-fight the wall they sit on — that fighting is what made the
-  // thin lines look broken / dashed.
-  const edgeLines = new LineMaterial({
-    color: 0x2f_35_40,
-    linewidth: EDGE_LINEWIDTH,
-    worldUnits: false,
-    transparent: true,
-    opacity: DEFAULT_EDGE_OPACITY,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
-    resolution: new Vector2(window.innerWidth, window.innerHeight),
-  });
-
   // Shared across reloads — disposeObject3D must not free them mid-session.
   ghost.userData.shared = true;
   clay.userData.shared = true;
-  edgeLines.userData.shared = true;
 
   return {
     ghost,
     clay,
-    edgeLines,
-    edgesVisible: DEFAULT_EDGE_OPACITY > 0,
     dispose: () => {
       ghost.dispose();
       clay.dispose();
-      edgeLines.dispose();
     },
   };
 }
@@ -143,65 +103,17 @@ export function setCityTransparency(
   }
 }
 
-/** Ink edge strength; 0 hides the lines entirely (via applyCityStyle). */
-export function setEdgeOpacity(
-  resources: StyleResources,
-  opacity: number
-): void {
-  resources.edgeLines.opacity = Math.min(Math.max(opacity, 0), 1);
-  resources.edgesVisible = opacity > 0.01;
-}
-
-/** Fat lines need the drawing-buffer size to compute their pixel width. */
-export function setEdgeResolution(
-  resources: StyleResources,
-  width: number,
-  height: number
-): void {
-  resources.edgeLines.resolution.set(width, height);
-}
-
-/**
- * Ink outline for one batched city mesh. The loader geometry is non-indexed
- * (flat-shaded), so EdgesGeometry would treat every triangle edge as a
- * boundary — weld a positions-only copy first, then promote to fat-line
- * geometry.
- */
-function buildEdges(mesh: Mesh, material: LineMaterial): LineSegments2 {
-  const positionsOnly = new BufferGeometry();
-  positionsOnly.setAttribute(
-    "position",
-    mesh.geometry.getAttribute("position")
-  );
-  const welded = mergeVertices(positionsOnly, 1e-4);
-  const edges = new EdgesGeometry(welded, EDGE_THRESHOLD_DEG);
-  welded.dispose();
-  const lineGeo = new LineSegmentsGeometry().fromEdgesGeometry(edges);
-  edges.dispose();
-  const lines = new LineSegments2(lineGeo, material);
-  lines.name = "city-edges";
-  // Render AFTER all building fills so hidden edges are depth-tested away —
-  // otherwise occluded edges draw through walls and the city reads x-ray.
-  lines.renderOrder = 1;
-  // Decoration only: keep the demolish raycast off the line segments.
-  lines.raycast = () => {
-    // intentionally empty
-  };
-  return lines;
-}
-
 interface StyledCityMesh extends Mesh {
   isCityObjectMesh?: boolean;
   userData: {
-    edges?: LineSegments2;
     originalMaterial?: Material | Material[];
   };
 }
 
 /**
- * Applies a style to all batched city meshes in the loader group. Edge
- * overlays are built lazily per mesh and cached; after a demolish-reload the
- * new meshes start bare, so call this again with the current style.
+ * Applies a style to all batched city meshes in the loader group. After a
+ * demolish-reload the new meshes start bare, so call this again with the
+ * current style.
  */
 export function applyCityStyle(
   cityGroup: Group,
@@ -214,20 +126,10 @@ export function applyCityStyle(
       return;
     }
     mesh.userData.originalMaterial ??= mesh.material;
-
     if (style === "standard") {
       mesh.material = mesh.userData.originalMaterial;
     } else {
       mesh.material = style === "ghost" ? resources.ghost : resources.clay;
-    }
-
-    const wantEdges = style !== "standard" && resources.edgesVisible;
-    if (wantEdges && !mesh.userData.edges) {
-      mesh.userData.edges = buildEdges(mesh, resources.edgeLines);
-      mesh.add(mesh.userData.edges);
-    }
-    if (mesh.userData.edges) {
-      mesh.userData.edges.visible = wantEdges;
     }
   });
 }

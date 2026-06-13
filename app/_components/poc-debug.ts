@@ -37,8 +37,6 @@ export interface PocDebugInfo {
   setDepthGrading?: (intensity: number) => void;
   /** Toggles the photographic depth of field. */
   setDepthOfField?: (enabled: boolean) => void;
-  /** Sets the ink edge opacity (0..1); 0 hides the overlay. */
-  setEdges?: (opacity: number) => void;
   /** Sets the paper-grain intensity (0..1). */
   setPaperGrain?: (intensity: number) => void;
   /** Switches the city rendering style. */
