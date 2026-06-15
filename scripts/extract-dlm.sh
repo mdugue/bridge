@@ -25,7 +25,9 @@ SRC="$ROOT/data/_raw/basis-dlm/basisdlm_sn_shape"
 OUTDIR="$ROOT/data/dlm"
 TILE="${1:-33412_5656}"
 SUFFIX="2_sn"
-RES=2048   # pixels per side over the 2 km tile (~1 m) — crisp roads/paths
+RES="${LANDCOVER_RES:-4096}"   # px per side over the 2 km tile (~0.5 m) — the
+                                # source grid for surface edges; higher = sharper
+                                # boundaries (the GPU still LINEAR+aniso filters)
 
 if [ ! -d "$SRC" ]; then
   echo "error: raw DLM not found at $SRC" >&2
@@ -152,15 +154,15 @@ PAL = {
     8: (164, 192, 209),  # water       dusty blue
 }
 cls = Image.open(src).convert("L")
-w, h = cls.size
-rgb = Image.new("RGB", (w, h))
-alpha = Image.new("L", (w, h))
-sp, dp, ap = cls.load(), rgb.load(), alpha.load()
-for y in range(h):
-    for x in range(w):
-        c = sp[x, y]
-        dp[x, y] = PAL.get(c, PAL[0])
-        ap[x, y] = 255 if c == 8 else 0  # water coverage
+# Vectorised palette map (C-level, fast at 4096²): build a 256-entry palette,
+# unknown ids fall back to the background tint; alpha = water (class 8) coverage.
+flat = []
+for i in range(256):
+    flat.extend(PAL.get(i, PAL[0]))
+pal_img = Image.frombytes("P", cls.size, cls.tobytes())
+pal_img.putpalette(flat)
+rgb = pal_img.convert("RGB")
+alpha = cls.point(lambda c: 255 if c == 8 else 0, mode="L")
 if blur > 0:
     rgb = rgb.filter(ImageFilter.GaussianBlur(blur))
 if wblur > 0:

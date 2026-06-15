@@ -2,7 +2,7 @@
   "tile": "33412_5658_2_sn",
   "crs": "EPSG:25833",
   "bounds": [412000, 5658000, 414000, 5660000],
-  "size": 2048,
+  "size": 4096,
   "classes": {
     "0": "background", "1": "farmland", "2": "forest", "3": "copse",
     "4": "builtup", "5": "railway", "6": "path", "7": "road", "8": "water"
