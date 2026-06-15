@@ -5,18 +5,12 @@
  */
 import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { TILE_NAMES } from "../lib/city/tiles";
 
-// The 2 x 2 block loaded by city-walk-client.tsx. Land-cover/canopy are baked
-// offline (scripts/extract-dlm.sh + extract-canopy.sh); the raw downloads stay
-// gitignored, only these small per-tile outputs are committed + copied.
-const TILES = [
-  "33412_5656_2_sn",
-  "33410_5656_2_sn",
-  "33410_5658_2_sn",
-  "33412_5658_2_sn",
-];
-
-const copies: [string, string][] = TILES.flatMap((tile) => [
+// The 2 x 2 block loaded by city-walk-client.tsx (shared list). Land-cover and
+// canopy are baked offline (scripts/extract-dlm.sh + extract-canopy.sh); the raw
+// downloads stay gitignored, only these small per-tile outputs are committed.
+const copies: [string, string][] = TILE_NAMES.flatMap((tile) => [
   [
     `data/cityjson/lod2_${tile}.city.json`,
     `public/data/lod2_${tile}.city.json`,

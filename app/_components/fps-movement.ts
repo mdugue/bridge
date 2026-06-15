@@ -1,6 +1,7 @@
 import type { PerspectiveCamera } from "three";
 import { Vector3 } from "three";
 import { approachHeight } from "@/lib/city/ground-clamp";
+import { clamp } from "@/lib/math";
 
 /** m/s. Walk is pedestrian-ish (Shift sprints); fly covers the 2 km tile. */
 const WALK_SPEED = 9;
@@ -125,8 +126,8 @@ export function createFpsMovement(
     press: (code) => keys.add(code),
     release: (code) => keys.delete(code),
     setAnalog: (x, y) => {
-      analogX = Math.min(Math.max(x, -1), 1);
-      analogY = Math.min(Math.max(y, -1), 1);
+      analogX = clamp(x, -1, 1);
+      analogY = clamp(y, -1, 1);
     },
     getMode: () => mode,
     setMode: (next) => {

@@ -28,6 +28,7 @@ import { recenterOffset } from "@/lib/city/recenter";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
 import type { CityJsonDocument } from "@/lib/city/types";
+import { clamp } from "@/lib/math";
 import {
   type CityLayer,
   countBuildings,
@@ -38,7 +39,7 @@ import {
 import { createCityCollider } from "./collision";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createInsertedBuilding } from "./inserted-building";
-import { createPostStack } from "./post-stack";
+import { createPostStack, DEFAULT_DOF } from "./post-stack";
 import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
@@ -305,7 +306,7 @@ async function bootApp(
 
   const camera = new PerspectiveCamera(
     DEFAULT_FOV,
-    container.clientWidth / Math.max(container.clientHeight, 1),
+    Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1),
     0.3,
     6000
   );
@@ -400,6 +401,16 @@ async function bootApp(
     return null;
   };
   const terrainMeshes = terrains.map((t) => t.mesh);
+  // Build terrain BVHs up front. The crosshair-autofocus ray (DoF, ~10 Hz) and
+  // travel taps both raycast the terrain; without an acceleration structure
+  // each query brute-forces the full ~2M-triangle heightfield on the main
+  // thread. (disposeObject3D frees these trees on teardown.)
+  for (const mesh of terrainMeshes) {
+    mesh.geometry.computeBoundsTree();
+  }
+  // Targets for the crosshair-autofocus ray; rebuilt only when demolish swaps
+  // the city group, so the focus tick allocates no fresh array.
+  let focusTargets: Object3D[] = [cityLayer.group, ...terrainMeshes];
   const unionBounds: TerrainBounds = terrains.reduce<TerrainBounds>(
     (acc, t) => [
       Math.min(acc[0], t.bounds[0]),
@@ -469,6 +480,8 @@ async function bootApp(
     opts.onModeChange?.(mode);
   };
 
+  // `heading` is reused as scratch: getPose() refreshes it via getWorldDirection
+  // and returns the compass angle; getCameraState() reuses both.
   const heading = new Vector3();
   const getPose = (): PlayerPose => {
     camera.getWorldDirection(heading);
@@ -484,14 +497,13 @@ async function bootApp(
   const RAD2DEG = 180 / Math.PI;
   const DEG2RAD = Math.PI / 180;
   const getCameraState = (): CameraState => {
-    camera.getWorldDirection(heading);
-    const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
+    const pose = getPose(); // also refreshes `heading` for the pitch below
     return {
       mode: movement.getMode(),
       pos: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
-      epsg: { x: epsg.x, y: epsg.y },
-      headingDeg: Math.atan2(heading.x, -heading.z) * RAD2DEG,
-      pitchDeg: Math.asin(Math.min(Math.max(heading.y, -1), 1)) * RAD2DEG,
+      epsg: { x: pose.epsgX, y: pose.epsgY },
+      headingDeg: pose.heading * RAD2DEG,
+      pitchDeg: Math.asin(clamp(heading.y, -1, 1)) * RAD2DEG,
       fov: camera.fov,
     };
   };
@@ -542,6 +554,8 @@ async function bootApp(
   let pinchStartFov = camera.fov;
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
+  // Reused NDC scratch shared by travel taps and the crosshair focus pick.
+  const pickNdc = new Vector2();
   const detachTouch = attachTouchControls(renderer.domElement, {
     onLook: (dx, dy) => {
       lookEuler.setFromQuaternion(camera.quaternion);
@@ -559,14 +573,8 @@ async function bootApp(
       camera.updateProjectionMatrix();
     },
     onDoubleTap: (ndcX, ndcY) => {
-      // Travel to the tapped spot on any tile's terrain.
-      for (const mesh of terrainMeshes) {
-        if (!mesh.geometry.boundsTree) {
-          // Lazy: only pay the BVH build when travel is actually used.
-          mesh.geometry.computeBoundsTree();
-        }
-      }
-      tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
+      // Travel to the tapped spot on any tile's terrain (BVH built eagerly).
+      tapRaycaster.setFromCamera(pickNdc.set(ndcX, ndcY), camera);
       const hit = tapRaycaster.intersectObjects(terrainMeshes, false)[0];
       if (hit) {
         const epsg = worldToEpsg(hit.point.x, hit.point.z, offset);
@@ -592,6 +600,8 @@ async function bootApp(
     cityLayer = demolishObject(cityLayer, world, objectId);
     // The reload produces bare loader meshes — re-dress them.
     applyCityStyle(cityLayer.group, currentStyle, styleResources);
+    // Point the focus ray at the fresh city group (the old one is disposed).
+    focusTargets = [cityLayer.group, ...terrainMeshes];
     emitStats();
   };
 
@@ -600,6 +610,8 @@ async function bootApp(
     const at = opts.insertAt ?? DEFAULT_INSERT_AT;
     const obj = await createInsertedBuilding(opts.insertedModelUrl);
     if (disposed) {
+      // Teardown raced the load (e.g. StrictMode remount) — free the orphan.
+      disposeObject3D(obj);
       return;
     }
     if (inserted) {
@@ -607,16 +619,10 @@ async function bootApp(
       disposeObject3D(inserted);
     }
     const ground = heightAt(at.x, at.y) ?? worldBounds.min.y;
-    // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
-    obj.position.set(at.x - offset.cx, ground, -(at.y - offset.cy));
+    const { x, z } = epsgToWorld(at.x, at.y, offset);
+    obj.position.set(x, ground, z);
     scene.add(obj);
     inserted = obj;
-  };
-
-  const insertBuildingNow = () => {
-    insertBuilding().catch(() => {
-      // glTF load failure is non-fatal for the POC; the box fallback can't fail
-    });
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -625,7 +631,8 @@ async function bootApp(
       demolishAtCrosshair();
     }
     if (e.code === "KeyB") {
-      insertBuildingNow();
+      // createInsertedBuilding never rejects (falls back to a marker box).
+      insertBuilding();
     }
     if (e.code === "KeyF") {
       setMovementMode(movement.getMode() === "walk" ? "fly" : "walk");
@@ -644,7 +651,8 @@ async function bootApp(
   renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
   const resizeObserver = new ResizeObserver(() => {
-    camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+    camera.aspect =
+      Math.max(container.clientWidth, 1) / Math.max(container.clientHeight, 1);
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
     postStack.setSize(container.clientWidth, container.clientHeight);
@@ -652,15 +660,17 @@ async function bootApp(
   resizeObserver.observe(container);
 
   // Crosshair autofocus for the photographic DoF (throttled like the pose).
+  // Skipped entirely while DoF is off — nothing consumes the focus point then.
+  let dofEnabled = DEFAULT_DOF;
   const focusRaycaster = new Raycaster();
   focusRaycaster.firstHitOnly = true;
   focusRaycaster.far = 4000;
   const updateFocus = () => {
-    focusRaycaster.setFromCamera(new Vector2(0, 0), camera);
-    const hit = focusRaycaster.intersectObjects(
-      [cityLayer.group, ...terrainMeshes],
-      true
-    )[0];
+    if (!dofEnabled) {
+      return;
+    }
+    focusRaycaster.setFromCamera(pickNdc.set(0, 0), camera);
+    const hit = focusRaycaster.intersectObjects(focusTargets, true)[0];
     postStack.setFocusTarget(hit?.point ?? null);
   };
 
@@ -699,7 +709,10 @@ async function bootApp(
       currentStyle = style;
       applyCityStyle(cityLayer.group, style, styleResources);
     },
-    setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
+    setDepthOfField: (enabled) => {
+      dofEnabled = enabled;
+      postStack.setDepthOfField(enabled);
+    },
     setDepthGrading: (intensity) => postStack.setDepthGrading(intensity),
     setContactShadows: (strength) => postStack.setContactShadows(strength),
     setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),

@@ -5,6 +5,8 @@
  * this palette keeps fog and fill light in tune with it.
  */
 
+import { clamp01 } from "@/lib/math";
+
 export interface AtmospherePalette {
   /** scene fog (and far-haze) color */
   fog: string;
@@ -34,7 +36,7 @@ function channel(hex: string, i: number): number {
 
 /** Linear RGB-hex interpolation, t clamped to [0, 1]. */
 export function lerpHexColor(a: string, b: string, t: number): string {
-  const k = Math.min(Math.max(t, 0), 1);
+  const k = clamp01(t);
   let out = "#";
   for (let i = 0; i < 3; i++) {
     const v = Math.round(channel(a, i) + (channel(b, i) - channel(a, i)) * k);
@@ -81,7 +83,7 @@ const FOG_DENSE = { near: 40, far: 450 };
  * slider.
  */
 export function fogRangeFor(t: number): { far: number; near: number } {
-  const k = Math.min(Math.max(t, 0), 1);
+  const k = clamp01(t);
   return {
     near: FOG_CLEAR.near * (FOG_DENSE.near / FOG_CLEAR.near) ** k,
     far: FOG_CLEAR.far * (FOG_DENSE.far / FOG_CLEAR.far) ** k,

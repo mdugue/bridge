@@ -140,6 +140,46 @@ interface Snapshot {
   v: number;
 }
 
+/** shadcn Slider reports its value as an array; pull out the single number. */
+function sliderNumber(value: number | readonly number[]): number {
+  return Number(Array.isArray(value) ? value[0] : value);
+}
+
+/** A 0..max percentage slider in a labelled Field — the look-control shape. */
+function LookSlider({
+  description,
+  disabled,
+  id,
+  label,
+  max = 100,
+  onChange,
+  value,
+}: {
+  description?: string;
+  disabled?: boolean;
+  id: string;
+  label: string;
+  max?: number;
+  onChange: (value: number) => void;
+  value: number;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Slider
+        disabled={disabled}
+        id={id}
+        max={max}
+        min={0}
+        onValueChange={(v) => onChange(sliderNumber(v))}
+        step={1}
+        value={[value]}
+      />
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+    </Field>
+  );
+}
+
 export default function CityWalk({
   citySrc,
   demSrc,
@@ -280,9 +320,7 @@ export default function CityWalk({
           setContactShadows: h.setContactShadows,
           setPaperGrain: h.setPaperGrain,
           insertBuilding: () => {
-            h.insertBuilding().catch(() => {
-              // glTF failure is non-fatal; the box fallback can't fail
-            });
+            h.insertBuilding();
           },
           setSunIso: (iso) => {
             h.setSun(new Date(iso));
@@ -328,9 +366,7 @@ export default function CityWalk({
   };
 
   const insertBuilding = () => {
-    handleRef.current?.insertBuilding().catch(() => {
-      // glTF failure is non-fatal; the box fallback can't fail
-    });
+    handleRef.current?.insertBuilding();
   };
 
   const copySnapshot = () => {
@@ -354,10 +390,17 @@ export default function CityWalk({
     };
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
-    navigator.clipboard?.writeText(text).then(
-      () => setSnapshotMsg("Copied to clipboard"),
-      () => setSnapshotMsg("Copy failed — select the text manually")
-    );
+    // `navigator.clipboard` is undefined on insecure origins / some webviews —
+    // guard it so we show the fallback instead of throwing on `.then`.
+    const clipboard = navigator.clipboard;
+    if (clipboard) {
+      clipboard.writeText(text).then(
+        () => setSnapshotMsg("Copied to clipboard"),
+        () => setSnapshotMsg("Copy failed — select the text manually")
+      );
+    } else {
+      setSnapshotMsg("Copy failed — select the text manually");
+    }
   };
 
   const applyLook = (h: CityWalkHandle, look: Snapshot["look"]) => {
@@ -451,9 +494,7 @@ export default function CityWalk({
           id="sun-time"
           max={LAST_MINUTE}
           min={0}
-          onValueChange={(value) =>
-            updateSun(day, Number(Array.isArray(value) ? value[0] : value))
-          }
+          onValueChange={(value) => updateSun(day, sliderNumber(value))}
           step={MINUTES_STEP}
           value={[minutes]}
         />
@@ -491,65 +532,44 @@ export default function CityWalk({
         </ToggleGroup>
       </Field>
 
-      <Field>
-        <FieldLabel htmlFor="building-transparency">
-          Transparency · {transparency[style]}%
-        </FieldLabel>
-        <Slider
-          disabled={style === "standard"}
-          id="building-transparency"
-          max={90}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setTransparency((prev) => ({ ...prev, [style]: next }));
-            handleRef.current?.setBuildingTransparency(next / 100);
-          }}
-          step={1}
-          value={[transparency[style]]}
-        />
-        <FieldDescription>
-          {style === "ghost"
+      <LookSlider
+        description={
+          style === "ghost"
             ? "Frosted glass — the backdrop shows through blurred"
-            : "Plain see-through"}
-        </FieldDescription>
-      </Field>
+            : "Plain see-through"
+        }
+        disabled={style === "standard"}
+        id="building-transparency"
+        label={`Transparency · ${transparency[style]}%`}
+        max={90}
+        onChange={(n) => {
+          setTransparency((prev) => ({ ...prev, [style]: n }));
+          handleRef.current?.setBuildingTransparency(n / 100);
+        }}
+        value={transparency[style]}
+      />
 
       <FieldSeparator />
 
-      <Field>
-        <FieldLabel htmlFor="contact-shadows">
-          Contact shadows · {contact}%
-        </FieldLabel>
-        <Slider
-          id="contact-shadows"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setContact(next);
-            handleRef.current?.setContactShadows(next / 100);
-          }}
-          step={1}
-          value={[contact]}
-        />
-      </Field>
+      <LookSlider
+        id="contact-shadows"
+        label={`Contact shadows · ${contact}%`}
+        onChange={(n) => {
+          setContact(n);
+          handleRef.current?.setContactShadows(n / 100);
+        }}
+        value={contact}
+      />
 
-      <Field>
-        <FieldLabel htmlFor="paper-grain">Paper grain · {grain}%</FieldLabel>
-        <Slider
-          id="paper-grain"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setGrain(next);
-            handleRef.current?.setPaperGrain(next / 100);
-          }}
-          step={1}
-          value={[grain]}
-        />
-      </Field>
+      <LookSlider
+        id="paper-grain"
+        label={`Paper grain · ${grain}%`}
+        onChange={(n) => {
+          setGrain(n);
+          handleRef.current?.setPaperGrain(n / 100);
+        }}
+        value={grain}
+      />
 
       <Field>
         <FieldLabel htmlFor="minimap-size">Minimap size</FieldLabel>
@@ -589,39 +609,25 @@ export default function CityWalk({
         />
       </Field>
 
-      <Field>
-        <FieldLabel htmlFor="atmosphere">Fog · {fogAmount}%</FieldLabel>
-        <Slider
-          id="atmosphere"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setFogAmount(next);
-            handleRef.current?.setAtmosphere(next / 100);
-          }}
-          step={1}
-          value={[fogAmount]}
-        />
-      </Field>
+      <LookSlider
+        id="atmosphere"
+        label={`Fog · ${fogAmount}%`}
+        onChange={(n) => {
+          setFogAmount(n);
+          handleRef.current?.setAtmosphere(n / 100);
+        }}
+        value={fogAmount}
+      />
 
-      <Field>
-        <FieldLabel htmlFor="depth-grading">
-          Depth color · warm near, cool far · {grading}%
-        </FieldLabel>
-        <Slider
-          id="depth-grading"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setGrading(next);
-            handleRef.current?.setDepthGrading(next / 100);
-          }}
-          step={1}
-          value={[grading]}
-        />
-      </Field>
+      <LookSlider
+        id="depth-grading"
+        label={`Depth color · warm near, cool far · ${grading}%`}
+        onChange={(n) => {
+          setGrading(n);
+          handleRef.current?.setDepthGrading(n / 100);
+        }}
+        value={grading}
+      />
 
       <Field orientation="horizontal">
         <FieldLabel htmlFor="fly-mode">

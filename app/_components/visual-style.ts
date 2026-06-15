@@ -1,5 +1,6 @@
 import type { Group, Material, Mesh } from "three";
 import { MeshPhysicalMaterial, MeshStandardMaterial } from "three";
+import { clamp01 } from "@/lib/math";
 
 /**
  * City rendering styles. Picking/demolish read geometry attributes, not
@@ -10,7 +11,6 @@ import { MeshPhysicalMaterial, MeshStandardMaterial } from "three";
  *  - clay: archviz clay with adjustable plain transparency (opaque, cheap)
  */
 export type CityStyleId = "standard" | "ghost" | "clay";
-export const CITY_STYLE_IDS: CityStyleId[] = ["standard", "ghost", "clay"];
 
 /** Transparency defaults per style (0 = solid, 1 = fully see-through). */
 export const DEFAULT_GHOST_TRANSPARENCY = 0.05;
@@ -82,7 +82,7 @@ export function setCityTransparency(
   style: CityStyleId,
   transparency: number
 ): void {
-  const t = Math.min(Math.max(transparency, 0), 1);
+  const t = clamp01(transparency);
   if (style === "ghost") {
     const wasTransmissive = resources.ghost.transmission > 0;
     resources.ghost.transmission = t;

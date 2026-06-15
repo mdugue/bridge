@@ -9,6 +9,7 @@ import {
 } from "postprocessing";
 import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { HalfFloatType, Vector2, Vector3 } from "three";
+import { clamp01 } from "@/lib/math";
 import { DepthGradingEffect } from "./depth-grading-effect";
 import { PaperGrainEffect } from "./paper-grain-effect";
 
@@ -100,7 +101,7 @@ export function createPostStack(
     },
     setDepthGrading: (intensity) => grading.setIntensity(intensity),
     setContactShadows: (strength) => {
-      const s = Math.min(Math.max(strength, 0), 1);
+      const s = clamp01(strength);
       ao.configuration.intensity = s * AO_INTENSITY_MAX;
       ao.enabled = s > 0.01;
     },

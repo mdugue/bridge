@@ -168,6 +168,22 @@ export interface SplatLayer {
 }
 
 /**
+ * Recentered NW-corner origin + size (world XY) of a splat layer. Shared by the
+ * terrain and water shaders so both map the same splatmap identically — if they
+ * disagreed, the water mask would slide off the painted shoreline.
+ */
+export function splatOriginSize(splat: SplatLayer): {
+  origin: [number, number];
+  size: [number, number];
+} {
+  const [minX, minY, maxX, maxY] = splat.bounds;
+  return {
+    origin: [minX - splat.offset.cx, maxY - splat.offset.cy],
+    size: [maxX - minX, maxY - minY],
+  };
+}
+
+/**
  * Stylized colour per land-cover class id (see scripts/extract-dlm.sh).
  * Kept muted to sit beside the paper-sage palette and the contour ink.
  */
@@ -206,15 +222,13 @@ function createTerrainMaterial(splat?: SplatLayer): MeshStandardMaterial {
     const hasSplat = splat !== undefined;
     const hasColor = splat?.colorTexture !== undefined;
     if (splat) {
-      const [minX, minY, maxX, maxY] = splat.bounds;
       // Recentered tile origin (north-west corner) + size; v grows southward.
+      const { origin, size } = splatOriginSize(splat);
       shader.uniforms.uSplat = {
         value: splat.colorTexture ?? splat.texture,
       };
-      shader.uniforms.uSplatOrigin = {
-        value: [minX - splat.offset.cx, maxY - splat.offset.cy],
-      };
-      shader.uniforms.uSplatSize = { value: [maxX - minX, maxY - minY] };
+      shader.uniforms.uSplatOrigin = { value: origin };
+      shader.uniforms.uSplatSize = { value: size };
     }
 
     // Base colour: sample the RGB splat directly, or map the class id via the
@@ -305,6 +319,11 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
         offset: opts.offset,
       }
     : undefined;
+  if (!splat) {
+    // Class-id splat missing → its colour splat can't be used; free the GPU
+    // texture instead of orphaning it (loadColorSplat may still have succeeded).
+    colorTexture?.dispose();
+  }
 
   const mesh = new Mesh(geometry, createTerrainMaterial(splat));
   mesh.name = "terrain";

@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { TILE_NAMES } from "@/lib/city/tiles";
 import type { TileSrc } from "./create-app";
 
 // three.js needs a real browser (WebGL, pointer lock) — never prerender it.
@@ -25,14 +26,11 @@ function tile(name: string): TileSrc {
   };
 }
 
-// Primary tile (spawn here) + the rest of the 2 x 2 block around it. Module
-// constants so the references stay stable across renders.
-const PRIMARY = tile("33412_5656_2_sn");
-const EXTRA_TILES: TileSrc[] = [
-  tile("33410_5656_2_sn"),
-  tile("33410_5658_2_sn"),
-  tile("33412_5658_2_sn"),
-];
+// Primary tile (spawn here) + the rest of the 2 x 2 block around it, from the
+// shared tile list. Module constants so references stay stable across renders.
+const [PRIMARY_NAME, ...EXTRA_NAMES] = TILE_NAMES;
+const PRIMARY = tile(PRIMARY_NAME);
+const EXTRA_TILES: TileSrc[] = EXTRA_NAMES.map(tile);
 
 export function CityWalkClient() {
   return (

@@ -4,6 +4,8 @@
  * No THREE, no DOM.
  */
 
+import { clamp } from "@/lib/math";
+
 /** Max pitch magnitude in radians (~83°) — keeps lookAt math sane. */
 export const PITCH_LIMIT = 1.45;
 
@@ -11,7 +13,7 @@ export const MIN_FOV = 30;
 export const MAX_FOV = 95;
 
 export function clampPitch(pitch: number): number {
-  return Math.min(Math.max(pitch, -PITCH_LIMIT), PITCH_LIMIT);
+  return clamp(pitch, -PITCH_LIMIT, PITCH_LIMIT);
 }
 
 /**
@@ -22,7 +24,7 @@ export function nextFov(startFov: number, ratio: number): number {
   if (ratio <= 0 || !Number.isFinite(ratio)) {
     return startFov;
   }
-  return Math.min(Math.max(startFov / ratio, MIN_FOV), MAX_FOV);
+  return clamp(startFov / ratio, MIN_FOV, MAX_FOV);
 }
 
 export interface TapSample {

@@ -14,8 +14,6 @@ const UTM_DEFS: Record<number, string> = {
   25833: "+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs +type=crs",
 };
 
-export const SUPPORTED_EPSG_CODES = Object.keys(UTM_DEFS).map(Number);
-
 /** Fallback when reprojection is impossible: Dresden city center. */
 export const FALLBACK_LAT_LNG = { lat: 51.05, lng: 13.74 };
 

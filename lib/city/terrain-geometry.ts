@@ -6,6 +6,8 @@
  * (maxY) — the GeoTIFF convention. Vertices sit at pixel centers.
  */
 
+import { clamp } from "@/lib/math";
+
 export type TerrainBounds = [number, number, number, number];
 
 export interface TerrainGeometryInput {
@@ -200,10 +202,10 @@ export function sampleHeightfield(
   const gy = (maxY - y) / dy - 0.5;
   const col0 = Math.floor(gx);
   const row0 = Math.floor(gy);
-  const col1 = Math.min(Math.max(col0 + 1, 0), n - 1);
-  const row1 = Math.min(Math.max(row0 + 1, 0), n - 1);
-  const c0 = Math.min(Math.max(col0, 0), n - 1);
-  const r0 = Math.min(Math.max(row0, 0), n - 1);
+  const col1 = clamp(col0 + 1, 0, n - 1);
+  const row1 = clamp(row0 + 1, 0, n - 1);
+  const c0 = clamp(col0, 0, n - 1);
+  const r0 = clamp(row0, 0, n - 1);
   if (gx < -0.5 || gy < -0.5 || gx > n - 0.5 || gy > n - 0.5) {
     return null;
   }
@@ -218,8 +220,8 @@ export function sampleHeightfield(
     }
   }
 
-  const fx = Math.min(Math.max(gx - col0, 0), 1);
-  const fy = Math.min(Math.max(gy - row0, 0), 1);
+  const fx = clamp(gx - col0, 0, 1);
+  const fy = clamp(gy - row0, 0, 1);
   const top = z00 + (z01 - z00) * fx;
   const bottom = z10 + (z11 - z10) * fx;
   return top + (bottom - top) * fy;

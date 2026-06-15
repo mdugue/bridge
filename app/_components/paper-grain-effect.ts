@@ -1,5 +1,6 @@
 import { Effect } from "postprocessing";
 import { Uniform } from "three";
+import { clamp01 } from "@/lib/math";
 
 /**
  * Static paper grain: a screen-anchored value-noise speckle plus faint
@@ -39,7 +40,7 @@ export class PaperGrainEffect extends Effect {
   setIntensity(value: number): void {
     const uniform = this.uniforms.get("intensity");
     if (uniform) {
-      uniform.value = Math.min(Math.max(value, 0), 1);
+      uniform.value = clamp01(value);
     }
   }
 }

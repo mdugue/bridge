@@ -3,6 +3,7 @@ import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import { sunDirectionWorld } from "@/lib/city/sun";
+import { clamp } from "@/lib/math";
 
 export interface SunState {
   aboveHorizon: boolean;
@@ -102,24 +103,33 @@ export function createSunRig(
   }
   const focus = center.clone();
   let lastFx = Number.NaN;
+  let lastFy = Number.NaN;
   let lastFz = Number.NaN;
-  const reposition = () => {
+  // `force` re-places the light even when the focus cell is unchanged — needed
+  // by update() when the sun direction moved but the camera (focus) did not.
+  const reposition = (force = false) => {
     // Snap the focus to the texel grid to keep shadow edges stable while moving.
     const fx = Math.round(focus.x / texelSize) * texelSize;
     const fy = Math.round(focus.y / texelSize) * texelSize;
     const fz = Math.round(focus.z / texelSize) * texelSize;
+    // While the camera sits within the same texel cell the light, its target
+    // and the shadow map are all unchanged — skip the per-frame matrix writes.
+    if (!force && fx === lastFx && fy === lastFy && fz === lastFz) {
+      return;
+    }
     sun.target.position.set(fx, fy, fz);
     sun.position.set(
       fx + dir.x * shadowDistance,
       fy + dir.y * shadowDistance,
       fz + dir.z * shadowDistance
     );
-    // Manual shadow update only when the snapped frustum centre changed.
+    // Manual shadow update only when the snapped frustum centre moved in X/Z.
     if (fx !== lastFx || fz !== lastFz) {
       sun.shadow.needsUpdate = true;
-      lastFx = fx;
-      lastFz = fz;
     }
+    lastFx = fx;
+    lastFy = fy;
+    lastFz = fz;
   };
 
   const follow = (point: Vector3) => {
@@ -131,7 +141,7 @@ export function createSunRig(
     const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
     dir.set(d.x, d.y, d.z);
     const aboveHorizon = dir.y > 0;
-    reposition();
+    reposition(true);
     sun.shadow.needsUpdate = true; // sun moved — force a shadow re-render
     sun.visible = aboveHorizon;
     // Quick ramp after sunrise, flat during the day.
@@ -145,8 +155,7 @@ export function createSunRig(
       dir.y,
       dir.z
     );
-    const altitudeDeg =
-      (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI;
+    const altitudeDeg = (Math.asin(clamp(dir.y, -1, 1)) * 180) / Math.PI;
     const palette = atmosphereAt(altitudeDeg);
     if (scene.fog instanceof Fog) {
       scene.fog.color.set(palette.fog);

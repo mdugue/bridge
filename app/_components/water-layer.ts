@@ -1,5 +1,5 @@
 import { type BufferGeometry, Mesh, MeshStandardMaterial } from "three";
-import type { SplatLayer } from "./terrain-layer";
+import { type SplatLayer, splatOriginSize } from "./terrain-layer";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
 export interface WaterLayer {
@@ -21,9 +21,7 @@ export function createWaterLayer(
   splat: SplatLayer
 ): WaterLayer {
   const uTime = { value: 0 };
-  const [minX, minY, maxX, maxY] = splat.bounds;
-  const origin = [minX - splat.offset.cx, maxY - splat.offset.cy];
-  const size = [maxX - minX, maxY - minY];
+  const { origin, size } = splatOriginSize(splat);
 
   const material = new MeshStandardMaterial({
     color: 0x86_a8_c4,

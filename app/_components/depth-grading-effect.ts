@@ -1,5 +1,6 @@
 import { Effect, EffectAttribute } from "postprocessing";
 import { Uniform } from "three";
+import { clamp01 } from "@/lib/math";
 
 /**
  * Painterly aerial perspective: warm tint up close, cooler and slightly
@@ -45,7 +46,7 @@ export class DepthGradingEffect extends Effect {
   setIntensity(value: number): void {
     const uniform = this.uniforms.get("intensity");
     if (uniform) {
-      uniform.value = Math.min(Math.max(value, 0), 1);
+      uniform.value = clamp01(value);
     }
   }
 }

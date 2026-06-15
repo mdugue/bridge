@@ -8,6 +8,8 @@ import {
   MeshStandardMaterial,
   Object3D,
 } from "three";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { clamp } from "@/lib/math";
 
 /** Recenter offset + ground lookup shared with the terrain. */
 export interface VegetationContext {
@@ -91,7 +93,6 @@ function collectPlacements(
   features: LineFeature[],
   ctx: VegetationContext
 ): { hedges: Placement[]; trees: Placement[] } {
-  const { cx, cy } = ctx.offset;
   const trees: Placement[] = [];
   const hedges: Placement[] = [];
   for (const f of features) {
@@ -110,10 +111,11 @@ function collectPlacements(
         continue; // off-tile or NoData
       }
       const seed = ex * 0.13 + ey * 0.07 + i;
+      const { x, z } = epsgToWorld(ex, ey, ctx.offset);
       const place: Placement = {
-        x: ex - cx,
+        x,
         y: ground,
-        z: -(ey - cy),
+        z,
         rot: isHedge ? hash(seed) * 0.3 : hash(seed * 1.7) * Math.PI,
         s: isHedge ? 1 : 0.8 + hash(seed) * 0.6,
       };
@@ -246,10 +248,14 @@ function collectCanopy(
   features: PointFeature[],
   ctx: VegetationContext
 ): Placement[] {
-  const { cx, cy } = ctx.offset;
   const out: Placement[] = [];
   for (const f of features) {
     if (f.geometry?.type !== "Point") {
+      continue;
+    }
+    // A missing/NaN height would make the scale NaN → a NaN instance matrix
+    // that corrupts the chunk's bounding sphere and culls the whole cell.
+    if (!Number.isFinite(f.properties?.h)) {
       continue;
     }
     const [ex, ey] = f.geometry.coordinates;
@@ -258,15 +264,14 @@ function collectCanopy(
       continue;
     }
     const seed = ex * 0.13 + ey * 0.07;
+    const { x, z } = epsgToWorld(ex, ey, ctx.offset);
     out.push({
-      x: ex - cx,
+      x,
       y: ground,
-      z: -(ey - cy),
+      z,
       rot: hash(seed * 1.7) * Math.PI,
       // Scale the whole tree to the measured canopy height (± a touch).
-      s:
-        Math.min(Math.max(f.properties.h / BASE_TREE_H, 0.5), 7) *
-        (0.9 + hash(seed) * 0.2),
+      s: clamp(f.properties.h / BASE_TREE_H, 0.5, 7) * (0.9 + hash(seed) * 0.2),
     });
   }
   return out;

@@ -1,5 +1,16 @@
 import type { BufferGeometry, Material, Object3D } from "three";
 
+/** Turns on shadow casting/receiving for every mesh in a loaded subtree. */
+export function enableShadows(
+  root: Object3D,
+  { cast = true, receive = true }: { cast?: boolean; receive?: boolean } = {}
+): void {
+  root.traverse((obj) => {
+    obj.castShadow = cast;
+    obj.receiveShadow = receive;
+  });
+}
+
 function disposeMaterial(material: Material | Material[] | undefined): void {
   if (Array.isArray(material)) {
     for (const m of material) {
@@ -25,6 +36,11 @@ export function disposeObject3D(root: Object3D): void {
       geometry?: BufferGeometry;
       material?: Material | Material[];
     };
+    // Free the three-mesh-bvh acceleration structure too (terrain/city picks
+    // and collision build one) — geometry.dispose() alone leaves it on the heap.
+    if (resource.geometry?.boundsTree) {
+      resource.geometry.disposeBoundsTree();
+    }
     resource.geometry?.dispose();
     disposeMaterial(resource.material);
   });

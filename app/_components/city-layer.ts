@@ -4,7 +4,7 @@ import { Raycaster, Vector2 } from "three";
 import { filterCityObject } from "@/lib/city/filter-city-object";
 import type { CityJsonDocument } from "@/lib/city/types";
 import { buildCityBvh } from "./collision";
-import { disposeObject3D } from "./three-utils";
+import { disposeObject3D, enableShadows } from "./three-utils";
 
 export interface CityLayer {
   /** mutable in-memory CityJSON — the source of truth for demolish */
@@ -41,10 +41,7 @@ function parseCity(
   // default depth pass (the geometry has a plain `position` attribute);
   // receiving works because CityObjectsMaterial is lambert-based with
   // `lights: true`.
-  loader.scene.traverse((obj) => {
-    obj.castShadow = true;
-    obj.receiveShadow = true;
-  });
+  enableShadows(loader.scene);
   // BVHs make per-frame collision rays (and demolish picks) cheap.
   buildCityBvh(loader.scene);
   return { group: loader.scene, matrix: loader.matrix };
