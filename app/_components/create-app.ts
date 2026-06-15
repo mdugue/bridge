@@ -6,13 +6,13 @@ import {
   Fog,
   Group,
   type Object3D,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   Raycaster,
   Scene,
   Timer,
   Vector2,
   Vector3,
-  VSMShadowMap,
   WebGLRenderer,
 } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
@@ -195,11 +195,12 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  // VSM (variance) shadows: the depth map is blurred, so shadow edges read as
-  // a soft gradient instead of hard texel staircases, and the statistical
-  // depth compare needs almost no bias — which removes the bright contact
-  // strip (peter-panning) at wall/ground seams.
-  renderer.shadowMap.type = VSMShadowMap;
+  // PCFSoft: percentage-closer soft shadows. VSM was tried but its blurred
+  // depth moments ring along steep depth gradients, which a large ground plane
+  // at a grazing angle presents everywhere — producing corduroy ribbing across
+  // terrain and facades. PCFSoft has no such artifact; the staircase is beaten
+  // instead with a small, fine-texel shadow frustum (see sun-rig).
+  renderer.shadowMap.type = PCFSoftShadowMap;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
   // Touch gestures (look/pinch/double-tap) need the browser to keep its

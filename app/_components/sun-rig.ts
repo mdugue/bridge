@@ -19,10 +19,10 @@ export interface SunRig {
 
 const SUN_INTENSITY = 2.4;
 const SHADOW_MAP_SIZE = 2048;
-/** Half-size of the shadow frustum, in metres. Small = sharp texels (smoother
- * shadow edges, less staircase); the frustum follows the camera so street-level
- * coverage isn't lost. */
-const SHADOW_RADIUS = 220;
+/** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
+ * shadow edges, less staircase under PCFSoft); the frustum follows the camera
+ * so street-level coverage isn't lost. 160 m → ~0.16 m texels at 2048². */
+const SHADOW_RADIUS = 160;
 
 function createSkyDome(scene: Scene): Sky {
   const sky = new Sky();
@@ -77,14 +77,12 @@ export function createSunRig(
   // Tight depth range around the frustum for good precision.
   cam.near = shadowDistance - SHADOW_RADIUS * 1.2;
   cam.far = shadowDistance + SHADOW_RADIUS * 1.2;
-  // VSM shadows (renderer.shadowMap.type): the depth map is gaussian-blurred,
-  // so edges are soft (no texel staircase) and the variance compare tolerates
-  // a near-zero bias — which is what keeps the shadow glued to the wall instead
-  // of leaving the bright contact strip. radius/blurSamples control softness.
-  sun.shadow.bias = -0.0001;
-  sun.shadow.normalBias = 0.02;
-  sun.shadow.radius = 3.5;
-  sun.shadow.blurSamples = 12;
+  // PCFSoft shadows (renderer.shadowMap.type). The terrain no longer casts, so
+  // there's no terrain self-acne; a small normalBias is enough to keep building
+  // and tree self-shadows clean. Kept low so the shadow still hugs wall bases
+  // (minimal peter-panning); the fine-texel frustum carries the edge softness.
+  sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
   // Current sun direction and frustum focus; reposition() places the light and
