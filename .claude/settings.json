@@ -1,14 +1,32 @@
 {
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.geodaten.sachsen.de)",
+      "Bash(ogr2ogr --version)",
+      "Bash(bash scripts/extract-dlm.sh 33412_5656)",
+      "Bash(python3 -)",
+      "Read(//tmp/**)",
+      "Bash(awk '{print $5}')",
+      "Bash(node shoot.mjs 182 42 /tmp/shot_current.png \"0,10,32\" \"0,3,8\")",
+      "Bash(node shoot.mjs 182 42 /tmp/shot_cmp.png \"13,13,28\" \"13,1,15\")",
+      "Bash(node shoot.mjs 150 35 /tmp/shot_crown.png \"8,7,20\" \"8,4,11\")",
+      "Bash(node -e ' *)",
+      "Bash(node shoot.mjs 150 30 /tmp/shot_trunks.png \"8,3.5,16\" \"8,3,11\")",
+      "Bash(node shoot.mjs 150 28 /tmp/shot_trunks2.png \"7,2.6,23\" \"7,2.4,11\")",
+      "Bash(grep -vE \"^\\\\s*$\")"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
+        "matcher": "Write|Edit",
         "hooks": [
           {
-            "command": "bun fix --skip=correctness/noUnusedImports",
-            "type": "command"
+            "type": "command",
+            "command": "bun fix --skip=correctness/noUnusedImports"
           }
-        ],
-        "matcher": "Write|Edit"
+        ]
       }
     ]
   }

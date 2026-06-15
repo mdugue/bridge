@@ -1,6 +1,6 @@
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
-import type { Camera, Group, Matrix4 } from "three";
-import { Raycaster, Vector2 } from "three";
+import type { BufferGeometry, Camera, Group, Matrix4, Mesh } from "three";
+import { BufferAttribute, Raycaster, Vector2 } from "three";
 import { filterCityObject } from "@/lib/city/filter-city-object";
 import type { CityJsonDocument } from "@/lib/city/types";
 import { buildCityBvh } from "./collision";
@@ -45,16 +45,52 @@ function parseCity(
     obj.castShadow = true;
     obj.receiveShadow = true;
   });
+  annotateBaseHeight(loader.scene);
   // BVHs make per-frame collision rays (and demolish picks) cheap.
   buildCityBvh(loader.scene);
   return { group: loader.scene, matrix: loader.matrix };
 }
 
+/**
+ * Writes a per-vertex `aBaseZ` attribute = the lowest local-Z (elevation, since
+ * the geometry is data-frame Z-up) of each building, looked up by the loader's
+ * per-vertex `objectid`. The clay material's shader uses `position.z - aBaseZ`
+ * as the height ABOVE each building's own base — so the ground-contact gradient
+ * and storey bands sit correctly even though buildings stand on terrain at
+ * different elevations. Skips meshes without an `objectid` attribute.
+ */
+function annotateBaseHeight(group: Group): void {
+  group.traverse((obj) => {
+    const geom = (obj as Mesh).geometry as BufferGeometry | undefined;
+    const pos = geom?.attributes.position;
+    const oid = geom?.attributes.objectid;
+    if (!(geom && pos && oid)) {
+      return;
+    }
+    const minZ = new Map<number, number>();
+    for (let i = 0; i < pos.count; i++) {
+      const id = oid.getX(i);
+      const z = pos.getZ(i);
+      const cur = minZ.get(id);
+      if (cur === undefined || z < cur) {
+        minZ.set(id, z);
+      }
+    }
+    const base = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      base[i] = minZ.get(oid.getX(i)) ?? pos.getZ(i);
+    }
+    geom.setAttribute("aBaseZ", new BufferAttribute(base, 1));
+  });
+}
+
 export function createCityLayer(
   data: CityJsonDocument,
-  world: Group
+  world: Group,
+  /** shared recenter matrix; pass the primary tile's so neighbours align */
+  sharedMatrix: Matrix4 | null = null
 ): CityLayer {
-  const { group, matrix } = parseCity(data, null);
+  const { group, matrix } = parseCity(data, sharedMatrix);
   world.add(group);
   return { data, group, matrix };
 }

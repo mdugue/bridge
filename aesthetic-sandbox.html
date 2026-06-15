@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ästhetik-Sandbox · Bäume & Gebäude</title>
+    <style>
+    :root {
+      color-scheme: dark;
+    }
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: #0d1014;
+    }
+    #app {
+      position: fixed;
+      inset: 0;
+    }
+    .panel {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      width: 270px;
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #e7ecf2;
+      background: rgba(18, 22, 28, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+    }
+    .panel h1 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .panel .sub {
+      margin-bottom: 10px;
+      font-size: 11.5px;
+      color: #9aa6b2;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+    .row label {
+      color: #c7d0da;
+    }
+    .row input[type="range"] {
+      width: 125px;
+      accent-color: #8fb98f;
+    }
+    .row input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #8fb98f;
+    }
+    .val {
+      min-width: 36px;
+      font-variant-numeric: tabular-nums;
+      color: #8fb98f;
+      text-align: right;
+    }
+    hr {
+      margin: 11px 0;
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .sec {
+      margin: 4px 0 2px;
+      font-size: 11px;
+      color: #7e8a96;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .hint {
+      position: fixed;
+      right: 14px;
+      bottom: 12px;
+      z-index: 10;
+      font-size: 11px;
+      color: #6b7682;
+    }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div class="panel">
+      <h1>Ästhetik-Sandbox</h1>
+      <div class="sub">
+        Dieselben Regler wie in der echten Stadt-Szene. 0 % = Effekt aus.
+      </div>
+
+      <div class="sec">Szene</div>
+      <div class="row">
+        <label>Sonnen-Azimut</label>
+        <input id="az" type="range" min="0" max="360" value="135">
+        <span class="val" id="azv">135°</span>
+      </div>
+      <div class="row">
+        <label>Sonnen-Höhe</label>
+        <input id="alt" type="range" min="3" max="85" value="30">
+        <span class="val" id="altv">30°</span>
+      </div>
+
+      <hr>
+      <div class="sec">Gebäude</div>
+      <div class="row">
+        <label>Boden-Verlauf</label>
+        <input id="ground" type="range" min="0" max="100" value="34">
+        <span class="val" id="groundv">34%</span>
+      </div>
+      <div class="row">
+        <label>Höhenlinien</label>
+        <input id="bands" type="range" min="0" max="100" value="18">
+        <span class="val" id="bandsv">18%</span>
+      </div>
+      <div class="row">
+        <label>Streiflicht</label>
+        <input id="rim" type="range" min="0" max="100" value="60">
+        <span class="val" id="rimv">60%</span>
+      </div>
+
+      <hr>
+      <div class="sec">Bäume</div>
+      <div class="row">
+        <label>Gegenlicht-Schimmer</label>
+        <input id="shimmer" type="range" min="0" max="100" value="45">
+        <span class="val" id="shimmerv">45%</span>
+      </div>
+      <div class="row">
+        <label>Multi-Tuft-Kronen</label>
+        <input id="multituft" type="checkbox" checked>
+      </div>
+    </div>
+    <div class="hint">Maus: drehen · Scroll: zoomen</div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+      }
+    }
+    </script>
+
+    <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
+    // palette pulled from the real project
+    const C = {
+      trunk: 0x8a_7c_68,
+      crown: 0xa6_bf_92,
+      clay: 0xec_e7_df,
+      ground: 0xcd_bf_9c,
+      skyHemi: 0xbf_d4_e6,
+      groundHemi: 0x4a_5a_3a,
+      bg: 0xd7_dd_e2,
+    };
+    const TRUNK_H = 2.4,
+      CROWN_R = 2.1;
+    const hash = (n) => {
+      const s = Math.sin(n * 12.9898) * 43_758.5453;
+      return s - Math.floor(s);
+    };
+
+    // ---------------------------------------------------------------- renderer
+    const app = document.getElementById("app");
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // soft since r182 via shadow.radius — matches the real app
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    app.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(C.bg);
+    scene.fog = new THREE.Fog(C.bg, 60, 170);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      innerWidth / innerHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(0, 12, 30);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 4, 0);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI * 0.49;
+
+    // ---------------------------------------------------------------- lights
+    const hemi = new THREE.HemisphereLight(C.skyHemi, C.groundHemi, 0.85);
+    scene.add(hemi);
+    const sun = new THREE.DirectionalLight(0xff_f2_e0, 2.4);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 120;
+    sun.shadow.camera.left = -40;
+    sun.shadow.camera.right = 40;
+    sun.shadow.camera.top = 40;
+    sun.shadow.camera.bottom = -40;
+    sun.shadow.bias = -0.0003;
+    sun.shadow.normalBias = 0;
+    sun.shadow.radius = 5;
+    scene.add(sun, sun.target);
+    const sunDir = new THREE.Vector3(); // surface->sun, shared into the shimmer
+    function placeSun() {
+      const az = (+az$.value * Math.PI) / 180,
+        alt = (+alt$.value * Math.PI) / 180;
+      sunDir
+        .set(
+          Math.cos(alt) * Math.sin(az),
+          Math.sin(alt),
+          Math.cos(alt) * Math.cos(az)
+        )
+        .normalize();
+      sun.position.copy(sunDir).multiplyScalar(60);
+      sun.target.position.set(0, 0, 0);
+      const k = Math.max(0.15, Math.sin(alt));
+      sun.intensity = 2.4 * k;
+      hemi.intensity = 0.5 + 0.5 * k;
+    }
+
+    // ---------------------------------------------------------------- ground
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(220, 220),
+      new THREE.MeshStandardMaterial({ color: C.ground, roughness: 1 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // ================================================================ CROWNS
+    // Cheap crown: detail-2 icosphere displaced into lobes + radial normals (the
+    // real app's far-LOD / always-on crown).
+    function cheapCrownGeo() {
+      const g = new THREE.IcosahedronGeometry(CROWN_R, 2);
+      const cy = TRUNK_H + CROWN_R * 0.5;
+      const lobes = [
+        [0, 0.6, 0],
+        [0.8, 0.25, 0.35],
+        [-0.7, 0.15, 0.5],
+        [0.25, 0.5, -0.7],
+        [-0.45, 0.4, -0.3],
+        [0.55, -0.05, -0.55],
+        [-0.2, -0.1, 0.7],
+      ].map(([x, y, z]) => new THREE.Vector3(x, y, z).normalize());
+      const pos = g.attributes.position,
+        nrm = g.attributes.normal,
+        v = new THREE.Vector3(),
+        dir = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        dir.copy(v).normalize();
+        let bulge = 0;
+        for (const L of lobes) {
+          const d = Math.max(0, dir.dot(L));
+          bulge += d * d * 0.34;
+        }
+        v.copy(dir).multiplyScalar(CROWN_R * (0.74 + Math.min(bulge, 0.95)));
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      g.scale(1, 1.05, 1);
+      g.translate(0, cy, 0);
+      for (let i = 0; i < pos.count; i++) {
+        v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
+        nrm.setXYZ(i, v.x, v.y, v.z);
+      }
+      nrm.needsUpdate = true;
+      return g;
+    }
+    // Rich crown: heavily overlapping merged lobes + radial normals (near-LOD).
+    function richCrownGeo(seed) {
+      const cy = TRUNK_H + CROWN_R * 0.5,
+        R = CROWN_R;
+      const up = new THREE.Vector3(0, 1, 0),
+        dir = new THREE.Vector3(),
+        at = new THREE.Vector3(),
+        scl = new THREE.Vector3();
+      const q = new THREE.Quaternion(),
+        mtx = new THREE.Matrix4(),
+        parts = [];
+      let k = 0;
+      const rnd = () => hash((k++ + 1) * 1.37 + 0.19 + seed * 17.31);
+      const core = new THREE.IcosahedronGeometry(R * 0.72, 1);
+      core.scale(1.1, 0.82, 1.1);
+      parts.push(core);
+      const addLobes = (count, dLo, dHi, rLo, rHi, el, yLo, yHi) => {
+        for (let i = 0; i < count; i++) {
+          const ny = yLo + rnd() * (yHi - yLo);
+          dir.set(rnd() * 2 - 1, ny, rnd() * 2 - 1).normalize();
+          at.copy(dir).multiplyScalar(R * (dLo + rnd() * (dHi - dLo)));
+          at.y += R * 0.06;
+          const rad = R * (rLo + rnd() * (rHi - rLo)),
+            long = 1 + rnd() * el;
+          scl.set(1 / Math.sqrt(long), long, 1 / Math.sqrt(long));
+          q.setFromUnitVectors(up, dir);
+          mtx.compose(at, q, scl);
+          const b = new THREE.IcosahedronGeometry(rad, 1);
+          b.applyMatrix4(mtx);
+          parts.push(b);
+        }
+      };
+      addLobes(5, 0.24, 0.44, 0.5, 0.66, 0.4, -0.3, 1.15);
+      addLobes(4, 0.34, 0.52, 0.4, 0.54, 0.35, -0.7, 0.05);
+      addLobes(8, 0.46, 0.66, 0.24, 0.34, 0.3, -0.15, 1.05);
+      const g = mergeGeometries(parts);
+      g.scale(1, 1.04, 1);
+      g.translate(0, cy, 0);
+      const pos = g.attributes.position,
+        nrm = g.attributes.normal,
+        v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
+        nrm.setXYZ(i, v.x, v.y, v.z);
+      }
+      nrm.needsUpdate = true;
+      return g;
+    }
+
+    // Organic trunk: flare + bark bumps + slight lean + a couple of branch stubs.
+    function trunkGeo(seed) {
+      const thick = 0.7 + hash(seed * 6.3) * 0.85;
+      const botR = 0.15 * thick,
+        topR = 0.085 * thick * (0.8 + hash(seed * 4.1) * 0.4);
+      const t = new THREE.CylinderGeometry(topR, botR, TRUNK_H, 8, 6);
+      t.translate(0, TRUNK_H / 2, 0);
+      const a0 = hash(seed * 4.7) * Math.PI * 2,
+        bx = Math.cos(a0),
+        bz = Math.sin(a0);
+      const bend = (0.04 + hash(seed * 9.1) * 0.06) * TRUNK_H;
+      const cOff = (tt) => tt ** 1.4 * bend;
+      const radiusAt = (tt) => botR + (topR - botR) * tt;
+      const pos = t.attributes.position,
+        v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const tt = Math.min(Math.max(v.y / TRUNK_H, 0), 1),
+          r = Math.hypot(v.x, v.z),
+          ang = Math.atan2(v.z, v.x);
+        if (r > 1e-4) {
+          const flare = tt < 0.16 ? 1 + ((0.16 - tt) / 0.16) * 0.9 : 1;
+          const bump =
+            1 + (hash(ang * 2.4 + v.y * 1.7 + seed * 3.3) - 0.5) * 0.2;
+          const nr = r * flare * bump;
+          v.x = Math.cos(ang) * nr;
+          v.z = Math.sin(ang) * nr;
+        }
+        const kk = cOff(tt);
+        v.x += bx * kk;
+        v.z += bz * kk;
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      const parts = [t],
+        up = new THREE.Vector3(0, 1, 0),
+        q = new THREE.Quaternion(),
+        mtx = new THREE.Matrix4();
+      const nB = 1 + Math.floor(hash(seed * 5.5) * 2.99),
+        baseA = hash(seed * 7.7) * Math.PI * 2;
+      const crownBottom = TRUNK_H + CROWN_R * 0.5 - CROWN_R * 0.85;
+      for (let j = 0; j < nB; j++) {
+        const a = baseA + (j / nB) * Math.PI * 2 + (hash(seed + j) - 0.5) * 0.7;
+        const forkT = 0.42 + j * 0.15 + hash(seed * 3.1 + j * 2) * 0.05,
+          forkY = TRUNK_H * forkT;
+        const tilt = 0.3 + hash(seed * 1.9 + j) * 0.26,
+          ca = Math.cos(a),
+          sa = Math.sin(a);
+        const dir = new THREE.Vector3(
+          ca * Math.sin(tilt),
+          Math.cos(tilt),
+          sa * Math.sin(tilt)
+        ).normalize();
+        const len =
+          (crownBottom - forkY) / dir.y +
+          CROWN_R * (0.5 + hash(seed + j) * 0.4);
+        const rFork = radiusAt(forkT);
+        const br = new THREE.CylinderGeometry(0.022, rFork * 0.85, len, 5);
+        br.translate(0, len / 2 - 0.14, 0);
+        q.setFromUnitVectors(up, dir);
+        const base = new THREE.Vector3(
+          bx * cOff(forkT) + ca * rFork * 0.6,
+          forkY,
+          bz * cOff(forkT) + sa * rFork * 0.6
+        );
+        mtx.compose(base, q, new THREE.Vector3(1, 1, 1));
+        br.applyMatrix4(mtx);
+        parts.push(br);
+      }
+      const merged = mergeGeometries(parts);
+      merged.computeVertexNormals();
+      return merged;
+    }
+
+    // ---------------------------------------------------------------- materials
+    const shimmer = { value: 0.45 };
+    function crownMaterial() {
+      const m = new THREE.MeshStandardMaterial({
+        color: C.crown,
+        roughness: 1,
+      });
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uSunDir = { value: sunDir };
+        sh.uniforms.uShimmer = shimmer;
+        sh.vertexShader = sh.vertexShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nuniform vec3 uSunDir;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;"
+          )
+          .replace(
+            "#include <worldpos_vertex>",
+            [
+              "#include <worldpos_vertex>",
+              " vShimWP = (modelMatrix * vec4(transformed, 1.0)).xyz;",
+              " #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0",
+              "  vShimSC = directionalShadowMatrix[0] * vec4(vShimWP + uSunDir*2.0, 1.0);",
+              " #endif",
+            ].join("\n")
+          );
+        sh.fragmentShader = sh.fragmentShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nuniform vec3 uSunDir;\nuniform float uShimmer;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;"
+          )
+          .replace(
+            "#include <emissivemap_fragment>",
+            [
+              "#include <emissivemap_fragment>",
+              " vec3 shimV = normalize(cameraPosition - vShimWP);",
+              " float shimBack = pow(clamp(dot(shimV, -uSunDir), 0.0, 1.0), 3.6);",
+              " float shimVis = 1.0;",
+              " #if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0",
+              "  DirectionalLightShadow shimDls = directionalLightShadows[0];",
+              "  shimVis = getShadow(directionalShadowMap[0], shimDls.shadowMapSize, shimDls.shadowIntensity, shimDls.shadowBias, shimDls.shadowRadius, vShimSC);",
+              " #endif",
+              " totalEmissiveRadiance += uShimmer * shimBack * shimVis * vec3(0.95,0.85,0.45);",
+            ].join("\n")
+          );
+      };
+      return m;
+    }
+    const trunkMat = (() => {
+      const m = new THREE.MeshStandardMaterial({
+        color: C.trunk,
+        roughness: 1,
+      });
+      m.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nvarying float vTrunkY;"
+          )
+          .replace(
+            "#include <begin_vertex>",
+            "#include <begin_vertex>\n vTrunkY = position.y;"
+          );
+        sh.fragmentShader = sh.fragmentShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nvarying float vTrunkY;"
+          )
+          .replace(
+            "#include <map_fragment>",
+            `#include <map_fragment>\n float tg = clamp(vTrunkY/${TRUNK_H.toFixed(2)}, 0.0, 1.0);\n diffuseColor.rgb *= mix(0.74, 1.05, smoothstep(0.0, 0.6, tg));`
+          );
+      };
+      return m;
+    })();
+    const crownMat = crownMaterial();
+
+    // Building clay material: Boden-Verlauf + Höhenlinien (fwidth contours) + rim.
+    // Sandbox buildings sit at y=0, so local height = world Y (no aBaseZ needed).
+    const clayU = {
+      uAO: { value: 0.34 },
+      uBands: { value: 0.18 },
+      uRim: { value: 0.6 },
+    };
+    function clayMaterial() {
+      const m = new THREE.MeshStandardMaterial({
+        color: C.clay,
+        roughness: 1,
+        metalness: 0,
+      });
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uAO = clayU.uAO;
+        sh.uniforms.uBands = clayU.uBands;
+        sh.uniforms.uRim = clayU.uRim;
+        sh.vertexShader = sh.vertexShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nvarying float vClayH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+          )
+          .replace(
+            "#include <beginnormal_vertex>",
+            "#include <beginnormal_vertex>\n vClayWN = normalize(mat3(modelMatrix) * objectNormal);"
+          )
+          .replace(
+            "#include <begin_vertex>",
+            "#include <begin_vertex>\n vClayH = position.y;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;"
+          );
+        sh.fragmentShader = sh.fragmentShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nvarying float vClayH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+          )
+          .replace(
+            "#include <map_fragment>",
+            [
+              "#include <map_fragment>",
+              " float clayH = max(vClayH, 0.0);",
+              " diffuseColor.rgb *= mix(1.0 - 0.55*uAO, 1.0, smoothstep(0.0, 5.0, clayH));",
+              " float clayWall = 1.0 - smoothstep(0.5, 0.7, abs(vClayWN.y));",
+              " float clayStoreys = clayH / 3.0;",
+              " float clayLine = 1.0 - min(abs(fract(clayStoreys-0.5)-0.5) / max(fwidth(clayStoreys), 1e-4), 1.0);",
+              " diffuseColor.rgb *= 1.0 - clayLine * uBands * clayWall;",
+            ].join("\n")
+          )
+          .replace(
+            "#include <emissivemap_fragment>",
+            [
+              "#include <emissivemap_fragment>",
+              " vec3 clayV = normalize(cameraPosition - vClayWP);",
+              " float clayFres = 1.0 - clamp(dot(clayV, vClayWN), 0.0, 1.0);",
+              " clayFres *= clayFres;",
+              " totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
+            ].join("\n")
+          );
+      };
+      return m;
+    }
+    const clayMat = clayMaterial();
+
+    // ---------------------------------------------------------------- scene content
+    const treeGroup = new THREE.Group();
+    scene.add(treeGroup);
+    const spots = [
+      [-9, -2],
+      [-5, 3],
+      [-1, -3],
+      [3, 2],
+      [7, -2],
+      [11, 3],
+      [-12, 4],
+      [1, 5],
+    ];
+    let multiTuft = true;
+    function rebuildTrees() {
+      treeGroup.clear();
+      spots.forEach(([x, z], i) => {
+        const s = 0.85 + hash(i * 3.1) * 0.5;
+        const g = new THREE.Group();
+        const trunk = new THREE.Mesh(trunkGeo(i + 1), trunkMat);
+        trunk.castShadow = true;
+        const crown = new THREE.Mesh(
+          multiTuft ? richCrownGeo(i + 1) : cheapCrownGeo(),
+          crownMat
+        );
+        crown.castShadow = true;
+        crown.receiveShadow = true;
+        g.add(trunk, crown);
+        g.position.set(x, 0, z);
+        g.scale.setScalar(s);
+        g.rotation.y = hash(i * 1.7) * Math.PI;
+        treeGroup.add(g);
+      });
+    }
+    const blocks = [
+      [-7, -9, 5, 11, 5],
+      [0, -11, 6, 17, 6],
+      [6, -8, 5, 8, 6],
+      [-3, -12, 7, 13, 5],
+      [10, -10, 4, 22, 4],
+    ];
+    for (const [x, z, w, h, d] of blocks) {
+      const geo = new THREE.BoxGeometry(w, h, d);
+      geo.translate(0, h / 2, 0);
+      const mesh = new THREE.Mesh(geo, clayMat);
+      mesh.position.set(x, 0, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+    }
+
+    // ---------------------------------------------------------------- controls
+    const $ = (id) => document.getElementById(id);
+    const az$ = $("az"),
+      alt$ = $("alt"),
+      ground$ = $("ground"),
+      bands$ = $("bands"),
+      rim$ = $("rim"),
+      shimmer$ = $("shimmer"),
+      mt$ = $("multituft");
+    function syncLabels() {
+      $("azv").textContent = az$.value + "°";
+      $("altv").textContent = alt$.value + "°";
+      $("groundv").textContent = ground$.value + "%";
+      $("bandsv").textContent = bands$.value + "%";
+      $("rimv").textContent = rim$.value + "%";
+      $("shimmerv").textContent = shimmer$.value + "%";
+    }
+    [az$, alt$].forEach((el) =>
+      el.addEventListener("input", () => {
+        placeSun();
+        syncLabels();
+      })
+    );
+    ground$.addEventListener("input", () => {
+      clayU.uAO.value = +ground$.value / 100;
+      syncLabels();
+    });
+    bands$.addEventListener("input", () => {
+      clayU.uBands.value = +bands$.value / 100;
+      syncLabels();
+    });
+    rim$.addEventListener("input", () => {
+      clayU.uRim.value = +rim$.value / 100;
+      syncLabels();
+    });
+    shimmer$.addEventListener("input", () => {
+      shimmer.value = +shimmer$.value / 100;
+      syncLabels();
+    });
+    mt$.addEventListener("change", () => {
+      multiTuft = mt$.checked;
+      rebuildTrees();
+    });
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    placeSun();
+    syncLabels();
+    rebuildTrees();
+    window.__sandbox = {
+      THREE,
+      camera,
+      controls,
+      renderer,
+      scene,
+      frame() {
+        controls.update();
+        renderer.render(scene, camera);
+      },
+    };
+    (function loop() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(loop);
+    })();
+    </script>
+  </body>
+</html>

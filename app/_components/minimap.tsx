@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   epsgToMapPx,
-  type FootprintRect,
+  type FootprintPoly,
   mapPxToEpsg,
 } from "@/lib/city/minimap";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -16,12 +16,91 @@ const DEFAULT_SIZE = 192;
 // Canvas drawing colors — scene content like the 3D view, not themable chrome.
 const PAPER = "#f7f5f0";
 const INK = "rgba(50, 53, 62, 0.85)";
+const INK_FILL = "rgba(50, 53, 62, 0.35)";
 const FRAME = "rgba(50, 53, 62, 0.25)";
 const PLAYER = "#2563eb";
 
+// Muted map tints per land-cover class id (see scripts/extract-dlm.sh), a touch
+// lighter than the 3D palette so the ink footprints stay legible on top.
+const MAP_PALETTE: [number, number, number][] = [
+  [230, 224, 209], // 0 background  warm pale taupe
+  [197, 211, 170], // 1 farmland    soft sage
+  [150, 176, 138], // 2 forest      muted moss
+  [175, 195, 158], // 3 copse       light moss
+  [228, 219, 203], // 4 built-up    warm pale clay
+  [197, 183, 178], // 5 railway     dusty mauve
+  [224, 205, 168], // 6 path        pale warm sand
+  [200, 200, 206], // 7 road        soft grey-lavender
+  [164, 192, 209], // 8 water       dusty blue
+];
+
+/**
+ * Recolors the class-id splatmap into a small map-tinted canvas. NEAREST
+ * sampling (smoothing off) keeps class boundaries crisp under downscaling.
+ */
+function colorizeLandcover(
+  img: HTMLImageElement,
+  size: number
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return canvas;
+  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0, size, size);
+  const image = ctx.getImageData(0, 0, size, size);
+  const { data } = image;
+  for (let i = 0; i < data.length; i += 4) {
+    const tint = MAP_PALETTE[data[i]] ?? MAP_PALETTE[0];
+    data[i] = tint[0];
+    data[i + 1] = tint[1];
+    data[i + 2] = tint[2];
+    data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
+/**
+ * Draws true building footprints as soft-filled, thin-outlined polygons so the
+ * map reads as a figure-ground plan instead of a few oversized solid blocks.
+ */
+function drawFootprints(
+  ctx: CanvasRenderingContext2D,
+  footprints: FootprintPoly[],
+  bounds: TerrainBounds,
+  size: number
+): void {
+  ctx.fillStyle = INK_FILL;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.5;
+  for (const poly of footprints) {
+    if (poly.pts.length < 3) {
+      continue;
+    }
+    ctx.beginPath();
+    poly.pts.forEach(([x, y], i) => {
+      const { px, py } = epsgToMapPx(x, y, bounds, size);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
 interface MinimapProps {
   bounds: TerrainBounds;
-  footprints: FootprintRect[];
+  footprints: FootprintPoly[];
+  /** per-tile land-cover class PNGs + their EPSG bounds, drawn as background */
+  landcoverTiles?: { bounds: TerrainBounds; src: string }[];
   onTeleport: (epsgX: number, epsgY: number) => void;
   /** CSS pixel edge length (square); smaller on phones */
   size?: number;
@@ -52,6 +131,7 @@ function setupCanvas(
 export function Minimap({
   bounds,
   footprints,
+  landcoverTiles,
   onTeleport,
   size = DEFAULT_SIZE,
   subscribePose,
@@ -59,29 +139,51 @@ export function Minimap({
   const staticRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
 
-  // Static layer: tile frame + footprints. Redrawn after demolish.
+  // Static layer: per-tile land-cover background + frame + footprints. Redrawn
+  // after demolish and again as each tile's image decodes.
   useEffect(() => {
     const canvas = staticRef.current;
     if (!canvas) {
       return;
     }
     const ctx = setupCanvas(canvas, size);
-    ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = FRAME;
-    ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
-    ctx.fillStyle = INK;
-    for (const rect of footprints) {
-      const a = epsgToMapPx(rect.minX, rect.maxY, bounds, size);
-      const b = epsgToMapPx(rect.maxX, rect.minY, bounds, size);
-      ctx.fillRect(
-        a.px,
-        a.py,
-        Math.max(b.px - a.px, 1.2),
-        Math.max(b.py - a.py, 1.2)
-      );
+    const tiles = landcoverTiles ?? [];
+    const decoded = new Map<string, HTMLCanvasElement>();
+
+    const repaint = () => {
+      ctx.fillStyle = PAPER;
+      ctx.fillRect(0, 0, size, size);
+      // Each tile drawn into its own sub-rect of the (union) bounds.
+      for (const tile of tiles) {
+        const cv = decoded.get(tile.src);
+        if (!cv) {
+          continue;
+        }
+        const a = epsgToMapPx(tile.bounds[0], tile.bounds[3], bounds, size);
+        const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
+        ctx.drawImage(cv, a.px, a.py, b.px - a.px, b.py - a.py);
+      }
+      ctx.strokeStyle = FRAME;
+      ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+      drawFootprints(ctx, footprints, bounds, size);
+    };
+
+    repaint(); // paper + footprints immediately; tiles fill in as they decode
+    let cancelled = false;
+    for (const tile of tiles) {
+      const img = new Image();
+      img.onload = () => {
+        if (!cancelled) {
+          decoded.set(tile.src, colorizeLandcover(img, 256));
+          repaint();
+        }
+      };
+      img.src = tile.src;
     }
-  }, [footprints, bounds, size]);
+    return () => {
+      cancelled = true;
+    };
+  }, [footprints, bounds, size, landcoverTiles]);
 
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {

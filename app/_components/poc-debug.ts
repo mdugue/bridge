@@ -5,7 +5,7 @@
  * touch `window` — the hook cannot leak into production.
  */
 
-import type { PlayerPose } from "./create-app";
+import type { CameraState, PlayerPose } from "./create-app";
 import type { CityStyleId } from "./visual-style";
 
 interface Xyz {
@@ -15,13 +15,19 @@ interface Xyz {
 }
 
 export interface PocDebugInfo {
+  /** Restores a camera pose captured by getCameraState (snapshot replay). */
+  applyCameraState?: (state: CameraState) => void;
   buildingCount: number;
   /** Demolishes the building under the screen-center crosshair. */
   demolishAtCrosshair?: () => void;
   /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
+  /** Captures the full camera pose for a reproducible snapshot. */
+  getCameraState?: () => CameraState;
   /** Current player pose in EPSG coordinates. */
   getPose?: () => PlayerPose;
+  /** Last-frame GPU counters (draw calls, triangles, programs). */
+  getRenderInfo?: () => { calls: number; triangles: number; programs: number };
   /** Inserts the prescribed building (marker box without a glTF). */
   insertBuilding?: () => void;
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
@@ -29,6 +35,12 @@ export interface PocDebugInfo {
   ready: boolean;
   /** Sets the fog amount (0..1). */
   setAtmosphere?: (amount: number) => void;
+  /** Sets the building storey contour-line (Höhenlinien) strength (0..1). */
+  setBuildingBands?: (strength: number) => void;
+  /** Sets the building ground-contact darkening (Boden-Verlauf) strength (0..1). */
+  setBuildingGroundShade?: (strength: number) => void;
+  /** Sets the building Fresnel rim (Streiflicht) strength (0..1). */
+  setBuildingRim?: (strength: number) => void;
   /** Sets the active style's transparency (0..1). */
   setBuildingTransparency?: (transparency: number) => void;
   /** Sets the soft contact-shadow (SSAO) strength (0..1). */
@@ -37,16 +49,16 @@ export interface PocDebugInfo {
   setDepthGrading?: (intensity: number) => void;
   /** Toggles the photographic depth of field. */
   setDepthOfField?: (enabled: boolean) => void;
-  /** Sets the ink edge opacity (0..1); 0 hides the overlay. */
-  setEdges?: (opacity: number) => void;
   /** Sets the paper-grain intensity (0..1). */
   setPaperGrain?: (intensity: number) => void;
   /** Switches the city rendering style. */
   setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
-  /** 0 = smooth shading; 2..6 = gradient-mapped toon bands. */
-  setToonBands?: (bands: number) => void;
+  /** Toggles the rich multi-tuft crown near the camera (LOD). */
+  setTreeMultiTuft?: (enabled: boolean) => void;
+  /** Sets the backlit canopy shimmer strength (0..1). */
+  setTreeShimmer?: (strength: number) => void;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;

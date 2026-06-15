@@ -1,91 +1,118 @@
-import type {
-  Group,
-  Material,
-  Mesh,
-  WebGLProgramParametersWithUniforms,
-} from "three";
-import {
-  BufferGeometry,
-  EdgesGeometry,
-  LineBasicMaterial,
-  LineSegments,
-  MeshPhysicalMaterial,
-  MeshStandardMaterial,
-} from "three";
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { Group, Material, Mesh } from "three";
+import { MeshPhysicalMaterial, MeshStandardMaterial } from "three";
 
 /**
  * City rendering styles. Picking/demolish read geometry attributes, not
  * materials, so the loader meshes can carry any material we like:
  *  - standard: the loader's per-type CityObjectsMaterial (LoD colors)
  *  - ghost: frosted-glass massing (physical transmission — the backdrop
- *    shows through blurred, consistently; never order-dependent popping)
- *  - clay: archviz clay with adjustable plain transparency
+ *    shows through blurred; EXPENSIVE, re-renders the scene each frame)
+ *  - clay: archviz clay with adjustable plain transparency (opaque, cheap)
  */
 export type CityStyleId = "standard" | "ghost" | "clay";
 export const CITY_STYLE_IDS: CityStyleId[] = ["standard", "ghost", "clay"];
 
 /** Transparency defaults per style (0 = solid, 1 = fully see-through). */
-export const DEFAULT_GHOST_TRANSPARENCY = 0.35;
+export const DEFAULT_GHOST_TRANSPARENCY = 0.05;
 export const DEFAULT_CLAY_TRANSPARENCY = 0;
-export const DEFAULT_EDGE_OPACITY = 0.7;
-/** 0 = smooth shading; >= 2 = gradient-mapped toon bands. */
-export const DEFAULT_TOON_BANDS = 0;
+
+/** Clay facade-detail defaults (0..1). Ground-shade darkens the base; rim is the
+ *  Streiflicht silhouette glow; bands are the faint storey contour lines. */
+export const DEFAULT_BUILDING_GROUND_SHADE = 0.34;
+export const DEFAULT_BUILDING_RIM = 0.6;
+export const DEFAULT_BUILDING_BANDS = 0.18;
+
+/** Live uniform refs for the clay facade detail (mutate `.value`, no recompile). */
+export interface ClayDetailUniforms {
+  uAO: { value: number };
+  uBands: { value: number };
+  uRim: { value: number };
+}
 
 export interface StyleResources {
   clay: MeshStandardMaterial;
+  /** Live uniforms for the clay Boden-Verlauf + Streiflicht. */
+  clayDetail: ClayDetailUniforms;
   dispose: () => void;
-  edgeLines: LineBasicMaterial;
-  /** mutated by setEdgeOpacity; applyCityStyle reads it for visibility */
-  edgesVisible: boolean;
   ghost: MeshPhysicalMaterial;
-  /** shared uniform driving the toon banding in ghost + clay shaders */
-  toonBands: { value: number };
 }
 
-const EDGE_THRESHOLD_DEG = 30;
-
 /**
- * Gradient-mapped toon banding, injected into the lit materials and driven
- * by a shared uniform — toggling does not recompile shaders. Quantizes the
- * final lit luminance (in gamma space, so bands are perceptually even)
- * while preserving hue.
+ * Procedural facade detail injected into the opaque clay material, keyed to each
+ * building's OWN base (the `aBaseZ` attribute written in city-layer) so it works
+ * despite buildings standing on terrain at different elevations:
+ *  - Boden-Verlauf (uAO): a soft darkening over the lowest ~5 m (ambient-occlusion
+ *    surrogate that gives the massing physical contact with the ground).
+ *  - Höhenlinien (uBands): thin, crisp horizontal contour strokes every storey
+ *    (~3 m), drawn with fwidth for constant on-screen width — the SAME hand-drawn
+ *    contour-line language as the terrain, so facades read height/scale without a
+ *    heavy "banded" look. Walls only.
+ *  - Streiflicht (uRim): a Fresnel rim that separates silhouettes from like-
+ *    coloured neighbours. Strength is squared-Fresnel + a healthy multiplier
+ *    because the rim competes with ACES tone-mapping and there is no bloom.
+ * `aBaseZ`/`position.z` are LOCAL data-frame Z (elevation, pre −90° world spin);
+ * normals/positions for the rim are taken in world space via `modelMatrix`.
+ * The uniforms are passed by reference so a setter can retune them live.
  */
-const TOON_CHUNK = /* glsl */ `
-  if ( toonBands >= 1.5 ) {
-    float toonLuma = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-    float toonGamma = pow( max( toonLuma, 0.0 ), 0.4545 );
-    float toonQuant = ( floor( toonGamma * toonBands ) + 0.5 ) / toonBands;
-    float toonTarget = pow( toonQuant, 2.2 );
-    outgoingLight *= toonTarget / max( toonLuma, 1e-5 );
-  }
-`;
-
-function injectToon(
-  shader: WebGLProgramParametersWithUniforms,
-  toonBands: { value: number }
+function addClayDetail(
+  material: MeshStandardMaterial,
+  uniforms: ClayDetailUniforms
 ): void {
-  shader.uniforms.toonBands = toonBands;
-  shader.fragmentShader = shader.fragmentShader
-    .replace("#include <common>", "#include <common>\nuniform float toonBands;")
-    .replace(
-      "#include <opaque_fragment>",
-      `${TOON_CHUNK}\n#include <opaque_fragment>`
-    );
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uAO = uniforms.uAO;
+    shader.uniforms.uBands = uniforms.uBands;
+    shader.uniforms.uRim = uniforms.uRim;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute float aBaseZ;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+      )
+      .replace(
+        "#include <beginnormal_vertex>",
+        "#include <beginnormal_vertex>\n vClayWN = normalize(mat3(modelMatrix) * objectNormal);"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;"
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+      )
+      .replace(
+        "#include <map_fragment>",
+        [
+          "#include <map_fragment>",
+          // Boden-Verlauf: darken the lowest ~5 m above the building's base.
+          "float clayH = max(vLocalH, 0.0);",
+          "diffuseColor.rgb *= mix(1.0 - 0.55 * uAO, 1.0, smoothstep(0.0, 5.0, clayH));",
+          // Höhenlinien: thin storey contour strokes (~3 m), fwidth-constant width,
+          // walls only — the terrain's contour-line language carried onto facades.
+          "float clayWall = 1.0 - smoothstep(0.5, 0.7, abs(vClayWN.y));",
+          "float clayStoreys = clayH / 3.0;",
+          "float clayLine = 1.0 - min(abs(fract(clayStoreys - 0.5) - 0.5) / max(fwidth(clayStoreys), 1e-4), 1.0);",
+          "diffuseColor.rgb *= 1.0 - clayLine * uBands * clayWall;",
+        ].join("\n")
+      )
+      .replace(
+        "#include <emissivemap_fragment>",
+        [
+          "#include <emissivemap_fragment>",
+          // Streiflicht: squared Fresnel rim, warm — strong enough to survive ACES.
+          "vec3 clayV = normalize(cameraPosition - vClayWP);",
+          "float clayFres = 1.0 - clamp(dot(clayV, vClayWN), 0.0, 1.0);",
+          "clayFres *= clayFres;",
+          "totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
+        ].join("\n")
+      );
+  };
 }
 
 /** Shared materials, created once per app instance. */
 export function createStyleResources(): StyleResources {
-  const toonBands = { value: DEFAULT_TOON_BANDS };
-
   // Frosted glass: `transmission` samples a blurred buffer of the scene
-  // BEHIND (terrain, sky, hero models — other transmissive buildings are
-  // excluded), so what shows through is stable under camera motion. This
-  // replaces the depthWrite-transparency approach whose visibility of
-  // occluded walls flipped with draw order while moving.
-  // Dense, milky glass: high roughness + low specular kill the glassy
-  // shine; thickness + attenuation give the body density so transmitted
-  // bright sky doesn't wash the buildings out.
+  // BEHIND, so what shows through is stable under camera motion.
   const ghost = new MeshPhysicalMaterial({
     color: 0xdf_e5_e9,
     roughness: 0.8,
@@ -97,7 +124,6 @@ export function createStyleResources(): StyleResources {
     attenuationColor: 0xb8_c4_cc,
     attenuationDistance: 12,
   });
-  ghost.onBeforeCompile = (shader) => injectToon(shader, toonBands);
 
   const clay = new MeshStandardMaterial({
     color: 0xec_e7_df,
@@ -108,29 +134,24 @@ export function createStyleResources(): StyleResources {
     opacity: 1 - DEFAULT_CLAY_TRANSPARENCY,
     alphaHash: DEFAULT_CLAY_TRANSPARENCY > 0,
   });
-  clay.onBeforeCompile = (shader) => injectToon(shader, toonBands);
-
-  const edgeLines = new LineBasicMaterial({
-    color: 0x2f_35_40,
-    transparent: true,
-    opacity: DEFAULT_EDGE_OPACITY,
-  });
+  const clayDetail: ClayDetailUniforms = {
+    uAO: { value: DEFAULT_BUILDING_GROUND_SHADE },
+    uBands: { value: DEFAULT_BUILDING_BANDS },
+    uRim: { value: DEFAULT_BUILDING_RIM },
+  };
+  addClayDetail(clay, clayDetail);
 
   // Shared across reloads — disposeObject3D must not free them mid-session.
   ghost.userData.shared = true;
   clay.userData.shared = true;
-  edgeLines.userData.shared = true;
 
   return {
     ghost,
     clay,
-    edgeLines,
-    edgesVisible: DEFAULT_EDGE_OPACITY > 0,
-    toonBands,
+    clayDetail,
     dispose: () => {
       ghost.dispose();
       clay.dispose();
-      edgeLines.dispose();
     },
   };
 }
@@ -176,59 +197,17 @@ export function setCityTransparency(
   }
 }
 
-/** 0 disables toon banding; 2..6 are sensible band counts. */
-export function setToonBands(resources: StyleResources, bands: number): void {
-  resources.toonBands.value = bands;
-}
-
-/** Ink edge strength; 0 hides the lines entirely (via applyCityStyle). */
-export function setEdgeOpacity(
-  resources: StyleResources,
-  opacity: number
-): void {
-  resources.edgeLines.opacity = Math.min(Math.max(opacity, 0), 1);
-  resources.edgesVisible = opacity > 0.01;
-}
-
-/**
- * Ink outline for one batched city mesh. The loader geometry is non-indexed
- * (flat-shaded), so EdgesGeometry would treat every triangle edge as a
- * boundary — weld a positions-only copy first.
- */
-function buildEdges(mesh: Mesh, material: LineBasicMaterial): LineSegments {
-  const positionsOnly = new BufferGeometry();
-  positionsOnly.setAttribute(
-    "position",
-    mesh.geometry.getAttribute("position")
-  );
-  const welded = mergeVertices(positionsOnly, 1e-4);
-  const edges = new EdgesGeometry(welded, EDGE_THRESHOLD_DEG);
-  welded.dispose();
-  const lines = new LineSegments(edges, material);
-  lines.name = "city-edges";
-  // Render AFTER all building fills so hidden edges are depth-tested away —
-  // otherwise lines of occluded buildings draw through walls and the whole
-  // city reads as x-ray glass no matter how opaque the fills are.
-  lines.renderOrder = 1;
-  // Decoration only: keep the demolish raycast off ~100k line segments.
-  lines.raycast = () => {
-    // intentionally empty
-  };
-  return lines;
-}
-
 interface StyledCityMesh extends Mesh {
   isCityObjectMesh?: boolean;
   userData: {
-    edges?: LineSegments;
     originalMaterial?: Material | Material[];
   };
 }
 
 /**
- * Applies a style to all batched city meshes in the loader group. Edge
- * overlays are built lazily per mesh and cached; after a demolish-reload the
- * new meshes start bare, so call this again with the current style.
+ * Applies a style to all batched city meshes in the loader group. After a
+ * demolish-reload the new meshes start bare, so call this again with the
+ * current style.
  */
 export function applyCityStyle(
   cityGroup: Group,
@@ -241,20 +220,10 @@ export function applyCityStyle(
       return;
     }
     mesh.userData.originalMaterial ??= mesh.material;
-
     if (style === "standard") {
       mesh.material = mesh.userData.originalMaterial;
     } else {
       mesh.material = style === "ghost" ? resources.ghost : resources.clay;
-    }
-
-    const wantEdges = style !== "standard" && resources.edgesVisible;
-    if (wantEdges && !mesh.userData.edges) {
-      mesh.userData.edges = buildEdges(mesh, resources.edgeLines);
-      mesh.add(mesh.userData.edges);
-    }
-    if (mesh.userData.edges) {
-      mesh.userData.edges.visible = wantEdges;
     }
   });
 }
