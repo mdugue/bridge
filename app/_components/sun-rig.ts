@@ -24,7 +24,7 @@ const SHADOW_MAP_SIZE = 4096;
 /** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
  * shadow edges, less staircase under PCFSoft); the frustum follows the camera
  * so street-level coverage isn't lost. 160 m → ~0.16 m texels at 2048². */
-const SHADOW_RADIUS = 160;
+const SHADOW_RADIUS = 110;
 
 function createSkyDome(scene: Scene): Sky {
   const sky = new Sky();
@@ -79,13 +79,12 @@ export function createSunRig(
   // Tight depth range around the frustum for good precision.
   cam.near = shadowDistance - SHADOW_RADIUS * 1.2;
   cam.far = shadowDistance + SHADOW_RADIUS * 1.2;
-  // normalBias = 0 is the key to killing the peter-panning contact strip: it
-  // would offset the flat ground's shadow sample toward the light at wall bases.
-  // We can afford 0 because nothing that needs it self-shadows here — the
-  // terrain doesn't cast at all, and buildings/trees are closed solids cast via
-  // their BACK faces (three's default shadowSide for FrontSide), so their lit
-  // front faces never self-acne. A tiny constant bias covers the rest.
-  sun.shadow.bias = -0.0002;
+  // normalBias = 0 kills the peter-panning contact strip (it would offset the
+  // flat ground's shadow sample toward the light at wall bases). Safe at 0
+  // because nothing that needs it self-shadows: terrain doesn't cast, and
+  // buildings/trees cast via their BACK faces (three's default shadowSide), so
+  // their lit front faces never self-acne. VSM softens edges via a SMALL blur.
+  sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0;
   scene.add(sun, sun.target);
 

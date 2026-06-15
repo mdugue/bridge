@@ -1,6 +1,14 @@
 {
   "permissions": {
-    "allow": ["WebSearch", "WebFetch(domain:www.geodaten.sachsen.de)"]
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.geodaten.sachsen.de)",
+      "Bash(ogr2ogr --version)",
+      "Bash(bash scripts/extract-dlm.sh 33412_5656)",
+      "Bash(python3 -)",
+      "Read(//tmp/**)",
+      "Bash(awk '{print $5}')"
+    ]
   },
   "hooks": {
     "PostToolUse": [

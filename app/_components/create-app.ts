@@ -6,7 +6,7 @@ import {
   Fog,
   Group,
   type Object3D,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   Raycaster,
   Scene,
@@ -195,12 +195,12 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  // PCFSoft: percentage-closer soft shadows. VSM was tried but its blurred
-  // depth moments ring along steep depth gradients, which a large ground plane
-  // at a grazing angle presents everywhere — producing corduroy ribbing across
-  // terrain and facades. PCFSoft has no such artifact; the staircase is beaten
-  // instead with a small, fine-texel shadow frustum (see sun-rig).
-  renderer.shadowMap.type = PCFSoftShadowMap;
+  // three 0.184 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
+  // and VSM paints a grid on lit faces here, so PCFShadowMap is the cleanest
+  // option: tight contact + artefact-free surfaces. Its only weakness is the
+  // texel staircase on shadow edges at a grazing sun, which a fine-texel
+  // camera-following frustum (see sun-rig) keeps small.
+  renderer.shadowMap.type = PCFShadowMap;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
   // Touch gestures (look/pinch/double-tap) need the browser to keep its

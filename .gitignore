@@ -53,3 +53,6 @@ next-env.d.ts
 # These are reproducible public downloads — never commit them. Only the
 # small clipped per-tile outputs (data/dlm/…) go into git.
 /data/_raw/
+
+# Local snapshot screenshot harness output (e2e/snapshot-shot.spec.ts)
+shots/
