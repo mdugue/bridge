@@ -86,6 +86,10 @@ export function createSunRig(
   // their lit front faces never self-acne. VSM softens edges via a SMALL blur.
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0;
+  // r182+ PCFShadowMap is soft: it spreads a 5-tap Vogel disk by radius*texel
+  // (shadowmap_pars_fragment.glsl). Default radius 1 ≈ hard; bump it so edges
+  // are a soft penumbra that hides the texel staircase — without VSM's grid.
+  sun.shadow.radius = 5;
   scene.add(sun, sun.target);
 
   // Current sun direction and frustum focus; reposition() places the light and
