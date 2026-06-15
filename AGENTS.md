@@ -54,8 +54,12 @@ and enforces a complexity cap; extract helpers rather than fighting it. No
   source. `public/data/` is generated, gitignored.
 - `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)
 
-The `.claude/skills/threejs-*` skills are generic three.js references — useful,
-but not project-specific. There is no `SPEC.md`; this file is the source of truth.
+The **`city-walker` skill** (`.claude/skills/city-walker/`) is the project's
+deep reference — scene architecture, the full shadow recipe + its dead ends,
+terrain/vegetation/surfaces, the data pipeline, and the QA harness. Load it for
+any non-trivial rendering, data, or perf work. The `.claude/skills/threejs-*`
+skills are generic three.js references. There is no `SPEC.md`; these are the
+source of truth.
 
 ## Coordinate system (read before touching geometry)
 
