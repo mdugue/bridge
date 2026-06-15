@@ -30,6 +30,14 @@ interface PointFeature {
 
 const TREE_SPACING = 9; // metres between trees along a row
 const HEDGE_SPACING = 1.1; // metres between hedge segments
+/**
+ * Edge length (m) of a vegetation chunk. Each chunk is its own InstancedMesh
+ * with a tight bounding sphere, so three frustum-culls whole chunks that are
+ * behind or beside the camera out of BOTH the main and the shadow pass —
+ * instead of the old all-or-nothing "one mesh per tile". Trades a few hundred
+ * (mostly-culled) draw calls for a large drop in processed triangles.
+ */
+const CHUNK_SIZE = 250;
 const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
 const HEDGE_H = 1.3;
@@ -115,6 +123,21 @@ function collectPlacements(
   return { trees, hedges };
 }
 
+/** Groups placements into CHUNK_SIZE cells so each becomes its own mesh. */
+function bucketByCell(items: Placement[]): Placement[][] {
+  const cells = new Map<string, Placement[]>();
+  for (const p of items) {
+    const key = `${Math.floor(p.x / CHUNK_SIZE)},${Math.floor(p.z / CHUNK_SIZE)}`;
+    const cell = cells.get(key);
+    if (cell) {
+      cell.push(p);
+    } else {
+      cells.set(key, [p]);
+    }
+  }
+  return [...cells.values()];
+}
+
 function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
   const dummy = new Object3D();
   for (let i = 0; i < items.length; i++) {
@@ -140,6 +163,19 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
  * nudge so a row never reads as a uniform clone stamp. One shared transform
  * drives trunk + crown.
  */
+/** Deterministic per-tree pastel sage variation (hue + value). */
+function paintCrowns(crowns: InstancedMesh, cell: Placement[]): void {
+  const col = new Color();
+  for (let i = 0; i < cell.length; i++) {
+    const v = hash(cell[i].x * 0.3 + cell[i].z * 0.7) - 0.5;
+    col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
+    crowns.setColorAt(i, col);
+  }
+  if (crowns.instanceColor) {
+    crowns.instanceColor.needsUpdate = true;
+  }
+}
+
 function buildTrees(trees: Placement[]): InstancedMesh[] {
   const trunkGeo = new CylinderGeometry(0.1, 0.16, TRUNK_H, 6);
   trunkGeo.translate(0, TRUNK_H / 2, 0);
@@ -148,48 +184,45 @@ function buildTrees(trees: Placement[]): InstancedMesh[] {
   const crownGeo = new IcosahedronGeometry(CROWN_R, 1);
   crownGeo.scale(1, 1.12, 1);
   crownGeo.translate(0, TRUNK_H + CROWN_R * 0.5, 0);
+  // Geometry + materials are shared across all chunks; only the per-chunk
+  // instance buffers differ, so this stays cheap to allocate.
+  const trunkMat = new MeshStandardMaterial({
+    color: 0x8a_7c_68,
+    roughness: 1,
+  });
+  const crownMat = new MeshStandardMaterial({
+    color: 0xa6_bf_92,
+    roughness: 1,
+  });
 
-  const trunks = new InstancedMesh(
-    trunkGeo,
-    new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 }),
-    trees.length
-  );
-  const crowns = new InstancedMesh(
-    crownGeo,
-    new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 }),
-    trees.length
-  );
-  trunks.castShadow = true;
-  crowns.castShadow = true;
-  crowns.receiveShadow = true;
-  writeInstances(trunks, trees);
-  writeInstances(crowns, trees);
-
-  // Per-tree pastel sage variation (hue + value), deterministic.
-  const col = new Color();
-  for (let i = 0; i < trees.length; i++) {
-    const v = hash(trees[i].x * 0.3 + trees[i].z * 0.7) - 0.5;
-    col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
-    crowns.setColorAt(i, col);
+  const meshes: InstancedMesh[] = [];
+  for (const cell of bucketByCell(trees)) {
+    const trunks = new InstancedMesh(trunkGeo, trunkMat, cell.length);
+    const crowns = new InstancedMesh(crownGeo, crownMat, cell.length);
+    trunks.castShadow = true;
+    crowns.castShadow = true;
+    crowns.receiveShadow = true;
+    writeInstances(trunks, cell);
+    writeInstances(crowns, cell);
+    paintCrowns(crowns, cell);
+    meshes.push(trunks, crowns);
   }
-  if (crowns.instanceColor) {
-    crowns.instanceColor.needsUpdate = true;
-  }
-  return [trunks, crowns];
+  return meshes;
 }
 
-function buildHedges(hedges: Placement[]): InstancedMesh {
+function buildHedges(hedges: Placement[]): InstancedMesh[] {
   const geo = new BoxGeometry(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
   geo.translate(0, HEDGE_H / 2, 0);
-  const mesh = new InstancedMesh(
-    geo,
-    new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 }),
-    hedges.length
-  );
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  writeInstances(mesh, hedges);
-  return mesh;
+  const mat = new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
+  const meshes: InstancedMesh[] = [];
+  for (const cell of bucketByCell(hedges)) {
+    const mesh = new InstancedMesh(geo, mat, cell.length);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    writeInstances(mesh, cell);
+    meshes.push(mesh);
+  }
+  return meshes;
 }
 
 async function fetchFeatures<T>(
@@ -268,7 +301,7 @@ export async function loadVegetation(
     group.add(...buildTrees(trees));
   }
   if (hedges.length > 0) {
-    group.add(buildHedges(hedges));
+    group.add(...buildHedges(hedges));
   }
   return group;
 }
