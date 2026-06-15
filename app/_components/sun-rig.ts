@@ -18,7 +18,9 @@ export interface SunRig {
 }
 
 const SUN_INTENSITY = 2.4;
-const SHADOW_MAP_SIZE = 2048;
+/** 4096 over the 160 m frustum ≈ 0.08 m/texel — fine enough that PCFSoft hides
+ * the texel staircase on shadow edges. Depth-only + throttled, so affordable. */
+const SHADOW_MAP_SIZE = 4096;
 /** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
  * shadow edges, less staircase under PCFSoft); the frustum follows the camera
  * so street-level coverage isn't lost. 160 m → ~0.16 m texels at 2048². */
@@ -77,12 +79,14 @@ export function createSunRig(
   // Tight depth range around the frustum for good precision.
   cam.near = shadowDistance - SHADOW_RADIUS * 1.2;
   cam.far = shadowDistance + SHADOW_RADIUS * 1.2;
-  // PCFSoft shadows (renderer.shadowMap.type). The terrain no longer casts, so
-  // there's no terrain self-acne; a small normalBias is enough to keep building
-  // and tree self-shadows clean. Kept low so the shadow still hugs wall bases
-  // (minimal peter-panning); the fine-texel frustum carries the edge softness.
-  sun.shadow.bias = -0.0003;
-  sun.shadow.normalBias = 0.03;
+  // normalBias = 0 is the key to killing the peter-panning contact strip: it
+  // would offset the flat ground's shadow sample toward the light at wall bases.
+  // We can afford 0 because nothing that needs it self-shadows here — the
+  // terrain doesn't cast at all, and buildings/trees are closed solids cast via
+  // their BACK faces (three's default shadowSide for FrontSide), so their lit
+  // front faces never self-acne. A tiny constant bias covers the rest.
+  sun.shadow.bias = -0.0002;
+  sun.shadow.normalBias = 0;
   scene.add(sun, sun.target);
 
   // Current sun direction and frustum focus; reposition() places the light and
