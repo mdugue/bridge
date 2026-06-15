@@ -6,13 +6,13 @@ import {
   Fog,
   Group,
   type Object3D,
-  PCFSoftShadowMap,
   PerspectiveCamera,
   Raycaster,
   Scene,
   Timer,
   Vector2,
   Vector3,
+  VSMShadowMap,
   WebGLRenderer,
 } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
@@ -23,7 +23,7 @@ import {
   utmToLatLng,
 } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
-import { buildingFootprints, type FootprintRect } from "@/lib/city/minimap";
+import { buildingFootprintPolys, type FootprintPoly } from "@/lib/city/minimap";
 import { recenterOffset } from "@/lib/city/recenter";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
@@ -84,6 +84,22 @@ export interface PlayerPose {
   heading: number;
 }
 
+/**
+ * Full camera state for reproducible snapshots: enough to drop the camera back
+ * exactly where it was. `pos` is the authoritative world position (Y-up);
+ * `epsg` is the human-readable ground coordinate. Angles in degrees.
+ */
+export interface CameraState {
+  epsg: { x: number; y: number };
+  fov: number;
+  /** 0 = north, clockwise positive (east) */
+  headingDeg: number;
+  mode: MovementMode;
+  /** + = looking up, - = looking down */
+  pitchDeg: number;
+  pos: { x: number; y: number; z: number };
+}
+
 /** A neighbouring tile loaded for visual context (no collision/demolish). */
 export interface TileSrc {
   citySrc: string;
@@ -123,6 +139,8 @@ export interface CityWalkOptions {
 }
 
 export interface CityWalkHandle {
+  /** Restores a camera pose captured by getCameraState (snapshot replay). */
+  applyCameraState: (state: CameraState) => void;
   demolishAtCrosshair: () => void;
   dispose: () => void;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
@@ -132,8 +150,10 @@ export interface CityWalkHandle {
    * Switches to fly mode so the ground clamp doesn't drag the camera down.
    */
   flyTo: (position: Xyz, lookAt: Xyz) => void;
-  /** current Building footprints (EPSG) — shrinks when demolishing */
-  getFootprints: () => FootprintRect[];
+  /** Captures the full camera pose for a reproducible snapshot. */
+  getCameraState: () => CameraState;
+  /** current Building footprint polygons (EPSG) — shrinks when demolishing */
+  getFootprints: () => FootprintPoly[];
   getMovementMode: () => MovementMode;
   getPose: () => PlayerPose;
   insertBuilding: () => Promise<void>;
@@ -175,7 +195,11 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
+  // VSM (variance) shadows: the depth map is blurred, so shadow edges read as
+  // a soft gradient instead of hard texel staircases, and the statistical
+  // depth compare needs almost no bias — which removes the bright contact
+  // strip (peter-panning) at wall/ground seams.
+  renderer.shadowMap.type = VSMShadowMap;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
   // Touch gestures (look/pinch/double-tap) need the browser to keep its
@@ -449,6 +473,43 @@ async function bootApp(
     };
   };
 
+  const RAD2DEG = 180 / Math.PI;
+  const DEG2RAD = Math.PI / 180;
+  const getCameraState = (): CameraState => {
+    camera.getWorldDirection(heading);
+    const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
+    return {
+      mode: movement.getMode(),
+      pos: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+      epsg: { x: epsg.x, y: epsg.y },
+      headingDeg: Math.atan2(heading.x, -heading.z) * RAD2DEG,
+      pitchDeg: Math.asin(Math.min(Math.max(heading.y, -1), 1)) * RAD2DEG,
+      fov: camera.fov,
+    };
+  };
+
+  const applyCameraState = (s: CameraState) => {
+    // Fly first so the ground clamp doesn't yank an aerial pose down to eye
+    // height before the frame even renders.
+    setMovementMode(s.mode);
+    camera.position.set(s.pos.x, s.pos.y, s.pos.z);
+    const h = s.headingDeg * DEG2RAD;
+    const p = s.pitchDeg * DEG2RAD;
+    // heading 0 = north = -Z, clockwise; pitch tilts towards +Y.
+    const cp = Math.cos(p);
+    camera.lookAt(
+      camera.position.x + Math.sin(h) * cp,
+      camera.position.y + Math.sin(p),
+      camera.position.z - Math.cos(h) * cp
+    );
+    if (s.fov > 0) {
+      camera.fov = s.fov;
+      camera.updateProjectionMatrix();
+    }
+    camera.updateMatrixWorld(true);
+    opts.onPose?.(getPose());
+  };
+
   const teleportTo = (epsgX: number, epsgY: number) => {
     const pos = epsgToWorld(epsgX, epsgY, offset);
     const ground = heightAt(epsgX, epsgY);
@@ -656,12 +717,14 @@ async function bootApp(
     },
     teleportTo,
     getPose,
+    getCameraState,
+    applyCameraState,
     getMovementMode: () => movement.getMode(),
     setMovementMode,
     setMoveInput: movement.setAnalog,
     getFootprints: () => [
-      ...buildingFootprints(cityLayer.data),
-      ...extraCities.flatMap((c) => buildingFootprints(c.data)),
+      ...buildingFootprintPolys(cityLayer.data),
+      ...extraCities.flatMap((c) => buildingFootprintPolys(c.data)),
     ],
     landcoverTiles,
     terrainBounds: unionBounds,

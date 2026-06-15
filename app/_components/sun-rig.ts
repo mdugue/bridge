@@ -77,14 +77,14 @@ export function createSunRig(
   // Tight depth range around the frustum for good precision.
   cam.near = shadowDistance - SHADOW_RADIUS * 1.2;
   cam.far = shadowDistance + SHADOW_RADIUS * 1.2;
-  // The terrain no longer casts shadows (see terrain-layer.ts), so the grid
-  // self-shadow acne that the old large normalBias band-aided is gone. That
-  // lets us run a tiny bias: a big normalBias offsets the ground's shadow
-  // sample toward the light and detaches the shadow from the wall — the bright
-  // contact strip the user saw. Keep it small so shadows stay glued to walls,
-  // with a hair of negative depth bias for residual building/tree self-acne.
-  sun.shadow.bias = -0.0002;
-  sun.shadow.normalBias = 0.03;
+  // VSM shadows (renderer.shadowMap.type): the depth map is gaussian-blurred,
+  // so edges are soft (no texel staircase) and the variance compare tolerates
+  // a near-zero bias — which is what keeps the shadow glued to the wall instead
+  // of leaving the bright contact strip. radius/blurSamples control softness.
+  sun.shadow.bias = -0.0001;
+  sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = 3.5;
+  sun.shadow.blurSamples = 12;
   scene.add(sun, sun.target);
 
   // Current sun direction and frustum focus; reposition() places the light and

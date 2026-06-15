@@ -112,15 +112,16 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     { timeout: 30_000 }
   );
 
-  // Minimap teleport: the map is 192 px over the 2 km tile, so clicking
-  // (48, 48) must land the player near 412500 E / 5657500 N (quarter tile
-  // from the north-west corner).
+  // Minimap teleport: the map is 192 px over the loaded 2x2 tile block (the
+  // union bounds span 410000..414000 E / 5656000..5660000 N), so clicking
+  // (48, 48) — a quarter in from the north-west corner — must land the player
+  // near 411000 E / 5659000 N.
   await page.getByTestId("minimap").click({ position: { x: 48, y: 48 } });
   const pose = await page.evaluate(() => window.__poc?.getPose?.());
-  expect(pose?.epsgX ?? 0).toBeGreaterThan(412_450);
-  expect(pose?.epsgX ?? 0).toBeLessThan(412_550);
-  expect(pose?.epsgY ?? 0).toBeGreaterThan(5_657_450);
-  expect(pose?.epsgY ?? 0).toBeLessThan(5_657_550);
+  expect(pose?.epsgX ?? 0).toBeGreaterThan(410_950);
+  expect(pose?.epsgX ?? 0).toBeLessThan(411_050);
+  expect(pose?.epsgY ?? 0).toBeGreaterThan(5_658_950);
+  expect(pose?.epsgY ?? 0).toBeLessThan(5_659_050);
 
   // Desktop grab-look: a primary-button mouse drag turns the view — no
   // pointer lock needed by default (immersive mode is opt-in).
@@ -180,6 +181,31 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     window.__poc?.setPaperGrain?.(0.25);
   });
   await page.waitForTimeout(500);
+
+  // Snapshot round-trip: applying a captured camera state must reproduce it
+  // (the basis for copy/paste QA of an exact view).
+  const roundTrip = await page.evaluate(() => {
+    const api = window.__poc;
+    if (!(api?.applyCameraState && api.getCameraState)) {
+      throw new Error("snapshot api incomplete");
+    }
+    api.applyCameraState({
+      mode: "fly",
+      pos: { x: 25, y: 140, z: -60 },
+      epsg: { x: 0, y: 0 },
+      headingDeg: 42,
+      pitchDeg: -20,
+      fov: 55,
+    });
+    return api.getCameraState();
+  });
+  expect(roundTrip.mode).toBe("fly");
+  expect(roundTrip.pos.x).toBeCloseTo(25, 1);
+  expect(roundTrip.pos.y).toBeCloseTo(140, 1);
+  expect(roundTrip.pos.z).toBeCloseTo(-60, 1);
+  expect(roundTrip.headingDeg).toBeCloseTo(42, 0);
+  expect(roundTrip.pitchDeg).toBeCloseTo(-20, 0);
+  expect(roundTrip.fov).toBeCloseTo(55, 1);
 
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);

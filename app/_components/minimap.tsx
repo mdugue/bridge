@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   epsgToMapPx,
-  type FootprintRect,
+  type FootprintPoly,
   mapPxToEpsg,
 } from "@/lib/city/minimap";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -16,6 +16,7 @@ const DEFAULT_SIZE = 192;
 // Canvas drawing colors — scene content like the 3D view, not themable chrome.
 const PAPER = "#f7f5f0";
 const INK = "rgba(50, 53, 62, 0.85)";
+const INK_FILL = "rgba(50, 53, 62, 0.35)";
 const FRAME = "rgba(50, 53, 62, 0.25)";
 const PLAYER = "#2563eb";
 
@@ -63,9 +64,41 @@ function colorizeLandcover(
   return canvas;
 }
 
+/**
+ * Draws true building footprints as soft-filled, thin-outlined polygons so the
+ * map reads as a figure-ground plan instead of a few oversized solid blocks.
+ */
+function drawFootprints(
+  ctx: CanvasRenderingContext2D,
+  footprints: FootprintPoly[],
+  bounds: TerrainBounds,
+  size: number
+): void {
+  ctx.fillStyle = INK_FILL;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.5;
+  for (const poly of footprints) {
+    if (poly.pts.length < 3) {
+      continue;
+    }
+    ctx.beginPath();
+    poly.pts.forEach(([x, y], i) => {
+      const { px, py } = epsgToMapPx(x, y, bounds, size);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
 interface MinimapProps {
   bounds: TerrainBounds;
-  footprints: FootprintRect[];
+  footprints: FootprintPoly[];
   /** per-tile land-cover class PNGs + their EPSG bounds, drawn as background */
   landcoverTiles?: { bounds: TerrainBounds; src: string }[];
   onTeleport: (epsgX: number, epsgY: number) => void;
@@ -132,17 +165,7 @@ export function Minimap({
       }
       ctx.strokeStyle = FRAME;
       ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
-      ctx.fillStyle = INK;
-      for (const rect of footprints) {
-        const a = epsgToMapPx(rect.minX, rect.maxY, bounds, size);
-        const b = epsgToMapPx(rect.maxX, rect.minY, bounds, size);
-        ctx.fillRect(
-          a.px,
-          a.py,
-          Math.max(b.px - a.px, 1.2),
-          Math.max(b.py - a.py, 1.2)
-        );
-      }
+      drawFootprints(ctx, footprints, bounds, size);
     };
 
     repaint(); // paper + footprints immediately; tiles fill in as they decode

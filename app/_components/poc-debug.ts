@@ -5,7 +5,7 @@
  * touch `window` — the hook cannot leak into production.
  */
 
-import type { PlayerPose } from "./create-app";
+import type { CameraState, PlayerPose } from "./create-app";
 import type { CityStyleId } from "./visual-style";
 
 interface Xyz {
@@ -15,11 +15,15 @@ interface Xyz {
 }
 
 export interface PocDebugInfo {
+  /** Restores a camera pose captured by getCameraState (snapshot replay). */
+  applyCameraState?: (state: CameraState) => void;
   buildingCount: number;
   /** Demolishes the building under the screen-center crosshair. */
   demolishAtCrosshair?: () => void;
   /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
+  /** Captures the full camera pose for a reproducible snapshot. */
+  getCameraState?: () => CameraState;
   /** Current player pose in EPSG coordinates. */
   getPose?: () => PlayerPose;
   /** Inserts the prescribed building (marker box without a glTF). */

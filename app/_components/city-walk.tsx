@@ -3,6 +3,9 @@
 import { format } from "date-fns";
 import {
   CalendarIcon,
+  CameraIcon,
+  ClipboardPasteIcon,
+  CopyIcon,
   FullscreenIcon,
   HammerIcon,
   HousePlusIcon,
@@ -37,11 +40,13 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
-import type { FootprintRect } from "@/lib/city/minimap";
+import type { FootprintPoly } from "@/lib/city/minimap";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
+  type CameraState,
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
@@ -112,6 +117,29 @@ const STYLE_LABELS: Record<CityStyleId, string> = {
   clay: "Clay",
 };
 
+const SNAPSHOT_VERSION = 1;
+
+/**
+ * A fully reproducible capture of the view: camera pose + sun instant + every
+ * look slider. Round-trips through JSON so a shot can be copied, pasted back,
+ * or dropped into a prompt / QA harness to recreate the exact frame.
+ */
+interface Snapshot {
+  camera: CameraState;
+  /** ISO instant driving the sun position */
+  date: string;
+  look: {
+    contactPct: number;
+    dof: boolean;
+    fogPct: number;
+    gradingPct: number;
+    grainPct: number;
+    style: CityStyleId;
+    transparencyPct: number;
+  };
+  v: number;
+}
+
 export default function CityWalk({
   citySrc,
   demSrc,
@@ -154,7 +182,7 @@ export default function CityWalk({
   );
   const [grain, setGrain] = useState(Math.round(DEFAULT_PAPER_GRAIN * 100));
   const [mode, setMode] = useState<MovementMode>("walk");
-  const [footprints, setFootprints] = useState<FootprintRect[]>([]);
+  const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
   const [landcoverTiles, setLandcoverTiles] = useState<
     { bounds: TerrainBounds; src: string }[]
@@ -162,6 +190,8 @@ export default function CityWalk({
   const [fps, setFps] = useState<number | null>(null);
   /** Minimap edge length in CSS px; user-adjustable. */
   const [minimapSize, setMinimapSize] = useState(coarse ? 120 : 192);
+  const [snapshotText, setSnapshotText] = useState("");
+  const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -238,6 +268,8 @@ export default function CityWalk({
           flyTo: h.flyTo,
           demolishAtCrosshair: h.demolishAtCrosshair,
           getPose: h.getPose,
+          getCameraState: h.getCameraState,
+          applyCameraState: h.applyCameraState,
           teleportTo: h.teleportTo,
           setStyle: h.setStyle,
           setDepthOfField: h.setDepthOfField,
@@ -298,6 +330,88 @@ export default function CityWalk({
     handleRef.current?.insertBuilding().catch(() => {
       // glTF failure is non-fatal; the box fallback can't fail
     });
+  };
+
+  const copySnapshot = () => {
+    const h = handleRef.current;
+    if (!h) {
+      return;
+    }
+    const snap: Snapshot = {
+      v: SNAPSHOT_VERSION,
+      camera: h.getCameraState(),
+      date: composeDate(day, minutes).toISOString(),
+      look: {
+        style,
+        transparencyPct: transparency[style],
+        fogPct: fogAmount,
+        gradingPct: grading,
+        contactPct: contact,
+        grainPct: grain,
+        dof,
+      },
+    };
+    const text = JSON.stringify(snap, null, 2);
+    setSnapshotText(text);
+    navigator.clipboard?.writeText(text).then(
+      () => setSnapshotMsg("Copied to clipboard"),
+      () => setSnapshotMsg("Copy failed — select the text manually")
+    );
+  };
+
+  const applyLook = (h: CityWalkHandle, look: Snapshot["look"]) => {
+    setStyle(look.style);
+    h.setStyle(look.style);
+    setTransparency((prev) => ({
+      ...prev,
+      [look.style]: look.transparencyPct,
+    }));
+    h.setBuildingTransparency(look.transparencyPct / 100);
+    setFogAmount(look.fogPct);
+    h.setAtmosphere(look.fogPct / 100);
+    setGrading(look.gradingPct);
+    h.setDepthGrading(look.gradingPct / 100);
+    setContact(look.contactPct);
+    h.setContactShadows(look.contactPct / 100);
+    setGrain(look.grainPct);
+    h.setPaperGrain(look.grainPct / 100);
+    setDof(look.dof);
+    h.setDepthOfField(look.dof);
+  };
+
+  const applySnapshot = () => {
+    const h = handleRef.current;
+    if (!h) {
+      return;
+    }
+    let snap: Snapshot;
+    try {
+      snap = JSON.parse(snapshotText) as Snapshot;
+    } catch {
+      setSnapshotMsg("Invalid snapshot JSON");
+      return;
+    }
+    if (!snap.camera) {
+      setSnapshotMsg("Snapshot missing camera");
+      return;
+    }
+    h.applyCameraState(snap.camera);
+    const date = new Date(snap.date);
+    if (!Number.isNaN(date.getTime())) {
+      const nextDay = new Date(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate()
+      );
+      const nextMinutes = date.getHours() * 60 + date.getMinutes();
+      setDay(nextDay);
+      setMinutes(nextMinutes);
+      setSun(h.setSun(date));
+    }
+    if (snap.look) {
+      applyLook(h, snap.look);
+    }
+    setSnapshotMsg("Snapshot applied");
   };
 
   // Shared between the desktop card and the mobile bottom drawer.
@@ -535,6 +649,48 @@ export default function CityWalk({
           Immersive mode · Esc exits
         </Button>
       )}
+
+      <FieldSeparator />
+
+      <Field>
+        <FieldLabel htmlFor="snapshot">
+          <CameraIcon data-icon="inline-start" />
+          Snapshot
+        </FieldLabel>
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            onClick={copySnapshot}
+            type="button"
+            variant="secondary"
+          >
+            <CopyIcon data-icon="inline-start" />
+            Copy
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={applySnapshot}
+            type="button"
+            variant="outline"
+          >
+            <ClipboardPasteIcon data-icon="inline-start" />
+            Apply
+          </Button>
+        </div>
+        <Textarea
+          className="font-mono text-[10px] leading-snug"
+          id="snapshot"
+          onChange={(e) => setSnapshotText(e.target.value)}
+          placeholder="Copy captures position, time & look as JSON. Paste one here and Apply to restore it."
+          rows={5}
+          spellCheck={false}
+          value={snapshotText}
+        />
+        <FieldDescription>
+          {snapshotMsg ??
+            "Reproducible capture — share or replay an exact view."}
+        </FieldDescription>
+      </Field>
     </FieldGroup>
   );
 
