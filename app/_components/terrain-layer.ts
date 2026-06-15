@@ -308,7 +308,12 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
 
   const mesh = new Mesh(geometry, createTerrainMaterial(splat));
   mesh.name = "terrain";
-  mesh.castShadow = true;
+  // The terrain only RECEIVES shadows. If it also cast, the grazing sun makes
+  // every triangle face self-shadow → the jagged "staircase"/triangle acne
+  // along shadow edges. Buildings and trees sit on the ground and cast onto it;
+  // the ground itself has nothing meaningful to cast, so this is pure win and
+  // also lets the sun rig run a much smaller shadow bias (no contact light-leak).
+  mesh.castShadow = false;
   mesh.receiveShadow = true;
 
   // Water re-uses the terrain geometry, masked to the water class.

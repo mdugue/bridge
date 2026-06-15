@@ -19,9 +19,10 @@ export interface SunRig {
 
 const SUN_INTENSITY = 2.4;
 const SHADOW_MAP_SIZE = 2048;
-/** Half-size of the shadow frustum, in metres. Small = sharp texels (no acne
- * triangles); the frustum follows the camera so coverage isn't lost. */
-const SHADOW_RADIUS = 280;
+/** Half-size of the shadow frustum, in metres. Small = sharp texels (smoother
+ * shadow edges, less staircase); the frustum follows the camera so street-level
+ * coverage isn't lost. */
+const SHADOW_RADIUS = 220;
 
 function createSkyDome(scene: Scene): Sky {
   const sky = new Sky();
@@ -76,14 +77,14 @@ export function createSunRig(
   // Tight depth range around the frustum for good precision.
   cam.near = shadowDistance - SHADOW_RADIUS * 1.2;
   cam.far = shadowDistance + SHADOW_RADIUS * 1.2;
-  // With the small, camera-following frustum the texels are fine enough that a
-  // small bias and a sub-metre normalBias clear the terrain-grid acne without
-  // the light-leak triangles the old normalBias=2 band-aid produced.
-  // Lower normalBias than before: the large 0.3 offset detached contact
-  // shadows (light leaked in where a wall/bridge meets the ground). A small
-  // negative depth bias plus PCFSoft keeps the grid acne in check.
-  sun.shadow.bias = -0.0006;
-  sun.shadow.normalBias = 0.12;
+  // The terrain no longer casts shadows (see terrain-layer.ts), so the grid
+  // self-shadow acne that the old large normalBias band-aided is gone. That
+  // lets us run a tiny bias: a big normalBias offsets the ground's shadow
+  // sample toward the light and detaches the shadow from the wall — the bright
+  // contact strip the user saw. Keep it small so shadows stay glued to walls,
+  // with a hair of negative depth bias for residual building/tree self-acne.
+  sun.shadow.bias = -0.0002;
+  sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
   // Current sun direction and frustum focus; reposition() places the light and
