@@ -269,6 +269,7 @@ export default function CityWalk({
           demolishAtCrosshair: h.demolishAtCrosshair,
           getPose: h.getPose,
           getCameraState: h.getCameraState,
+          getRenderInfo: h.getRenderInfo,
           applyCameraState: h.applyCameraState,
           teleportTo: h.teleportTo,
           setStyle: h.setStyle,

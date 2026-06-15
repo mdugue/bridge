@@ -26,6 +26,8 @@ export interface PocDebugInfo {
   getCameraState?: () => CameraState;
   /** Current player pose in EPSG coordinates. */
   getPose?: () => PlayerPose;
+  /** Last-frame GPU counters (draw calls, triangles, programs). */
+  getRenderInfo?: () => { calls: number; triangles: number; programs: number };
   /** Inserts the prescribed building (marker box without a glTF). */
   insertBuilding?: () => void;
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */

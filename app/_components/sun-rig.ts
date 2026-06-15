@@ -18,9 +18,10 @@ export interface SunRig {
 }
 
 const SUN_INTENSITY = 2.4;
-/** 4096 over the 160 m frustum ≈ 0.08 m/texel — fine enough that PCFSoft hides
- * the texel staircase on shadow edges. Depth-only + throttled, so affordable. */
-const SHADOW_MAP_SIZE = 4096;
+/** 3072 over the 110 m frustum ≈ 0.07 m/texel. The soft Vogel-disk PCF (see
+ * shadow.radius) hides residual stepping, so 3072 looks like 4096 here while
+ * costing ~44% less shadow fill — it re-renders on most frames while walking. */
+const SHADOW_MAP_SIZE = 3072;
 /** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
  * shadow edges, less staircase under PCFSoft); the frustum follows the camera
  * so street-level coverage isn't lost. 160 m → ~0.16 m texels at 2048². */

@@ -156,6 +156,13 @@ export interface CityWalkHandle {
   getFootprints: () => FootprintPoly[];
   getMovementMode: () => MovementMode;
   getPose: () => PlayerPose;
+  /**
+   * GPU counters for perf work. `programs` is the live shader-program count;
+   * `calls`/`triangles` reflect only the LAST render() pass, so with the
+   * post-processing composer active they report the final fullscreen pass, not
+   * the scene total (disable post-processing to read true scene counts).
+   */
+  getRenderInfo: () => { calls: number; triangles: number; programs: number };
   insertBuilding: () => Promise<void>;
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
@@ -720,6 +727,11 @@ async function bootApp(
     getPose,
     getCameraState,
     applyCameraState,
+    getRenderInfo: () => ({
+      calls: renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      programs: renderer.info.programs?.length ?? 0,
+    }),
     getMovementMode: () => movement.getMode(),
     setMovementMode,
     setMoveInput: movement.setAnalog,
