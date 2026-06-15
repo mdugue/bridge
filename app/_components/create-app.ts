@@ -43,7 +43,7 @@ import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
 import { attachTouchControls } from "./touch-controls";
-import { loadVegetation } from "./vegetation-layer";
+import { loadVegetation, type VegetationControl } from "./vegetation-layer";
 import {
   applyCityStyle,
   type CityStyleId,
@@ -170,6 +170,12 @@ export interface CityWalkHandle {
   offset: { cx: number; cy: number };
   /** fog amount 0..1 (0 = clear day, 1 = thick painterly haze) */
   setAtmosphere: (amount: number) => void;
+  /** building storey contour-line (Höhenlinien) strength 0..1 */
+  setBuildingBands: (strength: number) => void;
+  /** building ground-contact darkening (Boden-Verlauf) strength 0..1 */
+  setBuildingGroundShade: (strength: number) => void;
+  /** building Fresnel rim (Streiflicht) strength 0..1 */
+  setBuildingRim: (strength: number) => void;
   /** transparency 0..1 of the ACTIVE style (ghost: frosted, clay: alpha) */
   setBuildingTransparency: (transparency: number) => void;
   /** soft contact-shadow (SSAO) strength 0..1; 0 disables the pass */
@@ -185,6 +191,10 @@ export interface CityWalkHandle {
   setPaperGrain: (intensity: number) => void;
   setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
+  /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
+  setTreeMultiTuft: (enabled: boolean) => void;
+  /** backlit canopy shimmer strength 0..1 */
+  setTreeShimmer: (strength: number) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -333,6 +343,14 @@ async function bootApp(
   let cityLayer: CityLayer = createCityLayer(cityData, world);
   const offset = recenterOffset(cityLayer.matrix);
 
+  // Shared world sun direction (surface→sun), kept in sync by the sun rig and
+  // read by the crown shimmer. The vegetation builds before the sun rig exists,
+  // so this vector must already exist to be captured by reference.
+  const sunDirection = new Vector3(0, 1, 0);
+  // Per-tile vegetation handles, kept so the loop can drive crown LOD and the
+  // HUD can retune shimmer / multi-tuft.
+  const vegControls: VegetationControl[] = [];
+
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
   const loadTileScene = async (
     tile: TileSrc,
@@ -356,9 +374,11 @@ async function bootApp(
         heightAt: t.heightAt,
         canopyUrl: tile.vegetationSrc.replace("vegrows_", "canopy_"),
         signal: opts.signal,
+        sunDirection,
       });
       // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
-      scene.add(vegetation);
+      scene.add(vegetation.group);
+      vegControls.push(vegetation);
     }
     return t;
   };
@@ -431,7 +451,12 @@ async function bootApp(
 
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
-  const sunRig = createSunRig(scene, worldBounds, tileLatLng(cityData, offset));
+  const sunRig = createSunRig(
+    scene,
+    worldBounds,
+    tileLatLng(cityData, offset),
+    sunDirection
+  );
   sunRig.update(opts.initialDate);
 
   opts.onProgress?.("Preparing render styles…");
@@ -677,6 +702,10 @@ async function bootApp(
     terrain.water?.setTime(timer.getElapsed());
     // Keep the (small, sharp) shadow frustum centered on the player.
     sunRig.follow(camera.position);
+    // Swap each vegetation chunk between the rich and cheap crown by distance.
+    for (const veg of vegControls) {
+      veg.updateLod(camera.position);
+    }
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(getPose());
@@ -703,6 +732,25 @@ async function bootApp(
     setDepthGrading: (intensity) => postStack.setDepthGrading(intensity),
     setContactShadows: (strength) => postStack.setContactShadows(strength),
     setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),
+    setBuildingGroundShade: (strength) => {
+      styleResources.clayDetail.uAO.value = strength;
+    },
+    setBuildingBands: (strength) => {
+      styleResources.clayDetail.uBands.value = strength;
+    },
+    setBuildingRim: (strength) => {
+      styleResources.clayDetail.uRim.value = strength;
+    },
+    setTreeShimmer: (strength) => {
+      for (const veg of vegControls) {
+        veg.setShimmer(strength);
+      }
+    },
+    setTreeMultiTuft: (enabled) => {
+      for (const veg of vegControls) {
+        veg.setMultiTuft(enabled);
+      }
+    },
     setBuildingTransparency: (transparency) =>
       setCityTransparency(styleResources, currentStyle, transparency),
     setAtmosphere: (amount) => {

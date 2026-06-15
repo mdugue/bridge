@@ -13,6 +13,14 @@
       "formatter": { "enabled": false }
     },
     {
+      // Standalone CDN-loaded shader playground (not part of the app build):
+      // mirrors the city scene's tree/building tuning in isolation. Uses a
+      // namespace three import + terse inline scratch code on purpose.
+      "includes": ["aesthetic-sandbox.html"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
       // Auto-generated from Strava's OpenAPI spec (`bun run strava:types`).
       // Machine output — don't lint or format it; regenerate instead.
       "includes": ["lib/strava-api.generated.ts"],

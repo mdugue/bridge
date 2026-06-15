@@ -35,6 +35,12 @@ export interface PocDebugInfo {
   ready: boolean;
   /** Sets the fog amount (0..1). */
   setAtmosphere?: (amount: number) => void;
+  /** Sets the building storey contour-line (Höhenlinien) strength (0..1). */
+  setBuildingBands?: (strength: number) => void;
+  /** Sets the building ground-contact darkening (Boden-Verlauf) strength (0..1). */
+  setBuildingGroundShade?: (strength: number) => void;
+  /** Sets the building Fresnel rim (Streiflicht) strength (0..1). */
+  setBuildingRim?: (strength: number) => void;
   /** Sets the active style's transparency (0..1). */
   setBuildingTransparency?: (transparency: number) => void;
   /** Sets the soft contact-shadow (SSAO) strength (0..1). */
@@ -49,6 +55,10 @@ export interface PocDebugInfo {
   setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
+  /** Toggles the rich multi-tuft crown near the camera (LOD). */
+  setTreeMultiTuft?: (enabled: boolean) => void;
+  /** Sets the backlit canopy shimmer strength (0..1). */
+  setTreeShimmer?: (strength: number) => void;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;

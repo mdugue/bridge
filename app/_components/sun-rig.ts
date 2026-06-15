@@ -50,7 +50,10 @@ function createSkyDome(scene: Scene): Sky {
 export function createSunRig(
   scene: Scene,
   worldBounds: Box3,
-  latLng: { lat: number; lng: number }
+  latLng: { lat: number; lng: number },
+  /** Optional shared vector the rig keeps in sync with the world sun direction
+   * (surface→sun) so other materials (e.g. the crown shimmer) can read it. */
+  sunDirectionOut?: Vector3
 ): SunRig {
   const center = worldBounds.getCenter(new Vector3());
   // Light sits twice the frustum radius out; tight depth range = good precision.
@@ -99,6 +102,7 @@ export function createSunRig(
   {
     const d = sunDirectionWorld(new Date(0), latLng.lat, latLng.lng);
     dir.set(d.x, d.y, d.z);
+    sunDirectionOut?.copy(dir);
   }
   const focus = center.clone();
   let lastFx = Number.NaN;
@@ -130,6 +134,7 @@ export function createSunRig(
   const update = (date: Date): SunState => {
     const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
     dir.set(d.x, d.y, d.z);
+    sunDirectionOut?.copy(dir);
     const aboveHorizon = dir.y > 0;
     reposition();
     sun.shadow.needsUpdate = true; // sun moved — force a shadow re-render

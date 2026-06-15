@@ -1,13 +1,18 @@
 import {
   BoxGeometry,
+  type BufferGeometry,
   Color,
   CylinderGeometry,
   Group,
   IcosahedronGeometry,
   InstancedMesh,
+  Matrix4,
   MeshStandardMaterial,
   Object3D,
+  Quaternion,
+  Vector3,
 } from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /** Recenter offset + ground lookup shared with the terrain. */
 export interface VegetationContext {
@@ -16,6 +21,41 @@ export interface VegetationContext {
   heightAt: (x: number, y: number) => number | null;
   offset: { cx: number; cy: number };
   signal?: AbortSignal;
+  /**
+   * Shared world-space sun direction (surface→sun), updated by the sun rig.
+   * The crown material reads it (by reference) for the backlit shimmer. May be
+   * absent (shimmer then stays at its default direction).
+   */
+  sunDirection?: Vector3;
+}
+
+/** Default backlit-shimmer strength and whether the rich (near) crown is on. */
+export const DEFAULT_TREE_SHIMMER = 0.45;
+export const DEFAULT_TREE_MULTITUFT = true;
+/**
+ * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
+ * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
+ * a few metres away could stay cheap because its 250 m chunk's centre is far. A
+ * cheap chunk switches to rich within NEAR_IN; a rich chunk only drops past
+ * NEAR_OUT, so chunks straddling the line don't flicker.
+ */
+const LOD_NEAR_IN_M = 220;
+const LOD_NEAR_OUT_M = 300;
+
+/**
+ * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus live
+ * tuning of the shimmer and the rich-crown toggle.
+ */
+export interface VegetationControl {
+  group: Group;
+  setMultiTuft: (enabled: boolean) => void;
+  setShimmer: (strength: number) => void;
+  updateLod: (cameraPos: Vector3) => void;
+}
+
+interface CellLod {
+  cheap: InstancedMesh;
+  rich: InstancedMesh;
 }
 
 interface LineFeature {
@@ -156,13 +196,241 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
 }
 
 /**
- * Soft poetic tree: a slim trunk and a rounded, smooth-shaded crown in muted
- * sage. The crown is a higher-subdivision sphere so its contour reads as round
- * (matching the soft shading rather than fighting it) and stays opaque — the
- * earlier translucency read as noise. Each crown gets a gentle per-tree colour
- * nudge so a row never reads as a uniform clone stamp. One shared transform
- * drives trunk + crown.
+ * Lumpy, soft-shaded crown — a single icosphere (detail 2) whose surface is
+ * pushed out into a few overlapping lobes, then given RADIAL normals (every
+ * vertex normal points out from the crown centre). The lobes break the "green
+ * ball" silhouette; the radial normals make light glide over the whole mass as
+ * one soft form instead of faceting per triangle. This stays ONE shared
+ * geometry (~320 tris) — a cheap ~4× over the old icosphere, not the 18× of the
+ * sandbox's merged multi-tuft crown (that needs per-distance LOD before it can
+ * be afforded across tens of thousands of trees).
  */
+function buildCrownGeo(): BufferGeometry {
+  const g = new IcosahedronGeometry(CROWN_R, 2);
+  const cy = TRUNK_H + CROWN_R * 0.5;
+  // Lobe directions: a fuller top, irregular sides, flatter underside.
+  const lobes = [
+    new Vector3(0, 0.6, 0),
+    new Vector3(0.8, 0.25, 0.35),
+    new Vector3(-0.7, 0.15, 0.5),
+    new Vector3(0.25, 0.5, -0.7),
+    new Vector3(-0.45, 0.4, -0.3),
+    new Vector3(0.55, -0.05, -0.55),
+    new Vector3(-0.2, -0.1, 0.7),
+  ].map((v) => v.normalize());
+  const pos = g.attributes.position;
+  const nrm = g.attributes.normal;
+  const v = new Vector3();
+  const dir = new Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    dir.copy(v).normalize();
+    // Bumpy radius: each lobe bulges the surface where the vertex points at it.
+    let bulge = 0;
+    for (const L of lobes) {
+      const d = Math.max(0, dir.dot(L));
+      bulge += d * d * 0.34;
+    }
+    const r = CROWN_R * (0.74 + Math.min(bulge, 0.95));
+    v.copy(dir).multiplyScalar(r);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.scale(1, 1.05, 1);
+  g.translate(0, cy, 0);
+  // Radial normals from the crown centre -> soft, unified shading.
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
+    nrm.setXYZ(i, v.x, v.y, v.z);
+  }
+  nrm.needsUpdate = true;
+  return g;
+}
+
+/**
+ * Rich multi-tuft crown for NEAR trees (LOD): a squashed core plus heavily
+ * overlapping, elongated lobes merged into one mass, then RADIAL normals. ~18×
+ * the cheap crown's triangles, so it is only ever shown within LOD_NEAR_M. ONE
+ * shared geometry (fixed seed) — instance rotation hides the repetition.
+ */
+function buildCrownGeoRich(): BufferGeometry {
+  const cy = TRUNK_H + CROWN_R * 0.5;
+  const R = CROWN_R;
+  const up = new Vector3(0, 1, 0);
+  const dir = new Vector3();
+  const at = new Vector3();
+  const scl = new Vector3();
+  const q = new Quaternion();
+  const mtx = new Matrix4();
+  const parts: BufferGeometry[] = [];
+  let k = 0;
+  const rnd = () => hash((k++ + 1) * 1.37 + 0.19);
+
+  const core = new IcosahedronGeometry(R * 0.72, 1);
+  core.scale(1.1, 0.82, 1.1);
+  parts.push(core);
+
+  const addLobes = (
+    count: number,
+    distLo: number,
+    distHi: number,
+    radLo: number,
+    radHi: number,
+    elong: number,
+    yLo: number,
+    yHi: number
+  ): void => {
+    for (let i = 0; i < count; i++) {
+      const ny = yLo + rnd() * (yHi - yLo);
+      dir.set(rnd() * 2 - 1, ny, rnd() * 2 - 1).normalize();
+      at.copy(dir).multiplyScalar(R * (distLo + rnd() * (distHi - distLo)));
+      at.y += R * 0.06;
+      const rad = R * (radLo + rnd() * (radHi - radLo));
+      const long = 1 + rnd() * elong; // stretch along the lobe's reach
+      scl.set(1 / Math.sqrt(long), long, 1 / Math.sqrt(long));
+      q.setFromUnitVectors(up, dir);
+      mtx.compose(at, q, scl);
+      const b = new IcosahedronGeometry(rad, 1);
+      b.applyMatrix4(mtx);
+      parts.push(b);
+    }
+  };
+  addLobes(5, 0.24, 0.44, 0.5, 0.66, 0.4, -0.3, 1.15); // big fused lobes
+  addLobes(4, 0.34, 0.52, 0.4, 0.54, 0.35, -0.7, 0.05); // low skirt
+  addLobes(8, 0.46, 0.66, 0.24, 0.34, 0.3, -0.15, 1.05); // silhouette bumps
+
+  const merged = mergeGeometries(parts);
+  if (!merged) {
+    return buildCrownGeo(); // attributes always match here; fall back defensively
+  }
+  merged.scale(1, 1.04, 1);
+  merged.translate(0, cy, 0);
+  const pos = merged.attributes.position;
+  const nrm = merged.attributes.normal;
+  const v = new Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i) - cy, pos.getZ(i)).normalize();
+    nrm.setXYZ(i, v.x, v.y, v.z);
+  }
+  nrm.needsUpdate = true;
+  return merged;
+}
+
+/**
+ * Sage crown material with a shadow-gated backlit shimmer: when the sun is
+ * behind the canopy the camera-facing leaves glow warm, but ONLY where the sun
+ * actually reaches — the shadow is sampled 2 m toward the sun so a building
+ * behind the tree kills the glow while the crown's own self-shadow doesn't.
+ * Shared by both LOD crown meshes. `sunDirection` (surface→sun) and `shimmer`
+ * are live references; mutating `shimmer.value` retunes without a recompile.
+ */
+function buildCrownMaterial(
+  sunDirection: Vector3,
+  shimmer: { value: number }
+): MeshStandardMaterial {
+  const m = new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uSunDir = { value: sunDirection };
+    sh.uniforms.uShimmer = shimmer;
+    sh.vertexShader = sh.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec3 uSunDir;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;"
+      )
+      .replace(
+        "#include <worldpos_vertex>",
+        [
+          "#include <worldpos_vertex>",
+          "#ifdef USE_INSTANCING",
+          " vShimWP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;",
+          "#else",
+          " vShimWP = (modelMatrix * vec4(transformed, 1.0)).xyz;",
+          "#endif",
+          "#if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0",
+          " vShimSC = directionalShadowMatrix[0] * vec4(vShimWP + uSunDir * 2.0, 1.0);",
+          "#endif",
+        ].join("\n")
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec3 uSunDir;\nuniform float uShimmer;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;"
+      )
+      .replace(
+        "#include <emissivemap_fragment>",
+        [
+          "#include <emissivemap_fragment>",
+          "vec3 shimV = normalize(cameraPosition - vShimWP);",
+          "float shimBack = pow(clamp(dot(shimV, -uSunDir), 0.0, 1.0), 3.6);",
+          "float shimVis = 1.0;",
+          "#if defined(USE_SHADOWMAP) && NUM_DIR_LIGHT_SHADOWS > 0",
+          " DirectionalLightShadow shimDls = directionalLightShadows[0];",
+          " shimVis = getShadow(directionalShadowMap[0], shimDls.shadowMapSize, shimDls.shadowIntensity, shimDls.shadowBias, shimDls.shadowRadius, vShimSC);",
+          "#endif",
+          "totalEmissiveRadiance += uShimmer * shimBack * shimVis * vec3(0.95, 0.85, 0.45);",
+        ].join("\n")
+      );
+  };
+  return m;
+}
+
+/**
+ * De-sterilised trunk — a tapered cylinder with (1) a root flare at the base,
+ * (2) low-amplitude radial "bark" bumps and (3) a gentle fixed lean. One shared
+ * geometry across all instances (per-tree variety comes from instance rotation
+ * + scale); branches were dropped here because, shared, they'd repeat
+ * identically — they belong on a near-distance LOD crown.
+ */
+function buildTrunkGeo(): BufferGeometry {
+  const t = new CylinderGeometry(0.09, 0.16, TRUNK_H, 7, 5);
+  t.translate(0, TRUNK_H / 2, 0);
+  const bend = 0.05 * TRUNK_H;
+  const bx = 0.82;
+  const bz = 0.57;
+  const pos = t.attributes.position;
+  const v = new Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const tt = Math.min(Math.max(v.y / TRUNK_H, 0), 1);
+    const r = Math.hypot(v.x, v.z);
+    const ang = Math.atan2(v.z, v.x);
+    if (r > 1e-4) {
+      const flare = tt < 0.16 ? 1 + ((0.16 - tt) / 0.16) * 0.9 : 1;
+      const bump = 1 + (hash(ang * 2.4 + v.y * 1.7) - 0.5) * 0.2;
+      const nr = r * flare * bump;
+      v.x = Math.cos(ang) * nr;
+      v.z = Math.sin(ang) * nr;
+    }
+    const k = tt ** 1.4 * bend;
+    v.x += bx * k;
+    v.z += bz * k;
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  t.computeVertexNormals();
+  return t;
+}
+
+/** Trunk material with a gentle vertical value gradient (darker rooted base). */
+function buildTrunkMaterial(): MeshStandardMaterial {
+  const m = new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying float vTrunkY;")
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\n vTrunkY = position.y;"
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vTrunkY;")
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>\n float tg = clamp(vTrunkY / ${TRUNK_H.toFixed(
+          2
+        )}, 0.0, 1.0);\n diffuseColor.rgb *= mix(0.74, 1.05, smoothstep(0.0, 0.6, tg));`
+      );
+  };
+  return m;
+}
+
 /** Deterministic per-tree pastel sage variation (hue + value). */
 function paintCrowns(crowns: InstancedMesh, cell: Placement[]): void {
   const col = new Color();
@@ -176,38 +444,41 @@ function paintCrowns(crowns: InstancedMesh, cell: Placement[]): void {
   }
 }
 
-function buildTrees(trees: Placement[]): InstancedMesh[] {
-  const trunkGeo = new CylinderGeometry(0.1, 0.16, TRUNK_H, 6);
-  trunkGeo.translate(0, TRUNK_H / 2, 0);
-  // detail 1 keeps a round-enough contour at a quarter of detail 2's triangles
-  // (≈80 vs 320) — a big saving across tens of thousands of canopy trees.
-  const crownGeo = new IcosahedronGeometry(CROWN_R, 1);
-  crownGeo.scale(1, 1.12, 1);
-  crownGeo.translate(0, TRUNK_H + CROWN_R * 0.5, 0);
+function buildTrees(
+  trees: Placement[],
+  sunDirection: Vector3,
+  shimmer: { value: number }
+): { cells: CellLod[]; meshes: InstancedMesh[] } {
   // Geometry + materials are shared across all chunks; only the per-chunk
   // instance buffers differ, so this stays cheap to allocate.
-  const trunkMat = new MeshStandardMaterial({
-    color: 0x8a_7c_68,
-    roughness: 1,
-  });
-  const crownMat = new MeshStandardMaterial({
-    color: 0xa6_bf_92,
-    roughness: 1,
-  });
+  const trunkGeo = buildTrunkGeo();
+  const cheapGeo = buildCrownGeo();
+  const richGeo = buildCrownGeoRich();
+  const trunkMat = buildTrunkMaterial();
+  const crownMat = buildCrownMaterial(sunDirection, shimmer);
 
   const meshes: InstancedMesh[] = [];
+  const cells: CellLod[] = [];
   for (const cell of bucketByCell(trees)) {
     const trunks = new InstancedMesh(trunkGeo, trunkMat, cell.length);
-    const crowns = new InstancedMesh(crownGeo, crownMat, cell.length);
+    const cheap = new InstancedMesh(cheapGeo, crownMat, cell.length);
+    const rich = new InstancedMesh(richGeo, crownMat, cell.length);
     trunks.castShadow = true;
-    crowns.castShadow = true;
-    crowns.receiveShadow = true;
+    for (const c of [cheap, rich]) {
+      c.castShadow = true;
+      c.receiveShadow = true;
+    }
     writeInstances(trunks, cell);
-    writeInstances(crowns, cell);
-    paintCrowns(crowns, cell);
-    meshes.push(trunks, crowns);
+    writeInstances(cheap, cell);
+    writeInstances(rich, cell);
+    paintCrowns(cheap, cell);
+    paintCrowns(rich, cell);
+    // updateLod() decides which crown is visible each frame; start on cheap.
+    rich.visible = false;
+    meshes.push(trunks, cheap, rich);
+    cells.push({ cheap, rich });
   }
-  return meshes;
+  return { cells, meshes };
 }
 
 function buildHedges(hedges: Placement[]): InstancedMesh[] {
@@ -284,9 +555,14 @@ function collectCanopy(
 export async function loadVegetation(
   url: string,
   ctx: VegetationContext
-): Promise<Group> {
+): Promise<VegetationControl> {
   const group = new Group();
   group.name = "vegetation";
+
+  const shimmer = { value: DEFAULT_TREE_SHIMMER };
+  const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
+  let multiTuft = DEFAULT_TREE_MULTITUFT;
+  let cells: CellLod[] = [];
 
   const [rowFeatures, canopyFeatures] = await Promise.all([
     fetchFeatures<LineFeature>(url, ctx.signal),
@@ -298,10 +574,36 @@ export async function loadVegetation(
   const { trees, hedges } = collectPlacements(rowFeatures, ctx);
   trees.push(...collectCanopy(canopyFeatures, ctx));
   if (trees.length > 0) {
-    group.add(...buildTrees(trees));
+    const built = buildTrees(trees, sunDirection, shimmer);
+    group.add(...built.meshes);
+    cells = built.cells;
   }
   if (hedges.length > 0) {
     group.add(...buildHedges(hedges));
   }
-  return group;
+
+  return {
+    group,
+    setShimmer: (strength) => {
+      shimmer.value = strength;
+    },
+    setMultiTuft: (enabled) => {
+      multiTuft = enabled;
+    },
+    // Rich crown only near the camera (and only when multi-tuft is enabled);
+    // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in
+    // the chunk (sphere centre minus radius) with enter/exit hysteresis.
+    updateLod: (cameraPos) => {
+      for (const c of cells) {
+        const sphere = c.cheap.boundingSphere;
+        const near = sphere
+          ? cameraPos.distanceTo(sphere.center) - sphere.radius
+          : Number.POSITIVE_INFINITY;
+        const wantRich =
+          multiTuft && near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
+        c.rich.visible = wantRich;
+        c.cheap.visible = !wantRich;
+      }
+    },
+  };
 }

@@ -16,10 +16,97 @@ export const CITY_STYLE_IDS: CityStyleId[] = ["standard", "ghost", "clay"];
 export const DEFAULT_GHOST_TRANSPARENCY = 0.05;
 export const DEFAULT_CLAY_TRANSPARENCY = 0;
 
+/** Clay facade-detail defaults (0..1). Ground-shade darkens the base; rim is the
+ *  Streiflicht silhouette glow; bands are the faint storey contour lines. */
+export const DEFAULT_BUILDING_GROUND_SHADE = 0.34;
+export const DEFAULT_BUILDING_RIM = 0.6;
+export const DEFAULT_BUILDING_BANDS = 0.18;
+
+/** Live uniform refs for the clay facade detail (mutate `.value`, no recompile). */
+export interface ClayDetailUniforms {
+  uAO: { value: number };
+  uBands: { value: number };
+  uRim: { value: number };
+}
+
 export interface StyleResources {
   clay: MeshStandardMaterial;
+  /** Live uniforms for the clay Boden-Verlauf + Streiflicht. */
+  clayDetail: ClayDetailUniforms;
   dispose: () => void;
   ghost: MeshPhysicalMaterial;
+}
+
+/**
+ * Procedural facade detail injected into the opaque clay material, keyed to each
+ * building's OWN base (the `aBaseZ` attribute written in city-layer) so it works
+ * despite buildings standing on terrain at different elevations:
+ *  - Boden-Verlauf (uAO): a soft darkening over the lowest ~5 m (ambient-occlusion
+ *    surrogate that gives the massing physical contact with the ground).
+ *  - Höhenlinien (uBands): thin, crisp horizontal contour strokes every storey
+ *    (~3 m), drawn with fwidth for constant on-screen width — the SAME hand-drawn
+ *    contour-line language as the terrain, so facades read height/scale without a
+ *    heavy "banded" look. Walls only.
+ *  - Streiflicht (uRim): a Fresnel rim that separates silhouettes from like-
+ *    coloured neighbours. Strength is squared-Fresnel + a healthy multiplier
+ *    because the rim competes with ACES tone-mapping and there is no bloom.
+ * `aBaseZ`/`position.z` are LOCAL data-frame Z (elevation, pre −90° world spin);
+ * normals/positions for the rim are taken in world space via `modelMatrix`.
+ * The uniforms are passed by reference so a setter can retune them live.
+ */
+function addClayDetail(
+  material: MeshStandardMaterial,
+  uniforms: ClayDetailUniforms
+): void {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uAO = uniforms.uAO;
+    shader.uniforms.uBands = uniforms.uBands;
+    shader.uniforms.uRim = uniforms.uRim;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute float aBaseZ;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+      )
+      .replace(
+        "#include <beginnormal_vertex>",
+        "#include <beginnormal_vertex>\n vClayWN = normalize(mat3(modelMatrix) * objectNormal);"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;"
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+      )
+      .replace(
+        "#include <map_fragment>",
+        [
+          "#include <map_fragment>",
+          // Boden-Verlauf: darken the lowest ~5 m above the building's base.
+          "float clayH = max(vLocalH, 0.0);",
+          "diffuseColor.rgb *= mix(1.0 - 0.55 * uAO, 1.0, smoothstep(0.0, 5.0, clayH));",
+          // Höhenlinien: thin storey contour strokes (~3 m), fwidth-constant width,
+          // walls only — the terrain's contour-line language carried onto facades.
+          "float clayWall = 1.0 - smoothstep(0.5, 0.7, abs(vClayWN.y));",
+          "float clayStoreys = clayH / 3.0;",
+          "float clayLine = 1.0 - min(abs(fract(clayStoreys - 0.5) - 0.5) / max(fwidth(clayStoreys), 1e-4), 1.0);",
+          "diffuseColor.rgb *= 1.0 - clayLine * uBands * clayWall;",
+        ].join("\n")
+      )
+      .replace(
+        "#include <emissivemap_fragment>",
+        [
+          "#include <emissivemap_fragment>",
+          // Streiflicht: squared Fresnel rim, warm — strong enough to survive ACES.
+          "vec3 clayV = normalize(cameraPosition - vClayWP);",
+          "float clayFres = 1.0 - clamp(dot(clayV, vClayWN), 0.0, 1.0);",
+          "clayFres *= clayFres;",
+          "totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
+        ].join("\n")
+      );
+  };
 }
 
 /** Shared materials, created once per app instance. */
@@ -47,6 +134,12 @@ export function createStyleResources(): StyleResources {
     opacity: 1 - DEFAULT_CLAY_TRANSPARENCY,
     alphaHash: DEFAULT_CLAY_TRANSPARENCY > 0,
   });
+  const clayDetail: ClayDetailUniforms = {
+    uAO: { value: DEFAULT_BUILDING_GROUND_SHADE },
+    uBands: { value: DEFAULT_BUILDING_BANDS },
+    uRim: { value: DEFAULT_BUILDING_RIM },
+  };
+  addClayDetail(clay, clayDetail);
 
   // Shared across reloads — disposeObject3D must not free them mid-session.
   ghost.userData.shared = true;
@@ -55,6 +148,7 @@ export function createStyleResources(): StyleResources {
   return {
     ghost,
     clay,
+    clayDetail,
     dispose: () => {
       ghost.dispose();
       clay.dispose();

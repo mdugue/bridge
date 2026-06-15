@@ -65,9 +65,16 @@ import {
   DEFAULT_PAPER_GRAIN,
 } from "./post-stack";
 import type { SunState } from "./sun-rig";
+import {
+  DEFAULT_TREE_MULTITUFT,
+  DEFAULT_TREE_SHIMMER,
+} from "./vegetation-layer";
 import { VirtualJoystick } from "./virtual-joystick";
 import {
   type CityStyleId,
+  DEFAULT_BUILDING_BANDS,
+  DEFAULT_BUILDING_GROUND_SHADE,
+  DEFAULT_BUILDING_RIM,
   DEFAULT_CLAY_TRANSPARENCY,
   DEFAULT_GHOST_TRANSPARENCY,
 } from "./visual-style";
@@ -129,11 +136,16 @@ interface Snapshot {
   /** ISO instant driving the sun position */
   date: string;
   look: {
+    bandsPct?: number;
     contactPct: number;
     dof: boolean;
     fogPct: number;
     gradingPct: number;
     grainPct: number;
+    groundShadePct?: number;
+    multiTuft?: boolean;
+    rimPct?: number;
+    shimmerPct?: number;
     style: CityStyleId;
     transparencyPct: number;
   };
@@ -181,6 +193,15 @@ export default function CityWalk({
     Math.round(DEFAULT_CONTACT_SHADOWS * 100)
   );
   const [grain, setGrain] = useState(Math.round(DEFAULT_PAPER_GRAIN * 100));
+  const [groundShade, setGroundShade] = useState(
+    Math.round(DEFAULT_BUILDING_GROUND_SHADE * 100)
+  );
+  const [bands, setBands] = useState(Math.round(DEFAULT_BUILDING_BANDS * 100));
+  const [rim, setRim] = useState(Math.round(DEFAULT_BUILDING_RIM * 100));
+  const [shimmer, setShimmer] = useState(
+    Math.round(DEFAULT_TREE_SHIMMER * 100)
+  );
+  const [multiTuft, setMultiTuft] = useState(DEFAULT_TREE_MULTITUFT);
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -279,6 +300,11 @@ export default function CityWalk({
           setBuildingTransparency: h.setBuildingTransparency,
           setContactShadows: h.setContactShadows,
           setPaperGrain: h.setPaperGrain,
+          setBuildingGroundShade: h.setBuildingGroundShade,
+          setBuildingBands: h.setBuildingBands,
+          setBuildingRim: h.setBuildingRim,
+          setTreeShimmer: h.setTreeShimmer,
+          setTreeMultiTuft: h.setTreeMultiTuft,
           insertBuilding: () => {
             h.insertBuilding().catch(() => {
               // glTF failure is non-fatal; the box fallback can't fail
@@ -350,6 +376,11 @@ export default function CityWalk({
         contactPct: contact,
         grainPct: grain,
         dof,
+        groundShadePct: groundShade,
+        bandsPct: bands,
+        rimPct: rim,
+        shimmerPct: shimmer,
+        multiTuft,
       },
     };
     const text = JSON.stringify(snap, null, 2);
@@ -378,6 +409,27 @@ export default function CityWalk({
     h.setPaperGrain(look.grainPct / 100);
     setDof(look.dof);
     h.setDepthOfField(look.dof);
+    // Facade-detail + tree sliders are optional so legacy v1 snapshots still apply.
+    if (look.groundShadePct !== undefined) {
+      setGroundShade(look.groundShadePct);
+      h.setBuildingGroundShade(look.groundShadePct / 100);
+    }
+    if (look.bandsPct !== undefined) {
+      setBands(look.bandsPct);
+      h.setBuildingBands(look.bandsPct / 100);
+    }
+    if (look.rimPct !== undefined) {
+      setRim(look.rimPct);
+      h.setBuildingRim(look.rimPct / 100);
+    }
+    if (look.shimmerPct !== undefined) {
+      setShimmer(look.shimmerPct);
+      h.setTreeShimmer(look.shimmerPct / 100);
+    }
+    if (look.multiTuft !== undefined) {
+      setMultiTuft(look.multiTuft);
+      h.setTreeMultiTuft(look.multiTuft);
+    }
   };
 
   const applySnapshot = () => {
@@ -548,6 +600,90 @@ export default function CityWalk({
           }}
           step={1}
           value={[grain]}
+        />
+      </Field>
+
+      <FieldSeparator />
+
+      <Field>
+        <FieldLabel htmlFor="building-ground-shade">
+          Boden-Verlauf · {groundShade}%
+        </FieldLabel>
+        <Slider
+          id="building-ground-shade"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setGroundShade(next);
+            handleRef.current?.setBuildingGroundShade(next / 100);
+          }}
+          step={1}
+          value={[groundShade]}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="building-bands">Höhenlinien · {bands}%</FieldLabel>
+        <Slider
+          id="building-bands"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setBands(next);
+            handleRef.current?.setBuildingBands(next / 100);
+          }}
+          step={1}
+          value={[bands]}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="building-rim">Streiflicht · {rim}%</FieldLabel>
+        <Slider
+          id="building-rim"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setRim(next);
+            handleRef.current?.setBuildingRim(next / 100);
+          }}
+          step={1}
+          value={[rim]}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="tree-shimmer">
+          Gegenlicht-Schimmer · {shimmer}%
+        </FieldLabel>
+        <Slider
+          id="tree-shimmer"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setShimmer(next);
+            handleRef.current?.setTreeShimmer(next / 100);
+          }}
+          step={1}
+          value={[shimmer]}
+        />
+      </Field>
+
+      <Field orientation="horizontal">
+        <FieldLabel htmlFor="tree-multituft">
+          Multi-Tuft-Kronen (nah)
+        </FieldLabel>
+        <Switch
+          checked={multiTuft}
+          id="tree-multituft"
+          onCheckedChange={(checked) => {
+            setMultiTuft(checked);
+            handleRef.current?.setTreeMultiTuft(checked);
+          }}
         />
       </Field>
 
