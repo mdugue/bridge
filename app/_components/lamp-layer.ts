@@ -17,7 +17,8 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { VegetationContext } from "./vegetation-layer";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { fetchFeatures, type VegetationContext } from "./vegetation-layer";
 
 /** Lamp post height (m). OSM rarely tags it; the bake defaults each lamp to 5 m. */
 const LAMP_H = 5;
@@ -67,22 +68,6 @@ export interface LampLights {
   setNightFactor: (t: number) => void;
   /** repositions the lights onto the nearest lamp heads (call per frame) */
   updateNearest: (camPos: Vector3) => void;
-}
-
-async function fetchLampPoints(
-  url: string,
-  signal?: AbortSignal
-): Promise<LampPoint[]> {
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return [];
-    }
-    const data = (await res.json()) as { features?: LampPoint[] };
-    return data.features ?? [];
-  } catch {
-    return [];
-  }
 }
 
 /** A 64² soft radial-alpha disc, shared by the glow sprites and ground pools. */
@@ -219,8 +204,8 @@ export async function loadLamps(
 ): Promise<LampControl> {
   const group = new Group();
   group.name = "lamps";
-  const { cx, cy } = ctx.offset;
-  const features = await fetchLampPoints(url, ctx.signal);
+  const { offset } = ctx;
+  const features = await fetchFeatures<LampPoint>(url, ctx.signal);
 
   const places: Place[] = [];
   const headPositions: Vector3[] = [];
@@ -233,8 +218,7 @@ export async function loadLamps(
     if (ground === null) {
       continue; // off-tile / NoData
     }
-    const x = ex - cx;
-    const z = -(ey - cy);
+    const { x, z } = epsgToWorld(ex, ey, offset);
     places.push({ x, y: ground, z });
     headPositions.push(new Vector3(x, ground + LAMP_H, z));
   }

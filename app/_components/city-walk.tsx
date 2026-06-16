@@ -612,8 +612,11 @@ export default function CityWalk({
       setSnapshotMsg("Invalid snapshot JSON");
       return;
     }
-    if (!snap.camera) {
-      setSnapshotMsg("Snapshot missing camera");
+    // Guard the shape, not just presence: a parseable-but-malformed snapshot
+    // (e.g. {"camera":{}}) would otherwise throw deep inside applyCameraState
+    // and leave the camera half-applied with no feedback.
+    if (!snap.camera?.pos || typeof snap.camera.pos.x !== "number") {
+      setSnapshotMsg("Snapshot missing or malformed camera");
       return;
     }
     h.applyCameraState(snap.camera);

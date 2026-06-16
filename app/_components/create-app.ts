@@ -529,7 +529,13 @@ async function bootApp(
   // across all tiles (the Elbe surface). NB: worldBounds.min.y is unusable here
   // — NoData terrain vertices are parked at elevation 0, so it reports ~0, which
   // would push the whole fog band below the real terrain and hide the effect.
-  const valleyFloor = Math.min(...terrains.map((t) => t.minElevation));
+  // Exclude all-NoData tiles: fillGrid reports minElevation 0 for them (no valid
+  // sample), which would otherwise drag the fog floor down to sea level and hide
+  // the valley haze. The primary spawn tile always has real elevation.
+  const floors = terrains
+    .map((t) => t.minElevation)
+    .filter((e) => Number.isFinite(e) && e > 0);
+  const valleyFloor = floors.length ? Math.min(...floors) : worldBounds.min.y;
   heightFog.uFogHeightStart.value = valleyFloor + 1;
   const sunRig = createSunRig(
     scene,
@@ -712,6 +718,9 @@ async function bootApp(
     cityLayer = demolishObject(cityLayer, world, objectId);
     // The reload produces bare loader meshes — re-dress them.
     applyCityStyle(cityLayer.group, currentStyle, styleResources);
+    // Shadows don't auto-update; force a re-render or the gone building's
+    // shadow stays painted on the ground until the camera moves.
+    sunRig.invalidateShadow();
     emitStats();
   };
 
@@ -728,9 +737,12 @@ async function bootApp(
     }
     const ground = heightAt(at.x, at.y) ?? worldBounds.min.y;
     // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
-    obj.position.set(at.x - offset.cx, ground, -(at.y - offset.cy));
+    const w = epsgToWorld(at.x, at.y, offset);
+    obj.position.set(w.x, ground, w.z);
     scene.add(obj);
     inserted = obj;
+    // Shadows don't auto-update; force one so the new building casts a shadow.
+    sunRig.invalidateShadow();
   };
 
   const insertBuildingNow = () => {
