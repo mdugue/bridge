@@ -24,6 +24,8 @@ export interface TerrainGeometryInput {
 export interface TerrainGeometryData {
   /** triangle indices; quads touching a NoData vertex are omitted */
   indices: number[];
+  /** lowest VALID elevation (m); NoData vertices are parked at 0 and excluded */
+  minElevation: number;
   /** n*n*3 vertex positions in the recentered data frame (Z-up) */
   positions: Float32Array;
 }
@@ -109,34 +111,53 @@ function appendSkirts(
   addBorder(west, false);
 }
 
-export function buildTerrainGeometryData(
-  input: TerrainGeometryInput
-): TerrainGeometryData {
+/**
+ * Fills the n*n vertex grid (pixel centres, recentered) + the valid mask, and
+ * returns the lowest VALID elevation. NoData vertices are parked at z=0 and
+ * excluded from the min — so the height-fog floor anchors to the real valley,
+ * not the phantom z=0 holes.
+ */
+function fillGrid(
+  input: TerrainGeometryInput,
+  grid: Float32Array,
+  valid: Uint8Array
+): number {
   const { elevations, n, bounds, offset, nodata } = input;
   const [minX, minY, maxX, maxY] = bounds;
-  if (maxX <= minX || maxY <= minY) {
-    throw new Error(`Degenerate terrain bounds: [${bounds.join(", ")}]`);
-  }
   const dx = (maxX - minX) / n;
   const dy = (maxY - minY) / n;
-
-  const grid = new Float32Array(n * n * 3);
-  const valid = new Uint8Array(n * n);
-
   let p = 0;
+  let minElevation = Number.POSITIVE_INFINITY;
   for (let row = 0; row < n; row++) {
     for (let col = 0; col < n; col++) {
       const i = row * n + col;
       const z = elevations[i];
       const bad = isInvalidElevation(z, nodata);
       valid[i] = bad ? 0 : 1;
-
+      if (!bad && z < minElevation) {
+        minElevation = z;
+      }
       // Pixel centers; raster row 0 = north (maxY).
       grid[p++] = minX + (col + 0.5) * dx - offset.cx;
       grid[p++] = maxY - (row + 0.5) * dy - offset.cy;
       grid[p++] = bad ? 0 : z;
     }
   }
+  return Number.isFinite(minElevation) ? minElevation : 0;
+}
+
+export function buildTerrainGeometryData(
+  input: TerrainGeometryInput
+): TerrainGeometryData {
+  const { n, bounds, offset } = input;
+  const [minX, minY, maxX, maxY] = bounds;
+  if (maxX <= minX || maxY <= minY) {
+    throw new Error(`Degenerate terrain bounds: [${bounds.join(", ")}]`);
+  }
+
+  const grid = new Float32Array(n * n * 3);
+  const valid = new Uint8Array(n * n);
+  const minElevation = fillGrid(input, grid, valid);
 
   // Snap the border ring out to the tile's TRUE edge so neighbouring tiles
   // meet exactly (no half-pixel sky gap). Only the perpendicular axis moves;
@@ -178,7 +199,7 @@ export function buildTerrainGeometryData(
   positions.set(grid, 0);
   positions.set(skirtVerts, grid.length);
 
-  return { positions, indices };
+  return { positions, indices, minElevation };
 }
 
 /**

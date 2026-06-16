@@ -37,8 +37,15 @@ import {
 } from "./city-layer";
 import { createCityCollider } from "./collision";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
+import { createHeightFogUniforms } from "./height-fog";
 import { createInsertedBuilding } from "./inserted-building";
-import { createPostStack } from "./post-stack";
+import {
+  createLampLights,
+  type LampControl,
+  type LampLights,
+  loadLamps,
+} from "./lamp-layer";
+import { createPostStack, type FocusMode } from "./post-stack";
 import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
@@ -67,8 +74,8 @@ const SKY_COLOR = 0x9f_b6_cc;
 // three re-render the whole scene into a transmission buffer every frame
 // (≈ 2x cost). Default to the cheap opaque style; ghost stays a choice.
 export const DEFAULT_CITY_STYLE: CityStyleId = "clay";
-/** Default fog amount (0..1); ~the look the POC always had. */
-export const DEFAULT_ATMOSPHERE = 0.35;
+/** Default fog amount (0..1). Kept light — a gentle far haze, not a near wall. */
+export const DEFAULT_ATMOSPHERE = 0.2;
 
 export interface CityWalkStats {
   buildingCount: number;
@@ -105,6 +112,8 @@ export interface TileSrc {
   citySrc: string;
   demSrc: string;
   demTfwSrc?: string;
+  /** optional OSM street-lamp GeoJSON (ODbL); absent/404 = no lamps */
+  lampsSrc?: string;
   landcoverSrc?: string;
   vegetationSrc?: string;
 }
@@ -119,6 +128,8 @@ export interface CityWalkOptions {
   initialDate: Date;
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
+  /** optional OSM street-lamp GeoJSON (ODbL) for the primary tile */
+  lampsSrc?: string;
   /** optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
   landcoverSrc?: string;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
@@ -152,6 +163,14 @@ export interface CityWalkHandle {
   flyTo: (position: Xyz, lookAt: Xyz) => void;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
+  /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
+  getFocusDebug: () => {
+    bokehScale: number;
+    focusDistance: number;
+    focusRange: number;
+    hitDist: number | null;
+    hitName: string | null;
+  };
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
   getFootprints: () => FootprintPoly[];
   getMovementMode: () => MovementMode;
@@ -176,6 +195,8 @@ export interface CityWalkHandle {
   setBuildingGroundShade: (strength: number) => void;
   /** building Fresnel rim (Streiflicht) strength 0..1 */
   setBuildingRim: (strength: number) => void;
+  /** per-building clay tint (Farbvariation) mix 0..1; 0 = flat clay */
+  setBuildingTint: (strength: number) => void;
   /** transparency 0..1 of the ACTIVE style (ghost: frosted, clay: alpha) */
   setBuildingTransparency: (transparency: number) => void;
   /** soft contact-shadow (SSAO) strength 0..1; 0 disables the pass */
@@ -184,6 +205,12 @@ export interface CityWalkHandle {
   setDepthGrading: (intensity: number) => void;
   /** photographic depth of field with crosshair autofocus */
   setDepthOfField: (enabled: boolean) => void;
+  /** manual focus distance (m), used when focus mode is "manual" */
+  setFocusDistance: (meters: number) => void;
+  /** depth-of-field focus: "auto" (crosshair) or "manual" (fixed distance) */
+  setFocusMode: (mode: FocusMode) => void;
+  /** valley height-fog (Talnebel) strength 0..1; pools haze in low ground */
+  setHeightFog: (strength: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
@@ -195,6 +222,10 @@ export interface CityWalkHandle {
   setTreeMultiTuft: (enabled: boolean) => void;
   /** backlit canopy shimmer strength 0..1 */
   setTreeShimmer: (strength: number) => void;
+  /** backlit (shadow-gated) canopy translucency strength 0..1 on near/large trees */
+  setTreeTranslucency: (strength: number) => void;
+  /** river-mist (Flussnebel) strength 0..1 over the water surface */
+  setWaterMist: (strength: number) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -347,9 +378,17 @@ async function bootApp(
   // read by the crown shimmer. The vegetation builds before the sun rig exists,
   // so this vector must already exist to be captured by reference.
   const sunDirection = new Vector3(0, 1, 0);
+  // Shared valley height-fog uniforms (by reference): folded into every
+  // fog-receiving material below; the start (river/DGM minimum) is set once the
+  // world bounds are known, the strength is HUD-tunable — both without recompile.
+  const heightFog = createHeightFogUniforms();
   // Per-tile vegetation handles, kept so the loop can drive crown LOD and the
   // HUD can retune shimmer / multi-tuft.
   const vegControls: VegetationControl[] = [];
+  // Per-tile lamp visuals; the real (shared, fixed) point-light pool is built
+  // once after all tiles load so NUM_POINT_LIGHTS stays constant.
+  const lampControls: LampControl[] = [];
+  let lampLights: LampLights | null = null;
 
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
   const loadTileScene = async (
@@ -363,10 +402,14 @@ async function bootApp(
       offset,
       targetSize,
       signal: opts.signal,
+      sunDirection,
+      heightFog,
     });
     world.add(t.mesh);
     if (t.water) {
       world.add(t.water.mesh);
+      // River mist reuses the Z-up terrain geometry, so it lives on `world` too.
+      world.add(t.water.mistMesh);
     }
     if (tile.vegetationSrc) {
       const vegetation = await loadVegetation(tile.vegetationSrc, {
@@ -375,10 +418,21 @@ async function bootApp(
         canopyUrl: tile.vegetationSrc.replace("vegrows_", "canopy_"),
         signal: opts.signal,
         sunDirection,
+        heightFog,
       });
       // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
       scene.add(vegetation.group);
       vegControls.push(vegetation);
+    }
+    if (tile.lampsSrc) {
+      const lamps = await loadLamps(tile.lampsSrc, {
+        offset,
+        heightAt: t.heightAt,
+        signal: opts.signal,
+      });
+      // Lamps are authored Y-up (like vegetation), so they go on `scene`.
+      scene.add(lamps.group);
+      lampControls.push(lamps);
     }
     return t;
   };
@@ -390,6 +444,7 @@ async function bootApp(
     demTfwSrc: opts.demTfwSrc,
     landcoverSrc: opts.landcoverSrc,
     vegetationSrc: opts.vegetationSrc,
+    lampsSrc: opts.lampsSrc,
   });
   ensureAlive();
   assertCityOnTerrain(offset, terrain);
@@ -407,6 +462,17 @@ async function bootApp(
     // Neighbours are background — half-resolution terrain (~4 m) is plenty.
     terrains.push(await loadTileScene(tile, 512));
     ensureAlive();
+  }
+
+  // Single fixed pool of real point lights for the nearest lamps across ALL
+  // tiles. Built ONCE here (before the first render) so NUM_POINT_LIGHTS is
+  // baked into every lit program a single time — no per-tile recompile churn.
+  const lampHeads = lampControls.flatMap((l) => l.headPositions);
+  if (lampHeads.length > 0) {
+    lampLights = createLampLights(lampHeads);
+    for (const light of lampLights.lights) {
+      scene.add(light);
+    }
   }
 
   // First terrain that covers (x, y) wins; null only when off every tile.
@@ -451,16 +517,33 @@ async function bootApp(
 
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
+  // Seed the valley height-fog floor from the lowest VALID terrain elevation
+  // across all tiles (the Elbe surface). NB: worldBounds.min.y is unusable here
+  // — NoData terrain vertices are parked at elevation 0, so it reports ~0, which
+  // would push the whole fog band below the real terrain and hide the effect.
+  const valleyFloor = Math.min(...terrains.map((t) => t.minElevation));
+  heightFog.uFogHeightStart.value = valleyFloor + 1;
   const sunRig = createSunRig(
     scene,
     worldBounds,
     tileLatLng(cityData, offset),
     sunDirection
   );
-  sunRig.update(opts.initialDate);
+
+  // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk: emissive heads,
+  // glow sprites, ground pools and the shared real-light pool, all in lockstep.
+  const setSun = (date: Date): SunState => {
+    const state = sunRig.update(date);
+    for (const lamp of lampControls) {
+      lamp.setNightFactor(state.nightFactor);
+    }
+    lampLights?.setNightFactor(state.nightFactor);
+    return state;
+  };
+  setSun(opts.initialDate);
 
   opts.onProgress?.("Preparing render styles…");
-  const styleResources = createStyleResources();
+  const styleResources = createStyleResources(heightFog);
   let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
   applyCityStyle(cityLayer.group, currentStyle, styleResources);
   for (const c of extraCities) {
@@ -679,13 +762,27 @@ async function bootApp(
   // Crosshair autofocus for the photographic DoF (throttled like the pose).
   const focusRaycaster = new Raycaster();
   focusRaycaster.firstHitOnly = true;
-  focusRaycaster.far = 4000;
+  focusRaycaster.far = 6000;
+  // Stable focus-raycast context: neighbour-tile buildings + every tile's
+  // terrain. WITHOUT the neighbour buildings, the crosshair on a distant
+  // (neighbour-tile) silhouette hits nothing and autofocus falls back — so the
+  // far city blurred. The primary cityLayer.group is prepended fresh each call
+  // because demolish swaps it.
+  const focusContext = [...extraCities.map((c) => c.group), ...terrainMeshes];
+  const focusCrosshair = new Vector2(0, 0);
+  let lastFocusHit: { dist: number; name: string } | null = null;
   const updateFocus = () => {
-    focusRaycaster.setFromCamera(new Vector2(0, 0), camera);
+    focusRaycaster.setFromCamera(focusCrosshair, camera);
     const hit = focusRaycaster.intersectObjects(
-      [cityLayer.group, ...terrainMeshes],
+      [cityLayer.group, ...focusContext],
       true
     )[0];
+    lastFocusHit = hit
+      ? {
+          dist: camera.position.distanceTo(hit.point),
+          name: hit.object.name || hit.object.type,
+        }
+      : null;
     postStack.setFocusTarget(hit?.point ?? null);
   };
 
@@ -695,16 +792,29 @@ async function bootApp(
   renderer.setAnimationLoop((time) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
+    const elapsed = timer.getElapsed();
     if (dt > 0) {
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
     movement.update(dt);
-    terrain.water?.setTime(timer.getElapsed());
+    // Advance every tile's water ripple/glitter and feed it the current
+    // palette sky colour (Fresnel sky-tint stays in lockstep with the sun).
+    if (scene.fog instanceof Fog) {
+      for (const t of terrains) {
+        t.water?.update(elapsed, scene.fog.color);
+      }
+    }
     // Keep the (small, sharp) shadow frustum centered on the player.
     sunRig.follow(camera.position);
-    // Swap each vegetation chunk between the rich and cheap crown by distance.
+    // Drift the sky dome's clouds (one uniform write/frame).
+    sunRig.setTime(elapsed);
+    // Repoint the shared real lamp lights at the nearest heads.
+    lampLights?.updateNearest(camera.position);
+    // Swap each vegetation chunk between the rich and cheap crown by distance,
+    // and advance the wind sway (same clock as the water ripple).
     for (const veg of vegControls) {
       veg.updateLod(camera.position);
+      veg.setTime(elapsed);
     }
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
@@ -723,12 +833,14 @@ async function bootApp(
   emitStats();
 
   return {
-    setSun: (date) => sunRig.update(date),
+    setSun,
     setStyle: (style) => {
       currentStyle = style;
       applyCityStyle(cityLayer.group, style, styleResources);
     },
     setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
+    setFocusMode: (mode) => postStack.setFocusMode(mode),
+    setFocusDistance: (meters) => postStack.setFocusDistance(meters),
     setDepthGrading: (intensity) => postStack.setDepthGrading(intensity),
     setContactShadows: (strength) => postStack.setContactShadows(strength),
     setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),
@@ -741,14 +853,30 @@ async function bootApp(
     setBuildingRim: (strength) => {
       styleResources.clayDetail.uRim.value = strength;
     },
+    setBuildingTint: (strength) => {
+      styleResources.clayDetail.uTint.value = strength;
+    },
     setTreeShimmer: (strength) => {
       for (const veg of vegControls) {
         veg.setShimmer(strength);
       }
     },
+    setTreeTranslucency: (strength) => {
+      for (const veg of vegControls) {
+        veg.setTranslucency(strength);
+      }
+    },
     setTreeMultiTuft: (enabled) => {
       for (const veg of vegControls) {
         veg.setMultiTuft(enabled);
+      }
+    },
+    setHeightFog: (strength) => {
+      heightFog.uFogHeightStrength.value = Math.min(Math.max(strength, 0), 1);
+    },
+    setWaterMist: (strength) => {
+      for (const t of terrains) {
+        t.water?.setMist(strength);
       }
     },
     setBuildingTransparency: (transparency) =>
@@ -780,6 +908,11 @@ async function bootApp(
       triangles: renderer.info.render.triangles,
       programs: renderer.info.programs?.length ?? 0,
     }),
+    getFocusDebug: () => ({
+      ...postStack.getFocusInfo(),
+      hitDist: lastFocusHit?.dist ?? null,
+      hitName: lastFocusHit?.name ?? null,
+    }),
     getMovementMode: () => movement.getMode(),
     setMovementMode,
     setMoveInput: movement.setAnalog,
@@ -801,6 +934,10 @@ async function bootApp(
       controls.dispose();
       postStack.dispose();
       disposeObject3D(scene);
+      for (const lamp of lampControls) {
+        lamp.dispose();
+      }
+      lampLights?.dispose();
       styleResources.dispose();
       renderer.dispose();
       renderer.domElement.remove();

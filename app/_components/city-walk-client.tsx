@@ -22,6 +22,8 @@ function tile(name: string): TileSrc {
     demTfwSrc: `/data/dgm1_${name}.tfw`,
     landcoverSrc: `/data/landcover_${name}.png`,
     vegetationSrc: `/data/vegrows_${name}.geojson`,
+    // Optional (OSM, ODbL); the loader treats a 404 as "no lamps".
+    lampsSrc: `/data/lamps_${name}.geojson`,
   };
 }
 
@@ -41,6 +43,7 @@ export function CityWalkClient() {
       demSrc={PRIMARY.demSrc}
       demTfwSrc={PRIMARY.demTfwSrc}
       extraTiles={EXTRA_TILES}
+      lampsSrc={PRIMARY.lampsSrc}
       landcoverSrc={PRIMARY.landcoverSrc}
       vegetationSrc={PRIMARY.vegetationSrc}
     />

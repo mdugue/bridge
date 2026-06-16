@@ -6,6 +6,7 @@
  */
 
 import type { CameraState, PlayerPose } from "./create-app";
+import type { FocusMode } from "./post-stack";
 import type { CityStyleId } from "./visual-style";
 
 interface Xyz {
@@ -24,6 +25,14 @@ export interface PocDebugInfo {
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState?: () => CameraState;
+  /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
+  getFocusDebug?: () => {
+    bokehScale: number;
+    focusDistance: number;
+    focusRange: number;
+    hitDist: number | null;
+    hitName: string | null;
+  };
   /** Current player pose in EPSG coordinates. */
   getPose?: () => PlayerPose;
   /** Last-frame GPU counters (draw calls, triangles, programs). */
@@ -41,6 +50,8 @@ export interface PocDebugInfo {
   setBuildingGroundShade?: (strength: number) => void;
   /** Sets the building Fresnel rim (Streiflicht) strength (0..1). */
   setBuildingRim?: (strength: number) => void;
+  /** Sets the per-building clay tint (Farbvariation) mix (0..1). */
+  setBuildingTint?: (strength: number) => void;
   /** Sets the active style's transparency (0..1). */
   setBuildingTransparency?: (transparency: number) => void;
   /** Sets the soft contact-shadow (SSAO) strength (0..1). */
@@ -49,6 +60,12 @@ export interface PocDebugInfo {
   setDepthGrading?: (intensity: number) => void;
   /** Toggles the photographic depth of field. */
   setDepthOfField?: (enabled: boolean) => void;
+  /** Sets the manual focus distance (m). */
+  setFocusDistance?: (meters: number) => void;
+  /** Sets the depth-of-field focus mode ("auto" | "manual"). */
+  setFocusMode?: (mode: FocusMode) => void;
+  /** Sets the valley height-fog (Talnebel) strength (0..1). */
+  setHeightFog?: (strength: number) => void;
   /** Sets the paper-grain intensity (0..1). */
   setPaperGrain?: (intensity: number) => void;
   /** Switches the city rendering style. */
@@ -59,6 +76,10 @@ export interface PocDebugInfo {
   setTreeMultiTuft?: (enabled: boolean) => void;
   /** Sets the backlit canopy shimmer strength (0..1). */
   setTreeShimmer?: (strength: number) => void;
+  /** Sets the backlit (shadow-gated) canopy translucency strength (0..1). */
+  setTreeTranslucency?: (strength: number) => void;
+  /** Sets the river-mist (Flussnebel) strength (0..1). */
+  setWaterMist?: (strength: number) => void;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;

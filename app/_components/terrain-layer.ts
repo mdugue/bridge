@@ -11,6 +11,7 @@ import {
   SRGBColorSpace,
   type Texture,
   TextureLoader,
+  type Vector3,
 } from "three";
 import {
   buildTerrainGeometryData,
@@ -18,6 +19,7 @@ import {
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
 import { tfwToBounds } from "@/lib/city/tfw";
+import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /** Downsample target (N x N). 1024 over a 2 km tile ≈ 2 m — fine enough that
@@ -33,18 +35,25 @@ export interface TerrainLayer {
   /** bilinear elevation lookup at projected (not recentered) coordinates */
   heightAt: (x: number, y: number) => number | null;
   mesh: Mesh;
+  /** lowest valid elevation (m) on this tile — the valley/river floor */
+  minElevation: number;
   vertexCount: number;
   /** animated water surface, present only when a splatmap was loaded */
   water?: WaterLayer;
 }
 
 export interface TerrainOptions {
+  /** shared valley height-fog uniforms (by reference); patched into the
+   * terrain + water materials so the river/floor pools haze without a seam */
+  heightFog?: HeightFogUniforms;
   /** optional ATKIS land-cover splatmap (PNG), tinted per surface class */
   landcoverUrl?: string;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** aborts the raster download */
   signal?: AbortSignal;
+  /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
+  sunDirection?: Vector3;
   targetSize?: number;
   /** .tfw sidecar fallback, used only when the GeoTIFF has no embedded georef */
   tfwUrl?: string;
@@ -186,6 +195,32 @@ const TERRAIN_PALETTE = /* glsl */ `
 `;
 
 /**
+ * Meadow (class 1) painterly depth, added in the already-running terrain
+ * fragment pass — zero geometry. A value mottle (±~6%) plus a faint shading-
+ * normal break-up so the grazing sun catches texture; the class id comes from
+ * the NEAREST class raster (`uSplatClass`), not RGB colour-distance, which would
+ * misfire on the forest/copse/farmland greens. Distance-faded via `fwidth` so it
+ * never aliases/shimmers in the far field (the failure mode that got plain
+ * foliage translucency rejected as "noise").
+ */
+const GRASS_MOTTLE = /* glsl */ `
+  float grCls = floor( texture2D( uSplatClass, vSplatUv ).r * 255.0 + 0.5 );
+  float grMeadow = 1.0 - step( 0.5, abs( grCls - 1.0 ) );
+  float grFw = max( fwidth( vWorldXY.x ), fwidth( vWorldXY.y ) );
+  float grDetail = grMeadow * ( 1.0 - smoothstep( 0.5, 2.5, grFw ) );
+  float grMottle = sin( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.7
+                 + sin( vWorldXY.x * 2.7 - 0.5 ) * sin( vWorldXY.y * 2.3 + 1.1 ) * 0.3;
+  baseCol *= 1.0 + grMottle * 0.06 * grDetail;
+`;
+
+const GRASS_NORMAL = /* glsl */ `
+  #include <normal_fragment_begin>
+  float grGx = cos( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.85;
+  float grGy = sin( vWorldXY.x * 0.85 + 1.3 ) * cos( vWorldXY.y * 0.78 - 0.7 ) * 0.78;
+  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.12 * grDetail );
+`;
+
+/**
  * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
  * major) drawn in the fragment shader. The geometry lives in the Z-up data
  * frame, so `position.z` IS the absolute elevation.
@@ -197,63 +232,97 @@ const TERRAIN_PALETTE = /* glsl */ `
  * UVs are derived from the recentered world XY and the tile bounds — the
  * terrain geometry carries no uv attribute.
  */
-function createTerrainMaterial(splat?: SplatLayer): MeshStandardMaterial {
-  const material = new MeshStandardMaterial({
-    color: 0xad_b2_9e,
-    roughness: 1,
-  });
-  material.onBeforeCompile = (shader) => {
-    const hasSplat = splat !== undefined;
-    const hasColor = splat?.colorTexture !== undefined;
-    if (splat) {
-      const [minX, minY, maxX, maxY] = splat.bounds;
-      // Recentered tile origin (north-west corner) + size; v grows southward.
-      shader.uniforms.uSplat = {
-        value: splat.colorTexture ?? splat.texture,
-      };
-      shader.uniforms.uSplatOrigin = {
-        value: [minX - splat.offset.cx, maxY - splat.offset.cy],
-      };
-      shader.uniforms.uSplatSize = { value: [maxX - minX, maxY - minY] };
-    }
+/** The slice of an `onBeforeCompile` shader object the terrain patches touch. */
+interface TerrainShader {
+  fragmentShader: string;
+  uniforms: Record<string, { value: unknown }>;
+  vertexShader: string;
+}
 
-    // Base colour: sample the RGB splat directly, or map the class id via the
-    // fallback palette.
-    const baseColExpr = hasColor
-      ? "vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;"
-      : "vec3 baseCol = terrainPalette( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) );";
+function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
+  const [minX, minY, maxX, maxY] = splat.bounds;
+  // Recentered tile origin (north-west corner) + size; v grows southward.
+  shader.uniforms.uSplat = { value: splat.colorTexture ?? splat.texture };
+  shader.uniforms.uSplatOrigin = {
+    value: [minX - splat.offset.cx, maxY - splat.offset.cy],
+  };
+  shader.uniforms.uSplatSize = { value: [maxX - minX, maxY - minY] };
+  // Always the NEAREST class-id raster (even when uSplat is the RGB splat),
+  // so the meadow detail can test the exact land-cover class.
+  shader.uniforms.uSplatClass = { value: splat.texture };
+}
 
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        "#include <common>",
-        `#include <common>
-         varying float vElevation;
-         ${hasSplat ? "varying vec2 vSplatUv;\nuniform vec2 uSplatOrigin;\nuniform vec2 uSplatSize;" : ""}`
-      )
-      .replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-         vElevation = position.z;
-         ${hasSplat ? "vSplatUv = vec2( ( position.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - position.y ) / uSplatSize.y );" : ""}`
-      );
+function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
+  const decl = hasSplat
+    ? "varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform vec2 uSplatOrigin;\nuniform vec2 uSplatSize;"
+    : "";
+  const assign = hasSplat
+    ? "vSplatUv = vec2( ( position.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - position.y ) / uSplatSize.y );\n         vWorldXY = position.xy;"
+    : "";
+  shader.vertexShader = shader.vertexShader
+    .replace(
+      "#include <common>",
+      `#include <common>\n         varying float vElevation;\n         ${decl}`
+    )
+    .replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>\n         vElevation = position.z;\n         ${assign}`
+    );
+}
 
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        "#include <common>",
-        `#include <common>
-         varying float vElevation;
-         ${hasSplat ? `varying vec2 vSplatUv;\nuniform sampler2D uSplat;\n${hasColor ? "" : TERRAIN_PALETTE}` : ""}`
-      )
-      .replace(
-        "vec4 diffuseColor = vec4( diffuse, opacity );",
-        `${hasSplat ? baseColExpr : "vec3 baseCol = diffuse;"}
+function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
+  const hasSplat = splat !== undefined;
+  const hasColor = splat?.colorTexture !== undefined;
+  // Base colour: sample the RGB splat directly, or map the class id via the
+  // fallback palette.
+  const baseColExpr = hasColor
+    ? "vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;"
+    : "vec3 baseCol = terrainPalette( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) );";
+  const decl = hasSplat
+    ? `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform sampler2D uSplatClass;\n${hasColor ? "" : TERRAIN_PALETTE}`
+    : "";
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      "#include <common>",
+      `#include <common>\n         varying float vElevation;\n         ${decl}`
+    )
+    .replace(
+      "vec4 diffuseColor = vec4( diffuse, opacity );",
+      `${hasSplat ? baseColExpr : "vec3 baseCol = diffuse;"}
+         ${hasSplat ? GRASS_MOTTLE : ""}
          float minorD = vElevation / 2.0;
          float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
          float majorD = vElevation / 10.0;
          float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / fwidth( majorD ), 1.0 );
          float ink = clamp( minor * 0.10 + major * 0.15, 0.0, 0.26 );
          vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
-      );
+    );
+  if (hasSplat) {
+    // Meadow-only shading-normal break-up (grDetail declared above, in scope).
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <normal_fragment_begin>",
+      GRASS_NORMAL
+    );
+  }
+}
+
+function createTerrainMaterial(
+  splat?: SplatLayer,
+  heightFog?: HeightFogUniforms
+): MeshStandardMaterial {
+  const material = new MeshStandardMaterial({
+    color: 0xad_b2_9e,
+    roughness: 1,
+  });
+  material.onBeforeCompile = (shader) => {
+    if (splat) {
+      applyTerrainUniforms(shader, splat);
+    }
+    patchTerrainVertex(shader, splat !== undefined);
+    patchTerrainFragment(shader, splat);
+    if (heightFog) {
+      injectHeightFog(shader, heightFog);
+    }
   };
   return material;
 }
@@ -277,7 +346,7 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   });
   const elevations = raster as unknown as ArrayLike<number>;
 
-  const { positions, indices } = buildTerrainGeometryData({
+  const { positions, indices, minElevation } = buildTerrainGeometryData({
     elevations,
     n,
     bounds,
@@ -306,7 +375,7 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
       }
     : undefined;
 
-  const mesh = new Mesh(geometry, createTerrainMaterial(splat));
+  const mesh = new Mesh(geometry, createTerrainMaterial(splat, opts.heightFog));
   mesh.name = "terrain";
   // The terrain only RECEIVES shadows. If it also cast, the grazing sun makes
   // every triangle face self-shadow → the jagged "staircase"/triangle acne
@@ -317,12 +386,15 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   mesh.receiveShadow = true;
 
   // Water re-uses the terrain geometry, masked to the water class.
-  const water = splat ? createWaterLayer(geometry, splat) : undefined;
+  const water = splat
+    ? createWaterLayer(geometry, splat, opts.sunDirection, opts.heightFog)
+    : undefined;
 
   return {
     mesh,
     vertexCount: positions.length / 3,
     bounds,
+    minElevation,
     water,
     heightAt: (x, y) =>
       sampleHeightfield({ elevations, n, bounds, nodata }, x, y),

@@ -38,12 +38,39 @@ const copies: [string, string][] = TILES.flatMap((tile) => [
   [`data/dlm/canopy_${tile}.geojson`, `public/data/canopy_${tile}.geojson`],
 ]);
 
+// Optional artifacts: street lamps (scripts/extract-lamps.sh, ODbL). A tile may
+// not have been baked yet (or have zero lamps) — copy when present, warn but
+// never fail, and the loader treats a missing file as "no lamps".
+const optionalCopies: [string, string][] = TILES.map((tile) => [
+  `data/dlm/lamps_${tile}.geojson`,
+  `public/data/lamps_${tile}.geojson`,
+]);
+
 for (const [src, dest] of copies) {
   const srcPath = join(process.cwd(), src);
   const destPath = join(process.cwd(), dest);
   if (!existsSync(srcPath)) {
     process.stderr.write(`prepare-data: missing source file ${src}\n`);
     process.exit(1);
+  }
+  const upToDate =
+    existsSync(destPath) && statSync(destPath).size === statSync(srcPath).size;
+  if (upToDate) {
+    continue;
+  }
+  mkdirSync(dirname(destPath), { recursive: true });
+  copyFileSync(srcPath, destPath);
+  process.stdout.write(`prepare-data: copied ${src} -> ${dest}\n`);
+}
+
+for (const [src, dest] of optionalCopies) {
+  const srcPath = join(process.cwd(), src);
+  const destPath = join(process.cwd(), dest);
+  if (!existsSync(srcPath)) {
+    process.stdout.write(
+      `prepare-data: optional source absent, skipping ${src}\n`
+    );
+    continue;
   }
   const upToDate =
     existsSync(destPath) && statSync(destPath).size === statSync(srcPath).size;

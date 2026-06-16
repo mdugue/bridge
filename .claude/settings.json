@@ -14,7 +14,10 @@
       "Bash(node -e ' *)",
       "Bash(node shoot.mjs 150 30 /tmp/shot_trunks.png \"8,3.5,16\" \"8,3,11\")",
       "Bash(node shoot.mjs 150 28 /tmp/shot_trunks2.png \"7,2.6,23\" \"7,2.4,11\")",
-      "Bash(grep -vE \"^\\\\s*$\")"
+      "Bash(grep -vE \"^\\\\s*$\")",
+      "Bash(bun test *)",
+      "Bash(bunx playwright *)",
+      "Bash(git add *)"
     ]
   },
   "hooks": {

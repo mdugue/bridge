@@ -13,12 +13,16 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /** Recenter offset + ground lookup shared with the terrain. */
 export interface VegetationContext {
   /** optional canopy GeoJSON (points with an "h" height) from DOM1 */
   canopyUrl?: string;
   heightAt: (x: number, y: number) => number | null;
+  /** shared valley height-fog uniforms (by reference), patched into the
+   * crown/trunk/hedge materials so tree bases pool haze with the terrain */
+  heightFog?: HeightFogUniforms;
   offset: { cx: number; cy: number };
   signal?: AbortSignal;
   /**
@@ -32,6 +36,8 @@ export interface VegetationContext {
 /** Default backlit-shimmer strength and whether the rich (near) crown is on. */
 export const DEFAULT_TREE_SHIMMER = 0.45;
 export const DEFAULT_TREE_MULTITUFT = true;
+/** Default backlit translucency (shadow-gated subsurface glow) strength. */
+export const DEFAULT_TREE_TRANSLUCENCY = 0.5;
 /**
  * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
  * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
@@ -50,6 +56,10 @@ export interface VegetationControl {
   group: Group;
   setMultiTuft: (enabled: boolean) => void;
   setShimmer: (strength: number) => void;
+  /** advance the wind-sway animation (call per frame with elapsed seconds) */
+  setTime: (seconds: number) => void;
+  /** backlit (shadow-gated) translucency strength 0..1 on near/large crowns */
+  setTranslucency: (strength: number) => void;
   updateLod: (cameraPos: Vector3) => void;
 }
 
@@ -325,16 +335,46 @@ function buildCrownGeoRich(): BufferGeometry {
  */
 function buildCrownMaterial(
   sunDirection: Vector3,
-  shimmer: { value: number }
+  shimmer: { value: number },
+  uTime: { value: number },
+  translucency: { value: number },
+  heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uSunDir = { value: sunDirection };
     sh.uniforms.uShimmer = shimmer;
+    sh.uniforms.uTime = uTime;
+    sh.uniforms.uTranslucency = translucency;
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec3 uSunDir;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;"
+        "#include <common>\nuniform vec3 uSunDir;\nuniform float uTime;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;\nvarying float vCrownScale;"
+      )
+      // Wind sway: bend the crown in local space, stiff at the base (where it
+      // meets the trunk) and loose at the top. The per-tree phase comes from the
+      // instance's world column (instanceMatrix[3].xz) so neighbours sway out of
+      // step — a free, stable seed with no extra attribute or buffer upload.
+      // Crowns live in the Y-up scene, so local Y is already up. Cast shadows
+      // stay rigid (the auto depth material has no sway and the sun rig only
+      // re-renders the shadow map on move) — accepted; invisible at this scale.
+      .replace(
+        "#include <begin_vertex>",
+        [
+          "#include <begin_vertex>",
+          "#ifdef USE_INSTANCING",
+          " vec2 swayOrigin = instanceMatrix[3].xz;",
+          " float swayPhase = dot(swayOrigin, vec2(0.07, 0.11));",
+          " float swayK = clamp(transformed.y / 7.0, 0.0, 1.0);",
+          " swayK *= swayK;",
+          " float sway = sin(uTime * 0.38 + swayPhase) + 0.5 * sin(uTime * 0.8 + swayPhase * 1.7);",
+          " transformed.x += sway * swayK * 0.16;",
+          " transformed.z += 0.6 * sin(uTime * 0.31 + swayPhase + 1.7) * swayK * 0.16;",
+          " vCrownScale = length(instanceMatrix[0].xyz);",
+          "#else",
+          " vCrownScale = 1.0;",
+          "#endif",
+        ].join("\n")
       )
       .replace(
         "#include <worldpos_vertex>",
@@ -353,7 +393,7 @@ function buildCrownMaterial(
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec3 uSunDir;\nuniform float uShimmer;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;"
+        "#include <common>\nuniform vec3 uSunDir;\nuniform float uShimmer;\nuniform float uTranslucency;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;\nvarying float vCrownScale;"
       )
       .replace(
         "#include <emissivemap_fragment>",
@@ -367,8 +407,20 @@ function buildCrownMaterial(
           " shimVis = getShadow(directionalShadowMap[0], shimDls.shadowMapSize, shimDls.shadowIntensity, shimDls.shadowBias, shimDls.shadowRadius, vShimSC);",
           "#endif",
           "totalEmissiveRadiance += uShimmer * shimBack * shimVis * vec3(0.95, 0.85, 0.45);",
+          // Backlit translucency: a BROADER subsurface glow (low exponent) using
+          // the SAME shadow gate, so building occluders kill it but the crown's
+          // own self-shadow doesn't. Limited to near OR large crowns and to
+          // daytime so it never reads as far-field "noise".
+          "float trBack = pow(clamp(dot(shimV, -uSunDir), 0.0, 1.0), 1.6);",
+          "float trLarge = smoothstep(1.2, 3.0, vCrownScale);",
+          "float trNear = 1.0 - smoothstep(120.0, 260.0, distance(cameraPosition, vShimWP));",
+          "float trGate = max(trLarge, trNear) * clamp(uSunDir.y, 0.0, 1.0);",
+          "totalEmissiveRadiance += uTranslucency * trBack * shimVis * trGate * vec3(0.45, 0.62, 0.30);",
         ].join("\n")
       );
+    if (heightFog) {
+      injectHeightFog(sh, heightFog);
+    }
   };
   return m;
 }
@@ -410,7 +462,9 @@ function buildTrunkGeo(): BufferGeometry {
 }
 
 /** Trunk material with a gentle vertical value gradient (darker rooted base). */
-function buildTrunkMaterial(): MeshStandardMaterial {
+function buildTrunkMaterial(
+  heightFog?: HeightFogUniforms
+): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 });
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
@@ -427,6 +481,9 @@ function buildTrunkMaterial(): MeshStandardMaterial {
           2
         )}, 0.0, 1.0);\n diffuseColor.rgb *= mix(0.74, 1.05, smoothstep(0.0, 0.6, tg));`
       );
+    if (heightFog) {
+      injectHeightFog(sh, heightFog);
+    }
   };
   return m;
 }
@@ -447,15 +504,24 @@ function paintCrowns(crowns: InstancedMesh, cell: Placement[]): void {
 function buildTrees(
   trees: Placement[],
   sunDirection: Vector3,
-  shimmer: { value: number }
+  shimmer: { value: number },
+  uTime: { value: number },
+  translucency: { value: number },
+  heightFog?: HeightFogUniforms
 ): { cells: CellLod[]; meshes: InstancedMesh[] } {
   // Geometry + materials are shared across all chunks; only the per-chunk
   // instance buffers differ, so this stays cheap to allocate.
   const trunkGeo = buildTrunkGeo();
   const cheapGeo = buildCrownGeo();
   const richGeo = buildCrownGeoRich();
-  const trunkMat = buildTrunkMaterial();
-  const crownMat = buildCrownMaterial(sunDirection, shimmer);
+  const trunkMat = buildTrunkMaterial(heightFog);
+  const crownMat = buildCrownMaterial(
+    sunDirection,
+    shimmer,
+    uTime,
+    translucency,
+    heightFog
+  );
 
   const meshes: InstancedMesh[] = [];
   const cells: CellLod[] = [];
@@ -481,10 +547,16 @@ function buildTrees(
   return { cells, meshes };
 }
 
-function buildHedges(hedges: Placement[]): InstancedMesh[] {
+function buildHedges(
+  hedges: Placement[],
+  heightFog?: HeightFogUniforms
+): InstancedMesh[] {
   const geo = new BoxGeometry(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
   geo.translate(0, HEDGE_H / 2, 0);
   const mat = new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
+  if (heightFog) {
+    mat.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
+  }
   const meshes: InstancedMesh[] = [];
   for (const cell of bucketByCell(hedges)) {
     const mesh = new InstancedMesh(geo, mat, cell.length);
@@ -560,6 +632,11 @@ export async function loadVegetation(
   group.name = "vegetation";
 
   const shimmer = { value: DEFAULT_TREE_SHIMMER };
+  const translucency = { value: DEFAULT_TREE_TRANSLUCENCY };
+  // By-reference clock for the crown wind sway; advanced once per frame by the
+  // render loop (same elapsed seconds as the water ripple). One uniform write
+  // per tile per frame.
+  const uTime = { value: 0 };
   const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
   let multiTuft = DEFAULT_TREE_MULTITUFT;
   let cells: CellLod[] = [];
@@ -574,12 +651,19 @@ export async function loadVegetation(
   const { trees, hedges } = collectPlacements(rowFeatures, ctx);
   trees.push(...collectCanopy(canopyFeatures, ctx));
   if (trees.length > 0) {
-    const built = buildTrees(trees, sunDirection, shimmer);
+    const built = buildTrees(
+      trees,
+      sunDirection,
+      shimmer,
+      uTime,
+      translucency,
+      ctx.heightFog
+    );
     group.add(...built.meshes);
     cells = built.cells;
   }
   if (hedges.length > 0) {
-    group.add(...buildHedges(hedges));
+    group.add(...buildHedges(hedges, ctx.heightFog));
   }
 
   return {
@@ -589,6 +673,12 @@ export async function loadVegetation(
     },
     setMultiTuft: (enabled) => {
       multiTuft = enabled;
+    },
+    setTime: (seconds) => {
+      uTime.value = seconds;
+    },
+    setTranslucency: (strength) => {
+      translucency.value = strength;
     },
     // Rich crown only near the camera (and only when multi-tuft is enabled);
     // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in

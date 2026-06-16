@@ -1,5 +1,6 @@
 import type { Group, Material, Mesh } from "three";
 import { MeshPhysicalMaterial, MeshStandardMaterial } from "three";
+import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
  * City rendering styles. Picking/demolish read geometry attributes, not
@@ -21,12 +22,16 @@ export const DEFAULT_CLAY_TRANSPARENCY = 0;
 export const DEFAULT_BUILDING_GROUND_SHADE = 0.34;
 export const DEFAULT_BUILDING_RIM = 0.6;
 export const DEFAULT_BUILDING_BANDS = 0.18;
+/** Per-building clay tint mix (0 = flat clay, 1 = full per-building colour). A
+ *  middling default already breaks the uniform massing while staying painterly. */
+export const DEFAULT_BUILDING_TINT = 0.6;
 
 /** Live uniform refs for the clay facade detail (mutate `.value`, no recompile). */
 export interface ClayDetailUniforms {
   uAO: { value: number };
   uBands: { value: number };
   uRim: { value: number };
+  uTint: { value: number };
 }
 
 export interface StyleResources {
@@ -41,6 +46,12 @@ export interface StyleResources {
  * Procedural facade detail injected into the opaque clay material, keyed to each
  * building's OWN base (the `aBaseZ` attribute written in city-layer) so it works
  * despite buildings standing on terrain at different elevations:
+ *  - Farbvariation (uTint): blends each building's own muted clay-family colour
+ *    (the per-vertex `aTint` attribute from city-layer) into the flat base so a
+ *    dense block stops reading as one uniform mass. Applied FIRST so the shading
+ *    below (ground-darken, contour lines) modulates the tinted colour. A missing
+ *    `aTint` reads as (0,0,0); we treat that as "no tint" rather than letting it
+ *    darken the building to black.
  *  - Boden-Verlauf (uAO): a soft darkening over the lowest ~5 m (ambient-occlusion
  *    surrogate that gives the massing physical contact with the ground).
  *  - Höhenlinien (uBands): thin, crisp horizontal contour strokes every storey
@@ -56,16 +67,18 @@ export interface StyleResources {
  */
 function addClayDetail(
   material: MeshStandardMaterial,
-  uniforms: ClayDetailUniforms
+  uniforms: ClayDetailUniforms,
+  heightFog?: HeightFogUniforms
 ): void {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uAO = uniforms.uAO;
     shader.uniforms.uBands = uniforms.uBands;
     shader.uniforms.uRim = uniforms.uRim;
+    shader.uniforms.uTint = uniforms.uTint;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float aBaseZ;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+        "#include <common>\nattribute float aBaseZ;\nattribute vec3 aTint;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;"
       )
       .replace(
         "#include <beginnormal_vertex>",
@@ -73,17 +86,23 @@ function addClayDetail(
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;"
+        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n vClayTint = aTint;"
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;"
+        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;"
       )
       .replace(
         "#include <map_fragment>",
         [
           "#include <map_fragment>",
+          // Farbvariation: blend in the building's own clay-family colour first,
+          // so the shading below modulates it. A zero aTint = attribute absent →
+          // keep the base instead of mixing the building toward black.
+          "if (dot(vClayTint, vClayTint) > 1e-4) {",
+          "  diffuseColor.rgb = mix(diffuseColor.rgb, vClayTint, uTint);",
+          "}",
           // Boden-Verlauf: darken the lowest ~5 m above the building's base.
           "float clayH = max(vLocalH, 0.0);",
           "diffuseColor.rgb *= mix(1.0 - 0.55 * uAO, 1.0, smoothstep(0.0, 5.0, clayH));",
@@ -106,11 +125,16 @@ function addClayDetail(
           "totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
         ].join("\n")
       );
+    if (heightFog) {
+      injectHeightFog(shader, heightFog);
+    }
   };
 }
 
 /** Shared materials, created once per app instance. */
-export function createStyleResources(): StyleResources {
+export function createStyleResources(
+  heightFog?: HeightFogUniforms
+): StyleResources {
   // Frosted glass: `transmission` samples a blurred buffer of the scene
   // BEHIND, so what shows through is stable under camera motion.
   const ghost = new MeshPhysicalMaterial({
@@ -124,6 +148,9 @@ export function createStyleResources(): StyleResources {
     attenuationColor: 0xb8_c4_cc,
     attenuationDistance: 12,
   });
+  if (heightFog) {
+    ghost.onBeforeCompile = (shader) => injectHeightFog(shader, heightFog);
+  }
 
   const clay = new MeshStandardMaterial({
     color: 0xec_e7_df,
@@ -138,8 +165,9 @@ export function createStyleResources(): StyleResources {
     uAO: { value: DEFAULT_BUILDING_GROUND_SHADE },
     uBands: { value: DEFAULT_BUILDING_BANDS },
     uRim: { value: DEFAULT_BUILDING_RIM },
+    uTint: { value: DEFAULT_BUILDING_TINT },
   };
-  addClayDetail(clay, clayDetail);
+  addClayDetail(clay, clayDetail, heightFog);
 
   // Shared across reloads — disposeObject3D must not free them mid-session.
   ghost.userData.shared = true;

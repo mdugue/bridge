@@ -31,13 +31,24 @@ interface Snapshot {
   };
   date: string;
   look: {
+    bandsPct?: number;
     contactPct: number;
     dof: boolean;
+    focusDistanceM?: number;
+    focusMode?: "auto" | "manual";
     fogPct: number;
     gradingPct: number;
     grainPct: number;
+    groundShadePct?: number;
+    heightFogPct?: number;
+    multiTuft?: boolean;
+    rimPct?: number;
+    shimmerPct?: number;
     style: string;
+    tintPct?: number;
+    translucencyPct?: number;
     transparencyPct: number;
+    waterMistPct?: number;
   };
 }
 
@@ -78,6 +89,40 @@ for (const file of snapshotFiles()) {
       api.setContactShadows?.(s.look.contactPct / 100);
       api.setPaperGrain?.(s.look.grainPct / 100);
       api.setDepthOfField?.(s.look.dof);
+      if (s.look.focusMode !== undefined) {
+        api.setFocusMode?.(s.look.focusMode);
+      }
+      if (s.look.focusDistanceM !== undefined) {
+        api.setFocusDistance?.(s.look.focusDistanceM);
+      }
+      // Optional (newer) look fields — only applied when present in the shot.
+      if (s.look.groundShadePct !== undefined) {
+        api.setBuildingGroundShade?.(s.look.groundShadePct / 100);
+      }
+      if (s.look.bandsPct !== undefined) {
+        api.setBuildingBands?.(s.look.bandsPct / 100);
+      }
+      if (s.look.rimPct !== undefined) {
+        api.setBuildingRim?.(s.look.rimPct / 100);
+      }
+      if (s.look.tintPct !== undefined) {
+        api.setBuildingTint?.(s.look.tintPct / 100);
+      }
+      if (s.look.shimmerPct !== undefined) {
+        api.setTreeShimmer?.(s.look.shimmerPct / 100);
+      }
+      if (s.look.translucencyPct !== undefined) {
+        api.setTreeTranslucency?.(s.look.translucencyPct / 100);
+      }
+      if (s.look.multiTuft !== undefined) {
+        api.setTreeMultiTuft?.(s.look.multiTuft);
+      }
+      if (s.look.heightFogPct !== undefined) {
+        api.setHeightFog?.(s.look.heightFogPct / 100);
+      }
+      if (s.look.waterMistPct !== undefined) {
+        api.setWaterMist?.(s.look.waterMistPct / 100);
+      }
     }, snap);
 
     // Hide every HUD/control overlay so the shot is a clean render plate:

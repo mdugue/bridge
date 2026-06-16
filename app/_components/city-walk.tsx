@@ -56,18 +56,23 @@ import {
   type TileSrc,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
+import { DEFAULT_HEIGHT_FOG } from "./height-fog";
 import { Minimap } from "./minimap";
 import { updatePocDebug } from "./poc-debug";
 import {
   DEFAULT_CONTACT_SHADOWS,
   DEFAULT_DEPTH_GRADING,
   DEFAULT_DOF,
+  DEFAULT_FOCUS_DISTANCE,
+  DEFAULT_FOCUS_MODE,
   DEFAULT_PAPER_GRAIN,
+  type FocusMode,
 } from "./post-stack";
 import type { SunState } from "./sun-rig";
 import {
   DEFAULT_TREE_MULTITUFT,
   DEFAULT_TREE_SHIMMER,
+  DEFAULT_TREE_TRANSLUCENCY,
 } from "./vegetation-layer";
 import { VirtualJoystick } from "./virtual-joystick";
 import {
@@ -75,9 +80,11 @@ import {
   DEFAULT_BUILDING_BANDS,
   DEFAULT_BUILDING_GROUND_SHADE,
   DEFAULT_BUILDING_RIM,
+  DEFAULT_BUILDING_TINT,
   DEFAULT_CLAY_TRANSPARENCY,
   DEFAULT_GHOST_TRANSPARENCY,
 } from "./visual-style";
+import { DEFAULT_WATER_MIST } from "./water-layer";
 
 interface Props {
   /** URL of the CityJSON tile, served from /public */
@@ -90,6 +97,8 @@ interface Props {
   extraTiles?: TileSrc[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
   insertedModelUrl?: string;
+  /** Optional OSM street-lamp GeoJSON (ODbL) for the primary tile */
+  lampsSrc?: string;
   /** Optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
   landcoverSrc?: string;
   /** Optional ATKIS veg04 GeoJSON for hedges + tree rows */
@@ -139,17 +148,99 @@ interface Snapshot {
     bandsPct?: number;
     contactPct: number;
     dof: boolean;
+    focusDistanceM?: number;
+    focusMode?: FocusMode;
     fogPct: number;
     gradingPct: number;
     grainPct: number;
     groundShadePct?: number;
+    heightFogPct?: number;
     multiTuft?: boolean;
     rimPct?: number;
     shimmerPct?: number;
     style: CityStyleId;
+    tintPct?: number;
+    translucencyPct?: number;
     transparencyPct: number;
+    waterMistPct?: number;
   };
   v: number;
+}
+
+/** Manual DoF focus ring radius (m) for the minimap, or null when not shown. */
+function focusRingMeters(
+  dofOn: boolean,
+  mode: FocusMode,
+  distance: number
+): number | null {
+  return dofOn && mode === "manual" ? distance : null;
+}
+
+/** DoF focus controls (mode toggle + manual distance slider); null when DoF off. */
+function FocusControls({
+  enabled,
+  mode,
+  distance,
+  onMode,
+  onDistance,
+}: {
+  distance: number;
+  enabled: boolean;
+  mode: FocusMode;
+  onDistance: (meters: number) => void;
+  onMode: (mode: FocusMode) => void;
+}) {
+  if (!enabled) {
+    return null;
+  }
+  return (
+    <>
+      <Field>
+        <FieldLabel htmlFor="focus-mode">Focus</FieldLabel>
+        <ToggleGroup
+          className="w-full"
+          id="focus-mode"
+          onValueChange={(value: string[]) => {
+            const next = value[0] as FocusMode | undefined;
+            if (next) {
+              onMode(next);
+            }
+          }}
+          value={[mode]}
+          variant="outline"
+        >
+          <ToggleGroupItem className="flex-1" value="auto">
+            Auto
+          </ToggleGroupItem>
+          <ToggleGroupItem className="flex-1" value="manual">
+            Manual
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <FieldDescription>
+          {mode === "auto"
+            ? "Focuses on whatever the crosshair is over"
+            : "Fixed focus distance — shown as a ring on the minimap"}
+        </FieldDescription>
+      </Field>
+      {mode === "manual" && (
+        <Field>
+          <FieldLabel htmlFor="focus-distance">
+            Focus distance · {distance} m
+          </FieldLabel>
+          <Slider
+            id="focus-distance"
+            max={3000}
+            min={1}
+            onValueChange={(value) => {
+              onDistance(Number(Array.isArray(value) ? value[0] : value));
+            }}
+            step={5}
+            value={[distance]}
+          />
+        </Field>
+      )}
+    </>
+  );
 }
 
 export default function CityWalk({
@@ -158,6 +249,7 @@ export default function CityWalk({
   demTfwSrc,
   landcoverSrc,
   vegetationSrc,
+  lampsSrc,
   extraTiles,
   insertedModelUrl,
 }: Props) {
@@ -176,6 +268,8 @@ export default function CityWalk({
   const [minutes, setMinutes] = useState(INITIAL_MINUTES);
   const [style, setStyle] = useState<CityStyleId>(DEFAULT_CITY_STYLE);
   const [dof, setDof] = useState(DEFAULT_DOF);
+  const [focusMode, setFocusMode] = useState<FocusMode>(DEFAULT_FOCUS_MODE);
+  const [focusDistance, setFocusDistance] = useState(DEFAULT_FOCUS_DISTANCE);
   const [fogAmount, setFogAmount] = useState(
     Math.round(DEFAULT_ATMOSPHERE * 100)
   );
@@ -193,13 +287,23 @@ export default function CityWalk({
     Math.round(DEFAULT_CONTACT_SHADOWS * 100)
   );
   const [grain, setGrain] = useState(Math.round(DEFAULT_PAPER_GRAIN * 100));
+  const [heightFog, setHeightFog] = useState(
+    Math.round(DEFAULT_HEIGHT_FOG * 100)
+  );
+  const [waterMist, setWaterMist] = useState(
+    Math.round(DEFAULT_WATER_MIST * 100)
+  );
   const [groundShade, setGroundShade] = useState(
     Math.round(DEFAULT_BUILDING_GROUND_SHADE * 100)
   );
   const [bands, setBands] = useState(Math.round(DEFAULT_BUILDING_BANDS * 100));
   const [rim, setRim] = useState(Math.round(DEFAULT_BUILDING_RIM * 100));
+  const [tint, setTint] = useState(Math.round(DEFAULT_BUILDING_TINT * 100));
   const [shimmer, setShimmer] = useState(
     Math.round(DEFAULT_TREE_SHIMMER * 100)
+  );
+  const [translucency, setTranslucency] = useState(
+    Math.round(DEFAULT_TREE_TRANSLUCENCY * 100)
   );
   const [multiTuft, setMultiTuft] = useState(DEFAULT_TREE_MULTITUFT);
   const [mode, setMode] = useState<MovementMode>("walk");
@@ -237,6 +341,7 @@ export default function CityWalk({
       demTfwSrc,
       landcoverSrc,
       vegetationSrc,
+      lampsSrc,
       extraTiles,
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
@@ -291,19 +396,26 @@ export default function CityWalk({
           getPose: h.getPose,
           getCameraState: h.getCameraState,
           getRenderInfo: h.getRenderInfo,
+          getFocusDebug: h.getFocusDebug,
           applyCameraState: h.applyCameraState,
           teleportTo: h.teleportTo,
           setStyle: h.setStyle,
           setDepthOfField: h.setDepthOfField,
+          setFocusMode: h.setFocusMode,
+          setFocusDistance: h.setFocusDistance,
           setAtmosphere: h.setAtmosphere,
           setDepthGrading: h.setDepthGrading,
           setBuildingTransparency: h.setBuildingTransparency,
           setContactShadows: h.setContactShadows,
           setPaperGrain: h.setPaperGrain,
+          setHeightFog: h.setHeightFog,
+          setWaterMist: h.setWaterMist,
           setBuildingGroundShade: h.setBuildingGroundShade,
           setBuildingBands: h.setBuildingBands,
           setBuildingRim: h.setBuildingRim,
+          setBuildingTint: h.setBuildingTint,
           setTreeShimmer: h.setTreeShimmer,
+          setTreeTranslucency: h.setTreeTranslucency,
           setTreeMultiTuft: h.setTreeMultiTuft,
           insertBuilding: () => {
             h.insertBuilding().catch(() => {
@@ -340,6 +452,7 @@ export default function CityWalk({
     demTfwSrc,
     landcoverSrc,
     vegetationSrc,
+    lampsSrc,
     extraTiles,
     insertedModelUrl,
   ]);
@@ -375,11 +488,17 @@ export default function CityWalk({
         gradingPct: grading,
         contactPct: contact,
         grainPct: grain,
+        heightFogPct: heightFog,
+        waterMistPct: waterMist,
         dof,
+        focusMode,
+        focusDistanceM: focusDistance,
         groundShadePct: groundShade,
         bandsPct: bands,
         rimPct: rim,
+        tintPct: tint,
         shimmerPct: shimmer,
+        translucencyPct: translucency,
         multiTuft,
       },
     };
@@ -389,6 +508,45 @@ export default function CityWalk({
       () => setSnapshotMsg("Copied to clipboard"),
       () => setSnapshotMsg("Copy failed — select the text manually")
     );
+  };
+
+  // Optional (newer) look fields — split out so each apply fn stays under the
+  // complexity cap; legacy v1 snapshots simply omit them.
+  const applyOptionalLook = (h: CityWalkHandle, look: Snapshot["look"]) => {
+    // Percent sliders share a shape (set React state + push 0..1 to the handle),
+    // so table-drive them — one branch keeps this under the complexity cap.
+    const pctFields: [
+      number | undefined,
+      (pct: number) => void,
+      (n: number) => void,
+    ][] = [
+      [look.heightFogPct, setHeightFog, h.setHeightFog],
+      [look.waterMistPct, setWaterMist, h.setWaterMist],
+      [look.groundShadePct, setGroundShade, h.setBuildingGroundShade],
+      [look.bandsPct, setBands, h.setBuildingBands],
+      [look.rimPct, setRim, h.setBuildingRim],
+      [look.tintPct, setTint, h.setBuildingTint],
+      [look.shimmerPct, setShimmer, h.setTreeShimmer],
+      [look.translucencyPct, setTranslucency, h.setTreeTranslucency],
+    ];
+    for (const [value, setUi, apply] of pctFields) {
+      if (value !== undefined) {
+        setUi(value);
+        apply(value / 100);
+      }
+    }
+    if (look.focusMode !== undefined) {
+      setFocusMode(look.focusMode);
+      h.setFocusMode(look.focusMode);
+    }
+    if (look.focusDistanceM !== undefined) {
+      setFocusDistance(look.focusDistanceM);
+      h.setFocusDistance(look.focusDistanceM);
+    }
+    if (look.multiTuft !== undefined) {
+      setMultiTuft(look.multiTuft);
+      h.setTreeMultiTuft(look.multiTuft);
+    }
   };
 
   const applyLook = (h: CityWalkHandle, look: Snapshot["look"]) => {
@@ -409,27 +567,7 @@ export default function CityWalk({
     h.setPaperGrain(look.grainPct / 100);
     setDof(look.dof);
     h.setDepthOfField(look.dof);
-    // Facade-detail + tree sliders are optional so legacy v1 snapshots still apply.
-    if (look.groundShadePct !== undefined) {
-      setGroundShade(look.groundShadePct);
-      h.setBuildingGroundShade(look.groundShadePct / 100);
-    }
-    if (look.bandsPct !== undefined) {
-      setBands(look.bandsPct);
-      h.setBuildingBands(look.bandsPct / 100);
-    }
-    if (look.rimPct !== undefined) {
-      setRim(look.rimPct);
-      h.setBuildingRim(look.rimPct / 100);
-    }
-    if (look.shimmerPct !== undefined) {
-      setShimmer(look.shimmerPct);
-      h.setTreeShimmer(look.shimmerPct / 100);
-    }
-    if (look.multiTuft !== undefined) {
-      setMultiTuft(look.multiTuft);
-      h.setTreeMultiTuft(look.multiTuft);
-    }
+    applyOptionalLook(h, look);
   };
 
   const applySnapshot = () => {
@@ -656,6 +794,25 @@ export default function CityWalk({
       </Field>
 
       <Field>
+        <FieldLabel htmlFor="building-tint">Farbvariation · {tint}%</FieldLabel>
+        <Slider
+          id="building-tint"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setTint(next);
+            handleRef.current?.setBuildingTint(next / 100);
+          }}
+          step={1}
+          value={[tint]}
+        />
+        <FieldDescription>
+          Per-building clay tint from use &amp; height, blended into the base
+        </FieldDescription>
+      </Field>
+
+      <Field>
         <FieldLabel htmlFor="tree-shimmer">
           Gegenlicht-Schimmer · {shimmer}%
         </FieldLabel>
@@ -671,6 +828,27 @@ export default function CityWalk({
           step={1}
           value={[shimmer]}
         />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="tree-translucency">
+          Blattdurchscheinen · {translucency}%
+        </FieldLabel>
+        <Slider
+          id="tree-translucency"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setTranslucency(next);
+            handleRef.current?.setTreeTranslucency(next / 100);
+          }}
+          step={1}
+          value={[translucency]}
+        />
+        <FieldDescription>
+          Backlit glow on near/large crowns (shadow-gated)
+        </FieldDescription>
       </Field>
 
       <Field orientation="horizontal">
@@ -725,6 +903,20 @@ export default function CityWalk({
         />
       </Field>
 
+      <FocusControls
+        distance={focusDistance}
+        enabled={dof}
+        mode={focusMode}
+        onDistance={(m) => {
+          setFocusDistance(m);
+          handleRef.current?.setFocusDistance(m);
+        }}
+        onMode={(m) => {
+          setFocusMode(m);
+          handleRef.current?.setFocusMode(m);
+        }}
+      />
+
       <Field>
         <FieldLabel htmlFor="atmosphere">Fog · {fogAmount}%</FieldLabel>
         <Slider
@@ -739,6 +931,42 @@ export default function CityWalk({
           step={1}
           value={[fogAmount]}
         />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="height-fog">Talnebel · {heightFog}%</FieldLabel>
+        <Slider
+          id="height-fog"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setHeightFog(next);
+            handleRef.current?.setHeightFog(next / 100);
+          }}
+          step={1}
+          value={[heightFog]}
+        />
+        <FieldDescription>
+          Haze pooling along the valley floor / the Elbe
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="water-mist">Flussnebel · {waterMist}%</FieldLabel>
+        <Slider
+          id="water-mist"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setWaterMist(next);
+            handleRef.current?.setWaterMist(next / 100);
+          }}
+          step={1}
+          value={[waterMist]}
+        />
+        <FieldDescription>Drifting mist over the river</FieldDescription>
       </Field>
 
       <Field>
@@ -828,6 +1056,12 @@ export default function CityWalk({
             "Reproducible capture — share or replay an exact view."}
         </FieldDescription>
       </Field>
+
+      <FieldSeparator />
+
+      <p className="text-[10px] text-muted-foreground leading-snug">
+        Lamp positions © OpenStreetMap contributors (ODbL).
+      </p>
     </FieldGroup>
   );
 
@@ -952,6 +1186,7 @@ export default function CityWalk({
             >
               <Minimap
                 bounds={bounds}
+                focusRingM={focusRingMeters(dof, focusMode, focusDistance)}
                 footprints={footprints}
                 landcoverTiles={landcoverTiles}
                 onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}

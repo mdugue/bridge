@@ -1,6 +1,7 @@
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import type { BufferGeometry, Camera, Group, Matrix4, Mesh } from "three";
 import { BufferAttribute, Raycaster, Vector2 } from "three";
+import { buildingTint } from "@/lib/city/building-tint";
 import { filterCityObject } from "@/lib/city/filter-city-object";
 import type { CityJsonDocument } from "@/lib/city/types";
 import { buildCityBvh } from "./collision";
@@ -46,6 +47,7 @@ function parseCity(
     obj.receiveShadow = true;
   });
   annotateBaseHeight(loader.scene);
+  annotateTint(loader.scene, data);
   // BVHs make per-frame collision rays (and demolish picks) cheap.
   buildCityBvh(loader.scene);
   return { group: loader.scene, matrix: loader.matrix };
@@ -81,6 +83,45 @@ function annotateBaseHeight(group: Group): void {
       base[i] = minZ.get(oid.getX(i)) ?? pos.getZ(i);
     }
     geom.setAttribute("aBaseZ", new BufferAttribute(base, 1));
+  });
+}
+
+/**
+ * Writes a per-vertex `aTint` attribute (linear RGB) so the clay shader can give
+ * each building its own muted clay-family colour instead of one flat mass — see
+ * `buildingTint` for how the colour is chosen. The loader stores a vertex's
+ * building as an INDEX into `Object.keys(CityObjects)` (its `objectid`
+ * attribute), so we resolve that to the CityObject's id + attributes. Buildings
+ * span many vertices, so each tint is computed once per object and cached.
+ * Skips meshes without an `objectid` attribute (e.g. anything non-batched).
+ */
+function annotateTint(group: Group, data: CityJsonDocument): void {
+  const keys = Object.keys(data.CityObjects);
+  group.traverse((obj) => {
+    const geom = (obj as Mesh).geometry as BufferGeometry | undefined;
+    const pos = geom?.attributes.position;
+    const oid = geom?.attributes.objectid;
+    if (!(geom && pos && oid)) {
+      return;
+    }
+    const cache = new Map<number, [number, number, number]>();
+    const tint = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const idx: number = oid.getX(i);
+      let rgb = cache.get(idx);
+      if (!rgb) {
+        const key = keys[idx];
+        rgb = buildingTint(
+          key ?? String(idx),
+          data.CityObjects[key]?.attributes
+        );
+        cache.set(idx, rgb);
+      }
+      tint[i * 3] = rgb[0];
+      tint[i * 3 + 1] = rgb[1];
+      tint[i * 3 + 2] = rgb[2];
+    }
+    geom.setAttribute("aTint", new BufferAttribute(tint, 3));
   });
 }
 

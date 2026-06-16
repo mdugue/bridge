@@ -7,12 +7,22 @@ import { sunDirectionWorld } from "@/lib/city/sun";
 export interface SunState {
   aboveHorizon: boolean;
   altitudeDeg: number;
+  /** 0 (full day) → 1 (civil dusk and below): drives the street-lamp ignition */
+  nightFactor: number;
+}
+
+/** smoothstep ramping 1→0 as x rises from edge0 to edge1 (edges may invert). */
+function smoothstepDown(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
+  return t * t * (3 - 2 * t);
 }
 
 export interface SunRig {
   /** Re-centers the shadow frustum on a focus point (call per frame with the
    * camera position) so the player always stands in the high-res shadow area. */
   follow: (focus: Vector3) => void;
+  /** Advances the sky dome's drifting clouds (call per frame with elapsed s). */
+  setTime: (seconds: number) => void;
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
   update: (date: Date) => SunState;
 }
@@ -36,6 +46,15 @@ function createSkyDome(scene: Scene): Sky {
   u.rayleigh.value = 1.6;
   u.mieCoefficient.value = 0.004;
   u.mieDirectionalG.value = 0.75;
+  // Sky.js (r184) already ships a procedural drifting-cloud system (multi-octave
+  // fbm, sun-tinted) but nothing advances its `time`, so the clouds were frozen.
+  // Soften the defaults toward pale watercolor washes (not cotton balls) and let
+  // the render loop drive `time` for a gentle Dresden breeze. Effectively free:
+  // the fbm only runs on sky pixels (direction.y > 0).
+  u.cloudCoverage.value = 0.3;
+  u.cloudDensity.value = 0.3;
+  // Slow drift — a barely-moving Dresden sky, not racing clouds.
+  u.cloudSpeed.value = 0.0001;
   scene.add(sky);
   return sky;
 }
@@ -141,8 +160,14 @@ export function createSunRig(
     sun.visible = aboveHorizon;
     // Quick ramp after sunrise, flat during the day.
     sun.intensity = SUN_INTENSITY * Math.min(1, Math.max(dir.y, 0) * 5);
-    // Generous fill so shadowed facades stay readable at street level.
-    hemisphere.intensity = 0.45 + 0.6 * Math.max(dir.y, 0);
+    const altitudeDeg =
+      (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI;
+    // Civil-dusk ignition curve: 0 by day, 1 once the sun is well below.
+    const nightFactor = smoothstepDown(2, -6, altitudeDeg);
+    // Generous daytime fill, but crushed at night so the warm lamp pools have
+    // dark contrast to read against.
+    hemisphere.intensity =
+      (0.45 + 0.6 * Math.max(dir.y, 0)) * (1 - 0.75 * nightFactor);
 
     // Sky dome follows the same sun; fog + fill colors follow the palette.
     (sky.material.uniforms.sunPosition.value as Vector3).set(
@@ -150,8 +175,6 @@ export function createSunRig(
       dir.y,
       dir.z
     );
-    const altitudeDeg =
-      (Math.asin(Math.min(Math.max(dir.y, -1), 1)) * 180) / Math.PI;
     const palette = atmosphereAt(altitudeDeg);
     if (scene.fog instanceof Fog) {
       scene.fog.color.set(palette.fog);
@@ -162,8 +185,12 @@ export function createSunRig(
     hemisphere.color.set(palette.hemiSky);
     hemisphere.groundColor.set(palette.hemiGround);
 
-    return { altitudeDeg, aboveHorizon };
+    return { altitudeDeg, aboveHorizon, nightFactor };
   };
 
-  return { update, follow };
+  const setTime = (seconds: number) => {
+    sky.material.uniforms.time.value = seconds;
+  };
+
+  return { update, follow, setTime };
 }
