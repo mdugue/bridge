@@ -2,7 +2,7 @@
 <html lang="de">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta content="width=device-width, initial-scale=1" name="viewport" >
     <title>Ästhetik-Sandbox · Bäume & Gebäude</title>
     <style>
     :root {
@@ -104,12 +104,12 @@
       <div class="sec">Szene</div>
       <div class="row">
         <label>Sonnen-Azimut</label>
-        <input id="az" type="range" min="0" max="360" value="135">
+        <input id="az" max="360" min="0" type="range" value="135">
         <span class="val" id="azv">135°</span>
       </div>
       <div class="row">
         <label>Sonnen-Höhe</label>
-        <input id="alt" type="range" min="3" max="85" value="30">
+        <input id="alt" max="85" min="3" type="range" value="30">
         <span class="val" id="altv">30°</span>
       </div>
 
@@ -117,17 +117,17 @@
       <div class="sec">Gebäude</div>
       <div class="row">
         <label>Boden-Verlauf</label>
-        <input id="ground" type="range" min="0" max="100" value="34">
+        <input id="ground" max="100" min="0" type="range" value="34">
         <span class="val" id="groundv">34%</span>
       </div>
       <div class="row">
         <label>Höhenlinien</label>
-        <input id="bands" type="range" min="0" max="100" value="18">
+        <input id="bands" max="100" min="0" type="range" value="18">
         <span class="val" id="bandsv">18%</span>
       </div>
       <div class="row">
         <label>Streiflicht</label>
-        <input id="rim" type="range" min="0" max="100" value="60">
+        <input id="rim" max="100" min="0" type="range" value="60">
         <span class="val" id="rimv">60%</span>
       </div>
 
@@ -135,12 +135,12 @@
       <div class="sec">Bäume</div>
       <div class="row">
         <label>Gegenlicht-Schimmer</label>
-        <input id="shimmer" type="range" min="0" max="100" value="45">
+        <input id="shimmer" max="100" min="0" type="range" value="45">
         <span class="val" id="shimmerv">45%</span>
       </div>
       <div class="row">
         <label>Multi-Tuft-Kronen</label>
-        <input id="multituft" type="checkbox" checked>
+        <input checked id="multituft" type="checkbox" >
       </div>
     </div>
     <div class="hint">Maus: drehen · Scroll: zoomen</div>

@@ -13,6 +13,14 @@
       "formatter": { "enabled": false }
     },
     {
+      // Static assets served as-is (the default Next.js boilerplate SVGs).
+      // Not app source — the JSX a11y rules (e.g. noSvgWithoutTitle) don't
+      // apply to standalone files in public/.
+      "includes": ["public/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
       // Standalone CDN-loaded shader playground (not part of the app build):
       // mirrors the city scene's tree/building tuning in isolation. Uses a
       // namespace three import + terse inline scratch code on purpose.
