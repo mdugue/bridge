@@ -191,10 +191,18 @@ export interface CityWalkHandle {
   setAtmosphere: (amount: number) => void;
   /** building storey contour-line (Höhenlinien) strength 0..1 */
   setBuildingBands: (strength: number) => void;
+  /** warm dusk interior glow (Abendlicht) on commercial/public buildings 0..1 */
+  setBuildingDuskGlow: (strength: number) => void;
+  /** eave cornice-stroke (Traufkante) strength 0..1 */
+  setBuildingEave: (strength: number) => void;
   /** building ground-contact darkening (Boden-Verlauf) strength 0..1 */
   setBuildingGroundShade: (strength: number) => void;
   /** building Fresnel rim (Streiflicht) strength 0..1 */
   setBuildingRim: (strength: number) => void;
+  /** roof colour mix (Dachfarbe) 0..1; terracotta/slate from roofType */
+  setBuildingRoofTint: (strength: number) => void;
+  /** per-building roughness jitter (Materialstreuung) 0..1 */
+  setBuildingRoughness: (strength: number) => void;
   /** per-building clay tint (Farbvariation) mix 0..1; 0 = flat clay */
   setBuildingTint: (strength: number) => void;
   /** transparency 0..1 of the ACTIVE style (ghost: frosted, clay: alpha) */
@@ -532,18 +540,22 @@ async function bootApp(
 
   // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk: emissive heads,
   // glow sprites, ground pools and the shared real-light pool, all in lockstep.
+  // It also gates the clay dusk-glow — clayNight is a shared uniform ref created
+  // here (before styleResources exists) so setSun can drive it by reference.
+  const clayNight = { value: 0 };
   const setSun = (date: Date): SunState => {
     const state = sunRig.update(date);
     for (const lamp of lampControls) {
       lamp.setNightFactor(state.nightFactor);
     }
     lampLights?.setNightFactor(state.nightFactor);
+    clayNight.value = state.nightFactor;
     return state;
   };
   setSun(opts.initialDate);
 
   opts.onProgress?.("Preparing render styles…");
-  const styleResources = createStyleResources(heightFog);
+  const styleResources = createStyleResources(heightFog, clayNight);
   let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
   applyCityStyle(cityLayer.group, currentStyle, styleResources);
   for (const c of extraCities) {
@@ -855,6 +867,18 @@ async function bootApp(
     },
     setBuildingTint: (strength) => {
       styleResources.clayDetail.uTint.value = strength;
+    },
+    setBuildingRoofTint: (strength) => {
+      styleResources.clayDetail.uRoofTint.value = strength;
+    },
+    setBuildingEave: (strength) => {
+      styleResources.clayDetail.uEave.value = strength;
+    },
+    setBuildingDuskGlow: (strength) => {
+      styleResources.clayDetail.uDuskGlow.value = strength;
+    },
+    setBuildingRoughness: (strength) => {
+      styleResources.clayDetail.uRough.value = strength;
     },
     setTreeShimmer: (strength) => {
       for (const veg of vegControls) {

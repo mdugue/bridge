@@ -17,7 +17,8 @@
       "Bash(grep -vE \"^\\\\s*$\")",
       "Bash(bun test *)",
       "Bash(bunx playwright *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   },
   "hooks": {

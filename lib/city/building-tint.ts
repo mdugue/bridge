@@ -153,3 +153,112 @@ export function buildingTint(
     srgbChannelToLinear(b),
   ];
 }
+
+/** Roof swatches (sRGB 0..255). Muted on purpose so they read as soft terracotta
+ *  or slate under the watercolour grade, never fire-engine tiles. */
+const ROOF_FAMILIES = {
+  // Pitched / tiled — warm terracotta & brick (the Dresden old-town default).
+  tiled: [
+    [176, 99, 72],
+    [161, 88, 64],
+    [186, 112, 84],
+    [150, 92, 71],
+  ],
+  // Flat / low-pitch — slate & lead grey.
+  slate: [
+    [128, 130, 132],
+    [112, 118, 125],
+    [140, 135, 128],
+  ],
+} as const;
+
+/** AdV Dachform codes that are unambiguously pitched (so they get a tiled roof
+ *  regardless of the — sometimes missing — pitch angle). */
+const PITCHED_ROOF_CODES = new Set([
+  "2100",
+  "3100",
+  "3200",
+  "3300",
+  "3400",
+  "3500",
+]);
+/** Below this roof pitch (deg) a roof of unknown shape reads as flat/slate. */
+const FLAT_PITCH_DEG = 8;
+
+function roofIsTiled(attrs: Record<string, unknown>): boolean {
+  const rt = readString(attrs.roofType);
+  if (rt === "1000") {
+    return false; // Flachdach
+  }
+  if (rt && PITCHED_ROOF_CODES.has(rt)) {
+    return true;
+  }
+  const pitch = readNumber(attrs.Dachneigung);
+  if (pitch !== undefined) {
+    return pitch >= FLAT_PITCH_DEG;
+  }
+  return true; // unknown shape & pitch → old-town default is tiled
+}
+
+/**
+ * Stable linear-RGB ROOF tint, chosen from `roofType` + `Dachneigung`: warm
+ * terracotta for pitched/tiled roofs, cool slate for flat ones, with the same
+ * per-building hash jitter as the walls (decorrelated via a `#roof` salt).
+ */
+export function roofTint(
+  objectId: string,
+  attrs: Record<string, unknown> = {}
+): TintRgb {
+  const family = roofIsTiled(attrs) ? ROOF_FAMILIES.tiled : ROOF_FAMILIES.slate;
+  const pick =
+    family[
+      Math.min(
+        family.length - 1,
+        Math.floor(hash01(`${objectId}#roof`) * family.length)
+      )
+    ];
+  const jitter = (hash01(`${objectId}#roofL`) - 0.5) * 2 * LIGHT_JITTER;
+  const r = clamp01(pick[0] / 255 + jitter);
+  const g = clamp01(pick[1] / 255 + jitter);
+  const b = clamp01(pick[2] / 255 + jitter);
+  return [
+    srgbChannelToLinear(r),
+    srgbChannelToLinear(g),
+    srgbChannelToLinear(b),
+  ];
+}
+
+/**
+ * Whether a building earns a warm interior glow at dusk: commerce
+ * (`31001_2xxx`), public (`31001_3xxx`) and special structures (non-`31001`).
+ * Housing (`31001_9998`/`1xxx`) stays dark, so the lit centre reads as civic.
+ */
+export function buildingGlows(attrs: Record<string, unknown> = {}): boolean {
+  const fn = readString(attrs.function);
+  if (!fn) {
+    return false;
+  }
+  const [major, minor = ""] = fn.split("_");
+  if (major !== "31001") {
+    return true;
+  }
+  return minor.startsWith("2") || minor.startsWith("3");
+}
+
+/**
+ * Storey height (m) for the contour bands: snap the building height to whole
+ * ~3.2 m storeys so the topmost band lands near the eave. Clamped to a sane
+ * range; falls back to 3 m when no height is known.
+ */
+export function storeyHeight(heightMeters: number | undefined): number {
+  if (heightMeters === undefined || heightMeters < 2.5) {
+    return 3;
+  }
+  const storeys = Math.max(1, Math.round(heightMeters / 3.2));
+  return Math.min(Math.max(heightMeters / storeys, 2.5), 4.5);
+}
+
+/** Signed per-building roughness jitter in [-1,1] (decorrelated hash). */
+export function roughJitter(objectId: string): number {
+  return hash01(`${objectId}#R`) * 2 - 1;
+}

@@ -46,10 +46,18 @@ export interface PocDebugInfo {
   setAtmosphere?: (amount: number) => void;
   /** Sets the building storey contour-line (Höhenlinien) strength (0..1). */
   setBuildingBands?: (strength: number) => void;
+  /** Sets the dusk interior glow (Abendlicht) strength (0..1). */
+  setBuildingDuskGlow?: (strength: number) => void;
+  /** Sets the eave cornice-stroke (Traufkante) strength (0..1). */
+  setBuildingEave?: (strength: number) => void;
   /** Sets the building ground-contact darkening (Boden-Verlauf) strength (0..1). */
   setBuildingGroundShade?: (strength: number) => void;
   /** Sets the building Fresnel rim (Streiflicht) strength (0..1). */
   setBuildingRim?: (strength: number) => void;
+  /** Sets the roof colour mix (Dachfarbe) (0..1). */
+  setBuildingRoofTint?: (strength: number) => void;
+  /** Sets the per-building roughness jitter (Materialstreuung) strength (0..1). */
+  setBuildingRoughness?: (strength: number) => void;
   /** Sets the per-building clay tint (Farbvariation) mix (0..1). */
   setBuildingTint?: (strength: number) => void;
   /** Sets the active style's transparency (0..1). */

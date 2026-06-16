@@ -78,8 +78,12 @@ import { VirtualJoystick } from "./virtual-joystick";
 import {
   type CityStyleId,
   DEFAULT_BUILDING_BANDS,
+  DEFAULT_BUILDING_DUSK_GLOW,
+  DEFAULT_BUILDING_EAVE,
   DEFAULT_BUILDING_GROUND_SHADE,
   DEFAULT_BUILDING_RIM,
+  DEFAULT_BUILDING_ROOF_TINT,
+  DEFAULT_BUILDING_ROUGHNESS,
   DEFAULT_BUILDING_TINT,
   DEFAULT_CLAY_TRANSPARENCY,
   DEFAULT_GHOST_TRANSPARENCY,
@@ -148,6 +152,8 @@ interface Snapshot {
     bandsPct?: number;
     contactPct: number;
     dof: boolean;
+    duskGlowPct?: number;
+    eavePct?: number;
     focusDistanceM?: number;
     focusMode?: FocusMode;
     fogPct: number;
@@ -157,6 +163,8 @@ interface Snapshot {
     heightFogPct?: number;
     multiTuft?: boolean;
     rimPct?: number;
+    roofTintPct?: number;
+    roughnessPct?: number;
     shimmerPct?: number;
     style: CityStyleId;
     tintPct?: number;
@@ -299,6 +307,16 @@ export default function CityWalk({
   const [bands, setBands] = useState(Math.round(DEFAULT_BUILDING_BANDS * 100));
   const [rim, setRim] = useState(Math.round(DEFAULT_BUILDING_RIM * 100));
   const [tint, setTint] = useState(Math.round(DEFAULT_BUILDING_TINT * 100));
+  const [roofTint, setRoofTint] = useState(
+    Math.round(DEFAULT_BUILDING_ROOF_TINT * 100)
+  );
+  const [eave, setEave] = useState(Math.round(DEFAULT_BUILDING_EAVE * 100));
+  const [duskGlow, setDuskGlow] = useState(
+    Math.round(DEFAULT_BUILDING_DUSK_GLOW * 100)
+  );
+  const [roughness, setRoughness] = useState(
+    Math.round(DEFAULT_BUILDING_ROUGHNESS * 100)
+  );
   const [shimmer, setShimmer] = useState(
     Math.round(DEFAULT_TREE_SHIMMER * 100)
   );
@@ -414,6 +432,10 @@ export default function CityWalk({
           setBuildingBands: h.setBuildingBands,
           setBuildingRim: h.setBuildingRim,
           setBuildingTint: h.setBuildingTint,
+          setBuildingRoofTint: h.setBuildingRoofTint,
+          setBuildingEave: h.setBuildingEave,
+          setBuildingDuskGlow: h.setBuildingDuskGlow,
+          setBuildingRoughness: h.setBuildingRoughness,
           setTreeShimmer: h.setTreeShimmer,
           setTreeTranslucency: h.setTreeTranslucency,
           setTreeMultiTuft: h.setTreeMultiTuft,
@@ -497,6 +519,10 @@ export default function CityWalk({
         bandsPct: bands,
         rimPct: rim,
         tintPct: tint,
+        roofTintPct: roofTint,
+        eavePct: eave,
+        duskGlowPct: duskGlow,
+        roughnessPct: roughness,
         shimmerPct: shimmer,
         translucencyPct: translucency,
         multiTuft,
@@ -526,6 +552,10 @@ export default function CityWalk({
       [look.bandsPct, setBands, h.setBuildingBands],
       [look.rimPct, setRim, h.setBuildingRim],
       [look.tintPct, setTint, h.setBuildingTint],
+      [look.roofTintPct, setRoofTint, h.setBuildingRoofTint],
+      [look.eavePct, setEave, h.setBuildingEave],
+      [look.duskGlowPct, setDuskGlow, h.setBuildingDuskGlow],
+      [look.roughnessPct, setRoughness, h.setBuildingRoughness],
       [look.shimmerPct, setShimmer, h.setTreeShimmer],
       [look.translucencyPct, setTranslucency, h.setTreeTranslucency],
     ];
@@ -809,6 +839,88 @@ export default function CityWalk({
         />
         <FieldDescription>
           Per-building clay tint from use &amp; height, blended into the base
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="building-roof-tint">
+          Dachfarbe · {roofTint}%
+        </FieldLabel>
+        <Slider
+          id="building-roof-tint"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setRoofTint(next);
+            handleRef.current?.setBuildingRoofTint(next / 100);
+          }}
+          step={1}
+          value={[roofTint]}
+        />
+        <FieldDescription>
+          Terracotta or slate per roof, from roofType &amp; pitch
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="building-eave">Traufkante · {eave}%</FieldLabel>
+        <Slider
+          id="building-eave"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setEave(next);
+            handleRef.current?.setBuildingEave(next / 100);
+          }}
+          step={1}
+          value={[eave]}
+        />
+        <FieldDescription>
+          Soft cornice line where wall meets roof
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="building-dusk-glow">
+          Abendlicht · {duskGlow}%
+        </FieldLabel>
+        <Slider
+          id="building-dusk-glow"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setDuskGlow(next);
+            handleRef.current?.setBuildingDuskGlow(next / 100);
+          }}
+          step={1}
+          value={[duskGlow]}
+        />
+        <FieldDescription>
+          Warm interior glow on civic/commercial buildings at dusk
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="building-roughness">
+          Materialstreuung · {roughness}%
+        </FieldLabel>
+        <Slider
+          id="building-roughness"
+          max={100}
+          min={0}
+          onValueChange={(value) => {
+            const next = Number(Array.isArray(value) ? value[0] : value);
+            setRoughness(next);
+            handleRef.current?.setBuildingRoughness(next / 100);
+          }}
+          step={1}
+          value={[roughness]}
+        />
+        <FieldDescription>
+          Subtle per-building matte/sheen variation
         </FieldDescription>
       </Field>
 

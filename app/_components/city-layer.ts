@@ -1,7 +1,13 @@
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import type { BufferGeometry, Camera, Group, Matrix4, Mesh } from "three";
 import { BufferAttribute, Raycaster, Vector2 } from "three";
-import { buildingTint } from "@/lib/city/building-tint";
+import {
+  buildingGlows,
+  buildingTint,
+  roofTint,
+  roughJitter,
+  storeyHeight,
+} from "@/lib/city/building-tint";
 import { filterCityObject } from "@/lib/city/filter-city-object";
 import type { CityJsonDocument } from "@/lib/city/types";
 import { buildCityBvh } from "./collision";
@@ -47,7 +53,7 @@ function parseCity(
     obj.receiveShadow = true;
   });
   annotateBaseHeight(loader.scene);
-  annotateTint(loader.scene, data);
+  annotateBuildingDetail(loader.scene, data);
   // BVHs make per-frame collision rays (and demolish picks) cheap.
   buildCityBvh(loader.scene);
   return { group: loader.scene, matrix: loader.matrix };
@@ -86,42 +92,131 @@ function annotateBaseHeight(group: Group): void {
   });
 }
 
+/** RoofSurface index in the loader's fixed `defaultSemanticsColors` key order
+ *  (GroundSurface 0, WallSurface 1, RoofSurface 2). A vertex without semantics
+ *  is -1, so this never false-matches a wall. */
+const ROOF_SURFACE_TYPE = 2;
+
+interface BuildingStyle {
+  /** eave height above the building base (m): lowest roof vertex, or the full
+   *  height when no roof surface is tagged */
+  eaveH: number;
+  /** 1 = warm dusk glow (commerce/public/special), 0 = housing */
+  glow: number;
+  roof: [number, number, number];
+  /** signed roughness jitter [-1,1] */
+  rough: number;
+  /** contour-band spacing (m), snapped to whole storeys */
+  storeyH: number;
+  wall: [number, number, number];
+}
+
+/** Reads the loader's per-vertex `surfacetype` (may be absent on non-LoD2). */
+type SurfaceAttr = { getX: (i: number) => number } | undefined;
+
+/** Per-building style, computed once and reused across the building's vertices. */
+function buildingStyle(
+  id: string,
+  attrs: Record<string, unknown> | undefined,
+  baseZ: number,
+  maxZ: number,
+  roofMinZ: number | undefined
+): BuildingStyle {
+  const a = attrs ?? {};
+  const total = maxZ - baseZ;
+  const mh = typeof a.measuredHeight === "number" ? a.measuredHeight : total;
+  return {
+    wall: buildingTint(id, a),
+    roof: roofTint(id, a),
+    storeyH: storeyHeight(mh),
+    eaveH: roofMinZ === undefined ? total : Math.max(roofMinZ - baseZ, 0),
+    glow: buildingGlows(a) ? 1 : 0,
+    rough: roughJitter(id),
+  };
+}
+
+/** First pass: per-building lowest ROOF vertex (for the eave) and overall top. */
+function scanRoofAndTop(
+  pos: { count: number; getZ: (i: number) => number },
+  oid: { getX: (i: number) => number },
+  surf: SurfaceAttr
+): { roofMinZ: Map<number, number>; maxZ: Map<number, number> } {
+  const roofMinZ = new Map<number, number>();
+  const maxZ = new Map<number, number>();
+  for (let i = 0; i < pos.count; i++) {
+    const idx: number = oid.getX(i);
+    const z = pos.getZ(i);
+    const mx = maxZ.get(idx);
+    if (mx === undefined || z > mx) {
+      maxZ.set(idx, z);
+    }
+    if (surf?.getX(i) === ROOF_SURFACE_TYPE) {
+      const rm = roofMinZ.get(idx);
+      if (rm === undefined || z < rm) {
+        roofMinZ.set(idx, z);
+      }
+    }
+  }
+  return { roofMinZ, maxZ };
+}
+
 /**
- * Writes a per-vertex `aTint` attribute (linear RGB) so the clay shader can give
- * each building its own muted clay-family colour instead of one flat mass — see
- * `buildingTint` for how the colour is chosen. The loader stores a vertex's
- * building as an INDEX into `Object.keys(CityObjects)` (its `objectid`
- * attribute), so we resolve that to the CityObject's id + attributes. Buildings
- * span many vertices, so each tint is computed once per object and cached.
- * Skips meshes without an `objectid` attribute (e.g. anything non-batched).
+ * Writes the per-vertex attributes the clay shader reads to individualise each
+ * building (all keyed by the loader's `objectid` index → CityObject attributes,
+ * computed once per building and cached):
+ *  - `aTint` (vec3): wall colour on wall faces, ROOF colour on RoofSurface faces
+ *    (roofType/Dachneigung → terracotta or slate).
+ *  - `aBuild` (vec4): (isRoof, storeyHeight, eaveHeight, glowFlag). isRoof is
+ *    per-vertex; the rest are per-building.
+ *  - `aRough` (float): per-building roughness jitter.
+ * Needs `aBaseZ` (written by annotateBaseHeight) for heights; reads the loader's
+ * `surfacetype` to tell roofs from walls (absent → everything treated as wall).
  */
-function annotateTint(group: Group, data: CityJsonDocument): void {
+function annotateBuildingDetail(group: Group, data: CityJsonDocument): void {
   const keys = Object.keys(data.CityObjects);
   group.traverse((obj) => {
     const geom = (obj as Mesh).geometry as BufferGeometry | undefined;
     const pos = geom?.attributes.position;
     const oid = geom?.attributes.objectid;
-    if (!(geom && pos && oid)) {
+    const baseAttr = geom?.attributes.aBaseZ;
+    if (!(geom && pos && oid && baseAttr)) {
       return;
     }
-    const cache = new Map<number, [number, number, number]>();
+    const surf = geom.attributes.surfacetype as SurfaceAttr;
+    const { roofMinZ, maxZ } = scanRoofAndTop(pos, oid, surf);
+    const cache = new Map<number, BuildingStyle>();
     const tint = new Float32Array(pos.count * 3);
+    const build = new Float32Array(pos.count * 4);
+    const rough = new Float32Array(pos.count);
     for (let i = 0; i < pos.count; i++) {
       const idx: number = oid.getX(i);
-      let rgb = cache.get(idx);
-      if (!rgb) {
+      let s = cache.get(idx);
+      if (!s) {
         const key = keys[idx];
-        rgb = buildingTint(
+        const baseZ = baseAttr.getX(i);
+        s = buildingStyle(
           key ?? String(idx),
-          data.CityObjects[key]?.attributes
+          data.CityObjects[key]?.attributes,
+          baseZ,
+          maxZ.get(idx) ?? baseZ,
+          roofMinZ.get(idx)
         );
-        cache.set(idx, rgb);
+        cache.set(idx, s);
       }
-      tint[i * 3] = rgb[0];
-      tint[i * 3 + 1] = rgb[1];
-      tint[i * 3 + 2] = rgb[2];
+      const isRoof = surf?.getX(i) === ROOF_SURFACE_TYPE ? 1 : 0;
+      const c = isRoof === 1 ? s.roof : s.wall;
+      tint[i * 3] = c[0];
+      tint[i * 3 + 1] = c[1];
+      tint[i * 3 + 2] = c[2];
+      build[i * 4] = isRoof;
+      build[i * 4 + 1] = s.storeyH;
+      build[i * 4 + 2] = s.eaveH;
+      build[i * 4 + 3] = s.glow;
+      rough[i] = s.rough;
     }
     geom.setAttribute("aTint", new BufferAttribute(tint, 3));
+    geom.setAttribute("aBuild", new BufferAttribute(build, 4));
+    geom.setAttribute("aRough", new BufferAttribute(rough, 1));
   });
 }
 

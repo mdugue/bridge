@@ -25,12 +25,31 @@ export const DEFAULT_BUILDING_BANDS = 0.18;
 /** Per-building clay tint mix (0 = flat clay, 1 = full per-building colour). A
  *  middling default already breaks the uniform massing while staying painterly. */
 export const DEFAULT_BUILDING_TINT = 0.6;
+/** Roof colour mix (terracotta/slate from roofType/Dachneigung). Roofs carry
+ *  more colour than walls — they're the strongest readability cue. */
+export const DEFAULT_BUILDING_ROOF_TINT = 0.7;
+/** Eave (Traufkante) cornice-stroke strength at the wall/roof boundary. */
+export const DEFAULT_BUILDING_EAVE = 0.35;
+/** Warm dusk interior glow on commercial/public buildings (gated by nightFactor). */
+export const DEFAULT_BUILDING_DUSK_GLOW = 0.5;
+/** Per-building roughness jitter — subtle matte/sheen variation between houses. */
+export const DEFAULT_BUILDING_ROUGHNESS = 0.12;
 
 /** Live uniform refs for the clay facade detail (mutate `.value`, no recompile). */
 export interface ClayDetailUniforms {
   uAO: { value: number };
   uBands: { value: number };
+  /** dusk interior glow strength (commercial/public) */
+  uDuskGlow: { value: number };
+  /** eave cornice-stroke strength */
+  uEave: { value: number };
+  /** night factor 0..1, driven by the sun rig (gates the dusk glow) */
+  uNight: { value: number };
   uRim: { value: number };
+  /** roof colour mix strength */
+  uRoofTint: { value: number };
+  /** per-building roughness jitter strength */
+  uRough: { value: number };
   uTint: { value: number };
 }
 
@@ -75,10 +94,15 @@ function addClayDetail(
     shader.uniforms.uBands = uniforms.uBands;
     shader.uniforms.uRim = uniforms.uRim;
     shader.uniforms.uTint = uniforms.uTint;
+    shader.uniforms.uRoofTint = uniforms.uRoofTint;
+    shader.uniforms.uEave = uniforms.uEave;
+    shader.uniforms.uDuskGlow = uniforms.uDuskGlow;
+    shader.uniforms.uNight = uniforms.uNight;
+    shader.uniforms.uRough = uniforms.uRough;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float aBaseZ;\nattribute vec3 aTint;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;"
+        "#include <common>\nattribute float aBaseZ;\nattribute vec3 aTint;\nattribute vec4 aBuild;\nattribute float aRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
       )
       .replace(
         "#include <beginnormal_vertex>",
@@ -86,32 +110,45 @@ function addClayDetail(
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n vClayTint = aTint;"
+        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n vClayTint = aTint;\n vClayBuild = aBuild;\n vClayRough = aRough;"
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;"
+        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        // Materialstreuung: nudge roughness per building so the matte sheen
+        // varies house-to-house (clamped to stay matte, no shiny clay).
+        "#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor + uRough * vClayRough, 0.55, 1.0);"
       )
       .replace(
         "#include <map_fragment>",
         [
           "#include <map_fragment>",
           // Farbvariation: blend in the building's own clay-family colour first,
-          // so the shading below modulates it. A zero aTint = attribute absent →
-          // keep the base instead of mixing the building toward black.
+          // so the shading below modulates it. Roof faces (aBuild.x = 1) carry the
+          // roof colour at the roof mix strength, walls the wall colour. A zero
+          // aTint = attribute absent → keep the base, don't mix toward black.
+          "float clayIsRoof = step(0.5, vClayBuild.x);",
+          "float clayTintMix = mix(uTint, uRoofTint, clayIsRoof);",
           "if (dot(vClayTint, vClayTint) > 1e-4) {",
-          "  diffuseColor.rgb = mix(diffuseColor.rgb, vClayTint, uTint);",
+          "  diffuseColor.rgb = mix(diffuseColor.rgb, vClayTint, clayTintMix);",
           "}",
           // Boden-Verlauf: darken the lowest ~5 m above the building's base.
           "float clayH = max(vLocalH, 0.0);",
           "diffuseColor.rgb *= mix(1.0 - 0.55 * uAO, 1.0, smoothstep(0.0, 5.0, clayH));",
-          // Höhenlinien: thin storey contour strokes (~3 m), fwidth-constant width,
-          // walls only — the terrain's contour-line language carried onto facades.
+          // walls vs near-horizontal faces (roofs/ground), reused below.
           "float clayWall = 1.0 - smoothstep(0.5, 0.7, abs(vClayWN.y));",
-          "float clayStoreys = clayH / 3.0;",
+          // Höhenlinien: storey contour strokes at the building's OWN storey
+          // height (from measuredHeight), fwidth-constant width, walls only.
+          "float clayStoreys = clayH / max(vClayBuild.y, 0.5);",
           "float clayLine = 1.0 - min(abs(fract(clayStoreys - 0.5) - 0.5) / max(fwidth(clayStoreys), 1e-4), 1.0);",
           "diffuseColor.rgb *= 1.0 - clayLine * uBands * clayWall;",
+          // Traufkante: one soft cornice stroke at the wall/roof boundary (eave).
+          "float clayEave = 1.0 - min(abs(clayH - vClayBuild.z) / max(fwidth(clayH) * 2.0, 1e-4), 1.0);",
+          "diffuseColor.rgb *= 1.0 - clayEave * uEave * clayWall * 0.6;",
         ].join("\n")
       )
       .replace(
@@ -123,6 +160,10 @@ function addClayDetail(
           "float clayFres = 1.0 - clamp(dot(clayV, vClayWN), 0.0, 1.0);",
           "clayFres *= clayFres;",
           "totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
+          // Abendlicht: warm interior glow on commercial/public buildings at
+          // dusk (aBuild.w = 1), gated by nightFactor, walls only.
+          "float clayGlow = vClayBuild.w * uDuskGlow * uNight;",
+          "totalEmissiveRadiance += clayGlow * clayWall * vec3(1.0, 0.82, 0.5) * 0.5;",
         ].join("\n")
       );
     if (heightFog) {
@@ -131,9 +172,11 @@ function addClayDetail(
   };
 }
 
-/** Shared materials, created once per app instance. */
+/** Shared materials, created once per app instance. `night` is a uniform ref
+ *  the sun rig mutates (0 = day, 1 = night) to gate the dusk glow live. */
 export function createStyleResources(
-  heightFog?: HeightFogUniforms
+  heightFog?: HeightFogUniforms,
+  night?: { value: number }
 ): StyleResources {
   // Frosted glass: `transmission` samples a blurred buffer of the scene
   // BEHIND, so what shows through is stable under camera motion.
@@ -166,6 +209,11 @@ export function createStyleResources(
     uBands: { value: DEFAULT_BUILDING_BANDS },
     uRim: { value: DEFAULT_BUILDING_RIM },
     uTint: { value: DEFAULT_BUILDING_TINT },
+    uRoofTint: { value: DEFAULT_BUILDING_ROOF_TINT },
+    uEave: { value: DEFAULT_BUILDING_EAVE },
+    uDuskGlow: { value: DEFAULT_BUILDING_DUSK_GLOW },
+    uNight: night ?? { value: 0 },
+    uRough: { value: DEFAULT_BUILDING_ROUGHNESS },
   };
   addClayDetail(clay, clayDetail, heightFog);
 

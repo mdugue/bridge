@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { buildingTint } from "./building-tint";
+import {
+  buildingGlows,
+  buildingTint,
+  roofTint,
+  roughJitter,
+  storeyHeight,
+} from "./building-tint";
 
 const inRange = (rgb: number[]) =>
   rgb.every((c) => c >= 0 && c <= 1) && rgb.length === 3;
@@ -58,4 +64,44 @@ test("taller buildings drift cooler than short ones of the same id/family", () =
     measuredHeight: 30,
   });
   expect(tall[2] - tall[0]).toBeGreaterThan(short[2] - short[0]);
+});
+
+test("roofTint: pitched/tiled roofs are warmer (R>B) than flat/slate roofs", () => {
+  const tiled = roofTint("r", { roofType: "3100" }); // Satteldach
+  const flat = roofTint("r", { roofType: "1000" }); // Flachdach
+  expect(tiled[0]).toBeGreaterThan(tiled[2]); // terracotta: red-biased
+  expect(flat[0] - flat[2]).toBeLessThan(tiled[0] - tiled[2]); // slate: ~neutral
+  expect(roofTint("r").every((c) => c >= 0 && c <= 1)).toBe(true);
+});
+
+test("roofTint: low pitch reads flat, steep pitch reads tiled (unknown roofType)", () => {
+  const lowPitch = roofTint("r", { roofType: "9999", Dachneigung: 2 });
+  const steep = roofTint("r", { roofType: "9999", Dachneigung: 40 });
+  expect(steep[0] - steep[2]).toBeGreaterThan(lowPitch[0] - lowPitch[2]);
+});
+
+test("buildingGlows: commerce/public/special glow, housing does not", () => {
+  expect(buildingGlows({ function: "31001_2000" })).toBe(true); // commerce
+  expect(buildingGlows({ function: "31001_3021" })).toBe(true); // public
+  expect(buildingGlows({ function: "53001_1800" })).toBe(true); // special
+  expect(buildingGlows({ function: "31001_9998" })).toBe(false); // housing
+  expect(buildingGlows({})).toBe(false);
+});
+
+test("storeyHeight: snaps near ~3.2 m, clamps, falls back to 3", () => {
+  expect(storeyHeight(undefined)).toBe(3);
+  expect(storeyHeight(1)).toBe(3); // implausibly short → fallback
+  const h = storeyHeight(12);
+  expect(h).toBeGreaterThanOrEqual(2.5);
+  expect(h).toBeLessThanOrEqual(4.5);
+  expect(Math.round(12 / h)).toBe(4); // 12 m → 4 storeys of 3 m
+});
+
+test("roughJitter: deterministic, in [-1,1]", () => {
+  expect(roughJitter("x")).toBe(roughJitter("x"));
+  for (const id of ["a", "b", "kurz", "DESNATPU1000HJx5"]) {
+    const v = roughJitter(id);
+    expect(v).toBeGreaterThanOrEqual(-1);
+    expect(v).toBeLessThanOrEqual(1);
+  }
 });

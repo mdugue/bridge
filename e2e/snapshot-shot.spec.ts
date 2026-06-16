@@ -34,6 +34,8 @@ interface Snapshot {
     bandsPct?: number;
     contactPct: number;
     dof: boolean;
+    duskGlowPct?: number;
+    eavePct?: number;
     focusDistanceM?: number;
     focusMode?: "auto" | "manual";
     fogPct: number;
@@ -43,6 +45,8 @@ interface Snapshot {
     heightFogPct?: number;
     multiTuft?: boolean;
     rimPct?: number;
+    roofTintPct?: number;
+    roughnessPct?: number;
     shimmerPct?: number;
     style: string;
     tintPct?: number;
@@ -107,6 +111,18 @@ for (const file of snapshotFiles()) {
       }
       if (s.look.tintPct !== undefined) {
         api.setBuildingTint?.(s.look.tintPct / 100);
+      }
+      if (s.look.roofTintPct !== undefined) {
+        api.setBuildingRoofTint?.(s.look.roofTintPct / 100);
+      }
+      if (s.look.eavePct !== undefined) {
+        api.setBuildingEave?.(s.look.eavePct / 100);
+      }
+      if (s.look.duskGlowPct !== undefined) {
+        api.setBuildingDuskGlow?.(s.look.duskGlowPct / 100);
+      }
+      if (s.look.roughnessPct !== undefined) {
+        api.setBuildingRoughness?.(s.look.roughnessPct / 100);
       }
       if (s.look.shimmerPct !== undefined) {
         api.setTreeShimmer?.(s.look.shimmerPct / 100);
