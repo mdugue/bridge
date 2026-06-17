@@ -13,6 +13,7 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /** Recenter offset + ground lookup shared with the terrain. */
@@ -141,7 +142,7 @@ function collectPlacements(
   features: LineFeature[],
   ctx: VegetationContext
 ): { hedges: Placement[]; trees: Placement[] } {
-  const { cx, cy } = ctx.offset;
+  const { offset } = ctx;
   const trees: Placement[] = [];
   const hedges: Placement[] = [];
   for (const f of features) {
@@ -160,10 +161,11 @@ function collectPlacements(
         continue; // off-tile or NoData
       }
       const seed = ex * 0.13 + ey * 0.07 + i;
+      const w = epsgToWorld(ex, ey, offset);
       const place: Placement = {
-        x: ex - cx,
+        x: w.x,
         y: ground,
-        z: -(ey - cy),
+        z: w.z,
         rot: isHedge ? hash(seed) * 0.3 : hash(seed * 1.7) * Math.PI,
         s: isHedge ? 1 : 0.8 + hash(seed) * 0.6,
       };
@@ -568,7 +570,7 @@ function buildHedges(
   return meshes;
 }
 
-async function fetchFeatures<T>(
+export async function fetchFeatures<T>(
   url: string,
   signal?: AbortSignal
 ): Promise<T[]> {
@@ -589,7 +591,7 @@ function collectCanopy(
   features: PointFeature[],
   ctx: VegetationContext
 ): Placement[] {
-  const { cx, cy } = ctx.offset;
+  const { offset } = ctx;
   const out: Placement[] = [];
   for (const f of features) {
     if (f.geometry?.type !== "Point") {
@@ -600,16 +602,19 @@ function collectCanopy(
     if (ground === null) {
       continue;
     }
+    // A point missing a numeric `h` (only the TS type, not the JSON, promises
+    // one) would make scale NaN; Math.max/min don't clamp NaN, so the NaN
+    // matrix poisons the chunk's bounding sphere and the whole cell culls.
+    const h = Number.isFinite(f.properties.h) ? f.properties.h : BASE_TREE_H;
     const seed = ex * 0.13 + ey * 0.07;
+    const w = epsgToWorld(ex, ey, offset);
     out.push({
-      x: ex - cx,
+      x: w.x,
       y: ground,
-      z: -(ey - cy),
+      z: w.z,
       rot: hash(seed * 1.7) * Math.PI,
       // Scale the whole tree to the measured canopy height (± a touch).
-      s:
-        Math.min(Math.max(f.properties.h / BASE_TREE_H, 0.5), 7) *
-        (0.9 + hash(seed) * 0.2),
+      s: Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2),
     });
   }
   return out;

@@ -179,9 +179,14 @@ export function buildingFootprintPolys(
     }
     const extent = (obj as { geographicalExtent?: number[] })
       .geographicalExtent;
+    // Only a LEAF Building (no BuildingPart children) falls back to its bbox.
+    // A parent Building carries empty geometry but its parts emit the real
+    // GroundSurface polys above, so adding its bbox would stack an oversized
+    // rectangle on top of the accurate footprints.
     if (
       found === 0 &&
       obj.type === "Building" &&
+      !obj.children?.length &&
       extent &&
       extent.length >= 6
     ) {

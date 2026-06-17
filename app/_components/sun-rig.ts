@@ -21,6 +21,10 @@ export interface SunRig {
   /** Re-centers the shadow frustum on a focus point (call per frame with the
    * camera position) so the player always stands in the high-res shadow area. */
   follow: (focus: Vector3) => void;
+  /** Forces a one-off shadow-map re-render. The map is otherwise only redrawn
+   * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
+   * (demolish / insert) must call this or stale shadows linger. */
+  invalidateShadow: () => void;
   /** Advances the sky dome's drifting clouds (call per frame with elapsed s). */
   setTime: (seconds: number) => void;
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
@@ -125,6 +129,7 @@ export function createSunRig(
   }
   const focus = center.clone();
   let lastFx = Number.NaN;
+  let lastFy = Number.NaN;
   let lastFz = Number.NaN;
   const reposition = () => {
     // Snap the focus to the texel grid to keep shadow edges stable while moving.
@@ -137,10 +142,13 @@ export function createSunRig(
       fy + dir.y * shadowDistance,
       fz + dir.z * shadowDistance
     );
-    // Manual shadow update only when the snapped frustum centre changed.
-    if (fx !== lastFx || fz !== lastFz) {
+    // Manual shadow update only when the snapped frustum centre changed. fy
+    // matters too: ascending straight up in fly mode keeps fx/fz fixed while
+    // the frustum's vertical slice shifts, which would otherwise go stale.
+    if (fx !== lastFx || fy !== lastFy || fz !== lastFz) {
       sun.shadow.needsUpdate = true;
       lastFx = fx;
+      lastFy = fy;
       lastFz = fz;
     }
   };
@@ -192,5 +200,9 @@ export function createSunRig(
     sky.material.uniforms.time.value = seconds;
   };
 
-  return { update, follow, setTime };
+  const invalidateShadow = () => {
+    sun.shadow.needsUpdate = true;
+  };
+
+  return { update, follow, setTime, invalidateShadow };
 }
