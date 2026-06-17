@@ -99,6 +99,8 @@ import {
 import type { SunState } from "./sun-rig";
 import { DEFAULT_MEADOW_NDVI } from "./terrain-layer";
 import {
+  DEFAULT_TREE_LEAF_BRIGHT,
+  DEFAULT_TREE_LEAF_FLUTTER,
   DEFAULT_TREE_MULTITUFT,
   DEFAULT_TREE_SHIMMER,
   DEFAULT_TREE_TRANSLUCENCY,
@@ -200,6 +202,8 @@ interface Snapshot {
     grainPct: number;
     groundShadePct?: number;
     heightFogPct?: number;
+    leafBrightPct?: number;
+    leafFlutterPct?: number;
     meadowNdviPct?: number;
     multiTuft?: boolean;
     rimPct?: number;
@@ -494,6 +498,8 @@ interface SceneControlsProps {
   handleRef: RefObject<CityWalkHandle | null>;
   heightFog: number;
   insertBuilding: () => void;
+  leafBright: number;
+  leafFlutter: number;
   meadowNdvi: number;
   minutes: number;
   mode: MovementMode;
@@ -514,6 +520,8 @@ interface SceneControlsProps {
   setGrain: Dispatch<SetStateAction<number>>;
   setGroundShade: Dispatch<SetStateAction<number>>;
   setHeightFog: Dispatch<SetStateAction<number>>;
+  setLeafBright: Dispatch<SetStateAction<number>>;
+  setLeafFlutter: Dispatch<SetStateAction<number>>;
   setMeadowNdvi: Dispatch<SetStateAction<number>>;
   setMultiTuft: Dispatch<SetStateAction<boolean>>;
   setRim: Dispatch<SetStateAction<number>>;
@@ -563,6 +571,8 @@ function SceneControls({
   handleRef,
   heightFog,
   insertBuilding,
+  leafBright,
+  leafFlutter,
   meadowNdvi,
   minutes,
   mode,
@@ -583,6 +593,8 @@ function SceneControls({
   setGrain,
   setGroundShade,
   setHeightFog,
+  setLeafBright,
+  setLeafFlutter,
   setMeadowNdvi,
   setMultiTuft,
   setRim,
@@ -862,6 +874,26 @@ function SceneControls({
           }}
           value={translucency}
         />
+        <PctSlider
+          description="(A) Windböen lassen Blätter ihre helle Unterseite zeigen — Farbe flimmert über sonnige Kronen. 0 = nur (B) sichtbar."
+          id="tree-leaf-flutter"
+          label="Blattflimmern"
+          onChange={(n) => {
+            setLeafFlutter(n);
+            handleRef.current?.setTreeLeafFlutter(n / 100);
+          }}
+          value={leafFlutter}
+        />
+        <PctSlider
+          description="(B) Krone hellt auf, wenn sie sich in die Böe neigt (an die Wiege-Bewegung gekoppelt). 0 = nur (A) sichtbar."
+          id="tree-leaf-bright"
+          label="Windhelligkeit"
+          onChange={(n) => {
+            setLeafBright(n);
+            handleRef.current?.setTreeLeafBright(n / 100);
+          }}
+          value={leafBright}
+        />
         <Field orientation="horizontal">
           <FieldLabel htmlFor="tree-multituft">
             Multi-Tuft-Kronen (nah)
@@ -1083,6 +1115,12 @@ export default function CityWalk({
   const [translucency, setTranslucency] = useState(
     Math.round(DEFAULT_TREE_TRANSLUCENCY * 100)
   );
+  const [leafFlutter, setLeafFlutter] = useState(
+    Math.round(DEFAULT_TREE_LEAF_FLUTTER * 100)
+  );
+  const [leafBright, setLeafBright] = useState(
+    Math.round(DEFAULT_TREE_LEAF_BRIGHT * 100)
+  );
   const [multiTuft, setMultiTuft] = useState(DEFAULT_TREE_MULTITUFT);
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
@@ -1203,6 +1241,8 @@ export default function CityWalk({
           setBuildingRoughness: h.setBuildingRoughness,
           setTreeShimmer: h.setTreeShimmer,
           setTreeTranslucency: h.setTreeTranslucency,
+          setTreeLeafFlutter: h.setTreeLeafFlutter,
+          setTreeLeafBright: h.setTreeLeafBright,
           setTreeMultiTuft: h.setTreeMultiTuft,
           insertBuilding: () => {
             h.insertBuilding().catch(() => {
@@ -1296,6 +1336,8 @@ export default function CityWalk({
         roughnessPct: roughness,
         shimmerPct: shimmer,
         translucencyPct: translucency,
+        leafFlutterPct: leafFlutter,
+        leafBrightPct: leafBright,
         multiTuft,
       },
     };
@@ -1331,6 +1373,8 @@ export default function CityWalk({
       [look.roughnessPct, setRoughness, h.setBuildingRoughness],
       [look.shimmerPct, setShimmer, h.setTreeShimmer],
       [look.translucencyPct, setTranslucency, h.setTreeTranslucency],
+      [look.leafFlutterPct, setLeafFlutter, h.setTreeLeafFlutter],
+      [look.leafBrightPct, setLeafBright, h.setTreeLeafBright],
     ];
     for (const [value, setUi, apply] of pctFields) {
       if (value !== undefined) {
@@ -1432,6 +1476,8 @@ export default function CityWalk({
       handleRef={handleRef}
       heightFog={heightFog}
       insertBuilding={insertBuilding}
+      leafBright={leafBright}
+      leafFlutter={leafFlutter}
       meadowNdvi={meadowNdvi}
       minutes={minutes}
       mode={mode}
@@ -1452,6 +1498,8 @@ export default function CityWalk({
       setGrain={setGrain}
       setGroundShade={setGroundShade}
       setHeightFog={setHeightFog}
+      setLeafBright={setLeafBright}
+      setLeafFlutter={setLeafFlutter}
       setMeadowNdvi={setMeadowNdvi}
       setMultiTuft={setMultiTuft}
       setRim={setRim}

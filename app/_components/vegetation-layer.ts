@@ -50,6 +50,22 @@ export const DEFAULT_TREE_MULTITUFT = true;
 /** Default backlit translucency (shadow-gated subsurface glow) strength. */
 export const DEFAULT_TREE_TRANSLUCENCY = 0.5;
 /**
+ * Two coupled "moving leaves" effects on the crown, each independently tunable
+ * (zero one to preview the other):
+ * - (A) `LEAF_FLUTTER`: small, irregular bright specks (world-space value noise,
+ *   ~1-2 m cells, two octaves + drift) where wind flips leaves to their paler
+ *   underside; the crown albedo blends toward a lighter silver-sage — gated to
+ *   SUNLIT, sun-facing leaves so it reads as light glinting off turning leaves,
+ *   not a tree-group-wide band.
+ * - (B) `LEAF_BRIGHT`: the crown brightens as it leans into the same gust and
+ *   dims as it rocks back (centred on the existing wind-sway, so the mean colour
+ *   is unchanged) — motion and light agree.
+ * Both run in the MAIN pass only (the shadow/depth material has neither), so
+ * they add no shadow-pass cost and no extra attribute/buffer upload.
+ */
+export const DEFAULT_TREE_LEAF_FLUTTER = 0.5;
+export const DEFAULT_TREE_LEAF_BRIGHT = 0.5;
+/**
  * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
  * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
  * a few metres away could stay cheap because its 250 m chunk's centre is far. A
@@ -65,6 +81,10 @@ const LOD_NEAR_OUT_M = 300;
  */
 export interface VegetationControl {
   group: Group;
+  /** (B) sway-coupled crown brightness strength 0..1 */
+  setLeafBright: (strength: number) => void;
+  /** (A) wind-gust leaf-flutter colour shimmer strength 0..1 */
+  setLeafFlutter: (strength: number) => void;
   setMultiTuft: (enabled: boolean) => void;
   setShimmer: (strength: number) => void;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
@@ -354,6 +374,8 @@ function buildCrownMaterial(
   shimmer: { value: number },
   uTime: { value: number },
   translucency: { value: number },
+  leafFlutter: { value: number },
+  leafBright: { value: number },
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 });
@@ -362,10 +384,12 @@ function buildCrownMaterial(
     sh.uniforms.uShimmer = shimmer;
     sh.uniforms.uTime = uTime;
     sh.uniforms.uTranslucency = translucency;
+    sh.uniforms.uLeafFlutter = leafFlutter;
+    sh.uniforms.uLeafBright = leafBright;
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec3 uSunDir;\nuniform float uTime;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;\nvarying float vCrownScale;"
+        "#include <common>\nuniform vec3 uSunDir;\nuniform float uTime;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;\nvarying float vCrownScale;\nvarying float vSway;\nvarying vec3 vWorldNormal;"
       )
       // Wind sway: bend the crown in local space, stiff at the base (where it
       // meets the trunk) and loose at the top. The per-tree phase comes from the
@@ -387,8 +411,15 @@ function buildCrownMaterial(
           " transformed.x += sway * swayK * 0.16;",
           " transformed.z += 0.6 * sin(uTime * 0.31 + swayPhase + 1.7) * swayK * 0.16;",
           " vCrownScale = length(instanceMatrix[0].xyz);",
+          // (B) per-crown gust signal (centred on 0) for the fragment brightness
+          // pulse, and a world-space normal for (A)'s sun-facing gate. Normal
+          // isn't bent by the sway (only position is), so the attribute is fine.
+          " vSway = sway;",
+          " vWorldNormal = normalize(mat3(modelMatrix * instanceMatrix) * normal);",
           "#else",
           " vCrownScale = 1.0;",
+          " vSway = 0.0;",
+          " vWorldNormal = normalize(mat3(modelMatrix) * normal);",
           "#endif",
         ].join("\n")
       )
@@ -409,7 +440,24 @@ function buildCrownMaterial(
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec3 uSunDir;\nuniform float uShimmer;\nuniform float uTranslucency;\nvarying vec3 vShimWP;\nvarying vec4 vShimSC;\nvarying float vCrownScale;"
+        [
+          "#include <common>",
+          "uniform vec3 uSunDir;",
+          "uniform float uShimmer;",
+          "uniform float uTranslucency;",
+          "uniform float uTime;",
+          "uniform float uLeafFlutter;",
+          "uniform float uLeafBright;",
+          "varying vec3 vShimWP;",
+          "varying vec4 vShimSC;",
+          "varying float vCrownScale;",
+          "varying float vSway;",
+          "varying vec3 vWorldNormal;",
+          // Cheap value noise (smoothed hash lattice) for the leaf twinkle —
+          // small, irregular specks instead of a clean rolling sine band.
+          "float leafHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }",
+          "float leafNoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(leafHash(i), leafHash(i + vec2(1.0, 0.0)), f.x), mix(leafHash(i + vec2(0.0, 1.0)), leafHash(i + vec2(1.0, 1.0)), f.x), f.y); }",
+        ].join("\n")
       )
       .replace(
         "#include <emissivemap_fragment>",
@@ -432,6 +480,27 @@ function buildCrownMaterial(
           "float trNear = 1.0 - smoothstep(120.0, 260.0, distance(cameraPosition, vShimWP));",
           "float trGate = max(trLarge, trNear) * clamp(uSunDir.y, 0.0, 1.0);",
           "totalEmissiveRadiance += uTranslucency * trBack * shimVis * trGate * vec3(0.45, 0.62, 0.30);",
+          // (A) Leaf twinkle — small, irregular bright specks where wind flips
+          // leaves to their pale underside. World-space value noise at ~1-2 m
+          // cells (two octaves + drift) keeps each speck leaf-clump-sized and
+          // noisy, NOT a tree-group-wide band; the vShimWP.y offset stops them
+          // forming vertical columns. Gated to SUNLIT (shadow), sun-facing
+          // (NdotL) leaves and faded with distance so far crowns don't crawl.
+          // Blends the crown's OWN colour toward a paler silver-sage + a faint
+          // glint, before lights_physical_fragment so it still shades naturally.
+          "vec2 leafUV = vShimWP.xz + vShimWP.y * vec2(0.7, 0.5);",
+          "float twk = leafNoise(leafUV * 1.2 + vec2(uTime * 0.7, uTime * 0.45)) + 0.6 * leafNoise(leafUV * 2.8 - vec2(uTime * 1.1, uTime * 0.8));",
+          "float sunFace = clamp(dot(normalize(vWorldNormal), uSunDir), 0.0, 1.0);",
+          "float twDist = 1.0 - 0.7 * smoothstep(150.0, 420.0, distance(cameraPosition, vShimWP));",
+          "float twinkle = smoothstep(0.95, 1.45, twk) * shimVis * clamp(uSunDir.y, 0.0, 1.0) * (0.3 + 0.7 * sunFace) * twDist;",
+          "float leafLuma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));",
+          "vec3 leafUnder = mix(diffuseColor.rgb, vec3(leafLuma * 1.25 + 0.06), 0.6);",
+          "diffuseColor.rgb = mix(diffuseColor.rgb, leafUnder, clamp(uLeafFlutter * twinkle, 0.0, 1.0));",
+          "totalEmissiveRadiance += uLeafFlutter * twinkle * 0.14 * vec3(0.90, 0.95, 0.60);",
+          // (B) Sway-coupled brightness — vSway is the SAME centred gust signal
+          // that bends the geometry, so the whole crown brightens leaning in and
+          // dims rocking back; centred so the average colour is unchanged.
+          "diffuseColor.rgb *= 1.0 + uLeafBright * vSway * 0.18;",
         ].join("\n")
       );
     if (heightFog) {
@@ -546,6 +615,8 @@ function buildTrees(
   shimmer: { value: number },
   uTime: { value: number },
   translucency: { value: number },
+  leafFlutter: { value: number },
+  leafBright: { value: number },
   heightFog?: HeightFogUniforms
 ): { cells: CellLod[]; meshes: InstancedMesh[] } {
   // Geometry + materials are shared across all chunks; only the per-chunk
@@ -559,6 +630,8 @@ function buildTrees(
     shimmer,
     uTime,
     translucency,
+    leafFlutter,
+    leafBright,
     heightFog
   );
 
@@ -744,6 +817,8 @@ export async function loadVegetation(
 
   const shimmer = { value: DEFAULT_TREE_SHIMMER };
   const translucency = { value: DEFAULT_TREE_TRANSLUCENCY };
+  const leafFlutter = { value: DEFAULT_TREE_LEAF_FLUTTER };
+  const leafBright = { value: DEFAULT_TREE_LEAF_BRIGHT };
   // By-reference clock for the crown wind sway; advanced once per frame by the
   // render loop (same elapsed seconds as the water ripple). One uniform write
   // per tile per frame.
@@ -772,6 +847,8 @@ export async function loadVegetation(
       shimmer,
       uTime,
       translucency,
+      leafFlutter,
+      leafBright,
       ctx.heightFog
     );
     group.add(...built.meshes);
@@ -785,6 +862,12 @@ export async function loadVegetation(
     group,
     setShimmer: (strength) => {
       shimmer.value = strength;
+    },
+    setLeafFlutter: (strength) => {
+      leafFlutter.value = strength;
+    },
+    setLeafBright: (strength) => {
+      leafBright.value = strength;
     },
     setMultiTuft: (enabled) => {
       multiTuft = enabled;

@@ -43,6 +43,8 @@ interface Snapshot {
     grainPct: number;
     groundShadePct?: number;
     heightFogPct?: number;
+    leafBrightPct?: number;
+    leafFlutterPct?: number;
     meadowNdviPct?: number;
     multiTuft?: boolean;
     rimPct?: number;
@@ -134,6 +136,12 @@ for (const file of snapshotFiles()) {
       }
       if (s.look.translucencyPct !== undefined) {
         api.setTreeTranslucency?.(s.look.translucencyPct / 100);
+      }
+      if (s.look.leafFlutterPct !== undefined) {
+        api.setTreeLeafFlutter?.(s.look.leafFlutterPct / 100);
+      }
+      if (s.look.leafBrightPct !== undefined) {
+        api.setTreeLeafBright?.(s.look.leafBrightPct / 100);
       }
       if (s.look.multiTuft !== undefined) {
         api.setTreeMultiTuft?.(s.look.multiTuft);

@@ -87,6 +87,10 @@ export interface PocDebugInfo {
   setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
+  /** Sets the (B) sway-coupled crown brightness (Windhelligkeit) strength (0..1). */
+  setTreeLeafBright?: (strength: number) => void;
+  /** Sets the (A) wind-gust leaf-flutter colour shimmer (Blattflimmern) strength (0..1). */
+  setTreeLeafFlutter?: (strength: number) => void;
   /** Toggles the rich multi-tuft crown near the camera (LOD). */
   setTreeMultiTuft?: (enabled: boolean) => void;
   /** Sets the backlit canopy shimmer strength (0..1). */

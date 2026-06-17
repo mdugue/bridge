@@ -177,34 +177,94 @@ mask "$WORK/m_rail.tif" ver03_l 8 "SPW='1000'"   # heavy rail only (tram bridges
 mask "$WORK/m_road.tif" ver01_l 8
 mask "$WORK/m_path.tif" ver02_l 5
 
-# --- 4. Bridge DECKS: ver06_f BWF=1800 polygons (+ names from ver06_l) ----------
-# One real deck footprint per span → a single clean slab volume in the renderer.
-BR_RAW="$WORK/bridge_raw.geojson"
+# --- 4a. OSM bridge:structure (arch / beam / cable-stayed) for arch synthesis ---
+# Basis-DLM carries no structure type, so tag each deck from OSM man_made=bridge
+# (ODbL). Prefer a block-wide cache, else a per-tile cache, else fetch (mirrors);
+# reproject to EPSG so the bridge step can match by centroid. Non-fatal → no tags.
+OSMBR="$WORK/osmbr_epsg.geojson"
+echo "$EMPTY" > "$OSMBR"
+brvalid() { [ -s "$1" ] && python3 -c 'import json,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception: sys.exit(1)
+sys.exit(0 if isinstance(d.get("elements"),list) and "remark" not in d else 1)' "$1" 2>/dev/null; }
+BRSRC="$(ls "$RAWDIR"/bridges_block_*.json 2>/dev/null | head -1)"
+if [ -z "${BRSRC:-}" ] || ! brvalid "$BRSRC"; then
+  BRSRC="$RAWDIR/bridges_${TILE}_${SUFFIX}.json"
+  if ! brvalid "$BRSRC" && command -v gdaltransform >/dev/null && command -v curl >/dev/null; then
+    read -r bS bW bN bE < <(printf '%s %s\n%s %s\n%s %s\n%s %s\n' \
+        "$XMIN" "$YMIN" "$XMAX" "$YMIN" "$XMIN" "$YMAX" "$XMAX" "$YMAX" \
+      | gdaltransform -s_srs EPSG:25833 -t_srs EPSG:4326 | python3 -c '
+import sys
+lo=[]; la=[]
+for ln in sys.stdin:
+    p=ln.split()
+    if len(p)>=2: lo.append(float(p[0])); la.append(float(p[1]))
+m=0.001
+print(min(la)-m, min(lo)-m, max(la)+m, max(lo)+m)')
+    BRQ="[out:json][timeout:180];way[\"man_made\"=\"bridge\"]($bS,$bW,$bN,$bE);out geom;"
+    for EP in "https://overpass-api.de/api/interpreter" \
+              "https://overpass.kumi.systems/api/interpreter" \
+              "https://overpass.private.coffee/api/interpreter"; do
+      curl -s -m 180 -G "$EP" --data-urlencode "data=$BRQ" -o "$BRSRC" || true
+      brvalid "$BRSRC" && break
+      rm -f "$BRSRC"
+    done
+  fi
+fi
+if [ -n "${BRSRC:-}" ] && brvalid "$BRSRC"; then
+  python3 - "$BRSRC" "$WORK/osmbr_wgs84.geojson" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+feats = []
+for e in d.get("elements", []):
+    t = e.get("tags", {})
+    g = e.get("geometry")
+    if e.get("type") != "way" or t.get("man_made") != "bridge" or not g or len(g) < 3:
+        continue
+    c = [[p["lon"], p["lat"]] for p in g]
+    if c[0] != c[-1]:
+        c.append(c[0])
+    feats.append({"type": "Feature",
+                  "properties": {"structure": t.get("bridge:structure") or ""},
+                  "geometry": {"type": "Polygon", "coordinates": [c]}})
+json.dump({"type": "FeatureCollection", "features": feats}, open(sys.argv[2], "w"))
+PY
+  ogr2ogr -q -f GeoJSON -lco RFC7946=NO -lco COORDINATE_PRECISION=2 \
+    -s_srs EPSG:4326 -t_srs EPSG:25833 "$OSMBR" "$WORK/osmbr_wgs84.geojson" 2>/dev/null \
+    || echo "$EMPTY" > "$OSMBR"
+fi
+
+# --- 4. Bridge DECKS: ver06_l centrelines (complete) + ver06_f footprints -------
+# ver06_l carries ALL bridges (rail/road/path) + names; ver06_f has clean AREA
+# footprints but ONLY for (mostly rail) major spans. So drive the set from the
+# complete ver06_l, snap each to a ver06_f polygon footprint where one matches
+# (real outline), else buffer the centreline by kind-width. One slab per deck.
+BR_LINES="$WORK/bridge_lines.geojson"
+if [ -f "$SRC/ver06_l.shp" ]; then
+  ogr2ogr -f GeoJSON -lco RFC7946=NO -lco COORDINATE_PRECISION=2 \
+    -spat "$XMIN" "$YMIN" "$XMAX" "$YMAX" -dialect SQLITE \
+    -sql "SELECT NAM AS name, geometry FROM ver06_l WHERE BWF='1800'" \
+    "$BR_LINES" "$SRC/ver06_l.shp" 2>/dev/null || true
+fi
+[ -f "$BR_LINES" ] || echo "$EMPTY" > "$BR_LINES"
+BR_POLY="$WORK/bridge_poly.geojson"
 if [ -f "$SRC/ver06_f.shp" ]; then
   ogr2ogr -f GeoJSON -lco RFC7946=NO -lco COORDINATE_PRECISION=2 \
     -spat "$XMIN" "$YMIN" "$XMAX" "$YMAX" -dialect SQLITE \
     -sql "SELECT geometry FROM ver06_f WHERE BWF='1800'" \
-    "$BR_RAW" "$SRC/ver06_f.shp" 2>/dev/null || true
+    "$BR_POLY" "$SRC/ver06_f.shp" 2>/dev/null || true
 fi
-[ -f "$BR_RAW" ] || echo "$EMPTY" > "$BR_RAW"
-# Named bridge centrelines (ver06_l) for a tolerant nearest-name join.
-BR_NAMES="$WORK/bridge_names.geojson"
-if [ -f "$SRC/ver06_l.shp" ]; then
-  ogr2ogr -f GeoJSON -lco RFC7946=NO -lco COORDINATE_PRECISION=2 \
-    -spat "$XMIN" "$YMIN" "$XMAX" "$YMAX" -dialect SQLITE \
-    -sql "SELECT NAM AS name, geometry FROM ver06_l WHERE BWF='1800' AND NAM IS NOT NULL" \
-    "$BR_NAMES" "$SRC/ver06_l.shp" 2>/dev/null || true
-fi
-[ -f "$BR_NAMES" ] || echo "$EMPTY" > "$BR_NAMES"
+[ -f "$BR_POLY" ] || echo "$EMPTY" > "$BR_POLY"
 
 BRIDGE="$OUTDIR/bridge_${TILE}_${SUFFIX}.geojson"
-python3 - "$BR_RAW" "$BR_NAMES" "$DGM" "$DOM" "$WORK/m_rail.tif" "$WORK/m_road.tif" \
-  "$WORK/m_path.tif" "$BRIDGE" "$XMIN" "$YMAX" <<'PY' || echo "$EMPTY" > "$BRIDGE"
+python3 - "$BR_LINES" "$BR_POLY" "$DGM" "$DOM" "$WORK/m_rail.tif" "$WORK/m_road.tif" \
+  "$WORK/m_path.tif" "$OSMBR" "$BRIDGE" "$XMIN" "$YMAX" <<'PY' || echo "$EMPTY" > "$BRIDGE"
 import json, math, sys
 from PIL import Image
-(raw_p, names_p, dgm_p, dom_p, rail_p, road_p, path_p, out_p, xmin, ymax) = (
+(lines_p, poly_p, dgm_p, dom_p, rail_p, road_p, path_p, osmbr_p, out_p, xmin, ymax) = (
     sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6],
-    sys.argv[7], sys.argv[8], float(sys.argv[9]), float(sys.argv[10]))
+    sys.argv[7], sys.argv[8], sys.argv[9], float(sys.argv[10]), float(sys.argv[11]))
+WIDTH = {"rail": 9.0, "road": 11.0, "path": 3.5, "other": 8.0}
 SIZE = 2000
 CAMBER = 0.012
 dgm = list(Image.open(dgm_p).getdata())
@@ -299,52 +359,119 @@ def deck_profile(ring):
         deck.append(round(h0 + (h1 - h0) * t + camber * math.sin(math.pi * t), 2))
     return deck
 
-# Named centrelines → representative midpoints for the nearest-name join.
-names = []
+def classify_line(coords):
+    """Kind from sampling the masks along the centreline (carries what the bridge
+    actually carries, unlike the deck-edge ring of a road bridge)."""
+    pts = []
+    for i in range(len(coords) - 1):
+        a, b = coords[i], coords[i + 1]
+        pts.append(a)
+        pts.append(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
+    pts.append(coords[-1])
+    return classify(pts)
+
+def buffer_line(coords, half):
+    """Offset a centreline to a deck polygon (left side + reversed right side)."""
+    n = len(coords)
+    left, right = [], []
+    for i in range(n):
+        a = coords[max(0, i - 1)]
+        b = coords[min(n - 1, i + 1)]
+        tx, ty = b[0] - a[0], b[1] - a[1]
+        L = math.hypot(tx, ty) or 1.0
+        nx, ny = -ty / L, tx / L
+        left.append((coords[i][0] + nx * half, coords[i][1] + ny * half))
+        right.append((coords[i][0] - nx * half, coords[i][1] - ny * half))
+    return left + right[::-1]
+
+# ver06_f deck footprints (real outlines; mostly the rail / major spans).
+polys = []
+for ft in json.load(open(poly_p)).get("features", []):
+    g = ft.get("geometry") or {}
+    if g.get("type") == "Polygon" and g.get("coordinates"):
+        ring = [(c[0], c[1]) for c in g["coordinates"][0] if len(c) >= 2]
+        if len(ring) >= 4:
+            cx = sum(x for x, _ in ring) / len(ring)
+            cy = sum(y for _, y in ring) / len(ring)
+            polys.append([ring, cx, cy, False])
+
+# OSM bridge:structure footprints (EPSG) → (cx, cy, structure) for nearest-match.
+osm_struct = []
 try:
-    for ft in json.load(open(names_p)).get("features", []):
+    for ft in json.load(open(osmbr_p)).get("features", []):
         g = ft.get("geometry") or {}
-        nm = (ft.get("properties") or {}).get("name")
-        cs = g.get("coordinates") or []
-        if g.get("type") == "LineString" and cs and nm:
-            mid = cs[len(cs) // 2]
-            names.append((nm, mid[0], mid[1]))
+        st = (ft.get("properties") or {}).get("structure") or ""
+        if g.get("type") == "Polygon" and g.get("coordinates") and st:
+            r = g["coordinates"][0]
+            cx = sum(p[0] for p in r) / len(r)
+            cy = sum(p[1] for p in r) / len(r)
+            osm_struct.append((cx, cy, st))
 except Exception:
     pass
 
-def nearest_name(cx, cy):
-    best, bd = None, 40.0 ** 2  # 40 m tolerance (centreline runs offset from deck)
-    for nm, nx, ny in names:
-        d = (nx - cx) ** 2 + (ny - cy) ** 2
+def structure_at(cx, cy):
+    best, bd = "", 60.0 ** 2  # nearest OSM bridge centroid within 60 m
+    for ox, oy, st in osm_struct:
+        d = (ox - cx) ** 2 + (oy - cy) ** 2
         if d < bd:
-            bd, best = d, nm
+            bd, best = d, st
     return best
 
 feats = []
-for ft in json.load(open(raw_p)).get("features", []):
-    g = ft.get("geometry") or {}
-    if g.get("type") != "Polygon" or not g.get("coordinates"):
-        continue
-    ring = [(c[0], c[1]) for c in g["coordinates"][0] if len(c) >= 2]
-    if len(ring) < 4:
-        continue
+
+def emit(ring, name, kind):
     deck = deck_profile(ring)
     if deck is None:
-        continue
+        return
     cx = sum(x for x, _ in ring) / len(ring)
     cy = sum(y for _, y in ring) / len(ring)
-    kind = classify(ring + [(cx, cy)])
     feats.append({
         "type": "Feature",
-        "properties": {"name": nearest_name(cx, cy), "kind": kind, "deck": deck},
+        "properties": {"name": name, "kind": kind,
+                       "structure": structure_at(cx, cy), "deck": deck},
         "geometry": {"type": "Polygon",
                      "coordinates": [[[round(x, 2), round(y, 2)] for x, y in ring]]},
     })
+
+# Drive from the COMPLETE ver06_l centreline set: snap each to a footprint where
+# one matches (real outline), else buffer it by kind-width. Names come straight
+# from ver06_l, so road/path bridges (which often lack a ver06_f polygon) survive.
+for ft in json.load(open(lines_p)).get("features", []):
+    g = ft.get("geometry") or {}
+    if g.get("type") != "LineString":
+        continue
+    coords = [(c[0], c[1]) for c in g["coordinates"] if len(c) >= 2]
+    if len(coords) < 2:
+        continue
+    name = (ft.get("properties") or {}).get("name") or None
+    kind = classify_line(coords)
+    mx = sum(x for x, _ in coords) / len(coords)
+    my = sum(y for _, y in coords) / len(coords)
+    best, bd = -1, 50.0 ** 2  # match line midpoint to an unused footprint centroid
+    for pi, p in enumerate(polys):
+        if p[3]:
+            continue
+        d = (p[1] - mx) ** 2 + (p[2] - my) ** 2
+        if d < bd:
+            bd, best = d, pi
+    if best >= 0:
+        polys[best][3] = True
+        emit(polys[best][0], name, kind)
+    else:
+        emit(buffer_line(coords, WIDTH[kind] / 2), name, kind)
+
+# Footprints with no matching centreline (unnamed rail spans) — keep them too.
+for p in polys:
+    if not p[3]:
+        emit(p[0], None, classify(p[0] + [(p[1], p[2])]))
+
 json.dump({"type": "FeatureCollection",
            "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::25833"}},
            "features": feats}, open(out_p, "w"))
 named = sum(1 for x in feats if x["properties"]["name"])
-print(f"wrote {out_p}: {len(feats)} bridge decks ({named} named)")
+from collections import Counter
+kinds = dict(Counter(x["properties"]["kind"] for x in feats))
+print(f"wrote {out_p}: {len(feats)} bridge decks ({named} named) {kinds}")
 PY
 
 # --- 5. OSM platforms (station structure) — non-fatal, cached like lamps -------

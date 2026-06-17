@@ -270,6 +270,10 @@ export interface CityWalkHandle {
   setPaperGrain: (intensity: number) => void;
   setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
+  /** (B) sway-coupled crown brightness (Windhelligkeit) strength 0..1 */
+  setTreeLeafBright: (strength: number) => void;
+  /** (A) wind-gust leaf-flutter colour shimmer (Blattflimmern) strength 0..1 */
+  setTreeLeafFlutter: (strength: number) => void;
   /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
   setTreeMultiTuft: (enabled: boolean) => void;
   /** backlit canopy shimmer strength 0..1 */
@@ -1084,6 +1088,16 @@ async function bootApp(
     setTreeTranslucency: (strength) => {
       for (const veg of vegControls) {
         veg.setTranslucency(strength);
+      }
+    },
+    setTreeLeafFlutter: (strength) => {
+      for (const veg of vegControls) {
+        veg.setLeafFlutter(strength);
+      }
+    },
+    setTreeLeafBright: (strength) => {
+      for (const veg of vegControls) {
+        veg.setLeafBright(strength);
       }
     },
     setTreeMultiTuft: (enabled) => {

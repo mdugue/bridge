@@ -78,11 +78,12 @@ flowchart TB
   OSM ==>|"point positions"| LAMP
 
   %% railway + bridges + platforms
-  DLM ==>|"ver03_l tracks (heavy rail)"| RAIL
+  DLM ==>|"ver03_f area (dissolved) = ballast<br/>+ ver03_l tracks (heavy rail)"| RAIL
   DGM -. "drape / lift onto deck" .-> RAIL
-  DLM ==>|"ver06_l BWF=1800 (named)"| BRG
+  DLM ==>|"ver06_l decks + ver06_f footprints"| BRG
   DGM ==>|"abutment deck height + piers"| BRG
   DOM -. "deck surface (viaducts)" .-> BRG
+  OSM -. "bridge:structure → arches" .-> BRG
   OSM ==>|"railway=platform polygons"| PLT
   DGM -. ground-clamp .-> PLT
 
@@ -103,8 +104,8 @@ flowchart TB
 | **Building detailing** | CityJSON attrs + `surfacetype` | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `city-layer.ts` `annotateBuildingDetail`, `visual-style.ts`, `lib/city/building-tint.ts`; bake `extract-roof-colour.sh` |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `extract-dlm.sh` + `extract-canopy.sh` + `extract-ndvi.sh` |
 | **Street lamps** | OSM | DGM1 (ground-clamp); gated off water + railway | baked by `scripts/extract-lamps.sh`; `lamp-layer.ts` |
-| **Railway tracks** | Basis-DLM `ver03_l` (heavy rail) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
-| **Bridges** | Basis-DLM `ver06_l` (BWF=1800) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
+| **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
+| **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Station platforms** | OSM `railway=platform` | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Minimap** | derived from tile bounds | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |

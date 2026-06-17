@@ -46,6 +46,8 @@ interface BridgeFeature {
     deck: number[];
     kind: "other" | "path" | "rail" | "road";
     name: string | null;
+    /** OSM bridge:structure (e.g. "arch", "beam", "beam;arch") for arch synthesis */
+    structure?: string | null;
   };
 }
 
@@ -92,6 +94,8 @@ const PIER_SPACING = 26; // distance between bridge piers (m)
 const PIER_MIN_GAP = 2.5; // only pier where the deck clears the ground by this (m)
 const PIER_HALF = 0.65; // pier column half-width (m)
 const PLATFORM_H = 0.55; // station platform height above ground (m)
+const ARCH_SPAN_M = 26; // target span between arch piers (m)
+const ARCH_MIN_RISE = 2.5; // min deck clearance to bother arching (else box piers)
 
 const COLORS = {
   ballast: 0x9a_8f_85, // warm grey-brown crushed stone
@@ -585,7 +589,16 @@ function buildBridges(
     const kind = f.properties.kind;
     addFootprint(tops[kind] ?? tops.other, ring, topY, DECK_DEPTH);
     addParapetWalls(stone, ring, topY);
-    addPiers(stone, ring, topY, ctx);
+    // Arch bridges (OSM bridge:structure ~ "arch") get spandrel arches spanning
+    // between piers; everything else gets plain box piers.
+    if (
+      (f.properties.structure ?? "").includes("arch") &&
+      addArches(stone, ring, topY, ctx)
+    ) {
+      // arches placed their own piers
+    } else {
+      addPiers(stone, ring, topY, ctx);
+    }
     if (kind === "rail") {
       let minX = Number.POSITIVE_INFINITY;
       let minZ = Number.POSITIVE_INFINITY;
@@ -634,6 +647,32 @@ function buildBridges(
   return { meshes, decks };
 }
 
+/** The two farthest-apart ring vertices (the deck's abutment ends) + their span. */
+function longAxis(pts: { x: number; z: number }[]): {
+  a: { x: number; z: number };
+  b: { x: number; z: number };
+  span: number;
+} {
+  let ai = 0;
+  let bi = 1;
+  let bd = -1;
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const d = (pts[i].x - pts[j].x) ** 2 + (pts[i].z - pts[j].z) ** 2;
+      if (d > bd) {
+        bd = d;
+        ai = i;
+        bi = j;
+      }
+    }
+  }
+  return {
+    a: pts[ai],
+    b: pts[bi],
+    span: Math.hypot(pts[bi].x - pts[ai].x, pts[bi].z - pts[ai].z),
+  };
+}
+
 /** Drops box piers from the deck underside to terrain along the deck's long axis,
  *  placed even over the river by interpolating ground between the abutments. */
 function addPiers(
@@ -680,6 +719,88 @@ function addPiers(
     }
     addColumn(acc, px, pz, ground, deckUnder, PIER_HALF);
   }
+}
+
+/**
+ * Spandrel-arch treatment for arch bridges (OSM `bridge:structure ~ "arch"`):
+ * along the deck's long axis, a vertical side wall on each edge whose BOTTOM
+ * follows a row of segmental arch intrados (high at each crown, springing low at
+ * the piers), carried on slim river piers. Reads as a masonry arch viaduct from
+ * the side. Returns false (→ caller falls back to box piers) when the deck
+ * doesn't clear the ground enough to be worth arching (a low/flat bridge).
+ */
+function addArches(
+  acc: Mesh3,
+  ring: Ring2,
+  topY: number[],
+  ctx: RailContext
+): boolean {
+  const { a, b, span } = longAxis(ring.pts);
+  if (span < 16) {
+    return false;
+  }
+  const axx = (b.x - a.x) / span;
+  const axz = (b.z - a.z) / span;
+  const pxu = -axz; // perpendicular unit
+  const pzu = axx;
+  let half = 0;
+  for (const p of ring.pts) {
+    half = Math.max(half, Math.abs((p.x - a.x) * pxu + (p.z - a.z) * pzu));
+  }
+  half = Math.max(half, 1.5);
+  const groundAt = (x: number, z: number) => {
+    const e = worldToEpsg({ x, z }, ctx.offset);
+    return ctx.heightAt(e.x, e.y);
+  };
+  const deckUnder = Math.min(...topY) - DECK_DEPTH;
+  const ga = groundAt(a.x, a.z) ?? deckUnder - 6;
+  const gb = groundAt(b.x, b.z) ?? deckUnder - 6;
+  const springY = Math.min(ga, gb) + 0.8;
+  if (deckUnder - springY < ARCH_MIN_RISE) {
+    return false;
+  }
+  const n = Math.min(Math.max(Math.round(span / ARCH_SPAN_M), 1), 8);
+  const segLen = span / n;
+  const rise = Math.min(segLen / 2, deckUnder - springY - 0.3);
+  const edge = (t: number, side: number) => ({
+    x: a.x + (b.x - a.x) * t + pxu * side * half,
+    z: a.z + (b.z - a.z) * t + pzu * side * half,
+  });
+  const intrados = (frac: number) => {
+    const dx = (frac - 0.5) * segLen;
+    return springY + Math.sqrt(Math.max(0, rise * rise - dx * dx));
+  };
+  const M = 10;
+  for (let k = 0; k < n; k++) {
+    for (const side of [1, -1]) {
+      for (let m = 0; m < M; m++) {
+        const f0 = m / M;
+        const f1 = (m + 1) / M;
+        const A = edge((k + f0) / n, side);
+        const B = edge((k + f1) / n, side);
+        quad(
+          acc,
+          [A.x, deckUnder, A.z],
+          [B.x, deckUnder, B.z],
+          [B.x, intrados(f1), B.z],
+          [A.x, intrados(f0), A.z],
+          [pxu * side, 0, pzu * side]
+        );
+      }
+    }
+    // River pier under each springing point (skip the bank abutments at k=0).
+    if (k > 0) {
+      const t = k / n;
+      const g =
+        groundAt(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t) ??
+        ga + (gb - ga) * t;
+      for (const side of [1, -1]) {
+        const e = edge(t, side);
+        addColumn(acc, e.x, e.z, g, springY + 0.3, PIER_HALF);
+      }
+    }
+  }
+  return true;
 }
 
 /** One merged ballast surface from the dissolved railway-area polygons. */
