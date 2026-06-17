@@ -18,7 +18,10 @@
       "Bash(bun test *)",
       "Bash(bunx playwright *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "WebFetch(domain:www.landesvermessung.sachsen.de)",
+      "Bash(grep -iE 'fetch|load|url|path|\\\\.json|\\\\.png|\\\\.tif|\\\\.geojson|`/')",
+      "Edit(/.claude/skills/city-walker/**)"
     ]
   },
   "hooks": {

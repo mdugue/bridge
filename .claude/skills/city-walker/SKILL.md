@@ -6,7 +6,13 @@ description: Project-specific guide to this 3D city-walker viewer — scene arch
 # City Walker — rendering, data & QA
 
 Stylized client-side 3D walk through Dresden from Saxon open geodata. Read
-`AGENTS.md` first for the high-level map; this skill is the deep reference.
+`AGENTS.md` first for the high-level map; this skill is the deep reference for
+*how it's built*. For *what maps to what* — the source→feature provenance
+diagram, the transformation ledger (active / experimental / planned /
+**discontinued**), and how to render other locations — see `docs/`
+(`docs/README.md`). **When you add, change, or drop a data→feature
+transformation, update `docs/transformations.md` + `docs/data-flow.md` as part of
+the change** (Definition of Done in `docs/README.md`).
 
 ## Scene architecture
 

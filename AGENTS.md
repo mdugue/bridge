@@ -61,6 +61,14 @@ any non-trivial rendering, data, or perf work. The `.claude/skills/threejs-*`
 skills are generic three.js references. There is no `SPEC.md`; these are the
 source of truth.
 
+- `docs/` — the **knowledge base** (what maps to what + status + portability):
+  [data-flow.md](docs/data-flow.md) (source→feature provenance diagram),
+  [transformations.md](docs/transformations.md) (the ledger of every
+  built/experimental/planned/**discontinued** transformation), and
+  [portability.md](docs/portability.md) (rendering other locations with
+  more/less data). Roles: AGENTS.md = orientation, skill = how it's built,
+  `docs/` = what maps to what. Start at [docs/README.md](docs/README.md).
+
 ## Coordinate system (read before touching geometry)
 
 Source data is **EPSG:25833** (ETRS89/UTM33), Z-up. A parent `world` group is
@@ -155,6 +163,10 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - **Conventional Commits** (`feat:`, `fix:`, `perf:`, `refactor:`…).
 - Commit hygiene: stage specific paths you changed; never sweep up the user's
   unrelated working-tree edits.
+- **Keep the knowledge base current.** Adding, altering, or dropping a
+  data→feature transformation isn't done until `docs/transformations.md` (with
+  the right status, incl. **why** for discontinued) and `docs/data-flow.md`
+  reflect it — see [docs/README.md](docs/README.md#keeping-these-docs-current).
 
 ## When in doubt, ask before
 
