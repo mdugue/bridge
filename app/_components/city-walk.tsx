@@ -9,11 +9,13 @@ import {
   ClipboardPasteIcon,
   CloudFogIcon,
   CopyIcon,
+  FootprintsIcon,
   FullscreenIcon,
   Gamepad2Icon,
   HammerIcon,
   HousePlusIcon,
   type LucideIcon,
+  PlaneIcon,
   SlidersHorizontalIcon,
   SparklesIcon,
   SunIcon,
@@ -95,11 +97,13 @@ import {
   type FocusMode,
 } from "./post-stack";
 import type { SunState } from "./sun-rig";
+import { DEFAULT_MEADOW_NDVI } from "./terrain-layer";
 import {
   DEFAULT_TREE_MULTITUFT,
   DEFAULT_TREE_SHIMMER,
   DEFAULT_TREE_TRANSLUCENCY,
 } from "./vegetation-layer";
+import { SCENIC_VIEWS } from "./viewpoints";
 import { VirtualJoystick } from "./virtual-joystick";
 import {
   type CityStyleId,
@@ -109,6 +113,7 @@ import {
   DEFAULT_BUILDING_GROUND_SHADE,
   DEFAULT_BUILDING_RIM,
   DEFAULT_BUILDING_ROOF_TINT,
+  DEFAULT_BUILDING_ROOF_VIBRANCE,
   DEFAULT_BUILDING_ROUGHNESS,
   DEFAULT_BUILDING_TINT,
   DEFAULT_CLAY_TRANSPARENCY,
@@ -117,6 +122,8 @@ import {
 import { DEFAULT_WATER_MIST } from "./water-layer";
 
 interface Props {
+  /** Optional baked bridge-deck GeoJSON for the primary tile */
+  bridgeSrc?: string;
   /** URL of the CityJSON tile, served from /public */
   citySrc: string;
   /** URL of the DGM GeoTIFF */
@@ -131,6 +138,12 @@ interface Props {
   lampsSrc?: string;
   /** Optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
   landcoverSrc?: string;
+  /** Optional OSM station-platform GeoJSON (ODbL) for the primary tile */
+  platformSrc?: string;
+  /** Optional baked dissolved ballast-area GeoJSON for the primary tile */
+  railareaSrc?: string;
+  /** Optional baked railway-track GeoJSON (Basis-DLM) for the primary tile */
+  railSrc?: string;
   /** Optional ATKIS veg04 GeoJSON for hedges + tree rows */
   vegetationSrc?: string;
 }
@@ -187,9 +200,11 @@ interface Snapshot {
     grainPct: number;
     groundShadePct?: number;
     heightFogPct?: number;
+    meadowNdviPct?: number;
     multiTuft?: boolean;
     rimPct?: number;
     roofTintPct?: number;
+    roofVibrancePct?: number;
     roughnessPct?: number;
     shimmerPct?: number;
     style: CityStyleId;
@@ -419,6 +434,47 @@ function FocusControls({
   );
 }
 
+/**
+ * Quick-jump buttons that glide the camera to curated Dresden vantages. The
+ * mode icon previews where you land: a plane for the aerial flights, footprints
+ * for the ones that set you down on the ground.
+ */
+function ScenicViews({
+  handleRef,
+}: {
+  handleRef: RefObject<CityWalkHandle | null>;
+}) {
+  return (
+    <Field>
+      <FieldLabel>Scenic views</FieldLabel>
+      <div className="grid grid-cols-2 gap-2">
+        {SCENIC_VIEWS.map((view) => (
+          <Button
+            className="justify-start"
+            key={view.id}
+            onClick={() => handleRef.current?.flyToViewpoint(view)}
+            size="sm"
+            title={view.description}
+            type="button"
+            variant="secondary"
+          >
+            {view.mode === "fly" ? (
+              <PlaneIcon data-icon="inline-start" />
+            ) : (
+              <FootprintsIcon data-icon="inline-start" />
+            )}
+            <span className="truncate">{view.label}</span>
+          </Button>
+        ))}
+      </div>
+      <FieldDescription>
+        Glide the camera to a curated vantage — the icon shows whether you
+        arrive flying or on foot.
+      </FieldDescription>
+    </Field>
+  );
+}
+
 interface SceneControlsProps {
   applySnapshot: () => void;
   bands: number;
@@ -438,11 +494,13 @@ interface SceneControlsProps {
   handleRef: RefObject<CityWalkHandle | null>;
   heightFog: number;
   insertBuilding: () => void;
+  meadowNdvi: number;
   minutes: number;
   mode: MovementMode;
   multiTuft: boolean;
   rim: number;
   roofTint: number;
+  roofVibrance: number;
   roughness: number;
   setBands: Dispatch<SetStateAction<number>>;
   setContact: Dispatch<SetStateAction<number>>;
@@ -456,9 +514,11 @@ interface SceneControlsProps {
   setGrain: Dispatch<SetStateAction<number>>;
   setGroundShade: Dispatch<SetStateAction<number>>;
   setHeightFog: Dispatch<SetStateAction<number>>;
+  setMeadowNdvi: Dispatch<SetStateAction<number>>;
   setMultiTuft: Dispatch<SetStateAction<boolean>>;
   setRim: Dispatch<SetStateAction<number>>;
   setRoofTint: Dispatch<SetStateAction<number>>;
+  setRoofVibrance: Dispatch<SetStateAction<number>>;
   setRoughness: Dispatch<SetStateAction<number>>;
   setShimmer: Dispatch<SetStateAction<number>>;
   setSnapshotText: Dispatch<SetStateAction<string>>;
@@ -503,11 +563,13 @@ function SceneControls({
   handleRef,
   heightFog,
   insertBuilding,
+  meadowNdvi,
   minutes,
   mode,
   multiTuft,
   rim,
   roofTint,
+  roofVibrance,
   roughness,
   setBands,
   setContact,
@@ -521,9 +583,11 @@ function SceneControls({
   setGrain,
   setGroundShade,
   setHeightFog,
+  setMeadowNdvi,
   setMultiTuft,
   setRim,
   setRoofTint,
+  setRoofVibrance,
   setRoughness,
   setShimmer,
   setSnapshotText,
@@ -727,6 +791,16 @@ function SceneControls({
           value={roofTint}
         />
         <PctSlider
+          description="Lift roof colour vividness, keeping each roof's true hue — copper-green, terracotta & slate alike (0 = raw aerial)"
+          id="building-roof-vibrance"
+          label="Dachsättigung"
+          onChange={(n) => {
+            setRoofVibrance(n);
+            handleRef.current?.setBuildingRoofVibrance(n / 100);
+          }}
+          value={roofVibrance}
+        />
+        <PctSlider
           description="Soft cornice line where wall meets roof"
           id="building-eave"
           label="Traufkante"
@@ -759,6 +833,16 @@ function SceneControls({
       </ControlGroup>
 
       <ControlGroup icon={TreesIcon} title="Vegetation">
+        <PctSlider
+          description="Tint meadows lush-green↔dry from the DOP infrared (NDVI)"
+          id="meadow-ndvi"
+          label="Wiesenfärbung"
+          onChange={(n) => {
+            setMeadowNdvi(n);
+            handleRef.current?.setMeadowNdvi(n / 100);
+          }}
+          value={meadowNdvi}
+        />
         <PctSlider
           id="tree-shimmer"
           label="Gegenlicht-Schimmer"
@@ -873,6 +957,7 @@ function SceneControls({
       </ControlGroup>
 
       <ControlGroup icon={CameraIcon} title="Snapshot">
+        <ScenicViews handleRef={handleRef} />
         <Field>
           <FieldLabel htmlFor="snapshot">Snapshot JSON</FieldLabel>
           <div className="flex gap-2">
@@ -923,6 +1008,10 @@ export default function CityWalk({
   landcoverSrc,
   vegetationSrc,
   lampsSrc,
+  railSrc,
+  bridgeSrc,
+  railareaSrc,
+  platformSrc,
   extraTiles,
   insertedModelUrl,
 }: Props) {
@@ -963,6 +1052,9 @@ export default function CityWalk({
   const [heightFog, setHeightFog] = useState(
     Math.round(DEFAULT_HEIGHT_FOG * 100)
   );
+  const [meadowNdvi, setMeadowNdvi] = useState(
+    Math.round(DEFAULT_MEADOW_NDVI * 100)
+  );
   const [waterMist, setWaterMist] = useState(
     Math.round(DEFAULT_WATER_MIST * 100)
   );
@@ -974,6 +1066,9 @@ export default function CityWalk({
   const [tint, setTint] = useState(Math.round(DEFAULT_BUILDING_TINT * 100));
   const [roofTint, setRoofTint] = useState(
     Math.round(DEFAULT_BUILDING_ROOF_TINT * 100)
+  );
+  const [roofVibrance, setRoofVibrance] = useState(
+    Math.round(DEFAULT_BUILDING_ROOF_VIBRANCE * 100)
   );
   const [eave, setEave] = useState(Math.round(DEFAULT_BUILDING_EAVE * 100));
   const [duskGlow, setDuskGlow] = useState(
@@ -1023,6 +1118,10 @@ export default function CityWalk({
       landcoverSrc,
       vegetationSrc,
       lampsSrc,
+      railSrc,
+      bridgeSrc,
+      railareaSrc,
+      platformSrc,
       extraTiles,
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
@@ -1073,6 +1172,7 @@ export default function CityWalk({
         updatePocDebug({
           offset: h.offset,
           flyTo: h.flyTo,
+          flyToViewpoint: h.flyToViewpoint,
           demolishAtCrosshair: h.demolishAtCrosshair,
           getPose: h.getPose,
           getCameraState: h.getCameraState,
@@ -1090,12 +1190,14 @@ export default function CityWalk({
           setContactShadows: h.setContactShadows,
           setPaperGrain: h.setPaperGrain,
           setHeightFog: h.setHeightFog,
+          setMeadowNdvi: h.setMeadowNdvi,
           setWaterMist: h.setWaterMist,
           setBuildingGroundShade: h.setBuildingGroundShade,
           setBuildingBands: h.setBuildingBands,
           setBuildingRim: h.setBuildingRim,
           setBuildingTint: h.setBuildingTint,
           setBuildingRoofTint: h.setBuildingRoofTint,
+          setBuildingRoofVibrance: h.setBuildingRoofVibrance,
           setBuildingEave: h.setBuildingEave,
           setBuildingDuskGlow: h.setBuildingDuskGlow,
           setBuildingRoughness: h.setBuildingRoughness,
@@ -1138,6 +1240,10 @@ export default function CityWalk({
     landcoverSrc,
     vegetationSrc,
     lampsSrc,
+    railSrc,
+    bridgeSrc,
+    railareaSrc,
+    platformSrc,
     extraTiles,
     insertedModelUrl,
   ]);
@@ -1174,6 +1280,7 @@ export default function CityWalk({
         contactPct: contact,
         grainPct: grain,
         heightFogPct: heightFog,
+        meadowNdviPct: meadowNdvi,
         waterMistPct: waterMist,
         dof,
         focusMode,
@@ -1183,6 +1290,7 @@ export default function CityWalk({
         rimPct: rim,
         tintPct: tint,
         roofTintPct: roofTint,
+        roofVibrancePct: roofVibrance,
         eavePct: eave,
         duskGlowPct: duskGlow,
         roughnessPct: roughness,
@@ -1210,12 +1318,14 @@ export default function CityWalk({
       (n: number) => void,
     ][] = [
       [look.heightFogPct, setHeightFog, h.setHeightFog],
+      [look.meadowNdviPct, setMeadowNdvi, h.setMeadowNdvi],
       [look.waterMistPct, setWaterMist, h.setWaterMist],
       [look.groundShadePct, setGroundShade, h.setBuildingGroundShade],
       [look.bandsPct, setBands, h.setBuildingBands],
       [look.rimPct, setRim, h.setBuildingRim],
       [look.tintPct, setTint, h.setBuildingTint],
       [look.roofTintPct, setRoofTint, h.setBuildingRoofTint],
+      [look.roofVibrancePct, setRoofVibrance, h.setBuildingRoofVibrance],
       [look.eavePct, setEave, h.setBuildingEave],
       [look.duskGlowPct, setDuskGlow, h.setBuildingDuskGlow],
       [look.roughnessPct, setRoughness, h.setBuildingRoughness],
@@ -1322,11 +1432,13 @@ export default function CityWalk({
       handleRef={handleRef}
       heightFog={heightFog}
       insertBuilding={insertBuilding}
+      meadowNdvi={meadowNdvi}
       minutes={minutes}
       mode={mode}
       multiTuft={multiTuft}
       rim={rim}
       roofTint={roofTint}
+      roofVibrance={roofVibrance}
       roughness={roughness}
       setBands={setBands}
       setContact={setContact}
@@ -1340,9 +1452,11 @@ export default function CityWalk({
       setGrain={setGrain}
       setGroundShade={setGroundShade}
       setHeightFog={setHeightFog}
+      setMeadowNdvi={setMeadowNdvi}
       setMultiTuft={setMultiTuft}
       setRim={setRim}
       setRoofTint={setRoofTint}
+      setRoofVibrance={setRoofVibrance}
       setRoughness={setRoughness}
       setShimmer={setShimmer}
       setSnapshotText={setSnapshotText}

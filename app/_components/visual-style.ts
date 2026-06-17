@@ -28,11 +28,11 @@ export const DEFAULT_BUILDING_TINT = 0.6;
 /** Roof colour mix (real DOP colour, else synth terracotta/slate). Roofs carry
  *  more colour than walls — they're the strongest readability cue. */
 export const DEFAULT_BUILDING_ROOF_TINT = 0.7;
-/** Roof warmth: how far the real DOP roof colour is pulled back toward the
- *  synthesized terracotta/slate palette (0 = raw DOP, truthful but cooler;
- *  1 = full synth warmth). A partial blend keeps real material variation while
- *  recovering the old-town glow. */
-export const DEFAULT_BUILDING_ROOF_WARMTH = 0.5;
+/** Roof vividness ("Dachsättigung"): hue-preserving chroma boost on the real DOP
+ *  roof colour (0 = raw DOP, drab/hazy; 1 = full lift). Keeps each roof's TRUE
+ *  hue — copper-green stays green, terracotta red, slate cool — and lifts the
+ *  dull/hazy ones most, curing drabness without homogenising toward terracotta. */
+export const DEFAULT_BUILDING_ROOF_VIBRANCE = 0.5;
 /** Eave (Traufkante) cornice-stroke strength at the wall/roof boundary. */
 export const DEFAULT_BUILDING_EAVE = 0.35;
 /** Warm dusk interior glow on commercial/public buildings (gated by nightFactor). */
@@ -53,8 +53,8 @@ export interface ClayDetailUniforms {
   uRim: { value: number };
   /** roof colour mix strength */
   uRoofTint: { value: number };
-  /** roof warmth: blend real DOP colour back toward the synth palette */
-  uRoofWarmth: { value: number };
+  /** roof vividness (Dachsättigung): hue-preserving chroma boost on DOP colour */
+  uRoofVibrance: { value: number };
   /** per-building roughness jitter strength */
   uRough: { value: number };
   uTint: { value: number };
@@ -102,7 +102,7 @@ function addClayDetail(
     shader.uniforms.uRim = uniforms.uRim;
     shader.uniforms.uTint = uniforms.uTint;
     shader.uniforms.uRoofTint = uniforms.uRoofTint;
-    shader.uniforms.uRoofWarmth = uniforms.uRoofWarmth;
+    shader.uniforms.uRoofVibrance = uniforms.uRoofVibrance;
     shader.uniforms.uEave = uniforms.uEave;
     shader.uniforms.uDuskGlow = uniforms.uDuskGlow;
     shader.uniforms.uNight = uniforms.uNight;
@@ -110,7 +110,7 @@ function addClayDetail(
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float aBaseZ;\nattribute vec3 aTint;\nattribute vec3 aRoofWarm;\nattribute vec4 aBuild;\nattribute float aRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec3 vClayRoofWarm;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+        "#include <common>\nattribute float aBaseZ;\nattribute vec3 aTint;\nattribute vec4 aBuild;\nattribute float aRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
       )
       .replace(
         "#include <beginnormal_vertex>",
@@ -118,12 +118,12 @@ function addClayDetail(
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n vClayTint = aTint;\n vClayRoofWarm = aRoofWarm;\n vClayBuild = aBuild;\n vClayRough = aRough;"
+        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n vClayTint = aTint;\n vClayBuild = aBuild;\n vClayRough = aRough;"
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofWarmth;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec3 vClayRoofWarm;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -141,16 +141,19 @@ function addClayDetail(
           // aTint = attribute absent → keep the base, don't mix toward black.
           "float clayIsRoof = step(0.5, vClayBuild.x);",
           "float clayTintMix = mix(uTint, uRoofTint, clayIsRoof);",
-          // Dachwärme: warm the real DOP roof colour toward the synthesized
-          // terracotta/slate target (vClayRoofWarm) by uRoofWarmth — roofs only
-          // (clayIsRoof gates it). Value-preserving: scale the target to the DOP
-          // roof's OWN luminance first, so a dark roof stays dark and real
-          // brightness/material variation survives the warming (a flat lerp would
-          // crush it). No DOP colour => both are the synth value => a no-op.
-          "vec3 clayLumW = vec3(0.299, 0.587, 0.114);",
-          "float clayLumDop = dot(vClayTint, clayLumW);",
-          "vec3 clayWarmTgt = vClayRoofWarm * (clayLumDop / max(dot(vClayRoofWarm, clayLumW), 1e-3));",
-          "vec3 clayCol = mix(vClayTint, clayWarmTgt, uRoofWarmth * clayIsRoof);",
+          // Dachsättigung (uRoofVibrance): lift the REAL roof colour into a confident
+          // watercolour register WITHOUT choosing a target hue — copper-green stays
+          // green, terracotta red, slate cool. Hue-preserving chroma boost around
+          // the grey axis (vibrance: dull/hazy roofs lifted most, already-vivid
+          // ones barely, so nothing blows out), plus a tiny warm nudge on the
+          // muddy-grey roofs only (the audited cool haze cast). Roofs only; 0 = raw.
+          "float clayRoofL = dot(vClayTint, vec3(0.299, 0.587, 0.114));",
+          "vec3 clayRoofC = vClayTint - clayRoofL;",
+          "float clayDull = 1.0 - smoothstep(0.04, 0.30, length(clayRoofC));",
+          "float clayVib = uRoofVibrance * clayDull;",
+          "vec3 clayRoofCol = clayRoofL + clayRoofC * (1.0 + 2.4 * clayVib);",
+          "clayRoofCol += vec3(0.018, 0.004, -0.014) * uRoofVibrance * clayDull;",
+          "vec3 clayCol = mix(vClayTint, clamp(clayRoofCol, 0.0, 1.0), clayIsRoof);",
           "if (dot(vClayTint, vClayTint) > 1e-4) {",
           "  diffuseColor.rgb = mix(diffuseColor.rgb, clayCol, clayTintMix);",
           "}",
@@ -228,7 +231,7 @@ export function createStyleResources(
     uRim: { value: DEFAULT_BUILDING_RIM },
     uTint: { value: DEFAULT_BUILDING_TINT },
     uRoofTint: { value: DEFAULT_BUILDING_ROOF_TINT },
-    uRoofWarmth: { value: DEFAULT_BUILDING_ROOF_WARMTH },
+    uRoofVibrance: { value: DEFAULT_BUILDING_ROOF_VIBRANCE },
     uEave: { value: DEFAULT_BUILDING_EAVE },
     uDuskGlow: { value: DEFAULT_BUILDING_DUSK_GLOW },
     uNight: night ?? { value: 0 },

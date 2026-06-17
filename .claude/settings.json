@@ -21,7 +21,8 @@
       "Bash(git commit *)",
       "WebFetch(domain:www.landesvermessung.sachsen.de)",
       "Bash(grep -iE 'fetch|load|url|path|\\\\.json|\\\\.png|\\\\.tif|\\\\.geojson|`/')",
-      "Edit(/.claude/skills/city-walker/**)"
+      "Edit(/.claude/skills/city-walker/**)",
+      "Bash(ogrinfo -ro -q ver06_l.shp -spat 410000 5656000 414000 5660000 -where 'NAM='\\\\''Marienbrücke'\\\\''' ver06_l)"
     ]
   },
   "hooks": {

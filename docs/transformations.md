@@ -23,6 +23,12 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 - **Surface splatmap** — Basis-DLM land-cover → 4096² RGBA PNG (RGB = pastel
   palette per class, A = water coverage), sampled with anisotropy 16.
   `extract-dlm.sh` → `terrain-layer.ts`.
+- **Meadow NDVI tint** (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
+  DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
+  shifts the pastel sage lush deep-green↔dry hay. In the terrain fragment shader
+  (`uNdvi`/`uMeadowNdvi`, gated by the class raster `grMeadow`), HUD slider
+  *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
+  flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
 - **Water** — DLM alpha (water mask, `smoothstep`ed shoreline) + DGM1 geometry +
   animated normal wobble. `water-layer.ts`.
 - **Buildings** — CityJSON LoD2 → one merged mesh/tile, per-vertex `objectid`;
@@ -40,8 +46,15 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
   terracotta pitched / slate flat). Bake: `scripts/extract-roof-colour.sh`.
-  *Open tuning:* raw DOP is truthful but cooler/greyer than the romantic synth
-  palette — a warmth blend toward terracotta is the likely sweet spot (see 🧪).
+- **Roof vividness** (*Dachsättigung*) — raw DOP reads drab/hazy (audited: 38 %
+  near-grey, mean R−B slightly negative). `uRoofVibrance` (default **0.5**, HUD
+  slider *Dachsättigung*) applies a **hue-preserving chroma
+  boost**: it lifts each roof's saturation around the grey axis, weighted so
+  dull/hazy roofs lift most and vivid ones barely (nothing blows out), plus a
+  tiny warm nudge on the muddy greys only. **Keeps each roof's TRUE hue** —
+  copper-green stays green, terracotta red, slate cool — curing drabness without
+  homogenising toward terracotta. *(Rejected: blending toward a terracotta target
+  — it destroyed the ~187 genuine copper-patina-green roofs the DOP captured.)*
 - **Storey bands** (*Höhenlinien*) — band spacing from `storeyHeight(measuredHeight)`
   (`storeysAboveGround` is only ~4 % populated, so derived).
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
@@ -60,11 +73,39 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 - **NDVI crown colour** — per-tree DOP greenness (`ndvi_<tile>.png`, sampled on
   the CPU at placement) shifts the crown dry pale-sage → lush deep green.
   `extract-ndvi.sh` → `vegetation-layer.ts` `crownColor`; falls back to the
-  hash-only sage when no NDVI raster (graceful — see portability).
+  hash-only sage when no NDVI raster (graceful — see portability). Sampled with a
+  **5×5 footprint max** + a remap recentred on the low NDVI median: the raster is
+  ~2 m/px and median-zero, so a single-pixel sample left ~95 % of crowns reading
+  "dry" (invisible); the footprint max + recentre make lush↔dry read clearly.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
   **multi-tuft crown LOD** (rich near / cheap icosphere far, per-chunk distance);
   **backlight shimmer** (one shadow-gated sample, far cheaper than transmission).
 - **Street lamps** — OSM lamp points → instanced lamp posts (ODbL). `extract-lamps.sh`.
+  Gated off **water (8) and railway (5)** land-cover so no poles stand in the
+  Elbe or the track bed (the rail corridor is now its own layer).
+
+### Railway & bridges
+All baked by `scripts/extract-rail.sh`, built in `app/_components/rail-layer.ts`
+(Y-up scene, like vegetation/lamps). Replaces the old "brown smear" — the
+railway and bridges used to exist only as flat land-cover colour on the DGM.
+- **Railway tracks** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`;
+  trams `SPW=3000`/`BKT=1201` are excluded — they run embedded in the street, not
+  on ballast). Ballast-bed ribbon + steel rails (a pair per track, count from
+  `GLS`), draped on the DGM and **lifted onto a rail bridge's deck** where they
+  cross one. Railway splat class recoloured dusty-mauve → **ballast warm-grey**
+  (`extract-dlm.sh` + terrain shader fallback) since tracks now sit on top.
+- **Bridge decks** — Basis-DLM `ver06_l` (`BWF=1800`, named: Marien-/Albert-/
+  Augustusbrücke …). Centreline buffered to a deck (width by **kind**), with edge
+  fascia, parapets, midspan camber and **piers** dropped to terrain. Deck height
+  = abutment-to-abutment ramp from **DGM1**, lifted to the **DOM1** surface where
+  it rises above (viaducts) — so Elbe bridges sit above the water instead of
+  sinking in. **Kind** (rail/road/path) is derived by rasterising the rail/road/
+  path networks and sampling them along the centreline (Basis-DLM doesn't tag
+  what a bridge carries). **Source preference:** Basis-DLM geometry + names; OSM
+  is the portable fallback (see portability.md).
+- **Station platforms** — OSM `railway=platform` (ODbL) → triangulated flat slabs
+  (`ShapeUtils.triangulateShape`), clamped to terrain. The OSM half of the blend
+  (Basis-DLM has no platform geometry); absent/empty when Overpass is unreachable.
 
 ### Lighting
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
@@ -75,12 +116,6 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 
 ## 🧪 Experimental
 
-- **Roof-colour warmth blend** — raw DOP roof colour (shipped, ✅ above) reads
-  truthful but cooler/drabber than the synth terracotta palette. A blend (DOP
-  variation pulled ~⅓ toward the terracotta family), ideally a live HUD slider
-  (0 = raw DOP ↔ 1 = full synth warmth), would recover old-town warmth while
-  keeping real material variation. **Decision pending** user review of the A/B
-  (`shots/feat_aerial_day.png` vs `…_PREV.png`).
 - **DOP-lean caveat (recorded):** standard DOP has building lean (tall roofs
   displaced over facades). Mitigated in the bake by eroding the roof footprint
   inward + a robust median; revisit with true-orthophotos if available.
@@ -92,10 +127,9 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 Ranked roughly by impact-vs-effort (full rationale lives in chat history / the
 research that produced them):
 
-1. **DOP NDVI — density & meadow** *(crown colour now ✅ active above)* — extend
-   the baked `ndvi_<tile>.png` to also drive tree placement **density** and
-   **meadow/grass tinting** in the terrain splat. The crown-colour slice shipped;
-   these two remain.
+1. **DOP NDVI tree-placement density** — *(crown colour + meadow tint now ✅
+   active)* — the remaining NDVI use: thin/thicken canopy placement by local NDVI
+   so sparse/stressed areas get fewer trees. Lower priority than the two shipped.
 2. **Stylized DOP ground-drape** — posterized, desaturated DOP blended over
    terrain past ~150 m for far-distance texture. *Aesthetic risk* — prototype
    behind a slider, judge on GPU before committing.

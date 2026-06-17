@@ -46,6 +46,12 @@ const optionalCopies: [string, string][] = TILES.flatMap((tile) => [
   [`data/dlm/lamps_${tile}.geojson`, `public/data/lamps_${tile}.geojson`],
   [`data/dop/roofcolor_${tile}.json`, `public/data/roofcolor_${tile}.json`],
   [`data/dlm/ndvi_${tile}.png`, `public/data/ndvi_${tile}.png`],
+  // Railway tracks + bridge decks (Basis-DLM) and OSM station platforms (ODbL),
+  // baked by scripts/extract-rail.sh.
+  [`data/dlm/rail_${tile}.geojson`, `public/data/rail_${tile}.geojson`],
+  [`data/dlm/bridge_${tile}.geojson`, `public/data/bridge_${tile}.geojson`],
+  [`data/dlm/railarea_${tile}.geojson`, `public/data/railarea_${tile}.geojson`],
+  [`data/dlm/platform_${tile}.geojson`, `public/data/platform_${tile}.geojson`],
 ]);
 
 for (const [src, dest] of copies) {

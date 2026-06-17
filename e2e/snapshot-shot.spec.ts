@@ -43,9 +43,11 @@ interface Snapshot {
     grainPct: number;
     groundShadePct?: number;
     heightFogPct?: number;
+    meadowNdviPct?: number;
     multiTuft?: boolean;
     rimPct?: number;
     roofTintPct?: number;
+    roofVibrancePct?: number;
     roughnessPct?: number;
     shimmerPct?: number;
     style: string;
@@ -115,6 +117,9 @@ for (const file of snapshotFiles()) {
       if (s.look.roofTintPct !== undefined) {
         api.setBuildingRoofTint?.(s.look.roofTintPct / 100);
       }
+      if (s.look.roofVibrancePct !== undefined) {
+        api.setBuildingRoofVibrance?.(s.look.roofVibrancePct / 100);
+      }
       if (s.look.eavePct !== undefined) {
         api.setBuildingEave?.(s.look.eavePct / 100);
       }
@@ -135,6 +140,9 @@ for (const file of snapshotFiles()) {
       }
       if (s.look.heightFogPct !== undefined) {
         api.setHeightFog?.(s.look.heightFogPct / 100);
+      }
+      if (s.look.meadowNdviPct !== undefined) {
+        api.setMeadowNdvi?.(s.look.meadowNdviPct / 100);
       }
       if (s.look.waterMistPct !== undefined) {
         api.setWaterMist?.(s.look.waterMistPct / 100);

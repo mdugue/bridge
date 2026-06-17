@@ -148,7 +148,7 @@ PAL = {
     2: (150, 176, 138),  # forest      muted moss
     3: (175, 195, 158),  # copse       light moss
     4: (228, 219, 203),  # built-up    warm pale clay
-    5: (197, 183, 178),  # railway     dusty mauve
+    5: (178, 169, 160),  # railway     warm ballast grey (tracks/decks drawn on top)
     6: (224, 205, 168),  # path        pale warm sand
     7: (200, 200, 206),  # road        soft grey-lavender
     8: (164, 192, 209),  # water       dusty blue

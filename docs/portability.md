@@ -19,9 +19,9 @@ For each source: its role, and what the dependent feature does when the source i
 |---|---|---|---|---|
 | **CityJSON LoD2** | building geometry + attrs | fall back to **OSM building footprints** extruded by `building:levels`/height tag → flat-roof boxes | **LoD1** (boxes, no roof shape): roof colour → flat-roof slate; eave = box top; storey bands still work from height | **LoD3 / textured**: could use real roof geometry + textures |
 | **DGM1** | terrain + ground-clamp | **flat plane** at a constant elevation; everything clamps to y=0 | coarser DEM (e.g. 10–30 m SRTM): smoother terrain, same pipeline | finer/derived (breaklines): sharper riverbanks |
-| **DOM1** | canopy heights (nDOM) | trees from row data only, at **default heights**; no canopy fill | coarser nDOM: blockier canopy placement | point-cloud per-tree height (see below) |
-| **Basis-DLM** | surface colours + veg rows + water mask + tree gate | single flat ground colour; **OSM `landuse`/`natural`/`water`** polygons substitute for surfaces, water, and forest; no road gate → gate trees on OSM roads | regional DLM variant: remap class ids in `extract-dlm.sh` palette | — |
-| **OSM** | street lamps (+ universal fallback for footprints/water/landuse) | no lamps; the other fallbacks above go away too | — | denser tags → richer POI/lamps |
+| **DOM1** | canopy heights (nDOM) + **bridge deck surface** | trees from row data only, at **default heights**; bridge decks fall back to the DGM abutment ramp (no viaduct lift) | coarser nDOM: blockier canopy placement | point-cloud per-tree height (see below) |
+| **Basis-DLM** | surface colours + veg rows + water mask + tree gate + **rail tracks + bridge centrelines** | single flat ground colour; **OSM `landuse`/`natural`/`water`** polygons substitute for surfaces; **OSM `railway=rail` + `man_made=bridge`/`bridge=yes`** substitute for tracks/bridges; no road gate → gate trees on OSM roads | regional DLM variant: remap class ids in `extract-dlm.sh` palette | — |
+| **OSM** | street lamps + **station platforms** (+ universal fallback for footprints/water/landuse + rails/bridges) | no lamps/platforms; the other fallbacks above go away too | — | denser tags → richer POI/lamps/platforms |
 | **DOP** | roof colour (`roofcolor_<tile>.json`) + NDVI crowns (`ndvi_<tile>.png`) | synthesized roof palette + hash-only sage crowns (both fall back automatically) | RGB-only (no NIR): roof colour yes, NDVI no | true-ortho: no building lean → cleaner roof sampling |
 
 **Reading the matrix when porting:** start from the cheapest universal source

@@ -7,6 +7,7 @@
 
 import type { CameraState, PlayerPose } from "./create-app";
 import type { FocusMode } from "./post-stack";
+import type { Viewpoint } from "./viewpoints";
 import type { CityStyleId } from "./visual-style";
 
 interface Xyz {
@@ -23,6 +24,8 @@ export interface PocDebugInfo {
   demolishAtCrosshair?: () => void;
   /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
+  /** Animated glide to a curated scenic Viewpoint (the HUD buttons). */
+  flyToViewpoint?: (viewpoint: Viewpoint) => void;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState?: () => CameraState;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
@@ -56,8 +59,8 @@ export interface PocDebugInfo {
   setBuildingRim?: (strength: number) => void;
   /** Sets the roof colour mix (Dachfarbe) (0..1). */
   setBuildingRoofTint?: (strength: number) => void;
-  /** Sets the roof warmth blend (Dachwärme) toward synth terracotta (0..1). */
-  setBuildingRoofWarmth?: (strength: number) => void;
+  /** Sets the roof vividness (Dachsättigung) hue-preserving chroma boost (0..1). */
+  setBuildingRoofVibrance?: (strength: number) => void;
   /** Sets the per-building roughness jitter (Materialstreuung) strength (0..1). */
   setBuildingRoughness?: (strength: number) => void;
   /** Sets the per-building clay tint (Farbvariation) mix (0..1). */
@@ -76,6 +79,8 @@ export interface PocDebugInfo {
   setFocusMode?: (mode: FocusMode) => void;
   /** Sets the valley height-fog (Talnebel) strength (0..1). */
   setHeightFog?: (strength: number) => void;
+  /** Sets the meadow NDVI tint (Wiesenfärbung) strength (0..1). */
+  setMeadowNdvi?: (strength: number) => void;
   /** Sets the paper-grain intensity (0..1). */
   setPaperGrain?: (intensity: number) => void;
   /** Switches the city rendering style. */

@@ -24,6 +24,11 @@ function tile(name: string): TileSrc {
     vegetationSrc: `/data/vegrows_${name}.geojson`,
     // Optional (OSM, ODbL); the loader treats a 404 as "no lamps".
     lampsSrc: `/data/lamps_${name}.geojson`,
+    // Railway tracks + bridge decks + ballast yards (Basis-DLM); platforms (OSM).
+    railSrc: `/data/rail_${name}.geojson`,
+    bridgeSrc: `/data/bridge_${name}.geojson`,
+    railareaSrc: `/data/railarea_${name}.geojson`,
+    platformSrc: `/data/platform_${name}.geojson`,
   };
 }
 
@@ -39,12 +44,16 @@ const EXTRA_TILES: TileSrc[] = [
 export function CityWalkClient() {
   return (
     <CityWalk
+      bridgeSrc={PRIMARY.bridgeSrc}
       citySrc={PRIMARY.citySrc}
       demSrc={PRIMARY.demSrc}
       demTfwSrc={PRIMARY.demTfwSrc}
       extraTiles={EXTRA_TILES}
       lampsSrc={PRIMARY.lampsSrc}
       landcoverSrc={PRIMARY.landcoverSrc}
+      platformSrc={PRIMARY.platformSrc}
+      railareaSrc={PRIMARY.railareaSrc}
+      railSrc={PRIMARY.railSrc}
       vegetationSrc={PRIMARY.vegetationSrc}
     />
   );

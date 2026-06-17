@@ -48,6 +48,8 @@ export interface TerrainOptions {
   heightFog?: HeightFogUniforms;
   /** optional ATKIS land-cover splatmap (PNG), tinted per surface class */
   landcoverUrl?: string;
+  /** shared meadow-NDVI tint strength (by reference) for the HUD slider */
+  meadowNdvi?: { value: number };
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** aborts the raster download */
@@ -102,6 +104,36 @@ async function loadColorSplat(url: string): Promise<Texture | null> {
 /** Derives the RGB splatmap URL from the class-id URL (…/landcover_X → …_rgb_X). */
 function colorSplatUrl(classUrl: string): string {
   return classUrl.replace(LANDCOVER_PREFIX, "landcover_rgb_");
+}
+
+/** Derives the DOP-NDVI raster URL from the class-id URL (…/landcover_X → ndvi_X). */
+function ndviSplatUrl(classUrl: string): string {
+  return classUrl.replace(LANDCOVER_PREFIX, "ndvi_");
+}
+
+/** Default meadow-NDVI tint strength (Wiesenfärbung): lush-green↔dry across the
+ *  DOP greenness. A middling default reads without looking like a heat map. */
+export const DEFAULT_MEADOW_NDVI = 0.6;
+
+/**
+ * Loads the DOP NDVI raster (single-channel greenness) for the meadow tint.
+ * LINEAR + mipmaps low-pass the ~2 m raster (the workflow's recommendation), so
+ * the meadow colour reads as a smooth gradient. Data values, not colour → no
+ * sRGB. Absent/404 → null and the meadow keeps its flat pastel sage.
+ */
+async function loadNdviTexture(url: string): Promise<Texture | null> {
+  try {
+    const texture = await new TextureLoader().loadAsync(url);
+    texture.magFilter = LinearFilter;
+    texture.minFilter = LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = 16;
+    texture.flipY = false;
+    texture.colorSpace = NoColorSpace;
+    return texture;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchArrayBuffer(
@@ -171,6 +203,10 @@ export interface SplatLayer {
   bounds: TerrainBounds;
   /** pre-baked pastel RGB colours; sampled LINEAR for soft transitions */
   colorTexture?: Texture;
+  /** live meadow-NDVI tint strength (shared ref, mutated by the HUD slider) */
+  meadowNdvi?: { value: number };
+  /** DOP NDVI raster (LINEAR) for the meadow greenness tint */
+  ndviTexture?: Texture;
   offset: { cx: number; cy: number };
   /** class-id raster (NEAREST); used by the water mask */
   texture: Texture;
@@ -187,7 +223,7 @@ const TERRAIN_PALETTE = /* glsl */ `
     if ( cls < 2.5 ) return vec3( 0.286, 0.471, 0.310 ); // 2 forest
     if ( cls < 3.5 ) return vec3( 0.451, 0.612, 0.408 ); // 3 copse
     if ( cls < 4.5 ) return vec3( 0.800, 0.760, 0.690 ); // 4 built-up
-    if ( cls < 5.5 ) return vec3( 0.490, 0.396, 0.396 ); // 5 railway
+    if ( cls < 5.5 ) return vec3( 0.698, 0.663, 0.627 ); // 5 railway (ballast grey)
     if ( cls < 6.5 ) return vec3( 0.804, 0.706, 0.518 ); // 6 path
     if ( cls < 7.5 ) return vec3( 0.255, 0.263, 0.302 ); // 7 road
     return vec3( 0.353, 0.588, 0.784 );                  // 8 water
@@ -221,6 +257,22 @@ const GRASS_NORMAL = /* glsl */ `
 `;
 
 /**
+ * Meadow NDVI tint (Wiesenfärbung): on class-1 farmland/meadow only, shift the
+ * pastel sage toward lush deep-green where the DOP greenness is high and a drier
+ * yellow-tan where it's low — large-area colour variation the flat splat can't
+ * give. `grMeadow` (from the class raster) and `baseCol` are in scope from
+ * GRASS_MOTTLE; the NDVI is LINEAR-filtered so the ~2 m raster reads smooth, and
+ * a tiny `step` gates out zero/nodata texels (keep the base sage, don't grey out).
+ */
+const MEADOW_NDVI = /* glsl */ `
+  float grNdvi = texture2D( uNdvi, vSplatUv ).r;
+  float grNdviT = clamp( ( grNdvi - 0.1 ) / 0.5, 0.0, 1.0 );
+  vec3 grTint = mix( baseCol * vec3( 1.14, 1.02, 0.82 ),  // dry: paler warm hay
+                     baseCol * vec3( 0.70, 1.12, 0.52 ), grNdviT );  // lush: deep grass
+  baseCol = mix( baseCol, grTint, uMeadowNdvi * grMeadow * step( 0.012, grNdvi ) );
+`;
+
+/**
  * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
  * major) drawn in the fragment shader. The geometry lives in the Z-up data
  * frame, so `position.z` IS the absolute elevation.
@@ -250,6 +302,11 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   // Always the NEAREST class-id raster (even when uSplat is the RGB splat),
   // so the meadow detail can test the exact land-cover class.
   shader.uniforms.uSplatClass = { value: splat.texture };
+  if (splat.ndviTexture) {
+    shader.uniforms.uNdvi = { value: splat.ndviTexture };
+    // Bind the shared ref by identity so the HUD slider retunes it live.
+    shader.uniforms.uMeadowNdvi = splat.meadowNdvi ?? { value: 0 };
+  }
 }
 
 function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
@@ -273,13 +330,17 @@ function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
 function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
   const hasSplat = splat !== undefined;
   const hasColor = splat?.colorTexture !== undefined;
+  const hasNdvi = splat?.ndviTexture !== undefined;
   // Base colour: sample the RGB splat directly, or map the class id via the
   // fallback palette.
   const baseColExpr = hasColor
     ? "vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;"
     : "vec3 baseCol = terrainPalette( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) );";
+  const ndviDecl = hasNdvi
+    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
+    : "";
   const decl = hasSplat
-    ? `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform sampler2D uSplatClass;\n${hasColor ? "" : TERRAIN_PALETTE}`
+    ? `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform sampler2D uSplatClass;\n${ndviDecl}${hasColor ? "" : TERRAIN_PALETTE}`
     : "";
   shader.fragmentShader = shader.fragmentShader
     .replace(
@@ -290,6 +351,7 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
       "vec4 diffuseColor = vec4( diffuse, opacity );",
       `${hasSplat ? baseColExpr : "vec3 baseCol = diffuse;"}
          ${hasSplat ? GRASS_MOTTLE : ""}
+         ${hasNdvi ? MEADOW_NDVI : ""}
          float minorD = vElevation / 2.0;
          float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
          float majorD = vElevation / 10.0;
@@ -360,16 +422,19 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
 
-  const [splatTexture, colorTexture] = opts.landcoverUrl
+  const [splatTexture, colorTexture, ndviTexture] = opts.landcoverUrl
     ? await Promise.all([
         loadSplatTexture(opts.landcoverUrl),
         loadColorSplat(colorSplatUrl(opts.landcoverUrl)),
+        loadNdviTexture(ndviSplatUrl(opts.landcoverUrl)),
       ])
-    : [null, null];
+    : [null, null, null];
   const splat: SplatLayer | undefined = splatTexture
     ? {
         texture: splatTexture,
         colorTexture: colorTexture ?? undefined,
+        ndviTexture: ndviTexture ?? undefined,
+        meadowNdvi: opts.meadowNdvi,
         bounds,
         offset: opts.offset,
       }

@@ -1,0 +1,18 @@
+{
+"type": "FeatureCollection",
+"name": "plat_wgs84",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::25833" } },
+"xy_coordinate_resolution": 0.01,
+"features": [
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412777.2,5658357.31],[412806.94,5658342.51],[412831.44,5658330.32]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412867.85,5659149.05],[412834.09,5659105.08]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412870.78,5659143.82],[412838.3,5659102.11]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[413157.68,5659663.91],[413128.69,5659601.17]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[413124.57,5659608.78],[413151.43,5659666.63]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412791.92,5658342.33],[412826.69,5658325.05]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412503.51,5658496.0],[412519.23,5658487.8]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412486.33,5658538.44],[412494.14,5658551.47]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412452.19,5658503.29],[412435.41,5658508.1]]}},
+{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[[412466.43,5658482.12],[412457.27,5658466.74]]}}
+]
+}

@@ -133,22 +133,25 @@ utm_p, cls_p, out_p, xmin, ymin, xmax, ymax, h = (
     float(sys.argv[4]), float(sys.argv[5]), float(sys.argv[6]), float(sys.argv[7]),
     float(sys.argv[8]),
 )
-WATER = 8  # only land-cover class we reject (OSM lamps are otherwise well-placed)
+# Reject lamps on water (8) and on the railway facility (5): the rail corridor
+# is now its own layer (ballast/decks), and OSM lamps falling inside it stood as
+# stray poles in the track bed.
+BLOCKED = {5, 8}
 clsimg = Image.open(cls_p).convert("L")
 CW, CH = clsimg.size
 cls = list(clsimg.getdata())
 with open(utm_p) as f:
     src = json.load(f)
-def is_water(x, y):
+def blocked(x, y):
     if not (xmin <= x <= xmax and ymin <= y <= ymax):
         return False  # off-tile: keep (a neighbour tile owns the gate)
     c = min(int((x - xmin) / (xmax - xmin) * CW), CW - 1)
     r = min(int((ymax - y) / (ymax - ymin) * CH), CH - 1)
-    return cls[r * CW + c] == WATER
+    return cls[r * CW + c] in BLOCKED
 feats = []
 for ft in src.get("features", []):
     x, y = ft["geometry"]["coordinates"][:2]
-    if is_water(x, y):
+    if blocked(x, y):
         continue
     feats.append({
         "type": "Feature",

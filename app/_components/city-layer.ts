@@ -6,7 +6,6 @@ import {
   buildingTint,
   type RoofColorLut,
   roofColor,
-  roofTint,
   roughJitter,
   storeyHeight,
 } from "@/lib/city/building-tint";
@@ -109,8 +108,6 @@ interface BuildingStyle {
   /** 1 = warm dusk glow (commerce/public/special), 0 = housing */
   glow: number;
   roof: [number, number, number];
-  /** synthesized terracotta/slate roof colour — the warmth-blend target */
-  roofWarm: [number, number, number];
   /** signed roughness jitter [-1,1] */
   rough: number;
   /** contour-band spacing (m), snapped to whole storeys */
@@ -136,7 +133,6 @@ function buildingStyle(
   return {
     wall: buildingTint(id, a),
     roof: roofColor(id, a, roofLut),
-    roofWarm: roofTint(id, a),
     storeyH: storeyHeight(mh),
     eaveH: roofMinZ === undefined ? total : Math.max(roofMinZ - baseZ, 0),
     glow: buildingGlows(a) ? 1 : 0,
@@ -174,13 +170,10 @@ interface DetailBuffers {
   build: Float32Array;
   rough: Float32Array;
   tint: Float32Array;
-  warm: Float32Array;
 }
 
-const ZERO_RGB: [number, number, number] = [0, 0, 0];
-
-/** Writes one vertex's detail attributes: roof/wall colour → aTint, the synth
- *  warmth-blend target → aRoofWarm (roof verts only), plus aBuild and aRough. */
+/** Writes one vertex's detail attributes: roof/wall colour → aTint, plus the
+ *  aBuild (isRoof/storey/eave/glow) and aRough channels. */
 function writeVertexAttrs(
   b: DetailBuffers,
   i: number,
@@ -188,13 +181,9 @@ function writeVertexAttrs(
   isRoof: number
 ): void {
   const c = isRoof === 1 ? s.roof : s.wall;
-  const w = isRoof === 1 ? s.roofWarm : ZERO_RGB;
   b.tint[i * 3] = c[0];
   b.tint[i * 3 + 1] = c[1];
   b.tint[i * 3 + 2] = c[2];
-  b.warm[i * 3] = w[0];
-  b.warm[i * 3 + 1] = w[1];
-  b.warm[i * 3 + 2] = w[2];
   b.build[i * 4] = isRoof;
   b.build[i * 4 + 1] = s.storeyH;
   b.build[i * 4 + 2] = s.eaveH;
@@ -233,7 +222,6 @@ function annotateBuildingDetail(
     const cache = new Map<number, BuildingStyle>();
     const buffers: DetailBuffers = {
       tint: new Float32Array(pos.count * 3),
-      warm: new Float32Array(pos.count * 3),
       build: new Float32Array(pos.count * 4),
       rough: new Float32Array(pos.count),
     };
@@ -257,7 +245,6 @@ function annotateBuildingDetail(
       writeVertexAttrs(buffers, i, s, isRoof);
     }
     geom.setAttribute("aTint", new BufferAttribute(buffers.tint, 3));
-    geom.setAttribute("aRoofWarm", new BufferAttribute(buffers.warm, 3));
     geom.setAttribute("aBuild", new BufferAttribute(buffers.build, 4));
     geom.setAttribute("aRough", new BufferAttribute(buffers.rough, 1));
   });
