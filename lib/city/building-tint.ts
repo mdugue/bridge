@@ -229,6 +229,34 @@ export function roofTint(
 }
 
 /**
+ * Per-building roof colour LUT baked from the DOP orthophoto
+ * (`scripts/extract-roof-colour.sh`): CityJSON object id → LINEAR rgb sampled
+ * under the roof footprint. Keys are the raw CityObject id strings, the same
+ * ids `Object.keys(CityObjects)` yields, so they line up with the loader's
+ * per-vertex `objectid` index.
+ */
+export type RoofColorLut = Record<string, TintRgb>;
+
+/**
+ * Roof colour for one building: the real DOP-sampled colour when the LUT has it,
+ * otherwise the synthesized terracotta/slate palette. This is the source
+ * preference baked into one place — present LUT entry wins, missing one (no DOP,
+ * a roof too small to sample, a demolished/edited building) degrades to
+ * `roofTint` so the look never breaks. See docs/transformations.md.
+ */
+export function roofColor(
+  objectId: string,
+  attrs: Record<string, unknown> = {},
+  lut?: RoofColorLut
+): TintRgb {
+  const sampled = lut?.[objectId];
+  if (sampled && sampled.length === 3) {
+    return [sampled[0], sampled[1], sampled[2]];
+  }
+  return roofTint(objectId, attrs);
+}
+
+/**
  * Whether a building earns a warm interior glow at dusk: commerce
  * (`31001_2xxx`), public (`31001_3xxx`) and special structures (non-`31001`).
  * Housing (`31001_9998`/`1xxx`) stays dark, so the lit centre reads as civic.

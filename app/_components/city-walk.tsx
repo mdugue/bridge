@@ -2,34 +2,47 @@
 
 import { format } from "date-fns";
 import {
+  Building2Icon,
   CalendarIcon,
   CameraIcon,
+  ChevronDownIcon,
   ClipboardPasteIcon,
+  CloudFogIcon,
   CopyIcon,
   FullscreenIcon,
+  Gamepad2Icon,
   HammerIcon,
   HousePlusIcon,
+  type LucideIcon,
   SlidersHorizontalIcon,
+  SparklesIcon,
+  SunIcon,
+  TreesIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type Dispatch,
+  type ReactNode,
+  type RefObject,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field";
 import { Kbd } from "@/components/ui/kbd";
 import {
@@ -37,6 +50,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarProvider,
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { Slider } from "@/components/ui/slider";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
@@ -184,6 +210,152 @@ function focusRingMeters(
   return dofOn && mode === "manual" ? distance : null;
 }
 
+/** A labelled 0–100(+) slider that mirrors its value into the scene handle. */
+function PctSlider({
+  description,
+  disabled = false,
+  id,
+  label,
+  max = 100,
+  min = 0,
+  onChange,
+  step = 1,
+  unit = "%",
+  value,
+}: {
+  description?: ReactNode;
+  disabled?: boolean;
+  id: string;
+  label: string;
+  max?: number;
+  min?: number;
+  onChange: (value: number) => void;
+  step?: number;
+  unit?: string;
+  value: number;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>
+        {label} · {value}
+        {unit}
+      </FieldLabel>
+      <Slider
+        disabled={disabled}
+        id={id}
+        max={max}
+        min={min}
+        onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
+        step={step}
+        value={[value]}
+      />
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+    </Field>
+  );
+}
+
+/** A collapsible, titled section of related controls inside the sidebar. */
+function ControlGroup({
+  children,
+  defaultOpen = true,
+  icon: Icon,
+  title,
+}: {
+  children: ReactNode;
+  defaultOpen?: boolean;
+  icon: LucideIcon;
+  title: string;
+}) {
+  return (
+    <Collapsible
+      className="border-sidebar-border/50 border-b"
+      defaultOpen={defaultOpen}
+    >
+      <SidebarGroup className="py-1">
+        <SidebarGroupLabel
+          className="group/trigger gap-2"
+          render={<CollapsibleTrigger />}
+        >
+          <Icon />
+          {title}
+          <ChevronDownIcon className="ml-auto transition-transform group-aria-expanded/trigger:rotate-180" />
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <FieldGroup className="gap-3 pb-2">{children}</FieldGroup>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  );
+}
+
+/** The minimap, sized to fill the sidebar's content width (kept square). */
+function SidebarMinimap({
+  bounds,
+  focusRingM,
+  footprints,
+  landcoverTiles,
+  onTeleport,
+  subscribePose,
+}: {
+  bounds: TerrainBounds;
+  focusRingM: number | null;
+  footprints: FootprintPoly[];
+  landcoverTiles: { bounds: TerrainBounds; src: string }[];
+  onTeleport: (epsgX: number, epsgY: number) => void;
+  subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      return;
+    }
+    const measure = () => setSize(Math.round(el.clientWidth));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div className="px-2 pt-2" ref={ref}>
+      {size > 0 && (
+        <Minimap
+          bounds={bounds}
+          focusRingM={focusRingM}
+          footprints={footprints}
+          landcoverTiles={landcoverTiles}
+          onTeleport={onTeleport}
+          size={size}
+          subscribePose={subscribePose}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Floating button that opens the settings sidebar; hidden while it's open. */
+function SettingsToggle() {
+  const { toggleSidebar, state, isMobile, openMobile } = useSidebar();
+  const open = isMobile ? openMobile : state === "expanded";
+  if (open) {
+    return null;
+  }
+  return (
+    <Button
+      aria-label="Scene settings"
+      className="absolute top-3 right-3 z-20 shadow-md"
+      onClick={toggleSidebar}
+      size="icon"
+      variant="secondary"
+    >
+      <SlidersHorizontalIcon />
+    </Button>
+  );
+}
+
 /** DoF focus controls (mode toggle + manual distance slider); null when DoF off. */
 function FocusControls({
   enabled,
@@ -214,6 +386,7 @@ function FocusControls({
               onMode(next);
             }
           }}
+          size="sm"
           value={[mode]}
           variant="outline"
         >
@@ -231,22 +404,514 @@ function FocusControls({
         </FieldDescription>
       </Field>
       {mode === "manual" && (
+        <PctSlider
+          id="focus-distance"
+          label="Focus distance"
+          max={3000}
+          min={1}
+          onChange={onDistance}
+          step={5}
+          unit=" m"
+          value={distance}
+        />
+      )}
+    </>
+  );
+}
+
+interface SceneControlsProps {
+  applySnapshot: () => void;
+  bands: number;
+  coarse: boolean;
+  contact: number;
+  copySnapshot: () => void;
+  day: Date;
+  dof: boolean;
+  duskGlow: number;
+  eave: number;
+  focusDistance: number;
+  focusMode: FocusMode;
+  fogAmount: number;
+  grading: number;
+  grain: number;
+  groundShade: number;
+  handleRef: RefObject<CityWalkHandle | null>;
+  heightFog: number;
+  insertBuilding: () => void;
+  minutes: number;
+  mode: MovementMode;
+  multiTuft: boolean;
+  rim: number;
+  roofTint: number;
+  roughness: number;
+  setBands: Dispatch<SetStateAction<number>>;
+  setContact: Dispatch<SetStateAction<number>>;
+  setDof: Dispatch<SetStateAction<boolean>>;
+  setDuskGlow: Dispatch<SetStateAction<number>>;
+  setEave: Dispatch<SetStateAction<number>>;
+  setFocusDistance: Dispatch<SetStateAction<number>>;
+  setFocusMode: Dispatch<SetStateAction<FocusMode>>;
+  setFogAmount: Dispatch<SetStateAction<number>>;
+  setGrading: Dispatch<SetStateAction<number>>;
+  setGrain: Dispatch<SetStateAction<number>>;
+  setGroundShade: Dispatch<SetStateAction<number>>;
+  setHeightFog: Dispatch<SetStateAction<number>>;
+  setMultiTuft: Dispatch<SetStateAction<boolean>>;
+  setRim: Dispatch<SetStateAction<number>>;
+  setRoofTint: Dispatch<SetStateAction<number>>;
+  setRoughness: Dispatch<SetStateAction<number>>;
+  setShimmer: Dispatch<SetStateAction<number>>;
+  setSnapshotText: Dispatch<SetStateAction<string>>;
+  setStyle: Dispatch<SetStateAction<CityStyleId>>;
+  setTint: Dispatch<SetStateAction<number>>;
+  setTranslucency: Dispatch<SetStateAction<number>>;
+  setTransparency: Dispatch<SetStateAction<Record<CityStyleId, number>>>;
+  setWaterMist: Dispatch<SetStateAction<number>>;
+  shimmer: number;
+  snapshotMsg: string | null;
+  snapshotText: string;
+  style: CityStyleId;
+  sun: SunState | null;
+  tint: number;
+  translucency: number;
+  transparency: Record<CityStyleId, number>;
+  updateSun: (day: Date, minutes: number) => void;
+  waterMist: number;
+}
+
+/**
+ * The full control surface, grouped into collapsible sections. Shared verbatim
+ * between the desktop sidebar and the mobile bottom drawer — kept top-level so
+ * its many branches don't push the host component past the complexity cap.
+ */
+function SceneControls({
+  applySnapshot,
+  bands,
+  coarse,
+  contact,
+  copySnapshot,
+  day,
+  dof,
+  duskGlow,
+  eave,
+  focusDistance,
+  focusMode,
+  fogAmount,
+  grading,
+  grain,
+  groundShade,
+  handleRef,
+  heightFog,
+  insertBuilding,
+  minutes,
+  mode,
+  multiTuft,
+  rim,
+  roofTint,
+  roughness,
+  setBands,
+  setContact,
+  setDof,
+  setDuskGlow,
+  setEave,
+  setFocusDistance,
+  setFocusMode,
+  setFogAmount,
+  setGrading,
+  setGrain,
+  setGroundShade,
+  setHeightFog,
+  setMultiTuft,
+  setRim,
+  setRoofTint,
+  setRoughness,
+  setShimmer,
+  setSnapshotText,
+  setStyle,
+  setTint,
+  setTransparency,
+  setTranslucency,
+  setWaterMist,
+  shimmer,
+  snapshotMsg,
+  snapshotText,
+  style,
+  sun,
+  tint,
+  translucency,
+  transparency,
+  updateSun,
+  waterMist,
+}: SceneControlsProps) {
+  return (
+    <>
+      <ControlGroup icon={SunIcon} title="Sun & time">
         <Field>
-          <FieldLabel htmlFor="focus-distance">
-            Focus distance · {distance} m
+          <FieldLabel htmlFor="sun-date">Date</FieldLabel>
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  className="w-full justify-start font-normal"
+                  id="sun-date"
+                  size="sm"
+                  variant="outline"
+                />
+              }
+            >
+              <CalendarIcon data-icon="inline-start" />
+              {format(day, "PPP")}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+              <Calendar
+                mode="single"
+                onSelect={(d) => d && updateSun(d, minutes)}
+                selected={day}
+              />
+            </PopoverContent>
+          </Popover>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="sun-time">
+            Time of day · {formatMinutes(minutes)}
           </FieldLabel>
           <Slider
-            id="focus-distance"
-            max={3000}
-            min={1}
-            onValueChange={(value) => {
-              onDistance(Number(Array.isArray(value) ? value[0] : value));
+            id="sun-time"
+            max={LAST_MINUTE}
+            min={0}
+            onValueChange={(value) =>
+              updateSun(day, Number(Array.isArray(value) ? value[0] : value))
+            }
+            step={MINUTES_STEP}
+            value={[minutes]}
+          />
+          <FieldDescription>
+            {sun
+              ? `Sun altitude ${sun.altitudeDeg.toFixed(1)}°${
+                  sun.aboveHorizon ? "" : " — below horizon (night)"
+                }`
+              : "Sun position unknown"}
+          </FieldDescription>
+        </Field>
+      </ControlGroup>
+
+      <ControlGroup icon={CloudFogIcon} title="Atmosphere">
+        <PctSlider
+          id="atmosphere"
+          label="Fog"
+          onChange={(n) => {
+            setFogAmount(n);
+            handleRef.current?.setAtmosphere(n / 100);
+          }}
+          value={fogAmount}
+        />
+        <PctSlider
+          description="Haze pooling along the valley floor / the Elbe"
+          id="height-fog"
+          label="Talnebel"
+          onChange={(n) => {
+            setHeightFog(n);
+            handleRef.current?.setHeightFog(n / 100);
+          }}
+          value={heightFog}
+        />
+        <PctSlider
+          description="Drifting mist over the river"
+          id="water-mist"
+          label="Flussnebel"
+          onChange={(n) => {
+            setWaterMist(n);
+            handleRef.current?.setWaterMist(n / 100);
+          }}
+          value={waterMist}
+        />
+        <PctSlider
+          id="depth-grading"
+          label="Depth color · warm near, cool far"
+          onChange={(n) => {
+            setGrading(n);
+            handleRef.current?.setDepthGrading(n / 100);
+          }}
+          value={grading}
+        />
+      </ControlGroup>
+
+      <ControlGroup icon={Building2Icon} title="Buildings">
+        <Field>
+          <FieldLabel htmlFor="city-style">Building style</FieldLabel>
+          <ToggleGroup
+            className="w-full"
+            id="city-style"
+            onValueChange={(value: string[]) => {
+              const next = value[0] as CityStyleId | undefined;
+              if (next) {
+                setStyle(next);
+                handleRef.current?.setStyle(next);
+              }
             }}
-            step={5}
-            value={[distance]}
+            size="sm"
+            value={[style]}
+            variant="outline"
+          >
+            {(Object.keys(STYLE_LABELS) as CityStyleId[]).map((id) => (
+              <ToggleGroupItem className="flex-1" key={id} value={id}>
+                {STYLE_LABELS[id]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </Field>
+
+        <PctSlider
+          description={
+            style === "ghost"
+              ? "Frosted glass — the backdrop shows through blurred"
+              : "Plain see-through"
+          }
+          disabled={style === "standard"}
+          id="building-transparency"
+          label="Transparency"
+          max={90}
+          onChange={(n) => {
+            setTransparency((prev) => ({ ...prev, [style]: n }));
+            handleRef.current?.setBuildingTransparency(n / 100);
+          }}
+          value={transparency[style]}
+        />
+
+        <PctSlider
+          id="building-ground-shade"
+          label="Boden-Verlauf"
+          onChange={(n) => {
+            setGroundShade(n);
+            handleRef.current?.setBuildingGroundShade(n / 100);
+          }}
+          value={groundShade}
+        />
+        <PctSlider
+          id="building-bands"
+          label="Höhenlinien"
+          onChange={(n) => {
+            setBands(n);
+            handleRef.current?.setBuildingBands(n / 100);
+          }}
+          value={bands}
+        />
+        <PctSlider
+          id="building-rim"
+          label="Streiflicht"
+          onChange={(n) => {
+            setRim(n);
+            handleRef.current?.setBuildingRim(n / 100);
+          }}
+          value={rim}
+        />
+        <PctSlider
+          description="Per-building clay tint from use & height, blended into the base"
+          id="building-tint"
+          label="Farbvariation"
+          onChange={(n) => {
+            setTint(n);
+            handleRef.current?.setBuildingTint(n / 100);
+          }}
+          value={tint}
+        />
+        <PctSlider
+          description="Terracotta or slate per roof, from roofType & pitch"
+          id="building-roof-tint"
+          label="Dachfarbe"
+          onChange={(n) => {
+            setRoofTint(n);
+            handleRef.current?.setBuildingRoofTint(n / 100);
+          }}
+          value={roofTint}
+        />
+        <PctSlider
+          description="Soft cornice line where wall meets roof"
+          id="building-eave"
+          label="Traufkante"
+          onChange={(n) => {
+            setEave(n);
+            handleRef.current?.setBuildingEave(n / 100);
+          }}
+          value={eave}
+        />
+        <PctSlider
+          description="Warm interior glow on civic/commercial buildings at dusk"
+          id="building-dusk-glow"
+          label="Abendlicht"
+          onChange={(n) => {
+            setDuskGlow(n);
+            handleRef.current?.setBuildingDuskGlow(n / 100);
+          }}
+          value={duskGlow}
+        />
+        <PctSlider
+          description="Subtle per-building matte/sheen variation"
+          id="building-roughness"
+          label="Materialstreuung"
+          onChange={(n) => {
+            setRoughness(n);
+            handleRef.current?.setBuildingRoughness(n / 100);
+          }}
+          value={roughness}
+        />
+      </ControlGroup>
+
+      <ControlGroup icon={TreesIcon} title="Vegetation">
+        <PctSlider
+          id="tree-shimmer"
+          label="Gegenlicht-Schimmer"
+          onChange={(n) => {
+            setShimmer(n);
+            handleRef.current?.setTreeShimmer(n / 100);
+          }}
+          value={shimmer}
+        />
+        <PctSlider
+          description="Backlit glow on near/large crowns (shadow-gated)"
+          id="tree-translucency"
+          label="Blattdurchscheinen"
+          onChange={(n) => {
+            setTranslucency(n);
+            handleRef.current?.setTreeTranslucency(n / 100);
+          }}
+          value={translucency}
+        />
+        <Field orientation="horizontal">
+          <FieldLabel htmlFor="tree-multituft">
+            Multi-Tuft-Kronen (nah)
+          </FieldLabel>
+          <Switch
+            checked={multiTuft}
+            id="tree-multituft"
+            onCheckedChange={(checked) => {
+              setMultiTuft(checked);
+              handleRef.current?.setTreeMultiTuft(checked);
+            }}
+            size="sm"
           />
         </Field>
-      )}
+      </ControlGroup>
+
+      <ControlGroup icon={SparklesIcon} title="Rendering">
+        <PctSlider
+          id="contact-shadows"
+          label="Contact shadows"
+          onChange={(n) => {
+            setContact(n);
+            handleRef.current?.setContactShadows(n / 100);
+          }}
+          value={contact}
+        />
+        <PctSlider
+          id="paper-grain"
+          label="Paper grain"
+          onChange={(n) => {
+            setGrain(n);
+            handleRef.current?.setPaperGrain(n / 100);
+          }}
+          value={grain}
+        />
+        <Field orientation="horizontal">
+          <FieldLabel htmlFor="depth-of-field">Depth of field</FieldLabel>
+          <Switch
+            checked={dof}
+            id="depth-of-field"
+            onCheckedChange={(checked) => {
+              setDof(checked);
+              handleRef.current?.setDepthOfField(checked);
+            }}
+            size="sm"
+          />
+        </Field>
+        <FocusControls
+          distance={focusDistance}
+          enabled={dof}
+          mode={focusMode}
+          onDistance={(m) => {
+            setFocusDistance(m);
+            handleRef.current?.setFocusDistance(m);
+          }}
+          onMode={(m) => {
+            setFocusMode(m);
+            handleRef.current?.setFocusMode(m);
+          }}
+        />
+      </ControlGroup>
+
+      <ControlGroup icon={Gamepad2Icon} title="Scene">
+        <Field orientation="horizontal">
+          <FieldLabel htmlFor="fly-mode">
+            {coarse ? "Fly mode" : "Fly mode (F)"}
+          </FieldLabel>
+          <Switch
+            checked={mode === "fly"}
+            id="fly-mode"
+            onCheckedChange={(checked) =>
+              handleRef.current?.setMovementMode(checked ? "fly" : "walk")
+            }
+            size="sm"
+          />
+        </Field>
+
+        <Button onClick={insertBuilding} size="sm" variant="secondary">
+          <HousePlusIcon data-icon="inline-start" />
+          {coarse ? "Insert building" : "Insert building (B)"}
+        </Button>
+
+        {!coarse && (
+          <Button
+            onClick={() => handleRef.current?.enterImmersive()}
+            size="sm"
+            variant="outline"
+          >
+            <FullscreenIcon data-icon="inline-start" />
+            Immersive mode · Esc exits
+          </Button>
+        )}
+      </ControlGroup>
+
+      <ControlGroup icon={CameraIcon} title="Snapshot">
+        <Field>
+          <FieldLabel htmlFor="snapshot">Snapshot JSON</FieldLabel>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              onClick={copySnapshot}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              <CopyIcon data-icon="inline-start" />
+              Copy
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={applySnapshot}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <ClipboardPasteIcon data-icon="inline-start" />
+              Apply
+            </Button>
+          </div>
+          <Textarea
+            className="font-mono text-[10px] leading-snug"
+            id="snapshot"
+            onChange={(e) => setSnapshotText(e.target.value)}
+            placeholder="Copy captures position, time & look as JSON. Paste one here and Apply to restore it."
+            rows={4}
+            spellCheck={false}
+            value={snapshotText}
+          />
+          <FieldDescription>
+            {snapshotMsg ??
+              "Reproducible capture — share or replay an exact view."}
+          </FieldDescription>
+        </Field>
+      </ControlGroup>
     </>
   );
 }
@@ -331,8 +996,6 @@ export default function CityWalk({
     { bounds: TerrainBounds; src: string }[]
   >([]);
   const [fps, setFps] = useState<number | null>(null);
-  /** Minimap edge length in CSS px; user-adjustable. */
-  const [minimapSize, setMinimapSize] = useState(coarse ? 120 : 192);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
 
@@ -638,680 +1301,188 @@ export default function CityWalk({
     setSnapshotMsg("Snapshot applied");
   };
 
-  // Shared between the desktop card and the mobile bottom drawer.
+  // Shared between the desktop sidebar and the mobile bottom drawer.
   const controlsFields = (
-    <FieldGroup className="gap-4">
-      <Field>
-        <FieldLabel htmlFor="sun-date">Date</FieldLabel>
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                className="w-full justify-start font-normal"
-                id="sun-date"
-                variant="outline"
-              />
-            }
-          >
-            <CalendarIcon data-icon="inline-start" />
-            {format(day, "PPP")}
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto p-0">
-            <Calendar
-              mode="single"
-              onSelect={(d) => d && updateSun(d, minutes)}
-              selected={day}
-            />
-          </PopoverContent>
-        </Popover>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="sun-time">
-          Time of day · {formatMinutes(minutes)}
-        </FieldLabel>
-        <Slider
-          id="sun-time"
-          max={LAST_MINUTE}
-          min={0}
-          onValueChange={(value) =>
-            updateSun(day, Number(Array.isArray(value) ? value[0] : value))
-          }
-          step={MINUTES_STEP}
-          value={[minutes]}
-        />
-        <FieldDescription>
-          {sun
-            ? `Sun altitude ${sun.altitudeDeg.toFixed(1)}°${
-                sun.aboveHorizon ? "" : " — below horizon (night)"
-              }`
-            : "Sun position unknown"}
-        </FieldDescription>
-      </Field>
-
-      <FieldSeparator />
-
-      <Field>
-        <FieldLabel htmlFor="city-style">Building style</FieldLabel>
-        <ToggleGroup
-          className="w-full"
-          id="city-style"
-          onValueChange={(value: string[]) => {
-            const next = value[0] as CityStyleId | undefined;
-            if (next) {
-              setStyle(next);
-              handleRef.current?.setStyle(next);
-            }
-          }}
-          value={[style]}
-          variant="outline"
-        >
-          {(Object.keys(STYLE_LABELS) as CityStyleId[]).map((id) => (
-            <ToggleGroupItem className="flex-1" key={id} value={id}>
-              {STYLE_LABELS[id]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-transparency">
-          Transparency · {transparency[style]}%
-        </FieldLabel>
-        <Slider
-          disabled={style === "standard"}
-          id="building-transparency"
-          max={90}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setTransparency((prev) => ({ ...prev, [style]: next }));
-            handleRef.current?.setBuildingTransparency(next / 100);
-          }}
-          step={1}
-          value={[transparency[style]]}
-        />
-        <FieldDescription>
-          {style === "ghost"
-            ? "Frosted glass — the backdrop shows through blurred"
-            : "Plain see-through"}
-        </FieldDescription>
-      </Field>
-
-      <FieldSeparator />
-
-      <Field>
-        <FieldLabel htmlFor="contact-shadows">
-          Contact shadows · {contact}%
-        </FieldLabel>
-        <Slider
-          id="contact-shadows"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setContact(next);
-            handleRef.current?.setContactShadows(next / 100);
-          }}
-          step={1}
-          value={[contact]}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="paper-grain">Paper grain · {grain}%</FieldLabel>
-        <Slider
-          id="paper-grain"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setGrain(next);
-            handleRef.current?.setPaperGrain(next / 100);
-          }}
-          step={1}
-          value={[grain]}
-        />
-      </Field>
-
-      <FieldSeparator />
-
-      <Field>
-        <FieldLabel htmlFor="building-ground-shade">
-          Boden-Verlauf · {groundShade}%
-        </FieldLabel>
-        <Slider
-          id="building-ground-shade"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setGroundShade(next);
-            handleRef.current?.setBuildingGroundShade(next / 100);
-          }}
-          step={1}
-          value={[groundShade]}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-bands">Höhenlinien · {bands}%</FieldLabel>
-        <Slider
-          id="building-bands"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setBands(next);
-            handleRef.current?.setBuildingBands(next / 100);
-          }}
-          step={1}
-          value={[bands]}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-rim">Streiflicht · {rim}%</FieldLabel>
-        <Slider
-          id="building-rim"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setRim(next);
-            handleRef.current?.setBuildingRim(next / 100);
-          }}
-          step={1}
-          value={[rim]}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-tint">Farbvariation · {tint}%</FieldLabel>
-        <Slider
-          id="building-tint"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setTint(next);
-            handleRef.current?.setBuildingTint(next / 100);
-          }}
-          step={1}
-          value={[tint]}
-        />
-        <FieldDescription>
-          Per-building clay tint from use &amp; height, blended into the base
-        </FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-roof-tint">
-          Dachfarbe · {roofTint}%
-        </FieldLabel>
-        <Slider
-          id="building-roof-tint"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setRoofTint(next);
-            handleRef.current?.setBuildingRoofTint(next / 100);
-          }}
-          step={1}
-          value={[roofTint]}
-        />
-        <FieldDescription>
-          Terracotta or slate per roof, from roofType &amp; pitch
-        </FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-eave">Traufkante · {eave}%</FieldLabel>
-        <Slider
-          id="building-eave"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setEave(next);
-            handleRef.current?.setBuildingEave(next / 100);
-          }}
-          step={1}
-          value={[eave]}
-        />
-        <FieldDescription>
-          Soft cornice line where wall meets roof
-        </FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-dusk-glow">
-          Abendlicht · {duskGlow}%
-        </FieldLabel>
-        <Slider
-          id="building-dusk-glow"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setDuskGlow(next);
-            handleRef.current?.setBuildingDuskGlow(next / 100);
-          }}
-          step={1}
-          value={[duskGlow]}
-        />
-        <FieldDescription>
-          Warm interior glow on civic/commercial buildings at dusk
-        </FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="building-roughness">
-          Materialstreuung · {roughness}%
-        </FieldLabel>
-        <Slider
-          id="building-roughness"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setRoughness(next);
-            handleRef.current?.setBuildingRoughness(next / 100);
-          }}
-          step={1}
-          value={[roughness]}
-        />
-        <FieldDescription>
-          Subtle per-building matte/sheen variation
-        </FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="tree-shimmer">
-          Gegenlicht-Schimmer · {shimmer}%
-        </FieldLabel>
-        <Slider
-          id="tree-shimmer"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setShimmer(next);
-            handleRef.current?.setTreeShimmer(next / 100);
-          }}
-          step={1}
-          value={[shimmer]}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="tree-translucency">
-          Blattdurchscheinen · {translucency}%
-        </FieldLabel>
-        <Slider
-          id="tree-translucency"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setTranslucency(next);
-            handleRef.current?.setTreeTranslucency(next / 100);
-          }}
-          step={1}
-          value={[translucency]}
-        />
-        <FieldDescription>
-          Backlit glow on near/large crowns (shadow-gated)
-        </FieldDescription>
-      </Field>
-
-      <Field orientation="horizontal">
-        <FieldLabel htmlFor="tree-multituft">
-          Multi-Tuft-Kronen (nah)
-        </FieldLabel>
-        <Switch
-          checked={multiTuft}
-          id="tree-multituft"
-          onCheckedChange={(checked) => {
-            setMultiTuft(checked);
-            handleRef.current?.setTreeMultiTuft(checked);
-          }}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="minimap-size">Minimap size</FieldLabel>
-        <ToggleGroup
-          className="w-full"
-          id="minimap-size"
-          onValueChange={(value: string[]) => {
-            const next = value[0];
-            if (next) {
-              setMinimapSize(Number(next));
-            }
-          }}
-          value={[String(minimapSize)]}
-          variant="outline"
-        >
-          {[
-            ["S", 120],
-            ["M", 192],
-            ["L", 280],
-          ].map(([label, px]) => (
-            <ToggleGroupItem className="flex-1" key={px} value={String(px)}>
-              {label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </Field>
-
-      <Field orientation="horizontal">
-        <FieldLabel htmlFor="depth-of-field">Depth of field</FieldLabel>
-        <Switch
-          checked={dof}
-          id="depth-of-field"
-          onCheckedChange={(checked) => {
-            setDof(checked);
-            handleRef.current?.setDepthOfField(checked);
-          }}
-        />
-      </Field>
-
-      <FocusControls
-        distance={focusDistance}
-        enabled={dof}
-        mode={focusMode}
-        onDistance={(m) => {
-          setFocusDistance(m);
-          handleRef.current?.setFocusDistance(m);
-        }}
-        onMode={(m) => {
-          setFocusMode(m);
-          handleRef.current?.setFocusMode(m);
-        }}
-      />
-
-      <Field>
-        <FieldLabel htmlFor="atmosphere">Fog · {fogAmount}%</FieldLabel>
-        <Slider
-          id="atmosphere"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setFogAmount(next);
-            handleRef.current?.setAtmosphere(next / 100);
-          }}
-          step={1}
-          value={[fogAmount]}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="height-fog">Talnebel · {heightFog}%</FieldLabel>
-        <Slider
-          id="height-fog"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setHeightFog(next);
-            handleRef.current?.setHeightFog(next / 100);
-          }}
-          step={1}
-          value={[heightFog]}
-        />
-        <FieldDescription>
-          Haze pooling along the valley floor / the Elbe
-        </FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="water-mist">Flussnebel · {waterMist}%</FieldLabel>
-        <Slider
-          id="water-mist"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setWaterMist(next);
-            handleRef.current?.setWaterMist(next / 100);
-          }}
-          step={1}
-          value={[waterMist]}
-        />
-        <FieldDescription>Drifting mist over the river</FieldDescription>
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="depth-grading">
-          Depth color · warm near, cool far · {grading}%
-        </FieldLabel>
-        <Slider
-          id="depth-grading"
-          max={100}
-          min={0}
-          onValueChange={(value) => {
-            const next = Number(Array.isArray(value) ? value[0] : value);
-            setGrading(next);
-            handleRef.current?.setDepthGrading(next / 100);
-          }}
-          step={1}
-          value={[grading]}
-        />
-      </Field>
-
-      <Field orientation="horizontal">
-        <FieldLabel htmlFor="fly-mode">
-          {coarse ? "Fly mode" : "Fly mode (F)"}
-        </FieldLabel>
-        <Switch
-          checked={mode === "fly"}
-          id="fly-mode"
-          onCheckedChange={(checked) =>
-            handleRef.current?.setMovementMode(checked ? "fly" : "walk")
-          }
-        />
-      </Field>
-
-      <Button onClick={insertBuilding} variant="secondary">
-        <HousePlusIcon data-icon="inline-start" />
-        {coarse ? "Insert building" : "Insert building (B)"}
-      </Button>
-
-      {!coarse && (
-        <Button
-          onClick={() => handleRef.current?.enterImmersive()}
-          variant="outline"
-        >
-          <FullscreenIcon data-icon="inline-start" />
-          Immersive mode · Esc exits
-        </Button>
-      )}
-
-      <FieldSeparator />
-
-      <Field>
-        <FieldLabel htmlFor="snapshot">
-          <CameraIcon data-icon="inline-start" />
-          Snapshot
-        </FieldLabel>
-        <div className="flex gap-2">
-          <Button
-            className="flex-1"
-            onClick={copySnapshot}
-            type="button"
-            variant="secondary"
-          >
-            <CopyIcon data-icon="inline-start" />
-            Copy
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={applySnapshot}
-            type="button"
-            variant="outline"
-          >
-            <ClipboardPasteIcon data-icon="inline-start" />
-            Apply
-          </Button>
-        </div>
-        <Textarea
-          className="font-mono text-[10px] leading-snug"
-          id="snapshot"
-          onChange={(e) => setSnapshotText(e.target.value)}
-          placeholder="Copy captures position, time & look as JSON. Paste one here and Apply to restore it."
-          rows={5}
-          spellCheck={false}
-          value={snapshotText}
-        />
-        <FieldDescription>
-          {snapshotMsg ??
-            "Reproducible capture — share or replay an exact view."}
-        </FieldDescription>
-      </Field>
-
-      <FieldSeparator />
-
-      <p className="text-[10px] text-muted-foreground leading-snug">
-        Lamp positions © OpenStreetMap contributors (ODbL).
-      </p>
-    </FieldGroup>
+    <SceneControls
+      applySnapshot={applySnapshot}
+      bands={bands}
+      coarse={coarse}
+      contact={contact}
+      copySnapshot={copySnapshot}
+      day={day}
+      dof={dof}
+      duskGlow={duskGlow}
+      eave={eave}
+      focusDistance={focusDistance}
+      focusMode={focusMode}
+      fogAmount={fogAmount}
+      grading={grading}
+      grain={grain}
+      groundShade={groundShade}
+      handleRef={handleRef}
+      heightFog={heightFog}
+      insertBuilding={insertBuilding}
+      minutes={minutes}
+      mode={mode}
+      multiTuft={multiTuft}
+      rim={rim}
+      roofTint={roofTint}
+      roughness={roughness}
+      setBands={setBands}
+      setContact={setContact}
+      setDof={setDof}
+      setDuskGlow={setDuskGlow}
+      setEave={setEave}
+      setFocusDistance={setFocusDistance}
+      setFocusMode={setFocusMode}
+      setFogAmount={setFogAmount}
+      setGrading={setGrading}
+      setGrain={setGrain}
+      setGroundShade={setGroundShade}
+      setHeightFog={setHeightFog}
+      setMultiTuft={setMultiTuft}
+      setRim={setRim}
+      setRoofTint={setRoofTint}
+      setRoughness={setRoughness}
+      setShimmer={setShimmer}
+      setSnapshotText={setSnapshotText}
+      setStyle={setStyle}
+      setTint={setTint}
+      setTranslucency={setTranslucency}
+      setTransparency={setTransparency}
+      setWaterMist={setWaterMist}
+      shimmer={shimmer}
+      snapshotMsg={snapshotMsg}
+      snapshotText={snapshotText}
+      style={style}
+      sun={sun}
+      tint={tint}
+      translucency={translucency}
+      transparency={transparency}
+      updateSun={updateSun}
+      waterMist={waterMist}
+    />
   );
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-slate-900">
-      <div className="absolute inset-0" ref={mountRef} />
+    <SidebarProvider
+      className="relative h-full overflow-hidden"
+      style={{ "--sidebar-width": "20rem" } as CSSProperties}
+    >
+      {/* Scene is full-bleed and never resized by the sidebar (which overlays
+          it), so toggling the panel can't flash the WebGL canvas. */}
+      <div className="absolute inset-0 overflow-hidden bg-slate-900">
+        <div className="absolute inset-0" ref={mountRef} />
 
-      {status.phase === "loading" && (
-        <output
-          aria-live="polite"
-          className="absolute inset-0 flex items-center justify-center gap-3 bg-slate-900/70 text-lg text-white"
-        >
-          <Spinner />
-          {status.message}
-        </output>
-      )}
-
-      {status.phase === "error" && (
-        <Alert className="absolute inset-x-8 top-8" variant="destructive">
-          <AlertTitle>Failed to start the city viewer</AlertTitle>
-          <AlertDescription className="break-words">
+        {status.phase === "loading" && (
+          <output
+            aria-live="polite"
+            className="absolute inset-0 flex items-center justify-center gap-3 bg-slate-900/70 text-lg text-white"
+          >
+            <Spinner />
             {status.message}
-          </AlertDescription>
-        </Alert>
-      )}
+          </output>
+        )}
 
-      {status.phase === "ready" && (
-        <>
-          {/* crosshair */}
-          <div
-            aria-hidden
-            className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
-          />
+        {status.phase === "error" && (
+          <Alert className="absolute inset-x-8 top-8" variant="destructive">
+            <AlertTitle>Failed to start the city viewer</AlertTitle>
+            <AlertDescription className="wrap-break-word">
+              {status.message}
+            </AlertDescription>
+          </Alert>
+        )}
 
-          {/* FPS readout — always visible */}
-          <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/55 px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
-            {fps === null ? "–" : Math.round(fps)} FPS
-          </div>
+        {status.phase === "ready" && (
+          <>
+            {/* crosshair */}
+            <div
+              aria-hidden
+              className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
+            />
 
-          {!coarse && (
-            <Card className="pointer-events-none absolute top-3 left-3 max-w-xs gap-0 py-3">
-              <CardContent className="flex flex-col gap-2 px-4 text-xs leading-5">
-                <p>
-                  Drag the view to look around · <Kbd>WASD</Kbd> or joystick to
-                  move · double-click the ground to travel · scroll to zoom ·{" "}
-                  <Kbd>Shift</Kbd> sprint · <Kbd>F</Kbd> walk/fly ·{" "}
-                  <Kbd>Space</Kbd>/<Kbd>Shift</Kbd> up/down in fly mode ·{" "}
-                  <Kbd>R</Kbd> demolish under crosshair · <Kbd>B</Kbd> insert
-                  building · Immersive mode locks the mouse (<Kbd>Esc</Kbd>{" "}
-                  exits)
-                </p>
-                {stats && (
-                  <p className="text-muted-foreground">
-                    {stats.buildingCount} buildings ·{" "}
-                    {stats.terrainVertexCount.toLocaleString()} terrain vertices
-                    · {mode === "walk" ? "walking" : "flying"}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+            {/* FPS readout — always visible */}
+            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/55 px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
+              {fps === null ? "–" : Math.round(fps)} FPS
+            </div>
 
-          {coarse ? (
-            <Drawer>
-              <DrawerTrigger asChild>
+            <SettingsToggle />
+
+            <div className="absolute bottom-8 left-5">
+              <VirtualJoystick
+                onChange={(x, y) => handleRef.current?.setMoveInput(x, y)}
+              />
+            </div>
+
+            {coarse && (
+              <div className="absolute right-3 bottom-8 flex flex-col gap-2">
                 <Button
-                  aria-label="Scene settings"
-                  className="absolute top-3 right-3 shadow-md"
-                  size="icon"
+                  onClick={() => handleRef.current?.demolishAtCrosshair()}
+                  size="sm"
                   variant="secondary"
                 >
-                  <SlidersHorizontalIcon />
+                  <HammerIcon data-icon="inline-start" />
+                  Demolish
                 </Button>
-              </DrawerTrigger>
-              <DrawerContent>
-                <DrawerHeader>
-                  <DrawerTitle>Scene settings</DrawerTitle>
-                  <DrawerDescription>
-                    Drag to look around · joystick to walk · double-tap the
-                    ground to travel there · pinch to zoom
-                  </DrawerDescription>
-                </DrawerHeader>
-                <div className="overflow-y-auto px-4 pb-8">
-                  {controlsFields}
-                </div>
-              </DrawerContent>
-            </Drawer>
-          ) : (
-            <Card className="absolute top-3 right-3 max-h-[calc(100dvh-1.5rem)] w-72 gap-0 overflow-y-auto py-4">
-              <CardContent className="px-4">{controlsFields}</CardContent>
-            </Card>
-          )}
+                <Button onClick={insertBuilding} size="sm" variant="secondary">
+                  <HousePlusIcon data-icon="inline-start" />
+                  Insert
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-          <div className="absolute bottom-8 left-5">
-            <VirtualJoystick
-              onChange={(x, y) => handleRef.current?.setMoveInput(x, y)}
-            />
-          </div>
-
-          {coarse && (
-            <div className="absolute right-3 bottom-8 flex flex-col gap-2">
-              <Button
-                onClick={() => handleRef.current?.demolishAtCrosshair()}
-                size="sm"
-                variant="secondary"
-              >
-                <HammerIcon data-icon="inline-start" />
-                Demolish
-              </Button>
-              <Button onClick={insertBuilding} size="sm" variant="secondary">
-                <HousePlusIcon data-icon="inline-start" />
-                Insert
-              </Button>
+      {status.phase === "ready" && (
+        <Sidebar collapsible="offcanvas" side="right">
+          <SidebarHeader>
+            <div className="flex items-center justify-between pl-1">
+              <span className="font-medium text-sm">Scene settings</span>
+              <SidebarTrigger />
             </div>
-          )}
-
-          {bounds && (
-            <div
-              className={
-                coarse ? "absolute top-16 right-3" : "absolute right-3 bottom-3"
-              }
-            >
-              <Minimap
+          </SidebarHeader>
+          <SidebarContent>
+            {bounds && (
+              <SidebarMinimap
                 bounds={bounds}
                 focusRingM={focusRingMeters(dof, focusMode, focusDistance)}
                 footprints={footprints}
                 landcoverTiles={landcoverTiles}
                 onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
-                size={minimapSize}
                 subscribePose={subscribePose}
               />
-            </div>
-          )}
-        </>
+            )}
+            {controlsFields}
+          </SidebarContent>
+          <SidebarSeparator />
+          <SidebarFooter className="gap-1.5 text-muted-foreground text-xs leading-snug">
+            <p>
+              {coarse ? (
+                "Drag to look around · joystick to walk · double-tap the ground to travel · pinch to zoom"
+              ) : (
+                <>
+                  Drag to look around · <Kbd>WASD</Kbd> move · double-click
+                  ground to travel · scroll to zoom · <Kbd>Shift</Kbd> sprint ·{" "}
+                  <Kbd>F</Kbd> walk/fly · <Kbd>Space</Kbd>/<Kbd>Shift</Kbd>{" "}
+                  up/down · <Kbd>R</Kbd> demolish · <Kbd>B</Kbd> insert ·{" "}
+                  <Kbd>Esc</Kbd> exits immersive
+                </>
+              )}
+            </p>
+            {stats && (
+              <p>
+                {stats.buildingCount} buildings ·{" "}
+                {stats.terrainVertexCount.toLocaleString()} terrain vertices ·{" "}
+                {mode === "walk" ? "walking" : "flying"}
+              </p>
+            )}
+            <p className="text-[10px]">
+              Lamp positions © OpenStreetMap contributors (ODbL).
+            </p>
+          </SidebarFooter>
+        </Sidebar>
       )}
-    </div>
+    </SidebarProvider>
   );
 }

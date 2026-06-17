@@ -167,9 +167,11 @@ are unavailable** — do raster math in Python/Pillow (palette mode for speed; m
 `F` for float GeoTIFFs). Regenerate one tile:
 
 ```bash
-bash scripts/extract-dlm.sh 33412_5656     # splat + class raster + veg rows
-bash scripts/extract-canopy.sh 33412_5656  # canopy (needs the class raster first)
-bun scripts/prepare-data.ts                # refresh public/data
+bash scripts/extract-dlm.sh 33412_5656         # splat + class raster + veg rows
+bash scripts/extract-canopy.sh 33412_5656      # canopy (needs the class raster first)
+bash scripts/extract-roof-colour.sh 33412_5656 # DOP roof-colour LUT (needs data/_raw/DOP_RGBI)
+bash scripts/extract-ndvi.sh 33412_5656        # DOP NDVI raster for crown colour
+bun scripts/prepare-data.ts                    # refresh public/data
 ```
 
 ## Researching three.js releases

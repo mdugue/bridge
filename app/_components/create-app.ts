@@ -17,6 +17,7 @@ import {
 } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { fogRangeFor } from "@/lib/city/atmosphere";
+import type { RoofColorLut } from "@/lib/city/building-tint";
 import {
   epsgCodeFromReferenceSystem,
   FALLBACK_LAT_LNG,
@@ -199,8 +200,10 @@ export interface CityWalkHandle {
   setBuildingGroundShade: (strength: number) => void;
   /** building Fresnel rim (Streiflicht) strength 0..1 */
   setBuildingRim: (strength: number) => void;
-  /** roof colour mix (Dachfarbe) 0..1; terracotta/slate from roofType */
+  /** roof colour mix (Dachfarbe) 0..1; real DOP colour else terracotta/slate */
   setBuildingRoofTint: (strength: number) => void;
+  /** roof warmth (Dachwärme) 0..1; pull DOP roof colour toward synth terracotta */
+  setBuildingRoofWarmth: (strength: number) => void;
   /** per-building roughness jitter (Materialstreuung) 0..1 */
   setBuildingRoughness: (strength: number) => void;
   /** per-building clay tint (Farbvariation) mix 0..1; 0 = flat clay */
@@ -284,6 +287,37 @@ async function fetchCityJson(
     );
   }
   return data;
+}
+
+/**
+ * Optional per-building roof colours baked from the DOP orthophoto
+ * (`roofcolor_<tile>.json`, derived from the tile's `lod2_<tile>.city.json`
+ * URL). Absent/404 → undefined, and the roof falls back to the synthesized
+ * terracotta/slate palette (graceful degradation — see docs/portability.md).
+ */
+async function fetchRoofLut(
+  citySrc: string,
+  signal?: AbortSignal
+): Promise<RoofColorLut | undefined> {
+  const url = citySrc
+    .replace("lod2_", "roofcolor_")
+    .replace(".city.json", ".json");
+  if (url === citySrc) {
+    return;
+  }
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      return;
+    }
+    const doc = (await res.json()) as { roofs?: RoofColorLut };
+    return doc.roofs;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
+    return;
+  }
 }
 
 /**
@@ -376,10 +410,11 @@ async function bootApp(
 
   opts.onProgress?.("Loading CityJSON tile…");
   const cityData = await fetchCityJson(opts.citySrc, opts.signal);
+  const roofLut = await fetchRoofLut(opts.citySrc, opts.signal);
   ensureAlive();
 
   opts.onProgress?.("Parsing buildings…");
-  let cityLayer: CityLayer = createCityLayer(cityData, world);
+  let cityLayer: CityLayer = createCityLayer(cityData, world, null, roofLut);
   const offset = recenterOffset(cityLayer.matrix);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
@@ -424,6 +459,10 @@ async function bootApp(
         offset,
         heightAt: t.heightAt,
         canopyUrl: tile.vegetationSrc.replace("vegrows_", "canopy_"),
+        ndviUrl: tile.vegetationSrc
+          .replace("vegrows_", "ndvi_")
+          .replace(".geojson", ".png"),
+        bounds: t.bounds,
         signal: opts.signal,
         sunDirection,
         heightFog,
@@ -465,8 +504,11 @@ async function bootApp(
   for (const tile of opts.extraTiles ?? []) {
     opts.onProgress?.("Loading neighbouring tiles…");
     const data = await fetchCityJson(tile.citySrc, opts.signal);
+    const tileRoofLut = await fetchRoofLut(tile.citySrc, opts.signal);
     ensureAlive();
-    extraCities.push(createCityLayer(data, world, cityLayer.matrix));
+    extraCities.push(
+      createCityLayer(data, world, cityLayer.matrix, tileRoofLut)
+    );
     // Neighbours are background — half-resolution terrain (~4 m) is plenty.
     terrains.push(await loadTileScene(tile, 512));
     ensureAlive();
@@ -882,6 +924,9 @@ async function bootApp(
     },
     setBuildingRoofTint: (strength) => {
       styleResources.clayDetail.uRoofTint.value = strength;
+    },
+    setBuildingRoofWarmth: (strength) => {
+      styleResources.clayDetail.uRoofWarmth.value = strength;
     },
     setBuildingEave: (strength) => {
       styleResources.clayDetail.uEave.value = strength;

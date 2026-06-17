@@ -56,6 +56,8 @@ export interface PocDebugInfo {
   setBuildingRim?: (strength: number) => void;
   /** Sets the roof colour mix (Dachfarbe) (0..1). */
   setBuildingRoofTint?: (strength: number) => void;
+  /** Sets the roof warmth blend (Dachwärme) toward synth terracotta (0..1). */
+  setBuildingRoofWarmth?: (strength: number) => void;
   /** Sets the per-building roughness jitter (Materialstreuung) strength (0..1). */
   setBuildingRoughness?: (strength: number) => void;
   /** Sets the per-building clay tint (Farbvariation) mix (0..1). */

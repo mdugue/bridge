@@ -36,9 +36,12 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   **Source preference:** real per-building colour *(planned: DOP)* would replace
   the hash; the hash exists precisely so the look survives when `function` is 86 %
   "unspecified". `lib/city/building-tint.ts`, `visual-style.ts`.
-- **Roof colour** (*Dachfarbe*) — `surfacetype==RoofSurface` + `roofType` /
-  `Dachneigung` → terracotta (pitched) vs slate (flat). **Preferred upgrade: DOP
-  roof sampling** (see 🧪 below); falls back to this synthesized palette.
+- **Roof colour** (*Dachfarbe*) — real **DOP-sampled** colour per building when
+  available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
+  synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
+  terracotta pitched / slate flat). Bake: `scripts/extract-roof-colour.sh`.
+  *Open tuning:* raw DOP is truthful but cooler/greyer than the romantic synth
+  palette — a warmth blend toward terracotta is the likely sweet spot (see 🧪).
 - **Storey bands** (*Höhenlinien*) — band spacing from `storeyHeight(measuredHeight)`
   (`storeysAboveGround` is only ~4 % populated, so derived).
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
@@ -54,6 +57,10 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 - **Canopy fill** — `nDOM = DOM1 − DGM1`, one tree per ~7 m cell at the tallest
   pixel, scaled to measured height, **gated off road/bridge/water** via the DLM
   class raster. `extract-canopy.sh`.
+- **NDVI crown colour** — per-tree DOP greenness (`ndvi_<tile>.png`, sampled on
+  the CPU at placement) shifts the crown dry pale-sage → lush deep green.
+  `extract-ndvi.sh` → `vegetation-layer.ts` `crownColor`; falls back to the
+  hash-only sage when no NDVI raster (graceful — see portability).
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
   **multi-tuft crown LOD** (rich near / cheap icosphere far, per-chunk distance);
   **backlight shimmer** (one shadow-gated sample, far cheaper than transmission).
@@ -68,14 +75,15 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 
 ## 🧪 Experimental
 
-- **DOP roof colour** — sample the nadir DOP orthophoto under each building's
-  RoofSurface footprint → median colour → per-`objectid` LUT (committed JSON), fed
-  into the roof-colour transform as the *preferred* source with the synthesized
-  palette as fallback. Bake: `scripts/extract-roof-colour.sh` (needs a DOP tile in
-  `data/_raw/dop/`; see [portability.md](./portability.md#fetching-source-data)).
-  **Known caveat:** standard DOP has building lean (roofs displaced), so sample an
-  inner buffer of the footprint and take a robust median. Runtime wiring + GPU A/B
-  pending a fetched tile.
+- **Roof-colour warmth blend** — raw DOP roof colour (shipped, ✅ above) reads
+  truthful but cooler/drabber than the synth terracotta palette. A blend (DOP
+  variation pulled ~⅓ toward the terracotta family), ideally a live HUD slider
+  (0 = raw DOP ↔ 1 = full synth warmth), would recover old-town warmth while
+  keeping real material variation. **Decision pending** user review of the A/B
+  (`shots/feat_aerial_day.png` vs `…_PREV.png`).
+- **DOP-lean caveat (recorded):** standard DOP has building lean (tall roofs
+  displaced over facades). Mitigated in the bake by eroding the roof footprint
+  inward + a robust median; revisit with true-orthophotos if available.
 
 ---
 
@@ -84,9 +92,10 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 Ranked roughly by impact-vs-effort (full rationale lives in chat history / the
 research that produced them):
 
-1. **DOP NDVI vegetation** — `(NIR−R)/(NIR+R)` from the 4-channel DOP → tree
-   placement density + crown colour (lush↔dry) + meadow tinting. Cheap at runtime
-   (baked), high impact.
+1. **DOP NDVI — density & meadow** *(crown colour now ✅ active above)* — extend
+   the baked `ndvi_<tile>.png` to also drive tree placement **density** and
+   **meadow/grass tinting** in the terrain splat. The crown-colour slice shipped;
+   these two remain.
 2. **Stylized DOP ground-drape** — posterized, desaturated DOP blended over
    terrain past ~150 m for far-distance texture. *Aesthetic risk* — prototype
    behind a slider, judge on GPU before committing.

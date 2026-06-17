@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   epsgToMapPx,
   type FootprintPoly,
@@ -236,41 +235,37 @@ export function Minimap({
   }, [subscribePose, bounds, size]);
 
   return (
-    <Card className="pointer-events-auto gap-2 py-3">
-      <CardContent className="px-3">
-        <button
-          aria-label="Minimap — click to teleport"
-          className="relative block cursor-crosshair"
-          data-testid="minimap"
-          onClick={(e) => {
-            // Keyboard "clicks" carry no coordinates to teleport to.
-            if (e.detail === 0) {
-              return;
-            }
-            const rect = e.currentTarget.getBoundingClientRect();
-            const { x, y } = mapPxToEpsg(
-              e.clientX - rect.left,
-              e.clientY - rect.top,
-              bounds,
-              size
-            );
-            onTeleport(x, y);
-          }}
-          style={{ width: size, height: size }}
-          type="button"
-        >
-          <canvas
-            className="absolute inset-0"
-            ref={staticRef}
-            style={{ width: size, height: size }}
-          />
-          <canvas
-            className="absolute inset-0"
-            ref={overlayRef}
-            style={{ width: size, height: size }}
-          />
-        </button>
-      </CardContent>
-    </Card>
+    <button
+      aria-label="Minimap — click to teleport"
+      className="relative block cursor-crosshair overflow-hidden rounded-md ring-1 ring-sidebar-border"
+      data-testid="minimap"
+      onClick={(e) => {
+        // Keyboard "clicks" carry no coordinates to teleport to.
+        if (e.detail === 0) {
+          return;
+        }
+        const rect = e.currentTarget.getBoundingClientRect();
+        const { x, y } = mapPxToEpsg(
+          e.clientX - rect.left,
+          e.clientY - rect.top,
+          bounds,
+          size
+        );
+        onTeleport(x, y);
+      }}
+      style={{ width: size, height: size }}
+      type="button"
+    >
+      <canvas
+        className="absolute inset-0"
+        ref={staticRef}
+        style={{ width: size, height: size }}
+      />
+      <canvas
+        className="absolute inset-0"
+        ref={overlayRef}
+        style={{ width: size, height: size }}
+      />
+    </button>
   );
 }

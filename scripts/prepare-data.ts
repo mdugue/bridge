@@ -38,12 +38,14 @@ const copies: [string, string][] = TILES.flatMap((tile) => [
   [`data/dlm/canopy_${tile}.geojson`, `public/data/canopy_${tile}.geojson`],
 ]);
 
-// Optional artifacts: street lamps (scripts/extract-lamps.sh, ODbL). A tile may
-// not have been baked yet (or have zero lamps) — copy when present, warn but
-// never fail, and the loader treats a missing file as "no lamps".
-const optionalCopies: [string, string][] = TILES.map((tile) => [
-  `data/dlm/lamps_${tile}.geojson`,
-  `public/data/lamps_${tile}.geojson`,
+// Optional artifacts: street lamps (extract-lamps.sh, ODbL) and DOP-sampled
+// roof colours (extract-roof-colour.sh). A tile may not have been baked yet —
+// copy when present, warn but never fail; the loader treats a missing file as
+// "feature off" (lamps absent / roof colour falls back to the synth palette).
+const optionalCopies: [string, string][] = TILES.flatMap((tile) => [
+  [`data/dlm/lamps_${tile}.geojson`, `public/data/lamps_${tile}.geojson`],
+  [`data/dop/roofcolor_${tile}.json`, `public/data/roofcolor_${tile}.json`],
+  [`data/dlm/ndvi_${tile}.png`, `public/data/ndvi_${tile}.png`],
 ]);
 
 for (const [src, dest] of copies) {

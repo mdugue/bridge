@@ -112,11 +112,18 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     { timeout: 30_000 }
   );
 
-  // Minimap teleport: the map is 192 px over the loaded 2x2 tile block (the
-  // union bounds span 410000..414000 E / 5656000..5660000 N), so clicking
-  // (48, 48) — a quarter in from the north-west corner — must land the player
-  // near 411000 E / 5659000 N.
-  await page.getByTestId("minimap").click({ position: { x: 48, y: 48 } });
+  // Minimap teleport: the map spans the loaded 2x2 tile block (union bounds
+  // 410000..414000 E / 5656000..5660000 N) and is sized responsively in the
+  // sidebar, so clicking a quarter in from the north-west corner — whatever the
+  // rendered px size — must land the player near 411000 E / 5659000 N.
+  const minimap = page.getByTestId("minimap");
+  const minimapBox = await minimap.boundingBox();
+  await minimap.click({
+    position: {
+      x: (minimapBox?.width ?? 0) / 4,
+      y: (minimapBox?.height ?? 0) / 4,
+    },
+  });
   const pose = await page.evaluate(() => window.__poc?.getPose?.());
   expect(pose?.epsgX ?? 0).toBeGreaterThan(410_950);
   expect(pose?.epsgX ?? 0).toBeLessThan(411_050);

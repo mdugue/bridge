@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   buildingGlows,
   buildingTint,
+  roofColor,
   roofTint,
   roughJitter,
   storeyHeight,
@@ -78,6 +79,24 @@ test("roofTint: low pitch reads flat, steep pitch reads tiled (unknown roofType)
   const lowPitch = roofTint("r", { roofType: "9999", Dachneigung: 2 });
   const steep = roofTint("r", { roofType: "9999", Dachneigung: 40 });
   expect(steep[0] - steep[2]).toBeGreaterThan(lowPitch[0] - lowPitch[2]);
+});
+
+test("roofColor: uses the DOP LUT when present, else falls back to roofTint", () => {
+  const lut = {
+    DESNATPU1000HJx5: [0.42, 0.18, 0.12] as [number, number, number],
+  };
+  // LUT hit → exact sampled colour, regardless of roofType.
+  expect(roofColor("DESNATPU1000HJx5", { roofType: "1000" }, lut)).toEqual([
+    0.42, 0.18, 0.12,
+  ]);
+  // LUT miss → synthesized roofTint for that id+attrs.
+  expect(roofColor("not-in-lut", { roofType: "3100" }, lut)).toEqual(
+    roofTint("not-in-lut", { roofType: "3100" })
+  );
+  // No LUT at all → roofTint.
+  expect(roofColor("x", { roofType: "1000" })).toEqual(
+    roofTint("x", { roofType: "1000" })
+  );
 });
 
 test("buildingGlows: commerce/public/special glow, housing does not", () => {

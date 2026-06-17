@@ -16,14 +16,24 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
+/** Tile extent in the projected CRS: [minX, minY, maxX, maxY]. */
+type Bounds = [number, number, number, number];
+
+/** Samples a baked raster at projected coords → byte value, or undefined off-tile. */
+type RasterSampler = (x: number, y: number) => number | undefined;
+
 /** Recenter offset + ground lookup shared with the terrain. */
 export interface VegetationContext {
+  /** tile extent (EPSG) for the NDVI raster lookup; required with `ndviUrl` */
+  bounds?: Bounds;
   /** optional canopy GeoJSON (points with an "h" height) from DOM1 */
   canopyUrl?: string;
   heightAt: (x: number, y: number) => number | null;
   /** shared valley height-fog uniforms (by reference), patched into the
    * crown/trunk/hedge materials so tree bases pool haze with the terrain */
   heightFog?: HeightFogUniforms;
+  /** optional DOP-derived NDVI raster (PNG, L) for lush↔dry crown colour */
+  ndviUrl?: string;
   offset: { cx: number; cy: number };
   signal?: AbortSignal;
   /**
@@ -130,6 +140,8 @@ function sampleLine(
 }
 
 interface Placement {
+  /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
+  ndvi?: number;
   rot: number;
   s: number;
   x: number;
@@ -140,7 +152,8 @@ interface Placement {
 /** Resamples every line and drops each point onto the terrain (EPSG -> world). */
 function collectPlacements(
   features: LineFeature[],
-  ctx: VegetationContext
+  ctx: VegetationContext,
+  ndviAt?: RasterSampler
 ): { hedges: Placement[]; trees: Placement[] } {
   const { offset } = ctx;
   const trees: Placement[] = [];
@@ -168,6 +181,7 @@ function collectPlacements(
         z: w.z,
         rot: isHedge ? hash(seed) * 0.3 : hash(seed * 1.7) * Math.PI,
         s: isHedge ? 1 : 0.8 + hash(seed) * 0.6,
+        ndvi: ndviAt?.(ex, ey),
       };
       (isHedge ? hedges : trees).push(place);
     }
@@ -490,12 +504,35 @@ function buildTrunkMaterial(
   return m;
 }
 
-/** Deterministic per-tree pastel sage variation (hue + value). */
+/**
+ * Per-tree crown colour. `v` is the deterministic hash jitter (keeps neighbours
+ * distinct). Without NDVI it's the original pastel sage; with it, the DOP
+ * greenness shifts the crown dry pale-sage → lush deep green, so a vigorous
+ * park reads richer than a stressed street tree.
+ */
+function crownColor(col: Color, p: Placement, v: number): void {
+  if (p.ndvi === undefined) {
+    col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
+    return;
+  }
+  // The DOP NDVI raster is globally muted (5×5-sampled median ~0.28), so remap
+  // about that low centre — not a textbook 0.3..0.7 — or every tree clamps to
+  // "dry" and the variation is invisible. This spreads the real per-tree spread
+  // across the full lushness range while staying in the soft watercolour palette.
+  const t = Math.min(Math.max((p.ndvi - 0.1) / 0.45, 0), 1);
+  col.setHSL(
+    0.19 + 0.1 * t + v * 0.04, // dry yellow-green → lush green
+    0.14 + 0.26 * t, // pale sage → richer green
+    0.68 - 0.16 * t + v * 0.1 // light → deeper
+  );
+}
+
+/** Deterministic per-tree crown variation (hash jitter + optional NDVI). */
 function paintCrowns(crowns: InstancedMesh, cell: Placement[]): void {
   const col = new Color();
   for (let i = 0; i < cell.length; i++) {
     const v = hash(cell[i].x * 0.3 + cell[i].z * 0.7) - 0.5;
-    col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
+    crownColor(col, cell[i], v);
     crowns.setColorAt(i, col);
   }
   if (crowns.instanceColor) {
@@ -570,6 +607,73 @@ function buildHedges(
   return meshes;
 }
 
+/** Max byte over a 5×5 (~10 m) window = the crown footprint. The NDVI raster is
+ *  ~2 m/px and median-zero, so a single-pixel sample drops ~28% of trees onto an
+ *  empty pixel; the footprint max recovers the real canopy value (cuts zeros to
+ *  ~4% and roughly triples the median — measured). */
+function sampleMaxWindow(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number
+): number {
+  let m = 0;
+  for (let dy = -2; dy <= 2; dy++) {
+    const py = Math.min(h - 1, Math.max(0, cy + dy));
+    for (let dx = -2; dx <= 2; dx++) {
+      const px = Math.min(w - 1, Math.max(0, cx + dx));
+      m = Math.max(m, data[(py * w + px) * 4]); // R of the L→RGBA decode
+    }
+  }
+  return m;
+}
+
+/**
+ * Loads the DOP NDVI PNG into a CPU sampler (EPSG → 0..1). Returns null on any
+ * failure (no raster, decode error, no OffscreenCanvas) so crowns fall back to
+ * the hash-only sage — graceful degradation, see docs/portability.md.
+ */
+async function loadNdviSampler(
+  url: string,
+  bounds: Bounds,
+  signal?: AbortSignal
+): Promise<RasterSampler | null> {
+  if (typeof OffscreenCanvas === "undefined") {
+    return null;
+  }
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      return null;
+    }
+    const bmp = await createImageBitmap(await res.blob());
+    const { width: w, height: h } = bmp;
+    const c2d = new OffscreenCanvas(w, h).getContext("2d");
+    if (!c2d) {
+      return null;
+    }
+    c2d.drawImage(bmp, 0, 0);
+    const data = c2d.getImageData(0, 0, w, h).data;
+    const [minX, minY, maxX, maxY] = bounds;
+    return (ex, ey) => {
+      const u = (ex - minX) / (maxX - minX);
+      const vv = (maxY - ey) / (maxY - minY); // raster row 0 = north
+      if (u < 0 || u > 1 || vv < 0 || vv > 1) {
+        return;
+      }
+      const cx = Math.min(w - 1, Math.floor(u * w));
+      const cy = Math.min(h - 1, Math.floor(vv * h));
+      return sampleMaxWindow(data, w, h, cx, cy) / 255;
+    };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
+    return null;
+  }
+}
+
 export async function fetchFeatures<T>(
   url: string,
   signal?: AbortSignal
@@ -589,7 +693,8 @@ export async function fetchFeatures<T>(
 /** Canopy points (DOM1-derived) → height-scaled tree placements. */
 function collectCanopy(
   features: PointFeature[],
-  ctx: VegetationContext
+  ctx: VegetationContext,
+  ndviAt?: RasterSampler
 ): Placement[] {
   const { offset } = ctx;
   const out: Placement[] = [];
@@ -615,6 +720,7 @@ function collectCanopy(
       rot: hash(seed * 1.7) * Math.PI,
       // Scale the whole tree to the measured canopy height (± a touch).
       s: Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2),
+      ndvi: ndviAt?.(ex, ey),
     });
   }
   return out;
@@ -646,15 +752,19 @@ export async function loadVegetation(
   let multiTuft = DEFAULT_TREE_MULTITUFT;
   let cells: CellLod[] = [];
 
-  const [rowFeatures, canopyFeatures] = await Promise.all([
+  const [rowFeatures, canopyFeatures, ndviSampler] = await Promise.all([
     fetchFeatures<LineFeature>(url, ctx.signal),
     ctx.canopyUrl
       ? fetchFeatures<PointFeature>(ctx.canopyUrl, ctx.signal)
       : Promise.resolve([]),
+    ctx.ndviUrl && ctx.bounds
+      ? loadNdviSampler(ctx.ndviUrl, ctx.bounds, ctx.signal)
+      : Promise.resolve(null),
   ]);
+  const ndviAt = ndviSampler ?? undefined;
 
-  const { trees, hedges } = collectPlacements(rowFeatures, ctx);
-  trees.push(...collectCanopy(canopyFeatures, ctx));
+  const { trees, hedges } = collectPlacements(rowFeatures, ctx, ndviAt);
+  trees.push(...collectCanopy(canopyFeatures, ctx, ndviAt));
   if (trees.length > 0) {
     const built = buildTrees(
       trees,

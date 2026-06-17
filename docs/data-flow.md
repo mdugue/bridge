@@ -27,7 +27,7 @@ flowchart TB
     DOM["DOM1<br/>surface raster (1 m)"]
     DLM["Basis-DLM (ATKIS)<br/>land cover + veg rows"]
     OSM["OpenStreetMap<br/>street lamps"]
-    DOP["DOP orthophoto<br/>RGB + near-IR"]:::planned
+    DOP["DOP orthophoto<br/>RGB + near-IR"]
   end
 
   HASH["deterministic hash"]:::synth
@@ -61,14 +61,14 @@ flowchart TB
   CJ ==>|"merged mesh + objectid"| BLD
   CJ ==>|"function · roofType · height · surfacetype"| DET
   HASH -.->|"per-building variation<br/>(carries the look when attrs are sparse)"| DET
-  DOP -. "preferred roof colour<br/>(replaces hash for roofs)" .-> DET
+  DOP -. "real roof colour<br/>(83% coverage, else synth)" .-> DET
 
   %% vegetation (multi-source + gated)
   DLM ==>|"hedge / tree rows"| VEG
   DOM ==>|"nDOM = DOM1 − DGM1 → canopy"| VEG
   DGM ==>|"nDOM base term"| VEG
   DLM -. "gates: no trees on roads/water" .-> VEG
-  DOP -. "NDVI → density &amp; crown colour" .-> VEG
+  DOP -. "NDVI → crown colour (density planned)" .-> VEG
 
   %% lamps
   OSM ==>|"point positions"| LAMP
@@ -87,8 +87,8 @@ flowchart TB
 | **Surface colours** | Basis-DLM splatmap PNG | — | `terrain-layer.ts` (samples splat); baked by `scripts/extract-dlm.sh` |
 | **Water (Elbe)** | Basis-DLM (alpha = water) **+** DGM1 (geometry) | — | `water-layer.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 | DGM1 (ground-clamp) | `city-layer.ts` (`cityjson-threejs-loader`) |
-| **Building detailing** | CityJSON attrs + `surfacetype` | hash (fallback variation) · DOP *(planned, preferred roof)* · sun (dusk gate) | `city-layer.ts` `annotateBuildingDetail`, `visual-style.ts`, `lib/city/building-tint.ts` |
-| **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI *(planned)* | `vegetation-layer.ts`; baked by `extract-dlm.sh` + `extract-canopy.sh` |
+| **Building detailing** | CityJSON attrs + `surfacetype` | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `city-layer.ts` `annotateBuildingDetail`, `visual-style.ts`, `lib/city/building-tint.ts`; bake `extract-roof-colour.sh` |
+| **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `extract-dlm.sh` + `extract-canopy.sh` + `extract-ndvi.sh` |
 | **Street lamps** | OSM | DGM1 (ground-clamp) | baked by `scripts/extract-lamps.sh`; placed in `vegetation-layer.ts` / scene |
 | **Minimap** | derived from tile bounds | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
