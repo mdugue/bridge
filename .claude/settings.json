@@ -24,18 +24,5 @@
       "Edit(/.claude/skills/city-walker/**)",
       "Bash(ogrinfo -ro -q ver06_l.shp -spat 410000 5656000 414000 5660000 -where 'NAM='\\\\''Marienbrücke'\\\\''' ver06_l)"
     ]
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bun fix --skip=correctness/noUnusedImports"
-          }
-        ]
-      }
-    ]
   }
 }
