@@ -771,10 +771,15 @@ async function bootApp(
   opts.onProgress?.("Preparing render styles…");
   const styleResources = createStyleResources(heightFog, clayNight);
   let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
-  applyCityStyle(cityLayer.group, currentStyle, styleResources);
-  for (const c of extraCities) {
-    applyCityStyle(c.group, currentStyle, styleResources);
-  }
+  // The neighbour tiles are as visible as the primary one — restyle ALL of them
+  // together, or a style switch leaves 3/4 of the skyline on the old material.
+  const restyleCities = () => {
+    applyCityStyle(cityLayer.group, currentStyle, styleResources);
+    for (const c of extraCities) {
+      applyCityStyle(c.group, currentStyle, styleResources);
+    }
+  };
+  restyleCities();
   const postStack = createPostStack(renderer, scene, camera);
 
   // Spawn at the recenter point (= world origin), standing on the terrain.
@@ -1106,7 +1111,7 @@ async function bootApp(
     setSun,
     setStyle: (style) => {
       currentStyle = style;
-      applyCityStyle(cityLayer.group, style, styleResources);
+      restyleCities();
       invalidateShadows();
     },
     setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
