@@ -185,7 +185,7 @@ export default function CityWalk({
           return;
         }
         setStats(s);
-        updatePocDebug({ ready: true, ...s });
+        updatePocDebug(s);
         const h = handleRef.current;
         if (h) {
           setFootprints(h.getFootprints());
@@ -213,6 +213,7 @@ export default function CityWalk({
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
         updatePocDebug({
+          ready: true,
           offset: h.offset,
           flyTo: h.flyTo,
           demolishAtCrosshair: h.demolishAtCrosshair,

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 // Software-rendered WebGL so the smoke test also runs on headless CI boxes
 // without a GPU (ANGLE -> SwiftShader).
@@ -12,15 +12,47 @@ test.use({
   },
 });
 
+/** Resolves once the viewer has rendered `count` more frames. */
+async function waitForFrames(page: Page, count: number): Promise<void> {
+  const start = await page.evaluate(() => window.__poc?.frames ?? 0);
+  await page.waitForFunction(
+    (target) => (window.__poc?.frames ?? 0) >= target,
+    start + count,
+    { timeout: 60_000 }
+  );
+}
+
+/** Skips the current test when the browser has no WebGL at all. */
+async function skipWithoutWebGl(page: Page): Promise<void> {
+  const webglAvailable = await page.evaluate(() => {
+    const probe = document.createElement("canvas");
+    return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
+  });
+  // biome-ignore lint/suspicious/noSkippedTests: conditional runtime skip — render assertions are meaningless without WebGL
+  test.skip(
+    !webglAvailable,
+    "WebGL is genuinely unavailable in this environment"
+  );
+}
+
 test("city page serves the viewer shell", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(String(err)));
   await page.goto("/");
-  // Either the loading overlay, the ready HUD, or a loud error — never blank.
+  // Either the loading overlay or the booted canvas — never a blank page.
   await expect(
     page
-      .locator("main")
-      .filter({ has: page.locator("div") })
+      .getByText(
+        /Loading 3D viewer|Starting renderer|Loading CityJSON|Parsing buildings|Loading DGM|Indexing terrain|Preparing render styles/
+      )
+      .or(page.locator("canvas[data-engine]"))
       .first()
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 60_000 });
+  // Scoped to <main>: the app's own error Alert lives there, while the
+  // Next.js dev overlay parks an empty alert region next to it (dev server
+  // only — CI serves a production build).
+  await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });
 
 test("city walk renders buildings, terrain and shadows", async ({ page }) => {
@@ -38,15 +70,7 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
 
   await page.goto("/");
 
-  const webglAvailable = await page.evaluate(() => {
-    const probe = document.createElement("canvas");
-    return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
-  });
-  // biome-ignore lint/suspicious/noSkippedTests: conditional runtime skip — render assertions are meaningless without WebGL, but the spec still runs everywhere it can
-  test.skip(
-    !webglAvailable,
-    "WebGL is genuinely unavailable in this environment — render assertions skipped"
-  );
+  await skipWithoutWebGl(page);
 
   // Debug hook (dev/test builds only) is set after the first successful load.
   // Waited on first: in dev, React StrictMode briefly runs a second, aborted
@@ -155,38 +179,49 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   );
   expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
 
-  // Style, DoF and atmosphere controls must not produce shader/render
-  // errors (caught by the console assertions below after a few frames).
-  await page.evaluate(() => {
-    window.__poc?.setStyle?.("clay");
-    window.__poc?.setStyle?.("standard");
-    window.__poc?.setStyle?.("ghost");
-    window.__poc?.setDepthOfField?.(false);
-    window.__poc?.setDepthOfField?.(true);
-    window.__poc?.setAtmosphere?.(1);
-    window.__poc?.setAtmosphere?.(0.35);
-    window.__poc?.setDepthGrading?.(1);
-    window.__poc?.setDepthGrading?.(0.5);
-    window.__poc?.setBuildingTransparency?.(0.8);
-    window.__poc?.setBuildingTransparency?.(0.45);
-    // Clay's alpha-hash path recompiles when crossing 0 — exercise it.
-    window.__poc?.setStyle?.("clay");
-    window.__poc?.setBuildingTransparency?.(0.5);
-    window.__poc?.setBuildingTransparency?.(0);
-    window.__poc?.setStyle?.("ghost");
-    window.__poc?.setToonBands?.(4);
-    window.__poc?.setToonBands?.(0);
-    window.__poc?.setEdges?.(0);
-    window.__poc?.setEdges?.(0.7);
-    window.__poc?.setContactShadows?.(1);
-    window.__poc?.setContactShadows?.(0.5);
-    window.__poc?.setPaperGrain?.(1);
-    window.__poc?.setPaperGrain?.(0.25);
-  });
-  await page.waitForTimeout(500);
-
-  expect(pageErrors).toEqual([]);
-  expect(consoleErrors).toEqual([]);
+  // Style, DoF and atmosphere controls must not produce shader/render errors.
+  // Each step is bound to real rendered frames: a shader that only fails once
+  // its program is compiled and drawn cannot hide behind a fixed sleep.
+  const STYLE_STEPS = 21;
+  for (let i = 0; i < STYLE_STEPS; i++) {
+    await page.evaluate((index) => {
+      const steps: Array<() => void> = [
+        () => window.__poc?.setStyle?.("clay"),
+        () => window.__poc?.setStyle?.("standard"),
+        () => window.__poc?.setStyle?.("ghost"),
+        () => window.__poc?.setDepthOfField?.(false),
+        () => window.__poc?.setDepthOfField?.(true),
+        () => {
+          window.__poc?.setAtmosphere?.(1);
+          window.__poc?.setDepthGrading?.(1);
+        },
+        () => {
+          window.__poc?.setAtmosphere?.(0.35);
+          window.__poc?.setDepthGrading?.(0.5);
+        },
+        () => window.__poc?.setBuildingTransparency?.(0.8),
+        () => window.__poc?.setBuildingTransparency?.(0.45),
+        // Clay's alpha-hash program compiles when transparency crosses 0 —
+        // each of these must reach a rendered frame.
+        () => window.__poc?.setStyle?.("clay"),
+        () => window.__poc?.setBuildingTransparency?.(0.5),
+        () => window.__poc?.setBuildingTransparency?.(0),
+        () => window.__poc?.setStyle?.("ghost"),
+        () => window.__poc?.setToonBands?.(4),
+        () => window.__poc?.setToonBands?.(0),
+        () => window.__poc?.setEdges?.(0),
+        () => window.__poc?.setEdges?.(0.7),
+        () => window.__poc?.setContactShadows?.(1),
+        () => window.__poc?.setContactShadows?.(0.5),
+        () => window.__poc?.setPaperGrain?.(1),
+        () => window.__poc?.setPaperGrain?.(0.25),
+      ];
+      steps[index]?.();
+    }, i);
+    await waitForFrames(page, 2);
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  }
 
   // Visual artifact for humans; not asserted on.
   await page.screenshot({ path: "test-results/city-walk-smoke.png" });
@@ -205,7 +240,17 @@ test.describe("mobile", () => {
     page,
   }) => {
     test.setTimeout(240_000);
+    const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(msg.text());
+      }
+    });
+
     await page.goto("/");
+    await skipWithoutWebGl(page);
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: 120_000,
     });
@@ -295,5 +340,8 @@ test.describe("mobile", () => {
     await expect(page.getByText("Building style")).toBeVisible({
       timeout: 30_000,
     });
+
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
   });
 });
