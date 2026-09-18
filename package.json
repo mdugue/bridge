@@ -61,10 +61,11 @@
     "typecheck": "tsgo --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix",
-    "test": "bun test ./lib",
-    "test:watch": "bun test ./lib --watch",
-    "test:coverage": "bun test ./lib --coverage",
-    "test:e2e": "playwright test"
+    "test": "bun test ./lib ./app",
+    "test:watch": "bun test ./lib ./app --watch",
+    "test:coverage": "bun test ./lib ./app --coverage",
+    "test:e2e": "playwright test",
+    "verify": "bun run lint && bun run typecheck && bun run test"
   },
   "version": "0.1.0",
   "private": true,

@@ -27,5 +27,14 @@ export function disposeObject3D(root: Object3D): void {
     };
     resource.geometry?.dispose();
     disposeMaterial(resource.material);
+    // visual-style.ts stashes the loader's original material when it swaps
+    // in a shared style material; free it too, or every demolish-reload
+    // leaks one compiled program.
+    const original = (
+      obj.userData as { originalMaterial?: Material | Material[] }
+    ).originalMaterial;
+    if (original && original !== resource.material) {
+      disposeMaterial(original);
+    }
   });
 }

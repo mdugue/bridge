@@ -26,19 +26,24 @@ without re-reading its "Current state" against the live code**; a full
 `/improve reconcile` would refresh the excerpts. Verified status of each plan
 against the merged tree (checked 2026-09-18, after the merge):
 
-- **001 — still valid, and more urgent than when it was written.** `bun test`
-  is still `bun test ./lib`, there is still no `verify` script, `__poc.ready`
-  still flips in `onStats` before the handle API is installed, and the style
-  burst still cannot fail. Its Step 3 (e2e that waits for real frames) is the
-  natural home for the CI timing work the merge commit had to do.
-- **002 — partly shipped by #16.** Step 3 (on-demand shadow map) is done:
-  `sun-rig.ts` sets `shadow.autoUpdate = false` and raises `needsUpdate` only
-  when the sun or the frustum moves. Step 2's `firstHitOnly` is already set on
-  the focus raycaster. **Step 1 is still open and now worth more**: the
-  autofocus ray still hits BVH-less terrain ~10×/s, and it is four terrain
-  meshes plus the neighbour-tile city groups since #16 loads a 2×2 block.
-  Steps 4 (half-res transmission, `antialias: true` MSAA backbuffer) and 5 are
-  untouched.
+- **001 — DONE on `main` (PR #18), merged in here.** The `app/` test glob, the
+  `verify` script, the honest `__poc.ready`, the frame counter and the
+  frame-bound style walk all apply to this branch now. Two adaptations were
+  needed on merge: the walk's `setToonBands`/`setEdges` steps are gone (#16
+  removed both) and were replaced by steps for the shader paths #16 added
+  (height fog, meadow NDVI, water mist, the crown shaders), and the CI timing
+  work for the much heavier scene lives in `playwright.config.ts`.
+- **002 — DONE on `main` (PR #18), ported by hand.** #16 had already solved one
+  of its six steps its own way (`sun-rig.ts` gates the shadow map per light and
+  re-renders it when the sun or the camera-following frustum moves), so the
+  merge keeps that gate and drops `main`'s renderer-level
+  `shadowMap.autoUpdate = false`: with both closed, the rig's per-frame
+  invalidation would be swallowed and shadows would freeze while walking.
+  `invalidateShadows()` is the single entry point either way — **the rule to
+  carry forward is that every new scene object and every material change that
+  alters the depth pass has to call it**; a missing call is a stale shadow, never
+  a crash. The terrain BVH now covers all four tiles of the 2×2 block, not just
+  the primary one.
 - **003 — obsolete as written.** #16 deleted `buildEdges`/`EdgesGeometry` from
   `visual-style.ts`; welded building ink edges no longer exist (the terrain
   contour ink is a shader term now). The finding it was written for is gone,
@@ -72,8 +77,8 @@ against the merged tree (checked 2026-09-18, after the merge):
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Make the test baseline real — `app/` tests run, e2e waits for frames, `bun run verify` | P1 | S | — | TODO — valid after #16 |
-| 002 | Remove per-frame waste: terrain BVH at load, on-demand shadow map, half-res transmission, no MSAA backbuffer | P1 | S | 001 | TODO — re-scoped: Step 3 shipped in #16, Steps 1/4/5 open |
+| 001 | Make the test baseline real — `app/` tests run, e2e waits for frames, `bun run verify` | P1 | S | — | DONE — 15 test files / 75 unit tests, `bun run verify` + `bun run test:e2e` green. One deviation: the ghost test asserts "version increased", not "+1" — three's own `transmission` setter already bumps `version` on the zero crossing, so `setCityTransparency`'s `needsUpdate` is a redundant second bump (see follow-up below). |
+| 002 | Remove per-frame waste: terrain BVH at load, on-demand shadow map, half-res transmission, no MSAA backbuffer | P1 | S | 001 | DONE — all six steps; `bun run verify`, `bun run build` and `bun run test:e2e` green. The manual shadow check was replaced by a scripted one (the executing environment has no display): under `autoUpdate = false`, moving the sun from 05:30 to 16:30 changes 48 % of the frame's pixels, `insertBuilding()` changes 0.49 %, demolish is covered by the e2e spec, all with zero console errors — i.e. every `invalidateShadows()` site produces a fresh frame. Note this measures "the frame re-renders", not "the shadow itself moved"; confirming the look (shadow follows the time slider, demolished building's shadow gone, inserted box casts one) plus the half-resolution transmission and SMAA-without-MSAA appearance still needs one maintainer glance in `bun dev`. |
 | 003 | Derive ink edges from CityJSON rings instead of welding the GPU mesh (≈1 s off boot, ≈0.65 s off each demolish) | P1 | M | 001 (recommended) | REJECTED — #16 removed `buildEdges`/ink edges; no target left |
 | 004 | Preprocess the DGM into a 512² heightfield at build time (12.6 MB → ≈0.75 MB, no in-browser GeoTIFF decode) | P1 | M | — | TODO — valid; ×4 tiles after #16 |
 | 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | P2 | M | 001 | TODO — Steps 1–3 verbatim, 4–5 need porting |
@@ -141,6 +146,7 @@ against `8075a21`.
 | 26 | `tsconfig` `types: ["bun"]` applies Bun globals to browser code; `target: ES2017`; `allowJs` with no JS files. | dx | LOW | S | MED | `tsconfig.json:3, 5, 24` | investigate — a `tsconfig.node.json` for scripts/tests; not urgent |
 | 27 | `epsgCodeFromReferenceSystem` rejects OGC URLs with a trailing slash. | bug | LOW | S | LOW | `lib/city/crs.ts:22` | not planned — one-line regex + test; do it opportunistically |
 | 28 | Superseded Dependabot PRs (#9, #13, #15) saturate the 5-slot limit; `suncalc` 1.9 → 2.0 (#10) needs an export-shape/azimuth check before merging. | deps | LOW | S | LOW | GitHub PRs #8–#15 | maintainer action, no code |
+| 29 | `setCityTransparency` raises `ghost.needsUpdate` when transmission crosses 0, but three's own `MeshPhysicalMaterial.transmission` setter already bumps `material.version` for exactly that case (`node_modules/three/src/materials/MeshPhysicalMaterial.js:536-544`) — the extra flag costs a second, redundant program rebuild on every crossing. The clay/`alphaHash` half of the function has no such setter and does need the flag. | perf/tech-debt | LOW | S | LOW | `visual-style.ts:159-165`; found while writing `visual-style.test.ts` for plan 001 | not planned — one-line deletion plus the comment; the test asserts "a recompile was forced", not the delta, so it survives either way |
 
 ## Direction — options for the maintainer (not ranked against the bugs)
 
