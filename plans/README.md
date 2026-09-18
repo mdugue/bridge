@@ -77,6 +77,13 @@ against the merged tree (checked 2026-09-18, after the merge):
 - **`aesthetic-and-visual-fine-tuning.md` is #16's own plan and is ~shipped** —
   see the status header in that file. One roadmap item (atmospheric motes) is
   left.
+- **007 — one premise reads differently here.** It lists 002 as landed and
+  assumes `renderer.shadowMap.autoUpdate = false`. In this tree the gate sits on
+  the light instead (`sun.shadow.autoUpdate` in `sun-rig.ts`, with
+  `invalidateShadows()` as the single entry point) — see the 002 note above for
+  why. The plan's *idea* is unaffected; only don't go looking for the renderer
+  flag. Its excerpts were written against `908ade3`, so re-read them against the
+  live `create-app.ts` / `post-stack.ts` before executing.
 
 ## Execution order & status
 
@@ -88,8 +95,16 @@ against the merged tree (checked 2026-09-18, after the merge):
 | 004 | Preprocess the DGM into a 512² heightfield at build time (12.6 MB → ≈0.75 MB, no in-browser GeoTIFF decode) | P1 | M | — | TODO — valid; ×4 tiles after #16 |
 | 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | P2 | M | 001 | TODO — Steps 1–3 verbatim, 4–5 need porting |
 | 006 | Scaffold cleanup, unused deps, lint config, fonts, README + AGENTS.md | P2 | M | — | TODO — Step 5 recompute, Step 9 superseded by #16 |
+| 007 | Adaptive quality while the camera moves (movement regression: skip AO + DoF during motion) | P2 | S | 002 (landed) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
+
+**Later additions.** Plans 001–006 and findings 1–29 come from the `improve`
+run against `8075a21`. Plan 007 and finding 30 were added on 2026-09-18 from a
+separate react-three-fiber feasibility check against `908ade3`; that check's
+verdict is in "Findings considered and rejected", and it also re-tested two
+entries already on this page (see the notes on finding 21 and on the
+render-on-demand rejection).
 
 ## Dependency notes
 
@@ -143,7 +158,7 @@ against `8075a21`.
 | 18 | CI `bun-version: latest` (non-reproducible); `@typescript/native-preview` on a caret over a daily dev tag; `.mcp.json` runs `npx shadcn@latest`; `.vscode` default formatter is Prettier (not installed); `ignoreScripts` array is not a Bun field. | dx/deps/security | LOW-MED | S | LOW | `ci.yml:27,39,51,63,86`; `package.json:47, 71-78`; `.mcp.json`; `.vscode/settings.json:3` | 006 |
 | 19 | Tile id typed in the script and the client (and the e2e spec); `prepare-data` up-to-date check compares sizes only. | dx/bug | LOW | S | LOW | `scripts/prepare-data.ts:9, 33-34`; `city-walk-client.tsx:17` | 004 |
 | 20 | NoData terrain vertices written at z = 0 skew the world bounds (shadow camera, spawn fallback) on tiles with NoData — latent, the shipped tile has 100 % valid pixels. | bug | LOW | S | LOW | `terrain-geometry.ts:67`; `create-app.ts:294, 305` | 004 |
-| 21 | `city-walk.tsx` (661 lines, 17 `useState`) mirrors handle state in three parallel setter lists (handle, `__poc`, React); 250-line controls JSX re-renders on every slider event; state is not re-applied if the effect re-runs. | tech-debt/perf | MED | M | MED | `city-walk.tsx:121-152, 277-532`; `poc-debug.ts:17-54`; `create-app.ts:101-143` | deferred — PR #16 grows this file by ~1,000 lines; consolidate after it lands (`SceneSettings` + `applySetting`, `scene-controls.tsx`, `PercentSlider`) |
+| 21 | `city-walk.tsx` (661 lines, 17 `useState`) mirrors handle state in three parallel setter lists (handle, `__poc`, React); 250-line controls JSX re-renders on every slider event; state is not re-applied if the effect re-runs. | tech-debt/perf | MED | M | MED | `city-walk.tsx:121-152, 277-532`; `poc-debug.ts:17-54`; `create-app.ts:101-143` | deferred — PR #16 grows this file by ~1,000 lines; consolidate after it lands (`SceneSettings` + `applySetting`, `scene-controls.tsx`, `PercentSlider`). **Confirmed 2026-09-18** on PR #20 (the #16 successor): the file is now **1,650 lines / 38 `useState` in the one component** — the +988 growth this row predicted — and every slider drag still re-renders the whole HUD root (React Compiler memoizes the children, not the root). That branch already added `PctSlider` and `ControlGroup`, i.e. part of the remedy exists there; consolidate on top of it rather than from scratch. Re-confirmed as a React-side problem, not a three-side one: adopting r3f would not touch it (see the rejected list) |
 | 22 | Single 2048² shadow frustum spans the 2 km tile (≈1.4 m/texel); no quality tier for coarse pointers (DPR 2 + AO + transmission + DoF). | perf/visual | MED | M / S-M | MED | `sun-rig.ts:45-65`; `create-app.ts:153`; `post-stack.ts:61-78` | deferred — visual decisions in flight in PR #16; do after it: player-following texel-snapped frustum with `needsUpdate` gating; `quality: "high" \| "mobile"` option |
 | 23 | `cityjson-threejs-loader@0.4.0` is untyped (three duck-type casts), patched via `patches/`, and unmaintained; the patch also removed the loader's default-parser fallback. | deps/tech-debt | LOW-MED | S (types) / M (vendor) | MED | `city-layer.ts:21-25`; `visual-style.ts:220-226`; `patches/cityjson-threejs-loader@0.4.0.patch` | deferred — add `types/cityjson-threejs-loader.d.ts` first (S); vendor the ~12 used files only if a three bump needs a third patch hunk |
 | 24 | `bootApp` (318 lines) mixes input wiring, loading, render loop and handle assembly; `PlayerPose`/`Xyz`/`{cx,cy}` types duplicated instead of reusing `RecenterOffset`; `clamp` re-implemented 18× | tech-debt | LOW | S-M | LOW | `create-app.ts:244-561, 145-149`; `poc-debug.ts:11-15`; `lib/city/ground-clamp.ts:9-12` | deferred — bundle with #21 after PR #16 |
@@ -152,6 +167,8 @@ against `8075a21`.
 | 27 | `epsgCodeFromReferenceSystem` rejects OGC URLs with a trailing slash. | bug | LOW | S | LOW | `lib/city/crs.ts:22` | not planned — one-line regex + test; do it opportunistically |
 | 28 | Superseded Dependabot PRs (#9, #13, #15) saturate the 5-slot limit; `suncalc` 1.9 → 2.0 (#10) needs an export-shape/azimuth check before merging. | deps | LOW | S | LOW | GitHub PRs #8–#15 | maintainer action, no code |
 | 29 | `setCityTransparency` raises `ghost.needsUpdate` when transmission crosses 0, but three's own `MeshPhysicalMaterial.transmission` setter already bumps `material.version` for exactly that case (`node_modules/three/src/materials/MeshPhysicalMaterial.js:536-544`) — the extra flag costs a second, redundant program rebuild on every crossing. The clay/`alphaHash` half of the function has no such setter and does need the flag. | perf/tech-debt | LOW | S | LOW | `visual-style.ts:159-165`; found while writing `visual-style.test.ts` for plan 001 | not planned — one-line deletion plus the comment; the test asserts "a recompile was forced", not the delta, so it survives either way |
+
+| 30 | The post stack pays full fill-rate cost while the camera moves: `N8AOPostPass` + `DepthOfFieldEffect` run every frame although motion is already destroying the AO contact darkening and the bokeh the player is paying for. Plan 002 removed the per-frame CPU waste; this is the GPU half, and `AGENTS.md` names fill-rate as the bottleneck. Transient (motion-keyed), so it composes with the static device tier in #22 rather than replacing it. | perf | MED | S | LOW | `create-app.ts:511-520`; `post-stack.ts`; found during the r3f feasibility check | 007 |
 
 ## Direction — options for the maintainer (not ranked against the bugs)
 
@@ -215,7 +232,31 @@ Grounded in repo evidence; each is a choice, not a defect.
 - **Replace `date-fns` with `Intl`** — `react-day-picker` (used by the
   reachable calendar) depends on it; removing it drops zero packages.
 - **Render-on-demand loop** — a walkable viewer with continuous input needs
-  continuous frames; rAF already pauses hidden tabs.
+  continuous frames; rAF already pauses hidden tabs. *Re-tested 2026-09-18
+  during the r3f check and the rejection stands, with one added reason:* after
+  plan 002 a stationary camera does now produce a pixel-identical frame, so a
+  narrow "idle after N seconds with pointer lock released" variant is
+  technically possible — but it buys battery only, never framerate, and it
+  would break `waitForFrames` in `e2e/city-walk.spec.ts`, which advances on
+  `__poc.frames`. Not worth the test-harness cost. Motion-keyed *quality*
+  reduction is the version that pays; that is plan 007.
+- **Migrating the viewer to react-three-fiber** — evaluated 2026-09-18 and
+  rejected. The scheduler argument does not apply: r3f's frameloop is a bare
+  `requestAnimationFrame` with React out of the per-frame path
+  (`packages/fiber/src/core/loop.ts`), i.e. frame-for-frame identical to our
+  `renderer.setAnimationLoop`, and the win pmndrs advertises (the 510-
+  `TextGeometry` benchmark) is time-slicing *component mounts* — React only
+  yields *between* component renders, so it cannot preempt our monolithic
+  imperative loaders (merged CityJSON parse, raster→heightfield) from inside a
+  call. Against that: every `onBeforeCompile` site becomes a `<primitive>`
+  escape hatch, the hand-ordered `post-stack.ts` (two custom `Effect`s +
+  crosshair autofocus) would go under `@react-three/postprocessing` (which
+  also pins `n8ao ^2` against our `^1.10`), and the `CityWalkHandle` that
+  `__poc` and the whole e2e harness drive would have to be rebuilt on a store.
+  Our scene graph is static-after-load — r3f's weakest case. The parts of the
+  r3f playbook that are worth having need no reconciler: `regress()` is plan
+  007, and `frameloop="demand"` is the entry above. Revisit only if the scene
+  becomes dynamically composed.
 - **`docs/architecture.md`** — the frame comments in `lib/city/sun.ts`,
   `ground-clamp.ts`, `recenter.ts` and `create-app.ts` are accurate; the
   README (plan 006) links them instead of duplicating.
