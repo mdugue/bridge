@@ -26,6 +26,8 @@ export interface PocDebugInfo {
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
   /** Animated glide to a curated scenic Viewpoint (the HUD buttons). */
   flyToViewpoint?: (viewpoint: Viewpoint) => void;
+  /** Rendered-frame counter; e2e waits on it instead of sleeping. */
+  frames: number;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState?: () => CameraState;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
@@ -122,9 +124,21 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
   window.__poc = {
     ready: false,
     buildingCount: 0,
+    frames: 0,
     terrainVertexCount: 0,
     shadowsEnabled: false,
     ...window.__poc,
     ...patch,
   };
+}
+
+/** Called once per rendered frame from the animation loop. */
+export function tickPocFrame(): void {
+  if (!enabled) {
+    return;
+  }
+  const poc = window.__poc;
+  if (poc) {
+    poc.frames += 1;
+  }
 }

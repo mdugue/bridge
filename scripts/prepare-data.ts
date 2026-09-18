@@ -3,7 +3,7 @@
  * into public/data/ so the browser can fetch it. Runs ahead of `dev` and
  * `build`; public/data/ is gitignored to avoid duplicating ~19 MB in git.
  */
-import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 // The 2 x 2 block loaded by city-walk-client.tsx. Land-cover/canopy are baked
@@ -77,9 +77,19 @@ for (const [src, dest] of optionalCopies) {
   const srcPath = join(process.cwd(), src);
   const destPath = join(process.cwd(), dest);
   if (!existsSync(srcPath)) {
-    process.stdout.write(
-      `prepare-data: optional source absent, skipping ${src}\n`
-    );
+    // public/data/ is persistent and gitignored, so a copy from an earlier bake
+    // would keep being served after its source was removed — the loader would
+    // never see the "feature off" fallback it is supposed to degrade to.
+    if (existsSync(destPath)) {
+      rmSync(destPath);
+      process.stdout.write(
+        `prepare-data: optional source gone, removed stale ${dest}\n`
+      );
+    } else {
+      process.stdout.write(
+        `prepare-data: optional source absent, skipping ${src}\n`
+      );
+    }
     continue;
   }
   const upToDate =

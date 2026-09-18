@@ -47,6 +47,7 @@ import {
   type LampLights,
   loadLamps,
 } from "./lamp-layer";
+import { tickPocFrame } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
 import { createSunRig, type SunState } from "./sun-rig";
@@ -296,8 +297,18 @@ interface Xyz {
 }
 
 function createRenderer(container: HTMLElement): WebGLRenderer {
-  const renderer = new WebGLRenderer({ antialias: true });
+  // No MSAA: everything renders through the EffectComposer and SMAA carries
+  // the AA (see post-stack.ts); a multisampled default framebuffer would only
+  // be resolved for a full-screen quad.
+  const renderer = new WebGLRenderer({
+    antialias: false,
+    powerPreference: "high-performance",
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // The ghost style's frosted transmission renders the opaque scene a second
+  // time per frame; at roughness 0.8 it samples a blurred mip anyway, so a
+  // half-resolution transmission buffer is visually free.
+  renderer.transmissionResolutionScale = 0.5;
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   // three 0.184 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
@@ -306,6 +317,16 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
   // texel staircase on shadow edges at a grazing sun, which a fine-texel
   // camera-following frustum (see sun-rig) keeps small.
   renderer.shadowMap.type = PCFShadowMap;
+  // The on-demand shadow gate lives on the LIGHT (`sun.shadow.autoUpdate` in
+  // sun-rig.ts), not here. three has both gates — WebGLShadowMap.render returns
+  // early on `shadowMap.autoUpdate === false && !needsUpdate`, before it ever
+  // looks at the lights — and the light-level one is the one that fits this
+  // scene: the sun is the only shadow caster (lamp lights are castShadow:false)
+  // and the rig re-renders the map from inside the render loop whenever its
+  // camera-following frustum moves. Closing the renderer-level gate as well
+  // would swallow those per-frame invalidations and freeze the shadows while
+  // walking. The saving is identical either way — the ~640k-triangle depth pass
+  // is what gets skipped.
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
   // Touch gestures (look/pinch/double-tap) need the browser to keep its
@@ -689,6 +710,15 @@ async function bootApp(
     }
   });
 
+  opts.onProgress?.("Indexing terrain…");
+  // BVH for the 10 Hz autofocus ray and for double-tap travel. Building it
+  // once costs ~0.2 s per tile; without it every raycast brute-forces ~522k
+  // triangles (~50 ms each on desktop) — and the autofocus ray walks the whole
+  // 2x2 block, so every tile needs one, not just the primary.
+  for (const mesh of terrainMeshes) {
+    mesh.geometry.computeBoundsTree();
+  }
+
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
   // Seed the valley height-fog floor from the lowest VALID terrain elevation
@@ -715,6 +745,17 @@ async function bootApp(
   // It also gates the clay dusk-glow — clayNight is a shared uniform ref created
   // here (before styleResources exists) so setSun can drive it by reference.
   const clayNight = { value: 0 };
+  /**
+   * Forces one shadow-map re-render. The map is otherwise only redrawn when the
+   * sun or the frustum moves, so **every new scene object and every material
+   * change that alters the depth pass has to call this** — a missing call shows
+   * up as a stale shadow (a demolished building still casting, a new one not),
+   * never as a crash.
+   */
+  const invalidateShadows = () => {
+    sunRig.invalidateShadow();
+  };
+
   const setSun = (date: Date): SunState => {
     const state = sunRig.update(date);
     for (const lamp of lampControls) {
@@ -722,6 +763,7 @@ async function bootApp(
     }
     lampLights?.setNightFactor(state.nightFactor);
     clayNight.value = state.nightFactor;
+    invalidateShadows();
     return state;
   };
   setSun(opts.initialDate);
@@ -879,13 +921,7 @@ async function bootApp(
       camera.updateProjectionMatrix();
     },
     onDoubleTap: (ndcX, ndcY) => {
-      // Travel to the tapped spot on any tile's terrain.
-      for (const mesh of terrainMeshes) {
-        if (!mesh.geometry.boundsTree) {
-          // Lazy: only pay the BVH build when travel is actually used.
-          mesh.geometry.computeBoundsTree();
-        }
-      }
+      // Travel to the tapped spot on the terrain.
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
       const hit = tapRaycaster.intersectObjects(terrainMeshes, false)[0];
       if (hit) {
@@ -912,9 +948,7 @@ async function bootApp(
     cityLayer = demolishObject(cityLayer, world, objectId);
     // The reload produces bare loader meshes — re-dress them.
     applyCityStyle(cityLayer.group, currentStyle, styleResources);
-    // Shadows don't auto-update; force a re-render or the gone building's
-    // shadow stays painted on the ground until the camera moves.
-    sunRig.invalidateShadow();
+    invalidateShadows();
     emitStats();
   };
 
@@ -934,9 +968,8 @@ async function bootApp(
     const w = epsgToWorld(at.x, at.y, offset);
     obj.position.set(w.x, ground, w.z);
     scene.add(obj);
+    invalidateShadows();
     inserted = obj;
-    // Shadows don't auto-update; force one so the new building casts a shadow.
-    sunRig.invalidateShadow();
   };
 
   const insertBuildingNow = () => {
@@ -1064,6 +1097,7 @@ async function bootApp(
       opts.onFps?.(fps);
     }
     postStack.render(dt);
+    tickPocFrame();
   });
 
   emitStats();
@@ -1073,6 +1107,7 @@ async function bootApp(
     setStyle: (style) => {
       currentStyle = style;
       applyCityStyle(cityLayer.group, style, styleResources);
+      invalidateShadows();
     },
     setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
     setFocusMode: (mode) => postStack.setFocusMode(mode),
@@ -1143,8 +1178,11 @@ async function bootApp(
         t.water?.setMist(strength);
       }
     },
-    setBuildingTransparency: (transparency) =>
-      setCityTransparency(styleResources, currentStyle, transparency),
+    setBuildingTransparency: (transparency) => {
+      setCityTransparency(styleResources, currentStyle, transparency);
+      // Clay's alpha-hash cutout changes what the depth pass writes.
+      invalidateShadows();
+    },
     setAtmosphere: (amount) => {
       if (scene.fog instanceof Fog) {
         const range = fogRangeFor(amount);
