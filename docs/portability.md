@@ -67,7 +67,7 @@ derived per-tile artifacts under `data/` are committed.
 |---|---|
 | CityJSON LoD2, DGM1, DOM1 | [Höhen- & 3D-Stadtmodelle](https://www.geodaten.sachsen.de/digitale-hoehenmodelle-3994.html) |
 | Basis-DLM (ATKIS) | portal → Landschaftsmodelle |
-| **DOP** orthophoto (RGB + NIR) | [DOP-Downloadbereich](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) — 2 km tiles, GeoTIFF + `.tfw`; pick the **4-channel (RGB+Infrarot)** variant for NDVI. Drop into `data/_raw/dop/dop_<tile>.tif`. |
+| **DOP** orthophoto (RGB + NIR) | [DOP-Downloadbereich](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) — 2 km tiles, GeoTIFF + `.tfw`; pick the **4-channel (RGB+Infrarot)** variant for NDVI. Unpack as downloaded into `data/_raw/DOP_RGBI/dop20rgbi_<tile>_2_sn_tiff/` — `extract-ndvi.sh` and `extract-roof-colour.sh` read `dop20rgbi_<tile>_2_sn.tif` from there. |
 | Laser-scan point cloud | portal → Laserscandaten (LAS/LAZ; large) |
 | Street lamps | OpenStreetMap (Overpass) — ODbL |
 
