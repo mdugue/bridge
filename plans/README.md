@@ -28,11 +28,16 @@ against the merged tree (checked 2026-09-18, after the merge):
 
 - **001 — DONE on `main` (PR #18), merged in here.** The `app/` test glob, the
   `verify` script, the honest `__poc.ready`, the frame counter and the
-  frame-bound style walk all apply to this branch now. Two adaptations were
-  needed on merge: the walk's `setToonBands`/`setEdges` steps are gone (#16
+  frame-bound style walk all apply to this branch now. Three adaptations were
+  needed on merge. The walk's `setToonBands`/`setEdges` steps are gone (#16
   removed both) and were replaced by steps for the shader paths #16 added
-  (height fog, meadow NDVI, water mist, the crown shaders), and the CI timing
-  work for the much heavier scene lives in `playwright.config.ts`.
+  (height fog, meadow NDVI, water mist, the crown shaders). The walk moved into
+  a spec of its own, because binding it to real frames exposes what this scene
+  costs without a GPU: **~4 s per clay frame and ~20 s per ghost frame** (two
+  cores, measured — `transmission` re-renders the whole scene, so ghost barely
+  improves with a smaller canvas). It therefore runs the cheap styles first and
+  visits ghost twice at the end. The rest of the CI timing work — one worker,
+  one retry, a 600 s per-test budget — lives in `playwright.config.ts`.
 - **002 — DONE on `main` (PR #18), ported by hand.** #16 had already solved one
   of its six steps its own way (`sun-rig.ts` gates the shadow map per light and
   re-renders it when the sun or the camera-following frustum moves), so the

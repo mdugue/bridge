@@ -147,6 +147,15 @@ iterate yourself. `shots/` is gitignored. The default headless e2e uses
 SwiftShader, which renders shadows/AA nothing like a real GPU, so use `--headed`
 for any lighting/shadow work.
 
+**Budget the e2e specs in frames, not seconds.** Under SwiftShader this scene
+costs roughly **4 s per clay frame and 20 s per ghost frame** (measured on two
+cores; ghost re-renders the whole scene for `transmission`, so its cost barely
+moves with canvas size). Anything that waits on rendered frames — the style walk
+uses `waitForFrames` — has to keep its ghost steps to a handful and do the rest
+in clay/standard, or it walks straight into the per-test timeout. Playwright runs
+a single worker on CI for the same reason: parallel viewer pages halve each
+other's frame rate.
+
 ## Researching three.js releases
 
 The GitHub releases **HTML page is JS-heavy and WebFetch reads it poorly** (and

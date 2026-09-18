@@ -195,66 +195,6 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   );
   expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
 
-  // Style, DoF and atmosphere controls must not produce shader/render errors.
-  // Each step is bound to real rendered frames: a shader that only fails once
-  // its program is compiled and drawn cannot hide behind a fixed sleep.
-  const STYLE_STEPS = 20;
-  for (let i = 0; i < STYLE_STEPS; i++) {
-    await page.evaluate((index) => {
-      const steps: Array<() => void> = [
-        () => window.__poc?.setStyle?.("clay"),
-        () => window.__poc?.setStyle?.("standard"),
-        () => window.__poc?.setStyle?.("ghost"),
-        () => window.__poc?.setDepthOfField?.(false),
-        () => window.__poc?.setDepthOfField?.(true),
-        () => {
-          window.__poc?.setAtmosphere?.(1);
-          window.__poc?.setDepthGrading?.(1);
-        },
-        () => {
-          window.__poc?.setAtmosphere?.(0.35);
-          window.__poc?.setDepthGrading?.(0.5);
-        },
-        () => window.__poc?.setBuildingTransparency?.(0.8),
-        () => window.__poc?.setBuildingTransparency?.(0.45),
-        // Clay's alpha-hash program compiles when transparency crosses 0 —
-        // each of these must reach a rendered frame.
-        () => window.__poc?.setStyle?.("clay"),
-        () => window.__poc?.setBuildingTransparency?.(0.5),
-        () => window.__poc?.setBuildingTransparency?.(0),
-        () => window.__poc?.setStyle?.("ghost"),
-        () => window.__poc?.setContactShadows?.(1),
-        () => window.__poc?.setContactShadows?.(0.5),
-        () => window.__poc?.setPaperGrain?.(1),
-        () => window.__poc?.setPaperGrain?.(0.25),
-        // Shader paths that only exist since the aesthetic work: the terrain's
-        // NDVI meadow tint, the height-fog chunk patch, the water mist sheet,
-        // and the crown shaders (multi-tuft swaps the LOD meshes).
-        () => {
-          window.__poc?.setHeightFog?.(1);
-          window.__poc?.setMeadowNdvi?.(1);
-          window.__poc?.setWaterMist?.(1);
-        },
-        () => {
-          window.__poc?.setTreeShimmer?.(1);
-          window.__poc?.setTreeTranslucency?.(1);
-          window.__poc?.setTreeLeafFlutter?.(1);
-          window.__poc?.setTreeLeafBright?.(1);
-          window.__poc?.setTreeMultiTuft?.(true);
-        },
-        () => {
-          window.__poc?.setHeightFog?.(0.35);
-          window.__poc?.setWaterMist?.(0.3);
-          window.__poc?.setTreeMultiTuft?.(false);
-        },
-      ];
-      steps[index]?.();
-    }, i);
-    await waitForFrames(page, 2);
-    expect(pageErrors).toEqual([]);
-    expect(consoleErrors).toEqual([]);
-  }
-
   // Snapshot round-trip: applying a captured camera state must reproduce it
   // (the basis for copy/paste QA of an exact view).
   const roundTrip = await page.evaluate(() => {
@@ -280,8 +220,97 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   expect(roundTrip.pitchDeg).toBeCloseTo(-20, 0);
   expect(roundTrip.fov).toBeCloseTo(55, 1);
 
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
   // Visual artifact for humans; not asserted on.
   await page.screenshot({ path: "test-results/city-walk-smoke.png" });
+});
+
+/**
+ * The style/post controls, each bound to real rendered frames: a shader that
+ * only fails once its program is compiled and drawn cannot hide behind a fixed
+ * sleep. Split off from the scene spec because it is the expensive half — under
+ * software GL this scene renders a clay frame in ~4 s and a GHOST frame in ~20 s
+ * (transmission re-renders the whole scene), which is why the walk runs the
+ * cheap styles first and visits ghost in two steps at the end rather than
+ * interleaving it.
+ */
+test("style, post and shader controls survive real frames", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(String(err)));
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  await page.goto("/");
+  await skipWithoutWebGl(page);
+  await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
+    timeout: slow(120_000),
+  });
+
+  const STYLE_STEPS = 13;
+  for (let i = 0; i < STYLE_STEPS; i++) {
+    await page.evaluate((index) => {
+      const steps: Array<() => void> = [
+        () => window.__poc?.setStyle?.("clay"),
+        () => window.__poc?.setDepthOfField?.(false),
+        // Post-stack uniforms compile nothing, so they share two steps: one at
+        // full strength, one back down. Each frame here costs seconds.
+        () => {
+          window.__poc?.setDepthOfField?.(true);
+          window.__poc?.setAtmosphere?.(1);
+          window.__poc?.setDepthGrading?.(1);
+          window.__poc?.setContactShadows?.(1);
+          window.__poc?.setPaperGrain?.(1);
+        },
+        () => {
+          window.__poc?.setAtmosphere?.(0.35);
+          window.__poc?.setDepthGrading?.(0.5);
+          window.__poc?.setContactShadows?.(0.5);
+          window.__poc?.setPaperGrain?.(0.25);
+        },
+        // Clay's alpha-hash program compiles when transparency crosses 0, in
+        // both directions — each crossing must reach a rendered frame.
+        () => window.__poc?.setBuildingTransparency?.(0.5),
+        () => window.__poc?.setBuildingTransparency?.(0.8),
+        () => window.__poc?.setBuildingTransparency?.(0),
+        // Shader paths the aesthetic work added: the terrain's NDVI meadow
+        // tint, the height-fog chunk patch, the water mist sheet.
+        () => {
+          window.__poc?.setHeightFog?.(1);
+          window.__poc?.setMeadowNdvi?.(1);
+          window.__poc?.setWaterMist?.(1);
+        },
+        // Crown shaders; multi-tuft swaps the instanced LOD meshes.
+        () => {
+          window.__poc?.setTreeShimmer?.(1);
+          window.__poc?.setTreeTranslucency?.(1);
+          window.__poc?.setTreeLeafFlutter?.(1);
+          window.__poc?.setTreeLeafBright?.(1);
+          window.__poc?.setTreeMultiTuft?.(true);
+        },
+        () => window.__poc?.setStyle?.("standard"),
+        // Ghost last, and only twice: every frame in this style costs ~20 s
+        // under software GL.
+        () => {
+          window.__poc?.setStyle?.("ghost");
+          window.__poc?.setBuildingTransparency?.(0.45);
+        },
+        () => window.__poc?.setBuildingTransparency?.(0),
+        () => window.__poc?.setStyle?.("clay"),
+      ];
+      steps[index]?.();
+    }, i);
+    await waitForFrames(page, 2);
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+  }
 });
 
 test.describe("mobile", () => {

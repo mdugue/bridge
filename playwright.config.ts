@@ -18,11 +18,13 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   // Every frame of the viewer specs is software-rendered (SwiftShader) through
   // the full post stack, so they run minutes, not seconds; a shared CI runner
-  // is about half the speed of a developer machine. This has to be the config
-  // default rather than `test.setTimeout()` in the spec: under load the browser
-  // context itself can take longer than Playwright's 30 s default to come up,
-  // and that happens before any code in the test body runs.
-  timeout: process.env.CI ? 360_000 : 240_000,
+  // is about half the speed of a developer machine: measured on two cores, one
+  // clay frame costs ~4 s and one ghost frame ~20 s, and the style walk waits on
+  // 26 of them. This has to be the config default rather than
+  // `test.setTimeout()` in the spec: under load the browser context itself can
+  // take longer than Playwright's 30 s default to come up, and that happens
+  // before any code in the test body runs.
+  timeout: process.env.CI ? 600_000 : 240_000,
   reporter: "html",
   use: {
     baseURL,

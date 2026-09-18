@@ -78,11 +78,11 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    # Two viewer specs drive the real scene through software-rendered WebGL and
-    # run one worker at a time (see playwright.config.ts): minutes each, plus
-    # the production build the web server does first. A budget under ~25 min
-    # cancels the job mid-run and reports nothing.
-    timeout-minutes: 30
+    # Three viewer specs drive the real scene through software-rendered WebGL,
+    # one worker at a time (see playwright.config.ts): minutes each, plus the
+    # production build the web server does first. A tight budget cancels the job
+    # mid-run and reports nothing at all, which is worse than a slow job.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
