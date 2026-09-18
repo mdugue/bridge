@@ -30,7 +30,9 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
 - **Water** — DLM alpha (water mask, `smoothstep`ed shoreline) + DGM1 geometry +
-  animated normal wobble. `water-layer.ts`.
+  animated normal wobble. `water-layer.ts`. Missing RGBA splat → coverage falls
+  back to the NEAREST class raster tested against class 8 (hard-edged bank);
+  the class PNG's own alpha decodes to 1 everywhere and must never be read.
 - **Buildings** — CityJSON LoD2 → one merged mesh/tile, per-vertex `objectid`;
   demolish = drop from CityJSON + re-parse; BVH picking/collision. `city-layer.ts`.
 - **Ground-clamp** — DGM1 sampled to seat buildings, trees, lamps, and the player

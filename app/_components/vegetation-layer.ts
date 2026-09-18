@@ -99,14 +99,17 @@ interface CellLod {
   rich: InstancedMesh;
 }
 
+// GeoJSON allows `"properties": null`, so both are modelled as nullable and
+// every read goes through `?.` — a single null feature must not throw out of
+// the layer's documented non-fatal load.
 interface LineFeature {
   geometry: { coordinates: [number, number][]; type: "LineString" };
-  properties: { kind: "hedge" | "treerow" };
+  properties: { kind: "hedge" | "treerow" } | null;
 }
 
 interface PointFeature {
   geometry: { coordinates: [number, number]; type: "Point" };
-  properties: { h: number };
+  properties: { h: number } | null;
 }
 
 const TREE_SPACING = 9; // metres between trees along a row
@@ -783,7 +786,8 @@ function collectCanopy(
     // A point missing a numeric `h` (only the TS type, not the JSON, promises
     // one) would make scale NaN; Math.max/min don't clamp NaN, so the NaN
     // matrix poisons the chunk's bounding sphere and the whole cell culls.
-    const h = Number.isFinite(f.properties.h) ? f.properties.h : BASE_TREE_H;
+    const rawH = f.properties?.h ?? Number.NaN;
+    const h = Number.isFinite(rawH) ? rawH : BASE_TREE_H;
     const seed = ex * 0.13 + ey * 0.07;
     const w = epsgToWorld(ex, ey, offset);
     out.push({

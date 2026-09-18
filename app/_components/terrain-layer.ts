@@ -429,6 +429,13 @@ function createTerrainMaterial(
     color: 0xad_b2_9e,
     roughness: 1,
   });
+  // The patched GLSL branches on which optional rasters actually loaded, but
+  // three keys its program cache on `onBeforeCompile.toString()` — identical for
+  // every tile's terrain material. Without an explicit key a tile that lost its
+  // RGB splat or NDVI would be handed a neighbour's compiled program (and its
+  // unbound samplers). Neighbour tiles do load independently, so this happens.
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.colorTexture !== undefined}-${splat?.ndviTexture !== undefined}-${heightFog !== undefined}`;
+  material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
       applyTerrainUniforms(shader, splat);
