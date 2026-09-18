@@ -102,7 +102,8 @@ function buildEdges(mesh: Mesh, material: LineBasicMaterial): LineSegments {
 }
 ```
 
-Excerpt — `app/_components/visual-style.ts:220-260` (the caller):
+Excerpt — `app/_components/visual-style.ts:220-260` (the caller; abridged — the
+five-line doc comment above `applyCityStyle` at lines 228–232 is omitted):
 
 ```ts
 interface StyledCityMesh extends Mesh {
@@ -143,7 +144,8 @@ export function applyCityStyle(
 }
 ```
 
-Excerpt — `app/_components/city-layer.ts:9-19` and `53-82`:
+Excerpt — `app/_components/city-layer.ts:9-19` and `53-82` (abridged — the
+six-line doc comment above `demolishObject` at lines 62–67 is omitted):
 
 ```ts
 export interface CityLayer {
@@ -395,12 +397,17 @@ Then implement `export function buildingEdgeSegments(doc: CityJsonDocument, offs
    (including last→first) with `a !== b`, compute the numeric key
    `min * 4_194_304 + max` (safe while a document has fewer than 4,194,304
    vertices — assert this once at the top and throw a descriptive `Error`
-   otherwise) and record the normal in a `Map<number, number[]>`: on first
-   sight store `[nx, ny, nz]`; on second sight append the second normal (the
-   array becomes length 6); on third or later sight leave it as is
-   (non-manifold — treat as a crease).
-5. Emit: for each map entry, keep the edge if the entry has one normal
-   (boundary edge) or if `Math.abs(dot(n1, n2)) < Math.cos(creaseAngleDeg in radians)`.
+   otherwise) and record it in a `Map<number, { normals: number[]; faces: number }>`:
+   on first sight store `{ normals: [nx, ny, nz], faces: 1 }`; on second
+   sight append the second normal (length 6) and set `faces = 2`; on third
+   or later sight only increment `faces` (non-manifold edge).
+5. Emit: for each map entry, keep the edge if `faces === 1` (boundary edge),
+   or if `faces > 2` (non-manifold — always drawn), or if
+   `Math.abs(dot(n1, n2)) <= Math.cos(creaseAngleDeg in radians)`. Note the
+   `<=`: with `creaseAngleDeg: 0` the threshold is `cos(0) = 1`, so every
+   shared edge is kept (coplanar neighbours have `|dot| = 1`); with the
+   default 30° the threshold is ≈0.866, so coplanar edges are dropped and
+   90° creases (`dot = 0`) are kept.
    Write both endpoints (from X/Y/Z) into a growing `number[]`, then copy
    into a `Float32Array`. Return `{ positions, segmentCount: positions.length / 6 }`.
 6. `creaseAngleDeg` defaults to `DEFAULT_CREASE_ANGLE_DEG`; clamp it to
@@ -465,7 +472,7 @@ In `app/_components/visual-style.ts`:
    `import { recenterOffset } from "@/lib/city/recenter";`,
    `import type { CityLayer } from "./city-layer";` and `BufferAttribute`
    from `three`.
-2. Add a new exported function:
+2. Add a new module-private function:
 
 ```ts
 const EDGES_NAME = "city-edges";
@@ -515,6 +522,16 @@ function ensureCityEdges(layer: CityLayer, material: LineBasicMaterial): LineSeg
 5. Update the doc comment above `applyCityStyle` to say the edge overlay is
    one group-level object built from the CityJSON and rebuilt after a
    demolish-reload because the group is replaced.
+
+Frame check before trusting the coordinates: the loader bakes
+`layer.matrix` into the mesh vertices (`geom.applyMatrix4(matrix)` in the
+vendored `CityObjectsMesh`), and `layer.group` itself carries no transform.
+Confirm once in `bun dev` via the console —
+`window.__poc` does not expose the group, so add a temporary
+`console.assert(layer.group.matrix.determinant() === 1 && layer.group.position.length() === 0)`
+in `ensureCityEdges` while developing and remove it before committing
+(AGENTS.md forbids committed console calls). If the group is NOT identity,
+STOP: the extractor's offset handling would need to change.
 
 Why the group, not the meshes: `demolishObject` calls
 `disposeObject3D(layer.group)` and swaps in a fresh group, so the overlay is

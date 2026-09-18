@@ -59,7 +59,8 @@ so the fallback stays in the script.
 ## Current state
 
 - `scripts/prepare-data.ts` (41 lines) — copies three files from `data/`
-  to `public/data/` (gitignored) if sizes differ. Full content:
+  to `public/data/` (gitignored) if sizes differ. Lines 6–41 (the five-line
+  module doc comment at lines 1–5 is omitted here):
 
 ```ts
 import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
@@ -185,9 +186,10 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
 }
 ```
 
-  Lines 49–98 hold `isPixelSpaceBounds` and `resolveBounds` (the `.tfw`
-  fallback, with its `gdal_translate -a_srs EPSG:25833` error message);
-  lines 100–136 hold `createTerrainMaterial` (keep unchanged).
+  `isPixelSpaceBounds` starts at line 50 and `resolveBounds` at line 69
+  (doc comments from 45 and 64) — the `.tfw` fallback with its
+  `gdal_translate -a_srs EPSG:25833` error message; `createTerrainMaterial`
+  is lines 105–136 (doc from 100) — keep it unchanged.
 
 - `app/_components/create-app.ts` — `CityWalkOptions.demTfwSrc?: string`
   (line 84) and the call:
@@ -394,9 +396,12 @@ position loop, compute the mean of all valid samples (one pass using
 vertices are excluded from the index buffer, but their positions still feed
 bounding boxes, so park them at the mean valid height instead of 0.
 
-Add to `lib/city/terrain-geometry.test.ts`: with `flat3x3` and
-`elevations[0] = -9999`, `positions[2]` equals `100` (the mean of the valid
-samples), and the existing "omits quads" test still passes.
+Add to `lib/city/terrain-geometry.test.ts` a new test that builds its own
+array exactly like the existing "omits quads touching a NoData vertex" test
+does (`const elevations = new Float32Array(9).fill(100); elevations[0] = -9999;`
+then spread `{ ...flat3x3, elevations, offset }`) — never mutate the shared
+`flat3x3.elevations`. Assert `positions[2]` equals `100` (the mean of the
+valid samples) and that the existing tests still pass.
 
 **Verify**: `bun test lib/city/terrain-geometry.test.ts` → 6 pass.
 

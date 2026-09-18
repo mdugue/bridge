@@ -171,7 +171,45 @@ Inside `bootApp` the disposables are created in this order:
 `let disposed = false;` is declared at line 250; `let inserted: Object3D | null = null;`
 at line 416, AFTER the collider is created.
 
-Excerpt — `create-app.ts:416-432` (`insertBuilding`) and `472-483` (`updateFocus`) — see plan 002's excerpts; they are unchanged by plan 002 except for the `invalidateShadows()` call and the focus target list stays `[cityLayer.group, terrain.mesh]`.
+Excerpt — `create-app.ts:416-432` (`insertBuilding`; after plan 002 there is
+also an `invalidateShadows();` call after `scene.add(obj);`):
+
+```ts
+  let inserted: Object3D | null = null;
+  const insertBuilding = async () => {
+    const at = opts.insertAt ?? DEFAULT_INSERT_AT;
+    const obj = await createInsertedBuilding(opts.insertedModelUrl);
+    if (disposed) {
+      return;
+    }
+    if (inserted) {
+      scene.remove(inserted);
+      disposeObject3D(inserted);
+    }
+    const ground = terrain.heightAt(at.x, at.y) ?? worldBounds.min.y;
+    // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
+    obj.position.set(at.x - offset.cx, ground, -(at.y - offset.cy));
+    scene.add(obj);
+    inserted = obj;
+  };
+```
+
+Excerpt — `create-app.ts:472-483` (`updateFocus`; unchanged by plan 002):
+
+```ts
+  // Crosshair autofocus for the photographic DoF (throttled like the pose).
+  const focusRaycaster = new Raycaster();
+  focusRaycaster.firstHitOnly = true;
+  focusRaycaster.far = 4000;
+  const updateFocus = () => {
+    focusRaycaster.setFromCamera(new Vector2(0, 0), camera);
+    const hit = focusRaycaster.intersectObjects(
+      [cityLayer.group, terrain.mesh],
+      true
+    )[0];
+    postStack.setFocusTarget(hit?.point ?? null);
+  };
+```
 
 Excerpt — `app/_components/collision.ts:41-67`:
 
@@ -400,9 +438,13 @@ In `bootApp` (`create-app.ts`), replace the two key handlers with:
 
 Register `window.addEventListener("blur", onFocusLost)` and
 `document.addEventListener("visibilitychange", onVisibility)` next to the
-existing listener registrations, and remove both in `dispose` (or via the
-cleanup list from Step 5 if you do the steps in order — Step 5 will absorb
-these).
+existing listener registrations. Then:
+
+- Add `window.removeEventListener("blur", onFocusLost);` and
+  `document.removeEventListener("visibilitychange", onVisibility);` to the
+  handle's `dispose` right after the existing `keyup` removal. This is
+  required even if you stop before Step 5; Step 5 moves these removals into
+  the cleanup list.
 
 **Verify**: `bun typecheck` → exit 0; `grep -c "releaseAll" app/_components/create-app.ts` → `2`.
 

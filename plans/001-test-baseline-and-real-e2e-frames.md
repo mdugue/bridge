@@ -8,7 +8,10 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat 8075a21..HEAD -- package.json app/_components/poc-debug.ts app/_components/create-app.ts app/_components/city-walk.tsx e2e/city-walk.spec.ts app/_components/visual-style.test.ts app/_components/fps-movement.test.ts app/_components/three-utils.test.ts`
+> `git diff --stat 8075a21..HEAD -- package.json app/_components/poc-debug.ts app/_components/create-app.ts app/_components/city-walk.tsx e2e/city-walk.spec.ts app/_components/visual-style.ts app/_components/fps-movement.ts app/_components/three-utils.ts app/_components/visual-style.test.ts app/_components/fps-movement.test.ts app/_components/three-utils.test.ts`
+> (`visual-style.ts`, `fps-movement.ts` and `three-utils.ts` are not edited
+> here, but Steps 4–6 test their current APIs — a rewrite by PR #16 changes
+> what the tests must assert.)
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition. (PR #16 "Aesthectic and visual fine
@@ -33,7 +36,7 @@ CI is green, but three things make that signal weaker than it looks:
    Every module that talks to three.js is structurally untestable today,
    even the ones that need no WebGL (movement math, material switching,
    disposal guards).
-2. The e2e "style burst" in `e2e/city-walk.spec.ts` runs 22 setter calls in
+2. The e2e "style burst" in `e2e/city-walk.spec.ts` runs 23 setter calls in
    one synchronous `page.evaluate`, then waits a fixed 500 ms and asserts no
    console errors. Under the software renderer a frame can take longer than
    500 ms, and only the last value of each setter is ever bound to a frame.
@@ -382,11 +385,11 @@ In `app/_components/city-walk.tsx`:
 
 In `e2e/city-walk.spec.ts`:
 
-1. Add two helpers near the top (after the `test.use` block):
+1. Add `Page` to the existing import line at the top of the file
+   (`import { expect, type Page, test } from "@playwright/test";`) and add
+   two helpers after the `test.use` block:
 
 ```ts
-import type { Page } from "@playwright/test";
-
 /** Resolves once the viewer has rendered `count` more frames. */
 async function waitForFrames(page: Page, count: number): Promise<void> {
   const start = await page.evaluate(() => window.__poc?.frames ?? 0);
@@ -412,12 +415,17 @@ async function skipWithoutWebGl(page: Page): Promise<void> {
    with `await skipWithoutWebGl(page);` and call the same helper at the start
    of the mobile test after `page.goto("/")`.
 
-2. Replace the burst (lines 160–189) with grouped steps. Define the groups
-   as an array of functions executed in the page, each followed by a
-   two-frame wait and the error assertions:
+2. Replace the burst (lines 160–189) with 21 grouped steps, each followed
+   by a two-frame wait and the error assertions. Playwright cannot
+   serialise closures, so the array literal lives INSIDE the browser-side
+   function and the test drives it by index — this is the only form to
+   write (do not define the array in test scope):
 
 ```ts
-  const steps: Array<() => void> = [
+  const STYLE_STEPS = 21;
+  for (let i = 0; i < STYLE_STEPS; i++) {
+    await page.evaluate((index) => {
+      const steps: Array<() => void> = [
     () => window.__poc?.setStyle?.("clay"),
     () => window.__poc?.setStyle?.("standard"),
     () => window.__poc?.setStyle?.("ghost"),
@@ -447,17 +455,7 @@ async function skipWithoutWebGl(page: Page): Promise<void> {
     () => window.__poc?.setContactShadows?.(0.5),
     () => window.__poc?.setPaperGrain?.(1),
     () => window.__poc?.setPaperGrain?.(0.25),
-  ];
-```
-
-   Playwright cannot serialise closures, so the array literal must live
-   INSIDE the browser-side function and be driven by index from the test:
-
-```ts
-  const STYLE_STEPS = 21;
-  for (let i = 0; i < STYLE_STEPS; i++) {
-    await page.evaluate((index) => {
-      const steps: Array<() => void> = [ /* the 21 entries above, verbatim */ ];
+      ];
       steps[index]?.();
     }, i);
     await waitForFrames(page, 2);
@@ -466,8 +464,7 @@ async function skipWithoutWebGl(page: Page): Promise<void> {
   }
 ```
 
-   (Do not define the array outside `page.evaluate`; do not try to pass
-   functions across the boundary.) Delete the `waitForTimeout(500)` line.
+   Delete the `waitForTimeout(500)` line.
 
 3. Replace the first test's body with assertions on real content:
 
@@ -552,7 +549,7 @@ Cases:
 4. `KeyW` + `KeyS` → position unchanged (opposing keys cancel).
 5. `setAnalog(2, -3)` clamps to `(1, -1)`: after `update(1)` with no keys, `x ≈ 9` and `z ≈ 9`.
 6. `release("KeyW")` after `press("KeyW")` → `update(1)` moves nothing.
-7. Walk mode: `resolveStep` is called with the proposed step and its return value is applied verbatim — pass `resolveStep: () => new Vector3()` and assert `x`/`z` unchanged after `KeyW` + `update(1)`; pass a spy that records its argument and assert the recorded vector has `z ≈ -9`.
+7. Walk mode: `resolveStep` is called with the proposed step and its return value is applied verbatim — pass `resolveStep: () => new Vector3()` and assert `x`/`z` unchanged after `KeyW` + `update(1)`; pass a spy that records `displacement.clone()` (the argument is a shared, mutated instance — never store the reference) and assert the recorded vector has `z ≈ -9`.
 8. `groundHeight: () => null` holds `y` at its current value across `update(1)`.
 9. Fly mode: `setMode("fly")`, `press("Space")`, `update(1)` → `y ≈ 1.7 + 35`; `ShiftLeft` instead → `y ≈ 1.7 - 35`; in walk mode `ShiftLeft` alone leaves `y ≈ 1.7`.
 10. `snapToGround()` with `groundHeight: () => 50` sets `y` to exactly `51.7` (no smoothing); `getMode()` reports `"walk"` then `"fly"` after `setMode`.

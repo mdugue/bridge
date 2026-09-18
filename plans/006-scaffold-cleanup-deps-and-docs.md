@@ -197,9 +197,11 @@ const geistMono = Geist_Mono({
 ```
 
 `app/globals.css:10-12` maps `--font-sans`, `--font-mono: var(--font-geist-mono)`,
-`--font-heading`. `font-heading` is used by `components/ui/drawer.tsx:101`
-(mobile "Scene settings" title) and `card.tsx:40` (CardTitle); `font-mono`
-only by the unreachable `chart.tsx`.
+`--font-heading`. Among reachable files, `font-heading` is used by
+`components/ui/drawer.tsx:101` (mobile "Scene settings" title) and
+`card.tsx:40` (CardTitle); unreachable `dialog.tsx`, `sheet.tsx`,
+`empty.tsx` and `alert-dialog.tsx` use it too and go away in Step 5.
+`font-mono` is used only by the unreachable `chart.tsx`.
 
 Other one-liners:
 
@@ -331,7 +333,8 @@ Commit: `chore: rename package, drop unused deps, pin the typechecker`.
 ### Step 2: CI Bun pin and a Dependabot group for the three stack
 
 - `.github/workflows/ci.yml`: replace every `bun-version: latest` with
-  `bun-version-file: package.json` (5 occurrences).
+  `bun-version-file: package.json` (5 occurrences). This only works because
+  Step 1 added the `packageManager` field — do not reorder the steps.
 - `.github/dependabot.yml`: add a group
 
 ```yaml
@@ -425,9 +428,10 @@ Commit: `chore: fix stale path comment and editor formatter`.
 
 `.mcp.json`: replace `"shadcn@latest"` with `"shadcn@<version>"` where
 `<version>` is the resolved `shadcn` version in `bun.lock` (search for
-`"shadcn@`). Add a one-line `"//"`-style comment is not valid JSON — instead
-mention the pin in AGENTS.md (Step 9). If PR #16 is open, this file will
-conflict trivially; still do it.
+`"shadcn@`). JSON allows no comments, so the reason is recorded in
+AGENTS.md when Step 9 runs; if Step 9 is skipped because PR #16 is open,
+say in the status row that the AGENTS.md line is still owed. If PR #16 is
+open, this file will conflict trivially; still do it.
 
 **Verify**: `grep -n "shadcn@latest" .mcp.json` → no output.
 
@@ -480,7 +484,7 @@ Append a section:
   lockfile version.
 ```
 
-Also fix the stale line "Theme components may use scoped `<style>` for fonts" (there are no theme components) by deleting it.
+Also delete only the final sentence of the Tailwind bullet — "Theme components may use scoped `<style>` for fonts." (there are no theme components) — keeping the load-bearing rule "**Tailwind for styling.** No CSS-in-JS, no styled-components." intact.
 
 **Verify**: `grep -n "bun run verify" AGENTS.md` → 1 hit; `grep -n "Theme components" AGENTS.md` → no output.
 

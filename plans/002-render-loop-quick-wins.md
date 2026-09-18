@@ -214,7 +214,8 @@ export function pickCityObjectId(
 }
 ```
 
-Excerpt — `three-utils.ts:1-31`:
+Excerpt — `three-utils.ts:1-31` (the five-line JSDoc above `disposeObject3D` at
+lines 17–21 is shown too so the excerpt is literal):
 
 ```ts
 import type { BufferGeometry, Material, Object3D } from "three";
@@ -233,6 +234,11 @@ function disposeMaterial(material: Material | Material[] | undefined): void {
   }
 }
 
+/**
+ * Frees GPU resources of a subtree. Needed because demolish works by
+ * disposing the whole loader output and re-parsing the filtered CityJSON —
+ * without this every demolish would leak buffers.
+ */
 export function disposeObject3D(root: Object3D): void {
   root.traverse((obj) => {
     const resource = obj as Object3D & {
@@ -317,7 +323,7 @@ Then delete the four lines `if (!terrain.mesh.geometry.boundsTree) { … }`
 inside `onDoubleTap` (keep the "Travel to the tapped spot" comment and the
 raycast).
 
-**Verify**: `bun typecheck` → exit 0; `grep -n "computeBoundsTree" app/_components/create-app.ts` → exactly one hit, before the `createSunRig` line.
+**Verify**: `bun typecheck` → exit 0; `grep -n "computeBoundsTree" app/_components/create-app.ts` → exactly one hit, before the `createSunRig` line (plan 005 later adds a second call inside `insertBuilding`; if 005 has already landed, expect two hits and check that neither is inside `onDoubleTap`).
 
 Commit: `perf: build the terrain BVH at load for the autofocus raycast`.
 
@@ -444,7 +450,7 @@ Commit: `fix: dispose the stashed loader material on demolish`.
 - [ ] `bun run verify` exits 0
 - [ ] `bun run build` exits 0
 - [ ] `bun run test:e2e` reports 3 passed
-- [ ] `grep -c "computeBoundsTree" app/_components/create-app.ts` → `1` and it is not inside `onDoubleTap`
+- [ ] `grep -c "computeBoundsTree" app/_components/create-app.ts` → `1` (`2` if plan 005 has landed) and none inside `onDoubleTap`
 - [ ] `grep -c "invalidateShadows()" app/_components/create-app.ts` → `6`
 - [ ] `grep -n "antialias: false" app/_components/create-app.ts` → 1 hit; `grep -n "transmissionResolutionScale = 0.5" app/_components/create-app.ts` → 1 hit
 - [ ] `grep -n "firstHitOnly = true" app/_components/city-layer.ts` → 1 hit

@@ -48,8 +48,9 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   and the `readRasters` double-cast defects by deleting that code path.
 - 006 changes `package.json`/`bun.lock`; run it last so the other plans'
   frozen-lockfile installs are unaffected while they are in flight.
-- 002 and 005 both edit `create-app.ts`; do them sequentially, not in
-  parallel worktrees.
+- 002, 003, 004 and 005 all edit `create-app.ts` (002/005 substantially,
+  003/004 at a few call sites); do them sequentially, not in parallel
+  worktrees.
 
 ## Verification baseline (recon)
 
@@ -73,7 +74,7 @@ against `8075a21`.
 | 2 | Shadow map (2048², ≈640k triangles) re-rendered every frame although the sun/scene only change on user actions (`shadowMap.autoUpdate` default). | perf | HIGH | S | LOW | `create-app.ts:155-156`; `sun-rig.ts:53-67` | 002 |
 | 3 | Ink edges built by `mergeVertices` + `EdgesGeometry` over the whole batched mesh: 1,069 ms at boot, 652 ms again per demolish (measured). CityJSON rings give the same outlines in 85 ms as a pure, testable function. | perf | HIGH | M | MED | `visual-style.ts:198-218, 252-255`; `create-app.ts:301, 412` | 003 |
 | 4 | Raw 13.6 MB GeoTIFF (12.6 MB gzipped) fetched and resampled in-browser (632 ms) on every load; a build-time 512² float32 heightfield is 1 MB (≈0.75 MB gz). | perf | HIGH | M | MED | `terrain-layer.ts:141-154`; `scripts/prepare-data.ts` | 004 |
-| 5 | The e2e "style burst" cannot fail: 22 setters in one `page.evaluate`, then a 500 ms sleep; the clay alpha-hash program is never compiled. The one guard for commit `013eab7` is vacuous. | tests | HIGH | S | MED | `e2e/city-walk.spec.ts:160-189` | 001 |
+| 5 | The e2e "style burst" cannot fail: 23 setters in one `page.evaluate`, then a 500 ms sleep; the clay alpha-hash program is never compiled. The one guard for commit `013eab7` is vacuous. | tests | HIGH | S | MED | `e2e/city-walk.spec.ts:160-189` | 001 |
 | 6 | `bun test ./lib` excludes `app/_components/` entirely; no single verify command; `__poc.ready` flips before the API is installed. | tests/dx | HIGH | S | LOW | `package.json:64`; `city-walk.tsx:188, 239`; `create-app.ts:499` | 001 |
 | 7 | Held keys never release on window blur (camera walks forever after Alt-Tab); `R`/`B`/`F` fire on every key-repeat (each `R` re-parses the tile). | bug | MED | S | LOW | `create-app.ts:440-462`; `fps-movement.ts:51,125-126` | 005 |
 | 8 | Diagonal input is √2× walk speed, joystick + key is 2×; the collision ray budget scales with it. | bug | MED | S | LOW | `fps-movement.ts:68-85`; `collision.ts:55` | 005 |
