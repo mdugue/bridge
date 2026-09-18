@@ -1,5 +1,15 @@
 # Plan 003: Derive ink edges from CityJSON rings instead of welding the GPU mesh
 
+> **⛔ OBSOLETE — do not execute.** PR #16 removed welded ink edges entirely:
+> `visual-style.ts` no longer imports `EdgesGeometry`, and `buildEdges` /
+> `mesh.userData.edges` are gone (buildings carry no outline overlay; the
+> terrain's contour ink is a fragment-shader term). The 1,069 ms boot cost and
+> the 652 ms per demolish that justified this plan no longer exist, and every
+> "Current state" excerpt below describes deleted code. Kept for the ring
+> extractor design in Step 2, which is still the right approach **if** outlines
+> ever come back — in that case re-plan against the live `visual-style.ts`.
+> Status in `plans/README.md`: REJECTED (superseded by PR #16).
+
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and

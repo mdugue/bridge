@@ -1,5 +1,27 @@
 # Aesthetic & Visual Fine-Tuning — Implementation Plan
 
+> **Status: shipped, except item 2.** Verified against the tree on 2026-09-18
+> (the branch this plan was written for, after merging `main`):
+>
+> | # | Item | State |
+> |---|------|-------|
+> | 1 | Wind sway on crowns | **done** — `vegetation-layer.ts`, `uTime` + `instanceMatrix[3].xz` phase, exactly as planned |
+> | 2 | Atmospheric motes | **open** — no `motes-layer.ts`; the only unshipped item |
+> | 3 | Better water | **done** — `water-layer.ts` Fresnel sky-tint, sun glitter, shared `uSunDir` |
+> | 4 | Drifting clouds | **done** — `sun-rig.ts` drives the Sky dome's `time`/`cloudSpeed` |
+> | 5 | Golden/blue-hour stops | **done** — `lib/city/atmosphere.ts` STOPS (−2° blue hour, +6° golden hour) |
+> | 6 | Height-term fog | **done** — `height-fog.ts` patches `fog_vertex`/`fog_fragment` |
+> | 7 | Water mist | **done** — `setWaterMist` on the handle and the HUD |
+> | 8 | Grass depth | **done** — meadow-gated mottle in the terrain shader plus the DOP-NDVI tint (`uNdvi`, `setMeadowNdvi`), which the plan did not foresee |
+> | 9 | Backlit foliage translucency | **done** — shadow-gated, `setTreeTranslucency` |
+> | 10 | Dusk/night + OSM lamps | **done** — `lamp-layer.ts` + `scripts/extract-lamps.sh`, dusk glow in `visual-style.ts` |
+> | — | Wiring debt (4 stranded setters) | **done** — every setter is on the handle, `__poc` and the HUD |
+>
+> The branch also shipped things this plan never listed (rail/bridges/platforms,
+> retaining walls, roof colour from DOP, scenic viewpoints, the `docs/`
+> knowledge base). Treat the sections below as the rationale record for what was
+> built — only §2 is still a to-do.
+
 > Goal: deepen the soft, illustrative **watercolor / contour-map** mood of the
 > Dresden city-walker — particles, better water, automated night lighting, and a
 > set of cheap polish passes — **without breaking the art direction or the
