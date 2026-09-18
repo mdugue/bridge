@@ -26,7 +26,7 @@ flowchart TB
     DGM["DGM1<br/>terrain raster (1 m)"]
     DOM["DOM1<br/>surface raster (1 m)"]
     DLM["Basis-DLM (ATKIS)<br/>land cover + veg rows"]
-    OSM["OpenStreetMap<br/>street lamps"]
+    OSM["OpenStreetMap<br/>(local .pbf extract)"]
     DOP["DOP orthophoto<br/>RGB + near-IR"]
   end
 
@@ -45,6 +45,7 @@ flowchart TB
     RAIL["Railway tracks"]
     BRG["Bridges"]
     PLT["Station platforms"]
+    WAL["Retaining walls"]
     MM["Minimap"]
     LIGHT["Light &amp; shadow"]
   end
@@ -85,6 +86,9 @@ flowchart TB
   DOM -. "deck surface (viaducts)" .-> BRG
   OSM -. "bridge:structure → arches" .-> BRG
   OSM ==>|"railway=platform polygons"| PLT
+  OSM ==>|"barrier=retaining_wall/city_wall + height"| WAL
+  DGM -. "drape base onto stepped terrain" .-> WAL
+  WAL -. "breakline conflation: burn a step into the heightfield" .-> TER
   DGM -. ground-clamp .-> PLT
 
   %% minimap + lighting (derived, not raw data)
@@ -97,7 +101,7 @@ flowchart TB
 
 | Feature | Primary source | Also needs / modifiers | Code |
 |---|---|---|---|
-| **Terrain ground** | DGM1 GeoTIFF | — | `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
+| **Terrain ground** | DGM1 GeoTIFF | OSM walls (conflated into a step) | `terrain-layer.ts`, `lib/city/terrain-geometry.ts`, `lib/city/terrain-conflate.ts` |
 | **Surface colours** | Basis-DLM splatmap PNG | DOP NDVI (meadow tint, class 1) | `terrain-layer.ts` (samples splat + `uNdvi`); baked by `extract-dlm.sh` + `extract-ndvi.sh` |
 | **Water (Elbe)** | Basis-DLM (alpha = water) **+** DGM1 (geometry) | — | `water-layer.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 | DGM1 (ground-clamp) | `city-layer.ts` (`cityjson-threejs-loader`) |
@@ -107,6 +111,7 @@ flowchart TB
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Station platforms** | OSM `railway=platform` | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
+| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall` + `height` (local `.pbf`) | DGM1 (base drape + terrain conflated to step) — *the wall isn't in DGM/DOM/LiDAR* | `wall-layer.ts`, `lib/city/terrain-conflate.ts`; baked by `scripts/extract-walls.sh` |
 | **Minimap** | derived from tile bounds | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
 

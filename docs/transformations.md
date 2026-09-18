@@ -137,6 +137,37 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   (`ShapeUtils.triangulateShape`), per-vertex terrain-clamped. The OSM half of the
   blend (Basis-DLM has no platform geometry); absent/empty when Overpass is down.
 
+### Retaining / city walls
+- **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
+  wall` + `man_made=embankment` (ODbL), with the tagged `height` (e.g. the
+  8.5–9 m city walls). `extract-walls.sh` → `wall-layer.ts`: vertical sandstone
+  ribbons, base draped on the DGM via the cross-tile `heightAt`, top = base +
+  height, nudged slightly onto the low side so the face skins the (now stepped)
+  terrain. **Why OSM:** the monumental wall is NOT in the elevation data —
+  DGM1/DOM1/**LiDAR-ground all smooth it into a gentle bank** (verified by
+  sampling: ground ≈ DGM across the wall), and it's not a CityJSON building, so it
+  "went missing". OSM has it as explicit vector lines with heights.
+  **Source:** a LOCAL Geofabrik `.osm.pbf` read via GDAL's OSM driver (both the
+  `lines` and `multipolygons` layers — GDAL files closed barrier ways as
+  polygons), so the whole block bakes in one pass with **no Overpass rate limits**
+  and reproducibly (verified feature-for-feature identical to the old Overpass
+  bake: 436 walls, same kinds/lengths/heights).
+
+### Wall → terrain conflation (heightfield breakline burn)
+- **Stepped ground at walls** — `lib/city/terrain-conflate.ts`, applied inside
+  `loadTerrain` before the mesh is built. The DGM blurs a vertical wall into a
+  ramp, so the OSM ribbon used to float over it / get swallowed and the ground
+  never "stepped". The conflation reads the terrain's natural shelf level a short
+  way out on each side of each wall line, then snaps nearby cells toward the
+  **high-side** level on one side and the **low-side** level on the other — a
+  sharp step concentrated AT the line, feathering back to the untouched DGM within
+  a ~11 m band (nearest-wall-wins). The wall ribbon then skins a real step.
+  **Deterministic + source-portable** (any DEM + any OSM wall lines). **Gated** to
+  earth-retaining kinds (`retaining_wall`/`city_wall`/`embankment`) and only where
+  the two sides actually differ by ≥1.5 m, so freestanding garden walls and flat
+  fountain rims leave the ground alone; a ≤18 m clamp stops a bad height tag
+  gouging a canyon. Pure + unit-tested (`terrain-conflate.test.ts`).
+
 ### Lighting
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
   `castShadow=false`; `normalBias=0`; tight camera-following frustum. Full recipe

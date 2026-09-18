@@ -13,6 +13,7 @@ import {
   TextureLoader,
   type Vector3,
 } from "three";
+import { conflateWalls, type WallLine } from "@/lib/city/terrain-conflate";
 import {
   buildTerrainGeometryData,
   sampleHeightfield,
@@ -60,6 +61,10 @@ export interface TerrainOptions {
   /** .tfw sidecar fallback, used only when the GeoTIFF has no embedded georef */
   tfwUrl?: string;
   url: string;
+  /** baked OSM wall lines (EPSG:25833) for this tile; retaining/city walls are
+   * burned into the heightfield as steps so they sit on a real edge, not the
+   * smooth bank the DGM blurs them into (see lib/city/terrain-conflate.ts) */
+  wallLinesUrl?: string;
 }
 
 /**
@@ -145,6 +150,54 @@ async function fetchArrayBuffer(
     throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
   }
   return await res.arrayBuffer();
+}
+
+interface WallFeatureJson {
+  geometry?: { coordinates?: [number, number][]; type?: string };
+  properties?: { kind?: string };
+}
+
+/** Loads the baked wall LineStrings (EPSG:25833) for conflation. Non-fatal: a
+ *  missing/404/empty file yields [] and the terrain is left as the plain DGM. */
+async function loadWallLines(
+  url: string,
+  signal?: AbortSignal
+): Promise<WallLine[]> {
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      return [];
+    }
+    const json = (await res.json()) as { features?: WallFeatureJson[] };
+    const out: WallLine[] = [];
+    for (const f of json.features ?? []) {
+      const coords = f.geometry?.coordinates;
+      if (f.geometry?.type === "LineString" && Array.isArray(coords)) {
+        out.push({ coords, kind: f.properties?.kind ?? "wall" });
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Returns the DGM elevations with retaining/city walls burned in as steps, or
+ *  the untouched raster when there are no wall lines for this tile. */
+async function conflateTerrain(
+  base: ArrayLike<number>,
+  grid: { bounds: TerrainBounds; n: number; nodata: number | null },
+  wallLinesUrl: string | undefined,
+  signal?: AbortSignal
+): Promise<ArrayLike<number>> {
+  if (!wallLinesUrl) {
+    return base;
+  }
+  const walls = await loadWallLines(wallLinesUrl, signal);
+  if (walls.length === 0) {
+    return base;
+  }
+  return conflateWalls({ elevations: base, ...grid, walls });
 }
 
 /** True when getBoundingBox() returned pixel indices instead of map units. */
@@ -406,7 +459,12 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
     interleave: true,
     resampleMethod: "bilinear",
   });
-  const elevations = raster as unknown as ArrayLike<number>;
+  const elevations = await conflateTerrain(
+    raster as unknown as ArrayLike<number>,
+    { n, bounds, nodata },
+    opts.wallLinesUrl,
+    opts.signal
+  );
 
   const { positions, indices, minElevation } = buildTerrainGeometryData({
     elevations,

@@ -65,6 +65,7 @@ import {
   createStyleResources,
   setCityTransparency,
 } from "./visual-style";
+import { loadWalls, type WallControl } from "./wall-layer";
 
 const EYE_HEIGHT = 1.7;
 /** Keys that mean "I'm driving" — pressing any of them aborts a scenic flight. */
@@ -482,6 +483,7 @@ async function bootApp(
   let lampLights: LampLights | null = null;
   // Per-tile rail/bridge/platform geometry, kept only so dispose can free it.
   const railControls: RailControl[] = [];
+  const wallControls: WallControl[] = [];
 
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
   const loadTileScene = async (
@@ -492,6 +494,11 @@ async function bootApp(
       url: tile.demSrc,
       tfwUrl: tile.demTfwSrc,
       landcoverUrl: tile.landcoverSrc,
+      // Retaining/city walls are burned into THIS tile's heightfield as steps so
+      // the ground breaks at the wall instead of the DGM's smooth bank.
+      wallLinesUrl: tile.landcoverSrc
+        ?.replace("landcover_", "walls_")
+        .replace(".png", ".geojson"),
       offset,
       targetSize,
       signal: opts.signal,
@@ -626,6 +633,29 @@ async function bootApp(
     });
     scene.add(rail.group);
     railControls.push(rail);
+    ensureAlive();
+  }
+
+  // OSM retaining/city walls (e.g. the Brühlsche Terrasse) — the monumental
+  // walls the elevation data smooths away. Built ONCE for the block on the
+  // cross-tile heightAt; the URL is derived from each tile's land-cover URL.
+  const wallUrls = [
+    opts.landcoverSrc,
+    ...(opts.extraTiles ?? []).map((t) => t.landcoverSrc),
+  ]
+    .filter((u): u is string => u !== undefined)
+    .map((u) => u.replace("landcover_", "walls_").replace(".png", ".geojson"));
+  if (wallUrls.length > 0) {
+    opts.onProgress?.("Building walls…");
+    const walls = await loadWalls({
+      offset,
+      heightAt,
+      wallUrls,
+      signal: opts.signal,
+      heightFog,
+    });
+    scene.add(walls.group);
+    wallControls.push(walls);
     ensureAlive();
   }
 
@@ -1180,6 +1210,9 @@ async function bootApp(
       }
       for (const rail of railControls) {
         rail.dispose();
+      }
+      for (const wall of wallControls) {
+        wall.dispose();
       }
       lampLights?.dispose();
       styleResources.dispose();

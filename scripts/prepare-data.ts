@@ -52,6 +52,8 @@ const optionalCopies: [string, string][] = TILES.flatMap((tile) => [
   [`data/dlm/bridge_${tile}.geojson`, `public/data/bridge_${tile}.geojson`],
   [`data/dlm/railarea_${tile}.geojson`, `public/data/railarea_${tile}.geojson`],
   [`data/dlm/platform_${tile}.geojson`, `public/data/platform_${tile}.geojson`],
+  // OSM retaining/city walls (extract-walls.sh, ODbL).
+  [`data/dlm/walls_${tile}.geojson`, `public/data/walls_${tile}.geojson`],
 ]);
 
 for (const [src, dest] of copies) {
