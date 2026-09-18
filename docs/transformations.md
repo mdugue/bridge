@@ -205,10 +205,46 @@ research that produced them):
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). Sizeable integration.
 8. **Adaptive / half-res post** — fill-rate is the bottleneck; a resolution scale
-   under load buys headroom before the larger WebGPU move.
+   under load buys headroom before the larger WebGPU move. See *App shell & frame
+   budget* below for the two cheap levers that pair with it (movement regression,
+   idle frameloop).
 9. **Cable-stayed / truss bridge structures** — arch + beam now ship (✅ above);
    `bridge:structure=cable-stayed` (Pieschener Molenbrücke) / `truss` still fall
    back to a flat soffit. Pylons + stay cables / truss webs would finish the set.
+
+### App shell & frame budget (not data→look)
+
+Runtime/architecture items rather than source→feature transformations. Recorded
+here so they survive threads alongside everything else. All four came out of the
+react-three-fiber feasibility check (see 🗃️ below) — they are the parts of the
+r3f playbook that are worth having **without** adopting the reconciler.
+
+- **Movement regression** — r3f's `regress()` pattern, hand-rolled: while the
+  camera is moving or turning, drop `setPixelRatio` and/or skip the DoF + N8AO
+  passes, then restore after a short debounce once it settles. Aims straight at
+  the stated fill-rate bottleneck, and motion blur/DoF is exactly what the eye
+  misses least mid-movement. Pairs with 📋 8 above (same lever, different
+  trigger). `create-app.ts` render loop + `post-stack.ts`.
+- **On-demand rendering (idle frameloop)** — r3f's `frameloop="demand"`: skip
+  `postStack.render()` entirely when nothing changed. **Caveat that limits this
+  here:** water ripple, wind sway and cloud drift all advance every frame, so a
+  general dirty-flag buys nothing. Only worth scoping to a *real* idle state
+  (pointer-lock released, no input for N seconds, sliders untouched) — a
+  battery/fan win on a parked camera, not a framerate win. `create-app.ts:1028`.
+- **Sliced layer build (load jank)** — the vegetation chunk loop
+  (`vegetation-layer.ts`, `bucketByCell`) is the one naturally sliceable part of
+  the load: `await scheduler.yield()` between 250 m cells lets the `onProgress`
+  loading message actually paint instead of the main thread freezing through it.
+  The monolithic phases (merged CityJSON parse, raster→heightfield, rail
+  extrusion) are **not** sliceable without restructuring — a worker is the real
+  answer there, and neither needs React.
+- **HUD state split** — `CityWalk` (`city-walk.tsx`) is one ~600-line JSX
+  component holding ~30 `useState`, so every slider drag *and* the 2 Hz `onFps`
+  tick re-render the whole HUD root. React Compiler blunts it (children memoize)
+  but the root still re-renders each time. Move the look sliders into a store or
+  per-group state so a drag re-renders only its own `ControlGroup`. The 60 Hz
+  pose path (`subscribePose`, deliberately never through React state) is already
+  the right pattern — leave it alone.
 
 ---
 
@@ -230,6 +266,7 @@ research that produced them):
 | **Per-line ballast ribbons** (rail v1: one ~9.6 m ribbon per `ver03_l` line) | 42+ overlapping coplanar ribbons in the yard z-fought into ragged/torn edges. | Replaced by the **dissolved `ver03_f` area** as one merged surface. |
 | **`ver06_l` centreline-buffered decks** (rail v1) | Buffered planks stacked deck-top + ballast + parapet-cap → "2-story" bridges, and one plank merged the parallel Marienbrücke spans. | Replaced by **`ver06_f` deck polygons** (one slab per real footprint); kept as the no-`ver06_f` portability fallback. |
 | **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build **once for the block** on the cross-tile `heightAt`. |
+| **react-three-fiber migration** | The scheduler win people cite is time-slicing *component mounts* (pmndrs' 510-`TextGeometry` benchmark). r3f's own frameloop is a bare `requestAnimationFrame` with React out of the per-frame path — identical to our `setAnimationLoop`, so **zero** frame-time delta. And React only yields *between* component renders: our load is monolithic imperative work (merged CityJSON parse, raster→heightfield, rail extrusion) it cannot preempt inside a call. Cost side: 13 `onBeforeCompile` sites across 7 layers become `<primitive>` escape hatches; the hand-ordered `post-stack.ts` (2 custom `Effect`s + crosshair autofocus) goes under `@react-three/postprocessing` (which also pins `n8ao ^2`, we run `^1.10`); and the ~60-method `CityWalkHandle` that `window.__poc` and the snapshot e2e harness drive would have to be rebuilt on a store. | Our scene graph is static-after-load (only demolish/insert add or remove) — r3f's weakest case. The genuinely useful parts of the r3f playbook need no reconciler and are filed under 📋 *App shell & frame budget*. Revisit only if the scene becomes dynamically composed. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 
 ---
