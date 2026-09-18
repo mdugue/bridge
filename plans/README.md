@@ -29,8 +29,8 @@ on #16.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Make the test baseline real — `app/` tests run, e2e waits for frames, `bun run verify` | P1 | S | — | TODO |
-| 002 | Remove per-frame waste: terrain BVH at load, on-demand shadow map, half-res transmission, no MSAA backbuffer | P1 | S | 001 | TODO |
+| 001 | Make the test baseline real — `app/` tests run, e2e waits for frames, `bun run verify` | P1 | S | — | DONE — 15 test files / 75 unit tests, `bun run verify` + `bun run test:e2e` green. One deviation: the ghost test asserts "version increased", not "+1" — three's own `transmission` setter already bumps `version` on the zero crossing, so `setCityTransparency`'s `needsUpdate` is a redundant second bump (see follow-up below). |
+| 002 | Remove per-frame waste: terrain BVH at load, on-demand shadow map, half-res transmission, no MSAA backbuffer | P1 | S | 001 | DONE — all six steps; `bun run verify`, `bun run build` and `bun run test:e2e` green. The manual shadow check was replaced by a scripted one (the executing environment has no display): under `autoUpdate = false`, moving the sun from 05:30 to 16:30 changes 48 % of the frame's pixels, `insertBuilding()` changes 0.49 %, demolish is covered by the e2e spec, all with zero console errors — i.e. every `invalidateShadows()` site produces a fresh frame. Note this measures "the frame re-renders", not "the shadow itself moved"; confirming the look (shadow follows the time slider, demolished building's shadow gone, inserted box casts one) plus the half-resolution transmission and SMAA-without-MSAA appearance still needs one maintainer glance in `bun dev`. |
 | 003 | Derive ink edges from CityJSON rings instead of welding the GPU mesh (≈1 s off boot, ≈0.65 s off each demolish) | P1 | M | 001 (recommended) | TODO |
 | 004 | Preprocess the DGM into a 512² heightfield at build time (12.6 MB → ≈0.75 MB, no in-browser GeoTIFF decode) | P1 | M | — | TODO |
 | 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | P2 | M | 001 | TODO |
@@ -98,6 +98,7 @@ against `8075a21`.
 | 26 | `tsconfig` `types: ["bun"]` applies Bun globals to browser code; `target: ES2017`; `allowJs` with no JS files. | dx | LOW | S | MED | `tsconfig.json:3, 5, 24` | investigate — a `tsconfig.node.json` for scripts/tests; not urgent |
 | 27 | `epsgCodeFromReferenceSystem` rejects OGC URLs with a trailing slash. | bug | LOW | S | LOW | `lib/city/crs.ts:22` | not planned — one-line regex + test; do it opportunistically |
 | 28 | Superseded Dependabot PRs (#9, #13, #15) saturate the 5-slot limit; `suncalc` 1.9 → 2.0 (#10) needs an export-shape/azimuth check before merging. | deps | LOW | S | LOW | GitHub PRs #8–#15 | maintainer action, no code |
+| 29 | `setCityTransparency` raises `ghost.needsUpdate` when transmission crosses 0, but three's own `MeshPhysicalMaterial.transmission` setter already bumps `material.version` for exactly that case (`node_modules/three/src/materials/MeshPhysicalMaterial.js:536-544`) — the extra flag costs a second, redundant program rebuild on every crossing. The clay/`alphaHash` half of the function has no such setter and does need the flag. | perf/tech-debt | LOW | S | LOW | `visual-style.ts:159-165`; found while writing `visual-style.test.ts` for plan 001 | not planned — one-line deletion plus the comment; the test asserts "a recompile was forced", not the delta, so it survives either way |
 
 ## Direction — options for the maintainer (not ranked against the bugs)
 
