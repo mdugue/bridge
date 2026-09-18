@@ -1,5 +1,14 @@
 import { expect, type Page, test } from "@playwright/test";
 
+/**
+ * Inner waits scale with the machine. Without a GPU every frame is rendered in
+ * software, so work that is instant on a developer box — a demolish re-parses
+ * the whole tile, a drawer animates while the render loop competes for the main
+ * thread — can take tens of seconds on a shared CI runner. The per-test budget
+ * itself lives in playwright.config.ts.
+ */
+const slow = (ms: number) => (process.env.CI ? ms * 3 : ms);
+
 // Software-rendered WebGL so the smoke test also runs on headless CI boxes
 // without a GPU (ANGLE -> SwiftShader).
 test.use({
@@ -18,7 +27,7 @@ async function waitForFrames(page: Page, count: number): Promise<void> {
   await page.waitForFunction(
     (target) => (window.__poc?.frames ?? 0) >= target,
     start + count,
-    { timeout: 60_000 }
+    { timeout: slow(60_000) }
   );
 }
 
@@ -56,9 +65,8 @@ test("city page serves the viewer shell", async ({ page }) => {
 });
 
 test("city walk renders buildings, terrain and shadows", async ({ page }) => {
-  // Software-rendered WebGL plus the post-processing stack (SSAO, DoF)
-  // makes every frame expensive on CI machines without a GPU.
-  test.setTimeout(240_000);
+  // The per-test budget for this one lives in playwright.config.ts: software
+  // WebGL plus the post stack makes every frame expensive without a GPU.
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   page.on("pageerror", (err) => pageErrors.push(String(err)));
@@ -76,13 +84,13 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   // Waited on first: in dev, React StrictMode briefly runs a second, aborted
   // viewer instance whose canvas would trip a strict locator during loading.
   await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-    timeout: 120_000,
+    timeout: slow(120_000),
   });
 
   // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
   // 2D canvases of its own; three.js tags its canvas with data-engine).
   const canvas = page.locator("canvas[data-engine]");
-  await expect(canvas).toBeVisible({ timeout: 60_000 });
+  await expect(canvas).toBeVisible({ timeout: slow(60_000) });
   const box = await canvas.boundingBox();
   expect(box?.width ?? 0).toBeGreaterThan(0);
   expect(box?.height ?? 0).toBeGreaterThan(0);
@@ -95,7 +103,7 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   // Demolish end to end: hover the camera over a real building, aim straight
   // down and trigger the crosshair demolition — the building count must drop.
   const cityDoc = (await (
-    await page.request.get("/data/lod1_33412_5656_2_sn.city.json")
+    await page.request.get("/data/lod2_33412_5656_2_sn.city.json")
   ).json()) as {
     CityObjects: Record<
       string,
@@ -133,18 +141,26 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   await page.waitForFunction(
     (before) => (window.__poc?.buildingCount ?? 0) < before,
     buildingsBefore,
-    { timeout: 30_000 }
+    { timeout: slow(30_000) }
   );
 
-  // Minimap teleport: the map is 192 px over the 2 km tile, so clicking
-  // (48, 48) must land the player near 412500 E / 5657500 N (quarter tile
-  // from the north-west corner).
-  await page.getByTestId("minimap").click({ position: { x: 48, y: 48 } });
+  // Minimap teleport: the map spans the loaded 2x2 tile block (union bounds
+  // 410000..414000 E / 5656000..5660000 N) and is sized responsively in the
+  // sidebar, so clicking a quarter in from the north-west corner — whatever the
+  // rendered px size — must land the player near 411000 E / 5659000 N.
+  const minimap = page.getByTestId("minimap");
+  const minimapBox = await minimap.boundingBox();
+  await minimap.click({
+    position: {
+      x: (minimapBox?.width ?? 0) / 4,
+      y: (minimapBox?.height ?? 0) / 4,
+    },
+  });
   const pose = await page.evaluate(() => window.__poc?.getPose?.());
-  expect(pose?.epsgX ?? 0).toBeGreaterThan(412_450);
-  expect(pose?.epsgX ?? 0).toBeLessThan(412_550);
-  expect(pose?.epsgY ?? 0).toBeGreaterThan(5_657_450);
-  expect(pose?.epsgY ?? 0).toBeLessThan(5_657_550);
+  expect(pose?.epsgX ?? 0).toBeGreaterThan(410_950);
+  expect(pose?.epsgX ?? 0).toBeLessThan(411_050);
+  expect(pose?.epsgY ?? 0).toBeGreaterThan(5_658_950);
+  expect(pose?.epsgY ?? 0).toBeLessThan(5_659_050);
 
   // Desktop grab-look: a primary-button mouse drag turns the view — no
   // pointer lock needed by default (immersive mode is opt-in).
@@ -179,42 +195,125 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   );
   expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
 
-  // Style, DoF and atmosphere controls must not produce shader/render errors.
-  // Each step is bound to real rendered frames: a shader that only fails once
-  // its program is compiled and drawn cannot hide behind a fixed sleep.
-  const STYLE_STEPS = 21;
+  // Snapshot round-trip: applying a captured camera state must reproduce it
+  // (the basis for copy/paste QA of an exact view).
+  const roundTrip = await page.evaluate(() => {
+    const api = window.__poc;
+    if (!(api?.applyCameraState && api.getCameraState)) {
+      throw new Error("snapshot api incomplete");
+    }
+    api.applyCameraState({
+      mode: "fly",
+      pos: { x: 25, y: 140, z: -60 },
+      epsg: { x: 0, y: 0 },
+      headingDeg: 42,
+      pitchDeg: -20,
+      fov: 55,
+    });
+    return api.getCameraState();
+  });
+  expect(roundTrip.mode).toBe("fly");
+  expect(roundTrip.pos.x).toBeCloseTo(25, 1);
+  expect(roundTrip.pos.y).toBeCloseTo(140, 1);
+  expect(roundTrip.pos.z).toBeCloseTo(-60, 1);
+  expect(roundTrip.headingDeg).toBeCloseTo(42, 0);
+  expect(roundTrip.pitchDeg).toBeCloseTo(-20, 0);
+  expect(roundTrip.fov).toBeCloseTo(55, 1);
+
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
+  // Visual artifact for humans; not asserted on. Capturing the canvas forces a
+  // fresh software-rendered frame, which costs seconds here — on CI run #38 this
+  // very line ate the rest of the budget and failed a spec whose assertions had
+  // all passed. Cap it, and never let a debugging plate fail a green test.
+  await page
+    .screenshot({
+      path: "test-results/city-walk-smoke.png",
+      timeout: slow(30_000),
+    })
+    .catch(() => {
+      // No plate this time; the assertions above are the test.
+    });
+});
+
+/**
+ * The style/post controls, each bound to real rendered frames: a shader that
+ * only fails once its program is compiled and drawn cannot hide behind a fixed
+ * sleep. Split off from the scene spec because it is the expensive half — under
+ * software GL this scene renders a clay frame in ~4 s and a GHOST frame in ~20 s
+ * (transmission re-renders the whole scene), which is why the walk runs the
+ * cheap styles first and visits ghost in two steps at the end rather than
+ * interleaving it.
+ */
+test("style, post and shader controls survive real frames", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(String(err)));
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  await page.goto("/");
+  await skipWithoutWebGl(page);
+  await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
+    timeout: slow(120_000),
+  });
+
+  const STYLE_STEPS = 13;
   for (let i = 0; i < STYLE_STEPS; i++) {
     await page.evaluate((index) => {
       const steps: Array<() => void> = [
         () => window.__poc?.setStyle?.("clay"),
-        () => window.__poc?.setStyle?.("standard"),
-        () => window.__poc?.setStyle?.("ghost"),
         () => window.__poc?.setDepthOfField?.(false),
-        () => window.__poc?.setDepthOfField?.(true),
+        // Post-stack uniforms compile nothing, so they share two steps: one at
+        // full strength, one back down. Each frame here costs seconds.
         () => {
+          window.__poc?.setDepthOfField?.(true);
           window.__poc?.setAtmosphere?.(1);
           window.__poc?.setDepthGrading?.(1);
+          window.__poc?.setContactShadows?.(1);
+          window.__poc?.setPaperGrain?.(1);
         },
         () => {
           window.__poc?.setAtmosphere?.(0.35);
           window.__poc?.setDepthGrading?.(0.5);
+          window.__poc?.setContactShadows?.(0.5);
+          window.__poc?.setPaperGrain?.(0.25);
         },
-        () => window.__poc?.setBuildingTransparency?.(0.8),
-        () => window.__poc?.setBuildingTransparency?.(0.45),
-        // Clay's alpha-hash program compiles when transparency crosses 0 —
-        // each of these must reach a rendered frame.
-        () => window.__poc?.setStyle?.("clay"),
+        // Clay's alpha-hash program compiles when transparency crosses 0, in
+        // both directions — each crossing must reach a rendered frame.
         () => window.__poc?.setBuildingTransparency?.(0.5),
+        () => window.__poc?.setBuildingTransparency?.(0.8),
         () => window.__poc?.setBuildingTransparency?.(0),
-        () => window.__poc?.setStyle?.("ghost"),
-        () => window.__poc?.setToonBands?.(4),
-        () => window.__poc?.setToonBands?.(0),
-        () => window.__poc?.setEdges?.(0),
-        () => window.__poc?.setEdges?.(0.7),
-        () => window.__poc?.setContactShadows?.(1),
-        () => window.__poc?.setContactShadows?.(0.5),
-        () => window.__poc?.setPaperGrain?.(1),
-        () => window.__poc?.setPaperGrain?.(0.25),
+        // Shader paths the aesthetic work added: the terrain's NDVI meadow
+        // tint, the height-fog chunk patch, the water mist sheet.
+        () => {
+          window.__poc?.setHeightFog?.(1);
+          window.__poc?.setMeadowNdvi?.(1);
+          window.__poc?.setWaterMist?.(1);
+        },
+        // Crown shaders; multi-tuft swaps the instanced LOD meshes.
+        () => {
+          window.__poc?.setTreeShimmer?.(1);
+          window.__poc?.setTreeTranslucency?.(1);
+          window.__poc?.setTreeLeafFlutter?.(1);
+          window.__poc?.setTreeLeafBright?.(1);
+          window.__poc?.setTreeMultiTuft?.(true);
+        },
+        () => window.__poc?.setStyle?.("standard"),
+        // Ghost last, and only twice: every frame in this style costs ~20 s
+        // under software GL.
+        () => {
+          window.__poc?.setStyle?.("ghost");
+          window.__poc?.setBuildingTransparency?.(0.45);
+        },
+        () => window.__poc?.setBuildingTransparency?.(0),
+        () => window.__poc?.setStyle?.("clay"),
       ];
       steps[index]?.();
     }, i);
@@ -222,9 +321,6 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
   }
-
-  // Visual artifact for humans; not asserted on.
-  await page.screenshot({ path: "test-results/city-walk-smoke.png" });
 });
 
 test.describe("mobile", () => {
@@ -239,7 +335,6 @@ test.describe("mobile", () => {
   test("touch UI: joystick, drawer, drag-look, double-tap travel", async ({
     page,
   }) => {
-    test.setTimeout(240_000);
     const pageErrors: string[] = [];
     const consoleErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
@@ -252,7 +347,7 @@ test.describe("mobile", () => {
     await page.goto("/");
     await skipWithoutWebGl(page);
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-      timeout: 120_000,
+      timeout: slow(120_000),
     });
 
     // Touch chrome instead of keyboard hints.
@@ -331,14 +426,14 @@ test.describe("mobile", () => {
         );
       },
       poseBefore,
-      { timeout: 15_000 }
+      { timeout: slow(15_000) }
     );
 
     // Drawer opens with the scene settings (generous timeout: the main
     // thread shares time with software-rendered frames).
     await page.getByRole("button", { name: "Scene settings" }).tap();
     await expect(page.getByText("Building style")).toBeVisible({
-      timeout: 30_000,
+      timeout: slow(30_000),
     });
 
     expect(pageErrors).toEqual([]);

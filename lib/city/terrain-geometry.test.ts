@@ -12,39 +12,51 @@ const flat3x3 = {
   nodata: -9999,
 };
 
-test("buildTerrainGeometryData returns n*n*3 positions and full triangulation", () => {
+// Index/vertex budgets: an n*n surface grid plus a 4*n vertical skirt ring
+// (one bottom vertex per border vertex). Top = (n-1)^2 quads; skirt = 4 borders
+// of (n-1) segments, each a 2-triangle quad.
+const topIndices = (n: number) => (n - 1) * (n - 1) * 2 * 3;
+const skirtIndices = (n: number) => 4 * (n - 1) * 2 * 3;
+
+test("buildTerrainGeometryData returns grid + skirt positions and triangulation", () => {
   const { positions, indices } = buildTerrainGeometryData({
     ...flat3x3,
     offset: { cx: 0, cy: 0 },
   });
-  expect(positions.length).toBe(3 * 3 * 3);
-  // (n-1)^2 quads * 2 triangles * 3 indices
-  expect(indices.length).toBe(2 * 2 * 2 * 3);
+  // n*n grid vertices + a 4*n skirt ring.
+  expect(positions.length).toBe((3 * 3 + 4 * 3) * 3);
+  expect(indices.length).toBe(topIndices(3) + skirtIndices(3));
 });
 
-test("buildTerrainGeometryData places a known cell at pixel center minus offset", () => {
+test("buildTerrainGeometryData keeps interior vertices at pixel centers, snaps borders to the tile edge", () => {
   const { positions } = buildTerrainGeometryData({
     ...flat3x3,
     offset: { cx: 1.5, cy: 1.5 },
   });
-  // Vertex 0 = row 0 (north), col 0 (west): pixel center (0.5, 2.5), z kept.
-  expect(positions[0]).toBeCloseTo(0.5 - 1.5);
-  expect(positions[1]).toBeCloseTo(2.5 - 1.5);
-  expect(positions[2]).toBe(100);
-  // Last vertex = row 2 (south), col 2 (east): pixel center (2.5, 0.5).
-  expect(positions[24]).toBeCloseTo(2.5 - 1.5);
-  expect(positions[25]).toBeCloseTo(0.5 - 1.5);
+  // Interior center vertex (row 1, col 1): true pixel center (1.5, 1.5).
+  expect(positions[4 * 3]).toBeCloseTo(1.5 - 1.5);
+  expect(positions[4 * 3 + 1]).toBeCloseTo(1.5 - 1.5);
+  expect(positions[4 * 3 + 2]).toBe(100);
+  // Vertex 0 = NW corner: snapped out to the true edge (minX, maxY) so
+  // neighbouring tiles meet with no sky gap.
+  expect(positions[0]).toBeCloseTo(0 - 1.5);
+  expect(positions[1]).toBeCloseTo(3 - 1.5);
+  // Last grid vertex (row 2, col 2) = SE corner: snapped to (maxX, minY).
+  expect(positions[8 * 3]).toBeCloseTo(3 - 1.5);
+  expect(positions[8 * 3 + 1]).toBeCloseTo(0 - 1.5);
 });
 
 test("buildTerrainGeometryData omits quads touching a NoData vertex", () => {
   const elevations = new Float32Array(9).fill(100);
-  elevations[0] = -9999; // north-west corner -> kills exactly one quad
+  elevations[0] = -9999; // north-west corner -> kills its top quad + 2 skirt segs
   const { indices } = buildTerrainGeometryData({
     ...flat3x3,
     elevations,
     offset: { cx: 0, cy: 0 },
   });
-  expect(indices.length).toBe((4 - 1) * 2 * 3);
+  // One top quad gone, and the two skirt segments touching vertex 0 (north[0],
+  // west[0]) dropped: 2 quads * 6 indices.
+  expect(indices.length).toBe(topIndices(3) + skirtIndices(3) - 2 * 6 - 6);
   // The NoData vertex must not be referenced at all.
   expect(indices).not.toContain(0);
 });

@@ -11,19 +11,79 @@ than the usual three to five, because several top items are small and
 cluster naturally. Everything else is recorded below as a follow-up or a
 rejected finding so it is not re-audited next run.
 
-**Scheduling constraint — PR #16.** The open branch
-`aesthectic-and-visual-fine-tuning` (PR #16, based on `f984714`) rewrites
-`app/_components/create-app.ts` (+711/−49), `city-walk.tsx` (+1368/−379),
+**Reconciliation — PR #16 is in the tree.** The maintainer took the second
+option below: `main` was merged **into** `aesthectic-and-visual-fine-tuning`
+(PR #16), so the plans and the aesthetic work now live in one tree. Every
+plan's drift check therefore trips — `create-app.ts`, `city-walk.tsx`,
 `visual-style.ts`, `terrain-layer.ts`, `sun-rig.ts`, `city-layer.ts`,
-`minimap.tsx`, `poc-debug.ts`, `post-stack.ts`, `AGENTS.md`, `biome.jsonc`,
-`.mcp.json` and 19 files under `components/ui/`. Plans 001–006 were written
-against `main`; every plan carries a drift check that will stop the executor
-if those files changed. The changes in each plan are local (mostly under 30
-lines per file) and port easily, but the maintainer should decide the order:
-either land the plans first and rebase #16, or merge #16 and re-run
-`/improve reconcile` to refresh the excerpts. Plans 001 (tests) and 006
-(cleanup/docs) are the least entangled; 006 explicitly gates two of its steps
-on #16.
+`minimap.tsx`, `poc-debug.ts`, `post-stack.ts`, `prepare-data.ts`, `AGENTS.md`,
+`biome.jsonc`, `.mcp.json` and the `components/ui/**` files all changed, and
+nine modules that no plan knows about now exist (`rail-layer.ts`,
+`wall-layer.ts`, `water-layer.ts`, `lamp-layer.ts`, `vegetation-layer.ts`,
+`height-fog.ts`, `camera-flight.ts`, `viewpoints.ts`, plus
+`lib/city/{building-tint,terrain-conflate}.ts`). **Do not execute a plan
+without re-reading its "Current state" against the live code**; a full
+`/improve reconcile` would refresh the excerpts. Verified status of each plan
+against the merged tree (checked 2026-09-18, after the merge):
+
+- **001 — DONE on `main` (PR #18), merged in here.** The `app/` test glob, the
+  `verify` script, the honest `__poc.ready`, the frame counter and the
+  frame-bound style walk all apply to this branch now. Three adaptations were
+  needed on merge. The walk's `setToonBands`/`setEdges` steps are gone (#16
+  removed both) and were replaced by steps for the shader paths #16 added
+  (height fog, meadow NDVI, water mist, the crown shaders). The walk moved into
+  a spec of its own, because binding it to real frames exposes what this scene
+  costs without a GPU: **~4 s per clay frame and ~20 s per ghost frame** (two
+  cores, measured — `transmission` re-renders the whole scene, so ghost barely
+  improves with a smaller canvas). It therefore runs the cheap styles first and
+  visits ghost twice at the end. The rest of the CI timing work — one worker,
+  one retry, a 600 s per-test budget — lives in `playwright.config.ts`.
+- **002 — DONE on `main` (PR #18), ported by hand.** #16 had already solved one
+  of its six steps its own way (`sun-rig.ts` gates the shadow map per light and
+  re-renders it when the sun or the camera-following frustum moves), so the
+  merge keeps that gate and drops `main`'s renderer-level
+  `shadowMap.autoUpdate = false`: with both closed, the rig's per-frame
+  invalidation would be swallowed and shadows would freeze while walking.
+  `invalidateShadows()` is the single entry point either way — **the rule to
+  carry forward is that every new scene object and every material change that
+  alters the depth pass has to call it**; a missing call is a stale shadow, never
+  a crash. The terrain BVH now covers all four tiles of the 2×2 block, not just
+  the primary one.
+- **003 — obsolete as written.** #16 deleted `buildEdges`/`EdgesGeometry` from
+  `visual-style.ts`; welded building ink edges no longer exist (the terrain
+  contour ink is a shader term now). The finding it was written for is gone,
+  so the plan has no target — re-plan from scratch if outlines ever return.
+- **004 — still valid, bigger payoff.** The DGM is still decoded from GeoTIFF
+  in the browser (`terrain-layer.ts` `fromArrayBuffer`/`readRasters`), and #16
+  boots a 2×2 tile block, so it is four decodes per load, not one. The plan's
+  MB and ms figures are per tile.
+- **005 — still valid.** `fps-movement.ts`, `touch-controls.ts`,
+  `collision.ts`, `three-utils.ts` and `inserted-building.ts` were not touched
+  by #16, so Steps 1–3 apply verbatim (there is still no `blur` handler, so
+  keys still stick). Steps 4–5 must be ported onto the rewritten
+  `create-app.ts`.
+- **006 — mostly valid, two steps changed.** The four dead dependencies
+  (`@giro3d/giro3d`, `fast-xml-parser`, `fit-file-parser`, `html-to-image`) are
+  still unimported. Step 5 (prune unreachable shadcn files) **must be
+  recomputed** — #16's mobile drawer uses `vaul`/`drawer.tsx`, which the old
+  list treats as unreachable. Step 9 is superseded: #16 rewrote `AGENTS.md`
+  for this project and added `docs/`; only the README rewrite (Step 8) is
+  still open, and it should link `docs/README.md`.
+- **Deferred findings 21/22/24 are now actionable.** #16 answered 22 (3072²
+  shadow map on a 110 m camera-following, texel-snapped frustum). 21 grew:
+  `city-walk.tsx` is 1,650 lines with 40 `useState`, and `SceneControls` takes
+  65 props — a `SceneSettings` object plus data-driven slider definitions is
+  the obvious cut.
+- **`aesthetic-and-visual-fine-tuning.md` is #16's own plan and is ~shipped** —
+  see the status header in that file. One roadmap item (atmospheric motes) is
+  left.
+- **007 — one premise reads differently here.** It lists 002 as landed and
+  assumes `renderer.shadowMap.autoUpdate = false`. In this tree the gate sits on
+  the light instead (`sun.shadow.autoUpdate` in `sun-rig.ts`, with
+  `invalidateShadows()` as the single entry point) — see the 002 note above for
+  why. The plan's *idea* is unaffected; only don't go looking for the renderer
+  flag. Its excerpts were written against `908ade3`, so re-read them against the
+  live `create-app.ts` / `post-stack.ts` before executing.
 
 ## Execution order & status
 
@@ -31,10 +91,10 @@ on #16.
 |------|-------|----------|--------|------------|--------|
 | 001 | Make the test baseline real — `app/` tests run, e2e waits for frames, `bun run verify` | P1 | S | — | DONE — 15 test files / 75 unit tests, `bun run verify` + `bun run test:e2e` green. One deviation: the ghost test asserts "version increased", not "+1" — three's own `transmission` setter already bumps `version` on the zero crossing, so `setCityTransparency`'s `needsUpdate` is a redundant second bump (see follow-up below). |
 | 002 | Remove per-frame waste: terrain BVH at load, on-demand shadow map, half-res transmission, no MSAA backbuffer | P1 | S | 001 | DONE — all six steps; `bun run verify`, `bun run build` and `bun run test:e2e` green. The manual shadow check was replaced by a scripted one (the executing environment has no display): under `autoUpdate = false`, moving the sun from 05:30 to 16:30 changes 48 % of the frame's pixels, `insertBuilding()` changes 0.49 %, demolish is covered by the e2e spec, all with zero console errors — i.e. every `invalidateShadows()` site produces a fresh frame. Note this measures "the frame re-renders", not "the shadow itself moved"; confirming the look (shadow follows the time slider, demolished building's shadow gone, inserted box casts one) plus the half-resolution transmission and SMAA-without-MSAA appearance still needs one maintainer glance in `bun dev`. |
-| 003 | Derive ink edges from CityJSON rings instead of welding the GPU mesh (≈1 s off boot, ≈0.65 s off each demolish) | P1 | M | 001 (recommended) | TODO |
-| 004 | Preprocess the DGM into a 512² heightfield at build time (12.6 MB → ≈0.75 MB, no in-browser GeoTIFF decode) | P1 | M | — | TODO |
-| 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | P2 | M | 001 | TODO |
-| 006 | Scaffold cleanup, unused deps, lint config, fonts, README + AGENTS.md | P2 | M | — (steps 5 & 9 wait for PR #16) | TODO |
+| 003 | Derive ink edges from CityJSON rings instead of welding the GPU mesh (≈1 s off boot, ≈0.65 s off each demolish) | P1 | M | 001 (recommended) | REJECTED — #16 removed `buildEdges`/ink edges; no target left |
+| 004 | Preprocess the DGM into a 512² heightfield at build time (12.6 MB → ≈0.75 MB, no in-browser GeoTIFF decode) | P1 | M | — | TODO — valid; ×4 tiles after #16 |
+| 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | P2 | M | 001 | TODO — Steps 1–3 verbatim, 4–5 need porting |
+| 006 | Scaffold cleanup, unused deps, lint config, fonts, README + AGENTS.md | P2 | M | — | TODO — Step 5 recompute, Step 9 superseded by #16 |
 | 007 | Adaptive quality while the camera moves (movement regression: skip AO + DoF during motion) | P2 | S | 002 (landed) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).

@@ -3,7 +3,6 @@ import {
   createStyleResources,
   DEFAULT_GHOST_TRANSPARENCY,
   setCityTransparency,
-  setEdgeOpacity,
 } from "./visual-style";
 
 // three bakes the transmission / alpha-hash code paths into the compiled
@@ -76,22 +75,18 @@ test("the standard style owns no transparency of its own", () => {
   expect(resources.clay.opacity).toBe(opacity);
 });
 
-test("setEdgeOpacity clamps and flips edgesVisible at 0.01", () => {
-  const resources = createStyleResources();
-  setEdgeOpacity(resources, 0);
-  expect(resources.edgeLines.opacity).toBe(0);
-  expect(resources.edgesVisible).toBe(false);
-  setEdgeOpacity(resources, 0.005);
-  expect(resources.edgesVisible).toBe(false);
-  setEdgeOpacity(resources, 0.02);
-  expect(resources.edgesVisible).toBe(true);
-  setEdgeOpacity(resources, 1.5);
-  expect(resources.edgeLines.opacity).toBe(1);
-});
-
 test("style materials are flagged shared so disposeObject3D spares them", () => {
   const resources = createStyleResources();
   expect(resources.ghost.userData.shared).toBe(true);
   expect(resources.clay.userData.shared).toBe(true);
-  expect(resources.edgeLines.userData.shared).toBe(true);
+});
+
+test("clay detail uniforms are live references the HUD can retune", () => {
+  const resources = createStyleResources();
+  // The sliders mutate these objects in place — a copy would silently stop
+  // driving the compiled shader.
+  resources.clayDetail.uTint.value = 0.42;
+  expect(resources.clayDetail.uTint.value).toBe(0.42);
+  expect(resources.clayDetail.uRoofTint).toBeDefined();
+  expect(resources.clayDetail.uDuskGlow).toBeDefined();
 });

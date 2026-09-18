@@ -1,6 +1,14 @@
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
-import type { Camera, Group, Matrix4 } from "three";
-import { Raycaster, Vector2 } from "three";
+import type { BufferGeometry, Camera, Group, Matrix4, Mesh } from "three";
+import { BufferAttribute, Raycaster, Vector2 } from "three";
+import {
+  buildingGlows,
+  buildingTint,
+  type RoofColorLut,
+  roofColor,
+  roughJitter,
+  storeyHeight,
+} from "@/lib/city/building-tint";
 import { filterCityObject } from "@/lib/city/filter-city-object";
 import type { CityJsonDocument } from "@/lib/city/types";
 import { buildCityBvh } from "./collision";
@@ -16,6 +24,8 @@ export interface CityLayer {
    * on every reload, so the world never jumps after a demolish.
    */
   matrix: Matrix4;
+  /** optional DOP-sampled roof colours, reused on demolish re-parse */
+  roofLut?: RoofColorLut;
 }
 
 /** Duck-type of the loader's mesh subclasses we care about when picking. */
@@ -30,7 +40,8 @@ interface CityObjectsMeshLike {
  */
 function parseCity(
   data: CityJsonDocument,
-  matrix: Matrix4 | null
+  matrix: Matrix4 | null,
+  roofLut: RoofColorLut | undefined
 ): { group: Group; matrix: Matrix4 } {
   const loader = new CityJSONLoader(new CityJSONParser());
   if (matrix) {
@@ -45,18 +56,211 @@ function parseCity(
     obj.castShadow = true;
     obj.receiveShadow = true;
   });
+  annotateBaseHeight(loader.scene);
+  annotateBuildingDetail(loader.scene, data, roofLut);
   // BVHs make per-frame collision rays (and demolish picks) cheap.
   buildCityBvh(loader.scene);
   return { group: loader.scene, matrix: loader.matrix };
 }
 
+/**
+ * Writes a per-vertex `aBaseZ` attribute = the lowest local-Z (elevation, since
+ * the geometry is data-frame Z-up) of each building, looked up by the loader's
+ * per-vertex `objectid`. The clay material's shader uses `position.z - aBaseZ`
+ * as the height ABOVE each building's own base — so the ground-contact gradient
+ * and storey bands sit correctly even though buildings stand on terrain at
+ * different elevations. Skips meshes without an `objectid` attribute.
+ */
+function annotateBaseHeight(group: Group): void {
+  group.traverse((obj) => {
+    const geom = (obj as Mesh).geometry as BufferGeometry | undefined;
+    const pos = geom?.attributes.position;
+    const oid = geom?.attributes.objectid;
+    if (!(geom && pos && oid)) {
+      return;
+    }
+    const minZ = new Map<number, number>();
+    for (let i = 0; i < pos.count; i++) {
+      const id = oid.getX(i);
+      const z = pos.getZ(i);
+      const cur = minZ.get(id);
+      if (cur === undefined || z < cur) {
+        minZ.set(id, z);
+      }
+    }
+    const base = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      base[i] = minZ.get(oid.getX(i)) ?? pos.getZ(i);
+    }
+    geom.setAttribute("aBaseZ", new BufferAttribute(base, 1));
+  });
+}
+
+/** RoofSurface index in the loader's fixed `defaultSemanticsColors` key order
+ *  (GroundSurface 0, WallSurface 1, RoofSurface 2). A vertex without semantics
+ *  is -1, so this never false-matches a wall. */
+const ROOF_SURFACE_TYPE = 2;
+
+interface BuildingStyle {
+  /** eave height above the building base (m): lowest roof vertex, or the full
+   *  height when no roof surface is tagged */
+  eaveH: number;
+  /** 1 = warm dusk glow (commerce/public/special), 0 = housing */
+  glow: number;
+  roof: [number, number, number];
+  /** signed roughness jitter [-1,1] */
+  rough: number;
+  /** contour-band spacing (m), snapped to whole storeys */
+  storeyH: number;
+  wall: [number, number, number];
+}
+
+/** Reads the loader's per-vertex `surfacetype` (may be absent on non-LoD2). */
+type SurfaceAttr = { getX: (i: number) => number } | undefined;
+
+/** Per-building style, computed once and reused across the building's vertices. */
+function buildingStyle(
+  id: string,
+  attrs: Record<string, unknown> | undefined,
+  baseZ: number,
+  maxZ: number,
+  roofMinZ: number | undefined,
+  roofLut: RoofColorLut | undefined
+): BuildingStyle {
+  const a = attrs ?? {};
+  const total = maxZ - baseZ;
+  const mh = typeof a.measuredHeight === "number" ? a.measuredHeight : total;
+  return {
+    wall: buildingTint(id, a),
+    roof: roofColor(id, a, roofLut),
+    storeyH: storeyHeight(mh),
+    eaveH: roofMinZ === undefined ? total : Math.max(roofMinZ - baseZ, 0),
+    glow: buildingGlows(a) ? 1 : 0,
+    rough: roughJitter(id),
+  };
+}
+
+/** First pass: per-building lowest ROOF vertex (for the eave) and overall top. */
+function scanRoofAndTop(
+  pos: { count: number; getZ: (i: number) => number },
+  oid: { getX: (i: number) => number },
+  surf: SurfaceAttr
+): { roofMinZ: Map<number, number>; maxZ: Map<number, number> } {
+  const roofMinZ = new Map<number, number>();
+  const maxZ = new Map<number, number>();
+  for (let i = 0; i < pos.count; i++) {
+    const idx: number = oid.getX(i);
+    const z = pos.getZ(i);
+    const mx = maxZ.get(idx);
+    if (mx === undefined || z > mx) {
+      maxZ.set(idx, z);
+    }
+    if (surf?.getX(i) === ROOF_SURFACE_TYPE) {
+      const rm = roofMinZ.get(idx);
+      if (rm === undefined || z < rm) {
+        roofMinZ.set(idx, z);
+      }
+    }
+  }
+  return { roofMinZ, maxZ };
+}
+
+/** Mutable per-mesh attribute buffers, filled vertex-by-vertex. */
+interface DetailBuffers {
+  build: Float32Array;
+  rough: Float32Array;
+  tint: Float32Array;
+}
+
+/** Writes one vertex's detail attributes: roof/wall colour → aTint, plus the
+ *  aBuild (isRoof/storey/eave/glow) and aRough channels. */
+function writeVertexAttrs(
+  b: DetailBuffers,
+  i: number,
+  s: BuildingStyle,
+  isRoof: number
+): void {
+  const c = isRoof === 1 ? s.roof : s.wall;
+  b.tint[i * 3] = c[0];
+  b.tint[i * 3 + 1] = c[1];
+  b.tint[i * 3 + 2] = c[2];
+  b.build[i * 4] = isRoof;
+  b.build[i * 4 + 1] = s.storeyH;
+  b.build[i * 4 + 2] = s.eaveH;
+  b.build[i * 4 + 3] = s.glow;
+  b.rough[i] = s.rough;
+}
+
+/**
+ * Writes the per-vertex attributes the clay shader reads to individualise each
+ * building (all keyed by the loader's `objectid` index → CityObject attributes,
+ * computed once per building and cached):
+ *  - `aTint` (vec3): wall colour on wall faces, ROOF colour on RoofSurface faces
+ *    (roofType/Dachneigung → terracotta or slate).
+ *  - `aBuild` (vec4): (isRoof, storeyHeight, eaveHeight, glowFlag). isRoof is
+ *    per-vertex; the rest are per-building.
+ *  - `aRough` (float): per-building roughness jitter.
+ * Needs `aBaseZ` (written by annotateBaseHeight) for heights; reads the loader's
+ * `surfacetype` to tell roofs from walls (absent → everything treated as wall).
+ */
+function annotateBuildingDetail(
+  group: Group,
+  data: CityJsonDocument,
+  roofLut: RoofColorLut | undefined
+): void {
+  const keys = Object.keys(data.CityObjects);
+  group.traverse((obj) => {
+    const geom = (obj as Mesh).geometry as BufferGeometry | undefined;
+    const pos = geom?.attributes.position;
+    const oid = geom?.attributes.objectid;
+    const baseAttr = geom?.attributes.aBaseZ;
+    if (!(geom && pos && oid && baseAttr)) {
+      return;
+    }
+    const surf = geom.attributes.surfacetype as SurfaceAttr;
+    const { roofMinZ, maxZ } = scanRoofAndTop(pos, oid, surf);
+    const cache = new Map<number, BuildingStyle>();
+    const buffers: DetailBuffers = {
+      tint: new Float32Array(pos.count * 3),
+      build: new Float32Array(pos.count * 4),
+      rough: new Float32Array(pos.count),
+    };
+    for (let i = 0; i < pos.count; i++) {
+      const idx: number = oid.getX(i);
+      let s = cache.get(idx);
+      if (!s) {
+        const key = keys[idx];
+        const baseZ = baseAttr.getX(i);
+        s = buildingStyle(
+          key ?? String(idx),
+          data.CityObjects[key]?.attributes,
+          baseZ,
+          maxZ.get(idx) ?? baseZ,
+          roofMinZ.get(idx),
+          roofLut
+        );
+        cache.set(idx, s);
+      }
+      const isRoof = surf?.getX(i) === ROOF_SURFACE_TYPE ? 1 : 0;
+      writeVertexAttrs(buffers, i, s, isRoof);
+    }
+    geom.setAttribute("aTint", new BufferAttribute(buffers.tint, 3));
+    geom.setAttribute("aBuild", new BufferAttribute(buffers.build, 4));
+    geom.setAttribute("aRough", new BufferAttribute(buffers.rough, 1));
+  });
+}
+
 export function createCityLayer(
   data: CityJsonDocument,
-  world: Group
+  world: Group,
+  /** shared recenter matrix; pass the primary tile's so neighbours align */
+  sharedMatrix: Matrix4 | null = null,
+  /** optional DOP-sampled per-building roof colours (else synthesized) */
+  roofLut?: RoofColorLut
 ): CityLayer {
-  const { group, matrix } = parseCity(data, null);
+  const { group, matrix } = parseCity(data, sharedMatrix, roofLut);
   world.add(group);
-  return { data, group, matrix };
+  return { data, group, matrix, roofLut };
 }
 
 /**
@@ -76,9 +280,14 @@ export function demolishObject(
   }
   world.remove(layer.group);
   disposeObject3D(layer.group);
-  const { group } = parseCity(filtered, layer.matrix);
+  const { group } = parseCity(filtered, layer.matrix, layer.roofLut);
   world.add(group);
-  return { data: filtered, group, matrix: layer.matrix };
+  return {
+    data: filtered,
+    group,
+    matrix: layer.matrix,
+    roofLut: layer.roofLut,
+  };
 }
 
 // Hoisted: demolish picks happen on a key press, but there's no reason to

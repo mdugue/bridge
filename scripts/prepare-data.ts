@@ -3,25 +3,58 @@
  * into public/data/ so the browser can fetch it. Runs ahead of `dev` and
  * `build`; public/data/ is gitignored to avoid duplicating ~19 MB in git.
  */
-import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const TILE = "33412_5656_2_sn";
-
-const copies: [string, string][] = [
-  [
-    `data/cityjson/lod1_${TILE}.city.json`,
-    `public/data/lod1_${TILE}.city.json`,
-  ],
-  [
-    `data/dgm/dgm1_${TILE}_tiff/dgm1_${TILE}.tif`,
-    `public/data/dgm1_${TILE}.tif`,
-  ],
-  [
-    `data/dgm/dgm1_${TILE}_tiff/dgm1_${TILE}.tfw`,
-    `public/data/dgm1_${TILE}.tfw`,
-  ],
+// The 2 x 2 block loaded by city-walk-client.tsx. Land-cover/canopy are baked
+// offline (scripts/extract-dlm.sh + extract-canopy.sh); the raw downloads stay
+// gitignored, only these small per-tile outputs are committed + copied.
+const TILES = [
+  "33412_5656_2_sn",
+  "33410_5656_2_sn",
+  "33410_5658_2_sn",
+  "33412_5658_2_sn",
 ];
+
+const copies: [string, string][] = TILES.flatMap((tile) => [
+  [
+    `data/cityjson/lod2_${tile}.city.json`,
+    `public/data/lod2_${tile}.city.json`,
+  ],
+  [
+    `data/dgm/dgm1_${tile}_tiff/dgm1_${tile}.tif`,
+    `public/data/dgm1_${tile}.tif`,
+  ],
+  [
+    `data/dgm/dgm1_${tile}_tiff/dgm1_${tile}.tfw`,
+    `public/data/dgm1_${tile}.tfw`,
+  ],
+  [`data/dlm/landcover_${tile}.png`, `public/data/landcover_${tile}.png`],
+  [
+    `data/dlm/landcover_rgb_${tile}.png`,
+    `public/data/landcover_rgb_${tile}.png`,
+  ],
+  [`data/dlm/vegrows_${tile}.geojson`, `public/data/vegrows_${tile}.geojson`],
+  [`data/dlm/canopy_${tile}.geojson`, `public/data/canopy_${tile}.geojson`],
+]);
+
+// Optional artifacts: street lamps (extract-lamps.sh, ODbL) and DOP-sampled
+// roof colours (extract-roof-colour.sh). A tile may not have been baked yet —
+// copy when present, warn but never fail; the loader treats a missing file as
+// "feature off" (lamps absent / roof colour falls back to the synth palette).
+const optionalCopies: [string, string][] = TILES.flatMap((tile) => [
+  [`data/dlm/lamps_${tile}.geojson`, `public/data/lamps_${tile}.geojson`],
+  [`data/dop/roofcolor_${tile}.json`, `public/data/roofcolor_${tile}.json`],
+  [`data/dlm/ndvi_${tile}.png`, `public/data/ndvi_${tile}.png`],
+  // Railway tracks + bridge decks (Basis-DLM) and OSM station platforms (ODbL),
+  // baked by scripts/extract-rail.sh.
+  [`data/dlm/rail_${tile}.geojson`, `public/data/rail_${tile}.geojson`],
+  [`data/dlm/bridge_${tile}.geojson`, `public/data/bridge_${tile}.geojson`],
+  [`data/dlm/railarea_${tile}.geojson`, `public/data/railarea_${tile}.geojson`],
+  [`data/dlm/platform_${tile}.geojson`, `public/data/platform_${tile}.geojson`],
+  // OSM retaining/city walls (extract-walls.sh, ODbL).
+  [`data/dlm/walls_${tile}.geojson`, `public/data/walls_${tile}.geojson`],
+]);
 
 for (const [src, dest] of copies) {
   const srcPath = join(process.cwd(), src);
@@ -29,6 +62,35 @@ for (const [src, dest] of copies) {
   if (!existsSync(srcPath)) {
     process.stderr.write(`prepare-data: missing source file ${src}\n`);
     process.exit(1);
+  }
+  const upToDate =
+    existsSync(destPath) && statSync(destPath).size === statSync(srcPath).size;
+  if (upToDate) {
+    continue;
+  }
+  mkdirSync(dirname(destPath), { recursive: true });
+  copyFileSync(srcPath, destPath);
+  process.stdout.write(`prepare-data: copied ${src} -> ${dest}\n`);
+}
+
+for (const [src, dest] of optionalCopies) {
+  const srcPath = join(process.cwd(), src);
+  const destPath = join(process.cwd(), dest);
+  if (!existsSync(srcPath)) {
+    // public/data/ is persistent and gitignored, so a copy from an earlier bake
+    // would keep being served after its source was removed — the loader would
+    // never see the "feature off" fallback it is supposed to degrade to.
+    if (existsSync(destPath)) {
+      rmSync(destPath);
+      process.stdout.write(
+        `prepare-data: optional source gone, removed stale ${dest}\n`
+      );
+    } else {
+      process.stdout.write(
+        `prepare-data: optional source absent, skipping ${src}\n`
+      );
+    }
+    continue;
   }
   const upToDate =
     existsSync(destPath) && statSync(destPath).size === statSync(srcPath).size;

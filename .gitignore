@@ -48,3 +48,11 @@ next-env.d.ts
 
 # POC tile data copied from data/ by scripts/prepare-data.ts
 /public/data/
+
+# Raw bulk geodata downloads (e.g. the ~1 GB statewide ATKIS Basis-DLM).
+# These are reproducible public downloads — never commit them. Only the
+# small clipped per-tile outputs (data/dlm/…) go into git.
+/data/_raw/
+
+# Local snapshot screenshot harness output (e2e/snapshot-shot.spec.ts)
+shots/
