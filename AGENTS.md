@@ -17,7 +17,7 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 ## Tech stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r184** (`three`), `cityjson-threejs-loader`, `geotiff`,
+- **three.js r186** (`three`), `cityjson-threejs-loader`, `geotiff`,
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline

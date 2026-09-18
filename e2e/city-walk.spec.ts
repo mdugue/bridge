@@ -1,5 +1,14 @@
 import { expect, test } from "@playwright/test";
 
+/**
+ * Inner waits scale with the machine. Without a GPU every frame is rendered in
+ * software, so work that is instant on a developer box — a demolish re-parses
+ * the whole tile, a drawer animates while the render loop competes for the main
+ * thread — can take tens of seconds on a shared CI runner. The per-test budget
+ * itself lives in playwright.config.ts.
+ */
+const slow = (ms: number) => (process.env.CI ? ms * 3 : ms);
+
 // Software-rendered WebGL so the smoke test also runs on headless CI boxes
 // without a GPU (ANGLE -> SwiftShader).
 test.use({
@@ -24,9 +33,8 @@ test("city page serves the viewer shell", async ({ page }) => {
 });
 
 test("city walk renders buildings, terrain and shadows", async ({ page }) => {
-  // Software-rendered WebGL plus the post-processing stack (SSAO, DoF)
-  // makes every frame expensive on CI machines without a GPU.
-  test.setTimeout(240_000);
+  // The per-test budget for this one lives in playwright.config.ts: software
+  // WebGL plus the post stack makes every frame expensive without a GPU.
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   page.on("pageerror", (err) => pageErrors.push(String(err)));
@@ -52,13 +60,13 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   // Waited on first: in dev, React StrictMode briefly runs a second, aborted
   // viewer instance whose canvas would trip a strict locator during loading.
   await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-    timeout: 120_000,
+    timeout: slow(120_000),
   });
 
   // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
   // 2D canvases of its own; three.js tags its canvas with data-engine).
   const canvas = page.locator("canvas[data-engine]");
-  await expect(canvas).toBeVisible({ timeout: 60_000 });
+  await expect(canvas).toBeVisible({ timeout: slow(60_000) });
   const box = await canvas.boundingBox();
   expect(box?.width ?? 0).toBeGreaterThan(0);
   expect(box?.height ?? 0).toBeGreaterThan(0);
@@ -109,7 +117,7 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   await page.waitForFunction(
     (before) => (window.__poc?.buildingCount ?? 0) < before,
     buildingsBefore,
-    { timeout: 30_000 }
+    { timeout: slow(30_000) }
   );
 
   // Minimap teleport: the map spans the loaded 2x2 tile block (union bounds
@@ -233,10 +241,9 @@ test.describe("mobile", () => {
   test("touch UI: joystick, drawer, drag-look, double-tap travel", async ({
     page,
   }) => {
-    test.setTimeout(240_000);
     await page.goto("/");
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-      timeout: 120_000,
+      timeout: slow(120_000),
     });
 
     // Touch chrome instead of keyboard hints.
@@ -315,14 +322,14 @@ test.describe("mobile", () => {
         );
       },
       poseBefore,
-      { timeout: 15_000 }
+      { timeout: slow(15_000) }
     );
 
     // Drawer opens with the scene settings (generous timeout: the main
     // thread shares time with software-rendered frames).
     await page.getByRole("button", { name: "Scene settings" }).tap();
     await expect(page.getByText("Building style")).toBeVisible({
-      timeout: 30_000,
+      timeout: slow(30_000),
     });
   });
 });
