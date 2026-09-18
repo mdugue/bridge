@@ -20,6 +20,8 @@ export interface PocDebugInfo {
   demolishAtCrosshair?: () => void;
   /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
+  /** Rendered-frame counter; e2e waits on it instead of sleeping. */
+  frames: number;
   /** Current player pose in EPSG coordinates. */
   getPose?: () => PlayerPose;
   /** Inserts the prescribed building (marker box without a glTF). */
@@ -70,9 +72,21 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
   window.__poc = {
     ready: false,
     buildingCount: 0,
+    frames: 0,
     terrainVertexCount: 0,
     shadowsEnabled: false,
     ...window.__poc,
     ...patch,
   };
+}
+
+/** Called once per rendered frame from the animation loop. */
+export function tickPocFrame(): void {
+  if (!enabled) {
+    return;
+  }
+  const poc = window.__poc;
+  if (poc) {
+    poc.frames += 1;
+  }
 }

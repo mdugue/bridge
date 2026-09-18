@@ -38,6 +38,7 @@ import {
 import { createCityCollider } from "./collision";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createInsertedBuilding } from "./inserted-building";
+import { tickPocFrame } from "./poc-debug";
 import { createPostStack } from "./post-stack";
 import { createSunRig, type SunState } from "./sun-rig";
 import { loadTerrain, type TerrainLayer } from "./terrain-layer";
@@ -149,11 +150,26 @@ interface Xyz {
 }
 
 function createRenderer(container: HTMLElement): WebGLRenderer {
-  const renderer = new WebGLRenderer({ antialias: true });
+  // No MSAA: everything renders through the EffectComposer and SMAA carries
+  // the AA (see post-stack.ts); a multisampled default framebuffer would only
+  // be resolved for a full-screen quad.
+  const renderer = new WebGLRenderer({
+    antialias: false,
+    powerPreference: "high-performance",
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // The ghost style's frosted transmission renders the opaque scene a second
+  // time per frame; at roughness 0.8 it samples a blurred mip anyway, so a
+  // half-resolution transmission buffer is visually free.
+  renderer.transmissionResolutionScale = 0.5;
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = PCFShadowMap;
+  // The sun and the buildings only change on user actions; re-rendering the
+  // 2048² shadow map every frame (a depth pass over ~640k triangles) is
+  // pure waste. bootApp raises needsUpdate whenever the scene changes.
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.domElement.style.display = "block";
   // Touch gestures (look/pinch/double-tap) need the browser to keep its
@@ -290,10 +306,21 @@ async function bootApp(
   assertCityOnTerrain(offset, terrain);
   world.add(terrain.mesh);
 
+  opts.onProgress?.("Indexing terrain…");
+  // BVH for the 10 Hz autofocus ray and for double-tap travel. Building it
+  // once costs ~0.2 s; without it every raycast brute-forces ~522k triangles
+  // (~50 ms each on desktop).
+  terrain.mesh.geometry.computeBoundsTree();
+
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
   const sunRig = createSunRig(scene, worldBounds, tileLatLng(cityData, offset));
   sunRig.update(opts.initialDate);
+
+  const invalidateShadows = () => {
+    renderer.shadowMap.needsUpdate = true;
+  };
+  invalidateShadows();
 
   opts.onProgress?.("Preparing render styles…");
   const styleResources = createStyleResources();
@@ -381,10 +408,6 @@ async function bootApp(
     },
     onDoubleTap: (ndcX, ndcY) => {
       // Travel to the tapped spot on the terrain.
-      if (!terrain.mesh.geometry.boundsTree) {
-        // Lazy: ~500k triangles, only pay the BVH build when actually used.
-        terrain.mesh.geometry.computeBoundsTree();
-      }
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
       const hit = tapRaycaster.intersectObject(terrain.mesh, false)[0];
       if (hit) {
@@ -410,6 +433,7 @@ async function bootApp(
     cityLayer = demolishObject(cityLayer, world, objectId);
     // The reload produces bare loader meshes — re-dress them.
     applyCityStyle(cityLayer.group, currentStyle, styleResources);
+    invalidateShadows();
     emitStats();
   };
 
@@ -428,6 +452,7 @@ async function bootApp(
     // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
     obj.position.set(at.x - offset.cx, ground, -(at.y - offset.cy));
     scene.add(obj);
+    invalidateShadows();
     inserted = obj;
   };
 
@@ -494,22 +519,31 @@ async function bootApp(
       updateFocus();
     }
     postStack.render(dt);
+    tickPocFrame();
   });
 
   emitStats();
 
   return {
-    setSun: (date) => sunRig.update(date),
+    setSun: (date) => {
+      const state = sunRig.update(date);
+      invalidateShadows();
+      return state;
+    },
     setStyle: (style) => {
       currentStyle = style;
       applyCityStyle(cityLayer.group, style, styleResources);
+      invalidateShadows();
     },
     setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
     setDepthGrading: (intensity) => postStack.setDepthGrading(intensity),
     setContactShadows: (strength) => postStack.setContactShadows(strength),
     setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),
-    setBuildingTransparency: (transparency) =>
-      setCityTransparency(styleResources, currentStyle, transparency),
+    setBuildingTransparency: (transparency) => {
+      setCityTransparency(styleResources, currentStyle, transparency);
+      // Clay's alpha-hash cutout changes what the depth pass writes.
+      invalidateShadows();
+    },
     setToonBands: (bands) => setToonBands(styleResources, bands),
     setEdges: (opacity) => {
       setEdgeOpacity(styleResources, opacity);

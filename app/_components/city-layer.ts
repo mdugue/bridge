@@ -81,14 +81,20 @@ export function demolishObject(
   return { data: filtered, group, matrix: layer.matrix };
 }
 
+// Hoisted: demolish picks happen on a key press, but there's no reason to
+// allocate per call. firstHitOnly stops the BVH walk at the nearest hit
+// instead of collecting and sorting every intersection along the ray.
+const pickRaycaster = new Raycaster();
+pickRaycaster.firstHitOnly = true;
+const SCREEN_CENTER = new Vector2(0, 0);
+
 /** Raycasts the screen center and resolves the aimed CityObject id. */
 export function pickCityObjectId(
   camera: Camera,
   layer: CityLayer
 ): string | null {
-  const raycaster = new Raycaster();
-  raycaster.setFromCamera(new Vector2(0, 0), camera);
-  for (const hit of raycaster.intersectObject(layer.group, true)) {
+  pickRaycaster.setFromCamera(SCREEN_CENTER, camera);
+  for (const hit of pickRaycaster.intersectObject(layer.group, true)) {
     const obj = hit.object as unknown as CityObjectsMeshLike;
     if (obj.isCityObject && obj.resolveIntersectionInfo) {
       return obj.resolveIntersectionInfo(hit).objectId ?? null;
