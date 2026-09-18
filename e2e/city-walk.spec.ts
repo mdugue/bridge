@@ -223,8 +223,18 @@ test("city walk renders buildings, terrain and shadows", async ({ page }) => {
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
 
-  // Visual artifact for humans; not asserted on.
-  await page.screenshot({ path: "test-results/city-walk-smoke.png" });
+  // Visual artifact for humans; not asserted on. Capturing the canvas forces a
+  // fresh software-rendered frame, which costs seconds here — on CI run #38 this
+  // very line ate the rest of the budget and failed a spec whose assertions had
+  // all passed. Cap it, and never let a debugging plate fail a green test.
+  await page
+    .screenshot({
+      path: "test-results/city-walk-smoke.png",
+      timeout: slow(30_000),
+    })
+    .catch(() => {
+      // No plate this time; the assertions above are the test.
+    });
 });
 
 /**
