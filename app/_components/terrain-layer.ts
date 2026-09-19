@@ -1,4 +1,3 @@
-import { fromArrayBuffer, type GeoTIFFImage } from "geotiff";
 import {
   BufferAttribute,
   BufferGeometry,
@@ -13,19 +12,19 @@ import {
   TextureLoader,
   type Vector3,
 } from "three";
+import {
+  decodeHeightfield,
+  parseHeightfieldHeader,
+  resolveSiblingUrl,
+} from "@/lib/city/heightfield";
 import { conflateWalls, type WallLine } from "@/lib/city/terrain-conflate";
 import {
   buildTerrainGeometryData,
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
-import { tfwToBounds } from "@/lib/city/tfw";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
-
-/** Downsample target (N x N). 1024 over a 2 km tile ≈ 2 m — fine enough that
- * the terrain silhouette no longer reads as coarse polygonal steps. */
-const DEFAULT_TARGET_SIZE = 1024;
 
 /** Filename token swapped to find the RGB splat next to the class-id one. */
 const LANDCOVER_PREFIX = /landcover_/;
@@ -57,9 +56,8 @@ export interface TerrainOptions {
   signal?: AbortSignal;
   /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
   sunDirection?: Vector3;
-  targetSize?: number;
-  /** .tfw sidecar fallback, used only when the GeoTIFF has no embedded georef */
-  tfwUrl?: string;
+  /** URL of the heightfield header JSON (see lib/city/heightfield.ts); the
+   * grid size and bounds come from it, baked by scripts/prepare-data.ts */
   url: string;
   /** baked OSM wall lines (EPSG:25833) for this tile; retaining/city walls are
    * burned into the heightfield as steps so they sit on a real edge, not the
@@ -152,6 +150,14 @@ async function fetchArrayBuffer(
   return await res.arrayBuffer();
 }
 
+async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
 interface WallFeatureJson {
   geometry?: { coordinates?: [number, number][]; type?: string };
   properties?: { kind?: string };
@@ -198,57 +204,6 @@ async function conflateTerrain(
     return base;
   }
   return conflateWalls({ elevations: base, ...grid, walls });
-}
-
-/** True when getBoundingBox() returned pixel indices instead of map units. */
-function isPixelSpaceBounds(
-  bounds: number[],
-  width: number,
-  height: number
-): boolean {
-  const [minX, minY, maxX, maxY] = bounds;
-  return (
-    Math.abs(minX) <= 1 &&
-    Math.abs(minY) <= 1 &&
-    Math.abs(maxX - width) <= 1 &&
-    Math.abs(maxY - height) <= 1
-  );
-}
-
-/**
- * Resolves the raster's georeferenced bounds. geotiff.js CANNOT read .tfw
- * sidecars, so if the GeoTIFF carries no embedded geotransform we parse the
- * .tfw ourselves — and fail loudly rather than silently misplace the terrain.
- */
-async function resolveBounds(
-  image: GeoTIFFImage,
-  tfwUrl: string | undefined
-): Promise<TerrainBounds> {
-  const width = image.getWidth();
-  const height = image.getHeight();
-
-  let embedded: number[] | null = null;
-  try {
-    embedded = image.getBoundingBox();
-  } catch {
-    embedded = null;
-  }
-  if (embedded && !isPixelSpaceBounds(embedded, width, height)) {
-    return embedded as TerrainBounds;
-  }
-
-  if (tfwUrl) {
-    const res = await fetch(tfwUrl);
-    if (res.ok) {
-      return tfwToBounds(await res.text(), width, height);
-    }
-  }
-
-  throw new Error(
-    "DGM GeoTIFF has no embedded georeferencing and no readable .tfw sidecar. " +
-      "Embed it with: gdal_translate -a_srs EPSG:25833 in.tif out.tif " +
-      "(or serve the .tfw next to the .tif)."
-  );
 }
 
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
@@ -450,24 +405,22 @@ function createTerrainMaterial(
 }
 
 export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
-  const n = opts.targetSize ?? DEFAULT_TARGET_SIZE;
-
-  const tiff = await fromArrayBuffer(
-    await fetchArrayBuffer(opts.url, opts.signal)
+  // The raster arrives ready to use: scripts/prepare-data.ts resampled the DGM
+  // GeoTIFF to n x n float32 at build time and stored NoData as NaN, so there
+  // is nothing to decode here and no nodata sentinel to carry around.
+  const header = parseHeightfieldHeader(await fetchJson(opts.url, opts.signal));
+  const { n, bounds } = header;
+  /** Holes are NaN in the baked samples, so there is no sentinel to match. */
+  const nodata: number | null = null;
+  const samples = decodeHeightfield(
+    await fetchArrayBuffer(
+      resolveSiblingUrl(opts.url, header.data),
+      opts.signal
+    ),
+    n
   );
-  const image = await tiff.getImage();
-  const bounds = await resolveBounds(image, opts.tfwUrl);
-  const nodata = image.getGDALNoData();
-
-  const raster = await image.readRasters({
-    width: n,
-    height: n,
-    samples: [0],
-    interleave: true,
-    resampleMethod: "bilinear",
-  });
   const elevations = await conflateTerrain(
-    raster as unknown as ArrayLike<number>,
+    samples,
     { n, bounds, nodata },
     opts.wallLinesUrl,
     opts.signal

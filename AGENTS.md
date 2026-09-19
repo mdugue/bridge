@@ -17,7 +17,8 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 ## Tech stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r186** (`three`), `cityjson-threejs-loader`, `geotiff`,
+- **three.js r186** (`three`), `cityjson-threejs-loader`, `geotiff` (build step
+  only — the client no longer decodes rasters),
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline
@@ -28,7 +29,7 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 
 ```bash
 bun install
-bun dev            # prepare-data.ts (copy geodata -> public/data) then next dev
+bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
 bun lint           # eslint + ultracite (biome)
 bun typecheck      # tsgo --noEmit
@@ -50,7 +51,8 @@ and enforces a complexity cap; extract helpers rather than fighting it. No
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp) with `bun test` units alongside
 - `scripts/` — `extract-dlm.sh`, `extract-canopy.sh` (offline data bakes) and
-  `prepare-data.ts` (copies committed artifacts into `public/data` at build)
+  `prepare-data.ts` (copies committed artifacts into `public/data` at build and
+  bakes each DGM GeoTIFF into a float32 heightfield — see `lib/city/heightfield.ts`)
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
 - `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)

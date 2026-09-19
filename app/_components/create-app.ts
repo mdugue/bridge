@@ -129,8 +129,8 @@ export interface TileSrc {
   /** optional baked bridge-deck GeoJSON (Basis-DLM + DGM/DOM1 heights) */
   bridgeSrc?: string;
   citySrc: string;
+  /** URL of this tile's heightfield header JSON (see lib/city/heightfield.ts) */
   demSrc: string;
-  demTfwSrc?: string;
   /** optional OSM street-lamp GeoJSON (ODbL); absent/404 = no lamps */
   lampsSrc?: string;
   landcoverSrc?: string;
@@ -148,8 +148,8 @@ export interface CityWalkOptions {
   bridgeSrc?: string;
   citySrc: string;
   container: HTMLElement;
+  /** URL of the primary tile's heightfield header JSON */
   demSrc: string;
-  demTfwSrc?: string;
   /** neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   initialDate: Date;
@@ -518,13 +518,9 @@ async function bootApp(
   const wallControls: WallControl[] = [];
 
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
-  const loadTileScene = async (
-    tile: TileSrc,
-    targetSize?: number
-  ): Promise<TerrainLayer> => {
+  const loadTileScene = async (tile: TileSrc): Promise<TerrainLayer> => {
     const t = await loadTerrain({
       url: tile.demSrc,
-      tfwUrl: tile.demTfwSrc,
       landcoverUrl: tile.landcoverSrc,
       // Retaining/city walls are burned into THIS tile's heightfield as steps so
       // the ground breaks at the wall instead of the DGM's smooth bank.
@@ -532,7 +528,6 @@ async function bootApp(
         ?.replace("landcover_", "walls_")
         .replace(".png", ".geojson"),
       offset,
-      targetSize,
       signal: opts.signal,
       sunDirection,
       heightFog,
@@ -581,7 +576,6 @@ async function bootApp(
   const terrain = await loadTileScene({
     citySrc: opts.citySrc,
     demSrc: opts.demSrc,
-    demTfwSrc: opts.demTfwSrc,
     landcoverSrc: opts.landcoverSrc,
     vegetationSrc: opts.vegetationSrc,
     lampsSrc: opts.lampsSrc,
@@ -602,8 +596,9 @@ async function bootApp(
     extraCities.push(
       createCityLayer(data, world, cityLayer.matrix, tileRoofLut)
     );
-    // Neighbours are background — half-resolution terrain (~4 m) is plenty.
-    terrains.push(await loadTileScene(tile, 512));
+    // Neighbours are background — their heightfield is baked at half the
+    // primary's resolution (~4 m), see lib/city/tile.ts.
+    terrains.push(await loadTileScene(tile));
     ensureAlive();
   }
 

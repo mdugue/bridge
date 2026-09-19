@@ -125,10 +125,8 @@ interface Props {
   bridgeSrc?: string;
   /** URL of the CityJSON tile, served from /public */
   citySrc: string;
-  /** URL of the DGM GeoTIFF */
+  /** URL of the heightfield header JSON (see lib/city/heightfield.ts) */
   demSrc: string;
-  /** URL of the .tfw sidecar (georef fallback) */
-  demTfwSrc?: string;
   /** Neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
@@ -993,7 +991,6 @@ function SceneControls({
 export default function CityWalk({
   citySrc,
   demSrc,
-  demTfwSrc,
   landcoverSrc,
   vegetationSrc,
   lampsSrc,
@@ -1104,7 +1101,6 @@ export default function CityWalk({
       container,
       citySrc,
       demSrc,
-      demTfwSrc,
       landcoverSrc,
       vegetationSrc,
       lampsSrc,
@@ -1229,7 +1225,6 @@ export default function CityWalk({
   }, [
     citySrc,
     demSrc,
-    demTfwSrc,
     landcoverSrc,
     vegetationSrc,
     lampsSrc,

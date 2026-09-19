@@ -24,7 +24,7 @@ export interface TerrainGeometryInput {
 export interface TerrainGeometryData {
   /** triangle indices; quads touching a NoData vertex are omitted */
   indices: number[];
-  /** lowest VALID elevation (m); NoData vertices are parked at 0 and excluded */
+  /** lowest VALID elevation (m); NoData vertices are excluded from the min */
   minElevation: number;
   /** n*n*3 vertex positions in the recentered data frame (Z-up) */
   positions: Float32Array;
@@ -111,11 +111,32 @@ function appendSkirts(
   addBorder(west, false);
 }
 
+/** Mean of the valid samples; 0 when the tile is entirely NoData. */
+function meanValidElevation(
+  elevations: ArrayLike<number>,
+  count: number,
+  nodata: number | null
+): number {
+  let sum = 0;
+  let valid = 0;
+  for (let i = 0; i < count; i++) {
+    const z = elevations[i];
+    if (!isInvalidElevation(z, nodata)) {
+      sum += z;
+      valid++;
+    }
+  }
+  return valid === 0 ? 0 : sum / valid;
+}
+
 /**
  * Fills the n*n vertex grid (pixel centres, recentered) + the valid mask, and
- * returns the lowest VALID elevation. NoData vertices are parked at z=0 and
- * excluded from the min — so the height-fog floor anchors to the real valley,
- * not the phantom z=0 holes.
+ * returns the lowest VALID elevation. NoData vertices are excluded from the
+ * min — so the height-fog floor anchors to the real valley, not the holes —
+ * but they are still WRITTEN, at the mean valid elevation: the index buffer
+ * skips them, yet their positions still feed the bounding box (and through it
+ * the shadow camera and the spawn fallback). At z=0 a single NoData pixel
+ * would drag those ~110 m below the real ground.
  */
 function fillGrid(
   input: TerrainGeometryInput,
@@ -126,6 +147,7 @@ function fillGrid(
   const [minX, minY, maxX, maxY] = bounds;
   const dx = (maxX - minX) / n;
   const dy = (maxY - minY) / n;
+  const fallback = meanValidElevation(elevations, n * n, nodata);
   let p = 0;
   let minElevation = Number.POSITIVE_INFINITY;
   for (let row = 0; row < n; row++) {
@@ -140,7 +162,7 @@ function fillGrid(
       // Pixel centers; raster row 0 = north (maxY).
       grid[p++] = minX + (col + 0.5) * dx - offset.cx;
       grid[p++] = maxY - (row + 0.5) * dy - offset.cy;
-      grid[p++] = bad ? 0 : z;
+      grid[p++] = bad ? fallback : z;
     }
   }
   return Number.isFinite(minElevation) ? minElevation : 0;
