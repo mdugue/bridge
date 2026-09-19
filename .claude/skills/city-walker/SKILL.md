@@ -35,7 +35,9 @@ Y-up), loads the tiles, runs the animation loop, and returns a `CityWalkHandle`
   fog/atmosphere by time of day.
 - `post-stack.ts` — pmndrs `postprocessing`: SSAO, DoF, SMAA, depth grading,
   paper grain, vignette.
-- `visual-style.ts` — clay (opaque, default) / ghost (transmission) / standard.
+- `visual-style.ts` — the one building style: opaque archviz clay + facade
+  detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
+  glow), hash-dithered transparency. The old ghost/standard styles are gone.
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -128,8 +130,11 @@ Expensive, gate behind LOD: the **multi-tuft crown** (core + ~17 merged lobes �
 
 Buildings are already merged (low draw calls) — **BatchedMesh is moot** and
 would break objectid picking. The bottleneck is **fill-rate**: post-processing
-(SSAO is the priciest) and the shadow-map render. `MeshPhysicalMaterial.transmission`
-(ghost) ≈ doubles scene cost → default is opaque clay. `handle.getRenderInfo()`
+(SSAO is the priciest) and the shadow-map render — which is why AO and DoF are
+skipped while the camera moves (`lib/city/regression.ts`). Buildings are opaque
+clay only; `MeshPhysicalMaterial.transmission` ≈ doubles scene cost, so the
+frosted "ghost" style was dropped rather than kept as an option.
+`handle.getRenderInfo()`
 exposes counters (but with post-processing it reflects only the final pass —
 read true scene counts with FX off).
 

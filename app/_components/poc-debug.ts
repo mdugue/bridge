@@ -9,7 +9,6 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { CameraState, PlayerPose } from "./create-app";
 import type { FocusMode } from "./post-stack";
 import type { Viewpoint } from "./viewpoints";
-import type { CityStyleId } from "./visual-style";
 
 interface Xyz {
   x: number;
@@ -91,8 +90,6 @@ export interface PocDebugInfo {
   setMeadowNdvi?: (strength: number) => void;
   /** Sets the paper-grain intensity (0..1). */
   setPaperGrain?: (intensity: number) => void;
-  /** Switches the city rendering style. */
-  setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
   /** Sets the (B) sway-coupled crown brightness (Windhelligkeit) strength (0..1). */

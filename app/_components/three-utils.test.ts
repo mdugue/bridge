@@ -75,17 +75,3 @@ test("two meshes sharing one material dispose without throwing", () => {
 test("a bare Object3D is traversed without throwing", () => {
   expect(() => disposeObject3D(new Object3D())).not.toThrow();
 });
-
-test("frees the loader material stashed by applyCityStyle", () => {
-  const original = new MeshBasicMaterial();
-  const styleMaterial = shared(new MeshBasicMaterial());
-  const originalCalls = countDisposals(original);
-  const styleCalls = countDisposals(styleMaterial);
-  const mesh = new Mesh(new BoxGeometry(), styleMaterial);
-  mesh.userData.originalMaterial = original;
-
-  disposeObject3D(mesh);
-
-  expect(originalCalls()).toBe(1);
-  expect(styleCalls()).toBe(0);
-});

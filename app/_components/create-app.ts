@@ -48,7 +48,7 @@ import {
   type LampLights,
   loadLamps,
 } from "./lamp-layer";
-import { tickPocFrame } from "./poc-debug";
+import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
 import { currentSceneProfile, type SceneProfile } from "./scene-profile";
@@ -64,7 +64,6 @@ import { loadVegetation, type VegetationControl } from "./vegetation-layer";
 import type { Viewpoint } from "./viewpoints";
 import {
   applyCityStyle,
-  type CityStyleId,
   createStyleResources,
   setCityTransparency,
 } from "./visual-style";
@@ -92,11 +91,6 @@ const TOUCH_LOOK_SPEED = 0.004;
 /** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
 const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 const SKY_COLOR = 0x9f_b6_cc;
-/** Default rendering style — the "context frame" ambition. */
-// Clay is OPAQUE — ghost uses MeshPhysicalMaterial.transmission, which makes
-// three re-render the whole scene into a transmission buffer every frame
-// (≈ 2x cost). Default to the cheap opaque style; ghost stays a choice.
-export const DEFAULT_CITY_STYLE: CityStyleId = "clay";
 /** Default fog amount (0..1). Kept light — a gentle far haze, not a near wall. */
 export const DEFAULT_ATMOSPHERE = 0.2;
 
@@ -272,7 +266,6 @@ export interface CityWalkHandle {
   setMovementMode: (mode: MovementMode) => void;
   /** paper-grain overlay intensity 0..1 */
   setPaperGrain: (intensity: number) => void;
-  setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
   /** (B) sway-coupled crown brightness (Windhelligkeit) strength 0..1 */
   setTreeLeafBright: (strength: number) => void;
@@ -318,10 +311,6 @@ function createRenderer(
   renderer.setPixelRatio(
     profile === "lite" ? 0.5 : Math.min(window.devicePixelRatio, 2)
   );
-  // The ghost style's frosted transmission renders the opaque scene a second
-  // time per frame; at roughness 0.8 it samples a blurred mip anyway, so a
-  // half-resolution transmission buffer is visually free.
-  renderer.transmissionResolutionScale = profile === "lite" ? 0.25 : 0.5;
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   // three 0.184 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
@@ -792,16 +781,12 @@ async function bootApp(
 
   opts.onProgress?.("Preparing render styles…");
   const styleResources = createStyleResources(heightFog, clayNight);
-  let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
-  // The neighbour tiles are as visible as the primary one — restyle ALL of them
-  // together, or a style switch leaves 3/4 of the skyline on the old material.
-  const restyleCities = () => {
-    applyCityStyle(cityLayer.group, currentStyle, styleResources);
-    for (const c of extraCities) {
-      applyCityStyle(c.group, currentStyle, styleResources);
-    }
-  };
-  restyleCities();
+  // The neighbour tiles are as visible as the primary one — dress ALL of them,
+  // or 3/4 of the skyline keeps the loader's raw LoD colours.
+  applyCityStyle(cityLayer.group, styleResources);
+  for (const c of extraCities) {
+    applyCityStyle(c.group, styleResources);
+  }
   const postStack = createPostStack(renderer, scene, camera);
 
   // Spawn at the recenter point (= world origin), standing on the terrain.
@@ -974,7 +959,7 @@ async function bootApp(
     }
     cityLayer = demolishObject(cityLayer, world, objectId);
     // The reload produces bare loader meshes — re-dress them.
-    applyCityStyle(cityLayer.group, currentStyle, styleResources);
+    applyCityStyle(cityLayer.group, styleResources);
     invalidateShadows();
     emitStats();
   };
@@ -1163,11 +1148,6 @@ async function bootApp(
 
   return {
     setSun,
-    setStyle: (style) => {
-      currentStyle = style;
-      restyleCities();
-      invalidateShadows();
-    },
     setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
     setFocusMode: (mode) => postStack.setFocusMode(mode),
     setFocusDistance: (meters) => postStack.setFocusDistance(meters),
@@ -1238,7 +1218,7 @@ async function bootApp(
       }
     },
     setBuildingTransparency: (transparency) => {
-      setCityTransparency(styleResources, currentStyle, transparency);
+      setCityTransparency(styleResources, transparency);
       // Clay's alpha-hash cutout changes what the depth pass writes.
       invalidateShadows();
     },

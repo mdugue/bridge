@@ -125,9 +125,11 @@ off-screen chunks frustum-cull out of both the main and shadow pass. After
 `computeBoundingSphere()` or the whole cloud gets wrongly culled when the origin
 is off-screen.
 
-**Transparency is expensive.** `MeshPhysicalMaterial.transmission` (the "ghost"
-style) re-renders the whole scene into a buffer each frame (~2× cost) — the
-default building style is the opaque "clay" for this reason.
+**Buildings render in exactly one style: the opaque "clay"** (`visual-style.ts`
+— archviz clay plus the facade-detail shader, with hash-dithered transparency).
+The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
+loader's raw LoD colours) styles were removed. Keep transmission out of the
+scene: it re-renders everything into a buffer each frame (~2× cost).
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.
@@ -150,10 +152,9 @@ for any lighting/shadow work.
 
 **Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel
 is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
-and ~**4 s per clay frame / 14–20 s per ghost frame** at 1280×720 (measured on
-four cores). Anything that waits on rendered frames — the style walk uses
-`waitForFrames` — walks straight into the per-test timeout if it spends frames
-carelessly. Playwright runs a single worker on CI for the same reason: parallel
+and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
+on rendered frames — the control walk uses `waitForFrames` — walks straight into
+the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
 viewer pages halve each other's frame rate.
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
