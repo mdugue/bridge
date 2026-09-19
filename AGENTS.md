@@ -31,9 +31,10 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 bun install
 bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
+bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # eslint + ultracite (biome)
 bun typecheck      # tsgo --noEmit
-bun test           # unit tests in lib/
+bun test           # unit tests in lib/ and app/_components/
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
@@ -187,6 +188,14 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 ## Conventions
 
 - TypeScript strict. No `any` without a `// reason:` comment.
+- Version pins: exact for the three.js stack (`three`, `@types/three`,
+  `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`), the
+  framework trio and the formatters; caret for everything else. The Bun version
+  comes from `packageManager` in `package.json` (CI reads it via
+  `bun-version-file`), and `.mcp.json` pins the shadcn MCP server to the
+  lockfile version rather than `@latest`.
+- `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
+  Adding a component adds its dependency; removing one should remove it again.
 - Tailwind for styling; components in `app/_components/` (route-private) or
   `components/` (shared, incl. shadcn `components/ui/`).
 - **Conventional Commits** (`feat:`, `fix:`, `perf:`, `refactor:`…).

@@ -1,30 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# City Walk — Dresden
 
-## Getting Started
+A client-side, stylized **3D city walker**: spawn into a pastel rendering of
+Dresden built from Saxon open geodata and walk (or fly) through it. Buildings
+come from LoD2 **CityJSON**, the ground from **DGM1** elevation rasters,
+surfaces (roads, water, meadow, …) from an **ATKIS Basis-DLM** splatmap, and
+trees from DLM hedge/tree rows plus a **DOM1**-derived canopy. Everything runs
+in the browser with [three.js](https://threejs.org) — one route, no backend, no
+database, no accounts, nothing persisted.
 
-First, run the development server:
+## Prerequisites
+
+- [Bun](https://bun.sh) 1.3+
+- A WebGL2-capable browser
+
+## Quickstart
 
 ```bash
-bun dev
+bun install
+bun dev     # prepares public/data, then serves http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`bun dev` runs `scripts/prepare-data.ts` first; it copies the committed
+per-tile artifacts into `public/data/` and bakes the terrain heightfields
+(a few seconds on the first run, nothing on later ones).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Add `?scene=lite` to load the primary tile alone with a small shadow map —
+that is what the headless e2e suite uses; it is not how the scene is meant to
+look.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Data
 
-## Learn More
+```
+data/**  (committed, small, derived)  →  scripts/prepare-data.ts  →  public/data/  (gitignored)
+```
 
-To learn more about Next.js, take a look at the following resources:
+The viewer loads a **2 × 2 block** of 2 km tiles: the primary tile
+`33412_5656_2_sn` (which you spawn on, collide with and demolish from) plus
+three neighbours for context. The list lives in
+[`lib/city/tile.ts`](lib/city/tile.ts) — the one place a tile id is written,
+read by both the bake script and the client.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Tile id scheme: `<UTM zone 33><easting km>_<northing km>_<edge km>_sn`. The
+primary tile spans 412000–414000 E / 5656000–5658000 N in **EPSG:25833**.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The DGM1 GeoTIFF is **not** served: `prepare-data.ts` resamples it into a
+float32 heightfield (`<tile>.heightfield-<n>.json` + `.f32`, primary 1024²,
+neighbours 512²; see [`lib/city/heightfield.ts`](lib/city/heightfield.ts)), so
+the browser never decodes a raster on the main thread.
 
-## Deploy on Vercel
+Requirements for new data:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- CityJSON must declare EPSG:25832 or 25833 in `metadata.referenceSystem`
+  ([`lib/city/crs.ts`](lib/city/crs.ts)). Reproject with
+  `cjio in.city.json reproject 25833 save out.city.json`.
+- The DGM GeoTIFF needs embedded georeferencing or a `.tfw` sidecar. Embed it
+  with `gdal_translate -a_srs EPSG:25833 in.tif out.tif`.
+- The city's recenter point must fall inside the DGM extent, or startup fails
+  loudly rather than placing the city in the void.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Raw bulk downloads (DLM, DOM1, DOP — gigabytes) stay in `data/_raw/`, which is
+gitignored; there is no Git-LFS. The bake scripts in `scripts/` regenerate the
+committed artifacts from them.
+
+**Provenance.** Sources are the
+[Saxon open-geodata portal](https://www.geodaten.sachsen.de/) (*Offene
+Geodaten*, mostly *Datenlizenz Deutschland – Zero*) plus OpenStreetMap for
+street lamps and walls (ODbL) — see
+[docs/portability.md](docs/portability.md#fetching-source-data).
+`TODO(maintainer):` record the exact dataset editions, download dates and
+per-dataset licences for the committed tiles.
+
+## Controls
+
+Desktop:
+
+| Input | Action |
+|---|---|
+| Drag | Look around |
+| `W` `A` `S` `D` | Move (`Shift` sprints) |
+| `F` | Toggle walk / fly |
+| `Space` / `Shift` | Up / down (fly mode) |
+| Scroll | Zoom (field of view) |
+| Double-click the ground | Travel there |
+| Click the minimap | Teleport there |
+| `R` | Demolish the building under the crosshair |
+| `B` | Insert a building at the prescribed spot |
+| "Immersive mode" | Pointer lock (`Esc` exits) |
+
+Touch: drag to look, joystick to walk, pinch to zoom, double-tap the ground to
+travel, and the button in the corner opens the scene settings.
+
+## Architecture
+
+A React shell owns the HUD; three.js owns the canvas.
+[`app/_components/city-walk.tsx`](app/_components/city-walk.tsx) mounts
+`createCityWalkApp` ([`create-app.ts`](app/_components/create-app.ts)), which
+builds the scene imperatively and returns a **handle of setters** — every HUD
+slider calls one. Pure, three-free, unit-tested math lives in
+[`lib/city/`](lib/city); the WebGL glue lives in `app/_components/`.
+
+Coordinate frames matter here. Source data is EPSG:25833, Z-up; a parent
+`world` group is rotated −90° about X so data-Z (elevation) becomes scene-Y
+(up), giving `x = easting − cx`, `z = −(northing − cy)`, `y = elevation`, with
+`(cx, cy)` the shared recenter offset ([`lib/city/recenter.ts`](lib/city/recenter.ts),
+[`lib/city/ground-clamp.ts`](lib/city/ground-clamp.ts)). The sun goes SunCalc →
+ENU → world in [`lib/city/sun.ts`](lib/city/sun.ts).
+
+Two design decisions worth knowing: **demolish** is a data-level filter plus a
+re-parse of the CityJSON rather than a mesh edit
+([`city-layer.ts`](app/_components/city-layer.ts)), and
+`cityjson-threejs-loader` is **patched** via [`patches/`](patches) — read the
+patch header before bumping it.
+
+## Development
+
+```bash
+bun run verify   # lint + typecheck + unit tests — run this before pushing
+bun run build
+bun run test:e2e # Playwright, against a production build
+bun run fix      # ultracite (biome) autofix
+```
+
+Unit tests are `bun test` files colocated with the code they cover (`lib/` and
+`app/_components/`). The e2e specs drive the viewer through the `window.__poc`
+hook ([`poc-debug.ts`](app/_components/poc-debug.ts)), which dev builds expose
+automatically and production builds only with `NEXT_PUBLIC_POC_DEBUG=1`;
+changing that hook means updating [`e2e/`](e2e).
+
+## Further reading
+
+- [AGENTS.md](AGENTS.md) — orientation: stack, commands, conventions, the
+  coordinate frame, and the rendering gotchas worth not relearning.
+- [docs/](docs/README.md) — the knowledge base: what maps to what
+  ([data-flow](docs/data-flow.md)), every transformation built, shelved or
+  rejected ([transformations](docs/transformations.md)), and how to render a
+  different location ([portability](docs/portability.md)).
+- [plans/README.md](plans/README.md) — the implementation plans and their
+  status.

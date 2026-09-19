@@ -1,7 +1,7 @@
 /**
  * three-mesh-bvh extends BufferGeometry/Raycaster via prototype patching;
  * this augmentation mirrors the runtime wiring done in
- * app/city/_components/collision.ts.
+ * app/_components/collision.ts.
  */
 import type { MeshBVH } from "three-mesh-bvh";
 

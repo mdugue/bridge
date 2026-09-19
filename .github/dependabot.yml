@@ -19,11 +19,23 @@ updates:
         patterns: [shadcn, "@base-ui/*"]
       lint-and-format:
         patterns: [eslint, eslint-*, biome, "@biomejs/*", ultracite]
+      # The three.js stack moves as one: postprocessing caps `three`, and
+      # n8ao / three-mesh-bvh / the CityJSON loader all peer on it, so a solo
+      # bump is either unmergeable or a silent version skew.
+      three:
+        patterns:
+          - three
+          - "@types/three"
+          - three-mesh-bvh
+          - postprocessing
+          - n8ao
+          - cityjson-threejs-loader
       types:
         patterns: ["@types/*"]
-        exclude-patterns: ["@types/react*"]
+        exclude-patterns: ["@types/react*", "@types/three"]
 
-  # Keep Actions and the `oven-sh/setup-bun` pin fresh.
+  # Keep Actions fresh (the Bun version comes from package.json's
+  # `packageManager` field, not from the setup-bun pin).
   - package-ecosystem: github-actions
     directory: /
     schedule:
