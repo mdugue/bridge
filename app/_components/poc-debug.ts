@@ -9,7 +9,6 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { CameraState, PlayerPose } from "./create-app";
 import type { FocusMode } from "./post-stack";
 import type { Viewpoint } from "./viewpoints";
-import type { CityStyleId } from "./visual-style";
 
 interface Xyz {
   x: number;
@@ -48,6 +47,11 @@ export interface PocDebugInfo {
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
   offset?: { cx: number; cy: number };
   ready: boolean;
+  /**
+   * True while the camera is moving and the post stack is running reduced
+   * (AO + DoF skipped) — see lib/city/regression.ts.
+   */
+  regressed?: boolean;
   /** Sets the fog amount (0..1). */
   setAtmosphere?: (amount: number) => void;
   /** Sets the building storey contour-line (Höhenlinien) strength (0..1). */
@@ -86,8 +90,6 @@ export interface PocDebugInfo {
   setMeadowNdvi?: (strength: number) => void;
   /** Sets the paper-grain intensity (0..1). */
   setPaperGrain?: (intensity: number) => void;
-  /** Switches the city rendering style. */
-  setStyle?: (style: CityStyleId) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
   /** Sets the (B) sway-coupled crown brightness (Windhelligkeit) strength (0..1). */

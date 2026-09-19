@@ -1,6 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import {
+  cityJsonFile,
+  heightfieldHeaderFile,
+  TILE_BLOCK,
+  type TileSpec,
+} from "@/lib/city/tile";
 import type { TileSrc } from "./create-app";
 
 // three.js needs a real browser (WebGL, pointer lock) — never prerender it.
@@ -15,11 +21,10 @@ const CityWalk = dynamic(() => import("./city-walk"), {
 });
 
 /** Builds the per-tile URLs (all prepared by scripts/prepare-data.ts). */
-function tile(name: string): TileSrc {
+function tile({ tile: name, n }: TileSpec): TileSrc {
   return {
-    citySrc: `/data/lod2_${name}.city.json`,
-    demSrc: `/data/dgm1_${name}.tif`,
-    demTfwSrc: `/data/dgm1_${name}.tfw`,
+    citySrc: `/data/${cityJsonFile(name)}`,
+    demSrc: `/data/${heightfieldHeaderFile(name, n)}`,
     landcoverSrc: `/data/landcover_${name}.png`,
     vegetationSrc: `/data/vegrows_${name}.geojson`,
     // Optional (OSM, ODbL); the loader treats a 404 as "no lamps".
@@ -32,14 +37,12 @@ function tile(name: string): TileSrc {
   };
 }
 
-// Primary tile (spawn here) + the rest of the 2 x 2 block around it. Module
-// constants so the references stay stable across renders.
-const PRIMARY = tile("33412_5656_2_sn");
-const EXTRA_TILES: TileSrc[] = [
-  tile("33410_5656_2_sn"),
-  tile("33410_5658_2_sn"),
-  tile("33412_5658_2_sn"),
-];
+// Primary tile (spawn here) + the rest of the 2 x 2 block around it, in the
+// order lib/city/tile.ts lists them (the same list prepare-data.ts bakes).
+// Module constants so the references stay stable across renders.
+const [PRIMARY_SPEC, ...NEIGHBOUR_SPECS] = TILE_BLOCK;
+const PRIMARY = tile(PRIMARY_SPEC);
+const EXTRA_TILES: TileSrc[] = NEIGHBOUR_SPECS.map(tile);
 
 export function CityWalkClient() {
   return (
@@ -47,7 +50,6 @@ export function CityWalkClient() {
       bridgeSrc={PRIMARY.bridgeSrc}
       citySrc={PRIMARY.citySrc}
       demSrc={PRIMARY.demSrc}
-      demTfwSrc={PRIMARY.demTfwSrc}
       extraTiles={EXTRA_TILES}
       lampsSrc={PRIMARY.lampsSrc}
       landcoverSrc={PRIMARY.landcoverSrc}

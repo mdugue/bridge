@@ -61,6 +61,21 @@ test("buildTerrainGeometryData omits quads touching a NoData vertex", () => {
   expect(indices).not.toContain(0);
 });
 
+test("buildTerrainGeometryData parks NoData vertices at the mean valid elevation", () => {
+  const elevations = new Float32Array(9).fill(100);
+  elevations[0] = -9999;
+  const { positions, minElevation } = buildTerrainGeometryData({
+    ...flat3x3,
+    elevations,
+    offset: { cx: 0, cy: 0 },
+  });
+  // The hole is excluded from the geometry but its position still feeds the
+  // bounding box (shadow camera, spawn fallback) — so it sits at the mean of
+  // the valid samples, not at z = 0 a hundred metres below the ground.
+  expect(positions[2]).toBe(100);
+  expect(minElevation).toBe(100);
+});
+
 test("buildTerrainGeometryData rejects degenerate bounds", () => {
   expect(() =>
     buildTerrainGeometryData({

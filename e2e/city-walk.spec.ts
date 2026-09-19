@@ -337,12 +337,11 @@ test.describe("desktop viewer", () => {
    * shader-chunk define) costs two software-rendered frames — so steps that
    * only move uniforms are batched together rather than spent one per frame.
    */
-  test("style, post and shader controls survive real frames", async () => {
-    const STYLE_STEPS = 11;
-    for (let i = 0; i < STYLE_STEPS; i++) {
+  test("post and shader controls survive real frames", async () => {
+    const CONTROL_STEPS = 6;
+    for (let i = 0; i < CONTROL_STEPS; i++) {
       await page.evaluate((index) => {
         const steps: Array<() => void> = [
-          () => window.__poc?.setStyle?.("clay"),
           () => window.__poc?.setDepthOfField?.(false),
           // Post-stack uniforms compile nothing, so they share two steps: one
           // at full strength, one back down.
@@ -378,21 +377,30 @@ test.describe("desktop viewer", () => {
             window.__poc?.setTreeLeafBright?.(1);
             window.__poc?.setTreeMultiTuft?.(true);
           },
-          () => window.__poc?.setStyle?.("standard"),
-          // Ghost is the priciest style by far (transmission re-renders the
-          // whole scene), so it is visited once, at the end, in two steps.
-          () => {
-            window.__poc?.setStyle?.("ghost");
-            window.__poc?.setBuildingTransparency?.(0.45);
-          },
-          () => window.__poc?.setBuildingTransparency?.(0),
-          () => window.__poc?.setStyle?.("clay"),
         ];
         steps[index]?.();
       }, i);
       await waitForFrames(page, 2);
       expectNoErrors(errors);
     }
+  });
+
+  test("quality regresses while moving and recovers when still", async () => {
+    // Motion-keyed regression (lib/city/regression.ts): AO + DoF are skipped
+    // while the camera moves. Asserted through __poc.regressed rather than
+    // pixels — the passes' visual delta is exactly what SwiftShader renders
+    // least like a GPU.
+    await page.keyboard.down("KeyW");
+    await waitForFrames(page, 2);
+    expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
+
+    await page.keyboard.up("KeyW");
+    // Recovery is frame-driven (RECOVER_MS of accumulated dt with the camera
+    // still), so this waits on the flag, never on a clock.
+    await page.waitForFunction(() => window.__poc?.regressed === false, null, {
+      timeout: slow(60_000),
+    });
+    expectNoErrors(errors);
   });
 });
 
@@ -481,7 +489,7 @@ test.describe("mobile", () => {
     // Drawer opens with the scene settings (generous timeout: the main
     // thread shares time with software-rendered frames).
     await page.getByRole("button", { name: "Scene settings" }).tap();
-    await expect(page.getByText("Building style")).toBeVisible({
+    await expect(page.getByText("Boden-Verlauf")).toBeVisible({
       timeout: slow(30_000),
     });
 

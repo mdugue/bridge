@@ -17,7 +17,8 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 ## Tech stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r186** (`three`), `cityjson-threejs-loader`, `geotiff`,
+- **three.js r186** (`three`), `cityjson-threejs-loader`, `geotiff` (build step
+  only — the client no longer decodes rasters),
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline
@@ -28,11 +29,12 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 
 ```bash
 bun install
-bun dev            # prepare-data.ts (copy geodata -> public/data) then next dev
+bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
+bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # eslint + ultracite (biome)
 bun typecheck      # tsgo --noEmit
-bun test           # unit tests in lib/
+bun test           # unit tests in lib/ and app/_components/
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
@@ -50,7 +52,8 @@ and enforces a complexity cap; extract helpers rather than fighting it. No
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp) with `bun test` units alongside
 - `scripts/` — `extract-dlm.sh`, `extract-canopy.sh` (offline data bakes) and
-  `prepare-data.ts` (copies committed artifacts into `public/data` at build)
+  `prepare-data.ts` (copies committed artifacts into `public/data` at build and
+  bakes each DGM GeoTIFF into a float32 heightfield — see `lib/city/heightfield.ts`)
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
 - `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)
@@ -125,9 +128,11 @@ off-screen chunks frustum-cull out of both the main and shadow pass. After
 `computeBoundingSphere()` or the whole cloud gets wrongly culled when the origin
 is off-screen.
 
-**Transparency is expensive.** `MeshPhysicalMaterial.transmission` (the "ghost"
-style) re-renders the whole scene into a buffer each frame (~2× cost) — the
-default building style is the opaque "clay" for this reason.
+**Buildings render in exactly one style: the opaque "clay"** (`visual-style.ts`
+— archviz clay plus the facade-detail shader, with hash-dithered transparency).
+The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
+loader's raw LoD colours) styles were removed. Keep transmission out of the
+scene: it re-renders everything into a buffer each frame (~2× cost).
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.
@@ -150,10 +155,9 @@ for any lighting/shadow work.
 
 **Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel
 is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
-and ~**4 s per clay frame / 14–20 s per ghost frame** at 1280×720 (measured on
-four cores). Anything that waits on rendered frames — the style walk uses
-`waitForFrames` — walks straight into the per-test timeout if it spends frames
-carelessly. Playwright runs a single worker on CI for the same reason: parallel
+and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
+on rendered frames — the control walk uses `waitForFrames` — walks straight into
+the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
 viewer pages halve each other's frame rate.
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
@@ -184,6 +188,14 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 ## Conventions
 
 - TypeScript strict. No `any` without a `// reason:` comment.
+- Version pins: exact for the three.js stack (`three`, `@types/three`,
+  `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`), the
+  framework trio and the formatters; caret for everything else. The Bun version
+  comes from `packageManager` in `package.json` (CI reads it via
+  `bun-version-file`), and `.mcp.json` pins the shadcn MCP server to the
+  lockfile version rather than `@latest`.
+- `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
+  Adding a component adds its dependency; removing one should remove it again.
 - Tailwind for styling; components in `app/_components/` (route-private) or
   `components/` (shared, incl. shadcn `components/ui/`).
 - **Conventional Commits** (`feat:`, `fix:`, `perf:`, `refactor:`…).

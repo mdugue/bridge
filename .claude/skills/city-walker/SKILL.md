@@ -25,7 +25,8 @@ Y-up), loads the tiles, runs the animation loop, and returns a `CityWalkHandle`
   tile (~2000 buildings, per-vertex `objectid`). Demolish = remove the object
   from the in-memory CityJSON and **re-parse** (you can't hide one building).
   Picking/collision use `three-mesh-bvh`.
-- `terrain-layer.ts` — DGM1 GeoTIFF → heightfield mesh + the surface splat; also
+- `terrain-layer.ts` — baked DGM1 heightfield (`.heightfield-<n>.json` + `.f32`,
+  produced by `prepare-data.ts`) → mesh + the surface splat; also
   builds the water layer. `lib/city/terrain-geometry.ts` is the pure math.
 - `water-layer.ts` — clone of terrain geometry, masked by the splat's alpha
   (water coverage), animated normal wobble.
@@ -35,7 +36,9 @@ Y-up), loads the tiles, runs the animation loop, and returns a `CityWalkHandle`
   fog/atmosphere by time of day.
 - `post-stack.ts` — pmndrs `postprocessing`: SSAO, DoF, SMAA, depth grading,
   paper grain, vignette.
-- `visual-style.ts` — clay (opaque, default) / ghost (transmission) / standard.
+- `visual-style.ts` — the one building style: opaque archviz clay + facade
+  detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
+  glow), hash-dithered transparency. The old ghost/standard styles are gone.
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -128,8 +131,11 @@ Expensive, gate behind LOD: the **multi-tuft crown** (core + ~17 merged lobes �
 
 Buildings are already merged (low draw calls) — **BatchedMesh is moot** and
 would break objectid picking. The bottleneck is **fill-rate**: post-processing
-(SSAO is the priciest) and the shadow-map render. `MeshPhysicalMaterial.transmission`
-(ghost) ≈ doubles scene cost → default is opaque clay. `handle.getRenderInfo()`
+(SSAO is the priciest) and the shadow-map render — which is why AO and DoF are
+skipped while the camera moves (`lib/city/regression.ts`). Buildings are opaque
+clay only; `MeshPhysicalMaterial.transmission` ≈ doubles scene cost, so the
+frosted "ghost" style was dropped rather than kept as an option.
+`handle.getRenderInfo()`
 exposes counters (but with post-processing it reflects only the final pass —
 read true scene counts with FX off).
 
@@ -182,7 +188,10 @@ because boot is the largest fixed cost left once frames are cheap. The
 
 Raw downloads (gitignored `data/_raw/`): no Git-LFS; commit only the small
 derived per-tile artifacts in `data/dlm/` and `data/dgm/`. `prepare-data.ts`
-copies them to `public/data/` at `bun dev`/`build`. **numpy and `gdal_calc.py`
+copies them to `public/data/` at `bun dev`/`build`, and bakes each tile's DGM
+GeoTIFF into a float32 heightfield there (primary 1024², neighbours 512²;
+`lib/city/heightfield.ts` owns the format, `lib/city/tile.ts` the tile list) —
+the `.tif` itself is never served. **numpy and `gdal_calc.py`
 are unavailable** — do raster math in Python/Pillow (palette mode for speed; mode
 `F` for float GeoTIFFs). Regenerate one tile:
 

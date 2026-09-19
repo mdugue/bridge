@@ -79,7 +79,6 @@ import {
   type CityWalkStats,
   createCityWalkApp,
   DEFAULT_ATMOSPHERE,
-  DEFAULT_CITY_STYLE,
   type PlayerPose,
   type TileSrc,
 } from "./create-app";
@@ -108,7 +107,6 @@ import {
 import { SCENIC_VIEWS } from "./viewpoints";
 import { VirtualJoystick } from "./virtual-joystick";
 import {
-  type CityStyleId,
   DEFAULT_BUILDING_BANDS,
   DEFAULT_BUILDING_DUSK_GLOW,
   DEFAULT_BUILDING_EAVE,
@@ -119,7 +117,6 @@ import {
   DEFAULT_BUILDING_ROUGHNESS,
   DEFAULT_BUILDING_TINT,
   DEFAULT_CLAY_TRANSPARENCY,
-  DEFAULT_GHOST_TRANSPARENCY,
 } from "./visual-style";
 import { DEFAULT_WATER_MIST } from "./water-layer";
 
@@ -128,10 +125,8 @@ interface Props {
   bridgeSrc?: string;
   /** URL of the CityJSON tile, served from /public */
   citySrc: string;
-  /** URL of the DGM GeoTIFF */
+  /** URL of the heightfield header JSON (see lib/city/heightfield.ts) */
   demSrc: string;
-  /** URL of the .tfw sidecar (georef fallback) */
-  demTfwSrc?: string;
   /** Neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
@@ -172,12 +167,6 @@ function formatMinutes(minutes: number): string {
   return `${h}:${m}`;
 }
 
-const STYLE_LABELS: Record<CityStyleId, string> = {
-  standard: "Standard",
-  ghost: "Ghost",
-  clay: "Clay",
-};
-
 const SNAPSHOT_VERSION = 1;
 
 /**
@@ -211,7 +200,6 @@ interface Snapshot {
     roofVibrancePct?: number;
     roughnessPct?: number;
     shimmerPct?: number;
-    style: CityStyleId;
     tintPct?: number;
     translucencyPct?: number;
     transparencyPct: number;
@@ -530,19 +518,17 @@ interface SceneControlsProps {
   setRoughness: Dispatch<SetStateAction<number>>;
   setShimmer: Dispatch<SetStateAction<number>>;
   setSnapshotText: Dispatch<SetStateAction<string>>;
-  setStyle: Dispatch<SetStateAction<CityStyleId>>;
   setTint: Dispatch<SetStateAction<number>>;
   setTranslucency: Dispatch<SetStateAction<number>>;
-  setTransparency: Dispatch<SetStateAction<Record<CityStyleId, number>>>;
+  setTransparency: Dispatch<SetStateAction<number>>;
   setWaterMist: Dispatch<SetStateAction<number>>;
   shimmer: number;
   snapshotMsg: string | null;
   snapshotText: string;
-  style: CityStyleId;
   sun: SunState | null;
   tint: number;
   translucency: number;
-  transparency: Record<CityStyleId, number>;
+  transparency: number;
   updateSun: (day: Date, minutes: number) => void;
   waterMist: number;
 }
@@ -603,7 +589,6 @@ function SceneControls({
   setRoughness,
   setShimmer,
   setSnapshotText,
-  setStyle,
   setTint,
   setTransparency,
   setTranslucency,
@@ -611,7 +596,6 @@ function SceneControls({
   shimmer,
   snapshotMsg,
   snapshotText,
-  style,
   sun,
   tint,
   translucency,
@@ -714,45 +698,16 @@ function SceneControls({
       </ControlGroup>
 
       <ControlGroup icon={Building2Icon} title="Buildings">
-        <Field>
-          <FieldLabel htmlFor="city-style">Building style</FieldLabel>
-          <ToggleGroup
-            className="w-full"
-            id="city-style"
-            onValueChange={(value: string[]) => {
-              const next = value[0] as CityStyleId | undefined;
-              if (next) {
-                setStyle(next);
-                handleRef.current?.setStyle(next);
-              }
-            }}
-            size="sm"
-            value={[style]}
-            variant="outline"
-          >
-            {(Object.keys(STYLE_LABELS) as CityStyleId[]).map((id) => (
-              <ToggleGroupItem className="flex-1" key={id} value={id}>
-                {STYLE_LABELS[id]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </Field>
-
         <PctSlider
-          description={
-            style === "ghost"
-              ? "Frosted glass — the backdrop shows through blurred"
-              : "Plain see-through"
-          }
-          disabled={style === "standard"}
+          description="Plain see-through"
           id="building-transparency"
           label="Transparency"
           max={90}
           onChange={(n) => {
-            setTransparency((prev) => ({ ...prev, [style]: n }));
+            setTransparency(n);
             handleRef.current?.setBuildingTransparency(n / 100);
           }}
-          value={transparency[style]}
+          value={transparency}
         />
 
         <PctSlider
@@ -1036,7 +991,6 @@ function SceneControls({
 export default function CityWalk({
   citySrc,
   demSrc,
-  demTfwSrc,
   landcoverSrc,
   vegetationSrc,
   lampsSrc,
@@ -1060,7 +1014,6 @@ export default function CityWalk({
   const [sun, setSun] = useState<SunState | null>(null);
   const [day, setDay] = useState(INITIAL_DATE);
   const [minutes, setMinutes] = useState(INITIAL_MINUTES);
-  const [style, setStyle] = useState<CityStyleId>(DEFAULT_CITY_STYLE);
   const [dof, setDof] = useState(DEFAULT_DOF);
   const [focusMode, setFocusMode] = useState<FocusMode>(DEFAULT_FOCUS_MODE);
   const [focusDistance, setFocusDistance] = useState(DEFAULT_FOCUS_DISTANCE);
@@ -1070,12 +1023,8 @@ export default function CityWalk({
   const [grading, setGrading] = useState(
     Math.round(DEFAULT_DEPTH_GRADING * 100)
   );
-  const [transparency, setTransparency] = useState<Record<CityStyleId, number>>(
-    {
-      standard: 0,
-      ghost: Math.round(DEFAULT_GHOST_TRANSPARENCY * 100),
-      clay: Math.round(DEFAULT_CLAY_TRANSPARENCY * 100),
-    }
+  const [transparency, setTransparency] = useState(
+    Math.round(DEFAULT_CLAY_TRANSPARENCY * 100)
   );
   const [contact, setContact] = useState(
     Math.round(DEFAULT_CONTACT_SHADOWS * 100)
@@ -1152,7 +1101,6 @@ export default function CityWalk({
       container,
       citySrc,
       demSrc,
-      demTfwSrc,
       landcoverSrc,
       vegetationSrc,
       lampsSrc,
@@ -1220,7 +1168,6 @@ export default function CityWalk({
           getFocusDebug: h.getFocusDebug,
           applyCameraState: h.applyCameraState,
           teleportTo: h.teleportTo,
-          setStyle: h.setStyle,
           setDepthOfField: h.setDepthOfField,
           setFocusMode: h.setFocusMode,
           setFocusDistance: h.setFocusDistance,
@@ -1278,7 +1225,6 @@ export default function CityWalk({
   }, [
     citySrc,
     demSrc,
-    demTfwSrc,
     landcoverSrc,
     vegetationSrc,
     lampsSrc,
@@ -1315,8 +1261,7 @@ export default function CityWalk({
       camera: h.getCameraState(),
       date: composeDate(day, minutes).toISOString(),
       look: {
-        style,
-        transparencyPct: transparency[style],
+        transparencyPct: transparency,
         fogPct: fogAmount,
         gradingPct: grading,
         contactPct: contact,
@@ -1399,12 +1344,7 @@ export default function CityWalk({
   };
 
   const applyLook = (h: CityWalkHandle, look: Snapshot["look"]) => {
-    setStyle(look.style);
-    h.setStyle(look.style);
-    setTransparency((prev) => ({
-      ...prev,
-      [look.style]: look.transparencyPct,
-    }));
+    setTransparency(look.transparencyPct);
     h.setBuildingTransparency(look.transparencyPct / 100);
     setFogAmount(look.fogPct);
     h.setAtmosphere(look.fogPct / 100);
@@ -1510,7 +1450,6 @@ export default function CityWalk({
       setRoughness={setRoughness}
       setShimmer={setShimmer}
       setSnapshotText={setSnapshotText}
-      setStyle={setStyle}
       setTint={setTint}
       setTranslucency={setTranslucency}
       setTransparency={setTransparency}
@@ -1518,7 +1457,6 @@ export default function CityWalk({
       shimmer={shimmer}
       snapshotMsg={snapshotMsg}
       snapshotText={snapshotText}
-      style={style}
       sun={sun}
       tint={tint}
       translucency={translucency}

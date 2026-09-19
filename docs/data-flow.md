@@ -101,7 +101,7 @@ flowchart TB
 
 | Feature | Primary source | Also needs / modifiers | Code |
 |---|---|---|---|
-| **Terrain ground** | DGM1 GeoTIFF | OSM walls (conflated into a step) | `terrain-layer.ts`, `lib/city/terrain-geometry.ts`, `lib/city/terrain-conflate.ts` |
+| **Terrain ground** | DGM1 GeoTIFF → build-time heightfield (`.f32`) | OSM walls (conflated into a step) | baked by `scripts/prepare-data.ts` (`lib/city/heightfield.ts`); `terrain-layer.ts`, `lib/city/terrain-geometry.ts`, `lib/city/terrain-conflate.ts` |
 | **Surface colours** | Basis-DLM splatmap PNG | DOP NDVI (meadow tint, class 1) | `terrain-layer.ts` (samples splat + `uNdvi`); baked by `extract-dlm.sh` + `extract-ndvi.sh` |
 | **Water (Elbe)** | Basis-DLM (alpha = water) **+** DGM1 (geometry) | — | `water-layer.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 | DGM1 (ground-clamp) | `city-layer.ts` (`cityjson-threejs-loader`) |

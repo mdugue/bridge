@@ -30,6 +30,8 @@ export const DEFAULT_PAPER_GRAIN = 0.25;
 const HYPERFOCAL_M = 600;
 /** AO intensity at contact-shadows slider = 1. */
 const AO_INTENSITY_MAX = 6;
+/** Below this slider value the AO pass is off rather than invisibly cheap. */
+const AO_OFF_EPSILON = 0.01;
 
 // focusRange is the metric over which a fragment ramps from sharp to fully
 // blurred (CoC = smoothstep(0, focusRange, |dist − focusDistance|)). A fixed
@@ -72,6 +74,12 @@ export interface PostStack {
   setFocusTarget: (point: Vector3 | null) => void;
   /** 0..1 — paper-grain overlay intensity */
   setPaperGrain: (intensity: number) => void;
+  /**
+   * Reduced-quality mode while the camera moves: skips the AO and DoF passes.
+   * Layered under the sliders — it never resurrects a pass the user turned
+   * off, and recovery restores exactly what they asked for.
+   */
+  setRegressed: (on: boolean) => void;
   setSize: (width: number, height: number) => void;
 }
 
@@ -116,6 +124,18 @@ export function createPostStack(
   dofPass.enabled = DEFAULT_DOF;
   composer.addPass(dofPass);
 
+  // User intent vs. motion regression are two independent layers: the sliders
+  // write the *Wanted flags, the render loop writes `regressed`, and only
+  // applyPassGating() ever touches `.enabled`. Writing `.enabled` directly
+  // from either side would make recovery clobber the user's choice.
+  let aoWanted = DEFAULT_CONTACT_SHADOWS > AO_OFF_EPSILON;
+  let dofWanted = DEFAULT_DOF;
+  let regressed = false;
+  const applyPassGating = () => {
+    ao.enabled = aoWanted && !regressed;
+    dofPass.enabled = dofWanted && !regressed;
+  };
+
   const grading = new DepthGradingEffect();
   grading.setIntensity(DEFAULT_DEPTH_GRADING);
   const grain = new PaperGrainEffect();
@@ -139,15 +159,24 @@ export function createPostStack(
     }),
     setSize: (width, height) => composer.setSize(width, height),
     setDepthOfField: (enabled) => {
-      dofPass.enabled = enabled;
+      dofWanted = enabled;
+      applyPassGating();
     },
     setDepthGrading: (intensity) => grading.setIntensity(intensity),
     setContactShadows: (strength) => {
       const s = Math.min(Math.max(strength, 0), 1);
       ao.configuration.intensity = s * AO_INTENSITY_MAX;
-      ao.enabled = s > 0.01;
+      aoWanted = s > AO_OFF_EPSILON;
+      applyPassGating();
     },
     setPaperGrain: (intensity) => grain.setIntensity(intensity),
+    setRegressed: (on) => {
+      if (on === regressed) {
+        return;
+      }
+      regressed = on;
+      applyPassGating();
+    },
     setFocusMode: (mode) => {
       focusMode = mode;
       if (mode === "manual") {

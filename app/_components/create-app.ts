@@ -5,6 +5,7 @@ import {
   Euler,
   Fog,
   Group,
+  type Mesh,
   type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
@@ -26,6 +27,7 @@ import {
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { buildingFootprintPolys, type FootprintPoly } from "@/lib/city/minimap";
 import { recenterOffset } from "@/lib/city/recenter";
+import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
 import type { CityJsonDocument } from "@/lib/city/types";
@@ -47,7 +49,7 @@ import {
   type LampLights,
   loadLamps,
 } from "./lamp-layer";
-import { tickPocFrame } from "./poc-debug";
+import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
 import { currentSceneProfile, type SceneProfile } from "./scene-profile";
@@ -63,7 +65,6 @@ import { loadVegetation, type VegetationControl } from "./vegetation-layer";
 import type { Viewpoint } from "./viewpoints";
 import {
   applyCityStyle,
-  type CityStyleId,
   createStyleResources,
   setCityTransparency,
 } from "./visual-style";
@@ -91,11 +92,6 @@ const TOUCH_LOOK_SPEED = 0.004;
 /** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
 const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 const SKY_COLOR = 0x9f_b6_cc;
-/** Default rendering style — the "context frame" ambition. */
-// Clay is OPAQUE — ghost uses MeshPhysicalMaterial.transmission, which makes
-// three re-render the whole scene into a transmission buffer every frame
-// (≈ 2x cost). Default to the cheap opaque style; ghost stays a choice.
-export const DEFAULT_CITY_STYLE: CityStyleId = "clay";
 /** Default fog amount (0..1). Kept light — a gentle far haze, not a near wall. */
 export const DEFAULT_ATMOSPHERE = 0.2;
 
@@ -134,8 +130,8 @@ export interface TileSrc {
   /** optional baked bridge-deck GeoJSON (Basis-DLM + DGM/DOM1 heights) */
   bridgeSrc?: string;
   citySrc: string;
+  /** URL of this tile's heightfield header JSON (see lib/city/heightfield.ts) */
   demSrc: string;
-  demTfwSrc?: string;
   /** optional OSM street-lamp GeoJSON (ODbL); absent/404 = no lamps */
   lampsSrc?: string;
   landcoverSrc?: string;
@@ -153,8 +149,8 @@ export interface CityWalkOptions {
   bridgeSrc?: string;
   citySrc: string;
   container: HTMLElement;
+  /** URL of the primary tile's heightfield header JSON */
   demSrc: string;
-  demTfwSrc?: string;
   /** neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   initialDate: Date;
@@ -271,7 +267,6 @@ export interface CityWalkHandle {
   setMovementMode: (mode: MovementMode) => void;
   /** paper-grain overlay intensity 0..1 */
   setPaperGrain: (intensity: number) => void;
-  setStyle: (style: CityStyleId) => void;
   setSun: (date: Date) => SunState;
   /** (B) sway-coupled crown brightness (Windhelligkeit) strength 0..1 */
   setTreeLeafBright: (strength: number) => void;
@@ -317,10 +312,6 @@ function createRenderer(
   renderer.setPixelRatio(
     profile === "lite" ? 0.5 : Math.min(window.devicePixelRatio, 2)
   );
-  // The ghost style's frosted transmission renders the opaque scene a second
-  // time per frame; at roughness 0.8 it samples a blurred mip anyway, so a
-  // half-resolution transmission buffer is visually free.
-  renderer.transmissionResolutionScale = profile === "lite" ? 0.25 : 0.5;
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   // three 0.184 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
@@ -445,11 +436,18 @@ export async function createCityWalkApp(
   const fogRange = fogRangeFor(DEFAULT_ATMOSPHERE);
   scene.fog = new Fog(SKY_COLOR, fogRange.near, fogRange.far);
 
+  // Everything bootApp creates registers its teardown here, so a boot that
+  // throws halfway (a real load failure, or the StrictMode remount aborting
+  // one) frees exactly what a clean dispose would. Without it the post stack's
+  // half-float targets, the style materials, the listeners and the per-tile
+  // layer controls survived a failed boot.
+  const cleanups: Array<() => void> = [];
   try {
-    return await bootApp(opts, renderer, scene);
+    return await bootApp(opts, renderer, scene, cleanups);
   } catch (err) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
+    runCleanups(cleanups);
     disposeObject3D(scene);
     renderer.dispose();
     renderer.domElement.remove();
@@ -457,10 +455,18 @@ export async function createCityWalkApp(
   }
 }
 
+/** Unwinds registered teardowns in reverse creation order. */
+function runCleanups(cleanups: Array<() => void>): void {
+  for (const cleanup of [...cleanups].reverse()) {
+    cleanup();
+  }
+}
+
 async function bootApp(
   opts: CityWalkOptions,
   renderer: WebGLRenderer,
-  scene: Scene
+  scene: Scene,
+  cleanups: Array<() => void>
 ): Promise<CityWalkHandle> {
   const { container } = opts;
   let disposed = false;
@@ -526,15 +532,25 @@ async function bootApp(
   // Per-tile rail/bridge/platform geometry, kept only so dispose can free it.
   const railControls: RailControl[] = [];
   const wallControls: WallControl[] = [];
+  // The arrays are filled during the abortable load, so this one cleanup
+  // covers however many tiles made it in before a failure.
+  cleanups.push(() => {
+    for (const lamp of lampControls) {
+      lamp.dispose();
+    }
+    for (const rail of railControls) {
+      rail.dispose();
+    }
+    for (const wall of wallControls) {
+      wall.dispose();
+    }
+    lampLights?.dispose();
+  });
 
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
-  const loadTileScene = async (
-    tile: TileSrc,
-    targetSize?: number
-  ): Promise<TerrainLayer> => {
+  const loadTileScene = async (tile: TileSrc): Promise<TerrainLayer> => {
     const t = await loadTerrain({
       url: tile.demSrc,
-      tfwUrl: tile.demTfwSrc,
       landcoverUrl: tile.landcoverSrc,
       // Retaining/city walls are burned into THIS tile's heightfield as steps so
       // the ground breaks at the wall instead of the DGM's smooth bank.
@@ -542,7 +558,6 @@ async function bootApp(
         ?.replace("landcover_", "walls_")
         .replace(".png", ".geojson"),
       offset,
-      targetSize,
       signal: opts.signal,
       sunDirection,
       heightFog,
@@ -591,7 +606,6 @@ async function bootApp(
   const terrain = await loadTileScene({
     citySrc: opts.citySrc,
     demSrc: opts.demSrc,
-    demTfwSrc: opts.demTfwSrc,
     landcoverSrc: opts.landcoverSrc,
     vegetationSrc: opts.vegetationSrc,
     lampsSrc: opts.lampsSrc,
@@ -612,8 +626,9 @@ async function bootApp(
     extraCities.push(
       createCityLayer(data, world, cityLayer.matrix, tileRoofLut)
     );
-    // Neighbours are background — half-resolution terrain (~4 m) is plenty.
-    terrains.push(await loadTileScene(tile, 512));
+    // Neighbours are background — their heightfield is baked at half the
+    // primary's resolution (~4 m), see lib/city/tile.ts.
+    terrains.push(await loadTileScene(tile));
     ensureAlive();
   }
 
@@ -791,17 +806,15 @@ async function bootApp(
 
   opts.onProgress?.("Preparing render styles…");
   const styleResources = createStyleResources(heightFog, clayNight);
-  let currentStyle: CityStyleId = DEFAULT_CITY_STYLE;
-  // The neighbour tiles are as visible as the primary one — restyle ALL of them
-  // together, or a style switch leaves 3/4 of the skyline on the old material.
-  const restyleCities = () => {
-    applyCityStyle(cityLayer.group, currentStyle, styleResources);
-    for (const c of extraCities) {
-      applyCityStyle(c.group, currentStyle, styleResources);
-    }
-  };
-  restyleCities();
+  cleanups.push(() => styleResources.dispose());
+  // The neighbour tiles are as visible as the primary one — dress ALL of them,
+  // or 3/4 of the skyline keeps the loader's raw LoD colours.
+  applyCityStyle(cityLayer.group, styleResources);
+  for (const c of extraCities) {
+    applyCityStyle(c.group, styleResources);
+  }
   const postStack = createPostStack(renderer, scene, camera);
+  cleanups.push(() => postStack.dispose());
 
   // Spawn at the recenter point (= world origin), standing on the terrain.
   const groundY = heightAt(offset.cx, offset.cy) ?? worldBounds.min.y;
@@ -809,12 +822,18 @@ async function bootApp(
   camera.lookAt(0, groundY + EYE_HEIGHT, -100);
 
   const controls = new PointerLockControls(camera, renderer.domElement);
+  cleanups.push(() => controls.dispose());
   const groundHeight = (x: number, z: number) => {
     const epsg = worldToEpsg(x, z, offset);
     return heightAt(epsg.x, epsg.y);
   };
   // Wall collision against the CURRENT city group (demolish swaps it).
-  const collider = createCityCollider(() => cityLayer.group);
+  // Declared before the collider so the inserted building can join the
+  // collision/focus targets the moment it exists.
+  let inserted: Object3D | null = null;
+  const collider = createCityCollider(() =>
+    inserted ? [cityLayer.group, inserted] : [cityLayer.group]
+  );
   const movement = createFpsMovement(camera, {
     groundHeight,
     eyeHeight: EYE_HEIGHT,
@@ -956,6 +975,7 @@ async function bootApp(
       }
     },
   });
+  cleanups.push(detachTouch);
 
   let fps = 0;
   const emitStats = () => {
@@ -973,16 +993,18 @@ async function bootApp(
     }
     cityLayer = demolishObject(cityLayer, world, objectId);
     // The reload produces bare loader meshes — re-dress them.
-    applyCityStyle(cityLayer.group, currentStyle, styleResources);
+    applyCityStyle(cityLayer.group, styleResources);
     invalidateShadows();
     emitStats();
   };
 
-  let inserted: Object3D | null = null;
   const insertBuilding = async () => {
     const at = opts.insertAt ?? DEFAULT_INSERT_AT;
     const obj = await createInsertedBuilding(opts.insertedModelUrl);
     if (disposed) {
+      // The app was torn down while the glTF was in flight; nothing will ever
+      // add this object to a scene, so free it here or it leaks.
+      disposeObject3D(obj);
       return;
     }
     if (inserted) {
@@ -993,6 +1015,13 @@ async function bootApp(
     // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
     const w = epsgToWorld(at.x, at.y, offset);
     obj.position.set(w.x, ground, w.z);
+    // BVHs keep the per-frame collision rays cheap for real glTF models.
+    obj.traverse((child) => {
+      const mesh = child as Mesh;
+      if (mesh.isMesh && !mesh.geometry.boundsTree) {
+        mesh.geometry.computeBoundsTree();
+      }
+    });
     scene.add(obj);
     invalidateShadows();
     inserted = obj;
@@ -1004,7 +1033,17 @@ async function bootApp(
     });
   };
 
+  /** True for a key event aimed at a text field — the HUD owns those keys. */
+  const isTextEntry = (target: EventTarget | null): boolean =>
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.matches("input, textarea, select"));
   const onKeyDown = (e: KeyboardEvent) => {
+    // Held keys auto-repeat. Movement doesn't care (the Set is idempotent),
+    // but the one-shot actions must fire once per press — holding R used to
+    // re-parse the whole tile on every repeat.
+    if (e.repeat || isTextEntry(e.target)) {
+      return;
+    }
     movement.press(e.code);
     // Any movement/mode key is the player taking the wheel back — abandon any
     // scenic flight in progress so it doesn't fight or override their control.
@@ -1021,7 +1060,19 @@ async function bootApp(
       setMovementMode(movement.getMode() === "walk" ? "fly" : "walk");
     }
   };
-  const onKeyUp = (e: KeyboardEvent) => movement.release(e.code);
+  const onKeyUp = (e: KeyboardEvent) => {
+    if (!isTextEntry(e.target)) {
+      movement.release(e.code);
+    }
+  };
+  // A keyup delivered to another window (Alt-Tab, a native dialog) would leave
+  // the key held forever and the camera walking on its own.
+  const onFocusLost = () => movement.releaseAll();
+  const onVisibility = () => {
+    if (document.hidden) {
+      movement.releaseAll();
+    }
+  };
   // Mouse wheel zooms like pinch (FOV); immersive pointer lock is opt-in
   // via the handle, so plain clicks/drags stay free for grab-look.
   const onWheel = (e: WheelEvent) => {
@@ -1031,7 +1082,16 @@ async function bootApp(
   };
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onFocusLost);
+  document.addEventListener("visibilitychange", onVisibility);
   renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+  cleanups.push(() => {
+    document.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("keyup", onKeyUp);
+    window.removeEventListener("blur", onFocusLost);
+    document.removeEventListener("visibilitychange", onVisibility);
+    renderer.domElement.removeEventListener("wheel", onWheel);
+  });
 
   const resizeObserver = new ResizeObserver(() => {
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
@@ -1040,6 +1100,7 @@ async function bootApp(
     postStack.setSize(container.clientWidth, container.clientHeight);
   });
   resizeObserver.observe(container);
+  cleanups.push(() => resizeObserver.disconnect());
 
   // Crosshair autofocus for the photographic DoF (throttled like the pose).
   const focusRaycaster = new Raycaster();
@@ -1055,10 +1116,10 @@ async function bootApp(
   let lastFocusHit: { dist: number; name: string } | null = null;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
-    const hit = focusRaycaster.intersectObjects(
-      [cityLayer.group, ...focusContext],
-      true
-    )[0];
+    const targets = inserted
+      ? [cityLayer.group, inserted, ...focusContext]
+      : [cityLayer.group, ...focusContext];
+    const hit = focusRaycaster.intersectObjects(targets, true)[0];
     lastFocusHit = hit
       ? {
           dist: camera.position.distanceTo(hit.point),
@@ -1081,6 +1142,37 @@ async function bootApp(
     movement.update(dt);
   };
 
+  // Motion-keyed quality regression. Derived from the CAMERA, not the input
+  // layer: WASD, the joystick, pointer-lock mouse-look, touch look and the
+  // scenic flights all move it, and only two of those go through `movement`.
+  //
+  // Both comparisons need an epsilon, NOT `equals`: the walk-mode eye height
+  // approaches the ground exponentially (approachHeight), so after the player
+  // stops it keeps changing in the last few ulps for ~220 frames — an exact
+  // comparison would hold the regression ~3.5 s past every stop. 1e-8 m² is
+  // 0.1 mm of travel, four orders below one frame of walking (0.15 m at 60 Hz).
+  const MOVED_DIST_SQ = 1e-8;
+  // 1 - |dot| for two unit quaternions ~= theta^2 / 8, so 1e-9 is ~0.005° of
+  // turn — far below one pixel of mouse-look, far above numerical noise.
+  const MOVED_QUAT_DOT = 1e-9;
+  const lastPos = camera.position.clone();
+  const lastQuat = camera.quaternion.clone();
+  const regression = createRegressionState();
+  let regressedNow = false;
+  const updateRegression = (dt: number) => {
+    const moved =
+      camera.position.distanceToSquared(lastPos) > MOVED_DIST_SQ ||
+      1 - Math.abs(camera.quaternion.dot(lastQuat)) > MOVED_QUAT_DOT;
+    lastPos.copy(camera.position);
+    lastQuat.copy(camera.quaternion);
+    const regressed = stepRegression(regression, moved, dt * 1000);
+    postStack.setRegressed(regressed);
+    if (regressed !== regressedNow) {
+      regressedNow = regressed;
+      updatePocDebug({ regressed });
+    }
+  };
+
   const timer = new Timer();
   let tickDue = 0;
   let fpsDue = 0;
@@ -1092,6 +1184,7 @@ async function bootApp(
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
     stepMovement(dt);
+    updateRegression(dt);
     // Advance every tile's water ripple/glitter and feed it the current
     // palette sky colour (Fresnel sky-tint stays in lockstep with the sun).
     if (scene.fog instanceof Fog) {
@@ -1125,16 +1218,12 @@ async function bootApp(
     postStack.render(dt);
     tickPocFrame();
   });
+  cleanups.push(() => renderer.setAnimationLoop(null));
 
   emitStats();
 
   return {
     setSun,
-    setStyle: (style) => {
-      currentStyle = style;
-      restyleCities();
-      invalidateShadows();
-    },
     setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
     setFocusMode: (mode) => postStack.setFocusMode(mode),
     setFocusDistance: (meters) => postStack.setFocusDistance(meters),
@@ -1205,7 +1294,7 @@ async function bootApp(
       }
     },
     setBuildingTransparency: (transparency) => {
-      setCityTransparency(styleResources, currentStyle, transparency);
+      setCityTransparency(styleResources, transparency);
       // Clay's alpha-hash cutout changes what the depth pass writes.
       invalidateShadows();
     },
@@ -1259,27 +1348,16 @@ async function bootApp(
     terrainBounds: unionBounds,
     offset,
     dispose: () => {
+      if (disposed) {
+        return;
+      }
       disposed = true;
-      renderer.setAnimationLoop(null);
-      resizeObserver.disconnect();
-      detachTouch();
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("keyup", onKeyUp);
-      renderer.domElement.removeEventListener("wheel", onWheel);
-      controls.dispose();
-      postStack.dispose();
+      // Same list, same order as a failed boot unwinds: animation loop ->
+      // resize observer -> listeners -> touch -> controls -> post stack ->
+      // style materials -> per-tile layer controls. disposeObject3D skips
+      // userData.shared materials, so freeing the style ones first is safe.
+      runCleanups(cleanups);
       disposeObject3D(scene);
-      for (const lamp of lampControls) {
-        lamp.dispose();
-      }
-      for (const rail of railControls) {
-        rail.dispose();
-      }
-      for (const wall of wallControls) {
-        wall.dispose();
-      }
-      lampLights?.dispose();
-      styleResources.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     },

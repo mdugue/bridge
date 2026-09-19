@@ -52,7 +52,6 @@ interface Snapshot {
     roofVibrancePct?: number;
     roughnessPct?: number;
     shimmerPct?: number;
-    style: string;
     tintPct?: number;
     translucencyPct?: number;
     transparencyPct: number;
@@ -90,7 +89,6 @@ for (const file of snapshotFiles()) {
       }
       api.applyCameraState(s.camera);
       api.setSunIso?.(s.date);
-      api.setStyle?.(s.look.style as Parameters<typeof api.setStyle>[0]);
       api.setBuildingTransparency?.(s.look.transparencyPct / 100);
       api.setAtmosphere?.(s.look.fogPct / 100);
       api.setDepthGrading?.(s.look.gradingPct / 100);
