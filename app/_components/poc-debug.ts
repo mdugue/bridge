@@ -48,6 +48,11 @@ export interface PocDebugInfo {
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
   offset?: { cx: number; cy: number };
   ready: boolean;
+  /**
+   * True while the camera is moving and the post stack is running reduced
+   * (AO + DoF skipped) — see lib/city/regression.ts.
+   */
+  regressed?: boolean;
   /** Sets the fog amount (0..1). */
   setAtmosphere?: (amount: number) => void;
   /** Sets the building storey contour-line (Höhenlinien) strength (0..1). */

@@ -26,6 +26,7 @@ import {
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { buildingFootprintPolys, type FootprintPoly } from "@/lib/city/minimap";
 import { recenterOffset } from "@/lib/city/recenter";
+import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
 import type { CityJsonDocument } from "@/lib/city/types";
@@ -1081,6 +1082,37 @@ async function bootApp(
     movement.update(dt);
   };
 
+  // Motion-keyed quality regression. Derived from the CAMERA, not the input
+  // layer: WASD, the joystick, pointer-lock mouse-look, touch look and the
+  // scenic flights all move it, and only two of those go through `movement`.
+  //
+  // Both comparisons need an epsilon, NOT `equals`: the walk-mode eye height
+  // approaches the ground exponentially (approachHeight), so after the player
+  // stops it keeps changing in the last few ulps for ~220 frames — an exact
+  // comparison would hold the regression ~3.5 s past every stop. 1e-8 m² is
+  // 0.1 mm of travel, four orders below one frame of walking (0.15 m at 60 Hz).
+  const MOVED_DIST_SQ = 1e-8;
+  // 1 - |dot| for two unit quaternions ~= theta^2 / 8, so 1e-9 is ~0.005° of
+  // turn — far below one pixel of mouse-look, far above numerical noise.
+  const MOVED_QUAT_DOT = 1e-9;
+  const lastPos = camera.position.clone();
+  const lastQuat = camera.quaternion.clone();
+  const regression = createRegressionState();
+  let regressedNow = false;
+  const updateRegression = (dt: number) => {
+    const moved =
+      camera.position.distanceToSquared(lastPos) > MOVED_DIST_SQ ||
+      1 - Math.abs(camera.quaternion.dot(lastQuat)) > MOVED_QUAT_DOT;
+    lastPos.copy(camera.position);
+    lastQuat.copy(camera.quaternion);
+    const regressed = stepRegression(regression, moved, dt * 1000);
+    postStack.setRegressed(regressed);
+    if (regressed !== regressedNow) {
+      regressedNow = regressed;
+      updatePocDebug({ regressed });
+    }
+  };
+
   const timer = new Timer();
   let tickDue = 0;
   let fpsDue = 0;
@@ -1092,6 +1124,7 @@ async function bootApp(
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
     stepMovement(dt);
+    updateRegression(dt);
     // Advance every tile's water ripple/glitter and feed it the current
     // palette sky colour (Fresnel sky-tint stays in lockstep with the sun).
     if (scene.fog instanceof Fog) {

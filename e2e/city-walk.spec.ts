@@ -394,6 +394,24 @@ test.describe("desktop viewer", () => {
       expectNoErrors(errors);
     }
   });
+
+  test("quality regresses while moving and recovers when still", async () => {
+    // Motion-keyed regression (lib/city/regression.ts): AO + DoF are skipped
+    // while the camera moves. Asserted through __poc.regressed rather than
+    // pixels — the passes' visual delta is exactly what SwiftShader renders
+    // least like a GPU.
+    await page.keyboard.down("KeyW");
+    await waitForFrames(page, 2);
+    expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
+
+    await page.keyboard.up("KeyW");
+    // Recovery is frame-driven (RECOVER_MS of accumulated dt with the camera
+    // still), so this waits on the flag, never on a clock.
+    await page.waitForFunction(() => window.__poc?.regressed === false, null, {
+      timeout: slow(60_000),
+    });
+    expectNoErrors(errors);
+  });
 });
 
 test.describe("mobile", () => {

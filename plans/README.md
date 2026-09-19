@@ -95,7 +95,7 @@ against the merged tree (checked 2026-09-18, after the merge):
 | 004 | Preprocess the DGM into a 512² heightfield at build time (12.6 MB → ≈0.75 MB, no in-browser GeoTIFF decode) | P1 | M | — | TODO — valid; ×4 tiles after #16 |
 | 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | P2 | M | 001 | TODO — Steps 1–3 verbatim, 4–5 need porting |
 | 006 | Scaffold cleanup, unused deps, lint config, fonts, README + AGENTS.md | P2 | M | — | TODO — Step 5 recompute, Step 9 superseded by #16 |
-| 007 | Adaptive quality while the camera moves (movement regression: skip AO + DoF during motion) | P2 | S | 002 (landed) | TODO |
+| 007 | Adaptive quality while the camera moves (movement regression: skip AO + DoF during motion) | P2 | S | 002 (landed) | DONE — Steps 1–3 + 5; `bun run verify`, `bun run build` and `bun run test:e2e` (9/9) green. Ported onto the post-#16 tree as the plan's drift note anticipated (the excerpts were stale; the idea was not). **Step 2 uses the epsilon fallback, not `equals`**: the walk-mode eye height approaches the ground exponentially, so a resting camera keeps changing in its last ulps for ~224 frames — exact equality would have held the regression ~3.5 s past every stop. Thresholds are `distanceToSquared > 1e-8` (0.1 mm) and `1 - |quat.dot|> 1e-9` (~0.005°). **Step 4 (pixel-ratio drop) was not attempted** — it is explicitly gated on a real-GPU look and this environment has no display; the four manual checks in the plan's "Verification" are likewise open for the maintainer. |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
