@@ -5,6 +5,7 @@
  * touch `window` — the hook cannot leak into production.
  */
 
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { CameraState, PlayerPose } from "./create-app";
 import type { FocusMode } from "./post-stack";
 import type { Viewpoint } from "./viewpoints";
@@ -104,6 +105,13 @@ export interface PocDebugInfo {
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;
+  /**
+   * Union DGM extent [minX, minY, maxX, maxY] in EPSG — the minimap's frame.
+   * Exposed so e2e can assert the minimap's px→EPSG mapping against the
+   * bounds actually loaded, instead of hard-coding a tile block that changes
+   * with the scene profile (see scene-profile.ts).
+   */
+  terrainBounds?: TerrainBounds;
   terrainVertexCount: number;
 }
 

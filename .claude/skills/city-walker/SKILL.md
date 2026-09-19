@@ -158,6 +158,26 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
             "contactPct":50,"grainPct":25,"dof":true } }
 ```
 
+### The `lite` scene profile (headless e2e only)
+
+`?scene=lite` (`app/_components/scene-profile.ts`) exists because SwiftShader
+shades every pixel on the CPU. It changes exactly three things:
+
+| Knob | full | lite | Why it is the right knob |
+|---|---|---|---|
+| tiles loaded | primary + 2×2 block | **primary only** | 3/4 of the geometry AND 3/4 of the boot (boot 14 s → 4.4 s, 74 MB → 18 MB) |
+| `SHADOW_MAP_SIZE` | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
+| `pixelRatio` / `transmissionResolutionScale` | dpr≤2 / 0.5 | **0.5** / 0.25 | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
+
+Everything a spec asserts on — loaders, layer construction, every style's shader
+programs, the HUD wiring — is identical in both. **Never** use lite to judge a
+render: it is coarse by design; that is what the `--headed` harness above is for.
+
+The specs share one booted page per context (`mode: "serial"` + `beforeAll`),
+because boot is the largest fixed cost left once frames are cheap. The
+`snapshot-shot.spec.ts` harness deliberately stays on the **full** profile.
+
+
 ## Data pipeline
 
 Raw downloads (gitignored `data/_raw/`): no Git-LFS; commit only the small
