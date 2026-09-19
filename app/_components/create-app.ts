@@ -50,6 +50,7 @@ import {
 import { tickPocFrame } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
+import { currentSceneProfile, type SceneProfile } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
 import {
   DEFAULT_MEADOW_NDVI,
@@ -296,7 +297,10 @@ interface Xyz {
   z: number;
 }
 
-function createRenderer(container: HTMLElement): WebGLRenderer {
+function createRenderer(
+  container: HTMLElement,
+  profile: SceneProfile
+): WebGLRenderer {
   // No MSAA: everything renders through the EffectComposer and SMAA carries
   // the AA (see post-stack.ts); a multisampled default framebuffer would only
   // be resolved for a full-screen quad.
@@ -304,11 +308,19 @@ function createRenderer(container: HTMLElement): WebGLRenderer {
     antialias: false,
     powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // The `lite` profile renders at half linear resolution (a quarter of the
+  // pixels) and lets the browser upscale. The canvas fills the viewport and
+  // the HUD needs a desktop-width window to lay out, so this — not the
+  // Playwright viewport — is the only honest way to cut fill-rate in the
+  // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
+  // the post stack costs, and the post stack is most of a frame.
+  renderer.setPixelRatio(
+    profile === "lite" ? 0.5 : Math.min(window.devicePixelRatio, 2)
+  );
   // The ghost style's frosted transmission renders the opaque scene a second
   // time per frame; at roughness 0.8 it samples a blurred mip anyway, so a
   // half-resolution transmission buffer is visually free.
-  renderer.transmissionResolutionScale = 0.5;
+  renderer.transmissionResolutionScale = profile === "lite" ? 0.25 : 0.5;
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   // three 0.184 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
@@ -427,7 +439,7 @@ function tileLatLng(
 export async function createCityWalkApp(
   opts: CityWalkOptions
 ): Promise<CityWalkHandle> {
-  const renderer = createRenderer(opts.container);
+  const renderer = createRenderer(opts.container, currentSceneProfile());
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
   const fogRange = fogRangeFor(DEFAULT_ATMOSPHERE);
@@ -474,6 +486,15 @@ async function bootApp(
       throw new DOMException("CityWalk startup aborted", "AbortError");
     }
   };
+
+  // The `lite` profile (?scene=lite, see scene-profile.ts) renders the primary
+  // tile alone. Neighbours are passive visual context, but they are three
+  // quarters of the geometry AND three quarters of the boot cost — parsing
+  // three more CityJSON documents, three more DGM heightfields and three more
+  // canopy clouds. Dropping them is what makes the headless e2e suite
+  // affordable; nothing it asserts on lives outside the primary tile.
+  const profile = currentSceneProfile();
+  const neighbourTiles = profile === "lite" ? [] : (opts.extraTiles ?? []);
 
   opts.onProgress?.("Loading CityJSON tile…");
   const cityData = await fetchCityJson(opts.citySrc, opts.signal);
@@ -583,7 +604,7 @@ async function bootApp(
   // stay on the primary tile (these are passive visual context).
   const terrains: TerrainLayer[] = [terrain];
   const extraCities: CityLayer[] = [];
-  for (const tile of opts.extraTiles ?? []) {
+  for (const tile of neighbourTiles) {
     opts.onProgress?.("Loading neighbouring tiles…");
     const data = await fetchCityJson(tile.citySrc, opts.signal);
     const tileRoofLut = await fetchRoofLut(tile.citySrc, opts.signal);
@@ -629,7 +650,7 @@ async function bootApp(
       platformSrc: opts.platformSrc,
       railareaSrc: opts.railareaSrc,
     },
-    ...(opts.extraTiles ?? []),
+    ...neighbourTiles,
   ];
   const railUrls = railTiles
     .map((t) => t.railSrc)
@@ -662,7 +683,7 @@ async function bootApp(
   // cross-tile heightAt; the URL is derived from each tile's land-cover URL.
   const wallUrls = [
     opts.landcoverSrc,
-    ...(opts.extraTiles ?? []).map((t) => t.landcoverSrc),
+    ...neighbourTiles.map((t) => t.landcoverSrc),
   ]
     .filter((u): u is string => u !== undefined)
     .map((u) => u.replace("landcover_", "walls_").replace(".png", ".geojson"));
@@ -701,7 +722,7 @@ async function bootApp(
   if (opts.landcoverSrc) {
     landcoverTiles.push({ src: opts.landcoverSrc, bounds: terrain.bounds });
   }
-  (opts.extraTiles ?? []).forEach((t, i) => {
+  neighbourTiles.forEach((t, i) => {
     if (t.landcoverSrc) {
       landcoverTiles.push({
         src: t.landcoverSrc,

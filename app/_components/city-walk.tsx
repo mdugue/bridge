@@ -1210,6 +1210,7 @@ export default function CityWalk({
         updatePocDebug({
           ready: true,
           offset: h.offset,
+          terrainBounds: h.terrainBounds,
           flyTo: h.flyTo,
           flyToViewpoint: h.flyToViewpoint,
           demolishAtCrosshair: h.demolishAtCrosshair,

@@ -52,12 +52,56 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
-  build:
-    name: Build
+  # Build and e2e share ONE job. They used to be two, each doing its own
+  # `next build` on its own runner — the same work billed twice. This job's
+  # build step is the build check; the Playwright step then serves the artifact
+  # it just produced instead of rebuilding inside `webServer`.
+  e2e:
+    # Name kept as-is: it is the status check PRs are gated on. (The separate
+    # "Build" check is gone — drop it from branch protection if it is required.)
+    name: E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The viewer specs drive the real scene through software-rendered WebGL,
+    # one worker at a time (see playwright.config.ts). The `lite` scene profile
+    # keeps that to a few minutes, but a shared runner is about half the speed
+    # of a developer machine, so leave headroom: a tight budget cancels the job
+    # mid-run and reports nothing at all, which is worse than a slow job.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+      # One extra commit, not the whole history: the repo carries ~130 MB of
+      # committed geodata, so a deep clone is not free.
+      - name: Fetch the PR base commit
+        if: github.event_name == 'pull_request'
+        run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      # The e2e half is skipped on PRs that cannot affect it (docs, the data
+      # pipeline scripts, this workflow). The job itself always runs and always
+      # builds, so the status check stays green rather than "skipped" — which
+      # branch protection would treat as never reported.
+      - name: Decide whether the e2e half has to run
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$BASE_SHA" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Not a pull request — running the full suite."
+            exit 0
+          fi
+          # Two-dot diff: with a shallow base there is no merge base to walk.
+          # It over-reports (changes that landed on main since the PR branched
+          # count too), which errs towards running the suite.
+          if git diff --name-only "$BASE_SHA" HEAD -- \
+              app components hooks lib e2e public types \
+              playwright.config.ts next.config.ts package.json bun.lock \
+              | grep -q .; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No viewer-facing changes — building only."
+          fi
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -71,50 +115,42 @@ jobs:
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
             nextjs-${{ runner.os }}-
-      - run: bun run build
+      # NEXT_PUBLIC_POC_DEBUG exposes the window.__poc hook the specs drive. It
+      # is a single inlined constant, so this still exercises the real
+      # production build path; a deploy builds without it and ships no hook.
+      - name: Build
+        run: bun run build
         env:
+          NEXT_PUBLIC_POC_DEBUG: "1"
           NEXT_TELEMETRY_DISABLED: "1"
-
-  e2e:
-    name: E2E (Playwright)
-    runs-on: ubuntu-latest
-    # Three viewer specs drive the real scene through software-rendered WebGL,
-    # one worker at a time (see playwright.config.ts): minutes each, plus the
-    # production build the web server does first. A tight budget cancels the job
-    # mid-run and reports nothing at all, which is worse than a slow job.
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
       # Cache the Playwright browser binaries — ~150 MB to install otherwise.
       - uses: actions/cache@v5
+        if: steps.scope.outputs.run == 'true'
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: steps.scope.outputs.run == 'true' && steps.playwright-cache.outputs.cache-hit != 'true'
         run: bunx playwright install --with-deps chromium
       - name: Install OS deps only
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        if: steps.scope.outputs.run == 'true' && steps.playwright-cache.outputs.cache-hit == 'true'
         run: bunx playwright install-deps chromium
       - name: Run Playwright tests
+        if: steps.scope.outputs.run == 'true'
         run: bun run test:e2e
         env:
           CI: "1"
           NEXT_TELEMETRY_DISABLED: "1"
       - name: Upload HTML report
-        if: always()
+        if: always() && steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
       - name: Upload traces / failure artifacts
-        if: failure()
+        if: failure() && steps.scope.outputs.run == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces

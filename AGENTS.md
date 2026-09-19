@@ -33,7 +33,8 @@ bun build
 bun lint           # eslint + ultracite (biome)
 bun typecheck      # tsgo --noEmit
 bun test           # unit tests in lib/
-bun test:e2e       # playwright (e2e/)
+bun test:e2e       # playwright (e2e/) against a production build
+E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
 
 Lint is **ultracite** (a biome preset) — it auto-formats on save via the hook
@@ -147,14 +148,30 @@ iterate yourself. `shots/` is gitignored. The default headless e2e uses
 SwiftShader, which renders shadows/AA nothing like a real GPU, so use `--headed`
 for any lighting/shadow work.
 
-**Budget the e2e specs in frames, not seconds.** Under SwiftShader this scene
-costs roughly **4 s per clay frame and 20 s per ghost frame** (measured on two
-cores; ghost re-renders the whole scene for `transmission`, so its cost barely
-moves with canvas size). Anything that waits on rendered frames — the style walk
-uses `waitForFrames` — has to keep its ghost steps to a handful and do the rest
-in clay/standard, or it walks straight into the per-test timeout. Playwright runs
-a single worker on CI for the same reason: parallel viewer pages halve each
-other's frame rate.
+**Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel
+is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
+and ~**4 s per clay frame / 14–20 s per ghost frame** at 1280×720 (measured on
+four cores). Anything that waits on rendered frames — the style walk uses
+`waitForFrames` — walks straight into the per-test timeout if it spends frames
+carelessly. Playwright runs a single worker on CI for the same reason: parallel
+viewer pages halve each other's frame rate.
+
+**The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
+[`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It loads
+the **primary tile only** (boot 14 s → 4.4 s, 74 MB → 18 MB), shadow-maps at
+**512²** instead of 3072², and renders at **`pixelRatio` 0.5** with a quarter-res
+transmission buffer. Same loaders, same layers, same shader programs — a quarter
+of the world and a quarter of the pixels. The knobs it does *not* touch are the
+ones a test asserts on. Two rules when you add a spec:
+
+- Drive the viewer at `/?scene=lite`; only the "serves the viewer shell" spec
+  uses the bare route, and it never waits for the scene to load.
+- Share a booted page across assertions (`test.describe.configure({ mode:
+  "serial" })` + a `beforeAll` context) rather than booting per test — the boot
+  is the single largest fixed cost left.
+
+Lite is for headless CI, **never for looking at pixels**: for anything visual use
+the `--headed` snapshot harness below, at the full profile, on a real GPU.
 
 ## Researching three.js releases
 
