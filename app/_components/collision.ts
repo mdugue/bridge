@@ -38,7 +38,11 @@ export interface CityCollider {
   resolveStep: (position: Vector3, displacement: Vector3) => Vector3;
 }
 
-export function createCityCollider(getCity: () => Object3D): CityCollider {
+/**
+ * Wall collision against whatever `getTargets` returns — the city group of the
+ * primary tile, plus the inserted building when there is one.
+ */
+export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
   const raycaster = new Raycaster();
   raycaster.firstHitOnly = true;
   const normalMatrix = new Matrix3();
@@ -57,7 +61,7 @@ export function createCityCollider(getCity: () => Object3D): CityCollider {
       origin.copy(position);
       origin.y -= drop;
       raycaster.set(origin, dir);
-      const hit = raycaster.intersectObject(getCity(), true)[0];
+      const hit = raycaster.intersectObjects(getTargets(), true)[0];
       if (hit?.face) {
         normalMatrix.getNormalMatrix(hit.object.matrixWorld);
         return hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();

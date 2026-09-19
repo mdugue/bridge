@@ -5,6 +5,7 @@ import {
   Euler,
   Fog,
   Group,
+  type Mesh,
   type Object3D,
   PCFShadowMap,
   PerspectiveCamera,
@@ -435,11 +436,18 @@ export async function createCityWalkApp(
   const fogRange = fogRangeFor(DEFAULT_ATMOSPHERE);
   scene.fog = new Fog(SKY_COLOR, fogRange.near, fogRange.far);
 
+  // Everything bootApp creates registers its teardown here, so a boot that
+  // throws halfway (a real load failure, or the StrictMode remount aborting
+  // one) frees exactly what a clean dispose would. Without it the post stack's
+  // half-float targets, the style materials, the listeners and the per-tile
+  // layer controls survived a failed boot.
+  const cleanups: Array<() => void> = [];
   try {
-    return await bootApp(opts, renderer, scene);
+    return await bootApp(opts, renderer, scene, cleanups);
   } catch (err) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
+    runCleanups(cleanups);
     disposeObject3D(scene);
     renderer.dispose();
     renderer.domElement.remove();
@@ -447,10 +455,18 @@ export async function createCityWalkApp(
   }
 }
 
+/** Unwinds registered teardowns in reverse creation order. */
+function runCleanups(cleanups: Array<() => void>): void {
+  for (const cleanup of [...cleanups].reverse()) {
+    cleanup();
+  }
+}
+
 async function bootApp(
   opts: CityWalkOptions,
   renderer: WebGLRenderer,
-  scene: Scene
+  scene: Scene,
+  cleanups: Array<() => void>
 ): Promise<CityWalkHandle> {
   const { container } = opts;
   let disposed = false;
@@ -516,6 +532,20 @@ async function bootApp(
   // Per-tile rail/bridge/platform geometry, kept only so dispose can free it.
   const railControls: RailControl[] = [];
   const wallControls: WallControl[] = [];
+  // The arrays are filled during the abortable load, so this one cleanup
+  // covers however many tiles made it in before a failure.
+  cleanups.push(() => {
+    for (const lamp of lampControls) {
+      lamp.dispose();
+    }
+    for (const rail of railControls) {
+      rail.dispose();
+    }
+    for (const wall of wallControls) {
+      wall.dispose();
+    }
+    lampLights?.dispose();
+  });
 
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
   const loadTileScene = async (tile: TileSrc): Promise<TerrainLayer> => {
@@ -776,6 +806,7 @@ async function bootApp(
 
   opts.onProgress?.("Preparing render styles…");
   const styleResources = createStyleResources(heightFog, clayNight);
+  cleanups.push(() => styleResources.dispose());
   // The neighbour tiles are as visible as the primary one — dress ALL of them,
   // or 3/4 of the skyline keeps the loader's raw LoD colours.
   applyCityStyle(cityLayer.group, styleResources);
@@ -783,6 +814,7 @@ async function bootApp(
     applyCityStyle(c.group, styleResources);
   }
   const postStack = createPostStack(renderer, scene, camera);
+  cleanups.push(() => postStack.dispose());
 
   // Spawn at the recenter point (= world origin), standing on the terrain.
   const groundY = heightAt(offset.cx, offset.cy) ?? worldBounds.min.y;
@@ -790,12 +822,18 @@ async function bootApp(
   camera.lookAt(0, groundY + EYE_HEIGHT, -100);
 
   const controls = new PointerLockControls(camera, renderer.domElement);
+  cleanups.push(() => controls.dispose());
   const groundHeight = (x: number, z: number) => {
     const epsg = worldToEpsg(x, z, offset);
     return heightAt(epsg.x, epsg.y);
   };
   // Wall collision against the CURRENT city group (demolish swaps it).
-  const collider = createCityCollider(() => cityLayer.group);
+  // Declared before the collider so the inserted building can join the
+  // collision/focus targets the moment it exists.
+  let inserted: Object3D | null = null;
+  const collider = createCityCollider(() =>
+    inserted ? [cityLayer.group, inserted] : [cityLayer.group]
+  );
   const movement = createFpsMovement(camera, {
     groundHeight,
     eyeHeight: EYE_HEIGHT,
@@ -937,6 +975,7 @@ async function bootApp(
       }
     },
   });
+  cleanups.push(detachTouch);
 
   let fps = 0;
   const emitStats = () => {
@@ -959,11 +998,13 @@ async function bootApp(
     emitStats();
   };
 
-  let inserted: Object3D | null = null;
   const insertBuilding = async () => {
     const at = opts.insertAt ?? DEFAULT_INSERT_AT;
     const obj = await createInsertedBuilding(opts.insertedModelUrl);
     if (disposed) {
+      // The app was torn down while the glTF was in flight; nothing will ever
+      // add this object to a scene, so free it here or it leaks.
+      disposeObject3D(obj);
       return;
     }
     if (inserted) {
@@ -974,6 +1015,13 @@ async function bootApp(
     // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
     const w = epsgToWorld(at.x, at.y, offset);
     obj.position.set(w.x, ground, w.z);
+    // BVHs keep the per-frame collision rays cheap for real glTF models.
+    obj.traverse((child) => {
+      const mesh = child as Mesh;
+      if (mesh.isMesh && !mesh.geometry.boundsTree) {
+        mesh.geometry.computeBoundsTree();
+      }
+    });
     scene.add(obj);
     invalidateShadows();
     inserted = obj;
@@ -985,7 +1033,17 @@ async function bootApp(
     });
   };
 
+  /** True for a key event aimed at a text field — the HUD owns those keys. */
+  const isTextEntry = (target: EventTarget | null): boolean =>
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.matches("input, textarea, select"));
   const onKeyDown = (e: KeyboardEvent) => {
+    // Held keys auto-repeat. Movement doesn't care (the Set is idempotent),
+    // but the one-shot actions must fire once per press — holding R used to
+    // re-parse the whole tile on every repeat.
+    if (e.repeat || isTextEntry(e.target)) {
+      return;
+    }
     movement.press(e.code);
     // Any movement/mode key is the player taking the wheel back — abandon any
     // scenic flight in progress so it doesn't fight or override their control.
@@ -1002,7 +1060,19 @@ async function bootApp(
       setMovementMode(movement.getMode() === "walk" ? "fly" : "walk");
     }
   };
-  const onKeyUp = (e: KeyboardEvent) => movement.release(e.code);
+  const onKeyUp = (e: KeyboardEvent) => {
+    if (!isTextEntry(e.target)) {
+      movement.release(e.code);
+    }
+  };
+  // A keyup delivered to another window (Alt-Tab, a native dialog) would leave
+  // the key held forever and the camera walking on its own.
+  const onFocusLost = () => movement.releaseAll();
+  const onVisibility = () => {
+    if (document.hidden) {
+      movement.releaseAll();
+    }
+  };
   // Mouse wheel zooms like pinch (FOV); immersive pointer lock is opt-in
   // via the handle, so plain clicks/drags stay free for grab-look.
   const onWheel = (e: WheelEvent) => {
@@ -1012,7 +1082,16 @@ async function bootApp(
   };
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onFocusLost);
+  document.addEventListener("visibilitychange", onVisibility);
   renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+  cleanups.push(() => {
+    document.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("keyup", onKeyUp);
+    window.removeEventListener("blur", onFocusLost);
+    document.removeEventListener("visibilitychange", onVisibility);
+    renderer.domElement.removeEventListener("wheel", onWheel);
+  });
 
   const resizeObserver = new ResizeObserver(() => {
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
@@ -1021,6 +1100,7 @@ async function bootApp(
     postStack.setSize(container.clientWidth, container.clientHeight);
   });
   resizeObserver.observe(container);
+  cleanups.push(() => resizeObserver.disconnect());
 
   // Crosshair autofocus for the photographic DoF (throttled like the pose).
   const focusRaycaster = new Raycaster();
@@ -1036,10 +1116,10 @@ async function bootApp(
   let lastFocusHit: { dist: number; name: string } | null = null;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
-    const hit = focusRaycaster.intersectObjects(
-      [cityLayer.group, ...focusContext],
-      true
-    )[0];
+    const targets = inserted
+      ? [cityLayer.group, inserted, ...focusContext]
+      : [cityLayer.group, ...focusContext];
+    const hit = focusRaycaster.intersectObjects(targets, true)[0];
     lastFocusHit = hit
       ? {
           dist: camera.position.distanceTo(hit.point),
@@ -1138,6 +1218,7 @@ async function bootApp(
     postStack.render(dt);
     tickPocFrame();
   });
+  cleanups.push(() => renderer.setAnimationLoop(null));
 
   emitStats();
 
@@ -1267,27 +1348,16 @@ async function bootApp(
     terrainBounds: unionBounds,
     offset,
     dispose: () => {
+      if (disposed) {
+        return;
+      }
       disposed = true;
-      renderer.setAnimationLoop(null);
-      resizeObserver.disconnect();
-      detachTouch();
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("keyup", onKeyUp);
-      renderer.domElement.removeEventListener("wheel", onWheel);
-      controls.dispose();
-      postStack.dispose();
+      // Same list, same order as a failed boot unwinds: animation loop ->
+      // resize observer -> listeners -> touch -> controls -> post stack ->
+      // style materials -> per-tile layer controls. disposeObject3D skips
+      // userData.shared materials, so freeing the style ones first is safe.
+      runCleanups(cleanups);
       disposeObject3D(scene);
-      for (const lamp of lampControls) {
-        lamp.dispose();
-      }
-      for (const rail of railControls) {
-        rail.dispose();
-      }
-      for (const wall of wallControls) {
-        wall.dispose();
-      }
-      lampLights?.dispose();
-      styleResources.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     },

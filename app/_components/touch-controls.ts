@@ -54,6 +54,21 @@ export function attachTouchControls(
     return Math.hypot(a.x - b.x, a.y - b.y);
   };
 
+  /**
+   * Re-anchors the pinch whenever exactly two pointers remain. Capturing the
+   * baseline only on the second pointerdown left a stale one behind when a
+   * third finger lifted: the surviving pair kept measuring against a distance
+   * that belonged to a different pair, and the FOV jumped.
+   */
+  const syncPinchBaseline = () => {
+    if (pointers.size === 2) {
+      pinchStartDistance = pinchDistance();
+      callbacks.onPinchStart();
+    } else {
+      pinchStartDistance = 0;
+    }
+  };
+
   const onPointerDown = (e: PointerEvent) => {
     if (!acceptsPointer(e)) {
       return;
@@ -71,10 +86,7 @@ export function attachTouchControls(
       y: e.clientY,
     });
     dragged = pointers.size > 1 ? true : dragged;
-    if (pointers.size === 2) {
-      pinchStartDistance = pinchDistance();
-      callbacks.onPinchStart();
-    }
+    syncPinchBaseline();
   };
 
   const onPointerMove = (e: PointerEvent) => {
@@ -105,6 +117,7 @@ export function attachTouchControls(
       return;
     }
     pointers.delete(e.pointerId);
+    syncPinchBaseline();
     const isTap =
       !dragged &&
       pointers.size === 0 &&
@@ -128,7 +141,6 @@ export function attachTouchControls(
     }
     if (pointers.size === 0) {
       dragged = false;
-      pinchStartDistance = 0;
     }
   };
 

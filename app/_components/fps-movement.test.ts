@@ -63,12 +63,57 @@ test("opposing keys cancel out", () => {
   expect(camera.position.z).toBeCloseTo(0, 5);
 });
 
-test("analog input is clamped to the unit square", () => {
+test("analog input is clamped per axis, then to walking speed", () => {
   const { camera, movement } = rig();
   movement.setAnalog(2, -3); // clamps to (1, -1): full right, full backward
   movement.update(1);
-  expect(camera.position.x).toBeCloseTo(WALK_STEP, 5);
-  expect(camera.position.z).toBeCloseTo(WALK_STEP, 5);
+  // The setter clamps each axis to [-1, 1]; the combined vector is then
+  // normalised, so a full diagonal still covers WALK_STEP, not WALK_STEP*√2.
+  const diagonal = WALK_STEP / Math.SQRT2;
+  expect(camera.position.x).toBeCloseTo(diagonal, 5);
+  expect(camera.position.z).toBeCloseTo(diagonal, 5);
+  expect(Math.hypot(camera.position.x, camera.position.z)).toBeCloseTo(
+    WALK_STEP,
+    5
+  );
+});
+
+test("diagonal input walks at walking speed, not √2x", () => {
+  const { camera, movement } = rig();
+  movement.press("KeyW");
+  movement.press("KeyD");
+  movement.update(1);
+  expect(Math.hypot(camera.position.x, camera.position.z)).toBeCloseTo(
+    WALK_STEP,
+    5
+  );
+  expect(camera.position.x).toBeCloseTo(WALK_STEP / Math.SQRT2, 3);
+  expect(camera.position.z).toBeCloseTo(-WALK_STEP / Math.SQRT2, 3);
+});
+
+test("stick and key pushing the same way do not stack to double speed", () => {
+  const { camera, movement } = rig();
+  movement.press("KeyW");
+  movement.setAnalog(0, 1);
+  movement.update(1);
+  expect(camera.position.z).toBeCloseTo(-WALK_STEP, 5);
+});
+
+test("sub-unit stick input is not normalised up", () => {
+  const { camera, movement } = rig();
+  movement.setAnalog(0.5, 0);
+  movement.update(1);
+  expect(camera.position.x).toBeCloseTo(WALK_STEP / 2, 5);
+});
+
+test("releaseAll drops held keys and the stick", () => {
+  const { camera, movement } = rig();
+  movement.press("KeyW");
+  movement.setAnalog(1, 0);
+  movement.releaseAll();
+  movement.update(1);
+  expect(camera.position.x).toBeCloseTo(0, 5);
+  expect(camera.position.z).toBeCloseTo(0, 5);
 });
 
 test("releasing a key stops the movement", () => {

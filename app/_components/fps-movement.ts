@@ -26,6 +26,8 @@ export interface FpsMovement {
   getMode: () => MovementMode;
   press: (code: string) => void;
   release: (code: string) => void;
+  /** Drops every held key and the stick — call when the window loses focus. */
+  releaseAll: () => void;
   /**
    * Analog move input from the virtual joystick: x = strafe right,
    * y = forward, both in [-1, 1]. Adds to whatever keys contribute.
@@ -58,30 +60,38 @@ export function createFpsMovement(
 
   const shiftHeld = () => keys.has("ShiftLeft") || keys.has("ShiftRight");
 
-  /** Accumulates the proposed horizontal step into `displacement`. */
+  /** Proposed horizontal step: keys + stick combined, never faster than `step`. */
   const horizontalStep = (step: number): Vector3 => {
     camera.getWorldDirection(forward);
     forward.y = 0;
     forward.normalize();
     right.crossVectors(forward, camera.up).normalize();
 
-    displacement.set(0, 0, 0);
+    let ix = analogX;
+    let iy = analogY;
     if (keys.has("KeyW")) {
-      displacement.addScaledVector(forward, step);
+      iy += 1;
     }
     if (keys.has("KeyS")) {
-      displacement.addScaledVector(forward, -step);
+      iy -= 1;
     }
     if (keys.has("KeyD")) {
-      displacement.addScaledVector(right, step);
+      ix += 1;
     }
     if (keys.has("KeyA")) {
-      displacement.addScaledVector(right, -step);
+      ix -= 1;
     }
-    if (analogX !== 0 || analogY !== 0) {
-      displacement.addScaledVector(forward, step * analogY);
-      displacement.addScaledVector(right, step * analogX);
+    // Diagonals and stacked stick+key input move at walking speed, not √2x
+    // or 2x — this also keeps the collision ray budget honest (the budget is
+    // derived from the step length).
+    const len = Math.hypot(ix, iy);
+    if (len > 1) {
+      ix /= len;
+      iy /= len;
     }
+    displacement.set(0, 0, 0);
+    displacement.addScaledVector(forward, step * iy);
+    displacement.addScaledVector(right, step * ix);
     return displacement;
   };
 
@@ -124,6 +134,11 @@ export function createFpsMovement(
     update,
     press: (code) => keys.add(code),
     release: (code) => keys.delete(code),
+    releaseAll: () => {
+      keys.clear();
+      analogX = 0;
+      analogY = 0;
+    },
     setAnalog: (x, y) => {
       analogX = Math.min(Math.max(x, -1), 1);
       analogY = Math.min(Math.max(y, -1), 1);
