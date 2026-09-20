@@ -1,20 +1,32 @@
 /**
- * Prepares the tile block for the browser: copies the committed per-tile
- * artifacts from data/ into public/data/, and turns each DGM GeoTIFF into a
- * ready-to-upload heightfield (see lib/city/heightfield.ts) so the client
- * never decodes a 13 MB raster on the main thread. Runs ahead of `dev` and
- * `build`; public/data/ is gitignored to avoid duplicating ~100 MB in git.
+ * Prepares the tile block for the browser. Two stages:
+ *
+ *  1. **Bake** — every artifact the viewer may request (lib/city/tile.ts,
+ *     `tileArtifacts`) is either a committed per-tile file under data/ or is
+ *     produced here from one (the DGM GeoTIFF → heightfield, see
+ *     lib/city/heightfield.ts). Baked outputs live in `.cache/prepare-data/`
+ *     (gitignored) with mtime-based staleness, so a rerun is cheap.
+ *  2. **Publish** — each artifact is copied into `public/data/` under a
+ *     content-hashed name and `manifest.json` maps logical → hashed names.
+ *     Hashed names let `/data/*` be served as immutable (next.config.ts) while
+ *     a re-bake still reaches every client through the manifest. Stale files
+ *     in public/data/ are pruned, so a removed optional source really turns
+ *     its feature off instead of serving an old copy forever.
+ *
+ * Runs ahead of `dev` and `build`; public/data/ is gitignored.
  */
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { fromArrayBuffer } from "geotiff";
 import {
@@ -26,83 +38,52 @@ import {
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tfwToBounds } from "../lib/city/tfw";
 import {
+  type DataManifest,
   dgmSourceFiles,
   heightfieldDataFile,
   heightfieldHeaderFile,
+  MANIFEST_FILE,
   TILE_BLOCK,
   tileArtifacts,
 } from "../lib/city/tile";
 
-// The tile block and every per-tile artifact come from lib/city/tile.ts — the
-// one list the client requests from as well, so a tile or artifact added there
-// is prepared here. Land-cover/canopy/lamps/… are baked offline by the
-// scripts/extract-*.sh bakes; the raw downloads stay gitignored, only these
-// small per-tile outputs are committed + copied.
 const OUT_DIR = "public/data";
+const CACHE_DIR = ".cache/prepare-data";
+
+function fail(message: string): never {
+  process.stderr.write(`prepare-data: ${message}\n`);
+  process.exit(1);
+}
+
+function log(message: string): void {
+  process.stdout.write(`prepare-data: ${message}\n`);
+}
+
+// --- bake: copies ---------------------------------------------------------
+
+/** Logical artifact name → the on-disk file to publish from (source or cache). */
+const toPublish = new Map<string, string>();
 
 const artifacts = TILE_BLOCK.flatMap((spec) =>
   Object.values(tileArtifacts(spec)).filter((a) => a.source !== null)
 );
-// The DGM is NOT copied: it is baked into a heightfield below.
-const copies: [string, string][] = artifacts
-  .filter((a) => a.required)
-  .map((a) => [`data/${a.source}/${a.file}`, join(OUT_DIR, a.file)]);
-// Optional artifacts: a tile may not have been baked yet — copy when present,
-// warn but never fail; the loader treats a missing file as "feature off".
-const optionalCopies: [string, string][] = artifacts
-  .filter((a) => !a.required)
-  .map((a) => [`data/${a.source}/${a.file}`, join(OUT_DIR, a.file)]);
-
-for (const [src, dest] of copies) {
-  const srcPath = join(process.cwd(), src);
-  const destPath = join(process.cwd(), dest);
-  if (!existsSync(srcPath)) {
-    process.stderr.write(`prepare-data: missing source file ${src}\n`);
-    process.exit(1);
+for (const artifact of artifacts) {
+  const src = join(process.cwd(), `data/${artifact.source}/${artifact.file}`);
+  if (existsSync(src)) {
+    toPublish.set(artifact.file, src);
+  } else if (artifact.required) {
+    fail(`missing source file data/${artifact.source}/${artifact.file}`);
+  } else {
+    // The loader treats a missing optional artifact as "feature off"; the
+    // prune below makes sure an earlier copy doesn't keep it on.
+    log(`optional source absent, skipping ${artifact.file}`);
   }
-  const upToDate =
-    existsSync(destPath) && statSync(destPath).size === statSync(srcPath).size;
-  if (upToDate) {
-    continue;
-  }
-  mkdirSync(dirname(destPath), { recursive: true });
-  copyFileSync(srcPath, destPath);
-  process.stdout.write(`prepare-data: copied ${src} -> ${dest}\n`);
 }
 
-for (const [src, dest] of optionalCopies) {
-  const srcPath = join(process.cwd(), src);
-  const destPath = join(process.cwd(), dest);
-  if (!existsSync(srcPath)) {
-    // public/data/ is persistent and gitignored, so a copy from an earlier bake
-    // would keep being served after its source was removed — the loader would
-    // never see the "feature off" fallback it is supposed to degrade to.
-    if (existsSync(destPath)) {
-      rmSync(destPath);
-      process.stdout.write(
-        `prepare-data: optional source gone, removed stale ${dest}\n`
-      );
-    } else {
-      process.stdout.write(
-        `prepare-data: optional source absent, skipping ${src}\n`
-      );
-    }
-    continue;
-  }
-  const upToDate =
-    existsSync(destPath) && statSync(destPath).size === statSync(srcPath).size;
-  if (upToDate) {
-    continue;
-  }
-  mkdirSync(dirname(destPath), { recursive: true });
-  copyFileSync(srcPath, destPath);
-  process.stdout.write(`prepare-data: copied ${src} -> ${dest}\n`);
-}
-
-// --- DGM -> heightfield -------------------------------------------------
+// --- bake: DGM -> heightfield ---------------------------------------------
 // The browser used to fetch each tile's 13.6 MB GeoTIFF and resample it on the
 // main thread (~0.6 s per tile, x4 tiles). Doing it here leaves the client with
-// a header plus a raw float32 grid it can upload as is.
+// a header plus a gzipped uint16 grid it dequantises in one pass.
 
 /** True when getBoundingBox() returned pixel indices instead of map units. */
 function isPixelSpaceBounds(
@@ -117,11 +98,6 @@ function isPixelSpaceBounds(
     Math.abs(maxX - width) <= 1 &&
     Math.abs(maxY - height) <= 1
   );
-}
-
-function fail(message: string): never {
-  process.stderr.write(`prepare-data: ${message}\n`);
-  process.exit(1);
 }
 
 function readArrayBuffer(path: string): ArrayBuffer {
@@ -163,7 +139,7 @@ function isStale(dest: string, ...sources: string[]): boolean {
   );
 }
 
-/** A previously written header is only reusable if it still parses at this version. */
+/** A cached header is only reusable if it still parses at this version. */
 function headerIsCurrent(path: string): boolean {
   try {
     return (
@@ -180,14 +156,14 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
   const tifPath = join(process.cwd(), source.tif);
   const tfwPath = join(process.cwd(), source.tfw);
   if (!existsSync(tifPath)) {
-    fail(`missing source file ${tifPath}`);
+    fail(`missing source file ${source.tif}`);
   }
-  const headerPath = join(
-    process.cwd(),
-    OUT_DIR,
-    heightfieldHeaderFile(tile, n)
-  );
-  const dataPath = join(process.cwd(), OUT_DIR, heightfieldDataFile(tile, n));
+  const headerName = heightfieldHeaderFile(tile, n);
+  const dataName = heightfieldDataFile(tile, n);
+  const headerPath = join(process.cwd(), CACHE_DIR, headerName);
+  const dataPath = join(process.cwd(), CACHE_DIR, dataName);
+  toPublish.set(headerName, headerPath);
+  toPublish.set(dataName, dataPath);
   const stale =
     isStale(headerPath, tifPath, tfwPath) ||
     isStale(dataPath, tifPath, tfwPath) ||
@@ -226,7 +202,8 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
     version: HEIGHTFIELD_VERSION,
     n,
     bounds,
-    data: heightfieldDataFile(tile, n),
+    // Logical sibling name; publish() rewrites it to the hashed one.
+    data: dataName,
     zMin: encoded.zMin,
     zScale: encoded.zScale,
   };
@@ -235,11 +212,92 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
   // browser inflates it natively (DecompressionStream) — see heightfield.ts.
   writeFileSync(dataPath, gzipSync(Buffer.from(encoded.samples.buffer)));
   writeFileSync(headerPath, `${JSON.stringify(header, null, 2)}\n`);
-  process.stdout.write(
-    `prepare-data: built ${heightfieldHeaderFile(tile, n)} (${n}x${n} from ${width}x${height}, bounds [${bounds.join(", ")}])\n`
+  log(
+    `built ${headerName} (${n}x${n} from ${width}x${height}, bounds [${bounds.join(", ")}])`
   );
 }
 
 for (const { tile, n } of TILE_BLOCK) {
   await bakeHeightfield(tile, n);
 }
+
+// --- publish: hashed names + manifest -------------------------------------
+
+/** `name.ext` → `name.<8 hex of sha1(content)>.ext` (`.u16.gz` keeps both). */
+function hashedName(file: string, content: Buffer): string {
+  const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
+  const ext = file.endsWith(".u16.gz") ? ".u16.gz" : extname(file);
+  const stem = basename(file, ext);
+  return `${stem}.${hash}${ext}`;
+}
+
+const outDir = join(process.cwd(), OUT_DIR);
+mkdirSync(outDir, { recursive: true });
+const manifest: DataManifest = { version: 1, files: {} };
+const keep = new Set<string>([MANIFEST_FILE]);
+let published = 0;
+
+/** Publishes one artifact; `content` overrides the file on disk when given. */
+function publish(logical: string, path: string, content?: Buffer): void {
+  const bytes = content ?? readFileSync(path);
+  const hashed = hashedName(logical, bytes);
+  manifest.files[logical] = hashed;
+  keep.add(hashed);
+  const dest = join(outDir, hashed);
+  if (existsSync(dest)) {
+    return;
+  }
+  if (content) {
+    writeFileSync(dest, content);
+  } else {
+    copyFileSync(path, dest);
+  }
+  published++;
+}
+
+// Data files first: a heightfield header names its data sibling, so the
+// header can only be published once the data's hashed name is known.
+const headerNames = new Set(
+  TILE_BLOCK.map(({ tile, n }) => heightfieldHeaderFile(tile, n))
+);
+for (const [logical, path] of toPublish) {
+  if (!headerNames.has(logical)) {
+    publish(logical, path);
+  }
+}
+for (const [logical, path] of toPublish) {
+  if (headerNames.has(logical)) {
+    const header = parseHeightfieldHeader(
+      JSON.parse(readFileSync(path, "utf8"))
+    );
+    const data = manifest.files[header.data];
+    if (!data) {
+      fail(
+        `heightfield header ${logical} names unpublished data ${header.data}`
+      );
+    }
+    publish(
+      logical,
+      path,
+      Buffer.from(`${JSON.stringify({ ...header, data }, null, 2)}\n`)
+    );
+  }
+}
+
+writeFileSync(
+  join(outDir, MANIFEST_FILE),
+  `${JSON.stringify(manifest, null, 2)}\n`
+);
+
+// Prune whatever the manifest no longer references (old hashes, removed
+// optional sources, the pre-manifest flat copies).
+let pruned = 0;
+for (const entry of readdirSync(outDir)) {
+  if (!keep.has(entry)) {
+    rmSync(join(outDir, entry), { recursive: true });
+    pruned++;
+  }
+}
+log(
+  `${Object.keys(manifest.files).length} artifacts in ${OUT_DIR} (${published} new, ${pruned} pruned)`
+);

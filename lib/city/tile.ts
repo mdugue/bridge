@@ -141,3 +141,39 @@ export function dgmSourceFiles(tile: string): { tif: string; tfw: string } {
   const dir = `data/dgm/dgm1_${tile}_tiff`;
   return { tif: `${dir}/dgm1_${tile}.tif`, tfw: `${dir}/dgm1_${tile}.tfw` };
 }
+
+/**
+ * `public/data/manifest.json`, written by scripts/prepare-data.ts: maps each
+ * artifact's logical file name (the names above) to the content-hashed name
+ * it is actually served under. Hashed names let `/data/*` be cached as
+ * immutable (see next.config.ts) while a re-bake still reaches every client
+ * through the manifest, which is the one file served with `no-cache`.
+ */
+export const MANIFEST_FILE = "manifest.json";
+
+export interface DataManifest {
+  files: Record<string, string>;
+  version: 1;
+}
+
+/** Resolves a logical artifact name through the manifest (unknown → as is). */
+export function manifestUrl(
+  manifest: DataManifest | null,
+  file: string,
+  base = "/data"
+): string {
+  return `${base}/${manifest?.files[file] ?? file}`;
+}
+
+/** The artifact map as served URLs, resolved through the manifest. */
+export function tileUrlsFrom(
+  spec: TileSpec,
+  manifest: DataManifest | null,
+  base = "/data"
+): Record<TileArtifactKind, string> {
+  const out = {} as Record<TileArtifactKind, string>;
+  for (const [kind, artifact] of Object.entries(tileArtifacts(spec))) {
+    out[kind as TileArtifactKind] = manifestUrl(manifest, artifact.file, base);
+  }
+  return out;
+}

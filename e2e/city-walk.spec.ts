@@ -77,6 +77,17 @@ async function waitForFrames(page: Page, count: number): Promise<void> {
   );
 }
 
+/**
+ * Resolves a logical /data artifact name to its content-hashed URL through
+ * the manifest scripts/prepare-data.ts publishes (see lib/city/tile.ts).
+ */
+async function dataUrl(page: Page, file: string): Promise<string> {
+  const manifest = (await (
+    await page.request.get("/data/manifest.json")
+  ).json()) as { files: Record<string, string> };
+  return `/data/${manifest.files[file] ?? file}`;
+}
+
 /** True when the browser has WebGL at all (render assertions need it). */
 function hasWebGl(page: Page): Promise<boolean> {
   return page.evaluate(() => {
@@ -277,7 +288,9 @@ test.describe("desktop viewer", () => {
     // minimap's 2369 footprint polygons, and a main thread busy with that
     // makes Playwright's actionability checks on the minimap crawl.
     const cityDoc = (await (
-      await page.request.get("/data/lod2_33412_5656_2_sn.city.json")
+      await page.request.get(
+        await dataUrl(page, "lod2_33412_5656_2_sn.city.json")
+      )
     ).json()) as {
       CityObjects: Record<
         string,
