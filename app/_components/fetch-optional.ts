@@ -71,6 +71,12 @@ export async function fetchGzipped(
   if (!res.body) {
     throw new Error(`Failed to fetch ${url}: empty body`);
   }
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error(
+      "This browser cannot inflate the tile data (no DecompressionStream; " +
+        "needs Safari 16.4+, Chrome 80+, Firefox 113+)."
+    );
+  }
   const inflated = res.body.pipeThrough(new DecompressionStream("gzip"));
   return await new Response(inflated).arrayBuffer();
 }

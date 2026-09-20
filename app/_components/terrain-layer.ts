@@ -10,6 +10,7 @@ import {
   NoColorSpace,
   SRGBColorSpace,
   Texture,
+  TextureLoader,
   type Vector3,
 } from "three";
 import {
@@ -77,6 +78,11 @@ export interface TerrainOptions {
  * first frame only pays the GPU upload. Rejects on a decode/network failure.
  */
 async function loadBitmapTexture(url: string): Promise<Texture> {
+  if (typeof createImageBitmap === "undefined") {
+    const texture = await new TextureLoader().loadAsync(url);
+    texture.flipY = false;
+    return texture;
+  }
   const loader = new ImageBitmapLoader();
   loader.setOptions({
     imageOrientation: "none",
@@ -87,6 +93,15 @@ async function loadBitmapTexture(url: string): Promise<Texture> {
   const texture = new Texture(bitmap);
   texture.flipY = false;
   texture.needsUpdate = true;
+  // The decoded bitmap is 64 MB for a 4096² raster and, unlike an <img>'s
+  // purgeable decode cache, stays resident as long as three holds it in
+  // `texture.image`. Twelve of them took mobile Safari past its per-tab
+  // memory limit. Once the GPU has the texels the CPU copy is dead weight:
+  // release it right after the upload (mipmaps are generated on the GPU).
+  texture.onUpdate = () => {
+    bitmap.close();
+    texture.onUpdate = null;
+  };
   return texture;
 }
 
@@ -415,13 +430,19 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
 
-  const [splatTexture, colorTexture, ndviTexture] = opts.landcoverUrl
-    ? await Promise.all([
-        loadSplatTexture(opts.landcoverUrl),
-        opts.landcoverRgbUrl ? loadColorSplat(opts.landcoverRgbUrl) : null,
-        opts.ndviUrl ? loadNdviTexture(opts.ndviUrl) : null,
-      ])
-    : [null, null, null];
+  // Decoded one after another on purpose: three 4096² rasters decoding at
+  // once (times four tiles loading concurrently) is a ~800 MB peak that
+  // mobile Safari kills the tab for. Sequential keeps it to one raster's
+  // worth per tile in flight.
+  const splatTexture = opts.landcoverUrl
+    ? await loadSplatTexture(opts.landcoverUrl)
+    : null;
+  const colorTexture =
+    splatTexture && opts.landcoverRgbUrl
+      ? await loadColorSplat(opts.landcoverRgbUrl)
+      : null;
+  const ndviTexture =
+    splatTexture && opts.ndviUrl ? await loadNdviTexture(opts.ndviUrl) : null;
   const splat: SplatLayer | undefined = splatTexture
     ? {
         texture: splatTexture,
