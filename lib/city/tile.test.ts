@@ -16,7 +16,7 @@ test("the artifact map reproduces the served file names", () => {
     "dgm1_33412_5656_2_sn.heightfield-1024.json"
   );
   expect(a.heightfieldData.file).toBe(
-    "dgm1_33412_5656_2_sn.heightfield-1024.f32"
+    "dgm1_33412_5656_2_sn.heightfield-1024.u16.gz"
   );
   expect(a.walls.file).toBe("walls_33412_5656_2_sn.geojson");
   expect(a.roofColor.file).toBe("roofcolor_33412_5656_2_sn.json");

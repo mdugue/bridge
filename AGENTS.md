@@ -53,7 +53,7 @@ and enforces a complexity cap; extract helpers rather than fighting it. No
   ground-clamp) with `bun test` units alongside
 - `scripts/` — `extract-dlm.sh`, `extract-canopy.sh` (offline data bakes) and
   `prepare-data.ts` (copies committed artifacts into `public/data` at build and
-  bakes each DGM GeoTIFF into a float32 heightfield — see `lib/city/heightfield.ts`)
+  bakes each DGM GeoTIFF into a gzipped uint16 heightfield — see `lib/city/heightfield.ts`)
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
 - `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)

@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { gzipSync } from "node:zlib";
 import { fromArrayBuffer } from "geotiff";
 import {
   encodeHeightfield,
@@ -217,7 +218,7 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
     fail(`unexpected raster shape for ${tile}`);
   }
   // reason: geotiff types the result as TypedArray | TypedArray[]; isView narrowed it above
-  const samples = encodeHeightfield(
+  const encoded = encodeHeightfield(
     raster as unknown as ArrayLike<number>,
     image.getGDALNoData()
   );
@@ -226,9 +227,13 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
     n,
     bounds,
     data: heightfieldDataFile(tile, n),
+    zMin: encoded.zMin,
+    zScale: encoded.zScale,
   };
   mkdirSync(dirname(dataPath), { recursive: true });
-  writeFileSync(dataPath, Buffer.from(samples.buffer));
+  // Pre-gzipped: static hosts don't compress binary MIME types, and the
+  // browser inflates it natively (DecompressionStream) — see heightfield.ts.
+  writeFileSync(dataPath, gzipSync(Buffer.from(encoded.samples.buffer)));
   writeFileSync(headerPath, `${JSON.stringify(header, null, 2)}\n`);
   process.stdout.write(
     `prepare-data: built ${heightfieldHeaderFile(tile, n)} (${n}x${n} from ${width}x${height}, bounds [${bounds.join(", ")}])\n`

@@ -20,9 +20,9 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 ### Geometry & ground
 - **Terrain heightfield** — DGM1 → triangulated heightfield + edge skirt to hide
   inter-tile seams. The GeoTIFF is resampled **at build time**
-  (`scripts/prepare-data.ts` → `<tile>.heightfield-<n>.json` + `.f32`, primary
+  (`scripts/prepare-data.ts` → `<tile>.heightfield-<n>.json` + `.u16.gz`, primary
   tile 1024², neighbours 512², NoData stored as NaN — see
-  `lib/city/heightfield.ts`); the browser fetches the float32 grid and never
+  `lib/city/heightfield.ts`); the browser fetches the gzipped uint16 (cm) grid and never
   decodes a raster. `terrain-layer.ts`, `lib/city/terrain-geometry.ts`.
 - **Surface splatmap** — Basis-DLM land-cover → 4096² RGBA PNG (RGB = pastel
   palette per class, A = water coverage), sampled with anisotropy 16.

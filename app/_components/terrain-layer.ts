@@ -130,7 +130,8 @@ async function loadNdviTexture(url: string): Promise<Texture | null> {
   }
 }
 
-async function fetchArrayBuffer(
+/** Fetches a pre-gzipped binary artifact and inflates it in the browser. */
+async function fetchGzipped(
   url: string,
   signal?: AbortSignal
 ): Promise<ArrayBuffer> {
@@ -138,7 +139,11 @@ async function fetchArrayBuffer(
   if (!res.ok) {
     throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
   }
-  return await res.arrayBuffer();
+  if (!res.body) {
+    throw new Error(`Failed to fetch ${url}: empty body`);
+  }
+  const inflated = res.body.pipeThrough(new DecompressionStream("gzip"));
+  return await new Response(inflated).arrayBuffer();
 }
 
 async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
@@ -380,18 +385,16 @@ function createTerrainMaterial(
 
 export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   // The raster arrives ready to use: scripts/prepare-data.ts resampled the DGM
-  // GeoTIFF to n x n float32 at build time and stored NoData as NaN, so there
-  // is nothing to decode here and no nodata sentinel to carry around.
+  // GeoTIFF to n x n at build time (quantised uint16, gzipped); decoding it
+  // is one dequantising pass and NoData comes out as NaN, so there is no
+  // nodata sentinel to carry around.
   const header = parseHeightfieldHeader(await fetchJson(opts.url, opts.signal));
   const { n, bounds } = header;
   /** Holes are NaN in the baked samples, so there is no sentinel to match. */
   const nodata: number | null = null;
   const samples = decodeHeightfield(
-    await fetchArrayBuffer(
-      resolveSiblingUrl(opts.url, header.data),
-      opts.signal
-    ),
-    n
+    await fetchGzipped(resolveSiblingUrl(opts.url, header.data), opts.signal),
+    header
   );
   const elevations = conflateTerrain(
     samples,
