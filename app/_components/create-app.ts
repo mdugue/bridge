@@ -757,15 +757,11 @@ async function bootApp(
     }
   });
 
-  opts.onProgress?.("Indexing terrain…");
-  await nextPaint();
-  // BVH for the 10 Hz autofocus ray and for double-tap travel. Building it
-  // once costs ~0.2 s per tile; without it every raycast brute-forces ~522k
-  // triangles (~50 ms each on desktop) — and the autofocus ray walks the whole
-  // 2x2 block, so every tile needs one, not just the primary.
-  for (const mesh of terrainMeshes) {
-    mesh.geometry.computeBoundsTree();
-  }
+  // Terrain BVHs (for the 10 Hz autofocus ray and double-tap travel) are
+  // built AFTER the first frame, one tile per idle slot — see indexTerrain
+  // below. They cost ~1.5 s of main thread for the block and nothing the
+  // first frame needs depends on them.
+  const indexedTerrain: Mesh[] = [];
 
   world.updateMatrixWorld(true);
   const worldBounds = new Box3().setFromObject(world);
@@ -1124,14 +1120,17 @@ async function bootApp(
   // (neighbour-tile) silhouette hits nothing and autofocus falls back — so the
   // far city blurred. The primary cityLayer.group is prepended fresh each call
   // because demolish swaps it.
-  const focusContext = [...extraCities.map((c) => c.group), ...terrainMeshes];
+  // Terrain joins as each tile's BVH lands (indexedTerrain): a brute-force
+  // ray through ~2M unindexed triangles ten times a second would freeze the
+  // first seconds, and the DoF merely focuses on buildings until then.
+  const focusCityContext = extraCities.map((c) => c.group);
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
     const targets = inserted
-      ? [cityLayer.group, inserted, ...focusContext]
-      : [cityLayer.group, ...focusContext];
+      ? [cityLayer.group, inserted, ...focusCityContext, ...indexedTerrain]
+      : [cityLayer.group, ...focusCityContext, ...indexedTerrain];
     const hit = focusRaycaster.intersectObjects(targets, true)[0];
     lastFocusHit = hit
       ? {
@@ -1232,6 +1231,28 @@ async function bootApp(
     tickPocFrame();
   });
   cleanups.push(() => renderer.setAnimationLoop(null));
+
+  // Build the terrain BVHs off the critical path: one tile per idle slot,
+  // primary first, starting once the loop is running. Until a tile is indexed
+  // the double-tap ray still hits it (three-mesh-bvh falls back to the plain
+  // raycast), only slower; the autofocus ray waits (see updateFocus).
+  const idle = (fn: () => void): void => {
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(fn, { timeout: 1500 });
+    } else {
+      setTimeout(fn, 50);
+    }
+  };
+  const indexTerrain = () => {
+    const mesh = terrainMeshes[indexedTerrain.length];
+    if (disposed || !mesh) {
+      return;
+    }
+    mesh.geometry.computeBoundsTree();
+    indexedTerrain.push(mesh);
+    idle(indexTerrain);
+  };
+  idle(indexTerrain);
 
   emitStats();
 
