@@ -9,8 +9,8 @@ import {
   Vector2,
 } from "three";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { fetchFeatures } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { fetchFeatures } from "./vegetation-layer";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as

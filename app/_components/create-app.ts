@@ -40,6 +40,7 @@ import {
   pickCityObjectId,
 } from "./city-layer";
 import { createCityCollider } from "./collision";
+import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { createInsertedBuilding } from "./inserted-building";
@@ -58,6 +59,8 @@ import {
   DEFAULT_MEADOW_NDVI,
   loadTerrain,
   type TerrainLayer,
+  type WallFeature,
+  wallLinesFrom,
 } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
 import { attachTouchControls } from "./touch-controls";
@@ -125,41 +128,46 @@ export interface CameraState {
   pos: { x: number; y: number; z: number };
 }
 
-/** A neighbouring tile loaded for visual context (no collision/demolish). */
+/**
+ * Every URL one tile may be loaded from (built from `tileUrls()` in
+ * lib/city/tile.ts). The primary tile is walked on, collided with and
+ * demolished from; neighbours are visual context only.
+ */
 export interface TileSrc {
   /** optional baked bridge-deck GeoJSON (Basis-DLM + DGM/DOM1 heights) */
   bridgeSrc?: string;
+  /** optional DOM1-derived canopy points (trees scaled to measured height) */
+  canopySrc?: string;
   citySrc: string;
   /** URL of this tile's heightfield header JSON (see lib/city/heightfield.ts) */
   demSrc: string;
   /** optional OSM street-lamp GeoJSON (ODbL); absent/404 = no lamps */
   lampsSrc?: string;
+  /** optional pre-baked pastel RGB splat (needs `landcoverSrc`) */
+  landcoverRgbSrc?: string;
   landcoverSrc?: string;
+  /** optional DOP NDVI raster (meadow tint + crown colour) */
+  ndviSrc?: string;
   /** optional OSM station-platform GeoJSON (ODbL) */
   platformSrc?: string;
   /** optional baked dissolved ballast-area GeoJSON (Basis-DLM ver03_f) */
   railareaSrc?: string;
   /** optional baked railway-track GeoJSON (Basis-DLM ver03_l, heavy rail) */
   railSrc?: string;
+  /** optional DOP-sampled per-building roof colours (else synthesized) */
+  roofColorSrc?: string;
   vegetationSrc?: string;
+  /** optional OSM retaining/city walls (ODbL): terrain step + ribbon */
+  wallsSrc?: string;
 }
 
 export interface CityWalkOptions {
-  /** optional baked bridge-deck GeoJSON for the primary tile */
-  bridgeSrc?: string;
-  citySrc: string;
   container: HTMLElement;
-  /** URL of the primary tile's heightfield header JSON */
-  demSrc: string;
   /** neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   initialDate: Date;
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
-  /** optional OSM street-lamp GeoJSON (ODbL) for the primary tile */
-  lampsSrc?: string;
-  /** optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
-  landcoverSrc?: string;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
   onFps?: (fps: number) => void;
   onModeChange?: (mode: MovementMode) => void;
@@ -167,20 +175,14 @@ export interface CityWalkOptions {
   onPose?: (pose: PlayerPose) => void;
   onProgress?: (message: string) => void;
   onStats?: (stats: CityWalkStats) => void;
-  /** optional OSM station-platform GeoJSON (ODbL) for the primary tile */
-  platformSrc?: string;
-  /** optional baked dissolved ballast-area GeoJSON for the primary tile */
-  railareaSrc?: string;
-  /** optional baked railway-track GeoJSON for the primary tile */
-  railSrc?: string;
+  /** the spawn tile: walked on, collided with, demolished from */
+  primary: TileSrc;
   /**
    * Aborts startup mid-load (React StrictMode mounts effects twice in dev;
    * without this the doomed first instance would finish loading 19 MB of
    * tile data and leave a second canvas around until then).
    */
   signal?: AbortSignal;
-  /** optional ATKIS veg04 GeoJSON for hedges + tree rows */
-  vegetationSrc?: string;
 }
 
 export interface CityWalkHandle {
@@ -361,33 +363,31 @@ async function fetchCityJson(
 
 /**
  * Optional per-building roof colours baked from the DOP orthophoto
- * (`roofcolor_<tile>.json`, derived from the tile's `lod2_<tile>.city.json`
- * URL). Absent/404 → undefined, and the roof falls back to the synthesized
- * terracotta/slate palette (graceful degradation — see docs/portability.md).
+ * (`roofcolor_<tile>.json`). Absent/404 → undefined, and the roof falls back
+ * to the synthesized terracotta/slate palette (graceful degradation — see
+ * docs/portability.md).
  */
 async function fetchRoofLut(
-  citySrc: string,
+  url: string | undefined,
   signal?: AbortSignal
 ): Promise<RoofColorLut | undefined> {
-  const url = citySrc
-    .replace("lod2_", "roofcolor_")
-    .replace(".city.json", ".json");
-  if (url === citySrc) {
+  if (!url) {
     return;
   }
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return;
-    }
-    const doc = (await res.json()) as { roofs?: RoofColorLut };
-    return doc.roofs;
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw err;
-    }
-    return;
-  }
+  const doc = await fetchOptionalJson<{ roofs?: RoofColorLut }>(url, signal);
+  return doc?.roofs;
+}
+
+/**
+ * Lets React commit and paint the progress message before a long synchronous
+ * stretch (parse, BVH, shader setup). Without this yield the overlay shows the
+ * PREVIOUS message throughout — the state update is queued, but the main
+ * thread never gets to render it until the stretch is over.
+ */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+  });
 }
 
 /**
@@ -502,12 +502,16 @@ async function bootApp(
   const profile = currentSceneProfile();
   const neighbourTiles = profile === "lite" ? [] : (opts.extraTiles ?? []);
 
+  const primary = opts.primary;
   opts.onProgress?.("Loading CityJSON tile…");
-  const cityData = await fetchCityJson(opts.citySrc, opts.signal);
-  const roofLut = await fetchRoofLut(opts.citySrc, opts.signal);
+  const [cityData, roofLut] = await Promise.all([
+    fetchCityJson(primary.citySrc, opts.signal),
+    fetchRoofLut(primary.roofColorSrc, opts.signal),
+  ]);
   ensureAlive();
 
   opts.onProgress?.("Parsing buildings…");
+  await nextPaint();
   let cityLayer: CityLayer = createCityLayer(cityData, world, null, roofLut);
   const offset = recenterOffset(cityLayer.matrix);
 
@@ -547,16 +551,28 @@ async function bootApp(
     lampLights?.dispose();
   });
 
+  interface TileScene {
+    terrain: TerrainLayer;
+    /** this tile's OSM walls, fetched once for conflation AND the ribbons */
+    wallFeatures: WallFeature[];
+  }
+
   // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
-  const loadTileScene = async (tile: TileSrc): Promise<TerrainLayer> => {
+  const loadTileScene = async (tile: TileSrc): Promise<TileScene> => {
+    // OSM walls feed two consumers — the heightfield step (conflation) and
+    // the ribbon geometry built for the whole block later — so fetch once.
+    const wallFeatures = await fetchFeatures<WallFeature>(
+      tile.wallsSrc,
+      opts.signal
+    );
     const t = await loadTerrain({
       url: tile.demSrc,
       landcoverUrl: tile.landcoverSrc,
+      landcoverRgbUrl: tile.landcoverRgbSrc,
+      ndviUrl: tile.ndviSrc,
       // Retaining/city walls are burned into THIS tile's heightfield as steps so
       // the ground breaks at the wall instead of the DGM's smooth bank.
-      wallLinesUrl: tile.landcoverSrc
-        ?.replace("landcover_", "walls_")
-        .replace(".png", ".geojson"),
+      wallLines: wallLinesFrom(wallFeatures),
       offset,
       signal: opts.signal,
       sunDirection,
@@ -573,10 +589,8 @@ async function bootApp(
       const vegetation = await loadVegetation(tile.vegetationSrc, {
         offset,
         heightAt: t.heightAt,
-        canopyUrl: tile.vegetationSrc.replace("vegrows_", "canopy_"),
-        ndviUrl: tile.vegetationSrc
-          .replace("vegrows_", "ndvi_")
-          .replace(".geojson", ".png"),
+        canopyUrl: tile.canopySrc,
+        ndviUrl: tile.ndviSrc,
         bounds: t.bounds,
         signal: opts.signal,
         sunDirection,
@@ -599,17 +613,12 @@ async function bootApp(
     // NB: rails/bridges/ballast are NOT loaded here — they are built ONCE for the
     // whole tile block below, on the cross-tile heightAt, so tracks run
     // continuously across tile seams instead of truncating at each tile edge.
-    return t;
+    return { terrain: t, wallFeatures };
   };
 
   opts.onProgress?.("Loading DGM terrain…");
-  const terrain = await loadTileScene({
-    citySrc: opts.citySrc,
-    demSrc: opts.demSrc,
-    landcoverSrc: opts.landcoverSrc,
-    vegetationSrc: opts.vegetationSrc,
-    lampsSrc: opts.lampsSrc,
-  });
+  const primaryScene = await loadTileScene(primary);
+  const terrain = primaryScene.terrain;
   ensureAlive();
   assertCityOnTerrain(offset, terrain);
 
@@ -617,19 +626,35 @@ async function bootApp(
   // line up; terrain/water/trees load the same way. Collision and demolish
   // stay on the primary tile (these are passive visual context).
   const terrains: TerrainLayer[] = [terrain];
+  const wallFeaturesByTile: WallFeature[][] = [primaryScene.wallFeatures];
   const extraCities: CityLayer[] = [];
-  for (const tile of neighbourTiles) {
+  if (neighbourTiles.length > 0) {
     opts.onProgress?.("Loading neighbouring tiles…");
-    const data = await fetchCityJson(tile.citySrc, opts.signal);
-    const tileRoofLut = await fetchRoofLut(tile.citySrc, opts.signal);
-    ensureAlive();
-    extraCities.push(
-      createCityLayer(data, world, cityLayer.matrix, tileRoofLut)
+    // Fetch every neighbour's documents at once (network overlaps the
+    // main-thread parse below), then parse in tile order so the batched
+    // meshes are deterministic.
+    const docs = await Promise.all(
+      neighbourTiles.map((tile) =>
+        Promise.all([
+          fetchCityJson(tile.citySrc, opts.signal),
+          fetchRoofLut(tile.roofColorSrc, opts.signal),
+        ])
+      )
     );
+    ensureAlive();
+    for (const [data, tileRoofLut] of docs) {
+      extraCities.push(
+        createCityLayer(data, world, cityLayer.matrix, tileRoofLut)
+      );
+    }
+    // Terrain / water / vegetation / lamps per neighbour, concurrently.
+    // Promise.all preserves order, which landcoverTiles below relies on.
     // Neighbours are background — their heightfield is baked at half the
     // primary's resolution (~4 m), see lib/city/tile.ts.
-    terrains.push(await loadTileScene(tile));
+    const scenes = await Promise.all(neighbourTiles.map(loadTileScene));
     ensureAlive();
+    terrains.push(...scenes.map((sc) => sc.terrain));
+    wallFeaturesByTile.push(...scenes.map((sc) => sc.wallFeatures));
   }
 
   // Single fixed pool of real point lights for the nearest lamps across ALL
@@ -658,15 +683,7 @@ async function bootApp(
   // block on the cross-tile `heightAt`, so a track crossing a tile seam samples
   // the neighbour's heightfield instead of being dropped at the edge. Merges all
   // tiles' baked GeoJSONs; non-fatal (missing files yield nothing).
-  const railTiles = [
-    {
-      railSrc: opts.railSrc,
-      bridgeSrc: opts.bridgeSrc,
-      platformSrc: opts.platformSrc,
-      railareaSrc: opts.railareaSrc,
-    },
-    ...neighbourTiles,
-  ];
+  const railTiles = [primary, ...neighbourTiles];
   const railUrls = railTiles
     .map((t) => t.railSrc)
     .filter((u) => u !== undefined);
@@ -695,20 +712,14 @@ async function bootApp(
 
   // OSM retaining/city walls (e.g. the Brühlsche Terrasse) — the monumental
   // walls the elevation data smooths away. Built ONCE for the block on the
-  // cross-tile heightAt; the URL is derived from each tile's land-cover URL.
-  const wallUrls = [
-    opts.landcoverSrc,
-    ...neighbourTiles.map((t) => t.landcoverSrc),
-  ]
-    .filter((u): u is string => u !== undefined)
-    .map((u) => u.replace("landcover_", "walls_").replace(".png", ".geojson"));
-  if (wallUrls.length > 0) {
+  // cross-tile heightAt, from the features each tile already fetched.
+  const wallFeatures = wallFeaturesByTile.flat();
+  if (wallFeatures.length > 0) {
     opts.onProgress?.("Building walls…");
-    const walls = await loadWalls({
+    const walls = loadWalls({
       offset,
       heightAt,
-      wallUrls,
-      signal: opts.signal,
+      wallFeatures,
       heightFog,
     });
     scene.add(walls.group);
@@ -734,8 +745,8 @@ async function bootApp(
 
   // Per-tile land-cover PNGs + bounds so the minimap can place each correctly.
   const landcoverTiles: { bounds: TerrainBounds; src: string }[] = [];
-  if (opts.landcoverSrc) {
-    landcoverTiles.push({ src: opts.landcoverSrc, bounds: terrain.bounds });
+  if (primary.landcoverSrc) {
+    landcoverTiles.push({ src: primary.landcoverSrc, bounds: terrain.bounds });
   }
   neighbourTiles.forEach((t, i) => {
     if (t.landcoverSrc) {
@@ -747,6 +758,7 @@ async function bootApp(
   });
 
   opts.onProgress?.("Indexing terrain…");
+  await nextPaint();
   // BVH for the 10 Hz autofocus ray and for double-tap travel. Building it
   // once costs ~0.2 s per tile; without it every raycast brute-forces ~522k
   // triangles (~50 ms each on desktop) — and the autofocus ray walks the whole
@@ -805,6 +817,7 @@ async function bootApp(
   setSun(opts.initialDate);
 
   opts.onProgress?.("Preparing render styles…");
+  await nextPaint();
   const styleResources = createStyleResources(heightFog, clayNight);
   cleanups.push(() => styleResources.dispose());
   // The neighbour tiles are as visible as the primary one — dress ALL of them,

@@ -18,7 +18,8 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
-import { fetchFeatures, type VegetationContext } from "./vegetation-layer";
+import { fetchFeatures } from "./fetch-optional";
+import type { VegetationContext } from "./vegetation-layer";
 
 /** Lamp post height (m). OSM rarely tags it; the bake defaults each lamp to 5 m. */
 const LAMP_H = 5;

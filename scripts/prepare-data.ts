@@ -25,48 +25,32 @@ import {
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tfwToBounds } from "../lib/city/tfw";
 import {
-  cityJsonFile,
+  dgmSourceFiles,
   heightfieldDataFile,
   heightfieldHeaderFile,
   TILE_BLOCK,
+  tileArtifacts,
 } from "../lib/city/tile";
 
-// The 2 x 2 block loaded by city-walk-client.tsx — same source of truth, so a
-// tile added there is prepared here. Land-cover/canopy are baked offline
-// (scripts/extract-dlm.sh + extract-canopy.sh); the raw downloads stay
-// gitignored, only these small per-tile outputs are committed + copied.
-const TILES = TILE_BLOCK.map((spec) => spec.tile);
+// The tile block and every per-tile artifact come from lib/city/tile.ts — the
+// one list the client requests from as well, so a tile or artifact added there
+// is prepared here. Land-cover/canopy/lamps/… are baked offline by the
+// scripts/extract-*.sh bakes; the raw downloads stay gitignored, only these
+// small per-tile outputs are committed + copied.
 const OUT_DIR = "public/data";
 
+const artifacts = TILE_BLOCK.flatMap((spec) =>
+  Object.values(tileArtifacts(spec)).filter((a) => a.source !== null)
+);
 // The DGM is NOT copied: it is baked into a heightfield below.
-const copies: [string, string][] = TILES.flatMap((tile) => [
-  [`data/cityjson/${cityJsonFile(tile)}`, join(OUT_DIR, cityJsonFile(tile))],
-  [`data/dlm/landcover_${tile}.png`, `public/data/landcover_${tile}.png`],
-  [
-    `data/dlm/landcover_rgb_${tile}.png`,
-    `public/data/landcover_rgb_${tile}.png`,
-  ],
-  [`data/dlm/vegrows_${tile}.geojson`, `public/data/vegrows_${tile}.geojson`],
-  [`data/dlm/canopy_${tile}.geojson`, `public/data/canopy_${tile}.geojson`],
-]);
-
-// Optional artifacts: street lamps (extract-lamps.sh, ODbL) and DOP-sampled
-// roof colours (extract-roof-colour.sh). A tile may not have been baked yet —
-// copy when present, warn but never fail; the loader treats a missing file as
-// "feature off" (lamps absent / roof colour falls back to the synth palette).
-const optionalCopies: [string, string][] = TILES.flatMap((tile) => [
-  [`data/dlm/lamps_${tile}.geojson`, `public/data/lamps_${tile}.geojson`],
-  [`data/dop/roofcolor_${tile}.json`, `public/data/roofcolor_${tile}.json`],
-  [`data/dlm/ndvi_${tile}.png`, `public/data/ndvi_${tile}.png`],
-  // Railway tracks + bridge decks (Basis-DLM) and OSM station platforms (ODbL),
-  // baked by scripts/extract-rail.sh.
-  [`data/dlm/rail_${tile}.geojson`, `public/data/rail_${tile}.geojson`],
-  [`data/dlm/bridge_${tile}.geojson`, `public/data/bridge_${tile}.geojson`],
-  [`data/dlm/railarea_${tile}.geojson`, `public/data/railarea_${tile}.geojson`],
-  [`data/dlm/platform_${tile}.geojson`, `public/data/platform_${tile}.geojson`],
-  // OSM retaining/city walls (extract-walls.sh, ODbL).
-  [`data/dlm/walls_${tile}.geojson`, `public/data/walls_${tile}.geojson`],
-]);
+const copies: [string, string][] = artifacts
+  .filter((a) => a.required)
+  .map((a) => [`data/${a.source}/${a.file}`, join(OUT_DIR, a.file)]);
+// Optional artifacts: a tile may not have been baked yet — copy when present,
+// warn but never fail; the loader treats a missing file as "feature off".
+const optionalCopies: [string, string][] = artifacts
+  .filter((a) => !a.required)
+  .map((a) => [`data/${a.source}/${a.file}`, join(OUT_DIR, a.file)]);
 
 for (const [src, dest] of copies) {
   const srcPath = join(process.cwd(), src);
@@ -191,14 +175,9 @@ function headerIsCurrent(path: string): boolean {
 }
 
 async function bakeHeightfield(tile: string, n: number): Promise<void> {
-  const tifPath = join(
-    process.cwd(),
-    `data/dgm/dgm1_${tile}_tiff/dgm1_${tile}.tif`
-  );
-  const tfwPath = join(
-    process.cwd(),
-    `data/dgm/dgm1_${tile}_tiff/dgm1_${tile}.tfw`
-  );
+  const source = dgmSourceFiles(tile);
+  const tifPath = join(process.cwd(), source.tif);
+  const tfwPath = join(process.cwd(), source.tfw);
   if (!existsSync(tifPath)) {
     fail(`missing source file ${tifPath}`);
   }

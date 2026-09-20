@@ -48,8 +48,9 @@ source upgrades a feature listed above.
    bash scripts/extract-roof-colour.sh <tile> # roof colour LUT (DOP) — experimental
    bun scripts/prepare-data.ts               # copy derived artifacts → public/data
    ```
-5. **List the tiles** in `scripts/prepare-data.ts` (`TILES`) and the loader's tile
-   block.
+5. **List the tiles** in `lib/city/tile.ts` (`TILE_BLOCK`); new per-tile
+   artifacts go into `tileArtifacts()` in the same file — `prepare-data.ts`
+   and the client both read it.
 6. **Verify on a real GPU** with the snapshot harness (see the skill's QA section)
    from oblique angles.
 7. **Record any new fallback** you had to add in the

@@ -26,9 +26,6 @@ import {
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
-/** Filename token swapped to find the RGB splat next to the class-id one. */
-const LANDCOVER_PREFIX = /landcover_/;
-
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
   bounds: TerrainBounds;
@@ -46,10 +43,14 @@ export interface TerrainOptions {
   /** shared valley height-fog uniforms (by reference); patched into the
    * terrain + water materials so the river/floor pools haze without a seam */
   heightFog?: HeightFogUniforms;
-  /** optional ATKIS land-cover splatmap (PNG), tinted per surface class */
+  /** optional pre-baked pastel RGB splat (needs `landcoverUrl`) */
+  landcoverRgbUrl?: string;
+  /** optional ATKIS land-cover class raster (PNG), tinted per surface class */
   landcoverUrl?: string;
   /** shared meadow-NDVI tint strength (by reference) for the HUD slider */
   meadowNdvi?: { value: number };
+  /** optional DOP NDVI raster for the meadow tint (needs `landcoverUrl`) */
+  ndviUrl?: string;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** aborts the raster download */
@@ -59,10 +60,10 @@ export interface TerrainOptions {
   /** URL of the heightfield header JSON (see lib/city/heightfield.ts); the
    * grid size and bounds come from it, baked by scripts/prepare-data.ts */
   url: string;
-  /** baked OSM wall lines (EPSG:25833) for this tile; retaining/city walls are
-   * burned into the heightfield as steps so they sit on a real edge, not the
-   * smooth bank the DGM blurs them into (see lib/city/terrain-conflate.ts) */
-  wallLinesUrl?: string;
+  /** OSM wall lines (EPSG:25833) for this tile, already fetched; retaining/city
+   * walls are burned into the heightfield as steps so they sit on a real edge,
+   * not the smooth bank the DGM blurs them into (lib/city/terrain-conflate.ts) */
+  wallLines?: WallLine[];
 }
 
 /**
@@ -102,16 +103,6 @@ async function loadColorSplat(url: string): Promise<Texture | null> {
   } catch {
     return null;
   }
-}
-
-/** Derives the RGB splatmap URL from the class-id URL (…/landcover_X → …_rgb_X). */
-function colorSplatUrl(classUrl: string): string {
-  return classUrl.replace(LANDCOVER_PREFIX, "landcover_rgb_");
-}
-
-/** Derives the DOP-NDVI raster URL from the class-id URL (…/landcover_X → ndvi_X). */
-function ndviSplatUrl(classUrl: string): string {
-  return classUrl.replace(LANDCOVER_PREFIX, "ndvi_");
 }
 
 /** Default meadow-NDVI tint strength (Wiesenfärbung): lush-green↔dry across the
@@ -158,49 +149,32 @@ async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
   return await res.json();
 }
 
-interface WallFeatureJson {
+/** A baked OSM wall feature (see wall-layer.ts / scripts/extract-walls.sh). */
+export interface WallFeature {
   geometry?: { coordinates?: [number, number][]; type?: string };
-  properties?: { kind?: string };
+  properties?: { h?: number; kind?: string };
 }
 
-/** Loads the baked wall LineStrings (EPSG:25833) for conflation. Non-fatal: a
- *  missing/404/empty file yields [] and the terrain is left as the plain DGM. */
-async function loadWallLines(
-  url: string,
-  signal?: AbortSignal
-): Promise<WallLine[]> {
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return [];
+/** Maps baked wall features to the LineStrings the conflation step burns in. */
+export function wallLinesFrom(features: WallFeature[]): WallLine[] {
+  const out: WallLine[] = [];
+  for (const f of features) {
+    const coords = f.geometry?.coordinates;
+    if (f.geometry?.type === "LineString" && Array.isArray(coords)) {
+      out.push({ coords, kind: f.properties?.kind ?? "wall" });
     }
-    const json = (await res.json()) as { features?: WallFeatureJson[] };
-    const out: WallLine[] = [];
-    for (const f of json.features ?? []) {
-      const coords = f.geometry?.coordinates;
-      if (f.geometry?.type === "LineString" && Array.isArray(coords)) {
-        out.push({ coords, kind: f.properties?.kind ?? "wall" });
-      }
-    }
-    return out;
-  } catch {
-    return [];
   }
+  return out;
 }
 
 /** Returns the DGM elevations with retaining/city walls burned in as steps, or
  *  the untouched raster when there are no wall lines for this tile. */
-async function conflateTerrain(
+function conflateTerrain(
   base: ArrayLike<number>,
   grid: { bounds: TerrainBounds; n: number; nodata: number | null },
-  wallLinesUrl: string | undefined,
-  signal?: AbortSignal
-): Promise<ArrayLike<number>> {
-  if (!wallLinesUrl) {
-    return base;
-  }
-  const walls = await loadWallLines(wallLinesUrl, signal);
-  if (walls.length === 0) {
+  walls: WallLine[] | undefined
+): ArrayLike<number> {
+  if (!walls || walls.length === 0) {
     return base;
   }
   return conflateWalls({ elevations: base, ...grid, walls });
@@ -419,11 +393,10 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
     ),
     n
   );
-  const elevations = await conflateTerrain(
+  const elevations = conflateTerrain(
     samples,
     { n, bounds, nodata },
-    opts.wallLinesUrl,
-    opts.signal
+    opts.wallLines
   );
 
   const { positions, indices, minElevation } = buildTerrainGeometryData({
@@ -443,8 +416,8 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   const [splatTexture, colorTexture, ndviTexture] = opts.landcoverUrl
     ? await Promise.all([
         loadSplatTexture(opts.landcoverUrl),
-        loadColorSplat(colorSplatUrl(opts.landcoverUrl)),
-        loadNdviTexture(ndviSplatUrl(opts.landcoverUrl)),
+        opts.landcoverRgbUrl ? loadColorSplat(opts.landcoverRgbUrl) : null,
+        opts.ndviUrl ? loadNdviTexture(opts.ndviUrl) : null,
       ])
     : [null, null, null];
   const splat: SplatLayer | undefined = splatTexture

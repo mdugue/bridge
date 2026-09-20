@@ -14,6 +14,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { fetchFeatures, isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /** Tile extent in the projected CRS: [minX, minY, maxX, maxY]. */
@@ -743,26 +744,10 @@ async function loadNdviSampler(
       return sampleMaxWindow(data, w, h, cx, cy) / 255;
     };
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (isAbortError(err)) {
       throw err;
     }
     return null;
-  }
-}
-
-export async function fetchFeatures<T>(
-  url: string,
-  signal?: AbortSignal
-): Promise<T[]> {
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return [];
-    }
-    const data = (await res.json()) as { features?: T[] };
-    return data.features ?? [];
-  } catch {
-    return [];
   }
 }
 

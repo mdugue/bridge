@@ -121,28 +121,12 @@ import {
 import { DEFAULT_WATER_MIST } from "./water-layer";
 
 interface Props {
-  /** Optional baked bridge-deck GeoJSON for the primary tile */
-  bridgeSrc?: string;
-  /** URL of the CityJSON tile, served from /public */
-  citySrc: string;
-  /** URL of the heightfield header JSON (see lib/city/heightfield.ts) */
-  demSrc: string;
   /** Neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
   insertedModelUrl?: string;
-  /** Optional OSM street-lamp GeoJSON (ODbL) for the primary tile */
-  lampsSrc?: string;
-  /** Optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
-  landcoverSrc?: string;
-  /** Optional OSM station-platform GeoJSON (ODbL) for the primary tile */
-  platformSrc?: string;
-  /** Optional baked dissolved ballast-area GeoJSON for the primary tile */
-  railareaSrc?: string;
-  /** Optional baked railway-track GeoJSON (Basis-DLM) for the primary tile */
-  railSrc?: string;
-  /** Optional ATKIS veg04 GeoJSON for hedges + tree rows */
-  vegetationSrc?: string;
+  /** The spawn tile's URLs (see lib/city/tile.ts) */
+  primary: TileSrc;
 }
 
 type Status =
@@ -989,15 +973,7 @@ function SceneControls({
 }
 
 export default function CityWalk({
-  citySrc,
-  demSrc,
-  landcoverSrc,
-  vegetationSrc,
-  lampsSrc,
-  railSrc,
-  bridgeSrc,
-  railareaSrc,
-  platformSrc,
+  primary,
   extraTiles,
   insertedModelUrl,
 }: Props) {
@@ -1099,15 +1075,7 @@ export default function CityWalk({
 
     createCityWalkApp({
       container,
-      citySrc,
-      demSrc,
-      landcoverSrc,
-      vegetationSrc,
-      lampsSrc,
-      railSrc,
-      bridgeSrc,
-      railareaSrc,
-      platformSrc,
+      primary,
       extraTiles,
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
@@ -1222,19 +1190,7 @@ export default function CityWalk({
       handleRef.current = null;
       handle?.dispose();
     };
-  }, [
-    citySrc,
-    demSrc,
-    landcoverSrc,
-    vegetationSrc,
-    lampsSrc,
-    railSrc,
-    bridgeSrc,
-    railareaSrc,
-    platformSrc,
-    extraTiles,
-    insertedModelUrl,
-  ]);
+  }, [primary, extraTiles, insertedModelUrl]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);
