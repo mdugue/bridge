@@ -10,7 +10,7 @@ import {
   tileUrlsFrom,
 } from "./tile";
 
-const primary = { tile: PRIMARY_TILE, n: 1024 };
+const primary = { tile: PRIMARY_TILE, n: 1024, raster: 4096 };
 
 test("the artifact map reproduces the served file names", () => {
   const a = tileArtifacts(primary);

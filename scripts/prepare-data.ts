@@ -29,6 +29,7 @@ import {
 import { basename, dirname, extname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { fromArrayBuffer } from "geotiff";
+import sharp from "sharp";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
 import {
@@ -86,6 +87,47 @@ for (const artifact of artifacts) {
     log(`optional source absent, skipping ${artifact.file}`);
   }
 }
+
+// --- bake: downsampled neighbour rasters -----------------------------------
+// The DLM bake writes 4096² land-cover rasters. A neighbour tile is backdrop:
+// served at 2048² it costs a quarter of the texture memory (64 MB → 16 MB per
+// RGBA raster before mipmaps), which is what keeps the 2×2 block inside a
+// phone's GPU budget. The class raster keeps NEAREST (ids must not blend);
+// the pastel RGB splat (alpha = water coverage) is box-filtered.
+
+async function bakeRasters(): Promise<void> {
+  for (const spec of TILE_BLOCK) {
+    if (spec.raster >= 4096) {
+      continue;
+    }
+    const a = tileArtifacts(spec);
+    for (const [artifact, kernel] of [
+      [a.landcover, "nearest"],
+      [a.landcoverRgb, "lanczos3"],
+    ] as const) {
+      const src = join(
+        process.cwd(),
+        `data/${artifact.source}/${artifact.file}`
+      );
+      if (!existsSync(src)) {
+        continue;
+      }
+      const dest = join(process.cwd(), CACHE_DIR, artifact.file);
+      toPublish.set(artifact.file, dest);
+      if (!isStale(dest, src)) {
+        continue;
+      }
+      mkdirSync(dirname(dest), { recursive: true });
+      await sharp(src)
+        .resize(spec.raster, spec.raster, { kernel, fit: "fill" })
+        .png({ compressionLevel: 9, palette: false })
+        .toFile(dest);
+      log(`downsampled ${artifact.file} to ${spec.raster}² (${kernel})`);
+    }
+  }
+}
+
+await bakeRasters();
 
 // --- bake: DGM -> heightfield ---------------------------------------------
 // The browser used to fetch each tile's 13.6 MB GeoTIFF and resample it on the

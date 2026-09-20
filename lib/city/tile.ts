@@ -26,16 +26,31 @@ export const NEIGHBOUR_TILES = [
 export const PRIMARY_HEIGHTFIELD_N = 1024;
 export const NEIGHBOUR_HEIGHTFIELD_N = 512;
 
+/**
+ * Land-cover raster edge (px) served per role. The bakes write 4096² (≈0.5 m
+ * per texel over a 2 km tile); the neighbours are backdrop and are
+ * downsampled at prepare time to 2048² (≈1 m) — a quarter of the texture
+ * memory, which is what keeps a 2×2 block inside a phone's GPU budget.
+ */
+export const PRIMARY_RASTER_PX = 4096;
+export const NEIGHBOUR_RASTER_PX = 2048;
+
 export interface TileSpec {
   /** heightfield grid size baked and served for this tile */
   n: number;
+  /** land-cover raster edge served for this tile (px) */
+  raster: number;
   tile: string;
 }
 
 /** Every tile the app loads, with the grid size it is served at. */
 export const TILE_BLOCK: TileSpec[] = [
-  { tile: PRIMARY_TILE, n: PRIMARY_HEIGHTFIELD_N },
-  ...NEIGHBOUR_TILES.map((tile) => ({ tile, n: NEIGHBOUR_HEIGHTFIELD_N })),
+  { tile: PRIMARY_TILE, n: PRIMARY_HEIGHTFIELD_N, raster: PRIMARY_RASTER_PX },
+  ...NEIGHBOUR_TILES.map((tile) => ({
+    tile,
+    n: NEIGHBOUR_HEIGHTFIELD_N,
+    raster: NEIGHBOUR_RASTER_PX,
+  })),
 ];
 
 /** Files served from /data (= public/data/), all derived from the tile id. */
