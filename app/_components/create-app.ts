@@ -18,29 +18,24 @@ import {
 } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { fogRangeFor } from "@/lib/city/atmosphere";
-import type { RoofColorLut } from "@/lib/city/building-tint";
-import {
-  epsgCodeFromReferenceSystem,
-  FALLBACK_LAT_LNG,
-  utmToLatLng,
-} from "@/lib/city/crs";
+import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
-import { buildingFootprintPolys, type FootprintPoly } from "@/lib/city/minimap";
-import { recenterOffset } from "@/lib/city/recenter";
+import type { FootprintPoly } from "@/lib/city/minimap";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
-import type { CityJsonDocument } from "@/lib/city/types";
 import { createCameraFlight } from "./camera-flight";
 import {
   type CityLayer,
+  cityFootprints,
   countBuildings,
   createCityLayer,
   demolishObject,
-  pickCityObjectId,
+  fetchCityMesh,
+  pickCityObjectIndex,
 } from "./city-layer";
 import { createCityCollider } from "./collision";
-import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
+import { fetchFeatures } from "./fetch-optional";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { createInsertedBuilding } from "./inserted-building";
@@ -138,7 +133,10 @@ export interface TileSrc {
   bridgeSrc?: string;
   /** optional DOM1-derived canopy points (trees scaled to measured height) */
   canopySrc?: string;
-  citySrc: string;
+  /** the baked building mesh (gzipped vertex stream, lib/city/city-mesh.ts) */
+  cityMeshSrc: string;
+  /** the baked building mesh's meta JSON (per-object style, demolish tree) */
+  cityMetaSrc: string;
   /** URL of this tile's heightfield header JSON (see lib/city/heightfield.ts) */
   demSrc: string;
   /** optional OSM street-lamp GeoJSON (ODbL); absent/404 = no lamps */
@@ -154,8 +152,6 @@ export interface TileSrc {
   railareaSrc?: string;
   /** optional baked railway-track GeoJSON (Basis-DLM ver03_l, heavy rail) */
   railSrc?: string;
-  /** optional DOP-sampled per-building roof colours (else synthesized) */
-  roofColorSrc?: string;
   vegetationSrc?: string;
   /** optional OSM retaining/city walls (ODbL): terrain step + ribbon */
   wallsSrc?: string;
@@ -341,43 +337,6 @@ function createRenderer(
   return renderer;
 }
 
-async function fetchCityJson(
-  url: string,
-  signal?: AbortSignal
-): Promise<CityJsonDocument> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch CityJSON (${url}): HTTP ${res.status}`);
-  }
-  const data = (await res.json()) as CityJsonDocument;
-  const epsg = epsgCodeFromReferenceSystem(data.metadata?.referenceSystem);
-  if (epsg === null || utmToLatLng(epsg, 0, 0) === null) {
-    throw new Error(
-      `Unsupported CityJSON CRS "${data.metadata?.referenceSystem}" — ` +
-        "expected ETRS89/UTM (EPSG:25832 or 25833). Reproject the data, " +
-        "e.g. cjio in.city.json reproject 25833 save out.city.json."
-    );
-  }
-  return data;
-}
-
-/**
- * Optional per-building roof colours baked from the DOP orthophoto
- * (`roofcolor_<tile>.json`). Absent/404 → undefined, and the roof falls back
- * to the synthesized terracotta/slate palette (graceful degradation — see
- * docs/portability.md).
- */
-async function fetchRoofLut(
-  url: string | undefined,
-  signal?: AbortSignal
-): Promise<RoofColorLut | undefined> {
-  if (!url) {
-    return;
-  }
-  const doc = await fetchOptionalJson<{ roofs?: RoofColorLut }>(url, signal);
-  return doc?.roofs;
-}
-
 /**
  * Lets React commit and paint the progress message before a long synchronous
  * stretch (parse, BVH, shader setup). Without this yield the overlay shows the
@@ -417,13 +376,9 @@ function assertCityOnTerrain(
 
 /** Reprojects the recenter point (tile center) to WGS84 for SunCalc. */
 function tileLatLng(
-  cityData: CityJsonDocument,
+  epsg: number,
   offset: { cx: number; cy: number }
 ): { lat: number; lng: number } {
-  const epsg = epsgCodeFromReferenceSystem(cityData.metadata?.referenceSystem);
-  if (epsg === null) {
-    return FALLBACK_LAT_LNG;
-  }
   return utmToLatLng(epsg, offset.cx, offset.cy) ?? FALLBACK_LAT_LNG;
 }
 
@@ -503,17 +458,27 @@ async function bootApp(
   const neighbourTiles = profile === "lite" ? [] : (opts.extraTiles ?? []);
 
   const primary = opts.primary;
-  opts.onProgress?.("Loading CityJSON tile…");
-  const [cityData, roofLut] = await Promise.all([
-    fetchCityJson(primary.citySrc, opts.signal),
-    fetchRoofLut(primary.roofColorSrc, opts.signal),
-  ]);
+  const citySrcOf = (tile: TileSrc) => ({
+    metaUrl: tile.cityMetaSrc,
+    dataUrl: tile.cityMeshSrc,
+  });
+  opts.onProgress?.("Loading buildings…");
+  const primaryCity = await fetchCityMesh(citySrcOf(primary), opts.signal);
   ensureAlive();
-
-  opts.onProgress?.("Parsing buildings…");
-  await nextPaint();
-  let cityLayer: CityLayer = createCityLayer(cityData, world, null, roofLut);
-  const offset = recenterOffset(cityLayer.matrix);
+  if (utmToLatLng(primaryCity.meta.epsg, 0, 0) === null) {
+    throw new Error(
+      `Unsupported city CRS EPSG:${primaryCity.meta.epsg} — expected ` +
+        "ETRS89/UTM (EPSG:25832 or 25833). Reproject the CityJSON before baking."
+    );
+  }
+  let cityLayer: CityLayer = createCityLayer(
+    primaryCity.meta,
+    primaryCity.vertices,
+    world
+  );
+  // The recenter offset was captured at bake time from the primary tile and
+  // shared with the neighbours, so every layer subtracts the same origin.
+  const offset = primaryCity.meta.offset;
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
   // read by the crown shimmer. The vegetation builds before the sun rig exists,
@@ -630,22 +595,13 @@ async function bootApp(
   const extraCities: CityLayer[] = [];
   if (neighbourTiles.length > 0) {
     opts.onProgress?.("Loading neighbouring tiles…");
-    // Fetch every neighbour's documents at once (network overlaps the
-    // main-thread parse below), then parse in tile order so the batched
-    // meshes are deterministic.
-    const docs = await Promise.all(
-      neighbourTiles.map((tile) =>
-        Promise.all([
-          fetchCityJson(tile.citySrc, opts.signal),
-          fetchRoofLut(tile.roofColorSrc, opts.signal),
-        ])
-      )
+    // Fetch every neighbour's mesh at once, then build in tile order.
+    const meshes = await Promise.all(
+      neighbourTiles.map((tile) => fetchCityMesh(citySrcOf(tile), opts.signal))
     );
     ensureAlive();
-    for (const [data, tileRoofLut] of docs) {
-      extraCities.push(
-        createCityLayer(data, world, cityLayer.matrix, tileRoofLut)
-      );
+    for (const { meta, vertices } of meshes) {
+      extraCities.push(createCityLayer(meta, vertices, world));
     }
     // Terrain / water / vegetation / lamps per neighbour, concurrently.
     // Promise.all preserves order, which landcoverTiles below relies on.
@@ -780,7 +736,7 @@ async function bootApp(
   const sunRig = createSunRig(
     scene,
     worldBounds,
-    tileLatLng(cityData, offset),
+    tileLatLng(primaryCity.meta.epsg, offset),
     sunDirection
   );
 
@@ -989,19 +945,19 @@ async function bootApp(
   let fps = 0;
   const emitStats = () => {
     opts.onStats?.({
-      buildingCount: countBuildings(cityLayer.data),
+      buildingCount: countBuildings(cityLayer),
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
     });
   };
 
   const demolishAtCrosshair = () => {
-    const objectId = pickCityObjectId(camera, cityLayer);
-    if (!objectId) {
+    const objectIndex = pickCityObjectIndex(camera, cityLayer);
+    if (objectIndex === null) {
       return;
     }
-    cityLayer = demolishObject(cityLayer, world, objectId);
-    // The reload produces bare loader meshes — re-dress them.
+    cityLayer = demolishObject(cityLayer, world, objectIndex);
+    // The rebuilt mesh starts with a placeholder material — re-dress it.
     applyCityStyle(cityLayer.group, styleResources);
     invalidateShadows();
     emitStats();
@@ -1375,8 +1331,8 @@ async function bootApp(
       movement.setAnalog(x, y);
     },
     getFootprints: () => [
-      ...buildingFootprintPolys(cityLayer.data),
-      ...extraCities.flatMap((c) => buildingFootprintPolys(c.data)),
+      ...cityFootprints(cityLayer),
+      ...extraCities.flatMap(cityFootprints),
     ],
     landcoverTiles,
     terrainBounds: unionBounds,

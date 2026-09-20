@@ -23,6 +23,7 @@ import {
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
+import { fetchGzipped, fetchRequiredJson } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
@@ -128,30 +129,6 @@ async function loadNdviTexture(url: string): Promise<Texture | null> {
   } catch {
     return null;
   }
-}
-
-/** Fetches a pre-gzipped binary artifact and inflates it in the browser. */
-async function fetchGzipped(
-  url: string,
-  signal?: AbortSignal
-): Promise<ArrayBuffer> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
-  }
-  if (!res.body) {
-    throw new Error(`Failed to fetch ${url}: empty body`);
-  }
-  const inflated = res.body.pipeThrough(new DecompressionStream("gzip"));
-  return await new Response(inflated).arrayBuffer();
-}
-
-async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
-  }
-  return await res.json();
 }
 
 /** A baked OSM wall feature (see wall-layer.ts / scripts/extract-walls.sh). */
@@ -388,7 +365,9 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   // GeoTIFF to n x n at build time (quantised uint16, gzipped); decoding it
   // is one dequantising pass and NoData comes out as NaN, so there is no
   // nodata sentinel to carry around.
-  const header = parseHeightfieldHeader(await fetchJson(opts.url, opts.signal));
+  const header = parseHeightfieldHeader(
+    await fetchRequiredJson(opts.url, opts.signal)
+  );
   const { n, bounds } = header;
   /** Holes are NaN in the baked samples, so there is no sentinel to match. */
   const nodata: number | null = null;

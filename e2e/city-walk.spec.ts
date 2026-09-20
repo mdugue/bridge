@@ -287,22 +287,16 @@ test.describe("desktop viewer", () => {
     // Runs after the read-only tests: re-parsing the tile also rebuilds the
     // minimap's 2369 footprint polygons, and a main thread busy with that
     // makes Playwright's actionability checks on the minimap crawl.
-    const cityDoc = (await (
+    const cityMeta = (await (
       await page.request.get(
-        await dataUrl(page, "lod2_33412_5656_2_sn.city.json")
+        await dataUrl(page, "city_33412_5656_2_sn.mesh.json")
       )
-    ).json()) as {
-      CityObjects: Record<
-        string,
-        { type: string; geographicalExtent?: number[] }
-      >;
-    };
-    const target = Object.values(cityDoc.CityObjects).find(
-      (o) => o.type === "Building" && o.geographicalExtent
+    ).json()) as { objects: { type: string; extent?: number[] }[] };
+    const target = cityMeta.objects.find(
+      (o) => o.type === "Building" && o.extent
     );
-    expect(target?.geographicalExtent).toBeDefined();
-    const [minX, minY, minZ, maxX, maxY, maxZ] =
-      target?.geographicalExtent ?? [];
+    expect(target?.extent).toBeDefined();
+    const [minX, minY, minZ, maxX, maxY, maxZ] = target?.extent ?? [];
     const buildingsBefore = await page.evaluate(
       () => window.__poc?.buildingCount ?? 0
     );

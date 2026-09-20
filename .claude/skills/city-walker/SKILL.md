@@ -21,10 +21,13 @@ the change** (Definition of Done in `docs/README.md`).
 Y-up), loads the tiles, runs the animation loop, and returns a `CityWalkHandle`
 (the imperative API the React HUD calls). The layers:
 
-- `city-layer.ts` — wraps `cityjson-threejs-loader`. One **merged** mesh per
-  tile (~2000 buildings, per-vertex `objectid`). Demolish = remove the object
-  from the in-memory CityJSON and **re-parse** (you can't hide one building).
-  Picking/collision use `three-mesh-bvh`.
+- `city-layer.ts` — loads the **baked** building mesh (`city_<tile>.mesh.json`
+  + `.mesh.bin.gz`, produced by `scripts/bake-city-mesh.ts` from the CityJSON
+  at build time; format in `lib/city/city-mesh.ts`). One merged mesh per tile
+  (per-vertex `objectid`); the clay attributes expand the meta's per-object
+  table at load. Demolish = filter the object's building tree out of the
+  vertex stream and rebuild (you can't hide one building in a batched mesh).
+  Picking/collision use `three-mesh-bvh`. No CityJSON reaches the browser.
 - `terrain-layer.ts` — baked DGM1 heightfield (`.heightfield-<n>.json` + `.u16.gz`,
   produced by `prepare-data.ts`) → mesh + the surface splat; also
   builds the water layer. `lib/city/terrain-geometry.ts` is the pure math.

@@ -26,8 +26,8 @@ const CityWalk = dynamic(() => import("./city-walk"), {
 function tile(spec: TileSpec, manifest: DataManifest | null): TileSrc {
   const u = tileUrlsFrom(spec, manifest);
   return {
-    citySrc: u.city,
-    roofColorSrc: u.roofColor,
+    cityMeshSrc: u.cityMeshData,
+    cityMetaSrc: u.cityMeshMeta,
     demSrc: u.heightfieldHeader,
     landcoverSrc: u.landcover,
     landcoverRgbSrc: u.landcoverRgb,

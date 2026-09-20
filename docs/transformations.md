@@ -37,8 +37,12 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   animated normal wobble. `water-layer.ts`. Missing RGBA splat → coverage falls
   back to the NEAREST class raster tested against class 8 (hard-edged bank);
   the class PNG's own alpha decodes to 1 everywhere and must never be read.
-- **Buildings** — CityJSON LoD2 → one merged mesh/tile, per-vertex `objectid`;
-  demolish = drop from CityJSON + re-parse; BVH picking/collision. `city-layer.ts`.
+- **Buildings** — CityJSON LoD2 → **build-time** binary mesh (one merged
+  mesh/tile, per-vertex `objectid`, uint16-quantised positions, gzipped) + a
+  meta JSON with the per-object style table, demolish tree and footprints
+  (`scripts/bake-city-mesh.ts`, `lib/city/city-mesh.ts`); demolish = filter the
+  building tree out of the vertex stream + rebuild; BVH picking/collision.
+  `city-layer.ts`. The DOP roof LUT is folded in at bake time.
 - **Ground-clamp** — DGM1 sampled to seat buildings, trees, lamps, and the player
   on terrain. `lib/city/ground-clamp.ts`.
 

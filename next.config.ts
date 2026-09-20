@@ -4,8 +4,6 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   reactCompiler: true,
   reactStrictMode: true,
-  // cityjson-threejs-loader ships untranspiled ESM; Next won't build it raw.
-  transpilePackages: ["cityjson-threejs-loader"],
   // Everything under /data is published under a content-hashed name by
   // scripts/prepare-data.ts, so it can be cached forever; the manifest that
   // maps logical → hashed names is the one file that must always revalidate.

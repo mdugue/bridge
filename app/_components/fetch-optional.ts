@@ -42,3 +42,35 @@ export async function fetchFeatures<T>(
   const doc = await fetchOptionalJson<{ features?: T[] }>(url, signal);
   return doc?.features ?? [];
 }
+
+/** Fetches a REQUIRED JSON artifact; any failure throws. */
+export async function fetchRequiredJson<T>(
+  url: string,
+  signal?: AbortSignal
+): Promise<T> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  }
+  return (await res.json()) as T;
+}
+
+/**
+ * Fetches a REQUIRED pre-gzipped binary artifact and inflates it in the
+ * browser (native DecompressionStream). The bakes gzip binary blobs
+ * themselves because static hosts only compress text-like MIME types.
+ */
+export async function fetchGzipped(
+  url: string,
+  signal?: AbortSignal
+): Promise<ArrayBuffer> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  }
+  if (!res.body) {
+    throw new Error(`Failed to fetch ${url}: empty body`);
+  }
+  const inflated = res.body.pipeThrough(new DecompressionStream("gzip"));
+  return await new Response(inflated).arrayBuffer();
+}

@@ -29,6 +29,8 @@ import {
 import { basename, dirname, extname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { fromArrayBuffer } from "geotiff";
+import type { Matrix4 } from "three";
+import type { RoofColorLut } from "../lib/city/building-tint";
 import {
   encodeHeightfield,
   HEIGHTFIELD_VERSION,
@@ -38,6 +40,9 @@ import {
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tfwToBounds } from "../lib/city/tfw";
 import {
+  cityMeshDataFile,
+  cityMeshMetaFile,
+  cityMeshSourceFiles,
   type DataManifest,
   dgmSourceFiles,
   heightfieldDataFile,
@@ -46,6 +51,8 @@ import {
   TILE_BLOCK,
   tileArtifacts,
 } from "../lib/city/tile";
+import type { CityJsonDocument } from "../lib/city/types";
+import { bakeCityMesh } from "./bake-city-mesh";
 
 const OUT_DIR = "public/data";
 const CACHE_DIR = ".cache/prepare-data";
@@ -220,6 +227,69 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
 for (const { tile, n } of TILE_BLOCK) {
   await bakeHeightfield(tile, n);
 }
+
+// --- bake: CityJSON -> building mesh ---------------------------------------
+// The browser used to parse 8–11 MB of CityJSON per tile (earcut + attribute
+// annotation, ~0.5 s of main thread each). scripts/bake-city-mesh.ts does it
+// once here; the primary tile goes first because the neighbours share its
+// recenter matrix (the same rule the browser used to apply at load time).
+
+/** The bake's own sources: a change to either invalidates every tile. */
+const CITY_BAKE_SOURCES = [
+  join(process.cwd(), "scripts/bake-city-mesh.ts"),
+  join(process.cwd(), "lib/city/city-mesh.ts"),
+  join(process.cwd(), "lib/city/building-tint.ts"),
+  join(process.cwd(), "lib/city/minimap.ts"),
+];
+
+function bakeCityMeshes(): void {
+  let sharedMatrix: Matrix4 | null = null;
+  const stale = TILE_BLOCK.some(({ tile }) => {
+    const src = cityMeshSourceFiles(tile);
+    const inputs = [
+      join(process.cwd(), src.city),
+      join(process.cwd(), src.roofColor),
+      ...CITY_BAKE_SOURCES,
+    ];
+    return (
+      isStale(
+        join(process.cwd(), CACHE_DIR, cityMeshMetaFile(tile)),
+        ...inputs
+      ) ||
+      isStale(join(process.cwd(), CACHE_DIR, cityMeshDataFile(tile)), ...inputs)
+    );
+  });
+  for (const { tile } of TILE_BLOCK) {
+    const metaPath = join(process.cwd(), CACHE_DIR, cityMeshMetaFile(tile));
+    const dataPath = join(process.cwd(), CACHE_DIR, cityMeshDataFile(tile));
+    toPublish.set(cityMeshMetaFile(tile), metaPath);
+    toPublish.set(cityMeshDataFile(tile), dataPath);
+    if (!stale) {
+      continue;
+    }
+    const src = cityMeshSourceFiles(tile);
+    const cityPath = join(process.cwd(), src.city);
+    if (!existsSync(cityPath)) {
+      fail(`missing source file ${src.city}`);
+    }
+    const doc = JSON.parse(readFileSync(cityPath, "utf8")) as CityJsonDocument;
+    const roofPath = join(process.cwd(), src.roofColor);
+    const roofLut = existsSync(roofPath)
+      ? (JSON.parse(readFileSync(roofPath, "utf8")) as { roofs?: RoofColorLut })
+          .roofs
+      : undefined;
+    const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix);
+    sharedMatrix ??= baked.matrix;
+    mkdirSync(dirname(dataPath), { recursive: true });
+    writeFileSync(dataPath, gzipSync(Buffer.from(baked.bytes)));
+    writeFileSync(metaPath, JSON.stringify(baked.meta));
+    log(
+      `built ${cityMeshMetaFile(tile)} (${baked.meta.objects.length} objects, ${baked.meta.vertexCount} vertices${roofLut ? ", DOP roof colours" : ""})`
+    );
+  }
+}
+
+bakeCityMeshes();
 
 // --- publish: hashed names + manifest -------------------------------------
 

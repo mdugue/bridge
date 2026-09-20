@@ -17,8 +17,8 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 ## Tech stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r186** (`three`), `cityjson-threejs-loader`, `geotiff` (build step
-  only — the client no longer decodes rasters),
+- **three.js r186** (`three`), `cityjson-threejs-loader` and `geotiff` (both
+  build step only — the client decodes neither CityJSON nor rasters),
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline
@@ -52,8 +52,10 @@ and enforces a complexity cap; extract helpers rather than fighting it. No
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp) with `bun test` units alongside
 - `scripts/` — `extract-dlm.sh`, `extract-canopy.sh` (offline data bakes) and
-  `prepare-data.ts` (copies committed artifacts into `public/data` at build and
-  bakes each DGM GeoTIFF into a gzipped uint16 heightfield — see `lib/city/heightfield.ts`)
+  `prepare-data.ts` (bakes the committed artifacts into `public/data` under
+  content-hashed names + `manifest.json`: each DGM GeoTIFF becomes a gzipped
+  uint16 heightfield, each CityJSON a binary building mesh via
+  `bake-city-mesh.ts` — see `lib/city/heightfield.ts`)
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
 - `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)
@@ -116,10 +118,11 @@ camera-following frustum on a right-sized map (finer texels = cleaner edges).
 it here. The remaining limit (very long shadows clipping beyond the frustum at
 low sun) is only solvable with Cascaded Shadow Maps.
 
-**Buildings are already batched.** `cityjson-threejs-loader` merges ~2000
-buildings into one mesh per tile (per-vertex `objectid`), so draw calls are
-already low and **BatchedMesh would not help** (and would break objectid
-picking/demolish). The perf bottleneck is **fill-rate** (post FX + shadow map),
+**Buildings are already batched.** Each tile's buildings are ONE baked mesh
+(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time and
+writes a gzipped vertex stream + meta, `lib/city/city-mesh.ts`; per-vertex
+`objectid`), so draw calls are already low and **BatchedMesh would not help**
+(and would break objectid picking/demolish). The perf bottleneck is **fill-rate** (post FX + shadow map),
 not draw calls.
 
 **Vegetation** is chunked into 250 m cells (one InstancedMesh per cell) so
