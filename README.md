@@ -20,9 +20,11 @@ bun install
 bun dev     # prepares public/data, then serves http://localhost:3000
 ```
 
-`bun dev` runs `scripts/prepare-data.ts` first; it copies the committed
-per-tile artifacts into `public/data/` and bakes the terrain heightfields
-(a few seconds on the first run, nothing on later ones).
+`bun dev` runs `scripts/prepare-data.ts` first; it bakes the committed
+per-tile artifacts into `public/data/` — the terrain heightfields from the
+DGM GeoTIFFs and the building meshes from the CityJSON — and publishes
+everything under content-hashed names with a `manifest.json` (a few seconds
+on the first run, nothing on later ones; the bake cache lives in `.cache/`).
 
 Add `?scene=lite` to load the primary tile alone with a small shadow map —
 that is what the headless e2e suite uses; it is not how the scene is meant to
@@ -43,10 +45,16 @@ read by both the bake script and the client.
 Tile id scheme: `<UTM zone 33><easting km>_<northing km>_<edge km>_sn`. The
 primary tile spans 412000–414000 E / 5656000–5658000 N in **EPSG:25833**.
 
-The DGM1 GeoTIFF is **not** served: `prepare-data.ts` resamples it into a
-float32 heightfield (`<tile>.heightfield-<n>.json` + `.f32`, primary 1024²,
-neighbours 512²; see [`lib/city/heightfield.ts`](lib/city/heightfield.ts)), so
-the browser never decodes a raster on the main thread.
+Neither the DGM1 GeoTIFF nor the CityJSON is served. `prepare-data.ts`
+resamples the DGM into a gzipped centimetre-uint16 heightfield
+(`<tile>.heightfield-<n>.json` + `.u16.gz`, primary 1024², neighbours 512²;
+see [`lib/city/heightfield.ts`](lib/city/heightfield.ts)) and runs the
+CityJSON parser once at build time into a binary building mesh
+(`city_<tile>.mesh.json` + `.mesh.bin.gz`;
+[`lib/city/city-mesh.ts`](lib/city/city-mesh.ts)), so the browser decodes
+neither a raster nor a CityJSON document. Every `/data` file is published
+under a content-hashed name and cached as immutable; `manifest.json` maps the
+logical names and is the one file that revalidates.
 
 Requirements for new data:
 

@@ -1,6 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  ImageBitmapLoader,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
@@ -8,8 +9,7 @@ import {
   NearestFilter,
   NoColorSpace,
   SRGBColorSpace,
-  type Texture,
-  TextureLoader,
+  Texture,
   type Vector3,
 } from "three";
 import {
@@ -68,17 +68,39 @@ export interface TerrainOptions {
 }
 
 /**
+ * Decodes a raster into a texture OFF the main thread. `TextureLoader` hands
+ * three an <img>, which the browser decodes lazily — for a 4096² PNG that is
+ * ~64 MB of pixels decoded (and flipped) synchronously at the first upload,
+ * on the main thread, per tile and per raster. `createImageBitmap` decodes
+ * in the browser's image workers, already in the orientation three needs
+ * (`imageOrientation: "none"` = the flipY=false these rasters use), so the
+ * first frame only pays the GPU upload. Rejects on a decode/network failure.
+ */
+async function loadBitmapTexture(url: string): Promise<Texture> {
+  const loader = new ImageBitmapLoader();
+  loader.setOptions({
+    imageOrientation: "none",
+    premultiplyAlpha: "none",
+    colorSpaceConversion: "none",
+  });
+  const bitmap = await loader.loadAsync(url);
+  const texture = new Texture(bitmap);
+  texture.flipY = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
  * Loads the land-cover splatmap as a NEAREST-filtered data texture (class ids
  * must not be interpolated) in linear space (the red channel is a class id,
  * not a colour). Non-fatal: a failure just falls back to the flat sage ground.
  */
 async function loadSplatTexture(url: string): Promise<Texture | null> {
   try {
-    const texture = await new TextureLoader().loadAsync(url);
+    const texture = await loadBitmapTexture(url);
     texture.magFilter = NearestFilter;
     texture.minFilter = NearestFilter;
     texture.generateMipmaps = false;
-    texture.flipY = false;
     texture.colorSpace = NoColorSpace;
     return texture;
   } catch {
@@ -93,12 +115,11 @@ async function loadSplatTexture(url: string): Promise<Texture | null> {
  */
 async function loadColorSplat(url: string): Promise<Texture | null> {
   try {
-    const texture = await new TextureLoader().loadAsync(url);
+    const texture = await loadBitmapTexture(url);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
-    texture.flipY = false;
     texture.colorSpace = SRGBColorSpace;
     return texture;
   } catch {
@@ -118,12 +139,11 @@ export const DEFAULT_MEADOW_NDVI = 0.6;
  */
 async function loadNdviTexture(url: string): Promise<Texture | null> {
   try {
-    const texture = await new TextureLoader().loadAsync(url);
+    const texture = await loadBitmapTexture(url);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
-    texture.flipY = false;
     texture.colorSpace = NoColorSpace;
     return texture;
   } catch {
