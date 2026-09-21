@@ -34,7 +34,8 @@ bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # eslint + ultracite (biome)
-bun typecheck      # tsgo --noEmit
+bun typecheck      # tsc --noEmit (TypeScript 6 — the same compiler `next
+                   # build` and ESLint's typed rules use)
 bun test           # unit tests in lib/, app/_components/ and scripts/
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
@@ -211,10 +212,27 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - TypeScript strict. No `any` without a `// reason:` comment.
 - Version pins: exact for the three.js stack (`three`, `@types/three`,
   `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`), the
-  framework trio and the formatters; caret for everything else. The Bun version
-  comes from `packageManager` in `package.json` (CI reads it via
-  `bun-version-file`), and `.mcp.json` pins the shadcn MCP server to the
-  lockfile version rather than `@latest`.
+  framework trio and the formatters; caret for everything else. `suncalc` is
+  pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
+  float would rotate the sun rather than fail. The Bun version comes from
+  `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
+  `.mcp.json` pins **both** MCP servers (shadcn, next-devtools) to an exact
+  version rather than `@latest`.
+- **One TypeScript, and it is 6.x.** `typescript-eslint` peers on
+  `typescript <6.1.0`, so TypeScript 7 cannot be adopted until it accepts
+  `>=7` — until then `tsc` from TS 6 is the single checker for `bun typecheck`,
+  `next build` and ESLint's typed rules. Do not reintroduce a second compiler
+  (`@typescript/native-preview`/`tsgo`): a green `bun run verify` has to
+  predict a green build.
+- **ESLint stays on 9.x.** `eslint-plugin-react`, `eslint-plugin-import` and
+  `eslint-plugin-jsx-a11y` — all pulled in by `eslint-config-next` — still cap
+  their `eslint` peer at `^9`. ESLint 10 installs only with peer warnings.
+- `types/n8ao.d.ts` is a hand-written shim because `n8ao` ships no types. Do
+  not add one for `three-mesh-bvh`: the package declares its own `three`
+  augmentation (`BufferGeometry.boundsTree`, `Raycaster.firstHitOnly`, and
+  `BatchedMesh` on top).
+- `tsconfig.json`'s `allowJs: true` is **not** removable — `next build`
+  rewrites the file to put it back, which would dirty the tree on every build.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
 - Tailwind for styling; components in `app/_components/` (route-private) or

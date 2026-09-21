@@ -111,8 +111,9 @@ Coordinate frames matter here. Source data is EPSG:25833, Z-up; a parent
 `world` group is rotated −90° about X so data-Z (elevation) becomes scene-Y
 (up), giving `x = easting − cx`, `z = −(northing − cy)`, `y = elevation`, with
 `(cx, cy)` the shared recenter offset ([`lib/city/recenter.ts`](lib/city/recenter.ts),
-[`lib/city/ground-clamp.ts`](lib/city/ground-clamp.ts)). The sun goes SunCalc →
-ENU → world in [`lib/city/sun.ts`](lib/city/sun.ts).
+[`lib/city/ground-clamp.ts`](lib/city/ground-clamp.ts)). The sun goes suncalc →
+ENU → world in [`lib/city/sun.ts`](lib/city/sun.ts) — note suncalc 2 reports
+degrees with a **north-based** azimuth (1.x used radians measured from south).
 
 Two design decisions worth knowing: **demolish** is a data-level filter plus a
 re-parse of the CityJSON rather than a mesh edit
