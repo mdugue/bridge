@@ -173,6 +173,11 @@ test.describe("desktop viewer", () => {
     errors = watchErrors(page);
     await page.goto(LITE);
     webgl = await hasWebGl(page);
+    // On CI the SwiftShader flags above must yield WebGL; a silent skip
+    // would let a Chromium/Playwright bump turn the whole suite green.
+    if (process.env.CI) {
+      expect(webgl).toBe(true);
+    }
     if (!webgl) {
       return;
     }
@@ -185,11 +190,15 @@ test.describe("desktop viewer", () => {
   });
 
   test.beforeEach(() => {
-    // biome-ignore lint/suspicious/noSkippedTests: conditional runtime skip — render assertions are meaningless without WebGL
+    // Conditional runtime skip — render assertions are meaningless without WebGL.
     test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
   });
 
   test.afterAll(async () => {
+    // Errors logged after the last test's own check must not go unnoticed.
+    if (webgl) {
+      expectNoErrors(errors);
+    }
     await page?.context().close();
   });
 
@@ -208,6 +217,29 @@ test.describe("desktop viewer", () => {
     expect(poc?.firstFrame).toBe(true);
     expect(poc?.terrainVertexCount ?? 0).toBeGreaterThan(0);
     expect(poc?.shadowsEnabled).toBe(true);
+    expectNoErrors(errors);
+  });
+
+  test("every scene layer is built on the primary tile", async () => {
+    // Counts come from what each loader actually put in the scene graph, so a
+    // renamed GeoJSON property, a 404 or a thrown builder — all of which the
+    // loaders swallow into an empty group — fails here instead of passing.
+    const stats = await page.evaluate(() => window.__poc?.layerStats);
+    expect(stats).toBeDefined();
+    if (!stats) {
+      return;
+    }
+    expect(stats.city.triangles).toBeGreaterThan(0);
+    expect(stats.terrain.meshes).toBe(1); // lite = primary tile only
+    expect(stats.water.meshes).toBeGreaterThanOrEqual(1);
+    // 5 118 canopy points + 25 tree rows on 33412_5656 (trunk + two crowns each)
+    expect(stats.vegetation.instances).toBeGreaterThan(1000);
+    // 339 OSM lamps: posts + heads + decals are instanced
+    expect(stats.lamps.instances).toBeGreaterThan(100);
+    // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
+    expect(stats.rail.triangles).toBeGreaterThan(0);
+    // 292 wall lines
+    expect(stats.walls.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);
   });
 
@@ -283,6 +315,47 @@ test.describe("desktop viewer", () => {
     expectNoErrors(errors);
   });
 
+  test("a snapshot applied mid-flight wins over the glide", async () => {
+    // A scenic flight owns the camera for up to 3.8 s; a pose set from outside
+    // (snapshot apply, minimap click, QA flyTo) must cancel it, or the next
+    // frame silently glides the camera away again.
+    const target = {
+      mode: "fly" as const,
+      pos: { x: -40, y: 160, z: 30 },
+      epsg: { x: 0, y: 0 },
+      headingDeg: 200,
+      pitchDeg: -15,
+      fov: 55,
+    };
+    await page.evaluate((t) => {
+      const api = window.__poc;
+      if (!(api?.flyToViewpoint && api.applyCameraState)) {
+        throw new Error("flight api incomplete");
+      }
+      // SCENIC_VIEWS[0] (viewpoints.ts) — inside the primary tile.
+      api.flyToViewpoint({
+        id: "carolabruecke",
+        label: "Carolabrücke",
+        description:
+          "Hovering over the Elbe by the Carolabrücke, the river sweeping toward the Altstadt skyline.",
+        mode: "fly",
+        epsg: { x: 412_550, y: 5_656_980 },
+        aboveGround: 70,
+        headingDeg: 245,
+        pitchDeg: -10,
+        fov: 62,
+      });
+      api.applyCameraState(t);
+    }, target);
+    await waitForFrames(page, 3);
+    const state = await page.evaluate(() => window.__poc?.getCameraState?.());
+    expect(state?.pos.x).toBeCloseTo(target.pos.x, 0);
+    expect(state?.pos.y).toBeCloseTo(target.pos.y, 0);
+    expect(state?.pos.z).toBeCloseTo(target.pos.z, 0);
+    expect(state?.mode).toBe("fly");
+    expectNoErrors(errors);
+  });
+
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
@@ -303,6 +376,9 @@ test.describe("desktop viewer", () => {
       () => window.__poc?.buildingCount ?? 0
     );
     expect(buildingsBefore).toBeGreaterThan(0);
+    const trianglesBefore = await page.evaluate(
+      () => window.__poc?.layerStats?.city.triangles ?? 0
+    );
     await page.evaluate(
       ([easting, northing, midHeight, top]) => {
         const api = window.__poc;
@@ -335,6 +411,11 @@ test.describe("desktop viewer", () => {
       buildingsBefore,
       { timeout: slow(30_000) }
     );
+    // The mesh itself shrank, not just the filtered document.
+    const trianglesAfter = await page.evaluate(
+      () => window.__poc?.layerStats?.city.triangles ?? 0
+    );
+    expect(trianglesAfter).toBeLessThan(trianglesBefore);
     expectNoErrors(errors);
   });
 
@@ -399,9 +480,24 @@ test.describe("desktop viewer", () => {
     // while the camera moves. Asserted through __poc.regressed rather than
     // pixels — the passes' visual delta is exactly what SwiftShader renders
     // least like a GPU.
+    const before = await page.evaluate(() => ({
+      frames: window.__poc?.frames ?? 0,
+      shadows: window.__poc?.shadowRenders ?? 0,
+    }));
     await page.keyboard.down("KeyW");
-    await waitForFrames(page, 2);
+    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the 20 m
+    // follow dead zone, so the shadow map must not be redrawn on the way.
+    await waitForFrames(page, 8);
     expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
+    const after = await page.evaluate(() => ({
+      frames: window.__poc?.frames ?? 0,
+      shadows: window.__poc?.shadowRenders ?? 0,
+    }));
+    const frames = after.frames - before.frames;
+    const shadowRenders = after.shadows - before.shadows;
+    expect(frames).toBeGreaterThanOrEqual(8);
+    // Before the dead zone this equalled `frames` (one depth pass per frame).
+    expect(shadowRenders).toBeLessThan(frames / 2);
 
     await page.keyboard.up("KeyW");
     // Recovery is frame-driven (RECOVER_MS of accumulated dt with the camera
@@ -431,7 +527,10 @@ test.describe("mobile", () => {
 
     await page.goto(LITE);
     const webgl = await hasWebGl(page);
-    // biome-ignore lint/suspicious/noSkippedTests: conditional runtime skip — render assertions are meaningless without WebGL
+    if (process.env.CI) {
+      expect(webgl).toBe(true);
+    }
+    // Conditional runtime skip — render assertions are meaningless without WebGL.
     test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: slow(120_000),

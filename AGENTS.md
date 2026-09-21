@@ -22,8 +22,8 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline
-- Playwright for e2e + the screenshot harness; `bun test` for the `lib/` and
-  `scripts/` units
+- Playwright for e2e + the screenshot harness; `bun test` for the `lib/`,
+  `app/_components/` and `scripts/` units
 - Deployed as a static client app; no database, no stateful API routes
 
 ## Commands
@@ -33,26 +33,60 @@ bun install
 bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
-bun lint           # eslint + ultracite (biome)
-bun typecheck      # tsgo --noEmit
+bun lint           # oxlint (rules) + oxfmt --check (formatting)
+bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
+                   # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
 
-Lint is **ultracite** (a biome preset) — it auto-formats on save via the hook
-and enforces a complexity cap; extract helpers rather than fighting it. No
-`console.log` in committed code.
+Linting and formatting are **oxlint + oxfmt** (`.oxlintrc.json`, `.oxfmtrc.json`)
+— biome/ultracite are gone. `bun lint` runs `oxlint --max-warnings=0` then
+`oxfmt --check`; `bun run fix` formats and applies the safe autofixes.
+Run `bun run fix` before `bun run verify` — there is no format-on-save hook
+for Claude Code (it was removed after it reformatted files carrying
+merge-conflict markers); Cursor still runs a fix hook after edits via
+`.cursor/hooks.json`. A complexity cap of 20 is enforced (`complexity`), so
+extract helpers rather than fighting it. No `console.log` in committed code.
+
+**`.oxlintrc.json` names its rules explicitly, on purpose.** oxlint's default is
+the `correctness` category alone, which on this repo reports nothing — so the
+rules ported from biome (`no-var`, `prefer-const`, `typescript/no-explicit-any`,
+`ban-ts-comment`, `no-namespace`, …) and the react/Next.js ones are listed one by
+one. Do not "simplify" that to a category: `-D suspicious -D pedantic` adds 411
+findings and `-D style` adds 6551, nearly all of them rules that do not fit this
+codebase (`react-in-jsx-scope` is obsolete under the modern JSX transform,
+`no-inline-comments` fights the commenting style, `max-lines-per-function`
+fights the scene-setup functions). Equally, ultracite's own oxlint preset is as
+opinionated as its biome one — adopting it wholesale is a style refactor, not a
+config change.
 
 ## Where things live
 
-- `app/_components/` — the viewer: `create-app.ts` (scene/loop/handle),
-  `terrain-layer.ts`, `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts`,
-  `sun-rig.ts`, `post-stack.ts`, `visual-style.ts`, `minimap.tsx`,
-  `city-walk.tsx` (HUD), `poc-debug.ts` (the `window.__poc` test/QA hook)
+- `app/_components/` — the viewer, grouped:
+  - spine: `create-app.ts` (scene/loop/handle), `city-walk.tsx` (HUD),
+    `city-walk-client.tsx` (the `ssr: false` mount + tile sources),
+    `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
+    (`?scene=lite`), `webgl-support.ts` (the WebGL2 preflight),
+    `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
+  - layers: `terrain-layer.ts`, `water-layer.ts`, `vegetation-layer.ts`,
+    `city-layer.ts`, `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`,
+    `inserted-building.ts`
+  - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
+    `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`,
+    `look-defaults.ts` (initial slider values; the table itself is
+    `lib/city/look-controls.ts`)
+  - input/camera: `fps-movement.ts`, `touch-controls.ts`, `collision.ts`,
+    `camera-flight.ts`, `viewpoints.ts`, `virtual-joystick.tsx`
+  - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
-  ground-clamp) with `bun test` units alongside
-- `scripts/` — `extract-dlm.sh`, `extract-canopy.sh` (offline data bakes) and
+  ground-clamp, the look-controls table, the Snapshot contract) with
+  `bun test` units alongside
+- `scripts/` — the offline data bakes `extract-dlm.sh`, `extract-canopy.sh`,
+  `extract-ndvi.sh`, `extract-roof-colour.sh`, `extract-lamps.sh`,
+  `extract-walls.sh`, `extract-rail.sh` (+ `ndvi-at-trees.py`, the NDVI
+  sampler `extract-ndvi.sh` calls), `bake-city-mesh.ts` and
   `prepare-data.ts` (bakes the committed artifacts into `public/data` under
   content-hashed names + `manifest.json`: each DGM GeoTIFF becomes a gzipped
   uint16 heightfield, each CityJSON a binary building mesh via
@@ -89,10 +123,14 @@ Tiles are named `33EEE_NNNN`; the primary is `33412_5656_2_sn`, loaded with a
 
 ## Data pipeline
 
-Raw downloads (DLM ~5 GB, DOM1/DGM ~100s MB) **must not be committed** — keep
-them in `data/_raw/` (gitignored). No Git-LFS. Only small derived per-tile
-artifacts (`data/dlm/*.png|geojson`, `data/dgm/…`) are committed; `prepare-data.ts`
-copies them to `public/data/` at build. Pipeline notes:
+Bulk raw downloads (DLM ~5 GB, DOM1, DOP, OSM `.osm.pbf`) **must not be
+committed** — keep them in `data/_raw/` (gitignored). The exception is the
+**DGM1 GeoTIFF + `.tfw` per tile (~13–15 MB, `data/dgm/`)**: it is committed
+because `prepare-data.ts` bakes the heightfield from it at build time and
+`extract-canopy.sh`/`extract-rail.sh` read it. No Git-LFS. Only small derived
+per-tile artifacts (`data/dlm/*.png|geojson`, `data/dop/*.json`) are committed
+otherwise; `prepare-data.ts` publishes them to `public/data/` at build.
+Pipeline notes:
 
 - `extract-dlm.sh` bakes a 4096² class-id PNG + a pastel **RGBA splatmap**
   (RGB = palette, **A = water coverage**). Palette mapping uses PIL **palette
@@ -166,7 +204,7 @@ camera pose + sun time + look sliders as JSON; `__poc.getCameraState()` /
 a snapshot JSON into `shots/` and run:
 
 ```bash
-bunx playwright test e2e/snapshot-shot.spec.ts --headed
+bun run shots
 ```
 
 It writes a clean canvas plate (HUD hidden) to `shots/<name>.png` — read it and
@@ -184,8 +222,8 @@ viewer pages halve each other's frame rate.
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It loads
 the **primary tile only** (boot 14 s → 4.4 s, 74 MB → 18 MB), shadow-maps at
-**512²** instead of 3072², and renders at **`pixelRatio` 0.5** with a quarter-res
-transmission buffer. Same loaders, same layers, same shader programs — a quarter
+**512²** instead of 3072², and renders at **`pixelRatio` 0.5**. Same loaders,
+same layers, same shader programs — a quarter
 of the world and a quarter of the pixels. The knobs it does *not* touch are the
 ones a test asserts on. Two rules when you add a spec:
 
@@ -211,10 +249,50 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - TypeScript strict. No `any` without a `// reason:` comment.
 - Version pins: exact for the three.js stack (`three`, `@types/three`,
   `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`), the
-  framework trio and the formatters; caret for everything else. The Bun version
-  comes from `packageManager` in `package.json` (CI reads it via
-  `bun-version-file`), and `.mcp.json` pins the shadcn MCP server to the
-  lockfile version rather than `@latest`.
+  framework trio and the formatters; caret for everything else. `suncalc` is
+  pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
+  float would rotate the sun rather than fail. The Bun version comes from
+  `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
+  `.mcp.json` pins **both** MCP servers (shadcn, next-devtools) to an exact
+  version rather than `@latest`.
+- **One TypeScript, and it is 7.x (the native compiler).** `bun typecheck` and
+  `next build` both run it; there is no second checker. Note what TS 7's npm
+  package *is*: a per-platform native binary plus a `tsc` launcher. It ships
+  **no `lib/typescript.js`**, so the classic JS compiler API is gone and any
+  tool that consumes it (typescript-eslint, the old tsserver) cannot run on it.
+  That is why ESLint is no longer here — see below. If you ever need that API
+  back, `@typescript/typescript6` is the shim that provides it. The same
+  applies to the editor: `.vscode/settings.json` no longer points
+  `js/ts.tsdk.path` at `node_modules/typescript/lib`, because there is no
+  `tsserver` there any more — let the TypeScript extension supply its own.
+- **No ESLint — oxlint replaced it.** typescript-eslint hard-crashes on TS 7
+  (`Cannot read properties of undefined (reading 'Cjs')`) and no channel of it,
+  canary included, accepts `typescript >=7`. oxlint needs no TypeScript at all
+  (it has its own Rust parser), so it cannot hit that wall. Coverage was checked
+  rule by rule against the 86 rules `eslint-config-next` had enabled here, and
+  all of them are reachable except **one**:
+  `@next/next/no-location-assign-relative-destination`, which oxlint has no
+  equivalent for (no current exposure — nothing here calls `location.assign`).
+  **Careful when auditing oxlint coverage**: `oxlint --print-config` lists only
+  the *enabled* rules, and its default is the `correctness` category alone —
+  the full catalogue is 653 rules (`oxlint --print-config -D all`). Several
+  rules you would expect are present but off by default, which is why
+  `.oxlintrc.json` names `react/rules-of-hooks`, `react/display-name`,
+  `react/no-unescaped-entities`, `react/jsx-no-comment-textnodes` and
+  `import/no-anonymous-default-export` explicitly. Do not re-add ESLint to
+  recover a rule without first checking the full catalogue.
+- `types/n8ao.d.ts` is a hand-written shim because `n8ao` ships no types. Do
+  not add one for `three-mesh-bvh`: the package declares its own `three`
+  augmentation (`BufferGeometry.boundsTree`, `Raycaster.firstHitOnly`, and
+  `BatchedMesh` on top).
+- `tsconfig.json`'s `allowJs: true` is **not** removable — `next build`
+  rewrites the file to put it back, which would dirty the tree on every build.
+- **Markdown is excluded from oxfmt** (`.oxfmtrc.json`). It rewrites `*em*` to
+  `_em_` and, worse, strips the indent from continuation lines inside list
+  items, which detaches them from their bullet. Prose here stays hand-wrapped.
+- **No CSS linting any more.** biome checked `app/globals.css` (unknown at-rules,
+  unknown units, descending specificity); oxlint does not lint CSS at all. oxfmt
+  still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
 - Tailwind for styling; components in `app/_components/` (route-private) or

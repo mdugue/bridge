@@ -1,0 +1,79 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "nextjs",
+    "jsx-a11y",
+    "import",
+    "typescript",
+    "oxc",
+    "unicorn"
+  ],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/display-name": "error",
+    "react/no-unescaped-entities": "error",
+    "react/jsx-no-comment-textnodes": "error",
+    "import/no-anonymous-default-export": "warn",
+
+    "complexity": ["error", { "max": 20 }],
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "no-var": "error",
+    "prefer-const": "error",
+    "prefer-rest-params": "error",
+    "no-unused-vars": "error",
+    "no-unused-expressions": "error",
+    "no-array-constructor": "error",
+    "no-object-constructor": "error",
+    "no-new-wrappers": "error",
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-self-compare": "error",
+    "no-template-curly-in-string": "error",
+    "no-unsafe-optional-chaining": "error",
+
+    "typescript/no-explicit-any": "error",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-non-null-asserted-optional-chain": "error",
+    "typescript/no-misused-new": "error",
+    "typescript/no-this-alias": "error",
+    "typescript/prefer-as-const": "error",
+    "typescript/no-duplicate-enum-values": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/triple-slash-reference": "error"
+  },
+  "ignorePatterns": [
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "components/ui/**",
+    "hooks/use-mobile.ts",
+    ".agents/**",
+    "playwright-report/**",
+    "test-results/**",
+    "coverage/**",
+    "public/**",
+    "data/**",
+    "aesthetic-sandbox.html"
+  ],
+  "overrides": [
+    {
+      "files": ["lib/city/terrain-geometry.ts"],
+      "rules": { "oxc/erasing-op": "off" }
+    },
+    {
+      "files": ["**/*.{test,spec}.{ts,tsx}", "e2e/**"],
+      "rules": {
+        "complexity": "off",
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ]
+}

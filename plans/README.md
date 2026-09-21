@@ -25,17 +25,17 @@ is not re-audited next time.
 | 001 | Make the test baseline real — `app/` tests run, e2e waits for frames, `bun run verify` | P1 | S | — | DONE (PR #18) |
 | 002 | Remove per-frame waste: terrain BVH at load, on-demand shadow map, half-res transmission, no MSAA backbuffer | P1 | S | 001 | DONE (PR #18; the shadow gate lives on the light, see History) |
 | 003 | Derive ink edges from CityJSON rings instead of welding the GPU mesh | P1 | M | 001 | REJECTED — #16 removed ink edges; no target left |
-| 004 | Preprocess the DGM into a heightfield at build time | P1 | M | — | DONE (PR #25; primary 1024², neighbours 512², `lib/city/tile.ts` owns the block; the size-only staleness check survives for the *copies* — plan 011 removes it) |
+| 004 | Preprocess the DGM into a heightfield at build time | P1 | M | — | DONE (PR #25; primary 1024², neighbours 512², `lib/city/tile.ts` owns the block; the size-only staleness check for the *copies* went with the content-hashed publish step in PR #28) |
 | 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | P2 | M | 001 | DONE (PR #25) |
 | 006 | Scaffold cleanup, unused deps, lint config, fonts, README + AGENTS.md | P2 | M | — | DONE (PR #25) |
 | 007 | Adaptive quality while the camera moves (skip AO + DoF during motion) | P2 | S | 002 | DONE (PR #25; step 4, the pixel-ratio drop, was not attempted — needs a real-GPU look) |
-| 008 | Make the verification net catch what it exists to catch — e2e fails without WebGL, per-layer census, fixture-integrity and shader-anchor tests, CI gate, harness opt-in | P1 | M | — | TODO |
-| 009 | Re-render the shadow map only when the player has moved a real distance (20 m dead zone; LOD swaps invalidate; `shadowRenders` counter; sun-rig unit test) | P1 | S | 008 (recommended) | TODO |
+| 008 | Make the verification net catch what it exists to catch — e2e fails without WebGL, per-layer census, fixture-integrity and shader-anchor tests, CI gate, harness opt-in | P1 | M | — | PARTIAL — steps 1–4 and 8 DONE (fail-not-skip on CI + `afterAll` error check; per-layer census on `__poc.layerStats` + e2e assertion incl. demolish shrinking the mesh; failure screenshots/traces; the shot harness is opt-in via `bun run shots`; `lib/city` purity guard). Open: step 5 (CI e2e path gate, coverage artifact), 6 (fixture-integrity test — `lib/city/tile.test.ts` exists from plan 010 but does not check the GeoJSON contracts), 7 (shader-anchor tests), 8 (`lib/city` purity guard) |
+| 009 | Re-render the shadow map only when the player has moved a real distance (20 m dead zone; LOD swaps invalidate; `shadowRenders` counter; sun-rig unit test) | P1 | S | 008 (recommended) | DONE (the vegetation step moved into a `stepVegetation` helper to stay under the loop's complexity cap) |
 | 010 | One tile artifact map in `lib/city/tile.ts`, one optional-fetch/abort policy, walls fetched once, neighbours loaded concurrently | P1 | M | 008; after 009 | DONE (loading-performance PR; ran before 008/009 — the layer census that plan 008 adds should still be added) |
-| 011 | Six confirmed defects: flight not cancelled by teleport/snapshot/flyTo, keyup swallowed by text fields, size-only copy staleness, minimap re-decode on demolish, null/MultiPolygon rail data, WebGL2 preflight | P2 | M | 008; after 010 | TODO |
-| 012 | Drive the 21 look controls from one table (`lib/city/look-controls.ts`), validate the Snapshot contract (`parseSnapshot`), re-seed a fresh handle, share the type with the e2e harness | P2 | L | 008; after 011 | TODO |
-| 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | TODO |
-| 014 | Bring AGENTS.md, the city-walker skill, `docs/`, code comments and the OSM attribution back in line with the code | P3 | S–M | after 008–013 | TODO |
+| 011 | Six confirmed defects: flight not cancelled by teleport/snapshot/flyTo, keyup swallowed by text fields, size-only copy staleness, minimap re-decode on demolish, null/MultiPolygon rail data, WebGL2 preflight | P2 | M | 008; after 010 | DONE (step 3 was already moot: PR #28 publishes every artifact under a content hash; the WebGL2 preflight lives in the HUD's status initializer because the React Compiler lint forbids setState in an effect body; neighbour footprints are memoised per streamed layer, not precomputed) |
+| 012 | Drive the 21 look controls from one table (`lib/city/look-controls.ts`), validate the Snapshot contract (`parseSnapshot`), re-seed a fresh handle, share the type with the e2e harness | P2 | L | 008; after 011 | DONE (the re-seed reads the HUD state through a ref synced in its own effect — listing `look` as a boot-effect dependency would reboot the renderer on every slider move; `useState` count is 19 incl. plan 011's WebGL2 probe) |
+| 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | DONE (except `.editorconfig`/`.vscode/extensions.json`, and `allowJs` — `next build` re-adds it; ultracite held at 7.8.3, see below) |
+| 014 | Bring AGENTS.md, the city-walker skill, `docs/`, code comments and the OSM attribution back in line with the code | P3 | S–M | after 008–013 | DONE (ran before 008/009/013, so the skill's shadow row and the typecheck command describe the current state; the platform GeoJSON is written by `ogr2ogr` with no post-processing step, so it carries no `attribution` member — the HUD footer, README and the lamps/walls/bridge-deck emitters do; `bun run shots` not added to the README because plan 008 has not landed) |
 | 015 | Progressive first frame: show the primary tile as soon as its terrain + buildings exist, stream the neighbours, vegetation, lamps, rails and walls afterwards behind a non-blocking chip | P1 | L | the loading-performance PR (010, hashed data, baked meshes); 008 recommended | DONE (loading-performance PR; `?scene=lite&block=1` exercises the streaming headless) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample (Bun ≥ 1.4 pin, lockfile v2, pure-JS PNG decoder for the pixel test, sharp out) | P3 | S | #28 + #29 merged; **Step 0**: the Vercel build must run Bun 1.4 | TODO — gated on Step 0; measured +24 % RGB / +21 % class file size, pixels equivalent |
 
@@ -246,10 +246,22 @@ re-checked; the ones still open are folded in below with fresh evidence.
   on any `pointerup`; `#27` (`crs.ts:22` trailing-slash regex) — all latent
   on the shipped data.
 - **Maintainer actions**: close Dependabot #3/#12/#13/#15 (superseded) and
-  #26 (plan 013 migrates suncalc); decide ESLint 10 (blocked by
-  `eslint-config-next`'s plugin peers; 9.x is EOL) vs. dropping ESLint
-  (loses the React-Compiler-aware hooks rules); delete or `_raw/` the two
+  #26 (plan 013 migrated suncalc); delete or `_raw/` the two
   unused `33414_*` DGM tiles (~28 MB); move or delete `aesthetic-sandbox.html`.
+- **Resolved since**: TypeScript 7 and bun 1.4.2 are both in (see below); the
+  ESLint-10-vs-drop-ESLint question is settled — ESLint is gone, replaced by
+  oxlint, because TS 7 ships no JS compiler API for typescript-eslint to use.
+  The four rules that move left no home are listed in AGENTS.md.
+- **Deliberately held back (re-checked 2026-09-21, registry)**:
+  - `ultracite` is **gone** along with biome — its oxlint preset is as
+    opinionated as its biome one (`no-plusplus`, `prefer-destructuring`,
+    `no-inline-comments`), so adopting it is the same style refactor the 451
+    biome violations represented, and `.oxlintrc.json` cannot `extends` its
+    `.mjs` presets anyway (JSON configs extend JSON only).
+  - `n8ao` 1.10.3 → 2.0.1. Ships no types (`types/n8ao.d.ts` would need
+    rewriting) and changes SSAO output; per AGENTS.md, a visual change needs
+    the `--headed` snapshot harness on a real GPU, which headless CI cannot do.
+  - `postprocessing` 7.x is alpha/beta only.
 
 ## Findings considered and rejected
 

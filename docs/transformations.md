@@ -103,7 +103,9 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   ~2 m/px and median-zero, so a single-pixel sample left ~95 % of crowns reading
   "dry" (invisible); the footprint max + recentre make lush↔dry read clearly.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
-  **multi-tuft crown LOD** (rich near / cheap icosphere far, per-chunk distance);
+  the cheap crown is a detail-2 icosphere (≈320 tris) with lobes;
+  **multi-tuft crown LOD** (rich ~1 440-tri crown near / cheap icosphere far,
+  per-chunk distance, 220 m in / 300 m out);
   **backlight shimmer** (one shadow-gated sample, far cheaper than transmission).
 - **Canopy motion** — per-frame in `buildCrownMaterial`, **main pass only** (the
   shadow/depth material has none of it → no shadow-pass cost, no extra buffers):
@@ -198,6 +200,21 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   `castShadow=false`; `normalBias=0`; tight camera-following frustum. Full recipe
   and dead-ends in the [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 
+### Atmosphere & time of day
+- **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
+  pooling in low ground, folded into every fog-receiving material via
+  `onBeforeCompile`; HUD *Talnebel*. `height-fog.ts`.
+- **River mist** — DLM water mask (the water surface) → a drifting, sun-lit
+  mist sheet over the Elbe; HUD *Flussnebel*. `water-layer.ts` `createWaterMist`.
+- **Drifting clouds** — sun instant → the sky dome's `time`/`cloudSpeed` so the
+  cloud cover moves with the frame. `sun-rig.ts`.
+- **Golden/blue-hour palette stops** — sun altitude → sky/fog/hemisphere colours
+  from a palette with stops at −2° (blue hour) and +6° (golden hour).
+  `lib/city/atmosphere.ts` `STOPS`.
+- **Meadow mottle** — DLM class 1 (farmland/meadow) → a low-frequency
+  colour + normal mottle so grass reads as ground, not paint. `terrain-layer.ts`
+  `GRASS_MOTTLE`/`GRASS_NORMAL`.
+
 ---
 
 ## 🧪 Experimental
@@ -229,8 +246,10 @@ research that produced them):
    per-tree position/height/crown; bake to per-tile GeoJSON.
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). Sizeable integration.
-8. **Adaptive / half-res post** — fill-rate is the bottleneck; a resolution scale
-   under load buys headroom before the larger WebGPU move.
+8. **Adaptive resolution while moving** — *partly shipped*: AO and DoF are
+   skipped while the camera moves (`lib/city/regression.ts`, plan 007) and DoF
+   runs at half resolution; a pixel-ratio drop under motion is the open half
+   (needs a real-GPU look).
 9. **Cable-stayed / truss bridge structures** — arch + beam now ship (✅ above);
    `bridge:structure=cable-stayed` (Pieschener Molenbrücke) / `truss` still fall
    back to a flat soffit. Pylons + stay cables / truss webs would finish the set.

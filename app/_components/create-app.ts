@@ -21,8 +21,10 @@ import { fogRangeFor } from "@/lib/city/atmosphere";
 import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { parseHeightfieldHeader } from "@/lib/city/heightfield";
+import type { LookTarget } from "@/lib/city/look-controls";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
+import type { CameraStateJson } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
 import { createCameraFlight } from "./camera-flight";
@@ -53,6 +55,7 @@ import {
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
+import { type SceneCensus, sceneCensus } from "./scene-census";
 import {
   currentDeviceTier,
   currentSceneProfile,
@@ -111,10 +114,21 @@ const SKY_COLOR = 0x9f_b6_cc;
 /** Default fog amount (0..1). Kept light — a gentle far haze, not a near wall. */
 export const DEFAULT_ATMOSPHERE = 0.2;
 
+export type LayerName =
+  | "city"
+  | "lamps"
+  | "rail"
+  | "terrain"
+  | "vegetation"
+  | "walls"
+  | "water";
+
 export interface CityWalkStats {
   buildingCount: number;
   /** estimated GPU footprint of geometry + textures + shadow map (MB) */
   gpuMegabytes: number;
+  /** what each layer actually built — the e2e suite asserts on these */
+  layerStats: Record<LayerName, SceneCensus>;
   shadowsEnabled: boolean;
   terrainVertexCount: number;
 }
@@ -130,18 +144,10 @@ export interface PlayerPose {
 /**
  * Full camera state for reproducible snapshots: enough to drop the camera back
  * exactly where it was. `pos` is the authoritative world position (Y-up);
- * `epsg` is the human-readable ground coordinate. Angles in degrees.
+ * `epsg` is the human-readable ground coordinate. Angles in degrees. It IS the
+ * JSON shape (`lib/city/snapshot.ts`), so a snapshot round-trips untouched.
  */
-export interface CameraState {
-  epsg: { x: number; y: number };
-  fov: number;
-  /** 0 = north, clockwise positive (east) */
-  headingDeg: number;
-  mode: MovementMode;
-  /** + = looking up, - = looking down */
-  pitchDeg: number;
-  pos: { x: number; y: number; z: number };
-}
+export type CameraState = CameraStateJson;
 
 /**
  * Every URL one tile may be loaded from (built from `tileUrls()` in
@@ -209,7 +215,12 @@ export interface CityWalkOptions {
   signal?: AbortSignal;
 }
 
-export interface CityWalkHandle {
+/**
+ * The 21 percent-style look setters come from LookTarget (one per row of
+ * LOOK_CONTROLS in lib/city/look-controls.ts — the table is their
+ * documentation); the compiler proves the handle literal implements each.
+ */
+export interface CityWalkHandle extends LookTarget {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
   demolishAtCrosshair: () => void;
@@ -258,60 +269,18 @@ export interface CityWalkHandle {
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
-  /** fog amount 0..1 (0 = clear day, 1 = thick painterly haze) */
-  setAtmosphere: (amount: number) => void;
-  /** building storey contour-line (Höhenlinien) strength 0..1 */
-  setBuildingBands: (strength: number) => void;
-  /** warm dusk interior glow (Abendlicht) on commercial/public buildings 0..1 */
-  setBuildingDuskGlow: (strength: number) => void;
-  /** eave cornice-stroke (Traufkante) strength 0..1 */
-  setBuildingEave: (strength: number) => void;
-  /** building ground-contact darkening (Boden-Verlauf) strength 0..1 */
-  setBuildingGroundShade: (strength: number) => void;
-  /** building Fresnel rim (Streiflicht) strength 0..1 */
-  setBuildingRim: (strength: number) => void;
-  /** roof colour mix (Dachfarbe) 0..1; real DOP colour else terracotta/slate */
-  setBuildingRoofTint: (strength: number) => void;
-  /** roof vividness (Dachsättigung) 0..1; hue-preserving chroma boost on DOP colour */
-  setBuildingRoofVibrance: (strength: number) => void;
-  /** per-building roughness jitter (Materialstreuung) 0..1 */
-  setBuildingRoughness: (strength: number) => void;
-  /** per-building clay tint (Farbvariation) mix 0..1; 0 = flat clay */
-  setBuildingTint: (strength: number) => void;
-  /** transparency 0..1 of the ACTIVE style (ghost: frosted, clay: alpha) */
-  setBuildingTransparency: (transparency: number) => void;
-  /** soft contact-shadow (SSAO) strength 0..1; 0 disables the pass */
-  setContactShadows: (strength: number) => void;
-  /** warm-near/cool-far color grading intensity 0..1 */
-  setDepthGrading: (intensity: number) => void;
   /** photographic depth of field with crosshair autofocus */
   setDepthOfField: (enabled: boolean) => void;
   /** manual focus distance (m), used when focus mode is "manual" */
   setFocusDistance: (meters: number) => void;
   /** depth-of-field focus: "auto" (crosshair) or "manual" (fixed distance) */
   setFocusMode: (mode: FocusMode) => void;
-  /** valley height-fog (Talnebel) strength 0..1; pools haze in low ground */
-  setHeightFog: (strength: number) => void;
-  /** meadow NDVI tint (Wiesenfärbung) 0..1; lush-green↔dry on farmland/meadow */
-  setMeadowNdvi: (strength: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
-  /** paper-grain overlay intensity 0..1 */
-  setPaperGrain: (intensity: number) => void;
   setSun: (date: Date) => SunState;
-  /** (B) sway-coupled crown brightness (Windhelligkeit) strength 0..1 */
-  setTreeLeafBright: (strength: number) => void;
-  /** (A) wind-gust leaf-flutter colour shimmer (Blattflimmern) strength 0..1 */
-  setTreeLeafFlutter: (strength: number) => void;
   /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
   setTreeMultiTuft: (enabled: boolean) => void;
-  /** backlit canopy shimmer strength 0..1 */
-  setTreeShimmer: (strength: number) => void;
-  /** backlit (shadow-gated) canopy translucency strength 0..1 on near/large trees */
-  setTreeTranslucency: (strength: number) => void;
-  /** river-mist (Flussnebel) strength 0..1 over the water surface */
-  setWaterMist: (strength: number) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -346,7 +315,7 @@ function createRenderer(
   );
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  // three 0.184 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
+  // three r182 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
   // and VSM paints a grid on lit faces here, so PCFShadowMap is the cleanest
   // option: tight contact + artefact-free surfaces. Its only weakness is the
   // texel staircase on shadow edges at a grazing sun, which a fine-texel
@@ -666,6 +635,15 @@ async function bootApp(
   const terrainMeshes: Mesh[] = [terrain.mesh];
   const wallFeaturesByTile: WallFeature[][] = [primaryScene.wallFeatures];
   const extraCities: CityLayer[] = [];
+  const footprintCache = new WeakMap<CityLayer, FootprintPoly[]>();
+  const neighbourFootprints = (layer: CityLayer): FootprintPoly[] => {
+    let polys = footprintCache.get(layer);
+    if (!polys) {
+      polys = cityFootprints(layer);
+      footprintCache.set(layer, polys);
+    }
+    return polys;
+  };
 
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles. Built ONCE here (before the first render, with no heads yet) so
@@ -816,7 +794,9 @@ async function bootApp(
    * sun or the frustum moves, so **every new scene object and every material
    * change that alters the depth pass has to call this** — a missing call shows
    * up as a stale shadow (a demolished building still casting, a new one not),
-   * never as a crash.
+   * never as a crash. The render loop calls it when a crown LOD swap changes
+   * the casters; the follow dead zone (sun-rig.ts) means nothing else redraws
+   * the map while the player wanders inside it.
    */
   const invalidateShadows = () => {
     sunRig.invalidateShadow();
@@ -955,6 +935,8 @@ async function bootApp(
   };
 
   const applyCameraState = (s: CameraState) => {
+    // A pose set from outside wins over a scenic glide in progress.
+    cancelFlight();
     // Fly first so the ground clamp doesn't yank an aerial pose down to eye
     // height before the frame even renders.
     setMovementMode(s.mode);
@@ -977,6 +959,8 @@ async function bootApp(
   };
 
   const teleportTo = (epsgX: number, epsgY: number) => {
+    // A pose set from outside wins over a scenic glide in progress.
+    cancelFlight();
     const pos = epsgToWorld(epsgX, epsgY, offset);
     const ground = heightAt(epsgX, epsgY);
     camera.position.set(
@@ -1041,6 +1025,22 @@ async function bootApp(
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
       gpuMegabytes: Math.round(gpuBytes() / 1_048_576),
+      layerStats: {
+        city: sceneCensus([
+          cityLayer.group,
+          ...extraCities.map((c) => c.group),
+        ]),
+        terrain: sceneCensus(terrains.map((t) => t.mesh)),
+        water: sceneCensus(
+          terrains.flatMap((t) =>
+            t.water ? [t.water.mesh, t.water.mistMesh] : []
+          )
+        ),
+        vegetation: sceneCensus(vegControls.map((v) => v.group)),
+        lamps: sceneCensus(lampControls.map((l) => l.group)),
+        rail: sceneCensus(railControls.map((r) => r.group)),
+        walls: sceneCensus(wallControls.map((w) => w.group)),
+      },
     });
   };
 
@@ -1119,9 +1119,10 @@ async function bootApp(
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {
-    if (!isTextEntry(e.target)) {
-      movement.release(e.code);
-    }
+    // Always release: the press may have landed on the canvas while the
+    // release lands in a text field the user clicked into meanwhile. Releasing
+    // a key that was never pressed is a no-op.
+    movement.release(e.code);
   };
   // A keyup delivered to another window (Alt-Tab, a native dialog) would leave
   // the key held forever and the camera walking on its own.
@@ -1240,6 +1241,23 @@ async function bootApp(
   };
 
   const timer = new Timer();
+  // Swap each vegetation chunk between the rich and cheap crown by distance,
+  // and advance the wind sway (same clock as the water ripple). A swap changes
+  // what casts shadows, so it invalidates the map — with the follow dead zone
+  // (sun-rig.ts) nothing else redraws it for us.
+  const stepVegetation = (elapsed: number) => {
+    let lodChanged = false;
+    for (const veg of vegControls) {
+      if (veg.updateLod(camera.position)) {
+        lodChanged = true;
+      }
+      veg.setTime(elapsed);
+    }
+    if (lodChanged) {
+      invalidateShadows();
+    }
+  };
+
   let tickDue = 0;
   let fpsDue = 0;
   renderer.setAnimationLoop((time) => {
@@ -1264,12 +1282,7 @@ async function bootApp(
     sunRig.setTime(elapsed);
     // Repoint the shared real lamp lights at the nearest heads.
     lampLights?.updateNearest(camera.position);
-    // Swap each vegetation chunk between the rich and cheap crown by distance,
-    // and advance the wind sway (same clock as the water ripple).
-    for (const veg of vegControls) {
-      veg.updateLod(camera.position);
-      veg.setTime(elapsed);
-    }
+    stepVegetation(elapsed);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(getPose());
@@ -1281,8 +1294,10 @@ async function bootApp(
       fpsDue = timer.getElapsed() + 0.5;
       opts.onFps?.(fps);
     }
+    // Read the flag BEFORE the render: three clears it once the map is drawn.
+    const shadowRendered = sunRig.shadowPending();
     postStack.render(dt);
-    tickPocFrame();
+    tickPocFrame(shadowRendered);
   });
   cleanups.push(() => renderer.setAnimationLoop(null));
 
@@ -1472,6 +1487,8 @@ async function bootApp(
     demolishAtCrosshair,
     enterImmersive: () => controls.lock(),
     flyTo: (position, lookAt) => {
+      // A pose set from outside wins over a scenic glide in progress.
+      cancelFlight();
       setMovementMode("fly");
       camera.position.set(position.x, position.y, position.z);
       camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
@@ -1504,9 +1521,11 @@ async function bootApp(
       }
       movement.setAnalog(x, y);
     },
+    // Neighbours are never demolished, so their footprints are computed once
+    // per layer (they stream in after the first frame) and reused thereafter.
     getFootprints: () => [
       ...cityFootprints(cityLayer),
-      ...extraCities.flatMap(cityFootprints),
+      ...extraCities.flatMap(neighbourFootprints),
     ],
     landcoverTiles,
     terrainBounds: unionBounds,

@@ -92,7 +92,8 @@ export interface VegetationControl {
   setTime: (seconds: number) => void;
   /** backlit (shadow-gated) translucency strength 0..1 on near/large crowns */
   setTranslucency: (strength: number) => void;
-  updateLod: (cameraPos: Vector3) => void;
+  /** swaps crown LOD per chunk; returns true when any chunk changed (the shadow map must then be redrawn) */
+  updateLod: (cameraPos: Vector3) => boolean;
 }
 
 interface CellLod {
@@ -871,6 +872,7 @@ export async function loadVegetation(
     // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in
     // the chunk (sphere centre minus radius) with enter/exit hysteresis.
     updateLod: (cameraPos) => {
+      let changed = false;
       for (const c of cells) {
         const sphere = c.cheap.boundingSphere;
         const near = sphere
@@ -878,9 +880,13 @@ export async function loadVegetation(
           : Number.POSITIVE_INFINITY;
         const wantRich =
           multiTuft && near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
+        if (wantRich !== c.rich.visible) {
+          changed = true;
+        }
         c.rich.visible = wantRich;
         c.cheap.visible = !wantRich;
       }
+      return changed;
     },
   };
 }

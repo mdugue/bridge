@@ -29,6 +29,9 @@ function serverCommand(): string {
 
 export default defineConfig({
   testDir: "./e2e",
+  // The --headed snapshot harness renders every shots/*.json at the full
+  // profile and overwrites the PNGs; it only runs when asked for (bun run shots).
+  testIgnore: process.env.SHOTS ? [] : ["**/snapshot-shot.spec.ts"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -53,7 +56,9 @@ export default defineConfig({
     : [["html", { open: "never" }]],
   use: {
     baseURL,
-    trace: "on-first-retry",
+    // A first-attempt failure leaves something to look at (retries: 0 locally).
+    screenshot: "only-on-failure",
+    trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

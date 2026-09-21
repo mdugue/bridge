@@ -7,10 +7,13 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    # Superseded PRs still occupy a slot until a maintainer closes them, so a
+    # tight cap lets one stale major starve every other group. 10 keeps the
+    # grouped updates flowing while the queue drains.
+    open-pull-requests-limit: 10
     groups:
       next:
-        patterns: [next, "@next/*", eslint-config-next]
+        patterns: [next, "@next/*"]
       react:
         patterns: [react, react-dom, "@types/react", "@types/react-dom"]
       tailwind:
@@ -18,7 +21,7 @@ updates:
       shadcn:
         patterns: [shadcn, "@base-ui/*"]
       lint-and-format:
-        patterns: [eslint, eslint-*, biome, "@biomejs/*", ultracite]
+        patterns: [oxlint, oxfmt]
       # The three.js stack moves as one: postprocessing caps `three`, and
       # n8ao / three-mesh-bvh / the CityJSON loader all peer on it, so a solo
       # bump is either unmergeable or a silent version skew.

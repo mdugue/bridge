@@ -71,54 +71,45 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
+import {
+  clampPct,
+  LOOK_BY_KEY,
+  LOOK_CONTROLS,
+  type LookGroup,
+  type LookKey,
+  type LookPct,
+  type LookTarget,
+} from "@/lib/city/look-controls";
 import type { FootprintPoly } from "@/lib/city/minimap";
+import {
+  parseSnapshot,
+  SNAPSHOT_VERSION,
+  type Snapshot,
+  type SnapshotLook,
+} from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
-  type CameraState,
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
-  DEFAULT_ATMOSPHERE,
   type PlayerPose,
   type TileSrc,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
-import { DEFAULT_HEIGHT_FOG } from "./height-fog";
+import { DEFAULT_LOOK_PCT } from "./look-defaults";
 import { Minimap } from "./minimap";
 import { updatePocDebug } from "./poc-debug";
 import {
-  DEFAULT_CONTACT_SHADOWS,
-  DEFAULT_DEPTH_GRADING,
   DEFAULT_DOF,
   DEFAULT_FOCUS_DISTANCE,
   DEFAULT_FOCUS_MODE,
-  DEFAULT_PAPER_GRAIN,
   type FocusMode,
 } from "./post-stack";
 import type { SunState } from "./sun-rig";
-import { DEFAULT_MEADOW_NDVI } from "./terrain-layer";
-import {
-  DEFAULT_TREE_LEAF_BRIGHT,
-  DEFAULT_TREE_LEAF_FLUTTER,
-  DEFAULT_TREE_MULTITUFT,
-  DEFAULT_TREE_SHIMMER,
-  DEFAULT_TREE_TRANSLUCENCY,
-} from "./vegetation-layer";
+import { DEFAULT_TREE_MULTITUFT } from "./vegetation-layer";
 import { SCENIC_VIEWS } from "./viewpoints";
 import { VirtualJoystick } from "./virtual-joystick";
-import {
-  DEFAULT_BUILDING_BANDS,
-  DEFAULT_BUILDING_DUSK_GLOW,
-  DEFAULT_BUILDING_EAVE,
-  DEFAULT_BUILDING_GROUND_SHADE,
-  DEFAULT_BUILDING_RIM,
-  DEFAULT_BUILDING_ROOF_TINT,
-  DEFAULT_BUILDING_ROOF_VIBRANCE,
-  DEFAULT_BUILDING_ROUGHNESS,
-  DEFAULT_BUILDING_TINT,
-  DEFAULT_CLAY_TRANSPARENCY,
-} from "./visual-style";
-import { DEFAULT_WATER_MIST } from "./water-layer";
+import { hasWebGl2 } from "./webgl-support";
 
 interface Props {
   /** Neighbouring tiles rendered around the primary one for context */
@@ -151,47 +142,6 @@ function formatMinutes(minutes: number): string {
   const h = String(Math.floor(minutes / 60)).padStart(2, "0");
   const m = String(minutes % 60).padStart(2, "0");
   return `${h}:${m}`;
-}
-
-const SNAPSHOT_VERSION = 1;
-
-/**
- * A fully reproducible capture of the view: camera pose + sun instant + every
- * look slider. Round-trips through JSON so a shot can be copied, pasted back,
- * or dropped into a prompt / QA harness to recreate the exact frame.
- */
-interface Snapshot {
-  camera: CameraState;
-  /** ISO instant driving the sun position */
-  date: string;
-  look: {
-    bandsPct?: number;
-    contactPct: number;
-    dof: boolean;
-    duskGlowPct?: number;
-    eavePct?: number;
-    focusDistanceM?: number;
-    focusMode?: FocusMode;
-    fogPct: number;
-    gradingPct: number;
-    grainPct: number;
-    groundShadePct?: number;
-    heightFogPct?: number;
-    leafBrightPct?: number;
-    leafFlutterPct?: number;
-    meadowNdviPct?: number;
-    multiTuft?: boolean;
-    rimPct?: number;
-    roofTintPct?: number;
-    roofVibrancePct?: number;
-    roughnessPct?: number;
-    shimmerPct?: number;
-    tintPct?: number;
-    translucencyPct?: number;
-    transparencyPct: number;
-    waterMistPct?: number;
-  };
-  v: number;
 }
 
 /** Manual DoF focus ring radius (m) for the minimap, or null when not shown. */
@@ -244,6 +194,33 @@ function PctSlider({
       />
       {description ? <FieldDescription>{description}</FieldDescription> : null}
     </Field>
+  );
+}
+
+/** The percent sliders of one control group, rendered from LOOK_CONTROLS. */
+function LookSliders({
+  group,
+  look,
+  onLook,
+}: {
+  group: LookGroup;
+  look: LookPct;
+  onLook: (key: LookKey, value: number) => void;
+}) {
+  return (
+    <>
+      {LOOK_CONTROLS.filter((def) => def.group === group).map((def) => (
+        <PctSlider
+          description={def.description}
+          id={def.id}
+          key={def.key}
+          label={def.label}
+          max={def.max}
+          onChange={(n) => onLook(def.key, n)}
+          value={look[def.key]}
+        />
+      ))}
+    </>
   );
 }
 
@@ -455,139 +432,60 @@ function ScenicViews({
 
 interface SceneControlsProps {
   applySnapshot: () => void;
-  bands: number;
   coarse: boolean;
-  contact: number;
   copySnapshot: () => void;
   day: Date;
   dof: boolean;
-  duskGlow: number;
-  eave: number;
   focusDistance: number;
   focusMode: FocusMode;
-  fogAmount: number;
-  grading: number;
-  grain: number;
-  groundShade: number;
   handleRef: RefObject<CityWalkHandle | null>;
-  heightFog: number;
   insertBuilding: () => void;
-  leafBright: number;
-  leafFlutter: number;
-  meadowNdvi: number;
+  look: LookPct;
   minutes: number;
   mode: MovementMode;
   multiTuft: boolean;
-  rim: number;
-  roofTint: number;
-  roofVibrance: number;
-  roughness: number;
-  setBands: Dispatch<SetStateAction<number>>;
-  setContact: Dispatch<SetStateAction<number>>;
+  onLook: (key: LookKey, value: number) => void;
   setDof: Dispatch<SetStateAction<boolean>>;
-  setDuskGlow: Dispatch<SetStateAction<number>>;
-  setEave: Dispatch<SetStateAction<number>>;
   setFocusDistance: Dispatch<SetStateAction<number>>;
   setFocusMode: Dispatch<SetStateAction<FocusMode>>;
-  setFogAmount: Dispatch<SetStateAction<number>>;
-  setGrading: Dispatch<SetStateAction<number>>;
-  setGrain: Dispatch<SetStateAction<number>>;
-  setGroundShade: Dispatch<SetStateAction<number>>;
-  setHeightFog: Dispatch<SetStateAction<number>>;
-  setLeafBright: Dispatch<SetStateAction<number>>;
-  setLeafFlutter: Dispatch<SetStateAction<number>>;
-  setMeadowNdvi: Dispatch<SetStateAction<number>>;
   setMultiTuft: Dispatch<SetStateAction<boolean>>;
-  setRim: Dispatch<SetStateAction<number>>;
-  setRoofTint: Dispatch<SetStateAction<number>>;
-  setRoofVibrance: Dispatch<SetStateAction<number>>;
-  setRoughness: Dispatch<SetStateAction<number>>;
-  setShimmer: Dispatch<SetStateAction<number>>;
   setSnapshotText: Dispatch<SetStateAction<string>>;
-  setTint: Dispatch<SetStateAction<number>>;
-  setTranslucency: Dispatch<SetStateAction<number>>;
-  setTransparency: Dispatch<SetStateAction<number>>;
-  setWaterMist: Dispatch<SetStateAction<number>>;
-  shimmer: number;
   snapshotMsg: string | null;
   snapshotText: string;
   sun: SunState | null;
-  tint: number;
-  translucency: number;
-  transparency: number;
   updateSun: (day: Date, minutes: number) => void;
-  waterMist: number;
 }
 
 /**
  * The full control surface, grouped into collapsible sections. Shared verbatim
  * between the desktop sidebar and the mobile bottom drawer — kept top-level so
  * its many branches don't push the host component past the complexity cap.
+ * The percent sliders come from LOOK_CONTROLS (lib/city/look-controls.ts).
  */
 function SceneControls({
   applySnapshot,
-  bands,
   coarse,
-  contact,
   copySnapshot,
   day,
   dof,
-  duskGlow,
-  eave,
   focusDistance,
   focusMode,
-  fogAmount,
-  grading,
-  grain,
-  groundShade,
   handleRef,
-  heightFog,
   insertBuilding,
-  leafBright,
-  leafFlutter,
-  meadowNdvi,
+  look,
   minutes,
   mode,
   multiTuft,
-  rim,
-  roofTint,
-  roofVibrance,
-  roughness,
-  setBands,
-  setContact,
+  onLook,
   setDof,
-  setDuskGlow,
-  setEave,
   setFocusDistance,
   setFocusMode,
-  setFogAmount,
-  setGrading,
-  setGrain,
-  setGroundShade,
-  setHeightFog,
-  setLeafBright,
-  setLeafFlutter,
-  setMeadowNdvi,
   setMultiTuft,
-  setRim,
-  setRoofTint,
-  setRoofVibrance,
-  setRoughness,
-  setShimmer,
   setSnapshotText,
-  setTint,
-  setTransparency,
-  setTranslucency,
-  setWaterMist,
-  shimmer,
   snapshotMsg,
   snapshotText,
   sun,
-  tint,
-  translucency,
-  transparency,
   updateSun,
-  waterMist,
 }: SceneControlsProps) {
   return (
     <>
@@ -643,198 +541,15 @@ function SceneControls({
       </ControlGroup>
 
       <ControlGroup icon={CloudFogIcon} title="Atmosphere">
-        <PctSlider
-          id="atmosphere"
-          label="Fog"
-          onChange={(n) => {
-            setFogAmount(n);
-            handleRef.current?.setAtmosphere(n / 100);
-          }}
-          value={fogAmount}
-        />
-        <PctSlider
-          description="Haze pooling along the valley floor / the Elbe"
-          id="height-fog"
-          label="Talnebel"
-          onChange={(n) => {
-            setHeightFog(n);
-            handleRef.current?.setHeightFog(n / 100);
-          }}
-          value={heightFog}
-        />
-        <PctSlider
-          description="Drifting mist over the river"
-          id="water-mist"
-          label="Flussnebel"
-          onChange={(n) => {
-            setWaterMist(n);
-            handleRef.current?.setWaterMist(n / 100);
-          }}
-          value={waterMist}
-        />
-        <PctSlider
-          id="depth-grading"
-          label="Depth color · warm near, cool far"
-          onChange={(n) => {
-            setGrading(n);
-            handleRef.current?.setDepthGrading(n / 100);
-          }}
-          value={grading}
-        />
+        <LookSliders group="atmosphere" look={look} onLook={onLook} />
       </ControlGroup>
 
       <ControlGroup icon={Building2Icon} title="Buildings">
-        <PctSlider
-          description="Plain see-through"
-          id="building-transparency"
-          label="Transparency"
-          max={90}
-          onChange={(n) => {
-            setTransparency(n);
-            handleRef.current?.setBuildingTransparency(n / 100);
-          }}
-          value={transparency}
-        />
-
-        <PctSlider
-          id="building-ground-shade"
-          label="Boden-Verlauf"
-          onChange={(n) => {
-            setGroundShade(n);
-            handleRef.current?.setBuildingGroundShade(n / 100);
-          }}
-          value={groundShade}
-        />
-        <PctSlider
-          id="building-bands"
-          label="Höhenlinien"
-          onChange={(n) => {
-            setBands(n);
-            handleRef.current?.setBuildingBands(n / 100);
-          }}
-          value={bands}
-        />
-        <PctSlider
-          id="building-rim"
-          label="Streiflicht"
-          onChange={(n) => {
-            setRim(n);
-            handleRef.current?.setBuildingRim(n / 100);
-          }}
-          value={rim}
-        />
-        <PctSlider
-          description="Per-building clay tint from use & height, blended into the base"
-          id="building-tint"
-          label="Farbvariation"
-          onChange={(n) => {
-            setTint(n);
-            handleRef.current?.setBuildingTint(n / 100);
-          }}
-          value={tint}
-        />
-        <PctSlider
-          description="Terracotta or slate per roof, from roofType & pitch"
-          id="building-roof-tint"
-          label="Dachfarbe"
-          onChange={(n) => {
-            setRoofTint(n);
-            handleRef.current?.setBuildingRoofTint(n / 100);
-          }}
-          value={roofTint}
-        />
-        <PctSlider
-          description="Lift roof colour vividness, keeping each roof's true hue — copper-green, terracotta & slate alike (0 = raw aerial)"
-          id="building-roof-vibrance"
-          label="Dachsättigung"
-          onChange={(n) => {
-            setRoofVibrance(n);
-            handleRef.current?.setBuildingRoofVibrance(n / 100);
-          }}
-          value={roofVibrance}
-        />
-        <PctSlider
-          description="Soft cornice line where wall meets roof"
-          id="building-eave"
-          label="Traufkante"
-          onChange={(n) => {
-            setEave(n);
-            handleRef.current?.setBuildingEave(n / 100);
-          }}
-          value={eave}
-        />
-        <PctSlider
-          description="Warm interior glow on civic/commercial buildings at dusk"
-          id="building-dusk-glow"
-          label="Abendlicht"
-          onChange={(n) => {
-            setDuskGlow(n);
-            handleRef.current?.setBuildingDuskGlow(n / 100);
-          }}
-          value={duskGlow}
-        />
-        <PctSlider
-          description="Subtle per-building matte/sheen variation"
-          id="building-roughness"
-          label="Materialstreuung"
-          onChange={(n) => {
-            setRoughness(n);
-            handleRef.current?.setBuildingRoughness(n / 100);
-          }}
-          value={roughness}
-        />
+        <LookSliders group="buildings" look={look} onLook={onLook} />
       </ControlGroup>
 
       <ControlGroup icon={TreesIcon} title="Vegetation">
-        <PctSlider
-          description="Tint meadows lush-green↔dry from the DOP infrared (NDVI)"
-          id="meadow-ndvi"
-          label="Wiesenfärbung"
-          onChange={(n) => {
-            setMeadowNdvi(n);
-            handleRef.current?.setMeadowNdvi(n / 100);
-          }}
-          value={meadowNdvi}
-        />
-        <PctSlider
-          id="tree-shimmer"
-          label="Gegenlicht-Schimmer"
-          onChange={(n) => {
-            setShimmer(n);
-            handleRef.current?.setTreeShimmer(n / 100);
-          }}
-          value={shimmer}
-        />
-        <PctSlider
-          description="Backlit glow on near/large crowns (shadow-gated)"
-          id="tree-translucency"
-          label="Blattdurchscheinen"
-          onChange={(n) => {
-            setTranslucency(n);
-            handleRef.current?.setTreeTranslucency(n / 100);
-          }}
-          value={translucency}
-        />
-        <PctSlider
-          description="(A) Windböen lassen Blätter ihre helle Unterseite zeigen — Farbe flimmert über sonnige Kronen. 0 = nur (B) sichtbar."
-          id="tree-leaf-flutter"
-          label="Blattflimmern"
-          onChange={(n) => {
-            setLeafFlutter(n);
-            handleRef.current?.setTreeLeafFlutter(n / 100);
-          }}
-          value={leafFlutter}
-        />
-        <PctSlider
-          description="(B) Krone hellt auf, wenn sie sich in die Böe neigt (an die Wiege-Bewegung gekoppelt). 0 = nur (A) sichtbar."
-          id="tree-leaf-bright"
-          label="Windhelligkeit"
-          onChange={(n) => {
-            setLeafBright(n);
-            handleRef.current?.setTreeLeafBright(n / 100);
-          }}
-          value={leafBright}
-        />
+        <LookSliders group="vegetation" look={look} onLook={onLook} />
         <Field orientation="horizontal">
           <FieldLabel htmlFor="tree-multituft">
             Multi-Tuft-Kronen (nah)
@@ -852,24 +567,7 @@ function SceneControls({
       </ControlGroup>
 
       <ControlGroup icon={SparklesIcon} title="Rendering">
-        <PctSlider
-          id="contact-shadows"
-          label="Contact shadows"
-          onChange={(n) => {
-            setContact(n);
-            handleRef.current?.setContactShadows(n / 100);
-          }}
-          value={contact}
-        />
-        <PctSlider
-          id="paper-grain"
-          label="Paper grain"
-          onChange={(n) => {
-            setGrain(n);
-            handleRef.current?.setPaperGrain(n / 100);
-          }}
-          value={grain}
-        />
+        <LookSliders group="rendering" look={look} onLook={onLook} />
         <Field orientation="horizontal">
           <FieldLabel htmlFor="depth-of-field">Depth of field</FieldLabel>
           <Switch
@@ -984,10 +682,19 @@ export default function CityWalk({
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
 
-  const [status, setStatus] = useState<Status>({
-    phase: "loading",
-    message: "Starting renderer…",
-  });
+  // Probed once, before the renderer is created: three's raw "Error creating
+  // WebGL context" is replaced by a sentence naming the one prerequisite.
+  const [webGl2] = useState(hasWebGl2);
+  const [status, setStatus] = useState<Status>(() =>
+    webGl2
+      ? { phase: "loading", message: "Starting renderer…" }
+      : {
+          phase: "error",
+          message:
+            "This viewer needs WebGL2, which this browser or device does not provide. " +
+            "Try a current desktop or mobile browser with hardware acceleration enabled.",
+        }
+  );
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   const [sun, setSun] = useState<SunState | null>(null);
   const [day, setDay] = useState(INITIAL_DATE);
@@ -995,59 +702,7 @@ export default function CityWalk({
   const [dof, setDof] = useState(DEFAULT_DOF);
   const [focusMode, setFocusMode] = useState<FocusMode>(DEFAULT_FOCUS_MODE);
   const [focusDistance, setFocusDistance] = useState(DEFAULT_FOCUS_DISTANCE);
-  const [fogAmount, setFogAmount] = useState(
-    Math.round(DEFAULT_ATMOSPHERE * 100)
-  );
-  const [grading, setGrading] = useState(
-    Math.round(DEFAULT_DEPTH_GRADING * 100)
-  );
-  const [transparency, setTransparency] = useState(
-    Math.round(DEFAULT_CLAY_TRANSPARENCY * 100)
-  );
-  const [contact, setContact] = useState(
-    Math.round(DEFAULT_CONTACT_SHADOWS * 100)
-  );
-  const [grain, setGrain] = useState(Math.round(DEFAULT_PAPER_GRAIN * 100));
-  const [heightFog, setHeightFog] = useState(
-    Math.round(DEFAULT_HEIGHT_FOG * 100)
-  );
-  const [meadowNdvi, setMeadowNdvi] = useState(
-    Math.round(DEFAULT_MEADOW_NDVI * 100)
-  );
-  const [waterMist, setWaterMist] = useState(
-    Math.round(DEFAULT_WATER_MIST * 100)
-  );
-  const [groundShade, setGroundShade] = useState(
-    Math.round(DEFAULT_BUILDING_GROUND_SHADE * 100)
-  );
-  const [bands, setBands] = useState(Math.round(DEFAULT_BUILDING_BANDS * 100));
-  const [rim, setRim] = useState(Math.round(DEFAULT_BUILDING_RIM * 100));
-  const [tint, setTint] = useState(Math.round(DEFAULT_BUILDING_TINT * 100));
-  const [roofTint, setRoofTint] = useState(
-    Math.round(DEFAULT_BUILDING_ROOF_TINT * 100)
-  );
-  const [roofVibrance, setRoofVibrance] = useState(
-    Math.round(DEFAULT_BUILDING_ROOF_VIBRANCE * 100)
-  );
-  const [eave, setEave] = useState(Math.round(DEFAULT_BUILDING_EAVE * 100));
-  const [duskGlow, setDuskGlow] = useState(
-    Math.round(DEFAULT_BUILDING_DUSK_GLOW * 100)
-  );
-  const [roughness, setRoughness] = useState(
-    Math.round(DEFAULT_BUILDING_ROUGHNESS * 100)
-  );
-  const [shimmer, setShimmer] = useState(
-    Math.round(DEFAULT_TREE_SHIMMER * 100)
-  );
-  const [translucency, setTranslucency] = useState(
-    Math.round(DEFAULT_TREE_TRANSLUCENCY * 100)
-  );
-  const [leafFlutter, setLeafFlutter] = useState(
-    Math.round(DEFAULT_TREE_LEAF_FLUTTER * 100)
-  );
-  const [leafBright, setLeafBright] = useState(
-    Math.round(DEFAULT_TREE_LEAF_BRIGHT * 100)
-  );
+  const [look, setLook] = useState<LookPct>(DEFAULT_LOOK_PCT);
   const [multiTuft, setMultiTuft] = useState(DEFAULT_TREE_MULTITUFT);
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
@@ -1059,6 +714,24 @@ export default function CityWalk({
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
 
+  // The boot effect seeds a fresh handle from the HUD's current look state.
+  // It reads that state through a ref (synced here — refs must not be written
+  // during render) so a slider change never re-runs the effect and reboots
+  // the renderer. With the single-mount lifecycle the seed equals the
+  // defaults; its value is the future tile-switch / model-URL case.
+  const hudLookRef = useRef({ look, dof, focusMode, focusDistance, multiTuft });
+  useEffect(() => {
+    hudLookRef.current = { look, dof, focusMode, focusDistance, multiTuft };
+  }, [look, dof, focusMode, focusDistance, multiTuft]);
+
+  /** Slider change: clamp, store the percent, push 0..1 to the scene. */
+  const setLookValue = (key: LookKey, value: number) => {
+    const def = LOOK_BY_KEY[key];
+    const v = clampPct(def, value);
+    setLook((prev) => (prev[key] === v ? prev : { ...prev, [key]: v }));
+    handleRef.current?.[def.setter](v / 100);
+  };
+
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
     return () => {
@@ -1069,6 +742,11 @@ export default function CityWalk({
   useEffect(() => {
     const container = mountRef.current;
     if (!container) {
+      return;
+    }
+    // The WebGL2 preflight already failed (see the status initializer): no
+    // renderer, no handle, nothing to clean up.
+    if (!webGl2) {
       return;
     }
     let cancelled = false;
@@ -1143,11 +821,26 @@ export default function CityWalk({
         handle = h;
         handleRef.current = h;
         booted = true;
+        // A remounted handle boots at the scene defaults; push the HUD's
+        // current state so sliders and scene never disagree.
+        const hud = hudLookRef.current;
+        for (const def of LOOK_CONTROLS) {
+          h[def.setter](hud.look[def.key] / 100);
+        }
+        h.setDepthOfField(hud.dof);
+        h.setFocusMode(hud.focusMode);
+        h.setFocusDistance(hud.focusDistance);
+        h.setTreeMultiTuft(hud.multiTuft);
         setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
         setLandcoverTiles(h.landcoverTiles);
+        const lookSetters: Partial<LookTarget> = {};
+        for (const def of LOOK_CONTROLS) {
+          lookSetters[def.setter] = h[def.setter];
+        }
         updatePocDebug({
+          ...lookSetters,
           firstFrame: true,
           offset: h.offset,
           terrainBounds: h.terrainBounds,
@@ -1163,27 +856,6 @@ export default function CityWalk({
           setDepthOfField: h.setDepthOfField,
           setFocusMode: h.setFocusMode,
           setFocusDistance: h.setFocusDistance,
-          setAtmosphere: h.setAtmosphere,
-          setDepthGrading: h.setDepthGrading,
-          setBuildingTransparency: h.setBuildingTransparency,
-          setContactShadows: h.setContactShadows,
-          setPaperGrain: h.setPaperGrain,
-          setHeightFog: h.setHeightFog,
-          setMeadowNdvi: h.setMeadowNdvi,
-          setWaterMist: h.setWaterMist,
-          setBuildingGroundShade: h.setBuildingGroundShade,
-          setBuildingBands: h.setBuildingBands,
-          setBuildingRim: h.setBuildingRim,
-          setBuildingTint: h.setBuildingTint,
-          setBuildingRoofTint: h.setBuildingRoofTint,
-          setBuildingRoofVibrance: h.setBuildingRoofVibrance,
-          setBuildingEave: h.setBuildingEave,
-          setBuildingDuskGlow: h.setBuildingDuskGlow,
-          setBuildingRoughness: h.setBuildingRoughness,
-          setTreeShimmer: h.setTreeShimmer,
-          setTreeTranslucency: h.setTreeTranslucency,
-          setTreeLeafFlutter: h.setTreeLeafFlutter,
-          setTreeLeafBright: h.setTreeLeafBright,
           setTreeMultiTuft: h.setTreeMultiTuft,
           insertBuilding: () => {
             h.insertBuilding().catch(() => {
@@ -1214,7 +886,7 @@ export default function CityWalk({
       handleRef.current = null;
       handle?.dispose();
     };
-  }, [primary, extraTiles, insertedModelUrl]);
+  }, [primary, extraTiles, insertedModelUrl, webGl2]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);
@@ -1236,37 +908,20 @@ export default function CityWalk({
     if (!h) {
       return;
     }
+    const lookJson: SnapshotLook = {
+      dof,
+      focusMode,
+      focusDistanceM: focusDistance,
+      multiTuft,
+    };
+    for (const def of LOOK_CONTROLS) {
+      lookJson[def.snapshotKey] = look[def.key];
+    }
     const snap: Snapshot = {
       v: SNAPSHOT_VERSION,
       camera: h.getCameraState(),
       date: composeDate(day, minutes).toISOString(),
-      look: {
-        transparencyPct: transparency,
-        fogPct: fogAmount,
-        gradingPct: grading,
-        contactPct: contact,
-        grainPct: grain,
-        heightFogPct: heightFog,
-        meadowNdviPct: meadowNdvi,
-        waterMistPct: waterMist,
-        dof,
-        focusMode,
-        focusDistanceM: focusDistance,
-        groundShadePct: groundShade,
-        bandsPct: bands,
-        rimPct: rim,
-        tintPct: tint,
-        roofTintPct: roofTint,
-        roofVibrancePct: roofVibrance,
-        eavePct: eave,
-        duskGlowPct: duskGlow,
-        roughnessPct: roughness,
-        shimmerPct: shimmer,
-        translucencyPct: translucency,
-        leafFlutterPct: leafFlutter,
-        leafBrightPct: leafBright,
-        multiTuft,
-      },
+      look: lookJson,
     };
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
@@ -1276,67 +931,37 @@ export default function CityWalk({
     );
   };
 
-  // Optional (newer) look fields — split out so each apply fn stays under the
-  // complexity cap; legacy v1 snapshots simply omit them.
-  const applyOptionalLook = (h: CityWalkHandle, look: Snapshot["look"]) => {
-    // Percent sliders share a shape (set React state + push 0..1 to the handle),
-    // so table-drive them — one branch keeps this under the complexity cap.
-    const pctFields: [
-      number | undefined,
-      (pct: number) => void,
-      (n: number) => void,
-    ][] = [
-      [look.heightFogPct, setHeightFog, h.setHeightFog],
-      [look.meadowNdviPct, setMeadowNdvi, h.setMeadowNdvi],
-      [look.waterMistPct, setWaterMist, h.setWaterMist],
-      [look.groundShadePct, setGroundShade, h.setBuildingGroundShade],
-      [look.bandsPct, setBands, h.setBuildingBands],
-      [look.rimPct, setRim, h.setBuildingRim],
-      [look.tintPct, setTint, h.setBuildingTint],
-      [look.roofTintPct, setRoofTint, h.setBuildingRoofTint],
-      [look.roofVibrancePct, setRoofVibrance, h.setBuildingRoofVibrance],
-      [look.eavePct, setEave, h.setBuildingEave],
-      [look.duskGlowPct, setDuskGlow, h.setBuildingDuskGlow],
-      [look.roughnessPct, setRoughness, h.setBuildingRoughness],
-      [look.shimmerPct, setShimmer, h.setTreeShimmer],
-      [look.translucencyPct, setTranslucency, h.setTreeTranslucency],
-      [look.leafFlutterPct, setLeafFlutter, h.setTreeLeafFlutter],
-      [look.leafBrightPct, setLeafBright, h.setTreeLeafBright],
-    ];
-    for (const [value, setUi, apply] of pctFields) {
-      if (value !== undefined) {
-        setUi(value);
-        apply(value / 100);
+  /** Percent controls of a snapshot: clamp, store and push each present key. */
+  const applyLookPct = (h: CityWalkHandle, lookJson: SnapshotLook) => {
+    const next = { ...look };
+    for (const def of LOOK_CONTROLS) {
+      const raw = lookJson[def.snapshotKey];
+      if (typeof raw === "number") {
+        next[def.key] = clampPct(def, raw);
+        h[def.setter](next[def.key] / 100);
       }
     }
-    if (look.focusMode !== undefined) {
-      setFocusMode(look.focusMode);
-      h.setFocusMode(look.focusMode);
-    }
-    if (look.focusDistanceM !== undefined) {
-      setFocusDistance(look.focusDistanceM);
-      h.setFocusDistance(look.focusDistanceM);
-    }
-    if (look.multiTuft !== undefined) {
-      setMultiTuft(look.multiTuft);
-      h.setTreeMultiTuft(look.multiTuft);
-    }
+    setLook(next);
   };
 
-  const applyLook = (h: CityWalkHandle, look: Snapshot["look"]) => {
-    setTransparency(look.transparencyPct);
-    h.setBuildingTransparency(look.transparencyPct / 100);
-    setFogAmount(look.fogPct);
-    h.setAtmosphere(look.fogPct / 100);
-    setGrading(look.gradingPct);
-    h.setDepthGrading(look.gradingPct / 100);
-    setContact(look.contactPct);
-    h.setContactShadows(look.contactPct / 100);
-    setGrain(look.grainPct);
-    h.setPaperGrain(look.grainPct / 100);
-    setDof(look.dof);
-    h.setDepthOfField(look.dof);
-    applyOptionalLook(h, look);
+  /** The non-percent look fields (each optional: older snapshots omit them). */
+  const applyLookFlags = (h: CityWalkHandle, lookJson: SnapshotLook) => {
+    if (lookJson.dof !== undefined) {
+      setDof(lookJson.dof);
+      h.setDepthOfField(lookJson.dof);
+    }
+    if (lookJson.focusMode !== undefined) {
+      setFocusMode(lookJson.focusMode);
+      h.setFocusMode(lookJson.focusMode);
+    }
+    if (lookJson.focusDistanceM !== undefined) {
+      setFocusDistance(lookJson.focusDistanceM);
+      h.setFocusDistance(lookJson.focusDistanceM);
+    }
+    if (lookJson.multiTuft !== undefined) {
+      setMultiTuft(lookJson.multiTuft);
+      h.setTreeMultiTuft(lookJson.multiTuft);
+    }
   };
 
   const applySnapshot = () => {
@@ -1344,35 +969,28 @@ export default function CityWalk({
     if (!h) {
       return;
     }
-    let snap: Snapshot;
-    try {
-      snap = JSON.parse(snapshotText) as Snapshot;
-    } catch {
-      setSnapshotMsg("Invalid snapshot JSON");
+    // Validate every field before anything is applied: a trimmed or
+    // hand-edited snapshot names what is wrong instead of yielding a NaN
+    // camera and "Snapshot applied".
+    const parsed = parseSnapshot(snapshotText);
+    if (!parsed.ok) {
+      setSnapshotMsg(parsed.reason);
       return;
     }
-    // Guard the shape, not just presence: a parseable-but-malformed snapshot
-    // (e.g. {"camera":{}}) would otherwise throw deep inside applyCameraState
-    // and leave the camera half-applied with no feedback.
-    if (!snap.camera?.pos || typeof snap.camera.pos.x !== "number") {
-      setSnapshotMsg("Snapshot missing or malformed camera");
-      return;
-    }
+    const snap = parsed.snapshot;
     h.applyCameraState(snap.camera);
     const date = new Date(snap.date);
-    if (!Number.isNaN(date.getTime())) {
-      const nextDay = new Date(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate()
-      );
-      const nextMinutes = date.getHours() * 60 + date.getMinutes();
-      setDay(nextDay);
-      setMinutes(nextMinutes);
-      setSun(h.setSun(date));
-    }
+    const nextDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    );
+    setDay(nextDay);
+    setMinutes(date.getHours() * 60 + date.getMinutes());
+    setSun(h.setSun(date));
     if (snap.look) {
-      applyLook(h, snap.look);
+      applyLookPct(h, snap.look);
+      applyLookFlags(h, snap.look);
     }
     setSnapshotMsg("Snapshot applied");
   };
@@ -1381,68 +999,28 @@ export default function CityWalk({
   const controlsFields = (
     <SceneControls
       applySnapshot={applySnapshot}
-      bands={bands}
       coarse={coarse}
-      contact={contact}
       copySnapshot={copySnapshot}
       day={day}
       dof={dof}
-      duskGlow={duskGlow}
-      eave={eave}
       focusDistance={focusDistance}
       focusMode={focusMode}
-      fogAmount={fogAmount}
-      grading={grading}
-      grain={grain}
-      groundShade={groundShade}
       handleRef={handleRef}
-      heightFog={heightFog}
       insertBuilding={insertBuilding}
-      leafBright={leafBright}
-      leafFlutter={leafFlutter}
-      meadowNdvi={meadowNdvi}
+      look={look}
       minutes={minutes}
       mode={mode}
       multiTuft={multiTuft}
-      rim={rim}
-      roofTint={roofTint}
-      roofVibrance={roofVibrance}
-      roughness={roughness}
-      setBands={setBands}
-      setContact={setContact}
+      onLook={setLookValue}
       setDof={setDof}
-      setDuskGlow={setDuskGlow}
-      setEave={setEave}
       setFocusDistance={setFocusDistance}
       setFocusMode={setFocusMode}
-      setFogAmount={setFogAmount}
-      setGrading={setGrading}
-      setGrain={setGrain}
-      setGroundShade={setGroundShade}
-      setHeightFog={setHeightFog}
-      setLeafBright={setLeafBright}
-      setLeafFlutter={setLeafFlutter}
-      setMeadowNdvi={setMeadowNdvi}
       setMultiTuft={setMultiTuft}
-      setRim={setRim}
-      setRoofTint={setRoofTint}
-      setRoofVibrance={setRoofVibrance}
-      setRoughness={setRoughness}
-      setShimmer={setShimmer}
       setSnapshotText={setSnapshotText}
-      setTint={setTint}
-      setTranslucency={setTranslucency}
-      setTransparency={setTransparency}
-      setWaterMist={setWaterMist}
-      shimmer={shimmer}
       snapshotMsg={snapshotMsg}
       snapshotText={snapshotText}
       sun={sun}
-      tint={tint}
-      translucency={translucency}
-      transparency={transparency}
       updateSun={updateSun}
-      waterMist={waterMist}
     />
   );
 
@@ -1574,7 +1152,8 @@ export default function CityWalk({
               </p>
             )}
             <p className="text-[10px]">
-              Lamp positions © OpenStreetMap contributors (ODbL).
+              Street lamps, retaining walls, station platforms and bridge
+              structure © OpenStreetMap contributors (ODbL).
             </p>
           </SidebarFooter>
         </Sidebar>

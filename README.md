@@ -54,7 +54,9 @@ CityJSON parser once at build time into a binary building mesh
 [`lib/city/city-mesh.ts`](lib/city/city-mesh.ts)), so the browser decodes
 neither a raster nor a CityJSON document. Every `/data` file is published
 under a content-hashed name and cached as immutable; `manifest.json` maps the
-logical names and is the one file that revalidates.
+logical names and is the one file that revalidates. The DGM1 GeoTIFFs
+themselves are committed under `data/dgm/` (they are the bake input); every
+other raw source stays in the gitignored `data/_raw/`.
 
 Requirements for new data:
 
@@ -73,7 +75,8 @@ committed artifacts from them.
 **Provenance.** Sources are the
 [Saxon open-geodata portal](https://www.geodaten.sachsen.de/) (*Offene
 Geodaten*, mostly *Datenlizenz Deutschland – Zero*) plus OpenStreetMap for
-street lamps and walls (ODbL) — see
+street lamps, retaining walls, station platforms and bridge structure (ODbL) —
+see
 [docs/portability.md](docs/portability.md#fetching-source-data).
 `TODO(maintainer):` record the exact dataset editions, download dates and
 per-dataset licences for the committed tiles.
@@ -111,8 +114,9 @@ Coordinate frames matter here. Source data is EPSG:25833, Z-up; a parent
 `world` group is rotated −90° about X so data-Z (elevation) becomes scene-Y
 (up), giving `x = easting − cx`, `z = −(northing − cy)`, `y = elevation`, with
 `(cx, cy)` the shared recenter offset ([`lib/city/recenter.ts`](lib/city/recenter.ts),
-[`lib/city/ground-clamp.ts`](lib/city/ground-clamp.ts)). The sun goes SunCalc →
-ENU → world in [`lib/city/sun.ts`](lib/city/sun.ts).
+[`lib/city/ground-clamp.ts`](lib/city/ground-clamp.ts)). The sun goes suncalc →
+ENU → world in [`lib/city/sun.ts`](lib/city/sun.ts) — note suncalc 2 reports
+degrees with a **north-based** azimuth (1.x used radians measured from south).
 
 Two design decisions worth knowing: **demolish** is a data-level filter plus a
 re-parse of the CityJSON rather than a mesh edit
@@ -126,7 +130,7 @@ patch header before bumping it.
 bun run verify   # lint + typecheck + unit tests — run this before pushing
 bun run build
 bun run test:e2e # Playwright, against a production build
-bun run fix      # ultracite (biome) autofix
+bun run fix      # oxfmt + oxlint --fix
 ```
 
 Unit tests are `bun test` files colocated with the code they cover (`lib/` and

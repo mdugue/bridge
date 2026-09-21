@@ -42,12 +42,17 @@ source upgrades a feature listed above.
 4. **Run the bakes** for whatever sources exist; skip the rest (the loaders treat
    missing optional artifacts as "feature off"):
    ```bash
-   bash scripts/extract-dlm.sh <tile>        # surfaces + veg rows (Basis-DLM)
-   bash scripts/extract-canopy.sh <tile>     # canopy (needs DLM class raster + DOM1/DGM1)
-   bash scripts/extract-lamps.sh <tile>      # lamps (OSM)
-   bash scripts/extract-roof-colour.sh <tile> # roof colour LUT (DOP) — experimental
-   bun scripts/prepare-data.ts               # copy derived artifacts → public/data
+   bash scripts/extract-dlm.sh <tile>         # surfaces + veg rows + class raster (Basis-DLM)
+   bash scripts/extract-canopy.sh <tile>      # canopy (needs the class raster; DOM1 + DGM1)
+   bash scripts/extract-ndvi.sh <tile>        # NDVI raster: crown colour + meadow tint (DOP)
+   bash scripts/extract-roof-colour.sh <tile> # roof colour LUT (DOP + CityJSON)
+   bash scripts/extract-lamps.sh <tile>       # lamps (OSM Overpass; needs the class raster)
+   bash scripts/extract-walls.sh <tile>       # retaining walls (local OSM .osm.pbf)
+   bash scripts/extract-rail.sh <tile>        # rails, ballast, bridges (Basis-DLM + DOM1/DGM1), platforms (Overpass)
+   bun scripts/prepare-data.ts                # bake + publish → public/data
    ```
+   The same list with one-line dependencies lives in the
+   [city-walker skill](../.claude/skills/city-walker/SKILL.md#data-pipeline).
 5. **List the tiles** in `lib/city/tile.ts` (`TILE_BLOCK`); new per-tile
    artifacts go into `tileArtifacts()` in the same file — `prepare-data.ts`
    and the client both read it.
@@ -70,7 +75,8 @@ derived per-tile artifacts under `data/` are committed.
 | Basis-DLM (ATKIS) | portal → Landschaftsmodelle |
 | **DOP** orthophoto (RGB + NIR) | [DOP-Downloadbereich](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) — 2 km tiles, GeoTIFF + `.tfw`; pick the **4-channel (RGB+Infrarot)** variant for NDVI. Unpack as downloaded into `data/_raw/DOP_RGBI/dop20rgbi_<tile>_2_sn_tiff/` — `extract-ndvi.sh` and `extract-roof-colour.sh` read `dop20rgbi_<tile>_2_sn.tif` from there. |
 | Laser-scan point cloud | portal → Laserscandaten (LAS/LAZ; large) |
-| Street lamps | OpenStreetMap (Overpass) — ODbL |
+| Street lamps, station platforms | OpenStreetMap via Overpass (`extract-lamps.sh`, `extract-rail.sh`) — ODbL |
+| OSM walls, platforms, bridge structure | Geofabrik regional extract (`.osm.pbf`, e.g. Sachsen ~250 MB) from [download.geofabrik.de](https://download.geofabrik.de) into `data/_raw/osm/`; `extract-walls.sh` reads it via GDAL's OSM driver (override with `WALLS_PBF=`); `extract-lamps.sh`/`extract-rail.sh` platforms and `bridge:structure` use Overpass — ODbL |
 
 For a **non-Saxon** location, substitute the equivalent national/state portal (or
 OSM + a public DEM) and remap class ids / attribute keys in the bake scripts; the

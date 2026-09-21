@@ -465,7 +465,9 @@ for p in polys:
     if not p[3]:
         emit(p[0], None, classify(p[0] + [(p[1], p[2])]))
 
+# Decks carry the OSM bridge:structure join (ODbL) — credit it in the file.
 json.dump({"type": "FeatureCollection",
+           "attribution": "© OpenStreetMap contributors (ODbL)",
            "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::25833"}},
            "features": feats}, open(out_p, "w"))
 named = sum(1 for x in feats if x["properties"]["name"])
