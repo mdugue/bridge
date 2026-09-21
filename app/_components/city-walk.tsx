@@ -1152,7 +1152,8 @@ export default function CityWalk({
               </p>
             )}
             <p className="text-[10px]">
-              Lamp positions © OpenStreetMap contributors (ODbL).
+              Street lamps, retaining walls, station platforms and bridge
+              structure © OpenStreetMap contributors (ODbL).
             </p>
           </SidebarFooter>
         </Sidebar>

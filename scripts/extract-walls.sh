@@ -139,6 +139,7 @@ for path in (lines_p, mp_p):
 
 out = {
     "type": "FeatureCollection",
+    "attribution": "© OpenStreetMap contributors (ODbL)",
     "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::25833"}},
     "features": feats,
 }

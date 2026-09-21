@@ -52,7 +52,7 @@ const SHADOW_MAP_SIZE = shadowMapSizeFor(
 );
 /** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
  * shadow edges, less staircase under PCFSoft); the frustum follows the camera
- * so street-level coverage isn't lost. 160 m → ~0.16 m texels at 2048². */
+ * so street-level coverage isn't lost. 110 m → ~0.07 m texels at 3072². */
 const SHADOW_RADIUS = 110;
 
 function createSkyDome(scene: Scene): Sky {
@@ -79,7 +79,7 @@ function createSkyDome(scene: Scene): Sky {
 
 /**
  * Sun + atmosphere rig: directional light with an orthographic shadow camera
- * sized to the whole scene, a physical sky dome fed the same sun direction,
+ * that follows the camera (see follow()), a physical sky dome fed the same sun direction,
  * and fog/hemisphere colors interpolated from the time-of-day palette so the
  * whole frame stays in tune with the slider. `worldBounds` is in scene
  * (Y-up) coordinates.
@@ -124,7 +124,7 @@ export function createSunRig(
   // flat ground's shadow sample toward the light at wall bases). Safe at 0
   // because nothing that needs it self-shadows: terrain doesn't cast, and
   // buildings/trees cast via their BACK faces (three's default shadowSide), so
-  // their lit front faces never self-acne. VSM softens edges via a SMALL blur.
+  // their lit front faces never self-acne.
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0;
   // r182+ PCFShadowMap is soft: it spreads a 5-tap Vogel disk by radius*texel

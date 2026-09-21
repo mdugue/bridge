@@ -4,7 +4,7 @@
 #
 # MANUAL, one-off step (mirrors extract-canopy.sh). Street furniture is NOT in
 # ATKIS Basis-DLM / ALKIS, so OSM `highway=street_lamp` is the source. Licensed
-# ODbL → the derived file carries "© OpenStreetMap contributors (ODbL)" and the
+# ODbL → the derived file carries an "attribution" member ("© OpenStreetMap contributors (ODbL)") and the
 # app credits it in the HUD/about.
 #
 # Needs (GDAL on PATH; Python 3 with Pillow; curl) and, for the land-cover gate:
@@ -160,6 +160,7 @@ for ft in src.get("features", []):
     })
 geo = {
     "type": "FeatureCollection",
+    "attribution": "© OpenStreetMap contributors (ODbL)",
     "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::25833"}},
     "features": feats,
 }

@@ -303,7 +303,7 @@ function createRenderer(
   );
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  // three 0.184 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
+  // three r182 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
   // and VSM paints a grid on lit faces here, so PCFShadowMap is the cleanest
   // option: tight contact + artefact-free surfaces. Its only weakness is the
   // texel staircase on shadow edges at a grazing sun, which a fine-texel
