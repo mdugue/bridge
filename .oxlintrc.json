@@ -9,6 +9,13 @@
     "oxc",
     "unicorn"
   ],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/display-name": "error",
+    "react/no-unescaped-entities": "error",
+    "react/jsx-no-comment-textnodes": "error",
+    "import/no-anonymous-default-export": "warn"
+  },
   "ignorePatterns": [
     ".next/**",
     "out/**",

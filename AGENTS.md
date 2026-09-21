@@ -235,12 +235,18 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   (`Cannot read properties of undefined (reading 'Cjs')`) and no channel of it,
   canary included, accepts `typescript >=7`. oxlint needs no TypeScript at all
   (it has its own Rust parser), so it cannot hit that wall. Coverage was checked
-  rule by rule against the 86 rules `eslint-config-next` had enabled here: oxlint
-  covers 61, biome covers the rest, and four low-severity rules have no home —
-  `react/display-name`, `react/no-unescaped-entities`,
-  `import/no-anonymous-default-export` and
-  `@next/next/no-location-assign-relative-destination`. Do not re-add ESLint to
-  recover them without first checking whether typescript-eslint supports TS 7.
+  rule by rule against the 86 rules `eslint-config-next` had enabled here, and
+  all of them are reachable except **one**:
+  `@next/next/no-location-assign-relative-destination`, which oxlint has no
+  equivalent for (no current exposure — nothing here calls `location.assign`).
+  **Careful when auditing oxlint coverage**: `oxlint --print-config` lists only
+  the *enabled* rules, and its default is the `correctness` category alone —
+  the full catalogue is 653 rules (`oxlint --print-config -D all`). Several
+  rules you would expect are present but off by default, which is why
+  `.oxlintrc.json` names `react/rules-of-hooks`, `react/display-name`,
+  `react/no-unescaped-entities`, `react/jsx-no-comment-textnodes` and
+  `import/no-anonymous-default-export` explicitly. Do not re-add ESLint to
+  recover a rule without first checking the full catalogue.
 - `types/n8ao.d.ts` is a hand-written shim because `n8ao` ships no types. Do
   not add one for `three-mesh-bvh`: the package declares its own `three`
   augmentation (`BufferGeometry.boundsTree`, `Raycaster.firstHitOnly`, and
