@@ -61,7 +61,10 @@ export const TILE_BLOCK: TileSpec[] = [
   })),
 ];
 
-/** Files served from /data (= public/data/), all derived from the tile id. */
+// File names under /data (= public/data/) and their bake inputs, all derived
+// from the tile id.
+
+/** The committed CityJSON (data/cityjson/): a bake input, never served. */
 export function cityJsonFile(tile: string): string {
   return `lod2_${tile}.city.json`;
 }

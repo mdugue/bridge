@@ -24,7 +24,7 @@ export interface TerrainGeometryInput {
 export interface TerrainGeometryData {
   /** triangle indices; quads touching a NoData vertex are omitted */
   indices: number[];
-  /** lowest VALID elevation (m); NoData vertices are excluded from the min */
+  /** lowest VALID elevation (m); +Infinity for a tile that is entirely NoData */
   minElevation: number;
   /** n*n*3 vertex positions in the recentered data frame (Z-up) */
   positions: Float32Array;
@@ -42,7 +42,7 @@ const MIN_PLAUSIBLE_ELEVATION = -1000;
  * skirt then hides any residual vertical crack from the two tiles sampling the
  * elevation at different resolutions.
  */
-const SKIRT_DEPTH = 30;
+export const SKIRT_DEPTH = 30;
 
 function isInvalidElevation(z: number, nodata: number | null): boolean {
   return (
@@ -165,7 +165,7 @@ function fillGrid(
       grid[p++] = bad ? fallback : z;
     }
   }
-  return Number.isFinite(minElevation) ? minElevation : 0;
+  return minElevation;
 }
 
 export function buildTerrainGeometryData(

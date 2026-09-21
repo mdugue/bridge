@@ -94,6 +94,9 @@ function addClayDetail(
   uniforms: ClayDetailUniforms,
   heightFog?: HeightFogUniforms
 ): void {
+  // The closure branches on `heightFog`, but three keys its program cache on
+  // `onBeforeCompile.toString()` — identical either way. Name the branch.
+  material.customProgramCacheKey = () => `clay-${heightFog !== undefined}`;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uAO = uniforms.uAO;
     shader.uniforms.uBands = uniforms.uBands;

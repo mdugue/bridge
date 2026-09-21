@@ -32,17 +32,13 @@ import {
 } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { gzipSync } from "node:zlib";
-import { fromArrayBuffer } from "geotiff";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
 import {
-  encodeHeightfield,
   HEIGHTFIELD_VERSION,
   type HeightfieldHeader,
   parseHeightfieldHeader,
 } from "../lib/city/heightfield";
-import type { TerrainBounds } from "../lib/city/terrain-geometry";
-import { tfwToBounds } from "../lib/city/tfw";
 import {
   cityMeshDataFile,
   cityMeshMetaFile,
@@ -57,6 +53,7 @@ import {
 } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { bakeCityMesh } from "./bake-city-mesh";
+import { bakeHeightfield } from "./bake-heightfield";
 import { downsampleRaster } from "./downsample-raster";
 
 const OUT_DIR = "public/data";
@@ -135,51 +132,12 @@ async function bakeRasters(): Promise<void> {
 await bakeRasters();
 
 // --- bake: DGM -> heightfield ---------------------------------------------
-// The browser used to fetch each tile's 13.6 MB GeoTIFF and resample it on the
-// main thread (~0.6 s per tile, x4 tiles). Doing it here leaves the client with
-// a header plus a gzipped uint16 grid it dequantises in one pass.
-
-/** True when getBoundingBox() returned pixel indices instead of map units. */
-function isPixelSpaceBounds(
-  bounds: number[],
-  width: number,
-  height: number
-): boolean {
-  const [minX, minY, maxX, maxY] = bounds;
-  return (
-    Math.abs(minX) <= 1 &&
-    Math.abs(minY) <= 1 &&
-    Math.abs(maxX - width) <= 1 &&
-    Math.abs(maxY - height) <= 1
-  );
-}
+// The resample + encode lives in scripts/bake-heightfield.ts; this stage owns
+// the paths, the staleness check and the registration for publish.
 
 function readArrayBuffer(path: string): ArrayBuffer {
   const buf = readFileSync(path);
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-}
-
-/**
- * The raster's georeferenced bounds. geotiff.js cannot read .tfw sidecars, so
- * when a GeoTIFF carries no embedded geotransform we parse the sidecar here —
- * and fail loudly rather than silently misplace a tile.
- */
-function resolveBounds(
-  embedded: number[] | null,
-  width: number,
-  height: number,
-  tfwPath: string
-): TerrainBounds {
-  if (embedded && !isPixelSpaceBounds(embedded, width, height)) {
-    return embedded as TerrainBounds;
-  }
-  if (existsSync(tfwPath)) {
-    return tfwToBounds(readFileSync(tfwPath, "utf8"), width, height);
-  }
-  return fail(
-    "DGM GeoTIFF has no embedded georeferencing and no readable .tfw sidecar. " +
-      "Embed it with: gdal_translate -a_srs EPSG:25833 in.tif out.tif"
-  );
 }
 
 /** True when `dest` is missing or older than any of its sources. */
@@ -205,7 +163,17 @@ function headerIsCurrent(path: string): boolean {
   }
 }
 
-async function bakeHeightfield(tile: string, n: number): Promise<void> {
+/** The heightfield bake's own sources — the resampler, the codec and the .tfw
+ *  reader. A change to any of them re-bakes every tile, as the header
+ *  promises: a quantisation or z-scale edit must never serve a stale cache
+ *  just because HEIGHTFIELD_VERSION was not bumped. */
+const HEIGHTFIELD_BAKE_SOURCES = [
+  join(process.cwd(), "scripts/bake-heightfield.ts"),
+  join(process.cwd(), "lib/city/heightfield.ts"),
+  join(process.cwd(), "lib/city/tfw.ts"),
+];
+
+async function bakeHeightfieldTile(tile: string, n: number): Promise<void> {
   const source = dgmSourceFiles(tile);
   const tifPath = join(process.cwd(), source.tif);
   const tfwPath = join(process.cwd(), source.tfw);
@@ -219,60 +187,35 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
   toPublish.set(headerName, headerPath);
   toPublish.set(dataName, dataPath);
   const stale =
-    isStale(headerPath, tifPath, tfwPath) ||
-    isStale(dataPath, tifPath, tfwPath) ||
+    isStale(headerPath, tifPath, tfwPath, ...HEIGHTFIELD_BAKE_SOURCES) ||
+    isStale(dataPath, tifPath, tfwPath, ...HEIGHTFIELD_BAKE_SOURCES) ||
     !headerIsCurrent(headerPath);
   if (!stale) {
     return;
   }
 
-  const tiff = await fromArrayBuffer(readArrayBuffer(tifPath));
-  const image = await tiff.getImage();
-  const width = image.getWidth();
-  const height = image.getHeight();
-  let embedded: number[] | null = null;
-  try {
-    embedded = image.getBoundingBox();
-  } catch {
-    embedded = null;
-  }
-  const bounds = resolveBounds(embedded, width, height, tfwPath);
-  const raster = await image.readRasters({
-    width: n,
-    height: n,
-    samples: [0],
-    interleave: true,
-    resampleMethod: "bilinear",
-  });
-  if (!ArrayBuffer.isView(raster)) {
-    fail(`unexpected raster shape for ${tile}`);
-  }
-  // reason: geotiff types the result as TypedArray | TypedArray[]; isView narrowed it above
-  const encoded = encodeHeightfield(
-    raster as unknown as ArrayLike<number>,
-    image.getGDALNoData()
+  const baked = await bakeHeightfield(
+    readArrayBuffer(tifPath),
+    existsSync(tfwPath) ? readFileSync(tfwPath, "utf8") : null,
+    n
+  ).catch((err: unknown) =>
+    fail(`${tile}: ${err instanceof Error ? err.message : String(err)}`)
   );
   const header: HeightfieldHeader = {
-    version: HEIGHTFIELD_VERSION,
-    n,
-    bounds,
+    ...baked.header,
     // Logical sibling name; publish() rewrites it to the hashed one.
     data: dataName,
-    zMin: encoded.zMin,
-    zScale: encoded.zScale,
   };
   mkdirSync(dirname(dataPath), { recursive: true });
-  // Pre-gzipped: static hosts don't compress binary MIME types, and the
-  // browser inflates it natively (DecompressionStream) — see heightfield.ts.
-  writeFileSync(dataPath, gzipSync(Buffer.from(encoded.samples.buffer)));
+  writeFileSync(dataPath, baked.data);
   writeFileSync(headerPath, `${JSON.stringify(header, null, 2)}\n`);
   log(
-    `built ${headerName} (${n}x${n} from ${width}x${height}, bounds [${bounds.join(", ")}])`
+    `built ${headerName} (${n}x${n} from ${baked.source.width}x${baked.source.height}, bounds [${header.bounds.join(", ")}])`
   );
 }
 
 for (const { tile, n } of TILE_BLOCK) {
-  await bakeHeightfield(tile, n);
+  await bakeHeightfieldTile(tile, n);
 }
 
 // --- bake: CityJSON -> building mesh ---------------------------------------

@@ -105,6 +105,7 @@ import {
   DEFAULT_FOCUS_MODE,
   type FocusMode,
 } from "./post-stack";
+import type { SceneBudget } from "./scene-profile";
 import type { SunState } from "./sun-rig";
 import { DEFAULT_TREE_MULTITUFT } from "./vegetation-layer";
 import { SCENIC_VIEWS } from "./viewpoints";
@@ -112,6 +113,8 @@ import { VirtualJoystick } from "./virtual-joystick";
 import { hasWebGl2 } from "./webgl-support";
 
 interface Props {
+  /** The render budget the page was opened with (see scene-profile.ts) */
+  budget: SceneBudget;
   /** Neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
@@ -673,6 +676,7 @@ function SceneControls({
 }
 
 export default function CityWalk({
+  budget,
   primary,
   extraTiles,
   insertedModelUrl,
@@ -758,6 +762,7 @@ export default function CityWalk({
 
     createCityWalkApp({
       container,
+      budget,
       primary,
       extraTiles,
       insertedModelUrl,
@@ -886,7 +891,7 @@ export default function CityWalk({
       handleRef.current = null;
       handle?.dispose();
     };
-  }, [primary, extraTiles, insertedModelUrl, webGl2]);
+  }, [budget, primary, extraTiles, insertedModelUrl, webGl2]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);

@@ -25,7 +25,7 @@ import type { LookTarget } from "@/lib/city/look-controls";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import type { CameraStateJson } from "@/lib/city/snapshot";
-import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { SKIRT_DEPTH, type TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
 import { createCameraFlight } from "./camera-flight";
 import {
@@ -57,11 +57,12 @@ import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import {
-  currentDeviceTier,
-  currentSceneProfile,
-  loadsNeighbourTiles,
+  aoQualityFor,
+  type DeviceTier,
   pixelRatioFor,
+  type SceneBudget,
   type SceneProfile,
+  shadowMapSizeFor,
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
 import {
@@ -184,6 +185,12 @@ export interface TileSrc {
 }
 
 export interface CityWalkOptions {
+  /**
+   * The render budget (profile, device tier, whether the neighbour tiles
+   * load), resolved once by the client — see scene-profile.ts. Everything
+   * here takes its numbers from it instead of reading the window.
+   */
+  budget: SceneBudget;
   container: HTMLElement;
   /** neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
@@ -249,7 +256,6 @@ export interface CityWalkHandle extends LookTarget {
   };
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
   getFootprints: () => FootprintPoly[];
-  getMovementMode: () => MovementMode;
   getPose: () => PlayerPose;
   /**
    * GPU counters for perf work. `programs` is the live shader-program count;
@@ -295,7 +301,8 @@ interface Xyz {
 
 function createRenderer(
   container: HTMLElement,
-  profile: SceneProfile
+  profile: SceneProfile,
+  tier: DeviceTier
 ): WebGLRenderer {
   // No MSAA: everything renders through the EffectComposer and SMAA carries
   // the AA (see post-stack.ts); a multisampled default framebuffer would only
@@ -310,9 +317,7 @@ function createRenderer(
   // Playwright viewport — is the only honest way to cut fill-rate in the
   // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
   // the post stack costs, and the post stack is most of a frame.
-  renderer.setPixelRatio(
-    pixelRatioFor(profile, currentDeviceTier(), window.devicePixelRatio)
-  );
+  renderer.setPixelRatio(pixelRatioFor(profile, tier, window.devicePixelRatio));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
   // three r182 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
@@ -388,7 +393,8 @@ function tileLatLng(
 export async function createCityWalkApp(
   opts: CityWalkOptions
 ): Promise<CityWalkHandle> {
-  const renderer = createRenderer(opts.container, currentSceneProfile());
+  const { profile, tier } = opts.budget;
+  const renderer = createRenderer(opts.container, profile, tier);
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
   const fogRange = fogRangeFor(DEFAULT_ATMOSPHERE);
@@ -426,7 +432,7 @@ async function bootApp(
   scene: Scene,
   cleanups: Array<() => void>
 ): Promise<CityWalkHandle> {
-  const { container } = opts;
+  const { container, budget } = opts;
   let disposed = false;
 
   const camera = new PerspectiveCamera(
@@ -459,10 +465,7 @@ async function bootApp(
   // three more CityJSON documents, three more DGM heightfields and three more
   // canopy clouds. Dropping them is what makes the headless e2e suite
   // affordable; nothing it asserts on lives outside the primary tile.
-  const profile = currentSceneProfile();
-  const neighbourTiles = loadsNeighbourTiles(profile)
-    ? (opts.extraTiles ?? [])
-    : [];
+  const neighbourTiles = budget.neighbourTiles ? (opts.extraTiles ?? []) : [];
 
   const primary = opts.primary;
   const citySrcOf = (tile: TileSrc) => ({
@@ -762,25 +765,31 @@ async function bootApp(
   const worldBounds = new Box3().setFromObject(world);
   // Seed the valley height-fog floor from the lowest VALID terrain elevation
   // (the Elbe surface), lowered further as each neighbour lands. NB:
-  // worldBounds.min.y is unusable here — NoData terrain vertices are parked at
-  // elevation 0, so it reports ~0, which would push the whole fog band below
-  // the real terrain and hide the effect. All-NoData tiles are excluded for the
-  // same reason (fillGrid reports minElevation 0 for them); the primary spawn
-  // tile always has real elevation. A uniform write, no recompile.
+  // worldBounds.min.y is unusable here: the terrain skirt hangs 30 m below
+  // every border vertex, so the box bottom sits ~30 m under the river and the
+  // whole fog band (start … start + falloff) would end below the water — the
+  // Talnebel slider then changes no pixel. An all-NoData tile reports
+  // +Infinity and is skipped; the primary spawn tile always has real
+  // elevation. A uniform write, no recompile.
   const lowerFogFloor = (t: TerrainLayer) => {
-    if (Number.isFinite(t.minElevation) && t.minElevation > 0) {
+    if (Number.isFinite(t.minElevation)) {
       heightFog.uFogHeightStart.value = Math.min(
         heightFog.uFogHeightStart.value,
         t.minElevation + 1
       );
     }
   };
-  heightFog.uFogHeightStart.value = worldBounds.min.y + 1;
+  heightFog.uFogHeightStart.value = Number.POSITIVE_INFINITY;
   lowerFogFloor(terrain);
+  if (!Number.isFinite(heightFog.uFogHeightStart.value)) {
+    // No valid elevation anywhere: anchor to the lowest vertex above the skirt.
+    heightFog.uFogHeightStart.value = worldBounds.min.y + SKIRT_DEPTH + 1;
+  }
   const sunRig = createSunRig(
     scene,
     worldBounds,
     tileLatLng(primaryCity.meta.epsg, offset),
+    shadowMapSizeFor(budget.profile, budget.tier),
     sunDirection
   );
 
@@ -844,7 +853,12 @@ async function bootApp(
   cleanups.push(() => styleResources.dispose());
   // The neighbour tiles are dressed the same way as they land (loadRest).
   applyCityStyle(cityLayer.group, styleResources);
-  const postStack = createPostStack(renderer, scene, camera);
+  const postStack = createPostStack(
+    renderer,
+    scene,
+    camera,
+    aoQualityFor(budget.profile)
+  );
   cleanups.push(() => postStack.dispose());
 
   // Spawn at the recenter point (= world origin), standing on the terrain.
@@ -1512,7 +1526,6 @@ async function bootApp(
       hitDist: lastFocusHit?.dist ?? null,
       hitName: lastFocusHit?.name ?? null,
     }),
-    getMovementMode: () => movement.getMode(),
     setMovementMode,
     setMoveInput: (x, y) => {
       // Joystick/analog input is the player taking over — drop any scenic glide.

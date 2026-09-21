@@ -76,6 +76,18 @@ test("buildTerrainGeometryData parks NoData vertices at the mean valid elevation
   expect(minElevation).toBe(100);
 });
 
+test("buildTerrainGeometryData reports +Infinity for an all-NoData tile", () => {
+  const { indices, minElevation } = buildTerrainGeometryData({
+    ...flat3x3,
+    elevations: new Float32Array(9).fill(-9999),
+    offset: { cx: 0, cy: 0 },
+  });
+  // Nothing to draw, and no valid minimum for the fog floor to anchor to —
+  // a finite fake (0) would put the valley haze a hundred metres underground.
+  expect(indices.length).toBe(0);
+  expect(minElevation).toBe(Number.POSITIVE_INFINITY);
+});
+
 test("buildTerrainGeometryData rejects degenerate bounds", () => {
   expect(() =>
     buildTerrainGeometryData({

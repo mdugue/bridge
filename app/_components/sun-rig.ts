@@ -3,11 +3,6 @@ import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import { sunDirectionWorld } from "@/lib/city/sun";
-import {
-  currentDeviceTier,
-  currentSceneProfile,
-  shadowMapSizeFor,
-} from "./scene-profile";
 
 export interface SunState {
   aboveHorizon: boolean;
@@ -41,18 +36,6 @@ export interface SunRig {
 }
 
 const SUN_INTENSITY = 2.4;
-/** 3072 over the 110 m frustum ≈ 0.07 m/texel. The soft Vogel-disk PCF (see
- * shadow.radius) hides residual stepping, so 3072 looks like 4096 here while
- * costing ~44% less shadow fill. The map is redrawn at each FOLLOW_DEAD_ZONE_M
- * re-centre, when the sun moves, and on explicit invalidation — not per frame.
- * The `lite` e2e profile drops this to 512 and phones get 2048 (see
- * scene-profile.ts): under SwiftShader the depth pass is one of the few
- * per-frame costs that does not shrink with the canvas, and no headless
- * assertion depends on edge quality. */
-const SHADOW_MAP_SIZE = shadowMapSizeFor(
-  currentSceneProfile(),
-  currentDeviceTier()
-);
 /** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
  * shadow edges, less staircase under PCFSoft); the frustum follows the camera
  * so street-level coverage isn't lost. 110 m → ~0.07 m texels at 3072². */
@@ -100,6 +83,16 @@ export function createSunRig(
   scene: Scene,
   worldBounds: Box3,
   latLng: { lat: number; lng: number },
+  /** Shadow-map edge in texels (scene-profile.ts `shadowMapSizeFor`). 3072
+   * over the 110 m frustum ≈ 0.07 m/texel: the soft Vogel-disk PCF (see
+   * shadow.radius) hides residual stepping, so 3072 looks like 4096 here
+   * while costing ~44% less shadow fill. The `lite` e2e profile passes 512
+   * and phones 2048 — under SwiftShader the depth pass is one of the few
+   * per-frame costs that does not shrink with the canvas, and no headless
+   * assertion depends on edge quality. The map is redrawn at each
+   * FOLLOW_DEAD_ZONE_M re-centre, when the sun moves, and on explicit
+   * invalidation — not per frame. */
+  shadowMapSize: number,
   /** Optional shared vector the rig keeps in sync with the world sun direction
    * (surface→sun) so other materials (e.g. the crown shimmer) can read it. */
   sunDirectionOut?: Vector3
@@ -109,7 +102,7 @@ export function createSunRig(
   const shadowDistance = SHADOW_RADIUS * 2;
   // World size of one shadow texel — snap the frustum centre to this grid so
   // shadow edges don't crawl/shimmer as the camera moves.
-  const texelSize = (SHADOW_RADIUS * 2) / SHADOW_MAP_SIZE;
+  const texelSize = (SHADOW_RADIUS * 2) / shadowMapSize;
 
   const hemisphere = new HemisphereLight(0xbf_d4_e6, 0x4a_5a_3a, 0.7);
   scene.add(hemisphere);
@@ -123,7 +116,7 @@ export function createSunRig(
   // thousands of shadow-casting trees.
   sun.shadow.autoUpdate = false;
   sun.shadow.needsUpdate = true;
-  sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   const cam = sun.shadow.camera;
   cam.left = -SHADOW_RADIUS;
   cam.right = SHADOW_RADIUS;
@@ -241,6 +234,6 @@ export function createSunRig(
     // three only draws the map for a VISIBLE light: below the horizon the
     // flag stays raised (and is consumed at sunrise), so it is not "pending".
     shadowPending: () => sun.visible && sun.shadow.needsUpdate,
-    shadowMapBytes: SHADOW_MAP_SIZE * SHADOW_MAP_SIZE * 4,
+    shadowMapBytes: shadowMapSize * shadowMapSize * 4,
   };
 }

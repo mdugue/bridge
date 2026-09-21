@@ -222,7 +222,8 @@ viewer pages halve each other's frame rate.
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It loads
 the **primary tile only** (boot 14 s → 4.4 s, 74 MB → 18 MB), shadow-maps at
-**512²** instead of 3072², and renders at **`pixelRatio` 0.5**. Same loaders,
+**512²** instead of 3072², renders at **`pixelRatio` 0.5**, and runs the SSAO
+pass in its cheaper Performance mode. Same loaders,
 same layers, same shader programs — a quarter
 of the world and a quarter of the pixels. The knobs it does *not* touch are the
 ones a test asserts on. Two rules when you add a spec:

@@ -83,7 +83,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | `shadow.normalBias` | **0** | a positive normalBias offsets the flat ground sample → bright peter-panning contact strip. Safe at 0 because terrain doesn't cast and solids cast via back faces (lit faces never self-acne) |
 | `shadow.bias` | ~−0.0003 | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting heightfield self-shadows into triangle/staircase acne at grazing sun; ground only receives |
-| `SHADOW_MAP_SIZE` | 3072 | soft radius lets 3072 look like 4096 at ~44% less fill |
+| shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 | soft radius lets 3072 look like 4096 at ~44% less fill |
 | `SHADOW_RADIUS` (frustum half-size) | ~110 m | camera-following, texel-snapped; small = fine texels |
 | `shadow.autoUpdate` | false | re-render only when the player leaves a 20 m dead zone around the last frustum centre, the sun moves, or a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 
@@ -179,14 +179,16 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
 ### The `lite` scene profile (headless e2e only)
 
 `?scene=lite` (`app/_components/scene-profile.ts`) exists because SwiftShader
-shades every pixel on the CPU. It changes three knobs (tiles, shadow map,
-render scale):
+shades every pixel on the CPU. It changes four knobs (tiles, shadow map,
+render scale, AO quality), all resolved once in `city-walk-client.tsx`
+(`currentSceneBudget`) and handed down as numbers:
 
 | Knob | full | lite | Why it is the right knob |
 |---|---|---|---|
 | tiles loaded | primary + 2×2 block | **primary only** | 3/4 of the geometry AND 3/4 of the boot (boot 14 s → 4.4 s, 74 MB → 18 MB) |
-| `SHADOW_MAP_SIZE` | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
+| shadow map size (`shadowMapSizeFor`) | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
 | `pixelRatio` | dpr≤2 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
+| N8AO quality | Medium | **Performance** | half the AO samples; keyed on the profile, not `navigator.webdriver` (Playwright sets that in the `--headed` shot harness too, which must show the product's AO) |
 
 Everything a spec asserts on — loaders, layer construction, every style's shader
 programs, the HUD wiring — is identical in both. **Never** use lite to judge a

@@ -11,6 +11,7 @@ import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { HalfFloatType, Vector2, Vector3 } from "three";
 import { DepthGradingEffect } from "./depth-grading-effect";
 import { PaperGrainEffect } from "./paper-grain-effect";
+import type { AoQuality } from "./scene-profile";
 
 /** Photographic depth of field (autofocus on the crosshair) — default on. */
 export const DEFAULT_DOF = true;
@@ -92,7 +93,8 @@ export interface PostStack {
 export function createPostStack(
   renderer: WebGLRenderer,
   scene: Scene,
-  camera: PerspectiveCamera
+  camera: PerspectiveCamera,
+  aoQuality: AoQuality
 ): PostStack {
   const composer = new EffectComposer(renderer, {
     frameBufferType: HalfFloatType,
@@ -103,8 +105,9 @@ export function createPostStack(
   const ao = new N8AOPostPass(scene, camera, size.x, size.y);
   ao.configuration.aoRadius = 12;
   ao.configuration.intensity = DEFAULT_CONTACT_SHADOWS * AO_INTENSITY_MAX;
-  // Software WebGL (headless test runs) can't afford full-quality SSAO.
-  ao.setQualityMode(navigator.webdriver ? "Performance" : "Medium");
+  // Medium for the product, Performance for headless SwiftShader — decided
+  // with the rest of the render budget (scene-profile.ts `aoQualityFor`).
+  ao.setQualityMode(aoQuality);
   composer.addPass(ao);
 
   // Photographic DoF. focusDistance/focusRange are WORLD METRES in this version;

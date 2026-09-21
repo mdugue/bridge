@@ -15,9 +15,9 @@ function disposeMaterial(material: Material | Material[] | undefined): void {
 }
 
 /**
- * Frees GPU resources of a subtree. Needed because demolish works by
- * disposing the whole loader output and re-parsing the filtered CityJSON —
- * without this every demolish would leak buffers.
+ * Frees GPU resources of a subtree. Demolish rebuilds the tile's building
+ * mesh from the filtered vertex stream and drops the old one (city-layer.ts);
+ * without this every demolish would leak its buffers.
  */
 export function disposeObject3D(root: Object3D): void {
   root.traverse((obj) => {

@@ -384,6 +384,9 @@ function buildCrownMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 });
+  // The closure branches on `heightFog`; three keys programs on the closure's
+  // text, so the branch has to be named (see terrain-layer.ts).
+  m.customProgramCacheKey = () => `crown-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uSunDir = { value: sunDirection };
     sh.uniforms.uShimmer = shimmer;
@@ -556,6 +559,7 @@ function buildTrunkMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 });
+  m.customProgramCacheKey = () => `trunk-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vTrunkY;")

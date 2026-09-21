@@ -1,17 +1,18 @@
 import { expect, test } from "bun:test";
 import { Box3, DirectionalLight, Scene, Vector3 } from "three";
+import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
 
 // Dresden — the primary tile's latitude/longitude.
 const DRESDEN = { lat: 51.05, lng: 13.74 };
 
-function rig() {
+function rig(shadowMapSize = shadowMapSizeFor("full")) {
   const scene = new Scene();
   const bounds = new Box3(
     new Vector3(-1000, 0, -1000),
     new Vector3(1000, 300, 1000)
   );
-  const sunRig = createSunRig(scene, bounds, DRESDEN);
+  const sunRig = createSunRig(scene, bounds, DRESDEN, shadowMapSize);
   const sun = scene.children.find(
     (o) => o instanceof DirectionalLight
   ) as DirectionalLight;
@@ -55,6 +56,19 @@ test("follow beyond the dead zone re-centres and redraws", () => {
   sun.shadow.needsUpdate = false;
   sunRig.follow(new Vector3(25, 125, 0));
   expect(sun.shadow.needsUpdate).toBe(true);
+});
+
+test("the shadow map takes the size it is given (lite = 512²)", () => {
+  const { sunRig, sun } = rig(512);
+  expect(sun.shadow.mapSize.x).toBe(512);
+  expect(sunRig.shadowMapBytes).toBe(512 * 512 * 4);
+  // Coarser texel (0.43 m over the 220 m frustum): the re-centre still snaps
+  // to it, so the frustum lands within one texel of the point.
+  sunRig.follow(new Vector3(0, 100, 0));
+  sunRig.follow(new Vector3(25, 100, 0));
+  expect(sun.target.position.distanceTo(new Vector3(25, 100, 0))).toBeLessThan(
+    0.45
+  );
 });
 
 test("the sun moving always redraws", () => {

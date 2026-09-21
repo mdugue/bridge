@@ -205,11 +205,12 @@ export function createWaterLayer(
   const mask: WaterMask = splat.colorTexture
     ? { texture: splat.colorTexture, hasColor: true }
     : { texture: splat.texture, hasColor: false };
-  // The emitted GLSL branches on `mask.hasColor`, but three keys its program
-  // cache on `onBeforeCompile.toString()` — identical for every tile's material.
-  // Without this key a tile whose colour splat failed to load could be handed
-  // another tile's compiled program.
-  material.customProgramCacheKey = () => `water-${mask.hasColor}`;
+  // The emitted GLSL branches on `mask.hasColor` and on `heightFog`, but three
+  // keys its program cache on `onBeforeCompile.toString()` — identical for
+  // every tile's material. Without this key a tile whose colour splat failed
+  // to load could be handed another tile's compiled program.
+  material.customProgramCacheKey = () =>
+    `water-${mask.hasColor}-${heightFog !== undefined}`;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSplat = { value: mask.texture };
     shader.uniforms.uTime = uTime;

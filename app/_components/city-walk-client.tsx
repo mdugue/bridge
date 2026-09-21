@@ -10,7 +10,11 @@ import {
   tileUrlsFrom,
 } from "@/lib/city/tile";
 import type { TileSrc } from "./create-app";
-import { currentDeviceTier, type DeviceTier } from "./scene-profile";
+import {
+  currentSceneBudget,
+  type DeviceTier,
+  type SceneBudget,
+} from "./scene-profile";
 
 // three.js needs a real browser (WebGL, pointer lock) — never prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
@@ -90,12 +94,14 @@ export function CityWalkClient() {
     if (manifest === undefined) {
       return null;
     }
-    // Sampled once per manifest so the primary and its neighbours agree on
-    // the tier (and the media query is evaluated once, not per tile).
-    const tier = currentDeviceTier();
+    // The render budget (profile, device tier, neighbour tiles) is read from
+    // the page ONCE, here, and handed down: the primary and its neighbours
+    // agree on the tier, and the scene never re-reads the window.
+    const budget: SceneBudget = currentSceneBudget();
     return {
-      primary: tile(PRIMARY_SPEC, manifest, tier),
-      extra: NEIGHBOUR_SPECS.map((spec) => tile(spec, manifest, tier)),
+      budget,
+      primary: tile(PRIMARY_SPEC, manifest, budget.tier),
+      extra: NEIGHBOUR_SPECS.map((spec) => tile(spec, manifest, budget.tier)),
     };
   }, [manifest]);
   if (!tiles) {
@@ -105,5 +111,11 @@ export function CityWalkClient() {
       </div>
     );
   }
-  return <CityWalk extraTiles={tiles.extra} primary={tiles.primary} />;
+  return (
+    <CityWalk
+      budget={tiles.budget}
+      extraTiles={tiles.extra}
+      primary={tiles.primary}
+    />
+  );
 }

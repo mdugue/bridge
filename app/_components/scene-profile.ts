@@ -1,45 +1,50 @@
 /**
- * Scene profile — how much world the viewer builds and how expensive each
- * frame is allowed to be.
+ * Scene profile and render budget — how much world the viewer builds and how
+ * expensive each frame is allowed to be.
  *
- * `full` is the product: the primary tile plus its 2x2 neighbour block and a
- * 3072² shadow map. `lite` exists for the headless e2e suite, where every
- * frame is rasterized on the CPU by SwiftShader: it loads the primary tile
- * only and shrinks the shadow map, which is what actually costs seconds a
- * frame there. Everything a test asserts on — the loaders, the layer
- * construction, the shader programs of every style, the HUD wiring — is
- * identical in both profiles; only the amount of geometry and shadow fill
- * changes. Measured on two cores: a clay frame drops from ~4 s to well under
- * one, and boot from ~14 s to ~5 s.
+ * `full` is the product: the primary tile plus its 2x2 neighbour block, a
+ * 3072² shadow map and Medium-quality SSAO. `lite` exists for the headless
+ * e2e suite, where every frame is rasterized on the CPU by SwiftShader: it
+ * loads the primary tile only, shrinks the shadow map, halves the render
+ * scale and runs N8AO in its Performance mode — the four knobs that actually
+ * cost seconds a frame there. Everything a test asserts on — the loaders, the
+ * layer construction, the shader programs of every style, the HUD wiring —
+ * is identical in both profiles. Measured on two cores: a clay frame drops
+ * from ~4 s to well under one, and boot from ~14 s to ~5 s.
  *
  * Opt in with `?scene=lite`. The default is always `full`, so nothing about a
  * normal visit changes.
  *
  * Orthogonal to the profile is the **device tier**: a phone (coarse pointer,
  * no hover) shares one memory pool between CPU and GPU and Safari kills the
- * tab well under 1.5 GB, so it gets a 2048² shadow map and a 1.5 pixel-ratio
- * cap. Same world, same shaders — only fill and shadow texels shrink.
+ * tab well under 1.5 GB, so it gets a 2048² shadow map, a 1.5 pixel-ratio
+ * cap and the 2048² land-cover rasters. Same world, same shaders — only fill,
+ * shadow texels and texture memory shrink; AO quality follows the profile,
+ * not the tier.
+ *
+ * Both are read from the page ONCE (`currentSceneBudget`, in
+ * city-walk-client.tsx) and handed down as a `SceneBudget`: the renderer, the
+ * sun rig, the post stack and the tile loader take the number they need from
+ * it instead of reading the window themselves.
  */
 
 export type SceneProfile = "full" | "lite";
 
 export type DeviceTier = "desktop" | "mobile";
 
+/** The N8AO quality modes this scene uses (the pass also knows Low/High/Ultra). */
+export type AoQuality = "Medium" | "Performance";
+
+export interface SceneBudget {
+  /** whether the neighbour tiles load: always in `full`, in `lite` only with `?block=1` */
+  neighbourTiles: boolean;
+  profile: SceneProfile;
+  tier: DeviceTier;
+}
+
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
 export function sceneProfileFromSearch(search: string): SceneProfile {
   return new URLSearchParams(search).get("scene") === "lite" ? "lite" : "full";
-}
-
-/**
- * The profile this page was opened with. Safe during SSR (returns `full`);
- * read it inside the browser-only startup path, never during render, so the
- * server and client markup can't disagree.
- */
-export function currentSceneProfile(): SceneProfile {
-  if (typeof window === "undefined") {
-    return "full";
-  }
-  return sceneProfileFromSearch(window.location.search);
 }
 
 /**
@@ -51,18 +56,7 @@ export function liteKeepsBlockFromSearch(search: string): boolean {
   return new URLSearchParams(search).get("block") === "1";
 }
 
-/** Whether the neighbour tiles load for this page (see liteKeepsBlockFromSearch). */
-export function loadsNeighbourTiles(profile: SceneProfile): boolean {
-  if (profile === "full") {
-    return true;
-  }
-  return (
-    typeof window !== "undefined" &&
-    liteKeepsBlockFromSearch(window.location.search)
-  );
-}
-
-/** The media query that marks a touch-first device (same as use-coarse-pointer). */
+/** The media query that marks a touch-first device (also drives the touch HUD). */
 export const MOBILE_MEDIA_QUERY = "(pointer: coarse) and (hover: none)";
 
 /** Pure mapping from the media-query result, for tests. */
@@ -70,12 +64,32 @@ export function deviceTierFromMedia(coarseNoHover: boolean): DeviceTier {
   return coarseNoHover ? "mobile" : "desktop";
 }
 
-/** The tier of the device this page runs on (`desktop` during SSR). */
-export function currentDeviceTier(): DeviceTier {
+/** Pure: the budget for a page's `location.search` and its media-query result. */
+export function sceneBudgetFor(
+  search: string,
+  coarseNoHover: boolean
+): SceneBudget {
+  const profile = sceneProfileFromSearch(search);
+  return {
+    profile,
+    tier: deviceTierFromMedia(coarseNoHover),
+    neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
+  };
+}
+
+/**
+ * The budget of the page this runs in. Safe during SSR (the full desktop
+ * budget); read it once inside the browser-only startup path, never during
+ * render, so the server and client markup can't disagree.
+ */
+export function currentSceneBudget(): SceneBudget {
   if (typeof window === "undefined") {
-    return "desktop";
+    return sceneBudgetFor("", false);
   }
-  return deviceTierFromMedia(window.matchMedia(MOBILE_MEDIA_QUERY).matches);
+  return sceneBudgetFor(
+    window.location.search,
+    window.matchMedia(MOBILE_MEDIA_QUERY).matches
+  );
 }
 
 /** Shadow-map resolution for a profile + tier (see sun-rig.ts for the recipe). */
@@ -112,4 +126,14 @@ export function pixelRatioFor(
     return 0.5;
   }
   return Math.min(devicePixelRatio, tier === "mobile" ? 1.5 : 2);
+}
+
+/**
+ * SSAO quality for a profile: headless SwiftShader cannot afford the product's
+ * sample count. Keyed on the profile, not `navigator.webdriver` — Playwright
+ * sets that flag in the `--headed` shot harness too, which must render the
+ * product's AO.
+ */
+export function aoQualityFor(profile: SceneProfile): AoQuality {
+  return profile === "lite" ? "Performance" : "Medium";
 }
