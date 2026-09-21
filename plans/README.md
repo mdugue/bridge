@@ -253,13 +253,11 @@ re-checked; the ones still open are folded in below with fresh evidence.
   oxlint, because TS 7 ships no JS compiler API for typescript-eslint to use.
   The four rules that move left no home are listed in AGENTS.md.
 - **Deliberately held back (re-checked 2026-09-21, registry)**:
-  - `ultracite` 7.8.3 → 7.12.0. The preset turns on ~10 new rule families:
-    **451** violations, of which `assist/source/useSortedKeys` 249,
-    `style/noIncrementDecrement` 94, `performance/noJsxPropsBind` 43,
-    `style/useDestructuring` 21, `suspicious/noUnnecessaryConditions` 15,
-    `noShadow`/`noLeakedRender` 9 each. Biome 2.5.14 **on its own** is clean
-    (verified), so this is a style-refactor decision, not a dependency bump —
-    and `noIncrementDecrement` alone rewrites the renderer's hot loops.
+  - `ultracite` is **gone** along with biome — its oxlint preset is as
+    opinionated as its biome one (`no-plusplus`, `prefer-destructuring`,
+    `no-inline-comments`), so adopting it is the same style refactor the 451
+    biome violations represented, and `.oxlintrc.json` cannot `extends` its
+    `.mjs` presets anyway (JSON configs extend JSON only).
   - `n8ao` 1.10.3 → 2.0.1. Ships no types (`types/n8ao.d.ts` would need
     rewriting) and changes SSAO output; per AGENTS.md, a visual change needs
     the `--headed` snapshot harness on a real GPU, which headless CI cannot do.

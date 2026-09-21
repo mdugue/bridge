@@ -66,8 +66,8 @@ function clamp01(x: number): number {
 }
 
 /**
- * Deterministic, well-spread string hash → float in [0,1), with no bitwise ops
- * (biome bans them). A polynomial roll in a 31-bit ring gives a distinct,
+ * Deterministic, well-spread string hash → float in [0,1), with no bitwise ops.
+ * A polynomial roll in a 31-bit ring gives a distinct,
  * decorrelated seed per id; a sine-fract scramble breaks any residual ordering.
  */
 const HASH_MOD = 2_147_483_647; // 2^31 − 1 (Mersenne prime)
