@@ -88,29 +88,24 @@ for (const artifact of artifacts) {
   }
 }
 
-// --- bake: downsampled neighbour rasters -----------------------------------
-// The DLM bake writes 4096² land-cover rasters. A neighbour tile is backdrop:
-// served at 2048² it costs a quarter of the texture memory (64 MB → 16 MB per
-// RGBA raster before mipmaps), which is what keeps the 2×2 block inside a
-// phone's GPU budget. The class raster keeps NEAREST (ids must not blend);
-// the pastel RGB splat (alpha = water coverage) is box-filtered.
+// --- bake: downsampled rasters ----------------------------------------------
+// The DLM bake writes 4096² land-cover rasters. A neighbour tile is backdrop
+// and is served at 2048²; phones get 2048² for the primary tile as well (see
+// MOBILE_RASTER_PX) — a quarter of the texture memory per raster. The class
+// raster keeps NEAREST (ids must not blend); the pastel RGB splat (alpha =
+// water coverage) is Lanczos-filtered. Which variants exist is decided by
+// tileArtifacts() (lib/city/tile.ts), not here.
 
 async function bakeRasters(): Promise<void> {
   for (const spec of TILE_BLOCK) {
-    if (spec.raster >= 4096) {
-      continue;
-    }
-    const a = tileArtifacts(spec);
-    for (const [artifact, kernel] of [
-      [a.landcover, "nearest"],
-      [a.landcoverRgb, "lanczos3"],
-    ] as const) {
-      const src = join(
-        process.cwd(),
-        `data/${artifact.source}/${artifact.file}`
-      );
-      if (!existsSync(src)) {
+    for (const artifact of Object.values(tileArtifacts(spec))) {
+      const { bakedFrom, raster, resample } = artifact;
+      if (!(bakedFrom && raster && resample) || toPublish.has(artifact.file)) {
         continue;
+      }
+      const src = join(process.cwd(), `data/dlm/${bakedFrom}`);
+      if (!existsSync(src)) {
+        fail(`missing source file data/dlm/${bakedFrom}`);
       }
       const dest = join(process.cwd(), CACHE_DIR, artifact.file);
       toPublish.set(artifact.file, dest);
@@ -119,10 +114,10 @@ async function bakeRasters(): Promise<void> {
       }
       mkdirSync(dirname(dest), { recursive: true });
       await sharp(src)
-        .resize(spec.raster, spec.raster, { kernel, fit: "fill" })
+        .resize(raster, raster, { kernel: resample, fit: "fill" })
         .png({ compressionLevel: 9, palette: false })
         .toFile(dest);
-      log(`downsampled ${artifact.file} to ${spec.raster}² (${kernel})`);
+      log(`downsampled ${bakedFrom} to ${raster}² (${resample})`);
     }
   }
 }

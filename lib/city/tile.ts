@@ -34,6 +34,12 @@ export const NEIGHBOUR_HEIGHTFIELD_N = 512;
  */
 export const PRIMARY_RASTER_PX = 4096;
 export const NEIGHBOUR_RASTER_PX = 2048;
+/** The edge the DLM bake writes (the committed source rasters). */
+export const BAKED_RASTER_PX = 4096;
+/** The edge phones get for EVERY tile, the primary included: a 4096² RGBA
+ *  splat is 85 MB of GPU memory with its mip chain, four times what a phone
+ *  should spend on the ground colour of one tile. */
+export const MOBILE_RASTER_PX = 2048;
 
 export interface TileSpec {
   /** heightfield grid size baked and served for this tile */
@@ -92,10 +98,16 @@ export function heightfieldDataFile(tile: string, n: number): string {
 export type ArtifactSource = "dlm" | null;
 
 export interface TileArtifact {
+  /** for a downsampled raster: the committed full-size file it is baked from */
+  bakedFrom?: string;
   /** file name under public/data (= the URL's last segment) */
   file: string;
+  /** for a downsampled raster: its edge (px) */
+  raster?: number;
   /** false = the loader treats a 404 as "feature off" */
   required: boolean;
+  /** for a downsampled raster: NEAREST keeps class ids exact, Lanczos for colour */
+  resample?: "lanczos3" | "nearest";
   source: ArtifactSource;
 }
 
@@ -108,7 +120,9 @@ export type TileArtifactKind =
   | "heightfieldHeader"
   | "lamps"
   | "landcover"
+  | "landcoverLow"
   | "landcoverRgb"
+  | "landcoverRgbLow"
   | "ndvi"
   | "platform"
   | "rail"
@@ -117,14 +131,41 @@ export type TileArtifactKind =
   | "walls";
 
 /**
+ * A land-cover raster at `px`: the committed 4096² bake as is, or a variant
+ * prepare-data downsamples from it (`.r<px>.png`), class ids NEAREST so none
+ * blend, the pastel RGB splat Lanczos.
+ */
+function landcoverArtifact(
+  tile: string,
+  px: number,
+  rgb: boolean
+): TileArtifact {
+  const base = rgb ? `landcover_rgb_${tile}` : `landcover_${tile}`;
+  if (px >= BAKED_RASTER_PX) {
+    return { file: `${base}.png`, required: true, source: "dlm" };
+  }
+  return {
+    file: `${base}.r${px}.png`,
+    required: true,
+    source: null,
+    bakedFrom: `${base}.png`,
+    raster: px,
+    resample: rgb ? "lanczos3" : "nearest",
+  };
+}
+
+/**
  * Every file the viewer may request for a tile — the ONE list that
  * scripts/prepare-data.ts copies and city-walk-client.tsx requests. Add an
- * artifact here, nowhere else.
+ * artifact here, nowhere else. The `…Low` rasters are what phones load (see
+ * MOBILE_RASTER_PX); for a tile already served at that size they are the same
+ * file.
  */
 export function tileArtifacts(
   spec: TileSpec
 ): Record<TileArtifactKind, TileArtifact> {
   const { tile, n } = spec;
+  const low = Math.min(spec.raster, MOBILE_RASTER_PX);
   const dlm = (file: string, required = false): TileArtifact => ({
     file,
     required,
@@ -151,8 +192,10 @@ export function tileArtifacts(
       required: true,
       source: null,
     },
-    landcover: dlm(`landcover_${tile}.png`, true),
-    landcoverRgb: dlm(`landcover_rgb_${tile}.png`, true),
+    landcover: landcoverArtifact(tile, spec.raster, false),
+    landcoverRgb: landcoverArtifact(tile, spec.raster, true),
+    landcoverLow: landcoverArtifact(tile, low, false),
+    landcoverRgbLow: landcoverArtifact(tile, low, true),
     vegrows: dlm(`vegrows_${tile}.geojson`, true),
     canopy: dlm(`canopy_${tile}.geojson`, true),
     ndvi: dlm(`ndvi_${tile}.png`),

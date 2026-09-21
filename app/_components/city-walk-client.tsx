@@ -10,6 +10,7 @@ import {
   tileUrlsFrom,
 } from "@/lib/city/tile";
 import type { TileSrc } from "./create-app";
+import { currentDeviceTier, type DeviceTier } from "./scene-profile";
 
 // three.js needs a real browser (WebGL, pointer lock) — never prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
@@ -23,14 +24,21 @@ const CityWalk = dynamic(() => import("./city-walk"), {
 });
 
 /** Builds the per-tile URLs (all prepared by scripts/prepare-data.ts). */
-function tile(spec: TileSpec, manifest: DataManifest | null): TileSrc {
+function tile(
+  spec: TileSpec,
+  manifest: DataManifest | null,
+  tier: DeviceTier
+): TileSrc {
   const u = tileUrlsFrom(spec, manifest);
+  // Phones take the 2048² land-cover variants (a quarter of the texture
+  // memory); everything else is the same data for every device.
+  const mobile = tier === "mobile";
   return {
     cityMeshSrc: u.cityMeshData,
     cityMetaSrc: u.cityMeshMeta,
     demSrc: u.heightfieldHeader,
-    landcoverSrc: u.landcover,
-    landcoverRgbSrc: u.landcoverRgb,
+    landcoverSrc: mobile ? u.landcoverLow : u.landcover,
+    landcoverRgbSrc: mobile ? u.landcoverRgbLow : u.landcoverRgb,
     ndviSrc: u.ndvi,
     vegetationSrc: u.vegrows,
     canopySrc: u.canopy,
@@ -83,8 +91,10 @@ export function CityWalkClient() {
       manifest === undefined
         ? null
         : {
-            primary: tile(PRIMARY_SPEC, manifest),
-            extra: NEIGHBOUR_SPECS.map((spec) => tile(spec, manifest)),
+            primary: tile(PRIMARY_SPEC, manifest, currentDeviceTier()),
+            extra: NEIGHBOUR_SPECS.map((spec) =>
+              tile(spec, manifest, currentDeviceTier())
+            ),
           },
     [manifest]
   );
