@@ -37,6 +37,7 @@ is not re-audited next time.
 | 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | TODO |
 | 014 | Bring AGENTS.md, the city-walker skill, `docs/`, code comments and the OSM attribution back in line with the code | P3 | S–M | after 008–013 | TODO |
 | 015 | Progressive first frame: show the primary tile as soon as its terrain + buildings exist, stream the neighbours, vegetation, lamps, rails and walls afterwards behind a non-blocking chip | P1 | L | the loading-performance PR (010, hashed data, baked meshes); 008 recommended | DONE (loading-performance PR; `?scene=lite&block=1` exercises the streaming headless) |
+| 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample (Bun ≥ 1.4 pin, lockfile v2, pure-JS PNG decoder for the pixel test, sharp out) | P3 | S | #28 + #29 merged; **Step 0**: the Vercel build must run Bun 1.4 | TODO — gated on Step 0; measured +24 % RGB / +21 % class file size, pixels equivalent |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
@@ -335,3 +336,8 @@ re-checked; the ones still open are folded in below with fresh evidence.
   executed in PR #25 with the deviations recorded in their status rows.
 - **2026-09-20 run** (against `2079c3a`, this file): all of 001–007 verified
   closed on `main`; findings 31–67 above; plans 008–014.
+- **2026-09-21** (against `e1c00c9`, PR #29): plan 016 written by hand after the
+  `/code-review` of the 2048² raster change found sharp's alpha premultiply
+  painting the ground black (fixed in #29). Bun 1.4's `Bun.Image` was measured
+  against sharp on the real rasters before planning; the plan is gated on the
+  Vercel build container running Bun 1.4.
