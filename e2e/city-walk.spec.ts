@@ -190,7 +190,7 @@ test.describe("desktop viewer", () => {
   });
 
   test.beforeEach(() => {
-    // biome-ignore lint/suspicious/noSkippedTests: conditional runtime skip — render assertions are meaningless without WebGL
+    // Conditional runtime skip — render assertions are meaningless without WebGL.
     test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
   });
 
@@ -530,7 +530,7 @@ test.describe("mobile", () => {
     if (process.env.CI) {
       expect(webgl).toBe(true);
     }
-    // biome-ignore lint/suspicious/noSkippedTests: conditional runtime skip — render assertions are meaningless without WebGL
+    // Conditional runtime skip — render assertions are meaningless without WebGL.
     test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: slow(120_000),

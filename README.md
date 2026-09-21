@@ -130,7 +130,7 @@ patch header before bumping it.
 bun run verify   # lint + typecheck + unit tests — run this before pushing
 bun run build
 bun run test:e2e # Playwright, against a production build
-bun run fix      # ultracite (biome) autofix
+bun run fix      # oxfmt + oxlint --fix
 ```
 
 Unit tests are `bun test` files colocated with the code they cover (`lib/` and
