@@ -266,9 +266,6 @@ re-checked; the ones still open are folded in below with fresh evidence.
   - `n8ao` 1.10.3 → 2.0.1. Ships no types (`types/n8ao.d.ts` would need
     rewriting) and changes SSAO output; per AGENTS.md, a visual change needs
     the `--headed` snapshot harness on a real GPU, which headless CI cannot do.
-  - `bun` 1.3.11 → 1.4.2 in `packageManager` (and the `@types/bun` skew it
-    would fix): needs a machine running 1.4.2 to regenerate and validate the
-    lockfile.
   - `postprocessing` 7.x is alpha/beta only.
 
 ## Findings considered and rejected
