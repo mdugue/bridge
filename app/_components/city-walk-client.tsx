@@ -86,18 +86,18 @@ export function CityWalkClient() {
   // order lib/city/tile.ts lists them (the same list prepare-data.ts bakes).
   // Memoised so the references stay stable across renders (the HUD effect
   // keys on them).
-  const tiles = useMemo(
-    () =>
-      manifest === undefined
-        ? null
-        : {
-            primary: tile(PRIMARY_SPEC, manifest, currentDeviceTier()),
-            extra: NEIGHBOUR_SPECS.map((spec) =>
-              tile(spec, manifest, currentDeviceTier())
-            ),
-          },
-    [manifest]
-  );
+  const tiles = useMemo(() => {
+    if (manifest === undefined) {
+      return null;
+    }
+    // Sampled once per manifest so the primary and its neighbours agree on
+    // the tier (and the media query is evaluated once, not per tile).
+    const tier = currentDeviceTier();
+    return {
+      primary: tile(PRIMARY_SPEC, manifest, tier),
+      extra: NEIGHBOUR_SPECS.map((spec) => tile(spec, manifest, tier)),
+    };
+  }, [manifest]);
   if (!tiles) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-slate-900 text-lg text-white">

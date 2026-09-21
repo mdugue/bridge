@@ -4,8 +4,12 @@
  *  1. **Bake** — every artifact the viewer may request (lib/city/tile.ts,
  *     `tileArtifacts`) is either a committed per-tile file under data/ or is
  *     produced here from one (the DGM GeoTIFF → heightfield, see
- *     lib/city/heightfield.ts). Baked outputs live in `.cache/prepare-data/`
- *     (gitignored) with mtime-based staleness, so a rerun is cheap.
+ *     lib/city/heightfield.ts; the 4096² land-cover rasters → their 2048²
+ *     variants, see downsample-raster.ts; CityJSON → the building mesh).
+ *     Baked outputs live in `.cache/prepare-data/` (gitignored) with
+ *     mtime-based staleness against the inputs AND the bake's own source
+ *     files, so a rerun is cheap and a changed bake never serves a stale
+ *     cache. Every `required` artifact must come out of this stage.
  *  2. **Publish** — each artifact is copied into `public/data/` under a
  *     content-hashed name and `manifest.json` maps logical → hashed names.
  *     Hashed names let `/data/*` be served as immutable (next.config.ts) while
@@ -29,7 +33,6 @@ import {
 import { basename, dirname, extname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { fromArrayBuffer } from "geotiff";
-import sharp from "sharp";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
 import {
@@ -54,6 +57,7 @@ import {
 } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { bakeCityMesh } from "./bake-city-mesh";
+import { downsampleRaster } from "./downsample-raster";
 
 const OUT_DIR = "public/data";
 const CACHE_DIR = ".cache/prepare-data";
@@ -94,7 +98,15 @@ for (const artifact of artifacts) {
 // MOBILE_RASTER_PX) — a quarter of the texture memory per raster. The class
 // raster keeps NEAREST (ids must not blend); the pastel RGB splat (alpha =
 // water coverage) is Lanczos-filtered. Which variants exist is decided by
-// tileArtifacts() (lib/city/tile.ts), not here.
+// tileArtifacts() (lib/city/tile.ts), not here; HOW they are resampled by
+// scripts/downsample-raster.ts — read its header before touching either.
+
+/** The bake's own sources: the resampler, and the kernel each variant
+ *  declares. A change to either re-bakes every variant. */
+const RASTER_BAKE_SOURCES = [
+  join(process.cwd(), "scripts/downsample-raster.ts"),
+  join(process.cwd(), "lib/city/tile.ts"),
+];
 
 async function bakeRasters(): Promise<void> {
   for (const spec of TILE_BLOCK) {
@@ -103,21 +115,19 @@ async function bakeRasters(): Promise<void> {
       if (!(bakedFrom && raster && resample) || toPublish.has(artifact.file)) {
         continue;
       }
-      const src = join(process.cwd(), `data/dlm/${bakedFrom}`);
+      const source = `data/${bakedFrom.source}/${bakedFrom.file}`;
+      const src = join(process.cwd(), source);
       if (!existsSync(src)) {
-        fail(`missing source file data/dlm/${bakedFrom}`);
+        fail(`missing source file ${source}`);
       }
       const dest = join(process.cwd(), CACHE_DIR, artifact.file);
       toPublish.set(artifact.file, dest);
-      if (!isStale(dest, src)) {
+      if (!isStale(dest, src, ...RASTER_BAKE_SOURCES)) {
         continue;
       }
       mkdirSync(dirname(dest), { recursive: true });
-      await sharp(src)
-        .resize(raster, raster, { kernel: resample, fit: "fill" })
-        .png({ compressionLevel: 9, palette: false })
-        .toFile(dest);
-      log(`downsampled ${bakedFrom} to ${raster}² (${resample})`);
+      writeFileSync(dest, await downsampleRaster(src, raster, resample));
+      log(`downsampled ${bakedFrom.file} to ${raster}² (${resample})`);
     }
   }
 }
@@ -327,6 +337,18 @@ function bakeCityMeshes(): void {
 }
 
 bakeCityMeshes();
+
+// Every required artifact must have come out of a stage above. A kind that
+// is neither a committed source nor covered by a bake step (or a spec whose
+// raster edge is 0/NaN and so skipped the raster bake) fails here — not as
+// a 404 the loader turns into "feature off" on every client.
+for (const spec of TILE_BLOCK) {
+  for (const artifact of Object.values(tileArtifacts(spec))) {
+    if (artifact.required && !toPublish.has(artifact.file)) {
+      fail(`required artifact ${artifact.file} was neither copied nor baked`);
+    }
+  }
+}
 
 // --- publish: hashed names + manifest -------------------------------------
 

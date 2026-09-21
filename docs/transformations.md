@@ -43,11 +43,15 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   shadow map. Until the block is complete the fog far plane is clamped to
   ~1.1 km so the missing neighbours read as haze.
 - **Rasters at 2048²** — `prepare-data.ts` downsamples the land-cover rasters
-  (class ids NEAREST, RGB splat Lanczos) to a quarter of the texture memory:
-  for the three backdrop tiles on every device, and for the primary tile too
-  on phones (`MOBILE_RASTER_PX`, chosen by the client per device tier). Cost:
-  ~1 m instead of ~0.5 m class boundaries — on desktop only on the
-  neighbours (visible near a tile seam or flying low), on phones everywhere.
+  (class ids NEAREST, RGB splat Lanczos; `scripts/downsample-raster.ts`) to a
+  quarter of the texture memory: for the three backdrop tiles on every device,
+  and for the primary tile too on phones (`MOBILE_RASTER_PX`, chosen by the
+  client per device tier). The splat's colour and its alpha (= water coverage)
+  are resized as two separate images: sharp premultiplies alpha across a
+  resize, which turned every land texel of the first version of this bake
+  black. Cost: ~1 m instead of ~0.5 m class boundaries — on desktop only on
+  the neighbours (visible near a tile seam or flying low), on phones
+  everywhere.
 - **Buildings** — CityJSON LoD2 → **build-time** binary mesh (one merged
   mesh/tile, per-vertex `objectid`, uint16-quantised positions, gzipped) + a
   meta JSON with the per-object style table, demolish tree and footprints

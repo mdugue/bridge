@@ -22,7 +22,8 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline
-- Playwright for e2e + the screenshot harness; `bun test` for `lib/` units
+- Playwright for e2e + the screenshot harness; `bun test` for the `lib/` and
+  `scripts/` units
 - Deployed as a static client app; no database, no stateful API routes
 
 ## Commands
@@ -34,7 +35,7 @@ bun build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # eslint + ultracite (biome)
 bun typecheck      # tsgo --noEmit
-bun test           # unit tests in lib/ and app/_components/
+bun test           # unit tests in lib/, app/_components/ and scripts/
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
@@ -99,6 +100,12 @@ copies them to `public/data/` at build. Pipeline notes:
 - `extract-canopy.sh` derives canopy points: `nDOM = DOM1 − DGM1`. `gdal_calc.py`
   and **numpy are unavailable**; nDOM is computed directly in Python/Pillow. It
   gates trees on the land-cover class raster so none sit on roads/bridges/water.
+- `prepare-data.ts` downsamples the 4096² rasters to the 2048² variants through
+  `scripts/downsample-raster.ts`. **sharp premultiplies alpha across `resize`**,
+  and on the RGB splat alpha is water coverage, so a plain resize zeroes the
+  colour of every land texel (a black ground; the headless e2e cannot see it).
+  The helper resizes the colour and the alpha as separate alpha-less images —
+  keep it that way, and keep its unit test.
 
 ## Rendering gotchas (hard-won — don't relearn these)
 
