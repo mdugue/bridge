@@ -27,10 +27,11 @@ export const PRIMARY_HEIGHTFIELD_N = 1024;
 export const NEIGHBOUR_HEIGHTFIELD_N = 512;
 
 /**
- * Land-cover raster edge (px) served per role. The bakes write 4096² (≈0.5 m
- * per texel over a 2 km tile); the neighbours are backdrop and are
+ * Land-cover raster edge (px) baked per role. The DLM bake writes 4096²
+ * (≈0.5 m per texel over a 2 km tile); the neighbours are backdrop and are
  * downsampled at prepare time to 2048² (≈1 m) — a quarter of the texture
- * memory, which is what keeps a 2×2 block inside a phone's GPU budget.
+ * memory, which is what keeps a 2×2 block inside a phone's GPU budget. What a
+ * device is actually served is tier-dependent: see MOBILE_RASTER_PX.
  */
 export const PRIMARY_RASTER_PX = 4096;
 export const NEIGHBOUR_RASTER_PX = 2048;
@@ -44,7 +45,8 @@ export const MOBILE_RASTER_PX = 2048;
 export interface TileSpec {
   /** heightfield grid size baked and served for this tile */
   n: number;
-  /** land-cover raster edge served for this tile (px) */
+  /** land-cover raster edge baked for this tile (px); desktops are served
+   *  it as is, phones take min(raster, MOBILE_RASTER_PX) */
   raster: number;
   tile: string;
 }
@@ -97,17 +99,22 @@ export function heightfieldDataFile(tile: string, n: number): string {
  *  mesh from CityJSON + the DOP roof LUT). */
 export type ArtifactSource = "dlm" | null;
 
+/** How prepare-data resamples a raster: NEAREST keeps class ids exact
+ *  (none may blend), Lanczos filters colour. */
+export type RasterResample = "lanczos3" | "nearest";
+
 export interface TileArtifact {
-  /** for a downsampled raster: the committed full-size file it is baked from */
-  bakedFrom?: string;
+  /** for a downsampled raster: the committed full-size file it is baked from,
+   *  and where under data/ that file lives */
+  bakedFrom?: { file: string; source: Exclude<ArtifactSource, null> };
   /** file name under public/data (= the URL's last segment) */
   file: string;
   /** for a downsampled raster: its edge (px) */
   raster?: number;
   /** false = the loader treats a 404 as "feature off" */
   required: boolean;
-  /** for a downsampled raster: NEAREST keeps class ids exact, Lanczos for colour */
-  resample?: "lanczos3" | "nearest";
+  /** for a downsampled raster: the kernel (see RasterResample) */
+  resample?: RasterResample;
   source: ArtifactSource;
 }
 
@@ -148,7 +155,7 @@ function landcoverArtifact(
     file: `${base}.r${px}.png`,
     required: true,
     source: null,
-    bakedFrom: `${base}.png`,
+    bakedFrom: { file: `${base}.png`, source: "dlm" },
     raster: px,
     resample: rgb ? "lanczos3" : "nearest",
   };

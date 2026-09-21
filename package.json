@@ -50,9 +50,9 @@
     "typecheck": "tsgo --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix",
-    "test": "bun test ./lib ./app",
-    "test:watch": "bun test ./lib ./app --watch",
-    "test:coverage": "bun test ./lib ./app --coverage",
+    "test": "bun test ./lib ./app ./scripts",
+    "test:watch": "bun test ./lib ./app ./scripts --watch",
+    "test:coverage": "bun test ./lib ./app ./scripts --coverage",
     "test:e2e": "playwright test",
     "verify": "bun run lint && bun run typecheck && bun run test"
   },

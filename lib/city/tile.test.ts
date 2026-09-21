@@ -42,7 +42,10 @@ test("land-cover rasters: the primary serves the bake, phones a 2048² variant",
     source: "dlm",
   });
   expect(a.landcoverLow.file).toBe("landcover_33412_5656_2_sn.r2048.png");
-  expect(a.landcoverLow.bakedFrom).toBe("landcover_33412_5656_2_sn.png");
+  expect(a.landcoverLow.bakedFrom).toEqual({
+    file: "landcover_33412_5656_2_sn.png",
+    source: "dlm",
+  });
   expect(a.landcoverLow.resample).toBe("nearest");
   expect(a.landcoverRgbLow.resample).toBe("lanczos3");
   // A neighbour is already served at 2048²: the low variant IS its raster.
