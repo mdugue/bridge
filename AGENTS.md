@@ -17,12 +17,13 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 ## Tech stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r186** (`three`), `cityjson-threejs-loader`, `geotiff` (build step
-  only — the client no longer decodes rasters),
+- **three.js r186** (`three`), `cityjson-threejs-loader` and `geotiff` (both
+  build step only — the client decodes neither CityJSON nor rasters),
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline
-- Playwright for e2e + the screenshot harness; `bun test` for `lib/` units
+- Playwright for e2e + the screenshot harness; `bun test` for the `lib/` and
+  `scripts/` units
 - Deployed as a static client app; no database, no stateful API routes
 
 ## Commands
@@ -34,7 +35,7 @@ bun build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # eslint + ultracite (biome)
 bun typecheck      # tsgo --noEmit
-bun test           # unit tests in lib/ and app/_components/
+bun test           # unit tests in lib/, app/_components/ and scripts/
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
@@ -52,8 +53,10 @@ and enforces a complexity cap; extract helpers rather than fighting it. No
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp) with `bun test` units alongside
 - `scripts/` — `extract-dlm.sh`, `extract-canopy.sh` (offline data bakes) and
-  `prepare-data.ts` (copies committed artifacts into `public/data` at build and
-  bakes each DGM GeoTIFF into a float32 heightfield — see `lib/city/heightfield.ts`)
+  `prepare-data.ts` (bakes the committed artifacts into `public/data` under
+  content-hashed names + `manifest.json`: each DGM GeoTIFF becomes a gzipped
+  uint16 heightfield, each CityJSON a binary building mesh via
+  `bake-city-mesh.ts` — see `lib/city/heightfield.ts`)
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
 - `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)
@@ -97,6 +100,12 @@ copies them to `public/data/` at build. Pipeline notes:
 - `extract-canopy.sh` derives canopy points: `nDOM = DOM1 − DGM1`. `gdal_calc.py`
   and **numpy are unavailable**; nDOM is computed directly in Python/Pillow. It
   gates trees on the land-cover class raster so none sit on roads/bridges/water.
+- `prepare-data.ts` downsamples the 4096² rasters to the 2048² variants through
+  `scripts/downsample-raster.ts`. **sharp premultiplies alpha across `resize`**,
+  and on the RGB splat alpha is water coverage, so a plain resize zeroes the
+  colour of every land texel (a black ground; the headless e2e cannot see it).
+  The helper resizes the colour and the alpha as separate alpha-less images —
+  keep it that way, and keep its unit test.
 
 ## Rendering gotchas (hard-won — don't relearn these)
 
@@ -116,10 +125,11 @@ camera-following frustum on a right-sized map (finer texels = cleaner edges).
 it here. The remaining limit (very long shadows clipping beyond the frustum at
 low sun) is only solvable with Cascaded Shadow Maps.
 
-**Buildings are already batched.** `cityjson-threejs-loader` merges ~2000
-buildings into one mesh per tile (per-vertex `objectid`), so draw calls are
-already low and **BatchedMesh would not help** (and would break objectid
-picking/demolish). The perf bottleneck is **fill-rate** (post FX + shadow map),
+**Buildings are already batched.** Each tile's buildings are ONE baked mesh
+(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time and
+writes a gzipped vertex stream + meta, `lib/city/city-mesh.ts`; per-vertex
+`objectid`), so draw calls are already low and **BatchedMesh would not help**
+(and would break objectid picking/demolish). The perf bottleneck is **fill-rate** (post FX + shadow map),
 not draw calls.
 
 **Vegetation** is chunked into 250 m cells (one InstancedMesh per cell) so
@@ -133,6 +143,17 @@ is off-screen.
 The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
 loader's raw LoD colours) styles were removed. Keep transmission out of the
 scene: it re-renders everything into a buffer each frame (~2× cost).
+
+**The boot has two phases.** `bootApp` returns (and the overlay drops) as
+soon as the primary tile's terrain + buildings are on screen; `loadRest`
+then streams the primary's vegetation and lamps, the three neighbour tiles,
+rails and walls behind a HUD chip (`status.phase === "streaming"`), and
+`onLoaded` flips it to `ready`. Anything added to the scene after the first
+frame must `invalidateShadows()` and re-check the abort signal
+(`ensureAlive()`), or it shows up as a missing shadow / a leak after a
+StrictMode remount. The e2e hook distinguishes `__poc.firstFrame` from
+`__poc.ready` (= everything loaded); `?scene=lite&block=1` keeps the
+neighbours in the lite profile to exercise the streaming headless.
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.

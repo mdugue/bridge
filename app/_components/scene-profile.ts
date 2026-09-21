@@ -14,9 +14,16 @@
  *
  * Opt in with `?scene=lite`. The default is always `full`, so nothing about a
  * normal visit changes.
+ *
+ * Orthogonal to the profile is the **device tier**: a phone (coarse pointer,
+ * no hover) shares one memory pool between CPU and GPU and Safari kills the
+ * tab well under 1.5 GB, so it gets a 2048² shadow map and a 1.5 pixel-ratio
+ * cap. Same world, same shaders — only fill and shadow texels shrink.
  */
 
 export type SceneProfile = "full" | "lite";
+
+export type DeviceTier = "desktop" | "mobile";
 
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
 export function sceneProfileFromSearch(search: string): SceneProfile {
@@ -35,11 +42,74 @@ export function currentSceneProfile(): SceneProfile {
   return sceneProfileFromSearch(window.location.search);
 }
 
-/** Shadow-map resolution for a profile (see sun-rig.ts for the full recipe). */
-export function shadowMapSizeFor(profile: SceneProfile): number {
+/**
+ * `?scene=lite&block=1` keeps the neighbour tiles in the lite profile — a QA
+ * knob for exercising the tile streaming (loadRest in create-app.ts) headless,
+ * where the full profile's shadow map and pixel count are unaffordable. Pure.
+ */
+export function liteKeepsBlockFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("block") === "1";
+}
+
+/** Whether the neighbour tiles load for this page (see liteKeepsBlockFromSearch). */
+export function loadsNeighbourTiles(profile: SceneProfile): boolean {
+  if (profile === "full") {
+    return true;
+  }
+  return (
+    typeof window !== "undefined" &&
+    liteKeepsBlockFromSearch(window.location.search)
+  );
+}
+
+/** The media query that marks a touch-first device (same as use-coarse-pointer). */
+export const MOBILE_MEDIA_QUERY = "(pointer: coarse) and (hover: none)";
+
+/** Pure mapping from the media-query result, for tests. */
+export function deviceTierFromMedia(coarseNoHover: boolean): DeviceTier {
+  return coarseNoHover ? "mobile" : "desktop";
+}
+
+/** The tier of the device this page runs on (`desktop` during SSR). */
+export function currentDeviceTier(): DeviceTier {
+  if (typeof window === "undefined") {
+    return "desktop";
+  }
+  return deviceTierFromMedia(window.matchMedia(MOBILE_MEDIA_QUERY).matches);
+}
+
+/** Shadow-map resolution for a profile + tier (see sun-rig.ts for the recipe). */
+export function shadowMapSizeFor(
+  profile: SceneProfile,
+  tier: DeviceTier = "desktop"
+): number {
   // 512² is a ~36x cheaper depth pass than 3072². The shadows look coarse,
   // which is fine: the headless suite asserts that shadows are ENABLED and
   // that the depth pass runs without error, never how soft an edge is (that
   // is what the --headed snapshot harness on a real GPU is for).
-  return profile === "lite" ? 512 : 3072;
+  if (profile === "lite") {
+    return 512;
+  }
+  // A phone's shadow map is a quarter of the desktop's texels (16 MB instead
+  // of 36 MB) and a quarter of the per-frame depth fill; the soft PCF radius
+  // hides the coarser texel over the 110 m frustum.
+  return tier === "mobile" ? 2048 : 3072;
+}
+
+/**
+ * Render pixel ratio for a profile + tier. `lite` renders at half linear
+ * resolution (a quarter of the pixels) and lets the browser upscale — the
+ * only honest way to cut fill-rate in the headless suite, where every pixel
+ * is shaded on the CPU. A phone is capped at 1.5 (its 3x panel would
+ * otherwise push the post stack's half-float buffers past what fits).
+ */
+export function pixelRatioFor(
+  profile: SceneProfile,
+  tier: DeviceTier,
+  devicePixelRatio: number
+): number {
+  if (profile === "lite") {
+    return 0.5;
+  }
+  return Math.min(devicePixelRatio, tier === "mobile" ? 1.5 : 2);
 }

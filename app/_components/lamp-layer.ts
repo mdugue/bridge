@@ -18,7 +18,8 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
-import { fetchFeatures, type VegetationContext } from "./vegetation-layer";
+import { fetchFeatures } from "./fetch-optional";
+import type { VegetationContext } from "./vegetation-layer";
 
 /** Lamp post height (m). OSM rarely tags it; the bake defaults each lamp to 5 m. */
 const LAMP_H = 5;
@@ -65,6 +66,8 @@ export interface LampControl {
 export interface LampLights {
   dispose: () => void;
   lights: PointLight[];
+  /** replaces the lamp heads the pool retargets to (tiles stream in) */
+  setHeads: (heads: Vector3[]) => void;
   setNightFactor: (t: number) => void;
   /** repositions the lights onto the nearest lamp heads (call per frame) */
   updateNearest: (camPos: Vector3) => void;
@@ -323,14 +326,16 @@ function falloff(d: number): number {
 
 /**
  * A small fixed pool of real point lights shared by ALL tiles' lamps. Allocated
- * ONCE (so `NUM_POINT_LIGHTS` is constant — no recompile churn), never added or
- * removed; at midday they simply sit at intensity 0. Each frame they jump to the
- * nearest lamp heads with a distance falloff so the hand-off is invisible.
+ * ONCE before the first frame (so `NUM_POINT_LIGHTS` is constant — no
+ * recompile churn), never added or removed; at midday, and until the first
+ * tile's lamps have streamed in (`setHeads`), they simply sit at intensity 0.
+ * Each frame they jump to the nearest lamp heads with a distance falloff so
+ * the hand-off is invisible.
  */
-export function createLampLights(heads: Vector3[]): LampLights {
-  const count = Math.min(MAX_REAL_LAMPS, heads.length);
+export function createLampLights(initialHeads: Vector3[] = []): LampLights {
+  let heads = initialHeads;
   const lights: PointLight[] = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < MAX_REAL_LAMPS; i++) {
     const light = new PointLight(0xff_d0_89, 0, LIGHT_RANGE, 2);
     light.castShadow = false;
     lights.push(light);
@@ -339,11 +344,14 @@ export function createLampLights(heads: Vector3[]): LampLights {
 
   return {
     lights,
+    setHeads: (next) => {
+      heads = next;
+    },
     setNightFactor: (t) => {
       nightFactor = Math.min(Math.max(t, 0), 1);
     },
     updateNearest: (camPos) => {
-      if (lights.length === 0 || nightFactor <= 0.001) {
+      if (heads.length === 0 || nightFactor <= 0.001) {
         for (const light of lights) {
           light.intensity = 0;
         }

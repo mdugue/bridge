@@ -26,16 +26,39 @@ export const NEIGHBOUR_TILES = [
 export const PRIMARY_HEIGHTFIELD_N = 1024;
 export const NEIGHBOUR_HEIGHTFIELD_N = 512;
 
+/**
+ * Land-cover raster edge (px) baked per role. The DLM bake writes 4096²
+ * (≈0.5 m per texel over a 2 km tile); the neighbours are backdrop and are
+ * downsampled at prepare time to 2048² (≈1 m) — a quarter of the texture
+ * memory, which is what keeps a 2×2 block inside a phone's GPU budget. What a
+ * device is actually served is tier-dependent: see MOBILE_RASTER_PX.
+ */
+export const PRIMARY_RASTER_PX = 4096;
+export const NEIGHBOUR_RASTER_PX = 2048;
+/** The edge the DLM bake writes (the committed source rasters). */
+export const BAKED_RASTER_PX = 4096;
+/** The edge phones get for EVERY tile, the primary included: a 4096² RGBA
+ *  splat is 85 MB of GPU memory with its mip chain, four times what a phone
+ *  should spend on the ground colour of one tile. */
+export const MOBILE_RASTER_PX = 2048;
+
 export interface TileSpec {
   /** heightfield grid size baked and served for this tile */
   n: number;
+  /** land-cover raster edge baked for this tile (px); desktops are served
+   *  it as is, phones take min(raster, MOBILE_RASTER_PX) */
+  raster: number;
   tile: string;
 }
 
 /** Every tile the app loads, with the grid size it is served at. */
 export const TILE_BLOCK: TileSpec[] = [
-  { tile: PRIMARY_TILE, n: PRIMARY_HEIGHTFIELD_N },
-  ...NEIGHBOUR_TILES.map((tile) => ({ tile, n: NEIGHBOUR_HEIGHTFIELD_N })),
+  { tile: PRIMARY_TILE, n: PRIMARY_HEIGHTFIELD_N, raster: PRIMARY_RASTER_PX },
+  ...NEIGHBOUR_TILES.map((tile) => ({
+    tile,
+    n: NEIGHBOUR_HEIGHTFIELD_N,
+    raster: NEIGHBOUR_RASTER_PX,
+  })),
 ];
 
 /** Files served from /data (= public/data/), all derived from the tile id. */
@@ -43,10 +66,205 @@ export function cityJsonFile(tile: string): string {
   return `lod2_${tile}.city.json`;
 }
 
+/** The baked building mesh (lib/city/city-mesh.ts): vertex stream + meta. */
+export function cityMeshDataFile(tile: string): string {
+  return `city_${tile}.mesh.bin.gz`;
+}
+
+export function cityMeshMetaFile(tile: string): string {
+  return `city_${tile}.mesh.json`;
+}
+
+/** The committed inputs of the building-mesh bake (CityJSON + DOP roof LUT). */
+export function cityMeshSourceFiles(tile: string): {
+  city: string;
+  roofColor: string;
+} {
+  return {
+    city: `data/cityjson/${cityJsonFile(tile)}`,
+    roofColor: `data/dop/roofcolor_${tile}.json`,
+  };
+}
+
 export function heightfieldHeaderFile(tile: string, n: number): string {
   return `dgm1_${tile}.heightfield-${n}.json`;
 }
 
 export function heightfieldDataFile(tile: string, n: number): string {
-  return `dgm1_${tile}.heightfield-${n}.f32`;
+  return `dgm1_${tile}.heightfield-${n}.u16.gz`;
+}
+
+/** Where a committed source lives under data/ (null = baked by prepare-data
+ *  from committed sources — the heightfield from the DGM GeoTIFF, the building
+ *  mesh from CityJSON + the DOP roof LUT). */
+export type ArtifactSource = "dlm" | null;
+
+/** How prepare-data resamples a raster: NEAREST keeps class ids exact
+ *  (none may blend), Lanczos filters colour. */
+export type RasterResample = "lanczos3" | "nearest";
+
+export interface TileArtifact {
+  /** for a downsampled raster: the committed full-size file it is baked from,
+   *  and where under data/ that file lives */
+  bakedFrom?: { file: string; source: Exclude<ArtifactSource, null> };
+  /** file name under public/data (= the URL's last segment) */
+  file: string;
+  /** for a downsampled raster: its edge (px) */
+  raster?: number;
+  /** false = the loader treats a 404 as "feature off" */
+  required: boolean;
+  /** for a downsampled raster: the kernel (see RasterResample) */
+  resample?: RasterResample;
+  source: ArtifactSource;
+}
+
+export type TileArtifactKind =
+  | "bridge"
+  | "canopy"
+  | "cityMeshData"
+  | "cityMeshMeta"
+  | "heightfieldData"
+  | "heightfieldHeader"
+  | "lamps"
+  | "landcover"
+  | "landcoverLow"
+  | "landcoverRgb"
+  | "landcoverRgbLow"
+  | "ndvi"
+  | "platform"
+  | "rail"
+  | "railarea"
+  | "vegrows"
+  | "walls";
+
+/**
+ * A land-cover raster at `px`: the committed 4096² bake as is, or a variant
+ * prepare-data downsamples from it (`.r<px>.png`), class ids NEAREST so none
+ * blend, the pastel RGB splat Lanczos.
+ */
+function landcoverArtifact(
+  tile: string,
+  px: number,
+  rgb: boolean
+): TileArtifact {
+  const base = rgb ? `landcover_rgb_${tile}` : `landcover_${tile}`;
+  if (px >= BAKED_RASTER_PX) {
+    return { file: `${base}.png`, required: true, source: "dlm" };
+  }
+  return {
+    file: `${base}.r${px}.png`,
+    required: true,
+    source: null,
+    bakedFrom: { file: `${base}.png`, source: "dlm" },
+    raster: px,
+    resample: rgb ? "lanczos3" : "nearest",
+  };
+}
+
+/**
+ * Every file the viewer may request for a tile — the ONE list that
+ * scripts/prepare-data.ts copies and city-walk-client.tsx requests. Add an
+ * artifact here, nowhere else. The `…Low` rasters are what phones load (see
+ * MOBILE_RASTER_PX); for a tile already served at that size they are the same
+ * file.
+ */
+export function tileArtifacts(
+  spec: TileSpec
+): Record<TileArtifactKind, TileArtifact> {
+  const { tile, n } = spec;
+  const low = Math.min(spec.raster, MOBILE_RASTER_PX);
+  const dlm = (file: string, required = false): TileArtifact => ({
+    file,
+    required,
+    source: "dlm",
+  });
+  return {
+    cityMeshMeta: {
+      file: cityMeshMetaFile(tile),
+      required: true,
+      source: null,
+    },
+    cityMeshData: {
+      file: cityMeshDataFile(tile),
+      required: true,
+      source: null,
+    },
+    heightfieldHeader: {
+      file: heightfieldHeaderFile(tile, n),
+      required: true,
+      source: null,
+    },
+    heightfieldData: {
+      file: heightfieldDataFile(tile, n),
+      required: true,
+      source: null,
+    },
+    landcover: landcoverArtifact(tile, spec.raster, false),
+    landcoverRgb: landcoverArtifact(tile, spec.raster, true),
+    landcoverLow: landcoverArtifact(tile, low, false),
+    landcoverRgbLow: landcoverArtifact(tile, low, true),
+    vegrows: dlm(`vegrows_${tile}.geojson`, true),
+    canopy: dlm(`canopy_${tile}.geojson`, true),
+    ndvi: dlm(`ndvi_${tile}.png`),
+    lamps: dlm(`lamps_${tile}.geojson`),
+    rail: dlm(`rail_${tile}.geojson`),
+    bridge: dlm(`bridge_${tile}.geojson`),
+    railarea: dlm(`railarea_${tile}.geojson`),
+    platform: dlm(`platform_${tile}.geojson`),
+    walls: dlm(`walls_${tile}.geojson`),
+  };
+}
+
+/** The same map as URLs under `base` (default: the /data route). */
+export function tileUrls(
+  spec: TileSpec,
+  base = "/data"
+): Record<TileArtifactKind, string> {
+  const out = {} as Record<TileArtifactKind, string>;
+  for (const [kind, artifact] of Object.entries(tileArtifacts(spec))) {
+    out[kind as TileArtifactKind] = `${base}/${artifact.file}`;
+  }
+  return out;
+}
+
+/** The committed DGM GeoTIFF (+ its .tfw sidecar) the heightfield bake reads. */
+export function dgmSourceFiles(tile: string): { tif: string; tfw: string } {
+  const dir = `data/dgm/dgm1_${tile}_tiff`;
+  return { tif: `${dir}/dgm1_${tile}.tif`, tfw: `${dir}/dgm1_${tile}.tfw` };
+}
+
+/**
+ * `public/data/manifest.json`, written by scripts/prepare-data.ts: maps each
+ * artifact's logical file name (the names above) to the content-hashed name
+ * it is actually served under. Hashed names let `/data/*` be cached as
+ * immutable (see next.config.ts) while a re-bake still reaches every client
+ * through the manifest, which is the one file served with `no-cache`.
+ */
+export const MANIFEST_FILE = "manifest.json";
+
+export interface DataManifest {
+  files: Record<string, string>;
+  version: 1;
+}
+
+/** Resolves a logical artifact name through the manifest (unknown → as is). */
+export function manifestUrl(
+  manifest: DataManifest | null,
+  file: string,
+  base = "/data"
+): string {
+  return `${base}/${manifest?.files[file] ?? file}`;
+}
+
+/** The artifact map as served URLs, resolved through the manifest. */
+export function tileUrlsFrom(
+  spec: TileSpec,
+  manifest: DataManifest | null,
+  base = "/data"
+): Record<TileArtifactKind, string> {
+  const out = {} as Record<TileArtifactKind, string>;
+  for (const [kind, artifact] of Object.entries(tileArtifacts(spec))) {
+    out[kind as TileArtifactKind] = manifestUrl(manifest, artifact.file, base);
+  }
+  return out;
 }

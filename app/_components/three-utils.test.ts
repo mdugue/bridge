@@ -7,7 +7,11 @@ import {
   MeshBasicMaterial,
   Object3D,
 } from "three";
-import { disposeObject3D } from "./three-utils";
+import {
+  disposeObject3D,
+  estimateGeometryBytes,
+  textureBytes,
+} from "./three-utils";
 
 /** Counts three's "dispose" events, which `.dispose()` dispatches. */
 function countDisposals(resource: BufferGeometry | Material): () => number {
@@ -74,4 +78,22 @@ test("two meshes sharing one material dispose without throwing", () => {
 
 test("a bare Object3D is traversed without throwing", () => {
   expect(() => disposeObject3D(new Object3D())).not.toThrow();
+});
+
+test("estimateGeometryBytes counts each geometry once, index included", () => {
+  const geometry = new BoxGeometry();
+  const expected =
+    Object.values(geometry.attributes).reduce(
+      (sum, a) => sum + a.array.byteLength,
+      0
+    ) + (geometry.index?.array.byteLength ?? 0);
+  const root = new Object3D();
+  root.add(new Mesh(geometry, new MeshBasicMaterial()));
+  root.add(new Mesh(geometry, new MeshBasicMaterial()));
+  expect(estimateGeometryBytes(root)).toBe(expected);
+});
+
+test("textureBytes adds a third for a mip chain", () => {
+  expect(textureBytes(4, 4, 4, false)).toBe(64);
+  expect(textureBytes(4, 4, 1, true)).toBe(21);
 });

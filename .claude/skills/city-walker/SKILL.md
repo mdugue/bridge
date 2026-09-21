@@ -18,14 +18,22 @@ the change** (Definition of Done in `docs/README.md`).
 
 `app/_components/create-app.ts` is the spine: it builds the renderer, scene, a
 `PerspectiveCamera`, a `world` group (Z-up data frame, rotated −90° about X to
-Y-up), loads the tiles, runs the animation loop, and returns a `CityWalkHandle`
-(the imperative API the React HUD calls). The layers:
+Y-up), loads the primary tile's buildings + terrain, starts the animation loop
+and returns a `CityWalkHandle` (the imperative API the React HUD calls) — the
+first frame. Everything else (`loadRest`: the primary's vegetation and lamps,
+the neighbour tiles, rails, walls) streams in behind the HUD's streaming chip;
+each step invalidates the shadow map and re-checks the abort signal. The fixed
+lamp-light pool and the fog floor are created before the first frame and
+retargeted/lowered as tiles land. The layers:
 
-- `city-layer.ts` — wraps `cityjson-threejs-loader`. One **merged** mesh per
-  tile (~2000 buildings, per-vertex `objectid`). Demolish = remove the object
-  from the in-memory CityJSON and **re-parse** (you can't hide one building).
-  Picking/collision use `three-mesh-bvh`.
-- `terrain-layer.ts` — baked DGM1 heightfield (`.heightfield-<n>.json` + `.f32`,
+- `city-layer.ts` — loads the **baked** building mesh (`city_<tile>.mesh.json`
+  + `.mesh.bin.gz`, produced by `scripts/bake-city-mesh.ts` from the CityJSON
+  at build time; format in `lib/city/city-mesh.ts`). One merged mesh per tile
+  (per-vertex `objectid`); the clay attributes expand the meta's per-object
+  table at load. Demolish = filter the object's building tree out of the
+  vertex stream and rebuild (you can't hide one building in a batched mesh).
+  Picking/collision use `three-mesh-bvh`. No CityJSON reaches the browser.
+- `terrain-layer.ts` — baked DGM1 heightfield (`.heightfield-<n>.json` + `.u16.gz`,
   produced by `prepare-data.ts`) → mesh + the surface splat; also
   builds the water layer. `lib/city/terrain-geometry.ts` is the pure math.
 - `water-layer.ts` — clone of terrain geometry, masked by the splat's alpha
@@ -189,7 +197,7 @@ because boot is the largest fixed cost left once frames are cheap. The
 Raw downloads (gitignored `data/_raw/`): no Git-LFS; commit only the small
 derived per-tile artifacts in `data/dlm/` and `data/dgm/`. `prepare-data.ts`
 copies them to `public/data/` at `bun dev`/`build`, and bakes each tile's DGM
-GeoTIFF into a float32 heightfield there (primary 1024², neighbours 512²;
+GeoTIFF into a gzipped uint16 (cm) heightfield there (primary 1024², neighbours 512²;
 `lib/city/heightfield.ts` owns the format, `lib/city/tile.ts` the tile list) —
 the `.tif` itself is never served. **numpy and `gdal_calc.py`
 are unavailable** — do raster math in Python/Pillow (palette mode for speed; mode

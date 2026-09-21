@@ -77,6 +77,17 @@ async function waitForFrames(page: Page, count: number): Promise<void> {
   );
 }
 
+/**
+ * Resolves a logical /data artifact name to its content-hashed URL through
+ * the manifest scripts/prepare-data.ts publishes (see lib/city/tile.ts).
+ */
+async function dataUrl(page: Page, file: string): Promise<string> {
+  const manifest = (await (
+    await page.request.get("/data/manifest.json")
+  ).json()) as { files: Record<string, string> };
+  return `/data/${manifest.files[file] ?? file}`;
+}
+
 /** True when the browser has WebGL at all (render assertions need it). */
 function hasWebGl(page: Page): Promise<boolean> {
   return page.evaluate(() => {
@@ -193,6 +204,8 @@ test.describe("desktop viewer", () => {
 
     const poc = await page.evaluate(() => window.__poc);
     expect(poc?.buildingCount ?? 0).toBeGreaterThan(0);
+    // The first frame precedes "everything loaded"; both are set once ready.
+    expect(poc?.firstFrame).toBe(true);
     expect(poc?.terrainVertexCount ?? 0).toBeGreaterThan(0);
     expect(poc?.shadowsEnabled).toBe(true);
     expectNoErrors(errors);
@@ -276,20 +289,16 @@ test.describe("desktop viewer", () => {
     // Runs after the read-only tests: re-parsing the tile also rebuilds the
     // minimap's 2369 footprint polygons, and a main thread busy with that
     // makes Playwright's actionability checks on the minimap crawl.
-    const cityDoc = (await (
-      await page.request.get("/data/lod2_33412_5656_2_sn.city.json")
-    ).json()) as {
-      CityObjects: Record<
-        string,
-        { type: string; geographicalExtent?: number[] }
-      >;
-    };
-    const target = Object.values(cityDoc.CityObjects).find(
-      (o) => o.type === "Building" && o.geographicalExtent
+    const cityMeta = (await (
+      await page.request.get(
+        await dataUrl(page, "city_33412_5656_2_sn.mesh.json")
+      )
+    ).json()) as { objects: { type: string; extent?: number[] }[] };
+    const target = cityMeta.objects.find(
+      (o) => o.type === "Building" && o.extent
     );
-    expect(target?.geographicalExtent).toBeDefined();
-    const [minX, minY, minZ, maxX, maxY, maxZ] =
-      target?.geographicalExtent ?? [];
+    expect(target?.extent).toBeDefined();
+    const [minX, minY, minZ, maxX, maxY, maxZ] = target?.extent ?? [];
     const buildingsBefore = await page.evaluate(
       () => window.__poc?.buildingCount ?? 0
     );

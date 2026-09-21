@@ -22,6 +22,11 @@ export interface PocDebugInfo {
   buildingCount: number;
   /** Demolishes the building under the screen-center crosshair. */
   demolishAtCrosshair?: () => void;
+  /**
+   * True once the primary tile is on screen and the handle exists; `ready`
+   * follows when every layer has streamed in (neighbours, vegetation, rails).
+   */
+  firstFrame: boolean;
   /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
   /** Animated glide to a curated scenic Viewpoint (the HUD buttons). */
@@ -41,7 +46,14 @@ export interface PocDebugInfo {
   /** Current player pose in EPSG coordinates. */
   getPose?: () => PlayerPose;
   /** Last-frame GPU counters (draw calls, triangles, programs). */
-  getRenderInfo?: () => { calls: number; triangles: number; programs: number };
+  getRenderInfo?: () => {
+    calls: number;
+    gpuBytes: number;
+    programs: number;
+    triangles: number;
+  };
+  /** estimated GPU footprint (MB), see CityWalkStats */
+  gpuMegabytes: number;
   /** Inserts the prescribed building (marker box without a glTF). */
   insertBuilding?: () => void;
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
@@ -132,11 +144,13 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
     return;
   }
   window.__poc = {
+    firstFrame: false,
     ready: false,
     buildingCount: 0,
     frames: 0,
     terrainVertexCount: 0,
     shadowsEnabled: false,
+    gpuMegabytes: 0,
     ...window.__poc,
     ...patch,
   };

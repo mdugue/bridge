@@ -20,9 +20,9 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 ### Geometry & ground
 - **Terrain heightfield** — DGM1 → triangulated heightfield + edge skirt to hide
   inter-tile seams. The GeoTIFF is resampled **at build time**
-  (`scripts/prepare-data.ts` → `<tile>.heightfield-<n>.json` + `.f32`, primary
+  (`scripts/prepare-data.ts` → `<tile>.heightfield-<n>.json` + `.u16.gz`, primary
   tile 1024², neighbours 512², NoData stored as NaN — see
-  `lib/city/heightfield.ts`); the browser fetches the float32 grid and never
+  `lib/city/heightfield.ts`); the browser fetches the gzipped uint16 (cm) grid and never
   decodes a raster. `terrain-layer.ts`, `lib/city/terrain-geometry.ts`.
 - **Surface splatmap** — Basis-DLM land-cover → 4096² RGBA PNG (RGB = pastel
   palette per class, A = water coverage), sampled with anisotropy 16.
@@ -37,8 +37,27 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   animated normal wobble. `water-layer.ts`. Missing RGBA splat → coverage falls
   back to the NEAREST class raster tested against class 8 (hard-edged bank);
   the class PNG's own alpha decodes to 1 everywhere and must never be read.
-- **Buildings** — CityJSON LoD2 → one merged mesh/tile, per-vertex `objectid`;
-  demolish = drop from CityJSON + re-parse; BVH picking/collision. `city-layer.ts`.
+- **Progressive first frame** — the primary tile's terrain + buildings render
+  first; vegetation, lamps, the neighbour tiles, rails and walls stream in
+  afterwards (`loadRest` in `create-app.ts`), each addition re-rendering the
+  shadow map. Until the block is complete the fog far plane is clamped to
+  ~1.1 km so the missing neighbours read as haze.
+- **Rasters at 2048²** — `prepare-data.ts` downsamples the land-cover rasters
+  (class ids NEAREST, RGB splat Lanczos; `scripts/downsample-raster.ts`) to a
+  quarter of the texture memory: for the three backdrop tiles on every device,
+  and for the primary tile too on phones (`MOBILE_RASTER_PX`, chosen by the
+  client per device tier). The splat's colour and its alpha (= water coverage)
+  are resized as two separate images: sharp premultiplies alpha across a
+  resize, which turned every land texel of the first version of this bake
+  black. Cost: ~1 m instead of ~0.5 m class boundaries — on desktop only on
+  the neighbours (visible near a tile seam or flying low), on phones
+  everywhere.
+- **Buildings** — CityJSON LoD2 → **build-time** binary mesh (one merged
+  mesh/tile, per-vertex `objectid`, uint16-quantised positions, gzipped) + a
+  meta JSON with the per-object style table, demolish tree and footprints
+  (`scripts/bake-city-mesh.ts`, `lib/city/city-mesh.ts`); demolish = filter the
+  building tree out of the vertex stream + rebuild; BVH picking/collision.
+  `city-layer.ts`. The DOP roof LUT is folded in at bake time.
 - **Ground-clamp** — DGM1 sampled to seat buildings, trees, lamps, and the player
   on terrain. `lib/city/ground-clamp.ts`.
 

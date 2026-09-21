@@ -101,11 +101,11 @@ flowchart TB
 
 | Feature | Primary source | Also needs / modifiers | Code |
 |---|---|---|---|
-| **Terrain ground** | DGM1 GeoTIFF → build-time heightfield (`.f32`) | OSM walls (conflated into a step) | baked by `scripts/prepare-data.ts` (`lib/city/heightfield.ts`); `terrain-layer.ts`, `lib/city/terrain-geometry.ts`, `lib/city/terrain-conflate.ts` |
+| **Terrain ground** | DGM1 GeoTIFF → build-time heightfield (`.u16.gz`) | OSM walls (conflated into a step) | baked by `scripts/prepare-data.ts` (`lib/city/heightfield.ts`); `terrain-layer.ts`, `lib/city/terrain-geometry.ts`, `lib/city/terrain-conflate.ts` |
 | **Surface colours** | Basis-DLM splatmap PNG | DOP NDVI (meadow tint, class 1) | `terrain-layer.ts` (samples splat + `uNdvi`); baked by `extract-dlm.sh` + `extract-ndvi.sh` |
 | **Water (Elbe)** | Basis-DLM (alpha = water) **+** DGM1 (geometry) | — | `water-layer.ts` |
-| **Buildings (geometry)** | CityJSON LoD2 | DGM1 (ground-clamp) | `city-layer.ts` (`cityjson-threejs-loader`) |
-| **Building detailing** | CityJSON attrs + `surfacetype` | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `city-layer.ts` `annotateBuildingDetail`, `visual-style.ts`, `lib/city/building-tint.ts`; bake `extract-roof-colour.sh` |
+| **Buildings (geometry)** | CityJSON LoD2 → build-time mesh (`.mesh.bin.gz` + `.mesh.json`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`, `lib/city/city-mesh.ts`); `city-layer.ts` |
+| **Building detailing** | CityJSON attrs + `surfacetype` (baked per object) | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `city-mesh.ts` `buildDetailAttributes`, `visual-style.ts`, `lib/city/building-tint.ts`; bake `extract-roof-colour.sh` |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `extract-dlm.sh` + `extract-canopy.sh` + `extract-ndvi.sh` |
 | **Street lamps** | OSM | DGM1 (ground-clamp); gated off water + railway | baked by `scripts/extract-lamps.sh`; `lamp-layer.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |

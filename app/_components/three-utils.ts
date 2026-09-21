@@ -1,4 +1,4 @@
-import type { BufferGeometry, Material, Object3D } from "three";
+import type { BufferGeometry, Material, Object3D, Texture } from "three";
 
 function disposeMaterial(material: Material | Material[] | undefined): void {
   if (Array.isArray(material)) {
@@ -28,4 +28,60 @@ export function disposeObject3D(root: Object3D): void {
     resource.geometry?.dispose();
     disposeMaterial(resource.material);
   });
+}
+
+/**
+ * GPU bytes of every geometry reachable from `root` (each geometry counted
+ * once: attributes, index and instanced attributes). An estimate for the
+ * memory HUD — three keeps no byte counters, and a phone's single memory
+ * pool is where this scene runs out of room first.
+ */
+export function estimateGeometryBytes(root: Object3D): number {
+  const seen = new Set<BufferGeometry>();
+  let bytes = 0;
+  root.traverse((obj) => {
+    const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
+    if (!geometry || seen.has(geometry)) {
+      return;
+    }
+    seen.add(geometry);
+    for (const attribute of Object.values(geometry.attributes)) {
+      bytes += attribute.array.byteLength;
+    }
+    bytes += geometry.index?.array.byteLength ?? 0;
+  });
+  return bytes;
+}
+
+// Textures register their upload size here; an ImageBitmap that was closed
+// after its upload reports 0×0, so the size is recorded at load time and
+// forgotten when the texture is disposed.
+const trackedTextures = new Map<Texture, number>();
+
+/** Records a texture's GPU footprint (bytes) until it is disposed. */
+export function trackTexture(texture: Texture, bytes: number): void {
+  trackedTextures.set(texture, bytes);
+  texture.addEventListener("dispose", () => {
+    trackedTextures.delete(texture);
+  });
+}
+
+/** Bytes of every live tracked texture. */
+export function trackedTextureBytes(): number {
+  let total = 0;
+  for (const bytes of trackedTextures.values()) {
+    total += bytes;
+  }
+  return total;
+}
+
+/** GPU bytes of a `width`×`height` texture (mip chain adds a third). */
+export function textureBytes(
+  width: number,
+  height: number,
+  bytesPerTexel: number,
+  mipmaps: boolean
+): number {
+  const base = width * height * bytesPerTexel;
+  return mipmaps ? Math.round(base * (4 / 3)) : base;
 }

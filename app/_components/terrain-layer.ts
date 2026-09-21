@@ -1,14 +1,16 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  ImageBitmapLoader,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
   MeshStandardMaterial,
   NearestFilter,
   NoColorSpace,
+  RedFormat,
   SRGBColorSpace,
-  type Texture,
+  Texture,
   TextureLoader,
   type Vector3,
 } from "three";
@@ -23,11 +25,10 @@ import {
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
+import { fetchGzipped, fetchRequiredJson } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
-
-/** Filename token swapped to find the RGB splat next to the class-id one. */
-const LANDCOVER_PREFIX = /landcover_/;
 
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
@@ -46,10 +47,14 @@ export interface TerrainOptions {
   /** shared valley height-fog uniforms (by reference); patched into the
    * terrain + water materials so the river/floor pools haze without a seam */
   heightFog?: HeightFogUniforms;
-  /** optional ATKIS land-cover splatmap (PNG), tinted per surface class */
+  /** optional pre-baked pastel RGB splat (needs `landcoverUrl`) */
+  landcoverRgbUrl?: string;
+  /** optional ATKIS land-cover class raster (PNG), tinted per surface class */
   landcoverUrl?: string;
   /** shared meadow-NDVI tint strength (by reference) for the HUD slider */
   meadowNdvi?: { value: number };
+  /** optional DOP NDVI raster for the meadow tint (needs `landcoverUrl`) */
+  ndviUrl?: string;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** aborts the raster download */
@@ -59,10 +64,50 @@ export interface TerrainOptions {
   /** URL of the heightfield header JSON (see lib/city/heightfield.ts); the
    * grid size and bounds come from it, baked by scripts/prepare-data.ts */
   url: string;
-  /** baked OSM wall lines (EPSG:25833) for this tile; retaining/city walls are
-   * burned into the heightfield as steps so they sit on a real edge, not the
-   * smooth bank the DGM blurs them into (see lib/city/terrain-conflate.ts) */
-  wallLinesUrl?: string;
+  /** OSM wall lines (EPSG:25833) for this tile, already fetched; retaining/city
+   * walls are burned into the heightfield as steps so they sit on a real edge,
+   * not the smooth bank the DGM blurs them into (lib/city/terrain-conflate.ts) */
+  wallLines?: WallLine[];
+}
+
+/**
+ * Decodes a raster into a texture OFF the main thread. `TextureLoader` hands
+ * three an <img>, which the browser decodes lazily — for a 4096² PNG that is
+ * ~64 MB of pixels decoded (and flipped) synchronously at the first upload,
+ * on the main thread, per tile and per raster. `createImageBitmap` decodes
+ * in the browser's image workers, already in the orientation three needs
+ * (`imageOrientation: "none"` = the flipY=false these rasters use), so the
+ * first frame only pays the GPU upload. Rejects on a decode/network failure.
+ */
+async function loadBitmapTexture(
+  url: string
+): Promise<{ height: number; texture: Texture; width: number }> {
+  if (typeof createImageBitmap === "undefined") {
+    const texture = await new TextureLoader().loadAsync(url);
+    texture.flipY = false;
+    const img = texture.image as { height: number; width: number };
+    return { texture, width: img.width, height: img.height };
+  }
+  const loader = new ImageBitmapLoader();
+  loader.setOptions({
+    imageOrientation: "none",
+    premultiplyAlpha: "none",
+    colorSpaceConversion: "none",
+  });
+  const bitmap = await loader.loadAsync(url);
+  const texture = new Texture(bitmap);
+  texture.flipY = false;
+  texture.needsUpdate = true;
+  // The decoded bitmap is 64 MB for a 4096² raster and, unlike an <img>'s
+  // purgeable decode cache, stays resident as long as three holds it in
+  // `texture.image`. Twelve of them took mobile Safari past its per-tab
+  // memory limit. Once the GPU has the texels the CPU copy is dead weight:
+  // release it right after the upload (mipmaps are generated on the GPU).
+  texture.onUpdate = () => {
+    bitmap.close();
+    texture.onUpdate = null;
+  };
+  return { texture, width: bitmap.width, height: bitmap.height };
 }
 
 /**
@@ -72,12 +117,16 @@ export interface TerrainOptions {
  */
 async function loadSplatTexture(url: string): Promise<Texture | null> {
   try {
-    const texture = await new TextureLoader().loadAsync(url);
+    const { texture, width, height } = await loadBitmapTexture(url);
     texture.magFilter = NearestFilter;
     texture.minFilter = NearestFilter;
     texture.generateMipmaps = false;
-    texture.flipY = false;
     texture.colorSpace = NoColorSpace;
+    // The class id lives in the red channel; uploading the grey PNG as RGBA
+    // would spend four bytes per texel on one (64 MB instead of 16 MB at
+    // 4096²). WebGL2 accepts a RED upload straight from the bitmap.
+    texture.format = RedFormat;
+    trackTexture(texture, textureBytes(width, height, 1, false));
     return texture;
   } catch {
     return null;
@@ -91,27 +140,17 @@ async function loadSplatTexture(url: string): Promise<Texture | null> {
  */
 async function loadColorSplat(url: string): Promise<Texture | null> {
   try {
-    const texture = await new TextureLoader().loadAsync(url);
+    const { texture, width, height } = await loadBitmapTexture(url);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
-    texture.flipY = false;
     texture.colorSpace = SRGBColorSpace;
+    trackTexture(texture, textureBytes(width, height, 4, true));
     return texture;
   } catch {
     return null;
   }
-}
-
-/** Derives the RGB splatmap URL from the class-id URL (…/landcover_X → …_rgb_X). */
-function colorSplatUrl(classUrl: string): string {
-  return classUrl.replace(LANDCOVER_PREFIX, "landcover_rgb_");
-}
-
-/** Derives the DOP-NDVI raster URL from the class-id URL (…/landcover_X → ndvi_X). */
-function ndviSplatUrl(classUrl: string): string {
-  return classUrl.replace(LANDCOVER_PREFIX, "ndvi_");
 }
 
 /** Default meadow-NDVI tint strength (Wiesenfärbung): lush-green↔dry across the
@@ -126,81 +165,47 @@ export const DEFAULT_MEADOW_NDVI = 0.6;
  */
 async function loadNdviTexture(url: string): Promise<Texture | null> {
   try {
-    const texture = await new TextureLoader().loadAsync(url);
+    const { texture, width, height } = await loadBitmapTexture(url);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
-    texture.flipY = false;
     texture.colorSpace = NoColorSpace;
+    // Greenness is a single channel too.
+    texture.format = RedFormat;
+    trackTexture(texture, textureBytes(width, height, 1, true));
     return texture;
   } catch {
     return null;
   }
 }
 
-async function fetchArrayBuffer(
-  url: string,
-  signal?: AbortSignal
-): Promise<ArrayBuffer> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
-  }
-  return await res.arrayBuffer();
-}
-
-async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
-  }
-  return await res.json();
-}
-
-interface WallFeatureJson {
+/** A baked OSM wall feature (see wall-layer.ts / scripts/extract-walls.sh). */
+export interface WallFeature {
   geometry?: { coordinates?: [number, number][]; type?: string };
-  properties?: { kind?: string };
+  properties?: { h?: number; kind?: string };
 }
 
-/** Loads the baked wall LineStrings (EPSG:25833) for conflation. Non-fatal: a
- *  missing/404/empty file yields [] and the terrain is left as the plain DGM. */
-async function loadWallLines(
-  url: string,
-  signal?: AbortSignal
-): Promise<WallLine[]> {
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return [];
+/** Maps baked wall features to the LineStrings the conflation step burns in. */
+export function wallLinesFrom(features: WallFeature[]): WallLine[] {
+  const out: WallLine[] = [];
+  for (const f of features) {
+    const coords = f.geometry?.coordinates;
+    if (f.geometry?.type === "LineString" && Array.isArray(coords)) {
+      out.push({ coords, kind: f.properties?.kind ?? "wall" });
     }
-    const json = (await res.json()) as { features?: WallFeatureJson[] };
-    const out: WallLine[] = [];
-    for (const f of json.features ?? []) {
-      const coords = f.geometry?.coordinates;
-      if (f.geometry?.type === "LineString" && Array.isArray(coords)) {
-        out.push({ coords, kind: f.properties?.kind ?? "wall" });
-      }
-    }
-    return out;
-  } catch {
-    return [];
   }
+  return out;
 }
 
 /** Returns the DGM elevations with retaining/city walls burned in as steps, or
  *  the untouched raster when there are no wall lines for this tile. */
-async function conflateTerrain(
+function conflateTerrain(
   base: ArrayLike<number>,
   grid: { bounds: TerrainBounds; n: number; nodata: number | null },
-  wallLinesUrl: string | undefined,
-  signal?: AbortSignal
-): Promise<ArrayLike<number>> {
-  if (!wallLinesUrl) {
-    return base;
-  }
-  const walls = await loadWallLines(wallLinesUrl, signal);
-  if (walls.length === 0) {
+  walls: WallLine[] | undefined
+): ArrayLike<number> {
+  if (!walls || walls.length === 0) {
     return base;
   }
   return conflateWalls({ elevations: base, ...grid, walls });
@@ -406,24 +411,23 @@ function createTerrainMaterial(
 
 export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   // The raster arrives ready to use: scripts/prepare-data.ts resampled the DGM
-  // GeoTIFF to n x n float32 at build time and stored NoData as NaN, so there
-  // is nothing to decode here and no nodata sentinel to carry around.
-  const header = parseHeightfieldHeader(await fetchJson(opts.url, opts.signal));
+  // GeoTIFF to n x n at build time (quantised uint16, gzipped); decoding it
+  // is one dequantising pass and NoData comes out as NaN, so there is no
+  // nodata sentinel to carry around.
+  const header = parseHeightfieldHeader(
+    await fetchRequiredJson(opts.url, opts.signal)
+  );
   const { n, bounds } = header;
   /** Holes are NaN in the baked samples, so there is no sentinel to match. */
   const nodata: number | null = null;
   const samples = decodeHeightfield(
-    await fetchArrayBuffer(
-      resolveSiblingUrl(opts.url, header.data),
-      opts.signal
-    ),
-    n
+    await fetchGzipped(resolveSiblingUrl(opts.url, header.data), opts.signal),
+    header
   );
-  const elevations = await conflateTerrain(
+  const elevations = conflateTerrain(
     samples,
     { n, bounds, nodata },
-    opts.wallLinesUrl,
-    opts.signal
+    opts.wallLines
   );
 
   const { positions, indices, minElevation } = buildTerrainGeometryData({
@@ -440,13 +444,19 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
 
-  const [splatTexture, colorTexture, ndviTexture] = opts.landcoverUrl
-    ? await Promise.all([
-        loadSplatTexture(opts.landcoverUrl),
-        loadColorSplat(colorSplatUrl(opts.landcoverUrl)),
-        loadNdviTexture(ndviSplatUrl(opts.landcoverUrl)),
-      ])
-    : [null, null, null];
+  // Decoded one after another on purpose: three 4096² rasters decoding at
+  // once (times four tiles loading concurrently) is a ~800 MB peak that
+  // mobile Safari kills the tab for. Sequential keeps it to one raster's
+  // worth per tile in flight.
+  const splatTexture = opts.landcoverUrl
+    ? await loadSplatTexture(opts.landcoverUrl)
+    : null;
+  const colorTexture =
+    splatTexture && opts.landcoverRgbUrl
+      ? await loadColorSplat(opts.landcoverRgbUrl)
+      : null;
+  const ndviTexture =
+    splatTexture && opts.ndviUrl ? await loadNdviTexture(opts.ndviUrl) : null;
   const splat: SplatLayer | undefined = splatTexture
     ? {
         texture: splatTexture,

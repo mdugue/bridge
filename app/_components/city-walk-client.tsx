@@ -1,13 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState } from "react";
 import {
-  cityJsonFile,
-  heightfieldHeaderFile,
+  type DataManifest,
+  MANIFEST_FILE,
   TILE_BLOCK,
   type TileSpec,
+  tileUrlsFrom,
 } from "@/lib/city/tile";
 import type { TileSrc } from "./create-app";
+import { currentDeviceTier, type DeviceTier } from "./scene-profile";
 
 // three.js needs a real browser (WebGL, pointer lock) — never prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
@@ -21,42 +24,86 @@ const CityWalk = dynamic(() => import("./city-walk"), {
 });
 
 /** Builds the per-tile URLs (all prepared by scripts/prepare-data.ts). */
-function tile({ tile: name, n }: TileSpec): TileSrc {
+function tile(
+  spec: TileSpec,
+  manifest: DataManifest | null,
+  tier: DeviceTier
+): TileSrc {
+  const u = tileUrlsFrom(spec, manifest);
+  // Phones take the 2048² land-cover variants (a quarter of the texture
+  // memory); everything else is the same data for every device.
+  const mobile = tier === "mobile";
   return {
-    citySrc: `/data/${cityJsonFile(name)}`,
-    demSrc: `/data/${heightfieldHeaderFile(name, n)}`,
-    landcoverSrc: `/data/landcover_${name}.png`,
-    vegetationSrc: `/data/vegrows_${name}.geojson`,
-    // Optional (OSM, ODbL); the loader treats a 404 as "no lamps".
-    lampsSrc: `/data/lamps_${name}.geojson`,
+    cityMeshSrc: u.cityMeshData,
+    cityMetaSrc: u.cityMeshMeta,
+    demSrc: u.heightfieldHeader,
+    landcoverSrc: mobile ? u.landcoverLow : u.landcover,
+    landcoverRgbSrc: mobile ? u.landcoverRgbLow : u.landcoverRgb,
+    ndviSrc: u.ndvi,
+    vegetationSrc: u.vegrows,
+    canopySrc: u.canopy,
+    // Optional (OSM, ODbL); the loaders treat a 404 as "feature off".
+    lampsSrc: u.lamps,
+    wallsSrc: u.walls,
     // Railway tracks + bridge decks + ballast yards (Basis-DLM); platforms (OSM).
-    railSrc: `/data/rail_${name}.geojson`,
-    bridgeSrc: `/data/bridge_${name}.geojson`,
-    railareaSrc: `/data/railarea_${name}.geojson`,
-    platformSrc: `/data/platform_${name}.geojson`,
+    railSrc: u.rail,
+    bridgeSrc: u.bridge,
+    railareaSrc: u.railarea,
+    platformSrc: u.platform,
   };
 }
 
-// Primary tile (spawn here) + the rest of the 2 x 2 block around it, in the
-// order lib/city/tile.ts lists them (the same list prepare-data.ts bakes).
-// Module constants so the references stay stable across renders.
 const [PRIMARY_SPEC, ...NEIGHBOUR_SPECS] = TILE_BLOCK;
-const PRIMARY = tile(PRIMARY_SPEC);
-const EXTRA_TILES: TileSrc[] = NEIGHBOUR_SPECS.map(tile);
+
+/**
+ * The artifact manifest (logical → content-hashed file names, see
+ * lib/city/tile.ts). Fetched with `no-cache` so a re-bake reaches every client
+ * while the hashed files themselves stay cached forever. A missing manifest
+ * (an old deploy, a hand-copied public/data) falls back to the flat names.
+ */
+function useDataManifest(): DataManifest | null | undefined {
+  const [manifest, setManifest] = useState<DataManifest | null | undefined>();
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/data/${MANIFEST_FILE}`, { cache: "no-cache" })
+      .then((res) => (res.ok ? (res.json() as Promise<DataManifest>) : null))
+      .catch(() => null)
+      .then((m) => {
+        if (!cancelled) {
+          setManifest(m && m.version === 1 ? m : null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return manifest;
+}
 
 export function CityWalkClient() {
-  return (
-    <CityWalk
-      bridgeSrc={PRIMARY.bridgeSrc}
-      citySrc={PRIMARY.citySrc}
-      demSrc={PRIMARY.demSrc}
-      extraTiles={EXTRA_TILES}
-      lampsSrc={PRIMARY.lampsSrc}
-      landcoverSrc={PRIMARY.landcoverSrc}
-      platformSrc={PRIMARY.platformSrc}
-      railareaSrc={PRIMARY.railareaSrc}
-      railSrc={PRIMARY.railSrc}
-      vegetationSrc={PRIMARY.vegetationSrc}
-    />
-  );
+  const manifest = useDataManifest();
+  // Primary tile (spawn here) + the rest of the 2 x 2 block around it, in the
+  // order lib/city/tile.ts lists them (the same list prepare-data.ts bakes).
+  // Memoised so the references stay stable across renders (the HUD effect
+  // keys on them).
+  const tiles = useMemo(() => {
+    if (manifest === undefined) {
+      return null;
+    }
+    // Sampled once per manifest so the primary and its neighbours agree on
+    // the tier (and the media query is evaluated once, not per tile).
+    const tier = currentDeviceTier();
+    return {
+      primary: tile(PRIMARY_SPEC, manifest, tier),
+      extra: NEIGHBOUR_SPECS.map((spec) => tile(spec, manifest, tier)),
+    };
+  }, [manifest]);
+  if (!tiles) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-900 text-lg text-white">
+        Loading 3D viewer…
+      </div>
+    );
+  }
+  return <CityWalk extraTiles={tiles.extra} primary={tiles.primary} />;
 }

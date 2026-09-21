@@ -8,7 +8,7 @@ import {
 } from "three";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { fetchFeatures } from "./vegetation-layer";
+import type { WallFeature } from "./terrain-layer";
 
 /**
  * Retaining / city walls from OSM (`scripts/extract-walls.sh`). Monumental walls
@@ -21,18 +21,13 @@ import { fetchFeatures } from "./vegetation-layer";
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 
-interface WallFeature {
-  geometry: { coordinates: [number, number][]; type: "LineString" };
-  properties: { h: number; kind: string };
-}
-
 export interface WallContext {
   heightAt: (x: number, y: number) => number | null;
   heightFog?: HeightFogUniforms;
   offset: { cx: number; cy: number };
-  signal?: AbortSignal;
-  /** baked OSM wall GeoJSONs (one per tile) */
-  wallUrls: string[];
+  /** baked OSM wall features of every tile, already fetched (once per tile,
+   * shared with the terrain conflation step) */
+  wallFeatures: WallFeature[];
 }
 
 export interface WallControl {
@@ -150,11 +145,12 @@ function buildWallGeometry(
   const pos: number[] = [];
   const nrm: number[] = [];
   for (const f of features) {
-    if (f.geometry?.type !== "LineString") {
+    const coords = f.geometry?.coordinates;
+    if (f.geometry?.type !== "LineString" || !coords) {
       continue;
     }
     const h = Math.max(0.5, f.properties?.h ?? 2);
-    const pts = densify(f.geometry.coordinates, SAMPLE_M);
+    const pts = densify(coords, SAMPLE_M);
     const cols: (WallCol | null)[] = pts.map((p, i) => {
       const a = pts[Math.max(0, i - 1)];
       const b = pts[Math.min(pts.length - 1, i + 1)];
@@ -187,14 +183,11 @@ function buildWallGeometry(
   return geo;
 }
 
-export async function loadWalls(ctx: WallContext): Promise<WallControl> {
+export function loadWalls(ctx: WallContext): WallControl {
   const group = new Group();
   group.name = "walls";
 
-  const all = await Promise.all(
-    ctx.wallUrls.map((u) => fetchFeatures<WallFeature>(u, ctx.signal))
-  );
-  const features = all.flat();
+  const features = ctx.wallFeatures;
 
   const material = new MeshStandardMaterial({
     color: WALL_COLOR,

@@ -121,32 +121,18 @@ import {
 import { DEFAULT_WATER_MIST } from "./water-layer";
 
 interface Props {
-  /** Optional baked bridge-deck GeoJSON for the primary tile */
-  bridgeSrc?: string;
-  /** URL of the CityJSON tile, served from /public */
-  citySrc: string;
-  /** URL of the heightfield header JSON (see lib/city/heightfield.ts) */
-  demSrc: string;
   /** Neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
   insertedModelUrl?: string;
-  /** Optional OSM street-lamp GeoJSON (ODbL) for the primary tile */
-  lampsSrc?: string;
-  /** Optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
-  landcoverSrc?: string;
-  /** Optional OSM station-platform GeoJSON (ODbL) for the primary tile */
-  platformSrc?: string;
-  /** Optional baked dissolved ballast-area GeoJSON for the primary tile */
-  railareaSrc?: string;
-  /** Optional baked railway-track GeoJSON (Basis-DLM) for the primary tile */
-  railSrc?: string;
-  /** Optional ATKIS veg04 GeoJSON for hedges + tree rows */
-  vegetationSrc?: string;
+  /** The spawn tile's URLs (see lib/city/tile.ts) */
+  primary: TileSrc;
 }
 
 type Status =
   | { phase: "loading"; message: string }
+  /** the primary tile is on screen and walkable; the rest streams in */
+  | { phase: "streaming"; message: string | null }
   | { phase: "ready" }
   | { phase: "error"; message: string };
 
@@ -989,15 +975,7 @@ function SceneControls({
 }
 
 export default function CityWalk({
-  citySrc,
-  demSrc,
-  landcoverSrc,
-  vegetationSrc,
-  lampsSrc,
-  railSrc,
-  bridgeSrc,
-  railareaSrc,
-  platformSrc,
+  primary,
   extraTiles,
   insertedModelUrl,
 }: Props) {
@@ -1095,26 +1073,39 @@ export default function CityWalk({
     }
     let cancelled = false;
     let handle: CityWalkHandle | null = null;
+    // True once the first frame is up: later progress messages belong to the
+    // streaming chip, not the blocking overlay.
+    let booted = false;
     const aborter = new AbortController();
 
     createCityWalkApp({
       container,
-      citySrc,
-      demSrc,
-      landcoverSrc,
-      vegetationSrc,
-      lampsSrc,
-      railSrc,
-      bridgeSrc,
-      railareaSrc,
-      platformSrc,
+      primary,
       extraTiles,
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
       onProgress: (message) => {
         if (!cancelled) {
-          setStatus({ phase: "loading", message });
+          setStatus(
+            booted
+              ? { phase: "streaming", message }
+              : { phase: "loading", message }
+          );
+        }
+      },
+      onLoaded: () => {
+        if (!cancelled) {
+          updatePocDebug({ ready: true });
+          setStatus({ phase: "ready" });
+        }
+      },
+      onError: (message) => {
+        if (!cancelled) {
+          setStatus({
+            phase: "streaming",
+            message: `Failed to load: ${message}`,
+          });
         }
       },
       onStats: (s) => {
@@ -1151,12 +1142,13 @@ export default function CityWalk({
         }
         handle = h;
         handleRef.current = h;
+        booted = true;
         setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
         setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({
-          ready: true,
+          firstFrame: true,
           offset: h.offset,
           terrainBounds: h.terrainBounds,
           flyTo: h.flyTo,
@@ -1202,7 +1194,7 @@ export default function CityWalk({
             h.setSun(new Date(iso));
           },
         });
-        setStatus({ phase: "ready" });
+        setStatus({ phase: "streaming", message: null });
       })
       .catch((err: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
@@ -1222,19 +1214,7 @@ export default function CityWalk({
       handleRef.current = null;
       handle?.dispose();
     };
-  }, [
-    citySrc,
-    demSrc,
-    landcoverSrc,
-    vegetationSrc,
-    lampsSrc,
-    railSrc,
-    bridgeSrc,
-    railareaSrc,
-    platformSrc,
-    extraTiles,
-    insertedModelUrl,
-  ]);
+  }, [primary, extraTiles, insertedModelUrl]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);
@@ -1466,6 +1446,8 @@ export default function CityWalk({
     />
   );
 
+  const booted = status.phase === "streaming" || status.phase === "ready";
+
   return (
     <SidebarProvider
       className="relative h-full overflow-hidden"
@@ -1495,7 +1477,7 @@ export default function CityWalk({
           </Alert>
         )}
 
-        {status.phase === "ready" && (
+        {booted && (
           <>
             {/* crosshair */}
             <div
@@ -1507,6 +1489,17 @@ export default function CityWalk({
             <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/55 px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
               {fps === null ? "–" : Math.round(fps)} FPS
             </div>
+
+            {/* Streaming chip: the scene is usable while the rest loads. */}
+            {status.phase === "streaming" && status.message && (
+              <output
+                aria-live="polite"
+                className="pointer-events-none absolute top-9 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-900/55 px-2.5 py-0.5 text-[11px] text-white"
+              >
+                <Spinner className="size-3" />
+                {status.message}
+              </output>
+            )}
 
             <SettingsToggle />
 
@@ -1536,7 +1529,7 @@ export default function CityWalk({
         )}
       </div>
 
-      {status.phase === "ready" && (
+      {booted && (
         <Sidebar collapsible="offcanvas" side="right">
           <SidebarHeader>
             <div className="flex items-center justify-between pl-1">
@@ -1575,7 +1568,8 @@ export default function CityWalk({
             {stats && (
               <p>
                 {stats.buildingCount} buildings ·{" "}
-                {stats.terrainVertexCount.toLocaleString()} terrain vertices ·{" "}
+                {stats.terrainVertexCount.toLocaleString()} terrain vertices · ≈{" "}
+                {stats.gpuMegabytes} MB GPU ·{" "}
                 {mode === "walk" ? "walking" : "flying"}
               </p>
             )}

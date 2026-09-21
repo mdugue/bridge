@@ -56,3 +56,6 @@ next-env.d.ts
 
 # Local snapshot screenshot harness output (e2e/snapshot-shot.spec.ts)
 shots/
+
+# Build cache of scripts/prepare-data.ts (baked heightfields etc.)
+/.cache/

@@ -18,28 +18,29 @@ import {
 } from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { fogRangeFor } from "@/lib/city/atmosphere";
-import type { RoofColorLut } from "@/lib/city/building-tint";
-import {
-  epsgCodeFromReferenceSystem,
-  FALLBACK_LAT_LNG,
-  utmToLatLng,
-} from "@/lib/city/crs";
+import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
-import { buildingFootprintPolys, type FootprintPoly } from "@/lib/city/minimap";
-import { recenterOffset } from "@/lib/city/recenter";
+import { parseHeightfieldHeader } from "@/lib/city/heightfield";
+import type { FootprintPoly } from "@/lib/city/minimap";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
-import type { CityJsonDocument } from "@/lib/city/types";
 import { createCameraFlight } from "./camera-flight";
 import {
   type CityLayer,
+  cityFootprints,
   countBuildings,
   createCityLayer,
   demolishObject,
-  pickCityObjectId,
+  fetchCityMesh,
+  pickCityObjectIndex,
 } from "./city-layer";
 import { createCityCollider } from "./collision";
+import {
+  fetchFeatures,
+  fetchRequiredJson,
+  isAbortError,
+} from "./fetch-optional";
 import { createFpsMovement, type MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { createInsertedBuilding } from "./inserted-building";
@@ -52,14 +53,26 @@ import {
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
-import { currentSceneProfile, type SceneProfile } from "./scene-profile";
+import {
+  currentDeviceTier,
+  currentSceneProfile,
+  loadsNeighbourTiles,
+  pixelRatioFor,
+  type SceneProfile,
+} from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
 import {
   DEFAULT_MEADOW_NDVI,
   loadTerrain,
   type TerrainLayer,
+  type WallFeature,
+  wallLinesFrom,
 } from "./terrain-layer";
-import { disposeObject3D } from "./three-utils";
+import {
+  disposeObject3D,
+  estimateGeometryBytes,
+  trackedTextureBytes,
+} from "./three-utils";
 import { attachTouchControls } from "./touch-controls";
 import { loadVegetation, type VegetationControl } from "./vegetation-layer";
 import type { Viewpoint } from "./viewpoints";
@@ -91,12 +104,17 @@ const DEFAULT_FOV = 55;
 const TOUCH_LOOK_SPEED = 0.004;
 /** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
 const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
+/** Fog far plane (m) while only the primary tile exists: its half-size plus
+ *  a margin, so the missing neighbours read as haze, not as an edge. */
+const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
 /** Default fog amount (0..1). Kept light — a gentle far haze, not a near wall. */
 export const DEFAULT_ATMOSPHERE = 0.2;
 
 export interface CityWalkStats {
   buildingCount: number;
+  /** estimated GPU footprint of geometry + textures + shadow map (MB) */
+  gpuMegabytes: number;
   shadowsEnabled: boolean;
   terrainVertexCount: number;
 }
@@ -125,16 +143,29 @@ export interface CameraState {
   pos: { x: number; y: number; z: number };
 }
 
-/** A neighbouring tile loaded for visual context (no collision/demolish). */
+/**
+ * Every URL one tile may be loaded from (built from `tileUrls()` in
+ * lib/city/tile.ts). The primary tile is walked on, collided with and
+ * demolished from; neighbours are visual context only.
+ */
 export interface TileSrc {
   /** optional baked bridge-deck GeoJSON (Basis-DLM + DGM/DOM1 heights) */
   bridgeSrc?: string;
-  citySrc: string;
+  /** optional DOM1-derived canopy points (trees scaled to measured height) */
+  canopySrc?: string;
+  /** the baked building mesh (gzipped vertex stream, lib/city/city-mesh.ts) */
+  cityMeshSrc: string;
+  /** the baked building mesh's meta JSON (per-object style, demolish tree) */
+  cityMetaSrc: string;
   /** URL of this tile's heightfield header JSON (see lib/city/heightfield.ts) */
   demSrc: string;
   /** optional OSM street-lamp GeoJSON (ODbL); absent/404 = no lamps */
   lampsSrc?: string;
+  /** optional pre-baked pastel RGB splat (needs `landcoverSrc`) */
+  landcoverRgbSrc?: string;
   landcoverSrc?: string;
+  /** optional DOP NDVI raster (meadow tint + crown colour) */
+  ndviSrc?: string;
   /** optional OSM station-platform GeoJSON (ODbL) */
   platformSrc?: string;
   /** optional baked dissolved ballast-area GeoJSON (Basis-DLM ver03_f) */
@@ -142,45 +173,40 @@ export interface TileSrc {
   /** optional baked railway-track GeoJSON (Basis-DLM ver03_l, heavy rail) */
   railSrc?: string;
   vegetationSrc?: string;
+  /** optional OSM retaining/city walls (ODbL): terrain step + ribbon */
+  wallsSrc?: string;
 }
 
 export interface CityWalkOptions {
-  /** optional baked bridge-deck GeoJSON for the primary tile */
-  bridgeSrc?: string;
-  citySrc: string;
   container: HTMLElement;
-  /** URL of the primary tile's heightfield header JSON */
-  demSrc: string;
   /** neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileSrc[];
   initialDate: Date;
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
-  /** optional OSM street-lamp GeoJSON (ODbL) for the primary tile */
-  lampsSrc?: string;
-  /** optional ATKIS land-cover splatmap (PNG) for per-surface terrain tinting */
-  landcoverSrc?: string;
+  /**
+   * A layer that streams in after the first frame (neighbour tiles,
+   * vegetation, rails, walls) failed to load. The primary scene keeps
+   * running; the HUD shows the message.
+   */
+  onError?: (message: string) => void;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
   onFps?: (fps: number) => void;
+  /** Every layer has streamed in (the scene is complete). */
+  onLoaded?: () => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
   onProgress?: (message: string) => void;
   onStats?: (stats: CityWalkStats) => void;
-  /** optional OSM station-platform GeoJSON (ODbL) for the primary tile */
-  platformSrc?: string;
-  /** optional baked dissolved ballast-area GeoJSON for the primary tile */
-  railareaSrc?: string;
-  /** optional baked railway-track GeoJSON for the primary tile */
-  railSrc?: string;
+  /** the spawn tile: walked on, collided with, demolished from */
+  primary: TileSrc;
   /**
    * Aborts startup mid-load (React StrictMode mounts effects twice in dev;
    * without this the doomed first instance would finish loading 19 MB of
    * tile data and leave a second canvas around until then).
    */
   signal?: AbortSignal;
-  /** optional ATKIS veg04 GeoJSON for hedges + tree rows */
-  vegetationSrc?: string;
 }
 
 export interface CityWalkHandle {
@@ -220,7 +246,13 @@ export interface CityWalkHandle {
    * post-processing composer active they report the final fullscreen pass, not
    * the scene total (disable post-processing to read true scene counts).
    */
-  getRenderInfo: () => { calls: number; triangles: number; programs: number };
+  getRenderInfo: () => {
+    calls: number;
+    /** estimated GPU bytes of geometry + textures + shadow map */
+    gpuBytes: number;
+    programs: number;
+    triangles: number;
+  };
   insertBuilding: () => Promise<void>;
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
@@ -310,7 +342,7 @@ function createRenderer(
   // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
   // the post stack costs, and the post stack is most of a frame.
   renderer.setPixelRatio(
-    profile === "lite" ? 0.5 : Math.min(window.devicePixelRatio, 2)
+    pixelRatioFor(profile, currentDeviceTier(), window.devicePixelRatio)
   );
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
@@ -339,55 +371,16 @@ function createRenderer(
   return renderer;
 }
 
-async function fetchCityJson(
-  url: string,
-  signal?: AbortSignal
-): Promise<CityJsonDocument> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch CityJSON (${url}): HTTP ${res.status}`);
-  }
-  const data = (await res.json()) as CityJsonDocument;
-  const epsg = epsgCodeFromReferenceSystem(data.metadata?.referenceSystem);
-  if (epsg === null || utmToLatLng(epsg, 0, 0) === null) {
-    throw new Error(
-      `Unsupported CityJSON CRS "${data.metadata?.referenceSystem}" — ` +
-        "expected ETRS89/UTM (EPSG:25832 or 25833). Reproject the data, " +
-        "e.g. cjio in.city.json reproject 25833 save out.city.json."
-    );
-  }
-  return data;
-}
-
 /**
- * Optional per-building roof colours baked from the DOP orthophoto
- * (`roofcolor_<tile>.json`, derived from the tile's `lod2_<tile>.city.json`
- * URL). Absent/404 → undefined, and the roof falls back to the synthesized
- * terracotta/slate palette (graceful degradation — see docs/portability.md).
+ * Lets React commit and paint the progress message before a long synchronous
+ * stretch (parse, BVH, shader setup). Without this yield the overlay shows the
+ * PREVIOUS message throughout — the state update is queued, but the main
+ * thread never gets to render it until the stretch is over.
  */
-async function fetchRoofLut(
-  citySrc: string,
-  signal?: AbortSignal
-): Promise<RoofColorLut | undefined> {
-  const url = citySrc
-    .replace("lod2_", "roofcolor_")
-    .replace(".city.json", ".json");
-  if (url === citySrc) {
-    return;
-  }
-  try {
-    const res = await fetch(url, { signal });
-    if (!res.ok) {
-      return;
-    }
-    const doc = (await res.json()) as { roofs?: RoofColorLut };
-    return doc.roofs;
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw err;
-    }
-    return;
-  }
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+  });
 }
 
 /**
@@ -417,13 +410,9 @@ function assertCityOnTerrain(
 
 /** Reprojects the recenter point (tile center) to WGS84 for SunCalc. */
 function tileLatLng(
-  cityData: CityJsonDocument,
+  epsg: number,
   offset: { cx: number; cy: number }
 ): { lat: number; lng: number } {
-  const epsg = epsgCodeFromReferenceSystem(cityData.metadata?.referenceSystem);
-  if (epsg === null) {
-    return FALLBACK_LAT_LNG;
-  }
   return utmToLatLng(epsg, offset.cx, offset.cy) ?? FALLBACK_LAT_LNG;
 }
 
@@ -487,8 +476,10 @@ async function bootApp(
 
   // Abort checkpoint after each async step (fetches abort via the signal
   // themselves; parsing/meshing in between does not).
+  // Also trips after dispose(): the streaming tail (loadRest) must never add
+  // to a scene that has already been torn down.
   const ensureAlive = () => {
-    if (opts.signal?.aborted) {
+    if (disposed || opts.signal?.aborted) {
       throw new DOMException("CityWalk startup aborted", "AbortError");
     }
   };
@@ -500,16 +491,45 @@ async function bootApp(
   // canopy clouds. Dropping them is what makes the headless e2e suite
   // affordable; nothing it asserts on lives outside the primary tile.
   const profile = currentSceneProfile();
-  const neighbourTiles = profile === "lite" ? [] : (opts.extraTiles ?? []);
+  const neighbourTiles = loadsNeighbourTiles(profile)
+    ? (opts.extraTiles ?? [])
+    : [];
 
-  opts.onProgress?.("Loading CityJSON tile…");
-  const cityData = await fetchCityJson(opts.citySrc, opts.signal);
-  const roofLut = await fetchRoofLut(opts.citySrc, opts.signal);
+  const primary = opts.primary;
+  const citySrcOf = (tile: TileSrc) => ({
+    metaUrl: tile.cityMetaSrc,
+    dataUrl: tile.cityMeshSrc,
+  });
+  opts.onProgress?.("Loading buildings…");
+  // The neighbours' heightfield HEADERS (~150 bytes each) come along with the
+  // primary mesh: their bounds frame the minimap from the first frame, while
+  // the tiles themselves stream in afterwards (see loadRest below).
+  const [primaryCity, neighbourBounds] = await Promise.all([
+    fetchCityMesh(citySrcOf(primary), opts.signal),
+    Promise.all(
+      neighbourTiles.map(
+        async (tile) =>
+          parseHeightfieldHeader(
+            await fetchRequiredJson(tile.demSrc, opts.signal)
+          ).bounds
+      )
+    ),
+  ]);
   ensureAlive();
-
-  opts.onProgress?.("Parsing buildings…");
-  let cityLayer: CityLayer = createCityLayer(cityData, world, null, roofLut);
-  const offset = recenterOffset(cityLayer.matrix);
+  if (utmToLatLng(primaryCity.meta.epsg, 0, 0) === null) {
+    throw new Error(
+      `Unsupported city CRS EPSG:${primaryCity.meta.epsg} — expected ` +
+        "ETRS89/UTM (EPSG:25832 or 25833). Reproject the CityJSON before baking."
+    );
+  }
+  let cityLayer: CityLayer = createCityLayer(
+    primaryCity.meta,
+    primaryCity.vertices,
+    world
+  );
+  // The recenter offset was captured at bake time from the primary tile and
+  // shared with the neighbours, so every layer subtracts the same origin.
+  const offset = primaryCity.meta.offset;
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
   // read by the crown shimmer. The vegetation builds before the sun rig exists,
@@ -547,41 +567,71 @@ async function bootApp(
     lampLights?.dispose();
   });
 
-  // Loads one tile's terrain (+ water + vegetation), all in the SHARED frame.
-  const loadTileScene = async (tile: TileSrc): Promise<TerrainLayer> => {
+  interface TileScene {
+    terrain: TerrainLayer;
+    /** this tile's OSM walls, fetched once for conflation AND the ribbons */
+    wallFeatures: WallFeature[];
+  }
+
+  // Loads one tile's terrain (+ water), in the SHARED frame. Vegetation and
+  // lamps are a separate step (loadTileDressing) so the first frame can wait
+  // on terrain + buildings alone.
+  const loadTileTerrain = async (tile: TileSrc): Promise<TileScene> => {
+    // OSM walls feed two consumers — the heightfield step (conflation) and
+    // the ribbon geometry built for the whole block later — so fetch once.
+    const wallFeatures = await fetchFeatures<WallFeature>(
+      tile.wallsSrc,
+      opts.signal
+    );
     const t = await loadTerrain({
       url: tile.demSrc,
       landcoverUrl: tile.landcoverSrc,
+      landcoverRgbUrl: tile.landcoverRgbSrc,
+      ndviUrl: tile.ndviSrc,
       // Retaining/city walls are burned into THIS tile's heightfield as steps so
       // the ground breaks at the wall instead of the DGM's smooth bank.
-      wallLinesUrl: tile.landcoverSrc
-        ?.replace("landcover_", "walls_")
-        .replace(".png", ".geojson"),
+      wallLines: wallLinesFrom(wallFeatures),
       offset,
       signal: opts.signal,
       sunDirection,
       heightFog,
       meadowNdvi,
     });
+    // Nothing may join the scene once the instance has been torn down
+    // (StrictMode remount) — a mesh added after dispose() would never be freed.
+    ensureAlive();
     world.add(t.mesh);
     if (t.water) {
       world.add(t.water.mesh);
       // River mist reuses the Z-up terrain geometry, so it lives on `world` too.
       world.add(t.water.mistMesh);
     }
+    // NB: rails/bridges/ballast are NOT loaded here — they are built ONCE for the
+    // whole tile block, on the cross-tile heightAt, so tracks run continuously
+    // across tile seams instead of truncating at each tile edge.
+    return { terrain: t, wallFeatures };
+  };
+
+  /** The night factor of the last setSun, applied to lamps that arrive later. */
+  let currentNight = 0;
+
+  // Vegetation + lamps of one tile, dropped onto ITS terrain (heightAt).
+  const loadTileDressing = async (
+    tile: TileSrc,
+    t: TerrainLayer
+  ): Promise<void> => {
     if (tile.vegetationSrc) {
       const vegetation = await loadVegetation(tile.vegetationSrc, {
         offset,
         heightAt: t.heightAt,
-        canopyUrl: tile.vegetationSrc.replace("vegrows_", "canopy_"),
-        ndviUrl: tile.vegetationSrc
-          .replace("vegrows_", "ndvi_")
-          .replace(".geojson", ".png"),
+        canopyUrl: tile.canopySrc,
+        ndviUrl: tile.ndviSrc,
         bounds: t.bounds,
         signal: opts.signal,
         sunDirection,
         heightFog,
       });
+      ensureAlive();
       // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
       scene.add(vegetation.group);
       vegControls.push(vegetation);
@@ -592,55 +642,38 @@ async function bootApp(
         heightAt: t.heightAt,
         signal: opts.signal,
       });
+      ensureAlive();
       // Lamps are authored Y-up (like vegetation), so they go on `scene`.
       scene.add(lamps.group);
+      lamps.setNightFactor(currentNight);
       lampControls.push(lamps);
+      lampLights?.setHeads(lampControls.flatMap((l) => l.headPositions));
     }
-    // NB: rails/bridges/ballast are NOT loaded here — they are built ONCE for the
-    // whole tile block below, on the cross-tile heightAt, so tracks run
-    // continuously across tile seams instead of truncating at each tile edge.
-    return t;
   };
 
   opts.onProgress?.("Loading DGM terrain…");
-  const terrain = await loadTileScene({
-    citySrc: opts.citySrc,
-    demSrc: opts.demSrc,
-    landcoverSrc: opts.landcoverSrc,
-    vegetationSrc: opts.vegetationSrc,
-    lampsSrc: opts.lampsSrc,
-  });
+  const primaryScene = await loadTileTerrain(primary);
+  const terrain = primaryScene.terrain;
   ensureAlive();
   assertCityOnTerrain(offset, terrain);
 
-  // Neighbouring tiles: buildings share the primary recenter matrix so they
-  // line up; terrain/water/trees load the same way. Collision and demolish
-  // stay on the primary tile (these are passive visual context).
+  // Neighbouring tiles stream in AFTER the first frame (loadRest): their
+  // buildings share the primary recenter offset so they line up; terrain,
+  // water and trees load the same way. Collision and demolish stay on the
+  // primary tile (neighbours are passive visual context). These arrays fill
+  // as tiles land; heightAt and the raycasts read them live.
   const terrains: TerrainLayer[] = [terrain];
+  const terrainMeshes: Mesh[] = [terrain.mesh];
+  const wallFeaturesByTile: WallFeature[][] = [primaryScene.wallFeatures];
   const extraCities: CityLayer[] = [];
-  for (const tile of neighbourTiles) {
-    opts.onProgress?.("Loading neighbouring tiles…");
-    const data = await fetchCityJson(tile.citySrc, opts.signal);
-    const tileRoofLut = await fetchRoofLut(tile.citySrc, opts.signal);
-    ensureAlive();
-    extraCities.push(
-      createCityLayer(data, world, cityLayer.matrix, tileRoofLut)
-    );
-    // Neighbours are background — their heightfield is baked at half the
-    // primary's resolution (~4 m), see lib/city/tile.ts.
-    terrains.push(await loadTileScene(tile));
-    ensureAlive();
-  }
 
   // Single fixed pool of real point lights for the nearest lamps across ALL
-  // tiles. Built ONCE here (before the first render) so NUM_POINT_LIGHTS is
-  // baked into every lit program a single time — no per-tile recompile churn.
-  const lampHeads = lampControls.flatMap((l) => l.headPositions);
-  if (lampHeads.length > 0) {
-    lampLights = createLampLights(lampHeads);
-    for (const light of lampLights.lights) {
-      scene.add(light);
-    }
+  // tiles. Built ONCE here (before the first render, with no heads yet) so
+  // NUM_POINT_LIGHTS is baked into every lit program a single time — no
+  // per-tile recompile churn; each tile's lamps retarget it as they arrive.
+  lampLights = createLampLights();
+  for (const light of lampLights.lights) {
+    scene.add(light);
   }
 
   // First terrain that covers (x, y) wins; null only when off every tile.
@@ -655,22 +688,18 @@ async function bootApp(
   };
 
   // Rails / bridges / ballast yards / platforms — built ONCE for the whole tile
-  // block on the cross-tile `heightAt`, so a track crossing a tile seam samples
-  // the neighbour's heightfield instead of being dropped at the edge. Merges all
-  // tiles' baked GeoJSONs; non-fatal (missing files yield nothing).
-  const railTiles = [
-    {
-      railSrc: opts.railSrc,
-      bridgeSrc: opts.bridgeSrc,
-      platformSrc: opts.platformSrc,
-      railareaSrc: opts.railareaSrc,
-    },
-    ...neighbourTiles,
-  ];
-  const railUrls = railTiles
-    .map((t) => t.railSrc)
-    .filter((u) => u !== undefined);
-  if (railUrls.length > 0) {
+  // block on the cross-tile `heightAt` (after every tile has landed), so a
+  // track crossing a tile seam samples the neighbour's heightfield instead of
+  // being dropped at the edge. Merges all tiles' baked GeoJSONs; non-fatal
+  // (missing files yield nothing).
+  const buildRails = async (): Promise<void> => {
+    const railTiles = [primary, ...neighbourTiles];
+    const railUrls = railTiles
+      .map((t) => t.railSrc)
+      .filter((u) => u !== undefined);
+    if (railUrls.length === 0) {
+      return;
+    }
     opts.onProgress?.("Building railway & bridges…");
     const rail = await loadRail({
       offset,
@@ -688,41 +717,41 @@ async function bootApp(
       signal: opts.signal,
       heightFog,
     });
+    ensureAlive();
     scene.add(rail.group);
     railControls.push(rail);
-    ensureAlive();
-  }
+  };
 
   // OSM retaining/city walls (e.g. the Brühlsche Terrasse) — the monumental
   // walls the elevation data smooths away. Built ONCE for the block on the
-  // cross-tile heightAt; the URL is derived from each tile's land-cover URL.
-  const wallUrls = [
-    opts.landcoverSrc,
-    ...neighbourTiles.map((t) => t.landcoverSrc),
-  ]
-    .filter((u): u is string => u !== undefined)
-    .map((u) => u.replace("landcover_", "walls_").replace(".png", ".geojson"));
-  if (wallUrls.length > 0) {
+  // cross-tile heightAt, from the features each tile already fetched.
+  const buildWalls = (): void => {
+    const wallFeatures = wallFeaturesByTile.flat();
+    if (wallFeatures.length === 0) {
+      return;
+    }
     opts.onProgress?.("Building walls…");
-    const walls = await loadWalls({
+    const walls = loadWalls({
       offset,
       heightAt,
-      wallUrls,
-      signal: opts.signal,
+      wallFeatures,
       heightFog,
     });
     scene.add(walls.group);
     wallControls.push(walls);
-    ensureAlive();
-  }
+  };
 
-  const terrainMeshes = terrains.map((t) => t.mesh);
-  const unionBounds: TerrainBounds = terrains.reduce<TerrainBounds>(
-    (acc, t) => [
-      Math.min(acc[0], t.bounds[0]),
-      Math.min(acc[1], t.bounds[1]),
-      Math.max(acc[2], t.bounds[2]),
-      Math.max(acc[3], t.bounds[3]),
+  // The whole block's extent, known from the heightfield headers before any
+  // neighbour has landed: the minimap frames it from the first frame.
+  const unionBounds: TerrainBounds = [
+    terrain.bounds,
+    ...neighbourBounds,
+  ].reduce<TerrainBounds>(
+    (acc, b) => [
+      Math.min(acc[0], b[0]),
+      Math.min(acc[1], b[1]),
+      Math.max(acc[2], b[2]),
+      Math.max(acc[3], b[3]),
     ],
     [
       Number.POSITIVE_INFINITY,
@@ -734,45 +763,46 @@ async function bootApp(
 
   // Per-tile land-cover PNGs + bounds so the minimap can place each correctly.
   const landcoverTiles: { bounds: TerrainBounds; src: string }[] = [];
-  if (opts.landcoverSrc) {
-    landcoverTiles.push({ src: opts.landcoverSrc, bounds: terrain.bounds });
+  if (primary.landcoverSrc) {
+    landcoverTiles.push({ src: primary.landcoverSrc, bounds: terrain.bounds });
   }
   neighbourTiles.forEach((t, i) => {
     if (t.landcoverSrc) {
-      landcoverTiles.push({
-        src: t.landcoverSrc,
-        bounds: terrains[i + 1].bounds,
-      });
+      landcoverTiles.push({ src: t.landcoverSrc, bounds: neighbourBounds[i] });
     }
   });
 
-  opts.onProgress?.("Indexing terrain…");
-  // BVH for the 10 Hz autofocus ray and for double-tap travel. Building it
-  // once costs ~0.2 s per tile; without it every raycast brute-forces ~522k
-  // triangles (~50 ms each on desktop) — and the autofocus ray walks the whole
-  // 2x2 block, so every tile needs one, not just the primary.
-  for (const mesh of terrainMeshes) {
-    mesh.geometry.computeBoundsTree();
-  }
+  // Terrain BVHs (for the 10 Hz autofocus ray and double-tap travel) are
+  // built AFTER the first frame, one tile per idle slot — see indexTerrain
+  // below. They cost ~1.5 s of main thread for the block and nothing the
+  // first frame needs depends on them.
+  const indexedTerrain: Mesh[] = [];
 
   world.updateMatrixWorld(true);
+  // The primary tile's extent: the sun rig only needs a centre to start from
+  // (its frustum follows the camera) and a ground fallback.
   const worldBounds = new Box3().setFromObject(world);
   // Seed the valley height-fog floor from the lowest VALID terrain elevation
-  // across all tiles (the Elbe surface). NB: worldBounds.min.y is unusable here
-  // — NoData terrain vertices are parked at elevation 0, so it reports ~0, which
-  // would push the whole fog band below the real terrain and hide the effect.
-  // Exclude all-NoData tiles: fillGrid reports minElevation 0 for them (no valid
-  // sample), which would otherwise drag the fog floor down to sea level and hide
-  // the valley haze. The primary spawn tile always has real elevation.
-  const floors = terrains
-    .map((t) => t.minElevation)
-    .filter((e) => Number.isFinite(e) && e > 0);
-  const valleyFloor = floors.length ? Math.min(...floors) : worldBounds.min.y;
-  heightFog.uFogHeightStart.value = valleyFloor + 1;
+  // (the Elbe surface), lowered further as each neighbour lands. NB:
+  // worldBounds.min.y is unusable here — NoData terrain vertices are parked at
+  // elevation 0, so it reports ~0, which would push the whole fog band below
+  // the real terrain and hide the effect. All-NoData tiles are excluded for the
+  // same reason (fillGrid reports minElevation 0 for them); the primary spawn
+  // tile always has real elevation. A uniform write, no recompile.
+  const lowerFogFloor = (t: TerrainLayer) => {
+    if (Number.isFinite(t.minElevation) && t.minElevation > 0) {
+      heightFog.uFogHeightStart.value = Math.min(
+        heightFog.uFogHeightStart.value,
+        t.minElevation + 1
+      );
+    }
+  };
+  heightFog.uFogHeightStart.value = worldBounds.min.y + 1;
+  lowerFogFloor(terrain);
   const sunRig = createSunRig(
     scene,
     worldBounds,
-    tileLatLng(cityData, offset),
+    tileLatLng(primaryCity.meta.epsg, offset),
     sunDirection
   );
 
@@ -794,6 +824,7 @@ async function bootApp(
 
   const setSun = (date: Date): SunState => {
     const state = sunRig.update(date);
+    currentNight = state.nightFactor;
     for (const lamp of lampControls) {
       lamp.setNightFactor(state.nightFactor);
     }
@@ -804,15 +835,35 @@ async function bootApp(
   };
   setSun(opts.initialDate);
 
+  // Fog: while the neighbour tiles are still streaming in, the world ends at
+  // the primary tile's edge; a tighter fog turns that edge into haze instead
+  // of a cliff against the sky. The slider value is kept and re-applied once
+  // the block is complete.
+  let fogAmount = DEFAULT_ATMOSPHERE;
+  let worldPartial = neighbourTiles.length > 0;
+  const applyFog = () => {
+    if (!(scene.fog instanceof Fog)) {
+      return;
+    }
+    const range = fogRangeFor(fogAmount);
+    const far = worldPartial
+      ? Math.min(range.far, PARTIAL_WORLD_FOG_FAR)
+      : range.far;
+    scene.fog.far = far;
+    scene.fog.near = Math.min(range.near, far * 0.6);
+  };
+  const restoreFog = () => {
+    worldPartial = false;
+    applyFog();
+  };
+  applyFog();
+
   opts.onProgress?.("Preparing render styles…");
+  await nextPaint();
   const styleResources = createStyleResources(heightFog, clayNight);
   cleanups.push(() => styleResources.dispose());
-  // The neighbour tiles are as visible as the primary one — dress ALL of them,
-  // or 3/4 of the skyline keeps the loader's raw LoD colours.
+  // The neighbour tiles are dressed the same way as they land (loadRest).
   applyCityStyle(cityLayer.group, styleResources);
-  for (const c of extraCities) {
-    applyCityStyle(c.group, styleResources);
-  }
   const postStack = createPostStack(renderer, scene, camera);
   cleanups.push(() => postStack.dispose());
 
@@ -978,21 +1029,28 @@ async function bootApp(
   cleanups.push(detachTouch);
 
   let fps = 0;
+  // Geometry + tracked textures + the shadow map; the post stack's screen
+  // buffers are excluded (they scale with the canvas, not the world).
+  const gpuBytes = () =>
+    estimateGeometryBytes(scene) +
+    trackedTextureBytes() +
+    sunRig.shadowMapBytes;
   const emitStats = () => {
     opts.onStats?.({
-      buildingCount: countBuildings(cityLayer.data),
+      buildingCount: countBuildings(cityLayer),
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
+      gpuMegabytes: Math.round(gpuBytes() / 1_048_576),
     });
   };
 
   const demolishAtCrosshair = () => {
-    const objectId = pickCityObjectId(camera, cityLayer);
-    if (!objectId) {
+    const objectIndex = pickCityObjectIndex(camera, cityLayer);
+    if (objectIndex === null) {
       return;
     }
-    cityLayer = demolishObject(cityLayer, world, objectId);
-    // The reload produces bare loader meshes — re-dress them.
+    cityLayer = demolishObject(cityLayer, world, objectIndex);
+    // The rebuilt mesh starts with a placeholder material — re-dress it.
     applyCityStyle(cityLayer.group, styleResources);
     invalidateShadows();
     emitStats();
@@ -1111,14 +1169,22 @@ async function bootApp(
   // (neighbour-tile) silhouette hits nothing and autofocus falls back — so the
   // far city blurred. The primary cityLayer.group is prepended fresh each call
   // because demolish swaps it.
-  const focusContext = [...extraCities.map((c) => c.group), ...terrainMeshes];
+  // Terrain joins as each tile's BVH lands (indexedTerrain): a brute-force
+  // ray through ~2M unindexed triangles ten times a second would freeze the
+  // first seconds, and the DoF merely focuses on buildings until then.
+  // Neighbour buildings join as they stream in (extraCities is live).
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
-    const targets = inserted
-      ? [cityLayer.group, inserted, ...focusContext]
-      : [cityLayer.group, ...focusContext];
+    const targets: Object3D[] = [cityLayer.group];
+    if (inserted) {
+      targets.push(inserted);
+    }
+    for (const c of extraCities) {
+      targets.push(c.group);
+    }
+    targets.push(...indexedTerrain);
     const hit = focusRaycaster.intersectObjects(targets, true)[0];
     lastFocusHit = hit
       ? {
@@ -1220,7 +1286,107 @@ async function bootApp(
   });
   cleanups.push(() => renderer.setAnimationLoop(null));
 
+  // Build the terrain BVHs off the critical path: one tile per idle slot,
+  // primary first, starting once the loop is running. Until a tile is indexed
+  // the double-tap ray still hits it (three-mesh-bvh falls back to the plain
+  // raycast), only slower; the autofocus ray waits (see updateFocus).
+  const idle = (fn: () => void): void => {
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(fn, { timeout: 1500 });
+    } else {
+      setTimeout(fn, 50);
+    }
+  };
+  let indexing = false;
+  const indexTerrain = () => {
+    const mesh = terrainMeshes[indexedTerrain.length];
+    if (disposed || !mesh) {
+      indexing = false;
+      return;
+    }
+    mesh.geometry.computeBoundsTree();
+    indexedTerrain.push(mesh);
+    idle(indexTerrain);
+  };
+  // Re-armed whenever a tile lands; a running chain just keeps going.
+  const scheduleIndexing = () => {
+    if (!indexing) {
+      indexing = true;
+      idle(indexTerrain);
+    }
+  };
+  scheduleIndexing();
+
   emitStats();
+
+  // --- everything after the first frame ----------------------------------
+  // The scene is already visible and walkable (primary terrain + buildings).
+  // The rest streams in behind it: the primary's vegetation and lamps, then
+  // the three neighbour tiles, then the rails and walls that span the block.
+  // Every addition invalidates the shadow map (a missed call shows up as a
+  // missing shadow, never as a crash) and re-checks the abort signal, so a
+  // StrictMode remount stops adding to a scene that is already disposed.
+  const loadNeighbours = async (): Promise<void> => {
+    if (neighbourTiles.length === 0) {
+      return;
+    }
+    opts.onProgress?.("Loading neighbouring tiles…");
+    // Fetch every neighbour's mesh at once, then build in tile order.
+    const meshes = await Promise.all(
+      neighbourTiles.map((tile) => fetchCityMesh(citySrcOf(tile), opts.signal))
+    );
+    ensureAlive();
+    for (const { meta, vertices } of meshes) {
+      const layer = createCityLayer(meta, vertices, world, false);
+      applyCityStyle(layer.group, styleResources);
+      extraCities.push(layer);
+    }
+    invalidateShadows();
+    emitStats();
+    // Terrain / water per neighbour, concurrently. Promise.all preserves order,
+    // which the per-tile dressing below relies on. Neighbours are background —
+    // their heightfield is baked at half the primary's resolution (~4 m).
+    const scenes = await Promise.all(neighbourTiles.map(loadTileTerrain));
+    ensureAlive();
+    for (const sc of scenes) {
+      terrains.push(sc.terrain);
+      terrainMeshes.push(sc.terrain.mesh);
+      wallFeaturesByTile.push(sc.wallFeatures);
+      lowerFogFloor(sc.terrain);
+    }
+    invalidateShadows();
+    scheduleIndexing();
+    // Vegetation + lamps one tile at a time: bounds the peak memory of the
+    // canopy build (tens of thousands of instances per tile).
+    for (const [i, tile] of neighbourTiles.entries()) {
+      await loadTileDressing(tile, scenes[i].terrain);
+      ensureAlive();
+      invalidateShadows();
+    }
+  };
+  const loadRest = async (): Promise<void> => {
+    await loadTileDressing(primary, terrain);
+    ensureAlive();
+    invalidateShadows();
+    await loadNeighbours();
+    await buildRails();
+    buildWalls();
+    invalidateShadows();
+    restoreFog();
+    emitStats();
+  };
+  loadRest()
+    .then(() => {
+      if (!disposed) {
+        opts.onLoaded?.();
+      }
+    })
+    .catch((err: unknown) => {
+      if (disposed || isAbortError(err)) {
+        return;
+      }
+      opts.onError?.(err instanceof Error ? err.message : String(err));
+    });
 
   return {
     setSun,
@@ -1299,11 +1465,8 @@ async function bootApp(
       invalidateShadows();
     },
     setAtmosphere: (amount) => {
-      if (scene.fog instanceof Fog) {
-        const range = fogRangeFor(amount);
-        scene.fog.near = range.near;
-        scene.fog.far = range.far;
-      }
+      fogAmount = amount;
+      applyFog();
     },
     insertBuilding,
     demolishAtCrosshair,
@@ -1324,6 +1487,7 @@ async function bootApp(
     getRenderInfo: () => ({
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
+      gpuBytes: gpuBytes(),
       programs: renderer.info.programs?.length ?? 0,
     }),
     getFocusDebug: () => ({
@@ -1341,8 +1505,8 @@ async function bootApp(
       movement.setAnalog(x, y);
     },
     getFootprints: () => [
-      ...buildingFootprintPolys(cityLayer.data),
-      ...extraCities.flatMap((c) => buildingFootprintPolys(c.data)),
+      ...cityFootprints(cityLayer),
+      ...extraCities.flatMap(cityFootprints),
     ],
     landcoverTiles,
     terrainBounds: unionBounds,
