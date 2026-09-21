@@ -62,3 +62,9 @@ test("null properties are tolerated", () => {
   };
   expect(buildBallast([feature], ctx)).not.toBeNull();
 });
+
+test("a null geometry is skipped, not thrown", () => {
+  const feature: AreaFeature = { geometry: null, properties: null };
+  expect(buildBallast([feature, polygon], ctx)).not.toBeNull();
+  expect(buildBallast([feature], ctx)).toBeNull();
+});

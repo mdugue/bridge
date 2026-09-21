@@ -60,17 +60,19 @@ export interface AreaFeature {
       | [number, number][][]
       | [number, number][][][];
     type: "LineString" | "MultiPolygon" | "Polygon";
-  };
+  } | null;
   properties: Record<string, unknown> | null;
 }
 
 /** Outer rings of a Polygon or MultiPolygon geometry (holes are ignored). */
-function outerRings(geometry: AreaFeature["geometry"]): [number, number][][] {
-  if (geometry.type === "Polygon") {
+function outerRings(
+  geometry: AreaFeature["geometry"] | null | undefined
+): [number, number][][] {
+  if (geometry?.type === "Polygon") {
     const outer = (geometry.coordinates as [number, number][][])[0];
     return outer ? [outer] : [];
   }
-  if (geometry.type === "MultiPolygon") {
+  if (geometry?.type === "MultiPolygon") {
     return (geometry.coordinates as [number, number][][][])
       .map((poly) => poly[0])
       .filter((ring): ring is [number, number][] => ring !== undefined);

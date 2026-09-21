@@ -2,7 +2,11 @@
 export function hasWebGl2(): boolean {
   try {
     const probe = document.createElement("canvas");
-    return probe.getContext("webgl2") !== null;
+    const gl = probe.getContext("webgl2");
+    // Release the probe: browsers cap live WebGL contexts per page, and this
+    // one would otherwise linger next to the renderer's until GC.
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return gl !== null;
   } catch {
     return false;
   }

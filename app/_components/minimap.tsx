@@ -158,13 +158,20 @@ export function Minimap({
   );
   useEffect(() => {
     let cancelled = false;
+    const requested = requestedRef.current;
+    // Loads this run started and has not finished: the cleanup un-requests
+    // them so a re-run (StrictMode's mount → cleanup → mount in dev) requests
+    // them again instead of skipping a load whose result was discarded.
+    const pending = new Set<string>();
     for (const tile of landcoverTiles ?? []) {
-      if (requestedRef.current.has(tile.src)) {
+      if (requested.has(tile.src)) {
         continue;
       }
-      requestedRef.current.add(tile.src);
+      requested.add(tile.src);
+      pending.add(tile.src);
       const img = new Image();
       img.onload = () => {
+        pending.delete(tile.src);
         if (!cancelled) {
           const cv = colorizeLandcover(img, 256);
           setDecoded((prev) => new Map(prev).set(tile.src, cv));
@@ -174,6 +181,9 @@ export function Minimap({
     }
     return () => {
       cancelled = true;
+      for (const src of pending) {
+        requested.delete(src);
+      }
     };
   }, [landcoverTiles]);
 

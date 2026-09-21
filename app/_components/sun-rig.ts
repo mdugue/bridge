@@ -238,7 +238,9 @@ export function createSunRig(
     follow,
     setTime,
     invalidateShadow,
-    shadowPending: () => sun.shadow.needsUpdate,
+    // three only draws the map for a VISIBLE light: below the horizon the
+    // flag stays raised (and is consumed at sunrise), so it is not "pending".
+    shadowPending: () => sun.visible && sun.shadow.needsUpdate,
     shadowMapBytes: SHADOW_MAP_SIZE * SHADOW_MAP_SIZE * 4,
   };
 }
