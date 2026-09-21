@@ -21,8 +21,10 @@ import { fogRangeFor } from "@/lib/city/atmosphere";
 import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { parseHeightfieldHeader } from "@/lib/city/heightfield";
+import type { LookTarget } from "@/lib/city/look-controls";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
+import type { CameraStateJson } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { clampPitch, nextFov } from "@/lib/city/touch";
 import { createCameraFlight } from "./camera-flight";
@@ -130,18 +132,10 @@ export interface PlayerPose {
 /**
  * Full camera state for reproducible snapshots: enough to drop the camera back
  * exactly where it was. `pos` is the authoritative world position (Y-up);
- * `epsg` is the human-readable ground coordinate. Angles in degrees.
+ * `epsg` is the human-readable ground coordinate. Angles in degrees. It IS the
+ * JSON shape (`lib/city/snapshot.ts`), so a snapshot round-trips untouched.
  */
-export interface CameraState {
-  epsg: { x: number; y: number };
-  fov: number;
-  /** 0 = north, clockwise positive (east) */
-  headingDeg: number;
-  mode: MovementMode;
-  /** + = looking up, - = looking down */
-  pitchDeg: number;
-  pos: { x: number; y: number; z: number };
-}
+export type CameraState = CameraStateJson;
 
 /**
  * Every URL one tile may be loaded from (built from `tileUrls()` in
@@ -209,7 +203,12 @@ export interface CityWalkOptions {
   signal?: AbortSignal;
 }
 
-export interface CityWalkHandle {
+/**
+ * The 21 percent-style look setters come from LookTarget (one per row of
+ * LOOK_CONTROLS in lib/city/look-controls.ts — the table is their
+ * documentation); the compiler proves the handle literal implements each.
+ */
+export interface CityWalkHandle extends LookTarget {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
   demolishAtCrosshair: () => void;
@@ -258,60 +257,18 @@ export interface CityWalkHandle {
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
-  /** fog amount 0..1 (0 = clear day, 1 = thick painterly haze) */
-  setAtmosphere: (amount: number) => void;
-  /** building storey contour-line (Höhenlinien) strength 0..1 */
-  setBuildingBands: (strength: number) => void;
-  /** warm dusk interior glow (Abendlicht) on commercial/public buildings 0..1 */
-  setBuildingDuskGlow: (strength: number) => void;
-  /** eave cornice-stroke (Traufkante) strength 0..1 */
-  setBuildingEave: (strength: number) => void;
-  /** building ground-contact darkening (Boden-Verlauf) strength 0..1 */
-  setBuildingGroundShade: (strength: number) => void;
-  /** building Fresnel rim (Streiflicht) strength 0..1 */
-  setBuildingRim: (strength: number) => void;
-  /** roof colour mix (Dachfarbe) 0..1; real DOP colour else terracotta/slate */
-  setBuildingRoofTint: (strength: number) => void;
-  /** roof vividness (Dachsättigung) 0..1; hue-preserving chroma boost on DOP colour */
-  setBuildingRoofVibrance: (strength: number) => void;
-  /** per-building roughness jitter (Materialstreuung) 0..1 */
-  setBuildingRoughness: (strength: number) => void;
-  /** per-building clay tint (Farbvariation) mix 0..1; 0 = flat clay */
-  setBuildingTint: (strength: number) => void;
-  /** transparency 0..1 of the ACTIVE style (ghost: frosted, clay: alpha) */
-  setBuildingTransparency: (transparency: number) => void;
-  /** soft contact-shadow (SSAO) strength 0..1; 0 disables the pass */
-  setContactShadows: (strength: number) => void;
-  /** warm-near/cool-far color grading intensity 0..1 */
-  setDepthGrading: (intensity: number) => void;
   /** photographic depth of field with crosshair autofocus */
   setDepthOfField: (enabled: boolean) => void;
   /** manual focus distance (m), used when focus mode is "manual" */
   setFocusDistance: (meters: number) => void;
   /** depth-of-field focus: "auto" (crosshair) or "manual" (fixed distance) */
   setFocusMode: (mode: FocusMode) => void;
-  /** valley height-fog (Talnebel) strength 0..1; pools haze in low ground */
-  setHeightFog: (strength: number) => void;
-  /** meadow NDVI tint (Wiesenfärbung) 0..1; lush-green↔dry on farmland/meadow */
-  setMeadowNdvi: (strength: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
-  /** paper-grain overlay intensity 0..1 */
-  setPaperGrain: (intensity: number) => void;
   setSun: (date: Date) => SunState;
-  /** (B) sway-coupled crown brightness (Windhelligkeit) strength 0..1 */
-  setTreeLeafBright: (strength: number) => void;
-  /** (A) wind-gust leaf-flutter colour shimmer (Blattflimmern) strength 0..1 */
-  setTreeLeafFlutter: (strength: number) => void;
   /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
   setTreeMultiTuft: (enabled: boolean) => void;
-  /** backlit canopy shimmer strength 0..1 */
-  setTreeShimmer: (strength: number) => void;
-  /** backlit (shadow-gated) canopy translucency strength 0..1 on near/large trees */
-  setTreeTranslucency: (strength: number) => void;
-  /** river-mist (Flussnebel) strength 0..1 over the water surface */
-  setWaterMist: (strength: number) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
