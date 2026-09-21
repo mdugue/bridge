@@ -91,5 +91,5 @@ export async function fetchGzipped(
     );
   }
   const inflated = res.body.pipeThrough(new DecompressionStream("gzip"));
-  return await new Response(inflated).arrayBuffer();
+  return new Response(inflated).arrayBuffer();
 }

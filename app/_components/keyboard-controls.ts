@@ -39,8 +39,9 @@ function isTextEntry(target: EventTarget | null): boolean {
     isContentEditable?: boolean;
     matches?: (selector: string) => boolean;
   } | null;
-  return Boolean(
-    el?.isContentEditable || el?.matches?.("input, textarea, select")
+  return (
+    el?.isContentEditable === true ||
+    el?.matches?.("input, textarea, select") === true
   );
 }
 

@@ -56,6 +56,9 @@ test("a raster without georeferencing is placed by its .tfw, or refused", async 
       ProjectedCSTypeGeoKey: 25_833,
     }
   );
+  // bun-types declare the `rejects` matchers as void, but bun resolves them
+  // asynchronously — dropping the await would end the test before it runs.
+  // oxlint-disable-next-line typescript/await-thenable
   await expect(bakeHeightfield(bare, null, 4)).rejects.toThrow(/\.tfw/);
   // The world file references the CENTRE of the top-left pixel; the bounds
   // are the pixel edges.

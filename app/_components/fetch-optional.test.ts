@@ -38,6 +38,9 @@ test("a network failure means feature off", async () => {
 test("an abort is rethrown", async () => {
   const abort = new DOMException("aborted", "AbortError");
   stubFetch(() => Promise.reject(abort));
+  // bun-types declare the `rejects` matchers as void, but bun resolves them
+  // asynchronously — dropping the await would end the test before it runs.
+  // oxlint-disable-next-line typescript/await-thenable
   await expect(fetchOptionalJson("/x")).rejects.toBe(abort);
 });
 
@@ -61,6 +64,9 @@ test("fetchFeaturesFrom merges the collections in URL order, a 404 among them co
 test("fetchFeaturesFrom rethrows an abort", async () => {
   const abort = new DOMException("aborted", "AbortError");
   stubFetch(() => Promise.reject(abort));
+  // bun-types declare the `rejects` matchers as void, but bun resolves them
+  // asynchronously — dropping the await would end the test before it runs.
+  // oxlint-disable-next-line typescript/await-thenable
   await expect(fetchFeaturesFrom(["/a", "/b"])).rejects.toBe(abort);
 });
 

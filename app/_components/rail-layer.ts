@@ -813,7 +813,7 @@ function buildRails(
     if (f.geometry?.type !== "LineString") {
       continue;
     }
-    const tracks = Math.min(Math.max(f.properties?.tracks || 1, 1), 3);
+    const tracks = Math.min(Math.max(f.properties?.tracks ?? 1, 1), 3);
     const dense = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
     // Split into runs of points with valid ground (never bridge a NoData gap).
     let run: Pt[] = [];

@@ -97,11 +97,7 @@ export async function bakeHeightfield(
   if (!ArrayBuffer.isView(raster)) {
     throw new Error("unexpected raster shape (expected one interleaved band)");
   }
-  // reason: geotiff types the result as TypedArray | TypedArray[]; isView narrowed it above
-  const encoded = encodeHeightfield(
-    raster as unknown as ArrayLike<number>,
-    image.getGDALNoData()
-  );
+  const encoded = encodeHeightfield(raster, image.getGDALNoData());
   return {
     header: {
       version: HEIGHTFIELD_VERSION,

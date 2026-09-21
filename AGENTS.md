@@ -33,7 +33,7 @@ bun install
 bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
-bun lint           # oxlint (rules) + oxfmt --check (formatting)
+bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
@@ -44,6 +44,17 @@ E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 Linting and formatting are **oxlint + oxfmt** (`.oxlintrc.json`, `.oxfmtrc.json`)
 — biome/ultracite are gone. `bun lint` runs `oxlint --max-warnings=0` then
 `oxfmt --check`; `bun run fix` formats and applies the safe autofixes.
+oxlint is **type-aware**: `options.typeAware` in `.oxlintrc.json` hands the
+`typescript/*` rules that need type information (`no-floating-promises`,
+`no-misused-promises`, `no-unsafe-*`, `no-deprecated`, `switch-exhaustiveness-
+check`, …) to `oxlint-tsgolint`, the typescript-go backend, which reads the
+same `tsconfig.json` as `tsc`. It adds well under a second here and needs no
+flag. The deliberately *unlisted* type-aware rules are `strict-boolean-
+expressions`, `no-unnecessary-condition` and `no-confusing-void-expression`:
+each reports 40–60 findings on this codebase, nearly all of them the
+`if (maybeObject)` / `onClick={() => setX()}` idioms the code uses on purpose.
+`--type-check` (tsc diagnostics inside lint) stays off — `bun typecheck` is
+the type checker and runs as its own CI job.
 Run `bun run fix` before `bun run verify` — there is no format-on-save hook
 for Claude Code (it was removed after it reformatted files carrying
 merge-conflict markers); Cursor still runs a fix hook after edits via
@@ -255,7 +266,9 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - TypeScript strict. No `any` without a `// reason:` comment.
 - Version pins: exact for the three.js stack (`three`, `@types/three`,
   `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`), the
-  framework trio and the formatters; caret for everything else. `suncalc` is
+  framework trio and the lint/format tools (`oxlint`, `oxlint-tsgolint`,
+  `oxfmt` — oxlint declares a `>=` peer range on tsgolint, so bump them
+  together); caret for everything else. `suncalc` is
   pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
   float would rotate the sun rather than fail. The Bun version comes from
   `packageManager` in `package.json` (CI reads it via `bun-version-file`), and

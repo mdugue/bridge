@@ -311,7 +311,9 @@ export function parseCityMeshMeta(json: unknown): CityMeshMeta {
   }
   const n = raw.vertexCount;
   if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
-    return invalid(`vertexCount must be a non-negative integer, got ${n}`);
+    return invalid(
+      `vertexCount must be a non-negative integer, got ${String(n)}`
+    );
   }
   if (!Array.isArray(raw.objects)) {
     return invalid("objects must be an array");
