@@ -33,7 +33,7 @@ bun install
 bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
-bun lint           # oxlint + ultracite (biome)
+bun lint           # oxlint (rules) + oxfmt --check (formatting)
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
@@ -41,12 +41,23 @@ bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
 
-Linting is **two tools, no overlap**: **ultracite** (a biome preset) formats and
-carries the style/correctness/TS-idiom rules — it auto-formats on save via the
-hook and enforces a complexity cap, so extract helpers rather than fighting it —
-and **oxlint** (`.oxlintrc.json`) carries what biome has no rules for: the
-Next.js plugin and the React-Compiler-era react rules. Both must pass; `bun lint`
-runs oxlint under `--max-warnings=0` first. No `console.log` in committed code.
+Linting and formatting are **oxlint + oxfmt** (`.oxlintrc.json`, `.oxfmtrc.json`)
+— biome/ultracite are gone. `bun lint` runs `oxlint --max-warnings=0` then
+`oxfmt --check`; `bun run fix` formats and applies the safe autofixes.
+A complexity cap of 20 is enforced (`complexity`), so extract helpers rather
+than fighting it. No `console.log` in committed code.
+
+**`.oxlintrc.json` names its rules explicitly, on purpose.** oxlint's default is
+the `correctness` category alone, which on this repo reports nothing — so the
+rules ported from biome (`no-var`, `prefer-const`, `typescript/no-explicit-any`,
+`ban-ts-comment`, `no-namespace`, …) and the react/Next.js ones are listed one by
+one. Do not "simplify" that to a category: `-D suspicious -D pedantic` adds 411
+findings and `-D style` adds 6551, nearly all of them rules that do not fit this
+codebase (`react-in-jsx-scope` is obsolete under the modern JSX transform,
+`no-inline-comments` fights the commenting style, `max-lines-per-function`
+fights the scene-setup functions). Equally, ultracite's own oxlint preset is as
+opinionated as its biome one — adopting it wholesale is a style refactor, not a
+config change.
 
 ## Where things live
 
@@ -253,6 +264,12 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   `BatchedMesh` on top).
 - `tsconfig.json`'s `allowJs: true` is **not** removable — `next build`
   rewrites the file to put it back, which would dirty the tree on every build.
+- **Markdown is excluded from oxfmt** (`.oxfmtrc.json`). It rewrites `*em*` to
+  `_em_` and, worse, strips the indent from continuation lines inside list
+  items, which detaches them from their bullet. Prose here stays hand-wrapped.
+- **No CSS linting any more.** biome checked `app/globals.css` (unknown at-rules,
+  unknown units, descending specificity); oxlint does not lint CSS at all. oxfmt
+  still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
 - Tailwind for styling; components in `app/_components/` (route-private) or

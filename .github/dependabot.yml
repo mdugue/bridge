@@ -21,7 +21,7 @@ updates:
       shadcn:
         patterns: [shadcn, "@base-ui/*"]
       lint-and-format:
-        patterns: [oxlint, biome, "@biomejs/*", ultracite]
+        patterns: [oxlint, oxfmt]
       # The three.js stack moves as one: postprocessing caps `three`, and
       # n8ao / three-mesh-bvh / the CityJSON loader all peer on it, so a solo
       # bump is either unmergeable or a silent version skew.
