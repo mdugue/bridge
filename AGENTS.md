@@ -33,19 +33,23 @@ bun install
 bun dev            # prepare-data.ts (geodata -> public/data) then next dev
 bun build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
-bun lint           # eslint + ultracite (biome)
-bun typecheck      # tsgo --noEmit
+bun lint           # oxlint + ultracite (biome)
+bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
+                   # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
 
-Lint is **ultracite** (a biome preset). Run `bun run fix` before
-`bun run verify` — there is no format-on-save hook for Claude Code (it was
-removed after it reformatted files carrying merge-conflict markers); Cursor
-still runs `bun fix` after edits via `.cursor/hooks.json`. It also enforces a
-complexity cap; extract helpers rather than fighting it. No `console.log` in
-committed code.
+Linting is **two tools, no overlap**: **ultracite** (a biome preset) formats and
+carries the style/correctness/TS-idiom rules, and **oxlint** (`.oxlintrc.json`)
+carries what biome has no rules for: the Next.js plugin and the
+React-Compiler-era react rules. Both must pass; `bun lint` runs oxlint under
+`--max-warnings=0` first. Run `bun run fix` before `bun run verify` — there is
+no format-on-save hook for Claude Code (it was removed after it reformatted
+files carrying merge-conflict markers); Cursor still runs `bun fix` after edits
+via `.cursor/hooks.json`. Ultracite also enforces a complexity cap; extract
+helpers rather than fighting it. No `console.log` in committed code.
 
 ## Where things live
 
@@ -234,10 +238,44 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - TypeScript strict. No `any` without a `// reason:` comment.
 - Version pins: exact for the three.js stack (`three`, `@types/three`,
   `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`), the
-  framework trio and the formatters; caret for everything else. The Bun version
-  comes from `packageManager` in `package.json` (CI reads it via
-  `bun-version-file`), and `.mcp.json` pins the shadcn MCP server to the
-  lockfile version rather than `@latest`.
+  framework trio and the formatters; caret for everything else. `suncalc` is
+  pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
+  float would rotate the sun rather than fail. The Bun version comes from
+  `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
+  `.mcp.json` pins **both** MCP servers (shadcn, next-devtools) to an exact
+  version rather than `@latest`.
+- **One TypeScript, and it is 7.x (the native compiler).** `bun typecheck` and
+  `next build` both run it; there is no second checker. Note what TS 7's npm
+  package *is*: a per-platform native binary plus a `tsc` launcher. It ships
+  **no `lib/typescript.js`**, so the classic JS compiler API is gone and any
+  tool that consumes it (typescript-eslint, the old tsserver) cannot run on it.
+  That is why ESLint is no longer here — see below. If you ever need that API
+  back, `@typescript/typescript6` is the shim that provides it. The same
+  applies to the editor: `.vscode/settings.json` no longer points
+  `js/ts.tsdk.path` at `node_modules/typescript/lib`, because there is no
+  `tsserver` there any more — let the TypeScript extension supply its own.
+- **No ESLint — oxlint replaced it.** typescript-eslint hard-crashes on TS 7
+  (`Cannot read properties of undefined (reading 'Cjs')`) and no channel of it,
+  canary included, accepts `typescript >=7`. oxlint needs no TypeScript at all
+  (it has its own Rust parser), so it cannot hit that wall. Coverage was checked
+  rule by rule against the 86 rules `eslint-config-next` had enabled here, and
+  all of them are reachable except **one**:
+  `@next/next/no-location-assign-relative-destination`, which oxlint has no
+  equivalent for (no current exposure — nothing here calls `location.assign`).
+  **Careful when auditing oxlint coverage**: `oxlint --print-config` lists only
+  the *enabled* rules, and its default is the `correctness` category alone —
+  the full catalogue is 653 rules (`oxlint --print-config -D all`). Several
+  rules you would expect are present but off by default, which is why
+  `.oxlintrc.json` names `react/rules-of-hooks`, `react/display-name`,
+  `react/no-unescaped-entities`, `react/jsx-no-comment-textnodes` and
+  `import/no-anonymous-default-export` explicitly. Do not re-add ESLint to
+  recover a rule without first checking the full catalogue.
+- `types/n8ao.d.ts` is a hand-written shim because `n8ao` ships no types. Do
+  not add one for `three-mesh-bvh`: the package declares its own `three`
+  augmentation (`BufferGeometry.boundsTree`, `Raycaster.firstHitOnly`, and
+  `BatchedMesh` on top).
+- `tsconfig.json`'s `allowJs: true` is **not** removable — `next build`
+  rewrites the file to put it back, which would dirty the tree on every build.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
 - Tailwind for styling; components in `app/_components/` (route-private) or

@@ -1,15 +1,19 @@
-import SunCalc from "suncalc";
+import { getPosition } from "suncalc";
 
 /**
  * Solar direction math, kept three-free so it is unit-testable.
  *
  * Frames involved:
- *  - SunCalc azimuth is measured FROM SOUTH, positive towards WEST;
- *    altitude is the angle above the horizon. Both in radians.
+ *  - suncalc 2.x reports `azimuth` as compass DEGREES, north-based clockwise
+ *    (0 = N, 90 = E, 180 = S, 270 = W), and `altitude` as degrees above the
+ *    horizon. (suncalc 1.x measured azimuth FROM SOUTH toward west, in
+ *    radians — hence the sign flip against the pre-2.0 version of this file.)
  *  - ENU: x=east, y=north, z=up (a map-style local tangent frame).
  *  - World (three.js scene): the city group is rotated -90° about X so the
  *    data's Z-up becomes Y-up. That maps East=+X, Up=+Y, North=-Z.
  */
+
+const DEG2RAD = Math.PI / 180;
 
 export interface Enu {
   east: number;
@@ -24,13 +28,15 @@ export interface Vec3 {
 
 /** Unit vector pointing TOWARD the sun in the ENU frame. */
 export function sunDirectionEnu(date: Date, lat: number, lng: number): Enu {
-  const { azimuth, altitude } = SunCalc.getPosition(date, lat, lng);
-  const horizontal = Math.cos(altitude);
+  const { azimuth, altitude } = getPosition(date, lat, lng);
+  const az = azimuth * DEG2RAD;
+  const alt = altitude * DEG2RAD;
+  const horizontal = Math.cos(alt);
   return {
-    // azimuth 0 = sun due SOUTH -> east component 0, north component -1.
-    east: -horizontal * Math.sin(azimuth),
-    north: -horizontal * Math.cos(azimuth),
-    up: Math.sin(altitude),
+    // azimuth 0 = sun due NORTH -> east component 0, north component +1.
+    east: horizontal * Math.sin(az),
+    north: horizontal * Math.cos(az),
+    up: Math.sin(alt),
   };
 }
 
