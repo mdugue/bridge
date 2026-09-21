@@ -81,6 +81,7 @@ import {
 } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly } from "@/lib/city/minimap";
+import type { PlayerPose } from "@/lib/city/pose";
 import {
   decodeLook,
   encodeSnapshot,
@@ -92,7 +93,6 @@ import {
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
-  type PlayerPose,
   type TileSrc,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
@@ -759,6 +759,9 @@ export default function CityWalk({
         }
       },
       onPose: (pose) => {
+        if (cancelled) {
+          return;
+        }
         for (const cb of poseListeners.current) {
           cb(pose);
         }

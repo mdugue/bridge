@@ -6,8 +6,8 @@ import {
   type FootprintPoly,
   mapPxToEpsg,
 } from "@/lib/city/minimap";
+import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import type { PlayerPose } from "./create-app";
 
 /** Default CSS pixel size; canvases are scaled by devicePixelRatio. */
 const DEFAULT_SIZE = 192;

@@ -11,6 +11,17 @@ const GROUND_TAU = 0.12;
 
 export type MovementMode = "walk" | "fly";
 
+/** The key codes movement reads — pressing one is the player taking the wheel. */
+export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([
+  "KeyW",
+  "KeyA",
+  "KeyS",
+  "KeyD",
+  "Space",
+  "ShiftLeft",
+  "ShiftRight",
+]);
+
 export interface FpsMovementOptions {
   eyeHeight: number;
   /** ground elevation (world Y) at world (x, z); null = off the terrain */
@@ -132,7 +143,11 @@ export function createFpsMovement(
 
   return {
     update,
-    press: (code) => keys.add(code),
+    press: (code) => {
+      if (MOVEMENT_KEYS.has(code)) {
+        keys.add(code);
+      }
+    },
     release: (code) => keys.delete(code),
     releaseAll: () => {
       keys.clear();

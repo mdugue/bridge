@@ -8,6 +8,7 @@ interface FiredPointer {
   clientX: number;
   clientY: number;
   pointerId: number;
+  pointerType?: string;
   timeStamp?: number;
 }
 
@@ -18,7 +19,14 @@ interface FiredPointer {
  */
 function harness() {
   const handlers = new Map<string, (e: PointerEvent) => void>();
+  const ownerDocument = {
+    pointerLockElement: null as unknown,
+    exitPointerLock: () => {
+      ownerDocument.pointerLockElement = null;
+    },
+  };
   const element = {
+    ownerDocument,
     addEventListener: (type: string, fn: (e: PointerEvent) => void) =>
       handlers.set(type, fn),
     removeEventListener: (type: string) => handlers.delete(type),
@@ -28,19 +36,23 @@ function harness() {
 
   const calls = {
     look: [] as [number, number][],
+    mouseLook: [] as [number, number][],
     pinchStart: 0,
     pinch: [] as number[],
     doubleTap: [] as [number, number][],
+    wheel: [] as number[],
   };
   const callbacks: TouchControlsCallbacks = {
     onLook: (dx, dy) => calls.look.push([dx, dy]),
+    onMouseLook: (dx, dy) => calls.mouseLook.push([dx, dy]),
     onPinchStart: () => {
       calls.pinchStart += 1;
     },
     onPinch: (ratio) => calls.pinch.push(ratio),
     onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
+    onWheel: (ratio) => calls.wheel.push(ratio),
   };
-  const detach = attachTouchControls(element, callbacks);
+  const { detach } = attachTouchControls(element, callbacks);
   const fire = (type: string, e: FiredPointer) =>
     handlers.get(type)?.({
       pointerType: "touch",
@@ -48,7 +60,25 @@ function harness() {
       timeStamp: 0,
       ...e,
     } as unknown as PointerEvent);
-  return { calls, detach, fire };
+  const lock = (on: boolean) => {
+    ownerDocument.pointerLockElement = on ? element : null;
+  };
+  const mouseMove = (movementX: number, movementY: number) =>
+    handlers.get("mousemove")?.({
+      movementX,
+      movementY,
+    } as unknown as PointerEvent);
+  const wheel = (deltaY: number) => {
+    let prevented = false;
+    handlers.get("wheel")?.({
+      deltaY,
+      preventDefault: () => {
+        prevented = true;
+      },
+    } as unknown as PointerEvent);
+    return prevented;
+  };
+  return { calls, detach, fire, lock, mouseMove, ownerDocument, wheel };
 }
 
 test("a one-finger drag reports per-event deltas, not cumulative ones", () => {
@@ -129,11 +159,50 @@ test("a drag is never a tap, so it cannot start a double tap", () => {
   expect(calls.doubleTap).toEqual([]);
 });
 
-test("detach removes every listener", () => {
-  const { fire, calls, detach } = harness();
+test("a wheel notch is one zoom step, up = in, and the page never scrolls", () => {
+  const { wheel, calls } = harness();
+  expect(wheel(-100)).toBe(true);
+  expect(wheel(100)).toBe(true);
+  expect(calls.wheel).toHaveLength(2);
+  expect(calls.wheel[0]).toBeGreaterThan(1);
+  expect(calls.wheel[1]).toBeCloseTo(1 / calls.wheel[0], 10);
+});
+
+test("pointer lock turns mouse motion into mouse-look and silences grab-look", () => {
+  const { fire, lock, mouseMove, calls } = harness();
+  mouseMove(5, 0);
+  expect(calls.mouseLook).toEqual([]);
+  lock(true);
+  mouseMove(5, -2);
+  fire("pointerdown", {
+    pointerId: 1,
+    clientX: 0,
+    clientY: 0,
+    pointerType: "mouse",
+  });
+  fire("pointermove", {
+    pointerId: 1,
+    clientX: 10,
+    clientY: 0,
+    pointerType: "mouse",
+  });
+  expect(calls.mouseLook).toEqual([[5, -2]]);
+  expect(calls.look).toEqual([]);
+});
+
+test("detach removes every listener and releases the pointer lock", () => {
+  const { fire, lock, mouseMove, wheel, calls, detach, ownerDocument } =
+    harness();
+  lock(true);
   detach();
+  expect(ownerDocument.pointerLockElement).toBeNull();
+  lock(true);
   fire("pointerdown", { pointerId: 1, clientX: 0, clientY: 0 });
   fire("pointermove", { pointerId: 1, clientX: 10, clientY: 0 });
+  wheel(-100);
+  mouseMove(5, 0);
   expect(calls.look).toEqual([]);
+  expect(calls.mouseLook).toEqual([]);
   expect(calls.pinchStart).toBe(0);
+  expect(calls.wheel).toEqual([]);
 });

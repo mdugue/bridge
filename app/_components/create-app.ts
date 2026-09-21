@@ -2,7 +2,6 @@ import {
   ACESFilmicToneMapping,
   Box3,
   Color,
-  Euler,
   Fog,
   Group,
   type Mesh,
@@ -16,7 +15,6 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { fogRangeFor } from "@/lib/city/atmosphere";
 import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
@@ -28,11 +26,10 @@ import {
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { FootprintPoly } from "@/lib/city/minimap";
+import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
-import type { CameraStateJson } from "@/lib/city/snapshot";
 import { SKIRT_DEPTH, type TerrainBounds } from "@/lib/city/terrain-geometry";
-import { clampPitch, nextFov } from "@/lib/city/touch";
-import { createCameraFlight } from "./camera-flight";
+import { createCameraPose } from "./camera-pose";
 import {
   type CityLayer,
   cityFootprints,
@@ -48,9 +45,10 @@ import {
   fetchRequiredJson,
   isAbortError,
 } from "./fetch-optional";
-import { createFpsMovement, type MovementMode } from "./fps-movement";
+import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { createInsertedBuilding } from "./inserted-building";
+import { attachKeyboardControls } from "./keyboard-controls";
 import {
   createLampLights,
   type LampControl,
@@ -91,25 +89,11 @@ import {
 } from "./visual-style";
 import { loadWalls, type WallControl } from "./wall-layer";
 
-const EYE_HEIGHT = 1.7;
-/** Keys that mean "I'm driving" — pressing any of them aborts a scenic flight. */
-const MOVEMENT_KEYS = new Set([
-  "KeyW",
-  "KeyA",
-  "KeyS",
-  "KeyD",
-  "KeyF",
-  "Space",
-  "ShiftLeft",
-  "ShiftRight",
-]);
 /**
  * Vertical FOV. 55° (~85° horizontal at 16:9) reads like a natural human
  * walking perspective; wider than ~60° starts to feel fisheye/distorted.
  */
 const DEFAULT_FOV = 55;
-/** rad per CSS px of touch drag — full phone-width swipe ≈ 90° */
-const TOUCH_LOOK_SPEED = 0.004;
 /** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
 const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 /** Fog far plane (m) while only the primary tile exists: its half-size plus
@@ -135,22 +119,6 @@ export interface CityWalkStats {
   shadowsEnabled: boolean;
   terrainVertexCount: number;
 }
-
-/** Player pose for the minimap: EPSG position + compass heading. */
-export interface PlayerPose {
-  epsgX: number;
-  epsgY: number;
-  /** radians, 0 = north, clockwise positive (towards east) */
-  heading: number;
-}
-
-/**
- * Full camera state for reproducible snapshots: enough to drop the camera back
- * exactly where it was. `pos` is the authoritative world position (Y-up);
- * `epsg` is the human-readable ground coordinate. Angles in degrees. It IS the
- * JSON shape (`lib/city/snapshot.ts`), so a snapshot round-trips untouched.
- */
-export type CameraState = CameraStateJson;
 
 /**
  * Every URL one tile may be loaded from (built from `tileUrls()` in
@@ -291,12 +259,6 @@ export interface CityWalkHandle {
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
-}
-
-interface Xyz {
-  x: number;
-  y: number;
-  z: number;
 }
 
 function createRenderer(
@@ -766,28 +728,22 @@ async function bootApp(
   // The primary tile's extent: the sun rig only needs a centre to start from
   // (its frustum follows the camera) and a ground fallback.
   const worldBounds = new Box3().setFromObject(world);
-  // Seed the valley height-fog floor from the lowest VALID terrain elevation
-  // (the Elbe surface), lowered further as each neighbour lands. NB:
-  // worldBounds.min.y is unusable here: the terrain skirt hangs 30 m below
-  // every border vertex, so the box bottom sits ~30 m under the river and the
-  // whole fog band (start … start + falloff) would end below the water — the
-  // Talnebel slider then changes no pixel. An all-NoData tile reports
-  // +Infinity and is skipped; the primary spawn tile always has real
-  // elevation. A uniform write, no recompile.
-  const lowerFogFloor = (t: TerrainLayer) => {
-    if (Number.isFinite(t.minElevation)) {
-      heightFog.uFogHeightStart.value = Math.min(
-        heightFog.uFogHeightStart.value,
-        t.minElevation + 1
-      );
-    }
+  // The lowest real terrain elevation so far (the Elbe surface): the floor
+  // the player stands on off every tile's DGM and the valley height-fog's
+  // start, lowered as each neighbour lands (a uniform write, no recompile).
+  // NB: worldBounds.min.y is unusable for either — the terrain skirt hangs
+  // 30 m below every border vertex, so the box bottom sits ~30 m under the
+  // river and the whole fog band (start … start + falloff) would end below
+  // the water; the Talnebel slider then changes no pixel. An all-NoData tile
+  // reports +Infinity; then the lowest vertex above the skirt stands in.
+  let groundFloor = Number.isFinite(terrain.minElevation)
+    ? terrain.minElevation
+    : worldBounds.min.y + SKIRT_DEPTH;
+  const lowerGroundFloor = (t: TerrainLayer) => {
+    groundFloor = Math.min(groundFloor, t.minElevation);
+    heightFog.uFogHeightStart.value = groundFloor + 1;
   };
-  heightFog.uFogHeightStart.value = Number.POSITIVE_INFINITY;
-  lowerFogFloor(terrain);
-  if (!Number.isFinite(heightFog.uFogHeightStart.value)) {
-    // No valid elevation anywhere: anchor to the lowest vertex above the skirt.
-    heightFog.uFogHeightStart.value = worldBounds.min.y + SKIRT_DEPTH + 1;
-  }
+  heightFog.uFogHeightStart.value = groundFloor + 1;
   const sunRig = createSunRig(
     scene,
     worldBounds,
@@ -907,17 +863,6 @@ async function bootApp(
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
 
-  // Spawn at the recenter point (= world origin), standing on the terrain.
-  const groundY = heightAt(offset.cx, offset.cy) ?? worldBounds.min.y;
-  camera.position.set(0, groundY + EYE_HEIGHT, 0);
-  camera.lookAt(0, groundY + EYE_HEIGHT, -100);
-
-  const controls = new PointerLockControls(camera, renderer.domElement);
-  cleanups.push(() => controls.dispose());
-  const groundHeight = (x: number, z: number) => {
-    const epsg = worldToEpsg(x, z, offset);
-    return heightAt(epsg.x, epsg.y);
-  };
   // Wall collision against the CURRENT city group (demolish swaps it).
   // Declared before the collider so the inserted building can join the
   // collision/focus targets the moment it exists.
@@ -925,152 +870,39 @@ async function bootApp(
   const collider = createCityCollider(() =>
     inserted ? [cityLayer.group, inserted] : [cityLayer.group]
   );
-  const movement = createFpsMovement(camera, {
-    groundHeight,
-    eyeHeight: EYE_HEIGHT,
+  // Where the player stands and looks, walk/fly, the scenic glides — and the
+  // one rule that any player input cancels a glide (camera-pose.ts).
+  const pose = createCameraPose(camera, {
+    groundFloor: () => groundFloor,
+    heightAt,
+    offset,
     resolveStep: collider.resolveStep,
+    onModeChange: opts.onModeChange,
+    onPose: opts.onPose,
   });
+  // Spawn at the recenter point (= world origin), standing on the terrain.
+  pose.teleportTo(offset.cx, offset.cy);
 
-  const setMovementMode = (mode: MovementMode) => {
-    movement.setMode(mode);
-    if (mode === "walk") {
-      movement.snapToGround();
-    }
-    opts.onModeChange?.(mode);
-  };
-
-  // Animated "fly to a scenic vantage" tween (the HUD viewpoint buttons). While
-  // it owns the camera the loop suspends player input; `pendingMode` is the
-  // mode to settle into once the glide lands (applied on the frame it ends).
-  const cameraFlight = createCameraFlight(camera);
-  let pendingMode: MovementMode | null = null;
-  const flyToViewpoint = (viewpoint: Viewpoint) => {
-    const ground = heightAt(viewpoint.epsg.x, viewpoint.epsg.y);
-    const w = epsgToWorld(viewpoint.epsg.x, viewpoint.epsg.y, offset);
-    // Fly during the glide so the ground clamp can't fight the vertical arc;
-    // pendingMode restores walk (and snaps to the ground) once it settles.
-    setMovementMode("fly");
-    cameraFlight.start({
-      pos: {
-        x: w.x,
-        y: (ground ?? worldBounds.min.y) + viewpoint.aboveGround,
-        z: w.z,
-      },
-      headingDeg: viewpoint.headingDeg,
-      pitchDeg: viewpoint.pitchDeg,
-      fov: viewpoint.fov,
-    });
-    pendingMode = viewpoint.mode;
-  };
-  const cancelFlight = () => {
-    cameraFlight.cancel();
-    pendingMode = null;
-  };
-
-  const heading = new Vector3();
-  const getPose = (): PlayerPose => {
-    camera.getWorldDirection(heading);
-    const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
-    return {
-      epsgX: epsg.x,
-      epsgY: epsg.y,
-      // world: north = -Z, east = +X -> compass heading clockwise from north
-      heading: Math.atan2(heading.x, -heading.z),
-    };
-  };
-
-  const RAD2DEG = 180 / Math.PI;
-  const DEG2RAD = Math.PI / 180;
-  const getCameraState = (): CameraState => {
-    camera.getWorldDirection(heading);
-    const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
-    return {
-      mode: movement.getMode(),
-      pos: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
-      epsg: { x: epsg.x, y: epsg.y },
-      headingDeg: Math.atan2(heading.x, -heading.z) * RAD2DEG,
-      pitchDeg: Math.asin(Math.min(Math.max(heading.y, -1), 1)) * RAD2DEG,
-      fov: camera.fov,
-    };
-  };
-
-  const applyCameraState = (s: CameraState) => {
-    // A pose set from outside wins over a scenic glide in progress.
-    cancelFlight();
-    // Fly first so the ground clamp doesn't yank an aerial pose down to eye
-    // height before the frame even renders.
-    setMovementMode(s.mode);
-    camera.position.set(s.pos.x, s.pos.y, s.pos.z);
-    const h = s.headingDeg * DEG2RAD;
-    const p = s.pitchDeg * DEG2RAD;
-    // heading 0 = north = -Z, clockwise; pitch tilts towards +Y.
-    const cp = Math.cos(p);
-    camera.lookAt(
-      camera.position.x + Math.sin(h) * cp,
-      camera.position.y + Math.sin(p),
-      camera.position.z - Math.cos(h) * cp
-    );
-    if (s.fov > 0) {
-      camera.fov = s.fov;
-      camera.updateProjectionMatrix();
-    }
-    camera.updateMatrixWorld(true);
-    opts.onPose?.(getPose());
-  };
-
-  const teleportTo = (epsgX: number, epsgY: number) => {
-    // A pose set from outside wins over a scenic glide in progress.
-    cancelFlight();
-    const pos = epsgToWorld(epsgX, epsgY, offset);
-    const ground = heightAt(epsgX, epsgY);
-    camera.position.set(
-      pos.x,
-      (ground ?? worldBounds.min.y) + EYE_HEIGHT,
-      pos.z
-    );
-    // Level the view (keep the compass heading, drop pitch/roll) — after
-    // an aerial pose the player would otherwise stare at the ground.
-    const level = new Euler(0, 0, 0, "YXZ");
-    level.setFromQuaternion(camera.quaternion);
-    level.x = 0;
-    level.z = 0;
-    camera.quaternion.setFromEuler(level);
-    camera.updateMatrixWorld(true);
-    opts.onPose?.(getPose());
-  };
-
-  // --- street-view-style touch controls (mobile) ------------------------
-  const lookEuler = new Euler(0, 0, 0, "YXZ");
-  let pinchStartFov = camera.fov;
+  // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
-  const detachTouch = attachTouchControls(renderer.domElement, {
-    onLook: (dx, dy) => {
-      lookEuler.setFromQuaternion(camera.quaternion);
-      // "Grab the world": dragging right rotates the view left.
-      lookEuler.y += dx * TOUCH_LOOK_SPEED;
-      lookEuler.x = clampPitch(lookEuler.x + dy * TOUCH_LOOK_SPEED);
-      lookEuler.z = 0;
-      camera.quaternion.setFromEuler(lookEuler);
-    },
-    onPinchStart: () => {
-      pinchStartFov = camera.fov;
-    },
-    onPinch: (ratio) => {
-      camera.fov = nextFov(pinchStartFov, ratio);
-      camera.updateProjectionMatrix();
-    },
+  const canvasControls = attachTouchControls(renderer.domElement, {
+    onLook: pose.turn,
+    onMouseLook: pose.look,
+    onPinchStart: pose.beginZoom,
+    onPinch: pose.zoomTo,
+    onWheel: pose.zoomBy,
     onDoubleTap: (ndcX, ndcY) => {
       // Travel to the tapped spot on the terrain.
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
       const hit = tapRaycaster.intersectObjects(terrainMeshes, false)[0];
       if (hit) {
         const epsg = worldToEpsg(hit.point.x, hit.point.z, offset);
-        teleportTo(epsg.x, epsg.y);
+        pose.teleportTo(epsg.x, epsg.y);
       }
     },
   });
-  cleanups.push(detachTouch);
+  cleanups.push(canvasControls.detach);
 
   let fps = 0;
   // Geometry + tracked textures + the shadow map; the post stack's screen
@@ -1129,7 +961,7 @@ async function bootApp(
       scene.remove(inserted);
       disposeObject3D(inserted);
     }
-    const ground = heightAt(at.x, at.y) ?? worldBounds.min.y;
+    const ground = heightAt(at.x, at.y) ?? groundFloor;
     // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
     const w = epsgToWorld(at.x, at.y, offset);
     obj.position.set(w.x, ground, w.z);
@@ -1151,66 +983,19 @@ async function bootApp(
     });
   };
 
-  /** True for a key event aimed at a text field — the HUD owns those keys. */
-  const isTextEntry = (target: EventTarget | null): boolean =>
-    target instanceof HTMLElement &&
-    (target.isContentEditable || target.matches("input, textarea, select"));
-  const onKeyDown = (e: KeyboardEvent) => {
-    // Held keys auto-repeat. Movement doesn't care (the Set is idempotent),
-    // but the one-shot actions must fire once per press — holding R used to
-    // re-parse the whole tile on every repeat.
-    if (e.repeat || isTextEntry(e.target)) {
-      return;
-    }
-    movement.press(e.code);
-    // Any movement/mode key is the player taking the wheel back — abandon any
-    // scenic flight in progress so it doesn't fight or override their control.
-    if (MOVEMENT_KEYS.has(e.code)) {
-      cancelFlight();
-    }
-    if (e.code === "KeyR") {
-      demolishAtCrosshair();
-    }
-    if (e.code === "KeyB") {
-      insertBuildingNow();
-    }
-    if (e.code === "KeyF") {
-      setMovementMode(movement.getMode() === "walk" ? "fly" : "walk");
-    }
-  };
-  const onKeyUp = (e: KeyboardEvent) => {
-    // Always release: the press may have landed on the canvas while the
-    // release lands in a text field the user clicked into meanwhile. Releasing
-    // a key that was never pressed is a no-op.
-    movement.release(e.code);
-  };
-  // A keyup delivered to another window (Alt-Tab, a native dialog) would leave
-  // the key held forever and the camera walking on its own.
-  const onFocusLost = () => movement.releaseAll();
-  const onVisibility = () => {
-    if (document.hidden) {
-      movement.releaseAll();
-    }
-  };
-  // Mouse wheel zooms like pinch (FOV); immersive pointer lock is opt-in
-  // via the handle, so plain clicks/drags stay free for grab-look.
-  const onWheel = (e: WheelEvent) => {
-    e.preventDefault();
-    camera.fov = nextFov(camera.fov, e.deltaY < 0 ? 1.05 : 1 / 1.05);
-    camera.updateProjectionMatrix();
-  };
-  document.addEventListener("keydown", onKeyDown);
-  document.addEventListener("keyup", onKeyUp);
-  window.addEventListener("blur", onFocusLost);
-  document.addEventListener("visibilitychange", onVisibility);
-  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
-  cleanups.push(() => {
-    document.removeEventListener("keydown", onKeyDown);
-    document.removeEventListener("keyup", onKeyUp);
-    window.removeEventListener("blur", onFocusLost);
-    document.removeEventListener("visibilitychange", onVisibility);
-    renderer.domElement.removeEventListener("wheel", onWheel);
-  });
+  cleanups.push(
+    attachKeyboardControls(
+      { document, window },
+      {
+        press: pose.press,
+        release: pose.release,
+        releaseAll: pose.releaseAll,
+        toggleMode: pose.toggleMode,
+        demolish: demolishAtCrosshair,
+        insertBuilding: insertBuildingNow,
+      }
+    )
+  );
 
   const resizeObserver = new ResizeObserver(() => {
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
@@ -1254,19 +1039,6 @@ async function bootApp(
         }
       : null;
     postStack.setFocusTarget(hit?.point ?? null);
-  };
-
-  // A scenic flight, while active, owns the camera — suspend player movement so
-  // input can't tug against the tween; settle into its mode when it lands.
-  const stepMovement = (dt: number) => {
-    if (cameraFlight.update(dt)) {
-      return;
-    }
-    if (pendingMode) {
-      setMovementMode(pendingMode);
-      pendingMode = null;
-    }
-    movement.update(dt);
   };
 
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
@@ -1327,7 +1099,7 @@ async function bootApp(
     if (dt > 0) {
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
-    stepMovement(dt);
+    pose.step(dt);
     updateRegression(dt);
     // Advance every tile's water ripple/glitter and feed it the current
     // palette sky colour (Fresnel sky-tint stays in lockstep with the sun).
@@ -1345,7 +1117,7 @@ async function bootApp(
     stepVegetation(elapsed);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
-      opts.onPose?.(getPose());
+      opts.onPose?.(pose.getPose());
       updateFocus();
     }
     // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
@@ -1427,7 +1199,7 @@ async function bootApp(
       terrains.push(sc.terrain);
       terrainMeshes.push(sc.terrain.mesh);
       wallFeaturesByTile.push(sc.wallFeatures);
-      lowerFogFloor(sc.terrain);
+      lowerGroundFloor(sc.terrain);
       // Joins the look fan-out here, so seed it here: a slider moved while
       // the neighbours streamed in must reach this tile's mist too.
       sc.terrain.water?.setMist(opts.look.get().waterMist);
@@ -1470,22 +1242,13 @@ async function bootApp(
     setSun,
     insertBuilding,
     demolishAtCrosshair,
-    enterImmersive: () => controls.lock(),
-    flyTo: (position, lookAt) => {
-      // A pose set from outside wins over a scenic glide in progress.
-      cancelFlight();
-      setMovementMode("fly");
-      camera.position.set(position.x, position.y, position.z);
-      camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
-      // Refresh matrixWorld now: callers may raycast (demolish) before the
-      // next rendered frame would otherwise update it.
-      camera.updateMatrixWorld(true);
-    },
-    flyToViewpoint,
-    teleportTo,
-    getPose,
-    getCameraState,
-    applyCameraState,
+    enterImmersive: canvasControls.lockPointer,
+    flyTo: pose.flyTo,
+    flyToViewpoint: pose.flyToViewpoint,
+    teleportTo: pose.teleportTo,
+    getPose: pose.getPose,
+    getCameraState: pose.getCameraState,
+    applyCameraState: pose.applyCameraState,
     getRenderInfo: () => ({
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
@@ -1497,14 +1260,8 @@ async function bootApp(
       hitDist: lastFocusHit?.dist ?? null,
       hitName: lastFocusHit?.name ?? null,
     }),
-    setMovementMode,
-    setMoveInput: (x, y) => {
-      // Joystick/analog input is the player taking over — drop any scenic glide.
-      if (x !== 0 || y !== 0) {
-        cancelFlight();
-      }
-      movement.setAnalog(x, y);
-    },
+    setMovementMode: pose.setMovementMode,
+    setMoveInput: pose.setMoveInput,
     // Neighbours are never demolished, so their footprints are computed once
     // per layer (they stream in after the first frame) and reused thereafter.
     getFootprints: () => [

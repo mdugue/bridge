@@ -13,7 +13,7 @@ import {
 
 export type MovementModeJson = "fly" | "walk";
 
-/** Camera pose as it round-trips through JSON (create-app's CameraState IS this type). */
+/** Camera pose as it round-trips through JSON (lib/city/pose.ts's CameraState IS this type). */
 export interface CameraStateJson {
   epsg: { x: number; y: number };
   fov: number;

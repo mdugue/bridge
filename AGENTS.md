@@ -77,11 +77,15 @@ config change.
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
-  - input/camera: `fps-movement.ts`, `touch-controls.ts`, `collision.ts`,
-    `camera-flight.ts`, `viewpoints.ts`, `virtual-joystick.tsx`
+  - input/camera: `camera-pose.ts` (the one owner of where the player
+    stands and looks, walk/fly and the scenic glides; every input cancels a
+    glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
+    `touch-controls.ts`, `collision.ts`, `viewpoints.ts`,
+    `virtual-joystick.tsx`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
-  ground-clamp, the look table + store, the Snapshot codec) with
+  ground-clamp, the pose convention + pitch/FOV policy, the look table +
+  store, the Snapshot codec) with
   `bun test` units alongside
 - `scripts/` — the offline data bakes `extract-dlm.sh`, `extract-canopy.sh`,
   `extract-ndvi.sh`, `extract-roof-colour.sh`, `extract-lamps.sh`,

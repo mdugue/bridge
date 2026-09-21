@@ -1,29 +1,7 @@
 /**
- * Pure helpers for the touch control scheme (street-view-style):
- * one-finger drag looks around, pinch zooms (FOV), double-tap travels.
- * No THREE, no DOM.
+ * Pure tap recognition for the touch control scheme (double-tap travels).
+ * The look/zoom policy the gestures drive lives in pose.ts. No THREE, no DOM.
  */
-
-/** Max pitch magnitude in radians (~83°) — keeps lookAt math sane. */
-export const PITCH_LIMIT = 1.45;
-
-export const MIN_FOV = 30;
-export const MAX_FOV = 95;
-
-export function clampPitch(pitch: number): number {
-  return Math.min(Math.max(pitch, -PITCH_LIMIT), PITCH_LIMIT);
-}
-
-/**
- * FOV for a pinch gesture: `ratio` = current finger distance / start
- * distance. Spreading (> 1) zooms in (smaller FOV), like map apps.
- */
-export function nextFov(startFov: number, ratio: number): number {
-  if (ratio <= 0 || !Number.isFinite(ratio)) {
-    return startFov;
-  }
-  return Math.min(Math.max(startFov / ratio, MIN_FOV), MAX_FOV);
-}
 
 export interface TapSample {
   timeMs: number;
