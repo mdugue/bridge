@@ -34,7 +34,7 @@ is not re-audited next time.
 | 010 | One tile artifact map in `lib/city/tile.ts`, one optional-fetch/abort policy, walls fetched once, neighbours loaded concurrently | P1 | M | 008; after 009 | DONE (loading-performance PR; ran before 008/009 — the layer census that plan 008 adds should still be added) |
 | 011 | Six confirmed defects: flight not cancelled by teleport/snapshot/flyTo, keyup swallowed by text fields, size-only copy staleness, minimap re-decode on demolish, null/MultiPolygon rail data, WebGL2 preflight | P2 | M | 008; after 010 | TODO |
 | 012 | Drive the 21 look controls from one table (`lib/city/look-controls.ts`), validate the Snapshot contract (`parseSnapshot`), re-seed a fresh handle, share the type with the e2e harness | P2 | L | 008; after 011 | TODO |
-| 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | TODO |
+| 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | DONE (except `.editorconfig`/`.vscode/extensions.json`, and `allowJs` — `next build` re-adds it; ultracite held at 7.8.3, see below) |
 | 014 | Bring AGENTS.md, the city-walker skill, `docs/`, code comments and the OSM attribution back in line with the code | P3 | S–M | after 008–013 | TODO |
 | 015 | Progressive first frame: show the primary tile as soon as its terrain + buildings exist, stream the neighbours, vegetation, lamps, rails and walls afterwards behind a non-blocking chip | P1 | L | the loading-performance PR (010, hashed data, baked meshes); 008 recommended | DONE (loading-performance PR; `?scene=lite&block=1` exercises the streaming headless) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample (Bun ≥ 1.4 pin, lockfile v2, pure-JS PNG decoder for the pixel test, sharp out) | P3 | S | #28 + #29 merged; **Step 0**: the Vercel build must run Bun 1.4 | TODO — gated on Step 0; measured +24 % RGB / +21 % class file size, pixels equivalent |
@@ -246,10 +246,24 @@ re-checked; the ones still open are folded in below with fresh evidence.
   on any `pointerup`; `#27` (`crs.ts:22` trailing-slash regex) — all latent
   on the shipped data.
 - **Maintainer actions**: close Dependabot #3/#12/#13/#15 (superseded) and
-  #26 (plan 013 migrates suncalc); decide ESLint 10 (blocked by
-  `eslint-config-next`'s plugin peers; 9.x is EOL) vs. dropping ESLint
-  (loses the React-Compiler-aware hooks rules); delete or `_raw/` the two
+  #26 (plan 013 migrated suncalc); delete or `_raw/` the two
   unused `33414_*` DGM tiles (~28 MB); move or delete `aesthetic-sandbox.html`.
+- **Resolved since**: TypeScript 7 and bun 1.4.2 are both in (see below); the
+  ESLint-10-vs-drop-ESLint question is settled — ESLint is gone, replaced by
+  oxlint, because TS 7 ships no JS compiler API for typescript-eslint to use.
+  The four rules that move left no home are listed in AGENTS.md.
+- **Deliberately held back (re-checked 2026-09-21, registry)**:
+  - `ultracite` 7.8.3 → 7.12.0. The preset turns on ~10 new rule families:
+    **451** violations, of which `assist/source/useSortedKeys` 249,
+    `style/noIncrementDecrement` 94, `performance/noJsxPropsBind` 43,
+    `style/useDestructuring` 21, `suspicious/noUnnecessaryConditions` 15,
+    `noShadow`/`noLeakedRender` 9 each. Biome 2.5.14 **on its own** is clean
+    (verified), so this is a style-refactor decision, not a dependency bump —
+    and `noIncrementDecrement` alone rewrites the renderer's hot loops.
+  - `n8ao` 1.10.3 → 2.0.1. Ships no types (`types/n8ao.d.ts` would need
+    rewriting) and changes SSAO output; per AGENTS.md, a visual change needs
+    the `--headed` snapshot harness on a real GPU, which headless CI cannot do.
+  - `postprocessing` 7.x is alpha/beta only.
 
 ## Findings considered and rejected
 

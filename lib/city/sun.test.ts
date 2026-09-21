@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import SunCalc from "suncalc";
+import { getTimes } from "suncalc";
 import { enuToWorld, sunDirectionEnu, sunDirectionWorld } from "./sun";
 
 // Dresden city center.
@@ -34,11 +34,7 @@ test("sunDirectionEnu yields a unit vector", () => {
 });
 
 test("at local solar noon the sun is due south and above the horizon", () => {
-  const noon = SunCalc.getTimes(
-    new Date("2026-06-21T12:00:00Z"),
-    LAT,
-    LNG
-  ).solarNoon;
+  const noon = getTimes(new Date("2026-06-21T12:00:00Z"), LAT, LNG).solarNoon;
   const dir = sunDirectionWorld(noon, LAT, LNG);
   // Above the horizon, well up in June.
   expect(dir.y).toBeGreaterThan(0.5);
@@ -49,20 +45,30 @@ test("at local solar noon the sun is due south and above the horizon", () => {
 });
 
 test("at midnight the sun is below the horizon", () => {
-  const nadir = SunCalc.getTimes(
-    new Date("2026-06-21T12:00:00Z"),
-    LAT,
-    LNG
-  ).nadir;
+  const nadir = getTimes(new Date("2026-06-21T12:00:00Z"), LAT, LNG).nadir;
   expect(sunDirectionWorld(nadir, LAT, LNG).y).toBeLessThan(0);
 });
 
 test("in the morning the sun stands to the east (+X)", () => {
-  const { sunrise, solarNoon } = SunCalc.getTimes(
+  const { sunrise, solarNoon } = getTimes(
     new Date("2026-06-21T12:00:00Z"),
     LAT,
     LNG
   );
+  if (!sunrise) {
+    throw new Error("June in Dresden has a sunrise");
+  }
   const midMorning = new Date((sunrise.getTime() + solarNoon.getTime()) / 2);
   expect(sunDirectionWorld(midMorning, LAT, LNG).x).toBeGreaterThan(0.3);
+});
+
+test("at midwinter solar noon the sun is due south but low", () => {
+  const noon = getTimes(new Date("2026-12-21T12:00:00Z"), LAT, LNG).solarNoon;
+  const dir = sunDirectionWorld(noon, LAT, LNG);
+  // Dresden sits at ~51.05°N, so the midwinter sun peaks ~15.5° up.
+  expect(dir.y).toBeGreaterThan(0.15);
+  expect(dir.y).toBeLessThan(0.35);
+  // Still due south: North=-Z, so z > 0, and no east-west component.
+  expect(dir.z).toBeGreaterThan(0);
+  expect(Math.abs(dir.x)).toBeLessThan(0.02);
 });
