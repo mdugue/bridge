@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   deviceTierFromMedia,
+  liteKeepsBlockFromSearch,
   pixelRatioFor,
   sceneProfileFromSearch,
   shadowMapSizeFor,
@@ -40,6 +41,12 @@ test("pixelRatioFor caps phones at 1.5, desktops at 2, lite at 0.5", () => {
   expect(pixelRatioFor("full", "mobile", 3)).toBe(1.5);
   expect(pixelRatioFor("full", "mobile", 1)).toBe(1);
   expect(pixelRatioFor("lite", "mobile", 3)).toBe(0.5);
+});
+
+test("liteKeepsBlockFromSearch reads the block=1 QA knob only", () => {
+  expect(liteKeepsBlockFromSearch("?scene=lite&block=1")).toBe(true);
+  expect(liteKeepsBlockFromSearch("?scene=lite")).toBe(false);
+  expect(liteKeepsBlockFromSearch("?block=true")).toBe(false);
 });
 
 test("deviceTierFromMedia maps the coarse-pointer query", () => {

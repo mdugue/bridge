@@ -36,7 +36,7 @@ is not re-audited next time.
 | 012 | Drive the 21 look controls from one table (`lib/city/look-controls.ts`), validate the Snapshot contract (`parseSnapshot`), re-seed a fresh handle, share the type with the e2e harness | P2 | L | 008; after 011 | TODO |
 | 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | TODO |
 | 014 | Bring AGENTS.md, the city-walker skill, `docs/`, code comments and the OSM attribution back in line with the code | P3 | S–M | after 008–013 | TODO |
-| 015 | Progressive first frame: show the primary tile as soon as its terrain + buildings exist, stream the neighbours, vegetation, lamps, rails and walls afterwards behind a non-blocking chip | P1 | L | the loading-performance PR (010, hashed data, baked meshes); 008 recommended | TODO |
+| 015 | Progressive first frame: show the primary tile as soon as its terrain + buildings exist, stream the neighbours, vegetation, lamps, rails and walls afterwards behind a non-blocking chip | P1 | L | the loading-performance PR (010, hashed data, baked meshes); 008 recommended | DONE (loading-performance PR; `?scene=lite&block=1` exercises the streaming headless) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 

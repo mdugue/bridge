@@ -18,8 +18,13 @@ the change** (Definition of Done in `docs/README.md`).
 
 `app/_components/create-app.ts` is the spine: it builds the renderer, scene, a
 `PerspectiveCamera`, a `world` group (Z-up data frame, rotated −90° about X to
-Y-up), loads the tiles, runs the animation loop, and returns a `CityWalkHandle`
-(the imperative API the React HUD calls). The layers:
+Y-up), loads the primary tile's buildings + terrain, starts the animation loop
+and returns a `CityWalkHandle` (the imperative API the React HUD calls) — the
+first frame. Everything else (`loadRest`: the primary's vegetation and lamps,
+the neighbour tiles, rails, walls) streams in behind the HUD's streaming chip;
+each step invalidates the shadow map and re-checks the abort signal. The fixed
+lamp-light pool and the fog floor are created before the first frame and
+retargeted/lowered as tiles land. The layers:
 
 - `city-layer.ts` — loads the **baked** building mesh (`city_<tile>.mesh.json`
   + `.mesh.bin.gz`, produced by `scripts/bake-city-mesh.ts` from the CityJSON

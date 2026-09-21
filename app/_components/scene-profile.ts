@@ -42,6 +42,26 @@ export function currentSceneProfile(): SceneProfile {
   return sceneProfileFromSearch(window.location.search);
 }
 
+/**
+ * `?scene=lite&block=1` keeps the neighbour tiles in the lite profile — a QA
+ * knob for exercising the tile streaming (loadRest in create-app.ts) headless,
+ * where the full profile's shadow map and pixel count are unaffordable. Pure.
+ */
+export function liteKeepsBlockFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("block") === "1";
+}
+
+/** Whether the neighbour tiles load for this page (see liteKeepsBlockFromSearch). */
+export function loadsNeighbourTiles(profile: SceneProfile): boolean {
+  if (profile === "full") {
+    return true;
+  }
+  return (
+    typeof window !== "undefined" &&
+    liteKeepsBlockFromSearch(window.location.search)
+  );
+}
+
 /** The media query that marks a touch-first device (same as use-coarse-pointer). */
 export const MOBILE_MEDIA_QUERY = "(pointer: coarse) and (hover: none)";
 

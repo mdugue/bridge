@@ -22,6 +22,11 @@ export interface PocDebugInfo {
   buildingCount: number;
   /** Demolishes the building under the screen-center crosshair. */
   demolishAtCrosshair?: () => void;
+  /**
+   * True once the primary tile is on screen and the handle exists; `ready`
+   * follows when every layer has streamed in (neighbours, vegetation, rails).
+   */
+  firstFrame: boolean;
   /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
   flyTo?: (position: Xyz, lookAt: Xyz) => void;
   /** Animated glide to a curated scenic Viewpoint (the HUD buttons). */
@@ -139,6 +144,7 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
     return;
   }
   window.__poc = {
+    firstFrame: false,
     ready: false,
     buildingCount: 0,
     frames: 0,

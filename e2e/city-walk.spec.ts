@@ -204,6 +204,8 @@ test.describe("desktop viewer", () => {
 
     const poc = await page.evaluate(() => window.__poc);
     expect(poc?.buildingCount ?? 0).toBeGreaterThan(0);
+    // The first frame precedes "everything loaded"; both are set once ready.
+    expect(poc?.firstFrame).toBe(true);
     expect(poc?.terrainVertexCount ?? 0).toBeGreaterThan(0);
     expect(poc?.shadowsEnabled).toBe(true);
     expectNoErrors(errors);

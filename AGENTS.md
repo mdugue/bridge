@@ -137,6 +137,17 @@ The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
 loader's raw LoD colours) styles were removed. Keep transmission out of the
 scene: it re-renders everything into a buffer each frame (~2× cost).
 
+**The boot has two phases.** `bootApp` returns (and the overlay drops) as
+soon as the primary tile's terrain + buildings are on screen; `loadRest`
+then streams the primary's vegetation and lamps, the three neighbour tiles,
+rails and walls behind a HUD chip (`status.phase === "streaming"`), and
+`onLoaded` flips it to `ready`. Anything added to the scene after the first
+frame must `invalidateShadows()` and re-check the abort signal
+(`ensureAlive()`), or it shows up as a missing shadow / a leak after a
+StrictMode remount. The e2e hook distinguishes `__poc.firstFrame` from
+`__poc.ready` (= everything loaded); `?scene=lite&block=1` keeps the
+neighbours in the lite profile to exercise the streaming headless.
+
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.
 

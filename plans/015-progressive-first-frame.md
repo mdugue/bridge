@@ -23,6 +23,13 @@
   the safety net for the e2e changes in Step 6
 - **Category**: perf / UX
 - **Planned at**: commit `3590838` (branch `claude/app-loading-performance-156xny`), 2026-09-20
+- **Status**: DONE in the same branch (see `loadRest` in `create-app.ts`, the
+  `streaming` HUD phase, `__poc.firstFrame`; the fog clamp and the `block=1`
+  lite QA knob in `scene-profile.ts`). Deviations from the steps below: the
+  neighbours' bounds come from their heightfield headers fetched alongside the
+  primary mesh (no sun-rig change was needed — its frustum follows the camera);
+  the walk-off clamp of Step 2 was not needed (movement already holds height
+  off the DGM).
 
 ## Why this matters
 

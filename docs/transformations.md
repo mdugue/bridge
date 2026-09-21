@@ -37,6 +37,11 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
   animated normal wobble. `water-layer.ts`. Missing RGBA splat → coverage falls
   back to the NEAREST class raster tested against class 8 (hard-edged bank);
   the class PNG's own alpha decodes to 1 everywhere and must never be read.
+- **Progressive first frame** — the primary tile's terrain + buildings render
+  first; vegetation, lamps, the neighbour tiles, rails and walls stream in
+  afterwards (`loadRest` in `create-app.ts`), each addition re-rendering the
+  shadow map. Until the block is complete the fog far plane is clamped to
+  ~1.1 km so the missing neighbours read as haze.
 - **Neighbour rasters at 2048²** — `prepare-data.ts` downsamples the three
   backdrop tiles' land-cover rasters (class ids NEAREST, RGB splat Lanczos) to
   a quarter of the texture memory; the primary stays at the bake's 4096². Cost:

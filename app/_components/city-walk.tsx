@@ -131,6 +131,8 @@ interface Props {
 
 type Status =
   | { phase: "loading"; message: string }
+  /** the primary tile is on screen and walkable; the rest streams in */
+  | { phase: "streaming"; message: string | null }
   | { phase: "ready" }
   | { phase: "error"; message: string };
 
@@ -1071,6 +1073,9 @@ export default function CityWalk({
     }
     let cancelled = false;
     let handle: CityWalkHandle | null = null;
+    // True once the first frame is up: later progress messages belong to the
+    // streaming chip, not the blocking overlay.
+    let booted = false;
     const aborter = new AbortController();
 
     createCityWalkApp({
@@ -1082,7 +1087,25 @@ export default function CityWalk({
       signal: aborter.signal,
       onProgress: (message) => {
         if (!cancelled) {
-          setStatus({ phase: "loading", message });
+          setStatus(
+            booted
+              ? { phase: "streaming", message }
+              : { phase: "loading", message }
+          );
+        }
+      },
+      onLoaded: () => {
+        if (!cancelled) {
+          updatePocDebug({ ready: true });
+          setStatus({ phase: "ready" });
+        }
+      },
+      onError: (message) => {
+        if (!cancelled) {
+          setStatus({
+            phase: "streaming",
+            message: `Failed to load: ${message}`,
+          });
         }
       },
       onStats: (s) => {
@@ -1119,12 +1142,13 @@ export default function CityWalk({
         }
         handle = h;
         handleRef.current = h;
+        booted = true;
         setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
         setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({
-          ready: true,
+          firstFrame: true,
           offset: h.offset,
           terrainBounds: h.terrainBounds,
           flyTo: h.flyTo,
@@ -1170,7 +1194,7 @@ export default function CityWalk({
             h.setSun(new Date(iso));
           },
         });
-        setStatus({ phase: "ready" });
+        setStatus({ phase: "streaming", message: null });
       })
       .catch((err: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
@@ -1422,6 +1446,8 @@ export default function CityWalk({
     />
   );
 
+  const booted = status.phase === "streaming" || status.phase === "ready";
+
   return (
     <SidebarProvider
       className="relative h-full overflow-hidden"
@@ -1451,7 +1477,7 @@ export default function CityWalk({
           </Alert>
         )}
 
-        {status.phase === "ready" && (
+        {booted && (
           <>
             {/* crosshair */}
             <div
@@ -1463,6 +1489,17 @@ export default function CityWalk({
             <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/55 px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
               {fps === null ? "–" : Math.round(fps)} FPS
             </div>
+
+            {/* Streaming chip: the scene is usable while the rest loads. */}
+            {status.phase === "streaming" && status.message && (
+              <output
+                aria-live="polite"
+                className="pointer-events-none absolute top-9 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-900/55 px-2.5 py-0.5 text-[11px] text-white"
+              >
+                <Spinner className="size-3" />
+                {status.message}
+              </output>
+            )}
 
             <SettingsToggle />
 
@@ -1492,7 +1529,7 @@ export default function CityWalk({
         )}
       </div>
 
-      {status.phase === "ready" && (
+      {booted && (
         <Sidebar collapsible="offcanvas" side="right">
           <SidebarHeader>
             <div className="flex items-center justify-between pl-1">
