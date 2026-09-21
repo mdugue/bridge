@@ -34,7 +34,7 @@ is not re-audited next time.
 | 010 | One tile artifact map in `lib/city/tile.ts`, one optional-fetch/abort policy, walls fetched once, neighbours loaded concurrently | P1 | M | 008; after 009 | DONE (loading-performance PR; ran before 008/009 — the layer census that plan 008 adds should still be added) |
 | 011 | Six confirmed defects: flight not cancelled by teleport/snapshot/flyTo, keyup swallowed by text fields, size-only copy staleness, minimap re-decode on demolish, null/MultiPolygon rail data, WebGL2 preflight | P2 | M | 008; after 010 | TODO |
 | 012 | Drive the 21 look controls from one table (`lib/city/look-controls.ts`), validate the Snapshot contract (`parseSnapshot`), re-seed a fresh handle, share the type with the e2e harness | P2 | L | 008; after 011 | TODO |
-| 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | TODO |
+| 013 | One type-checker (`tsc`, TS 6), suncalc 2 migration, dependency/pin hygiene, `.mcp.json` pin, agent allowlist + skills-lock prune, delete the redundant bvh shim, `--max-warnings=0`, tsconfig tidy, editorconfig | P2 | M | — (run last of 008–013) | DONE (except `.editorconfig`/`.vscode/extensions.json`, and `allowJs` — `next build` re-adds it; ultracite held at 7.8.3, see below) |
 | 014 | Bring AGENTS.md, the city-walker skill, `docs/`, code comments and the OSM attribution back in line with the code | P3 | S–M | after 008–013 | TODO |
 | 015 | Progressive first frame: show the primary tile as soon as its terrain + buildings exist, stream the neighbours, vegetation, lamps, rails and walls afterwards behind a non-blocking chip | P1 | L | the loading-performance PR (010, hashed data, baked meshes); 008 recommended | DONE (loading-performance PR; `?scene=lite&block=1` exercises the streaming headless) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample (Bun ≥ 1.4 pin, lockfile v2, pure-JS PNG decoder for the pixel test, sharp out) | P3 | S | #28 + #29 merged; **Step 0**: the Vercel build must run Bun 1.4 | TODO — gated on Step 0; measured +24 % RGB / +21 % class file size, pixels equivalent |
@@ -246,10 +246,30 @@ re-checked; the ones still open are folded in below with fresh evidence.
   on any `pointerup`; `#27` (`crs.ts:22` trailing-slash regex) — all latent
   on the shipped data.
 - **Maintainer actions**: close Dependabot #3/#12/#13/#15 (superseded) and
-  #26 (plan 013 migrates suncalc); decide ESLint 10 (blocked by
-  `eslint-config-next`'s plugin peers; 9.x is EOL) vs. dropping ESLint
+  #26 (plan 013 migrated suncalc); decide ESLint 10 vs. dropping ESLint
   (loses the React-Compiler-aware hooks rules); delete or `_raw/` the two
   unused `33414_*` DGM tiles (~28 MB); move or delete `aesthetic-sandbox.html`.
+- **Deliberately held back (re-checked 2026-09-21, registry)**:
+  - `ultracite` 7.8.3 → 7.12.0. The preset turns on ~10 new rule families:
+    **451** violations, of which `assist/source/useSortedKeys` 249,
+    `style/noIncrementDecrement` 94, `performance/noJsxPropsBind` 43,
+    `style/useDestructuring` 21, `suspicious/noUnnecessaryConditions` 15,
+    `noShadow`/`noLeakedRender` 9 each. Biome 2.5.14 **on its own** is clean
+    (verified), so this is a style-refactor decision, not a dependency bump —
+    and `noIncrementDecrement` alone rewrites the renderer's hot loops.
+  - `eslint` 10. `eslint-plugin-react` (`^9.7`), `eslint-plugin-import` (`^9`)
+    and `eslint-plugin-jsx-a11y` (`^9`) — all via `eslint-config-next` — still
+    cap their peer at 9. `typescript-eslint` 8.70 *does* accept `^10` now, so
+    the block is down to those three plugins.
+  - `typescript` 7.0.2. `typescript-eslint` 8.70 peers `typescript <6.1.0`.
+    (`^6.0.3` is safe to leave: 6.0.3 is the last 6.x, so it cannot float.)
+  - `n8ao` 1.10.3 → 2.0.1. Ships no types (`types/n8ao.d.ts` would need
+    rewriting) and changes SSAO output; per AGENTS.md, a visual change needs
+    the `--headed` snapshot harness on a real GPU, which headless CI cannot do.
+  - `bun` 1.3.11 → 1.4.2 in `packageManager` (and the `@types/bun` skew it
+    would fix): needs a machine running 1.4.2 to regenerate and validate the
+    lockfile.
+  - `postprocessing` 7.x is alpha/beta only.
 
 ## Findings considered and rejected
 
