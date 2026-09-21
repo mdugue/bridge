@@ -7,7 +7,10 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    # Superseded PRs still occupy a slot until a maintainer closes them, so a
+    # tight cap lets one stale major starve every other group. 10 keeps the
+    # grouped updates flowing while the queue drains.
+    open-pull-requests-limit: 10
     groups:
       next:
         patterns: [next, "@next/*", eslint-config-next]
