@@ -41,7 +41,14 @@ export interface PocDebugInfo {
   /** Current player pose in EPSG coordinates. */
   getPose?: () => PlayerPose;
   /** Last-frame GPU counters (draw calls, triangles, programs). */
-  getRenderInfo?: () => { calls: number; triangles: number; programs: number };
+  getRenderInfo?: () => {
+    calls: number;
+    gpuBytes: number;
+    programs: number;
+    triangles: number;
+  };
+  /** estimated GPU footprint (MB), see CityWalkStats */
+  gpuMegabytes: number;
   /** Inserts the prescribed building (marker box without a glTF). */
   insertBuilding?: () => void;
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
@@ -137,6 +144,7 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
     frames: 0,
     terrainVertexCount: 0,
     shadowsEnabled: false,
+    gpuMegabytes: 0,
     ...window.__poc,
     ...patch,
   };

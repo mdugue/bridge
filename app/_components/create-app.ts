@@ -48,7 +48,12 @@ import {
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
-import { currentSceneProfile, type SceneProfile } from "./scene-profile";
+import {
+  currentDeviceTier,
+  currentSceneProfile,
+  pixelRatioFor,
+  type SceneProfile,
+} from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
 import {
   DEFAULT_MEADOW_NDVI,
@@ -57,7 +62,11 @@ import {
   type WallFeature,
   wallLinesFrom,
 } from "./terrain-layer";
-import { disposeObject3D } from "./three-utils";
+import {
+  disposeObject3D,
+  estimateGeometryBytes,
+  trackedTextureBytes,
+} from "./three-utils";
 import { attachTouchControls } from "./touch-controls";
 import { loadVegetation, type VegetationControl } from "./vegetation-layer";
 import type { Viewpoint } from "./viewpoints";
@@ -95,6 +104,8 @@ export const DEFAULT_ATMOSPHERE = 0.2;
 
 export interface CityWalkStats {
   buildingCount: number;
+  /** estimated GPU footprint of geometry + textures + shadow map (MB) */
+  gpuMegabytes: number;
   shadowsEnabled: boolean;
   terrainVertexCount: number;
 }
@@ -218,7 +229,13 @@ export interface CityWalkHandle {
    * post-processing composer active they report the final fullscreen pass, not
    * the scene total (disable post-processing to read true scene counts).
    */
-  getRenderInfo: () => { calls: number; triangles: number; programs: number };
+  getRenderInfo: () => {
+    calls: number;
+    /** estimated GPU bytes of geometry + textures + shadow map */
+    gpuBytes: number;
+    programs: number;
+    triangles: number;
+  };
   insertBuilding: () => Promise<void>;
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
@@ -308,7 +325,7 @@ function createRenderer(
   // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
   // the post stack costs, and the post stack is most of a frame.
   renderer.setPixelRatio(
-    profile === "lite" ? 0.5 : Math.min(window.devicePixelRatio, 2)
+    pixelRatioFor(profile, currentDeviceTier(), window.devicePixelRatio)
   );
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
@@ -601,7 +618,7 @@ async function bootApp(
     );
     ensureAlive();
     for (const { meta, vertices } of meshes) {
-      extraCities.push(createCityLayer(meta, vertices, world));
+      extraCities.push(createCityLayer(meta, vertices, world, false));
     }
     // Terrain / water / vegetation / lamps per neighbour, concurrently.
     // Promise.all preserves order, which landcoverTiles below relies on.
@@ -943,11 +960,18 @@ async function bootApp(
   cleanups.push(detachTouch);
 
   let fps = 0;
+  // Geometry + tracked textures + the shadow map; the post stack's screen
+  // buffers are excluded (they scale with the canvas, not the world).
+  const gpuBytes = () =>
+    estimateGeometryBytes(scene) +
+    trackedTextureBytes() +
+    sunRig.shadowMapBytes;
   const emitStats = () => {
     opts.onStats?.({
       buildingCount: countBuildings(cityLayer),
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
+      gpuMegabytes: Math.round(gpuBytes() / 1_048_576),
     });
   };
 
@@ -1314,6 +1338,7 @@ async function bootApp(
     getRenderInfo: () => ({
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
+      gpuBytes: gpuBytes(),
       programs: renderer.info.programs?.length ?? 0,
     }),
     getFocusDebug: () => ({

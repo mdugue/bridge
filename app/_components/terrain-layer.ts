@@ -8,6 +8,7 @@ import {
   MeshStandardMaterial,
   NearestFilter,
   NoColorSpace,
+  RedFormat,
   SRGBColorSpace,
   Texture,
   TextureLoader,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/city/terrain-geometry";
 import { fetchGzipped, fetchRequiredJson } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 export interface TerrainLayer {
@@ -77,11 +79,14 @@ export interface TerrainOptions {
  * (`imageOrientation: "none"` = the flipY=false these rasters use), so the
  * first frame only pays the GPU upload. Rejects on a decode/network failure.
  */
-async function loadBitmapTexture(url: string): Promise<Texture> {
+async function loadBitmapTexture(
+  url: string
+): Promise<{ height: number; texture: Texture; width: number }> {
   if (typeof createImageBitmap === "undefined") {
     const texture = await new TextureLoader().loadAsync(url);
     texture.flipY = false;
-    return texture;
+    const img = texture.image as { height: number; width: number };
+    return { texture, width: img.width, height: img.height };
   }
   const loader = new ImageBitmapLoader();
   loader.setOptions({
@@ -102,7 +107,7 @@ async function loadBitmapTexture(url: string): Promise<Texture> {
     bitmap.close();
     texture.onUpdate = null;
   };
-  return texture;
+  return { texture, width: bitmap.width, height: bitmap.height };
 }
 
 /**
@@ -112,11 +117,16 @@ async function loadBitmapTexture(url: string): Promise<Texture> {
  */
 async function loadSplatTexture(url: string): Promise<Texture | null> {
   try {
-    const texture = await loadBitmapTexture(url);
+    const { texture, width, height } = await loadBitmapTexture(url);
     texture.magFilter = NearestFilter;
     texture.minFilter = NearestFilter;
     texture.generateMipmaps = false;
     texture.colorSpace = NoColorSpace;
+    // The class id lives in the red channel; uploading the grey PNG as RGBA
+    // would spend four bytes per texel on one (64 MB instead of 16 MB at
+    // 4096²). WebGL2 accepts a RED upload straight from the bitmap.
+    texture.format = RedFormat;
+    trackTexture(texture, textureBytes(width, height, 1, false));
     return texture;
   } catch {
     return null;
@@ -130,12 +140,13 @@ async function loadSplatTexture(url: string): Promise<Texture | null> {
  */
 async function loadColorSplat(url: string): Promise<Texture | null> {
   try {
-    const texture = await loadBitmapTexture(url);
+    const { texture, width, height } = await loadBitmapTexture(url);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
     texture.colorSpace = SRGBColorSpace;
+    trackTexture(texture, textureBytes(width, height, 4, true));
     return texture;
   } catch {
     return null;
@@ -154,12 +165,15 @@ export const DEFAULT_MEADOW_NDVI = 0.6;
  */
 async function loadNdviTexture(url: string): Promise<Texture | null> {
   try {
-    const texture = await loadBitmapTexture(url);
+    const { texture, width, height } = await loadBitmapTexture(url);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
     texture.colorSpace = NoColorSpace;
+    // Greenness is a single channel too.
+    texture.format = RedFormat;
+    trackTexture(texture, textureBytes(width, height, 1, true));
     return texture;
   } catch {
     return null;

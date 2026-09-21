@@ -1531,7 +1531,8 @@ export default function CityWalk({
             {stats && (
               <p>
                 {stats.buildingCount} buildings ·{" "}
-                {stats.terrainVertexCount.toLocaleString()} terrain vertices ·{" "}
+                {stats.terrainVertexCount.toLocaleString()} terrain vertices · ≈{" "}
+                {stats.gpuMegabytes} MB GPU ·{" "}
                 {mode === "walk" ? "walking" : "flying"}
               </p>
             )}

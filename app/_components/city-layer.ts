@@ -97,16 +97,27 @@ function buildMesh(meta: CityMeshMeta, v: CityMeshVertices): Group {
   return group;
 }
 
+/** The vertex stream of a layer that will never be demolished. */
+const NO_VERTICES: CityMeshVertices = {
+  positions: new Float32Array(0),
+  objectIds: new Uint16Array(0),
+  isRoof: new Uint8Array(0),
+};
+
 export function createCityLayer(
   meta: CityMeshMeta,
   vertices: CityMeshVertices,
-  world: Group
+  world: Group,
+  /** false for context tiles: they never demolish, so the ~15 bytes per
+   *  vertex the filter would need are not kept (the GPU-side attributes
+   *  three retains for raycasting are separate) */
+  demolishable = true
 ): CityLayer {
   const group = buildMesh(meta, vertices);
   world.add(group);
   return {
     meta,
-    vertices,
+    vertices: demolishable ? vertices : NO_VERTICES,
     alive: new Uint8Array(meta.objects.length).fill(1),
     group,
   };
@@ -123,7 +134,7 @@ export function demolishObject(
   objectIndex: number
 ): CityLayer {
   const doomed = doomedObjects(layer.meta, objectIndex);
-  if (doomed.size === 0) {
+  if (doomed.size === 0 || layer.vertices.objectIds.length === 0) {
     return layer;
   }
   const alive = layer.alive.slice();

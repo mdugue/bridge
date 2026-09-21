@@ -3,7 +3,11 @@ import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import { sunDirectionWorld } from "@/lib/city/sun";
-import { currentSceneProfile, shadowMapSizeFor } from "./scene-profile";
+import {
+  currentDeviceTier,
+  currentSceneProfile,
+  shadowMapSizeFor,
+} from "./scene-profile";
 
 export interface SunState {
   aboveHorizon: boolean;
@@ -28,6 +32,8 @@ export interface SunRig {
   invalidateShadow: () => void;
   /** Advances the sky dome's drifting clouds (call per frame with elapsed s). */
   setTime: (seconds: number) => void;
+  /** GPU bytes of the shadow map (RGBA8 depth-packed, no mipmaps). */
+  shadowMapBytes: number;
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
   update: (date: Date) => SunState;
 }
@@ -36,10 +42,14 @@ const SUN_INTENSITY = 2.4;
 /** 3072 over the 110 m frustum ≈ 0.07 m/texel. The soft Vogel-disk PCF (see
  * shadow.radius) hides residual stepping, so 3072 looks like 4096 here while
  * costing ~44% less shadow fill — it re-renders on most frames while walking.
- * The `lite` e2e profile drops this to 512 (see scene-profile.ts): under
- * SwiftShader the depth pass is one of the few per-frame costs that does not
- * shrink with the canvas, and no headless assertion depends on edge quality. */
-const SHADOW_MAP_SIZE = shadowMapSizeFor(currentSceneProfile());
+ * The `lite` e2e profile drops this to 512 and phones get 2048 (see
+ * scene-profile.ts): under SwiftShader the depth pass is one of the few
+ * per-frame costs that does not shrink with the canvas, and no headless
+ * assertion depends on edge quality. */
+const SHADOW_MAP_SIZE = shadowMapSizeFor(
+  currentSceneProfile(),
+  currentDeviceTier()
+);
 /** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
  * shadow edges, less staircase under PCFSoft); the frustum follows the camera
  * so street-level coverage isn't lost. 160 m → ~0.16 m texels at 2048². */
@@ -208,5 +218,11 @@ export function createSunRig(
     sun.shadow.needsUpdate = true;
   };
 
-  return { update, follow, setTime, invalidateShadow };
+  return {
+    update,
+    follow,
+    setTime,
+    invalidateShadow,
+    shadowMapBytes: SHADOW_MAP_SIZE * SHADOW_MAP_SIZE * 4,
+  };
 }
