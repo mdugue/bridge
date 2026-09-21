@@ -246,9 +246,12 @@ re-checked; the ones still open are folded in below with fresh evidence.
   on any `pointerup`; `#27` (`crs.ts:22` trailing-slash regex) — all latent
   on the shipped data.
 - **Maintainer actions**: close Dependabot #3/#12/#13/#15 (superseded) and
-  #26 (plan 013 migrated suncalc); decide ESLint 10 vs. dropping ESLint
-  (loses the React-Compiler-aware hooks rules); delete or `_raw/` the two
+  #26 (plan 013 migrated suncalc); delete or `_raw/` the two
   unused `33414_*` DGM tiles (~28 MB); move or delete `aesthetic-sandbox.html`.
+- **Resolved since**: TypeScript 7 and bun 1.4.2 are both in (see below); the
+  ESLint-10-vs-drop-ESLint question is settled — ESLint is gone, replaced by
+  oxlint, because TS 7 ships no JS compiler API for typescript-eslint to use.
+  The four rules that move left no home are listed in AGENTS.md.
 - **Deliberately held back (re-checked 2026-09-21, registry)**:
   - `ultracite` 7.8.3 → 7.12.0. The preset turns on ~10 new rule families:
     **451** violations, of which `assist/source/useSortedKeys` 249,
@@ -257,12 +260,6 @@ re-checked; the ones still open are folded in below with fresh evidence.
     `noShadow`/`noLeakedRender` 9 each. Biome 2.5.14 **on its own** is clean
     (verified), so this is a style-refactor decision, not a dependency bump —
     and `noIncrementDecrement` alone rewrites the renderer's hot loops.
-  - `eslint` 10. `eslint-plugin-react` (`^9.7`), `eslint-plugin-import` (`^9`)
-    and `eslint-plugin-jsx-a11y` (`^9`) — all via `eslint-config-next` — still
-    cap their peer at 9. `typescript-eslint` 8.70 *does* accept `^10` now, so
-    the block is down to those three plugins.
-  - `typescript` 7.0.2. `typescript-eslint` 8.70 peers `typescript <6.1.0`.
-    (`^6.0.3` is safe to leave: 6.0.3 is the last 6.x, so it cannot float.)
   - `n8ao` 1.10.3 → 2.0.1. Ships no types (`types/n8ao.d.ts` would need
     rewriting) and changes SSAO output; per AGENTS.md, a visual change needs
     the `--headed` snapshot harness on a real GPU, which headless CI cannot do.

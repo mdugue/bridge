@@ -13,7 +13,7 @@ updates:
     open-pull-requests-limit: 10
     groups:
       next:
-        patterns: [next, "@next/*", eslint-config-next]
+        patterns: [next, "@next/*"]
       react:
         patterns: [react, react-dom, "@types/react", "@types/react-dom"]
       tailwind:
@@ -21,7 +21,7 @@ updates:
       shadcn:
         patterns: [shadcn, "@base-ui/*"]
       lint-and-format:
-        patterns: [eslint, eslint-*, biome, "@biomejs/*", ultracite]
+        patterns: [oxlint, biome, "@biomejs/*", ultracite]
       # The three.js stack moves as one: postprocessing caps `three`, and
       # n8ao / three-mesh-bvh / the CityJSON loader all peer on it, so a solo
       # bump is either unmergeable or a silent version skew.

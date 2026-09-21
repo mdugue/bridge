@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "nextjs",
+    "jsx-a11y",
+    "import",
+    "typescript",
+    "oxc",
+    "unicorn"
+  ],
+  "ignorePatterns": [
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "components/ui/**",
+    "hooks/use-mobile.ts",
+    ".agents/**",
+    "playwright-report/**",
+    "test-results/**",
+    "coverage/**",
+    "public/**",
+    "data/**",
+    "aesthetic-sandbox.html"
+  ],
+  "overrides": [
+    {
+      "files": ["lib/city/terrain-geometry.ts"],
+      "rules": {
+        "oxc/erasing-op": "off"
+      }
+    }
+  ]
+}
