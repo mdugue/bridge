@@ -782,7 +782,9 @@ async function bootApp(
    * sun or the frustum moves, so **every new scene object and every material
    * change that alters the depth pass has to call this** — a missing call shows
    * up as a stale shadow (a demolished building still casting, a new one not),
-   * never as a crash.
+   * never as a crash. The render loop calls it when a crown LOD swap changes
+   * the casters; the follow dead zone (sun-rig.ts) means nothing else redraws
+   * the map while the player wanders inside it.
    */
   const invalidateShadows = () => {
     sunRig.invalidateShadow();
@@ -1211,6 +1213,23 @@ async function bootApp(
   };
 
   const timer = new Timer();
+  // Swap each vegetation chunk between the rich and cheap crown by distance,
+  // and advance the wind sway (same clock as the water ripple). A swap changes
+  // what casts shadows, so it invalidates the map — with the follow dead zone
+  // (sun-rig.ts) nothing else redraws it for us.
+  const stepVegetation = (elapsed: number) => {
+    let lodChanged = false;
+    for (const veg of vegControls) {
+      if (veg.updateLod(camera.position)) {
+        lodChanged = true;
+      }
+      veg.setTime(elapsed);
+    }
+    if (lodChanged) {
+      invalidateShadows();
+    }
+  };
+
   let tickDue = 0;
   let fpsDue = 0;
   renderer.setAnimationLoop((time) => {
@@ -1235,12 +1254,7 @@ async function bootApp(
     sunRig.setTime(elapsed);
     // Repoint the shared real lamp lights at the nearest heads.
     lampLights?.updateNearest(camera.position);
-    // Swap each vegetation chunk between the rich and cheap crown by distance,
-    // and advance the wind sway (same clock as the water ripple).
-    for (const veg of vegControls) {
-      veg.updateLod(camera.position);
-      veg.setTime(elapsed);
-    }
+    stepVegetation(elapsed);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(getPose());
@@ -1252,8 +1266,10 @@ async function bootApp(
       fpsDue = timer.getElapsed() + 0.5;
       opts.onFps?.(fps);
     }
+    // Read the flag BEFORE the render: three clears it once the map is drawn.
+    const shadowRendered = sunRig.shadowPending();
     postStack.render(dt);
-    tickPocFrame();
+    tickPocFrame(shadowRendered);
   });
   cleanups.push(() => renderer.setAnimationLoop(null));
 

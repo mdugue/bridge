@@ -85,7 +85,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | terrain `castShadow` | **false** | a casting heightfield self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | `SHADOW_MAP_SIZE` | 3072 | soft radius lets 3072 look like 4096 at ~44% less fill |
 | `SHADOW_RADIUS` (frustum half-size) | ~110 m | camera-following, texel-snapped; small = fine texels |
-| `shadow.autoUpdate` | false | re-render only when the snapped focus or the sun moves (throttle) |
+| `shadow.autoUpdate` | false | re-render only when the player leaves a 20 m dead zone around the last frustum centre, the sun moves, or a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), bigger frustum (coarser texels → fraying), 4096 map

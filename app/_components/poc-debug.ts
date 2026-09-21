@@ -76,6 +76,8 @@ export interface PocDebugInfo extends Partial<LookTarget> {
   setSunIso?: (iso: string) => void;
   /** Toggles the rich multi-tuft crown near the camera (LOD). */
   setTreeMultiTuft?: (enabled: boolean) => void;
+  /** Frames on which the sun's shadow map was redrawn; e2e asserts it stays far below `frames` while walking. */
+  shadowRenders: number;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;
@@ -108,6 +110,7 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
     ready: false,
     buildingCount: 0,
     frames: 0,
+    shadowRenders: 0,
     terrainVertexCount: 0,
     shadowsEnabled: false,
     gpuMegabytes: 0,
@@ -117,12 +120,15 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
 }
 
 /** Called once per rendered frame from the animation loop. */
-export function tickPocFrame(): void {
+export function tickPocFrame(shadowRendered: boolean): void {
   if (!enabled) {
     return;
   }
   const poc = window.__poc;
   if (poc) {
     poc.frames += 1;
+    if (shadowRendered) {
+      poc.shadowRenders += 1;
+    }
   }
 }

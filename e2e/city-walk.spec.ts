@@ -440,9 +440,24 @@ test.describe("desktop viewer", () => {
     // while the camera moves. Asserted through __poc.regressed rather than
     // pixels — the passes' visual delta is exactly what SwiftShader renders
     // least like a GPU.
+    const before = await page.evaluate(() => ({
+      frames: window.__poc?.frames ?? 0,
+      shadows: window.__poc?.shadowRenders ?? 0,
+    }));
     await page.keyboard.down("KeyW");
-    await waitForFrames(page, 2);
+    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the 20 m
+    // follow dead zone, so the shadow map must not be redrawn on the way.
+    await waitForFrames(page, 8);
     expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
+    const after = await page.evaluate(() => ({
+      frames: window.__poc?.frames ?? 0,
+      shadows: window.__poc?.shadowRenders ?? 0,
+    }));
+    const frames = after.frames - before.frames;
+    const shadowRenders = after.shadows - before.shadows;
+    expect(frames).toBeGreaterThanOrEqual(8);
+    // Before the dead zone this equalled `frames` (one depth pass per frame).
+    expect(shadowRenders).toBeLessThan(frames / 2);
 
     await page.keyboard.up("KeyW");
     // Recovery is frame-driven (RECOVER_MS of accumulated dt with the camera
