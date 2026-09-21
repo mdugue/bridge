@@ -25,10 +25,12 @@ import {
   type SceneLookKey,
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
+import type { WallFeature } from "@/lib/city/features";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { SKIRT_DEPTH, type TerrainBounds } from "@/lib/city/terrain-geometry";
+import type { TileUrls } from "@/lib/city/tile";
 import { createCameraPose } from "./camera-pose";
 import {
   type CityLayer,
@@ -68,12 +70,7 @@ import {
   shadowMapSizeFor,
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
-import {
-  loadTerrain,
-  type TerrainLayer,
-  type WallFeature,
-  wallLinesFrom,
-} from "./terrain-layer";
+import { loadTerrain, type TerrainLayer, wallLinesFrom } from "./terrain-layer";
 import {
   disposeObject3D,
   estimateGeometryBytes,
@@ -120,40 +117,6 @@ export interface CityWalkStats {
   terrainVertexCount: number;
 }
 
-/**
- * Every URL one tile may be loaded from (built from `tileUrls()` in
- * lib/city/tile.ts). The primary tile is walked on, collided with and
- * demolished from; neighbours are visual context only.
- */
-export interface TileSrc {
-  /** optional baked bridge-deck GeoJSON (Basis-DLM + DGM/DOM1 heights) */
-  bridgeSrc?: string;
-  /** optional DOM1-derived canopy points (trees scaled to measured height) */
-  canopySrc?: string;
-  /** the baked building mesh (gzipped vertex stream, lib/city/city-mesh.ts) */
-  cityMeshSrc: string;
-  /** the baked building mesh's meta JSON (per-object style, demolish tree) */
-  cityMetaSrc: string;
-  /** URL of this tile's heightfield header JSON (see lib/city/heightfield.ts) */
-  demSrc: string;
-  /** optional OSM street-lamp GeoJSON (ODbL); absent/404 = no lamps */
-  lampsSrc?: string;
-  /** optional pre-baked pastel RGB splat (needs `landcoverSrc`) */
-  landcoverRgbSrc?: string;
-  landcoverSrc?: string;
-  /** optional DOP NDVI raster (meadow tint + crown colour) */
-  ndviSrc?: string;
-  /** optional OSM station-platform GeoJSON (ODbL) */
-  platformSrc?: string;
-  /** optional baked dissolved ballast-area GeoJSON (Basis-DLM ver03_f) */
-  railareaSrc?: string;
-  /** optional baked railway-track GeoJSON (Basis-DLM ver03_l, heavy rail) */
-  railSrc?: string;
-  vegetationSrc?: string;
-  /** optional OSM retaining/city walls (ODbL): terrain step + ribbon */
-  wallsSrc?: string;
-}
-
 export interface CityWalkOptions {
   /**
    * The render budget (profile, device tier, whether the neighbour tiles
@@ -163,7 +126,7 @@ export interface CityWalkOptions {
   budget: SceneBudget;
   container: HTMLElement;
   /** neighbouring tiles rendered around the primary one for context */
-  extraTiles?: TileSrc[];
+  extraTiles?: TileUrls[];
   initialDate: Date;
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
@@ -188,8 +151,8 @@ export interface CityWalkOptions {
   onPose?: (pose: PlayerPose) => void;
   onProgress?: (message: string) => void;
   onStats?: (stats: CityWalkStats) => void;
-  /** the spawn tile: walked on, collided with, demolished from */
-  primary: TileSrc;
+  /** the spawn tile: walked on, collided with, demolished from (lib/city/tile.ts) */
+  primary: TileUrls;
   /**
    * Aborts startup mid-load (React StrictMode mounts effects twice in dev;
    * without this the doomed first instance would finish loading 19 MB of
@@ -430,21 +393,17 @@ async function bootApp(
   const neighbourTiles = budget.neighbourTiles ? (opts.extraTiles ?? []) : [];
 
   const primary = opts.primary;
-  const citySrcOf = (tile: TileSrc) => ({
-    metaUrl: tile.cityMetaSrc,
-    dataUrl: tile.cityMeshSrc,
-  });
   opts.onProgress?.("Loading buildings…");
   // The neighbours' heightfield HEADERS (~150 bytes each) come along with the
   // primary mesh: their bounds frame the minimap from the first frame, while
   // the tiles themselves stream in afterwards (see loadRest below).
   const [primaryCity, neighbourBounds] = await Promise.all([
-    fetchCityMesh(citySrcOf(primary), opts.signal),
+    fetchCityMesh(primary, opts.signal),
     Promise.all(
       neighbourTiles.map(
         async (tile) =>
           parseHeightfieldHeader(
-            await fetchRequiredJson(tile.demSrc, opts.signal)
+            await fetchRequiredJson(tile.heightfieldHeader, opts.signal)
           ).bounds
       )
     ),
@@ -510,18 +469,18 @@ async function bootApp(
   // Loads one tile's terrain (+ water), in the SHARED frame. Vegetation and
   // lamps are a separate step (loadTileDressing) so the first frame can wait
   // on terrain + buildings alone.
-  const loadTileTerrain = async (tile: TileSrc): Promise<TileScene> => {
+  const loadTileTerrain = async (tile: TileUrls): Promise<TileScene> => {
     // OSM walls feed two consumers — the heightfield step (conflation) and
     // the ribbon geometry built for the whole block later — so fetch once.
     const wallFeatures = await fetchFeatures<WallFeature>(
-      tile.wallsSrc,
+      tile.walls,
       opts.signal
     );
     const t = await loadTerrain({
-      url: tile.demSrc,
-      landcoverUrl: tile.landcoverSrc,
-      landcoverRgbUrl: tile.landcoverRgbSrc,
-      ndviUrl: tile.ndviSrc,
+      url: tile.heightfieldHeader,
+      landcoverUrl: tile.landcover,
+      landcoverRgbUrl: tile.landcoverRgb,
+      ndviUrl: tile.ndvi,
       // Retaining/city walls are burned into THIS tile's heightfield as steps so
       // the ground breaks at the wall instead of the DGM's smooth bank.
       wallLines: wallLinesFrom(wallFeatures),
@@ -551,41 +510,37 @@ async function bootApp(
 
   // Vegetation + lamps of one tile, dropped onto ITS terrain (heightAt).
   const loadTileDressing = async (
-    tile: TileSrc,
+    tile: TileUrls,
     t: TerrainLayer
   ): Promise<void> => {
-    if (tile.vegetationSrc) {
-      const vegetation = await loadVegetation(tile.vegetationSrc, {
-        offset,
-        heightAt: t.heightAt,
-        canopyUrl: tile.canopySrc,
-        ndviUrl: tile.ndviSrc,
-        bounds: t.bounds,
-        signal: opts.signal,
-        sunDirection,
-        heightFog,
-      });
-      ensureAlive();
-      // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
-      scene.add(vegetation.group);
-      vegControls.push(vegetation);
-      // Born with the current look, not the default: a slider moved while
-      // this tile streamed in must reach it too.
-      vegetation.applyLook(opts.look.get());
-    }
-    if (tile.lampsSrc) {
-      const lamps = await loadLamps(tile.lampsSrc, {
-        offset,
-        heightAt: t.heightAt,
-        signal: opts.signal,
-      });
-      ensureAlive();
-      // Lamps are authored Y-up (like vegetation), so they go on `scene`.
-      scene.add(lamps.group);
-      lamps.setNightFactor(currentNight);
-      lampControls.push(lamps);
-      lampLights?.setHeads(lampControls.flatMap((l) => l.headPositions));
-    }
+    const vegetation = await loadVegetation(tile.vegrows, {
+      offset,
+      heightAt: t.heightAt,
+      canopyUrl: tile.canopy,
+      ndviUrl: tile.ndvi,
+      bounds: t.bounds,
+      signal: opts.signal,
+      sunDirection,
+      heightFog,
+    });
+    ensureAlive();
+    // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
+    scene.add(vegetation.group);
+    vegControls.push(vegetation);
+    // Born with the current look, not the default: a slider moved while
+    // this tile streamed in must reach it too.
+    vegetation.applyLook(opts.look.get());
+    const lamps = await loadLamps(tile.lamps, {
+      offset,
+      heightAt: t.heightAt,
+      signal: opts.signal,
+    });
+    ensureAlive();
+    // Lamps are authored Y-up (like vegetation), so they go on `scene`.
+    scene.add(lamps.group);
+    lamps.setNightFactor(currentNight);
+    lampControls.push(lamps);
+    lampLights?.setHeads(lampControls.flatMap((l) => l.headPositions));
   };
 
   opts.onProgress?.("Loading DGM terrain…");
@@ -640,26 +595,14 @@ async function bootApp(
   // (missing files yield nothing).
   const buildRails = async (): Promise<void> => {
     const railTiles = [primary, ...neighbourTiles];
-    const railUrls = railTiles
-      .map((t) => t.railSrc)
-      .filter((u) => u !== undefined);
-    if (railUrls.length === 0) {
-      return;
-    }
     opts.onProgress?.("Building railway & bridges…");
     const rail = await loadRail({
       offset,
       heightAt,
-      railUrls,
-      bridgeUrls: railTiles
-        .map((t) => t.bridgeSrc)
-        .filter((u) => u !== undefined),
-      railareaUrls: railTiles
-        .map((t) => t.railareaSrc)
-        .filter((u) => u !== undefined),
-      platformUrls: railTiles
-        .map((t) => t.platformSrc)
-        .filter((u) => u !== undefined),
+      railUrls: railTiles.map((t) => t.rail),
+      bridgeUrls: railTiles.map((t) => t.bridge),
+      railareaUrls: railTiles.map((t) => t.railarea),
+      platformUrls: railTiles.map((t) => t.platform),
       signal: opts.signal,
       heightFog,
     });
@@ -708,15 +651,13 @@ async function bootApp(
   );
 
   // Per-tile land-cover PNGs + bounds so the minimap can place each correctly.
-  const landcoverTiles: { bounds: TerrainBounds; src: string }[] = [];
-  if (primary.landcoverSrc) {
-    landcoverTiles.push({ src: primary.landcoverSrc, bounds: terrain.bounds });
-  }
-  neighbourTiles.forEach((t, i) => {
-    if (t.landcoverSrc) {
-      landcoverTiles.push({ src: t.landcoverSrc, bounds: neighbourBounds[i] });
-    }
-  });
+  const landcoverTiles = [
+    { src: primary.landcover, bounds: terrain.bounds },
+    ...neighbourTiles.map((t, i) => ({
+      src: t.landcover,
+      bounds: neighbourBounds[i],
+    })),
+  ];
 
   // Terrain BVHs (for the 10 Hz autofocus ray and double-tap travel) are
   // built AFTER the first frame, one tile per idle slot — see indexTerrain
@@ -1180,7 +1121,7 @@ async function bootApp(
     opts.onProgress?.("Loading neighbouring tiles…");
     // Fetch every neighbour's mesh at once, then build in tile order.
     const meshes = await Promise.all(
-      neighbourTiles.map((tile) => fetchCityMesh(citySrcOf(tile), opts.signal))
+      neighbourTiles.map((tile) => fetchCityMesh(tile, opts.signal))
     );
     ensureAlive();
     for (const { meta, vertices } of meshes) {

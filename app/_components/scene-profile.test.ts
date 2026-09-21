@@ -56,16 +56,18 @@ test("deviceTierFromMedia maps the coarse-pointer query", () => {
   expect(deviceTierFromMedia(false)).toBe("desktop");
 });
 
-test("sceneBudgetFor resolves profile, tier and the neighbour tiles in one go", () => {
+test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters in one go", () => {
   expect(sceneBudgetFor("", false)).toEqual({
     profile: "full",
     tier: "desktop",
     neighbourTiles: true,
+    lowRasters: false,
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
     profile: "lite",
     tier: "mobile",
     neighbourTiles: false,
+    lowRasters: true,
   });
   // The QA knob keeps the block in the lite profile; alone it does nothing.
   expect(sceneBudgetFor("?scene=lite&block=1", false).neighbourTiles).toBe(

@@ -6,7 +6,6 @@ import {
   PRIMARY_TILE,
   TILE_BLOCK,
   tileArtifacts,
-  tileUrls,
   tileUrlsFrom,
 } from "./tile";
 
@@ -58,11 +57,22 @@ test("land-cover rasters: the primary serves the bake, phones a 2048² variant",
   expect(neighbour.landcoverLow).toEqual(neighbour.landcover);
 });
 
-test("tileUrls prefixes the /data route", () => {
-  expect(tileUrls(primary).canopy).toBe("/data/canopy_33412_5656_2_sn.geojson");
-  expect(tileUrls(primary, "/x").cityMeshMeta).toBe(
+test("tileUrlsFrom prefixes the /data route and serves phones the low rasters", () => {
+  const desktop = tileUrlsFrom(primary, null, false);
+  expect(desktop.canopy).toBe("/data/canopy_33412_5656_2_sn.geojson");
+  expect(desktop.landcover).toBe("/data/landcover_33412_5656_2_sn.png");
+  expect("landcoverLow" in desktop).toBe(false);
+  // The data blob is reached through the header's sibling name.
+  expect("heightfieldData" in desktop).toBe(false);
+  expect(tileUrlsFrom(primary, null, false, "/x").cityMeshMeta).toBe(
     "/x/city_33412_5656_2_sn.mesh.json"
   );
+  const phone = tileUrlsFrom(primary, null, true);
+  expect(phone.landcover).toBe("/data/landcover_33412_5656_2_sn.r2048.png");
+  expect(phone.landcoverRgb).toBe(
+    "/data/landcover_rgb_33412_5656_2_sn.r2048.png"
+  );
+  expect(phone.ndvi).toBe(desktop.ndvi);
 });
 
 test("the tile block lists the primary first", () => {
@@ -82,11 +92,11 @@ test("tileUrlsFrom resolves hashed names through the manifest", () => {
       "canopy_33412_5656_2_sn.geojson": "canopy_33412_5656_2_sn.abc123.geojson",
     },
   };
-  const u = tileUrlsFrom(primary, manifest);
+  const u = tileUrlsFrom(primary, manifest, false);
   expect(u.canopy).toBe("/data/canopy_33412_5656_2_sn.abc123.geojson");
   // Unknown names pass through unchanged (and so does a missing manifest).
   expect(u.cityMeshMeta).toBe("/data/city_33412_5656_2_sn.mesh.json");
-  expect(tileUrlsFrom(primary, null).cityMeshMeta).toBe(
+  expect(tileUrlsFrom(primary, null, false).cityMeshMeta).toBe(
     "/data/city_33412_5656_2_sn.mesh.json"
   );
 });

@@ -14,6 +14,7 @@ import {
   TextureLoader,
   type Vector3,
 } from "three";
+import type { WallFeature } from "@/lib/city/features";
 import {
   decodeHeightfield,
   parseHeightfieldHeader,
@@ -176,19 +177,15 @@ async function loadNdviTexture(url: string): Promise<Texture | null> {
   }
 }
 
-/** A baked OSM wall feature (see wall-layer.ts / scripts/extract-walls.sh). */
-export interface WallFeature {
-  geometry?: { coordinates?: [number, number][]; type?: string };
-  properties?: { h?: number; kind?: string };
-}
-
 /** Maps baked wall features to the LineStrings the conflation step burns in. */
 export function wallLinesFrom(features: WallFeature[]): WallLine[] {
   const out: WallLine[] = [];
   for (const f of features) {
-    const coords = f.geometry?.coordinates;
-    if (f.geometry?.type === "LineString" && Array.isArray(coords)) {
-      out.push({ coords, kind: f.properties?.kind ?? "wall" });
+    if (f.geometry?.type === "LineString") {
+      out.push({
+        coords: f.geometry.coordinates,
+        kind: f.properties?.kind ?? "wall",
+      });
     }
   }
   return out;
@@ -198,7 +195,7 @@ export function wallLinesFrom(features: WallFeature[]): WallLine[] {
  *  the untouched raster when there are no wall lines for this tile. */
 function conflateTerrain(
   base: ArrayLike<number>,
-  grid: { bounds: TerrainBounds; n: number; nodata: number | null },
+  grid: { bounds: TerrainBounds; n: number },
   walls: WallLine[] | undefined
 ): ArrayLike<number> {
   if (!walls || walls.length === 0) {
@@ -414,24 +411,17 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
     await fetchRequiredJson(opts.url, opts.signal)
   );
   const { n, bounds } = header;
-  /** Holes are NaN in the baked samples, so there is no sentinel to match. */
-  const nodata: number | null = null;
   const samples = decodeHeightfield(
     await fetchGzipped(resolveSiblingUrl(opts.url, header.data), opts.signal),
     header
   );
-  const elevations = conflateTerrain(
-    samples,
-    { n, bounds, nodata },
-    opts.wallLines
-  );
+  const elevations = conflateTerrain(samples, { n, bounds }, opts.wallLines);
 
   const { positions, indices, minElevation } = buildTerrainGeometryData({
     elevations,
     n,
     bounds,
     offset: opts.offset,
-    nodata,
   });
 
   const geometry = new BufferGeometry();
@@ -485,7 +475,6 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
     bounds,
     minElevation,
     water,
-    heightAt: (x, y) =>
-      sampleHeightfield({ elevations, n, bounds, nodata }, x, y),
+    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
   };
 }

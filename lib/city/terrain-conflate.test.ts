@@ -51,7 +51,6 @@ test("burns a sharp step at a retaining wall (sides snap to the shelves)", () =>
     elevations: el,
     n: N,
     bounds: BOUNDS,
-    nodata: -9999,
     walls: [wall("retaining_wall")],
   });
   // East of the wall snaps up toward the high shelf (~106), west down to ~100.
@@ -72,7 +71,6 @@ test("leaves terrain beyond the band untouched", () => {
     elevations: el,
     n: N,
     bounds: BOUNDS,
-    nodata: -9999,
     walls: [wall("retaining_wall")],
   });
   // Past the wall's north end (y=95 > span 90) → no stamp.
@@ -85,7 +83,6 @@ test("ignores non-retaining kinds (freestanding walls leave ground alone)", () =
     elevations: el,
     n: N,
     bounds: BOUNDS,
-    nodata: -9999,
     walls: [wall("wall")],
   });
   for (let i = 0; i < el.length; i++) {
@@ -99,7 +96,6 @@ test("skips walls with no real height difference between the two sides", () => {
     elevations: flat,
     n: N,
     bounds: BOUNDS,
-    nodata: -9999,
     walls: [wall("retaining_wall")],
   });
   for (let i = 0; i < flat.length; i++) {
@@ -112,13 +108,12 @@ test("never lifts NoData cells", () => {
   // Punch a NoData hole right next to the wall, on the high side.
   const holeCol = Math.round((52 - 0.5 * DX) / DX);
   const holeRow = Math.round((100 - 50) / DX - 0.5);
-  el[holeRow * N + holeCol] = -9999;
+  el[holeRow * N + holeCol] = Number.NaN;
   const out = conflateWalls({
     elevations: el,
     n: N,
     bounds: BOUNDS,
-    nodata: -9999,
     walls: [wall("retaining_wall")],
   });
-  expect(out[holeRow * N + holeCol]).toBe(-9999);
+  expect(out[holeRow * N + holeCol]).toBeNaN();
 });

@@ -6,15 +6,9 @@ import {
   type DataManifest,
   MANIFEST_FILE,
   TILE_BLOCK,
-  type TileSpec,
   tileUrlsFrom,
 } from "@/lib/city/tile";
-import type { TileSrc } from "./create-app";
-import {
-  currentSceneBudget,
-  type DeviceTier,
-  type SceneBudget,
-} from "./scene-profile";
+import { currentSceneBudget, type SceneBudget } from "./scene-profile";
 
 // three.js needs a real browser (WebGL, pointer lock) — never prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
@@ -26,36 +20,6 @@ const CityWalk = dynamic(() => import("./city-walk"), {
     </div>
   ),
 });
-
-/** Builds the per-tile URLs (all prepared by scripts/prepare-data.ts). */
-function tile(
-  spec: TileSpec,
-  manifest: DataManifest | null,
-  tier: DeviceTier
-): TileSrc {
-  const u = tileUrlsFrom(spec, manifest);
-  // Phones take the 2048² land-cover variants (a quarter of the texture
-  // memory); everything else is the same data for every device.
-  const mobile = tier === "mobile";
-  return {
-    cityMeshSrc: u.cityMeshData,
-    cityMetaSrc: u.cityMeshMeta,
-    demSrc: u.heightfieldHeader,
-    landcoverSrc: mobile ? u.landcoverLow : u.landcover,
-    landcoverRgbSrc: mobile ? u.landcoverRgbLow : u.landcoverRgb,
-    ndviSrc: u.ndvi,
-    vegetationSrc: u.vegrows,
-    canopySrc: u.canopy,
-    // Optional (OSM, ODbL); the loaders treat a 404 as "feature off".
-    lampsSrc: u.lamps,
-    wallsSrc: u.walls,
-    // Railway tracks + bridge decks + ballast yards (Basis-DLM); platforms (OSM).
-    railSrc: u.rail,
-    bridgeSrc: u.bridge,
-    railareaSrc: u.railarea,
-    platformSrc: u.platform,
-  };
-}
 
 const [PRIMARY_SPEC, ...NEIGHBOUR_SPECS] = TILE_BLOCK;
 
@@ -100,8 +64,10 @@ export function CityWalkClient() {
     const budget: SceneBudget = currentSceneBudget();
     return {
       budget,
-      primary: tile(PRIMARY_SPEC, manifest, budget.tier),
-      extra: NEIGHBOUR_SPECS.map((spec) => tile(spec, manifest, budget.tier)),
+      primary: tileUrlsFrom(PRIMARY_SPEC, manifest, budget.lowRasters),
+      extra: NEIGHBOUR_SPECS.map((spec) =>
+        tileUrlsFrom(spec, manifest, budget.lowRasters)
+      ),
     };
   }, [manifest]);
   if (!tiles) {

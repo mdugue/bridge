@@ -8,7 +8,13 @@ import {
   ShapeUtils,
   Vector2,
 } from "three";
+import type {
+  AreaFeature,
+  BridgeFeature,
+  RailFeature,
+} from "@/lib/city/features";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
 import { fetchFeatures } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
@@ -35,45 +41,16 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 
-// `properties` may be `null` in valid GeoJSON — every read goes through `?.`.
-interface RailFeature {
-  geometry: { coordinates: [number, number][]; type: "LineString" };
-  properties: { electrified?: number; tracks?: number } | null;
-}
-
-interface BridgeFeature {
-  geometry: { coordinates: [number, number][][]; type: "Polygon" };
-  properties: {
-    deck?: number[];
-    kind?: "other" | "path" | "rail" | "road";
-    name?: string | null;
-    /** OSM bridge:structure (e.g. "arch", "beam", "beam;arch") for arch synthesis */
-    structure?: string | null;
-  } | null;
-}
-
-/** exported for tests */
-export interface AreaFeature {
-  geometry: {
-    coordinates:
-      | [number, number][]
-      | [number, number][][]
-      | [number, number][][][];
-    type: "LineString" | "MultiPolygon" | "Polygon";
-  } | null;
-  properties: Record<string, unknown> | null;
-}
-
 /** Outer rings of a Polygon or MultiPolygon geometry (holes are ignored). */
 function outerRings(
   geometry: AreaFeature["geometry"] | null | undefined
 ): [number, number][][] {
   if (geometry?.type === "Polygon") {
-    const outer = (geometry.coordinates as [number, number][][])[0];
+    const outer = geometry.coordinates[0];
     return outer ? [outer] : [];
   }
   if (geometry?.type === "MultiPolygon") {
-    return (geometry.coordinates as [number, number][][][])
+    return geometry.coordinates
       .map((poly) => poly[0])
       .filter((ring): ring is [number, number][] => ring !== undefined);
   }
@@ -392,35 +369,6 @@ interface Pt {
   x: number;
   y: number;
   z: number;
-}
-
-/** Walks a polyline emitting [ex,ey] points every `spacing` m (EPSG coords). */
-function densify(
-  coords: [number, number][],
-  spacing: number
-): [number, number][] {
-  const out: [number, number][] = [];
-  let carry = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const [x0, y0] = coords[i];
-    const [x1, y1] = coords[i + 1];
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
-    if (len === 0) {
-      continue;
-    }
-    for (let d = carry; d < len; d += spacing) {
-      const t = d / len;
-      out.push([x0 + dx * t, y0 + dy * t]);
-    }
-    carry = carry + Math.ceil((len - carry) / spacing) * spacing - len;
-  }
-  const last = coords.at(-1);
-  if (last) {
-    out.push(last);
-  }
-  return out;
 }
 
 /** A rail-bridge deck for lifting rails onto it (ride the deck, no ballast). */
@@ -871,7 +819,7 @@ function buildRails(
       continue;
     }
     const tracks = Math.min(Math.max(f.properties?.tracks || 1, 1), 3);
-    const dense = densify(f.geometry.coordinates, SAMPLE_M);
+    const dense = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
     // Split into runs of points with valid ground (never bridge a NoData gap).
     let run: Pt[] = [];
     const flush = () => {
@@ -923,10 +871,7 @@ function buildPlatforms(
       }
     } else if (g?.type === "LineString") {
       const run: Pt[] = [];
-      for (const [ex, ey] of densify(
-        g.coordinates as [number, number][],
-        SAMPLE_M
-      )) {
+      for (const [ex, ey] of subdividePolyline(g.coordinates, SAMPLE_M)) {
         const ground = ctx.heightAt(ex, ey);
         if (ground !== null) {
           const w = epsgToWorld(ex, ey, ctx.offset);

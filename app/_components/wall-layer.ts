@@ -6,9 +6,10 @@ import {
   Mesh,
   MeshStandardMaterial,
 } from "three";
+import type { WallFeature } from "@/lib/city/features";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import type { WallFeature } from "./terrain-layer";
 
 /**
  * Retaining / city walls from OSM (`scripts/extract-walls.sh`). Monumental walls
@@ -51,26 +52,6 @@ interface WallCol {
   top: number;
   wx: number;
   wz: number;
-}
-
-/** Walks a polyline emitting EPSG points every `spacing` m (keeps the last). */
-function densify(
-  coords: [number, number][],
-  spacing: number
-): [number, number][] {
-  const out: [number, number][] = [];
-  for (let i = 0; i < coords.length - 1; i++) {
-    const [x0, y0] = coords[i];
-    const [x1, y1] = coords[i + 1];
-    const len = Math.hypot(x1 - x0, y1 - y0);
-    const steps = Math.max(1, Math.round(len / spacing));
-    for (let s = 0; s < steps; s++) {
-      const t = s / steps;
-      out.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
-    }
-  }
-  out.push(coords.at(-1) as [number, number]);
-  return out;
 }
 
 /** Base/top elevation for one wall vertex: top = the high side, base dropped to
@@ -145,12 +126,11 @@ function buildWallGeometry(
   const pos: number[] = [];
   const nrm: number[] = [];
   for (const f of features) {
-    const coords = f.geometry?.coordinates;
-    if (f.geometry?.type !== "LineString" || !coords) {
+    if (f.geometry?.type !== "LineString") {
       continue;
     }
     const h = Math.max(0.5, f.properties?.h ?? 2);
-    const pts = densify(coords, SAMPLE_M);
+    const pts = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
     const cols: (WallCol | null)[] = pts.map((p, i) => {
       const a = pts[Math.max(0, i - 1)];
       const b = pts[Math.min(pts.length - 1, i + 1)];

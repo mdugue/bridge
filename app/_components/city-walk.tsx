@@ -89,11 +89,11 @@ import {
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import type { TileUrls } from "@/lib/city/tile";
 import {
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
-  type TileSrc,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
@@ -108,11 +108,11 @@ interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
   budget: SceneBudget;
   /** Neighbouring tiles rendered around the primary one for context */
-  extraTiles?: TileSrc[];
+  extraTiles?: TileUrls[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
   insertedModelUrl?: string;
   /** The spawn tile's URLs (see lib/city/tile.ts) */
-  primary: TileSrc;
+  primary: TileUrls;
 }
 
 type Status =

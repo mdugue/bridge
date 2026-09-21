@@ -13,12 +13,14 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import {
   LOOK_DEFAULTS,
   type LookValues,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
+import { samplePolyline } from "@/lib/city/polyline";
 import { fetchFeatures, isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
@@ -94,19 +96,6 @@ interface CellLod {
   rich: InstancedMesh;
 }
 
-// GeoJSON allows `"properties": null`, so both are modelled as nullable and
-// every read goes through `?.` — a single null feature must not throw out of
-// the layer's documented non-fatal load.
-interface LineFeature {
-  geometry: { coordinates: [number, number][]; type: "LineString" };
-  properties: { kind: "hedge" | "treerow" } | null;
-}
-
-interface PointFeature {
-  geometry: { coordinates: [number, number]; type: "Point" };
-  properties: { h: number } | null;
-}
-
 const TREE_SPACING = 9; // metres between trees along a row
 const HEDGE_SPACING = 1.1; // metres between hedge segments
 /**
@@ -130,33 +119,6 @@ function hash(i: number): number {
   return s - Math.floor(s);
 }
 
-/** Walks a polyline emitting points every `spacing` metres (EPSG coords). */
-function sampleLine(
-  coords: [number, number][],
-  spacing: number
-): [number, number][] {
-  const out: [number, number][] = [];
-  // Distance from the current segment's start to the next sample to emit.
-  let dist = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const [x0, y0] = coords[i];
-    const [x1, y1] = coords[i + 1];
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
-    if (len === 0) {
-      continue;
-    }
-    while (dist < len) {
-      const t = dist / len;
-      out.push([x0 + dx * t, y0 + dy * t]);
-      dist += spacing;
-    }
-    dist -= len; // carry the remainder into the next segment
-  }
-  return out;
-}
-
 interface Placement {
   /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
   ndvi?: number;
@@ -169,7 +131,7 @@ interface Placement {
 
 /** Resamples every line and drops each point onto the terrain (EPSG -> world). */
 function collectPlacements(
-  features: LineFeature[],
+  features: VegRowFeature[],
   ctx: VegetationContext,
   ndviAt?: RasterSampler
 ): { hedges: Placement[]; trees: Placement[] } {
@@ -181,7 +143,7 @@ function collectPlacements(
       continue;
     }
     const isHedge = f.properties?.kind === "hedge";
-    const pts = sampleLine(
+    const pts = samplePolyline(
       f.geometry.coordinates,
       isHedge ? HEDGE_SPACING : TREE_SPACING
     );
@@ -751,7 +713,7 @@ async function loadNdviSampler(
 
 /** Canopy points (DOM1-derived) → height-scaled tree placements. */
 function collectCanopy(
-  features: PointFeature[],
+  features: CanopyFeature[],
   ctx: VegetationContext,
   ndviAt?: RasterSampler
 ): Placement[] {
@@ -824,9 +786,9 @@ export async function loadVegetation(
   let cells: CellLod[] = [];
 
   const [rowFeatures, canopyFeatures, ndviSampler] = await Promise.all([
-    fetchFeatures<LineFeature>(url, ctx.signal),
+    fetchFeatures<VegRowFeature>(url, ctx.signal),
     ctx.canopyUrl
-      ? fetchFeatures<PointFeature>(ctx.canopyUrl, ctx.signal)
+      ? fetchFeatures<CanopyFeature>(ctx.canopyUrl, ctx.signal)
       : Promise.resolve([]),
     ctx.ndviUrl && ctx.bounds
       ? loadNdviSampler(ctx.ndviUrl, ctx.bounds, ctx.signal)

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Mesh } from "three";
-import { type AreaFeature, buildBallast, type RailContext } from "./rail-layer";
+import type { AreaFeature } from "@/lib/city/features";
+import { buildBallast, type RailContext } from "./rail-layer";
 
 const ctx: RailContext = {
   offset: { cx: 0, cy: 0 },

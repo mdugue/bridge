@@ -36,6 +36,8 @@ export type DeviceTier = "desktop" | "mobile";
 export type AoQuality = "Medium" | "Performance";
 
 export interface SceneBudget {
+  /** phones take the 2048² land-cover rasters (lib/city/tile.ts, MOBILE_RASTER_PX) */
+  lowRasters: boolean;
   /** whether the neighbour tiles load: always in `full`, in `lite` only with `?block=1` */
   neighbourTiles: boolean;
   profile: SceneProfile;
@@ -70,10 +72,12 @@ export function sceneBudgetFor(
   coarseNoHover: boolean
 ): SceneBudget {
   const profile = sceneProfileFromSearch(search);
+  const tier = deviceTierFromMedia(coarseNoHover);
   return {
     profile,
-    tier: deviceTierFromMedia(coarseNoHover),
+    tier,
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
+    lowRasters: tier === "mobile",
   };
 }
 

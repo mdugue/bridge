@@ -20,7 +20,12 @@
  * `MIN_STEP_M` — so freestanding garden walls and flat fountain rims leave the
  * terrain alone. A `MAX_STEP_M` clamp stops a bad height tag gouging a canyon.
  */
-import type { TerrainBounds } from "./terrain-geometry";
+import { subdividePolyline } from "./polyline";
+import {
+  isInvalidElevation,
+  sampleHeightfield,
+  type TerrainBounds,
+} from "./terrain-geometry";
 
 export interface WallLine {
   /** EPSG:25833 coordinates (NOT recentered), as baked by extract-walls.sh */
@@ -36,8 +41,6 @@ export interface ConflateInput {
   elevations: ArrayLike<number>;
   /** grid size (n x n) */
   n: number;
-  /** raster NoData value, if any */
-  nodata: number | null;
   /** wall centrelines (EPSG:25833) with their kind */
   walls: WallLine[];
 }
@@ -51,76 +54,9 @@ const MAX_STEP_M = 18; // clamp so a bad height tag can't gouge a canyon (m)
 const FLAT_M = 2; // |perp| within which the snap is full — keeps the step solid
 const BAND_M = 11; // |perp| beyond which the terrain is left untouched (m)
 
-const MIN_PLAUSIBLE_ELEVATION = -1000;
-
-function isInvalid(z: number, nodata: number | null): boolean {
-  return (
-    !Number.isFinite(z) ||
-    z < MIN_PLAUSIBLE_ELEVATION ||
-    (nodata !== null && z === nodata)
-  );
-}
-
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
   return t * t * (3 - 2 * t);
-}
-
-/** Walks a polyline emitting EPSG points every ~`spacing` m (keeps the last). */
-function densify(
-  coords: [number, number][],
-  spacing: number
-): [number, number][] {
-  const out: [number, number][] = [];
-  for (let i = 0; i < coords.length - 1; i++) {
-    const [x0, y0] = coords[i];
-    const [x1, y1] = coords[i + 1];
-    const len = Math.hypot(x1 - x0, y1 - y0);
-    const steps = Math.max(1, Math.round(len / spacing));
-    for (let s = 0; s < steps; s++) {
-      const t = s / steps;
-      out.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
-    }
-  }
-  out.push(coords.at(-1) as [number, number]);
-  return out;
-}
-
-/** Bilinear lookup on the ORIGINAL grid (null outside / on NoData). */
-function sampleGrid(
-  elevations: ArrayLike<number>,
-  n: number,
-  bounds: TerrainBounds,
-  nodata: number | null,
-  x: number,
-  y: number
-): number | null {
-  const [minX, minY, maxX, maxY] = bounds;
-  const dx = (maxX - minX) / n;
-  const dy = (maxY - minY) / n;
-  const gx = (x - minX) / dx - 0.5;
-  const gy = (maxY - y) / dy - 0.5;
-  if (gx < -0.5 || gy < -0.5 || gx > n - 0.5 || gy > n - 0.5) {
-    return null;
-  }
-  const col0 = Math.min(Math.max(Math.floor(gx), 0), n - 1);
-  const row0 = Math.min(Math.max(Math.floor(gy), 0), n - 1);
-  const col1 = Math.min(col0 + 1, n - 1);
-  const row1 = Math.min(row0 + 1, n - 1);
-  const z00 = elevations[row0 * n + col0];
-  const z01 = elevations[row0 * n + col1];
-  const z10 = elevations[row1 * n + col0];
-  const z11 = elevations[row1 * n + col1];
-  for (const z of [z00, z01, z10, z11]) {
-    if (isInvalid(z, nodata)) {
-      return null;
-    }
-  }
-  const fx = Math.min(Math.max(gx - col0, 0), 1);
-  const fy = Math.min(Math.max(gy - row0, 0), 1);
-  const top = z00 + (z01 - z00) * fx;
-  const bottom = z10 + (z11 - z10) * fx;
-  return top + (bottom - top) * fy;
 }
 
 /** Per-wall-vertex step descriptor: the two shelf levels + the high-side normal. */
@@ -146,11 +82,10 @@ function stepAt(
   tx: number,
   ty: number
 ): Step | null {
-  const { elevations, n, bounds, nodata } = input;
   const px = -ty;
   const py = tx; // unit perpendicular
   const sample = (sx: number, sy: number): number | null =>
-    sampleGrid(elevations, n, bounds, nodata, sx, sy);
+    sampleHeightfield(input, sx, sy);
   const g = sample(x, y);
   let aLvl = sample(x + px * PROBE_M, y + py * PROBE_M);
   let bLvl = sample(x - px * PROBE_M, y - py * PROBE_M);
@@ -176,7 +111,7 @@ function stepAt(
  * input grid is never mutated; NoData cells are left as-is (no lifting holes).
  */
 export function conflateWalls(input: ConflateInput): Float32Array {
-  const { elevations, n, bounds, nodata, walls } = input;
+  const { elevations, n, bounds, walls } = input;
   const [minX, minY, maxX, maxY] = bounds;
   const dx = (maxX - minX) / n;
   const dy = (maxY - minY) / n;
@@ -193,7 +128,7 @@ export function conflateWalls(input: ConflateInput): Float32Array {
     if (!CONFLATE_KINDS.has(wall.kind) || wall.coords.length < 2) {
       continue;
     }
-    const pts = densify(wall.coords, cell);
+    const pts = subdividePolyline(wall.coords, cell);
     for (let i = 0; i < pts.length; i++) {
       const a = pts[Math.max(0, i - 1)];
       const b = pts[Math.min(pts.length - 1, i + 1)];
@@ -204,7 +139,7 @@ export function conflateWalls(input: ConflateInput): Float32Array {
       ty /= tl;
       const s = stepAt(input, pts[i][0], pts[i][1], tx, ty);
       if (s) {
-        stampStep(out, weight, target, s, { n, minX, maxY, dx, dy, nodata });
+        stampStep(out, weight, target, s, { n, minX, maxY, dx, dy });
       }
     }
   }
@@ -223,7 +158,6 @@ interface StampGrid {
   maxY: number;
   minX: number;
   n: number;
-  nodata: number | null;
 }
 
 /** Snaps the cells in one wall vertex's band toward its hi/lo shelf (max-wins). */
@@ -234,7 +168,7 @@ function stampStep(
   s: Step,
   g: StampGrid
 ): void {
-  const { n, minX, maxY, dx, dy, nodata } = g;
+  const { n, minX, maxY, dx, dy } = g;
   const colC = (s.x - minX) / dx - 0.5;
   const rowC = (maxY - s.y) / dy - 0.5;
   const rCol = Math.ceil(BAND_M / dx) + 1;
@@ -258,7 +192,7 @@ function stampStep(
         continue;
       }
       const idx = row * n + col;
-      if (isInvalid(out[idx], nodata)) {
+      if (isInvalidElevation(out[idx])) {
         continue;
       }
       const w = 1 - smoothstep(FLAT_M, BAND_M, Math.abs(dPerp));

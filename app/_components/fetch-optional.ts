@@ -7,6 +7,8 @@
  * (CityJSON, heightfields) throw on any failure instead.
  */
 
+import type { FeatureCollection } from "@/lib/city/features";
+
 /** True for the DOMException a fetch throws when its AbortSignal fires. */
 export function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
@@ -39,7 +41,7 @@ export async function fetchFeatures<T>(
   if (!url) {
     return [];
   }
-  const doc = await fetchOptionalJson<{ features?: T[] }>(url, signal);
+  const doc = await fetchOptionalJson<FeatureCollection<T>>(url, signal);
   return doc?.features ?? [];
 }
 

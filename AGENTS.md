@@ -66,7 +66,7 @@ config change.
 
 - `app/_components/` — the viewer, grouped:
   - spine: `create-app.ts` (scene/loop/handle), `city-walk.tsx` (HUD),
-    `city-walk-client.tsx` (the `ssr: false` mount + tile sources),
+    `city-walk-client.tsx` (the `ssr: false` mount + the tile URLs),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
     (`?scene=lite`), `webgl-support.ts` (the WebGL2 preflight),
     `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
@@ -84,9 +84,10 @@ config change.
     `virtual-joystick.tsx`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
-  ground-clamp, the pose convention + pitch/FOV policy, the look table +
-  store, the Snapshot codec) with
-  `bun test` units alongside
+  ground-clamp, polyline resampling, the pose convention + pitch/FOV
+  policy, the look table + store, the Snapshot codec, the tile artifact
+  list, and `features.ts` — the GeoJSON shapes the bakes write, checked
+  against every committed file by its test) with `bun test` units alongside
 - `scripts/` — the offline data bakes `extract-dlm.sh`, `extract-canopy.sh`,
   `extract-ndvi.sh`, `extract-roof-colour.sh`, `extract-lamps.sh`,
   `extract-walls.sh`, `extract-rail.sh` (+ `ndvi-at-trees.py`, the NDVI

@@ -121,24 +121,38 @@ export interface TileArtifact {
   source: ArtifactSource;
 }
 
+/**
+ * The kinds the viewer requests (see `tileUrlsFrom`). The `…Low` rasters
+ * are not kinds of their own on this side — `landcover` / `landcoverRgb`
+ * resolve to the device's variant — and the heightfield data is reached
+ * through its header, which names the published sibling
+ * (lib/city/heightfield.ts).
+ */
+export const TILE_URL_KINDS = [
+  "bridge",
+  "canopy",
+  "cityMeshData",
+  "cityMeshMeta",
+  "heightfieldHeader",
+  "lamps",
+  "landcover",
+  "landcoverRgb",
+  "ndvi",
+  "platform",
+  "rail",
+  "railarea",
+  "vegrows",
+  "walls",
+] as const;
+
+export type TileUrlKind = (typeof TILE_URL_KINDS)[number];
+
+/** Every artifact prepare-data publishes: the served kinds plus the bake-only ones. */
 export type TileArtifactKind =
-  | "bridge"
-  | "canopy"
-  | "cityMeshData"
-  | "cityMeshMeta"
+  | TileUrlKind
   | "heightfieldData"
-  | "heightfieldHeader"
-  | "lamps"
-  | "landcover"
   | "landcoverLow"
-  | "landcoverRgb"
-  | "landcoverRgbLow"
-  | "ndvi"
-  | "platform"
-  | "rail"
-  | "railarea"
-  | "vegrows"
-  | "walls";
+  | "landcoverRgbLow";
 
 /**
  * A land-cover raster at `px`: the committed 4096² bake as is, or a variant
@@ -218,18 +232,6 @@ export function tileArtifacts(
   };
 }
 
-/** The same map as URLs under `base` (default: the /data route). */
-export function tileUrls(
-  spec: TileSpec,
-  base = "/data"
-): Record<TileArtifactKind, string> {
-  const out = {} as Record<TileArtifactKind, string>;
-  for (const [kind, artifact] of Object.entries(tileArtifacts(spec))) {
-    out[kind as TileArtifactKind] = `${base}/${artifact.file}`;
-  }
-  return out;
-}
-
 /** The committed DGM GeoTIFF (+ its .tfw sidecar) the heightfield bake reads. */
 export function dgmSourceFiles(tile: string): { tif: string; tfw: string } {
   const dir = `data/dgm/dgm1_${tile}_tiff`;
@@ -259,15 +261,34 @@ export function manifestUrl(
   return `${base}/${manifest?.files[file] ?? file}`;
 }
 
-/** The artifact map as served URLs, resolved through the manifest. */
+/**
+ * Every URL the viewer may request for one tile — what create-app.ts loads
+ * from. The optional artifacts are URLs too; their loaders treat a 404 as
+ * "feature off".
+ */
+export type TileUrls = Record<TileUrlKind, string>;
+
+/**
+ * The artifact map as served URLs, resolved through the manifest.
+ * `lowRasters` serves the 2048² land-cover variants (phones, see
+ * MOBILE_RASTER_PX); everything else is the same data for every device.
+ */
 export function tileUrlsFrom(
   spec: TileSpec,
   manifest: DataManifest | null,
+  lowRasters: boolean,
   base = "/data"
-): Record<TileArtifactKind, string> {
-  const out = {} as Record<TileArtifactKind, string>;
-  for (const [kind, artifact] of Object.entries(tileArtifacts(spec))) {
-    out[kind as TileArtifactKind] = manifestUrl(manifest, artifact.file, base);
+): TileUrls {
+  const artifacts = tileArtifacts(spec);
+  const url = (artifact: TileArtifact) =>
+    manifestUrl(manifest, artifact.file, base);
+  const out = {} as TileUrls;
+  for (const kind of TILE_URL_KINDS) {
+    out[kind] = url(artifacts[kind]);
+  }
+  if (lowRasters) {
+    out.landcover = url(artifacts.landcoverLow);
+    out.landcoverRgb = url(artifacts.landcoverRgbLow);
   }
   return out;
 }

@@ -17,6 +17,7 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { LampFeature } from "@/lib/city/features";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import { fetchFeatures } from "./fetch-optional";
 import type { VegetationContext } from "./vegetation-layer";
@@ -40,11 +41,6 @@ const LIGHT_NEAR = 14;
 const LIGHT_FAR = 42;
 const LIGHT_BASE = 14;
 const LIGHT_RANGE = 40;
-
-interface LampPoint {
-  geometry: { coordinates: [number, number]; type: "Point" };
-  properties: { h?: number };
-}
 
 interface Place {
   x: number;
@@ -208,7 +204,7 @@ export async function loadLamps(
   const group = new Group();
   group.name = "lamps";
   const { offset } = ctx;
-  const features = await fetchFeatures<LampPoint>(url, ctx.signal);
+  const features = await fetchFeatures<LampFeature>(url, ctx.signal);
 
   const places: Place[] = [];
   const headPositions: Vector3[] = [];
