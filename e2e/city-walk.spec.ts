@@ -283,6 +283,47 @@ test.describe("desktop viewer", () => {
     expectNoErrors(errors);
   });
 
+  test("a snapshot applied mid-flight wins over the glide", async () => {
+    // A scenic flight owns the camera for up to 3.8 s; a pose set from outside
+    // (snapshot apply, minimap click, QA flyTo) must cancel it, or the next
+    // frame silently glides the camera away again.
+    const target = {
+      mode: "fly" as const,
+      pos: { x: -40, y: 160, z: 30 },
+      epsg: { x: 0, y: 0 },
+      headingDeg: 200,
+      pitchDeg: -15,
+      fov: 55,
+    };
+    await page.evaluate((t) => {
+      const api = window.__poc;
+      if (!(api?.flyToViewpoint && api.applyCameraState)) {
+        throw new Error("flight api incomplete");
+      }
+      // SCENIC_VIEWS[0] (viewpoints.ts) — inside the primary tile.
+      api.flyToViewpoint({
+        id: "carolabruecke",
+        label: "Carolabrücke",
+        description:
+          "Hovering over the Elbe by the Carolabrücke, the river sweeping toward the Altstadt skyline.",
+        mode: "fly",
+        epsg: { x: 412_550, y: 5_656_980 },
+        aboveGround: 70,
+        headingDeg: 245,
+        pitchDeg: -10,
+        fov: 62,
+      });
+      api.applyCameraState(t);
+    }, target);
+    await waitForFrames(page, 3);
+    const state = await page.evaluate(() => window.__poc?.getCameraState?.());
+    expect(state?.pos.x).toBeCloseTo(target.pos.x, 0);
+    expect(state?.pos.y).toBeCloseTo(target.pos.y, 0);
+    expect(state?.pos.z).toBeCloseTo(target.pos.z, 0);
+    expect(state?.mode).toBe("fly");
+    expectNoErrors(errors);
+  });
+
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.

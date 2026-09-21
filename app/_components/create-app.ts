@@ -666,6 +666,15 @@ async function bootApp(
   const terrainMeshes: Mesh[] = [terrain.mesh];
   const wallFeaturesByTile: WallFeature[][] = [primaryScene.wallFeatures];
   const extraCities: CityLayer[] = [];
+  const footprintCache = new WeakMap<CityLayer, FootprintPoly[]>();
+  const neighbourFootprints = (layer: CityLayer): FootprintPoly[] => {
+    let polys = footprintCache.get(layer);
+    if (!polys) {
+      polys = cityFootprints(layer);
+      footprintCache.set(layer, polys);
+    }
+    return polys;
+  };
 
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles. Built ONCE here (before the first render, with no heads yet) so
@@ -955,6 +964,8 @@ async function bootApp(
   };
 
   const applyCameraState = (s: CameraState) => {
+    // A pose set from outside wins over a scenic glide in progress.
+    cancelFlight();
     // Fly first so the ground clamp doesn't yank an aerial pose down to eye
     // height before the frame even renders.
     setMovementMode(s.mode);
@@ -977,6 +988,8 @@ async function bootApp(
   };
 
   const teleportTo = (epsgX: number, epsgY: number) => {
+    // A pose set from outside wins over a scenic glide in progress.
+    cancelFlight();
     const pos = epsgToWorld(epsgX, epsgY, offset);
     const ground = heightAt(epsgX, epsgY);
     camera.position.set(
@@ -1119,9 +1132,10 @@ async function bootApp(
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {
-    if (!isTextEntry(e.target)) {
-      movement.release(e.code);
-    }
+    // Always release: the press may have landed on the canvas while the
+    // release lands in a text field the user clicked into meanwhile. Releasing
+    // a key that was never pressed is a no-op.
+    movement.release(e.code);
   };
   // A keyup delivered to another window (Alt-Tab, a native dialog) would leave
   // the key held forever and the camera walking on its own.
@@ -1472,6 +1486,8 @@ async function bootApp(
     demolishAtCrosshair,
     enterImmersive: () => controls.lock(),
     flyTo: (position, lookAt) => {
+      // A pose set from outside wins over a scenic glide in progress.
+      cancelFlight();
       setMovementMode("fly");
       camera.position.set(position.x, position.y, position.z);
       camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
@@ -1504,9 +1520,11 @@ async function bootApp(
       }
       movement.setAnalog(x, y);
     },
+    // Neighbours are never demolished, so their footprints are computed once
+    // per layer (they stream in after the first frame) and reused thereafter.
     getFootprints: () => [
       ...cityFootprints(cityLayer),
-      ...extraCities.flatMap(cityFootprints),
+      ...extraCities.flatMap(neighbourFootprints),
     ],
     landcoverTiles,
     terrainBounds: unionBounds,

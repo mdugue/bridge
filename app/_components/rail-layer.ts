@@ -35,28 +35,47 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 
+// `properties` may be `null` in valid GeoJSON — every read goes through `?.`.
 interface RailFeature {
   geometry: { coordinates: [number, number][]; type: "LineString" };
-  properties: { electrified: number; tracks: number };
+  properties: { electrified?: number; tracks?: number } | null;
 }
 
 interface BridgeFeature {
   geometry: { coordinates: [number, number][][]; type: "Polygon" };
   properties: {
-    deck: number[];
-    kind: "other" | "path" | "rail" | "road";
-    name: string | null;
+    deck?: number[];
+    kind?: "other" | "path" | "rail" | "road";
+    name?: string | null;
     /** OSM bridge:structure (e.g. "arch", "beam", "beam;arch") for arch synthesis */
     structure?: string | null;
-  };
+  } | null;
 }
 
-interface AreaFeature {
+/** exported for tests */
+export interface AreaFeature {
   geometry: {
-    coordinates: [number, number][] | [number, number][][];
-    type: "LineString" | "Polygon";
+    coordinates:
+      | [number, number][]
+      | [number, number][][]
+      | [number, number][][][];
+    type: "LineString" | "MultiPolygon" | "Polygon";
   };
-  properties: Record<string, never>;
+  properties: Record<string, unknown> | null;
+}
+
+/** Outer rings of a Polygon or MultiPolygon geometry (holes are ignored). */
+function outerRings(geometry: AreaFeature["geometry"]): [number, number][][] {
+  if (geometry.type === "Polygon") {
+    const outer = (geometry.coordinates as [number, number][][])[0];
+    return outer ? [outer] : [];
+  }
+  if (geometry.type === "MultiPolygon") {
+    return (geometry.coordinates as [number, number][][][])
+      .map((poly) => poly[0])
+      .filter((ring): ring is [number, number][] => ring !== undefined);
+  }
+  return [];
 }
 
 export interface RailContext {
@@ -562,6 +581,19 @@ function meshFrom(
   return m;
 }
 
+/** A bridge feature's properties with defaults (`properties` may be null). */
+function bridgeProps(f: BridgeFeature): {
+  deck: number[];
+  kind: NonNullable<NonNullable<BridgeFeature["properties"]>["kind"]>;
+  structure: string;
+} {
+  return {
+    deck: f.properties?.deck ?? [],
+    kind: f.properties?.kind ?? "other",
+    structure: f.properties?.structure ?? "",
+  };
+}
+
 /** Builds the bridge decks and the rail-deck lift table. */
 function buildBridges(
   features: BridgeFeature[],
@@ -581,20 +613,16 @@ function buildBridges(
       continue;
     }
     const ring = ringToWorld(f.geometry.coordinates[0], ctx.offset);
-    const deck = f.properties.deck;
+    const { deck, kind, structure } = bridgeProps(f);
     if (ring.pts.length < 3 || deck.length < ring.pts.length) {
       continue;
     }
     const topY = ring.pts.map((_, i) => deck[i]);
-    const kind = f.properties.kind;
     addFootprint(tops[kind] ?? tops.other, ring, topY, DECK_DEPTH);
     addParapetWalls(stone, ring, topY);
     // Arch bridges (OSM bridge:structure ~ "arch") get spandrel arches spanning
     // between piers; everything else gets plain box piers.
-    if (
-      (f.properties.structure ?? "").includes("arch") &&
-      addArches(stone, ring, topY, ctx)
-    ) {
+    if (structure.includes("arch") && addArches(stone, ring, topY, ctx)) {
       // arches placed their own piers
     } else {
       addPiers(stone, ring, topY, ctx);
@@ -803,20 +831,23 @@ function addArches(
   return true;
 }
 
-/** One merged ballast surface from the dissolved railway-area polygons. */
-function buildBallast(features: AreaFeature[], ctx: RailContext): Mesh | null {
+/**
+ * One merged ballast surface from the dissolved railway-area polygons
+ * (Polygon or MultiPolygon — a yard dissolved into several parts). Exported
+ * for tests.
+ */
+export function buildBallast(
+  features: AreaFeature[],
+  ctx: RailContext
+): Mesh | null {
   const acc = mesh3();
   for (const f of features) {
-    if (f.geometry?.type !== "Polygon") {
-      continue;
-    }
-    const ring = ringToWorld(
-      (f.geometry.coordinates as [number, number][][])[0],
-      ctx.offset
-    );
-    const topY = clampRing(ring, BALLAST_RAISE, ctx);
-    if (topY) {
-      addFootprint(acc, ring, topY, BALLAST_DROP);
+    for (const outer of outerRings(f.geometry)) {
+      const ring = ringToWorld(outer, ctx.offset);
+      const topY = clampRing(ring, BALLAST_RAISE, ctx);
+      if (topY) {
+        addFootprint(acc, ring, topY, BALLAST_DROP);
+      }
     }
   }
   return meshFrom(acc, COLORS.ballast, ctx.heightFog, {
@@ -837,7 +868,7 @@ function buildRails(
     if (f.geometry?.type !== "LineString") {
       continue;
     }
-    const tracks = Math.min(Math.max(f.properties.tracks || 1, 1), 3);
+    const tracks = Math.min(Math.max(f.properties?.tracks || 1, 1), 3);
     const dense = densify(f.geometry.coordinates, SAMPLE_M);
     // Split into runs of points with valid ground (never bridge a NoData gap).
     let run: Pt[] = [];
@@ -880,14 +911,13 @@ function buildPlatforms(
   const acc = mesh3();
   for (const f of features) {
     const g = f.geometry;
-    if (g?.type === "Polygon") {
-      const ring = ringToWorld(
-        (g.coordinates as [number, number][][])[0],
-        ctx.offset
-      );
-      const topY = clampRing(ring, PLATFORM_H, ctx);
-      if (topY) {
-        addFootprint(acc, ring, topY, PLATFORM_H);
+    if (g?.type === "Polygon" || g?.type === "MultiPolygon") {
+      for (const outer of outerRings(g)) {
+        const ring = ringToWorld(outer, ctx.offset);
+        const topY = clampRing(ring, PLATFORM_H, ctx);
+        if (topY) {
+          addFootprint(acc, ring, topY, PLATFORM_H);
+        }
       }
     } else if (g?.type === "LineString") {
       const run: Pt[] = [];

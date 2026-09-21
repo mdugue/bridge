@@ -119,6 +119,7 @@ import {
   DEFAULT_CLAY_TRANSPARENCY,
 } from "./visual-style";
 import { DEFAULT_WATER_MIST } from "./water-layer";
+import { hasWebGl2 } from "./webgl-support";
 
 interface Props {
   /** Neighbouring tiles rendered around the primary one for context */
@@ -984,10 +985,19 @@ export default function CityWalk({
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
 
-  const [status, setStatus] = useState<Status>({
-    phase: "loading",
-    message: "Starting renderer…",
-  });
+  // Probed once, before the renderer is created: three's raw "Error creating
+  // WebGL context" is replaced by a sentence naming the one prerequisite.
+  const [webGl2] = useState(hasWebGl2);
+  const [status, setStatus] = useState<Status>(() =>
+    webGl2
+      ? { phase: "loading", message: "Starting renderer…" }
+      : {
+          phase: "error",
+          message:
+            "This viewer needs WebGL2, which this browser or device does not provide. " +
+            "Try a current desktop or mobile browser with hardware acceleration enabled.",
+        }
+  );
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   const [sun, setSun] = useState<SunState | null>(null);
   const [day, setDay] = useState(INITIAL_DATE);
@@ -1069,6 +1079,11 @@ export default function CityWalk({
   useEffect(() => {
     const container = mountRef.current;
     if (!container) {
+      return;
+    }
+    // The WebGL2 preflight already failed (see the status initializer): no
+    // renderer, no handle, nothing to clean up.
+    if (!webGl2) {
       return;
     }
     let cancelled = false;
@@ -1214,7 +1229,7 @@ export default function CityWalk({
       handleRef.current = null;
       handle?.dispose();
     };
-  }, [primary, extraTiles, insertedModelUrl]);
+  }, [primary, extraTiles, insertedModelUrl, webGl2]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);
