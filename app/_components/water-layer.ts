@@ -7,11 +7,9 @@ import {
   type Texture,
   Vector3,
 } from "three";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import type { SplatLayer } from "./terrain-layer";
-
-/** Default river-mist strength (0..1). */
-export const DEFAULT_WATER_MIST = 0.6;
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
 export interface WaterLayer {
@@ -121,7 +119,7 @@ function createWaterMist(
   uTime: { value: number },
   uSkyTint: { value: Color }
 ): { mesh: Mesh; setMist: (strength: number) => void } {
-  const uStrength = { value: DEFAULT_WATER_MIST };
+  const uStrength = { value: LOOK_DEFAULTS.waterMist };
   const material = new ShaderMaterial({
     uniforms: {
       uSplat: { value: mask.texture },
@@ -141,7 +139,7 @@ function createWaterMist(
   mesh.renderOrder = 3; // after the water sheet (2)
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.visible = DEFAULT_WATER_MIST > 0.001;
+  mesh.visible = LOOK_DEFAULTS.waterMist > 0.001;
   return {
     mesh,
     setMist: (strength) => {

@@ -74,14 +74,14 @@ config change.
     `city-layer.ts`, `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`,
     `inserted-building.ts`
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
-    `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`,
-    `look-defaults.ts` (initial slider values; the table itself is
-    `lib/city/look-controls.ts`)
+    `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
+    (the look table with its defaults is `lib/city/look-controls.ts`; the
+    store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
   - input/camera: `fps-movement.ts`, `touch-controls.ts`, `collision.ts`,
     `camera-flight.ts`, `viewpoints.ts`, `virtual-joystick.tsx`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
-  ground-clamp, the look-controls table, the Snapshot contract) with
+  ground-clamp, the look table + store, the Snapshot codec) with
   `bun test` units alongside
 - `scripts/` — the offline data bakes `extract-dlm.sh`, `extract-canopy.sh`,
   `extract-ndvi.sh`, `extract-roof-colour.sh`, `extract-lamps.sh`,
@@ -199,8 +199,8 @@ bridge or a misplaced layer is invisible looking straight down.
 ## QA: self-verify, don't ask for screenshots
 
 There is a **snapshot system**: the in-app Snapshot panel copies the full
-camera pose + sun time + look sliders as JSON; `__poc.getCameraState()` /
-`applyCameraState()` replay it. To check a visual change on a **real GPU**, drop
+camera pose + sun time + look sliders as JSON; `__poc.handle.getCameraState()`
+/ `applyCameraState()` replay it and `__poc.look.set()` drives the sliders. To check a visual change on a **real GPU**, drop
 a snapshot JSON into `shots/` and run:
 
 ```bash

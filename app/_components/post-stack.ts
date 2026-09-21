@@ -9,23 +9,15 @@ import {
 } from "postprocessing";
 import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { HalfFloatType, Vector2, Vector3 } from "three";
+import {
+  type FocusMode,
+  LOOK_DEFAULTS,
+  type LookValues,
+  type PostLookKey,
+} from "@/lib/city/look-controls";
 import { DepthGradingEffect } from "./depth-grading-effect";
 import { PaperGrainEffect } from "./paper-grain-effect";
 import type { AoQuality } from "./scene-profile";
-
-/** Photographic depth of field (autofocus on the crosshair) — default on. */
-export const DEFAULT_DOF = true;
-/** Focus mode: "auto" tracks the crosshair, "manual" uses a fixed distance. */
-export type FocusMode = "auto" | "manual";
-export const DEFAULT_FOCUS_MODE: FocusMode = "auto";
-/** Default manual focus distance (m). */
-export const DEFAULT_FOCUS_DISTANCE = 40;
-/** Default warm-near/cool-far grading intensity (0..1). */
-export const DEFAULT_DEPTH_GRADING = 0.5;
-/** Default contact-shadow (SSAO) strength (0..1). */
-export const DEFAULT_CONTACT_SHADOWS = 0.5;
-/** Default paper-grain intensity (0..1). */
-export const DEFAULT_PAPER_GRAIN = 0.25;
 
 /** Initial focus distance before the first crosshair raycast lands. */
 const HYPERFOCAL_M = 600;
@@ -58,23 +50,17 @@ export interface FocusInfo {
 }
 
 export interface PostStack {
+  /**
+   * Pushes the rendering rows of the look — depth grading, contact shadows,
+   * paper grain, depth of field and its focus mode/distance — into the passes.
+   */
+  applyLook: (look: LookValues) => void;
   dispose: () => void;
   /** current DoF focus distance/range/bokeh (QA). */
   getFocusInfo: () => FocusInfo;
   render: (deltaSeconds: number) => void;
-  /** 0..1 — soft contact-shadow (SSAO) strength; 0 disables the pass */
-  setContactShadows: (strength: number) => void;
-  /** 0..1 — strength of the warm-near/cool-far depth grade */
-  setDepthGrading: (intensity: number) => void;
-  setDepthOfField: (enabled: boolean) => void;
-  /** manual focus distance in metres (only used in "manual" focus mode) */
-  setFocusDistance: (meters: number) => void;
-  /** "auto" = crosshair autofocus; "manual" = fixed distance slider */
-  setFocusMode: (mode: FocusMode) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
-  /** 0..1 — paper-grain overlay intensity */
-  setPaperGrain: (intensity: number) => void;
   /**
    * Reduced-quality mode while the camera moves: skips the AO and DoF passes.
    * Layered under the sliders — it never resurrects a pass the user turned
@@ -104,7 +90,7 @@ export function createPostStack(
   const size = renderer.getSize(new Vector2());
   const ao = new N8AOPostPass(scene, camera, size.x, size.y);
   ao.configuration.aoRadius = 12;
-  ao.configuration.intensity = DEFAULT_CONTACT_SHADOWS * AO_INTENSITY_MAX;
+  ao.configuration.intensity = LOOK_DEFAULTS.contact * AO_INTENSITY_MAX;
   // Medium for the product, Performance for headless SwiftShader — decided
   // with the rest of the render budget (scene-profile.ts `aoQualityFor`).
   ao.setQualityMode(aoQuality);
@@ -121,18 +107,18 @@ export function createPostStack(
     resolutionScale: 0.5,
   });
   dof.target = focusPoint;
-  let focusMode: FocusMode = DEFAULT_FOCUS_MODE;
-  let manualDistance = DEFAULT_FOCUS_DISTANCE;
+  let focusMode: FocusMode = LOOK_DEFAULTS.focusMode;
+  let manualDistance = LOOK_DEFAULTS.focusDistanceM;
   const dofPass = new EffectPass(camera, dof);
-  dofPass.enabled = DEFAULT_DOF;
+  dofPass.enabled = LOOK_DEFAULTS.dof;
   composer.addPass(dofPass);
 
-  // User intent vs. motion regression are two independent layers: the sliders
-  // write the *Wanted flags, the render loop writes `regressed`, and only
+  // User intent vs. motion regression are two independent layers: the look
+  // writes the *Wanted flags, the render loop writes `regressed`, and only
   // applyPassGating() ever touches `.enabled`. Writing `.enabled` directly
   // from either side would make recovery clobber the user's choice.
-  let aoWanted = DEFAULT_CONTACT_SHADOWS > AO_OFF_EPSILON;
-  let dofWanted = DEFAULT_DOF;
+  let aoWanted = LOOK_DEFAULTS.contact > AO_OFF_EPSILON;
+  let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
   const applyPassGating = () => {
     ao.enabled = aoWanted && !regressed;
@@ -140,9 +126,9 @@ export function createPostStack(
   };
 
   const grading = new DepthGradingEffect();
-  grading.setIntensity(DEFAULT_DEPTH_GRADING);
+  grading.setIntensity(LOOK_DEFAULTS.grading);
   const grain = new PaperGrainEffect();
-  grain.setIntensity(DEFAULT_PAPER_GRAIN);
+  grain.setIntensity(LOOK_DEFAULTS.grain);
   composer.addPass(
     new EffectPass(
       camera,
@@ -153,6 +139,39 @@ export function createPostStack(
     )
   );
 
+  // One writer per rendering row — a Record over the keys, so a row added to
+  // the table cannot go unapplied.
+  const rows: Record<PostLookKey, (value: number) => void> = {
+    contact: (strength) => {
+      ao.configuration.intensity = strength * AO_INTENSITY_MAX;
+      aoWanted = strength > AO_OFF_EPSILON;
+    },
+    grading: (intensity) => grading.setIntensity(intensity),
+    grain: (intensity) => grain.setIntensity(intensity),
+  };
+
+  const setFocusMode = (mode: FocusMode) => {
+    focusMode = mode;
+    if (mode === "manual") {
+      // Drop the auto target and pin a fixed focus distance (world metres).
+      dof.target = null;
+      dof.cocMaterial.focusDistance = manualDistance;
+      dof.cocMaterial.focusRange = focusRangeFor(manualDistance);
+    } else {
+      dof.target = focusPoint;
+      dof.cocMaterial.focusRange = focusRangeFor(
+        camera.position.distanceTo(focusPoint)
+      );
+    }
+  };
+  const setFocusDistance = (meters: number) => {
+    manualDistance = Math.max(1, meters);
+    if (focusMode === "manual") {
+      dof.cocMaterial.focusDistance = manualDistance;
+      dof.cocMaterial.focusRange = focusRangeFor(manualDistance);
+    }
+  };
+
   return {
     render: (deltaSeconds) => composer.render(deltaSeconds),
     getFocusInfo: () => ({
@@ -161,45 +180,25 @@ export function createPostStack(
       bokehScale: dof.bokehScale,
     }),
     setSize: (width, height) => composer.setSize(width, height),
-    setDepthOfField: (enabled) => {
-      dofWanted = enabled;
+    applyLook: (look) => {
+      for (const key of Object.keys(rows) as PostLookKey[]) {
+        rows[key](look[key]);
+      }
+      dofWanted = look.dof;
       applyPassGating();
+      if (look.focusDistanceM !== manualDistance) {
+        setFocusDistance(look.focusDistanceM);
+      }
+      if (look.focusMode !== focusMode) {
+        setFocusMode(look.focusMode);
+      }
     },
-    setDepthGrading: (intensity) => grading.setIntensity(intensity),
-    setContactShadows: (strength) => {
-      const s = Math.min(Math.max(strength, 0), 1);
-      ao.configuration.intensity = s * AO_INTENSITY_MAX;
-      aoWanted = s > AO_OFF_EPSILON;
-      applyPassGating();
-    },
-    setPaperGrain: (intensity) => grain.setIntensity(intensity),
     setRegressed: (on) => {
       if (on === regressed) {
         return;
       }
       regressed = on;
       applyPassGating();
-    },
-    setFocusMode: (mode) => {
-      focusMode = mode;
-      if (mode === "manual") {
-        // Drop the auto target and pin a fixed focus distance (world metres).
-        dof.target = null;
-        dof.cocMaterial.focusDistance = manualDistance;
-        dof.cocMaterial.focusRange = focusRangeFor(manualDistance);
-      } else {
-        dof.target = focusPoint;
-        dof.cocMaterial.focusRange = focusRangeFor(
-          camera.position.distanceTo(focusPoint)
-        );
-      }
-    },
-    setFocusDistance: (meters) => {
-      manualDistance = Math.max(1, meters);
-      if (focusMode === "manual") {
-        dof.cocMaterial.focusDistance = manualDistance;
-        dof.cocMaterial.focusRange = focusRangeFor(manualDistance);
-      }
     },
     setFocusTarget: (point) => {
       // Manual mode pins its own distance — ignore the crosshair raycast.

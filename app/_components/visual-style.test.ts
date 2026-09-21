@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial } from "three";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
+  applyCityLook,
   applyCityStyle,
   createStyleResources,
   setCityTransparency,
@@ -41,6 +43,20 @@ test("transparency is clamped to 0..1", () => {
 
 test("the clay material is flagged shared so disposeObject3D spares it", () => {
   expect(createStyleResources().clay.userData.shared).toBe(true);
+});
+
+test("applyCityLook pushes the building rows into the uniforms and the transparency", () => {
+  const resources = createStyleResources();
+  applyCityLook(resources, {
+    ...LOOK_DEFAULTS,
+    tint: 0.42,
+    roughness: 0.3,
+    transparency: 0.5,
+  });
+  expect(resources.clayDetail.uTint.value).toBe(0.42);
+  expect(resources.clayDetail.uRough.value).toBe(0.3);
+  expect(resources.clay.opacity).toBeCloseTo(0.5, 5);
+  expect(resources.clay.alphaHash).toBe(true);
 });
 
 test("clay detail uniforms are live references the HUD can retune", () => {

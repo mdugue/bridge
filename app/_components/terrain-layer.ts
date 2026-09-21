@@ -153,10 +153,6 @@ async function loadColorSplat(url: string): Promise<Texture | null> {
   }
 }
 
-/** Default meadow-NDVI tint strength (Wiesenfärbung): lush-green↔dry across the
- *  DOP greenness. A middling default reads without looking like a heat map. */
-export const DEFAULT_MEADOW_NDVI = 0.6;
-
 /**
  * Loads the DOP NDVI raster (single-channel greenness) for the meadow tint.
  * LINEAR + mipmaps low-pass the ~2 m raster (the workflow's recommendation), so

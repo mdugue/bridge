@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { parseSnapshot, type Snapshot } from "./snapshot";
+import { LOOK_DEFAULTS } from "./look-controls";
+import {
+  decodeLook,
+  encodeSnapshot,
+  parseSnapshot,
+  type Snapshot,
+  snapshotInstant,
+} from "./snapshot";
 
 const valid: Snapshot = {
   v: 1,
@@ -132,4 +139,52 @@ test("a legacy snapshot with only the six original keys is accepted", () => {
 
 test("unknown versions are accepted", () => {
   expect(parseSnapshot(JSON.stringify({ ...valid, v: 7 })).ok).toBe(true);
+});
+
+test("what Copy encodes, Apply decodes back — through the same parser", () => {
+  const values = {
+    ...LOOK_DEFAULTS,
+    fogAmount: 0.35,
+    transparency: 0.9,
+    dof: false,
+    focusMode: "manual" as const,
+    focusDistanceM: 80,
+    multiTuft: false,
+  };
+  const snap = encodeSnapshot(values, valid.camera, new Date(valid.date));
+  expect(snap.v).toBe(1);
+  expect(snap.date).toBe(valid.date);
+  expect(snap.look?.fogPct).toBe(35);
+  expect(snap.look?.transparencyPct).toBe(90);
+  const parsed = parseSnapshot(JSON.stringify(snap));
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) {
+    return;
+  }
+  const patch = decodeLook(parsed.snapshot.look);
+  for (const [key, value] of Object.entries(values)) {
+    const decoded = patch[key as keyof typeof patch];
+    if (typeof value === "number") {
+      expect(decoded).toBeCloseTo(value, 6);
+    } else {
+      expect(decoded).toBe(value);
+    }
+  }
+});
+
+test("snapshotInstant floors a hand-edited instant to the minute the slider shows", () => {
+  const instant = snapshotInstant({ date: "2026-06-21T18:59:59.500Z" });
+  expect(instant.getSeconds()).toBe(0);
+  expect(instant.getMilliseconds()).toBe(0);
+  expect(instant.getTime()).toBe(
+    new Date("2026-06-21T18:59:00.000Z").getTime()
+  );
+});
+
+test("decodeLook leaves absent keys out, so an older snapshot keeps the current values", () => {
+  expect(decodeLook({ fogPct: 30, dof: false })).toEqual({
+    fogAmount: 0.3,
+    dof: false,
+  });
+  expect(decodeLook(undefined)).toEqual({});
 });

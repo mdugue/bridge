@@ -153,7 +153,7 @@ read true scene counts with FX off).
 ## QA: self-verify on a real GPU
 
 The in-app **Snapshot** panel serializes camera + sun time + look sliders to
-JSON; `__poc.getCameraState()` / `applyCameraState()` replay it. To eyeball a
+JSON; `__poc.handle.getCameraState()` / `applyCameraState()` replay it. To eyeball a
 change yourself:
 
 ```bash

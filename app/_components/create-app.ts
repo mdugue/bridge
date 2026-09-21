@@ -21,7 +21,12 @@ import { fogRangeFor } from "@/lib/city/atmosphere";
 import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { parseHeightfieldHeader } from "@/lib/city/heightfield";
-import type { LookTarget } from "@/lib/city/look-controls";
+import {
+  LOOK_DEFAULTS,
+  type LookValues,
+  type SceneLookKey,
+} from "@/lib/city/look-controls";
+import type { LookState } from "@/lib/city/look-state";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import type { CameraStateJson } from "@/lib/city/snapshot";
@@ -53,7 +58,7 @@ import {
   loadLamps,
 } from "./lamp-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
-import { createPostStack, type FocusMode } from "./post-stack";
+import { createPostStack } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import {
@@ -66,7 +71,6 @@ import {
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
 import {
-  DEFAULT_MEADOW_NDVI,
   loadTerrain,
   type TerrainLayer,
   type WallFeature,
@@ -81,9 +85,9 @@ import { attachTouchControls } from "./touch-controls";
 import { loadVegetation, type VegetationControl } from "./vegetation-layer";
 import type { Viewpoint } from "./viewpoints";
 import {
+  applyCityLook,
   applyCityStyle,
   createStyleResources,
-  setCityTransparency,
 } from "./visual-style";
 import { loadWalls, type WallControl } from "./wall-layer";
 
@@ -112,8 +116,6 @@ const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
  *  a margin, so the missing neighbours read as haze, not as an edge. */
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
-/** Default fog amount (0..1). Kept light — a gentle far haze, not a near wall. */
-export const DEFAULT_ATMOSPHERE = 0.2;
 
 export type LayerName =
   | "city"
@@ -198,6 +200,12 @@ export interface CityWalkOptions {
   insertAt?: { x: number; y: number };
   insertedModelUrl?: string;
   /**
+   * The look store (HUD-owned; lib/city/look-state.ts): the scene applies its
+   * current values at boot, on every change, and to each tile that lands
+   * later. It outlives the scene, so dispose() unsubscribes.
+   */
+  look: LookState;
+  /**
    * A layer that streams in after the first frame (neighbour tiles,
    * vegetation, rails, walls) failed to load. The primary scene keeps
    * running; the HUD shows the message.
@@ -223,11 +231,11 @@ export interface CityWalkOptions {
 }
 
 /**
- * The 21 percent-style look setters come from LookTarget (one per row of
- * LOOK_CONTROLS in lib/city/look-controls.ts — the table is their
- * documentation); the compiler proves the handle literal implements each.
+ * The imperative surface the HUD (and, in dev/test builds, `window.__poc`)
+ * drives. The look values are NOT here: they live in the look store passed in
+ * through CityWalkOptions, which the scene subscribes to.
  */
-export interface CityWalkHandle extends LookTarget {
+export interface CityWalkHandle {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
   demolishAtCrosshair: () => void;
@@ -275,18 +283,10 @@ export interface CityWalkHandle extends LookTarget {
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
-  /** photographic depth of field with crosshair autofocus */
-  setDepthOfField: (enabled: boolean) => void;
-  /** manual focus distance (m), used when focus mode is "manual" */
-  setFocusDistance: (meters: number) => void;
-  /** depth-of-field focus: "auto" (crosshair) or "manual" (fixed distance) */
-  setFocusMode: (mode: FocusMode) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
   setSun: (date: Date) => SunState;
-  /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
-  setTreeMultiTuft: (enabled: boolean) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -397,7 +397,7 @@ export async function createCityWalkApp(
   const renderer = createRenderer(opts.container, profile, tier);
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
-  const fogRange = fogRangeFor(DEFAULT_ATMOSPHERE);
+  const fogRange = fogRangeFor(opts.look.get().fogAmount);
   scene.fog = new Fog(SKY_COLOR, fogRange.near, fogRange.far);
 
   // Everything bootApp creates registers its teardown here, so a boot that
@@ -513,7 +513,7 @@ async function bootApp(
   const heightFog = createHeightFogUniforms();
   // Shared meadow-NDVI tint strength (by reference): bound into every tile's
   // terrain material so the HUD slider retunes the Wiesenfärbung live.
-  const meadowNdvi = { value: DEFAULT_MEADOW_NDVI };
+  const meadowNdvi = { value: LOOK_DEFAULTS.meadowNdvi };
   // Per-tile vegetation handles, kept so the loop can drive crown LOD and the
   // HUD can retune shimmer / multi-tuft.
   const vegControls: VegetationControl[] = [];
@@ -607,6 +607,9 @@ async function bootApp(
       // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
       scene.add(vegetation.group);
       vegControls.push(vegetation);
+      // Born with the current look, not the default: a slider moved while
+      // this tile streamed in must reach it too.
+      vegetation.applyLook(opts.look.get());
     }
     if (tile.lampsSrc) {
       const lamps = await loadLamps(tile.lampsSrc, {
@@ -828,7 +831,7 @@ async function bootApp(
   // the primary tile's edge; a tighter fog turns that edge into haze instead
   // of a cliff against the sky. The slider value is kept and re-applied once
   // the block is complete.
-  let fogAmount = DEFAULT_ATMOSPHERE;
+  let fogAmount = opts.look.get().fogAmount;
   let worldPartial = neighbourTiles.length > 0;
   const applyFog = () => {
     if (!(scene.fog instanceof Fog)) {
@@ -860,6 +863,49 @@ async function bootApp(
     aoQualityFor(budget.profile)
   );
   cleanups.push(() => postStack.dispose());
+
+  // The look store is the one source of every slider value: applied now, on
+  // every change, and (in loadTileTerrain / loadTileDressing) to each owner
+  // that lands later. The store outlives this instance — unsubscribe on
+  // dispose or an aborted StrictMode boot keeps receiving writes.
+  // One writer per scene-owned row — a Record over the keys, so a row added to
+  // the table cannot go unapplied. (A full re-apply is a few dozen uniform
+  // writes, cheaper than the bookkeeping to diff.)
+  const sceneRows: Record<SceneLookKey, (value: number) => void> = {
+    fogAmount: (amount) => {
+      fogAmount = amount;
+      applyFog();
+    },
+    heightFog: (strength) => {
+      heightFog.uFogHeightStrength.value = strength;
+    },
+    meadowNdvi: (strength) => {
+      meadowNdvi.value = strength;
+    },
+    waterMist: (strength) => {
+      for (const t of terrains) {
+        t.water?.setMist(strength);
+      }
+    },
+  };
+  let lastTransparency = Number.NaN;
+  const applyLook = (look: LookValues) => {
+    for (const key of Object.keys(sceneRows) as SceneLookKey[]) {
+      sceneRows[key](look[key]);
+    }
+    applyCityLook(styleResources, look);
+    if (look.transparency !== lastTransparency) {
+      lastTransparency = look.transparency;
+      // Clay's alpha-hash cutout changes what the depth pass writes.
+      invalidateShadows();
+    }
+    postStack.applyLook(look);
+    for (const veg of vegControls) {
+      veg.applyLook(look);
+    }
+  };
+  applyLook(opts.look.get());
+  cleanups.push(opts.look.subscribe(applyLook));
 
   // Spawn at the recenter point (= world origin), standing on the terrain.
   const groundY = heightAt(offset.cx, offset.cy) ?? worldBounds.min.y;
@@ -1382,6 +1428,9 @@ async function bootApp(
       terrainMeshes.push(sc.terrain.mesh);
       wallFeaturesByTile.push(sc.wallFeatures);
       lowerFogFloor(sc.terrain);
+      // Joins the look fan-out here, so seed it here: a slider moved while
+      // the neighbours streamed in must reach this tile's mist too.
+      sc.terrain.water?.setMist(opts.look.get().waterMist);
     }
     invalidateShadows();
     scheduleIndexing();
@@ -1419,84 +1468,6 @@ async function bootApp(
 
   return {
     setSun,
-    setDepthOfField: (enabled) => postStack.setDepthOfField(enabled),
-    setFocusMode: (mode) => postStack.setFocusMode(mode),
-    setFocusDistance: (meters) => postStack.setFocusDistance(meters),
-    setDepthGrading: (intensity) => postStack.setDepthGrading(intensity),
-    setContactShadows: (strength) => postStack.setContactShadows(strength),
-    setPaperGrain: (intensity) => postStack.setPaperGrain(intensity),
-    setBuildingGroundShade: (strength) => {
-      styleResources.clayDetail.uAO.value = strength;
-    },
-    setBuildingBands: (strength) => {
-      styleResources.clayDetail.uBands.value = strength;
-    },
-    setBuildingRim: (strength) => {
-      styleResources.clayDetail.uRim.value = strength;
-    },
-    setBuildingTint: (strength) => {
-      styleResources.clayDetail.uTint.value = strength;
-    },
-    setBuildingRoofTint: (strength) => {
-      styleResources.clayDetail.uRoofTint.value = strength;
-    },
-    setBuildingRoofVibrance: (strength) => {
-      styleResources.clayDetail.uRoofVibrance.value = strength;
-    },
-    setMeadowNdvi: (strength) => {
-      meadowNdvi.value = strength;
-    },
-    setBuildingEave: (strength) => {
-      styleResources.clayDetail.uEave.value = strength;
-    },
-    setBuildingDuskGlow: (strength) => {
-      styleResources.clayDetail.uDuskGlow.value = strength;
-    },
-    setBuildingRoughness: (strength) => {
-      styleResources.clayDetail.uRough.value = strength;
-    },
-    setTreeShimmer: (strength) => {
-      for (const veg of vegControls) {
-        veg.setShimmer(strength);
-      }
-    },
-    setTreeTranslucency: (strength) => {
-      for (const veg of vegControls) {
-        veg.setTranslucency(strength);
-      }
-    },
-    setTreeLeafFlutter: (strength) => {
-      for (const veg of vegControls) {
-        veg.setLeafFlutter(strength);
-      }
-    },
-    setTreeLeafBright: (strength) => {
-      for (const veg of vegControls) {
-        veg.setLeafBright(strength);
-      }
-    },
-    setTreeMultiTuft: (enabled) => {
-      for (const veg of vegControls) {
-        veg.setMultiTuft(enabled);
-      }
-    },
-    setHeightFog: (strength) => {
-      heightFog.uFogHeightStrength.value = Math.min(Math.max(strength, 0), 1);
-    },
-    setWaterMist: (strength) => {
-      for (const t of terrains) {
-        t.water?.setMist(strength);
-      }
-    },
-    setBuildingTransparency: (transparency) => {
-      setCityTransparency(styleResources, transparency);
-      // Clay's alpha-hash cutout changes what the depth pass writes.
-      invalidateShadows();
-    },
-    setAtmosphere: (amount) => {
-      fogAmount = amount;
-      applyFog();
-    },
     insertBuilding,
     demolishAtCrosshair,
     enterImmersive: () => controls.lock(),

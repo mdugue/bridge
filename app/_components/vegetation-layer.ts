@@ -14,6 +14,11 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
+import {
+  LOOK_DEFAULTS,
+  type LookValues,
+  type VegetationLookKey,
+} from "@/lib/city/look-controls";
 import { fetchFeatures, isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
@@ -45,27 +50,6 @@ export interface VegetationContext {
   sunDirection?: Vector3;
 }
 
-/** Default backlit-shimmer strength and whether the rich (near) crown is on. */
-export const DEFAULT_TREE_SHIMMER = 0.45;
-export const DEFAULT_TREE_MULTITUFT = true;
-/** Default backlit translucency (shadow-gated subsurface glow) strength. */
-export const DEFAULT_TREE_TRANSLUCENCY = 0.5;
-/**
- * Two coupled "moving leaves" effects on the crown, each independently tunable
- * (zero one to preview the other):
- * - (A) `LEAF_FLUTTER`: small, irregular bright specks (world-space value noise,
- *   ~1-2 m cells, two octaves + drift) where wind flips leaves to their paler
- *   underside; the crown albedo blends toward a lighter silver-sage — gated to
- *   SUNLIT, sun-facing leaves so it reads as light glinting off turning leaves,
- *   not a tree-group-wide band.
- * - (B) `LEAF_BRIGHT`: the crown brightens as it leans into the same gust and
- *   dims as it rocks back (centred on the existing wind-sway, so the mean colour
- *   is unchanged) — motion and light agree.
- * Both run in the MAIN pass only (the shadow/depth material has neither), so
- * they add no shadow-pass cost and no extra attribute/buffer upload.
- */
-export const DEFAULT_TREE_LEAF_FLUTTER = 0.5;
-export const DEFAULT_TREE_LEAF_BRIGHT = 0.5;
 /**
  * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
  * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
@@ -81,17 +65,26 @@ const LOD_NEAR_OUT_M = 300;
  * tuning of the shimmer and the rich-crown toggle.
  */
 export interface VegetationControl {
+  /**
+   * Pushes the vegetation rows of the look into the crowns: the backlit
+   * shimmer, the shadow-gated translucency, the multi-tuft crown LOD toggle,
+   * and the two coupled "moving leaves" effects, each independently tunable
+   * (zero one to preview the other):
+   * - (A) leafFlutter: small, irregular bright specks (world-space value
+   *   noise, ~1-2 m cells, two octaves + drift) where wind flips leaves to
+   *   their paler underside; the crown albedo blends toward a lighter
+   *   silver-sage — gated to SUNLIT, sun-facing leaves so it reads as light
+   *   glinting off turning leaves, not a tree-group-wide band.
+   * - (B) leafBright: the crown brightens as it leans into the same gust and
+   *   dims as it rocks back (centred on the wind sway, so the mean colour is
+   *   unchanged) — motion and light agree.
+   * Both run in the MAIN pass only (the shadow/depth material has neither),
+   * so they add no shadow-pass cost and no extra attribute/buffer upload.
+   */
+  applyLook: (look: LookValues) => void;
   group: Group;
-  /** (B) sway-coupled crown brightness strength 0..1 */
-  setLeafBright: (strength: number) => void;
-  /** (A) wind-gust leaf-flutter colour shimmer strength 0..1 */
-  setLeafFlutter: (strength: number) => void;
-  setMultiTuft: (enabled: boolean) => void;
-  setShimmer: (strength: number) => void;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
   setTime: (seconds: number) => void;
-  /** backlit (shadow-gated) translucency strength 0..1 on near/large crowns */
-  setTranslucency: (strength: number) => void;
   /** swaps crown LOD per chunk; returns true when any chunk changed (the shadow map must then be redrawn) */
   updateLod: (cameraPos: Vector3) => boolean;
 }
@@ -809,16 +802,25 @@ export async function loadVegetation(
   const group = new Group();
   group.name = "vegetation";
 
-  const shimmer = { value: DEFAULT_TREE_SHIMMER };
-  const translucency = { value: DEFAULT_TREE_TRANSLUCENCY };
-  const leafFlutter = { value: DEFAULT_TREE_LEAF_FLUTTER };
-  const leafBright = { value: DEFAULT_TREE_LEAF_BRIGHT };
+  // Booted at the table defaults; the caller applies the current look next.
+  const shimmer = { value: LOOK_DEFAULTS.shimmer };
+  const translucency = { value: LOOK_DEFAULTS.translucency };
+  const leafFlutter = { value: LOOK_DEFAULTS.leafFlutter };
+  const leafBright = { value: LOOK_DEFAULTS.leafBright };
+  // The crown uniform each vegetation row drives — a Record over the keys, so
+  // a row added to the table cannot go unapplied.
+  const rowUniform: Record<VegetationLookKey, { value: number }> = {
+    leafBright,
+    leafFlutter,
+    shimmer,
+    translucency,
+  };
   // By-reference clock for the crown wind sway; advanced once per frame by the
   // render loop (same elapsed seconds as the water ripple). One uniform write
   // per tile per frame.
   const uTime = { value: 0 };
   const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
-  let multiTuft = DEFAULT_TREE_MULTITUFT;
+  let multiTuft = LOOK_DEFAULTS.multiTuft;
   let cells: CellLod[] = [];
 
   const [rowFeatures, canopyFeatures, ndviSampler] = await Promise.all([
@@ -854,23 +856,14 @@ export async function loadVegetation(
 
   return {
     group,
-    setShimmer: (strength) => {
-      shimmer.value = strength;
-    },
-    setLeafFlutter: (strength) => {
-      leafFlutter.value = strength;
-    },
-    setLeafBright: (strength) => {
-      leafBright.value = strength;
-    },
-    setMultiTuft: (enabled) => {
-      multiTuft = enabled;
+    applyLook: (look) => {
+      for (const key of Object.keys(rowUniform) as VegetationLookKey[]) {
+        rowUniform[key].value = look[key];
+      }
+      multiTuft = look.multiTuft;
     },
     setTime: (seconds) => {
       uTime.value = seconds;
-    },
-    setTranslucency: (strength) => {
-      translucency.value = strength;
     },
     // Rich crown only near the camera (and only when multi-tuft is enabled);
     // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in
