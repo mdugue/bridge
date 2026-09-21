@@ -13,9 +13,8 @@ import type {
   BridgeFeature,
   RailFeature,
 } from "@/lib/city/features";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
-import { fetchFeatures } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
@@ -57,24 +56,20 @@ function outerRings(
   return [];
 }
 
-export interface RailContext {
-  /** baked bridge-deck GeoJSONs (one per tile) */
-  bridgeUrls: string[];
-  heightAt: (x: number, y: number) => number | null;
+export interface RailContext extends GroundContext {
   heightFog?: HeightFogUniforms;
-  offset: { cx: number; cy: number };
-  /** baked OSM platform GeoJSONs (ODbL) */
-  platformUrls: string[];
-  /** baked dissolved ballast-area GeoJSONs */
-  railareaUrls: string[];
-  /** baked railway-track centreline GeoJSONs */
-  railUrls: string[];
-  signal?: AbortSignal;
 }
 
-export interface RailControl {
-  dispose: () => void;
-  group: Group;
+/** The whole block's baked features, every tile's lists merged. */
+export interface RailFeatures {
+  /** dissolved ballast areas (Basis-DLM ver03_f) */
+  ballast: AreaFeature[];
+  /** bridge decks (Basis-DLM ver06_f) */
+  bridges: BridgeFeature[];
+  /** OSM platforms (ODbL) */
+  platforms: AreaFeature[];
+  /** railway-track centrelines (Basis-DLM ver03_l) */
+  rails: RailFeature[];
 }
 
 const SAMPLE_M = 4; // densify polylines to this spacing (m)
@@ -885,51 +880,31 @@ function buildPlatforms(
 }
 
 /**
- * Loads the baked rail/bridge/ballast/platform GeoJSONs for the WHOLE tile block
- * (one call, cross-tile heightAt) and builds the stylized geometry on the Y-up
- * scene. Bridges build first so the rails can ride their decks. Non-fatal.
+ * Builds the WHOLE tile block's rails, bridges, ballast and platforms (one
+ * call, cross-tile heightAt) as stylized geometry on the Y-up scene. Bridges
+ * build first so the rails can ride their decks. Empty inputs yield an empty
+ * group; the group is freed with the scene (disposeObject3D).
  */
-export async function loadRail(ctx: RailContext): Promise<RailControl> {
+export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   const group = new Group();
   group.name = "rail";
 
-  const fetchAll = <T>(urls: string[]) =>
-    Promise.all(urls.map((u) => fetchFeatures<T>(u, ctx.signal))).then(
-      (lists) => lists.flat()
-    );
-
-  const [railFeatures, bridgeFeatures, railareaFeatures, platformFeatures] =
-    await Promise.all([
-      fetchAll<RailFeature>(ctx.railUrls),
-      fetchAll<BridgeFeature>(ctx.bridgeUrls),
-      fetchAll<AreaFeature>(ctx.railareaUrls),
-      fetchAll<AreaFeature>(ctx.platformUrls),
-    ]);
-
-  const { meshes: bridgeMeshes, decks } = buildBridges(bridgeFeatures, ctx);
-  group.add(...bridgeMeshes);
-  const ballast = buildBallast(railareaFeatures, ctx);
+  const { meshes: bridgeMeshes, decks } = buildBridges(features.bridges, ctx);
+  // add() with no arguments logs a three error, so guard the spread.
+  if (bridgeMeshes.length > 0) {
+    group.add(...bridgeMeshes);
+  }
+  const ballast = buildBallast(features.ballast, ctx);
   if (ballast) {
     group.add(ballast);
   }
-  const rails = buildRails(railFeatures, ctx, decks);
+  const rails = buildRails(features.rails, ctx, decks);
   if (rails) {
     group.add(rails);
   }
-  const platforms = buildPlatforms(platformFeatures, ctx);
+  const platforms = buildPlatforms(features.platforms, ctx);
   if (platforms) {
     group.add(platforms);
   }
-
-  return {
-    group,
-    dispose: () => {
-      group.traverse((o) => {
-        if (o instanceof Mesh) {
-          o.geometry.dispose();
-          (o.material as MeshStandardMaterial).dispose();
-        }
-      });
-    },
-  };
+  return group;
 }

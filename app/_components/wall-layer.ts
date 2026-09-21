@@ -7,7 +7,7 @@ import {
   MeshStandardMaterial,
 } from "three";
 import type { WallFeature } from "@/lib/city/features";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
@@ -22,18 +22,8 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 
-export interface WallContext {
-  heightAt: (x: number, y: number) => number | null;
+export interface WallContext extends GroundContext {
   heightFog?: HeightFogUniforms;
-  offset: { cx: number; cy: number };
-  /** baked OSM wall features of every tile, already fetched (once per tile,
-   * shared with the terrain conflation step) */
-  wallFeatures: WallFeature[];
-}
-
-export interface WallControl {
-  dispose: () => void;
-  group: Group;
 }
 
 const SAMPLE_M = 2.5; // densify polylines to this spacing (m)
@@ -163,11 +153,13 @@ function buildWallGeometry(
   return geo;
 }
 
-export function loadWalls(ctx: WallContext): WallControl {
+/**
+ * Builds every tile's walls (the features each tile fetched once, shared with
+ * its terrain conflation) as one ribbon mesh; freed with the scene.
+ */
+export function buildWalls(features: WallFeature[], ctx: WallContext): Group {
   const group = new Group();
   group.name = "walls";
-
-  const features = ctx.wallFeatures;
 
   const material = new MeshStandardMaterial({
     color: WALL_COLOR,
@@ -188,14 +180,5 @@ export function loadWalls(ctx: WallContext): WallControl {
     group.add(mesh);
   }
 
-  return {
-    group,
-    dispose: () => {
-      material.dispose();
-      group.traverse((o) => {
-        const m = o as Mesh;
-        m.geometry?.dispose();
-      });
-    },
-  };
+  return group;
 }

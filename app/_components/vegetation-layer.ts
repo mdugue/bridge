@@ -14,36 +14,34 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
+import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import {
   LOOK_DEFAULTS,
   type LookValues,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
 import { samplePolyline } from "@/lib/city/polyline";
-import { fetchFeatures, isAbortError } from "./fetch-optional";
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
-/** Tile extent in the projected CRS: [minX, minY, maxX, maxY]. */
-type Bounds = [number, number, number, number];
+/** Samples a baked raster at projected coords → 0..1, or undefined off-tile. */
+export type RasterSampler = (x: number, y: number) => number | undefined;
 
-/** Samples a baked raster at projected coords → byte value, or undefined off-tile. */
-type RasterSampler = (x: number, y: number) => number | undefined;
+/** One tile's decoded vegetation inputs. */
+export interface VegetationFeatures {
+  /** DOM1-derived canopy points (trees scaled to their measured height) */
+  canopy: CanopyFeature[];
+  /** the DOP NDVI sampler (loadNdviSampler), for lush↔dry crown colour */
+  ndviAt?: RasterSampler;
+  /** ATKIS veg04 hedges and tree rows */
+  rows: VegRowFeature[];
+}
 
-/** Recenter offset + ground lookup shared with the terrain. */
-export interface VegetationContext {
-  /** tile extent (EPSG) for the NDVI raster lookup; required with `ndviUrl` */
-  bounds?: Bounds;
-  /** optional canopy GeoJSON (points with an "h" height) from DOM1 */
-  canopyUrl?: string;
-  heightAt: (x: number, y: number) => number | null;
+export interface VegetationContext extends GroundContext {
   /** shared valley height-fog uniforms (by reference), patched into the
    * crown/trunk/hedge materials so tree bases pool haze with the terrain */
   heightFog?: HeightFogUniforms;
-  /** optional DOP-derived NDVI raster (PNG, L) for lush↔dry crown colour */
-  ndviUrl?: string;
-  offset: { cx: number; cy: number };
-  signal?: AbortSignal;
   /**
    * Shared world-space sun direction (surface→sun), updated by the sun rig.
    * The crown material reads it (by reference) for the backlit shimmer. May be
@@ -671,9 +669,9 @@ function sampleMaxWindow(
  * failure (no raster, decode error, no OffscreenCanvas) so crowns fall back to
  * the hash-only sage — graceful degradation, see docs/portability.md.
  */
-async function loadNdviSampler(
+export async function loadNdviSampler(
   url: string,
-  bounds: Bounds,
+  bounds: TerrainBounds,
   signal?: AbortSignal
 ): Promise<RasterSampler | null> {
   if (typeof OffscreenCanvas === "undefined") {
@@ -753,14 +751,13 @@ function collectCanopy(
  * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
  * their measured height). Everything is drawn with InstancedMeshes so tens of
  * thousands of plants stay cheap; each is dropped onto the terrain via
- * `heightAt` and points off the tile are skipped.
- *
- * Non-fatal: any failure resolves to an empty group so the scene still loads.
+ * `heightAt` and points off the tile are skipped. Empty inputs yield an empty
+ * group; the meshes are freed with the scene (disposeObject3D).
  */
-export async function loadVegetation(
-  url: string,
+export function buildVegetation(
+  features: VegetationFeatures,
   ctx: VegetationContext
-): Promise<VegetationControl> {
+): VegetationControl {
   const group = new Group();
   group.name = "vegetation";
 
@@ -785,19 +782,9 @@ export async function loadVegetation(
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let cells: CellLod[] = [];
 
-  const [rowFeatures, canopyFeatures, ndviSampler] = await Promise.all([
-    fetchFeatures<VegRowFeature>(url, ctx.signal),
-    ctx.canopyUrl
-      ? fetchFeatures<CanopyFeature>(ctx.canopyUrl, ctx.signal)
-      : Promise.resolve([]),
-    ctx.ndviUrl && ctx.bounds
-      ? loadNdviSampler(ctx.ndviUrl, ctx.bounds, ctx.signal)
-      : Promise.resolve(null),
-  ]);
-  const ndviAt = ndviSampler ?? undefined;
-
-  const { trees, hedges } = collectPlacements(rowFeatures, ctx, ndviAt);
-  trees.push(...collectCanopy(canopyFeatures, ctx, ndviAt));
+  const { ndviAt } = features;
+  const { trees, hedges } = collectPlacements(features.rows, ctx, ndviAt);
+  trees.push(...collectCanopy(features.canopy, ctx, ndviAt));
   if (trees.length > 0) {
     const built = buildTrees(
       trees,

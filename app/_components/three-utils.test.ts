@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   BoxGeometry,
   type BufferGeometry,
+  InstancedMesh,
   type Material,
   Mesh,
   MeshBasicMaterial,
@@ -74,6 +75,20 @@ test("two meshes sharing one material dispose without throwing", () => {
 
   expect(() => disposeObject3D(group)).not.toThrow();
   expect(calls()).toBeGreaterThanOrEqual(1);
+});
+
+test("an InstancedMesh gets its own dispose event, for its instance buffers", () => {
+  const mesh = new InstancedMesh(new BoxGeometry(), new MeshBasicMaterial(), 4);
+  let calls = 0;
+  mesh.addEventListener("dispose", () => {
+    calls += 1;
+  });
+  const group = new Object3D();
+  group.add(mesh);
+
+  disposeObject3D(group);
+
+  expect(calls).toBe(1);
 });
 
 test("a bare Object3D is traversed without throwing", () => {

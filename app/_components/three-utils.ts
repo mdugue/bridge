@@ -1,4 +1,10 @@
-import type { BufferGeometry, Material, Object3D, Texture } from "three";
+import type {
+  BufferGeometry,
+  InstancedMesh,
+  Material,
+  Object3D,
+  Texture,
+} from "three";
 
 function disposeMaterial(material: Material | Material[] | undefined): void {
   if (Array.isArray(material)) {
@@ -15,9 +21,12 @@ function disposeMaterial(material: Material | Material[] | undefined): void {
 }
 
 /**
- * Frees GPU resources of a subtree. Demolish rebuilds the tile's building
- * mesh from the filtered vertex stream and drops the old one (city-layer.ts);
- * without this every demolish would leak its buffers.
+ * Frees the geometries and materials of a subtree. Demolish rebuilds the
+ * tile's building mesh from the filtered vertex stream and drops the old one
+ * (city-layer.ts); without this every demolish would leak its buffers, and
+ * dispose() runs it over the whole scene at teardown. Textures are NOT
+ * reached (a material may share them): the layer that created a texture
+ * frees it — TerrainLayer.dispose, LampControl.dispose, SunRig.dispose.
  */
 export function disposeObject3D(root: Object3D): void {
   root.traverse((obj) => {
@@ -27,6 +36,11 @@ export function disposeObject3D(root: Object3D): void {
     };
     resource.geometry?.dispose();
     disposeMaterial(resource.material);
+    // The per-instance matrix/colour buffers are released on the mesh's own
+    // dispose event, not the geometry's.
+    if ((obj as InstancedMesh).isInstancedMesh) {
+      (obj as InstancedMesh).dispose();
+    }
   });
 }
 

@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { Box3, DirectionalLight, Scene, Vector3 } from "three";
+import {
+  Box3,
+  DirectionalLight,
+  Scene,
+  Vector3,
+  type WebGLRenderTarget,
+} from "three";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
 
@@ -85,6 +91,20 @@ test("invalidateShadow redraws", () => {
   sunRig.invalidateShadow();
   expect(sun.shadow.needsUpdate).toBe(true);
   expect(sunRig.shadowPending()).toBe(true);
+});
+
+test("dispose frees the shadow map and is safe before any render", () => {
+  const { sunRig, sun } = rig();
+  expect(() => sunRig.dispose()).not.toThrow();
+  let calls = 0;
+  // reason: the rig only needs the one method of the render target it frees
+  sun.shadow.map = {
+    dispose: () => {
+      calls += 1;
+    },
+  } as unknown as WebGLRenderTarget;
+  sunRig.dispose();
+  expect(calls).toBe(1);
 });
 
 test("nightFactor ramps across civil dusk", () => {

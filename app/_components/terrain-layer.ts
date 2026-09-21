@@ -1,7 +1,6 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  ImageBitmapLoader,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
@@ -26,7 +25,11 @@ import {
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
-import { fetchGzipped, fetchRequiredJson } from "./fetch-optional";
+import {
+  fetchGzipped,
+  fetchRequiredJson,
+  isAbortError,
+} from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
@@ -34,6 +37,9 @@ import { createWaterLayer, type WaterLayer } from "./water-layer";
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
   bounds: TerrainBounds;
+  /** Frees the rasters. Geometry and materials are freed with the scene
+   *  (disposeObject3D); the tracked textures are this layer's to free. */
+  dispose: () => void;
   /** bilinear elevation lookup at projected (not recentered) coordinates */
   heightAt: (x: number, y: number) => number | null;
   mesh: Mesh;
@@ -78,10 +84,13 @@ export interface TerrainOptions {
  * on the main thread, per tile and per raster. `createImageBitmap` decodes
  * in the browser's image workers, already in the orientation three needs
  * (`imageOrientation: "none"` = the flipY=false these rasters use), so the
- * first frame only pays the GPU upload. Rejects on a decode/network failure.
+ * first frame only pays the GPU upload. Rejects on a decode/network failure
+ * and on abort, so a torn-down instance stops decoding rasters it will
+ * throw away.
  */
 async function loadBitmapTexture(
-  url: string
+  url: string,
+  signal?: AbortSignal
 ): Promise<{ height: number; texture: Texture; width: number }> {
   if (typeof createImageBitmap === "undefined") {
     const texture = await new TextureLoader().loadAsync(url);
@@ -89,13 +98,15 @@ async function loadBitmapTexture(
     const img = texture.image as { height: number; width: number };
     return { texture, width: img.width, height: img.height };
   }
-  const loader = new ImageBitmapLoader();
-  loader.setOptions({
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  }
+  const bitmap = await createImageBitmap(await res.blob(), {
     imageOrientation: "none",
     premultiplyAlpha: "none",
     colorSpaceConversion: "none",
   });
-  const bitmap = await loader.loadAsync(url);
   const texture = new Texture(bitmap);
   texture.flipY = false;
   texture.needsUpdate = true;
@@ -116,9 +127,12 @@ async function loadBitmapTexture(
  * must not be interpolated) in linear space (the red channel is a class id,
  * not a colour). Non-fatal: a failure just falls back to the flat sage ground.
  */
-async function loadSplatTexture(url: string): Promise<Texture | null> {
+async function loadSplatTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
   try {
-    const { texture, width, height } = await loadBitmapTexture(url);
+    const { texture, width, height } = await loadBitmapTexture(url, signal);
     texture.magFilter = NearestFilter;
     texture.minFilter = NearestFilter;
     texture.generateMipmaps = false;
@@ -129,7 +143,10 @@ async function loadSplatTexture(url: string): Promise<Texture | null> {
     texture.format = RedFormat;
     trackTexture(texture, textureBytes(width, height, 1, false));
     return texture;
-  } catch {
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
     return null;
   }
 }
@@ -139,9 +156,12 @@ async function loadSplatTexture(url: string): Promise<Texture | null> {
  * LINEAR + mipmaps + anisotropy let the GPU filter it smoothly, so class
  * boundaries no longer stair-step at grazing angles. Colour data → sRGB.
  */
-async function loadColorSplat(url: string): Promise<Texture | null> {
+async function loadColorSplat(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
   try {
-    const { texture, width, height } = await loadBitmapTexture(url);
+    const { texture, width, height } = await loadBitmapTexture(url, signal);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
@@ -149,7 +169,10 @@ async function loadColorSplat(url: string): Promise<Texture | null> {
     texture.colorSpace = SRGBColorSpace;
     trackTexture(texture, textureBytes(width, height, 4, true));
     return texture;
-  } catch {
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
     return null;
   }
 }
@@ -160,9 +183,12 @@ async function loadColorSplat(url: string): Promise<Texture | null> {
  * the meadow colour reads as a smooth gradient. Data values, not colour → no
  * sRGB. Absent/404 → null and the meadow keeps its flat pastel sage.
  */
-async function loadNdviTexture(url: string): Promise<Texture | null> {
+async function loadNdviTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
   try {
-    const { texture, width, height } = await loadBitmapTexture(url);
+    const { texture, width, height } = await loadBitmapTexture(url, signal);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
@@ -172,7 +198,10 @@ async function loadNdviTexture(url: string): Promise<Texture | null> {
     texture.format = RedFormat;
     trackTexture(texture, textureBytes(width, height, 1, true));
     return texture;
-  } catch {
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
     return null;
   }
 }
@@ -435,14 +464,16 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   // mobile Safari kills the tab for. Sequential keeps it to one raster's
   // worth per tile in flight.
   const splatTexture = opts.landcoverUrl
-    ? await loadSplatTexture(opts.landcoverUrl)
+    ? await loadSplatTexture(opts.landcoverUrl, opts.signal)
     : null;
   const colorTexture =
     splatTexture && opts.landcoverRgbUrl
-      ? await loadColorSplat(opts.landcoverRgbUrl)
+      ? await loadColorSplat(opts.landcoverRgbUrl, opts.signal)
       : null;
   const ndviTexture =
-    splatTexture && opts.ndviUrl ? await loadNdviTexture(opts.ndviUrl) : null;
+    splatTexture && opts.ndviUrl
+      ? await loadNdviTexture(opts.ndviUrl, opts.signal)
+      : null;
   const splat: SplatLayer | undefined = splatTexture
     ? {
         texture: splatTexture,
@@ -476,5 +507,10 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
     minElevation,
     water,
     heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
+    dispose: () => {
+      for (const texture of [splatTexture, colorTexture, ndviTexture]) {
+        texture?.dispose();
+      }
+    },
   };
 }

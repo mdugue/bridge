@@ -45,6 +45,17 @@ export async function fetchFeatures<T>(
   return doc?.features ?? [];
 }
 
+/** The features of several optional collections, merged in URL order. */
+export async function fetchFeaturesFrom<T>(
+  urls: string[],
+  signal?: AbortSignal
+): Promise<T[]> {
+  const lists = await Promise.all(
+    urls.map((url) => fetchFeatures<T>(url, signal))
+  );
+  return lists.flat();
+}
+
 /** Fetches a REQUIRED JSON artifact; any failure throws. */
 export async function fetchRequiredJson<T>(
   url: string,

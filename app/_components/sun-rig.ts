@@ -18,6 +18,8 @@ function smoothstepDown(edge0: number, edge1: number, x: number): number {
 }
 
 export interface SunRig {
+  /** Frees the shadow map — a render target disposeObject3D never reaches. */
+  dispose: () => void;
   /** Re-centers the shadow frustum on a focus point (call per frame with the
    * camera position) so the player always stands in the high-res shadow area. */
   follow: (focus: Vector3) => void;
@@ -235,5 +237,6 @@ export function createSunRig(
     // flag stays raised (and is consumed at sunrise), so it is not "pending".
     shadowPending: () => sun.visible && sun.shadow.needsUpdate,
     shadowMapBytes: shadowMapSize * shadowMapSize * 4,
+    dispose: () => sun.dispose(),
   };
 }
