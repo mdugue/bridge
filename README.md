@@ -54,7 +54,9 @@ CityJSON parser once at build time into a binary building mesh
 [`lib/city/city-mesh.ts`](lib/city/city-mesh.ts)), so the browser decodes
 neither a raster nor a CityJSON document. Every `/data` file is published
 under a content-hashed name and cached as immutable; `manifest.json` maps the
-logical names and is the one file that revalidates.
+logical names and is the one file that revalidates. The DGM1 GeoTIFFs
+themselves are committed under `data/dgm/` (they are the bake input); every
+other raw source stays in the gitignored `data/_raw/`.
 
 Requirements for new data:
 
@@ -73,7 +75,8 @@ committed artifacts from them.
 **Provenance.** Sources are the
 [Saxon open-geodata portal](https://www.geodaten.sachsen.de/) (*Offene
 Geodaten*, mostly *Datenlizenz Deutschland – Zero*) plus OpenStreetMap for
-street lamps and walls (ODbL) — see
+street lamps, retaining walls, station platforms and bridge structure (ODbL) —
+see
 [docs/portability.md](docs/portability.md#fetching-source-data).
 `TODO(maintainer):` record the exact dataset editions, download dates and
 per-dataset licences for the committed tiles.

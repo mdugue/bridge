@@ -93,6 +93,8 @@ flowchart TB
 
   %% minimap + lighting (derived, not raw data)
   DGM -. "tile bounds" .-> MM
+  DLM -. "class PNG as map background" .-> MM
+  CJ -. "building footprints" .-> MM
   SUN ==> LIGHT
   SUN -. "fog · sky · dusk gate" .-> DET
 ```
@@ -112,7 +114,7 @@ flowchart TB
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Station platforms** | OSM `railway=platform` | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall` + `height` (local `.pbf`) | DGM1 (base drape + terrain conflated to step) — *the wall isn't in DGM/DOM/LiDAR* | `wall-layer.ts`, `lib/city/terrain-conflate.ts`; baked by `scripts/extract-walls.sh` |
-| **Minimap** | derived from tile bounds | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*` |
+| **Minimap** | tile bounds + DLM class PNG (background) + CityJSON footprints | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
 
 **Multi-source features to keep in mind when porting:** *Water* needs both DLM

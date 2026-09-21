@@ -85,7 +85,7 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | terrain `castShadow` | **false** | a casting heightfield self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | `SHADOW_MAP_SIZE` | 3072 | soft radius lets 3072 look like 4096 at ~44% less fill |
 | `SHADOW_RADIUS` (frustum half-size) | ~110 m | camera-following, texel-snapped; small = fine texels |
-| `shadow.autoUpdate` | false | re-render only when the snapped focus or the sun moves (throttle) |
+| `shadow.autoUpdate` | false | re-render only when the player leaves a 20 m dead zone around the last frustum centre, the sun moves, or a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
 
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), bigger frustum (coarser texels → fraying), 4096 map
@@ -112,9 +112,11 @@ not sky.
 
 ## Vegetation
 
-- Trees = InstancedMesh (trunk + crown), hedges = InstancedMesh boxes. Crown is
-  `IcosahedronGeometry(r, 1)` (≈80 tris; detail 2 is 320 — too costly ×tens of
-  thousands ×shadow pass).
+- Trees = InstancedMesh (trunk + crown), hedges = InstancedMesh boxes. Crown =
+  `IcosahedronGeometry(r, 2)` (≈320 tris) with lobes and radial normals; the
+  near-camera **rich multi-tuft crown** (~1 440 tris) is swapped in per 250 m
+  chunk by `updateLod` (in at 220 m, out at 300 m). Detail 1 (≈80 tris) is the
+  fallback if the far field ever needs a third tier.
 - **Chunking:** placements are bucketed into 250 m cells, one InstancedMesh per
   cell (shared geo/material), so off-screen cells frustum-cull from both the
   main and shadow pass. After `setMatrixAt` you **must**
@@ -123,17 +125,18 @@ not sky.
 - Canopy from `extract-canopy.sh`: `nDOM = DOM1 − DGM1`, one tree per ~7 m cell
   at the tallest pixel, scaled to measured height, gated off road/bridge/water
   via the class raster.
-- **Tree LOD (planned):** chunking gives per-cell camera distance, so the rich
-  crown can be used near the camera and the cheap icosphere far away.
+- **Tree LOD (shipped):** per-chunk distance swaps the rich crown in near the
+  camera and the cheap one far away; a swap invalidates the shadow map
+  (plan 009).
 
-### Porting the sandbox crown (`aesthetic-sandbox.html`) — cost
+### Sandbox crown — what is left to port
 
-Cost = `geometry_tris × instances`, paid twice (shadow pass). Cheap, take any
-time: **radial normals** (free, build-time normal rewrite — biggest bang/buck),
-**backlight shimmer** (one shadow sample; far cheaper than `transmission`),
-**dappled canopy shadow** (`customDepthMaterial` + alphaMap in the depth pass).
-Expensive, gate behind LOD: the **multi-tuft crown** (core + ~17 merged lobes ≈
-**18×** triangles).
+Cost = `geometry_tris × instances`, paid twice (shadow pass). Still open:
+**dappled canopy shadow** (`customDepthMaterial` + alphaMap in the depth pass;
+mind the WebGLShadowMap alphaMap-override gotcha). Radial normals, backlight
+shimmer and the LOD-gated multi-tuft crown are in `vegetation-layer.ts`.
+`aesthetic-sandbox.html` at the repo root is the historical playground those
+were ported from; the layer file, not the sandbox, is the source of truth.
 
 ## Performance model
 
@@ -155,8 +158,9 @@ change yourself:
 
 ```bash
 # drop the snapshot JSON into shots/, then:
-bunx playwright test e2e/snapshot-shot.spec.ts --headed
+bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
+# Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
 Headless e2e uses SwiftShader — shadows/AA look nothing like a real GPU, so use
@@ -168,20 +172,21 @@ a bridge is invisible looking straight down). Snapshot JSON shape:
   "camera": { "mode": "fly", "pos": {"x":0,"y":0,"z":0}, "epsg": {"x":0,"y":0},
               "headingDeg": 0, "pitchDeg": 0, "fov": 55 },
   "date": "2026-06-15T08:30:00.000Z",
-  "look": { "style":"clay","transparencyPct":0,"fogPct":35,"gradingPct":50,
+  "look": { "transparencyPct":0,"fogPct":35,"gradingPct":50,
             "contactPct":50,"grainPct":25,"dof":true } }
 ```
 
 ### The `lite` scene profile (headless e2e only)
 
 `?scene=lite` (`app/_components/scene-profile.ts`) exists because SwiftShader
-shades every pixel on the CPU. It changes exactly three things:
+shades every pixel on the CPU. It changes three knobs (tiles, shadow map,
+render scale):
 
 | Knob | full | lite | Why it is the right knob |
 |---|---|---|---|
 | tiles loaded | primary + 2×2 block | **primary only** | 3/4 of the geometry AND 3/4 of the boot (boot 14 s → 4.4 s, 74 MB → 18 MB) |
 | `SHADOW_MAP_SIZE` | 3072 | **512** | the depth pass is per-frame fill that does *not* shrink with the canvas |
-| `pixelRatio` / `transmissionResolutionScale` | dpr≤2 / 0.5 | **0.5** / 0.25 | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
+| `pixelRatio` | dpr≤2 | **0.5** | the canvas fills the viewport and the HUD needs ≥768 px to lay out, so render scale is the only honest way to cut fill-rate |
 
 Everything a spec asserts on — loaders, layer construction, every style's shader
 programs, the HUD wiring — is identical in both. **Never** use lite to judge a
@@ -194,20 +199,28 @@ because boot is the largest fixed cost left once frames are cheap. The
 
 ## Data pipeline
 
-Raw downloads (gitignored `data/_raw/`): no Git-LFS; commit only the small
-derived per-tile artifacts in `data/dlm/` and `data/dgm/`. `prepare-data.ts`
-copies them to `public/data/` at `bun dev`/`build`, and bakes each tile's DGM
-GeoTIFF into a gzipped uint16 (cm) heightfield there (primary 1024², neighbours 512²;
-`lib/city/heightfield.ts` owns the format, `lib/city/tile.ts` the tile list) —
-the `.tif` itself is never served. **numpy and `gdal_calc.py`
+Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
+`data/_raw/`; no Git-LFS. Committed by design: the small derived per-tile
+artifacts in `data/dlm/` and `data/dop/`, **and the DGM1 GeoTIFF + `.tfw` per
+tile in `data/dgm/`** (~13–15 MB each) because `prepare-data.ts` bakes the
+heightfield from it at build time and `extract-canopy.sh`/`extract-rail.sh`
+read it. `prepare-data.ts` publishes the artifacts to `public/data/` at
+`bun dev`/`build`, and bakes each tile's DGM GeoTIFF into a gzipped uint16 (cm)
+heightfield there (primary 1024², neighbours 512²; `lib/city/heightfield.ts`
+owns the format, `lib/city/tile.ts` the tile list) — the `.tif` itself is
+never served. **numpy and `gdal_calc.py`
 are unavailable** — do raster math in Python/Pillow (palette mode for speed; mode
-`F` for float GeoTIFFs). Regenerate one tile:
+`F` for float GeoTIFFs). Regenerate one tile — all seven bakes, in dependency
+order:
 
 ```bash
-bash scripts/extract-dlm.sh 33412_5656         # splat + class raster + veg rows
-bash scripts/extract-canopy.sh 33412_5656      # canopy (needs the class raster first)
-bash scripts/extract-roof-colour.sh 33412_5656 # DOP roof-colour LUT (needs data/_raw/DOP_RGBI)
-bash scripts/extract-ndvi.sh 33412_5656        # DOP NDVI raster for crown colour
+bash scripts/extract-dlm.sh 33412_5656         # splat + class raster + veg rows (Basis-DLM)
+bash scripts/extract-canopy.sh 33412_5656      # canopy: needs the class raster; DOM1 + DGM1
+bash scripts/extract-ndvi.sh 33412_5656        # NDVI raster for crown colour + meadow tint (DOP)
+bash scripts/extract-roof-colour.sh 33412_5656 # roof-colour LUT (DOP + CityJSON)
+bash scripts/extract-lamps.sh 33412_5656       # street lamps (Overpass; needs the class raster)
+bash scripts/extract-walls.sh 33412_5656       # retaining walls (local .osm.pbf in data/_raw/osm)
+bash scripts/extract-rail.sh 33412_5656        # rails, ballast, bridges (Basis-DLM + DOM1/DGM1) + platforms (Overpass)
 bun scripts/prepare-data.ts                    # refresh public/data
 ```
 

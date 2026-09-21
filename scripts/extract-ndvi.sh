@@ -5,7 +5,7 @@
 # NDVI = (NIR − Red) / (NIR + Red), the standard greenness index. The Saxon DOP
 # is RGB+NIR (band 4 = near-infrared), so healthy canopy lights up while roads,
 # roofs and water stay low. The runtime samples this per tree to push crown
-# colour lush↔dry (and, later, meadow tint). See docs/transformations.md.
+# colour lush↔dry (and the meadow tint, HUD "Wiesenfärbung"). See docs/transformations.md.
 #
 # MANUAL, one-off step. Needs (gitignored):
 #   - data/_raw/DOP_RGBI/dop20rgbi_<tile>_2_sn_tiff/dop20rgbi_<tile>_2_sn.tif

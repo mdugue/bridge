@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { LOOK_CONTROLS } from "../lib/city/look-controls";
+import { parseSnapshot, type Snapshot } from "../lib/city/snapshot";
 
 // Big crisp canvas for inspecting shadow/edge artifacts.
 test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
@@ -20,45 +22,6 @@ test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
  * yields shots/<name>.png.
  */
 
-interface Snapshot {
-  camera: {
-    fov: number;
-    headingDeg: number;
-    mode: "walk" | "fly";
-    pitchDeg: number;
-    pos: { x: number; y: number; z: number };
-    epsg: { x: number; y: number };
-  };
-  date: string;
-  look: {
-    bandsPct?: number;
-    contactPct: number;
-    dof: boolean;
-    duskGlowPct?: number;
-    eavePct?: number;
-    focusDistanceM?: number;
-    focusMode?: "auto" | "manual";
-    fogPct: number;
-    gradingPct: number;
-    grainPct: number;
-    groundShadePct?: number;
-    heightFogPct?: number;
-    leafBrightPct?: number;
-    leafFlutterPct?: number;
-    meadowNdviPct?: number;
-    multiTuft?: boolean;
-    rimPct?: number;
-    roofTintPct?: number;
-    roofVibrancePct?: number;
-    roughnessPct?: number;
-    shimmerPct?: number;
-    tintPct?: number;
-    translucencyPct?: number;
-    transparencyPct: number;
-    waterMistPct?: number;
-  };
-}
-
 const SHOTS_DIR = join(process.cwd(), "shots");
 
 function snapshotFiles(): string[] {
@@ -73,87 +36,52 @@ for (const file of snapshotFiles()) {
   const name = file.replace(/\.json$/, "");
   test(`snapshot: ${name}`, async ({ page }) => {
     test.setTimeout(180_000);
-    const snap = JSON.parse(
-      readFileSync(join(SHOTS_DIR, file), "utf8")
-    ) as Snapshot;
+    // Validate before rendering: a broken shot fails loudly instead of
+    // silently rendering the defaults.
+    const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf8"));
+    if (!parsed.ok) {
+      throw new Error(`${file}: ${parsed.reason}`);
+    }
+    const snap: Snapshot = parsed.snapshot;
 
     await page.goto("/");
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: 120_000,
     });
 
-    await page.evaluate((s: Snapshot) => {
-      const api = window.__poc;
-      if (!api?.applyCameraState) {
-        throw new Error("snapshot api unavailable");
-      }
-      api.applyCameraState(s.camera);
-      api.setSunIso?.(s.date);
-      api.setBuildingTransparency?.(s.look.transparencyPct / 100);
-      api.setAtmosphere?.(s.look.fogPct / 100);
-      api.setDepthGrading?.(s.look.gradingPct / 100);
-      api.setContactShadows?.(s.look.contactPct / 100);
-      api.setPaperGrain?.(s.look.grainPct / 100);
-      api.setDepthOfField?.(s.look.dof);
-      if (s.look.focusMode !== undefined) {
-        api.setFocusMode?.(s.look.focusMode);
-      }
-      if (s.look.focusDistanceM !== undefined) {
-        api.setFocusDistance?.(s.look.focusDistanceM);
-      }
-      // Optional (newer) look fields — only applied when present in the shot.
-      if (s.look.groundShadePct !== undefined) {
-        api.setBuildingGroundShade?.(s.look.groundShadePct / 100);
-      }
-      if (s.look.bandsPct !== undefined) {
-        api.setBuildingBands?.(s.look.bandsPct / 100);
-      }
-      if (s.look.rimPct !== undefined) {
-        api.setBuildingRim?.(s.look.rimPct / 100);
-      }
-      if (s.look.tintPct !== undefined) {
-        api.setBuildingTint?.(s.look.tintPct / 100);
-      }
-      if (s.look.roofTintPct !== undefined) {
-        api.setBuildingRoofTint?.(s.look.roofTintPct / 100);
-      }
-      if (s.look.roofVibrancePct !== undefined) {
-        api.setBuildingRoofVibrance?.(s.look.roofVibrancePct / 100);
-      }
-      if (s.look.eavePct !== undefined) {
-        api.setBuildingEave?.(s.look.eavePct / 100);
-      }
-      if (s.look.duskGlowPct !== undefined) {
-        api.setBuildingDuskGlow?.(s.look.duskGlowPct / 100);
-      }
-      if (s.look.roughnessPct !== undefined) {
-        api.setBuildingRoughness?.(s.look.roughnessPct / 100);
-      }
-      if (s.look.shimmerPct !== undefined) {
-        api.setTreeShimmer?.(s.look.shimmerPct / 100);
-      }
-      if (s.look.translucencyPct !== undefined) {
-        api.setTreeTranslucency?.(s.look.translucencyPct / 100);
-      }
-      if (s.look.leafFlutterPct !== undefined) {
-        api.setTreeLeafFlutter?.(s.look.leafFlutterPct / 100);
-      }
-      if (s.look.leafBrightPct !== undefined) {
-        api.setTreeLeafBright?.(s.look.leafBrightPct / 100);
-      }
-      if (s.look.multiTuft !== undefined) {
-        api.setTreeMultiTuft?.(s.look.multiTuft);
-      }
-      if (s.look.heightFogPct !== undefined) {
-        api.setHeightFog?.(s.look.heightFogPct / 100);
-      }
-      if (s.look.meadowNdviPct !== undefined) {
-        api.setMeadowNdvi?.(s.look.meadowNdviPct / 100);
-      }
-      if (s.look.waterMistPct !== undefined) {
-        api.setWaterMist?.(s.look.waterMistPct / 100);
-      }
-    }, snap);
+    // The look controls come from the same table the HUD renders, so a new
+    // slider needs no edit here (see lib/city/look-controls.ts).
+    await page.evaluate(
+      ([s, defs]) => {
+        const api = window.__poc;
+        if (!api?.applyCameraState) {
+          throw new Error("snapshot api unavailable");
+        }
+        api.applyCameraState(s.camera);
+        api.setSunIso?.(s.date);
+        const look = s.look ?? {};
+        for (const def of defs) {
+          const raw = look[def.snapshotKey];
+          const setter = api[def.setter];
+          if (typeof raw === "number" && setter) {
+            setter(raw / 100);
+          }
+        }
+        if (look.dof !== undefined) {
+          api.setDepthOfField?.(look.dof);
+        }
+        if (look.focusMode !== undefined) {
+          api.setFocusMode?.(look.focusMode);
+        }
+        if (look.focusDistanceM !== undefined) {
+          api.setFocusDistance?.(look.focusDistanceM);
+        }
+        if (look.multiTuft !== undefined) {
+          api.setTreeMultiTuft?.(look.multiTuft);
+        }
+      },
+      [snap, LOOK_CONTROLS] as const
+    );
 
     // Hide every HUD/control overlay so the shot is a clean render plate:
     // keep only the canvas and its DOM ancestors visible.

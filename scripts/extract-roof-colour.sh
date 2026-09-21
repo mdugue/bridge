@@ -2,9 +2,9 @@
 #
 # extract-roof-colour.sh — sample real roof colours from a DOP orthophoto.
 #
-# STATUS: 🧪 EXPERIMENTAL (see docs/transformations.md). This bakes the per-
-# building roof-colour LUT; the runtime hook that consumes it + the GPU A/B
-# against the synthesized palette are the next step, pending a fetched DOP tile.
+# STATUS: ✅ active (see docs/transformations.md "Roof colour"). This bakes the
+# per-building roof-colour LUT; the runtime reads it in create-app.ts
+# (fetchRoofLut) and falls back to the synthesized palette when it is absent.
 #
 # Idea: the nadir DOP sees ROOFS well (not facades). Sample the DOP under each
 # building's RoofSurface footprint, take a robust median, and emit a LUT that the

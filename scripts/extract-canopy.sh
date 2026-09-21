@@ -4,12 +4,12 @@
 #
 # MANUAL, one-off step. Needs (all gitignored / already present):
 #   - data/_raw/dom1/<tile>/dom1_<tile>.tif   (Digital Surface Model, 1 m)
-#   - data/dgm/<tile>/dgm1_<tile>.tif         (Digital Terrain Model, 1 m)
+#   - data/dgm/dgm1_<tile>_tiff/dgm1_<tile>.tif (Digital Terrain Model, 1 m)
 #   - data/_raw/basis-dlm/…                    (ATKIS shapes for the veg mask)
 #   - GDAL on PATH; Python 3 with Pillow.
 #
 # Pipeline:
-#   nDOM = DOM1 - DGM1            (object height above ground, gdal_calc)
+#   nDOM = DOM1 - DGM1            (object height above ground, Python/Pillow — gdal_calc/numpy are unavailable)
 #   mask = forest+copse+park      (rasterised from the DLM)
 #   then grid-sample the masked nDOM: one tree per CELL metres at the highest
 #   canopy pixel above MINH, carrying that pixel's height.

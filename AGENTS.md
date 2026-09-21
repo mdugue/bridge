@@ -22,8 +22,8 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
   `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
   SMAA, grading, grain, vignette)
 - GDAL CLI + Python/Pillow for the offline data pipeline
-- Playwright for e2e + the screenshot harness; `bun test` for the `lib/` and
-  `scripts/` units
+- Playwright for e2e + the screenshot harness; `bun test` for the `lib/`,
+  `app/_components/` and `scripts/` units
 - Deployed as a static client app; no database, no stateful API routes
 
 ## Commands
@@ -44,8 +44,11 @@ E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 Linting and formatting are **oxlint + oxfmt** (`.oxlintrc.json`, `.oxfmtrc.json`)
 — biome/ultracite are gone. `bun lint` runs `oxlint --max-warnings=0` then
 `oxfmt --check`; `bun run fix` formats and applies the safe autofixes.
-A complexity cap of 20 is enforced (`complexity`), so extract helpers rather
-than fighting it. No `console.log` in committed code.
+Run `bun run fix` before `bun run verify` — there is no format-on-save hook
+for Claude Code (it was removed after it reformatted files carrying
+merge-conflict markers); Cursor still runs a fix hook after edits via
+`.cursor/hooks.json`. A complexity cap of 20 is enforced (`complexity`), so
+extract helpers rather than fighting it. No `console.log` in committed code.
 
 **`.oxlintrc.json` names its rules explicitly, on purpose.** oxlint's default is
 the `correctness` category alone, which on this repo reports nothing — so the
@@ -61,13 +64,29 @@ config change.
 
 ## Where things live
 
-- `app/_components/` — the viewer: `create-app.ts` (scene/loop/handle),
-  `terrain-layer.ts`, `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts`,
-  `sun-rig.ts`, `post-stack.ts`, `visual-style.ts`, `minimap.tsx`,
-  `city-walk.tsx` (HUD), `poc-debug.ts` (the `window.__poc` test/QA hook)
+- `app/_components/` — the viewer, grouped:
+  - spine: `create-app.ts` (scene/loop/handle), `city-walk.tsx` (HUD),
+    `city-walk-client.tsx` (the `ssr: false` mount + tile sources),
+    `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
+    (`?scene=lite`), `webgl-support.ts` (the WebGL2 preflight),
+    `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
+  - layers: `terrain-layer.ts`, `water-layer.ts`, `vegetation-layer.ts`,
+    `city-layer.ts`, `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`,
+    `inserted-building.ts`
+  - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
+    `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`,
+    `look-defaults.ts` (initial slider values; the table itself is
+    `lib/city/look-controls.ts`)
+  - input/camera: `fps-movement.ts`, `touch-controls.ts`, `collision.ts`,
+    `camera-flight.ts`, `viewpoints.ts`, `virtual-joystick.tsx`
+  - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
-  ground-clamp) with `bun test` units alongside
-- `scripts/` — `extract-dlm.sh`, `extract-canopy.sh` (offline data bakes) and
+  ground-clamp, the look-controls table, the Snapshot contract) with
+  `bun test` units alongside
+- `scripts/` — the offline data bakes `extract-dlm.sh`, `extract-canopy.sh`,
+  `extract-ndvi.sh`, `extract-roof-colour.sh`, `extract-lamps.sh`,
+  `extract-walls.sh`, `extract-rail.sh` (+ `ndvi-at-trees.py`, the NDVI
+  sampler `extract-ndvi.sh` calls), `bake-city-mesh.ts` and
   `prepare-data.ts` (bakes the committed artifacts into `public/data` under
   content-hashed names + `manifest.json`: each DGM GeoTIFF becomes a gzipped
   uint16 heightfield, each CityJSON a binary building mesh via
@@ -104,10 +123,14 @@ Tiles are named `33EEE_NNNN`; the primary is `33412_5656_2_sn`, loaded with a
 
 ## Data pipeline
 
-Raw downloads (DLM ~5 GB, DOM1/DGM ~100s MB) **must not be committed** — keep
-them in `data/_raw/` (gitignored). No Git-LFS. Only small derived per-tile
-artifacts (`data/dlm/*.png|geojson`, `data/dgm/…`) are committed; `prepare-data.ts`
-copies them to `public/data/` at build. Pipeline notes:
+Bulk raw downloads (DLM ~5 GB, DOM1, DOP, OSM `.osm.pbf`) **must not be
+committed** — keep them in `data/_raw/` (gitignored). The exception is the
+**DGM1 GeoTIFF + `.tfw` per tile (~13–15 MB, `data/dgm/`)**: it is committed
+because `prepare-data.ts` bakes the heightfield from it at build time and
+`extract-canopy.sh`/`extract-rail.sh` read it. No Git-LFS. Only small derived
+per-tile artifacts (`data/dlm/*.png|geojson`, `data/dop/*.json`) are committed
+otherwise; `prepare-data.ts` publishes them to `public/data/` at build.
+Pipeline notes:
 
 - `extract-dlm.sh` bakes a 4096² class-id PNG + a pastel **RGBA splatmap**
   (RGB = palette, **A = water coverage**). Palette mapping uses PIL **palette
@@ -181,7 +204,7 @@ camera pose + sun time + look sliders as JSON; `__poc.getCameraState()` /
 a snapshot JSON into `shots/` and run:
 
 ```bash
-bunx playwright test e2e/snapshot-shot.spec.ts --headed
+bun run shots
 ```
 
 It writes a clean canvas plate (HUD hidden) to `shots/<name>.png` — read it and
@@ -199,8 +222,8 @@ viewer pages halve each other's frame rate.
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It loads
 the **primary tile only** (boot 14 s → 4.4 s, 74 MB → 18 MB), shadow-maps at
-**512²** instead of 3072², and renders at **`pixelRatio` 0.5** with a quarter-res
-transmission buffer. Same loaders, same layers, same shader programs — a quarter
+**512²** instead of 3072², and renders at **`pixelRatio` 0.5**. Same loaders,
+same layers, same shader programs — a quarter
 of the world and a quarter of the pixels. The knobs it does *not* touch are the
 ones a test asserts on. Two rules when you add a spec:
 

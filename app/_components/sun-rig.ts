@@ -34,6 +34,8 @@ export interface SunRig {
   setTime: (seconds: number) => void;
   /** GPU bytes of the shadow map (RGBA8 depth-packed, no mipmaps). */
   shadowMapBytes: number;
+  /** True when the next render will redraw the shadow map. */
+  shadowPending: () => boolean;
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
   update: (date: Date) => SunState;
 }
@@ -41,7 +43,8 @@ export interface SunRig {
 const SUN_INTENSITY = 2.4;
 /** 3072 over the 110 m frustum ≈ 0.07 m/texel. The soft Vogel-disk PCF (see
  * shadow.radius) hides residual stepping, so 3072 looks like 4096 here while
- * costing ~44% less shadow fill — it re-renders on most frames while walking.
+ * costing ~44% less shadow fill. The map is redrawn at each FOLLOW_DEAD_ZONE_M
+ * re-centre, when the sun moves, and on explicit invalidation — not per frame.
  * The `lite` e2e profile drops this to 512 and phones get 2048 (see
  * scene-profile.ts): under SwiftShader the depth pass is one of the few
  * per-frame costs that does not shrink with the canvas, and no headless
@@ -52,8 +55,17 @@ const SHADOW_MAP_SIZE = shadowMapSizeFor(
 );
 /** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
  * shadow edges, less staircase under PCFSoft); the frustum follows the camera
- * so street-level coverage isn't lost. 160 m → ~0.16 m texels at 2048². */
+ * so street-level coverage isn't lost. 110 m → ~0.07 m texels at 3072². */
 const SHADOW_RADIUS = 110;
+/**
+ * Metres the player may drift from the last re-centred frustum before the
+ * shadow map is re-rendered. Re-centring on every texel (0.07 m) meant the
+ * ~640k-triangle depth pass ran on every moving frame; 20 m keeps the
+ * player well inside the 110 m half-size (90 m of margin in every
+ * direction) and turns ~60 re-renders/s while walking into ~0.5/s. The
+ * texel snap below still applies at each re-centre, so edges do not crawl.
+ */
+const FOLLOW_DEAD_ZONE_M = 20;
 
 function createSkyDome(scene: Scene): Sky {
   const sky = new Sky();
@@ -79,7 +91,7 @@ function createSkyDome(scene: Scene): Sky {
 
 /**
  * Sun + atmosphere rig: directional light with an orthographic shadow camera
- * sized to the whole scene, a physical sky dome fed the same sun direction,
+ * that follows the camera (see follow()), a physical sky dome fed the same sun direction,
  * and fog/hemisphere colors interpolated from the time-of-day palette so the
  * whole frame stays in tune with the slider. `worldBounds` is in scene
  * (Y-up) coordinates.
@@ -124,7 +136,7 @@ export function createSunRig(
   // flat ground's shadow sample toward the light at wall bases). Safe at 0
   // because nothing that needs it self-shadows: terrain doesn't cast, and
   // buildings/trees cast via their BACK faces (three's default shadowSide), so
-  // their lit front faces never self-acne. VSM softens edges via a SMALL blur.
+  // their lit front faces never self-acne.
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0;
   // r182+ PCFShadowMap is soft: it spreads a 5-tap Vogel disk by radius*texel
@@ -142,11 +154,9 @@ export function createSunRig(
     sunDirectionOut?.copy(dir);
   }
   const focus = center.clone();
-  let lastFx = Number.NaN;
-  let lastFy = Number.NaN;
-  let lastFz = Number.NaN;
+  const lastCentre = new Vector3(Number.NaN, Number.NaN, Number.NaN);
   const reposition = () => {
-    // Snap the focus to the texel grid to keep shadow edges stable while moving.
+    // Snap the focus to the texel grid to keep shadow edges stable.
     const fx = Math.round(focus.x / texelSize) * texelSize;
     const fy = Math.round(focus.y / texelSize) * texelSize;
     const fz = Math.round(focus.z / texelSize) * texelSize;
@@ -156,18 +166,23 @@ export function createSunRig(
       fy + dir.y * shadowDistance,
       fz + dir.z * shadowDistance
     );
-    // Manual shadow update only when the snapped frustum centre changed. fy
-    // matters too: ascending straight up in fly mode keeps fx/fz fixed while
-    // the frustum's vertical slice shifts, which would otherwise go stale.
-    if (fx !== lastFx || fy !== lastFy || fz !== lastFz) {
+    // Manual shadow update only when the snapped frustum centre changed.
+    // fy matters too: ascending straight up in fly mode keeps fx/fz fixed
+    // while the frustum's vertical slice shifts.
+    if (fx !== lastCentre.x || fy !== lastCentre.y || fz !== lastCentre.z) {
       sun.shadow.needsUpdate = true;
-      lastFx = fx;
-      lastFy = fy;
-      lastFz = fz;
+      lastCentre.set(fx, fy, fz);
     }
   };
 
   const follow = (point: Vector3) => {
+    // Inside the dead zone the frustum stays put — nothing to re-render.
+    if (
+      Number.isFinite(lastCentre.x) &&
+      point.distanceTo(lastCentre) < FOLLOW_DEAD_ZONE_M
+    ) {
+      return;
+    }
     focus.copy(point);
     reposition();
   };
@@ -223,6 +238,9 @@ export function createSunRig(
     follow,
     setTime,
     invalidateShadow,
+    // three only draws the map for a VISIBLE light: below the horizon the
+    // flag stays raised (and is consumed at sunrise), so it is not "pending".
+    shadowPending: () => sun.visible && sun.shadow.needsUpdate,
     shadowMapBytes: SHADOW_MAP_SIZE * SHADOW_MAP_SIZE * 4,
   };
 }

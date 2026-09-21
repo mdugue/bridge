@@ -5,9 +5,11 @@
  * touch `window` — the hook cannot leak into production.
  */
 
+import type { LookTarget } from "@/lib/city/look-controls";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import type { CameraState, PlayerPose } from "./create-app";
+import type { CameraState, LayerName, PlayerPose } from "./create-app";
 import type { FocusMode } from "./post-stack";
+import type { SceneCensus } from "./scene-census";
 import type { Viewpoint } from "./viewpoints";
 
 interface Xyz {
@@ -16,7 +18,8 @@ interface Xyz {
   z: number;
 }
 
-export interface PocDebugInfo {
+/** The look setters (`setAtmosphere`, …) come from LookTarget — see lib/city/look-controls.ts. */
+export interface PocDebugInfo extends Partial<LookTarget> {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState?: (state: CameraState) => void;
   buildingCount: number;
@@ -56,6 +59,8 @@ export interface PocDebugInfo {
   gpuMegabytes: number;
   /** Inserts the prescribed building (marker box without a glTF). */
   insertBuilding?: () => void;
+  /** Per-layer build census (meshes / instances / triangles), refreshed with the stats. */
+  layerStats?: Record<LayerName, SceneCensus>;
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
   offset?: { cx: number; cy: number };
   ready: boolean;
@@ -64,58 +69,18 @@ export interface PocDebugInfo {
    * (AO + DoF skipped) — see lib/city/regression.ts.
    */
   regressed?: boolean;
-  /** Sets the fog amount (0..1). */
-  setAtmosphere?: (amount: number) => void;
-  /** Sets the building storey contour-line (Höhenlinien) strength (0..1). */
-  setBuildingBands?: (strength: number) => void;
-  /** Sets the dusk interior glow (Abendlicht) strength (0..1). */
-  setBuildingDuskGlow?: (strength: number) => void;
-  /** Sets the eave cornice-stroke (Traufkante) strength (0..1). */
-  setBuildingEave?: (strength: number) => void;
-  /** Sets the building ground-contact darkening (Boden-Verlauf) strength (0..1). */
-  setBuildingGroundShade?: (strength: number) => void;
-  /** Sets the building Fresnel rim (Streiflicht) strength (0..1). */
-  setBuildingRim?: (strength: number) => void;
-  /** Sets the roof colour mix (Dachfarbe) (0..1). */
-  setBuildingRoofTint?: (strength: number) => void;
-  /** Sets the roof vividness (Dachsättigung) hue-preserving chroma boost (0..1). */
-  setBuildingRoofVibrance?: (strength: number) => void;
-  /** Sets the per-building roughness jitter (Materialstreuung) strength (0..1). */
-  setBuildingRoughness?: (strength: number) => void;
-  /** Sets the per-building clay tint (Farbvariation) mix (0..1). */
-  setBuildingTint?: (strength: number) => void;
-  /** Sets the active style's transparency (0..1). */
-  setBuildingTransparency?: (transparency: number) => void;
-  /** Sets the soft contact-shadow (SSAO) strength (0..1). */
-  setContactShadows?: (strength: number) => void;
-  /** Sets the warm-near/cool-far grading intensity (0..1). */
-  setDepthGrading?: (intensity: number) => void;
   /** Toggles the photographic depth of field. */
   setDepthOfField?: (enabled: boolean) => void;
   /** Sets the manual focus distance (m). */
   setFocusDistance?: (meters: number) => void;
   /** Sets the depth-of-field focus mode ("auto" | "manual"). */
   setFocusMode?: (mode: FocusMode) => void;
-  /** Sets the valley height-fog (Talnebel) strength (0..1). */
-  setHeightFog?: (strength: number) => void;
-  /** Sets the meadow NDVI tint (Wiesenfärbung) strength (0..1). */
-  setMeadowNdvi?: (strength: number) => void;
-  /** Sets the paper-grain intensity (0..1). */
-  setPaperGrain?: (intensity: number) => void;
   /** Re-aims the sun for an ISO date string. */
   setSunIso?: (iso: string) => void;
-  /** Sets the (B) sway-coupled crown brightness (Windhelligkeit) strength (0..1). */
-  setTreeLeafBright?: (strength: number) => void;
-  /** Sets the (A) wind-gust leaf-flutter colour shimmer (Blattflimmern) strength (0..1). */
-  setTreeLeafFlutter?: (strength: number) => void;
   /** Toggles the rich multi-tuft crown near the camera (LOD). */
   setTreeMultiTuft?: (enabled: boolean) => void;
-  /** Sets the backlit canopy shimmer strength (0..1). */
-  setTreeShimmer?: (strength: number) => void;
-  /** Sets the backlit (shadow-gated) canopy translucency strength (0..1). */
-  setTreeTranslucency?: (strength: number) => void;
-  /** Sets the river-mist (Flussnebel) strength (0..1). */
-  setWaterMist?: (strength: number) => void;
+  /** Frames on which the sun's shadow map was redrawn; e2e asserts it stays far below `frames` while walking. */
+  shadowRenders: number;
   shadowsEnabled: boolean;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo?: (epsgX: number, epsgY: number) => void;
@@ -148,6 +113,7 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
     ready: false,
     buildingCount: 0,
     frames: 0,
+    shadowRenders: 0,
     terrainVertexCount: 0,
     shadowsEnabled: false,
     gpuMegabytes: 0,
@@ -157,12 +123,15 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
 }
 
 /** Called once per rendered frame from the animation loop. */
-export function tickPocFrame(): void {
+export function tickPocFrame(shadowRendered: boolean): void {
   if (!enabled) {
     return;
   }
   const poc = window.__poc;
   if (poc) {
     poc.frames += 1;
+    if (shadowRendered) {
+      poc.shadowRenders += 1;
+    }
   }
 }

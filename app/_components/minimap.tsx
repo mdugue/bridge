@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   epsgToMapPx,
   type FootprintPoly,
@@ -147,6 +147,46 @@ export function Minimap({
     focusRingRef.current = focusRingM ?? null;
   }, [focusRingM]);
 
+  // Decoded + recoloured land-cover tiles, kept for the life of the component:
+  // decoding four 4096² PNGs is far too costly to repeat on every demolish or
+  // sidebar resize. `requested` remembers which sources are already loading.
+  // (Assumes `landcoverTiles` is stable for a session — a future tile switcher
+  // must clear both when the block changes.)
+  const requestedRef = useRef(new Set<string>());
+  const [decoded, setDecoded] = useState(
+    () => new Map<string, HTMLCanvasElement>()
+  );
+  useEffect(() => {
+    let cancelled = false;
+    const requested = requestedRef.current;
+    // Loads this run started and has not finished: the cleanup un-requests
+    // them so a re-run (StrictMode's mount → cleanup → mount in dev) requests
+    // them again instead of skipping a load whose result was discarded.
+    const pending = new Set<string>();
+    for (const tile of landcoverTiles ?? []) {
+      if (requested.has(tile.src)) {
+        continue;
+      }
+      requested.add(tile.src);
+      pending.add(tile.src);
+      const img = new Image();
+      img.onload = () => {
+        pending.delete(tile.src);
+        if (!cancelled) {
+          const cv = colorizeLandcover(img, 256);
+          setDecoded((prev) => new Map(prev).set(tile.src, cv));
+        }
+      };
+      img.src = tile.src;
+    }
+    return () => {
+      cancelled = true;
+      for (const src of pending) {
+        requested.delete(src);
+      }
+    };
+  }, [landcoverTiles]);
+
   // Static layer: per-tile land-cover background + frame + footprints. Redrawn
   // after demolish and again as each tile's image decodes.
   useEffect(() => {
@@ -155,43 +195,22 @@ export function Minimap({
       return;
     }
     const ctx = setupCanvas(canvas, size);
-    const tiles = landcoverTiles ?? [];
-    const decoded = new Map<string, HTMLCanvasElement>();
-
-    const repaint = () => {
-      ctx.fillStyle = PAPER;
-      ctx.fillRect(0, 0, size, size);
-      // Each tile drawn into its own sub-rect of the (union) bounds.
-      for (const tile of tiles) {
-        const cv = decoded.get(tile.src);
-        if (!cv) {
-          continue;
-        }
-        const a = epsgToMapPx(tile.bounds[0], tile.bounds[3], bounds, size);
-        const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
-        ctx.drawImage(cv, a.px, a.py, b.px - a.px, b.py - a.py);
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(0, 0, size, size);
+    // Each tile drawn into its own sub-rect of the (union) bounds.
+    for (const tile of landcoverTiles ?? []) {
+      const cv = decoded.get(tile.src);
+      if (!cv) {
+        continue;
       }
-      ctx.strokeStyle = FRAME;
-      ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
-      drawFootprints(ctx, footprints, bounds, size);
-    };
-
-    repaint(); // paper + footprints immediately; tiles fill in as they decode
-    let cancelled = false;
-    for (const tile of tiles) {
-      const img = new Image();
-      img.onload = () => {
-        if (!cancelled) {
-          decoded.set(tile.src, colorizeLandcover(img, 256));
-          repaint();
-        }
-      };
-      img.src = tile.src;
+      const a = epsgToMapPx(tile.bounds[0], tile.bounds[3], bounds, size);
+      const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
+      ctx.drawImage(cv, a.px, a.py, b.px - a.px, b.py - a.py);
     }
-    return () => {
-      cancelled = true;
-    };
-  }, [footprints, bounds, size, landcoverTiles]);
+    ctx.strokeStyle = FRAME;
+    ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+    drawFootprints(ctx, footprints, bounds, size);
+  }, [footprints, bounds, size, landcoverTiles, decoded]);
 
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {
