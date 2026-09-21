@@ -250,7 +250,7 @@ export function roofColor(
   lut?: RoofColorLut
 ): TintRgb {
   const sampled = lut?.[objectId];
-  if (sampled && sampled.length === 3) {
+  if (sampled?.length === 3) {
     return [sampled[0], sampled[1], sampled[2]];
   }
   return roofTint(objectId, attrs);

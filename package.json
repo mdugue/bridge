@@ -48,6 +48,7 @@
     "geotiff": "^3.0.5",
     "oxfmt": "0.68.0",
     "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2002",
     "shadcn": "^4.21.0",
     "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
