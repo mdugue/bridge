@@ -158,8 +158,9 @@ change yourself:
 
 ```bash
 # drop the snapshot JSON into shots/, then:
-bunx playwright test e2e/snapshot-shot.spec.ts --headed
+bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
+# Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
 Headless e2e uses SwiftShader — shadows/AA look nothing like a real GPU, so use

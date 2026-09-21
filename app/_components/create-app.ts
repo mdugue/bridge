@@ -55,6 +55,7 @@ import {
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type FocusMode } from "./post-stack";
 import { loadRail, type RailControl } from "./rail-layer";
+import { type SceneCensus, sceneCensus } from "./scene-census";
 import {
   currentDeviceTier,
   currentSceneProfile,
@@ -113,10 +114,21 @@ const SKY_COLOR = 0x9f_b6_cc;
 /** Default fog amount (0..1). Kept light — a gentle far haze, not a near wall. */
 export const DEFAULT_ATMOSPHERE = 0.2;
 
+export type LayerName =
+  | "city"
+  | "lamps"
+  | "rail"
+  | "terrain"
+  | "vegetation"
+  | "walls"
+  | "water";
+
 export interface CityWalkStats {
   buildingCount: number;
   /** estimated GPU footprint of geometry + textures + shadow map (MB) */
   gpuMegabytes: number;
+  /** what each layer actually built — the e2e suite asserts on these */
+  layerStats: Record<LayerName, SceneCensus>;
   shadowsEnabled: boolean;
   terrainVertexCount: number;
 }
@@ -1013,6 +1025,22 @@ async function bootApp(
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
       gpuMegabytes: Math.round(gpuBytes() / 1_048_576),
+      layerStats: {
+        city: sceneCensus([
+          cityLayer.group,
+          ...extraCities.map((c) => c.group),
+        ]),
+        terrain: sceneCensus(terrains.map((t) => t.mesh)),
+        water: sceneCensus(
+          terrains.flatMap((t) =>
+            t.water ? [t.water.mesh, t.water.mistMesh] : []
+          )
+        ),
+        vegetation: sceneCensus(vegControls.map((v) => v.group)),
+        lamps: sceneCensus(lampControls.map((l) => l.group)),
+        rail: sceneCensus(railControls.map((r) => r.group)),
+        walls: sceneCensus(wallControls.map((w) => w.group)),
+      },
     });
   };
 

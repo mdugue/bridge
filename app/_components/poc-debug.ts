@@ -7,8 +7,9 @@
 
 import type { LookTarget } from "@/lib/city/look-controls";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import type { CameraState, PlayerPose } from "./create-app";
+import type { CameraState, LayerName, PlayerPose } from "./create-app";
 import type { FocusMode } from "./post-stack";
+import type { SceneCensus } from "./scene-census";
 import type { Viewpoint } from "./viewpoints";
 
 interface Xyz {
@@ -58,6 +59,8 @@ export interface PocDebugInfo extends Partial<LookTarget> {
   gpuMegabytes: number;
   /** Inserts the prescribed building (marker box without a glTF). */
   insertBuilding?: () => void;
+  /** Per-layer build census (meshes / instances / triangles), refreshed with the stats. */
+  layerStats?: Record<LayerName, SceneCensus>;
   /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
   offset?: { cx: number; cy: number };
   ready: boolean;

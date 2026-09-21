@@ -193,7 +193,7 @@ camera pose + sun time + look sliders as JSON; `__poc.getCameraState()` /
 a snapshot JSON into `shots/` and run:
 
 ```bash
-bunx playwright test e2e/snapshot-shot.spec.ts --headed
+bun run shots
 ```
 
 It writes a clean canvas plate (HUD hidden) to `shots/<name>.png` — read it and

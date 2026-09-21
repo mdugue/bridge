@@ -173,6 +173,11 @@ test.describe("desktop viewer", () => {
     errors = watchErrors(page);
     await page.goto(LITE);
     webgl = await hasWebGl(page);
+    // On CI the SwiftShader flags above must yield WebGL; a silent skip
+    // would let a Chromium/Playwright bump turn the whole suite green.
+    if (process.env.CI) {
+      expect(webgl).toBe(true);
+    }
     if (!webgl) {
       return;
     }
@@ -190,6 +195,10 @@ test.describe("desktop viewer", () => {
   });
 
   test.afterAll(async () => {
+    // Errors logged after the last test's own check must not go unnoticed.
+    if (webgl) {
+      expectNoErrors(errors);
+    }
     await page?.context().close();
   });
 
@@ -208,6 +217,29 @@ test.describe("desktop viewer", () => {
     expect(poc?.firstFrame).toBe(true);
     expect(poc?.terrainVertexCount ?? 0).toBeGreaterThan(0);
     expect(poc?.shadowsEnabled).toBe(true);
+    expectNoErrors(errors);
+  });
+
+  test("every scene layer is built on the primary tile", async () => {
+    // Counts come from what each loader actually put in the scene graph, so a
+    // renamed GeoJSON property, a 404 or a thrown builder — all of which the
+    // loaders swallow into an empty group — fails here instead of passing.
+    const stats = await page.evaluate(() => window.__poc?.layerStats);
+    expect(stats).toBeDefined();
+    if (!stats) {
+      return;
+    }
+    expect(stats.city.triangles).toBeGreaterThan(0);
+    expect(stats.terrain.meshes).toBe(1); // lite = primary tile only
+    expect(stats.water.meshes).toBeGreaterThanOrEqual(1);
+    // 5 118 canopy points + 25 tree rows on 33412_5656 (trunk + two crowns each)
+    expect(stats.vegetation.instances).toBeGreaterThan(1000);
+    // 339 OSM lamps: posts + heads + decals are instanced
+    expect(stats.lamps.instances).toBeGreaterThan(100);
+    // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
+    expect(stats.rail.triangles).toBeGreaterThan(0);
+    // 292 wall lines
+    expect(stats.walls.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);
   });
 
@@ -344,6 +376,9 @@ test.describe("desktop viewer", () => {
       () => window.__poc?.buildingCount ?? 0
     );
     expect(buildingsBefore).toBeGreaterThan(0);
+    const trianglesBefore = await page.evaluate(
+      () => window.__poc?.layerStats?.city.triangles ?? 0
+    );
     await page.evaluate(
       ([easting, northing, midHeight, top]) => {
         const api = window.__poc;
@@ -376,6 +411,11 @@ test.describe("desktop viewer", () => {
       buildingsBefore,
       { timeout: slow(30_000) }
     );
+    // The mesh itself shrank, not just the filtered document.
+    const trianglesAfter = await page.evaluate(
+      () => window.__poc?.layerStats?.city.triangles ?? 0
+    );
+    expect(trianglesAfter).toBeLessThan(trianglesBefore);
     expectNoErrors(errors);
   });
 
@@ -487,6 +527,9 @@ test.describe("mobile", () => {
 
     await page.goto(LITE);
     const webgl = await hasWebGl(page);
+    if (process.env.CI) {
+      expect(webgl).toBe(true);
+    }
     // biome-ignore lint/suspicious/noSkippedTests: conditional runtime skip — render assertions are meaningless without WebGL
     test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {

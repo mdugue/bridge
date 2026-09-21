@@ -50,6 +50,7 @@
     "test:watch": "bun test ./lib ./app ./scripts --watch",
     "test:coverage": "bun test ./lib ./app ./scripts --coverage",
     "test:e2e": "playwright test",
+    "shots": "SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed",
     "verify": "bun run lint && bun run typecheck && bun run test"
   },
   "packageManager": "bun@1.4.2",
