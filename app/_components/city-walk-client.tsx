@@ -65,12 +65,12 @@ function useDataManifest(): DataManifest | null | undefined {
   const [manifest, setManifest] = useState<DataManifest | null | undefined>();
   useEffect(() => {
     let cancelled = false;
-    fetch(`/data/${MANIFEST_FILE}`, { cache: "no-cache" })
+    void fetch(`/data/${MANIFEST_FILE}`, { cache: "no-cache" })
       .then((res) => (res.ok ? (res.json() as Promise<DataManifest>) : null))
       .catch(() => null)
       .then((m) => {
         if (!cancelled) {
-          setManifest(m && m.version === 1 ? m : null);
+          setManifest(m?.version === 1 ? m : null);
         }
       });
     return () => {

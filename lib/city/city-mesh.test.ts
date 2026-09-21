@@ -102,7 +102,9 @@ test("buildDetailAttributes expands the object table per vertex", () => {
 });
 
 test("doomedObjects takes the whole building tree", () => {
-  expect(Array.from(doomedObjects({ objects }, 1)).sort()).toEqual([0, 1]);
+  expect(
+    Array.from(doomedObjects({ objects }, 1)).sort((a, b) => a - b)
+  ).toEqual([0, 1]);
   expect(Array.from(doomedObjects({ objects }, 2))).toEqual([2]);
   expect(doomedObjects({ objects }, 99).size).toBe(0);
 });

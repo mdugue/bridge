@@ -247,11 +247,7 @@ async function bakeHeightfield(tile: string, n: number): Promise<void> {
   if (!ArrayBuffer.isView(raster)) {
     fail(`unexpected raster shape for ${tile}`);
   }
-  // reason: geotiff types the result as TypedArray | TypedArray[]; isView narrowed it above
-  const encoded = encodeHeightfield(
-    raster as unknown as ArrayLike<number>,
-    image.getGDALNoData()
-  );
+  const encoded = encodeHeightfield(raster, image.getGDALNoData());
   const header: HeightfieldHeader = {
     version: HEIGHTFIELD_VERSION,
     n,

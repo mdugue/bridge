@@ -130,7 +130,7 @@ export function bakeCityMesh(
     loader.matrix = sharedMatrix;
   }
   loader.load(doc);
-  const matrix = loader.matrix as Matrix4;
+  const matrix = loader.matrix;
   const offset = recenterOffset(matrix);
   const v = collectVertices(loader.scene);
 

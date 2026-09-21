@@ -11,6 +11,7 @@ import {
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import { fetchFeatures } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { disposeObject3D } from "./three-utils";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
@@ -870,7 +871,7 @@ function buildRails(
     if (f.geometry?.type !== "LineString") {
       continue;
     }
-    const tracks = Math.min(Math.max(f.properties?.tracks || 1, 1), 3);
+    const tracks = Math.min(Math.max(f.properties?.tracks ?? 1, 1), 3);
     const dense = densify(f.geometry.coordinates, SAMPLE_M);
     // Split into runs of points with valid ground (never bridge a NoData gap).
     let run: Pt[] = [];
@@ -979,12 +980,7 @@ export async function loadRail(ctx: RailContext): Promise<RailControl> {
   return {
     group,
     dispose: () => {
-      group.traverse((o) => {
-        if (o instanceof Mesh) {
-          o.geometry.dispose();
-          (o.material as MeshStandardMaterial).dispose();
-        }
-      });
+      disposeObject3D(group);
     },
   };
 }
