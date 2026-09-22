@@ -3,7 +3,12 @@
 How each **raw data source** becomes a **rendered feature**. This is the
 "structured overview" of the pipeline: read it before adding a data source or a
 feature, and **update it when you change either** (see
-[the maintenance rule](./README.md#keeping-these-docs-current)).
+[the maintenance rule](./README.md#keeping-these-docs-current)). The
+plain-language version of this page is the guide's
+[How the city walker works](./guide/en/how-it-works.md); the per-attribute
+encoding table (which value drives which pixel) is in
+[rendering.md](./rendering.md#visual-encoding--which-data-drives-which-pixel);
+the bakes that produce each artifact are in [data-pipeline.md](./data-pipeline.md).
 
 The diagram convention encodes the *kind* of relation:
 

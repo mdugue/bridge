@@ -12,7 +12,11 @@ diagram, the transformation ledger (active / experimental / planned /
 **discontinued**), and how to render other locations — see `docs/`
 (`docs/README.md`). **When you add, change, or drop a data→feature
 transformation, update `docs/transformations.md` + `docs/data-flow.md` as part of
-the change** (Definition of Done in `docs/README.md`).
+the change** (Definition of Done in `docs/README.md`). `docs/rendering.md` is
+the human-readable map of the frame (scene graph, the attribute → visual
+codebook, budgets, boot sequence), `docs/data-pipeline.md` the bake/build
+reference, and `docs/adr/` the record of *why* the load-bearing choices below
+were made — add an ADR when you change one.
 
 ## Scene architecture
 

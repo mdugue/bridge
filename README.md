@@ -73,13 +73,14 @@ gitignored; there is no Git-LFS. The bake scripts in `scripts/` regenerate the
 committed artifacts from them.
 
 **Provenance.** Sources are the
-[Saxon open-geodata portal](https://www.geodaten.sachsen.de/) (*Offene
-Geodaten*, mostly *Datenlizenz Deutschland – Zero*) plus OpenStreetMap for
-street lamps, retaining walls, station platforms and bridge structure (ODbL) —
-see
-[docs/portability.md](docs/portability.md#fetching-source-data).
-`TODO(maintainer):` record the exact dataset editions, download dates and
-per-dataset licences for the committed tiles.
+[Saxon open-geodata portal](https://www.geodaten.sachsen.de/) of GeoSN
+(*Datenlizenz Deutschland – Namensnennung 2.0*, credit "Quelle: GeoSN,
+dl-de/by-2-0") plus OpenStreetMap for street lamps, retaining walls, station
+platforms and bridge structure (ODbL, "© OpenStreetMap contributors"). Every
+dataset — download route, strengths and weaknesses, the editions in use and
+what is still unrecorded — is described in the guide
+[Where the data comes from](docs/guide/en/data-sources.md)
+([deutsch](docs/guide/de/data-sources.md)).
 
 ## Controls
 
@@ -95,7 +96,6 @@ Desktop:
 | Double-click the ground | Travel there |
 | Click the minimap | Teleport there |
 | `R` | Demolish the building under the crosshair |
-| `B` | Insert a building at the prescribed spot |
 | "Immersive mode" | Pointer lock (`Esc` exits) |
 
 Touch: drag to look, joystick to walk, pinch to zoom, double-tap the ground to
@@ -118,11 +118,12 @@ Coordinate frames matter here. Source data is EPSG:25833, Z-up; a parent
 ENU → world in [`lib/city/sun.ts`](lib/city/sun.ts) — note suncalc 2 reports
 degrees with a **north-based** azimuth (1.x used radians measured from south).
 
-Two design decisions worth knowing: **demolish** is a data-level filter plus a
-re-parse of the CityJSON rather than a mesh edit
-([`city-layer.ts`](app/_components/city-layer.ts)), and
+Two design decisions worth knowing: **demolish** filters the building's
+vertices out of the baked mesh and rebuilds it — there is no CityJSON in the
+browser to re-parse ([`city-layer.ts`](app/_components/city-layer.ts)), and
 `cityjson-threejs-loader` is **patched** via [`patches/`](patches) — read the
-patch header before bumping it.
+patch header before bumping it. The reasoning behind these and the other
+load-bearing choices is recorded in [docs/adr](docs/adr/README.md).
 
 ## Development
 
@@ -131,6 +132,7 @@ bun run verify   # lint + typecheck + unit tests — run this before pushing
 bun run build
 bun run test:e2e # Playwright, against a production build
 bun run fix      # oxfmt + oxlint --fix
+bun run shots    # real-GPU screenshot plates from shots/*.json (headed)
 ```
 
 Unit tests are `bun test` files colocated with the code they cover (`lib/` and
@@ -141,11 +143,16 @@ changing that hook means updating [`e2e/`](e2e).
 
 ## Further reading
 
+- [docs/guide](docs/guide/README.md) — for users and non-developers, in
+  English and German: how it works, where the data comes from, the data's
+  journey to the browser, using the viewer, and a glossary.
 - [AGENTS.md](AGENTS.md) — orientation: stack, commands, conventions, the
   coordinate frame, and the rendering gotchas worth not relearning.
-- [docs/](docs/README.md) — the knowledge base: what maps to what
+- [docs/](docs/README.md) — the knowledge base: how data becomes pixels
+  ([rendering](docs/rendering.md)), the bakes and the build step
+  ([data-pipeline](docs/data-pipeline.md)), what maps to what
   ([data-flow](docs/data-flow.md)), every transformation built, shelved or
-  rejected ([transformations](docs/transformations.md)), and how to render a
-  different location ([portability](docs/portability.md)).
-- [plans/README.md](plans/README.md) — the implementation plans and their
-  status.
+  rejected ([transformations](docs/transformations.md)), how to render a
+  different location ([portability](docs/portability.md)), the
+  [architecture decision records](docs/adr/README.md) and the
+  [implementation plans and backlog](docs/plans/README.md).

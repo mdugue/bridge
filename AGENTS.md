@@ -118,13 +118,29 @@ any non-trivial rendering, data, or perf work. The `.claude/skills/threejs-*`
 skills are generic three.js references. There is no `SPEC.md`; these are the
 source of truth.
 
-- `docs/` — the **knowledge base** (what maps to what + status + portability):
-  [data-flow.md](docs/data-flow.md) (source→feature provenance diagram),
-  [transformations.md](docs/transformations.md) (the ledger of every
-  built/experimental/planned/**discontinued** transformation), and
-  [portability.md](docs/portability.md) (rendering other locations with
-  more/less data). Roles: AGENTS.md = orientation, skill = how it's built,
-  `docs/` = what maps to what. Start at [docs/README.md](docs/README.md).
+- `docs/` — the **knowledge base**. Start at [docs/README.md](docs/README.md).
+  - [rendering.md](docs/rendering.md) (scene graph, the attribute → visual
+    codebook, light/post, budgets, boot) and
+    [data-pipeline.md](docs/data-pipeline.md) (bakes, build step, artifact
+    contracts, sizes, provenance, regeneration) — the developer overviews;
+  - [data-flow.md](docs/data-flow.md) (source→feature provenance diagram),
+    [transformations.md](docs/transformations.md) (the ledger of every
+    built/experimental/planned/**discontinued** transformation),
+    [portability.md](docs/portability.md) (rendering other locations with
+    more/less data);
+  - [adr/](docs/adr/README.md) — architecture decision records: *why* the
+    load-bearing choices were made and which alternatives lost;
+  - [plans/](docs/plans/README.md) — implementation plans, the backlog and
+    the audit history. **Plans live here, not in a root `plans/`**: the
+    `improve` skill writes to `plans/` by default — move or point its output
+    to `docs/plans/` and reconcile against that README;
+  - [guide/](docs/guide/README.md) — user-facing pages in English **and
+    German** (how it works, data sources, the data's journey, using the
+    viewer, glossary). Written for non-developers; keep both languages in
+    sync when a user-visible fact changes.
+
+  Roles: AGENTS.md = orientation, skill = how it's built, `docs/` = what it
+  shows, what maps to what, why, and what is next.
 
 ## Coordinate system (read before touching geometry)
 
@@ -341,8 +357,15 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   unrelated working-tree edits.
 - **Keep the knowledge base current.** Adding, altering, or dropping a
   data→feature transformation isn't done until `docs/transformations.md` (with
-  the right status, incl. **why** for discontinued) and `docs/data-flow.md`
-  reflect it — see [docs/README.md](docs/README.md#keeping-these-docs-current).
+  the right status, incl. **why** for discontinued), `docs/data-flow.md` and
+  the codebook in `docs/rendering.md` reflect it; a decision that constrains
+  future work gets an ADR in `docs/adr/`; a new dataset or edition updates the
+  guide's data-sources page in **both** languages — see
+  [docs/README.md](docs/README.md#keeping-these-docs-current).
+- **Attribution is part of the data.** GeoSN products are `dl-de/by-2-0`
+  ("Quelle: GeoSN, dl-de/by-2-0"), OSM-derived layers ODbL ("© OpenStreetMap
+  contributors"); both credits live in the HUD footer (`scene-sidebar.tsx`) and
+  the OSM bakes write an `attribution` member. Keep them when you touch either.
 
 ## When in doubt, ask before
 

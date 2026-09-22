@@ -4,7 +4,16 @@
 > verification command and confirm the expected result before moving to the
 > next step. If anything in the "STOP conditions" section occurs, stop and
 > report — do not improvise. When done, update the status row for this plan
-> in `plans/README.md`.
+> in `docs/plans/README.md`.
+>
+> **Premise drift (noted 2026-09-22, when the plans moved into `docs/`)**:
+> `package.json` already pins `packageManager: bun@1.4.2`, yet `bun.lock` is
+> still `lockfileVersion: 1` and `sharp` remains in `dependencies` and
+> `trustedDependencies` — so the Bun-pin half of Step 1 happened elsewhere
+> and everything from Step 0 onward is untouched. Re-verify whether Bun
+> 1.4.2 rewrites the lockfile to v2 before trusting the lockfile reasoning
+> below; the measured numbers (+24 % RGB / +21 % class PNG size, pixels
+> equivalent) still stand.
 >
 > **Drift check (run first)**:
 > `git diff --stat e1c00c9..HEAD -- scripts/downsample-raster.ts scripts/downsample-raster.test.ts scripts/prepare-data.ts package.json bun.lock AGENTS.md docs/transformations.md`

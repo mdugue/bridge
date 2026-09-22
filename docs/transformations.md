@@ -11,7 +11,10 @@ slider, not load-bearing) · 📋 planned (designed, not built) · 🗃️ disco
 
 Each entry records **inputs**, **what it does**, **source preference / fallback**
 (what it degrades to when its best input is absent — see
-[portability.md](./portability.md)), and **where it lives**.
+[portability.md](./portability.md)), and **where it lives**. The *why* behind
+the load-bearing choices is in the [ADRs](./adr/README.md); the attribute →
+visual-variable codebook is in
+[rendering.md](./rendering.md#visual-encoding--which-data-drives-which-pixel).
 
 ---
 
@@ -21,7 +24,7 @@ Each entry records **inputs**, **what it does**, **source preference / fallback*
 - **Terrain heightfield** — DGM1 → triangulated heightfield + edge skirt to hide
   inter-tile seams. The GeoTIFF is resampled **at build time**
   (`scripts/prepare-data.ts` → `<tile>.heightfield-<n>.json` + `.u16.gz`, primary
-  tile 1024², neighbours 512², NoData stored as NaN — see
+  tile 1024², neighbours 512², NoData stored as `0xFFFF` and decoded to NaN — see
   `lib/city/heightfield.ts`); the browser fetches the gzipped uint16 (cm) grid and never
   decodes a raster. `terrain-layer.ts`, `lib/city/terrain-geometry.ts`.
 - **Surface splatmap** — Basis-DLM land-cover → 4096² RGBA PNG (RGB = pastel
@@ -246,13 +249,24 @@ research that produced them):
    per-tree position/height/crown; bake to per-tile GeoJSON.
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). Sizeable integration.
-8. **Adaptive resolution while moving** — *partly shipped*: AO and DoF are
-   skipped while the camera moves (`lib/city/regression.ts`, plan 007) and DoF
-   runs at half resolution; a pixel-ratio drop under motion is the open half
-   (needs a real-GPU look).
+8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
+   while the camera moves (`lib/city/regression.ts`, plan 007). AO is **not**
+   — gating it made the contact shadows blink on every step, so N8AO runs
+   permanently at half resolution instead
+   ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). A pixel-ratio
+   drop under motion is the open half (needs a ~1 s hold and a real-GPU look).
 9. **Cable-stayed / truss bridge structures** — arch + beam now ship (✅ above);
    `bridge:structure=cable-stayed` (Pieschener Molenbrücke) / `truss` still fall
    back to a flat soffit. Pylons + stay cables / truss webs would finish the set.
+10. **Atmospheric motes** — the one unbuilt item of the aesthetic roadmap:
+    camera-local `Points` (2–4 k) drifting in a toroidal volume (R ≈ 30 m),
+    additive, `depthWrite: false`, `fog: false` (fog would brighten distant
+    motes), hash-seeded so snapshots reproduce, opacity + `setDrawRange` on
+    one slider. +1 draw call. Design notes in [plans/README.md](./plans/README.md#open-work).
+11. **Far crown LOD tier** — a third InstancedMesh per 250 m cell (detail 1 or 0,
+    trunk hidden) beyond ~500 m; today a tree 2 km away still draws ~400
+    triangles in the main and every shadow pass. The swap mechanism exists
+    (`updateLod`); the look needs the `--headed` harness.
 
 ---
 
@@ -275,6 +289,11 @@ research that produced them):
 | **`ver06_l` centreline-buffered decks** (rail v1) | Buffered planks stacked deck-top + ballast + parapet-cap → "2-story" bridges, and one plank merged the parallel Marienbrücke spans. | Replaced by **`ver06_f` deck polygons** (one slab per real footprint); kept as the no-`ver06_f` portability fallback. |
 | **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build **once for the block** on the cross-tile `heightAt`. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
+| **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | N8AO runs permanently at `halfRes`; only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
+| **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
+| **Camera-follow grass tuft ring** | Shadow-casting instances rewritten every frame; reads as confetti. | Meadow mottle + normal perturbation in the terrain shader (✅ above). |
+| **Per-lamp real point lights** | three bakes the light count into every program → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
+| **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above). |
 
 ---
 

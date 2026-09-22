@@ -65,16 +65,21 @@ source upgrades a feature listed above.
 ## Fetching source data
 
 All from the **[Saxon open-geodata portal](https://www.geodaten.sachsen.de/)**
-(*Offene Geodaten*, free; mostly *Datenlizenz Deutschland – Zero*). Raw downloads
-stay in `data/_raw/` (gitignored, **never committed** — no Git-LFS); only small
-derived per-tile artifacts under `data/` are committed.
+of GeoSN (free; *Datenlizenz Deutschland – Namensnennung – Version 2.0*,
+`dl-de/by-2-0`, credit "Quelle: GeoSN, dl-de/by-2-0" — see the guide's
+[licence table](./guide/en/data-sources.md#licences-and-credits)). Raw
+downloads stay in `data/_raw/` (gitignored, **never committed** — no Git-LFS);
+only small derived per-tile artifacts under `data/` are committed, plus the
+DGM1 GeoTIFF the build reads. What each dataset is good and bad at, and the
+editions currently in use, are in the guide's
+[Where the data comes from](./guide/en/data-sources.md).
 
 | Source | Where |
 |---|---|
-| CityJSON LoD2, DGM1, DOM1 | [Höhen- & 3D-Stadtmodelle](https://www.geodaten.sachsen.de/digitale-hoehenmodelle-3994.html) |
-| Basis-DLM (ATKIS) | portal → Landschaftsmodelle |
+| DGM1, DOM1 (GeoTIFF, 2 km tiles), laser scan (LAZ) | [Downloadbereich Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html) |
+| 3D-Stadtmodell LoD2 (CityGML, 2 km tiles; convert to CityJSON before committing) | [Downloadbereich Digitale 3D-Stadtmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-3d-stadtmodelle-4875.html) |
+| Basis-DLM (ATKIS, statewide Shape package) | [Downloadbereich Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html) |
 | **DOP** orthophoto (RGB + NIR) | [DOP-Downloadbereich](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) — 2 km tiles, GeoTIFF + `.tfw`; pick the **4-channel (RGB+Infrarot)** variant for NDVI. Unpack as downloaded into `data/_raw/DOP_RGBI/dop20rgbi_<tile>_2_sn_tiff/` — `extract-ndvi.sh` and `extract-roof-colour.sh` read `dop20rgbi_<tile>_2_sn.tif` from there. |
-| Laser-scan point cloud | portal → Laserscandaten (LAS/LAZ; large) |
 | Street lamps, station platforms | OpenStreetMap via Overpass (`extract-lamps.sh`, `extract-rail.sh`) — ODbL |
 | OSM walls, platforms, bridge structure | Geofabrik regional extract (`.osm.pbf`, e.g. Sachsen ~250 MB) from [download.geofabrik.de](https://download.geofabrik.de) into `data/_raw/osm/`; `extract-walls.sh` reads it via GDAL's OSM driver (override with `WALLS_PBF=`); `extract-lamps.sh`/`extract-rail.sh` platforms and `bridge:structure` use Overpass — ODbL |
 
