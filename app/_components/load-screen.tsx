@@ -84,7 +84,7 @@ function PlateStack({ plates }: { plates: LoadStageState[] }) {
 function StageRow({ stage }: { stage: LoadStageState }) {
   return (
     <div
-      className="grid h-12 grid-cols-[18px_1fr_auto] items-center gap-3.5 border-white/10 border-b transition-opacity duration-500"
+      className="grid min-h-12 grid-cols-[18px_1fr_auto] items-center gap-3.5 border-white/10 border-b py-2 transition-opacity duration-500"
       style={{ opacity: stage.pending ? 0.4 : 1 }}
     >
       <ViewTransition
@@ -143,7 +143,7 @@ export function LoadScreen({
             <span className="font-medium text-[11px] uppercase leading-none tracking-widest opacity-60">
               City Walk
             </span>
-            <span className="font-semibold text-xl leading-tight">
+            <span className="font-semibold text-lg leading-tight sm:text-xl">
               Dresden · Altstadt
             </span>
           </div>
@@ -157,7 +157,7 @@ export function LoadScreen({
                     announcing the whole screen would talk over everything. */}
                 <output
                   aria-live="polite"
-                  className="block text-pretty font-medium text-3xl leading-tight tracking-tight"
+                  className="block text-pretty font-medium text-2xl leading-tight tracking-tight sm:text-3xl"
                 >
                   {loadHeadline(stages)}
                 </output>

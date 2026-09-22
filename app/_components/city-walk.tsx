@@ -1,6 +1,6 @@
 "use client";
 
-import { HammerIcon, HousePlusIcon, SlidersHorizontalIcon } from "lucide-react";
+import { SlidersHorizontalIcon } from "lucide-react";
 import {
   addTransitionType,
   type CSSProperties,
@@ -134,7 +134,8 @@ function SceneOverlays({
   return (
     <>
       <ControlHintBar coarse={coarse} />
-      <div className="absolute bottom-20 left-5">
+      {/* Clear of the hint bar even when it wraps to two rows on a phone. */}
+      <div className="absolute bottom-24 left-5">
         <VirtualJoystick onChange={onMove} />
       </div>
     </>
@@ -435,7 +436,7 @@ export default function CityWalk({
     >
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the WebGL canvas. */}
-      <div className="absolute inset-0 overflow-hidden bg-slate-900">
+      <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
         <div className="absolute inset-0" ref={mountRef} />
 
         {status.phase === "loading" && (
@@ -476,23 +477,6 @@ export default function CityWalk({
               coarse={coarse}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
             />
-
-            {coarse && (
-              <div className="absolute right-4 bottom-20 flex flex-col gap-2">
-                <Button
-                  onClick={() => handleRef.current?.demolishAtCrosshair()}
-                  size="sm"
-                  variant="secondary"
-                >
-                  <HammerIcon data-icon="inline-start" />
-                  Abreißen
-                </Button>
-                <Button onClick={insertBuilding} size="sm" variant="secondary">
-                  <HousePlusIcon data-icon="inline-start" />
-                  Einsetzen
-                </Button>
-              </div>
-            )}
           </>
         )}
       </div>

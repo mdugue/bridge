@@ -2,23 +2,39 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
+import { loadStageStates } from "@/lib/city/load-stages";
 import {
   type DataManifest,
   MANIFEST_FILE,
   TILE_BLOCK,
   tileUrlsFrom,
 } from "@/lib/city/tile";
+import { LoadScreen } from "./load-screen";
 import { currentSceneBudget, type SceneBudget } from "./scene-profile";
+
+/**
+ * The same Laden screen the viewer shows, at zero — the manifest fetch and
+ * the viewer chunk are the first seconds of the load, and on a phone they are
+ * seconds you can see. Rendering anything else here (it used to be a slab of
+ * slate with "Loading 3D viewer…") means the redesign starts by replacing a
+ * different loading screen.
+ *
+ * It is a plain render, not a transition, so the shared names stay dormant and
+ * the handover still belongs to the viewer's own screen.
+ */
+function BootScreen() {
+  return (
+    <div className="relative h-full w-full">
+      <LoadScreen percent={0} stages={loadStageStates({})} />
+    </div>
+  );
+}
 
 // three.js needs a real browser (WebGL, pointer lock) — never prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
 const CityWalk = dynamic(() => import("./city-walk"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-full w-full items-center justify-center bg-slate-900 text-lg text-white">
-      Loading 3D viewer…
-    </div>
-  ),
+  loading: () => <BootScreen />,
 });
 
 const [PRIMARY_SPEC, ...NEIGHBOUR_SPECS] = TILE_BLOCK;
@@ -71,11 +87,7 @@ export function CityWalkClient() {
     };
   }, [manifest]);
   if (!tiles) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-900 text-lg text-white">
-        Loading 3D viewer…
-      </div>
-    );
+    return <BootScreen />;
   }
   return (
     <CityWalk

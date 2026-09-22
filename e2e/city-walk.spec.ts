@@ -597,6 +597,29 @@ test.describe("mobile", () => {
     ).toBeVisible();
     await expect(page.getByText("WASD")).toHaveCount(0);
 
+    // Demolish/insert live in the sidebar's Werkzeuge section; they used to
+    // float over the scene as well, on the screens with the least room.
+    await expect(page.getByRole("button", { name: "Abreißen" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Einsetzen" })).toHaveCount(
+      0
+    );
+
+    // The hint bar fits the viewport (it wraps rather than being cut off) and
+    // can be waved away — everything it says is in the sidebar too.
+    const hintBar = page.getByText("umsehen").first();
+    const hintBox = await hintBar.boundingBox();
+    const viewport = page.viewportSize();
+    expect(hintBox && viewport).toBeTruthy();
+    if (hintBox && viewport) {
+      expect(hintBox.x + hintBox.width).toBeLessThanOrEqual(viewport.width);
+    }
+    const dismiss = page.getByRole("button", {
+      name: "Steuerungshinweise ausblenden",
+    });
+    await expect(dismiss).toBeVisible();
+    await dismiss.tap();
+    await expect(dismiss).toHaveCount(0);
+
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
     const headingBefore = await page.evaluate(
