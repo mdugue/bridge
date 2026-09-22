@@ -84,14 +84,42 @@ Current working setup (`sun-rig.ts` / `create-app.ts`):
 | `shadow.bias` | ~−0.0003 | small constant bias, residual cleanup |
 | terrain `castShadow` | **false** | a casting heightfield self-shadows into triangle/staircase acne at grazing sun; ground only receives |
 | shadow map size (`shadowMapSizeFor` in scene-profile.ts) | 3072 | soft radius lets 3072 look like 4096 at ~44% less fill |
-| `SHADOW_RADIUS` (frustum half-size) | ~110 m | camera-following, texel-snapped; small = fine texels |
-| `shadow.autoUpdate` | false | re-render only when the player leaves a 20 m dead zone around the last frustum centre, the sun moves, or a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
+| frustum half-size (`lib/city/shadow-fit.ts`) | 110 m at eye level, growing to 880 m with altitude | camera-following, texel-snapped; small = fine texels, but a fixed 110 m leaves a fly-over entirely unshadowed |
+| `shadow.autoUpdate` | false | re-render only when the frustum centre leaves a dead zone (18% of the half-size — 20 m at the base, as before), when the half-size re-fits, when the sun moves, or when a caster changes (`invalidateShadows()`, incl. the crown LOD swap) |
+
+### The frustum fit (`lib/city/shadow-fit.ts`)
+
+A fixed 110 m half-size centred on the camera is exactly right at eye level and
+useless in fly mode: from 200 m up it covers ground directly below the camera
+that is barely on screen, so everything the player looks at falls outside the
+shadow camera and renders flat. (That was the reported "no sun shadows when
+flying" bug; `shots/` before/after at that snapshot show it plainly.) The rig
+therefore re-fits per frame, from two pure functions:
+
+- `fitShadowRadius(heightAboveGround, current)` — half-size = 2.5 × altitude,
+  clamped to [110, 880] m and **quantized to octaves with hysteresis** (0.6 in
+  log2), so hovering on a step boundary cannot flap the frustum. A flap is a
+  full depth-pass re-render, which is the whole cost here.
+- `shadowFocusAhead(radius)` — how far along the camera's world direction to
+  push the centre: half of the radius *above the base*, so it is **zero at eye
+  level** (walking, and turning on the spot, behave exactly as before). Feed it
+  the raw `dir.x`/`dir.z`, not a renormalized horizontal: the cos(pitch) factor
+  collapses the offset when looking straight down, which is what you want.
+
+The centre is anchored to the **ground** under the camera, not to the camera —
+airborne, a camera-centred frustum puts its tight depth range hundreds of metres
+above the terrain that should be shadowed. Cost per re-render is unchanged (same
+map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
+the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
+them anyway.
 
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
-(rings/grid on lit faces), bigger frustum (coarser texels → fraying), 4096 map
+(rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
+fraying — the fit is careful to keep the base radius while walking), 4096 map
 (cost without visible gain once radius softens). **Open limit:** very long
-low-sun shadows clip beyond the 110 m frustum — only Cascaded Shadow Maps fix
-that (three has CSM in examples; sizeable integration, custom-material patching).
+low-sun shadows still clip beyond the frustum, and the far field at high
+altitude is unshadowed — only Cascaded Shadow Maps fix that properly (three has
+CSM in examples; sizeable integration, custom-material patching).
 
 ## Surfaces (splatmap)
 
@@ -142,8 +170,13 @@ were ported from; the layer file, not the sandbox, is the source of truth.
 
 Buildings are already merged (low draw calls) — **BatchedMesh is moot** and
 would break objectid picking. The bottleneck is **fill-rate**: post-processing
-(SSAO is the priciest) and the shadow-map render — which is why AO and DoF are
-skipped while the camera moves (`lib/city/regression.ts`). Buildings are opaque
+(SSAO is the priciest) and the shadow-map render — which is why **DoF** is
+skipped while the camera moves (`lib/city/regression.ts`). **AO is not**: the
+contact shadows blinked on every footstep, so the pass instead runs permanently
+at `configuration.halfRes` (depth-aware upsampling) — about what the skip saved,
+paid every frame. `halfRes`/`aoSamples`/`denoiseSamples` rebuild n8ao's
+materials, so they are construction-time settings; toggling them per frame
+trades the flicker for a recompile hitch. Buildings are opaque
 clay only; `MeshPhysicalMaterial.transmission` ≈ doubles scene cost, so the
 frosted "ghost" style was dropped rather than kept as an option.
 `handle.getRenderInfo()`

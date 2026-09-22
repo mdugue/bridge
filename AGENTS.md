@@ -179,6 +179,26 @@ camera-following frustum on a right-sized map (finer texels = cleaner edges).
 it here. The remaining limit (very long shadows clipping beyond the frustum at
 low sun) is only solvable with Cascaded Shadow Maps.
 
+**The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 110 m
+half-size is right at eye level and wrong in fly mode: from 200 m up it covers
+a patch of ground directly below the camera that is barely on screen, so the
+whole view renders unshadowed. The half-size therefore grows with altitude, in
+octaves (110 → 880 m) with hysteresis, and the frustum is centred **on the
+ground**, pushed along the camera's world direction by a fraction of the extra
+radius. At eye level the offset is zero and the behaviour is byte-for-byte the
+old one — in particular turning on the spot still never moves the frustum.
+Per-render cost is unchanged (same map size, same PCF); only the caster set
+grows. This is the cheap 90% of CSM, not a replacement for it.
+
+**Contact shadows (SSAO) are never motion-gated.** Skipping the N8AO pass while
+the camera moves made them blink on every footstep, which reads as a bug. The
+pass now runs at `configuration.halfRes` with n8ao's depth-aware upsampling —
+roughly what the skip used to save, paid every frame instead. `halfRes`,
+`aoSamples` and `denoiseSamples` all rebuild the pass's materials (see its
+configuration Proxy), so they are **construction-time settings**: a motion-keyed
+quality switch there trades a flicker for a shader-recompile hitch. DoF is still
+dropped while moving — motion has already destroyed the bokeh.
+
 **Buildings are already batched.** Each tile's buildings are ONE baked mesh
 (`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time and
 writes a gzipped vertex stream + meta, `lib/city/city-mesh.ts`; per-vertex

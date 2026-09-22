@@ -13,7 +13,11 @@ declare module "n8ao" {
       aoSamples: number;
       color: { set: (color: number | string) => void };
       denoiseSamples: number;
+      /** depth-aware upsampling of a halfRes AO buffer (n8ao default: true) */
+      depthAwareUpsampling: boolean;
       distanceFalloff: number;
+      /** renders AO at half linear resolution — a MATERIAL REBUILD, set once */
+      halfRes: boolean;
       intensity: number;
     };
     setQualityMode(
