@@ -105,6 +105,10 @@ visual-variable codebook is in
   **5×5 footprint max** + a remap recentred on the low NDVI median: the raster is
   ~2 m/px and median-zero, so a single-pixel sample left ~95 % of crowns reading
   "dry" (invisible); the footprint max + recentre make lush↔dry read clearly.
+  The low median has a cause: the DOP was flown on **2024-03-19**, leaf-off
+  (`data/provenance.json`), so deciduous crowns are bare in the imagery and
+  the index mostly separates evergreens and grass from everything else. A
+  summer DOP would make the recentre less necessary and the meadow tint truer.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
   the cheap crown is a detail-2 icosphere (≈320 tris) with lobes;
   **multi-tuft crown LOD** (rich ~1 440-tri crown near / cheap icosphere far,

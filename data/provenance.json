@@ -1,0 +1,98 @@
+{
+  "$comment": "Where the committed data came from, per tile and product. GeoSN rows were read from the portal's download-links service on the date in `retrieved` (see docs/data-pipeline.md#provenance for the query); `stand` is the provider's own currency field. Share tokens in the URLs are the portal's public folders and may rotate; the service is the durable index. OSM rows carry what the repository can prove; exact timestamps live in the raw files.",
+  "version": 1,
+  "retrieved": "2026-09-22",
+  "service": "https://geodienste.sachsen.de/ags-relay/ArcGISServer/guest/arcgis/rest/services/geosn/rest_geosn_downloadlinks/MapServer",
+  "licence": {
+    "geosn": "Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0); credit: Quelle: GeoSN, dl-de/by-2-0",
+    "osm": "Open Database License (ODbL); credit: © OpenStreetMap contributors"
+  },
+  "tiles": ["33410_5656_2_sn", "33410_5658_2_sn", "33412_5656_2_sn", "33412_5658_2_sn"],
+  "geosn": {
+    "DGM1": {
+      "layer": 6,
+      "committed": "data/dgm/dgm1_<tile>_tiff/",
+      "usedBy": ["scripts/prepare-data.ts", "scripts/extract-canopy.sh", "scripts/extract-rail.sh"],
+      "tiles": {
+        "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5656_2_sn_tiff.zip" },
+        "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5658_2_sn_tiff.zip" },
+        "33412_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33412_5656_2_sn_tiff.zip" },
+        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33412_5658_2_sn_tiff.zip" }
+      }
+    },
+    "DOM1": {
+      "layer": 4,
+      "committed": null,
+      "raw": "data/_raw/dom1/dom1_<tile>_tiff/",
+      "usedBy": ["scripts/extract-canopy.sh", "scripts/extract-rail.sh"],
+      "tiles": {
+        "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
+        "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5658_2_sn_tiff.zip" },
+        "33412_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33412_5656_2_sn_tiff.zip" },
+        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33412_5658_2_sn_tiff.zip" }
+      }
+    },
+    "LSC": {
+      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1, not used by the viewer yet.",
+      "layer": 1,
+      "committed": null,
+      "tiles": {
+        "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5656_2_sn_laz.zip" },
+        "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5658_2_sn_laz.zip" },
+        "33412_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33412_5656_2_sn_laz.zip" },
+        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33412_5658_2_sn_laz.zip" }
+      }
+    },
+    "LoD2": {
+      "$comment": "`stand` is the model's production year with the currency of its inputs in parentheses (laser scan for the roofs, Basis-DLM for the footprints, DGM for the ground); `creationDate` inside the CityJSON is the export date of each object.",
+      "layer": 3,
+      "committed": "data/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
+      "usedBy": ["scripts/prepare-data.ts", "scripts/extract-roof-colour.sh"],
+      "tiles": {
+        "33410_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-06-28 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5656_2_sn_citygml.zip" },
+        "33410_5658_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-26 (most objects; some 2021-01, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5658_2_sn_citygml.zip" },
+        "33412_5656_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-07-04 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33412_5656_2_sn_citygml.zip" },
+        "33412_5658_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-07-07 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33412_5658_2_sn_citygml.zip" }
+      }
+    },
+    "DOP_RGBI": {
+      "$comment": "`stand` is the flight date. 19 March 2024 is a leaf-off spring flight: deciduous crowns are bare, which is why the NDVI raster is low and median-centred and the crown colour remap recentres on that median.",
+      "layer": 17,
+      "committed": "derived only: data/dop/roofcolor_<tile>.json, data/dlm/ndvi_<tile>.png",
+      "raw": "data/_raw/DOP_RGBI/dop20rgbi_<tile>_tiff/",
+      "usedBy": ["scripts/extract-roof-colour.sh", "scripts/extract-ndvi.sh"],
+      "tiles": {
+        "33410_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5656_2_sn_tiff.zip" },
+        "33410_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5658_2_sn_tiff.zip" },
+        "33412_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33412_5656_2_sn_tiff.zip" },
+        "33412_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33412_5658_2_sn_tiff.zip" }
+      }
+    },
+    "Basis-DLM": {
+      "$comment": "One statewide package, replaced quarterly under the same URL, so the edition of a past download cannot be read from the portal afterwards. The derived files were baked from the package current in June 2026 (commits of 2026-06-12) and re-baked for rails and walls on 2026-09-18; the package on the share was dated 2026-07-28 (Last-Modified, 1.23 GB) when this file was written. Record the package's Last-Modified and the metadata inside the ZIP at the next download.",
+      "committed": "derived only: data/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge_<tile>.geojson",
+      "raw": "data/_raw/basis-dlm/basisdlm_sn_shape/",
+      "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
+      "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
+      "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
+      "editionInUse": "quarterly package current in June 2026 (exact release date unrecorded)"
+    }
+  },
+  "openstreetmap": {
+    "overpass": {
+      "$comment": "Point queries fetched once and cached under data/_raw/osm/*.json; the cached response's `osm3s.timestamp_osm_base` is the exact data timestamp.",
+      "endpoint": "https://overpass-api.de/api/interpreter",
+      "products": {
+        "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
+        "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dlm/platform_*.geojson)" },
+        "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" }
+      }
+    },
+    "geofabrik": {
+      "$comment": "Regional extract read by scripts/extract-walls.sh. `osmium fileinfo -e <file>` prints the extract's replication timestamp.",
+      "download": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
+      "raw": "data/_raw/osm/*.osm.pbf",
+      "products": { "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-09-18 or shortly before (walls re-baked that day)" } }
+    }
+  }
+}
