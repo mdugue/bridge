@@ -2,7 +2,6 @@
 
 import { SlidersHorizontalIcon } from "lucide-react";
 import {
-  addTransitionType,
   type CSSProperties,
   startTransition,
   useCallback,
@@ -36,7 +35,7 @@ import {
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { TileUrls } from "@/lib/city/tile";
 import { ControlHintBar } from "./control-hints";
-import { HANDOVER_TYPE, handoverDurationMs } from "./handover";
+import { handoverDurationMs } from "./handover";
 import {
   type CityWalkHandle,
   type CityWalkStats,
@@ -81,17 +80,6 @@ const INITIAL_MINUTES = 14 * 60;
 
 /** A little air after the morph before the heavy work resumes. */
 const STREAM_SETTLE_MS = 250;
-
-/**
- * How long the handover may stay pending before it is taken urgently, without
- * the morph. A React transition is interruptible and yields to the browser, so
- * on a device whose frames cost hundreds of milliseconds — which is exactly
- * what the first frames of this scene cost — it can sit unrendered for
- * seconds. The loading screen would then cover a scene that is ready to walk
- * in, which is the one thing this redesign must never do. The animation is the
- * part that is allowed to be dropped, not the first frame.
- */
-const HANDOVER_FALLBACK_MS = 1500;
 
 /** Local-time instant from a calendar day + minutes-of-day slider. */
 function composeDate(day: Date, minutes: number): Date {
@@ -179,6 +167,8 @@ export default function CityWalk({
     skipped: SkippedStages;
   }>({ fractions: {}, skipped: {} });
   const [streamError, setStreamError] = useState<string | null>(null);
+  // Kept past the handover so it can fade rather than blink out.
+  const [loadScreenMounted, setLoadScreenMounted] = useState(true);
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   const [sun, setSun] = useState<SunState | null>(null);
   const [day, setDay] = useState(INITIAL_DATE);
@@ -321,19 +311,15 @@ export default function CityWalk({
         setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({ handle: h, look, firstFrame: true });
-        // The frame where the loading screen becomes the pill. Tagged, so
-        // that the shared-element morph runs for this update and for no
-        // other one (see handover.ts).
-        startTransition(() => {
-          addTransitionType(HANDOVER_TYPE);
-          setStatus({ phase: "running" });
-        });
-        handoverFallback = setTimeout(() => {
-          // Still pending: take it urgently and lose the morph.
-          setStatus((prev) =>
-            prev.phase === "loading" ? { phase: "running" } : prev
-          );
-        }, HANDOVER_FALLBACK_MS);
+        // The frame where the loading screen lifts and the pill arrives.
+        // Urgent on purpose: the cross-fade is CSS, so React has nothing to
+        // wait for, and the scene is walkable the moment this commits.
+        setStatus({ phase: "running" });
+        // Then drop the loading screen once its fade has played.
+        handoverFallback = setTimeout(
+          () => setLoadScreenMounted(false),
+          handoverDurationMs()
+        );
         // The neighbour tiles, the vegetation and the terrain BVH wait until
         // the morph has played: each is a long synchronous task, and this is
         // the one moment the HUD is animating (see create-app's
@@ -449,8 +435,12 @@ export default function CityWalk({
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
         <div className="absolute inset-0" ref={mountRef} />
 
-        {status.phase === "loading" && (
-          <LoadScreen percent={percent} stages={stages} />
+        {loadScreenMounted && (
+          <LoadScreen
+            leaving={status.phase === "running"}
+            percent={percent}
+            stages={stages}
+          />
         )}
 
         {status.phase === "error" && (

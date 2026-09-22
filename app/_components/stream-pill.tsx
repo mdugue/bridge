@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useState, ViewTransition } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   type LoadStageState,
   stagesDoneLabel,
   streamingTitle,
 } from "@/lib/city/load-stages";
-import {
-  HANDOVER_SHARE_SOLID,
-  HANDOVER_SHARE_SURFACE,
-  HANDOVER_STACK_NAME,
-  HANDOVER_SURFACE_NAME,
-  handoverSegmentName,
-} from "./handover";
 
 /**
  * "Erster Frame" — the loading screen at pill size, pinned to the top of the
@@ -21,10 +14,9 @@ import {
  * glyph, each swatch became a segment, and the layers that are still streaming
  * keep filling them while you walk around.
  *
- * The text and the counter arrive last by a plain CSS animation rather than a
- * `<ViewTransition enter>`: they sit inside the pill, and a nested boundary
- * that mounts together with its parent never fires its own enter. The CSS runs
- * either way, which is also what the no-view-transitions path needs.
+ * It arrives on a CSS entrance — opacity and transform, composited off the
+ * main thread so it keeps its frame rate while the renderer is busy. See
+ * handover.ts for why this is a cross-fade and not a morph.
  */
 
 /** The two ends of a segment, as the HUD's own foreground token. */
@@ -49,21 +41,15 @@ function StackGlyph({ plates }: { plates: LoadStageState[] }) {
   // are enough, dimmed while their layer has not landed.
   const bars = plates.slice(0, 3);
   return (
-    <ViewTransition
-      default="none"
-      name={HANDOVER_STACK_NAME}
-      share={HANDOVER_SHARE_SOLID}
-    >
-      <span aria-hidden className="relative flex flex-col gap-0.5">
-        {bars.map((stage) => (
-          <span
-            className="h-1.25 w-3 rounded-xs transition-opacity duration-500"
-            key={stage.id}
-            style={{ background: stage.color, opacity: stage.done ? 1 : 0.35 }}
-          />
-        ))}
-      </span>
-    </ViewTransition>
+    <span aria-hidden className="relative flex flex-col gap-0.5">
+      {bars.map((stage) => (
+        <span
+          className="h-1.25 w-3 rounded-xs transition-opacity duration-500"
+          key={stage.id}
+          style={{ background: stage.color, opacity: stage.done ? 1 : 0.35 }}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -71,22 +57,16 @@ function StackGlyph({ plates }: { plates: LoadStageState[] }) {
 function Segment({ stage }: { stage: LoadStageState }) {
   const pct = Math.round(stage.fraction * 100);
   return (
-    <ViewTransition
-      default="none"
-      name={handoverSegmentName(stage.id)}
-      share={HANDOVER_SHARE_SOLID}
-    >
-      <span
-        className="h-1 w-5.5 rounded-full"
-        style={{
-          background: stage.done
-            ? FILLED
-            : stage.active
-              ? `linear-gradient(90deg,${FILLED} ${pct}%,${EMPTY} ${pct}%)`
-              : EMPTY,
-        }}
-      />
-    </ViewTransition>
+    <span
+      className="h-1 w-5.5 rounded-full"
+      style={{
+        background: stage.done
+          ? FILLED
+          : stage.active
+            ? `linear-gradient(90deg,${FILLED} ${pct}%,${EMPTY} ${pct}%)`
+            : EMPTY,
+      }}
+    />
   );
 }
 
@@ -127,22 +107,14 @@ export function StreamPill({ stages }: { stages: LoadStageState[] }) {
         phase === "leaving" && "opacity-0"
       )}
     >
-      {/* The surface the full-bleed loading screen shrank into. Separate from
-          the content so the content can arrive on top of it. */}
-      <ViewTransition
-        default="none"
-        name={HANDOVER_SURFACE_NAME}
-        share={HANDOVER_SHARE_SURFACE}
-      >
-        <span className="absolute inset-0 rounded-full bg-hud/85 shadow-lg backdrop-blur-lg" />
-      </ViewTransition>
+      <span className="absolute inset-0 rounded-full bg-hud/85 shadow-lg backdrop-blur-lg" />
 
       <StackGlyph plates={stages.filter((stage) => stage.plate)} />
       {/* Only the stage name is announced: the segments carry no text and the
           counter beside them would otherwise repeat it. */}
       <output
         aria-live="polite"
-        className="hud-pill-text relative font-medium text-xs leading-none"
+        className="relative font-medium text-xs leading-none"
       >
         {streamingTitle(stages)}
       </output>
@@ -151,7 +123,7 @@ export function StreamPill({ stages }: { stages: LoadStageState[] }) {
           <Segment key={stage.id} stage={stage} />
         ))}
       </span>
-      <span className="hud-pill-text relative font-mono text-[11px] leading-none tabular-nums opacity-65">
+      <span className="relative font-mono text-[11px] leading-none tabular-nums opacity-65">
         {stagesDoneLabel(stages)}
       </span>
     </div>

@@ -25,7 +25,7 @@ import { currentSceneBudget, type SceneBudget } from "./scene-profile";
 function BootScreen() {
   return (
     <div className="relative h-full w-full">
-      <LoadScreen percent={0} stages={loadStageStates({})} />
+      <LoadScreen leaving={false} percent={0} stages={loadStageStates({})} />
     </div>
   );
 }

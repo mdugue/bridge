@@ -141,88 +141,55 @@
 }
 
 /* --- Laden → Erster Frame handover -------------------------------------
-   The loading screen and the streaming pill are never on screen at the same
-   time; React pairs their shared <ViewTransition name> elements and the
-   browser animates between the two boxes (app/_components/handover.ts).
+   The loading screen lifts and the pill arrives. Opacity and transform ONLY:
+   those are composited off the main thread, so the animation keeps its frame
+   rate while the renderer is busy with the scene's first frames — which is
+   the whole reason this is no longer a view-transition morph (the group of a
+   view transition animates width and height, i.e. main-thread layout, at
+   exactly the wrong moment). See app/_components/handover.ts.
 
-   The root element gives up its own view-transition-name on purpose: with it,
-   the UA snapshots the whole page — including the WebGL canvas — into a static
-   image for the length of the transition, and the scene would freeze mid-
-   handover. Without it only the named HUD elements are captured, and the 3D
-   scene keeps rendering live underneath, which is the whole point of the
-   design: the pill reveals the scene, it does not fade it in. */
+   Short on purpose: the scene is walkable the instant the scrim starts to
+   lift, and half a second of cross-fade is all the story needs. */
 :root {
-  view-transition-name: none;
-  --handover-duration: 1.4s;
+  --handover-duration: 450ms;
   --handover-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-::view-transition-group(.hud-morph-surface),
-::view-transition-group(.hud-morph-solid) {
-  animation-duration: var(--handover-duration);
-  animation-timing-function: var(--handover-ease);
+.hud-leaving {
+  animation: hud-fade-out var(--handover-duration) var(--handover-ease) forwards;
 }
 
-/* The surface shrinks by a factor of ~30 and its content changes completely,
-   so the two snapshots cross-fade while the group resizes. That is what reads
-   as "the same surface, smaller". */
-::view-transition-old(.hud-morph-surface),
-::view-transition-new(.hud-morph-surface) {
-  height: 100%;
-  object-fit: fill;
-  animation-duration: var(--handover-duration);
-  animation-timing-function: var(--handover-ease);
+/* The copy goes a touch earlier and a touch further, so the screen reads as
+   lifting away rather than simply dimming. */
+.hud-leaving .hud-leaving-copy {
+  animation: hud-lift-out calc(var(--handover-duration) * 0.8)
+    var(--handover-ease) forwards;
 }
 
-/* The layer swatches and the plate stack are solid blocks of one colour.
-   Cross-fading old against new only muddies them — hold the snapshots still
-   and let the group slide and scale, so the shape travels. */
-::view-transition-old(.hud-morph-solid),
-::view-transition-new(.hud-morph-solid) {
-  height: 100%;
-  object-fit: fill;
-  animation: none;
-  mix-blend-mode: normal;
-}
-::view-transition-old(.hud-morph-solid) {
-  opacity: 0;
+.hud-pill {
+  /* `backwards` so the pill is not visible during the delay, and so the
+     opacity transition that retires it later is not pinned by a fill. */
+  animation: hud-pill-in calc(var(--handover-duration) * 0.7)
+    calc(var(--handover-duration) * 0.35) var(--handover-ease) backwards;
 }
 
-/* The loading copy leaves first; the pill's own text arrives last (by CSS, on
-   .hud-pill-text — a boundary nested inside the mounting pill would never
-   fire its own enter). The two never overlap in the middle of the morph. */
-::view-transition-old(.hud-fade-out) {
-  animation: hud-fade var(--handover-duration) var(--handover-ease) reverse;
-}
-
-@supports (view-transition-name: none) {
-  .hud-pill-text {
-    animation: hud-fade var(--handover-duration) var(--handover-ease) both;
-  }
-}
-
-@keyframes hud-fade {
-  0%,
-  65% {
+@keyframes hud-fade-out {
+  to {
     opacity: 0;
   }
-  100% {
-    opacity: 1;
-  }
 }
 
-/* No View Transitions (Firefox < 144, older Safari): the state still flips and
-   the pill simply appears, so it gets an entrance of its own. */
-@supports not (view-transition-name: none) {
-  .hud-pill {
-    animation: hud-pill-in 0.45s var(--handover-ease) both;
+@keyframes hud-lift-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
   }
 }
 
 @keyframes hud-pill-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -8px);
+    transform: translate(-50%, -10px);
   }
   to {
     opacity: 1;
@@ -231,14 +198,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(*),
-  ::view-transition-new(*),
-  ::view-transition-group(*) {
-    animation-duration: 0s !important;
-    animation-delay: 0s !important;
+  :root {
+    --handover-duration: 1ms;
   }
-  .hud-pill,
-  .hud-pill-text {
+  .hud-pill {
     animation: none;
   }
 }
