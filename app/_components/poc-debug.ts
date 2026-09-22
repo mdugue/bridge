@@ -1,97 +1,40 @@
 /**
- * Dev/test-only debug hook consumed by the Playwright smoke test
- * (e2e/city-walk.spec.ts) and manual QA. NEXT_PUBLIC_POC_DEBUG is inlined at
- * build time, so regular production builds ship `enabled === false` and never
- * touch `window` — the hook cannot leak into production.
+ * Dev/test-only debug hook consumed by the Playwright specs (e2e/) and manual
+ * QA. NEXT_PUBLIC_POC_DEBUG is inlined at build time, so regular production
+ * builds ship `enabled === false` and never touch `window` — the hook cannot
+ * leak into production.
+ *
+ * It publishes the objects the HUD itself drives — the scene handle and the
+ * look store — rather than a hand-copied mirror of their members: a member
+ * added to either is available to the specs without an edit here, and
+ * nothing can be left out of a registration list.
  */
 
-import type { LookTarget } from "@/lib/city/look-controls";
-import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import type { CameraState, LayerName, PlayerPose } from "./create-app";
-import type { FocusMode } from "./post-stack";
-import type { SceneCensus } from "./scene-census";
-import type { Viewpoint } from "./viewpoints";
+import type { LookState } from "@/lib/city/look-state";
+import type { CityWalkHandle, CityWalkStats } from "./create-app";
 
-interface Xyz {
-  x: number;
-  y: number;
-  z: number;
-}
-
-/** The look setters (`setAtmosphere`, …) come from LookTarget — see lib/city/look-controls.ts. */
-export interface PocDebugInfo extends Partial<LookTarget> {
-  /** Restores a camera pose captured by getCameraState (snapshot replay). */
-  applyCameraState?: (state: CameraState) => void;
-  buildingCount: number;
-  /** Demolishes the building under the screen-center crosshair. */
-  demolishAtCrosshair?: () => void;
+export interface PocDebugInfo {
   /**
-   * True once the primary tile is on screen and the handle exists; `ready`
+   * True once the primary tile is on screen and `handle` exists; `ready`
    * follows when every layer has streamed in (neighbours, vegetation, rails).
    */
   firstFrame: boolean;
-  /** Teleports the camera (world/Y-up coordinates) and enters fly mode. */
-  flyTo?: (position: Xyz, lookAt: Xyz) => void;
-  /** Animated glide to a curated scenic Viewpoint (the HUD buttons). */
-  flyToViewpoint?: (viewpoint: Viewpoint) => void;
   /** Rendered-frame counter; e2e waits on it instead of sleeping. */
   frames: number;
-  /** Captures the full camera pose for a reproducible snapshot. */
-  getCameraState?: () => CameraState;
-  /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
-  getFocusDebug?: () => {
-    bokehScale: number;
-    focusDistance: number;
-    focusRange: number;
-    hitDist: number | null;
-    hitName: string | null;
-  };
-  /** Current player pose in EPSG coordinates. */
-  getPose?: () => PlayerPose;
-  /** Last-frame GPU counters (draw calls, triangles, programs). */
-  getRenderInfo?: () => {
-    calls: number;
-    gpuBytes: number;
-    programs: number;
-    triangles: number;
-  };
-  /** estimated GPU footprint (MB), see CityWalkStats */
-  gpuMegabytes: number;
-  /** Inserts the prescribed building (marker box without a glTF). */
-  insertBuilding?: () => void;
-  /** Per-layer build census (meshes / instances / triangles), refreshed with the stats. */
-  layerStats?: Record<LayerName, SceneCensus>;
-  /** Recenter offset: world x = epsgX - cx, world z = -(epsgY - cy). */
-  offset?: { cx: number; cy: number };
+  /** The booted scene's handle — the object the HUD calls; set at the first frame. */
+  handle?: CityWalkHandle;
+  /** The HUD's look store: `look.set(...)` is exactly what a slider does. */
+  look?: LookState;
   ready: boolean;
   /**
    * True while the camera is moving and the post stack is running reduced
    * (AO + DoF skipped) — see lib/city/regression.ts.
    */
   regressed?: boolean;
-  /** Toggles the photographic depth of field. */
-  setDepthOfField?: (enabled: boolean) => void;
-  /** Sets the manual focus distance (m). */
-  setFocusDistance?: (meters: number) => void;
-  /** Sets the depth-of-field focus mode ("auto" | "manual"). */
-  setFocusMode?: (mode: FocusMode) => void;
-  /** Re-aims the sun for an ISO date string. */
-  setSunIso?: (iso: string) => void;
-  /** Toggles the rich multi-tuft crown near the camera (LOD). */
-  setTreeMultiTuft?: (enabled: boolean) => void;
   /** Frames on which the sun's shadow map was redrawn; e2e asserts it stays far below `frames` while walking. */
   shadowRenders: number;
-  shadowsEnabled: boolean;
-  /** Drops the player at EPSG coordinates, standing on the terrain. */
-  teleportTo?: (epsgX: number, epsgY: number) => void;
-  /**
-   * Union DGM extent [minX, minY, maxX, maxY] in EPSG — the minimap's frame.
-   * Exposed so e2e can assert the minimap's px→EPSG mapping against the
-   * bounds actually loaded, instead of hard-coding a tile block that changes
-   * with the scene profile (see scene-profile.ts).
-   */
-  terrainBounds?: TerrainBounds;
-  terrainVertexCount: number;
+  /** The last stats emit: building count, per-layer census, GPU estimate. */
+  stats?: CityWalkStats;
 }
 
 declare global {
@@ -111,12 +54,8 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
   window.__poc = {
     firstFrame: false,
     ready: false,
-    buildingCount: 0,
     frames: 0,
     shadowRenders: 0,
-    terrainVertexCount: 0,
-    shadowsEnabled: false,
-    gpuMegabytes: 0,
     ...window.__poc,
     ...patch,
   };

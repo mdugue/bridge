@@ -13,30 +13,35 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
-import { fetchFeatures, isAbortError } from "./fetch-optional";
+import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
+import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import {
+  LOOK_DEFAULTS,
+  type LookValues,
+  type VegetationLookKey,
+} from "@/lib/city/look-controls";
+import { samplePolyline } from "@/lib/city/polyline";
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
-/** Tile extent in the projected CRS: [minX, minY, maxX, maxY]. */
-type Bounds = [number, number, number, number];
+/** Samples a baked raster at projected coords → 0..1, or undefined off-tile. */
+export type RasterSampler = (x: number, y: number) => number | undefined;
 
-/** Samples a baked raster at projected coords → byte value, or undefined off-tile. */
-type RasterSampler = (x: number, y: number) => number | undefined;
+/** One tile's decoded vegetation inputs. */
+export interface VegetationFeatures {
+  /** DOM1-derived canopy points (trees scaled to their measured height) */
+  canopy: CanopyFeature[];
+  /** the DOP NDVI sampler (loadNdviSampler), for lush↔dry crown colour */
+  ndviAt?: RasterSampler;
+  /** ATKIS veg04 hedges and tree rows */
+  rows: VegRowFeature[];
+}
 
-/** Recenter offset + ground lookup shared with the terrain. */
-export interface VegetationContext {
-  /** tile extent (EPSG) for the NDVI raster lookup; required with `ndviUrl` */
-  bounds?: Bounds;
-  /** optional canopy GeoJSON (points with an "h" height) from DOM1 */
-  canopyUrl?: string;
-  heightAt: (x: number, y: number) => number | null;
+export interface VegetationContext extends GroundContext {
   /** shared valley height-fog uniforms (by reference), patched into the
    * crown/trunk/hedge materials so tree bases pool haze with the terrain */
   heightFog?: HeightFogUniforms;
-  /** optional DOP-derived NDVI raster (PNG, L) for lush↔dry crown colour */
-  ndviUrl?: string;
-  offset: { cx: number; cy: number };
-  signal?: AbortSignal;
   /**
    * Shared world-space sun direction (surface→sun), updated by the sun rig.
    * The crown material reads it (by reference) for the backlit shimmer. May be
@@ -45,27 +50,6 @@ export interface VegetationContext {
   sunDirection?: Vector3;
 }
 
-/** Default backlit-shimmer strength and whether the rich (near) crown is on. */
-export const DEFAULT_TREE_SHIMMER = 0.45;
-export const DEFAULT_TREE_MULTITUFT = true;
-/** Default backlit translucency (shadow-gated subsurface glow) strength. */
-export const DEFAULT_TREE_TRANSLUCENCY = 0.5;
-/**
- * Two coupled "moving leaves" effects on the crown, each independently tunable
- * (zero one to preview the other):
- * - (A) `LEAF_FLUTTER`: small, irregular bright specks (world-space value noise,
- *   ~1-2 m cells, two octaves + drift) where wind flips leaves to their paler
- *   underside; the crown albedo blends toward a lighter silver-sage — gated to
- *   SUNLIT, sun-facing leaves so it reads as light glinting off turning leaves,
- *   not a tree-group-wide band.
- * - (B) `LEAF_BRIGHT`: the crown brightens as it leans into the same gust and
- *   dims as it rocks back (centred on the existing wind-sway, so the mean colour
- *   is unchanged) — motion and light agree.
- * Both run in the MAIN pass only (the shadow/depth material has neither), so
- * they add no shadow-pass cost and no extra attribute/buffer upload.
- */
-export const DEFAULT_TREE_LEAF_FLUTTER = 0.5;
-export const DEFAULT_TREE_LEAF_BRIGHT = 0.5;
 /**
  * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
  * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
@@ -81,17 +65,26 @@ const LOD_NEAR_OUT_M = 300;
  * tuning of the shimmer and the rich-crown toggle.
  */
 export interface VegetationControl {
+  /**
+   * Pushes the vegetation rows of the look into the crowns: the backlit
+   * shimmer, the shadow-gated translucency, the multi-tuft crown LOD toggle,
+   * and the two coupled "moving leaves" effects, each independently tunable
+   * (zero one to preview the other):
+   * - (A) leafFlutter: small, irregular bright specks (world-space value
+   *   noise, ~1-2 m cells, two octaves + drift) where wind flips leaves to
+   *   their paler underside; the crown albedo blends toward a lighter
+   *   silver-sage — gated to SUNLIT, sun-facing leaves so it reads as light
+   *   glinting off turning leaves, not a tree-group-wide band.
+   * - (B) leafBright: the crown brightens as it leans into the same gust and
+   *   dims as it rocks back (centred on the wind sway, so the mean colour is
+   *   unchanged) — motion and light agree.
+   * Both run in the MAIN pass only (the shadow/depth material has neither),
+   * so they add no shadow-pass cost and no extra attribute/buffer upload.
+   */
+  applyLook: (look: LookValues) => void;
   group: Group;
-  /** (B) sway-coupled crown brightness strength 0..1 */
-  setLeafBright: (strength: number) => void;
-  /** (A) wind-gust leaf-flutter colour shimmer strength 0..1 */
-  setLeafFlutter: (strength: number) => void;
-  setMultiTuft: (enabled: boolean) => void;
-  setShimmer: (strength: number) => void;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
   setTime: (seconds: number) => void;
-  /** backlit (shadow-gated) translucency strength 0..1 on near/large crowns */
-  setTranslucency: (strength: number) => void;
   /** swaps crown LOD per chunk; returns true when any chunk changed (the shadow map must then be redrawn) */
   updateLod: (cameraPos: Vector3) => boolean;
 }
@@ -99,19 +92,6 @@ export interface VegetationControl {
 interface CellLod {
   cheap: InstancedMesh;
   rich: InstancedMesh;
-}
-
-// GeoJSON allows `"properties": null`, so both are modelled as nullable and
-// every read goes through `?.` — a single null feature must not throw out of
-// the layer's documented non-fatal load.
-interface LineFeature {
-  geometry: { coordinates: [number, number][]; type: "LineString" };
-  properties: { kind: "hedge" | "treerow" } | null;
-}
-
-interface PointFeature {
-  geometry: { coordinates: [number, number]; type: "Point" };
-  properties: { h: number } | null;
 }
 
 const TREE_SPACING = 9; // metres between trees along a row
@@ -137,33 +117,6 @@ function hash(i: number): number {
   return s - Math.floor(s);
 }
 
-/** Walks a polyline emitting points every `spacing` metres (EPSG coords). */
-function sampleLine(
-  coords: [number, number][],
-  spacing: number
-): [number, number][] {
-  const out: [number, number][] = [];
-  // Distance from the current segment's start to the next sample to emit.
-  let dist = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const [x0, y0] = coords[i];
-    const [x1, y1] = coords[i + 1];
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
-    if (len === 0) {
-      continue;
-    }
-    while (dist < len) {
-      const t = dist / len;
-      out.push([x0 + dx * t, y0 + dy * t]);
-      dist += spacing;
-    }
-    dist -= len; // carry the remainder into the next segment
-  }
-  return out;
-}
-
 interface Placement {
   /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
   ndvi?: number;
@@ -176,7 +129,7 @@ interface Placement {
 
 /** Resamples every line and drops each point onto the terrain (EPSG -> world). */
 function collectPlacements(
-  features: LineFeature[],
+  features: VegRowFeature[],
   ctx: VegetationContext,
   ndviAt?: RasterSampler
 ): { hedges: Placement[]; trees: Placement[] } {
@@ -188,7 +141,7 @@ function collectPlacements(
       continue;
     }
     const isHedge = f.properties?.kind === "hedge";
-    const pts = sampleLine(
+    const pts = samplePolyline(
       f.geometry.coordinates,
       isHedge ? HEDGE_SPACING : TREE_SPACING
     );
@@ -384,6 +337,9 @@ function buildCrownMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 });
+  // The closure branches on `heightFog`; three keys programs on the closure's
+  // text, so the branch has to be named (see terrain-layer.ts).
+  m.customProgramCacheKey = () => `crown-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uSunDir = { value: sunDirection };
     sh.uniforms.uShimmer = shimmer;
@@ -556,6 +512,7 @@ function buildTrunkMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 });
+  m.customProgramCacheKey = () => `trunk-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vTrunkY;")
@@ -712,9 +669,9 @@ function sampleMaxWindow(
  * failure (no raster, decode error, no OffscreenCanvas) so crowns fall back to
  * the hash-only sage — graceful degradation, see docs/portability.md.
  */
-async function loadNdviSampler(
+export async function loadNdviSampler(
   url: string,
-  bounds: Bounds,
+  bounds: TerrainBounds,
   signal?: AbortSignal
 ): Promise<RasterSampler | null> {
   if (typeof OffscreenCanvas === "undefined") {
@@ -754,7 +711,7 @@ async function loadNdviSampler(
 
 /** Canopy points (DOM1-derived) → height-scaled tree placements. */
 function collectCanopy(
-  features: PointFeature[],
+  features: CanopyFeature[],
   ctx: VegetationContext,
   ndviAt?: RasterSampler
 ): Placement[] {
@@ -794,42 +751,40 @@ function collectCanopy(
  * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
  * their measured height). Everything is drawn with InstancedMeshes so tens of
  * thousands of plants stay cheap; each is dropped onto the terrain via
- * `heightAt` and points off the tile are skipped.
- *
- * Non-fatal: any failure resolves to an empty group so the scene still loads.
+ * `heightAt` and points off the tile are skipped. Empty inputs yield an empty
+ * group; the meshes are freed with the scene (disposeObject3D).
  */
-export async function loadVegetation(
-  url: string,
+export function buildVegetation(
+  features: VegetationFeatures,
   ctx: VegetationContext
-): Promise<VegetationControl> {
+): VegetationControl {
   const group = new Group();
   group.name = "vegetation";
 
-  const shimmer = { value: DEFAULT_TREE_SHIMMER };
-  const translucency = { value: DEFAULT_TREE_TRANSLUCENCY };
-  const leafFlutter = { value: DEFAULT_TREE_LEAF_FLUTTER };
-  const leafBright = { value: DEFAULT_TREE_LEAF_BRIGHT };
+  // Booted at the table defaults; the caller applies the current look next.
+  const shimmer = { value: LOOK_DEFAULTS.shimmer };
+  const translucency = { value: LOOK_DEFAULTS.translucency };
+  const leafFlutter = { value: LOOK_DEFAULTS.leafFlutter };
+  const leafBright = { value: LOOK_DEFAULTS.leafBright };
+  // The crown uniform each vegetation row drives — a Record over the keys, so
+  // a row added to the table cannot go unapplied.
+  const rowUniform: Record<VegetationLookKey, { value: number }> = {
+    leafBright,
+    leafFlutter,
+    shimmer,
+    translucency,
+  };
   // By-reference clock for the crown wind sway; advanced once per frame by the
   // render loop (same elapsed seconds as the water ripple). One uniform write
   // per tile per frame.
   const uTime = { value: 0 };
   const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
-  let multiTuft = DEFAULT_TREE_MULTITUFT;
+  let multiTuft = LOOK_DEFAULTS.multiTuft;
   let cells: CellLod[] = [];
 
-  const [rowFeatures, canopyFeatures, ndviSampler] = await Promise.all([
-    fetchFeatures<LineFeature>(url, ctx.signal),
-    ctx.canopyUrl
-      ? fetchFeatures<PointFeature>(ctx.canopyUrl, ctx.signal)
-      : Promise.resolve([]),
-    ctx.ndviUrl && ctx.bounds
-      ? loadNdviSampler(ctx.ndviUrl, ctx.bounds, ctx.signal)
-      : Promise.resolve(null),
-  ]);
-  const ndviAt = ndviSampler ?? undefined;
-
-  const { trees, hedges } = collectPlacements(rowFeatures, ctx, ndviAt);
-  trees.push(...collectCanopy(canopyFeatures, ctx, ndviAt));
+  const { ndviAt } = features;
+  const { trees, hedges } = collectPlacements(features.rows, ctx, ndviAt);
+  trees.push(...collectCanopy(features.canopy, ctx, ndviAt));
   if (trees.length > 0) {
     const built = buildTrees(
       trees,
@@ -850,23 +805,14 @@ export async function loadVegetation(
 
   return {
     group,
-    setShimmer: (strength) => {
-      shimmer.value = strength;
-    },
-    setLeafFlutter: (strength) => {
-      leafFlutter.value = strength;
-    },
-    setLeafBright: (strength) => {
-      leafBright.value = strength;
-    },
-    setMultiTuft: (enabled) => {
-      multiTuft = enabled;
+    applyLook: (look) => {
+      for (const key of Object.keys(rowUniform) as VegetationLookKey[]) {
+        rowUniform[key].value = look[key];
+      }
+      multiTuft = look.multiTuft;
     },
     setTime: (seconds) => {
       uTime.value = seconds;
-    },
-    setTranslucency: (strength) => {
-      translucency.value = strength;
     },
     // Rich crown only near the camera (and only when multi-tuft is enabled);
     // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in

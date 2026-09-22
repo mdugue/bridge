@@ -1,8 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { LOOK_CONTROLS } from "../lib/city/look-controls";
-import { parseSnapshot, type Snapshot } from "../lib/city/snapshot";
+import {
+  decodeLook,
+  parseSnapshot,
+  type Snapshot,
+  snapshotInstant,
+} from "../lib/city/snapshot";
 
 // Big crisp canvas for inspecting shadow/edge artifacts.
 test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
@@ -49,38 +53,22 @@ for (const file of snapshotFiles()) {
       timeout: 120_000,
     });
 
-    // The look controls come from the same table the HUD renders, so a new
-    // slider needs no edit here (see lib/city/look-controls.ts).
+    // The same codec (and the same minute-floored instant) the HUD's Apply
+    // button uses, against the same store the sliders write — a new look
+    // control needs no edit here.
+    const lookPatch = decodeLook(snap.look);
+    const instant = snapshotInstant(snap).toISOString();
     await page.evaluate(
-      ([s, defs]) => {
-        const api = window.__poc;
-        if (!api?.applyCameraState) {
-          throw new Error("snapshot api unavailable");
+      ([camera, date, patch]) => {
+        const poc = window.__poc;
+        if (!(poc?.handle && poc.look)) {
+          throw new Error("scene handle not published");
         }
-        api.applyCameraState(s.camera);
-        api.setSunIso?.(s.date);
-        const look = s.look ?? {};
-        for (const def of defs) {
-          const raw = look[def.snapshotKey];
-          const setter = api[def.setter];
-          if (typeof raw === "number" && setter) {
-            setter(raw / 100);
-          }
-        }
-        if (look.dof !== undefined) {
-          api.setDepthOfField?.(look.dof);
-        }
-        if (look.focusMode !== undefined) {
-          api.setFocusMode?.(look.focusMode);
-        }
-        if (look.focusDistanceM !== undefined) {
-          api.setFocusDistance?.(look.focusDistanceM);
-        }
-        if (look.multiTuft !== undefined) {
-          api.setTreeMultiTuft?.(look.multiTuft);
-        }
+        poc.handle.applyCameraState(camera);
+        poc.handle.setSun(new Date(date));
+        poc.look.set(patch);
       },
-      [snap, LOOK_CONTROLS] as const
+      [snap.camera, instant, lookPatch] as const
     );
 
     // Hide every HUD/control overlay so the shot is a clean render plate:

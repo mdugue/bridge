@@ -77,7 +77,7 @@ config change.
 
 - `app/_components/` — the viewer, grouped:
   - spine: `create-app.ts` (scene/loop/handle), `city-walk.tsx` (HUD),
-    `city-walk-client.tsx` (the `ssr: false` mount + tile sources),
+    `city-walk-client.tsx` (the `ssr: false` mount + the tile URLs),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
     (`?scene=lite`), `webgl-support.ts` (the WebGL2 preflight),
     `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
@@ -85,15 +85,20 @@ config change.
     `city-layer.ts`, `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`,
     `inserted-building.ts`
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
-    `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`,
-    `look-defaults.ts` (initial slider values; the table itself is
-    `lib/city/look-controls.ts`)
-  - input/camera: `fps-movement.ts`, `touch-controls.ts`, `collision.ts`,
-    `camera-flight.ts`, `viewpoints.ts`, `virtual-joystick.tsx`
+    `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
+    (the look table with its defaults is `lib/city/look-controls.ts`; the
+    store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
+  - input/camera: `camera-pose.ts` (the one owner of where the player
+    stands and looks, walk/fly and the scenic glides; every input cancels a
+    glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
+    `touch-controls.ts`, `collision.ts`, `viewpoints.ts`,
+    `virtual-joystick.tsx`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
-  ground-clamp, the look-controls table, the Snapshot contract) with
-  `bun test` units alongside
+  ground-clamp, polyline resampling, the pose convention + pitch/FOV
+  policy, the look table + store, the Snapshot codec, the tile artifact
+  list, and `features.ts` — the GeoJSON shapes the bakes write, checked
+  against every committed file by its test) with `bun test` units alongside
 - `scripts/` — the offline data bakes `extract-dlm.sh`, `extract-canopy.sh`,
   `extract-ndvi.sh`, `extract-roof-colour.sh`, `extract-lamps.sh`,
   `extract-walls.sh`, `extract-rail.sh` (+ `ndvi-at-trees.py`, the NDVI
@@ -210,8 +215,8 @@ bridge or a misplaced layer is invisible looking straight down.
 ## QA: self-verify, don't ask for screenshots
 
 There is a **snapshot system**: the in-app Snapshot panel copies the full
-camera pose + sun time + look sliders as JSON; `__poc.getCameraState()` /
-`applyCameraState()` replay it. To check a visual change on a **real GPU**, drop
+camera pose + sun time + look sliders as JSON; `__poc.handle.getCameraState()`
+/ `applyCameraState()` replay it and `__poc.look.set()` drives the sliders. To check a visual change on a **real GPU**, drop
 a snapshot JSON into `shots/` and run:
 
 ```bash
@@ -233,7 +238,8 @@ viewer pages halve each other's frame rate.
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It loads
 the **primary tile only** (boot 14 s → 4.4 s, 74 MB → 18 MB), shadow-maps at
-**512²** instead of 3072², and renders at **`pixelRatio` 0.5**. Same loaders,
+**512²** instead of 3072², renders at **`pixelRatio` 0.5**, and runs the SSAO
+pass in its cheaper Performance mode. Same loaders,
 same layers, same shader programs — a quarter
 of the world and a quarter of the pixels. The knobs it does *not* touch are the
 ones a test asserts on. Two rules when you add a spec:

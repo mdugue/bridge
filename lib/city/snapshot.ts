@@ -5,11 +5,15 @@
  * a trimmed or hand-edited one (the documented QA workflow) reports what is
  * wrong instead of yielding NaN camera matrices. No THREE, no DOM.
  */
-import { LOOK_CONTROLS } from "./look-controls";
+import {
+  type FocusMode,
+  LOOK_CONTROLS,
+  type LookValues,
+} from "./look-controls";
 
 export type MovementModeJson = "fly" | "walk";
 
-/** Camera pose as it round-trips through JSON (create-app's CameraState IS this type). */
+/** Camera pose as it round-trips through JSON (lib/city/pose.ts's CameraState IS this type). */
 export interface CameraStateJson {
   epsg: { x: number; y: number };
   fov: number;
@@ -24,7 +28,7 @@ export interface CameraStateJson {
 export interface SnapshotLook {
   dof?: boolean;
   focusDistanceM?: number;
-  focusMode?: "auto" | "manual";
+  focusMode?: FocusMode;
   multiTuft?: boolean;
   /**
    * Per-control percentages, keyed by LookControlDef.snapshotKey (all
@@ -130,6 +134,77 @@ function checkLook(v: unknown): SnapshotLook {
   checkLookFlags(look);
   // Unknown keys are preserved (forward compatibility).
   return look as SnapshotLook;
+}
+
+/**
+ * The persisted document for the live values: one `<snapshotKey>` percent per
+ * table row, the four flags and the sun instant. What Copy writes.
+ */
+export function encodeSnapshot(
+  look: LookValues,
+  camera: CameraStateJson,
+  date: Date
+): Snapshot {
+  const lookJson: SnapshotLook = {
+    dof: look.dof,
+    focusMode: look.focusMode,
+    focusDistanceM: look.focusDistanceM,
+    multiTuft: look.multiTuft,
+  };
+  for (const def of LOOK_CONTROLS) {
+    lookJson[def.snapshotKey] = Math.round(look[def.key] * 100);
+  }
+  return {
+    v: SNAPSHOT_VERSION,
+    camera,
+    date: date.toISOString(),
+    look: lookJson,
+  };
+}
+
+/**
+ * The look values a parsed snapshot carries, as a store patch: every percent
+ * key that is present (older snapshots omit newer controls, which keep their
+ * current value) and each of the four flags when present. Ranges are clamped
+ * by the store on apply. What Apply reads.
+ */
+export function decodeLook(
+  look: SnapshotLook | undefined
+): Partial<LookValues> {
+  const patch: Partial<LookValues> = {};
+  if (!look) {
+    return patch;
+  }
+  for (const def of LOOK_CONTROLS) {
+    const raw = look[def.snapshotKey];
+    if (typeof raw === "number") {
+      patch[def.key] = raw / 100;
+    }
+  }
+  if (look.dof !== undefined) {
+    patch.dof = look.dof;
+  }
+  if (look.focusMode !== undefined) {
+    patch.focusMode = look.focusMode;
+  }
+  if (look.focusDistanceM !== undefined) {
+    patch.focusDistanceM = look.focusDistanceM;
+  }
+  if (look.multiTuft !== undefined) {
+    patch.multiTuft = look.multiTuft;
+  }
+  return patch;
+}
+
+/**
+ * The instant a snapshot applies: its date floored to the minute, which is
+ * what the HUD's time slider can show — so a Copy right after an Apply
+ * re-emits the same snapshot, and the shot harness renders what Apply does.
+ */
+export function snapshotInstant(snapshot: Pick<Snapshot, "date">): Date {
+  const date = new Date(snapshot.date);
+  date.setSeconds(0, 0);
+  return date;
 }
 
 /** Parses and validates pasted snapshot JSON; never throws. */

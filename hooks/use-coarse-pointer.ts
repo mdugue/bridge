@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
-
-const QUERY = "(pointer: coarse) and (hover: none)";
+import { MOBILE_MEDIA_QUERY as QUERY } from "@/app/_components/scene-profile";
 
 function subscribe(onStoreChange: () => void) {
   const mql = window.matchMedia(QUERY);

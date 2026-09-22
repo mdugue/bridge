@@ -20,6 +20,7 @@ import {
   parseCityMeshMeta,
 } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
+import type { TileUrls } from "@/lib/city/tile";
 import { buildCityBvh } from "./collision";
 import { fetchGzipped, fetchRequiredJson } from "./fetch-optional";
 import { disposeObject3D } from "./three-utils";
@@ -40,13 +41,6 @@ export interface CityLayer {
   vertices: CityMeshVertices;
 }
 
-export interface CityMeshSrc {
-  /** URL of the gzipped vertex stream */
-  dataUrl: string;
-  /** URL of the meta JSON */
-  metaUrl: string;
-}
-
 /** Marker the style/collision helpers look for on batched city meshes. */
 interface CityMesh extends Mesh {
   isCityObjectMesh?: boolean;
@@ -54,12 +48,12 @@ interface CityMesh extends Mesh {
 
 /** Fetches a tile's baked mesh (meta + inflated vertex stream). */
 export async function fetchCityMesh(
-  src: CityMeshSrc,
+  tile: Pick<TileUrls, "cityMeshData" | "cityMeshMeta">,
   signal?: AbortSignal
 ): Promise<{ meta: CityMeshMeta; vertices: CityMeshVertices }> {
   const [metaJson, buffer] = await Promise.all([
-    fetchRequiredJson<unknown>(src.metaUrl, signal),
-    fetchGzipped(src.dataUrl, signal),
+    fetchRequiredJson<unknown>(tile.cityMeshMeta, signal),
+    fetchGzipped(tile.cityMeshData, signal),
   ]);
   const meta = parseCityMeshMeta(metaJson);
   return { meta, vertices: decodeCityMesh(buffer, meta) };

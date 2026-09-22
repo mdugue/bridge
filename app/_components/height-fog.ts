@@ -16,6 +16,8 @@
  * river/DGM minimum, captured at boot) and strength retune with no recompile.
  */
 
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+
 /** Shape passed to a material's `onBeforeCompile` (the bits we touch). */
 interface OnBeforeCompileShader {
   fragmentShader: string;
@@ -32,10 +34,6 @@ export interface HeightFogUniforms {
   uFogHeightStrength: { value: number };
 }
 
-/** Default valley-fog strength (0..1). Light — a faint valley haze on a clear
- * day; pairs with the ~0.2 distance-fog default for a realistic regular day.
- * Dial up for moody/foggy-morning moods. */
-export const DEFAULT_HEIGHT_FOG = 0.2;
 /** Default fade height (m) above the valley floor — ~the Elbe-to-rim drop. */
 const DEFAULT_FALLOFF = 28;
 
@@ -43,7 +41,7 @@ export function createHeightFogUniforms(): HeightFogUniforms {
   return {
     uFogHeightStart: { value: 0 },
     uFogHeightFalloff: { value: DEFAULT_FALLOFF },
-    uFogHeightStrength: { value: DEFAULT_HEIGHT_FOG },
+    uFogHeightStrength: { value: LOOK_DEFAULTS.heightFog },
   };
 }
 

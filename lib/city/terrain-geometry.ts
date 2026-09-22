@@ -15,8 +15,6 @@ export interface TerrainGeometryInput {
   elevations: ArrayLike<number>;
   /** grid size (n x n) */
   n: number;
-  /** raster NoData value, if any */
-  nodata: number | null;
   /** recenter offset shared with the city (see recenterOffset) */
   offset: { cx: number; cy: number };
 }
@@ -24,13 +22,13 @@ export interface TerrainGeometryInput {
 export interface TerrainGeometryData {
   /** triangle indices; quads touching a NoData vertex are omitted */
   indices: number[];
-  /** lowest VALID elevation (m); NoData vertices are excluded from the min */
+  /** lowest VALID elevation (m); +Infinity for a tile that is entirely NoData */
   minElevation: number;
   /** n*n*3 vertex positions in the recentered data frame (Z-up) */
   positions: Float32Array;
 }
 
-/** Elevations below this are treated as NoData even without a nodata tag. */
+/** Elevations below this are treated as NoData (a sentinel that slipped through). */
 const MIN_PLAUSIBLE_ELEVATION = -1000;
 
 /**
@@ -42,14 +40,12 @@ const MIN_PLAUSIBLE_ELEVATION = -1000;
  * skirt then hides any residual vertical crack from the two tiles sampling the
  * elevation at different resolutions.
  */
-const SKIRT_DEPTH = 30;
+export const SKIRT_DEPTH = 30;
 
-function isInvalidElevation(z: number, nodata: number | null): boolean {
-  return (
-    !Number.isFinite(z) ||
-    z < MIN_PLAUSIBLE_ELEVATION ||
-    (nodata !== null && z === nodata)
-  );
+/** NoData is NaN in the baked heightfield (heightfield.ts); implausible
+ *  depths count too, so a raw raster sentinel can never become a spike. */
+export function isInvalidElevation(z: number): boolean {
+  return !Number.isFinite(z) || z < MIN_PLAUSIBLE_ELEVATION;
 }
 
 /**
@@ -114,14 +110,13 @@ function appendSkirts(
 /** Mean of the valid samples; 0 when the tile is entirely NoData. */
 function meanValidElevation(
   elevations: ArrayLike<number>,
-  count: number,
-  nodata: number | null
+  count: number
 ): number {
   let sum = 0;
   let valid = 0;
   for (let i = 0; i < count; i++) {
     const z = elevations[i];
-    if (!isInvalidElevation(z, nodata)) {
+    if (!isInvalidElevation(z)) {
       sum += z;
       valid++;
     }
@@ -143,18 +138,18 @@ function fillGrid(
   grid: Float32Array,
   valid: Uint8Array
 ): number {
-  const { elevations, n, bounds, offset, nodata } = input;
+  const { elevations, n, bounds, offset } = input;
   const [minX, minY, maxX, maxY] = bounds;
   const dx = (maxX - minX) / n;
   const dy = (maxY - minY) / n;
-  const fallback = meanValidElevation(elevations, n * n, nodata);
+  const fallback = meanValidElevation(elevations, n * n);
   let p = 0;
   let minElevation = Number.POSITIVE_INFINITY;
   for (let row = 0; row < n; row++) {
     for (let col = 0; col < n; col++) {
       const i = row * n + col;
       const z = elevations[i];
-      const bad = isInvalidElevation(z, nodata);
+      const bad = isInvalidElevation(z);
       valid[i] = bad ? 0 : 1;
       if (!bad && z < minElevation) {
         minElevation = z;
@@ -165,7 +160,7 @@ function fillGrid(
       grid[p++] = bad ? fallback : z;
     }
   }
-  return Number.isFinite(minElevation) ? minElevation : 0;
+  return minElevation;
 }
 
 export function buildTerrainGeometryData(
@@ -233,7 +228,7 @@ export function sampleHeightfield(
   x: number,
   y: number
 ): number | null {
-  const { elevations, n, bounds, nodata } = input;
+  const { elevations, n, bounds } = input;
   const [minX, minY, maxX, maxY] = bounds;
   const dx = (maxX - minX) / n;
   const dy = (maxY - minY) / n;
@@ -256,7 +251,7 @@ export function sampleHeightfield(
   const z10 = elevations[row1 * n + c0];
   const z11 = elevations[row1 * n + col1];
   for (const z of [z00, z01, z10, z11]) {
-    if (isInvalidElevation(z, nodata)) {
+    if (isInvalidElevation(z)) {
       return null;
     }
   }

@@ -1,14 +1,11 @@
 import { expect, test } from "bun:test";
 import type { Mesh } from "three";
-import { type AreaFeature, buildBallast, type RailContext } from "./rail-layer";
+import type { AreaFeature, RailFeature } from "@/lib/city/features";
+import { buildBallast, buildRail, type RailContext } from "./rail-layer";
 
 const ctx: RailContext = {
   offset: { cx: 0, cy: 0 },
   heightAt: () => 100,
-  bridgeUrls: [],
-  platformUrls: [],
-  railareaUrls: [],
-  railUrls: [],
 };
 
 const square = (x: number, y: number, s = 10): [number, number][] => [
@@ -61,6 +58,34 @@ test("null properties are tolerated", () => {
     properties: null,
   };
   expect(buildBallast([feature], ctx)).not.toBeNull();
+});
+
+test("buildRail: empty inputs yield an empty group, a track and a platform each a mesh", () => {
+  const empty = buildRail(
+    { rails: [], bridges: [], ballast: [], platforms: [] },
+    ctx
+  );
+  expect(empty.name).toBe("rail");
+  expect(empty.children).toHaveLength(0);
+
+  const track: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [40, 0],
+      ],
+    },
+    properties: { tracks: 2 },
+  };
+  const built = buildRail(
+    { rails: [track], bridges: [], ballast: [], platforms: [polygon] },
+    ctx
+  );
+  expect(built.children).toHaveLength(2);
+  for (const child of built.children) {
+    expect(triangleCount(child as Mesh)).toBeGreaterThan(0);
+  }
 });
 
 test("a null geometry is skipped, not thrown", () => {

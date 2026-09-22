@@ -9,7 +9,6 @@ const flat3x3 = {
   elevations: new Float32Array(9).fill(100),
   n: 3,
   bounds: [0, 0, 3, 3] as [number, number, number, number],
-  nodata: -9999,
 };
 
 // Index/vertex budgets: an n*n surface grid plus a 4*n vertical skirt ring
@@ -76,6 +75,18 @@ test("buildTerrainGeometryData parks NoData vertices at the mean valid elevation
   expect(minElevation).toBe(100);
 });
 
+test("buildTerrainGeometryData reports +Infinity for an all-NoData tile", () => {
+  const { indices, minElevation } = buildTerrainGeometryData({
+    ...flat3x3,
+    elevations: new Float32Array(9).fill(-9999),
+    offset: { cx: 0, cy: 0 },
+  });
+  // Nothing to draw, and no valid minimum for the fog floor to anchor to —
+  // a finite fake (0) would put the valley haze a hundred metres underground.
+  expect(indices.length).toBe(0);
+  expect(minElevation).toBe(Number.POSITIVE_INFINITY);
+});
+
 test("buildTerrainGeometryData rejects degenerate bounds", () => {
   expect(() =>
     buildTerrainGeometryData({
@@ -92,7 +103,6 @@ test("sampleHeightfield interpolates bilinearly and respects NoData", () => {
     elevations: new Float32Array([100, 200, 300, 400]),
     n: 2,
     bounds: [0, 0, 2, 2] as [number, number, number, number],
-    nodata: -9999,
   };
   // Center of the tile = average of all four samples.
   expect(sampleHeightfield(input, 1, 1)).toBeCloseTo(250);
@@ -103,7 +113,7 @@ test("sampleHeightfield interpolates bilinearly and respects NoData", () => {
   // NoData contributes -> null, not a spike.
   const withHole = {
     ...input,
-    elevations: new Float32Array([-9999, 200, 300, 400]),
+    elevations: new Float32Array([Number.NaN, 200, 300, 400]),
   };
   expect(sampleHeightfield(withHole, 1, 1)).toBeNull();
 });

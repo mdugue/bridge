@@ -4,10 +4,12 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
  * Street-view-style canvas gestures via Pointer Events, for touch AND mouse:
  *  - one-pointer drag: look around ("grab the world")
  *  - two-finger pinch: zoom (FOV) — touch only
+ *  - mouse wheel: zoom (FOV), one notch = one zoom step
  *  - double-tap / double-click: travel to the tapped spot
- * Mouse pointers are ignored while pointer lock is active (immersive mode
- * routes mouse-look through PointerLockControls instead). The element must
- * have `touch-action: none` so the browser doesn't consume the gestures.
+ *  - pointer lock (immersive mode, opt-in via `lockPointer`): mouse motion
+ *    is mouse-look; Esc exits natively. Clicks/drags are ignored meanwhile.
+ * The element must have `touch-action: none` so the browser doesn't consume
+ * the gestures.
  */
 
 export interface TouchControlsCallbacks {
@@ -15,10 +17,17 @@ export interface TouchControlsCallbacks {
   onDoubleTap: (ndcX: number, ndcY: number) => void;
   /** drag delta in CSS pixels since the last event */
   onLook: (dxPx: number, dyPx: number) => void;
+  /** pointer-locked mouse motion in CSS pixels */
+  onMouseLook: (dxPx: number, dyPx: number) => void;
   /** current finger distance / distance at pinch start */
   onPinch: (ratio: number) => void;
   onPinchStart: () => void;
+  /** one wheel notch, as a pinch-style ratio: > 1 zooms in */
+  onWheel: (ratio: number) => void;
 }
+
+/** FOV factor per wheel notch. */
+const WHEEL_ZOOM_STEP = 1.05;
 
 /** Drags beyond this no longer count as a tap. */
 const TAP_SLOP_PX = 12;
@@ -32,22 +41,30 @@ interface PointerState {
   y: number;
 }
 
-function acceptsPointer(e: PointerEvent): boolean {
-  if (e.pointerType === "touch" || e.pointerType === "pen") {
-    return true;
-  }
-  // Mouse: primary button only, and never while pointer-locked (immersive).
-  return e.button === 0 && document.pointerLockElement === null;
+export interface TouchControls {
+  detach: () => void;
+  /** Enters immersive mouse-look (desktop); the browser exits it on Esc. */
+  lockPointer: () => void;
 }
 
 export function attachTouchControls(
   element: HTMLElement,
   callbacks: TouchControlsCallbacks
-): () => void {
+): TouchControls {
   const pointers = new Map<number, PointerState>();
   let pinchStartDistance = 0;
   let dragged = false;
   let lastTap: TapSample | null = null;
+
+  const locked = () => element.ownerDocument.pointerLockElement === element;
+
+  const acceptsPointer = (e: PointerEvent): boolean => {
+    if (e.pointerType === "touch" || e.pointerType === "pen") {
+      return true;
+    }
+    // Mouse: primary button only, and never while pointer-locked (immersive).
+    return e.button === 0 && !locked();
+  };
 
   const pinchDistance = (): number => {
     const [a, b] = [...pointers.values()];
@@ -144,15 +161,42 @@ export function attachTouchControls(
     }
   };
 
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    callbacks.onWheel(e.deltaY < 0 ? WHEEL_ZOOM_STEP : 1 / WHEEL_ZOOM_STEP);
+  };
+
+  // While locked, every mouse event targets the locked element and carries
+  // only relative motion.
+  const onMouseMove = (e: MouseEvent) => {
+    if (locked()) {
+      callbacks.onMouseLook(e.movementX, e.movementY);
+    }
+  };
+
   element.addEventListener("pointerdown", onPointerDown);
   element.addEventListener("pointermove", onPointerMove);
   element.addEventListener("pointerup", onPointerEnd);
   element.addEventListener("pointercancel", onPointerEnd);
+  element.addEventListener("wheel", onWheel, { passive: false });
+  element.addEventListener("mousemove", onMouseMove);
 
-  return () => {
-    element.removeEventListener("pointerdown", onPointerDown);
-    element.removeEventListener("pointermove", onPointerMove);
-    element.removeEventListener("pointerup", onPointerEnd);
-    element.removeEventListener("pointercancel", onPointerEnd);
+  return {
+    lockPointer: () => {
+      // Rejects outside a user gesture or when the browser denies it; the
+      // viewer then simply stays in grab-look, so there is nothing to report.
+      element.requestPointerLock()?.catch(() => undefined);
+    },
+    detach: () => {
+      element.removeEventListener("pointerdown", onPointerDown);
+      element.removeEventListener("pointermove", onPointerMove);
+      element.removeEventListener("pointerup", onPointerEnd);
+      element.removeEventListener("pointercancel", onPointerEnd);
+      element.removeEventListener("wheel", onWheel);
+      element.removeEventListener("mousemove", onMouseMove);
+      if (locked()) {
+        element.ownerDocument.exitPointerLock();
+      }
+    },
   };
 }

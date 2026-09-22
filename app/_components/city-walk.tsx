@@ -31,6 +31,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -72,52 +73,46 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import {
-  clampPct,
-  LOOK_BY_KEY,
+  type FocusMode,
   LOOK_CONTROLS,
   type LookGroup,
-  type LookKey,
-  type LookPct,
-  type LookTarget,
+  lookPatch,
+  type LookValues,
 } from "@/lib/city/look-controls";
+import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly } from "@/lib/city/minimap";
+import type { PlayerPose } from "@/lib/city/pose";
 import {
+  decodeLook,
+  encodeSnapshot,
   parseSnapshot,
-  SNAPSHOT_VERSION,
-  type Snapshot,
-  type SnapshotLook,
+  snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import type { TileUrls } from "@/lib/city/tile";
 import {
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
-  type PlayerPose,
-  type TileSrc,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
-import { DEFAULT_LOOK_PCT } from "./look-defaults";
 import { Minimap } from "./minimap";
 import { updatePocDebug } from "./poc-debug";
-import {
-  DEFAULT_DOF,
-  DEFAULT_FOCUS_DISTANCE,
-  DEFAULT_FOCUS_MODE,
-  type FocusMode,
-} from "./post-stack";
+import type { SceneBudget } from "./scene-profile";
 import type { SunState } from "./sun-rig";
-import { DEFAULT_TREE_MULTITUFT } from "./vegetation-layer";
 import { SCENIC_VIEWS } from "./viewpoints";
 import { VirtualJoystick } from "./virtual-joystick";
 import { hasWebGl2 } from "./webgl-support";
 
 interface Props {
+  /** The render budget the page was opened with (see scene-profile.ts) */
+  budget: SceneBudget;
   /** Neighbouring tiles rendered around the primary one for context */
-  extraTiles?: TileSrc[];
+  extraTiles?: TileUrls[];
   /** Optional glTF/GLB to insert; falls back to a marker box */
   insertedModelUrl?: string;
   /** The spawn tile's URLs (see lib/city/tile.ts) */
-  primary: TileSrc;
+  primary: TileUrls;
 }
 
 type Status =
@@ -204,8 +199,8 @@ function LookSliders({
   onLook,
 }: {
   group: LookGroup;
-  look: LookPct;
-  onLook: (key: LookKey, value: number) => void;
+  look: LookValues;
+  onLook: (patch: Partial<LookValues>) => void;
 }) {
   return (
     <>
@@ -216,8 +211,8 @@ function LookSliders({
           key={def.key}
           label={def.label}
           max={def.max}
-          onChange={(n) => onLook(def.key, n)}
-          value={look[def.key]}
+          onChange={(n) => onLook(lookPatch(def.key, n / 100))}
+          value={Math.round(look[def.key] * 100)}
         />
       ))}
     </>
@@ -435,20 +430,12 @@ interface SceneControlsProps {
   coarse: boolean;
   copySnapshot: () => void;
   day: Date;
-  dof: boolean;
-  focusDistance: number;
-  focusMode: FocusMode;
   handleRef: RefObject<CityWalkHandle | null>;
   insertBuilding: () => void;
-  look: LookPct;
+  look: LookValues;
   minutes: number;
   mode: MovementMode;
-  multiTuft: boolean;
-  onLook: (key: LookKey, value: number) => void;
-  setDof: Dispatch<SetStateAction<boolean>>;
-  setFocusDistance: Dispatch<SetStateAction<number>>;
-  setFocusMode: Dispatch<SetStateAction<FocusMode>>;
-  setMultiTuft: Dispatch<SetStateAction<boolean>>;
+  onLook: (patch: Partial<LookValues>) => void;
   setSnapshotText: Dispatch<SetStateAction<string>>;
   snapshotMsg: string | null;
   snapshotText: string;
@@ -467,20 +454,12 @@ function SceneControls({
   coarse,
   copySnapshot,
   day,
-  dof,
-  focusDistance,
-  focusMode,
   handleRef,
   insertBuilding,
   look,
   minutes,
   mode,
-  multiTuft,
   onLook,
-  setDof,
-  setFocusDistance,
-  setFocusMode,
-  setMultiTuft,
   setSnapshotText,
   snapshotMsg,
   snapshotText,
@@ -555,12 +534,9 @@ function SceneControls({
             Multi-Tuft-Kronen (nah)
           </FieldLabel>
           <Switch
-            checked={multiTuft}
+            checked={look.multiTuft}
             id="tree-multituft"
-            onCheckedChange={(checked) => {
-              setMultiTuft(checked);
-              handleRef.current?.setTreeMultiTuft(checked);
-            }}
+            onCheckedChange={(checked) => onLook({ multiTuft: checked })}
             size="sm"
           />
         </Field>
@@ -571,27 +547,18 @@ function SceneControls({
         <Field orientation="horizontal">
           <FieldLabel htmlFor="depth-of-field">Depth of field</FieldLabel>
           <Switch
-            checked={dof}
+            checked={look.dof}
             id="depth-of-field"
-            onCheckedChange={(checked) => {
-              setDof(checked);
-              handleRef.current?.setDepthOfField(checked);
-            }}
+            onCheckedChange={(checked) => onLook({ dof: checked })}
             size="sm"
           />
         </Field>
         <FocusControls
-          distance={focusDistance}
-          enabled={dof}
-          mode={focusMode}
-          onDistance={(m) => {
-            setFocusDistance(m);
-            handleRef.current?.setFocusDistance(m);
-          }}
-          onMode={(m) => {
-            setFocusMode(m);
-            handleRef.current?.setFocusMode(m);
-          }}
+          distance={look.focusDistanceM}
+          enabled={look.dof}
+          mode={look.focusMode}
+          onDistance={(m) => onLook({ focusDistanceM: m })}
+          onMode={(m) => onLook({ focusMode: m })}
         />
       </ControlGroup>
 
@@ -673,6 +640,7 @@ function SceneControls({
 }
 
 export default function CityWalk({
+  budget,
   primary,
   extraTiles,
   insertedModelUrl,
@@ -699,11 +667,10 @@ export default function CityWalk({
   const [sun, setSun] = useState<SunState | null>(null);
   const [day, setDay] = useState(INITIAL_DATE);
   const [minutes, setMinutes] = useState(INITIAL_MINUTES);
-  const [dof, setDof] = useState(DEFAULT_DOF);
-  const [focusMode, setFocusMode] = useState<FocusMode>(DEFAULT_FOCUS_MODE);
-  const [focusDistance, setFocusDistance] = useState(DEFAULT_FOCUS_DISTANCE);
-  const [look, setLook] = useState<LookPct>(DEFAULT_LOOK_PCT);
-  const [multiTuft, setMultiTuft] = useState(DEFAULT_TREE_MULTITUFT);
+  // The look store outlives the scene: a remount (StrictMode, a tile switch)
+  // boots the new instance from it, so sliders and scene never disagree.
+  const [look] = useState(createLookState);
+  const lookValues = useSyncExternalStore(look.subscribe, look.get, look.get);
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -713,24 +680,6 @@ export default function CityWalk({
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
-
-  // The boot effect seeds a fresh handle from the HUD's current look state.
-  // It reads that state through a ref (synced here — refs must not be written
-  // during render) so a slider change never re-runs the effect and reboots
-  // the renderer. With the single-mount lifecycle the seed equals the
-  // defaults; its value is the future tile-switch / model-URL case.
-  const hudLookRef = useRef({ look, dof, focusMode, focusDistance, multiTuft });
-  useEffect(() => {
-    hudLookRef.current = { look, dof, focusMode, focusDistance, multiTuft };
-  }, [look, dof, focusMode, focusDistance, multiTuft]);
-
-  /** Slider change: clamp, store the percent, push 0..1 to the scene. */
-  const setLookValue = (key: LookKey, value: number) => {
-    const def = LOOK_BY_KEY[key];
-    const v = clampPct(def, value);
-    setLook((prev) => (prev[key] === v ? prev : { ...prev, [key]: v }));
-    handleRef.current?.[def.setter](v / 100);
-  };
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -758,6 +707,8 @@ export default function CityWalk({
 
     createCityWalkApp({
       container,
+      budget,
+      look,
       primary,
       extraTiles,
       insertedModelUrl,
@@ -791,7 +742,7 @@ export default function CityWalk({
           return;
         }
         setStats(s);
-        updatePocDebug(s);
+        updatePocDebug({ stats: s });
         const h = handleRef.current;
         if (h) {
           setFootprints(h.getFootprints());
@@ -808,6 +759,9 @@ export default function CityWalk({
         }
       },
       onPose: (pose) => {
+        if (cancelled) {
+          return;
+        }
         for (const cb of poseListeners.current) {
           cb(pose);
         }
@@ -821,51 +775,11 @@ export default function CityWalk({
         handle = h;
         handleRef.current = h;
         booted = true;
-        // A remounted handle boots at the scene defaults; push the HUD's
-        // current state so sliders and scene never disagree.
-        const hud = hudLookRef.current;
-        for (const def of LOOK_CONTROLS) {
-          h[def.setter](hud.look[def.key] / 100);
-        }
-        h.setDepthOfField(hud.dof);
-        h.setFocusMode(hud.focusMode);
-        h.setFocusDistance(hud.focusDistance);
-        h.setTreeMultiTuft(hud.multiTuft);
         setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
         setLandcoverTiles(h.landcoverTiles);
-        const lookSetters: Partial<LookTarget> = {};
-        for (const def of LOOK_CONTROLS) {
-          lookSetters[def.setter] = h[def.setter];
-        }
-        updatePocDebug({
-          ...lookSetters,
-          firstFrame: true,
-          offset: h.offset,
-          terrainBounds: h.terrainBounds,
-          flyTo: h.flyTo,
-          flyToViewpoint: h.flyToViewpoint,
-          demolishAtCrosshair: h.demolishAtCrosshair,
-          getPose: h.getPose,
-          getCameraState: h.getCameraState,
-          getRenderInfo: h.getRenderInfo,
-          getFocusDebug: h.getFocusDebug,
-          applyCameraState: h.applyCameraState,
-          teleportTo: h.teleportTo,
-          setDepthOfField: h.setDepthOfField,
-          setFocusMode: h.setFocusMode,
-          setFocusDistance: h.setFocusDistance,
-          setTreeMultiTuft: h.setTreeMultiTuft,
-          insertBuilding: () => {
-            h.insertBuilding().catch(() => {
-              // glTF failure is non-fatal; the box fallback can't fail
-            });
-          },
-          setSunIso: (iso) => {
-            h.setSun(new Date(iso));
-          },
-        });
+        updatePocDebug({ handle: h, look, firstFrame: true });
         setStatus({ phase: "streaming", message: null });
       })
       .catch((err: unknown) => {
@@ -885,8 +799,16 @@ export default function CityWalk({
       aborter.abort();
       handleRef.current = null;
       handle?.dispose();
+      // The hook must not keep a disposed scene callable (or alive): the
+      // next boot republishes.
+      updatePocDebug({
+        firstFrame: false,
+        ready: false,
+        handle: undefined,
+        look: undefined,
+      });
     };
-  }, [primary, extraTiles, insertedModelUrl, webGl2]);
+  }, [budget, look, primary, extraTiles, insertedModelUrl, webGl2]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);
@@ -908,60 +830,17 @@ export default function CityWalk({
     if (!h) {
       return;
     }
-    const lookJson: SnapshotLook = {
-      dof,
-      focusMode,
-      focusDistanceM: focusDistance,
-      multiTuft,
-    };
-    for (const def of LOOK_CONTROLS) {
-      lookJson[def.snapshotKey] = look[def.key];
-    }
-    const snap: Snapshot = {
-      v: SNAPSHOT_VERSION,
-      camera: h.getCameraState(),
-      date: composeDate(day, minutes).toISOString(),
-      look: lookJson,
-    };
+    const snap = encodeSnapshot(
+      look.get(),
+      h.getCameraState(),
+      composeDate(day, minutes)
+    );
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
     navigator.clipboard?.writeText(text).then(
       () => setSnapshotMsg("Copied to clipboard"),
       () => setSnapshotMsg("Copy failed — select the text manually")
     );
-  };
-
-  /** Percent controls of a snapshot: clamp, store and push each present key. */
-  const applyLookPct = (h: CityWalkHandle, lookJson: SnapshotLook) => {
-    const next = { ...look };
-    for (const def of LOOK_CONTROLS) {
-      const raw = lookJson[def.snapshotKey];
-      if (typeof raw === "number") {
-        next[def.key] = clampPct(def, raw);
-        h[def.setter](next[def.key] / 100);
-      }
-    }
-    setLook(next);
-  };
-
-  /** The non-percent look fields (each optional: older snapshots omit them). */
-  const applyLookFlags = (h: CityWalkHandle, lookJson: SnapshotLook) => {
-    if (lookJson.dof !== undefined) {
-      setDof(lookJson.dof);
-      h.setDepthOfField(lookJson.dof);
-    }
-    if (lookJson.focusMode !== undefined) {
-      setFocusMode(lookJson.focusMode);
-      h.setFocusMode(lookJson.focusMode);
-    }
-    if (lookJson.focusDistanceM !== undefined) {
-      setFocusDistance(lookJson.focusDistanceM);
-      h.setFocusDistance(lookJson.focusDistanceM);
-    }
-    if (lookJson.multiTuft !== undefined) {
-      setMultiTuft(lookJson.multiTuft);
-      h.setTreeMultiTuft(lookJson.multiTuft);
-    }
   };
 
   const applySnapshot = () => {
@@ -979,19 +858,16 @@ export default function CityWalk({
     }
     const snap = parsed.snapshot;
     h.applyCameraState(snap.camera);
-    const date = new Date(snap.date);
+    // The minute the sliders can show (see snapshotInstant), for the sun and
+    // the two time controls alike.
+    const date = snapshotInstant(snap);
     const nextDay = new Date(
       date.getFullYear(),
       date.getMonth(),
       date.getDate()
     );
-    setDay(nextDay);
-    setMinutes(date.getHours() * 60 + date.getMinutes());
-    setSun(h.setSun(date));
-    if (snap.look) {
-      applyLookPct(h, snap.look);
-      applyLookFlags(h, snap.look);
-    }
+    updateSun(nextDay, date.getHours() * 60 + date.getMinutes());
+    look.set(decodeLook(snap.look));
     setSnapshotMsg("Snapshot applied");
   };
 
@@ -1002,20 +878,12 @@ export default function CityWalk({
       coarse={coarse}
       copySnapshot={copySnapshot}
       day={day}
-      dof={dof}
-      focusDistance={focusDistance}
-      focusMode={focusMode}
       handleRef={handleRef}
       insertBuilding={insertBuilding}
-      look={look}
+      look={lookValues}
       minutes={minutes}
       mode={mode}
-      multiTuft={multiTuft}
-      onLook={setLookValue}
-      setDof={setDof}
-      setFocusDistance={setFocusDistance}
-      setFocusMode={setFocusMode}
-      setMultiTuft={setMultiTuft}
+      onLook={look.set}
       setSnapshotText={setSnapshotText}
       snapshotMsg={snapshotMsg}
       snapshotText={snapshotText}
@@ -1119,7 +987,11 @@ export default function CityWalk({
             {bounds && (
               <SidebarMinimap
                 bounds={bounds}
-                focusRingM={focusRingMeters(dof, focusMode, focusDistance)}
+                focusRingM={focusRingMeters(
+                  lookValues.dof,
+                  lookValues.focusMode,
+                  lookValues.focusDistanceM
+                )}
                 footprints={footprints}
                 landcoverTiles={landcoverTiles}
                 onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}

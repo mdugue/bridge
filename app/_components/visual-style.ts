@@ -1,5 +1,10 @@
 import type { Group, Material, Mesh } from "three";
 import { MeshStandardMaterial } from "three";
+import {
+  type ClayLookKey,
+  LOOK_DEFAULTS,
+  type LookValues,
+} from "@/lib/city/look-controls";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
@@ -12,32 +17,6 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * "ghost" (MeshPhysicalMaterial transmission — frosted massing, but it
  * re-rendered the whole scene into a transmission buffer every frame).
  */
-
-/** Clay transparency default (0 = solid, 1 = fully see-through). */
-export const DEFAULT_CLAY_TRANSPARENCY = 0;
-
-/** Clay facade-detail defaults (0..1). Ground-shade darkens the base; rim is the
- *  Streiflicht silhouette glow; bands are the faint storey contour lines. */
-export const DEFAULT_BUILDING_GROUND_SHADE = 0.34;
-export const DEFAULT_BUILDING_RIM = 0.6;
-export const DEFAULT_BUILDING_BANDS = 0.18;
-/** Per-building clay tint mix (0 = flat clay, 1 = full per-building colour). A
- *  middling default already breaks the uniform massing while staying painterly. */
-export const DEFAULT_BUILDING_TINT = 0.6;
-/** Roof colour mix (real DOP colour, else synth terracotta/slate). Roofs carry
- *  more colour than walls — they're the strongest readability cue. */
-export const DEFAULT_BUILDING_ROOF_TINT = 0.7;
-/** Roof vividness ("Dachsättigung"): hue-preserving chroma boost on the real DOP
- *  roof colour (0 = raw DOP, drab/hazy; 1 = full lift). Keeps each roof's TRUE
- *  hue — copper-green stays green, terracotta red, slate cool — and lifts the
- *  dull/hazy ones most, curing drabness without homogenising toward terracotta. */
-export const DEFAULT_BUILDING_ROOF_VIBRANCE = 0.5;
-/** Eave (Traufkante) cornice-stroke strength at the wall/roof boundary. */
-export const DEFAULT_BUILDING_EAVE = 0.35;
-/** Warm dusk interior glow on commercial/public buildings (gated by nightFactor). */
-export const DEFAULT_BUILDING_DUSK_GLOW = 0.5;
-/** Per-building roughness jitter — subtle matte/sheen variation between houses. */
-export const DEFAULT_BUILDING_ROUGHNESS = 0.12;
 
 /** Live uniform refs for the clay facade detail (mutate `.value`, no recompile). */
 export interface ClayDetailUniforms {
@@ -94,6 +73,9 @@ function addClayDetail(
   uniforms: ClayDetailUniforms,
   heightFog?: HeightFogUniforms
 ): void {
+  // The closure branches on `heightFog`, but three keys its program cache on
+  // `onBeforeCompile.toString()` — identical either way. Name the branch.
+  material.customProgramCacheKey = () => `clay-${heightFog !== undefined}`;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uAO = uniforms.uAO;
     shader.uniforms.uBands = uniforms.uBands;
@@ -203,20 +185,21 @@ export function createStyleResources(
     metalness: 0,
     // Hash-dithered transparency (see setCityTransparency) — opaque-pass
     // compositing keeps occlusion correct on the batched mesh.
-    opacity: 1 - DEFAULT_CLAY_TRANSPARENCY,
-    alphaHash: DEFAULT_CLAY_TRANSPARENCY > 0,
+    opacity: 1 - LOOK_DEFAULTS.transparency,
+    alphaHash: LOOK_DEFAULTS.transparency > 0,
   });
+  // Booted at the table defaults; applyCityLook retunes them live.
   const clayDetail: ClayDetailUniforms = {
-    uAO: { value: DEFAULT_BUILDING_GROUND_SHADE },
-    uBands: { value: DEFAULT_BUILDING_BANDS },
-    uRim: { value: DEFAULT_BUILDING_RIM },
-    uTint: { value: DEFAULT_BUILDING_TINT },
-    uRoofTint: { value: DEFAULT_BUILDING_ROOF_TINT },
-    uRoofVibrance: { value: DEFAULT_BUILDING_ROOF_VIBRANCE },
-    uEave: { value: DEFAULT_BUILDING_EAVE },
-    uDuskGlow: { value: DEFAULT_BUILDING_DUSK_GLOW },
+    uAO: { value: LOOK_DEFAULTS.groundShade },
+    uBands: { value: LOOK_DEFAULTS.bands },
+    uRim: { value: LOOK_DEFAULTS.rim },
+    uTint: { value: LOOK_DEFAULTS.tint },
+    uRoofTint: { value: LOOK_DEFAULTS.roofTint },
+    uRoofVibrance: { value: LOOK_DEFAULTS.roofVibrance },
+    uEave: { value: LOOK_DEFAULTS.eave },
+    uDuskGlow: { value: LOOK_DEFAULTS.duskGlow },
     uNight: night ?? { value: 0 },
-    uRough: { value: DEFAULT_BUILDING_ROUGHNESS },
+    uRough: { value: LOOK_DEFAULTS.roughness },
   };
   addClayDetail(clay, clayDetail, heightFog);
 
@@ -257,6 +240,43 @@ export function setCityTransparency(
   if (clay.alphaHash !== wasHashed) {
     clay.needsUpdate = true;
   }
+}
+
+/**
+ * The clay uniform each building row drives. Transparency is the material's
+ * opacity (setCityTransparency), not a uniform. A Record over the row keys,
+ * so a row added to the table cannot go unapplied.
+ */
+const CLAY_UNIFORM_FOR: Record<
+  Exclude<ClayLookKey, "transparency">,
+  keyof Omit<ClayDetailUniforms, "uNight">
+> = {
+  bands: "uBands",
+  duskGlow: "uDuskGlow",
+  eave: "uEave",
+  groundShade: "uAO",
+  rim: "uRim",
+  roofTint: "uRoofTint",
+  roofVibrance: "uRoofVibrance",
+  roughness: "uRough",
+  tint: "uTint",
+};
+
+/**
+ * Pushes the building rows of the look into the shared clay: the nine facade
+ * detail uniforms (live references, no recompile) and the transparency.
+ */
+export function applyCityLook(
+  resources: StyleResources,
+  look: LookValues
+): void {
+  for (const [key, uniform] of Object.entries(CLAY_UNIFORM_FOR) as [
+    keyof typeof CLAY_UNIFORM_FOR,
+    keyof ClayDetailUniforms,
+  ][]) {
+    resources.clayDetail[uniform].value = look[key];
+  }
+  setCityTransparency(resources, look.transparency);
 }
 
 interface StyledCityMesh extends Mesh {

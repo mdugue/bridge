@@ -1,59 +1,53 @@
 /**
- * The 0..1 "look" controls, declared ONCE. The HUD renders sliders from this
- * table, the handle/`__poc` expose one setter per row, and snapshots
- * serialise one `<snapshotKey>` per row — add a control here and every
- * consumer follows. No THREE, no DOM (the e2e harness imports this file).
+ * The look controls, declared ONCE. The HUD renders sliders from this table,
+ * the look store (look-state.ts) clamps and holds one value per row, the
+ * snapshot codec (snapshot.ts) serialises one `<snapshotKey>` per row, and
+ * the scene applies the values to its materials — add a control here and
+ * every consumer follows. No THREE, no DOM (the e2e harness imports this
+ * file).
  */
 export type LookGroup = "atmosphere" | "buildings" | "rendering" | "vegetation";
 
-export type LookSetterName =
-  | "setAtmosphere"
-  | "setBuildingBands"
-  | "setBuildingDuskGlow"
-  | "setBuildingEave"
-  | "setBuildingGroundShade"
-  | "setBuildingRim"
-  | "setBuildingRoofTint"
-  | "setBuildingRoofVibrance"
-  | "setBuildingRoughness"
-  | "setBuildingTint"
-  | "setBuildingTransparency"
-  | "setContactShadows"
-  | "setDepthGrading"
-  | "setHeightFog"
-  | "setMeadowNdvi"
-  | "setPaperGrain"
-  | "setTreeLeafBright"
-  | "setTreeLeafFlutter"
-  | "setTreeShimmer"
-  | "setTreeTranslucency"
-  | "setWaterMist";
-
-/** What every consumer of the look controls must provide: one 0..1 setter per row. */
-export type LookTarget = Record<LookSetterName, (value01: number) => void>;
-
-export type LookKey =
+/** Rows the scene itself applies: fog, the valley haze, the meadow tint, the river mist. */
+export type SceneLookKey =
+  | "fogAmount"
+  | "heightFog"
+  | "meadowNdvi"
+  | "waterMist";
+/** Rows the shared clay material applies (visual-style.ts). */
+export type ClayLookKey =
   | "bands"
-  | "contact"
   | "duskGlow"
   | "eave"
-  | "fogAmount"
-  | "grading"
-  | "grain"
   | "groundShade"
-  | "heightFog"
-  | "leafBright"
-  | "leafFlutter"
-  | "meadowNdvi"
   | "rim"
   | "roofTint"
   | "roofVibrance"
   | "roughness"
-  | "shimmer"
   | "tint"
-  | "translucency"
-  | "transparency"
-  | "waterMist";
+  | "transparency";
+/** Rows the post stack applies (post-stack.ts). */
+export type PostLookKey = "contact" | "grading" | "grain";
+/** Rows every vegetation tile applies (vegetation-layer.ts). */
+export type VegetationLookKey =
+  | "leafBright"
+  | "leafFlutter"
+  | "shimmer"
+  | "translucency";
+/**
+ * Every percent row. Each key belongs to exactly one owner union above, and
+ * each owner applies its rows through a `Record<…LookKey, …>` the compiler
+ * keeps complete — so a row added here without an owner entry is a type
+ * error, never a slider that renders nothing.
+ */
+export type LookKey =
+  | ClayLookKey
+  | PostLookKey
+  | SceneLookKey
+  | VegetationLookKey;
+
+/** Depth-of-field focus: "auto" tracks the crosshair, "manual" uses a fixed distance. */
+export type FocusMode = "auto" | "manual";
 
 export interface LookControlDef {
   /** slider help text (also the row's documentation) */
@@ -61,13 +55,13 @@ export interface LookControlDef {
   group: LookGroup;
   /** DOM id of the slider (stable: tests find controls by it) */
   id: string;
+  /** the value the scene boots with (0..1) */
+  initial: number;
   /** state key */
   key: LookKey;
   label: string;
   /** slider maximum in percent (default 100) */
   max?: number;
-  /** handle / __poc setter that receives value / 100 */
-  setter: LookSetterName;
   /**
    * Key inside Snapshot.look — the persisted format. Never rename one (old
    * snapshots would silently lose that slider).
@@ -75,8 +69,20 @@ export interface LookControlDef {
   snapshotKey: string;
 }
 
-/** Percent values (integers 0..max) of every look control. */
-export type LookPct = Record<LookKey, number>;
+/**
+ * Every look value the scene renders with, as the scene consumes it: the
+ * table rows as 0..1 floats (percent is only how the HUD and the snapshot
+ * show them) plus the four controls that are not percent sliders.
+ */
+export interface LookValues extends Record<LookKey, number> {
+  /** photographic depth of field with crosshair autofocus */
+  dof: boolean;
+  /** manual focus distance (m), used when focusMode is "manual" */
+  focusDistanceM: number;
+  focusMode: FocusMode;
+  /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
+  multiTuft: boolean;
+}
 
 /** One row per slider, in the order the HUD renders them. */
 export const LOOK_CONTROLS: readonly LookControlDef[] = [
@@ -87,7 +93,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Fog",
     description: undefined,
     group: "atmosphere",
-    setter: "setAtmosphere",
+    initial: 0.2,
     snapshotKey: "fogPct",
   },
   {
@@ -96,7 +102,9 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Talnebel",
     description: "Haze pooling along the valley floor / the Elbe",
     group: "atmosphere",
-    setter: "setHeightFog",
+    // Light — a faint valley haze on a clear day; pairs with the ~0.2
+    // distance fog for a regular day. Dial up for foggy-morning moods.
+    initial: 0.2,
     snapshotKey: "heightFogPct",
   },
   {
@@ -105,7 +113,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Flussnebel",
     description: "Drifting mist over the river",
     group: "atmosphere",
-    setter: "setWaterMist",
+    initial: 0.6,
     snapshotKey: "waterMistPct",
   },
   {
@@ -113,7 +121,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "depth-grading",
     label: "Depth color · warm near, cool far",
     group: "atmosphere",
-    setter: "setDepthGrading",
+    initial: 0.5,
     snapshotKey: "gradingPct",
   },
   // --- Buildings ---
@@ -123,8 +131,8 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Transparency",
     description: "Plain see-through",
     group: "buildings",
+    initial: 0,
     max: 90,
-    setter: "setBuildingTransparency",
     snapshotKey: "transparencyPct",
   },
   {
@@ -132,7 +140,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-ground-shade",
     label: "Boden-Verlauf",
     group: "buildings",
-    setter: "setBuildingGroundShade",
+    initial: 0.34,
     snapshotKey: "groundShadePct",
   },
   {
@@ -140,7 +148,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-bands",
     label: "Höhenlinien",
     group: "buildings",
-    setter: "setBuildingBands",
+    initial: 0.18,
     snapshotKey: "bandsPct",
   },
   {
@@ -148,7 +156,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-rim",
     label: "Streiflicht",
     group: "buildings",
-    setter: "setBuildingRim",
+    initial: 0.6,
     snapshotKey: "rimPct",
   },
   {
@@ -158,7 +166,8 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     description:
       "Per-building clay tint from use & height, blended into the base",
     group: "buildings",
-    setter: "setBuildingTint",
+    // A middling mix already breaks the uniform massing while staying painterly.
+    initial: 0.6,
     snapshotKey: "tintPct",
   },
   {
@@ -167,7 +176,8 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Dachfarbe",
     description: "Terracotta or slate per roof, from roofType & pitch",
     group: "buildings",
-    setter: "setBuildingRoofTint",
+    // Roofs carry more colour than walls — they are the strongest readability cue.
+    initial: 0.7,
     snapshotKey: "roofTintPct",
   },
   {
@@ -177,7 +187,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     description:
       "Lift roof colour vividness, keeping each roof's true hue — copper-green, terracotta & slate alike (0 = raw aerial)",
     group: "buildings",
-    setter: "setBuildingRoofVibrance",
+    initial: 0.5,
     snapshotKey: "roofVibrancePct",
   },
   {
@@ -186,7 +196,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Traufkante",
     description: "Soft cornice line where wall meets roof",
     group: "buildings",
-    setter: "setBuildingEave",
+    initial: 0.35,
     snapshotKey: "eavePct",
   },
   {
@@ -195,7 +205,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Abendlicht",
     description: "Warm interior glow on civic/commercial buildings at dusk",
     group: "buildings",
-    setter: "setBuildingDuskGlow",
+    initial: 0.5,
     snapshotKey: "duskGlowPct",
   },
   {
@@ -204,7 +214,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Materialstreuung",
     description: "Subtle per-building matte/sheen variation",
     group: "buildings",
-    setter: "setBuildingRoughness",
+    initial: 0.12,
     snapshotKey: "roughnessPct",
   },
   // --- Vegetation ---
@@ -214,7 +224,8 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Wiesenfärbung",
     description: "Tint meadows lush-green↔dry from the DOP infrared (NDVI)",
     group: "vegetation",
-    setter: "setMeadowNdvi",
+    // A middling default reads without looking like a heat map.
+    initial: 0.6,
     snapshotKey: "meadowNdviPct",
   },
   {
@@ -222,7 +233,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "tree-shimmer",
     label: "Gegenlicht-Schimmer",
     group: "vegetation",
-    setter: "setTreeShimmer",
+    initial: 0.45,
     snapshotKey: "shimmerPct",
   },
   {
@@ -231,7 +242,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     label: "Blattdurchscheinen",
     description: "Backlit glow on near/large crowns (shadow-gated)",
     group: "vegetation",
-    setter: "setTreeTranslucency",
+    initial: 0.5,
     snapshotKey: "translucencyPct",
   },
   {
@@ -241,7 +252,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     description:
       "(A) Windböen lassen Blätter ihre helle Unterseite zeigen — Farbe flimmert über sonnige Kronen. 0 = nur (B) sichtbar.",
     group: "vegetation",
-    setter: "setTreeLeafFlutter",
+    initial: 0.5,
     snapshotKey: "leafFlutterPct",
   },
   {
@@ -251,7 +262,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     description:
       "(B) Krone hellt auf, wenn sie sich in die Böe neigt (an die Wiege-Bewegung gekoppelt). 0 = nur (A) sichtbar.",
     group: "vegetation",
-    setter: "setTreeLeafBright",
+    initial: 0.5,
     snapshotKey: "leafBrightPct",
   },
   // --- Rendering ---
@@ -260,7 +271,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "contact-shadows",
     label: "Contact shadows",
     group: "rendering",
-    setter: "setContactShadows",
+    initial: 0.5,
     snapshotKey: "contactPct",
   },
   {
@@ -268,7 +279,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "paper-grain",
     label: "Paper grain",
     group: "rendering",
-    setter: "setPaperGrain",
+    initial: 0.25,
     snapshotKey: "grainPct",
   },
 ];
@@ -279,8 +290,25 @@ export const LOOK_BY_KEY: Readonly<Record<LookKey, LookControlDef>> =
     LookControlDef
   >;
 
-/** Rounds to an integer percent and clamps to the control's [0, max]. */
-export function clampPct(def: LookControlDef, value: number): number {
-  const max = def.max ?? 100;
-  return Math.min(Math.max(Math.round(value), 0), max);
+/** What the scene boots with: each row's `initial` plus the four flags. */
+export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
+  ...(Object.fromEntries(
+    LOOK_CONTROLS.map((def) => [def.key, def.initial])
+  ) as Record<LookKey, number>),
+  dof: true,
+  focusMode: "auto",
+  focusDistanceM: 40,
+  multiTuft: true,
+});
+
+/** A row's slider maximum as a 0..1 value. */
+export function maxValueOf(def: LookControlDef): number {
+  return (def.max ?? 100) / 100;
+}
+
+/** A one-row patch for the look store (`{ [key]: value01 }`, typed). */
+export function lookPatch(key: LookKey, value01: number): Partial<LookValues> {
+  const patch: Partial<LookValues> = {};
+  patch[key] = value01;
+  return patch;
 }

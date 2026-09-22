@@ -17,9 +17,8 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
-import { fetchFeatures } from "./fetch-optional";
-import type { VegetationContext } from "./vegetation-layer";
+import type { LampFeature } from "@/lib/city/features";
+import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 
 /** Lamp post height (m). OSM rarely tags it; the bake defaults each lamp to 5 m. */
 const LAMP_H = 5;
@@ -41,11 +40,6 @@ const LIGHT_FAR = 42;
 const LIGHT_BASE = 14;
 const LIGHT_RANGE = 40;
 
-interface LampPoint {
-  geometry: { coordinates: [number, number]; type: "Point" };
-  properties: { h?: number };
-}
-
 interface Place {
   x: number;
   y: number;
@@ -54,6 +48,7 @@ interface Place {
 
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
 export interface LampControl {
+  /** Frees the shared glow sprite; the meshes are freed with the scene. */
   dispose: () => void;
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
@@ -195,20 +190,19 @@ function buildDecals(places: Place[], sprite: CanvasTexture): InstancedMesh {
 }
 
 /**
- * Loads OSM street lamps for one tile into stylized geometry on the Y-up scene.
+ * Builds one tile's OSM street lamps into stylized geometry on the Y-up scene.
  * Mostly fake — emissive heads, additive glow sprites and ground light-pool
  * decals — driven by a single `nightFactor`; the real lighting comes from a
- * small shared {@link createLampLights} pool. Non-fatal: any failure (or a
- * missing/empty file) resolves to an empty group.
+ * small shared {@link createLampLights} pool. An empty feature list yields
+ * an empty group.
  */
-export async function loadLamps(
-  url: string,
-  ctx: VegetationContext
-): Promise<LampControl> {
+export function buildLamps(
+  features: LampFeature[],
+  ctx: GroundContext
+): LampControl {
   const group = new Group();
   group.name = "lamps";
   const { offset } = ctx;
-  const features = await fetchFeatures<LampPoint>(url, ctx.signal);
 
   const places: Place[] = [];
   const headPositions: Vector3[] = [];
@@ -261,16 +255,9 @@ export async function loadLamps(
       glow.visible = nf > 0.01;
       decals.visible = nf > 0.01;
     },
-    dispose: () => {
-      for (const m of [posts, heads, decals]) {
-        m.geometry.dispose();
-        (m.material as MeshStandardMaterial).dispose();
-      }
-      glow.geometry.dispose();
-      glowMat.dispose();
-      // disposeObject3D won't free the shared CanvasTexture — do it here.
-      sprite.dispose();
-    },
+    // disposeObject3D frees the meshes with the scene; the CanvasTexture the
+    // glow and pool materials share is this layer's to free.
+    dispose: () => sprite.dispose(),
   };
 }
 

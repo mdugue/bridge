@@ -1,9 +1,10 @@
+import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { MovementMode } from "./fps-movement";
 
 /**
  * A curated vantage the camera can glide to from the HUD. Authored in the same
  * EPSG:25833 frame as the rest of the data (so a coordinate can be eyeballed on
- * a map) plus a height *above the terrain* — create-app resolves the real
+ * a map) plus a height *above the terrain* — camera-pose resolves the real
  * ground at runtime, so a viewpoint stays correct even if the DGM changes.
  *
  * `mode` is where the player lands: `fly` keeps the elevated/free pose, `walk`
@@ -24,9 +25,6 @@ export interface Viewpoint {
   /** + = looking up, − = looking down. */
   pitchDeg: number;
 }
-
-/** Eye height for the walking viewpoints (mirrors EYE_HEIGHT in create-app). */
-const EYE = 1.7;
 
 /**
  * Hand-picked Dresden vantages. Coordinates anchored to the baked bridge
@@ -76,7 +74,7 @@ export const SCENIC_VIEWS: Viewpoint[] = [
       "On foot on the Elbwiese at the foot of the Carolabrücke, the Altstadt silhouette across the meadow.",
     mode: "walk",
     epsg: { x: 412_060, y: 5_656_745 },
-    aboveGround: EYE,
+    aboveGround: EYE_HEIGHT,
     headingDeg: 195,
     pitchDeg: 4,
     fov: 62,
@@ -88,7 +86,7 @@ export const SCENIC_VIEWS: Viewpoint[] = [
       "Strolling the tree-lined Neustadt embankment, the river leading toward the old town.",
     mode: "walk",
     epsg: { x: 412_420, y: 5_656_915 },
-    aboveGround: EYE,
+    aboveGround: EYE_HEIGHT,
     headingDeg: 243,
     pitchDeg: 1,
     fov: 62,

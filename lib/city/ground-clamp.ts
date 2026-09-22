@@ -11,6 +11,16 @@ export interface RecenterOffset {
   cy: number;
 }
 
+/**
+ * What every layer needs to drape a feature: the ground at projected
+ * coordinates and the recenter offset into the world frame.
+ */
+export interface GroundContext {
+  /** ground elevation (world Y) at projected (x, y); null = off the terrain */
+  heightAt: (x: number, y: number) => number | null;
+  offset: RecenterOffset;
+}
+
 /** World (x, z) -> projected EPSG coordinates. */
 export function worldToEpsg(
   x: number,

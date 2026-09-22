@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import {
+  aoQualityFor,
   deviceTierFromMedia,
   liteKeepsBlockFromSearch,
   pixelRatioFor,
+  sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapSizeFor,
 } from "./scene-profile";
@@ -52,4 +54,29 @@ test("liteKeepsBlockFromSearch reads the block=1 QA knob only", () => {
 test("deviceTierFromMedia maps the coarse-pointer query", () => {
   expect(deviceTierFromMedia(true)).toBe("mobile");
   expect(deviceTierFromMedia(false)).toBe("desktop");
+});
+
+test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters in one go", () => {
+  expect(sceneBudgetFor("", false)).toEqual({
+    profile: "full",
+    tier: "desktop",
+    neighbourTiles: true,
+    lowRasters: false,
+  });
+  expect(sceneBudgetFor("?scene=lite", true)).toEqual({
+    profile: "lite",
+    tier: "mobile",
+    neighbourTiles: false,
+    lowRasters: true,
+  });
+  // The QA knob keeps the block in the lite profile; alone it does nothing.
+  expect(sceneBudgetFor("?scene=lite&block=1", false).neighbourTiles).toBe(
+    true
+  );
+  expect(sceneBudgetFor("?block=1", false).neighbourTiles).toBe(true);
+});
+
+test("aoQualityFor drops to Performance only in the lite profile", () => {
+  expect(aoQualityFor("full")).toBe("Medium");
+  expect(aoQualityFor("lite")).toBe("Performance");
 });

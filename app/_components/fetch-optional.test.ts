@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
+import {
+  fetchFeatures,
+  fetchFeaturesFrom,
+  fetchOptionalJson,
+} from "./fetch-optional";
 
 const realFetch = globalThis.fetch;
-type FetchStub = () => Promise<{ json: () => unknown; ok: boolean }>;
+type FetchStub = (url: string) => Promise<{ json: () => unknown; ok: boolean }>;
 
 function stubFetch(impl: FetchStub): void {
   // reason: the test only needs the subset of Response the helper reads
@@ -42,6 +46,28 @@ test("an abort is rethrown", async () => {
 
 test("fetchFeatures without a URL yields nothing", async () => {
   expect(await fetchFeatures(undefined)).toEqual([]);
+});
+
+test("fetchFeaturesFrom merges the collections in URL order, a 404 among them contributing nothing", async () => {
+  stubFetch((url) =>
+    Promise.resolve(
+      url === "/b"
+        ? { ok: false, json: () => null }
+        : { ok: true, json: () => ({ features: url === "/a" ? [1] : [2, 3] }) }
+    )
+  );
+  expect(await fetchFeaturesFrom<number>(["/a", "/b", "/c"])).toEqual([
+    1, 2, 3,
+  ]);
+});
+
+test("fetchFeaturesFrom rethrows an abort", async () => {
+  const abort = new DOMException("aborted", "AbortError");
+  stubFetch(() => Promise.reject(abort));
+  // bun-types declare the `rejects` matchers as void, but bun resolves them
+  // asynchronously — dropping the await would end the test before it runs.
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(fetchFeaturesFrom(["/a", "/b"])).rejects.toBe(abort);
 });
 
 test("fetchFeatures unwraps the collection", async () => {

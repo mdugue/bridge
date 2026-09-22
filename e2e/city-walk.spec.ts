@@ -211,12 +211,15 @@ test.describe("desktop viewer", () => {
     expect(box?.width ?? 0).toBeGreaterThan(0);
     expect(box?.height ?? 0).toBeGreaterThan(0);
 
-    const poc = await page.evaluate(() => window.__poc);
-    expect(poc?.buildingCount ?? 0).toBeGreaterThan(0);
+    const poc = await page.evaluate(() => ({
+      firstFrame: window.__poc?.firstFrame,
+      stats: window.__poc?.stats,
+    }));
+    expect(poc.stats?.buildingCount ?? 0).toBeGreaterThan(0);
     // The first frame precedes "everything loaded"; both are set once ready.
-    expect(poc?.firstFrame).toBe(true);
-    expect(poc?.terrainVertexCount ?? 0).toBeGreaterThan(0);
-    expect(poc?.shadowsEnabled).toBe(true);
+    expect(poc.firstFrame).toBe(true);
+    expect(poc.stats?.terrainVertexCount ?? 0).toBeGreaterThan(0);
+    expect(poc.stats?.shadowsEnabled).toBe(true);
     expectNoErrors(errors);
   });
 
@@ -224,7 +227,7 @@ test.describe("desktop viewer", () => {
     // Counts come from what each loader actually put in the scene graph, so a
     // renamed GeoJSON property, a 404 or a thrown builder — all of which the
     // loaders swallow into an empty group — fails here instead of passing.
-    const stats = await page.evaluate(() => window.__poc?.layerStats);
+    const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
     expect(stats).toBeDefined();
     if (!stats) {
       return;
@@ -250,7 +253,9 @@ test.describe("desktop viewer", () => {
     // quarter into the bounds from the north-west. (The px<->EPSG math itself
     // is unit-tested in lib/city/minimap.test.ts; this proves the click
     // handler is wired to it with the right bounds and pixel size.)
-    const bounds = await page.evaluate(() => window.__poc?.terrainBounds);
+    const bounds = await page.evaluate(
+      () => window.__poc?.handle?.terrainBounds
+    );
     expect(bounds).toBeDefined();
     const [minX, minY, maxX, maxY] = bounds ?? [0, 0, 0, 0];
     const expectedX = minX + (maxX - minX) / 4;
@@ -264,7 +269,7 @@ test.describe("desktop viewer", () => {
         y: (minimapBox?.height ?? 0) / 4,
       },
     });
-    const pose = await page.evaluate(() => window.__poc?.getPose?.());
+    const pose = await page.evaluate(() => window.__poc?.handle?.getPose());
     // 50 m on a 2 km tile — loose enough for the rounding a click position
     // goes through, tight enough that a wrong quadrant or a flipped axis
     // (north-up vs canvas-down) fails.
@@ -277,11 +282,11 @@ test.describe("desktop viewer", () => {
     // Desktop grab-look: a primary-button mouse drag turns the view — no
     // pointer lock needed by default (immersive mode is opt-in).
     const headingBefore = await page.evaluate(
-      () => window.__poc?.getPose?.().heading ?? 0
+      () => window.__poc?.handle?.getPose().heading ?? 0
     );
     await dragAcrossCanvas(page, "mouse", 300);
     const headingAfter = await page.evaluate(
-      () => window.__poc?.getPose?.().heading ?? 0
+      () => window.__poc?.handle?.getPose().heading ?? 0
     );
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
     expectNoErrors(errors);
@@ -291,9 +296,9 @@ test.describe("desktop viewer", () => {
     // Applying a captured camera state must reproduce it (the basis for
     // copy/paste QA of an exact view).
     const roundTrip = await page.evaluate(() => {
-      const api = window.__poc;
-      if (!(api?.applyCameraState && api.getCameraState)) {
-        throw new Error("snapshot api incomplete");
+      const api = window.__poc?.handle;
+      if (!api) {
+        throw new Error("scene handle not published");
       }
       api.applyCameraState({
         mode: "fly",
@@ -328,9 +333,9 @@ test.describe("desktop viewer", () => {
       fov: 55,
     };
     await page.evaluate((t) => {
-      const api = window.__poc;
-      if (!(api?.flyToViewpoint && api.applyCameraState)) {
-        throw new Error("flight api incomplete");
+      const api = window.__poc?.handle;
+      if (!api) {
+        throw new Error("scene handle not published");
       }
       // SCENIC_VIEWS[0] (viewpoints.ts) — inside the primary tile.
       api.flyToViewpoint({
@@ -348,7 +353,9 @@ test.describe("desktop viewer", () => {
       api.applyCameraState(t);
     }, target);
     await waitForFrames(page, 3);
-    const state = await page.evaluate(() => window.__poc?.getCameraState?.());
+    const state = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
     expect(state?.pos.x).toBeCloseTo(target.pos.x, 0);
     expect(state?.pos.y).toBeCloseTo(target.pos.y, 0);
     expect(state?.pos.z).toBeCloseTo(target.pos.z, 0);
@@ -373,17 +380,17 @@ test.describe("desktop viewer", () => {
     expect(target?.extent).toBeDefined();
     const [minX, minY, minZ, maxX, maxY, maxZ] = target?.extent ?? [];
     const buildingsBefore = await page.evaluate(
-      () => window.__poc?.buildingCount ?? 0
+      () => window.__poc?.stats?.buildingCount ?? 0
     );
     expect(buildingsBefore).toBeGreaterThan(0);
     const trianglesBefore = await page.evaluate(
-      () => window.__poc?.layerStats?.city.triangles ?? 0
+      () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );
     await page.evaluate(
       ([easting, northing, midHeight, top]) => {
-        const api = window.__poc;
-        if (!(api?.flyTo && api.offset)) {
-          throw new Error("debug api incomplete");
+        const api = window.__poc?.handle;
+        if (!api) {
+          throw new Error("scene handle not published");
         }
         // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
         const x = easting - api.offset.cx;
@@ -405,15 +412,15 @@ test.describe("desktop viewer", () => {
     // scene graph the render loop maintains; demolishing in the same tick as
     // the fly has been seen to pick nothing on a loaded runner.
     await waitForFrames(page, 1);
-    await page.evaluate(() => window.__poc?.demolishAtCrosshair?.());
+    await page.evaluate(() => window.__poc?.handle?.demolishAtCrosshair());
     await page.waitForFunction(
-      (before) => (window.__poc?.buildingCount ?? 0) < before,
+      (before) => (window.__poc?.stats?.buildingCount ?? 0) < before,
       buildingsBefore,
       { timeout: slow(30_000) }
     );
     // The mesh itself shrank, not just the filtered document.
     const trianglesAfter = await page.evaluate(
-      () => window.__poc?.layerStats?.city.triangles ?? 0
+      () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );
     expect(trianglesAfter).toBeLessThan(trianglesBefore);
     expectNoErrors(errors);
@@ -431,42 +438,48 @@ test.describe("desktop viewer", () => {
     const CONTROL_STEPS = 6;
     for (let i = 0; i < CONTROL_STEPS; i++) {
       await page.evaluate((index) => {
+        // Driven through the look store the sliders write to — one set() per
+        // step is one batch of uniform writes.
+        const look = window.__poc?.look;
         const steps: Array<() => void> = [
-          () => window.__poc?.setDepthOfField?.(false),
+          () => look?.set({ dof: false }),
           // Post-stack uniforms compile nothing, so they share two steps: one
           // at full strength, one back down.
-          () => {
-            window.__poc?.setDepthOfField?.(true);
-            window.__poc?.setAtmosphere?.(1);
-            window.__poc?.setDepthGrading?.(1);
-            window.__poc?.setContactShadows?.(1);
-            window.__poc?.setPaperGrain?.(1);
-          },
-          () => {
-            window.__poc?.setAtmosphere?.(0.35);
-            window.__poc?.setDepthGrading?.(0.5);
-            window.__poc?.setContactShadows?.(0.5);
-            window.__poc?.setPaperGrain?.(0.25);
-          },
+          () =>
+            look?.set({
+              dof: true,
+              fogAmount: 1,
+              grading: 1,
+              contact: 1,
+              grain: 1,
+            }),
+          () =>
+            look?.set({
+              fogAmount: 0.35,
+              grading: 0.5,
+              contact: 0.5,
+              grain: 0.25,
+            }),
           // Clay's alpha-hash program compiles when transparency crosses 0, in
           // both directions — each crossing must reach a rendered frame. (0.8
           // used to get a step of its own; it crosses nothing 0.5 hasn't.)
-          () => window.__poc?.setBuildingTransparency?.(0.5),
-          () => window.__poc?.setBuildingTransparency?.(0),
+          () => look?.set({ transparency: 0.5 }),
+          () => look?.set({ transparency: 0 }),
           // Shader paths the aesthetic work added — the terrain's NDVI meadow
           // tint, the height-fog chunk patch, the water mist sheet, and the
           // crown shaders (multi-tuft swaps the instanced LOD meshes). They
           // compile independent programs, but one frame compiles them all.
-          () => {
-            window.__poc?.setHeightFog?.(1);
-            window.__poc?.setMeadowNdvi?.(1);
-            window.__poc?.setWaterMist?.(1);
-            window.__poc?.setTreeShimmer?.(1);
-            window.__poc?.setTreeTranslucency?.(1);
-            window.__poc?.setTreeLeafFlutter?.(1);
-            window.__poc?.setTreeLeafBright?.(1);
-            window.__poc?.setTreeMultiTuft?.(true);
-          },
+          () =>
+            look?.set({
+              heightFog: 1,
+              meadowNdvi: 1,
+              waterMist: 1,
+              shimmer: 1,
+              translucency: 1,
+              leafFlutter: 1,
+              leafBright: 1,
+              multiTuft: true,
+            }),
         ];
         steps[index]?.();
       }, i);
@@ -546,18 +559,20 @@ test.describe("mobile", () => {
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
     const headingBefore = await page.evaluate(
-      () => window.__poc?.getPose?.().heading ?? 0
+      () => window.__poc?.handle?.getPose().heading ?? 0
     );
     await dragAcrossCanvas(page, "touch", 400);
     const headingAfter = await page.evaluate(
-      () => window.__poc?.getPose?.().heading ?? 0
+      () => window.__poc?.handle?.getPose().heading ?? 0
     );
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
 
     // Double-tap on the ground ahead travels there. Synthetic events with
     // back-to-back timestamps: under software rendering the main thread is
     // busy for >320 ms between two real taps, which a real device never is.
-    const poseBefore = await page.evaluate(() => window.__poc?.getPose?.());
+    const poseBefore = await page.evaluate(() =>
+      window.__poc?.handle?.getPose()
+    );
     await page.evaluate(() => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
@@ -581,7 +596,7 @@ test.describe("mobile", () => {
     });
     await page.waitForFunction(
       (before) => {
-        const pose = window.__poc?.getPose?.();
+        const pose = window.__poc?.handle?.getPose();
         if (!(pose && before)) {
           return false;
         }

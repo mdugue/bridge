@@ -8,10 +8,14 @@ import {
   ShapeUtils,
   Vector2,
 } from "three";
-import { epsgToWorld } from "@/lib/city/ground-clamp";
-import { fetchFeatures } from "./fetch-optional";
+import type {
+  AreaFeature,
+  BridgeFeature,
+  RailFeature,
+} from "@/lib/city/features";
+import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { disposeObject3D } from "./three-utils";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
@@ -36,69 +40,36 @@ import { disposeObject3D } from "./three-utils";
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 
-// `properties` may be `null` in valid GeoJSON — every read goes through `?.`.
-interface RailFeature {
-  geometry: { coordinates: [number, number][]; type: "LineString" };
-  properties: { electrified?: number; tracks?: number } | null;
-}
-
-interface BridgeFeature {
-  geometry: { coordinates: [number, number][][]; type: "Polygon" };
-  properties: {
-    deck?: number[];
-    kind?: "other" | "path" | "rail" | "road";
-    name?: string | null;
-    /** OSM bridge:structure (e.g. "arch", "beam", "beam;arch") for arch synthesis */
-    structure?: string | null;
-  } | null;
-}
-
-/** exported for tests */
-export interface AreaFeature {
-  geometry: {
-    coordinates:
-      | [number, number][]
-      | [number, number][][]
-      | [number, number][][][];
-    type: "LineString" | "MultiPolygon" | "Polygon";
-  } | null;
-  properties: Record<string, unknown> | null;
-}
-
 /** Outer rings of a Polygon or MultiPolygon geometry (holes are ignored). */
 function outerRings(
   geometry: AreaFeature["geometry"] | null | undefined
 ): [number, number][][] {
   if (geometry?.type === "Polygon") {
-    const outer = (geometry.coordinates as [number, number][][])[0];
+    const outer = geometry.coordinates[0];
     return outer ? [outer] : [];
   }
   if (geometry?.type === "MultiPolygon") {
-    return (geometry.coordinates as [number, number][][][])
+    return geometry.coordinates
       .map((poly) => poly[0])
       .filter((ring): ring is [number, number][] => ring !== undefined);
   }
   return [];
 }
 
-export interface RailContext {
-  /** baked bridge-deck GeoJSONs (one per tile) */
-  bridgeUrls: string[];
-  heightAt: (x: number, y: number) => number | null;
+export interface RailContext extends GroundContext {
   heightFog?: HeightFogUniforms;
-  offset: { cx: number; cy: number };
-  /** baked OSM platform GeoJSONs (ODbL) */
-  platformUrls: string[];
-  /** baked dissolved ballast-area GeoJSONs */
-  railareaUrls: string[];
-  /** baked railway-track centreline GeoJSONs */
-  railUrls: string[];
-  signal?: AbortSignal;
 }
 
-export interface RailControl {
-  dispose: () => void;
-  group: Group;
+/** The whole block's baked features, every tile's lists merged. */
+export interface RailFeatures {
+  /** dissolved ballast areas (Basis-DLM ver03_f) */
+  ballast: AreaFeature[];
+  /** bridge decks (Basis-DLM ver06_f) */
+  bridges: BridgeFeature[];
+  /** OSM platforms (ODbL) */
+  platforms: AreaFeature[];
+  /** railway-track centrelines (Basis-DLM ver03_l) */
+  rails: RailFeature[];
 }
 
 const SAMPLE_M = 4; // densify polylines to this spacing (m)
@@ -393,35 +364,6 @@ interface Pt {
   x: number;
   y: number;
   z: number;
-}
-
-/** Walks a polyline emitting [ex,ey] points every `spacing` m (EPSG coords). */
-function densify(
-  coords: [number, number][],
-  spacing: number
-): [number, number][] {
-  const out: [number, number][] = [];
-  let carry = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const [x0, y0] = coords[i];
-    const [x1, y1] = coords[i + 1];
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
-    if (len === 0) {
-      continue;
-    }
-    for (let d = carry; d < len; d += spacing) {
-      const t = d / len;
-      out.push([x0 + dx * t, y0 + dy * t]);
-    }
-    carry = carry + Math.ceil((len - carry) / spacing) * spacing - len;
-  }
-  const last = coords.at(-1);
-  if (last) {
-    out.push(last);
-  }
-  return out;
 }
 
 /** A rail-bridge deck for lifting rails onto it (ride the deck, no ballast). */
@@ -872,7 +814,7 @@ function buildRails(
       continue;
     }
     const tracks = Math.min(Math.max(f.properties?.tracks ?? 1, 1), 3);
-    const dense = densify(f.geometry.coordinates, SAMPLE_M);
+    const dense = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
     // Split into runs of points with valid ground (never bridge a NoData gap).
     let run: Pt[] = [];
     const flush = () => {
@@ -924,10 +866,7 @@ function buildPlatforms(
       }
     } else if (g?.type === "LineString") {
       const run: Pt[] = [];
-      for (const [ex, ey] of densify(
-        g.coordinates as [number, number][],
-        SAMPLE_M
-      )) {
+      for (const [ex, ey] of subdividePolyline(g.coordinates, SAMPLE_M)) {
         const ground = ctx.heightAt(ex, ey);
         if (ground !== null) {
           const w = epsgToWorld(ex, ey, ctx.offset);
@@ -941,46 +880,31 @@ function buildPlatforms(
 }
 
 /**
- * Loads the baked rail/bridge/ballast/platform GeoJSONs for the WHOLE tile block
- * (one call, cross-tile heightAt) and builds the stylized geometry on the Y-up
- * scene. Bridges build first so the rails can ride their decks. Non-fatal.
+ * Builds the WHOLE tile block's rails, bridges, ballast and platforms (one
+ * call, cross-tile heightAt) as stylized geometry on the Y-up scene. Bridges
+ * build first so the rails can ride their decks. Empty inputs yield an empty
+ * group; the group is freed with the scene (disposeObject3D).
  */
-export async function loadRail(ctx: RailContext): Promise<RailControl> {
+export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   const group = new Group();
   group.name = "rail";
 
-  const fetchAll = <T>(urls: string[]) =>
-    Promise.all(urls.map((u) => fetchFeatures<T>(u, ctx.signal))).then(
-      (lists) => lists.flat()
-    );
-
-  const [railFeatures, bridgeFeatures, railareaFeatures, platformFeatures] =
-    await Promise.all([
-      fetchAll<RailFeature>(ctx.railUrls),
-      fetchAll<BridgeFeature>(ctx.bridgeUrls),
-      fetchAll<AreaFeature>(ctx.railareaUrls),
-      fetchAll<AreaFeature>(ctx.platformUrls),
-    ]);
-
-  const { meshes: bridgeMeshes, decks } = buildBridges(bridgeFeatures, ctx);
-  group.add(...bridgeMeshes);
-  const ballast = buildBallast(railareaFeatures, ctx);
+  const { meshes: bridgeMeshes, decks } = buildBridges(features.bridges, ctx);
+  // add() with no arguments logs a three error, so guard the spread.
+  if (bridgeMeshes.length > 0) {
+    group.add(...bridgeMeshes);
+  }
+  const ballast = buildBallast(features.ballast, ctx);
   if (ballast) {
     group.add(ballast);
   }
-  const rails = buildRails(railFeatures, ctx, decks);
+  const rails = buildRails(features.rails, ctx, decks);
   if (rails) {
     group.add(rails);
   }
-  const platforms = buildPlatforms(platformFeatures, ctx);
+  const platforms = buildPlatforms(features.platforms, ctx);
   if (platforms) {
     group.add(platforms);
   }
-
-  return {
-    group,
-    dispose: () => {
-      disposeObject3D(group);
-    },
-  };
+  return group;
 }

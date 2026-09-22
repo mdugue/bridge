@@ -1,4 +1,5 @@
 import { getPosition } from "suncalc";
+import { DEG2RAD } from "./pose";
 
 /**
  * Solar direction math, kept three-free so it is unit-testable.
@@ -12,8 +13,6 @@ import { getPosition } from "suncalc";
  *  - World (three.js scene): the city group is rotated -90° about X so the
  *    data's Z-up becomes Y-up. That maps East=+X, Up=+Y, North=-Z.
  */
-
-const DEG2RAD = Math.PI / 180;
 
 export interface Enu {
   east: number;

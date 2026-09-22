@@ -1,6 +1,6 @@
 import { Matrix4, type PerspectiveCamera, Quaternion, Vector3 } from "three";
+import { DEG2RAD, directionOf, type Xyz } from "@/lib/city/pose";
 
-const DEG2RAD = Math.PI / 180;
 /** s — minimum flight time so even a tiny hop reads as a deliberate glide. */
 const MIN_DURATION = 1.4;
 /** s — cap so the longest cross-tile flight never overstays its welcome. */
@@ -20,7 +20,7 @@ export interface FlightTarget {
   headingDeg: number;
   /** + = looking up, − = looking down. */
   pitchDeg: number;
-  pos: { x: number; y: number; z: number };
+  pos: Xyz;
 }
 
 interface ActiveFlight {
@@ -60,13 +60,12 @@ function clamp(value: number, min: number, max: number): number {
  * A self-contained camera tween for the scenic "fly to a viewpoint" buttons.
  * Position eases along a gently bowed arc (so it reads as flight, not a slide)
  * while orientation slerps — quaternions sidestep the heading wrap / gimbal
- * pitfalls of lerping Euler angles. The target orientation is built exactly the
- * way create-app's applyCameraState derives a look direction, so a flight lands
- * on the identical pose a snapshot would restore instantly.
+ * pitfalls of lerping Euler angles. The target orientation is built from the
+ * same direction convention (lib/city/pose.ts) applyCameraState uses, so a
+ * flight lands on the identical pose a snapshot would restore instantly.
  */
 export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
   let flight: ActiveFlight | null = null;
-  const dir = new Vector3();
   const lookAt = new Vector3();
   const rot = new Matrix4();
   const tmpPos = new Vector3();
@@ -77,11 +76,8 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
     headingDeg: number,
     pitchDeg: number
   ) => {
-    const h = headingDeg * DEG2RAD;
-    const p = pitchDeg * DEG2RAD;
-    const cp = Math.cos(p);
-    dir.set(Math.sin(h) * cp, Math.sin(p), -Math.cos(h) * cp);
-    lookAt.copy(endPos).add(dir);
+    const d = directionOf(headingDeg * DEG2RAD, pitchDeg * DEG2RAD);
+    lookAt.set(endPos.x + d.x, endPos.y + d.y, endPos.z + d.z);
     rot.lookAt(endPos, lookAt, camera.up);
     return new Quaternion().setFromRotationMatrix(rot);
   };
