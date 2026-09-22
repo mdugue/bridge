@@ -7,10 +7,11 @@ import {
   stagesDoneLabel,
 } from "@/lib/city/load-stages";
 import {
-  HANDOVER_SEGMENT_NAME,
-  HANDOVER_SHARE_CLASS,
+  HANDOVER_ENTER,
+  HANDOVER_SHARE,
   HANDOVER_STACK_NAME,
   HANDOVER_SURFACE_NAME,
+  handoverSegmentName,
 } from "./handover";
 
 /**
@@ -26,7 +27,11 @@ function StackGlyph({ plates }: { plates: LoadStageState[] }) {
   // are enough, dimmed while their layer has not landed.
   const bars = plates.slice(0, 3);
   return (
-    <ViewTransition name={HANDOVER_STACK_NAME} share={HANDOVER_SHARE_CLASS}>
+    <ViewTransition
+      default="none"
+      name={HANDOVER_STACK_NAME}
+      share={HANDOVER_SHARE}
+    >
       <span aria-hidden className="flex flex-col gap-0.5">
         {bars.map((stage) => (
           <span
@@ -52,8 +57,9 @@ function Segment({ stage }: { stage: LoadStageState }) {
   const pct = Math.round(stage.fraction * 100);
   return (
     <ViewTransition
-      name={HANDOVER_SEGMENT_NAME(stage.id)}
-      share={HANDOVER_SHARE_CLASS}
+      default="none"
+      name={handoverSegmentName(stage.id)}
+      share={HANDOVER_SHARE}
     >
       <span
         className="h-1 w-5.5 rounded-full"
@@ -73,32 +79,38 @@ export function StreamPill({ stages }: { stages: LoadStageState[] }) {
   const active = activeStage(stages);
   const title = active ? active.streaming : "Alles geladen";
   return (
-    <output
-      aria-live="polite"
-      className="hud-pill pointer-events-none absolute top-4 left-1/2 z-20 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full pr-3.5 pl-3 text-hud-foreground"
-    >
+    <div className="hud-pill pointer-events-none absolute top-4 left-1/2 z-20 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full pr-3.5 pl-3 text-hud-foreground">
       {/* The surface the full-bleed loading screen shrank into. Separate from
           the content so the content can fade in on top of it. */}
-      <ViewTransition name={HANDOVER_SURFACE_NAME} share={HANDOVER_SHARE_CLASS}>
+      <ViewTransition
+        default="none"
+        name={HANDOVER_SURFACE_NAME}
+        share={HANDOVER_SHARE}
+      >
         <span className="absolute inset-0 rounded-full bg-hud/85 shadow-lg backdrop-blur-lg" />
       </ViewTransition>
 
       <StackGlyph plates={stages.filter((stage) => stage.plate)} />
-      <ViewTransition enter="hud-fade-in">
-        <span className="relative font-medium text-xs leading-none">
+      <ViewTransition default="none" enter={HANDOVER_ENTER}>
+        {/* Only the stage name is announced: the segments carry no text and
+            the counter beside them would otherwise repeat it. */}
+        <output
+          aria-live="polite"
+          className="relative font-medium text-xs leading-none"
+        >
           {title}
-        </span>
+        </output>
       </ViewTransition>
       <span className="relative flex gap-0.75">
         {stages.map((stage) => (
           <Segment key={stage.id} stage={stage} />
         ))}
       </span>
-      <ViewTransition enter="hud-fade-in">
+      <ViewTransition default="none" enter={HANDOVER_ENTER}>
         <span className="relative font-mono text-[11px] leading-none tabular-nums opacity-65">
           {stagesDoneLabel(stages)}
         </span>
       </ViewTransition>
-    </output>
+    </div>
   );
 }

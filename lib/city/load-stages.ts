@@ -230,9 +230,18 @@ export function loadHeadline(states: LoadStageState[]): string {
   if (active) {
     return active.status;
   }
-  return states.every((stage) => stage.done)
-    ? "Alles geladen"
-    : "Bereit — du kannst losgehen";
+  if (states.every((stage) => stage.done)) {
+    return "Alles geladen";
+  }
+  // Nothing in flight and not finished: either the scene has not reported
+  // anything yet (the first moments, every row still "wartet") or we are
+  // between two stages. Only the second of those is walkable.
+  const done = states
+    .filter((stage) => stage.done)
+    .reduce((sum, stage) => sum + stage.weight, 0);
+  return done >= WALKABLE_PERCENT
+    ? "Bereit — du kannst losgehen"
+    : "Szene wird vorbereitet";
 }
 
 /** "3/6" for the pill: how many stages are behind us. */

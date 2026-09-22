@@ -82,6 +82,9 @@ describe("load stages", () => {
   });
 
   test("the headline follows the active stage, then the end state", () => {
+    // Before the scene has reported anything, nothing is walkable yet — the
+    // headline must not claim otherwise.
+    expect(loadHeadline(loadStageStates({}))).toBe("Szene wird vorbereitet");
     expect(loadHeadline(loadStageStates({ buildings: 0.5 }))).toBe(
       "Gebäude werden geladen"
     );

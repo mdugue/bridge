@@ -46,7 +46,9 @@ export function SceneTabs({
               className={cn(
                 "h-7.5 rounded-md font-medium text-muted-foreground text-xs transition-colors",
                 "hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1",
-                "data-selected:bg-background data-selected:text-foreground data-selected:shadow-sm"
+                // base-ui marks the selected tab with `data-active`, the same
+                // hook the vendored sidebar primitives style against.
+                "data-active:bg-background data-active:text-foreground data-active:shadow-sm"
               )}
               key={tab.id}
               value={tab.id}

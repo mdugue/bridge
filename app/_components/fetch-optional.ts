@@ -86,12 +86,19 @@ function countingStream(
   onBytes: BytesProgress
 ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
   let loaded = 0;
+  let reported = -1;
   return new TransformStream({
     transform(chunk, controller) {
       loaded += chunk.byteLength;
-      // The last chunk lands with the body still to inflate; 1 is reported by
-      // the caller once the artifact is actually built.
-      onBytes(Math.min(0.99, loaded / total));
+      // Chunks arrive far faster than anything can be shown: report whole
+      // percent steps only, which is also all the HUD renders.
+      const percent = Math.min(99, Math.floor((loaded / total) * 100));
+      if (percent !== reported) {
+        reported = percent;
+        // The last chunk lands with the body still to inflate; 1 is reported
+        // by the caller once the artifact is actually built.
+        onBytes(percent / 100);
+      }
       controller.enqueue(chunk);
     },
   });

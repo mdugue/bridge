@@ -294,6 +294,31 @@ test.describe("desktop viewer", () => {
     expectNoErrors(errors);
   });
 
+  test("the sidebar tabs reach every group of controls", async () => {
+    // The controls are no longer one long list: Erkunden holds the map and
+    // the vantages, Szene the sun and the look groups (each collapsed), and
+    // Erweitert the tools and counters. A slider is only two taps away, and
+    // this is what proves the three panels are actually wired.
+    await openSidebar(page);
+    await expect(page.getByText("Aussichtspunkte")).toBeVisible({
+      timeout: slow(30_000),
+    });
+
+    await page.getByRole("tab", { name: "Szene" }).click();
+    await expect(page.getByText("Sonne & Zeit")).toBeVisible();
+    // Look sliders live one collapsed group down, and stay collapsed until
+    // asked for — that is the point of the restructure.
+    await expect(page.getByText("Boden-Verlauf")).toHaveCount(0);
+    await page.getByRole("button", { name: /^Gebäude/ }).click();
+    await expect(page.getByText("Boden-Verlauf")).toBeVisible({
+      timeout: slow(30_000),
+    });
+
+    await page.getByRole("tab", { name: "Erweitert" }).click();
+    await expect(page.getByText("Statistik")).toBeVisible();
+    expectNoErrors(errors);
+  });
+
   test("grab-look drag turns the view", async () => {
     // Desktop grab-look: a primary-button mouse drag turns the view — no
     // pointer lock needed by default (immersive mode is opt-in).
@@ -628,13 +653,9 @@ test.describe("mobile", () => {
     // Drawer opens with the scene settings (generous timeout: the main
     // thread shares time with software-rendered frames).
     await page.getByRole("button", { name: "Szeneneinstellungen" }).tap();
+    // The Erkunden tab is what a drawer opens on; the tabbed structure
+    // itself is asserted on the desktop page, which is already booted.
     await expect(page.getByText("Aussichtspunkte")).toBeVisible({
-      timeout: slow(30_000),
-    });
-    // The look sliders moved behind the Szene tab, one collapsed group down.
-    await page.getByRole("tab", { name: "Szene" }).tap();
-    await page.getByRole("button", { name: /^Gebäude/ }).tap();
-    await expect(page.getByText("Boden-Verlauf")).toBeVisible({
       timeout: slow(30_000),
     });
 

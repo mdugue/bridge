@@ -137,6 +137,19 @@ function minutesOfDay(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
+/** True for a real instant — suncalc returns an Invalid Date at the poles
+ *  and on days the sun never rises or sets. */
+function isRealDate(date: Date | null | undefined): date is Date {
+  return date instanceof Date && !Number.isNaN(date.getTime());
+}
+
+/** A sunrise/sunset label, or an em dash when there is no such moment. */
+function sunTimeLabel(arrow: string, date: Date | null | undefined): string {
+  return isRealDate(date)
+    ? `${arrow} ${formatMinutes(minutesOfDay(date))}`
+    : `${arrow} –`;
+}
+
 /** A labelled 0–100(+) percent slider that writes straight to the look store. */
 function PctSlider({
   description,
@@ -164,8 +177,7 @@ function PctSlider({
       <FieldLabel className="justify-between font-medium text-xs" htmlFor={id}>
         {label}
         <span className="font-mono font-normal text-[11px] text-muted-foreground tabular-nums">
-          {value}
-          {unit}
+          {value} {unit}
         </span>
       </FieldLabel>
       <Slider
@@ -464,9 +476,7 @@ function SunControls({
   // The track is the day itself: night at both ends, the warm band anchored to
   // this date's real sunrise and sunset rather than to fixed hours.
   const at = (date: Date | null | undefined, fallback: number) =>
-    date && !Number.isNaN(date.getTime())
-      ? minutesOfDay(date) / (24 * 60)
-      : fallback;
+    isRealDate(date) ? minutesOfDay(date) / (24 * 60) : fallback;
   const rise = at(sunrise, 0.29);
   const set = at(sunset, 0.8);
   const gradient =
@@ -526,13 +536,9 @@ function SunControls({
       />
       <div className="flex justify-between font-mono text-[10px] text-muted-foreground leading-none">
         <span>0:00</span>
-        <span>
-          {sunrise ? `↑ ${formatMinutes(minutesOfDay(sunrise))}` : "↑ –"}
-        </span>
+        <span>{sunTimeLabel("↑", sunrise)}</span>
         <span>12:00</span>
-        <span>
-          {sunset ? `↓ ${formatMinutes(minutesOfDay(sunset))}` : "↓ –"}
-        </span>
+        <span>{sunTimeLabel("↓", sunset)}</span>
         <span>24:00</span>
       </div>
     </div>
@@ -553,12 +559,12 @@ function ToolButton({
 }) {
   return (
     <button
-      className="flex h-8.5 items-center gap-2.5 rounded-lg border bg-background px-2.5 text-left font-medium text-xs hover:border-ring"
+      className="flex min-h-8.5 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring"
       onClick={onClick}
       type="button"
     >
       <Icon className="size-3.5 shrink-0 opacity-70" />
-      <span className="flex-1 truncate">{label}</span>
+      <span className="flex-1 text-pretty leading-snug">{label}</span>
       <span className="inline-flex h-4.5 shrink-0 items-center rounded-sm bg-muted px-1.5 font-medium text-[10px] text-muted-foreground leading-none">
         {hint}
       </span>

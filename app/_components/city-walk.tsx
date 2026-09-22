@@ -2,6 +2,7 @@
 
 import { HammerIcon, HousePlusIcon, SlidersHorizontalIcon } from "lucide-react";
 import {
+  addTransitionType,
   type CSSProperties,
   startTransition,
   useCallback,
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import {
+  LOAD_STAGES,
   loadPercent,
   type LoadStageState,
   loadStageStates,
@@ -34,6 +36,7 @@ import {
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { TileUrls } from "@/lib/city/tile";
 import { ControlHintBar } from "./control-hints";
+import { HANDOVER_TYPE } from "./handover";
 import {
   type CityWalkHandle,
   type CityWalkStats,
@@ -75,6 +78,17 @@ type Status =
 const INITIAL_DATE = new Date();
 const INITIAL_MINUTES = 14 * 60;
 
+/**
+ * How long the handover may stay pending before it is taken urgently, without
+ * the morph. A React transition is interruptible and yields to the browser, so
+ * on a device whose frames cost hundreds of milliseconds — which is exactly
+ * what the first frames of this scene cost — it can sit unrendered for
+ * seconds. The loading screen would then cover a scene that is ready to walk
+ * in, which is the one thing this redesign must never do. The animation is the
+ * part that is allowed to be dropped, not the first frame.
+ */
+const HANDOVER_FALLBACK_MS = 1500;
+
 /** Local-time instant from a calendar day + minutes-of-day slider. */
 function composeDate(day: Date, minutes: number): Date {
   return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes);
@@ -100,13 +114,31 @@ function SettingsToggle() {
   );
 }
 
-/** The hint bar and joystick hide behind the sidebar rather than under it. */
-function SceneOverlays({ coarse }: { coarse: boolean }) {
+/**
+ * The overlays that belong to the scene, not to the panel: the key hints and
+ * the joystick. Both step aside while the sidebar is open — on a phone the
+ * sidebar is a sheet, so a joystick left mounted underneath would be a dead
+ * control the player can still see.
+ */
+function SceneOverlays({
+  coarse,
+  onMove,
+}: {
+  coarse: boolean;
+  onMove: (x: number, y: number) => void;
+}) {
   const { state, isMobile, openMobile } = useSidebar();
   if (isMobile ? openMobile : state === "expanded") {
     return null;
   }
-  return <ControlHintBar coarse={coarse} />;
+  return (
+    <>
+      <ControlHintBar coarse={coarse} />
+      <div className="absolute bottom-20 left-5">
+        <VirtualJoystick onChange={onMove} />
+      </div>
+    </>
+  );
 }
 
 export default function CityWalk({
@@ -135,9 +167,12 @@ export default function CityWalk({
         }
   );
   // What the scene has reported per load stage (lib/city/load-stages.ts): the
-  // loading screen, the handover and the pill all read these.
-  const [fractions, setFractions] = useState<StageFractions>({});
-  const [skipped, setSkipped] = useState<SkippedStages>({});
+  // loading screen, the handover and the pill all read this. One piece of
+  // state, not two, because a streaming failure has to settle both at once.
+  const [progress, setProgress] = useState<{
+    fractions: StageFractions;
+    skipped: SkippedStages;
+  }>({ fractions: {}, skipped: {} });
   const [streamError, setStreamError] = useState<string | null>(null);
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   const [sun, setSun] = useState<SunState | null>(null);
@@ -183,6 +218,7 @@ export default function CityWalk({
     }
     let cancelled = false;
     let handle: CityWalkHandle | null = null;
+    let handoverFallback: ReturnType<typeof setTimeout> | undefined;
     const aborter = new AbortController();
 
     createCityWalkApp({
@@ -198,10 +234,17 @@ export default function CityWalk({
         if (cancelled) {
           return;
         }
-        setFractions((prev) => ({ ...prev, [id]: fraction }));
-        if (isSkipped) {
-          setSkipped((prev) => ({ ...prev, [id]: true }));
-        }
+        // Deliberately NOT an urgent update. These arrive many times a
+        // second while a tile streams, and urgent work at that rate starves
+        // the one transition that matters — the handover below, which lands
+        // ten seconds late without this. handover.ts scopes the morph to its
+        // own transition type so these updates animate nothing.
+        startTransition(() => {
+          setProgress((prev) => ({
+            fractions: { ...prev.fractions, [id]: fraction },
+            skipped: isSkipped ? { ...prev.skipped, [id]: true } : prev.skipped,
+          }));
+        });
       },
       onLoaded: () => {
         if (!cancelled) {
@@ -209,24 +252,40 @@ export default function CityWalk({
         }
       },
       onError: (message) => {
-        if (!cancelled) {
-          setStreamError(message);
+        if (cancelled) {
+          return;
         }
+        setStreamError(message);
+        // loadRest threw: whatever had not landed is not coming. Settle those
+        // stages, or the pill would claim forever that a layer is loading and
+        // never reach the state where it unmounts.
+        setProgress((prev) => {
+          const settled = { ...prev.skipped };
+          for (const stage of LOAD_STAGES) {
+            if ((prev.fractions[stage.id] ?? 0) < 1) {
+              settled[stage.id] = true;
+            }
+          }
+          return { ...prev, skipped: settled };
+        });
       },
       onStats: (s) => {
         if (cancelled) {
           return;
         }
-        setStats(s);
         updatePocDebug({ stats: s });
         const h = handleRef.current;
-        if (h) {
-          setFootprints(h.getFootprints());
-        }
+        startTransition(() => {
+          setStats(s);
+          if (h) {
+            setFootprints(h.getFootprints());
+          }
+        });
       },
       onFps: (value) => {
         if (!cancelled) {
-          setFps(value);
+          // Twice a second, read only in the Erweitert tab's counters.
+          startTransition(() => setFps(value));
         }
       },
       onModeChange: (m) => {
@@ -256,10 +315,19 @@ export default function CityWalk({
         setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({ handle: h, look, firstFrame: true });
-        // The one update that must be a transition: React only runs a view
-        // transition for a transition, and this is the frame where the
-        // loading screen becomes the pill.
-        startTransition(() => setStatus({ phase: "running" }));
+        // The frame where the loading screen becomes the pill. Tagged, so
+        // that the shared-element morph runs for this update and for no
+        // other one (see handover.ts).
+        startTransition(() => {
+          addTransitionType(HANDOVER_TYPE);
+          setStatus({ phase: "running" });
+        });
+        handoverFallback = setTimeout(() => {
+          // Still pending: take it urgently and lose the morph.
+          setStatus((prev) =>
+            prev.phase === "loading" ? { phase: "running" } : prev
+          );
+        }, HANDOVER_FALLBACK_MS);
       })
       .catch((err: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
@@ -276,6 +344,7 @@ export default function CityWalk({
     return () => {
       cancelled = true;
       aborter.abort();
+      clearTimeout(handoverFallback);
       handleRef.current = null;
       handle?.dispose();
       // The hook must not keep a disposed scene callable (or alive): the
@@ -350,8 +419,11 @@ export default function CityWalk({
     setSnapshotMsg("Snapshot angewendet");
   };
 
-  const stages: LoadStageState[] = loadStageStates(fractions, skipped);
-  const percent = loadPercent(fractions, skipped);
+  const stages: LoadStageState[] = loadStageStates(
+    progress.fractions,
+    progress.skipped
+  );
+  const percent = loadPercent(progress.fractions, progress.skipped);
   const booted = status.phase === "running";
   const everythingLoaded = stages.every((stage) => stage.done);
 
@@ -400,13 +472,10 @@ export default function CityWalk({
             )}
 
             <SettingsToggle />
-            <SceneOverlays coarse={coarse} />
-
-            <div className="absolute bottom-20 left-5">
-              <VirtualJoystick
-                onChange={(x, y) => handleRef.current?.setMoveInput(x, y)}
-              />
-            </div>
+            <SceneOverlays
+              coarse={coarse}
+              onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+            />
 
             {coarse && (
               <div className="absolute right-4 bottom-20 flex flex-col gap-2">
