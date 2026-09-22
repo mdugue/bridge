@@ -14,9 +14,9 @@ import {
  * glyph, each swatch became a segment, and the layers that are still streaming
  * keep filling them while you walk around.
  *
- * It arrives on a CSS entrance — opacity and transform, composited off the
- * main thread so it keeps its frame rate while the renderer is busy. See
- * handover.ts for why this is a cross-fade and not a morph.
+ * It does not animate in: it is simply there when the frosted loading screen
+ * is removed, part of the same single frame in which the city goes sharp. See
+ * handover.ts for why nothing animates at that moment.
  */
 
 /** The two ends of a segment, as the HUD's own foreground token. */
@@ -103,7 +103,7 @@ export function StreamPill({ stages }: { stages: LoadStageState[] }) {
   return (
     <div
       className={cn(
-        "hud-pill pointer-events-none absolute top-4 left-1/2 z-20 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full pr-3.5 pl-3 text-hud-foreground transition-opacity duration-400",
+        "pointer-events-none absolute top-4 left-1/2 z-20 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full pr-3.5 pl-3 text-hud-foreground transition-opacity duration-400",
         phase === "leaving" && "opacity-0"
       )}
     >

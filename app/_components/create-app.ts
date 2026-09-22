@@ -249,8 +249,8 @@ export interface CityWalkHandle {
   /**
    * Begins everything after the first frame — the neighbour tiles, the
    * vegetation, the rails, the terrain BVH. Held back so its synchronous
-   * chunks cannot stutter the handover animation; idempotent, and a no-op
-   * once the scene is disposed.
+   * chunks cannot stutter the frames the city arrives in; idempotent, and a
+   * no-op once the scene is disposed.
    */
   startStreaming: () => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
@@ -1277,15 +1277,15 @@ async function bootApp(
    * tile's canopy build (tens of thousands of instances, one synchronous
    * pass) and the terrain BVH (`computeBoundsTree` on a 1024² mesh). The BVH
    * is scheduled through requestIdleCallback with a 1.5 s timeout, which is a
-   * guarantee that it runs — squarely inside the 1.4 s handover animation if
-   * nothing holds it back. Both stall the main thread for long enough to eat
-   * a dozen frames, and the handover is the one moment the HUD is animating.
+   * guarantee that it runs — squarely inside the handover if nothing holds it
+   * back. Both stall the main thread for long enough to eat a dozen frames,
+   * and the handover is where the city appears behind the frosted loading
+   * screen and the player takes over.
    *
    * So the scene waits. It is already walkable and already rendering; the
    * only thing the wait costs is a second of streaming, and what it buys is
-   * an animation that does not stutter. `startStreaming` is idempotent and
-   * the HUD calls it when the morph is over (city-walk.tsx), with its own
-   * fallback timer for the browsers that never animate at all.
+   * a first impression at frame rate. `startStreaming` is idempotent and the
+   * HUD calls it once the veil is gone (city-walk.tsx).
    */
   let streamingStarted = false;
   const startStreaming = (): void => {

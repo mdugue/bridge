@@ -19,13 +19,14 @@ import { currentSceneBudget, type SceneBudget } from "./scene-profile";
  * slate with "Loading 3D viewer…") means the redesign starts by replacing a
  * different loading screen.
  *
- * It is a plain render, not a transition, so the shared names stay dormant and
- * the handover still belongs to the viewer's own screen.
+ * The screen itself is translucent — it frosts whatever the viewer renders
+ * behind it (see handover.ts) — and there is no canvas yet, so it gets the
+ * opaque scrim the viewer's own shell would otherwise provide.
  */
 function BootScreen() {
   return (
-    <div className="relative h-full w-full">
-      <LoadScreen leaving={false} percent={0} stages={loadStageStates({})} />
+    <div className="relative h-full w-full bg-[image:var(--hud-scrim)]">
+      <LoadScreen handedOver={false} percent={0} stages={loadStageStates({})} />
     </div>
   );
 }

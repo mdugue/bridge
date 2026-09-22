@@ -35,7 +35,7 @@ import {
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { TileUrls } from "@/lib/city/tile";
 import { ControlHintBar } from "./control-hints";
-import { handoverDurationMs } from "./handover";
+import { VEIL_HOLD_MS } from "./handover";
 import {
   type CityWalkHandle,
   type CityWalkStats,
@@ -66,8 +66,9 @@ interface Props {
 
 /**
  * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
- * is the live scene with the streaming pill. The flip happens in a React
- * transition so the two can morph into each other — see handover.ts.
+ * is the live scene with the streaming pill. Nothing animates between them —
+ * the loading screen is frosted glass that the city arrives behind and that is
+ * then removed in a single frame. See handover.ts.
  */
 type Status =
   | { phase: "error"; message: string }
@@ -78,7 +79,7 @@ type Status =
 const INITIAL_DATE = new Date();
 const INITIAL_MINUTES = 14 * 60;
 
-/** A little air after the morph before the heavy work resumes. */
+/** A little air after the veil is gone before the heavy work resumes. */
 const STREAM_SETTLE_MS = 250;
 
 /** Local-time instant from a calendar day + minutes-of-day slider. */
@@ -167,8 +168,9 @@ export default function CityWalk({
     skipped: SkippedStages;
   }>({ fractions: {}, skipped: {} });
   const [streamError, setStreamError] = useState<string | null>(null);
-  // Kept past the handover so it can fade rather than blink out.
-  const [loadScreenMounted, setLoadScreenMounted] = useState(true);
+  // Kept past the handover: the city arrives behind the frosted screen, which
+  // is only then removed (handover.ts).
+  const [veilUp, setVeilUp] = useState(true);
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   const [sun, setSun] = useState<SunState | null>(null);
   const [day, setDay] = useState(INITIAL_DATE);
@@ -212,7 +214,7 @@ export default function CityWalk({
     }
     let cancelled = false;
     let handle: CityWalkHandle | null = null;
-    let handoverFallback: ReturnType<typeof setTimeout> | undefined;
+    let veilTimer: ReturnType<typeof setTimeout> | undefined;
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
     const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
@@ -230,11 +232,10 @@ export default function CityWalk({
         if (cancelled) {
           return;
         }
-        // Deliberately NOT an urgent update. These arrive many times a
-        // second while a tile streams, and urgent work at that rate starves
-        // the one transition that matters — the handover below, which lands
-        // ten seconds late without this. handover.ts scopes the morph to its
-        // own transition type so these updates animate nothing.
+        // Deliberately NOT an urgent update. These arrive many times a second
+        // while a tile streams, and urgent work at that rate starves whatever
+        // else React has queued — including, when it was still a transition,
+        // the handover itself, which landed ten seconds late without this.
         startTransition(() => {
           setProgress((prev) => ({
             fractions: { ...prev.fractions, [id]: fraction },
@@ -311,23 +312,19 @@ export default function CityWalk({
         setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({ handle: h, look, firstFrame: true });
-        // The frame where the loading screen lifts and the pill arrives.
-        // Urgent on purpose: the cross-fade is CSS, so React has nothing to
-        // wait for, and the scene is walkable the moment this commits.
+        // The frame the scene goes live in. The loading screen stays up and
+        // stops taking input: the city is now rendering behind its glass, and
+        // the player can already look around through it.
         setStatus({ phase: "running" });
-        // Then drop the loading screen once its fade has played.
-        handoverFallback = setTimeout(
-          () => setLoadScreenMounted(false),
-          handoverDurationMs()
-        );
+        // Then the glass is removed, in one frame, with nothing in between.
+        veilTimer = setTimeout(() => setVeilUp(false), VEIL_HOLD_MS);
         // The neighbour tiles, the vegetation and the terrain BVH wait until
-        // the morph has played: each is a long synchronous task, and this is
-        // the one moment the HUD is animating (see create-app's
-        // startStreaming). Under reduced motion the duration is ~0 and this
-        // is effectively immediate.
+        // then: each is a long synchronous task, and the frames while the city
+        // is arriving — and the first ones the player actually steers — are
+        // the worst possible place for them (see create-app's startStreaming).
         streamFallback = setTimeout(
           beginStreaming,
-          handoverDurationMs() + STREAM_SETTLE_MS
+          VEIL_HOLD_MS + STREAM_SETTLE_MS
         );
       })
       .catch((err: unknown) => {
@@ -345,7 +342,7 @@ export default function CityWalk({
     return () => {
       cancelled = true;
       aborter.abort();
-      clearTimeout(handoverFallback);
+      clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
       handle?.dispose();
@@ -435,9 +432,9 @@ export default function CityWalk({
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
         <div className="absolute inset-0" ref={mountRef} />
 
-        {loadScreenMounted && (
+        {veilUp && (
           <LoadScreen
-            leaving={status.phase === "running"}
+            handedOver={status.phase === "running"}
             percent={percent}
             stages={stages}
           />

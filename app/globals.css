@@ -76,6 +76,17 @@
     oklch(0.25 0.015 256.8) 0%,
     oklch(0.195 0.011 260.66) 70%
   );
+  /* The same surface, translucent: the loading screen is frosted glass over
+     the canvas, not a curtain in front of it. While the scene has nothing to
+     show it sits on the opaque scrim above and reads exactly as dark; the
+     moment the first frame is drawn the city appears behind it, softened.
+     Denser towards the edges, where the stage list and the bar need to stay
+     legible against a bright sky. */
+  --hud-veil: radial-gradient(
+    ellipse at 50% 40%,
+    oklch(0.25 0.015 256.8 / 0.82) 0%,
+    oklch(0.195 0.011 260.66 / 0.93) 70%
+  );
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -141,67 +152,9 @@
 }
 
 /* --- Laden → Erster Frame handover -------------------------------------
-   The loading screen lifts and the pill arrives. Opacity and transform ONLY:
-   those are composited off the main thread, so the animation keeps its frame
-   rate while the renderer is busy with the scene's first frames — which is
-   the whole reason this is no longer a view-transition morph (the group of a
-   view transition animates width and height, i.e. main-thread layout, at
-   exactly the wrong moment). See app/_components/handover.ts.
-
-   Short on purpose: the scene is walkable the instant the scrim starts to
-   lift, and half a second of cross-fade is all the story needs. */
-:root {
-  --handover-duration: 450ms;
-  --handover-ease: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hud-leaving {
-  animation: hud-fade-out var(--handover-duration) var(--handover-ease) forwards;
-}
-
-/* The copy goes a touch earlier and a touch further, so the screen reads as
-   lifting away rather than simply dimming. */
-.hud-leaving .hud-leaving-copy {
-  animation: hud-lift-out calc(var(--handover-duration) * 0.8)
-    var(--handover-ease) forwards;
-}
-
-.hud-pill {
-  /* `backwards` so the pill is not visible during the delay, and so the
-     opacity transition that retires it later is not pinned by a fill. */
-  animation: hud-pill-in calc(var(--handover-duration) * 0.7)
-    calc(var(--handover-duration) * 0.35) var(--handover-ease) backwards;
-}
-
-@keyframes hud-fade-out {
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes hud-lift-out {
-  to {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-}
-
-@keyframes hud-pill-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -10px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --handover-duration: 1ms;
-  }
-  .hud-pill {
-    animation: none;
-  }
-}
+   There is none, on purpose. Every animated version of it — the shared-element
+   morph first, then a plain cross-fade — stuttered, because the frames it has
+   to play on are the scene's most expensive ones. What replaces it is the
+   frosted veil above (--hud-veil): the loading screen stays put while the city
+   appears behind it, and is then removed in a single frame. Nothing animates,
+   so there is nothing left to drop frames. See app/_components/handover.ts. */

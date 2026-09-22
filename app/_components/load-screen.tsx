@@ -13,14 +13,13 @@ import { cn } from "@/lib/utils";
  * Three things carry the load: a stack of plates, one per data layer, that
  * settles as its layer arrives; the stage list with each layer's own progress;
  * and a hairline bar whose tick marks where the scene becomes walkable. All
- * three read the same stage states the streaming pill reads, and three of the
- * elements here (the surface, the stack, each swatch) are the ones that morph
- * into the pill at the handover — see handover.ts.
+ * three read the same stage states the streaming pill reads.
  *
- * On the way out the whole screen cross-fades and the copy lifts a few pixels
- * — opacity and transform only, so the animation is composited and keeps its
- * frame rate while the renderer is busy with the scene's first frames. See
- * handover.ts for why it is not a shared-element morph.
+ * The surface is frosted glass, not a curtain: translucent over the canvas and
+ * blurring whatever is behind it. For most of the load that is the opaque
+ * scrim of the shell, so it reads as a plain dark screen; once the first frame
+ * is drawn, the city itself appears through it. It is then removed in a single
+ * frame, with nothing animating in between — see handover.ts for why.
  */
 
 /** The isometric the stack is drawn in; the shadow plate shares it. */
@@ -95,12 +94,16 @@ function StageRow({ stage }: { stage: LoadStageState }) {
 }
 
 export function LoadScreen({
-  leaving,
+  handedOver,
   percent,
   stages,
 }: {
-  /** The first frame is up: lift away and let the live scene through. */
-  leaving: boolean;
+  /**
+   * The first frame is up and the scene is live behind the glass: stop taking
+   * pointer events, so the player can look around while the veil is still
+   * there, and stop offering the screen to assistive tech.
+   */
+  handedOver: boolean;
   percent: number;
   stages: LoadStageState[];
 }) {
@@ -108,17 +111,22 @@ export function LoadScreen({
   const walkable = percent >= WALKABLE_PERCENT;
   return (
     <div
-      aria-hidden={leaving}
+      aria-hidden={handedOver}
       className={cn(
         "absolute inset-0 z-30",
-        leaving && "hud-leaving pointer-events-none"
+        // Once the city is behind the glass the screen is a still image: the
+        // plates, the rows and the bar stop mid-settle rather than animating
+        // through the scene's first frames, which is exactly the competition
+        // the handover was redesigned to remove.
+        handedOver && "pointer-events-none **:transition-none"
       )}
     >
-      {/* The only opaque thing here, so the scene below is revealed when it
-          lifts rather than faded in over. */}
-      <div className="absolute inset-0 bg-[image:var(--hud-scrim)]" />
+      {/* Frosted, not opaque: the canvas below shows through as soon as it has
+          anything to show. `backdrop-filter` is a compositor pass, so this
+          costs the main thread nothing while the scene boots. */}
+      <div className="absolute inset-0 bg-[image:var(--hud-veil)] backdrop-blur-md" />
 
-      <div className="hud-leaving-copy absolute inset-0 flex flex-col px-8 py-10 text-hud-foreground sm:px-12 lg:px-18 lg:py-16">
+      <div className="absolute inset-0 flex flex-col px-8 py-10 text-hud-foreground sm:px-12 lg:px-18 lg:py-16">
         <div className="flex flex-col gap-1.5">
           <span className="font-medium text-[11px] uppercase leading-none tracking-widest opacity-60">
             City Walk
