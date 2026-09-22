@@ -244,6 +244,22 @@ export function loadHeadline(states: LoadStageState[]): string {
     : "Szene wird vorbereitet";
 }
 
+/**
+ * The pill's line. It has a case the loading screen does not: between the
+ * first frame and the start of the streaming tail nothing is in flight — the
+ * scene holds that work back so it cannot stutter the handover animation — and
+ * "Alles geladen" would be a plain lie with three layers still to come.
+ */
+export function streamingTitle(states: LoadStageState[]): string {
+  const active = activeStage(states);
+  if (active) {
+    return active.streaming;
+  }
+  return states.every((stage) => stage.done)
+    ? "Alles geladen"
+    : "Rest wird geladen";
+}
+
 /** "3/6" for the pill: how many stages are behind us. */
 export function stagesDoneLabel(states: LoadStageState[]): string {
   return `${states.filter((stage) => stage.done).length}/${states.length}`;

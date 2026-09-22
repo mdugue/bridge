@@ -6,6 +6,7 @@ import {
   loadPercent,
   loadStageStates,
   stagesDoneLabel,
+  streamingTitle,
   WALKABLE_PERCENT,
 } from "./load-stages";
 
@@ -94,6 +95,19 @@ describe("load stages", () => {
     const all = Object.fromEntries(LOAD_STAGES.map((s) => [s.id, 1]));
     expect(loadHeadline(loadStageStates(all))).toBe("Alles geladen");
     expect(activeStage(loadStageStates(all))).toBeNull();
+  });
+
+  test("the pill never claims more than the scene has loaded", () => {
+    // The gap the loading screen does not have: the first frame is up, the
+    // streaming tail has not started, so nothing is active and half the
+    // layers are still to come.
+    const firstFrame = loadStageStates({ buildings: 1, terrain: 1, light: 1 });
+    expect(streamingTitle(firstFrame)).toBe("Rest wird geladen");
+    expect(streamingTitle(loadStageStates({ neighbours: 0.5 }))).toBe(
+      "Nachbarkacheln laden"
+    );
+    const all = Object.fromEntries(LOAD_STAGES.map((s) => [s.id, 1]));
+    expect(streamingTitle(loadStageStates(all))).toBe("Alles geladen");
   });
 
   test("the pill counts finished stages", () => {

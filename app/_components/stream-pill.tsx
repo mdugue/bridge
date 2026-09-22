@@ -1,10 +1,11 @@
 "use client";
 
-import { ViewTransition } from "react";
+import { useEffect, useState, ViewTransition } from "react";
+import { cn } from "@/lib/utils";
 import {
-  activeStage,
   type LoadStageState,
   stagesDoneLabel,
+  streamingTitle,
 } from "@/lib/city/load-stages";
 import {
   HANDOVER_SHARE_SOLID,
@@ -29,6 +30,18 @@ import {
 /** The two ends of a segment, as the HUD's own foreground token. */
 const FILLED = "var(--hud-foreground)";
 const EMPTY = "rgb(255 255 255 / 0.18)";
+
+/**
+ * A warm cache finishes the remaining layers in well under a second, and a
+ * progress bar that flashes past is worse than none: you see something move
+ * at the top of the screen and never learn what it was. So the pill keeps the
+ * floor below, and always ends on "Alles geladen" rather than vanishing
+ * mid-sentence.
+ */
+const MIN_VISIBLE_MS = 2500;
+/** How long "Alles geladen" stays after the last layer lands. */
+const DONE_LINGER_MS = 1600;
+const FADE_MS = 400;
 
 /** The three bars the plate stack collapses into. */
 function StackGlyph({ plates }: { plates: LoadStageState[] }) {
@@ -78,10 +91,42 @@ function Segment({ stage }: { stage: LoadStageState }) {
 }
 
 export function StreamPill({ stages }: { stages: LoadStageState[] }) {
-  const active = activeStage(stages);
-  const title = active ? active.streaming : "Alles geladen";
+  const allDone = stages.every((stage) => stage.done);
+  const [mountedAt] = useState(() => Date.now());
+  const [phase, setPhase] = useState<"gone" | "leaving" | "shown">("shown");
+
+  // Nothing to report any more: hold the finished state briefly, and never
+  // for less than the floor, then leave.
+  useEffect(() => {
+    if (!allDone || phase !== "shown") {
+      return;
+    }
+    const wait = Math.max(
+      DONE_LINGER_MS,
+      MIN_VISIBLE_MS - (Date.now() - mountedAt)
+    );
+    const timer = setTimeout(() => setPhase("leaving"), wait);
+    return () => clearTimeout(timer);
+  }, [allDone, phase, mountedAt]);
+
+  useEffect(() => {
+    if (phase !== "leaving") {
+      return;
+    }
+    const timer = setTimeout(() => setPhase("gone"), FADE_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  if (phase === "gone") {
+    return null;
+  }
   return (
-    <div className="hud-pill pointer-events-none absolute top-4 left-1/2 z-20 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full pr-3.5 pl-3 text-hud-foreground">
+    <div
+      className={cn(
+        "hud-pill pointer-events-none absolute top-4 left-1/2 z-20 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full pr-3.5 pl-3 text-hud-foreground transition-opacity duration-400",
+        phase === "leaving" && "opacity-0"
+      )}
+    >
       {/* The surface the full-bleed loading screen shrank into. Separate from
           the content so the content can arrive on top of it. */}
       <ViewTransition
@@ -99,7 +144,7 @@ export function StreamPill({ stages }: { stages: LoadStageState[] }) {
         aria-live="polite"
         className="hud-pill-text relative font-medium text-xs leading-none"
       >
-        {title}
+        {streamingTitle(stages)}
       </output>
       <span className="relative flex gap-0.75">
         {stages.map((stage) => (

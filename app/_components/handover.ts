@@ -65,3 +65,29 @@ export const HANDOVER_STACK_NAME = "hud-stack";
 export function handoverSegmentName(stage: LoadStageId): string {
   return `hud-seg-${stage}`;
 }
+
+/**
+ * How long the morph runs, read from the stylesheet rather than duplicated
+ * here: `--handover-duration` is the single source of truth, and reduced
+ * motion sets it to 1ms, which is exactly the answer the caller wants there.
+ *
+ * The scene uses it to hold its heavy streaming work until the animation is
+ * over (city-walk.tsx). Deliberately NOT React's `onShare` end callback: the
+ * browser aborts a view transition when the DOM update overruns, which is
+ * precisely when the main thread is too busy — so the callback fires early
+ * exactly in the case the delay exists for.
+ */
+export function handoverDurationMs(): number {
+  const FALLBACK_MS = 1400;
+  if (typeof document === "undefined") {
+    return FALLBACK_MS;
+  }
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue("--handover-duration")
+    .trim();
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value)) {
+    return FALLBACK_MS;
+  }
+  return raw.endsWith("ms") ? value : value * 1000;
+}

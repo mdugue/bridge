@@ -36,7 +36,7 @@ import {
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { TileUrls } from "@/lib/city/tile";
 import { ControlHintBar } from "./control-hints";
-import { HANDOVER_TYPE } from "./handover";
+import { HANDOVER_TYPE, handoverDurationMs } from "./handover";
 import {
   type CityWalkHandle,
   type CityWalkStats,
@@ -77,6 +77,9 @@ type Status =
 // Evaluated once in the browser (the component is loaded with ssr: false).
 const INITIAL_DATE = new Date();
 const INITIAL_MINUTES = 14 * 60;
+
+/** A little air after the morph before the heavy work resumes. */
+const STREAM_SETTLE_MS = 250;
 
 /**
  * How long the handover may stay pending before it is taken urgently, without
@@ -220,6 +223,8 @@ export default function CityWalk({
     let cancelled = false;
     let handle: CityWalkHandle | null = null;
     let handoverFallback: ReturnType<typeof setTimeout> | undefined;
+    let streamFallback: ReturnType<typeof setTimeout> | undefined;
+    const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
 
     createCityWalkApp({
@@ -329,6 +334,15 @@ export default function CityWalk({
             prev.phase === "loading" ? { phase: "running" } : prev
           );
         }, HANDOVER_FALLBACK_MS);
+        // The neighbour tiles, the vegetation and the terrain BVH wait until
+        // the morph has played: each is a long synchronous task, and this is
+        // the one moment the HUD is animating (see create-app's
+        // startStreaming). Under reduced motion the duration is ~0 and this
+        // is effectively immediate.
+        streamFallback = setTimeout(
+          beginStreaming,
+          handoverDurationMs() + STREAM_SETTLE_MS
+        );
       })
       .catch((err: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
@@ -346,6 +360,7 @@ export default function CityWalk({
       cancelled = true;
       aborter.abort();
       clearTimeout(handoverFallback);
+      clearTimeout(streamFallback);
       handleRef.current = null;
       handle?.dispose();
       // The hook must not keep a disposed scene callable (or alive): the
@@ -426,7 +441,6 @@ export default function CityWalk({
   );
   const percent = loadPercent(progress.fractions, progress.skipped);
   const booted = status.phase === "running";
-  const everythingLoaded = stages.every((stage) => stage.done);
 
   return (
     <SidebarProvider
@@ -460,8 +474,9 @@ export default function CityWalk({
               className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
             />
 
-            {/* The loading screen, at pill size — until the last layer lands. */}
-            {!everythingLoaded && <StreamPill stages={stages} />}
+            {/* The loading screen, at pill size. It retires itself once the
+                last layer has landed and it has been readable for a moment. */}
+            <StreamPill stages={stages} />
 
             {streamError && (
               <output

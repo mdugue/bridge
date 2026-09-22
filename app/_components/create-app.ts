@@ -241,6 +241,13 @@ export interface CityWalkHandle {
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
   setSun: (date: Date) => SunState;
+  /**
+   * Begins everything after the first frame — the neighbour tiles, the
+   * vegetation, the rails, the terrain BVH. Held back so its synchronous
+   * chunks cannot stutter the handover animation; idempotent, and a no-op
+   * once the scene is disposed.
+   */
+  startStreaming: () => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -1174,7 +1181,6 @@ async function bootApp(
       idle(indexTerrain);
     }
   };
-  scheduleIndexing();
 
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
@@ -1266,18 +1272,43 @@ async function bootApp(
     restoreFog();
     emitStats();
   };
-  loadRest()
-    .then(() => {
-      if (!disposed) {
-        opts.onLoaded?.();
-      }
-    })
-    .catch((err: unknown) => {
-      if (disposed || isAbortError(err)) {
-        return;
-      }
-      opts.onError?.(err instanceof Error ? err.message : String(err));
-    });
+  /**
+   * Everything after the first frame, held until the HUD says so.
+   *
+   * The two heaviest things in the whole boot land right here: the primary
+   * tile's canopy build (tens of thousands of instances, one synchronous
+   * pass) and the terrain BVH (`computeBoundsTree` on a 1024² mesh). The BVH
+   * is scheduled through requestIdleCallback with a 1.5 s timeout, which is a
+   * guarantee that it runs — squarely inside the 1.4 s handover animation if
+   * nothing holds it back. Both stall the main thread for long enough to eat
+   * a dozen frames, and the handover is the one moment the HUD is animating.
+   *
+   * So the scene waits. It is already walkable and already rendering; the
+   * only thing the wait costs is a second of streaming, and what it buys is
+   * an animation that does not stutter. `startStreaming` is idempotent and
+   * the HUD calls it when the morph is over (city-walk.tsx), with its own
+   * fallback timer for the browsers that never animate at all.
+   */
+  let streamingStarted = false;
+  const startStreaming = (): void => {
+    if (streamingStarted || disposed) {
+      return;
+    }
+    streamingStarted = true;
+    scheduleIndexing();
+    loadRest()
+      .then(() => {
+        if (!disposed) {
+          opts.onLoaded?.();
+        }
+      })
+      .catch((err: unknown) => {
+        if (disposed || isAbortError(err)) {
+          return;
+        }
+        opts.onError?.(err instanceof Error ? err.message : String(err));
+      });
+  };
 
   return {
     setSun,
@@ -1303,6 +1334,7 @@ async function bootApp(
     }),
     setMovementMode: pose.setMovementMode,
     setMoveInput: pose.setMoveInput,
+    startStreaming,
     // Neighbours are never demolished, so their footprints are computed once
     // per layer (they stream in after the first frame) and reused thereafter.
     getFootprints: () => [
