@@ -21,30 +21,37 @@ import type { LoadStageId } from "@/lib/city/load-stages";
  * class below means the morph runs for that update and no other: a segment
  * filling by 3 % must not trigger a 1.4 s shared-element animation.
  *
- * The animation itself is CSS: `app/globals.css` styles
- * `::view-transition-group(.hud-morph)`. Where `startViewTransition` is
- * missing the state still flips — the pill simply appears, and its own CSS
- * entrance animation covers it (see the `@supports` block there).
+ * The animation itself is CSS, in `app/globals.css`. Where
+ * `startViewTransition` is missing the state still flips — the pill simply
+ * appears, and its own CSS entrance covers it.
  */
 
 /** The transition type the handover is tagged with. */
 export const HANDOVER_TYPE = "hud-handover";
 
-/** The morphing pairs: surface, stack and the six swatches. */
-export const HANDOVER_SHARE: ViewTransitionClass = {
-  [HANDOVER_TYPE]: "hud-morph",
+/**
+ * The dark surface, whose content changes completely between the two sizes:
+ * the old and new snapshots cross-fade while the box resizes.
+ */
+export const HANDOVER_SHARE_SURFACE: ViewTransitionClass = {
+  [HANDOVER_TYPE]: "hud-morph-surface",
+  default: "none",
+};
+
+/**
+ * The flat shapes — each layer swatch and the plate stack. These are solid
+ * blocks of one colour, so cross-fading old against new only muddies them;
+ * the group slides and scales and the snapshots hold still (the skill's
+ * sliding-indicator recipe).
+ */
+export const HANDOVER_SHARE_SOLID: ViewTransitionClass = {
+  [HANDOVER_TYPE]: "hud-morph-solid",
   default: "none",
 };
 
 /** The loading copy, which leaves before the pill's own text arrives. */
 export const HANDOVER_EXIT: ViewTransitionClass = {
   [HANDOVER_TYPE]: "hud-fade-out",
-  default: "none",
-};
-
-/** The pill-only text, which arrives last. */
-export const HANDOVER_ENTER: ViewTransitionClass = {
-  [HANDOVER_TYPE]: "hud-fade-in",
   default: "none",
 };
 

@@ -7,8 +7,8 @@ import {
   stagesDoneLabel,
 } from "@/lib/city/load-stages";
 import {
-  HANDOVER_ENTER,
-  HANDOVER_SHARE,
+  HANDOVER_SHARE_SOLID,
+  HANDOVER_SHARE_SURFACE,
   HANDOVER_STACK_NAME,
   HANDOVER_SURFACE_NAME,
   handoverSegmentName,
@@ -19,7 +19,16 @@ import {
  * live scene. Same six stages, same colours, same order: the stack became the
  * glyph, each swatch became a segment, and the layers that are still streaming
  * keep filling them while you walk around.
+ *
+ * The text and the counter arrive last by a plain CSS animation rather than a
+ * `<ViewTransition enter>`: they sit inside the pill, and a nested boundary
+ * that mounts together with its parent never fires its own enter. The CSS runs
+ * either way, which is also what the no-view-transitions path needs.
  */
+
+/** The two ends of a segment, as the HUD's own foreground token. */
+const FILLED = "var(--hud-foreground)";
+const EMPTY = "rgb(255 255 255 / 0.18)";
 
 /** The three bars the plate stack collapses into. */
 function StackGlyph({ plates }: { plates: LoadStageState[] }) {
@@ -30,27 +39,20 @@ function StackGlyph({ plates }: { plates: LoadStageState[] }) {
     <ViewTransition
       default="none"
       name={HANDOVER_STACK_NAME}
-      share={HANDOVER_SHARE}
+      share={HANDOVER_SHARE_SOLID}
     >
-      <span aria-hidden className="flex flex-col gap-0.5">
+      <span aria-hidden className="relative flex flex-col gap-0.5">
         {bars.map((stage) => (
           <span
             className="h-1.25 w-3 rounded-xs transition-opacity duration-500"
             key={stage.id}
-            style={{
-              background: stage.color,
-              opacity: stage.done ? 1 : 0.35,
-            }}
+            style={{ background: stage.color, opacity: stage.done ? 1 : 0.35 }}
           />
         ))}
       </span>
     </ViewTransition>
   );
 }
-
-/** The two ends of a segment, as the HUD's own foreground token. */
-const FILLED = "var(--hud-foreground)";
-const EMPTY = "rgb(255 255 255 / 0.18)";
 
 /** One stage as a segment: filled when done, part-filled while it streams. */
 function Segment({ stage }: { stage: LoadStageState }) {
@@ -59,7 +61,7 @@ function Segment({ stage }: { stage: LoadStageState }) {
     <ViewTransition
       default="none"
       name={handoverSegmentName(stage.id)}
-      share={HANDOVER_SHARE}
+      share={HANDOVER_SHARE_SOLID}
     >
       <span
         className="h-1 w-5.5 rounded-full"
@@ -81,36 +83,32 @@ export function StreamPill({ stages }: { stages: LoadStageState[] }) {
   return (
     <div className="hud-pill pointer-events-none absolute top-4 left-1/2 z-20 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full pr-3.5 pl-3 text-hud-foreground">
       {/* The surface the full-bleed loading screen shrank into. Separate from
-          the content so the content can fade in on top of it. */}
+          the content so the content can arrive on top of it. */}
       <ViewTransition
         default="none"
         name={HANDOVER_SURFACE_NAME}
-        share={HANDOVER_SHARE}
+        share={HANDOVER_SHARE_SURFACE}
       >
         <span className="absolute inset-0 rounded-full bg-hud/85 shadow-lg backdrop-blur-lg" />
       </ViewTransition>
 
       <StackGlyph plates={stages.filter((stage) => stage.plate)} />
-      <ViewTransition default="none" enter={HANDOVER_ENTER}>
-        {/* Only the stage name is announced: the segments carry no text and
-            the counter beside them would otherwise repeat it. */}
-        <output
-          aria-live="polite"
-          className="relative font-medium text-xs leading-none"
-        >
-          {title}
-        </output>
-      </ViewTransition>
+      {/* Only the stage name is announced: the segments carry no text and the
+          counter beside them would otherwise repeat it. */}
+      <output
+        aria-live="polite"
+        className="hud-pill-text relative font-medium text-xs leading-none"
+      >
+        {title}
+      </output>
       <span className="relative flex gap-0.75">
         {stages.map((stage) => (
           <Segment key={stage.id} stage={stage} />
         ))}
       </span>
-      <ViewTransition default="none" enter={HANDOVER_ENTER}>
-        <span className="relative font-mono text-[11px] leading-none tabular-nums opacity-65">
-          {stagesDoneLabel(stages)}
-        </span>
-      </ViewTransition>
+      <span className="hud-pill-text relative font-mono text-[11px] leading-none tabular-nums opacity-65">
+        {stagesDoneLabel(stages)}
+      </span>
     </div>
   );
 }

@@ -157,30 +157,48 @@
   --handover-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-::view-transition-group(.hud-morph) {
+::view-transition-group(.hud-morph-surface),
+::view-transition-group(.hud-morph-solid) {
   animation-duration: var(--handover-duration);
   animation-timing-function: var(--handover-ease);
 }
 
-/* The surface shrinks by a factor of ~30: scaling its snapshot would smear
-   the text it never had. Cross-fading the two boxes while the group animates
-   position and size is what reads as "the same surface, smaller". */
-::view-transition-old(.hud-morph),
-::view-transition-new(.hud-morph) {
+/* The surface shrinks by a factor of ~30 and its content changes completely,
+   so the two snapshots cross-fade while the group resizes. That is what reads
+   as "the same surface, smaller". */
+::view-transition-old(.hud-morph-surface),
+::view-transition-new(.hud-morph-surface) {
   height: 100%;
+  object-fit: fill;
   animation-duration: var(--handover-duration);
   animation-timing-function: var(--handover-ease);
-  object-fit: fill;
 }
 
-/* The loading copy leaves first, the pill's own text arrives last — so the
-   two never overlap in the middle of the morph. */
+/* The layer swatches and the plate stack are solid blocks of one colour.
+   Cross-fading old against new only muddies them — hold the snapshots still
+   and let the group slide and scale, so the shape travels. */
+::view-transition-old(.hud-morph-solid),
+::view-transition-new(.hud-morph-solid) {
+  height: 100%;
+  object-fit: fill;
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(.hud-morph-solid) {
+  opacity: 0;
+}
+
+/* The loading copy leaves first; the pill's own text arrives last (by CSS, on
+   .hud-pill-text — a boundary nested inside the mounting pill would never
+   fire its own enter). The two never overlap in the middle of the morph. */
 ::view-transition-old(.hud-fade-out) {
   animation: hud-fade var(--handover-duration) var(--handover-ease) reverse;
 }
 
-::view-transition-new(.hud-fade-in) {
-  animation: hud-fade var(--handover-duration) var(--handover-ease);
+@supports (view-transition-name: none) {
+  .hud-pill-text {
+    animation: hud-fade var(--handover-duration) var(--handover-ease) both;
+  }
 }
 
 @keyframes hud-fade {
@@ -213,10 +231,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root {
-    --handover-duration: 1ms;
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
-  .hud-pill {
+  .hud-pill,
+  .hud-pill-text {
     animation: none;
   }
 }

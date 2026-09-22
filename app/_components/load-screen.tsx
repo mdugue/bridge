@@ -8,7 +8,8 @@ import {
 } from "@/lib/city/load-stages";
 import {
   HANDOVER_EXIT,
-  HANDOVER_SHARE,
+  HANDOVER_SHARE_SOLID,
+  HANDOVER_SHARE_SURFACE,
   HANDOVER_STACK_NAME,
   HANDOVER_SURFACE_NAME,
   handoverSegmentName,
@@ -23,6 +24,11 @@ import {
  * three read the same stage states the streaming pill reads, and three of the
  * elements here (the surface, the stack, each swatch) are the ones that morph
  * into the pill at the handover — see handover.ts.
+ *
+ * The surface and the copy are returned as SIBLINGS rather than inside a
+ * wrapper: a `<ViewTransition>` fires `exit` only when it stands above every
+ * DOM node of the subtree being removed, so wrapping these two in a `<div>`
+ * would silently cost the copy its fade.
  */
 
 /** The isometric the stack is drawn in; the shadow plate shares it. */
@@ -38,7 +44,7 @@ function PlateStack({ plates }: { plates: LoadStageState[] }) {
       <ViewTransition
         default="none"
         name={HANDOVER_STACK_NAME}
-        share={HANDOVER_SHARE}
+        share={HANDOVER_SHARE_SOLID}
       >
         <div className="absolute inset-0">
           {/* Painted back to front: the layer that landed first sits lowest. */}
@@ -84,7 +90,7 @@ function StageRow({ stage }: { stage: LoadStageState }) {
       <ViewTransition
         default="none"
         name={handoverSegmentName(stage.id)}
-        share={HANDOVER_SHARE}
+        share={HANDOVER_SHARE_SOLID}
       >
         <span
           className="size-3.5 rotate-45 scale-80 rounded-xs border"
@@ -120,19 +126,19 @@ export function LoadScreen({
   const plates = stages.filter((stage) => stage.plate);
   const walkable = percent >= WALKABLE_PERCENT;
   return (
-    <div className="absolute inset-0 z-30 text-hud-foreground">
+    <>
       {/* The surface itself — this is what shrinks into the pill. It is the
           only opaque thing here, so the scene below is revealed, not faded in. */}
       <ViewTransition
         default="none"
         name={HANDOVER_SURFACE_NAME}
-        share={HANDOVER_SHARE}
+        share={HANDOVER_SHARE_SURFACE}
       >
-        <div className="absolute inset-0 bg-[image:var(--hud-scrim)]" />
+        <div className="absolute inset-0 z-30 bg-[image:var(--hud-scrim)]" />
       </ViewTransition>
 
       <ViewTransition default="none" exit={HANDOVER_EXIT}>
-        <div className="absolute inset-0 flex flex-col px-8 py-10 sm:px-12 lg:px-18 lg:py-16">
+        <div className="absolute inset-0 z-30 flex flex-col px-8 py-10 text-hud-foreground sm:px-12 lg:px-18 lg:py-16">
           <div className="flex flex-col gap-1.5">
             <span className="font-medium text-[11px] uppercase leading-none tracking-widest opacity-60">
               City Walk
@@ -206,6 +212,6 @@ export function LoadScreen({
           </div>
         </div>
       </ViewTransition>
-    </div>
+    </>
   );
 }
