@@ -900,7 +900,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
 
       <SidebarFooter className="border-t px-4 pt-2.5 pb-3 text-[10px] text-muted-foreground leading-snug">
         <p>
-          Offene Geodaten Sachsen · Lampen, Mauern, Bahnsteige und Brücken ©
+          Quelle: GeoSN, dl-de/by-2-0 · Lampen, Mauern, Bahnsteige und Brücken ©
           OpenStreetMap-Mitwirkende (ODbL)
         </p>
       </SidebarFooter>
