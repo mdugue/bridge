@@ -161,9 +161,11 @@ S/M/L.
 - Decide where `aesthetic-sandbox.html` (the historical crown playground at
   the repo root) should live, or delete it — the layer files are the source
   of truth.
-- Record the Basis-DLM edition, the DOM1 survey date, the DOP flight date
-  and the Geofabrik extract date in the guide's dataset table the next time
-  those are downloaded.
+- Record the Basis-DLM package's release date and the Geofabrik extract's
+  timestamp the next time those are downloaded (`data/provenance.json` and
+  the guide's dataset table; the DOM1 and DOP dates and the LoD2 inputs are
+  resolved — read from GeoSN's download service, see
+  [data-pipeline.md](../data-pipeline.md#provenance)).
 - Optionally give the platform GeoJSON an `attribution` member (it is
   written straight by `ogr2ogr`); the HUD footer carries the credit today.
 - `.editorconfig` was never created (plan 013).

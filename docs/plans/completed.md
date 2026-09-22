@@ -294,7 +294,8 @@ member in the bakes). Docs locate targets by text, never by line number.
 **Still open from this plan.** The two unused `33414_*` DGM tiles (~28 MB)
 are committed; `aesthetic-sandbox.html` sits at the repo root; the
 platform GeoJSON (written straight by `ogr2ogr`) carries no `attribution`
-member; four dataset dates are unrecorded (guide: dataset editions).
+member; the Basis-DLM package date and the Geofabrik extract timestamp are
+unrecorded (`data/provenance.json` has the rest).
 
 ## 015 — Progressive first frame · DONE
 

@@ -106,6 +106,12 @@ Laserscan-Punktwolke (aus ihr kämen einzelne Baumkronen), die Flurstücke
   gefüllt; der Viewer leitet Geschossbänder deshalb aus der gemessenen Höhe
   ab. Seit 2021 kann das Produkt auch Brücken, Mauern und Türme enthalten;
   die heruntergeladenen Kacheln enthalten nur Gebäude.
+- **Wie aktuell es ist:** Das Modell einer Kachel ist so alt wie seine
+  Eingaben. Für diese Kacheln stammen die Dächer aus dem Laserscan von
+  **2016**, die Grundrisse aus dem Basis-DLM von 2021 bzw. 2022 und der
+  Boden aus dem DGM von 2016; das Modell selbst wurde 2023 (westliches Paar)
+  bzw. 2024 (östliches Paar) erzeugt. Die Daten von 2025 in den Dateien sind
+  Exportdaten, keine Erfassungsdaten.
 
 ### Basis-DLM — das Landschaftsmodell
 
@@ -152,7 +158,10 @@ Laserscan-Punktwolke (aus ihr kämen einzelne Baumkronen), die Flurstücke
   Gebäude kippen im Bild seitlich, weshalb Dachgrundrisse vor der Abtastung
   nach innen verkleinert werden; die Rohfarben wirken fahl und dunstig, was
   der Viewer mit einer farbtonerhaltenden Sättigungsanhebung korrigiert.
-  Der Befliegungstermin ist in diesem Repository nicht festgehalten.
+  Die Kacheln wurden am **19. März 2024** beflogen, eine Frühjahrsbefliegung
+  ohne Laub: Laubbäume sind im Bild kahl, der Grünindex ist deshalb fast
+  überall niedrig, und die Kronenfärbung des Viewers zentriert ihn auf den
+  Median, statt ihn als Absolutwert zu lesen.
 
 ### OpenStreetMap
 
@@ -178,25 +187,58 @@ Laserscan-Punktwolke (aus ihr kämen einzelne Baumkronen), die Flurstücke
 
 ## Verwendete Datenstände
 
-Der genaue Stand zählt, wenn das Bild der Wirklichkeit widerspricht. Diese
-Tabelle hält fest, was über die eingecheckten Daten bekannt ist.
+Der genaue Stand zählt, wenn das Bild der Wirklichkeit widerspricht. Das
+GeoSN veröffentlicht zu jeder Kachel und jedem Produkt ein Feld „Stand“
+über den Download-Dienst hinter seinem Portal; die Werte unten wurden dort
+am 2026-09-22 abgelesen und stimmen mit den Metadatendateien in den
+Kachel-ZIPs überein. Die maschinenlesbare Fassung mit dem Download-Link
+jeder Datei ist [`data/provenance.json`](../../../data/provenance.json).
 „Eingecheckt“ ist das Datum, an dem die Datei ins Repository kam; der
 Download fand an diesem Tag oder kurz davor statt.
 
-| Datensatz | Kacheln | Stand / Erfassungsdatum | Woher bekannt | Eingecheckt |
+| Datensatz | Kacheln | Stand / Erfassungsdatum (Feld „Stand“ des Anbieters) | Woher bekannt | Eingecheckt |
 |---|---|---|---|---|
-| DGM1 | alle vier (plus zwei ungenutzte Kacheln im Osten) | 2024-11-30 (südliche Reihe), 2024-11-27 und 2024-11-30 (nördliche Reihe) | die `_akt.csv` in jeder Kachel-ZIP | 2026-06-11 |
-| LoD2 | alle vier | Objekte erzeugt am 2025-04-26 (33410_5658), 2025-06-28 (33410_5656), 2025-07-04 (33412_5656), 2025-07-07 (33412_5658); einige hundert Objekte je Kachel tragen ältere Daten bis 2020 zurück | das Attribut `creationDate` jedes Gebäudes | 2026-06-11 |
-| Basis-DLM | landesweiter Download | Stand nicht festgehalten | — | abgeleitete Dateien 2026-06-12, Bahn- und Brückendateien neu gebacken 2026-09-18 |
-| DOM1 | alle vier | Stand nicht festgehalten (dieselbe Befliegung wie das DGM1 ist wahrscheinlich, aber nicht geprüft) | — | abgeleitete Kronen-Dateien 2026-06-12 |
-| DOP (RGBI) | alle vier | Befliegungstermin nicht festgehalten | — | abgeleitete Dachfarben und NDVI 2026-06-16/17 |
-| OSM über Overpass | alle vier | Live-Datenbank zum Abfragezeitpunkt, Juni 2026 | — | 2026-06-12 (Lampen), 2026-06-17 (Bahnsteige, Brückentragwerk) |
-| OSM über Geofabrik | landesweiter Auszug | Auszugsdatum nicht festgehalten | — | Mauern neu gebacken 2026-09-18 |
+| DGM1 | alle vier (plus zwei ungenutzte Kacheln im Osten) | **2024-11-30** (südliche Reihe), **2024-11-27 und 2024-11-30** (nördliche Reihe) | die `_akt.csv` in jeder Kachel-ZIP; GeoSN-Download-Dienst | 2026-06-11 |
+| DOM1 | alle vier | **dieselbe Laserbefliegung** wie das DGM1: 2024-11-30 bzw. 2024-11-27 und 2024-11-30 | GeoSN-Download-Dienst (DOM1, DGM1 und Punktwolke tragen identische Daten) | abgeleitete Kronen-Dateien 2026-06-12 |
+| LoD2 | alle vier | südwestliches Paar (33410_*): Modell **2023**, gebaut aus dem Laserscan 2016, den Basis-DLM-Grundrissen 2021 und dem DGM 2016; südöstliches Paar (33412_*): Modell **2024**, aus dem Laserscan 2016, dem Basis-DLM 2022 und dem DGM 2016. Exportiert wurden die Objekte 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN-Download-Dienst; einige ältere Objekte tragen noch `Stand_*`-Attribute mit denselben Werten | 2026-06-11 |
+| DOP (RGBI) | alle vier | beflogen am **2024-03-19** (ohne Laub) | GeoSN-Download-Dienst | abgeleitete Dachfarben und NDVI 2026-06-16/17 |
+| Basis-DLM | landesweites Paket | das im **Juni 2026** aktuelle Quartalspaket; das genaue Freigabedatum wurde nicht notiert und lässt sich nachträglich nicht vom Portal ablesen, weil das Paket unter demselben Dateinamen ersetzt wird (die Datei auf dem Share trug beim Prüfen das Datum 2026-07-28) | Download-Seite: „quartalsweise aktualisiert“; Git-History | abgeleitete Dateien 2026-06-12, Bahn- und Brückendateien neu gebacken 2026-09-18 |
+| OSM über Overpass | alle vier | die Live-Datenbank am Abfragetag: 2026-06-12 oder früher (Lampen), 2026-06-17 oder früher (Bahnsteige, Brückentragwerk) | Git-History; die zwischengespeicherten Rohantworten tragen den exakten `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
+| OSM über Geofabrik | landesweiter Auszug | der Tagesauszug vom 2026-09-18 oder kurz davor | Git-History (Mauern an dem Tag neu gebacken); `osmium fileinfo -e` auf der Rohdatei zeigt den exakten Zeitstempel | 2026-09-18 |
 
-Offene Punkte für den Betreiber: beim nächsten Download den Stand des
-Basis-DLM, das Erfassungsdatum des DOM1, den Befliegungstermin des DOP und
-das Datum des Geofabrik-Auszugs notieren (das Portal liefert zu jeder
-Kachel eine Metadatendatei; der Geofabrik-Dateiname trägt sein Datum).
+Beachte die **unterschiedlichen Stände in einem Bild**: Boden und Baumhöhen
+stammen von Ende 2024, die Gebäudeformen aus einem Laserscan von 2016 mit
+Grundrissen von 2021/2022, die Dachfarben vom März 2024 und Lampen und
+Mauern aus OpenStreetMap von Mitte 2026. Ein 2023 fertiggestelltes Haus
+kann eine Dachfarbe von 2024 und keine 3D-Form haben.
+
+Beim nächsten Download noch festzuhalten: das Freigabedatum des
+Basis-DLM-Pakets (`Last-Modified` der ZIP oder die Metadaten darin) und der
+Zeitstempel des Geofabrik-Auszugs.
+
+## Woher genau jede Datei stammt
+
+Das GeoSN liefert jede Kachel-ZIP aus öffentlichen Ordnern auf seinem
+Cloud-Share; die Download-App des Portals findet sie über einen
+Kartendienst, der auch den „Stand“ jeder Kachel führt. Die Ordner sind je
+Produkt und Format:
+
+| Produkt | Paket | Portalseite |
+|---|---|---|
+| DGM1 (GeoTIFF + `.tfw` + `_akt.csv`) | `…/JCcXyifaNdLDnxZ/dgm1_<Kachel>_tiff.zip` | [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html) |
+| DOM1 (GeoTIFF) | `…/S6wwnFwX7882sZm/dom1_<Kachel>_tiff.zip` | dieselbe Seite |
+| Laserscan-Punktwolke (LAZ), ungenutzt | `…/rqcqdt8QMcLFUvC/lsc_<Kachel>_laz.zip` | dieselbe Seite |
+| LoD2 (CityGML) | `…/GVzwbSyp7Yl7mBD/lod2_<Kachel>_citygml.zip` | [Digitale 3D-Stadtmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-3d-stadtmodelle-4875.html) |
+| DOP20 RGBI (GeoTIFF) | `…/sX3GPcdBMGrfXT9/dop20rgbi_<Kachel>_tiff.zip` | [DOP](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) |
+| Basis-DLM (Shape, landesweit, 1,23 GB) | `…/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip` | [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html) |
+
+`…` steht für `https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/`.
+Die Ordner-Tokens können wechseln; der dauerhafte Index ist der in
+[data-pipeline.md](../../data-pipeline.md#provenance) (englisch)
+beschriebene Download-Dienst, der zu jeder Kachel den aktuellen Link und
+„Stand“ nennt. OpenStreetMap-Daten kamen über die Overpass-API
+(Punktabfragen, einmal zwischengespeichert) und aus dem Geofabrik-Auszug für
+Sachsen (`sachsen-latest.osm.pbf`).
 
 ## Lizenzen und Quellenvermerke
 

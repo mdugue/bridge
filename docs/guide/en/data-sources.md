@@ -104,6 +104,11 @@ could add.
   few percent, so the viewer derives storey bands from the measured height
   instead. Since 2021 the product can also contain bridges, walls and
   towers; the downloaded tiles contain only buildings.
+- **How current it is:** the model of a tile is dated by its inputs. For
+  these tiles the roofs come from the **2016** laser scan, the footprints
+  from the 2021 or 2022 Basis-DLM and the ground from the 2016 DGM; the
+  model itself was produced in 2023 (western pair) and 2024 (eastern pair).
+  The 2025 dates inside the files are export dates, not survey dates.
 
 ### Basis-DLM — the landscape model
 
@@ -147,8 +152,11 @@ could add.
 - **Not good at:** facades (a nadir photo sees roofs only); tall buildings
   lean sideways in the image, so roof footprints are eroded inward before
   sampling; the raw colours read drab and hazy, which the viewer corrects
-  with a hue-preserving saturation lift. The flight date is not recorded in
-  this repository.
+  with a hue-preserving saturation lift. The tiles were flown on
+  **19 March 2024**, a leaf-off spring flight: deciduous trees are bare in
+  the image, so the greenness index is low almost everywhere and the
+  viewer's crown colouring recentres it on the median rather than reading
+  it as an absolute value.
 
 ### OpenStreetMap
 
@@ -173,25 +181,56 @@ could add.
 
 ## Dataset editions in use
 
-The exact edition matters when the picture disagrees with reality. This
-table records what is known about the committed data. "Committed" is the
-date the file entered the repository; the download happened on or shortly
+The exact edition matters when the picture disagrees with reality. GeoSN
+publishes, for every tile and product, a currency field ("Stand") through
+the download service behind its portal; the values below were read from it
+on 2026-09-22 and match the metadata files shipped in the tile ZIPs. The
+machine-readable version, with the download link of every file, is
+[`data/provenance.json`](../../../data/provenance.json). "Committed" is the
+date a file entered the repository; the download happened on or shortly
 before it.
 
-| Dataset | Tiles | Edition / survey date | How we know | Committed |
+| Dataset | Tiles | Edition / survey date (provider's "Stand") | How we know | Committed |
 |---|---|---|---|---|
-| DGM1 | all four (plus two unused tiles to the east) | 2024-11-30 (southern row), 2024-11-27 and 2024-11-30 (northern row) | the `_akt.csv` shipped in each tile ZIP | 2026-06-11 |
-| LoD2 | all four | objects generated 2025-04-26 (33410_5658), 2025-06-28 (33410_5656), 2025-07-04 (33412_5656), 2025-07-07 (33412_5658); a few hundred objects per tile carry older dates back to 2020 | the `creationDate` attribute of each building | 2026-06-11 |
-| Basis-DLM | statewide download | edition not recorded | — | derived files 2026-06-12, rail and bridge files re-baked 2026-09-18 |
-| DOM1 | all four | edition not recorded (same survey as the DGM1 is likely but not verified) | — | derived canopy files 2026-06-12 |
-| DOP (RGBI) | all four | flight date not recorded | — | derived roof colours and NDVI 2026-06-16/17 |
-| OSM via Overpass | all four | live database at fetch time, June 2026 | — | 2026-06-12 (lamps), 2026-06-17 (platforms, bridge structure) |
-| OSM via Geofabrik | statewide extract | extract date not recorded | — | walls re-baked 2026-09-18 |
+| DGM1 | all four (plus two unused tiles to the east) | **2024-11-30** (southern row), **2024-11-27 and 2024-11-30** (northern row) | the `_akt.csv` in each tile ZIP; GeoSN download service | 2026-06-11 |
+| DOM1 | all four | the **same laser flight** as the DGM1: 2024-11-30 / 2024-11-27 and 2024-11-30 | GeoSN download service (DOM1, DGM1 and the point cloud carry identical dates) | derived canopy files 2026-06-12 |
+| LoD2 | all four | south-western pair (33410_*): model **2023**, built from the 2016 laser scan, the 2021 Basis-DLM footprints and the 2016 DGM; south-eastern pair (33412_*): model **2024**, from the 2016 laser scan, the 2022 Basis-DLM and the 2016 DGM. The objects were exported 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN download service; a few older objects still carry `Stand_*` attributes with the same values | 2026-06-11 |
+| DOP (RGBI) | all four | flown **2024-03-19** (leaf-off) | GeoSN download service | derived roof colours and NDVI 2026-06-16/17 |
+| Basis-DLM | statewide package | the quarterly package current in **June 2026**; the exact release date was not noted and cannot be read from the portal afterwards because the package is replaced under the same file name (the share's file was dated 2026-07-28 when checked) | download page: "updated quarterly"; git history | derived files 2026-06-12, rail and bridge files re-baked 2026-09-18 |
+| OSM via Overpass | all four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
+| OSM via Geofabrik | statewide extract | the daily extract of 2026-09-18 or shortly before | git history (walls re-baked that day); `osmium fileinfo -e` on the raw file prints the exact timestamp | 2026-09-18 |
 
-Open items for the maintainer: record the Basis-DLM edition, the DOM1
-survey date, the DOP flight date and the Geofabrik extract date the next
-time these are downloaded (the portal ships a metadata file with every
-tile; the Geofabrik file name carries its date).
+Note the **mismatch of dates inside one picture**: the ground and the tree
+heights are from late 2024, the building shapes from a 2016 laser scan with
+2021/2022 footprints, the roof colours from March 2024, and the lamps and
+walls from mid-2026 OpenStreetMap. A building finished in 2023 can have a
+2024 roof colour and no 3D shape.
+
+Still to record at the next download: the Basis-DLM package's release date
+(read the `Last-Modified` of the ZIP or the metadata inside it) and the
+Geofabrik extract's timestamp.
+
+## Where exactly each file came from
+
+GeoSN serves every tile ZIP from public folders on its cloud share; the
+portal's download app finds them through a map service that also carries
+the "Stand" of each tile. The folders are per product and format:
+
+| Product | Package | Portal page |
+|---|---|---|
+| DGM1 (GeoTIFF + `.tfw` + `_akt.csv`) | `…/JCcXyifaNdLDnxZ/dgm1_<tile>_tiff.zip` | [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html) |
+| DOM1 (GeoTIFF) | `…/S6wwnFwX7882sZm/dom1_<tile>_tiff.zip` | same page |
+| Laser-scan point cloud (LAZ), unused | `…/rqcqdt8QMcLFUvC/lsc_<tile>_laz.zip` | same page |
+| LoD2 (CityGML) | `…/GVzwbSyp7Yl7mBD/lod2_<tile>_citygml.zip` | [Digitale 3D-Stadtmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-3d-stadtmodelle-4875.html) |
+| DOP20 RGBI (GeoTIFF) | `…/sX3GPcdBMGrfXT9/dop20rgbi_<tile>_tiff.zip` | [DOP](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) |
+| Basis-DLM (Shape, statewide, 1.23 GB) | `…/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip` | [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html) |
+
+`…` stands for `https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/`.
+The folder tokens can rotate; the durable index is the download service
+described in [data-pipeline.md](../../data-pipeline.md#provenance), which
+lists the current link and "Stand" for any tile. OpenStreetMap data came
+from the Overpass API (point queries, cached once) and from the Geofabrik
+Saxony extract (`sachsen-latest.osm.pbf`).
 
 ## Licences and credits
 

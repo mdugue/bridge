@@ -154,14 +154,49 @@ profile ≈ 3.3 MB. Sources on disk that are never served: the DGM GeoTIFF
 
 ## Provenance
 
-Dataset editions, download routes and licences are recorded in the guide's
+`data/provenance.json` is the machine-readable record: for every tile and
+GeoSN product the provider's currency field ("Stand") and the download URL,
+plus what is known about the OSM inputs. The guide's
 [dataset table](./guide/en/data-sources.md#dataset-editions-in-use) (and its
-German twin). When you download a new edition, update that table in both
-languages from the metadata the portal ships with each tile (`_akt.csv` for
-the DGM, the ZIP's description file for the DOP and LoD2) and the Geofabrik
-file date. The licence is *Datenlizenz Deutschland – Namensnennung 2.0*
-(`dl-de/by-2-0`) for the GeoSN products and ODbL for OSM; both credits are
-in the HUD footer (`scene-sidebar.tsx`).
+German twin) is the prose version. Update both when a source is
+re-downloaded.
+
+**Where the GeoSN values come from.** The portal's download app
+(`geoviewer.sachsen.de/mapviewer/resources/apps/produktdownload/`) reads an
+ArcGIS map service that carries one feature per 2 km tile and product with
+the fields `Produkt`, `Kachel` (the tile as `<easting km><northing km>`,
+e.g. `4125656`), `Download` (the ZIP on `geocloud.landesvermessung.sachsen.de`)
+and `Stand`. Layers: 1 LSC · 2 LoD1 · 3 LoD2 (`Download_CityGML`,
+`Download_DXF`, `Download_Shape`) · 4 DOM1 · 6 DGM1 · 7 DOP_RGB · 17
+DOP_RGBI · 18 P10 · 8–16 DTK sheets. This queries the block for one layer:
+
+```bash
+L=17   # 6 = DGM1, 4 = DOM1, 3 = LoD2, 17 = DOP_RGBI, 1 = LSC
+curl -sS -G "https://geodienste.sachsen.de/ags-relay/ArcGISServer/guest/arcgis/rest/services/geosn/rest_geosn_downloadlinks/MapServer/$L/query" \
+  --data-urlencode 'geometry={"xmin":410000,"ymin":5656000,"xmax":414000,"ymax":5660000,"spatialReference":{"wkid":25833}}' \
+  --data-urlencode 'geometryType=esriGeometryEnvelope' --data-urlencode 'inSR=25833' \
+  --data-urlencode 'spatialRel=esriSpatialRelIntersects' --data-urlencode 'outFields=*' \
+  --data-urlencode 'returnGeometry=false' --data-urlencode 'f=json' \
+  | python3 -c 'import json,sys; [print(f["attributes"]) for f in json.load(sys.stdin)["features"]]'
+```
+
+The ZIPs themselves are on public Nextcloud folders (one token per product
+and format); the tokens can rotate, the service is the durable index. The
+Basis-DLM is one statewide package replaced quarterly under the same URL
+(`basisdlm_sn_shape.zip`, 1.23 GB, `Last-Modified` 2026-07-28 when
+checked), so its edition must be noted at download time: `curl -sI -r 0-0`
+on the URL prints the file date, and the ZIP carries a metadata file.
+
+**Where the OSM values come from.** Overpass responses are cached under
+`data/_raw/osm/*.json`; their `osm3s.timestamp_osm_base` is the exact data
+timestamp. The Geofabrik extract's timestamp is printed by
+`osmium fileinfo -e data/_raw/osm/sachsen-latest.osm.pbf`
+(`osmosis_replication_timestamp`). Neither raw file is committed, so the
+table records the git dates as bounds until someone reads the timestamps.
+
+**Licences.** *Datenlizenz Deutschland – Namensnennung 2.0* (`dl-de/by-2-0`)
+for the GeoSN products and ODbL for OSM; both credits are in the HUD footer
+(`scene-sidebar.tsx`).
 
 ## Regenerating or adding a tile
 
