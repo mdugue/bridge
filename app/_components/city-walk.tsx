@@ -1,32 +1,9 @@
 "use client";
 
-import { format } from "date-fns";
-import {
-  Building2Icon,
-  CalendarIcon,
-  CameraIcon,
-  ChevronDownIcon,
-  ClipboardPasteIcon,
-  CloudFogIcon,
-  CopyIcon,
-  FootprintsIcon,
-  FullscreenIcon,
-  Gamepad2Icon,
-  HammerIcon,
-  HousePlusIcon,
-  type LucideIcon,
-  PlaneIcon,
-  SlidersHorizontalIcon,
-  SparklesIcon,
-  SunIcon,
-  TreesIcon,
-} from "lucide-react";
+import { SlidersHorizontalIcon } from "lucide-react";
 import {
   type CSSProperties,
-  type Dispatch,
-  type ReactNode,
-  type RefObject,
-  type SetStateAction,
+  startTransition,
   useCallback,
   useEffect,
   useRef,
@@ -35,50 +12,17 @@ import {
 } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Kbd } from "@/components/ui/kbd";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarProvider,
-  SidebarSeparator,
-  SidebarTrigger,
-  useSidebar,
-} from "@/components/ui/sidebar";
-import { Slider } from "@/components/ui/slider";
-import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import {
-  type FocusMode,
-  LOOK_CONTROLS,
-  type LookGroup,
-  lookPatch,
-  type LookValues,
-} from "@/lib/city/look-controls";
+  LOAD_STAGES,
+  loadPercent,
+  type LoadStageState,
+  loadStageStates,
+  type SkippedStages,
+  type StageFractions,
+} from "@/lib/city/load-stages";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
@@ -90,17 +34,22 @@ import {
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import type { TileUrls } from "@/lib/city/tile";
+import { ControlHintBar } from "./control-hints";
+import { VEIL_HOLD_MS } from "./handover";
 import {
   type CityWalkHandle,
   type CityWalkStats,
   createCityWalkApp,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
-import { Minimap } from "./minimap";
+import { LoadScreen } from "./load-screen";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
+import type { ViewpointGeometry } from "./viewpoints";
+import { SceneSidebar } from "./scene-sidebar";
+import type { SceneTabId } from "./scene-tabs";
+import { StreamPill } from "./stream-pill";
 import type { SunState } from "./sun-rig";
-import { SCENIC_VIEWS } from "./viewpoints";
 import { VirtualJoystick } from "./virtual-joystick";
 import { hasWebGl2 } from "./webgl-support";
 
@@ -115,193 +64,30 @@ interface Props {
   primary: TileUrls;
 }
 
+/**
+ * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
+ * is the live scene with the streaming pill. Nothing animates between them —
+ * the loading screen is frosted glass that the city arrives behind and that is
+ * then removed in a single frame. See handover.ts.
+ */
 type Status =
-  | { phase: "loading"; message: string }
-  /** the primary tile is on screen and walkable; the rest streams in */
-  | { phase: "streaming"; message: string | null }
-  | { phase: "ready" }
-  | { phase: "error"; message: string };
+  | { phase: "error"; message: string }
+  | { phase: "loading" }
+  | { phase: "running" };
 
 // Evaluated once in the browser (the component is loaded with ssr: false).
 const INITIAL_DATE = new Date();
 const INITIAL_MINUTES = 14 * 60;
-const MINUTES_STEP = 1;
-const LAST_MINUTE = 24 * 60 - MINUTES_STEP;
+
+/** A little air after the veil is gone before the heavy work resumes. */
+const STREAM_SETTLE_MS = 250;
 
 /** Local-time instant from a calendar day + minutes-of-day slider. */
 function composeDate(day: Date, minutes: number): Date {
   return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes);
 }
 
-function formatMinutes(minutes: number): string {
-  const h = String(Math.floor(minutes / 60)).padStart(2, "0");
-  const m = String(minutes % 60).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
-/** Manual DoF focus ring radius (m) for the minimap, or null when not shown. */
-function focusRingMeters(
-  dofOn: boolean,
-  mode: FocusMode,
-  distance: number
-): number | null {
-  return dofOn && mode === "manual" ? distance : null;
-}
-
-/** A labelled 0–100(+) slider that mirrors its value into the scene handle. */
-function PctSlider({
-  description,
-  disabled = false,
-  id,
-  label,
-  max = 100,
-  min = 0,
-  onChange,
-  step = 1,
-  unit = "%",
-  value,
-}: {
-  description?: ReactNode;
-  disabled?: boolean;
-  id: string;
-  label: string;
-  max?: number;
-  min?: number;
-  onChange: (value: number) => void;
-  step?: number;
-  unit?: string;
-  value: number;
-}) {
-  return (
-    <Field>
-      <FieldLabel htmlFor={id}>
-        {label} · {value}
-        {unit}
-      </FieldLabel>
-      <Slider
-        disabled={disabled}
-        id={id}
-        max={max}
-        min={min}
-        onValueChange={(v) => onChange(Number(Array.isArray(v) ? v[0] : v))}
-        step={step}
-        value={[value]}
-      />
-      {description ? <FieldDescription>{description}</FieldDescription> : null}
-    </Field>
-  );
-}
-
-/** The percent sliders of one control group, rendered from LOOK_CONTROLS. */
-function LookSliders({
-  group,
-  look,
-  onLook,
-}: {
-  group: LookGroup;
-  look: LookValues;
-  onLook: (patch: Partial<LookValues>) => void;
-}) {
-  return (
-    <>
-      {LOOK_CONTROLS.filter((def) => def.group === group).map((def) => (
-        <PctSlider
-          description={def.description}
-          id={def.id}
-          key={def.key}
-          label={def.label}
-          max={def.max}
-          onChange={(n) => onLook(lookPatch(def.key, n / 100))}
-          value={Math.round(look[def.key] * 100)}
-        />
-      ))}
-    </>
-  );
-}
-
-/** A collapsible, titled section of related controls inside the sidebar. */
-function ControlGroup({
-  children,
-  defaultOpen = true,
-  icon: Icon,
-  title,
-}: {
-  children: ReactNode;
-  defaultOpen?: boolean;
-  icon: LucideIcon;
-  title: string;
-}) {
-  return (
-    <Collapsible
-      className="border-sidebar-border/50 border-b"
-      defaultOpen={defaultOpen}
-    >
-      <SidebarGroup className="py-1">
-        <SidebarGroupLabel
-          className="group/trigger gap-2"
-          render={<CollapsibleTrigger />}
-        >
-          <Icon />
-          {title}
-          <ChevronDownIcon className="ml-auto transition-transform group-aria-expanded/trigger:rotate-180" />
-        </SidebarGroupLabel>
-        <CollapsibleContent>
-          <SidebarGroupContent>
-            <FieldGroup className="gap-3 pb-2">{children}</FieldGroup>
-          </SidebarGroupContent>
-        </CollapsibleContent>
-      </SidebarGroup>
-    </Collapsible>
-  );
-}
-
-/** The minimap, sized to fill the sidebar's content width (kept square). */
-function SidebarMinimap({
-  bounds,
-  focusRingM,
-  footprints,
-  landcoverTiles,
-  onTeleport,
-  subscribePose,
-}: {
-  bounds: TerrainBounds;
-  focusRingM: number | null;
-  footprints: FootprintPoly[];
-  landcoverTiles: { bounds: TerrainBounds; src: string }[];
-  onTeleport: (epsgX: number, epsgY: number) => void;
-  subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) {
-      return;
-    }
-    const measure = () => setSize(Math.round(el.clientWidth));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return (
-    <div className="px-2 pt-2" ref={ref}>
-      {size > 0 && (
-        <Minimap
-          bounds={bounds}
-          focusRingM={focusRingM}
-          footprints={footprints}
-          landcoverTiles={landcoverTiles}
-          onTeleport={onTeleport}
-          size={size}
-          subscribePose={subscribePose}
-        />
-      )}
-    </div>
-  );
-}
-
-/** Floating button that opens the settings sidebar; hidden while it's open. */
+/** Floating button that opens the sidebar; hidden while it is open. */
 function SettingsToggle() {
   const { toggleSidebar, state, isMobile, openMobile } = useSidebar();
   const open = isMobile ? openMobile : state === "expanded";
@@ -310,8 +96,8 @@ function SettingsToggle() {
   }
   return (
     <Button
-      aria-label="Scene settings"
-      className="absolute top-3 right-3 z-20 shadow-md"
+      aria-label="Szeneneinstellungen"
+      className="absolute top-4 right-4 z-20 size-9 rounded-full border-0 bg-hud/85 text-hud-foreground shadow-lg backdrop-blur-lg hover:bg-hud/95"
       onClick={toggleSidebar}
       size="icon"
       variant="secondary"
@@ -321,320 +107,30 @@ function SettingsToggle() {
   );
 }
 
-/** DoF focus controls (mode toggle + manual distance slider); null when DoF off. */
-function FocusControls({
-  enabled,
-  mode,
-  distance,
-  onMode,
-  onDistance,
+/**
+ * The overlays that belong to the scene, not to the panel: the key hints and
+ * the joystick. Both step aside while the sidebar is open — on a phone the
+ * sidebar is a sheet, so a joystick left mounted underneath would be a dead
+ * control the player can still see.
+ */
+function SceneOverlays({
+  coarse,
+  onMove,
 }: {
-  distance: number;
-  enabled: boolean;
-  mode: FocusMode;
-  onDistance: (meters: number) => void;
-  onMode: (mode: FocusMode) => void;
+  coarse: boolean;
+  onMove: (x: number, y: number) => void;
 }) {
-  if (!enabled) {
+  const { state, isMobile, openMobile } = useSidebar();
+  if (isMobile ? openMobile : state === "expanded") {
     return null;
   }
   return (
     <>
-      <Field>
-        <FieldLabel htmlFor="focus-mode">Focus</FieldLabel>
-        <ToggleGroup
-          className="w-full"
-          id="focus-mode"
-          onValueChange={(value: string[]) => {
-            const next = value[0] as FocusMode | undefined;
-            if (next) {
-              onMode(next);
-            }
-          }}
-          size="sm"
-          value={[mode]}
-          variant="outline"
-        >
-          <ToggleGroupItem className="flex-1" value="auto">
-            Auto
-          </ToggleGroupItem>
-          <ToggleGroupItem className="flex-1" value="manual">
-            Manual
-          </ToggleGroupItem>
-        </ToggleGroup>
-        <FieldDescription>
-          {mode === "auto"
-            ? "Focuses on whatever the crosshair is over"
-            : "Fixed focus distance — shown as a ring on the minimap"}
-        </FieldDescription>
-      </Field>
-      {mode === "manual" && (
-        <PctSlider
-          id="focus-distance"
-          label="Focus distance"
-          max={3000}
-          min={1}
-          onChange={onDistance}
-          step={5}
-          unit=" m"
-          value={distance}
-        />
-      )}
-    </>
-  );
-}
-
-/**
- * Quick-jump buttons that glide the camera to curated Dresden vantages. The
- * mode icon previews where you land: a plane for the aerial flights, footprints
- * for the ones that set you down on the ground.
- */
-function ScenicViews({
-  handleRef,
-}: {
-  handleRef: RefObject<CityWalkHandle | null>;
-}) {
-  return (
-    <Field>
-      <FieldLabel>Scenic views</FieldLabel>
-      <div className="grid grid-cols-2 gap-2">
-        {SCENIC_VIEWS.map((view) => (
-          <Button
-            className="justify-start"
-            key={view.id}
-            onClick={() => handleRef.current?.flyToViewpoint(view)}
-            size="sm"
-            title={view.description}
-            type="button"
-            variant="secondary"
-          >
-            {view.mode === "fly" ? (
-              <PlaneIcon data-icon="inline-start" />
-            ) : (
-              <FootprintsIcon data-icon="inline-start" />
-            )}
-            <span className="truncate">{view.label}</span>
-          </Button>
-        ))}
+      <ControlHintBar coarse={coarse} />
+      {/* Clear of the hint bar even when it wraps to two rows on a phone. */}
+      <div className="absolute bottom-24 left-5">
+        <VirtualJoystick onChange={onMove} />
       </div>
-      <FieldDescription>
-        Glide the camera to a curated vantage — the icon shows whether you
-        arrive flying or on foot.
-      </FieldDescription>
-    </Field>
-  );
-}
-
-interface SceneControlsProps {
-  applySnapshot: () => void;
-  coarse: boolean;
-  copySnapshot: () => void;
-  day: Date;
-  handleRef: RefObject<CityWalkHandle | null>;
-  insertBuilding: () => void;
-  look: LookValues;
-  minutes: number;
-  mode: MovementMode;
-  onLook: (patch: Partial<LookValues>) => void;
-  setSnapshotText: Dispatch<SetStateAction<string>>;
-  snapshotMsg: string | null;
-  snapshotText: string;
-  sun: SunState | null;
-  updateSun: (day: Date, minutes: number) => void;
-}
-
-/**
- * The full control surface, grouped into collapsible sections. Shared verbatim
- * between the desktop sidebar and the mobile bottom drawer — kept top-level so
- * its many branches don't push the host component past the complexity cap.
- * The percent sliders come from LOOK_CONTROLS (lib/city/look-controls.ts).
- */
-function SceneControls({
-  applySnapshot,
-  coarse,
-  copySnapshot,
-  day,
-  handleRef,
-  insertBuilding,
-  look,
-  minutes,
-  mode,
-  onLook,
-  setSnapshotText,
-  snapshotMsg,
-  snapshotText,
-  sun,
-  updateSun,
-}: SceneControlsProps) {
-  return (
-    <>
-      <ControlGroup icon={SunIcon} title="Sun & time">
-        <Field>
-          <FieldLabel htmlFor="sun-date">Date</FieldLabel>
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  className="w-full justify-start font-normal"
-                  id="sun-date"
-                  size="sm"
-                  variant="outline"
-                />
-              }
-            >
-              <CalendarIcon data-icon="inline-start" />
-              {format(day, "PPP")}
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-0">
-              <Calendar
-                mode="single"
-                onSelect={(d) => d && updateSun(d, minutes)}
-                selected={day}
-              />
-            </PopoverContent>
-          </Popover>
-        </Field>
-
-        <Field>
-          <FieldLabel htmlFor="sun-time">
-            Time of day · {formatMinutes(minutes)}
-          </FieldLabel>
-          <Slider
-            id="sun-time"
-            max={LAST_MINUTE}
-            min={0}
-            onValueChange={(value) =>
-              updateSun(day, Number(Array.isArray(value) ? value[0] : value))
-            }
-            step={MINUTES_STEP}
-            value={[minutes]}
-          />
-          <FieldDescription>
-            {sun
-              ? `Sun altitude ${sun.altitudeDeg.toFixed(1)}°${
-                  sun.aboveHorizon ? "" : " — below horizon (night)"
-                }`
-              : "Sun position unknown"}
-          </FieldDescription>
-        </Field>
-      </ControlGroup>
-
-      <ControlGroup icon={CloudFogIcon} title="Atmosphere">
-        <LookSliders group="atmosphere" look={look} onLook={onLook} />
-      </ControlGroup>
-
-      <ControlGroup icon={Building2Icon} title="Buildings">
-        <LookSliders group="buildings" look={look} onLook={onLook} />
-      </ControlGroup>
-
-      <ControlGroup icon={TreesIcon} title="Vegetation">
-        <LookSliders group="vegetation" look={look} onLook={onLook} />
-        <Field orientation="horizontal">
-          <FieldLabel htmlFor="tree-multituft">
-            Multi-Tuft-Kronen (nah)
-          </FieldLabel>
-          <Switch
-            checked={look.multiTuft}
-            id="tree-multituft"
-            onCheckedChange={(checked) => onLook({ multiTuft: checked })}
-            size="sm"
-          />
-        </Field>
-      </ControlGroup>
-
-      <ControlGroup icon={SparklesIcon} title="Rendering">
-        <LookSliders group="rendering" look={look} onLook={onLook} />
-        <Field orientation="horizontal">
-          <FieldLabel htmlFor="depth-of-field">Depth of field</FieldLabel>
-          <Switch
-            checked={look.dof}
-            id="depth-of-field"
-            onCheckedChange={(checked) => onLook({ dof: checked })}
-            size="sm"
-          />
-        </Field>
-        <FocusControls
-          distance={look.focusDistanceM}
-          enabled={look.dof}
-          mode={look.focusMode}
-          onDistance={(m) => onLook({ focusDistanceM: m })}
-          onMode={(m) => onLook({ focusMode: m })}
-        />
-      </ControlGroup>
-
-      <ControlGroup icon={Gamepad2Icon} title="Scene">
-        <Field orientation="horizontal">
-          <FieldLabel htmlFor="fly-mode">
-            {coarse ? "Fly mode" : "Fly mode (F)"}
-          </FieldLabel>
-          <Switch
-            checked={mode === "fly"}
-            id="fly-mode"
-            onCheckedChange={(checked) =>
-              handleRef.current?.setMovementMode(checked ? "fly" : "walk")
-            }
-            size="sm"
-          />
-        </Field>
-
-        <Button onClick={insertBuilding} size="sm" variant="secondary">
-          <HousePlusIcon data-icon="inline-start" />
-          {coarse ? "Insert building" : "Insert building (B)"}
-        </Button>
-
-        {!coarse && (
-          <Button
-            onClick={() => handleRef.current?.enterImmersive()}
-            size="sm"
-            variant="outline"
-          >
-            <FullscreenIcon data-icon="inline-start" />
-            Immersive mode · Esc exits
-          </Button>
-        )}
-      </ControlGroup>
-
-      <ControlGroup icon={CameraIcon} title="Snapshot">
-        <ScenicViews handleRef={handleRef} />
-        <Field>
-          <FieldLabel htmlFor="snapshot">Snapshot JSON</FieldLabel>
-          <div className="flex gap-2">
-            <Button
-              className="flex-1"
-              onClick={copySnapshot}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              <CopyIcon data-icon="inline-start" />
-              Copy
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={applySnapshot}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <ClipboardPasteIcon data-icon="inline-start" />
-              Apply
-            </Button>
-          </div>
-          <Textarea
-            className="font-mono text-[10px] leading-snug"
-            id="snapshot"
-            onChange={(e) => setSnapshotText(e.target.value)}
-            placeholder="Copy captures position, time & look as JSON. Paste one here and Apply to restore it."
-            rows={4}
-            spellCheck={false}
-            value={snapshotText}
-          />
-          <FieldDescription>
-            {snapshotMsg ??
-              "Reproducible capture — share or replay an exact view."}
-          </FieldDescription>
-        </Field>
-      </ControlGroup>
     </>
   );
 }
@@ -655,14 +151,26 @@ export default function CityWalk({
   const [webGl2] = useState(hasWebGl2);
   const [status, setStatus] = useState<Status>(() =>
     webGl2
-      ? { phase: "loading", message: "Starting renderer…" }
+      ? { phase: "loading" }
       : {
           phase: "error",
           message:
-            "This viewer needs WebGL2, which this browser or device does not provide. " +
-            "Try a current desktop or mobile browser with hardware acceleration enabled.",
+            "Dieser Viewer braucht WebGL2, das dieser Browser oder dieses Gerät " +
+            "nicht bereitstellt. Bitte einen aktuellen Desktop- oder Mobil-Browser " +
+            "mit aktivierter Hardwarebeschleunigung verwenden.",
         }
   );
+  // What the scene has reported per load stage (lib/city/load-stages.ts): the
+  // loading screen, the handover and the pill all read this. One piece of
+  // state, not two, because a streaming failure has to settle both at once.
+  const [progress, setProgress] = useState<{
+    fractions: StageFractions;
+    skipped: SkippedStages;
+  }>({ fractions: {}, skipped: {} });
+  const [streamError, setStreamError] = useState<string | null>(null);
+  // Kept past the handover: the city arrives behind the frosted screen, which
+  // is only then removed (handover.ts).
+  const [veilUp, setVeilUp] = useState(true);
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   const [sun, setSun] = useState<SunState | null>(null);
   const [day, setDay] = useState(INITIAL_DATE);
@@ -674,12 +182,18 @@ export default function CityWalk({
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
+  const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
+    null
+  );
   const [landcoverTiles, setLandcoverTiles] = useState<
     { bounds: TerrainBounds; src: string }[]
   >([]);
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
+  const [tab, setTab] = useState<SceneTabId>("erkunden");
+  const [rememberedView, setRememberedView] =
+    useState<ViewpointGeometry | null>(null);
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -700,9 +214,9 @@ export default function CityWalk({
     }
     let cancelled = false;
     let handle: CityWalkHandle | null = null;
-    // True once the first frame is up: later progress messages belong to the
-    // streaming chip, not the blocking overlay.
-    let booted = false;
+    let veilTimer: ReturnType<typeof setTimeout> | undefined;
+    let streamFallback: ReturnType<typeof setTimeout> | undefined;
+    const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
 
     createCityWalkApp({
@@ -714,43 +228,61 @@ export default function CityWalk({
       insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
-      onProgress: (message) => {
-        if (!cancelled) {
-          setStatus(
-            booted
-              ? { phase: "streaming", message }
-              : { phase: "loading", message }
-          );
+      onStage: ({ id, fraction, skipped: isSkipped }) => {
+        if (cancelled) {
+          return;
         }
+        // Deliberately NOT an urgent update. These arrive many times a second
+        // while a tile streams, and urgent work at that rate starves whatever
+        // else React has queued — including, when it was still a transition,
+        // the handover itself, which landed ten seconds late without this.
+        startTransition(() => {
+          setProgress((prev) => ({
+            fractions: { ...prev.fractions, [id]: fraction },
+            skipped: isSkipped ? { ...prev.skipped, [id]: true } : prev.skipped,
+          }));
+        });
       },
       onLoaded: () => {
         if (!cancelled) {
           updatePocDebug({ ready: true });
-          setStatus({ phase: "ready" });
         }
       },
       onError: (message) => {
-        if (!cancelled) {
-          setStatus({
-            phase: "streaming",
-            message: `Failed to load: ${message}`,
-          });
+        if (cancelled) {
+          return;
         }
+        setStreamError(message);
+        // loadRest threw: whatever had not landed is not coming. Settle those
+        // stages, or the pill would claim forever that a layer is loading and
+        // never reach the state where it unmounts.
+        setProgress((prev) => {
+          const settled = { ...prev.skipped };
+          for (const stage of LOAD_STAGES) {
+            if ((prev.fractions[stage.id] ?? 0) < 1) {
+              settled[stage.id] = true;
+            }
+          }
+          return { ...prev, skipped: settled };
+        });
       },
       onStats: (s) => {
         if (cancelled) {
           return;
         }
-        setStats(s);
         updatePocDebug({ stats: s });
         const h = handleRef.current;
-        if (h) {
-          setFootprints(h.getFootprints());
-        }
+        startTransition(() => {
+          setStats(s);
+          if (h) {
+            setFootprints(h.getFootprints());
+          }
+        });
       },
       onFps: (value) => {
         if (!cancelled) {
-          setFps(value);
+          // Twice a second, read only in the Erweitert tab's counters.
+          startTransition(() => setFps(value));
         }
       },
       onModeChange: (m) => {
@@ -774,13 +306,26 @@ export default function CityWalk({
         }
         handle = h;
         handleRef.current = h;
-        booted = true;
         setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
+        setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({ handle: h, look, firstFrame: true });
-        setStatus({ phase: "streaming", message: null });
+        // The frame the scene goes live in. The loading screen stays up and
+        // stops taking input: the city is now rendering behind its glass, and
+        // the player can already look around through it.
+        setStatus({ phase: "running" });
+        // Then the glass is removed, in one frame, with nothing in between.
+        veilTimer = setTimeout(() => setVeilUp(false), VEIL_HOLD_MS);
+        // The neighbour tiles, the vegetation and the terrain BVH wait until
+        // then: each is a long synchronous task, and the frames while the city
+        // is arriving — and the first ones the player actually steers — are
+        // the worst possible place for them (see create-app's startStreaming).
+        streamFallback = setTimeout(
+          beginStreaming,
+          VEIL_HOLD_MS + STREAM_SETTLE_MS
+        );
       })
       .catch((err: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
@@ -797,6 +342,8 @@ export default function CityWalk({
     return () => {
       cancelled = true;
       aborter.abort();
+      clearTimeout(veilTimer);
+      clearTimeout(streamFallback);
       handleRef.current = null;
       handle?.dispose();
       // The hook must not keep a disposed scene callable (or alive): the
@@ -819,12 +366,6 @@ export default function CityWalk({
     }
   };
 
-  const insertBuilding = () => {
-    handleRef.current?.insertBuilding().catch(() => {
-      // glTF failure is non-fatal; the box fallback can't fail
-    });
-  };
-
   const copySnapshot = () => {
     const h = handleRef.current;
     if (!h) {
@@ -838,8 +379,8 @@ export default function CityWalk({
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
     navigator.clipboard?.writeText(text).then(
-      () => setSnapshotMsg("Copied to clipboard"),
-      () => setSnapshotMsg("Copy failed — select the text manually")
+      () => setSnapshotMsg("In die Zwischenablage kopiert"),
+      () => setSnapshotMsg("Kopieren fehlgeschlagen — Text manuell auswählen")
     );
   };
 
@@ -868,55 +409,40 @@ export default function CityWalk({
     );
     updateSun(nextDay, date.getHours() * 60 + date.getMinutes());
     look.set(decodeLook(snap.look));
-    setSnapshotMsg("Snapshot applied");
+    setSnapshotMsg("Snapshot angewendet");
   };
 
-  // Shared between the desktop sidebar and the mobile bottom drawer.
-  const controlsFields = (
-    <SceneControls
-      applySnapshot={applySnapshot}
-      coarse={coarse}
-      copySnapshot={copySnapshot}
-      day={day}
-      handleRef={handleRef}
-      insertBuilding={insertBuilding}
-      look={lookValues}
-      minutes={minutes}
-      mode={mode}
-      onLook={look.set}
-      setSnapshotText={setSnapshotText}
-      snapshotMsg={snapshotMsg}
-      snapshotText={snapshotText}
-      sun={sun}
-      updateSun={updateSun}
-    />
+  const stages: LoadStageState[] = loadStageStates(
+    progress.fractions,
+    progress.skipped
   );
-
-  const booted = status.phase === "streaming" || status.phase === "ready";
+  const percent = loadPercent(progress.fractions, progress.skipped);
+  const booted = status.phase === "running";
 
   return (
     <SidebarProvider
       className="relative h-full overflow-hidden"
-      style={{ "--sidebar-width": "20rem" } as CSSProperties}
+      // Open on a desktop, where there is room beside the scene, and closed on
+      // a touch device, where the panel would cover the view it describes.
+      defaultOpen={!coarse}
+      style={{ "--sidebar-width": "21.25rem" } as CSSProperties}
     >
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the WebGL canvas. */}
-      <div className="absolute inset-0 overflow-hidden bg-slate-900">
+      <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
         <div className="absolute inset-0" ref={mountRef} />
 
-        {status.phase === "loading" && (
-          <output
-            aria-live="polite"
-            className="absolute inset-0 flex items-center justify-center gap-3 bg-slate-900/70 text-lg text-white"
-          >
-            <Spinner />
-            {status.message}
-          </output>
+        {veilUp && (
+          <LoadScreen
+            handedOver={status.phase === "running"}
+            percent={percent}
+            stages={stages}
+          />
         )}
 
         {status.phase === "error" && (
           <Alert className="absolute inset-x-8 top-8" variant="destructive">
-            <AlertTitle>Failed to start the city viewer</AlertTitle>
+            <AlertTitle>Der Stadt-Viewer konnte nicht starten</AlertTitle>
             <AlertDescription className="wrap-break-word">
               {status.message}
             </AlertDescription>
@@ -931,104 +457,59 @@ export default function CityWalk({
               className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
             />
 
-            {/* FPS readout — always visible */}
-            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-full bg-slate-900/55 px-2 py-0.5 font-mono text-[11px] text-white tabular-nums">
-              {fps === null ? "–" : Math.round(fps)} FPS
-            </div>
+            {/* The loading screen, at pill size. It retires itself once the
+                last layer has landed and it has been readable for a moment. */}
+            <StreamPill stages={stages} />
 
-            {/* Streaming chip: the scene is usable while the rest loads. */}
-            {status.phase === "streaming" && status.message && (
+            {streamError && (
               <output
                 aria-live="polite"
-                className="pointer-events-none absolute top-9 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-900/55 px-2.5 py-0.5 text-[11px] text-white"
+                className="pointer-events-none absolute top-15 left-1/2 -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
               >
-                <Spinner className="size-3" />
-                {status.message}
+                Eine Schicht konnte nicht geladen werden: {streamError}
               </output>
             )}
 
             <SettingsToggle />
-
-            <div className="absolute bottom-8 left-5">
-              <VirtualJoystick
-                onChange={(x, y) => handleRef.current?.setMoveInput(x, y)}
-              />
-            </div>
-
-            {coarse && (
-              <div className="absolute right-3 bottom-8 flex flex-col gap-2">
-                <Button
-                  onClick={() => handleRef.current?.demolishAtCrosshair()}
-                  size="sm"
-                  variant="secondary"
-                >
-                  <HammerIcon data-icon="inline-start" />
-                  Demolish
-                </Button>
-                <Button onClick={insertBuilding} size="sm" variant="secondary">
-                  <HousePlusIcon data-icon="inline-start" />
-                  Insert
-                </Button>
-              </div>
-            )}
+            <SceneOverlays
+              coarse={coarse}
+              onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+            />
           </>
         )}
       </div>
 
       {booted && (
-        <Sidebar collapsible="offcanvas" side="right">
-          <SidebarHeader>
-            <div className="flex items-center justify-between pl-1">
-              <span className="font-medium text-sm">Scene settings</span>
-              <SidebarTrigger />
-            </div>
-          </SidebarHeader>
-          <SidebarContent>
-            {bounds && (
-              <SidebarMinimap
-                bounds={bounds}
-                focusRingM={focusRingMeters(
-                  lookValues.dof,
-                  lookValues.focusMode,
-                  lookValues.focusDistanceM
-                )}
-                footprints={footprints}
-                landcoverTiles={landcoverTiles}
-                onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
-                subscribePose={subscribePose}
-              />
-            )}
-            {controlsFields}
-          </SidebarContent>
-          <SidebarSeparator />
-          <SidebarFooter className="gap-1.5 text-muted-foreground text-xs leading-snug">
-            <p>
-              {coarse ? (
-                "Drag to look around · joystick to walk · double-tap the ground to travel · pinch to zoom"
-              ) : (
-                <>
-                  Drag to look around · <Kbd>WASD</Kbd> move · double-click
-                  ground to travel · scroll to zoom · <Kbd>Shift</Kbd> sprint ·{" "}
-                  <Kbd>F</Kbd> walk/fly · <Kbd>Space</Kbd>/<Kbd>Shift</Kbd>{" "}
-                  up/down · <Kbd>R</Kbd> demolish · <Kbd>B</Kbd> insert ·{" "}
-                  <Kbd>Esc</Kbd> exits immersive
-                </>
-              )}
-            </p>
-            {stats && (
-              <p>
-                {stats.buildingCount} buildings ·{" "}
-                {stats.terrainVertexCount.toLocaleString()} terrain vertices · ≈{" "}
-                {stats.gpuMegabytes} MB GPU ·{" "}
-                {mode === "walk" ? "walking" : "flying"}
-              </p>
-            )}
-            <p className="text-[10px]">
-              Street lamps, retaining walls, station platforms and bridge
-              structure © OpenStreetMap contributors (ODbL).
-            </p>
-          </SidebarFooter>
-        </Sidebar>
+        <SceneSidebar
+          applySnapshot={applySnapshot}
+          bounds={bounds}
+          coarse={coarse}
+          copySnapshot={copySnapshot}
+          day={day}
+          footprints={footprints}
+          fps={fps}
+          handleRef={handleRef}
+          landcoverTiles={landcoverTiles}
+          latLng={latLng}
+          look={lookValues}
+          minutes={minutes}
+          mode={mode}
+          onLook={look.set}
+          onDefaultTime={() => updateSun(day, INITIAL_MINUTES)}
+          onTab={setTab}
+          onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
+          rememberedView={rememberedView}
+          resetLook={() => look.set(LOOK_DEFAULTS)}
+          setRememberedView={setRememberedView}
+          setSnapshotText={setSnapshotText}
+          snapshotMsg={snapshotMsg}
+          snapshotText={snapshotText}
+          stats={stats}
+          subscribePose={subscribePose}
+          sun={sun}
+          tab={tab}
+          updateSun={updateSun}
+        />
       )}
     </SidebarProvider>
   );

@@ -19,6 +19,7 @@ import { fogRangeFor } from "@/lib/city/atmosphere";
 import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import { parseHeightfieldHeader } from "@/lib/city/heightfield";
+import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
   LOOK_DEFAULTS,
   type LookValues,
@@ -91,7 +92,7 @@ import {
   loadNdviSampler,
   type VegetationControl,
 } from "./vegetation-layer";
-import type { Viewpoint } from "./viewpoints";
+import type { ViewpointGeometry } from "./viewpoints";
 import {
   applyCityLook,
   applyCityStyle,
@@ -162,7 +163,14 @@ export interface CityWalkOptions {
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
-  onProgress?: (message: string) => void;
+  /**
+   * Load progress, stage by stage (lib/city/load-stages.ts). Fractions are
+   * real where the pipeline can measure them — the compressed byte stream of
+   * the two big downloads, the tile count of the neighbour block — and a plain
+   * started/finished elsewhere. The HUD turns them into the loading screen,
+   * the handover and the streaming pill.
+   */
+  onStage?: (update: LoadStageUpdate) => void;
   onStats?: (stats: CityWalkStats) => void;
   /** the spawn tile: walked on, collided with, demolished from (lib/city/tile.ts) */
   primary: TileUrls;
@@ -195,7 +203,12 @@ export interface CityWalkHandle {
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
    * the instant applyCameraState), landing in the viewpoint's movement mode.
    */
-  flyToViewpoint: (viewpoint: Viewpoint) => void;
+  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  /**
+   * The current pose as a vantage — what the HUD stores when you save a view,
+   * so restoring it is the same animated glide as any curated one.
+   */
+  captureViewpoint: () => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
@@ -225,12 +238,21 @@ export interface CityWalkHandle {
   insertBuilding: () => Promise<void>;
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
+  /** the scene's geographic position — the HUD's sunrise/sunset times */
+  latLng: { lat: number; lng: number };
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
   setSun: (date: Date) => SunState;
+  /**
+   * Begins everything after the first frame — the neighbour tiles, the
+   * vegetation, the rails, the terrain BVH. Held back so its synchronous
+   * chunks cannot stutter the frames the city arrives in; idempotent, and a
+   * no-op once the scene is disposed.
+   */
+  startStreaming: () => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** DGM extent in EPSG coordinates — the minimap frame */
@@ -406,12 +428,18 @@ async function bootApp(
   const neighbourTiles = budget.neighbourTiles ? (opts.extraTiles ?? []) : [];
 
   const primary = opts.primary;
-  opts.onProgress?.("Loading buildings…");
+  /** One stage report for the HUD (lib/city/load-stages.ts). */
+  const stage = (id: LoadStageId, fraction: number, skipped?: boolean) =>
+    opts.onStage?.({ id, fraction, skipped });
+
+  stage("buildings", 0);
   // The neighbours' heightfield HEADERS (~150 bytes each) come along with the
   // primary mesh: their bounds frame the minimap from the first frame, while
   // the tiles themselves stream in afterwards (see loadRest below).
   const [primaryCity, neighbourBounds] = await Promise.all([
-    fetchCityMesh(primary, opts.signal),
+    // The download is the bulk of the stage; the last tenth is the decode and
+    // the mesh build below, which report on completion.
+    fetchCityMesh(primary, opts.signal, (f) => stage("buildings", f * 0.9)),
     Promise.all(
       neighbourTiles.map(
         async (tile) =>
@@ -433,6 +461,7 @@ async function bootApp(
     primaryCity.vertices,
     world
   );
+  stage("buildings", 1);
   // The recenter offset was captured at bake time from the primary tile and
   // shared with the neighbours, so every layer subtracts the same origin.
   const offset = primaryCity.meta.offset;
@@ -505,12 +534,14 @@ async function bootApp(
   // (loadTileDressing) so the first frame can wait on terrain + buildings.
   const loadTileTerrain = async (
     tile: TileUrls,
-    slot: number
+    slot: number,
+    onBytes?: (fraction: number) => void
   ): Promise<TerrainLayer> => {
     // OSM walls feed two consumers — the heightfield step (conflation) and
     // the ribbon geometry built for the whole block later — so fetch once.
     const walls = await fetchFeatures<WallFeature>(tile.walls, opts.signal);
     const t = await loadTerrain({
+      onBytes,
       url: tile.heightfieldHeader,
       landcoverUrl: tile.landcover,
       landcoverRgbUrl: tile.landcoverRgb,
@@ -562,7 +593,8 @@ async function bootApp(
   // then built.
   const loadTileDressing = async (
     tile: TileUrls,
-    t: TerrainLayer
+    t: TerrainLayer,
+    onFetched?: () => void
   ): Promise<void> => {
     const [rows, canopy, ndviAt, lampFeatures] = await Promise.all([
       fetchFeatures<VegRowFeature>(tile.vegrows, opts.signal),
@@ -571,6 +603,8 @@ async function bootApp(
       fetchFeatures<LampFeature>(tile.lamps, opts.signal),
     ]);
     ensureAlive();
+    // The features are in; the canopy build is the other half of the wait.
+    onFetched?.();
     const ground = { offset, heightAt: t.heightAt };
     const vegetation = buildVegetation(
       { rows, canopy, ndviAt: ndviAt ?? undefined },
@@ -590,8 +624,13 @@ async function bootApp(
     lampLights?.setHeads(lampControls.flatMap((l) => l.headPositions));
   };
 
-  opts.onProgress?.("Loading DGM terrain…");
-  const terrain = await loadTileTerrain(primary, 0);
+  stage("terrain", 0);
+  // The raster download is nearly all of it; conflation and the geometry
+  // build are the last tenth.
+  const terrain = await loadTileTerrain(primary, 0, (f) =>
+    stage("terrain", f * 0.9)
+  );
+  stage("terrain", 1);
   assertCityOnTerrain(offset, terrain);
 
   // Neighbouring tiles stream in AFTER the first frame (loadRest): their
@@ -656,7 +695,7 @@ async function bootApp(
   // every tile has landed), so a track crossing a tile seam samples the
   // neighbour's heightfield instead of being dropped at the edge.
   const addBlockRails = (features: RailFeatures): void => {
-    opts.onProgress?.("Building railway & bridges…");
+    stage("rails", 0.7);
     const rail = buildRail(features, { offset, heightAt, heightFog });
     scene.add(rail);
     railGroups.push(rail);
@@ -669,7 +708,7 @@ async function bootApp(
     if (wallFeatures.length === 0) {
       return;
     }
-    opts.onProgress?.("Building walls…");
+    stage("rails", 0.85);
     const walls = buildWalls(wallFeatures, { offset, heightAt, heightFog });
     scene.add(walls);
     wallGroups.push(walls);
@@ -722,10 +761,13 @@ async function bootApp(
     // the water; the Talnebel slider then changes no pixel.
     lowerGroundFloor(worldBounds.min.y + SKIRT_DEPTH);
   }
+  // Where the tile sits on the globe: the sun rig needs it, and so does the
+  // HUD's sunrise/sunset readout.
+  const latLng = tileLatLng(primaryCity.meta.epsg, offset);
   const sunRig = createSunRig(
     scene,
     worldBounds,
-    tileLatLng(primaryCity.meta.epsg, offset),
+    latLng,
     shadowMapSizeFor(budget.profile, budget.tier),
     sunDirection
   );
@@ -785,7 +827,7 @@ async function bootApp(
   };
   applyFog();
 
-  opts.onProgress?.("Preparing render styles…");
+  stage("light", 0);
   await nextPaint();
   const styleResources = createStyleResources(heightFog, clayNight);
   cleanups.push(() => styleResources.dispose());
@@ -959,12 +1001,6 @@ async function bootApp(
     inserted = obj;
   };
 
-  const insertBuildingNow = () => {
-    insertBuilding().catch(() => {
-      // glTF load failure is non-fatal for the POC; the box fallback can't fail
-    });
-  };
-
   cleanups.push(
     attachKeyboardControls(
       { document, window },
@@ -974,7 +1010,6 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
-        insertBuilding: insertBuildingNow,
       }
     )
   );
@@ -1158,8 +1193,10 @@ async function bootApp(
       idle(indexTerrain);
     }
   };
-  scheduleIndexing();
 
+  // The sun rig, the shadow map and the clay materials are up: this is the
+  // first renderable frame, and the point the HUD hands over to the pill.
+  stage("light", 1);
   emitStats();
 
   // --- everything after the first frame ----------------------------------
@@ -1171,14 +1208,26 @@ async function bootApp(
   // StrictMode remount stops adding to a scene that is already disposed.
   const loadNeighbours = async (): Promise<void> => {
     if (neighbourTiles.length === 0) {
+      // The lite profile renders the primary tile alone — the stage is not
+      // slow, it never runs, and the loading list says so.
+      stage("neighbours", 1, true);
       return;
     }
-    opts.onProgress?.("Loading neighbouring tiles…");
+    // Progress in whole units of work: the one batched mesh fetch, then a
+    // terrain and a dressing pass per tile.
+    const units = 1 + neighbourTiles.length * 2;
+    let done = 0;
+    const unitDone = () => {
+      done += 1;
+      stage("neighbours", done / units);
+    };
+    stage("neighbours", 0);
     // Fetch every neighbour's mesh at once, then build in tile order.
     const meshes = await Promise.all(
       neighbourTiles.map((tile) => fetchCityMesh(tile, opts.signal))
     );
     ensureAlive();
+    unitDone();
     for (const { meta, vertices } of meshes) {
       const layer = createCityLayer(meta, vertices, world, false);
       applyCityStyle(layer.group, styleResources);
@@ -1197,6 +1246,7 @@ async function bootApp(
         invalidateShadows();
         scheduleIndexing();
         emitStats();
+        unitDone();
         return t;
       })
     );
@@ -1207,37 +1257,70 @@ async function bootApp(
       await loadTileDressing(tile, neighbourTerrains[i]);
       ensureAlive();
       invalidateShadows();
+      unitDone();
     }
   };
   const loadRest = async (): Promise<void> => {
-    await loadTileDressing(primary, terrain);
+    stage("vegetation", 0);
+    await loadTileDressing(primary, terrain, () => stage("vegetation", 0.5));
     ensureAlive();
     invalidateShadows();
+    stage("vegetation", 1);
     // The block's rail features are independent I/O: fetched while the
     // neighbours load, built once every tile has landed.
+    stage("rails", 0);
     const [, railFeatures] = await Promise.all([
       loadNeighbours(),
-      fetchBlockRailFeatures(),
+      fetchBlockRailFeatures().then((features) => {
+        stage("rails", 0.5);
+        return features;
+      }),
     ]);
     ensureAlive();
     addBlockRails(railFeatures);
     addBlockWalls();
+    stage("rails", 1);
     invalidateShadows();
     restoreFog();
     emitStats();
   };
-  loadRest()
-    .then(() => {
-      if (!disposed) {
-        opts.onLoaded?.();
-      }
-    })
-    .catch((err: unknown) => {
-      if (disposed || isAbortError(err)) {
-        return;
-      }
-      opts.onError?.(err instanceof Error ? err.message : String(err));
-    });
+  /**
+   * Everything after the first frame, held until the HUD says so.
+   *
+   * The two heaviest things in the whole boot land right here: the primary
+   * tile's canopy build (tens of thousands of instances, one synchronous
+   * pass) and the terrain BVH (`computeBoundsTree` on a 1024² mesh). The BVH
+   * is scheduled through requestIdleCallback with a 1.5 s timeout, which is a
+   * guarantee that it runs — squarely inside the handover if nothing holds it
+   * back. Both stall the main thread for long enough to eat a dozen frames,
+   * and the handover is where the city appears behind the frosted loading
+   * screen and the player takes over.
+   *
+   * So the scene waits. It is already walkable and already rendering; the
+   * only thing the wait costs is a second of streaming, and what it buys is
+   * a first impression at frame rate. `startStreaming` is idempotent and the
+   * HUD calls it once the veil is gone (city-walk.tsx).
+   */
+  let streamingStarted = false;
+  const startStreaming = (): void => {
+    if (streamingStarted || disposed) {
+      return;
+    }
+    streamingStarted = true;
+    scheduleIndexing();
+    loadRest()
+      .then(() => {
+        if (!disposed) {
+          opts.onLoaded?.();
+        }
+      })
+      .catch((err: unknown) => {
+        if (disposed || isAbortError(err)) {
+          return;
+        }
+        opts.onError?.(err instanceof Error ? err.message : String(err));
+      });
+  };
 
   return {
     setSun,
@@ -1246,6 +1329,7 @@ async function bootApp(
     enterImmersive: canvasControls.lockPointer,
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,
+    captureViewpoint: pose.captureViewpoint,
     teleportTo: pose.teleportTo,
     getPose: pose.getPose,
     getCameraState: pose.getCameraState,
@@ -1263,6 +1347,7 @@ async function bootApp(
     }),
     setMovementMode: pose.setMovementMode,
     setMoveInput: pose.setMoveInput,
+    startStreaming,
     // Neighbours are never demolished, so their footprints are computed once
     // per layer (they stream in after the first frame) and reused thereafter.
     getFootprints: () => [
@@ -1270,6 +1355,7 @@ async function bootApp(
       ...extraCities.flatMap(neighbourFootprints),
     ],
     landcoverTiles,
+    latLng,
     terrainBounds: unionBounds,
     offset,
     dispose: () => {

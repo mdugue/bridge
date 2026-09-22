@@ -90,7 +90,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
   {
     key: "fogAmount",
     id: "atmosphere",
-    label: "Fog",
+    label: "Nebel",
     description: undefined,
     group: "atmosphere",
     initial: 0.2,
@@ -100,7 +100,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "heightFog",
     id: "height-fog",
     label: "Talnebel",
-    description: "Haze pooling along the valley floor / the Elbe",
+    description: "Dunst am Talboden und über der Elbe",
     group: "atmosphere",
     // Light — a faint valley haze on a clear day; pairs with the ~0.2
     // distance fog for a regular day. Dial up for foggy-morning moods.
@@ -111,7 +111,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "waterMist",
     id: "water-mist",
     label: "Flussnebel",
-    description: "Drifting mist over the river",
+    description: "Treibender Nebel über dem Fluss",
     group: "atmosphere",
     initial: 0.6,
     snapshotKey: "waterMistPct",
@@ -119,7 +119,8 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
   {
     key: "grading",
     id: "depth-grading",
-    label: "Depth color · warm near, cool far",
+    label: "Tiefenfärbung",
+    description: "Warm nah, kühl fern",
     group: "atmosphere",
     initial: 0.5,
     snapshotKey: "gradingPct",
@@ -128,8 +129,8 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
   {
     key: "transparency",
     id: "building-transparency",
-    label: "Transparency",
-    description: "Plain see-through",
+    label: "Transparenz",
+    description: "Einfaches Durchsehen",
     group: "buildings",
     initial: 0,
     max: 90,
@@ -164,7 +165,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-tint",
     label: "Farbvariation",
     description:
-      "Per-building clay tint from use & height, blended into the base",
+      "Tonfarbe je Gebäude aus Nutzung & Höhe, in den Grundton gemischt",
     group: "buildings",
     // A middling mix already breaks the uniform massing while staying painterly.
     initial: 0.6,
@@ -174,7 +175,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "roofTint",
     id: "building-roof-tint",
     label: "Dachfarbe",
-    description: "Terracotta or slate per roof, from roofType & pitch",
+    description: "Terrakotta oder Schiefer je Dach, aus Dachform & Neigung",
     group: "buildings",
     // Roofs carry more colour than walls — they are the strongest readability cue.
     initial: 0.7,
@@ -185,7 +186,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-roof-vibrance",
     label: "Dachsättigung",
     description:
-      "Lift roof colour vividness, keeping each roof's true hue — copper-green, terracotta & slate alike (0 = raw aerial)",
+      "Hebt die Leuchtkraft der Dachfarben, ohne den Farbton zu verschieben — Kupfergrün, Terrakotta und Schiefer gleichermaßen (0 = rohes Luftbild)",
     group: "buildings",
     initial: 0.5,
     snapshotKey: "roofVibrancePct",
@@ -194,7 +195,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "eave",
     id: "building-eave",
     label: "Traufkante",
-    description: "Soft cornice line where wall meets roof",
+    description: "Weiche Kante, wo Wand auf Dach trifft",
     group: "buildings",
     initial: 0.35,
     snapshotKey: "eavePct",
@@ -203,7 +204,8 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "duskGlow",
     id: "building-dusk-glow",
     label: "Abendlicht",
-    description: "Warm interior glow on civic/commercial buildings at dusk",
+    description:
+      "Warmes Licht in öffentlichen und gewerblichen Bauten zur Dämmerung",
     group: "buildings",
     initial: 0.5,
     snapshotKey: "duskGlowPct",
@@ -212,7 +214,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "roughness",
     id: "building-roughness",
     label: "Materialstreuung",
-    description: "Subtle per-building matte/sheen variation",
+    description: "Feine Streuung zwischen matt und seidig je Gebäude",
     group: "buildings",
     initial: 0.12,
     snapshotKey: "roughnessPct",
@@ -222,7 +224,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "meadowNdvi",
     id: "meadow-ndvi",
     label: "Wiesenfärbung",
-    description: "Tint meadows lush-green↔dry from the DOP infrared (NDVI)",
+    description: "Färbt Wiesen saftig↔trocken aus dem DOP-Infrarot (NDVI)",
     group: "vegetation",
     // A middling default reads without looking like a heat map.
     initial: 0.6,
@@ -240,7 +242,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     key: "translucency",
     id: "tree-translucency",
     label: "Blattdurchscheinen",
-    description: "Backlit glow on near/large crowns (shadow-gated)",
+    description: "Durchleuchtete nahe und große Kronen (schattenabhängig)",
     group: "vegetation",
     initial: 0.5,
     snapshotKey: "translucencyPct",
@@ -269,7 +271,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
   {
     key: "contact",
     id: "contact-shadows",
-    label: "Contact shadows",
+    label: "Kontaktschatten",
     group: "rendering",
     initial: 0.5,
     snapshotKey: "contactPct",
@@ -277,7 +279,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
   {
     key: "grain",
     id: "paper-grain",
-    label: "Paper grain",
+    label: "Papierkorn",
     group: "rendering",
     initial: 0.25,
     snapshotKey: "grainPct",

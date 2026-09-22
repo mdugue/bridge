@@ -23,7 +23,7 @@ import {
   MOVEMENT_KEYS,
   type MovementMode,
 } from "./fps-movement";
-import type { Viewpoint } from "./viewpoints";
+import type { ViewpointGeometry } from "./viewpoints";
 
 /** rad per CSS px of grab-look drag — a full phone-width swipe ≈ 90° */
 const GRAB_RADIANS_PER_PX = 0.004;
@@ -67,7 +67,13 @@ export interface CameraPose {
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
    * the instant applyCameraState), landing in the viewpoint's movement mode.
    */
-  flyToViewpoint: (viewpoint: Viewpoint) => void;
+  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  /**
+   * The pose as a vantage the glide can fly back to. Height is captured
+   * ABOVE THE TERRAIN, like the curated viewpoints, so the saved view still
+   * lands correctly once a neighbour tile refines the ground under it.
+   */
+  captureViewpoint: () => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
   getMode: () => MovementMode;
@@ -240,6 +246,19 @@ export function createCameraPose(
       camera.position.set(position.x, position.y, position.z);
       camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
       poseJumped();
+    },
+    captureViewpoint: () => {
+      camera.getWorldDirection(dir);
+      const { heading, pitch } = headingPitchOf(dir);
+      const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
+      return {
+        epsg: { x: epsg.x, y: epsg.y },
+        aboveGround: camera.position.y - groundAt(epsg.x, epsg.y),
+        headingDeg: heading * RAD2DEG,
+        pitchDeg: pitch * RAD2DEG,
+        fov: camera.fov,
+        mode: movement.getMode(),
+      };
     },
     flyToViewpoint: (viewpoint) => {
       const { x, y } = viewpoint.epsg;

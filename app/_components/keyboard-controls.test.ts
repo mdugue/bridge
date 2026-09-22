@@ -39,7 +39,6 @@ function harness() {
     release: (code) => calls.push(`release:${code}`),
     releaseAll: () => calls.push("releaseAll"),
     demolish: () => calls.push("demolish"),
-    insertBuilding: () => calls.push("insertBuilding"),
     toggleMode: () => calls.push("toggleMode"),
   };
   const detach = attachKeyboardControls(targets, actions);
@@ -53,15 +52,12 @@ test("a movement key presses and releases; one-shots fire on their key", () => {
   fire("keydown", { code: "KeyW" });
   fire("keyup", { code: "KeyW" });
   fire("keydown", { code: "KeyR" });
-  fire("keydown", { code: "KeyB" });
   fire("keydown", { code: "KeyF" });
   expect(calls).toEqual([
     "press:KeyW",
     "release:KeyW",
     "press:KeyR",
     "demolish",
-    "press:KeyB",
-    "insertBuilding",
     "press:KeyF",
     "toggleMode",
   ]);

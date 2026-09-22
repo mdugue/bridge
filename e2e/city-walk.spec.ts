@@ -130,6 +130,19 @@ function dragAcrossCanvas(
   );
 }
 
+/**
+ * Opens the scene sidebar if it is closed. It boots closed by design — the
+ * first frame is meant to be unobstructed — so every spec that reads a
+ * control inside it opens it first. Idempotent: the toggle button only
+ * exists while the sidebar is shut.
+ */
+async function openSidebar(target: Page): Promise<void> {
+  const toggle = target.getByRole("button", { name: "Szeneneinstellungen" });
+  if (await toggle.isVisible()) {
+    await toggle.click();
+  }
+}
+
 test("city page serves the viewer shell", async ({ page }) => {
   // Deliberately the DEFAULT route (no ?scene=lite): this is the only spec
   // that proves the product URL serves a viewer at all. It never waits for the
@@ -140,7 +153,7 @@ test("city page serves the viewer shell", async ({ page }) => {
   await expect(
     page
       .getByText(
-        /Loading 3D viewer|Starting renderer|Loading CityJSON|Parsing buildings|Loading DGM|Indexing terrain|Preparing render styles/
+        /Bis zum ersten Bild|Gebäude werden geladen|Gelände wird geladen|Licht und Schatten werden berechnet/
       )
       .or(page.locator("canvas[data-engine]"))
       .first()
@@ -261,6 +274,9 @@ test.describe("desktop viewer", () => {
     const expectedX = minX + (maxX - minX) / 4;
     const expectedY = maxY - (maxY - minY) / 4;
 
+    // The sidebar starts closed so the first frame is unobstructed; the
+    // minimap lives in its Erkunden tab.
+    await openSidebar(page);
     const minimap = page.getByTestId("minimap");
     const minimapBox = await minimap.boundingBox();
     await minimap.click({
@@ -278,6 +294,31 @@ test.describe("desktop viewer", () => {
     expectNoErrors(errors);
   });
 
+  test("the sidebar tabs reach every group of controls", async () => {
+    // The controls are no longer one long list: Erkunden holds the map and
+    // the vantages, Szene the sun and the look groups (each collapsed), and
+    // Erweitert the tools and counters. A slider is only two taps away, and
+    // this is what proves the three panels are actually wired.
+    await openSidebar(page);
+    await expect(page.getByText("Aussichtspunkte")).toBeVisible({
+      timeout: slow(30_000),
+    });
+
+    await page.getByRole("tab", { name: "Szene" }).click();
+    await expect(page.getByText("Sonne & Zeit")).toBeVisible();
+    // Look sliders live one collapsed group down, and stay collapsed until
+    // asked for — that is the point of the restructure.
+    await expect(page.getByText("Boden-Verlauf")).toHaveCount(0);
+    await page.getByRole("button", { name: /^Gebäude/ }).click();
+    await expect(page.getByText("Boden-Verlauf")).toBeVisible({
+      timeout: slow(30_000),
+    });
+
+    await page.getByRole("tab", { name: "Erweitert" }).click();
+    await expect(page.getByText("Statistik")).toBeVisible();
+    expectNoErrors(errors);
+  });
+
   test("grab-look drag turns the view", async () => {
     // Desktop grab-look: a primary-button mouse drag turns the view — no
     // pointer lock needed by default (immersive mode is opt-in).
@@ -289,6 +330,26 @@ test.describe("desktop viewer", () => {
       () => window.__poc?.handle?.getPose().heading ?? 0
     );
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
+    expectNoErrors(errors);
+  });
+
+  test("the saved view can be set, cleared and set again", async () => {
+    // It is a removable item, not a one-shot: clearing it is also how you
+    // re-assign it, so the whole loop has to work from the UI alone.
+    await openSidebar(page);
+    await page.getByRole("tab", { name: "Erkunden" }).click();
+    const save = page.getByRole("button", { name: "Aktuelle Sicht merken" });
+    await expect(save).toBeVisible({ timeout: slow(15_000) });
+    await save.click();
+
+    const clear = page.getByRole("button", {
+      name: "Gemerkte Sicht entfernen",
+    });
+    await expect(clear).toBeVisible();
+    await clear.click();
+    await expect(save).toBeVisible();
+    await save.click();
+    await expect(clear).toBeVisible();
     expectNoErrors(errors);
   });
 
@@ -338,11 +399,9 @@ test.describe("desktop viewer", () => {
         throw new Error("scene handle not published");
       }
       // SCENIC_VIEWS[0] (viewpoints.ts) — inside the primary tile.
+      // The glide takes the geometry only (ViewpointGeometry); the copy that
+      // names a vantage is the HUD's business.
       api.flyToViewpoint({
-        id: "carolabruecke",
-        label: "Carolabrücke",
-        description:
-          "Hovering over the Elbe by the Carolabrücke, the river sweeping toward the Altstadt skyline.",
         mode: "fly",
         epsg: { x: 412_550, y: 5_656_980 },
         aboveGround: 70,
@@ -552,9 +611,30 @@ test.describe("mobile", () => {
     // Touch chrome instead of keyboard hints.
     await expect(page.getByTestId("joystick")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Scene settings" })
+      page.getByRole("button", { name: "Szeneneinstellungen" })
     ).toBeVisible();
     await expect(page.getByText("WASD")).toHaveCount(0);
+
+    // Demolish/insert live in the sidebar's Werkzeuge section; they used to
+    // float over the scene as well, on the screens with the least room.
+    await expect(page.getByRole("button", { name: "Abreißen" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Einsetzen" })).toHaveCount(
+      0
+    );
+
+    // The hint bar fits the viewport (it wraps rather than being cut off) and
+    // can be waved away — everything it says is in the sidebar too.
+    const hintBar = page.getByText("umsehen").first();
+    const hintBox = await hintBar.boundingBox();
+    const viewport = page.viewportSize();
+    expect(hintBox && viewport).toBeTruthy();
+    if (hintBox && viewport) {
+      expect(hintBox.x + hintBox.width).toBeLessThanOrEqual(viewport.width);
+    }
+    const dismiss = page.getByRole("button", { name: "Verstanden" });
+    await expect(dismiss).toBeVisible();
+    await dismiss.tap();
+    await expect(dismiss).toHaveCount(0);
 
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
@@ -611,8 +691,10 @@ test.describe("mobile", () => {
 
     // Drawer opens with the scene settings (generous timeout: the main
     // thread shares time with software-rendered frames).
-    await page.getByRole("button", { name: "Scene settings" }).tap();
-    await expect(page.getByText("Boden-Verlauf")).toBeVisible({
+    await page.getByRole("button", { name: "Szeneneinstellungen" }).tap();
+    // The Erkunden tab is what a drawer opens on; the tabbed structure
+    // itself is asserted on the desktop page, which is already booted.
+    await expect(page.getByText("Aussichtspunkte")).toBeVisible({
       timeout: slow(30_000),
     });
 

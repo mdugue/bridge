@@ -38,6 +38,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-hud: var(--hud);
+  --color-hud-foreground: var(--hud-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -64,6 +66,27 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* The HUD reads on top of the 3D scene, not on the page: it keeps its own
+     dark-on-any-sky pair in both themes, so the loading screen, the streaming
+     pill, the settings button and the hint bar are one surface. */
+  --hud: oklch(0.195 0.011 260.66);
+  --hud-foreground: oklch(0.941 0.01 252.81);
+  --hud-scrim: radial-gradient(
+    ellipse at 50% 40%,
+    oklch(0.25 0.015 256.8) 0%,
+    oklch(0.195 0.011 260.66) 70%
+  );
+  /* The same surface, translucent: the loading screen is frosted glass over
+     the canvas, not a curtain in front of it. While the scene has nothing to
+     show it sits on the opaque scrim above and reads exactly as dark; the
+     moment the first frame is drawn the city appears behind it, softened.
+     Denser towards the edges, where the stage list and the bar need to stay
+     legible against a bright sky. */
+  --hud-veil: radial-gradient(
+    ellipse at 50% 40%,
+    oklch(0.25 0.015 256.8 / 0.82) 0%,
+    oklch(0.195 0.011 260.66 / 0.93) 70%
+  );
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -127,3 +150,11 @@
     @apply font-sans;
   }
 }
+
+/* --- Laden → Erster Frame handover -------------------------------------
+   There is none, on purpose. Every animated version of it — the shared-element
+   morph first, then a plain cross-fade — stuttered, because the frames it has
+   to play on are the scene's most expensive ones. What replaces it is the
+   frosted veil above (--hud-veil): the loading screen stays put while the city
+   appears behind it, and is then removed in a single frame. Nothing animates,
+   so there is nothing left to drop frames. See app/_components/handover.ts. */
