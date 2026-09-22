@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { headingDelta, type PlayerPose } from "@/lib/city/pose";
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,10 +37,6 @@ export const TOUCH_HINTS: readonly ControlHint[] = [
 ];
 
 const DISMISSED_KEY = "city-walk:hints-dismissed";
-/** How far you have to walk before the hints have plainly done their job (m). */
-const MOVED_METRES = 3;
-/** ...or how far you have to turn (rad ≈ 20°). */
-const LOOKED_RADIANS = 0.35;
 /** Long enough to read as a fade, short enough not to linger. */
 const FADE_MS = 300;
 
@@ -63,23 +58,15 @@ function rememberDismissed(): void {
 }
 
 /**
- * The floating hint bar: bottom centre, over the scene, and gone once you
- * have plainly got it.
- *
- * A coach mark is not a dialog, so it does not wait to be closed: the moment
- * you turn the camera or walk a few metres it has done its job and fades out
- * by itself. The explicit way out is a trailing "Verstanden" action — the
- * snackbar convention — rather than a bare ✕ floating next to a block of text
- * that wraps to two rows on a phone. Either way it is remembered, and nothing
- * is lost: the full table lives in the sidebar under Steuerung.
+ * The floating hint bar: bottom centre, over the scene, and gone when — and
+ * only when — you say so. It does not time out and it does not read the
+ * camera: moving around is not the same as being done reading, and a hint
+ * that vanishes while you are still looking at it is worse than one that
+ * waits. "Verstanden" is the one way out, a trailing action behind a hairline
+ * divider (the snackbar convention), and it is remembered. Nothing is lost
+ * either way: the full table lives in the sidebar under Steuerung.
  */
-export function ControlHintBar({
-  coarse,
-  subscribePose,
-}: {
-  coarse: boolean;
-  subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
-}) {
+export function ControlHintBar({ coarse }: { coarse: boolean }) {
   const [phase, setPhase] = useState<"gone" | "leaving" | "shown">(() =>
     wasDismissed() ? "gone" : "shown"
   );
@@ -96,27 +83,6 @@ export function ControlHintBar({
     const timer = setTimeout(() => setPhase("gone"), FADE_MS);
     return () => clearTimeout(timer);
   }, [phase]);
-
-  // The camera itself says when the hints are spent.
-  useEffect(() => {
-    if (phase !== "shown") {
-      return;
-    }
-    let start: PlayerPose | null = null;
-    return subscribePose((pose) => {
-      start ??= pose;
-      const moved = Math.hypot(
-        pose.epsgX - start.epsgX,
-        pose.epsgY - start.epsgY
-      );
-      if (
-        moved > MOVED_METRES ||
-        headingDelta(pose.heading, start.heading) > LOOKED_RADIANS
-      ) {
-        dismiss();
-      }
-    });
-  }, [phase, subscribePose, dismiss]);
 
   if (phase === "gone") {
     return null;

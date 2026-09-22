@@ -1,9 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import {
   clampPitch,
   DEG2RAD,
   directionOf,
-  headingDelta,
   headingPitchOf,
   MAX_FOV,
   MIN_FOV,
@@ -66,27 +65,4 @@ test("nextFov: spreading fingers zooms in, pinching zooms out, clamped", () => {
 test("nextFov ignores degenerate ratios", () => {
   expect(nextFov(70, 0)).toBe(70);
   expect(nextFov(70, Number.NaN)).toBe(70);
-});
-
-describe("headingDelta", () => {
-  test("is the unsigned angle between two headings", () => {
-    expect(headingDelta(0, 0)).toBe(0);
-    expect(headingDelta(0, Math.PI / 2)).toBeCloseTo(Math.PI / 2);
-    expect(headingDelta(Math.PI / 2, 0)).toBeCloseTo(Math.PI / 2);
-  });
-
-  test("takes the short way round the circle", () => {
-    const deg = (d: number) => (d * Math.PI) / 180;
-    // 359° -> 1° is a 2° turn, not 358°.
-    expect(headingDelta(deg(359), deg(1))).toBeCloseTo(deg(2));
-    expect(headingDelta(deg(1), deg(359))).toBeCloseTo(deg(2));
-    // Half a turn is the maximum it can ever report.
-    expect(headingDelta(0, deg(180))).toBeCloseTo(Math.PI);
-    expect(headingDelta(0, deg(181))).toBeCloseTo(deg(179));
-  });
-
-  test("ignores whole extra turns", () => {
-    expect(headingDelta(0, Math.PI * 4)).toBeCloseTo(0);
-    expect(headingDelta(-Math.PI / 2, Math.PI * 2)).toBeCloseTo(Math.PI / 2);
-  });
 });

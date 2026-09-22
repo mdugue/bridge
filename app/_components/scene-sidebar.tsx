@@ -68,6 +68,7 @@ import {
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { cn } from "@/lib/utils";
 import type { CityWalkHandle, CityWalkStats } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
@@ -377,13 +378,23 @@ function MinimapCard({
   );
 }
 
-/** The scenic vantages, plus the view you saved yourself this session. */
+/**
+ * The scenic vantages, plus the one you saved yourself.
+ *
+ * The saved view is a removable item, the way a chip or a saved place is: the
+ * card travels there, and the ✕ in its corner clears it, which is also how you
+ * re-assign it — clear, then set it again from wherever you are standing. The
+ * two buttons are siblings rather than nested, because a button inside a
+ * button is neither valid HTML nor reachable by keyboard.
+ */
 function Viewpoints({
+  onForget,
   onRemember,
   onRestore,
   onTravel,
   remembered,
 }: {
+  onForget: () => void;
   onRemember: () => void;
   onRestore: () => void;
   onTravel: (id: string) => void;
@@ -414,19 +425,41 @@ function Viewpoints({
             </span>
           </button>
         ))}
-        <button
-          className="flex min-h-16.5 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed p-2.5 text-[11px] text-muted-foreground leading-tight hover:border-ring hover:text-foreground"
-          onClick={remembered ? onRestore : onRemember}
-          title={
-            remembered
-              ? "Zur gemerkten Sicht zurückspringen"
-              : "Die aktuelle Kameraposition für diese Sitzung merken"
-          }
-          type="button"
-        >
-          <StarIcon className="size-3.5" />
-          {remembered ? "Gemerkte Sicht" : "Aktuelle Sicht merken"}
-        </button>
+        <div className="relative">
+          <button
+            className={cn(
+              "flex min-h-16.5 w-full flex-col items-center justify-center gap-1.5 rounded-lg border p-2.5 text-[11px] leading-tight hover:border-ring",
+              remembered
+                ? "bg-background text-foreground"
+                : "border-dashed text-muted-foreground hover:text-foreground"
+            )}
+            onClick={remembered ? onRestore : onRemember}
+            title={
+              remembered
+                ? "Zur gemerkten Sicht zurückspringen"
+                : "Die aktuelle Sicht merken"
+            }
+            type="button"
+          >
+            <StarIcon
+              className={cn("size-3.5", remembered && "fill-current")}
+            />
+            {remembered ? "Gemerkte Sicht" : "Aktuelle Sicht merken"}
+          </button>
+          {remembered && (
+            <button
+              aria-label="Gemerkte Sicht entfernen"
+              // 20px reads right in the corner; the ::after pad makes it a
+              // real touch target without the bulk (as the sidebar primitives do).
+              className="absolute top-1 right-1 inline-flex size-5 items-center justify-center rounded-full text-muted-foreground after:absolute after:-inset-2 hover:bg-accent hover:text-foreground"
+              onClick={onForget}
+              title="Gemerkte Sicht entfernen"
+              type="button"
+            >
+              <XIcon className="size-3" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -642,35 +675,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 subscribePose={props.subscribePose}
               />
             )}
-            <div className="px-3 pb-3">
-              <ToggleGroup
-                className="grid w-full grid-cols-2 rounded-lg border p-0.75"
-                onValueChange={(value: string[]) => {
-                  const next = value[0] as MovementMode | undefined;
-                  if (next) {
-                    handleRef.current?.setMovementMode(next);
-                  }
-                }}
-                size="sm"
-                value={[props.mode]}
-              >
-                <ToggleGroupItem
-                  className="h-7 data-pressed:bg-foreground data-pressed:text-background"
-                  value="walk"
-                >
-                  <FootprintsIcon data-icon="inline-start" />
-                  Gehen
-                </ToggleGroupItem>
-                <ToggleGroupItem
-                  className="h-7 data-pressed:bg-foreground data-pressed:text-background"
-                  value="fly"
-                >
-                  <PlaneIcon data-icon="inline-start" />
-                  Fliegen
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
             <Viewpoints
+              onForget={() => props.setRememberedView(null)}
               onRemember={() => {
                 const state = handleRef.current?.getCameraState();
                 if (state) {
@@ -690,6 +696,37 @@ export function SceneSidebar(props: SceneSidebarProps) {
               }}
               remembered={props.rememberedView !== null}
             />
+            {/* Below the vantages, and quiet: one-click travel is the reason
+                to open this tab, while walk/fly is a mode you set once. Same
+                segmented control as the tabs above, not an inverted slab. */}
+            <div className="px-3 pb-3.5">
+              <ToggleGroup
+                className="grid w-full grid-cols-2 gap-0.75 rounded-lg bg-muted p-0.75"
+                onValueChange={(value: string[]) => {
+                  const next = value[0] as MovementMode | undefined;
+                  if (next) {
+                    handleRef.current?.setMovementMode(next);
+                  }
+                }}
+                size="sm"
+                value={[props.mode]}
+              >
+                <ToggleGroupItem
+                  className="h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
+                  value="walk"
+                >
+                  <FootprintsIcon data-icon="inline-start" />
+                  Gehen
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  className="h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
+                  value="fly"
+                >
+                  <PlaneIcon data-icon="inline-start" />
+                  Fliegen
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
             <ControlTable coarse={props.coarse} />
           </SceneTabPanel>
 

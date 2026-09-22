@@ -333,14 +333,23 @@ test.describe("desktop viewer", () => {
     expectNoErrors(errors);
   });
 
-  test("the control hints retire once you have looked around", async () => {
-    // A coach mark is not a dialog: turning the camera is proof enough that
-    // the hints have done their job, so they leave without being closed.
-    // (The drag above already turned the view well past the threshold.)
-    await expect(page.getByRole("button", { name: "Verstanden" })).toHaveCount(
-      0,
-      { timeout: slow(15_000) }
-    );
+  test("the saved view can be set, cleared and set again", async () => {
+    // It is a removable item, not a one-shot: clearing it is also how you
+    // re-assign it, so the whole loop has to work from the UI alone.
+    await openSidebar(page);
+    await page.getByRole("tab", { name: "Erkunden" }).click();
+    const save = page.getByRole("button", { name: "Aktuelle Sicht merken" });
+    await expect(save).toBeVisible({ timeout: slow(15_000) });
+    await save.click();
+
+    const clear = page.getByRole("button", {
+      name: "Gemerkte Sicht entfernen",
+    });
+    await expect(clear).toBeVisible();
+    await clear.click();
+    await expect(save).toBeVisible();
+    await save.click();
+    await expect(clear).toBeVisible();
     expectNoErrors(errors);
   });
 
