@@ -12,7 +12,6 @@ import {
   FootprintsIcon,
   FullscreenIcon,
   HammerIcon,
-  HousePlusIcon,
   type LucideIcon,
   PlaneIcon,
   SparklesIcon,
@@ -66,7 +65,7 @@ import {
   type LookValues,
 } from "@/lib/city/look-controls";
 import type { FootprintPoly } from "@/lib/city/minimap";
-import type { CameraState, PlayerPose } from "@/lib/city/pose";
+import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "@/lib/utils";
 import type { CityWalkHandle, CityWalkStats } from "./create-app";
@@ -75,7 +74,7 @@ import { Minimap } from "./minimap";
 import { CONTROL_HINTS, TOUCH_HINTS } from "./control-hints";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
-import { SCENIC_VIEWS } from "./viewpoints";
+import { SCENIC_VIEWS, type ViewpointGeometry } from "./viewpoints";
 
 /**
  * The scene sidebar, structured by what you came to do rather than by which
@@ -418,7 +417,7 @@ function Viewpoints({
               ) : (
                 <FootprintsIcon className="size-3" />
               )}
-              {view.mode === "fly" ? "Flug" : "zu Fuß"}
+              {view.mode === "fly" ? "Aus der Luft" : "Auf Augenhöhe"}
             </span>
             <span className="font-medium text-xs leading-tight">
               {view.label}
@@ -494,12 +493,14 @@ function SunControls({
   day,
   latLng,
   minutes,
+  onDefaultTime,
   sun,
   updateSun,
 }: {
   day: Date;
   latLng: { lat: number; lng: number } | null;
   minutes: number;
+  onDefaultTime: () => void;
   sun: SunState | null;
   updateSun: (day: Date, minutes: number) => void;
 }) {
@@ -521,11 +522,15 @@ function SunControls({
     <div className="flex flex-col gap-2.5 px-4 pt-1 pb-3.5">
       <div className="flex items-center justify-between">
         <span className={SECTION_LABEL}>Sonne &amp; Zeit</span>
-        <span className="text-[11px] text-muted-foreground">
-          {sun
-            ? `Sonnenhöhe ${sun.altitudeDeg.toFixed(0)}°${sun.aboveHorizon ? "" : " · unter dem Horizont"}`
-            : "Sonnenstand unbekannt"}
-        </span>
+        {/* Same affordance as Darstellung's reset, one section down. */}
+        <button
+          className="text-[11px] text-primary hover:underline"
+          onClick={onDefaultTime}
+          title="Zurück auf 14:00 — die Tageszeit, mit der die Szene startet und auf die ihr Licht abgestimmt ist"
+          type="button"
+        >
+          Standardzeit
+        </button>
       </div>
       <div className="grid grid-cols-[1fr_auto] items-center gap-2">
         <Popover>
@@ -574,6 +579,11 @@ function SunControls({
         <span>{sunTimeLabel("↓", sunset)}</span>
         <span>24:00</span>
       </div>
+      <span className="text-[11px] text-muted-foreground">
+        {sun
+          ? `Sonnenhöhe ${sun.altitudeDeg.toFixed(0)}°${sun.aboveHorizon ? "" : " · unter dem Horizont"}`
+          : "Sonnenstand unbekannt"}
+      </span>
     </div>
   );
 }
@@ -614,18 +624,18 @@ export interface SceneSidebarProps {
   footprints: FootprintPoly[];
   fps: number | null;
   handleRef: RefObject<CityWalkHandle | null>;
-  insertBuilding: () => void;
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
   latLng: { lat: number; lng: number } | null;
   look: LookValues;
   minutes: number;
   mode: MovementMode;
+  onDefaultTime: () => void;
   onLook: (patch: Partial<LookValues>) => void;
   onTab: (tab: SceneTabId) => void;
   onTeleport: (epsgX: number, epsgY: number) => void;
-  rememberedView: CameraState | null;
+  rememberedView: ViewpointGeometry | null;
   resetLook: () => void;
-  setRememberedView: (state: CameraState | null) => void;
+  setRememberedView: (view: ViewpointGeometry | null) => void;
   setSnapshotText: Dispatch<SetStateAction<string>>;
   snapshotMsg: string | null;
   snapshotText: string;
@@ -678,14 +688,14 @@ export function SceneSidebar(props: SceneSidebarProps) {
             <Viewpoints
               onForget={() => props.setRememberedView(null)}
               onRemember={() => {
-                const state = handleRef.current?.getCameraState();
-                if (state) {
-                  props.setRememberedView(state);
+                const here = handleRef.current?.captureViewpoint();
+                if (here) {
+                  props.setRememberedView(here);
                 }
               }}
               onRestore={() => {
                 if (props.rememberedView) {
-                  handleRef.current?.applyCameraState(props.rememberedView);
+                  handleRef.current?.flyToViewpoint(props.rememberedView);
                 }
               }}
               onTravel={(id) => {
@@ -733,6 +743,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
           <SceneTabPanel value="szene">
             <SunControls
               day={props.day}
+              onDefaultTime={props.onDefaultTime}
               latLng={props.latLng}
               minutes={props.minutes}
               sun={props.sun}
@@ -806,12 +817,6 @@ export function SceneSidebar(props: SceneSidebarProps) {
             <div className="flex flex-col gap-2 px-4 pt-1 pb-3.5">
               <span className={SECTION_LABEL}>Werkzeuge</span>
               <div className="flex flex-col gap-1.5">
-                <ToolButton
-                  hint="B"
-                  icon={HousePlusIcon}
-                  label="Gebäude einsetzen"
-                  onClick={props.insertBuilding}
-                />
                 <ToolButton
                   hint="R"
                   icon={HammerIcon}

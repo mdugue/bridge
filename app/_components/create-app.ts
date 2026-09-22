@@ -92,7 +92,7 @@ import {
   loadNdviSampler,
   type VegetationControl,
 } from "./vegetation-layer";
-import type { Viewpoint } from "./viewpoints";
+import type { ViewpointGeometry } from "./viewpoints";
 import {
   applyCityLook,
   applyCityStyle,
@@ -203,7 +203,12 @@ export interface CityWalkHandle {
    * Smoothly glides the camera to a curated scenic Viewpoint (animated, unlike
    * the instant applyCameraState), landing in the viewpoint's movement mode.
    */
-  flyToViewpoint: (viewpoint: Viewpoint) => void;
+  flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  /**
+   * The current pose as a vantage — what the HUD stores when you save a view,
+   * so restoring it is the same animated glide as any curated one.
+   */
+  captureViewpoint: () => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
@@ -996,12 +1001,6 @@ async function bootApp(
     inserted = obj;
   };
 
-  const insertBuildingNow = () => {
-    insertBuilding().catch(() => {
-      // glTF load failure is non-fatal for the POC; the box fallback can't fail
-    });
-  };
-
   cleanups.push(
     attachKeyboardControls(
       { document, window },
@@ -1011,7 +1010,6 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
-        insertBuilding: insertBuildingNow,
       }
     )
   );
@@ -1317,6 +1315,7 @@ async function bootApp(
     enterImmersive: canvasControls.lockPointer,
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,
+    captureViewpoint: pose.captureViewpoint,
     teleportTo: pose.teleportTo,
     getPose: pose.getPose,
     getCameraState: pose.getCameraState,

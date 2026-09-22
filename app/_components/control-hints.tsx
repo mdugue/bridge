@@ -24,7 +24,6 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "Space", action: "hoch (Flug)" },
   { key: "Scroll", action: "zoomen" },
   { key: "R", action: "abreißen" },
-  { key: "B", action: "einsetzen" },
   { key: "Esc", action: "immersiv beenden" },
 ];
 

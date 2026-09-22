@@ -26,7 +26,7 @@ import {
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly } from "@/lib/city/minimap";
-import type { CameraState, PlayerPose } from "@/lib/city/pose";
+import type { PlayerPose } from "@/lib/city/pose";
 import {
   decodeLook,
   encodeSnapshot,
@@ -46,6 +46,7 @@ import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
+import type { ViewpointGeometry } from "./viewpoints";
 import { SceneSidebar } from "./scene-sidebar";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
@@ -199,9 +200,8 @@ export default function CityWalk({
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<SceneTabId>("erkunden");
-  const [rememberedView, setRememberedView] = useState<CameraState | null>(
-    null
-  );
+  const [rememberedView, setRememberedView] =
+    useState<ViewpointGeometry | null>(null);
 
   const subscribePose = useCallback((cb: (pose: PlayerPose) => void) => {
     poseListeners.current.add(cb);
@@ -383,12 +383,6 @@ export default function CityWalk({
     }
   };
 
-  const insertBuilding = () => {
-    handleRef.current?.insertBuilding().catch(() => {
-      // glTF failure is non-fatal; the box fallback can't fail
-    });
-  };
-
   const copySnapshot = () => {
     const h = handleRef.current;
     if (!h) {
@@ -445,7 +439,9 @@ export default function CityWalk({
   return (
     <SidebarProvider
       className="relative h-full overflow-hidden"
-      defaultOpen={false}
+      // Open on a desktop, where there is room beside the scene, and closed on
+      // a touch device, where the panel would cover the view it describes.
+      defaultOpen={!coarse}
       style={{ "--sidebar-width": "21.25rem" } as CSSProperties}
     >
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
@@ -506,13 +502,13 @@ export default function CityWalk({
           footprints={footprints}
           fps={fps}
           handleRef={handleRef}
-          insertBuilding={insertBuilding}
           landcoverTiles={landcoverTiles}
           latLng={latLng}
           look={lookValues}
           minutes={minutes}
           mode={mode}
           onLook={look.set}
+          onDefaultTime={() => updateSun(day, INITIAL_MINUTES)}
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
           rememberedView={rememberedView}

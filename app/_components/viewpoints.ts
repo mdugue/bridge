@@ -27,6 +27,13 @@ export interface Viewpoint {
 }
 
 /**
+ * A vantage stripped of the copy that names it. The glide only ever reads the
+ * geometry, and the view you save yourself has no label of its own — it is
+ * wherever you happen to be standing.
+ */
+export type ViewpointGeometry = Omit<Viewpoint, "description" | "id" | "label">;
+
+/**
  * Hand-picked Dresden vantages. Coordinates anchored to the baked bridge
  * centrelines + DGM elevation profile (the Elbe channel sits at ~104 m between
  * banks at ~114 m), and the three aerial poses were verified against the

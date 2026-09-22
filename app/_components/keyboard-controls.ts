@@ -8,7 +8,6 @@ export interface KeyboardActions {
   /** R — demolish the building under the crosshair */
   demolish: () => void;
   /** B — insert the sample building */
-  insertBuilding: () => void;
   press: (code: string) => void;
   release: (code: string) => void;
   /** every held key is dropped: the window lost focus or was hidden */
@@ -25,13 +24,12 @@ export interface KeyboardTargets {
   window: Pick<Window, "addEventListener" | "removeEventListener">;
 }
 
-const ONE_SHOTS = new Map<string, "demolish" | "insertBuilding" | "toggleMode">(
-  [
-    ["KeyR", "demolish"],
-    ["KeyB", "insertBuilding"],
-    ["KeyF", "toggleMode"],
-  ]
-);
+// KeyB (insert a building) is out while the tool itself is disabled — a key
+// that silently does nothing is worse than one that is not bound.
+const ONE_SHOTS = new Map<string, "demolish" | "toggleMode">([
+  ["KeyR", "demolish"],
+  ["KeyF", "toggleMode"],
+]);
 
 /** True for a key event aimed at a text field — the HUD owns those keys. */
 function isTextEntry(target: EventTarget | null): boolean {

@@ -399,11 +399,9 @@ test.describe("desktop viewer", () => {
         throw new Error("scene handle not published");
       }
       // SCENIC_VIEWS[0] (viewpoints.ts) — inside the primary tile.
+      // The glide takes the geometry only (ViewpointGeometry); the copy that
+      // names a vantage is the HUD's business.
       api.flyToViewpoint({
-        id: "carolabruecke",
-        label: "Carolabrücke",
-        description:
-          "Hovering over the Elbe by the Carolabrücke, the river sweeping toward the Altstadt skyline.",
         mode: "fly",
         epsg: { x: 412_550, y: 5_656_980 },
         aboveGround: 70,
