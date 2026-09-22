@@ -2,6 +2,12 @@ import type { Box3, Scene } from "three";
 import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { atmosphereAt } from "@/lib/city/atmosphere";
+import {
+  fitShadowRadius,
+  SHADOW_BASE_RADIUS,
+  shadowDeadZone,
+  shadowFocusAhead,
+} from "@/lib/city/shadow-fit";
 import { sunDirectionWorld } from "@/lib/city/sun";
 
 export interface SunState {
@@ -20,9 +26,14 @@ function smoothstepDown(edge0: number, edge1: number, x: number): number {
 export interface SunRig {
   /** Frees the shadow map — a render target disposeObject3D never reaches. */
   dispose: () => void;
-  /** Re-centers the shadow frustum on a focus point (call per frame with the
-   * camera position) so the player always stands in the high-res shadow area. */
-  follow: (focus: Vector3) => void;
+  /**
+   * Re-fits the shadow frustum to the camera (call per frame). `direction` is
+   * the camera's world direction (NOT normalized in the horizontal plane — its
+   * cos(pitch) factor is what aims the frustum) and `groundY` the terrain
+   * elevation under the camera, which is both the frustum's vertical anchor
+   * and the altitude the half-size is derived from (lib/city/shadow-fit.ts).
+   */
+  follow: (position: Vector3, direction: Vector3, groundY: number) => void;
   /** Forces a one-off shadow-map re-render. The map is otherwise only redrawn
    * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
    * (demolish / insert) must call this or stale shadows linger. */
@@ -38,19 +49,6 @@ export interface SunRig {
 }
 
 const SUN_INTENSITY = 2.4;
-/** Half-size of the shadow frustum, in metres. Small = fine texels (smoother
- * shadow edges, less staircase under PCFSoft); the frustum follows the camera
- * so street-level coverage isn't lost. 110 m → ~0.07 m texels at 3072². */
-const SHADOW_RADIUS = 110;
-/**
- * Metres the player may drift from the last re-centred frustum before the
- * shadow map is re-rendered. Re-centring on every texel (0.07 m) meant the
- * ~640k-triangle depth pass ran on every moving frame; 20 m keeps the
- * player well inside the 110 m half-size (90 m of margin in every
- * direction) and turns ~60 re-renders/s while walking into ~0.5/s. The
- * texel snap below still applies at each re-centre, so edges do not crawl.
- */
-const FOLLOW_DEAD_ZONE_M = 20;
 
 function createSkyDome(scene: Scene): Sky {
   const sky = new Sky();
@@ -86,13 +84,13 @@ export function createSunRig(
   worldBounds: Box3,
   latLng: { lat: number; lng: number },
   /** Shadow-map edge in texels (scene-profile.ts `shadowMapSizeFor`). 3072
-   * over the 110 m frustum ≈ 0.07 m/texel: the soft Vogel-disk PCF (see
+   * over the 110 m base frustum ≈ 0.07 m/texel: the soft Vogel-disk PCF (see
    * shadow.radius) hides residual stepping, so 3072 looks like 4096 here
    * while costing ~44% less shadow fill. The `lite` e2e profile passes 512
    * and phones 2048 — under SwiftShader the depth pass is one of the few
    * per-frame costs that does not shrink with the canvas, and no headless
-   * assertion depends on edge quality. The map is redrawn at each
-   * FOLLOW_DEAD_ZONE_M re-centre, when the sun moves, and on explicit
+   * assertion depends on edge quality. The map is redrawn when the frustum
+   * re-centres or re-fits (follow), when the sun moves, and on explicit
    * invalidation — not per frame. */
   shadowMapSize: number,
   /** Optional shared vector the rig keeps in sync with the world sun direction
@@ -100,11 +98,18 @@ export function createSunRig(
   sunDirectionOut?: Vector3
 ): SunRig {
   const center = worldBounds.getCenter(new Vector3());
+  // The frustum half-size is not fixed: it starts at the base radius (eye
+  // level) and grows with altitude so a fly-over still gets sun shadows —
+  // lib/city/shadow-fit.ts owns the policy, resizeFrustum below applies it.
+  // These three derive from it and are recomputed on every change.
+  let radius = SHADOW_BASE_RADIUS;
   // Light sits twice the frustum radius out; tight depth range = good precision.
-  const shadowDistance = SHADOW_RADIUS * 2;
+  let shadowDistance = radius * 2;
   // World size of one shadow texel — snap the frustum centre to this grid so
   // shadow edges don't crawl/shimmer as the camera moves.
-  const texelSize = (SHADOW_RADIUS * 2) / shadowMapSize;
+  let texelSize = (radius * 2) / shadowMapSize;
+  // Metres the frustum centre may drift before the map is re-rendered.
+  let deadZone = shadowDeadZone(radius);
 
   const hemisphere = new HemisphereLight(0xbf_d4_e6, 0x4a_5a_3a, 0.7);
   scene.add(hemisphere);
@@ -120,13 +125,28 @@ export function createSunRig(
   sun.shadow.needsUpdate = true;
   sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   const cam = sun.shadow.camera;
-  cam.left = -SHADOW_RADIUS;
-  cam.right = SHADOW_RADIUS;
-  cam.top = SHADOW_RADIUS;
-  cam.bottom = -SHADOW_RADIUS;
-  // Tight depth range around the frustum for good precision.
-  cam.near = shadowDistance - SHADOW_RADIUS * 1.2;
-  cam.far = shadowDistance + SHADOW_RADIUS * 1.2;
+  /**
+   * Rebuilds the orthographic shadow camera for a new half-size. Everything
+   * that scales with the radius lives here, so the rest of the rig only ever
+   * reads the four `let`s above. Cheap — a projection matrix, no reallocation:
+   * the shadow map itself keeps its size, only the world area it covers
+   * changes. The caller forces the re-render (the frustum always moved too).
+   */
+  const resizeFrustum = (next: number) => {
+    radius = next;
+    shadowDistance = radius * 2;
+    texelSize = (radius * 2) / shadowMapSize;
+    deadZone = shadowDeadZone(radius);
+    cam.left = -radius;
+    cam.right = radius;
+    cam.top = radius;
+    cam.bottom = -radius;
+    // Tight depth range around the frustum for good precision.
+    cam.near = shadowDistance - radius * 1.2;
+    cam.far = shadowDistance + radius * 1.2;
+    cam.updateProjectionMatrix();
+  };
+  resizeFrustum(radius);
   // normalBias = 0 kills the peter-panning contact strip (it would offset the
   // flat ground's shadow sample toward the light at wall bases). Safe at 0
   // because nothing that needs it self-shadows: terrain doesn't cast, and
@@ -170,15 +190,37 @@ export function createSunRig(
     }
   };
 
-  const follow = (point: Vector3) => {
-    // Inside the dead zone the frustum stays put — nothing to re-render.
+  const follow = (position: Vector3, direction: Vector3, groundY: number) => {
+    const nextRadius = fitShadowRadius(position.y - groundY, radius);
+    // Push the centre along the view so the shadowed patch sits where the
+    // camera is looking. `direction` is deliberately NOT re-normalized in the
+    // horizontal plane: its cos(pitch) factor collapses the offset to zero
+    // when looking straight down, which is exactly what we want there.
+    const ahead = shadowFocusAhead(nextRadius);
+    const wantX = position.x + direction.x * ahead;
+    const wantZ = position.z + direction.z * ahead;
+    // Inside the dead zone, at an unchanged radius, the frustum stays put —
+    // nothing to re-render. The centre is anchored to the GROUND, not the
+    // camera: airborne, a frustum centred on the camera puts its tight depth
+    // range hundreds of metres above the terrain that should be shadowed.
     if (
+      nextRadius === radius &&
       Number.isFinite(lastCentre.x) &&
-      point.distanceTo(lastCentre) < FOLLOW_DEAD_ZONE_M
+      Math.hypot(
+        wantX - lastCentre.x,
+        groundY - lastCentre.y,
+        wantZ - lastCentre.z
+      ) < deadZone
     ) {
       return;
     }
-    focus.copy(point);
+    if (nextRadius !== radius) {
+      resizeFrustum(nextRadius);
+      // A resized frustum covers different world even from the same centre,
+      // and the texel grid it snaps to has changed — always redraw.
+      sun.shadow.needsUpdate = true;
+    }
+    focus.set(wantX, groundY, wantZ);
     reposition();
   };
 

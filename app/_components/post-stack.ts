@@ -62,16 +62,19 @@ export interface PostStack {
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
-   * Reduced-quality mode while the camera moves: skips the AO and DoF passes.
-   * Layered under the sliders — it never resurrects a pass the user turned
-   * off, and recovery restores exactly what they asked for.
+   * Reduced-quality mode while the camera moves: skips the DoF pass, whose
+   * bokeh the eye cannot resolve through motion anyway. Contact shadows (AO)
+   * stay on — see the half-res note at the pass — because a shadow that
+   * vanishes the moment you move and reappears when you stop reads as a bug,
+   * not as a saving. Layered under the sliders: it never resurrects a pass the
+   * user turned off, and recovery restores exactly what they asked for.
    */
   setRegressed: (on: boolean) => void;
   setSize: (width: number, height: number) => void;
 }
 
 /**
- * postprocessing pipeline: render -> N8AO (soft contact shadows) ->
+ * postprocessing pipeline: render -> N8AO (soft contact shadows, half-res) ->
  * photographic DoF (toggleable, crosshair autofocus) -> SMAA + depth
  * grading + vignette + paper grain. The composer bypasses the renderer's
  * MSAA, so SMAA carries the antialiasing.
@@ -91,6 +94,20 @@ export function createPostStack(
   const ao = new N8AOPostPass(scene, camera, size.x, size.y);
   ao.configuration.aoRadius = 12;
   ao.configuration.intensity = LOOK_DEFAULTS.contact * AO_INTENSITY_MAX;
+  // Half-resolution AO with depth-aware upsampling (n8ao's default upsampler).
+  // This is what buys the pass its permanent seat: the AO buffer and its
+  // denoise iterations are the priciest fill in the stack, and at a quarter of
+  // the pixels they cost roughly a third — about what skipping the pass while
+  // moving used to save, but paid every frame instead of flickering on and off.
+  // Contact occlusion is low-frequency by nature (aoRadius 12 m), so the
+  // upsample costs almost nothing visually; a hard geometric edge is carried
+  // by the depth-aware weights, not by the AO resolution.
+  // NB this is a construction-time setting on purpose: writing halfRes,
+  // aoSamples or denoiseSamples rebuilds the pass's materials (see the
+  // configuration Proxy in n8ao), so it must never be toggled per frame —
+  // a motion-keyed quality switch here would trade a flicker for a recompile
+  // hitch on every step.
+  ao.configuration.halfRes = true;
   // Medium for the product, Performance for headless SwiftShader — decided
   // with the rest of the render budget (scene-profile.ts `aoQualityFor`).
   ao.setQualityMode(aoQuality);
@@ -117,11 +134,15 @@ export function createPostStack(
   // writes the *Wanted flags, the render loop writes `regressed`, and only
   // applyPassGating() ever touches `.enabled`. Writing `.enabled` directly
   // from either side would make recovery clobber the user's choice.
+  //
+  // Only DoF is motion-gated. AO follows the slider alone: its contact
+  // shadows are scene lighting, and lighting that blinks with every footstep
+  // is worse than lighting that costs a little more.
   let aoWanted = LOOK_DEFAULTS.contact > AO_OFF_EPSILON;
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
   const applyPassGating = () => {
-    ao.enabled = aoWanted && !regressed;
+    ao.enabled = aoWanted;
     dofPass.enabled = dofWanted && !regressed;
   };
 

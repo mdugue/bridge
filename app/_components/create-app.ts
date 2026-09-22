@@ -1054,6 +1054,16 @@ async function bootApp(
     }
   };
 
+  // Ground elevation under the camera, for the shadow frustum (sun-rig.ts):
+  // both the plane it is anchored to and the altitude its half-size derives
+  // from. Off every tile — flying past the block edge — the ground floor
+  // stands in, exactly as it does for the walk clamp.
+  const shadowViewDir = new Vector3();
+  const groundUnderCamera = (): number => {
+    const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
+    return heightAt(epsg.x, epsg.y) ?? groundFloor;
+  };
+
   const timer = new Timer();
   // Swap each vegetation chunk between the rich and cheap crown by distance,
   // and advance the wind sway (same clock as the water ripple). A swap changes
@@ -1090,8 +1100,12 @@ async function bootApp(
         t.water?.update(elapsed, scene.fog.color);
       }
     }
-    // Keep the (small, sharp) shadow frustum centered on the player.
-    sunRig.follow(camera.position);
+    // Re-fit the shadow frustum to the camera: centred on the ground the
+    // player is looking at, and widened with altitude so a fly-over is
+    // shadowed too (lib/city/shadow-fit.ts). At eye level this is exactly the
+    // old tight 110 m frustum.
+    camera.getWorldDirection(shadowViewDir);
+    sunRig.follow(camera.position, shadowViewDir, groundUnderCamera());
     // Drift the sky dome's clouds (one uniform write/frame).
     sunRig.setTime(elapsed);
     // Repoint the shared real lamp lights at the nearest heads.
