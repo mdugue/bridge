@@ -26,6 +26,7 @@ import {
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
 import {
+  type BytesProgress,
   fetchGzipped,
   fetchRequiredJson,
   isAbortError,
@@ -60,6 +61,8 @@ export interface TerrainOptions {
   landcoverUrl?: string;
   /** shared meadow-NDVI tint strength (by reference) for the HUD slider */
   meadowNdvi?: { value: number };
+  /** download progress of the heightfield raster, 0..1 (the loading screen) */
+  onBytes?: BytesProgress;
   /** optional DOP NDVI raster for the meadow tint (needs `landcoverUrl`) */
   ndviUrl?: string;
   /** recenter offset shared with the city layer */
@@ -441,7 +444,11 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   );
   const { n, bounds } = header;
   const samples = decodeHeightfield(
-    await fetchGzipped(resolveSiblingUrl(opts.url, header.data), opts.signal),
+    await fetchGzipped(
+      resolveSiblingUrl(opts.url, header.data),
+      opts.signal,
+      opts.onBytes
+    ),
     header
   );
   const elevations = conflateTerrain(samples, { n, bounds }, opts.wallLines);

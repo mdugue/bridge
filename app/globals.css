@@ -38,6 +38,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-hud: var(--hud);
+  --color-hud-foreground: var(--hud-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -64,6 +66,16 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* The HUD reads on top of the 3D scene, not on the page: it keeps its own
+     dark-on-any-sky pair in both themes, so the loading screen, the streaming
+     pill, the settings button and the hint bar are one surface. */
+  --hud: oklch(0.195 0.011 260.66);
+  --hud-foreground: oklch(0.941 0.01 252.81);
+  --hud-scrim: radial-gradient(
+    ellipse at 50% 40%,
+    oklch(0.25 0.015 256.8) 0%,
+    oklch(0.195 0.011 260.66) 70%
+  );
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -125,5 +137,86 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* --- Laden → Erster Frame handover -------------------------------------
+   The loading screen and the streaming pill are never on screen at the same
+   time; React pairs their shared <ViewTransition name> elements and the
+   browser animates between the two boxes (app/_components/handover.ts).
+
+   The root element gives up its own view-transition-name on purpose: with it,
+   the UA snapshots the whole page — including the WebGL canvas — into a static
+   image for the length of the transition, and the scene would freeze mid-
+   handover. Without it only the named HUD elements are captured, and the 3D
+   scene keeps rendering live underneath, which is the whole point of the
+   design: the pill reveals the scene, it does not fade it in. */
+:root {
+  view-transition-name: none;
+  --handover-duration: 1.4s;
+  --handover-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+::view-transition-group(.hud-morph) {
+  animation-duration: var(--handover-duration);
+  animation-timing-function: var(--handover-ease);
+}
+
+/* The surface shrinks by a factor of ~30: scaling its snapshot would smear
+   the text it never had. Cross-fading the two boxes while the group animates
+   position and size is what reads as "the same surface, smaller". */
+::view-transition-old(.hud-morph),
+::view-transition-new(.hud-morph) {
+  height: 100%;
+  animation-duration: var(--handover-duration);
+  animation-timing-function: var(--handover-ease);
+  object-fit: fill;
+}
+
+/* The loading copy leaves first, the pill's own text arrives last — so the
+   two never overlap in the middle of the morph. */
+::view-transition-old(.hud-fade-out) {
+  animation: hud-fade var(--handover-duration) var(--handover-ease) reverse;
+}
+
+::view-transition-new(.hud-fade-in) {
+  animation: hud-fade var(--handover-duration) var(--handover-ease);
+}
+
+@keyframes hud-fade {
+  0%,
+  65% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* No View Transitions (Firefox < 144, older Safari): the state still flips and
+   the pill simply appears, so it gets an entrance of its own. */
+@supports not (view-transition-name: none) {
+  .hud-pill {
+    animation: hud-pill-in 0.45s var(--handover-ease) both;
+  }
+}
+
+@keyframes hud-pill-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --handover-duration: 1ms;
+  }
+  .hud-pill {
+    animation: none;
   }
 }

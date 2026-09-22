@@ -1,0 +1,198 @@
+"use client";
+
+import { ViewTransition } from "react";
+import {
+  type LoadStageState,
+  loadHeadline,
+  WALKABLE_PERCENT,
+} from "@/lib/city/load-stages";
+import {
+  HANDOVER_SEGMENT_NAME,
+  HANDOVER_SHARE_CLASS,
+  HANDOVER_STACK_NAME,
+  HANDOVER_SURFACE_NAME,
+} from "./handover";
+
+/**
+ * "Laden" — the full-bleed screen shown until the primary tile is walkable.
+ *
+ * Three things carry the load: a stack of plates, one per data layer, that
+ * settles as its layer arrives; the stage list with each layer's own progress;
+ * and a hairline bar whose tick marks where the scene becomes walkable. All
+ * three read the same stage states the streaming pill reads, and three of the
+ * elements here (the surface, the stack, each swatch) are the ones that morph
+ * into the pill at the handover — see handover.ts.
+ */
+
+/** The isometric the stack is drawn in; the shadow plate shares it. */
+const PLATE_TRANSFORM = "rotateX(60deg) rotateZ(45deg)";
+
+function PlateStack({ plates }: { plates: LoadStageState[] }) {
+  return (
+    <div aria-hidden className="relative hidden size-105 shrink-0 lg:block">
+      <div
+        className="absolute top-45 left-20 size-65 rounded-lg bg-black/45 blur-lg"
+        style={{ transform: `${PLATE_TRANSFORM} translate(30px,30px)` }}
+      />
+      <ViewTransition name={HANDOVER_STACK_NAME} share={HANDOVER_SHARE_CLASS}>
+        <div className="absolute inset-0">
+          {/* Painted back to front: the layer that landed first sits lowest. */}
+          {plates
+            .map((stage, i) => {
+              // An unfinished layer hovers above its resting place and settles
+              // as it loads — the plate IS that layer's progress bar.
+              const hover = stage.active ? (1 - stage.fraction) * 90 : 0;
+              const lift = -i * 26 - hover;
+              return (
+                <div
+                  className="absolute top-45 left-20 size-65 rounded-lg border transition-[transform,opacity,background-color] duration-500"
+                  key={stage.id}
+                  style={{
+                    transform: `${PLATE_TRANSFORM} translate(${lift}px,${lift}px)`,
+                    opacity: stage.done
+                      ? 1
+                      : stage.active
+                        ? 0.35 + 0.55 * stage.fraction
+                        : 0.1,
+                    background: stage.pending ? "transparent" : stage.color,
+                    borderStyle: stage.pending ? "dashed" : "solid",
+                    borderColor: stage.done
+                      ? "rgb(0 0 0 / 0.08)"
+                      : "rgb(255 255 255 / 0.5)",
+                  }}
+                />
+              );
+            })
+            .reverse()}
+        </div>
+      </ViewTransition>
+    </div>
+  );
+}
+
+function StageRow({ stage }: { stage: LoadStageState }) {
+  return (
+    <div
+      className="grid h-12 grid-cols-[18px_1fr_auto] items-center gap-3.5 border-white/10 border-b transition-opacity duration-500"
+      style={{ opacity: stage.pending ? 0.4 : 1 }}
+    >
+      <ViewTransition
+        name={HANDOVER_SEGMENT_NAME(stage.id)}
+        share={HANDOVER_SHARE_CLASS}
+      >
+        <span
+          className="size-3.5 rotate-45 scale-80 rounded-xs border"
+          style={{
+            background: stage.pending ? "transparent" : stage.color,
+            borderStyle: stage.pending ? "dashed" : "solid",
+            borderColor: stage.pending
+              ? "rgb(255 255 255 / 0.6)"
+              : "transparent",
+          }}
+        />
+      </ViewTransition>
+      <span className="flex flex-col gap-1">
+        <span className="font-medium text-sm leading-none">{stage.label}</span>
+        <span className="font-mono text-[11px] leading-none opacity-55">
+          {stage.meta}
+        </span>
+      </span>
+      <span className="min-w-18 text-right font-medium font-mono text-[11px] tabular-nums opacity-85">
+        {stage.stateText}
+      </span>
+    </div>
+  );
+}
+
+export function LoadScreen({
+  percent,
+  stages,
+}: {
+  percent: number;
+  stages: LoadStageState[];
+}) {
+  const plates = stages.filter((stage) => stage.plate);
+  const walkable = percent >= WALKABLE_PERCENT;
+  return (
+    <output
+      aria-live="polite"
+      className="absolute inset-0 z-30 block text-hud-foreground"
+    >
+      {/* The surface itself — this is what shrinks into the pill. It is the
+          only opaque thing here, so the scene below is revealed, not faded in. */}
+      <ViewTransition name={HANDOVER_SURFACE_NAME} share={HANDOVER_SHARE_CLASS}>
+        <div className="absolute inset-0 bg-[image:var(--hud-scrim)]" />
+      </ViewTransition>
+
+      <ViewTransition exit="hud-fade-out">
+        <div className="absolute inset-0 flex flex-col px-8 py-10 sm:px-12 lg:px-18 lg:py-16">
+          <div className="flex flex-col gap-1.5">
+            <span className="font-medium text-[11px] uppercase leading-none tracking-widest opacity-60">
+              City Walk
+            </span>
+            <span className="font-semibold text-xl leading-tight">
+              Dresden · Altstadt
+            </span>
+          </div>
+
+          <div className="flex flex-1 items-center gap-10 xl:gap-20">
+            <PlateStack plates={plates} />
+            <div className="flex w-full max-w-140 flex-col gap-6">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-pretty font-medium text-3xl leading-tight tracking-tight">
+                  {loadHeadline(stages)}
+                </h2>
+                <p className="text-sm leading-relaxed opacity-65">
+                  Die erste Kachel zuerst — sobald Gelände, Gebäude und Licht
+                  stehen, kannst du losgehen. Der Rest kommt im Hintergrund
+                  dazu.
+                </p>
+              </div>
+              <div className="flex flex-col">
+                {stages.map((stage) => (
+                  <div key={stage.id}>
+                    {stage.showsDividerBefore && (
+                      <div className="flex justify-end py-1.5">
+                        <span className="font-medium text-[10px] uppercase leading-none tracking-widest opacity-45">
+                          ab hier begehbar
+                        </span>
+                      </div>
+                    )}
+                    <StageRow stage={stage} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between text-[11px] leading-none opacity-60">
+              <span>
+                {walkable ? "Begehbar · Rest streamt" : "Bis zum ersten Bild"}
+              </span>
+              <span className="font-mono tabular-nums">
+                {Math.round(percent)} %
+              </span>
+            </div>
+            <div className="relative h-0.5 bg-white/10">
+              <div
+                className="absolute inset-y-0 left-0 bg-hud-foreground transition-[width] duration-500 ease-out"
+                style={{ width: `${percent}%` }}
+              />
+              <div
+                className="-top-1 absolute h-2.5 w-px bg-white/50"
+                style={{ left: `${WALKABLE_PERCENT}%` }}
+              />
+              <span
+                className="absolute top-2.5 -translate-x-1/2 whitespace-nowrap font-medium text-[10px] uppercase leading-none tracking-widest opacity-55"
+                style={{ left: `${WALKABLE_PERCENT}%` }}
+              >
+                begehbar
+              </span>
+            </div>
+          </div>
+        </div>
+      </ViewTransition>
+    </output>
+  );
+}

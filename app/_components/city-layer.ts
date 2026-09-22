@@ -22,7 +22,11 @@ import {
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { TileUrls } from "@/lib/city/tile";
 import { buildCityBvh } from "./collision";
-import { fetchGzipped, fetchRequiredJson } from "./fetch-optional";
+import {
+  type BytesProgress,
+  fetchGzipped,
+  fetchRequiredJson,
+} from "./fetch-optional";
 import { disposeObject3D } from "./three-utils";
 
 /**
@@ -46,14 +50,19 @@ interface CityMesh extends Mesh {
   isCityObjectMesh?: boolean;
 }
 
-/** Fetches a tile's baked mesh (meta + inflated vertex stream). */
+/**
+ * Fetches a tile's baked mesh (meta + inflated vertex stream). `onBytes`
+ * reports the vertex stream's download progress — the primary tile's is the
+ * largest single wait before the first frame.
+ */
 export async function fetchCityMesh(
   tile: Pick<TileUrls, "cityMeshData" | "cityMeshMeta">,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onBytes?: BytesProgress
 ): Promise<{ meta: CityMeshMeta; vertices: CityMeshVertices }> {
   const [metaJson, buffer] = await Promise.all([
     fetchRequiredJson<unknown>(tile.cityMeshMeta, signal),
-    fetchGzipped(tile.cityMeshData, signal),
+    fetchGzipped(tile.cityMeshData, signal, onBytes),
   ]);
   const meta = parseCityMeshMeta(metaJson);
   return { meta, vertices: decodeCityMesh(buffer, meta) };

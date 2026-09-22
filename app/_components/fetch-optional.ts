@@ -69,13 +69,46 @@ export async function fetchRequiredJson<T>(
 }
 
 /**
+ * Download progress of one artifact, 0..1. Reported off the COMPRESSED byte
+ * stream, which is what `Content-Length` measures — the inflated size is not
+ * known until the last chunk. A server that omits the header (chunked
+ * transfer) yields no fraction at all rather than a guessed one.
+ */
+export type BytesProgress = (fraction: number) => void;
+
+/**
+ * Counts bytes as they arrive and reports the fraction of `total`. Typed with
+ * the same chunk type `Response.body` carries, so the inflate step downstream
+ * still accepts it.
+ */
+function countingStream(
+  total: number,
+  onBytes: BytesProgress
+): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  let loaded = 0;
+  return new TransformStream({
+    transform(chunk, controller) {
+      loaded += chunk.byteLength;
+      // The last chunk lands with the body still to inflate; 1 is reported by
+      // the caller once the artifact is actually built.
+      onBytes(Math.min(0.99, loaded / total));
+      controller.enqueue(chunk);
+    },
+  });
+}
+
+/**
  * Fetches a REQUIRED pre-gzipped binary artifact and inflates it in the
  * browser (native DecompressionStream). The bakes gzip binary blobs
  * themselves because static hosts only compress text-like MIME types.
+ *
+ * `onBytes` is the one honest progress signal the loading screen has: these
+ * are the two multi-megabyte downloads the first frame waits on.
  */
 export async function fetchGzipped(
   url: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onBytes?: BytesProgress
 ): Promise<ArrayBuffer> {
   const res = await fetch(url, { signal });
   if (!res.ok) {
@@ -90,6 +123,11 @@ export async function fetchGzipped(
         "needs Safari 16.4+, Chrome 80+, Firefox 113+)."
     );
   }
-  const inflated = res.body.pipeThrough(new DecompressionStream("gzip"));
+  const total = Number(res.headers.get("content-length") ?? 0);
+  const counted =
+    onBytes && total > 0
+      ? res.body.pipeThrough(countingStream(total, onBytes))
+      : res.body;
+  const inflated = counted.pipeThrough(new DecompressionStream("gzip"));
   return new Response(inflated).arrayBuffer();
 }

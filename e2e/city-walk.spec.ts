@@ -130,6 +130,19 @@ function dragAcrossCanvas(
   );
 }
 
+/**
+ * Opens the scene sidebar if it is closed. It boots closed by design — the
+ * first frame is meant to be unobstructed — so every spec that reads a
+ * control inside it opens it first. Idempotent: the toggle button only
+ * exists while the sidebar is shut.
+ */
+async function openSidebar(target: Page): Promise<void> {
+  const toggle = target.getByRole("button", { name: "Szeneneinstellungen" });
+  if (await toggle.isVisible()) {
+    await toggle.click();
+  }
+}
+
 test("city page serves the viewer shell", async ({ page }) => {
   // Deliberately the DEFAULT route (no ?scene=lite): this is the only spec
   // that proves the product URL serves a viewer at all. It never waits for the
@@ -140,7 +153,7 @@ test("city page serves the viewer shell", async ({ page }) => {
   await expect(
     page
       .getByText(
-        /Loading 3D viewer|Starting renderer|Loading CityJSON|Parsing buildings|Loading DGM|Indexing terrain|Preparing render styles/
+        /Bis zum ersten Bild|Gebäude werden geladen|Gelände wird geladen|Licht und Schatten werden berechnet/
       )
       .or(page.locator("canvas[data-engine]"))
       .first()
@@ -261,6 +274,9 @@ test.describe("desktop viewer", () => {
     const expectedX = minX + (maxX - minX) / 4;
     const expectedY = maxY - (maxY - minY) / 4;
 
+    // The sidebar starts closed so the first frame is unobstructed; the
+    // minimap lives in its Erkunden tab.
+    await openSidebar(page);
     const minimap = page.getByTestId("minimap");
     const minimapBox = await minimap.boundingBox();
     await minimap.click({
@@ -552,7 +568,7 @@ test.describe("mobile", () => {
     // Touch chrome instead of keyboard hints.
     await expect(page.getByTestId("joystick")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Scene settings" })
+      page.getByRole("button", { name: "Szeneneinstellungen" })
     ).toBeVisible();
     await expect(page.getByText("WASD")).toHaveCount(0);
 
@@ -611,7 +627,13 @@ test.describe("mobile", () => {
 
     // Drawer opens with the scene settings (generous timeout: the main
     // thread shares time with software-rendered frames).
-    await page.getByRole("button", { name: "Scene settings" }).tap();
+    await page.getByRole("button", { name: "Szeneneinstellungen" }).tap();
+    await expect(page.getByText("Aussichtspunkte")).toBeVisible({
+      timeout: slow(30_000),
+    });
+    // The look sliders moved behind the Szene tab, one collapsed group down.
+    await page.getByRole("tab", { name: "Szene" }).tap();
+    await page.getByRole("button", { name: /^Gebäude/ }).tap();
     await expect(page.getByText("Boden-Verlauf")).toBeVisible({
       timeout: slow(30_000),
     });

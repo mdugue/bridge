@@ -37,7 +37,7 @@ export const SCENIC_VIEWS: Viewpoint[] = [
     id: "carolabruecke",
     label: "Carolabrücke",
     description:
-      "Hovering over the Elbe by the Carolabrücke, the river sweeping toward the Altstadt skyline.",
+      "Über der Elbe an der Carolabrücke — der Fluss zieht zur Altstadt-Silhouette.",
     mode: "fly",
     epsg: { x: 412_550, y: 5_656_980 },
     aboveGround: 70,
@@ -48,7 +48,7 @@ export const SCENIC_VIEWS: Viewpoint[] = [
   {
     id: "elbe-aerial",
     label: "Elbe-Panorama",
-    description: "High aerial over the river bend looking out across the city.",
+    description: "Hoch über der Flussbiegung, Blick über die ganze Stadt.",
     mode: "fly",
     epsg: { x: 412_914, y: 5_657_367 },
     aboveGround: 246,
@@ -59,7 +59,7 @@ export const SCENIC_VIEWS: Viewpoint[] = [
   {
     id: "rooftops",
     label: "Über den Dächern",
-    description: "A low glide just above the old-town rooftops.",
+    description: "Tiefer Gleitflug knapp über den Dächern der Altstadt.",
     mode: "fly",
     epsg: { x: 412_734, y: 5_657_637 },
     aboveGround: 31,
@@ -71,7 +71,7 @@ export const SCENIC_VIEWS: Viewpoint[] = [
     id: "canaletto",
     label: "Canaletto-Blick",
     description:
-      "On foot on the Elbwiese at the foot of the Carolabrücke, the Altstadt silhouette across the meadow.",
+      "Zu Fuß auf der Elbwiese unterhalb der Carolabrücke, die Altstadt jenseits der Wiese.",
     mode: "walk",
     epsg: { x: 412_060, y: 5_656_745 },
     aboveGround: EYE_HEIGHT,
@@ -83,7 +83,7 @@ export const SCENIC_VIEWS: Viewpoint[] = [
     id: "elbe-promenade",
     label: "Elbufer",
     description:
-      "Strolling the tree-lined Neustadt embankment, the river leading toward the old town.",
+      "Spaziergang am baumbestandenen Neustädter Ufer, der Fluss führt zur Altstadt.",
     mode: "walk",
     epsg: { x: 412_420, y: 5_656_915 },
     aboveGround: EYE_HEIGHT,
