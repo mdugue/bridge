@@ -1,35 +1,75 @@
-# docs/ — project knowledge base
+# docs/ — the project knowledge base
 
-Durable, version-controlled documentation for the 3D city-walker. This is where
-decisions and mappings live so they **survive across chat threads and
-contributors** instead of scattering into one-off conversations.
+Durable, version-controlled documentation for the Dresden 3D city walker:
+what it shows, where the data comes from, how it is built, which decisions
+were taken and why, and what is still open. It lives in the repository so it
+survives across chat threads and contributors.
 
-Scope split (don't duplicate — cross-link):
+## Start here
 
-| Doc | Answers |
+| You are… | Read |
 |---|---|
-| **[data-flow.md](./data-flow.md)** | *What becomes what?* The source→feature provenance diagram + feature table. |
-| **[transformations.md](./transformations.md)** | *What have we built / tried / rejected, and why?* The transformation ledger — active, experimental, planned, **discontinued**. |
-| **[portability.md](./portability.md)** | *How do we render a different location?* The data-availability degradation matrix + porting checklist. |
-| **[AGENTS.md](../AGENTS.md)** | Repo entrypoint: stack, commands, conventions, coordinate frame. |
-| **[city-walker skill](../.claude/skills/city-walker/SKILL.md)** | *How is it built?* Deep rendering/data/QA reference + the shadow recipe and its dead-ends. |
+| a **user** or a curious non-developer | the [guide](./guide/README.md) — in English and German: [how it works](./guide/en/how-it-works.md), [where the data comes from](./guide/en/data-sources.md), [from download to browser](./guide/en/data-journey.md), [using the viewer](./guide/en/using-the-viewer.md), [glossary](./guide/en/glossary.md) |
+| a **developer** new to the repo | [AGENTS.md](../AGENTS.md) for stack, commands and gotchas, then [rendering.md](./rendering.md) and [data-pipeline.md](./data-pipeline.md) |
+| about to **change a data → feature transformation** | [data-flow.md](./data-flow.md) + [transformations.md](./transformations.md) (and the rule below) |
+| about to **render another place** | [portability.md](./portability.md) |
+| wondering **why** something is the way it is | [adr/](./adr/README.md), the architecture decision records |
+| looking for **what is planned or was rejected** | [plans/](./plans/README.md), the implementation plans, backlog and audit history |
+| a **coding agent** doing rendering, data or perf work | the [city-walker skill](../.claude/skills/city-walker/SKILL.md) |
 
-Roles at a glance: **AGENTS.md** = orientation, **skill** = how it's built,
-**docs/** = what maps to what + status + portability. Personal agent memory is a
-scratchpad; **anything durable belongs here, in the repo.**
+## Map
+
+```
+docs/
+├── README.md              this page
+├── guide/                 user-facing, EN + DE (no jargon; every term in the glossary)
+│   ├── en/  how-it-works · data-sources · data-journey · using-the-viewer · glossary
+│   └── de/  the same five pages in German
+├── rendering.md           how data becomes pixels: scene graph, visual-encoding codebook, light, post, budget, boot
+├── data-pipeline.md       the bakes, the build step, artifact contracts, sizes, provenance, regeneration
+├── data-flow.md           source → feature provenance diagram + feature table
+├── transformations.md     the ledger: every transformation built / experimental / planned / discontinued, with why
+├── portability.md         degradation matrix + porting checklist for other locations
+├── adr/                   architecture decision records (one decision per file, numbered)
+└── plans/                 implementation plans: open work, condensed history, backlog, audit findings
+```
+
+Roles at a glance: **AGENTS.md** = orientation for developers and agents,
+the **skill** = how the tricky parts are built (recipes and dead ends),
+**docs/** = what it shows, what maps to what, why, and what is next. Personal
+agent memory is a scratchpad; anything durable belongs here.
 
 ## Keeping these docs current
 
-These docs are only useful if they don't rot. Treat them as part of "done":
+Docs are only useful if they do not rot. Treat them as part of "done":
 
 > **Definition of Done** — a change that **adds, alters, or drops a
-> data→feature transformation** is not complete until:
-> 1. [transformations.md](./transformations.md) has the entry (correct status:
->    ✅ / 🧪 / 📋 / 🗃️ — and *why*, especially for 🗃️ discontinued);
-> 2. [data-flow.md](./data-flow.md)'s diagram + table reflect any new source,
->    feature, or edge;
-> 3. [portability.md](./portability.md) records the fallback if a new optional
->    source was introduced.
+> data → feature transformation** is not complete until:
+> 1. [transformations.md](./transformations.md) has the entry with the right
+>    status (✅ active · 🧪 experimental · 📋 planned · 🗃️ discontinued —
+>    and *why*, especially for discontinued);
+> 2. [data-flow.md](./data-flow.md)'s diagram and table reflect any new
+>    source, feature or edge;
+> 3. [portability.md](./portability.md) records the fallback if a new
+>    optional source was introduced;
+> 4. the [visual-encoding table](./rendering.md#visual-encoding--which-data-drives-which-pixel)
+>    in rendering.md and, if a user can see the difference, the guide's
+>    layer table (EN and DE) follow.
 
-Rejected an idea? **Write it down as 🗃️ discontinued** — a documented dead-end is
-worth as much as a shipped feature; it stops the next thread from retrying it.
+> A change that **adds a dataset or edition** updates the guide's
+> [data-sources](./guide/en/data-sources.md) page (both languages: download
+> route, strengths and weaknesses, edition, licence) and
+> [data-pipeline.md](./data-pipeline.md).
+
+> A decision that **constrains future work** (a dependency, a format, a
+> rendering approach, a rejected alternative) gets an
+> [ADR](./adr/README.md). A rejected idea is worth as much as a shipped
+> feature: write it down as 🗃️ discontinued in the ledger so the next thread
+> does not retry it blindly.
+
+> Numbers in the guide (download sizes, feature counts, dates) are measured,
+> not estimated; [data-pipeline.md](./data-pipeline.md#measuring-what-the-browser-downloads)
+> says how.
+
+Plans follow their own lifecycle, described in
+[plans/README.md](./plans/README.md).

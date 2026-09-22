@@ -1,0 +1,59 @@
+# Architecture decision records
+
+One file per decision that constrains future work: a dependency, a data
+format, a rendering approach, a workflow rule, or a rejected alternative
+that must not be retried blindly. ADRs record **why** the code is the way it
+is; the ledger [transformations.md](../transformations.md) records **what**
+each data → look transformation does and its status.
+
+## Index
+
+| # | Decision | Status |
+|---|---|---|
+| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted |
+| [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber | accepted |
+| [0003](./0003-bake-heavy-inputs-at-build-time.md) | Bake heavy inputs at build time; the browser decodes no raster and parses no CityJSON | accepted |
+| [0004](./0004-commit-derived-artifacts-not-raw-data.md) | Commit small derived artifacts, not raw bulk data; the DGM1 GeoTIFF is the one exception; no Git-LFS | accepted |
+| [0005](./0005-one-projected-crs-and-a-rotated-world-group.md) | One projected CRS (EPSG:25833) and a −90° rotated `world` group | accepted |
+| [0006](./0006-tile-block-with-one-primary-and-one-artifact-map.md) | A 2×2 tile block with one primary tile, and one artifact map shared by bake and client | accepted |
+| [0007](./0007-content-hashed-publishing-with-a-manifest.md) | Content-hashed data files with a `manifest.json` | accepted |
+| [0008](./0008-progressive-two-phase-boot.md) | Progressive two-phase boot: first frame from the primary tile, everything else streamed | accepted |
+| [0009](./0009-shadow-recipe.md) | Shadow recipe: soft PCF, receive-only terrain, on-demand refresh with a dead zone, altitude-fitted frustum | accepted |
+| [0010](./0010-opaque-clay-buildings-only.md) | Buildings render as opaque clay only; no transmission, no outlines | accepted |
+| [0011](./0011-motion-keyed-quality-regression.md) | Motion-keyed quality regression: DoF off while moving, SSAO never gated | accepted |
+| [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | OpenStreetMap for what the official data lacks (walls, lamps, platforms, bridge structure), from a local extract where possible | accepted |
+| [0013](./0013-rail-layer-from-dissolved-areas-and-centreline-driven-decks.md) | Rail layer from dissolved ballast areas and centreline-driven decks, built once per block | accepted |
+| [0014](./0014-wall-to-terrain-breakline-conflation.md) | Burn OSM wall lines into the heightfield as breaklines | accepted |
+| [0015](./0015-roof-colour-from-orthophotos-with-vibrance-lift.md) | Roof colour from orthophotos with a hue-preserving vibrance lift | accepted |
+| [0016](./0016-land-cover-rasters-downsampled-with-alpha-as-data.md) | Land-cover rasters downsampled to 2048² with the alpha channel treated as data | accepted |
+| [0017](./0017-look-controls-table-and-snapshot-contract.md) | Look controls declared in one table; the Snapshot is a validated, versioned contract | accepted |
+| [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and assert presence; visuals are judged on a real GPU | accepted |
+| [0019](./0019-oxlint-oxfmt-and-native-typescript.md) | oxlint + oxfmt and the native TypeScript 7 compiler; no ESLint, no biome | accepted |
+| [0020](./0020-fixed-light-pool-and-static-shadow-casters.md) | A fixed pool of real point lights; animated geometry never updates the shadow map | accepted |
+
+## Format
+
+```markdown
+# ADR NNNN: Title (a decision, not a topic)
+
+- **Status:** proposed | accepted | superseded by ADR-NNNN | deprecated
+- **Date:** when it was decided (month precision is fine)
+
+## Context        — the forces: what problem, what constraints, what was measured
+## Decision       — one paragraph, in the active voice
+## Consequences   — what becomes easier, what becomes harder, what must now be kept true
+## Alternatives   — what was considered and why it lost (so nobody retries it blindly)
+## References     — code, plans, ledger entries, commits or PRs
+```
+
+## Adding one
+
+1. Copy the format, take the next number, keep the title a decision.
+2. Link it from the index above and, where it changes a transformation,
+   from [transformations.md](../transformations.md).
+3. Superseding: add a new ADR, set the old one's status to *superseded by*,
+   and never edit the old decision text — the history is the point.
+
+The first twenty were written in September 2026 from the code, the
+[implementation plans](../plans/README.md) and the ledger, with dates taken
+from the git history where a decision predates its record.
