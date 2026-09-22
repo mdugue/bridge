@@ -123,9 +123,11 @@ function SettingsToggle() {
 function SceneOverlays({
   coarse,
   onMove,
+  subscribePose,
 }: {
   coarse: boolean;
   onMove: (x: number, y: number) => void;
+  subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
   if (isMobile ? openMobile : state === "expanded") {
@@ -133,7 +135,7 @@ function SceneOverlays({
   }
   return (
     <>
-      <ControlHintBar coarse={coarse} />
+      <ControlHintBar coarse={coarse} subscribePose={subscribePose} />
       {/* Clear of the hint bar even when it wraps to two rows on a phone. */}
       <div className="absolute bottom-24 left-5">
         <VirtualJoystick onChange={onMove} />
@@ -476,6 +478,7 @@ export default function CityWalk({
             <SceneOverlays
               coarse={coarse}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+              subscribePose={subscribePose}
             />
           </>
         )}

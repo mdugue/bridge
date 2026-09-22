@@ -46,6 +46,17 @@ export function clampPitch(pitch: number): number {
   return Math.min(Math.max(pitch, -PITCH_LIMIT), PITCH_LIMIT);
 }
 
+/**
+ * The shortest angle between two headings (radians, unsigned). Headings wrap,
+ * so a turn from 359° to 1° is 2°, not 358° — "has the player looked around?"
+ * is wrong by a whole circle without this.
+ */
+export function headingDelta(a: number, b: number): number {
+  const turn = Math.PI * 2;
+  const d = Math.abs(a - b) % turn;
+  return d > Math.PI ? turn - d : d;
+}
+
 /** Unit view direction for a compass heading and a pitch (both radians). */
 export function directionOf(heading: number, pitch: number): Xyz {
   const cp = Math.cos(pitch);

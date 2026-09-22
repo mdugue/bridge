@@ -1,7 +1,8 @@
 "use client";
 
-import { XIcon } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { headingDelta, type PlayerPose } from "@/lib/city/pose";
+import { cn } from "@/lib/utils";
 
 /**
  * How you move, declared once. The floating bar over the scene shows the few
@@ -37,13 +38,18 @@ export const TOUCH_HINTS: readonly ControlHint[] = [
 ];
 
 const DISMISSED_KEY = "city-walk:hints-dismissed";
+/** How far you have to walk before the hints have plainly done their job (m). */
+const MOVED_METRES = 3;
+/** ...or how far you have to turn (rad ≈ 20°). */
+const LOOKED_RADIANS = 0.35;
+/** Long enough to read as a fade, short enough not to linger. */
+const FADE_MS = 300;
 
-/** Whether the player has already waved the hints away, on any earlier visit. */
 function wasDismissed(): boolean {
   try {
     return localStorage.getItem(DISMISSED_KEY) === "1";
   } catch {
-    // Private mode / blocked storage: show the hints, which is the safe default.
+    // Private mode / blocked storage: show the hints, the safe default.
     return false;
   }
 }
@@ -57,14 +63,62 @@ function rememberDismissed(): void {
 }
 
 /**
- * The floating hint bar: bottom centre, over the scene, and gone for good once
- * dismissed. It wraps rather than scrolls — on a phone four hints do not fit
- * one line, and a line cut mid-word is worse than two lines. Everything it
- * says also lives in the sidebar under Steuerung, so dismissing loses nothing.
+ * The floating hint bar: bottom centre, over the scene, and gone once you
+ * have plainly got it.
+ *
+ * A coach mark is not a dialog, so it does not wait to be closed: the moment
+ * you turn the camera or walk a few metres it has done its job and fades out
+ * by itself. The explicit way out is a trailing "Verstanden" action — the
+ * snackbar convention — rather than a bare ✕ floating next to a block of text
+ * that wraps to two rows on a phone. Either way it is remembered, and nothing
+ * is lost: the full table lives in the sidebar under Steuerung.
  */
-export function ControlHintBar({ coarse }: { coarse: boolean }) {
-  const [dismissed, setDismissed] = useState(wasDismissed);
-  if (dismissed) {
+export function ControlHintBar({
+  coarse,
+  subscribePose,
+}: {
+  coarse: boolean;
+  subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
+}) {
+  const [phase, setPhase] = useState<"gone" | "leaving" | "shown">(() =>
+    wasDismissed() ? "gone" : "shown"
+  );
+  const dismiss = useCallback(() => {
+    setPhase((prev) => (prev === "shown" ? "leaving" : prev));
+    rememberDismissed();
+  }, []);
+
+  // Unmount once the fade has played, not before.
+  useEffect(() => {
+    if (phase !== "leaving") {
+      return;
+    }
+    const timer = setTimeout(() => setPhase("gone"), FADE_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  // The camera itself says when the hints are spent.
+  useEffect(() => {
+    if (phase !== "shown") {
+      return;
+    }
+    let start: PlayerPose | null = null;
+    return subscribePose((pose) => {
+      start ??= pose;
+      const moved = Math.hypot(
+        pose.epsgX - start.epsgX,
+        pose.epsgY - start.epsgY
+      );
+      if (
+        moved > MOVED_METRES ||
+        headingDelta(pose.heading, start.heading) > LOOKED_RADIANS
+      ) {
+        dismiss();
+      }
+    });
+  }, [phase, subscribePose, dismiss]);
+
+  if (phase === "gone") {
     return null;
   }
   // The bar is the welcome, not the manual: only the primary hints, and on a
@@ -74,8 +128,13 @@ export function ControlHintBar({ coarse }: { coarse: boolean }) {
   );
   return (
     <div className="pointer-events-none absolute inset-x-3 bottom-5 z-10 flex justify-center">
-      <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-3xl bg-hud/85 py-2 pr-2 pl-3.5 text-[11px] text-hud-foreground backdrop-blur-lg sm:text-xs">
-        {/* The hints wrap; the dismiss stays beside them, never below. */}
+      <div
+        className={cn(
+          "pointer-events-auto flex max-w-full items-center gap-3 rounded-3xl bg-hud/85 py-2 pl-3.5 text-[11px] text-hud-foreground backdrop-blur-lg transition-opacity duration-300 sm:text-xs",
+          phase === "leaving" && "opacity-0"
+        )}
+      >
+        {/* The hints wrap; the action keeps the trailing edge, whatever they do. */}
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 sm:gap-x-4">
           {hints.map((hint) => (
             <span className="flex items-center gap-1.5" key={hint.key}>
@@ -87,15 +146,11 @@ export function ControlHintBar({ coarse }: { coarse: boolean }) {
           ))}
         </div>
         <button
-          aria-label="Steuerungshinweise ausblenden"
-          className="-mr-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full text-hud-foreground/70 hover:bg-white/15 hover:text-hud-foreground"
-          onClick={() => {
-            setDismissed(true);
-            rememberDismissed();
-          }}
+          className="-my-2 shrink-0 self-stretch whitespace-nowrap rounded-r-3xl border-white/15 border-l px-3.5 font-medium text-hud-foreground/75 hover:bg-white/10 hover:text-hud-foreground"
+          onClick={dismiss}
           type="button"
         >
-          <XIcon className="size-3.5" />
+          Verstanden
         </button>
       </div>
     </div>

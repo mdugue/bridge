@@ -333,6 +333,17 @@ test.describe("desktop viewer", () => {
     expectNoErrors(errors);
   });
 
+  test("the control hints retire once you have looked around", async () => {
+    // A coach mark is not a dialog: turning the camera is proof enough that
+    // the hints have done their job, so they leave without being closed.
+    // (The drag above already turned the view well past the threshold.)
+    await expect(page.getByRole("button", { name: "Verstanden" })).toHaveCount(
+      0,
+      { timeout: slow(15_000) }
+    );
+    expectNoErrors(errors);
+  });
+
   test("snapshot camera state round-trips", async () => {
     // Applying a captured camera state must reproduce it (the basis for
     // copy/paste QA of an exact view).
@@ -613,9 +624,7 @@ test.describe("mobile", () => {
     if (hintBox && viewport) {
       expect(hintBox.x + hintBox.width).toBeLessThanOrEqual(viewport.width);
     }
-    const dismiss = page.getByRole("button", {
-      name: "Steuerungshinweise ausblenden",
-    });
+    const dismiss = page.getByRole("button", { name: "Verstanden" });
     await expect(dismiss).toBeVisible();
     await dismiss.tap();
     await expect(dismiss).toHaveCount(0);
