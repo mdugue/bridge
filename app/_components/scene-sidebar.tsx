@@ -644,6 +644,8 @@ export interface SceneSidebarProps {
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
   sun: SunState | null;
   tab: SceneTabId;
+  /** 🧪 `?trees=kataster`: the city's tree cadastre is on screen, credit it */
+  treeCadastre?: boolean;
   updateSun: (day: Date, minutes: number) => void;
 }
 
@@ -903,6 +905,8 @@ export function SceneSidebar(props: SceneSidebarProps) {
         <p>
           Quelle: GeoSN, dl-de/by-2-0 · Lampen, Mauern, Bahnsteige und Brücken ©
           OpenStreetMap-Mitwirkende (ODbL)
+          {props.treeCadastre &&
+            " · Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0"}
         </p>
         <p className="mt-1.5">
           <Link

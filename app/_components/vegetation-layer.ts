@@ -28,10 +28,19 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 /** Samples a baked raster at projected coords → 0..1, or undefined off-tile. */
 export type RasterSampler = (x: number, y: number) => number | undefined;
 
+/**
+ * Veto on a row or canopy tree at EPSG (x, y) with its measured height `h`
+ * (canopy points only): false drops it because a surveyed inventory tree
+ * already stands there (tree-inventory-layer.ts, `?trees=kataster`).
+ */
+export type TreeVeto = (x: number, y: number, h?: number) => boolean;
+
 /** One tile's decoded vegetation inputs. */
 export interface VegetationFeatures {
   /** DOM1-derived canopy points (trees scaled to their measured height) */
   canopy: CanopyFeature[];
+  /** optional TreeVeto; hedges are never vetoed */
+  keepTree?: TreeVeto;
   /** the DOP NDVI sampler (loadNdviSampler), for lush↔dry crown colour */
   ndviAt?: RasterSampler;
   /** ATKIS veg04 hedges and tree rows */
@@ -57,8 +66,8 @@ export interface VegetationContext extends GroundContext {
  * cheap chunk switches to rich within NEAR_IN; a rich chunk only drops past
  * NEAR_OUT, so chunks straddling the line don't flicker.
  */
-const LOD_NEAR_IN_M = 220;
-const LOD_NEAR_OUT_M = 300;
+export const LOD_NEAR_IN_M = 220;
+export const LOD_NEAR_OUT_M = 300;
 
 /**
  * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus live
@@ -103,8 +112,8 @@ const HEDGE_SPACING = 1.1; // metres between hedge segments
  * instead of the old all-or-nothing "one mesh per tile". Trades a few hundred
  * (mostly-culled) draw calls for a large drop in processed triangles.
  */
-const CHUNK_SIZE = 250;
-const TRUNK_H = 2.4;
+export const CHUNK_SIZE = 250;
+export const TRUNK_H = 2.4;
 const CROWN_R = 2.1;
 const HEDGE_H = 1.3;
 const HEDGE_W = 0.9;
@@ -112,12 +121,12 @@ const HEDGE_W = 0.9;
 const BASE_TREE_H = 5.8;
 
 /** Deterministic [0,1) jitter so the layer rebuilds identically. */
-function hash(i: number): number {
+export function hash(i: number): number {
   const s = Math.sin(i * 12.9898) * 43_758.5453;
   return s - Math.floor(s);
 }
 
-interface Placement {
+export interface Placement {
   /** DOP NDVI 0..1 at this point (lush↔dry crown colour); undefined = no raster */
   ndvi?: number;
   rot: number;
@@ -131,7 +140,8 @@ interface Placement {
 function collectPlacements(
   features: VegRowFeature[],
   ctx: VegetationContext,
-  ndviAt?: RasterSampler
+  ndviAt?: RasterSampler,
+  keepTree?: TreeVeto
 ): { hedges: Placement[]; trees: Placement[] } {
   const { offset } = ctx;
   const trees: Placement[] = [];
@@ -147,6 +157,9 @@ function collectPlacements(
     );
     for (let i = 0; i < pts.length; i++) {
       const [ex, ey] = pts[i];
+      if (!isHedge && keepTree && !keepTree(ex, ey)) {
+        continue; // an inventory tree stands here
+      }
       const ground = ctx.heightAt(ex, ey);
       if (ground === null) {
         continue; // off-tile or NoData
@@ -209,7 +222,7 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
  * sandbox's merged multi-tuft crown (that needs per-distance LOD before it can
  * be afforded across tens of thousands of trees).
  */
-function buildCrownGeo(): BufferGeometry {
+export function buildCrownGeo(): BufferGeometry {
   const g = new IcosahedronGeometry(CROWN_R, 2);
   const cy = TRUNK_H + CROWN_R * 0.5;
   // Lobe directions: a fuller top, irregular sides, flatter underside.
@@ -256,7 +269,7 @@ function buildCrownGeo(): BufferGeometry {
  * the cheap crown's triangles, so it is only ever shown within LOD_NEAR_M. ONE
  * shared geometry (fixed seed) — instance rotation hides the repetition.
  */
-function buildCrownGeoRich(): BufferGeometry {
+export function buildCrownGeoRich(): BufferGeometry {
   const cy = TRUNK_H + CROWN_R * 0.5;
   const R = CROWN_R;
   const up = new Vector3(0, 1, 0);
@@ -327,7 +340,7 @@ function buildCrownGeoRich(): BufferGeometry {
  * Shared by both LOD crown meshes. `sunDirection` (surface→sun) and `shimmer`
  * are live references; mutating `shimmer.value` retunes without a recompile.
  */
-function buildCrownMaterial(
+export function buildCrownMaterial(
   sunDirection: Vector3,
   shimmer: { value: number },
   uTime: { value: number },
@@ -478,7 +491,7 @@ function buildCrownMaterial(
  * + scale); branches were dropped here because, shared, they'd repeat
  * identically — they belong on a near-distance LOD crown.
  */
-function buildTrunkGeo(): BufferGeometry {
+export function buildTrunkGeo(): BufferGeometry {
   const t = new CylinderGeometry(0.09, 0.16, TRUNK_H, 7, 5);
   t.translate(0, TRUNK_H / 2, 0);
   const bend = 0.05 * TRUNK_H;
@@ -508,7 +521,7 @@ function buildTrunkGeo(): BufferGeometry {
 }
 
 /** Trunk material with a gentle vertical value gradient (darker rooted base). */
-function buildTrunkMaterial(
+export function buildTrunkMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 });
@@ -541,7 +554,7 @@ function buildTrunkMaterial(
  * greenness shifts the crown dry pale-sage → lush deep green, so a vigorous
  * park reads richer than a stressed street tree.
  */
-function crownColor(col: Color, p: Placement, v: number): void {
+export function crownColor(col: Color, p: Placement, v: number): void {
   if (p.ndvi === undefined) {
     col.setHSL(0.26 + v * 0.05, 0.27, 0.62 + v * 0.12);
     return;
@@ -713,7 +726,8 @@ export async function loadNdviSampler(
 function collectCanopy(
   features: CanopyFeature[],
   ctx: VegetationContext,
-  ndviAt?: RasterSampler
+  ndviAt?: RasterSampler,
+  keepTree?: TreeVeto
 ): Placement[] {
   const { offset } = ctx;
   const out: Placement[] = [];
@@ -722,6 +736,9 @@ function collectCanopy(
       continue;
     }
     const [ex, ey] = f.geometry.coordinates;
+    if (keepTree && !keepTree(ex, ey, f.properties?.h)) {
+      continue; // an inventory tree stands here
+    }
     const ground = ctx.heightAt(ex, ey);
     if (ground === null) {
       continue;
@@ -782,9 +799,14 @@ export function buildVegetation(
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let cells: CellLod[] = [];
 
-  const { ndviAt } = features;
-  const { trees, hedges } = collectPlacements(features.rows, ctx, ndviAt);
-  trees.push(...collectCanopy(features.canopy, ctx, ndviAt));
+  const { ndviAt, keepTree } = features;
+  const { trees, hedges } = collectPlacements(
+    features.rows,
+    ctx,
+    ndviAt,
+    keepTree
+  );
+  trees.push(...collectCanopy(features.canopy, ctx, ndviAt, keepTree));
   if (trees.length > 0) {
     const built = buildTrees(
       trees,

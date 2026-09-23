@@ -7,6 +7,7 @@ import {
   sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapSizeFor,
+  treeSourceFromSearch,
 } from "./scene-profile";
 
 test("sceneProfileFromSearch defaults to the full product scene", () => {
@@ -62,18 +63,29 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     tier: "desktop",
     neighbourTiles: true,
     lowRasters: false,
+    trees: "canopy",
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
     profile: "lite",
     tier: "mobile",
     neighbourTiles: false,
     lowRasters: true,
+    trees: "canopy",
   });
   // The QA knob keeps the block in the lite profile; alone it does nothing.
   expect(sceneBudgetFor("?scene=lite&block=1", false).neighbourTiles).toBe(
     true
   );
   expect(sceneBudgetFor("?block=1", false).neighbourTiles).toBe(true);
+});
+
+test("the tree cadastre is opt-in via ?trees=kataster, orthogonal to the profile", () => {
+  expect(treeSourceFromSearch("")).toBe("canopy");
+  expect(treeSourceFromSearch("?trees=osm")).toBe("canopy");
+  expect(treeSourceFromSearch("?trees=kataster")).toBe("kataster");
+  expect(sceneBudgetFor("?scene=lite&trees=kataster", false).trees).toBe(
+    "kataster"
+  );
 });
 
 test("aoQualityFor drops to Performance only in the lite profile", () => {

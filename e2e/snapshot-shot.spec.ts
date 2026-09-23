@@ -48,7 +48,9 @@ for (const file of snapshotFiles()) {
     }
     const snap: Snapshot = parsed.snapshot;
 
-    await page.goto("/");
+    // SHOTS_QUERY renders the same views behind a URL flag (before/after
+    // pairs), e.g. SHOTS_QUERY='?trees=kataster' bun run shots.
+    await page.goto(`/${process.env.SHOTS_QUERY ?? ""}`);
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: 120_000,
     });
