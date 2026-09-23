@@ -48,6 +48,27 @@ export interface CanopyFeature {
   properties: { h: number } | null;
 }
 
+/**
+ * Individually surveyed trees — the Dresden street-tree cadastre
+ * (extract-trees.sh, dl-de/by-2-0 "Landeshauptstadt Dresden"). Heights and
+ * crown diameters in metres (imputed in the bake where the cadastre has
+ * none); `a` is the archetype id (lib/city/tree-inventory.ts
+ * TREE_ARCHETYPES), `l` the leaf type ("e" evergreen, "d" deciduous), `c` a
+ * foliage colour (1 purple, 2 golden; absent = green), `g` = 1 marks a globe
+ * cultivar.
+ */
+export interface TreeFeature {
+  geometry: PointGeometry;
+  properties: {
+    a: number;
+    c?: number;
+    d: number;
+    g?: number;
+    h: number;
+    l: "d" | "e";
+  } | null;
+}
+
 /** OSM street lamps (extract-lamps.sh, ODbL); the post height is a
  *  lamp-layer constant, so no property is read. */
 export interface LampFeature {

@@ -78,6 +78,27 @@
       "editionInUse": "quarterly package current in June 2026 (exact release date unrecorded)"
     }
   },
+  "dresden": {
+    "$comment": "Landeshauptstadt Dresden open data. 🧪 Experimental: only read behind ?trees=kataster. The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; extract-trees.sh checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
+    "Stadtbaumkataster": {
+      "service": "https://kommisdd.dresden.de/net3/public/ogcsl.ashx?NODEID=1633&Service=WFS",
+      "typeName": "cls:L1261",
+      "metadata": "https://www.geoportal.sachsen.de/md/4a9020f2-d9da-4731-a203-594eb10f0e3e",
+      "licence": "dl-de/by-2-0; credit: Landeshauptstadt Dresden",
+      "coverage": "street trees, parks, schools and other municipal land; not the Großer Garten, not private ground",
+      "retrieved": "2026-09-23",
+      "raw": "data/_raw/baumkataster/stadtbaum_<tile>.geojson (+ .meta.json)",
+      "committed": "data/dlm/trees_<tile>.geojson",
+      "usedBy": ["scripts/extract-trees.sh", "scripts/eval/kataster-eval.py"],
+      "numberMatched": {
+        "$comment": "per tile bbox incl. the 10 m margin; after the half-open tile clip: 3195, 3663, 6121, 5465 trees",
+        "33410_5656_2_sn": 3301,
+        "33410_5658_2_sn": 3755,
+        "33412_5656_2_sn": 6214,
+        "33412_5658_2_sn": 5567
+      }
+    }
+  },
   "openstreetmap": {
     "overpass": {
       "$comment": "Point queries fetched once and cached under data/_raw/osm/*.json; the cached response's `osm3s.timestamp_osm_base` is the exact data timestamp.",

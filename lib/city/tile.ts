@@ -141,6 +141,7 @@ export const TILE_URL_KINDS = [
   "platform",
   "rail",
   "railarea",
+  "trees",
   "vegrows",
   "walls",
 ] as const;
@@ -229,6 +230,8 @@ export function tileArtifacts(
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
     walls: dlm(`walls_${tile}.geojson`),
+    // Only requested with ?trees=kataster (scene-profile.ts TreeSource).
+    trees: dlm(`trees_${tile}.geojson`),
   };
 }
 
