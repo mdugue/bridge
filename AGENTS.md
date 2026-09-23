@@ -37,6 +37,8 @@ bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
+bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
+                   # (Bun.WebView + Chrome; commit the SVGs with the change)
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
@@ -109,7 +111,18 @@ config change.
   `bake-city-mesh.ts` — see `lib/city/heightfield.ts`)
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
-- `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)
+- `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
+  pages (`[[...slug]]/page.tsx`, the entry in `_components/landing.tsx`,
+  Markdown pipeline in `_lib/markdown.tsx`, the zoom dialog in
+  `_components/diagram.tsx`, the typeset preset and diagram tokens in
+  `wissen.css`; the prose rules themselves are shadcn/typeset, vendored as
+  `app/typeset.css`); `lib/docs/` is its pure core (file → route, link
+  rewriting, menu order, diagram keys and theming),
+  `scripts/render-diagrams.ts` renders the Mermaid blocks to
+  `docs/diagrams/`, and `scripts/bake-wissen-hero.ts` bakes the pages' map
+  picture inside `prepare-data.ts` — see ADR 0021
+- `e2e/` — `city-walk.spec.ts` (smoke), `wissen.spec.ts` (the docs pages)
+  and `snapshot-shot.spec.ts` (QA harness)
 
 The **`city-walker` skill** (`.claude/skills/city-walker/`) is the project's
 deep reference — scene architecture, the full shadow recipe + its dead ends,
@@ -140,7 +153,10 @@ source of truth.
     sync when a user-visible fact changes.
 
   Roles: AGENTS.md = orientation, skill = how it's built, `docs/` = what it
-  shows, what maps to what, why, and what is next.
+  shows, what maps to what, why, and what is next. The site publishes
+  `docs/` under `/wissen` (guide) and `/wissen/dev` (the rest): keep writing
+  it for GitHub, and run `bun run docs:diagrams` when a Mermaid block
+  changes.
 
 ## Coordinate system (read before touching geometry)
 
@@ -309,7 +325,12 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   float would rotate the sun rather than fail. The Bun version comes from
   `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
   `.mcp.json` pins **both** MCP servers (shadcn, next-devtools) to an exact
-  version rather than `@latest`.
+  version rather than `@latest`. In Claude Code on the web,
+  `.claude/hooks/session-start.sh` (registered in `.claude/settings.json`)
+  upgrades the container's older Bun to that pin and runs
+  `bun install --frozen-lockfile`: `Bun.WebView` (`bun run docs:diagrams`)
+  needs Bun ≥ 1.4, and an older Bun rewrites `bun.lock` on install. Bump the
+  pin and the hook follows; it does nothing outside the web container.
 - **One TypeScript, and it is 7.x (the native compiler).** `bun typecheck` and
   `next build` both run it; there is no second checker. Note what TS 7's npm
   package *is*: a per-platform native binary plus a `tsc` launcher. It ships
@@ -350,6 +371,11 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
+- Class names are joined with `cn` from the **`cn` package** (shadcn's
+  replacement for `clsx` + `tailwind-merge`, set up by `shadcn migrate cn`):
+  import it as `import { cn } from "cn"`, as the generated components do.
+  `lib/utils.ts` only re-exports it for the `utils` alias in
+  `components.json`; its test pins the merge behaviour the code relies on.
 - Tailwind for styling; components in `app/_components/` (route-private) or
   `components/` (shared, incl. shadcn `components/ui/`).
 - **Conventional Commits** (`feat:`, `fix:`, `perf:`, `refactor:`…).
