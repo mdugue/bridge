@@ -14,9 +14,10 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
  * Retaining / city walls from OSM (`scripts/extract-walls.sh`). Monumental walls
- * like the Brühlsche Terrasse are NOT a feature in the elevation data — the DGM1
- * / DOM1 / LiDAR all smooth the sandstone wall into a gentle bank, and a wall is
- * not a CityJSON building, so it "goes missing". OSM has it as tagged lines with
+ * like the Brühlsche Terrasse are no vertical face in any elevation product —
+ * the laser ground steps within ~0.75 m, the native DGM1 within ~1.7 m, and the
+ * 1024² heightfield smears that into a ~3 m bank — and a wall is not a
+ * CityJSON building, so it "goes missing". OSM has it as tagged lines with
  * heights; this renders those as vertical sandstone ribbons sitting on the DGM1
  * ground (base draped via the cross-tile `heightAt`, top = base + the OSM
  * height). Built ONCE for the whole tile block; authored Y-up → added to `scene`.

@@ -39,7 +39,22 @@ step. The function is pure and unit-tested.
 - **Raise only the ribbon and ignore the ground:** the state before; the
   ribbon floated.
 - **Take the step from the laser point cloud:** the wall is smoothed there
-  too.
+  too. *(Corrected 2026-09 — see Update.)*
+
+## Update (2026-09, terrain study)
+
+Measured against held-out laser-scan ground returns, the premise and the
+remedy both need qualifying (ledger 🧪 "Terrain TIN"). The laser ground
+steps within ~0.75 m and the native 1 m DGM1 within ~1.7 m; the ~3 m bank
+was mostly our 1024² resample. The burn sharpens the step but raises the
+error in the 20 m band around walls from 0.43 to 0.76 m RMSE: the 11 m
+probe reads the top of terraced walls (the Jungfernbastei's three levels
+become one cliff) and the step lands on the OSM line, which misses the
+measured edge by −0.5…+1 m (4 m at one bastion face). This ADR stays in
+force for the default heightfield; the `?terrain=tin` experiment meshes the
+native DGM1 without the burn and snaps the ribbon to the measured step
+instead (`lib/city/wall-snap.ts`). If that is adopted, this ADR is
+superseded for TIN tiles.
 
 ## References
 

@@ -7,8 +7,10 @@
 
 The official datasets model no street furniture and no platforms, and the
 monumental retaining walls of the old town (Brühlsche Terrasse) are in
-none of them: DGM1, DOM1 and the classified laser ground all smooth the
-wall into a gentle bank (verified by sampling), and it is not a building in
+none of them as a wall: DGM1, DOM1 and the classified laser ground all turn
+it into a ramp (1–2 m wide in DGM1, ~0.75 m in the laser returns; the
+"gentle bank" the viewer showed was mostly its 1024² resample — corrected
+2026-09, ledger "Terrain TIN"), and it is not a building in
 the LoD2 model, so it "went missing". OpenStreetMap has all of these as
 tagged vector features, including wall heights and bridge structure types,
 under the ODbL. Overpass, the public query API, rate-limits bursts with an

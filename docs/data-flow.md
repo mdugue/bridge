@@ -108,7 +108,7 @@ flowchart LR
 
 | Feature | Primary source | Also needs / modifiers | Code |
 |---|---|---|---|
-| **Terrain ground** | DGM1 GeoTIFF → build-time heightfield (`.u16.gz`) | OSM walls (conflated into a step) | baked by `scripts/prepare-data.ts` (`lib/city/heightfield.ts`); `terrain-layer.ts`, `lib/city/terrain-geometry.ts`, `lib/city/terrain-conflate.ts` |
+| **Terrain ground** | DGM1 GeoTIFF → build-time heightfield (`.u16.gz`) | OSM walls (conflated into a step) · 🧪 `?terrain=tin`: the primary tile as an error-bounded TIN of the native 1 m DGM1 (`.tin-15cm.bin.gz`, no conflation) | baked by `scripts/prepare-data.ts` (`lib/city/heightfield.ts`; TIN: `scripts/bake-terrain-tin.ts`, `lib/city/terrain-tin.ts`); `terrain-layer.ts`, `lib/city/terrain-geometry.ts`, `lib/city/terrain-conflate.ts` |
 | **Surface colours** | Basis-DLM splatmap PNG | DOP NDVI (meadow tint, class 1) | `terrain-layer.ts` (samples splat + `uNdvi`); baked by `extract-dlm.sh` + `extract-ndvi.sh` |
 | **Water (Elbe)** | Basis-DLM (alpha = water) **+** DGM1 (geometry) | — | `water-layer.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → build-time mesh (`.mesh.bin.gz` + `.mesh.json`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`, `lib/city/city-mesh.ts`); `city-layer.ts` |
@@ -118,7 +118,7 @@ flowchart LR
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Station platforms** | OSM `railway=platform` | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
-| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall` + `height` (local `.pbf`) | DGM1 (base drape + terrain conflated to step) — *the wall isn't in DGM/DOM/LiDAR* | `wall-layer.ts`, `lib/city/terrain-conflate.ts`; baked by `scripts/extract-walls.sh` |
+| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall` + `height` (local `.pbf`) | DGM1 (base drape + terrain conflated to step; 🧪 `?terrain=tin`: ribbon snapped to the measured step instead) — *no DGM/DOM/LiDAR product has the wall as a vertical face* | `wall-layer.ts`, `lib/city/terrain-conflate.ts`, `lib/city/wall-snap.ts`; baked by `scripts/extract-walls.sh` |
 | **Minimap** | tile bounds + DLM class PNG (background) + CityJSON footprints | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
 
