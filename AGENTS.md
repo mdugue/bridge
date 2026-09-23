@@ -321,7 +321,12 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   float would rotate the sun rather than fail. The Bun version comes from
   `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
   `.mcp.json` pins **both** MCP servers (shadcn, next-devtools) to an exact
-  version rather than `@latest`.
+  version rather than `@latest`. In Claude Code on the web,
+  `.claude/hooks/session-start.sh` (registered in `.claude/settings.json`)
+  upgrades the container's older Bun to that pin and runs
+  `bun install --frozen-lockfile`: `Bun.WebView` (`bun run docs:diagrams`)
+  needs Bun ≥ 1.4, and an older Bun rewrites `bun.lock` on install. Bump the
+  pin and the hook follows; it does nothing outside the web container.
 - **One TypeScript, and it is 7.x (the native compiler).** `bun typecheck` and
   `next build` both run it; there is no second checker. Note what TS 7's npm
   package *is*: a per-platform native binary plus a `tsc` launcher. It ships
