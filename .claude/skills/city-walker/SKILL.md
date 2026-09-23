@@ -69,7 +69,7 @@ world.x = epsgX − cx       world.z = −(epsgY − cy)       world.y = elevati
 tiles reuse it so they align. **Trap:** vegetation uses Y-up world coords, so it
 is added to `scene`, not the rotated `world` (else the −90° applies twice and
 trees launch into the sky). Tiles `33EEE_NNNN`; primary `33412_5656_2_sn` + a
-2×2 block (collision/demolish primary-only).
+2×2 block (collision, ground clamp and demolish on every tile).
 
 ## Shadows — the recipe and why (this took many rounds)
 

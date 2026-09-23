@@ -39,8 +39,8 @@ export interface CityCollider {
 }
 
 /**
- * Wall collision against whatever `getTargets` returns — the city group of the
- * primary tile, plus the inserted building when there is one.
+ * Wall collision against whatever `getTargets` returns — every loaded tile's
+ * city group, plus the inserted building when there is one.
  */
 export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
   const raycaster = new Raycaster();

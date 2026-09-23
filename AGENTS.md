@@ -170,7 +170,7 @@ shared recenter offset (captured from the primary tile so all tiles align).
 **Vegetation is added to the Y-up `scene`, not the Z-up `world`** — adding Y-up
 coords into the rotated group applies the transform twice (trees shoot skyward).
 Tiles are named `33EEE_NNNN`; the primary is `33412_5656_2_sn`, loaded with a
-2×2 neighbour block for context (collision/demolish stay on the primary tile).
+2×2 neighbour block; collision, ground clamp and demolish apply on every tile.
 
 ## Data pipeline
 

@@ -37,8 +37,8 @@ data/**  (committed, small, derived)  →  scripts/prepare-data.ts  →  public/
 ```
 
 The viewer loads a **2 × 2 block** of 2 km tiles: the primary tile
-`33412_5656_2_sn` (which you spawn on, collide with and demolish from) plus
-three neighbours for context. The list lives in
+`33412_5656_2_sn` (which you spawn on) plus three neighbours at lower
+resolution; you collide with and demolish buildings on all four. The list lives in
 [`lib/city/tile.ts`](lib/city/tile.ts) — the one place a tile id is written,
 read by both the bake script and the client.
 
