@@ -263,22 +263,3 @@
     transparent 45%
   );
 }
-
-/* --- pager ------------------------------------------------------------------ */
-
-.wissen-pager {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  border-radius: calc(var(--radius) * 1.4);
-  background: var(--card);
-  padding: 0.9rem 1.1rem;
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
-  transition: box-shadow 150ms;
-}
-
-.wissen-pager:hover {
-  box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--primary) 30%, transparent),
-    0 4px 12px -4px color-mix(in oklch, var(--foreground) 12%, transparent);
-}

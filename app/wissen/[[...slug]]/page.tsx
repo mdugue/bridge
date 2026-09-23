@@ -8,6 +8,12 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { descriptionOf } from "@/lib/docs/content";
 import {
   type Lang,
@@ -17,7 +23,7 @@ import {
   sourceUrl,
   twinOf,
 } from "@/lib/docs/routes";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { docIcon } from "../_components/doc-icon";
 import { DocNav, SECTION_LABEL } from "../_components/doc-nav";
 import { Landing, type LandingEntry } from "../_components/landing";
@@ -191,6 +197,48 @@ function Cover({
   );
 }
 
+/** One end of the pager: the neighbouring page as a card, whole card the link. */
+function PagerCard({
+  direction,
+  href,
+  label,
+  title,
+}: {
+  direction: "prev" | "next";
+  href: string;
+  label: string;
+  title: string;
+}) {
+  const next = direction === "next";
+  return (
+    <Card
+      className="group/pager relative transition-shadow hover:shadow-md hover:ring-primary/30"
+      size="sm"
+    >
+      <CardHeader className={cn(next && "justify-items-end text-right")}>
+        <CardDescription className="flex items-center gap-1.5">
+          {next ? (
+            <>
+              {label}
+              <ArrowRightIcon className="size-3.5 transition-transform group-hover/pager:translate-x-0.5" />
+            </>
+          ) : (
+            <>
+              <ArrowLeftIcon className="size-3.5 transition-transform group-hover/pager:-translate-x-0.5" />
+              {label}
+            </>
+          )}
+        </CardDescription>
+        <CardTitle>
+          <Link className="after:absolute after:inset-0" href={href}>
+            {title}
+          </Link>
+        </CardTitle>
+      </CardHeader>
+    </Card>
+  );
+}
+
 /**
  * One page, rendered once at build time. Cached because the Markdown pipeline
  * reads the clock on its way (Cache Components refuses that in a prerender
@@ -252,27 +300,22 @@ async function DocPage({ file }: { file: string }) {
             className="mt-16 grid gap-3 sm:grid-cols-2"
           >
             {place.prev ? (
-              <Link className="wissen-pager group/pager" href={place.prev.href}>
-                <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                  <ArrowLeftIcon className="size-3.5 transition-transform group-hover/pager:-translate-x-0.5" />
-                  {label.prev}
-                </span>
-                <span className="font-medium text-sm">{place.prev.title}</span>
-              </Link>
+              <PagerCard
+                direction="prev"
+                href={place.prev.href}
+                label={label.prev}
+                title={place.prev.title}
+              />
             ) : (
               <span />
             )}
             {place.next ? (
-              <Link
-                className="wissen-pager group/pager items-end text-right"
+              <PagerCard
+                direction="next"
                 href={place.next.href}
-              >
-                <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                  {label.next}
-                  <ArrowRightIcon className="size-3.5 transition-transform group-hover/pager:translate-x-0.5" />
-                </span>
-                <span className="font-medium text-sm">{place.next.title}</span>
-              </Link>
+                label={label.next}
+                title={place.next.title}
+              />
             ) : null}
           </nav>
         ) : null}

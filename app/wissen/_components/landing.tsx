@@ -1,8 +1,16 @@
 import { ArrowRightIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import type { HeroImage } from "../_lib/docs";
 import { docIcon } from "./doc-icon";
 import { SECTION_LABEL } from "./doc-nav";
@@ -136,32 +144,32 @@ export function Landing({
 
 function EntryCard({ entry, number }: { entry: LandingEntry; number: number }) {
   return (
-    <div className="group/entry relative flex h-full flex-col gap-3 rounded-xl bg-card p-5 text-card-foreground ring-1 ring-foreground/10 transition-shadow hover:shadow-md hover:ring-primary/30">
-      <div className="flex items-center justify-between">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
+    <Card className="group/entry relative h-full transition-shadow hover:shadow-md hover:ring-primary/30">
+      <CardHeader>
+        <CardTitle className="font-(family-name:--font-heading) text-base leading-snug">
+          {/* Stretched over the card, so the whole card is the link. */}
+          <Link className="after:absolute after:inset-0" href={entry.href}>
+            {entry.title}
+          </Link>
+        </CardTitle>
+        {entry.description ? (
+          <CardDescription className="line-clamp-3">
+            {entry.description}
+          </CardDescription>
+        ) : null}
+        <CardAction className="flex size-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
           {docIcon(entry.file, { className: "size-4.5" })}
-        </span>
-        <span className="font-mono text-muted-foreground text-xs tabular-nums">
-          {String(number).padStart(2, "0")}
-        </span>
-      </div>
-      <h3 className="font-(family-name:--font-heading) font-semibold text-base leading-snug">
-        <Link
-          className="after:absolute after:inset-0 after:rounded-xl"
-          href={entry.href}
-        >
-          {entry.title}
-        </Link>
-      </h3>
-      {entry.description ? (
-        <p className="line-clamp-3 text-muted-foreground text-sm leading-relaxed">
-          {entry.description}
-        </p>
-      ) : null}
-      <div className="mt-auto flex items-center justify-between pt-2 text-xs">
-        <span className="inline-flex items-center gap-1 font-medium text-primary">
-          Lesen
-          <ArrowRightIcon className="size-3.5 transition-transform group-hover/entry:translate-x-0.5" />
+        </CardAction>
+      </CardHeader>
+      <CardFooter className="mt-auto justify-between gap-3">
+        <span className="inline-flex items-center gap-2">
+          <span className="font-mono text-muted-foreground tabular-nums">
+            {String(number).padStart(2, "0")}
+          </span>
+          <span className="inline-flex items-center gap-1 font-medium text-primary">
+            Lesen
+            <ArrowRightIcon className="size-3.5 transition-transform group-hover/entry:translate-x-0.5" />
+          </span>
         </span>
         {entry.twin ? (
           <Link
@@ -172,8 +180,8 @@ function EntryCard({ entry, number }: { entry: LandingEntry; number: number }) {
             {entry.twin.label}
           </Link>
         ) : null}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }
 

@@ -59,6 +59,10 @@ attribute comments and broke a label containing `[…]`.
   repo's prose tables into single endless lines.
 - **A diagram wider than the column opens in a dialog** (shadcn `Dialog`)
   with zoom and drag-to-pan, titled after the heading it sits under.
+- **Pages are cards, the shadcn `Card` unchanged**: the guide on the
+  entry page and the previous/next pager under every page. Each card's
+  title is a link stretched over the whole card; only the language twin
+  sits above it as a link of its own.
 - **The pages carry the project's own picture**: the tile block's land-cover
   splat as one map, baked by `prepare-data.ts` (`bake-wissen-hero.ts`) and
   published like the viewer's data. The entry page uses it as its hero,
