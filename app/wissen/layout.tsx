@@ -11,8 +11,8 @@ import "./wissen.css";
  */
 export default function WissenLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-20 border-b bg-background/90 backdrop-blur">
+    <div className="flex min-h-dvh flex-col bg-(--wissen-paper)">
+      <header className="sticky top-0 z-20 border-b bg-(--wissen-paper)/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-2.5 px-4">
           <Link
             className="flex items-center gap-2.5 whitespace-nowrap font-semibold text-sm"

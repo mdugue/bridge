@@ -5,17 +5,20 @@ import { expect, test } from "@playwright/test";
  * inlined as SVG. No WebGL here, so these run in seconds.
  */
 test.describe("/wissen", () => {
-  test("the entry lists the guide in both languages", async ({ page }) => {
+  test("the entry lists the guide and the developer docs", async ({ page }) => {
     await page.goto("/wissen");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "Nutzerdokumentation"
+      "begehbares Dresden"
     );
-    const menu = page.getByRole("navigation", { name: "Wissen" }).first();
+    // The cards are the German guide in its index order, each with its twin.
     await expect(
-      menu.getByRole("link", { name: "Der Weg der Daten" })
+      page.getByRole("link", { name: "Der Weg der Daten" })
     ).toBeVisible();
     await expect(
-      menu.getByRole("link", { name: "From download to browser" })
+      page.getByRole("link", { name: "English" }).first()
+    ).toHaveAttribute("href", /^\/wissen\/en\//u);
+    await expect(
+      page.getByRole("link", { name: /Transformation catalog/u })
     ).toBeVisible();
   });
 
@@ -49,6 +52,24 @@ test.describe("/wissen", () => {
         )
         .first()
     ).toBeAttached();
+  });
+
+  test("a wide diagram opens in a dialog with zoom", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.goto("/wissen/dev/data-flow");
+    await page
+      .getByRole("button", { name: /Enlarge/u })
+      .first()
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading")).toContainText("provenance");
+    const zoom = dialog.getByRole("button", { name: /%$/u });
+    const before = await zoom.textContent();
+    await dialog.getByRole("button", { name: "Zoom in" }).click();
+    await expect(zoom).not.toHaveText(before ?? "");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
   });
 
   test("an unknown page is a 404", async ({ page }) => {

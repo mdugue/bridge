@@ -54,6 +54,7 @@ import {
 import type { CityJsonDocument } from "../lib/city/types";
 import { bakeCityMesh } from "./bake-city-mesh";
 import { bakeHeightfield } from "./bake-heightfield";
+import { bakeWissenHero } from "./bake-wissen-hero";
 import { downsampleRaster } from "./downsample-raster";
 
 const OUT_DIR = "public/data";
@@ -280,6 +281,35 @@ function bakeCityMeshes(): void {
 }
 
 bakeCityMeshes();
+
+// --- bake: the /wissen picture ---------------------------------------------
+// The block's pastel land-cover splat as one map (scripts/bake-wissen-hero.ts)
+// for the knowledge-base pages, which let next/image size it. Not a viewer
+// artifact: optional, and skipped quietly if a splat is missing.
+
+const HERO_FILE = "wissen-hero.webp";
+const HERO_WIDTH = 1600;
+const HERO_BAKE_SOURCES = [join(process.cwd(), "scripts/bake-wissen-hero.ts")];
+
+async function bakeHero(): Promise<void> {
+  const tiles = TILE_BLOCK.map(({ tile }) => tile);
+  const rasterOf = (tile: string) =>
+    join(process.cwd(), `data/dlm/landcover_rgb_${tile}.png`);
+  if (!tiles.every((tile) => existsSync(rasterOf(tile)))) {
+    log("land-cover splat missing, skipping the /wissen picture");
+    return;
+  }
+  const dest = join(process.cwd(), CACHE_DIR, HERO_FILE);
+  toPublish.set(HERO_FILE, dest);
+  if (!isStale(dest, ...tiles.map(rasterOf), ...HERO_BAKE_SOURCES)) {
+    return;
+  }
+  mkdirSync(dirname(dest), { recursive: true });
+  writeFileSync(dest, await bakeWissenHero(tiles, rasterOf, HERO_WIDTH));
+  log(`baked ${HERO_FILE}`);
+}
+
+await bakeHero();
 
 // Every required artifact must have come out of a stage above. A kind that
 // is neither a committed source nor covered by a bake step (or a spec whose

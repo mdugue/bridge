@@ -29,7 +29,10 @@ attribute comments and broke a label containing `[…]`.
   other file is `/wissen/dev/<path>` (a folder's `README.md` is the folder).
   The mapping, the link rewriting and the menu order live in `lib/docs/`;
   the menu follows the links of `docs/guide/README.md` and
-  `docs/README.md`, so reordering an index reorders the site.
+  `docs/README.md`, so reordering an index reorders the site. `/wissen`
+  itself is a landing built from that index – the pages' own titles and
+  first paragraphs as cards – rather than the README's table, which stays
+  the entry on GitHub.
 - **Markdown stays written for GitHub.** Links remain relative `.md` links;
   at render time a link to another page becomes its route, a link to
   anything outside `docs/` becomes the file on GitHub.
@@ -47,6 +50,19 @@ attribute comments and broke a label containing `[…]`.
   `app/wissen/wissen.css`), so the SVGs carry no palette of their own. The
   script refuses a diagram that paints any other colour than the theme's
   or the diagram's own `classDef`s, judged on Chrome's computed styles.
+- **Prose is styled by shadcn/typeset** (`app/typeset.css`, vendored: one
+  file we own, imported after Tailwind) with a `.typeset-wissen` preset in
+  `app/wissen/wissen.css`: Inter for text, Space Grotesk (the layout's
+  `--font-heading`) for headings, the viewer's tokens for colour. Diagrams
+  opt out (`data-not-typeset`); tables keep a wrapper of their own, because
+  typeset's `typeset-scroll` sets tables to `max-content`, which turns this
+  repo's prose tables into single endless lines.
+- **A diagram wider than the column opens in a dialog** (shadcn `Dialog`)
+  with zoom and drag-to-pan, titled after the heading it sits under.
+- **The pages carry the project's own picture**: the tile block's land-cover
+  splat as one map, baked by `prepare-data.ts` (`bake-wissen-hero.ts`) and
+  published like the viewer's data. The entry page uses it as its hero,
+  every other page as a thin strip.
 - **A freshness test guards the pairing.** `lib/docs/diagrams.test.ts`
   (part of `bun run verify`) fails when a Mermaid block has no SVG, when an
   SVG has no block, or when a sentinel or the measured font name leaked
@@ -67,6 +83,8 @@ attribute comments and broke a label containing `[…]`.
 - The guide's rule stays: English is the reference, both languages change
   in the same commit. The site shows the twin link and the `hreflang`
   alternates; it does not translate.
+- `app/typeset.css` does not update itself; it is ours to edit, and a newer
+  typeset is a manual diff against https://ui.shadcn.com/typeset.css.
 - Mermaid is a dev dependency only. The shipped dependencies are the
   unified/remark/rehype chain and Shiki, all server-side.
 

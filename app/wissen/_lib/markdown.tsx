@@ -4,7 +4,7 @@ import rehypeShiki from "@shikijs/rehype";
 import type { Element, Root as HastRoot } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { toString as hastText } from "hast-util-to-string";
-import type { Code, Root as MdastRoot } from "mdast";
+import type { Root as MdastRoot } from "mdast";
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
@@ -30,15 +30,34 @@ export interface RenderedDoc {
   toc: TocEntry[];
 }
 
+/** The text of an mdast node, for the heading a diagram sits under. */
+function mdText(node: { value?: unknown; children?: unknown[] }): string {
+  if (typeof node.value === "string") {
+    return node.value;
+  }
+  return (node.children ?? [])
+    .map((c) => mdText(c as { value?: unknown; children?: unknown[] }))
+    .join("");
+}
+
 /**
  * Each ```mermaid block becomes its committed SVG (scripts/render-diagrams.ts).
  * A missing one fails the build rather than shipping a code listing – the
- * freshness test says the same thing earlier, in `bun run verify`.
+ * freshness test says the same thing earlier, in `bun run verify`. The
+ * heading above a diagram becomes its title in the zoom dialog.
  */
 function remarkDiagrams() {
   return (tree: MdastRoot) => {
-    visit(tree, "code", (node: Code, index, parent) => {
-      if (node.lang !== "mermaid" || !parent || index === undefined) {
+    let heading: string | null = null;
+    visit(tree, (node, index, parent) => {
+      if (node.type === "heading") {
+        heading = mdText(node).trim();
+        return;
+      }
+      if (node.type !== "code" || !parent || index === undefined) {
+        return;
+      }
+      if (node.lang !== "mermaid") {
         return;
       }
       const key = diagramKey(node.value);
@@ -52,10 +71,15 @@ function remarkDiagrams() {
           `No rendered diagram docs/diagrams/${key}.svg – run \`bun run docs:diagrams\``
         );
       }
-      const width = Number(svg.match(/<svg[^>]*\swidth="([\d.]+)"/u)?.[1] ?? 0);
+      const box = svg.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/u);
+      const attrs = [
+        `data-width="${Math.round(Number(box?.[1] ?? 0))}"`,
+        `data-height="${Math.round(Number(box?.[2] ?? 0))}"`,
+        heading ? `data-title="${heading.replaceAll('"', "&quot;")}"` : "",
+      ].join(" ");
       parent.children[index] = {
         type: "html",
-        value: `<figure class="diagram" data-width="${Math.round(width)}">${svg}</figure>`,
+        value: `<figure class="diagram" ${attrs}>${svg}</figure>`,
       };
     });
   };
@@ -77,7 +101,11 @@ function rehypeLinks(file: string, pages: ReadonlySet<string>) {
   };
 }
 
-/** Wide tables scroll inside their own box instead of widening the page. */
+/**
+ * Wide tables scroll inside their own box instead of widening the page. Not
+ * typeset's `typeset-scroll`: that one sets tables to max-content, which
+ * turns this repo's prose tables into single endless lines.
+ */
 function rehypeTableScroll() {
   return (tree: HastRoot) => {
     visit(tree, "element", (node: Element, index, parent) => {
@@ -87,7 +115,7 @@ function rehypeTableScroll() {
       parent.children[index] = {
         type: "element",
         tagName: "div",
-        properties: { className: ["table-scroll"] },
+        properties: { className: ["doc-table"] },
         children: [node],
       };
     });
@@ -156,9 +184,20 @@ export async function renderDoc(
     jsxs,
     components: {
       a: DocLink,
-      figure: (props: ComponentProps<"figure"> & { "data-width"?: string }) =>
+      figure: (
+        props: ComponentProps<"figure"> & {
+          "data-width"?: string;
+          "data-height"?: string;
+          "data-title"?: string;
+        }
+      ) =>
         props.className === "diagram" ? (
-          <Diagram lang={lang} width={Number(props["data-width"] ?? 0)}>
+          <Diagram
+            height={Number(props["data-height"] ?? 0)}
+            lang={lang}
+            title={props["data-title"] ?? null}
+            width={Number(props["data-width"] ?? 0)}
+          >
             {props.children}
           </Diagram>
         ) : (

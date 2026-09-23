@@ -112,11 +112,15 @@ config change.
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
 - `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
-  pages (`[[...slug]]/page.tsx`, Markdown pipeline in `_lib/markdown.tsx`,
-  prose and diagram tokens in `wissen.css`); `lib/docs/` is its pure core
-  (file → route, link rewriting, menu order, diagram keys and theming) and
+  pages (`[[...slug]]/page.tsx`, the entry in `_components/landing.tsx`,
+  Markdown pipeline in `_lib/markdown.tsx`, the zoom dialog in
+  `_components/diagram.tsx`, the typeset preset and diagram tokens in
+  `wissen.css`; the prose rules themselves are shadcn/typeset, vendored as
+  `app/typeset.css`); `lib/docs/` is its pure core (file → route, link
+  rewriting, menu order, diagram keys and theming),
   `scripts/render-diagrams.ts` renders the Mermaid blocks to
-  `docs/diagrams/` — see ADR 0021
+  `docs/diagrams/`, and `scripts/bake-wissen-hero.ts` bakes the pages' map
+  picture inside `prepare-data.ts` — see ADR 0021
 - `e2e/` — `city-walk.spec.ts` (smoke), `wissen.spec.ts` (the docs pages)
   and `snapshot-shot.spec.ts` (QA harness)
 
