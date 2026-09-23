@@ -5,7 +5,7 @@ import {
   loadHeadline,
   WALKABLE_PERCENT,
 } from "@/lib/city/load-stages";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * "Laden" — the full-bleed screen shown until the primary tile is walkable.

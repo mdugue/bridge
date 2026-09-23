@@ -2,7 +2,7 @@
 
 import { Tabs } from "@base-ui/react/tabs";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * The sidebar's three-way segmented control — Erkunden · Szene · Erweitert.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * How you move, declared once. The floating bar over the scene shows the few

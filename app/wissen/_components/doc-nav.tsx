@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { NavGroup, NavItem } from "@/lib/docs/nav";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /** The same small caps label the viewer's sidebar uses for its sections. */
 export const SECTION_LABEL =

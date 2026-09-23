@@ -371,6 +371,11 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
 - `components/ui/**` is vendored by `shadcn add` — regenerate, never hand-edit.
   Adding a component adds its dependency; removing one should remove it again.
+- Class names are joined with `cn` from the **`cn` package** (shadcn's
+  replacement for `clsx` + `tailwind-merge`, set up by `shadcn migrate cn`):
+  import it as `import { cn } from "cn"`, as the generated components do.
+  `lib/utils.ts` only re-exports it for the `utils` alias in
+  `components.json`; its test pins the merge behaviour the code relies on.
 - Tailwind for styling; components in `app/_components/` (route-private) or
   `components/` (shared, incl. shadcn `components/ui/`).
 - **Conventional Commits** (`feat:`, `fix:`, `perf:`, `refactor:`…).

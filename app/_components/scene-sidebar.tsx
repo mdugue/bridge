@@ -68,7 +68,7 @@ import {
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import type { CityWalkHandle, CityWalkStats } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
