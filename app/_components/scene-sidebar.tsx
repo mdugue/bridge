@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   ClipboardPasteIcon,
   CloudFogIcon,
+  CoffeeIcon,
   CopyIcon,
   FootprintsIcon,
   FullscreenIcon,
@@ -30,6 +31,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { getTimes } from "suncalc";
 import { Button } from "@/components/ui/button";
+import { SUPPORT_URL } from "@/lib/brand";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Collapsible,
@@ -904,14 +906,35 @@ export function SceneSidebar(props: SceneSidebarProps) {
           Quelle: GeoSN, dl-de/by-2-0 · Lampen, Mauern, Bahnsteige und Brücken ©
           OpenStreetMap-Mitwirkende (ODbL)
         </p>
-        <p className="mt-1.5">
+        <div className="mt-1.5 flex items-center gap-3">
           <Link
             className="underline underline-offset-2 hover:text-foreground"
             href="/wissen"
           >
             Wissen: Datenquellen und wie die Stadt entsteht
           </Link>
-        </p>
+          {/* The one call to action in the footer, so it is a button, not a
+              second muted link. A plain link to Ko-fi, not its widget:
+              nothing loads from there until it is clicked. */}
+          <Button
+            className="ml-auto"
+            nativeButton={false}
+            render={
+              <a
+                aria-label="Unterstützen – auf Ko-fi, öffnet in neuem Tab"
+                href={SUPPORT_URL}
+                rel="noopener noreferrer"
+                target="_blank"
+                title="Auf Ko-fi unterstützen"
+              />
+            }
+            size="sm"
+            variant="outline"
+          >
+            <CoffeeIcon aria-hidden data-icon="inline-start" />
+            Unterstützen
+          </Button>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

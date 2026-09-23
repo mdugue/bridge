@@ -96,6 +96,9 @@ config change.
     `touch-controls.ts`, `collision.ts`, `viewpoints.ts`,
     `virtual-joystick.tsx`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
+- `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
+  (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
+  loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
   policy, the look table + store, the Snapshot codec, the tile artifact
