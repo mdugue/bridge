@@ -9,6 +9,7 @@ import {
 import type { WallFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
+import { type StepSnap, smoothSnaps, snapToStep } from "@/lib/city/wall-snap";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
@@ -24,7 +25,17 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 export interface WallContext extends GroundContext {
   heightFog?: HeightFogUniforms;
+  /**
+   * `?terrain=tin`: the ground was NOT burned to the OSM line, so an
+   * earth-retaining wall snaps to the step the terrain measures instead
+   * (lib/city/wall-snap.ts) — face at the ramp's foot, a coping cap back to
+   * its crest. Walls with no measurable step keep the old placement.
+   */
+  snapToStep?: boolean;
 }
+
+/** OSM kinds that hold back earth (the ones the conflation also reshapes). */
+const RETAINING_KINDS = new Set(["retaining_wall", "city_wall", "embankment"]);
 
 const SAMPLE_M = 2.5; // densify polylines to this spacing (m)
 const PERP_M = 9; // perpendicular probe distance to find the low/high side (m)
@@ -36,12 +47,49 @@ const MIN_H = 1.2; // skip kerb-height garden walls (m)
 const MAX_H = 14; // clamp tall tags (m)
 const WALL_COLOR = 0xc9_bd_a4; // warm sandstone
 
-/** A densified wall vertex with its world XZ and the base/top elevations. */
+/** A densified wall vertex with its world XZ and the base/top elevations;
+ *  a snapped column also carries where its coping cap ends (`bx`, `bz`). */
 interface WallCol {
   base: number;
+  bx?: number;
+  bz?: number;
   top: number;
   wx: number;
   wz: number;
+}
+
+/** How far in front of the measured ramp foot the snapped face stands (m):
+ *  the ramp's foot wanders between the 1 m grid points the TIN kept, and a
+ *  straight face between two columns must stay in front of all of it. */
+const FACE_MARGIN_M = 0.5;
+
+/** The column at a (smoothed) measured step: face just in front of the
+ *  ramp's foot, cap back to its crest. */
+function snappedColumn(
+  ex: number,
+  ey: number,
+  px: number,
+  py: number,
+  h: number,
+  step: StepSnap,
+  ctx: WallContext
+): WallCol {
+  const faceAt = step.foot - step.up * FACE_MARGIN_M;
+  const face = epsgToWorld(ex + px * faceAt, ey + py * faceAt, ctx.offset);
+  const back = epsgToWorld(
+    ex + px * step.crest,
+    ey + py * step.crest,
+    ctx.offset
+  );
+  const base = Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - 0.4;
+  return {
+    wx: face.x,
+    wz: face.z,
+    bx: back.x,
+    bz: back.z,
+    base,
+    top: step.hi,
+  };
 }
 
 /** Base/top elevation for one wall vertex: top = the high side, base dropped to
@@ -109,6 +157,76 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   }
 }
 
+/** The coping cap between two snapped columns: a flat strip at the top from
+ *  the face back to the crest, hiding the ramp the face stands in front of. */
+function pushCap(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
+  if (a.bx === undefined && b.bx === undefined) {
+    return;
+  }
+  const abx = a.bx ?? a.wx;
+  const abz = a.bz ?? a.wz;
+  const bbx = b.bx ?? b.wx;
+  const bbz = b.bz ?? b.wz;
+  pos.push(
+    a.wx,
+    a.top,
+    a.wz,
+    b.wx,
+    b.top,
+    b.wz,
+    bbx,
+    b.top,
+    bbz,
+    a.wx,
+    a.top,
+    a.wz,
+    bbx,
+    b.top,
+    bbz,
+    abx,
+    a.top,
+    abz
+  );
+  for (let i = 0; i < 6; i++) {
+    nrm.push(0, 1, 0);
+  }
+}
+
+/**
+ * One wall's columns, every SAMPLE_M along its line. With `snapToStep`, an
+ * earth-retaining wall first snaps every vertex to the measured step and
+ * smooths the snaps along the wall (lib/city/wall-snap.ts); vertices that
+ * find no agreed step fall back to the OSM-line placement.
+ */
+function wallColumns(f: WallFeature, ctx: WallContext): (WallCol | null)[] {
+  const h = Math.max(0.5, f.properties?.h ?? 2);
+  const snap =
+    ctx.snapToStep === true && RETAINING_KINDS.has(f.properties?.kind ?? "");
+  const pts = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
+  const perps = pts.map((_, i) => {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    const tx = b[0] - a[0];
+    const ty = b[1] - a[1];
+    const tl = Math.hypot(tx, ty) || 1;
+    return [-ty / tl, tx / tl] as const;
+  });
+  const steps = snap
+    ? smoothSnaps(
+        pts.map((p, i) =>
+          snapToStep(ctx.heightAt, p[0], p[1], perps[i][0], perps[i][1])
+        )
+      )
+    : [];
+  return pts.map((p, i) => {
+    const [px, py] = perps[i];
+    const step = steps[i];
+    return step
+      ? snappedColumn(p[0], p[1], px, py, h, step, ctx)
+      : columnAt(p[0], p[1], px, py, h, ctx);
+  });
+}
+
 function buildWallGeometry(
   features: WallFeature[],
   ctx: WallContext
@@ -119,18 +237,7 @@ function buildWallGeometry(
     if (f.geometry?.type !== "LineString") {
       continue;
     }
-    const h = Math.max(0.5, f.properties?.h ?? 2);
-    const pts = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
-    const cols: (WallCol | null)[] = pts.map((p, i) => {
-      const a = pts[Math.max(0, i - 1)];
-      const b = pts[Math.min(pts.length - 1, i + 1)];
-      let tx = b[0] - a[0];
-      let ty = b[1] - a[1];
-      const tl = Math.hypot(tx, ty) || 1;
-      tx /= tl;
-      ty /= tl;
-      return columnAt(p[0], p[1], -ty, tx, h, ctx);
-    });
+    const cols = wallColumns(f, ctx);
     for (let i = 0; i < cols.length - 1; i++) {
       const c0 = cols[i];
       const c1 = cols[i + 1];
@@ -141,6 +248,7 @@ function buildWallGeometry(
         continue;
       }
       pushQuad(pos, nrm, c0, c1);
+      pushCap(pos, nrm, c0, c1);
     }
   }
   if (pos.length === 0) {

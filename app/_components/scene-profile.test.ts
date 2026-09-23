@@ -62,13 +62,18 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     tier: "desktop",
     neighbourTiles: true,
     lowRasters: false,
+    terrain: "grid",
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
     profile: "lite",
     tier: "mobile",
     neighbourTiles: false,
     lowRasters: true,
+    terrain: "grid",
   });
+  // The terrain TIN is an opt-in experiment; anything else keeps the grid.
+  expect(sceneBudgetFor("?terrain=tin", false).terrain).toBe("tin");
+  expect(sceneBudgetFor("?terrain=TIN", false).terrain).toBe("grid");
   // The QA knob keeps the block in the lite profile; alone it does nothing.
   expect(sceneBudgetFor("?scene=lite&block=1", false).neighbourTiles).toBe(
     true

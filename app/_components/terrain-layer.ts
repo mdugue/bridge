@@ -26,6 +26,12 @@ import {
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
 import {
+  buildTinGeometryData,
+  decodeTerrainTin,
+  parseTerrainTinHeader,
+  TinIndex,
+} from "@/lib/city/terrain-tin";
+import {
   type BytesProgress,
   fetchGzipped,
   fetchRequiredJson,
@@ -71,6 +77,10 @@ export interface TerrainOptions {
   signal?: AbortSignal;
   /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
   sunDirection?: Vector3;
+  /** URL of a terrain TIN header (lib/city/terrain-tin.ts): when given, the
+   * tile is meshed from the TIN instead of the heightfield at `url`, and
+   * `wallLines` are not burned in (the `?terrain=tin` experiment) */
+  tinUrl?: string;
   /** URL of the heightfield header JSON (see lib/city/heightfield.ts); the
    * grid size and bounds come from it, baked by scripts/prepare-data.ts */
   url: string;
@@ -434,7 +444,47 @@ function createTerrainMaterial(
   return material;
 }
 
-export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
+/** The meshed ground of one tile, whichever way it was built. */
+interface GroundSurface {
+  bounds: TerrainBounds;
+  geometry: BufferGeometry;
+  heightAt: (x: number, y: number) => number | null;
+  minElevation: number;
+  vertexCount: number;
+}
+
+function surfaceGeometry(
+  positions: Float32Array,
+  indices: number[] | Uint32Array
+): BufferGeometry {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  geometry.setIndex(
+    Array.isArray(indices) ? indices : new BufferAttribute(indices, 1)
+  );
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  return geometry;
+}
+
+/** A geometry sharing `geometry`'s positions and index with every normal
+ *  pointing up the data frame's +Z (for a flat water sheet on a TIN). */
+function upFacingTwin(geometry: BufferGeometry): BufferGeometry {
+  const position = geometry.getAttribute("position");
+  const normals = new Float32Array(position.count * 3);
+  for (let i = 2; i < normals.length; i += 3) {
+    normals[i] = 1;
+  }
+  const twin = new BufferGeometry();
+  twin.setAttribute("position", position);
+  twin.setAttribute("normal", new BufferAttribute(normals, 3));
+  twin.setIndex(geometry.getIndex());
+  twin.boundingBox = geometry.boundingBox?.clone() ?? null;
+  return twin;
+}
+
+/** The default ground: the baked n×n heightfield, walls burned in. */
+async function loadGridSurface(opts: TerrainOptions): Promise<GroundSurface> {
   // The raster arrives ready to use: scripts/prepare-data.ts resampled the DGM
   // GeoTIFF to n x n at build time (quantised uint16, gzipped); decoding it
   // is one dequantising pass and NoData comes out as NaN, so there is no
@@ -452,19 +502,62 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
     header
   );
   const elevations = conflateTerrain(samples, { n, bounds }, opts.wallLines);
-
   const { positions, indices, minElevation } = buildTerrainGeometryData({
     elevations,
     n,
     bounds,
     offset: opts.offset,
   });
+  return {
+    bounds,
+    geometry: surfaceGeometry(positions, indices),
+    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
+    minElevation,
+    vertexCount: positions.length / 3,
+  };
+}
 
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
+/**
+ * The `?terrain=tin` ground: the error-bounded TIN baked from the native 1 m
+ * DGM (lib/city/terrain-tin.ts). Nothing is burned in — the TIN already
+ * carries the DGM's 1–2 m wall ramps, and the breakline burn measurably
+ * damages terraced walls (see bake-terrain-tin.ts); the wall ribbons snap to
+ * the measured steps instead. `heightAt` interpolates the very triangles the
+ * GPU draws, through a bucket index (TinIndex).
+ */
+async function loadTinSurface(
+  url: string,
+  opts: TerrainOptions
+): Promise<GroundSurface> {
+  const header = parseTerrainTinHeader(
+    await fetchRequiredJson(url, opts.signal)
+  );
+  const tin = decodeTerrainTin(
+    await fetchGzipped(
+      resolveSiblingUrl(url, header.data),
+      opts.signal,
+      opts.onBytes
+    ),
+    header
+  );
+  const { positions, indices, minElevation } = buildTinGeometryData(
+    tin,
+    opts.offset
+  );
+  const index = new TinIndex(tin);
+  return {
+    bounds: header.bounds,
+    geometry: surfaceGeometry(positions, indices),
+    heightAt: (x, y) => index.heightAt(x, y),
+    minElevation,
+    vertexCount: positions.length / 3,
+  };
+}
+
+export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
+  const { bounds, geometry, heightAt, minElevation, vertexCount } = opts.tinUrl
+    ? await loadTinSurface(opts.tinUrl, opts)
+    : await loadGridSurface(opts);
 
   // Decoded one after another on purpose: three 4096² rasters decoding at
   // once (times four tiles loading concurrently) is a ~800 MB peak that
@@ -502,18 +595,27 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   mesh.castShadow = false;
   mesh.receiveShadow = true;
 
-  // Water re-uses the terrain geometry, masked to the water class.
+  // Water re-uses the terrain geometry, masked to the water class. A TIN
+  // spans the river with a few huge triangles whose vertex normals are
+  // averaged with the steep bank faces they share a vertex with, so the
+  // water's shading fans out in faint streaks across them; its twin shares
+  // the positions and index but faces straight up.
   const water = splat
-    ? createWaterLayer(geometry, splat, opts.sunDirection, opts.heightFog)
+    ? createWaterLayer(
+        opts.tinUrl ? upFacingTwin(geometry) : geometry,
+        splat,
+        opts.sunDirection,
+        opts.heightFog
+      )
     : undefined;
 
   return {
     mesh,
-    vertexCount: positions.length / 3,
+    vertexCount,
     bounds,
     minElevation,
     water,
-    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
+    heightAt,
     dispose: () => {
       for (const texture of [splatTexture, colorTexture, ndviTexture]) {
         texture?.dispose();
