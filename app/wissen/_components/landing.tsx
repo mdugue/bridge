@@ -55,7 +55,7 @@ export function Landing({
         <div className="wissen-hero-veil absolute inset-0 -z-10" />
         <div className="mx-auto max-w-7xl px-4 pt-20 pb-24 sm:pt-28 sm:pb-32">
           <p className={cn(SECTION_LABEL, "text-primary")}>Wissen</p>
-          <h1 className="mt-4 max-w-2xl text-balance font-(family-name:--font-heading) font-semibold text-4xl leading-[1.1] tracking-tight sm:text-5xl">
+          <h1 className="mt-4 max-w-2xl text-balance font-heading font-semibold text-4xl leading-[1.1] tracking-tight sm:text-5xl">
             Wie aus offenen Geodaten ein begehbares Dresden wird
           </h1>
           <p className="mt-5 max-w-xl text-pretty text-base text-foreground/75 leading-relaxed sm:text-lg">
@@ -101,7 +101,7 @@ export function Landing({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className={SECTION_LABEL}>Leitfaden</p>
-            <h2 className="mt-3 font-(family-name:--font-heading) font-semibold text-2xl tracking-tight">
+            <h2 className="mt-3 font-heading font-semibold text-2xl tracking-tight">
               Ohne Vorwissen in Geodaten oder 3D-Grafik
             </h2>
           </div>
@@ -121,7 +121,7 @@ export function Landing({
       <section className="border-t bg-background/60">
         <div className="mx-auto max-w-7xl px-4 py-14 sm:py-20">
           <p className={SECTION_LABEL}>Entwicklung · English</p>
-          <h2 className="mt-3 font-(family-name:--font-heading) font-semibold text-2xl tracking-tight">
+          <h2 className="mt-3 font-heading font-semibold text-2xl tracking-tight">
             Wie es gebaut ist
           </h2>
           <p className="mt-3 max-w-2xl text-muted-foreground text-sm leading-relaxed">
@@ -146,7 +146,7 @@ function EntryCard({ entry, number }: { entry: LandingEntry; number: number }) {
   return (
     <Card className="group/entry relative h-full transition-shadow hover:shadow-md hover:ring-primary/30">
       <CardHeader>
-        <CardTitle className="font-(family-name:--font-heading) text-base leading-snug">
+        <CardTitle className="font-heading text-base leading-snug">
           {/* Stretched over the card, so the whole card is the link. */}
           <Link className="after:absolute after:inset-0" href={entry.href}>
             {entry.title}
