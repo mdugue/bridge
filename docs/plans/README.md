@@ -48,6 +48,7 @@ history. Decisions that came out of plans are written up as
 | 014 | Bring AGENTS.md, the skill, `docs/`, comments and the OSM attribution in line with the code | DONE | [completed.md](./completed.md#014--knowledge-base-currency--done) |
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | **TODO** — gated on the deploy container's Bun version; premise drift noted in the file | [016-bun-image-raster-downsample.md](./016-bun-image-raster-downsample.md) |
+| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **TODO** — five phases, each its own PR | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -129,6 +130,9 @@ S/M/L.
    rejects anything but 25832/25833). Pick one non-Saxon 2 km tile, run the
    pipeline with OSM + a public DEM, write down what breaks; then decide
    bake-side extrusion vs. runtime fallbacks.
+   *For Germany this is now [plan 017](./017-germany-wide-sites.md)*
+   (LoD2 + DGM1 are near-nationwide, so no footprint extrusion is needed
+   there); the OSM-only case outside Germany stays open here.
 2. **Shareable view links (S–M).** The Snapshot codec is versioned and
    validated; the only URL read is `?scene=`. A `?snap=<base64>` read once
    after `ready` and written on Copy turns "this corner at 08:00 on
@@ -152,6 +156,7 @@ S/M/L.
    inputs and writes `data/<tile>.provenance.json` (dataset, edition,
    download date, licence) that the HUD footer could read. The guide's
    dataset table is the hand-kept version of this today.
+   *Folded into [plan 017](./017-germany-wide-sites.md), phase 2.*
 
 ### Maintainer actions
 
