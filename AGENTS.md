@@ -37,6 +37,8 @@ bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
+bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
+                   # (Bun.WebView + Chrome; commit the SVGs with the change)
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
@@ -109,7 +111,14 @@ config change.
   `bake-city-mesh.ts` — see `lib/city/heightfield.ts`)
 - `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
   source. `public/data/` is generated, gitignored.
-- `e2e/` — `city-walk.spec.ts` (smoke) and `snapshot-shot.spec.ts` (QA harness)
+- `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
+  pages (`[[...slug]]/page.tsx`, Markdown pipeline in `_lib/markdown.tsx`,
+  prose and diagram tokens in `wissen.css`); `lib/docs/` is its pure core
+  (file → route, link rewriting, menu order, diagram keys and theming) and
+  `scripts/render-diagrams.ts` renders the Mermaid blocks to
+  `docs/diagrams/` — see ADR 0021
+- `e2e/` — `city-walk.spec.ts` (smoke), `wissen.spec.ts` (the docs pages)
+  and `snapshot-shot.spec.ts` (QA harness)
 
 The **`city-walker` skill** (`.claude/skills/city-walker/`) is the project's
 deep reference — scene architecture, the full shadow recipe + its dead ends,
@@ -140,7 +149,10 @@ source of truth.
     sync when a user-visible fact changes.
 
   Roles: AGENTS.md = orientation, skill = how it's built, `docs/` = what it
-  shows, what maps to what, why, and what is next.
+  shows, what maps to what, why, and what is next. The site publishes
+  `docs/` under `/wissen` (guide) and `/wissen/dev` (the rest): keep writing
+  it for GitHub, and run `bun run docs:diagrams` when a Mermaid block
+  changes.
 
 ## Coordinate system (read before touching geometry)
 

@@ -5,6 +5,11 @@ what it shows, where the data comes from, how it is built, which decisions
 were taken and why, and what is still open. It lives in the repository so it
 survives across chat threads and contributors.
 
+The site publishes this folder as it is: the guide under `/wissen`, the rest
+under `/wissen/dev` ([ADR 0021](./adr/0021-docs-published-under-wissen-with-prerendered-diagrams.md)).
+Write for GitHub – relative `.md` links, Mermaid in fenced blocks – and the
+pages follow.
+
 ## Start here
 
 | You are… | Read |
@@ -31,7 +36,8 @@ docs/
 ├── transformations.md     the ledger: every transformation built / experimental / planned / discontinued, with why
 ├── portability.md         degradation matrix + porting checklist for other locations
 ├── adr/                   architecture decision records (one decision per file, numbered)
-└── plans/                 implementation plans: open work, condensed history, backlog, audit findings
+├── plans/                 implementation plans: open work, condensed history, backlog, audit findings
+└── diagrams/              the Mermaid blocks above, rendered to SVG (generated: bun run docs:diagrams)
 ```
 
 Roles at a glance: **AGENTS.md** = orientation for developers and agents,
@@ -70,6 +76,10 @@ Docs are only useful if they do not rot. Treat them as part of "done":
 > Numbers in the guide (download sizes, feature counts, dates) are measured,
 > not estimated; [data-pipeline.md](./data-pipeline.md#measuring-what-the-browser-downloads)
 > says how.
+
+> A change to a **Mermaid diagram** re-renders it: `bun run docs:diagrams`
+> writes the SVG the site shows into `diagrams/` and prunes the old one;
+> commit both. `bun run verify` fails while they disagree.
 
 Plans follow their own lifecycle, described in
 [plans/README.md](./plans/README.md).

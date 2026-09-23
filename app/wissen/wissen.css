@@ -1,0 +1,243 @@
+/* The /wissen pages: docs/ as prose, in the viewer's tokens (globals.css).
+   Plain CSS on purpose – the Markdown arrives as bare elements, so this styles
+   elements, not classes. */
+
+/* --- Diagrams ------------------------------------------------------------
+   The committed SVGs (docs/diagrams/, scripts/render-diagrams.ts) carry no
+   colour of their own, only these variables – so a palette change here
+   restyles every diagram without a re-render. The magenta tint is the
+   viewer's --primary, the rest the neutral scale. */
+:root {
+  --diagram-background: var(--background);
+  --diagram-node: color-mix(in oklch, var(--primary) 5%, var(--background));
+  --diagram-node-border: color-mix(in oklch, var(--primary) 32%, var(--border));
+  --diagram-text: var(--foreground);
+  --diagram-line: color-mix(
+    in oklch,
+    var(--muted-foreground) 80%,
+    var(--background)
+  );
+  --diagram-cluster: color-mix(in oklch, var(--muted) 70%, var(--background));
+  --diagram-cluster-border: var(--border);
+  --diagram-label-background: var(--background);
+  --diagram-note: color-mix(in oklch, var(--primary) 7%, var(--background));
+  --diagram-note-border: color-mix(in oklch, var(--primary) 30%, var(--border));
+}
+
+.doc {
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--foreground);
+  overflow-wrap: break-word;
+}
+
+.doc > * + * {
+  margin-top: 1.1em;
+}
+
+.doc :where(h1, h2, h3, h4) {
+  /* What the `font-heading` utility resolves to in globals.css. */
+  font-family: var(--font-sans), sans-serif;
+  line-height: 1.25;
+  scroll-margin-top: 5rem;
+  text-wrap: balance;
+}
+
+.doc h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.6em;
+}
+
+.doc h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 2.6em;
+  padding-top: 1.4em;
+  border-top: 1px solid var(--border);
+}
+
+.doc h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 2em;
+}
+
+.doc h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 1.6em;
+}
+
+.doc :where(h2, h3, h4) + * {
+  margin-top: 0.6em;
+}
+
+.doc a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--primary) 30%, transparent);
+  text-underline-offset: 3px;
+}
+
+.doc a:hover {
+  text-decoration-color: var(--primary);
+}
+
+.doc strong {
+  font-weight: 600;
+}
+
+.doc :where(ul, ol) {
+  padding-left: 1.4em;
+}
+
+.doc ul {
+  list-style: disc;
+}
+
+.doc ol {
+  list-style: decimal;
+}
+
+.doc li + li,
+.doc li > :where(ul, ol) {
+  margin-top: 0.35em;
+}
+
+.doc li::marker {
+  color: var(--muted-foreground);
+}
+
+.doc blockquote {
+  border-left: 2px solid color-mix(in oklch, var(--primary) 45%, transparent);
+  padding: 0.1em 0 0.1em 1em;
+  color: color-mix(in oklch, var(--foreground) 80%, var(--background));
+}
+
+.doc blockquote > * + * {
+  margin-top: 0.7em;
+}
+
+.doc hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2.5em 0;
+}
+
+.doc :not(pre) > code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.84em;
+  background: var(--muted);
+  border-radius: calc(var(--radius) * 0.6);
+  padding: 0.12em 0.35em;
+}
+
+.doc pre {
+  font-size: 12.5px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+}
+
+.doc pre code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.doc .table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.doc table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.doc :where(th, td) {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55em 0.8em;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc tr:last-child td {
+  border-bottom: 0;
+}
+
+.doc th {
+  font-weight: 600;
+  background: color-mix(in oklch, var(--muted) 70%, var(--background));
+  white-space: nowrap;
+}
+
+.doc td code {
+  white-space: nowrap;
+}
+
+/* --- Diagram figure ------------------------------------------------------ */
+.doc .diagram {
+  display: flex;
+  flex-direction: column;
+  margin-top: 1.6em;
+  margin-bottom: 1.6em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--diagram-background);
+  padding: 1rem;
+}
+
+.doc .diagram-canvas {
+  display: flex;
+  justify-content: center;
+  /* The line height the labels were measured with (the renderer's page). */
+  line-height: normal;
+}
+
+.doc .diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.doc .diagram[data-full] .diagram-canvas {
+  justify-content: flex-start;
+  overflow-x: auto;
+}
+
+.doc .diagram[data-full] svg {
+  flex: none;
+  max-width: none;
+}
+
+/* Mermaid's HTML labels sit in foreignObject and would inherit the prose. */
+.doc .diagram-canvas :where(p) {
+  margin: 0;
+}
+
+/* Below the drawing, not over it: a shrunk diagram has no corner to spare. */
+.doc .diagram-zoom {
+  align-self: flex-end;
+  margin: 0.5rem -0.5rem -0.5rem 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  background: color-mix(in oklch, var(--background) 92%, transparent);
+  padding: 0.2rem 0.5rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.doc .diagram-zoom:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}

@@ -21,12 +21,12 @@ The diagram convention encodes the *kind* of relation:
 | node tagged *synth* | synthesized in-engine, no external data. |
 
 ```mermaid
-flowchart TB
+flowchart LR
   classDef planned fill:#fef3c7,stroke:#d97706,stroke-dasharray:4 3,color:#92400e;
   classDef synth fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
 
   subgraph SRC["📦 Data sources — Saxon open geodata (+ OSM)"]
-    direction LR
+    direction TB
     CJ["CityJSON LoD2<br/>buildings + ALKIS attrs"]
     DGM["DGM1<br/>terrain raster (1 m)"]
     DOM["DOM1<br/>surface raster (1 m)"]
@@ -39,7 +39,7 @@ flowchart TB
   SUN["sun rig (time of day)"]:::synth
 
   subgraph FEAT["🎨 Rendered features — what you walk through"]
-    direction LR
+    direction TB
     TER["Terrain ground"]
     SURF["Surface colours<br/>roads · meadow · …"]
     WAT["Water (Elbe)"]

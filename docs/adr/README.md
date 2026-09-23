@@ -30,6 +30,7 @@ each data → look transformation does and its status.
 | [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and assert presence; visuals are judged on a real GPU | accepted |
 | [0019](./0019-oxlint-oxfmt-and-native-typescript.md) | oxlint + oxfmt and the native TypeScript 7 compiler; no ESLint, no biome | accepted |
 | [0020](./0020-fixed-light-pool-and-static-shadow-casters.md) | A fixed pool of real point lights; animated geometry never updates the shadow map | accepted |
+| [0021](./0021-docs-published-under-wissen-with-prerendered-diagrams.md) | docs/ is published as /wissen, and its diagrams are prerendered SVG | accepted |
 
 ## Format
 

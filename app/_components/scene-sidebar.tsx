@@ -26,6 +26,7 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
+import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { getTimes } from "suncalc";
 import { Button } from "@/components/ui/button";
@@ -902,6 +903,14 @@ export function SceneSidebar(props: SceneSidebarProps) {
         <p>
           Quelle: GeoSN, dl-de/by-2-0 · Lampen, Mauern, Bahnsteige und Brücken ©
           OpenStreetMap-Mitwirkende (ODbL)
+        </p>
+        <p className="mt-1.5">
+          <Link
+            className="underline underline-offset-2 hover:text-foreground"
+            href="/wissen"
+          >
+            Wissen: Datenquellen und wie die Stadt entsteht
+          </Link>
         </p>
       </SidebarFooter>
     </Sidebar>
