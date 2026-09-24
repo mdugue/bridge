@@ -922,6 +922,11 @@ async function bootApp(
   let streamingStarted = false;
   /** Set once, the first time everything in view is loaded and dressed. */
   let loaded = false;
+  // Progress after the first frame (reportProgress below): declared before
+  // the first await, since tile events call checkLoaded from then on.
+  let surroundings = 0;
+  let details = 0;
+  let busy = false;
   const idle = (fn: () => void): void => {
     if (typeof requestIdleCallback === "function") {
       requestIdleCallback(fn, { timeout: 1500 });
@@ -989,9 +994,6 @@ async function bootApp(
   // the tile renderer's own load progress, and the details (vegetation,
   // lamps, rails, walls) built per fine tile against those still queued.
   // Both only ever move forward, and both end when everything in view is in.
-  let surroundings = 0;
-  let details = 0;
-  let busy = false;
   function reportProgress(spawnDressed: boolean): void {
     if (extras.tiles.length === 1) {
       stage("surroundings", 1, true);
