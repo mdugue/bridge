@@ -1,7 +1,7 @@
 /**
  * Snaps a wall ribbon to the step the elevation data actually has — the
- * `?terrain=tin` alternative to burning the OSM line into the ground
- * (terrain-conflate.ts). DOM-free, THREE-free, pure.
+ * TIN ground's alternative to burning the OSM line into the ground
+ * (terrain-conflate.ts, now only for heightfield tiles). DOM-free, THREE-free, pure.
  *
  * On the native 1 m DGM the tall retaining walls are already a 1–2 m ramp
  * (the terrain study, docs/transformations.md "Terrain TIN"), but the OSM

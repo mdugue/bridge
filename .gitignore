@@ -59,3 +59,4 @@ shots/
 
 # Build cache of scripts/prepare-data.ts (baked heightfields etc.)
 /.cache/
+__pycache__/

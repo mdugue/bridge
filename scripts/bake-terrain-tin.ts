@@ -1,7 +1,7 @@
 /**
  * Bakes one DGM GeoTIFF into an error-bounded terrain TIN
- * (lib/city/terrain-tin.ts) — the `?terrain=tin` alternative to the regular
- * heightfield (bake-heightfield.ts). The raster is read at its NATIVE
+ * (lib/city/terrain-tin.ts) — the ground the viewer meshes, in place of the
+ * regular heightfield (bake-heightfield.ts). The raster is read at its NATIVE
  * resolution (DGM1: 1 m, 2000²) rather than resampled to 1024², then
  * Delatin inserts the worst-fitting grid point until every grid point lies
  * within `maxError` of the mesh. Flat ground (the Elbe, squares, meadows)

@@ -75,7 +75,7 @@ test("tileUrlsFrom prefixes the /data route and serves phones the low rasters", 
   expect(phone.ndvi).toBe(desktop.ndvi);
 });
 
-test("only a tile with a TIN tolerance serves the terrain TIN, optionally", () => {
+test("a tile with a TIN tolerance requires its terrain TIN", () => {
   const withTin = tileArtifacts({ ...primary, tinMaxError: 0.15 });
   expect(withTin.terrainTinHeader?.file).toBe(
     "dgm1_33412_5656_2_sn.tin-15cm.json"
@@ -83,15 +83,17 @@ test("only a tile with a TIN tolerance serves the terrain TIN, optionally", () =
   expect(withTin.terrainTinData?.file).toBe(
     "dgm1_33412_5656_2_sn.tin-15cm.bin.gz"
   );
-  expect(withTin.terrainTinHeader?.required).toBe(false);
+  expect(withTin.terrainTinHeader?.required).toBe(true);
   expect(tileArtifacts(primary).terrainTinHeader).toBeUndefined();
   expect(
     tileUrlsFrom({ ...primary, tinMaxError: 0.15 }, null, false).terrainTin
   ).toBe("/data/dgm1_33412_5656_2_sn.tin-15cm.json");
   expect(tileUrlsFrom(primary, null, false).terrainTin).toBeUndefined();
-  // In the shipped block only the primary carries one.
-  expect(TILE_BLOCK.filter((s) => s.tinMaxError !== undefined)).toHaveLength(1);
-  expect(TILE_BLOCK[0].tinMaxError).toBeDefined();
+  // In the shipped block every tile is meshed from a TIN: the primary (walked
+  // on) at ±0.15 m, the backdrop neighbours at ±0.25 m.
+  expect(TILE_BLOCK.map((s) => s.tinMaxError)).toEqual([
+    0.15, 0.25, 0.25, 0.25,
+  ]);
 });
 
 test("the tile block lists the primary first", () => {

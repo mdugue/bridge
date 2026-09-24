@@ -79,7 +79,8 @@ export interface TerrainOptions {
   sunDirection?: Vector3;
   /** URL of a terrain TIN header (lib/city/terrain-tin.ts): when given, the
    * tile is meshed from the TIN instead of the heightfield at `url`, and
-   * `wallLines` are not burned in (the `?terrain=tin` experiment) */
+   * `wallLines` are not burned in (the default for every tile that has a
+   * TIN — lib/city/tile.ts `tinMaxError`) */
   tinUrl?: string;
   /** URL of the heightfield header JSON (see lib/city/heightfield.ts); the
    * grid size and bounds come from it, baked by scripts/prepare-data.ts */
@@ -518,7 +519,7 @@ async function loadGridSurface(opts: TerrainOptions): Promise<GroundSurface> {
 }
 
 /**
- * The `?terrain=tin` ground: the error-bounded TIN baked from the native 1 m
+ * The default ground: the error-bounded TIN baked from the native 1 m
  * DGM (lib/city/terrain-tin.ts). Nothing is burned in — the TIN already
  * carries the DGM's 1–2 m wall ramps, and the breakline burn measurably
  * damages terraced walls (see bake-terrain-tin.ts); the wall ribbons snap to

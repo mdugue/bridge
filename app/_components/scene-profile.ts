@@ -44,34 +44,17 @@ export type TreeSource = "canopy" | "kataster";
 /** The N8AO quality modes this scene uses (the pass also knows Low/High/Ultra). */
 export type AoQuality = "Medium" | "Performance";
 
-/**
- * How the ground is meshed. `grid` is the product (the baked heightfield,
- * plus the client-side wall conflation); `tin` is the `?terrain=tin`
- * experiment — the primary tile loads the error-bounded TIN baked from the
- * native 1 m DGM (lib/city/terrain-tin.ts) and the wall ribbons snap to its
- * measured steps instead of burning steps into the ground. Tiles without a
- * TIN keep their grid either way.
- */
-export type TerrainMode = "grid" | "tin";
-
 export interface SceneBudget {
   /** phones take the 2048² land-cover rasters (lib/city/tile.ts, MOBILE_RASTER_PX) */
   lowRasters: boolean;
   /** whether the neighbour tiles load: always in `full`, in `lite` only with `?block=1` */
   neighbourTiles: boolean;
   profile: SceneProfile;
-  /** `?terrain=tin` opts into the terrain TIN experiment; default `grid` */
-  terrain: TerrainMode;
   tier: DeviceTier;
   /** the tree inputs (experimental: `?trees=kataster`) */
   trees: TreeSource;
   /** 🧪 experimental vegetation layers, opt-in via `?veg=` (see vegExtrasFromSearch) */
   vegExtras: VegExtras;
-}
-
-/** Parses the terrain mode out of a `location.search` string. Pure. */
-export function terrainModeFromSearch(search: string): TerrainMode {
-  return new URLSearchParams(search).get("terrain") === "tin" ? "tin" : "grid";
 }
 
 /**
@@ -138,7 +121,6 @@ export function sceneBudgetFor(
     tier,
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
     lowRasters: tier === "mobile",
-    terrain: terrainModeFromSearch(search),
     trees: treeSourceFromSearch(search),
     vegExtras: vegExtrasFromSearch(search),
   };

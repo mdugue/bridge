@@ -5,8 +5,9 @@
  * The problem: a retaining/city wall (e.g. the Brühlsche Terrasse) is a sharp
  * vertical step in reality, but the 1024² heightfield resampled from DGM1
  * smooths it into a ~3 m bank (the native DGM1 already has a 1–2 m ramp).
- * Measured cost of this burn, and the `?terrain=tin` alternative that skips
- * it: docs/transformations.md, "Terrain TIN".
+ * Measured cost of this burn, and the terrain TIN that replaced it on every
+ * tile that has one (ADR 0014, superseded there): docs/transformations.md,
+ * "Terrain TIN". Only a tile meshed from its heightfield is still conflated.
  * So the OSM wall ribbon either floats over the ramp or gets swallowed by it —
  * the ground never "steps" on both sides the way it should.
  *

@@ -227,10 +227,10 @@ for (const { tile, n } of TILE_BLOCK) {
   await bakeHeightfieldTile(tile, n);
 }
 
-// --- bake: DGM -> terrain TIN (the `?terrain=tin` experiment) ---------------
-// Only for tiles whose spec names a tolerance (lib/city/tile.ts,
-// PRIMARY_TIN_MAX_ERROR). Delatin refinement of the native 1 m DGM lives in
-// scripts/bake-terrain-tin.ts; the default viewer never requests the result.
+// --- bake: DGM -> terrain TIN (the ground the viewer meshes) ----------------
+// For every tile whose spec names a tolerance (lib/city/tile.ts: primary
+// ±0.15 m, neighbours ±0.25 m). Delatin refinement of the native 1 m DGM
+// lives in scripts/bake-terrain-tin.ts.
 
 const TIN_BAKE_SOURCES = [
   join(process.cwd(), "scripts/bake-terrain-tin.ts"),

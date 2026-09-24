@@ -545,20 +545,21 @@ async function bootApp(
     slot: number,
     onBytes?: (fraction: number) => void
   ): Promise<TerrainLayer> => {
-    // OSM walls feed two consumers — the heightfield step (conflation) and
-    // the ribbon geometry built for the whole block later — so fetch once.
+    // OSM walls feed the ribbon geometry built for the whole block later —
+    // and, on a tile meshed from its heightfield, the conflation step.
     const walls = await fetchFeatures<WallFeature>(tile.walls, opts.signal);
     const t = await loadTerrain({
       onBytes,
       url: tile.heightfieldHeader,
-      // ?terrain=tin: a tile that has a TIN is meshed from it instead
-      // (lib/city/terrain-tin.ts); the rest keep their heightfield.
-      tinUrl: budget.terrain === "tin" ? tile.terrainTin : undefined,
+      // A tile with a TIN (every tile of the block, lib/city/tile.ts) is
+      // meshed from it (lib/city/terrain-tin.ts), with nothing burned in;
+      // only a tile without one falls back to the heightfield.
+      tinUrl: tile.terrainTin,
       landcoverUrl: tile.landcover,
       landcoverRgbUrl: tile.landcoverRgb,
       ndviUrl: tile.ndvi,
-      // Retaining/city walls are burned into THIS tile's heightfield as steps so
-      // the ground breaks at the wall instead of the DGM's smooth bank.
+      // Grid tiles only: retaining/city walls are burned into the heightfield
+      // as steps (ADR 0014). A TIN ignores them — the ribbons snap instead.
       wallLines: wallLinesFrom(walls),
       offset,
       signal: opts.signal,
@@ -768,8 +769,12 @@ async function bootApp(
       offset,
       heightAt,
       heightFog,
-      // ?terrain=tin: the ribbons follow the measured steps (wall-snap.ts)
-      snapToStep: budget.terrain === "tin",
+      // On TIN ground nothing was burned to the OSM line, so the ribbons
+      // follow the measured steps instead (wall-snap.ts). A grid tile (no
+      // TIN in its spec) is conflated; then every ribbon keeps the OSM line.
+      snapToStep: [primary, ...neighbourTiles].every(
+        (tile) => tile.terrainTin !== undefined
+      ),
     });
     scene.add(walls);
     wallGroups.push(walls);

@@ -1,8 +1,8 @@
 /**
  * Error-bounded terrain TIN: an irregular triangle mesh over the tile, baked
  * by scripts/bake-terrain-tin.ts (Delatin greedy refinement of a regular
- * height grid) and read by app/_components/terrain-layer.ts when the viewer
- * runs with `?terrain=tin`. Where the regular heightfield spends the same
+ * height grid) and read by app/_components/terrain-layer.ts for every tile
+ * whose spec names a tolerance (lib/city/tile.ts). Where the regular heightfield spends the same
  * vertex density on a flat river as on a retaining wall, the TIN puts its
  * vertices where the ground actually bends: every grid point of the source
  * lies within `maxError` of the mesh, so a 2 m drop that spans two 1 m cells

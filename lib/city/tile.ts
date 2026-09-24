@@ -27,15 +27,18 @@ export const PRIMARY_HEIGHTFIELD_N = 1024;
 export const NEIGHBOUR_HEIGHTFIELD_N = 512;
 
 /**
- * Delatin tolerance (m) of the primary tile's error-bounded terrain TIN
- * (lib/city/terrain-tin.ts, baked from the NATIVE 1 m DGM1 by
- * scripts/bake-terrain-tin.ts). Served only to `?terrain=tin` — the default
- * viewer keeps the heightfield. At 0.15 m the TIN is ~305k triangles (a
- * seventh of the 1024² grid) in about the grid's bytes, and matches or beats
- * it on every accuracy metric of the terrain study (docs/transformations.md,
- * "Terrain TIN").
+ * Delatin tolerances (m) of the terrain TINs (lib/city/terrain-tin.ts, baked
+ * from the NATIVE 1 m DGM1 by scripts/bake-terrain-tin.ts) — the ground every
+ * tile is meshed from. The primary tile is walked on: at 0.15 m its TIN is
+ * ~305k triangles (a seventh of the old 1024² grid) in about the grid's
+ * bytes, and matches or beats it on every accuracy metric of the terrain
+ * study (docs/transformations.md, "Terrain TIN"). The neighbours are backdrop
+ * seen from the primary or from the air: at 0.25 m a TIN is 150–240k
+ * triangles, a third of their 512² grids (≈4 m spacing, which smears every
+ * wall and embankment), for 1.6–2.2× the grid's gzipped bytes (0.5–0.8 MB).
  */
 export const PRIMARY_TIN_MAX_ERROR = 0.15;
+export const NEIGHBOUR_TIN_MAX_ERROR = 0.25;
 
 /**
  * Land-cover raster edge (px) baked per role. The DLM bake writes 4096²
@@ -60,8 +63,9 @@ export interface TileSpec {
    *  it as is, phones take min(raster, MOBILE_RASTER_PX) */
   raster: number;
   tile: string;
-  /** Delatin tolerance (m) of the terrain TIN baked for this tile (the
-   *  `?terrain=tin` experiment); absent = no TIN, the tile keeps its grid */
+  /** Delatin tolerance (m) of the terrain TIN baked for this tile, which the
+   *  viewer then meshes the ground from; absent = no TIN, the tile is meshed
+   *  from its heightfield (+ the client wall conflation, ADR 0014) */
   tinMaxError?: number;
 }
 
@@ -77,6 +81,7 @@ export const TILE_BLOCK: TileSpec[] = [
     tile,
     n: NEIGHBOUR_HEIGHTFIELD_N,
     raster: NEIGHBOUR_RASTER_PX,
+    tinMaxError: NEIGHBOUR_TIN_MAX_ERROR,
   })),
 ];
 
@@ -272,8 +277,9 @@ export function tileArtifacts(spec: TileSpec): TileArtifacts {
   };
 }
 
-/** The TIN header + payload, baked from the DGM by prepare-data; optional,
- *  since only the `?terrain=tin` viewer asks for them. */
+/** The TIN header + payload, baked from the DGM by prepare-data. Required:
+ *  a tile whose spec names a tolerance is meshed from its TIN, never from
+ *  the heightfield. */
 function tinArtifacts(
   spec: TileSpec
 ): Partial<Record<TinArtifactKind, TileArtifact>> {
@@ -283,12 +289,12 @@ function tinArtifacts(
   return {
     terrainTinHeader: {
       file: terrainTinHeaderFile(spec.tile, spec.tinMaxError),
-      required: false,
+      required: true,
       source: null,
     },
     terrainTinData: {
       file: terrainTinDataFile(spec.tile, spec.tinMaxError),
-      required: false,
+      required: true,
       source: null,
     },
   };

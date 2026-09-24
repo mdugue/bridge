@@ -27,7 +27,8 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 export interface WallContext extends GroundContext {
   heightFog?: HeightFogUniforms;
   /**
-   * `?terrain=tin`: the ground was NOT burned to the OSM line, so an
+   * TIN ground (every tile of the block): nothing was burned to the OSM
+   * line, so an
    * earth-retaining wall snaps to the step the terrain measures instead
    * (lib/city/wall-snap.ts) — face at the ramp's foot, a coping cap back to
    * its crest. Walls with no measurable step keep the old placement.
