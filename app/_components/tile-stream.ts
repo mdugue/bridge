@@ -138,6 +138,42 @@ function dressingParts(d: TileDressing): Object3D[] {
   );
 }
 
+/**
+ * One object per distinct material and draw kind. A dressing is hundreds of
+ * objects (a vegetation cell each, lamps, rails, walls) over a handful of
+ * materials; compiling every one would queue the same program hundreds of
+ * times, and the node renderer yields a frame per object.
+ */
+function compileRepresentatives(roots: Object3D[]): Object3D[] {
+  const seen = new Map<string, Object3D>();
+  for (const root of roots) {
+    root.traverse((object) => {
+      const { material } = object as Mesh;
+      if (!material) {
+        return;
+      }
+      const kind = object.type;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        const key = `${m.uuid}:${kind}`;
+        if (!seen.has(key)) {
+          seen.set(key, object);
+        }
+      }
+    });
+  }
+  return [...seen.values()];
+}
+
+/** How long a tile may wait on its compile before it shows regardless. */
+const COMPILE_WAIT_MS = 3000;
+
+function withinCompileWait(done: Promise<void>): Promise<void> {
+  return Promise.race([
+    done,
+    new Promise<void>((resolve) => setTimeout(resolve, COMPILE_WAIT_MS)),
+  ]);
+}
+
 function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
   for (const part of dressingParts(d)) {
@@ -248,7 +284,7 @@ class DressingPlugin {
     }
     // The renderer shows the tile once this resolves: its programs are
     // ready by then instead of compiling inside a frame.
-    await this.ctx.compile(scene);
+    await withinCompileWait(this.ctx.compile(scene));
   }
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
@@ -311,7 +347,11 @@ class DressingPlugin {
           this.url
         );
         const parts = dressingParts(dressing);
-        await Promise.all(parts.map((part) => this.ctx.compile(part)));
+        await withinCompileWait(
+          Promise.all(
+            compileRepresentatives(parts).map((o) => this.ctx.compile(o))
+          ).then(() => undefined)
+        );
         if (this.dressed.get(scene) !== entry) {
           disposeDressing(dressing);
           return;

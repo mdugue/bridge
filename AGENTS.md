@@ -297,8 +297,12 @@ the coarse one's geometric error is `COARSE_TERRAIN_ERROR` in
 `lib/city/tileset.ts`). Everything a tile brings (dressing, BVH, materials,
 textures) is built in the dressing plugin's `processTileModel` and freed in
 its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
-The glTF extras key is **`tileId`**: the renderer writes `userData.tile`
-itself and would overwrite ours. The sun's shadow camera is a second
+Before a tile or its dressing shows, its shaders are compiled with
+`compileAsync` against the scene pass's target (`PostStack.compile`) —
+add new per-tile objects inside that path, or they compile inside a frame.
+The terrain has no BVH: ground rays march the height grid
+(`lib/city/ground-ray.ts`). The glTF extras key is **`tileId`**: the
+renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
 streaming camera, so tiles that cast into the view stay loaded;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 

@@ -138,11 +138,47 @@ wire after meshopt + gzip) and drop the runtime widening.
 leaves it empty on node pages (the renderer uploads it again) — keep the
 bitmap or upload from a typed array. 3DTilesRendererJS needed no change.
 
+**Stutter on long flights** (a 56 s flight over eight viewpoints, frames
+recorded in the page, 2026-09-24):
+
+| | frames > 100 ms | > 500 ms | total stalled |
+|---|---|---|---|
+| today, before | 6 | 2 | 2.4 s |
+| today, with compileAsync + no terrain BVH | **0** | 0 | **0 s** |
+| WebGPU, before | 21 | 4 | 7.8 s |
+| WebGPU, with both | 5 | 2 | 2.4 s |
+| WebGPURenderer → WebGL2, with both | 69 | 24 | 55 s |
+
+Two fixes landed on the main branch and help both renderers: tiles and
+dressings are compiled with `compileAsync` before they show, and the
+terrain BVH (~1 s of main thread per fine tile) is gone — the two ground
+rays march the height grid (`lib/city/ground-ray.ts`). On the node
+renderer `compileAsync` only pays off if the precompiled shader is the one
+the scene pass uses: three builds node shaders asynchronously and reads
+MRT, tone mapping and colour space at that time, so the spike's pass has
+no MRT (GTAO reconstructs normals from depth), the renderer stays linear
+and untonemapped, and `renderOutput(ACES, sRGB)` is the last node.
+
+What remains on WebGPU is **geometry upload**: a CPU profile of the flight
+puts `writeBuffer` at 2.5 s, and the three long tasks left (0.5–0.9 s)
+land when a fine terrain tile arrives — ≈ 1 M vertices and a 25 MB
+Uint32 index buffer uploaded in one piece. The WebGL path pays the same
+upload in far less time. Fix for Phase 1: cut the fine terrain level into
+smaller chunks at bake time (e.g. 4 × 512² per tile, or 16 × 256² with
+16-bit indices), so each upload is small and chunks cull on their own.
+
+**The WebGL2 backend** of WebGPURenderer stalls far worse than either:
+it compiles node shaders synchronously even under `compileAsync`. Browsers
+without WebGPU should keep today's WebGLRenderer path rather than get the
+node renderer's fallback — or wait for three to make that backend's
+compile asynchronous.
+
 **Gate reading.** Neither reject criterion triggers: the WebGL2 backend
 is not > 25 % slower than today, and the clay (indeed the whole look)
-matches. Recommended: accept ADR 0027, and start Phase 1 with
-`compileAsync` for the WebGL2 backend's stalls and the FLOAT id/roof
-attributes in the bake.
+matches. Recommended: accept ADR 0027 for browsers with WebGPU,
+keep today's WebGL path as the fallback (not the node renderer's WebGL2
+backend), and start Phase 1 with chunked fine terrain. The FLOAT id/roof
+attributes and `compileAsync` are already on the main branch.
 
 ## Phase 1 — Renderer and post (M)
 

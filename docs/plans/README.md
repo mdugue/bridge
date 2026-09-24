@@ -94,20 +94,17 @@ S/M/L.
 9. **Far crown LOD tier (S–M, GPU).** A third InstancedMesh per cell
    (detail 1 or 0, trunk hidden) beyond ~500 m; today a tree 2 km away
    draws ~400 triangles in the main and every shadow pass. Ledger 📋 #11.
-10. **Terrain BVH → grid ray-march (M).** Each fine terrain tile
-    (≈2.1 M triangles) gets a `computeBoundsTree()` on an idle callback
-    after it lands (`indexTerrain` in `create-app.ts`); it serves two rays
-    per second that a bilinear march over the tile's grid heights answers
-    in microseconds. Pure `lib/city/grid-ray.ts` + tests.
+10. ~~**Terrain BVH → grid ray-march (M).**~~ Done 2026-09-24
+    (`lib/city/ground-ray.ts`): no terrain BVH any more; it was the longest
+    stall on flights (~1 s per fine tile).
 11. **Shadow centre biased ahead at eye level (S, GPU).** Plan 009's
    leftover: push the re-centre 20–30 m along the view direction so long
    low-sun shadows clip less (the altitude fit only pushes ahead above the
    base radius). Long shadows beyond the frustum are otherwise a CSM
    problem (ledger 📋 #7).
-12. **First-frame compile (S, GPU).** Rasters decode off-thread
-    (`createImageBitmap`) and the colour splat is painted on the GPU, but
-    every program compile still lands in the first visible frame;
-    `renderer.compileAsync` under the overlay.
+12. ~~**First-frame compile (S, GPU).**~~ Done 2026-09-24: every tile and
+    dressing is compiled with `compileAsync` before it shows
+    (`PostStack.compile`).
 13. **Bundle: `proj4` for one conversion (S).** A 40-line UTM inverse for
     zones 32/33 replaces it (`lib/city/crs.ts`). Size unmeasured.
     (`GLTFLoader` is load-bearing now: every tile is glTF.)
