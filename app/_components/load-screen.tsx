@@ -6,9 +6,10 @@ import {
   WALKABLE_PERCENT,
 } from "@/lib/city/load-stages";
 import { cn } from "cn";
+import { currentSite } from "@/sites";
 
 /**
- * "Laden" — the full-bleed screen shown until the primary tile is walkable.
+ * "Laden" — the full-bleed screen shown until the spawn tile is walkable.
  *
  * Three things carry the load: a stack of plates, one per data layer, that
  * settles as its layer arrives; the stage list with each layer's own progress;
@@ -132,7 +133,7 @@ export function LoadScreen({
             City Walk
           </span>
           <span className="font-semibold text-lg leading-tight sm:text-xl">
-            Dresden · Altstadt
+            {currentSite().label}
           </span>
         </div>
 

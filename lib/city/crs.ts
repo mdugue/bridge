@@ -16,9 +16,6 @@ const UTM_DEFS: Record<number, string> = {
 
 export const SUPPORTED_EPSG_CODES = Object.keys(UTM_DEFS).map(Number);
 
-/** Fallback when reprojection is impossible: Dresden city center. */
-export const FALLBACK_LAT_LNG = { lat: 51.05, lng: 13.74 };
-
 const TRAILING_NUMBER = /(\d+)\s*$/;
 
 /** Extracts the numeric EPSG code from a CityJSON referenceSystem URL/URN. */

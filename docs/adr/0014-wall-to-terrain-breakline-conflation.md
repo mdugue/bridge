@@ -1,6 +1,6 @@
 # ADR 0014: Burn OSM wall lines into the heightfield as breaklines
 
-- **Status:** superseded by ADR-0023 for TIN tiles (every tile of the shipped block); in force for a tile meshed from its heightfield
+- **Status:** superseded by [ADR 0028](./0028-terrain-tin-per-tile-and-wall-snap.md) (a TIN burns nothing in; walls snap to the measured step); in force only for a tile whose DGM has NoData, which falls back to the grid — applied at bake time since [ADR 0024](./0024-site-streams-as-3d-tiles.md)
 - **Date:** 2026-06
 
 ## Context
@@ -58,9 +58,10 @@ superseded for TIN tiles.
 
 ## Update (2026-09, adopted)
 
-The TIN was adopted for every tile ([ADR 0023](./0023-terrain-tin-per-tile-and-wall-snap.md)):
-the primary at ±0.15 m, the neighbours at ±0.25 m. This decision now applies
-only to a tile whose spec names no TIN tolerance.
+The TIN was adopted for every terrain level of every tile
+([ADR 0028](./0028-terrain-tin-per-tile-and-wall-snap.md)): the fine level
+at ±0.15 m, the coarse one at ±0.5 m. This decision now applies only to a
+tile whose DGM has NoData, which the bake meshes as the grid instead.
 
 ## References
 

@@ -7,11 +7,13 @@ Entrypoint for coding agents working on this repo.
 A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
 rendering of Dresden built from Saxon open geodata and walk (or fly) through it.
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
-rasters (as an error-bounded TIN per tile), surfaces (roads/water/meadow/…)
-from an **ATKIS Basis-DLM** "splatmap", and trees from DLM hedge/tree-rows, a
+rasters (an error-bounded TIN per tile and level), surfaces
+(roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover class raster
+(painted with one palette at runtime), and trees from DLM hedge/tree-rows, a
 **DOM1**-derived canopy, the city's **street-tree cadastre** and laser-scan
-crowns, plus OSM hedges. Everything
-renders in the browser with **three.js**; there is no backend.
+crowns, plus OSM hedges. The build bakes it all into an **OGC 3D Tiles**
+tileset of glTF content that the browser streams with **3DTilesRendererJS**
+and renders with **three.js**; there is no backend.
 
 Single-page Next.js app. The 3D scene is imperative three.js code mounted into a
 React shell; React owns the HUD/controls, three.js owns the canvas.
@@ -19,11 +21,14 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 ## Tech stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r186** (`three`), `cityjson-threejs-loader` and `geotiff` (both
-  build step only — the client decodes neither CityJSON nor rasters),
-  `three-mesh-bvh` (collision/picking), `postprocessing` (pmndrs — SSAO, DoF,
-  SMAA, grading, grain, vignette)
-- GDAL CLI + Python/Pillow for the offline data pipeline
+- **three.js r186** (`three`), **`3d-tiles-renderer`** (3DTilesRendererJS —
+  streaming, LOD, LRU, glTF metadata), `three-mesh-bvh` (collision/picking),
+  `postprocessing` (pmndrs — SSAO, DoF, SMAA, grading, grain, vignette)
+- Build step only: `cityjson-threejs-loader`, `geotiff`, `@gltf-transform/*`
+  and `meshoptimizer` (the client decodes neither CityJSON nor GeoTIFF; it
+  gets glTF)
+- **Python in a uv environment** (`pipeline/`: numpy, rasterio, pyogrio,
+  shapely, Pillow — GDAL ships inside the wheels) for the offline bakes
 - Playwright for e2e + the screenshot harness; `bun test` for the `lib/`,
   `app/_components/` and `scripts/` units
 - Deployed as a static client app; no database, no stateful API routes
@@ -39,6 +44,9 @@ bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
+bun run bake       # offline bakes (pipeline/, Python via uv): raw → data/
+                   # [tile] [--ingest] [--step X]; --ingest downloads first
+bun run test:pipeline   # pytest + ruff for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
                    # (Bun.WebView + Chrome; commit the SVGs with the change)
 bun test:e2e       # playwright (e2e/) against a production build
@@ -80,14 +88,22 @@ config change.
 ## Where things live
 
 - `app/_components/` — the viewer, grouped:
-  - spine: `create-app.ts` (scene/loop/handle), `city-walk.tsx` (HUD),
-    `city-walk-client.tsx` (the `ssr: false` mount + the tile URLs),
+  - spine: `create-app.ts` (scene/loop/handle), `tile-stream.ts` (the
+    3DTilesRendererJS setup: gzip + glTF-metadata plugins and the dressing
+    plugin that builds and disposes everything a tile carries),
+    `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount +
+    which tileset to stream),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
     (`?scene=lite`), `webgl-support.ts` (the WebGL2 preflight),
     `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
-  - layers: `terrain-layer.ts`, `water-layer.ts`, `vegetation-layer.ts`,
-    `city-layer.ts`, `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`,
-    `inserted-building.ts`
+  - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
+    (the GPU pass that paints the class raster with the palette),
+    `water-layer.ts`, `vegetation-layer.ts`, `tree-inventory-layer.ts` (the
+    street-tree cadastre), `low-vegetation-layer.ts` (hedges),
+    `city-layer.ts` (dresses a building tile: clay material, object table,
+    BVH, demolish), `rail-layer.ts`, `wall-layer.ts` (ribbons, snapped to
+    the measured step on a TIN), `lamp-layer.ts`, `shader-chunks.ts`
+    (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
@@ -95,27 +111,45 @@ config change.
   - input/camera: `camera-pose.ts` (the one owner of where the player
     stands and looks, walk/fly and the scenic glides; every input cancels a
     glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
-    `touch-controls.ts`, `collision.ts`, `viewpoints.ts`,
-    `virtual-joystick.tsx`
+    `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, the tile artifact
-  list, and `features.ts` — the GeoJSON shapes the bakes write, checked
-  against every committed file by its test) with `bun test` units alongside
-- `scripts/` — the offline data bakes `extract-dlm.sh`, `extract-canopy.sh`,
-  `extract-ndvi.sh`, `extract-roof-colour.sh`, `extract-lamps.sh`,
-  `extract-walls.sh`, `extract-rail.sh` (+ `ndvi-at-trees.py`, the NDVI
-  sampler `extract-ndvi.sh` calls), `bake-city-mesh.ts` and
-  `prepare-data.ts` (bakes the committed artifacts into `public/data` under
-  content-hashed names + `manifest.json`: each DGM GeoTIFF becomes a gzipped
-  uint16 heightfield, each CityJSON a binary building mesh via
-  `bake-city-mesh.ts` — see `lib/city/heightfield.ts`)
-- `data/` — committed *derived* geodata; `data/_raw/` is **gitignored** bulk
-  source. `public/data/` is generated, gitignored.
+  policy, the look table + store, the Snapshot codec, `site.ts` (the site
+  type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
+  extras), `landcover.ts` (the classes and the one palette), `city-mesh.ts`
+  (the per-object table: packing, demolish, footprints), `terrain-tin.ts`
+  (the TIN mesh + the triangle index ground height reads), `wall-snap.ts`,
+  `tree-inventory.ts` (archetypes, the canopy veto), `tile.ts` (each
+  tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
+  write, checked against every committed file by its test) with `bun test`
+  units alongside
+- `sites/` — one config per place (`dresden.ts`: tiles, CRS, labels,
+  attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
+- `pipeline/` — the offline bakes, one Python package in a uv environment
+  (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
+  `lamps.py`, `walls.py`, `rail.py`, `trees.py` (+ `tree_archetypes.py`),
+  `lowveg.py` (hedges + laser-scan trees), `osm.py`; `ingest_sn.py` is
+  Saxony's download adapter, `ingest_trees_dresden.py` the city's tree
+  cadastre; tests in `pipeline/tests/`), run by `bun run bake`
+  (`scripts/bake.ts`) — see ADR 0025
+- `scripts/` — the build step: `prepare-data.ts` bakes the committed
+  artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
+  `tileset-spawn.json`) with glTF content under content-hashed names +
+  `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
+  CityJSON loader, `bake-tiles.ts` turns it into glTF with a per-object
+  property table) and the terrain at two levels (an error-bounded Delatin
+  TIN of the native DGM, ±0.15 m and ±0.5 m; a DGM with NoData falls back
+  to the resampled grid with the wall breaklines burned in — ADR 0028),
+  written by `tile-glb.ts` (meshopt, quantised,
+  `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
+  `bake.ts` (the pipeline runner), `downsample-raster.ts` (the 2048² class
+  raster), `bake-wissen-hero.ts`, `render-diagrams.ts`
+- `data/` — committed *derived* geodata; `data/_raw/<site>/` is
+  **gitignored** bulk source. `public/data/` is generated, gitignored.
 - `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
   pages (`[[...slug]]/page.tsx`, the entry in `_components/landing.tsx`,
   Markdown pipeline in `_lib/markdown.tsx`, the zoom dialog in
@@ -165,38 +199,63 @@ source of truth.
 
 ## Coordinate system (read before touching geometry)
 
-Source data is **EPSG:25833** (ETRS89/UTM33), Z-up. A parent `world` group is
-rotated −90° about X so data-Z (elevation) becomes scene-Y (up). Mapping:
-`x = epsgX − cx`, `z = −(epsgY − cy)`, `y = elevation`, where `(cx, cy)` is the
-shared recenter offset (captured from the primary tile so all tiles align).
-**Vegetation is added to the Y-up `scene`, not the Z-up `world`** — adding Y-up
-coords into the rotated group applies the transform twice (trees shoot skyward).
-Tiles are named `33EEE_NNNN`; the primary is `33412_5656_2_sn`, loaded with a
-2×2 neighbour block for context (collision/demolish stay on the primary tile).
+Source data is **EPSG:25833** for Dresden (ETRS89/UTM33; the site config
+allows 25832 too), Z-up. A parent `world` group is rotated −90° about X so
+data-Z (elevation) becomes scene-Y (up). Mapping: `x = epsgX − cx`,
+`z = −(epsgY − cy)`, `y = elevation`, where `(cx, cy)` is the shared recenter
+offset (captured at bake time from the spawn tile's CityJSON, carried in the
+tileset's extras, so all tiles align). The glTF content is Y-up; the
+renderer's up-axis turn cancels the `world` rotation, so a tile's content
+root **is** the Y-up scene frame. **Vegetation and other dressing live in the
+Y-up frame, never inside the rotated `world` group itself** — adding Y-up
+coords into the rotated group applies the transform twice (trees shoot
+skyward). Positions in the glTF are quantised (not metres): shaders that need
+data-frame coordinates derive them from world space (`shader-chunks.ts`,
+world (x, y, z) = data (x, −z, y)). Tiles are named `33EEE_NNNN_2_sn` (the
+site's `tileSuffix`); `33412_5656_2_sn` is the spawn tile. The viewer streams
+every tile of the site around the camera; collision, demolish and picking
+work on every loaded tile.
 
 ## Data pipeline
 
 Bulk raw downloads (DLM ~5 GB, DOM1, DOP, OSM `.osm.pbf`) **must not be
-committed** — keep them in `data/_raw/` (gitignored). The exception is the
-**DGM1 GeoTIFF + `.tfw` per tile (~13–15 MB, `data/dgm/`)**: it is committed
-because `prepare-data.ts` bakes the heightfield from it at build time and
-`extract-canopy.sh`/`extract-rail.sh` read it. No Git-LFS. Only small derived
-per-tile artifacts (`data/dlm/*.png|geojson`, `data/dop/*.json`) are committed
-otherwise; `prepare-data.ts` publishes them to `public/data/` at build.
-Pipeline notes:
+committed** — keep them in `data/_raw/<site>/{dom1,dop,dlm,osm,downloads}`
+(gitignored; `bun run bake --ingest` fills it through the site's ingest
+adapter). The exception is the **DGM1 GeoTIFF + `.tfw` per tile (~13–15 MB,
+`data/dgm/`)** and the CityJSON: committed because `prepare-data.ts` bakes the
+terrain and buildings from them at build time and the canopy/rail bakes read
+the DGM. No Git-LFS. Only small derived per-tile artifacts
+(`data/dlm/*.png|json|geojson`, `data/dop/*.json`) are committed otherwise;
+`prepare-data.ts` publishes them to `public/data/` at build. Pipeline notes:
 
-- `extract-dlm.sh` bakes a 4096² class-id PNG + a pastel **RGBA splatmap**
-  (RGB = palette, **A = water coverage**). Palette mapping uses PIL **palette
-  mode** (fast at 4096²), not a per-pixel loop.
-- `extract-canopy.sh` derives canopy points: `nDOM = DOM1 − DGM1`. `gdal_calc.py`
-  and **numpy are unavailable**; nDOM is computed directly in Python/Pillow. It
-  gates trees on the land-cover class raster so none sit on roads/bridges/water.
-- `prepare-data.ts` downsamples the 4096² rasters to the 2048² variants through
-  `scripts/downsample-raster.ts`. **sharp premultiplies alpha across `resize`**,
-  and on the RGB splat alpha is water coverage, so a plain resize zeroes the
-  colour of every land texel (a black ground; the headless e2e cannot see it).
-  The helper resizes the colour and the alpha as separate alpha-less images —
-  keep it that way, and keep its unit test.
+- **The bakes are Python, in their own uv environment** (`pipeline/`,
+  `uv.lock`; ADR 0025). numpy, rasterio, pyogrio and shapely are there, and
+  GDAL comes inside the wheels (with the OSM driver): fix the environment,
+  don't bend the code around a missing tool. `bun run bake` passes each
+  tile's extent and CRS from the site config; the steps run land cover
+  first (the canopy and lamps are gated on it). `bun run test:pipeline` and
+  CI's `pipeline` job run pytest + ruff.
+- `landcover.py` bakes **only class ids** (4096² 8-bit PNG + legend); the
+  colours are `lib/city/landcover.ts`, painted on the GPU at runtime
+  (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
+- `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
+  them on the class raster so no tree sits on a road, bridge or water.
+- `trees.py` reads the street-tree cadastre the site's cadastre adapter
+  fetched (Dresden's WFS); `lowveg.py` grids the GeoSN laser scan
+  (`<raw>/lsc/<tile>.laz`, placed by hand) with the **PDAL CLI** into 0.5 m
+  rasters for the hedge heights and the scan trees. Without a cadastre or a
+  scan those steps skip (hedges keep their tagged height).
+- All OSM layers (walls, lamps, platforms, bridge structure) come from the
+  site's Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass.
+- Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
+  note (the runtime falls back); rail decks fall back to the DGM ramp.
+- `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
+  with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
+  through an image resize any more (sharp premultiplies alpha — that once
+  painted the ground black).
+- `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
+  ≈ 20 s); the glTF quantisation, meshopt and gzip settings live in
+  `scripts/tile-glb.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)
 
@@ -206,7 +265,7 @@ spreads a 5-tap Vogel disk by `light.shadow.radius * texel`
 (`shadowmap_pars_fragment.glsl`). Default `radius` is 1 ≈ hard, so soft shadows
 require **explicitly raising `shadow.radius`**. The working recipe (see
 `sun-rig.ts`): `PCFShadowMap` + a raised `shadow.radius`; terrain
-**`castShadow = false`** (it only receives — a casting heightfield self-shadows
+**`castShadow = false`** (it only receives — a casting terrain self-shadows
 into triangle/staircase acne at grazing sun); `normalBias = 0` (it offsets the
 flat ground's sample toward the light → the bright peter-panning contact strip;
 safe at 0 because terrain doesn't cast and buildings/trees cast via back faces,
@@ -236,12 +295,32 @@ configuration Proxy), so they are **construction-time settings**: a motion-keyed
 quality switch there trades a flicker for a shader-recompile hitch. DoF is still
 dropped while moving — motion has already destroyed the bokeh.
 
-**Buildings are already batched.** Each tile's buildings are ONE baked mesh
-(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time and
-writes a gzipped vertex stream + meta, `lib/city/city-mesh.ts`; per-vertex
-`objectid`), so draw calls are already low and **BatchedMesh would not help**
-(and would break objectid picking/demolish). The perf bottleneck is **fill-rate** (post FX + shadow map),
-not draw calls.
+**Buildings are already batched.** Each tile's buildings are ONE glTF mesh
+(`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time,
+`scripts/bake-tiles.ts` writes it with a per-vertex feature id,
+`EXT_mesh_features`), so draw calls are already low and **BatchedMesh would
+not help** (and would break feature-id picking/demolish). Per-building data
+(tint, heights, roof colour, glow, roughness, the demolish tree) is **one row
+per object** in an `EXT_structural_metadata` property table, packed into a
+float texture the clay shader reads (`lib/city/city-mesh.ts`) — add a
+building attribute there, not as a vertex attribute. The perf bottleneck is
+**fill-rate** (post FX + shadow map), not draw calls.
+
+**Tiles come and go.** 3DTilesRendererJS loads and unloads tiles by
+screen-space error (`app/_components/tile-stream.ts`; two terrain levels,
+the coarse one's geometric error is `COARSE_TERRAIN_ERROR` in
+`lib/city/tileset.ts`). Everything a tile brings (dressing, BVH, materials,
+textures) is built in the dressing plugin's `processTileModel` and freed in
+its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
+Before a tile or its dressing shows, its shaders are compiled with
+`compileAsync` against the scene pass's target (`PostStack.compile`) —
+add new per-tile objects inside that path, or they compile inside a frame.
+The terrain has no BVH: ground rays march the ground height
+(`lib/city/ground-ray.ts`), which a TIN tile answers from a bucket index
+over the triangles it draws (`TriangleIndex`, `lib/city/terrain-tin.ts`). The glTF extras key is **`tileId`**: the
+renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
+streaming camera, so tiles that cast into the view stay loaded;
+`displayActiveTiles` keeps loaded tiles drawn while turning.
 
 **Vegetation** is chunked into 250 m cells (one InstancedMesh per cell) so
 off-screen chunks frustum-cull out of both the main and shadow pass. After
@@ -256,15 +335,18 @@ loader's raw LoD colours) styles were removed. Keep transmission out of the
 scene: it re-renders everything into a buffer each frame (~2× cost).
 
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
-soon as the primary tile's terrain + buildings are on screen; `loadRest`
-then streams the primary's vegetation and lamps, the three neighbour tiles,
-rails and walls behind a HUD chip (`status.phase === "streaming"`), and
-`onLoaded` flips it to `ready`. Anything added to the scene after the first
-frame must `invalidateShadows()` and re-check the abort signal
-(`ensureAlive()`), or it shows up as a missing shadow / a leak after a
+soon as the spawn tile's buildings and any of its terrain levels are on
+screen; `startStreaming` then opens the dressing gate, and vegetation,
+lamps, rails and walls are built tile by tile behind a HUD chip
+(the streaming pill). `onLoaded` flips it to `ready` once the
+spawn tile is dressed, the renderer is idle and no dressing is pending.
+Anything added to the scene after the first frame must re-render the shadow
+map (`invalidateShadows()`, which the stream's change handler does) and
+respect disposal, or it shows up as a missing shadow / a leak after a
 StrictMode remount. The e2e hook distinguishes `__poc.firstFrame` from
-`__poc.ready` (= everything loaded); `?scene=lite&block=1` keeps the
-neighbours in the lite profile to exercise the streaming headless.
+`__poc.ready`; the lite profile streams `tileset-spawn.json` (the spawn tile
+only), and `?scene=lite&block=1` streams the whole site in lite to exercise
+the streaming headless.
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.
@@ -293,8 +375,9 @@ the per-test timeout if it spends frames carelessly. Playwright runs a single wo
 viewer pages halve each other's frame rate.
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
-[`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It loads
-the **primary tile only** (boot 14 s → 4.4 s, 74 MB → 18 MB), shadow-maps at
+[`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams
+the **spawn tile only** (`tileset-spawn.json`; the full-site boot was
+14 s → 4.4 s, 74 MB → 18 MB when this was measured), shadow-maps at
 **512²** instead of 3072², renders at **`pixelRatio` 0.5**, and runs the SSAO
 pass in its cheaper Performance mode. Same loaders,
 same layers, same shader programs — a quarter
@@ -322,7 +405,9 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 
 - TypeScript strict. No `any` without a `// reason:` comment.
 - Version pins: exact for the three.js stack (`three`, `@types/three`,
-  `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`), the
+  `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`,
+  `3d-tiles-renderer`) and the glTF build tools (`@gltf-transform/*`,
+  `meshoptimizer`), the
   framework trio and the lint/format tools (`oxlint`, `oxlint-tsgolint`,
   `oxfmt` — oxlint declares a `>=` peer range on tsgolint, so bump them
   together); caret for everything else. `suncalc` is
@@ -402,7 +487,7 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 
 - Introducing a backend / stateful API route
 - Adding a heavy dependency (map/tiling library, a second renderer)
-- Migrating to WebGPURenderer + TSL (a large move; it is three's strategic
-  direction and where advanced soft shadows live, but our post-processing stack
-  is WebGL — revisit only if we hit WebGL ceilings)
+- Migrating to WebGPURenderer + TSL: proposed in ADR 0027 and staged in
+  plan 020 behind a spike on a real GPU; don't start the port before the
+  maintainer has the spike's plates and numbers
 - Committing raw bulk geodata, or switching on Git-LFS

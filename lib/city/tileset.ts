@@ -1,0 +1,276 @@
+/**
+ * The OGC 3D Tiles tileset the viewer streams (3DTilesRendererJS), and the
+ * `extras` the bake writes next to each glTF so the runtime can dress it.
+ * scripts/prepare-data.ts writes it; app/_components/tile-stream.ts reads
+ * it. No THREE, no DOM.
+ *
+ * Tree, per site tile:
+ *
+ *   tile           content: buildings            refine ADD   (always, once visible)
+ *     └ terrain L1 content: ±0.5 m TIN          refine REPLACE
+ *         └ terrain L0 content: ±0.15 m TIN + the tile's dressing
+ *
+ * Each terrain level is an error-bounded TIN of the native DGM
+ * (lib/city/terrain-tin.ts); a tile whose DGM has NoData falls back to the
+ * regular grid (1024² / 512²) with the OSM walls burned in.
+ *
+ * The buildings of a tile load whenever the tile is in view; the terrain
+ * refines from the coarse level to the fine one by screen-space error, and
+ * only the fine level carries vegetation, lamps, rails and walls. Which tile
+ * gets the fine level is a question of distance, not of a "primary" role.
+ *
+ * The tileset's frame is the site's recentered data frame (Z-up, like every
+ * 3D Tiles frame); the glTF content is Y-up as glTF requires, and the
+ * renderer rotates it in. The tileset's group sits in the viewer's rotated
+ * `world` group like every other data-frame layer.
+ */
+import type { TerrainBounds } from "./terrain-geometry";
+
+/**
+ * Whether a tile owns the point: west and south edges in, east and north
+ * edges out, so a point on a seam belongs to exactly one tile. Features a bake
+ * reads with a margin (lamps near the edge) are dressed by their owner only.
+ */
+export function ownsPoint(
+  bounds: TerrainBounds,
+  x: number,
+  y: number
+): boolean {
+  const [minX, minY, maxX, maxY] = bounds;
+  return x >= minX && x < maxX && y >= minY && y < maxY;
+}
+
+/** Logical names; published under content-hashed names via the manifest. */
+export const TILESET_FILE = "tileset.json";
+/** The spawn tile alone — the `lite` scene profile (headless tests). */
+export const TILESET_SPAWN_FILE = "tileset-spawn.json";
+
+export interface TerrainLevel {
+  /**
+   * Delatin tolerance (m) of the level's TIN: every 1 m DGM point lies
+   * within it. The fine level is walked on: at ±0.15 m a Dresden tile is
+   * 290–480k triangles (a fifth of a 1024² grid) in 0.6× its bytes and
+   * matches or beats it on every metric of the terrain study
+   * (docs/transformations.md, "Terrain TIN"). The coarse level is seen from
+   * afar: at ±0.5 m it is 47–86k triangles in 0.17–0.31 MB, a tenth of the
+   * 512² grid's triangles in half its bytes, and still sharper at walls
+   * than the grid's 4 m cells.
+   */
+  maxError: number;
+  /** grid edge of the fallback for a DGM with NoData (no TIN) */
+  n: number;
+  /** land-cover raster edge the level samples on desktops (phones: ≤ 2048) */
+  raster: number;
+}
+
+/** Fine (0) and coarse (1) terrain. */
+export const TERRAIN_LEVELS: Record<0 | 1, TerrainLevel> = {
+  0: { maxError: 0.15, n: 1024, raster: 4096 },
+  1: { maxError: 0.5, n: 512, raster: 2048 },
+};
+
+/**
+ * Geometric error (m) of the coarse terrain: the fine level replaces it once
+ * `error · screenHeight / (distance · 2 tan(fov/2))` exceeds the renderer's
+ * error target (16 px). 40 m switches at ≈1.2 km from the tile on a 1080p
+ * screen at the 55° default field of view. Start value — tune on a GPU.
+ */
+export const COARSE_TERRAIN_ERROR = 40;
+/** Large enough that a visible tile always refines to its terrain. */
+const TILE_ERROR = 100_000;
+
+/** The rasters and features a fine terrain tile is dressed with (file names). */
+export interface DressingFiles {
+  bridge: string;
+  canopy: string;
+  /** laser-scan crowns outside the canopy mask (tiles with a scan only) */
+  canopyx: string;
+  lamps: string;
+  /** OSM hedges at their measured height */
+  lowveg: string;
+  platform: string;
+  rail: string;
+  railarea: string;
+  /** the street-tree cadastre */
+  trees: string;
+  vegrows: string;
+  walls: string;
+}
+
+export interface TerrainExtras {
+  bounds: TerrainBounds;
+  /** fine level only */
+  dressing?: DressingFiles;
+  kind: "terrain";
+  /** class raster at the level's edge */
+  landcover: string;
+  /** class raster at ≤ 2048² (phones) */
+  landcoverLow: string;
+  level: 0 | 1;
+  /** lowest valid elevation (m) — the valley floor */
+  minElevation: number;
+  /**
+   * How the mesh is built. "tin": an error-bounded TIN, nothing burned in;
+   * the runtime indexes its triangles for ground height and the walls snap
+   * to the measured step. "grid": the n×n fallback for a DGM with NoData,
+   * walls burned in; its first n·n vertices are the grid, row 0 = north.
+   */
+  surface: TerrainSurface;
+  ndvi?: string;
+  /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
+  tileId: string;
+}
+
+export type TerrainSurface =
+  | { kind: "grid"; n: number }
+  | { kind: "tin"; maxError: number };
+
+export interface CityExtras {
+  kind: "city";
+  tileId: string;
+}
+
+export type ContentExtras = CityExtras | TerrainExtras;
+
+export interface TilesetTileInfo {
+  bounds: TerrainBounds;
+  /**
+   * minimap footprints per object: `[object][polygon][vertex] = [x, y]`.
+   * Here rather than in the city content, so the minimap shows every
+   * building from the start, whatever has streamed in.
+   */
+  footprints: string;
+  id: string;
+  /** a ≤ 2048² class raster for the minimap */
+  minimap: string;
+}
+
+/** What the viewer needs before any content has loaded. */
+export interface TilesetExtras {
+  epsg: number;
+  /** recenter offset: data-frame x = epsgX − cx, y = epsgY − cy */
+  offset: { cx: number; cy: number };
+  site: string;
+  /** the site's tiles, the spawn tile first */
+  tiles: TilesetTileInfo[];
+}
+
+/** Everything the bake knows about one tile when it writes the tree. */
+export interface BakedTile {
+  bounds: TerrainBounds;
+  city: string;
+  id: string;
+  /** terrain glb per level */
+  terrain: Record<0 | 1, string>;
+  /** [min, max] elevation of everything on the tile (terrain + roofs) */
+  zRange: [number, number];
+}
+
+type Box = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
+
+/** A 3D Tiles bounding box around a tile's extent, in the recentered frame. */
+export function tileBox(
+  bounds: TerrainBounds,
+  zRange: [number, number],
+  offset: { cx: number; cy: number }
+): Box {
+  const [minX, minY, maxX, maxY] = bounds;
+  const hx = (maxX - minX) / 2;
+  const hy = (maxY - minY) / 2;
+  const hz = Math.max((zRange[1] - zRange[0]) / 2, 1);
+  return [
+    minX + hx - offset.cx,
+    minY + hy - offset.cy,
+    (zRange[0] + zRange[1]) / 2,
+    hx,
+    0,
+    0,
+    0,
+    hy,
+    0,
+    0,
+    0,
+    hz,
+  ];
+}
+
+function tileNode(tile: BakedTile, offset: { cx: number; cy: number }) {
+  const boundingVolume = { box: tileBox(tile.bounds, tile.zRange, offset) };
+  return {
+    boundingVolume,
+    geometricError: TILE_ERROR,
+    refine: "ADD",
+    content: { uri: tile.city },
+    children: [
+      {
+        boundingVolume,
+        geometricError: COARSE_TERRAIN_ERROR,
+        refine: "REPLACE",
+        content: { uri: tile.terrain[1] },
+        children: [
+          {
+            boundingVolume,
+            geometricError: 0,
+            content: { uri: tile.terrain[0] },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** The tileset JSON over `tiles` (the spawn tile first). */
+export function buildTileset(
+  tiles: BakedTile[],
+  extras: TilesetExtras
+): object {
+  const zRange: [number, number] = [
+    Math.min(...tiles.map((t) => t.zRange[0])),
+    Math.max(...tiles.map((t) => t.zRange[1])),
+  ];
+  const bounds: TerrainBounds = [
+    Math.min(...tiles.map((t) => t.bounds[0])),
+    Math.min(...tiles.map((t) => t.bounds[1])),
+    Math.max(...tiles.map((t) => t.bounds[2])),
+    Math.max(...tiles.map((t) => t.bounds[3])),
+  ];
+  return {
+    asset: { version: "1.1" },
+    geometricError: TILE_ERROR,
+    extras,
+    root: {
+      boundingVolume: { box: tileBox(bounds, zRange, extras.offset) },
+      geometricError: TILE_ERROR,
+      refine: "ADD",
+      children: tiles.map((t) => tileNode(t, extras.offset)),
+    },
+  };
+}
+
+/** Validates the parts of the tileset extras the viewer depends on. */
+export function parseTilesetExtras(json: unknown): TilesetExtras {
+  const extras = (json as { extras?: Partial<TilesetExtras> } | null)?.extras;
+  const ok =
+    typeof extras?.epsg === "number" &&
+    typeof extras.offset?.cx === "number" &&
+    typeof extras.offset.cy === "number" &&
+    Array.isArray(extras.tiles) &&
+    extras.tiles.length > 0;
+  if (!ok) {
+    throw new Error("tileset: extras must carry epsg, offset and tiles");
+  }
+  return extras as TilesetExtras;
+}

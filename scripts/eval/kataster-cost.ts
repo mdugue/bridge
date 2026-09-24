@@ -16,12 +16,15 @@
  *     (casters within the fitted shadow frustum's half-size of its focus —
  *     lib/city/shadow-fit.ts; the map only re-renders on a move/invalidate)
  *
+ * The ground is the committed DGM resampled to 1024² (bilinear): what the
+ * vegetation stands on moves by centimetres against the shipped TIN, which
+ * changes nothing this measures.
+ *
  * Run: bun scripts/eval/kataster-cost.ts   (after prepare-data and
  * scripts/eval/kataster-shots.py; no GPU, no browser)
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { gunzipSync } from "node:zlib";
 import {
   Frustum,
   InstancedMesh,
@@ -46,14 +49,17 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "../../lib/city/features";
-import {
-  decodeHeightfield,
-  parseHeightfieldHeader,
-} from "../../lib/city/heightfield";
 import { directionOf } from "../../lib/city/pose";
 import { fitShadowRadius, shadowFocusAhead } from "../../lib/city/shadow-fit";
 import { sampleHeightfield } from "../../lib/city/terrain-geometry";
-import { TILE_BLOCK, type DataManifest } from "../../lib/city/tile";
+import {
+  type DataManifest,
+  dgmSourceFiles,
+  tileIds,
+} from "../../lib/city/tile";
+import { parseTilesetExtras, TILESET_FILE } from "../../lib/city/tileset";
+import { currentSite } from "../../sites";
+import { readDgm } from "../bake-tiles";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const PUB = join(ROOT, "public", "data");
@@ -75,25 +81,20 @@ const features = <F>(file: string): F[] => {
   }
 };
 
-const primary = TILE_BLOCK[0];
-const meta = JSON.parse(
-  readFileSync(served(`city_${primary.tile}.mesh.json`), "utf8")
-) as { offset: { cx: number; cy: number } };
-const offset = meta.offset;
+const { offset } = parseTilesetExtras(
+  JSON.parse(readFileSync(served(TILESET_FILE), "utf8"))
+);
 
-function heightAtFor(tile: string, n: number) {
-  const header = parseHeightfieldHeader(
-    JSON.parse(
-      readFileSync(served(`dgm1_${tile}.heightfield-${n}.json`), "utf8")
-    )
-  );
-  const raw = gunzipSync(readFileSync(join(PUB, header.data)));
-  const elevations = decodeHeightfield(
-    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
-    header
+async function heightAtFor(tile: string, n: number) {
+  const src = dgmSourceFiles(tile);
+  const tif = readFileSync(join(ROOT, src.tif));
+  const { elevations, bounds } = await readDgm(
+    tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
+    readFileSync(join(ROOT, src.tfw), "utf8"),
+    n
   );
   return (x: number, y: number) =>
-    sampleHeightfield({ elevations, n, bounds: header.bounds }, x, y);
+    sampleHeightfield({ elevations, n, bounds }, x, y);
 }
 
 const MODES = ["canopy", "kataster", "shipped"] as const;
@@ -110,8 +111,9 @@ const controls: Record<
 const buildMs: Record<Mode, number> = { canopy: 0, kataster: 0, shipped: 0 };
 const heights: ((x: number, y: number) => number | null)[] = [];
 
-for (const spec of TILE_BLOCK) {
-  const heightAt = heightAtFor(spec.tile, spec.n);
+for (const tile of tileIds(currentSite())) {
+  const spec = { tile };
+  const heightAt = await heightAtFor(tile, 1024);
   heights.push(heightAt);
   const ctx = { offset, heightAt };
   const rows = features<VegRowFeature>(`vegrows_${spec.tile}.geojson`);

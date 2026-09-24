@@ -16,7 +16,9 @@ survey office. It publishes the terrain and surface models, the 3D building
 model, the land-use map and the aerial photos as free downloads on its
 open-geodata portal, [geodaten.sachsen.de](https://www.geodaten.sachsen.de/).
 All of them are cut into the same **2 km × 2 km tiles**, which is why the
-viewer thinks in tiles too.
+viewer thinks in tiles too. Which tiles it shows is written down in one
+place, the site config `sites/dresden.ts`: the four tiles (the first is the
+one you start on), the viewpoints and the credits.
 
 **OpenStreetMap (OSM)** — the world map maintained by volunteers. It fills
 gaps the official datasets leave: street lamps, station platforms,
@@ -90,9 +92,9 @@ documentation.
 | **Update cycle** | Region by region, after each new laser flight. For Dresden the previous scan dated from 2016, the current one from 27–30 November 2024. |
 | **Resolution and accuracy** | 1 m cells, height stored in the cell centre. Height accuracy up to ±0.15 m and position ±0.30 m at 95 % confidence, per GeoSN. |
 | **Generally suited for** | Any "how high is the ground here" question: terrain analysis, flood and drainage modelling, visibility studies, slope maps, rectifying aerial photos. |
-| **Used here for** | The ground itself — a triangle mesh that keeps every point of the 1 m grid within 15 cm (25 cm on the outer tiles), dense where the ground bends and sparse where it is flat, so walls and embankments keep their edges; seating buildings, trees, lamps and the player on it; the abutment heights of bridges; the base term of the tree heights. |
+| **Used here for** | The ground itself — a triangle mesh that keeps every point of the 1 m grid within 15 cm near the camera (50 cm in the distance), dense where the ground bends and sparse where it is flat, so walls and embankments keep their edges; seating buildings, trees, lamps and the player on it; the abutment heights of bridges; the base term of the tree heights. |
 | **Strengths** | The true shape of the ground, including river banks, embankments and the terraces of the old town, to a few centimetres. |
-| **Weaknesses** | Anything vertical: a laser-scanned wall becomes a steep ramp one to two metres wide, never a vertical face — and once the viewer resamples the 1 m grid to its 2 m mesh, monumental walls such as the Brühlsche Terrasse "disappear" into a gentle bank about 3 m wide. Bridges are removed by definition, so a deck taken from this model would sink to the river bed. The viewer fixes both with other sources. |
+| **Weaknesses** | Anything vertical: a laser-scanned wall becomes a steep ramp one to two metres wide, never a vertical face — resampled to a coarser regular grid, monumental walls such as the Brühlsche Terrasse "disappear" into a gentle bank about 3 m wide (which is why the viewer meshes the 1 m grid directly and snaps its walls to the measured step). Bridges are removed by definition, so a deck taken from this model would sink to the river bed. The viewer fixes both with other sources. |
 | **Format and download** | GeoTIFF, 2000 × 2000 pixels of 32-bit floats, 13.6 MB per 2 km tile, with a `.tfw` world file and an `_akt.csv` stating the survey date. Heights in metres above sea level (**DHHN2016**). [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html). |
 
 Special role: this is the only bulk raw dataset committed to the
@@ -184,13 +186,13 @@ repository, because the build step reads it directly. See
 |---|---|
 | **Stands for** | *OpenStreetMap*, the free world map built by volunteers since 2004. |
 | **How it is collected** | Contributors map from GPS traces, on-the-ground surveys and by tracing aerial imagery (including official orthophotos where their licence allows), and describe each object with free-form key=value *tags* such as `highway=street_lamp` or `barrier=retaining_wall` + `height=9`. |
-| **Update cycle** | Continuous: edits are live within minutes. Extracts for download (Geofabrik) are rebuilt daily; the Overpass API queries the live database. |
+| **Update cycle** | Continuous: edits are live within minutes. Extracts for download (Geofabrik) are rebuilt daily; the project reads such an extract, not the live database. |
 | **Resolution and accuracy** | No guarantee; in a well-mapped city typically metre-level positions. Completeness and tag consistency vary from street to street and mapper to mapper. |
 | **Generally suited for** | Things no official dataset has: street furniture, points of interest, names, informal paths, structure types; near-worldwide coverage; quick to fetch. |
 | **Used here for** | Lamp positions (`highway=street_lamp`), station platforms (`railway=platform`), retaining walls, city walls and embankments (`barrier=*`, `man_made=embankment`) with their `height` tag, hedges (`barrier=hedge`), and whether a bridge is an arch bridge (`bridge:structure`). |
 | **Strengths** | Human-readable tags for exactly the details the survey office does not model; the Brühlsche Terrasse exists here and nowhere else. |
 | **Weaknesses** | Not every lamp is mapped, heights are often missing (the viewer uses defaults per wall type), tags vary. Volunteer data must be credited (ODbL). |
-| **Download and licence** | Two routes: small point queries through the **Overpass API**, cached locally so the service is hit once; walls from a regional extract of the whole state, downloaded once from [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) (about 250 MB), which avoids rate limits and makes the result reproducible. Licence: **ODbL**, credit "© OpenStreetMap contributors". |
+| **Download and licence** | One regional extract of the whole state, `sachsen-latest.osm.pbf`, downloaded from [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) (about 250 MB) and read locally, which avoids rate limits and makes the result reproducible. The lamp, platform and bridge-structure files committed today are older: they were fetched through the **Overpass API**, a live query service, before the bakes switched to the extract, and move to the extract at their next re-bake. Licence: **ODbL**, credit "© OpenStreetMap contributors". |
 
 ## Dataset editions in use
 
@@ -210,7 +212,9 @@ before it.
 | LoD2 | all four | south-western pair (33410_*): model **2023**, built from the 2016 laser scan, the 2021 Basis-DLM footprints and the 2016 DGM; south-eastern pair (33412_*): model **2024**, from the 2016 laser scan, the 2022 Basis-DLM and the 2016 DGM. The objects were exported 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN download service; a few older objects still carry `Stand_*` attributes with the same values | 2026-06-11 |
 | DOP (RGBI) | all four | flown **2024-03-19** (leaf-off) | GeoSN download service | derived roof colours and NDVI 2026-06-16/17 |
 | Basis-DLM | statewide package | the quarterly package current in **June 2026**; the exact release date was not noted and cannot be read from the portal afterwards because the package is replaced under the same file name (the share's file was dated 2026-07-28 when checked) | download page: "updated quarterly"; git history | derived files 2026-06-12, rail and bridge files re-baked 2026-09-18 |
-| OSM via Overpass | all four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
+| LSC (laser scan) | the start tile | the **same laser flight** as the DGM1: 2024-11-30 | GeoSN download service | derived hedge heights and courtyard trees 2026-09-23 |
+| Stadtbaumkataster | all four | the city's register on **2026-09-23** (each record carries its own last-change date, mostly 2025–2026) | the fetch date, recorded next to the cached response | 2026-09-23 |
+| OSM via Overpass (no longer used by the bakes; the committed lamp, platform, bridge-structure and hedge files still come from it) | all four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure), 2026-09-23 (hedges) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
 | OSM via Geofabrik | statewide extract | the daily extract of 2026-09-18 or shortly before | git history (walls re-baked that day); `osmium fileinfo -e` on the raw file prints the exact timestamp | 2026-09-18 |
 
 Note the **mismatch of dates inside one picture**: the ground and the tree
@@ -233,7 +237,7 @@ the "Stand" of each tile. The folders are per product and format:
 |---|---|---|
 | DGM1 (GeoTIFF + `.tfw` + `_akt.csv`) | `…/JCcXyifaNdLDnxZ/dgm1_<tile>_tiff.zip` | [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html) |
 | DOM1 (GeoTIFF) | `…/S6wwnFwX7882sZm/dom1_<tile>_tiff.zip` | same page |
-| Laser-scan point cloud (LAZ), unused | `…/rqcqdt8QMcLFUvC/lsc_<tile>_laz.zip` | same page |
+| Laser-scan point cloud (LAZ), hedges and courtyard trees (downloaded by hand) | `…/rqcqdt8QMcLFUvC/lsc_<tile>_laz.zip` | same page |
 | LoD2 (CityGML) | `…/GVzwbSyp7Yl7mBD/lod2_<tile>_citygml.zip` | [Digitale 3D-Stadtmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-3d-stadtmodelle-4875.html) |
 | DOP20 RGBI (GeoTIFF) | `…/sX3GPcdBMGrfXT9/dop20rgbi_<tile>_tiff.zip` | [DOP](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) |
 | Basis-DLM (Shape, statewide, 1.23 GB) | `…/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip` | [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html) |
@@ -241,9 +245,15 @@ the "Stand" of each tile. The folders are per product and format:
 `…` stands for `https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/`.
 The folder tokens can rotate; the durable index is the download service
 described in [data-pipeline.md](../../data-pipeline.md#provenance), which
-lists the current link and "Stand" for any tile. OpenStreetMap data came
-from the Overpass API (point queries, cached once) and from the Geofabrik
-Saxony extract (`sachsen-latest.osm.pbf`).
+lists the current link and "Stand" for any tile. `bun run bake --ingest`
+uses that service to fetch the surface model and the aerial photo of each
+tile, and fetches the statewide Basis-DLM package and the OpenStreetMap
+extract as well; the DGM1 and the LoD2 are committed and downloaded by
+hand. OpenStreetMap data now comes only from the Geofabrik Saxony extract
+(`sachsen-latest.osm.pbf`); the committed lamp, platform,
+bridge-structure and hedge files still date from earlier Overpass API
+queries. The street-tree register comes from the city's own map service,
+which `bun run bake --ingest` also queries.
 
 ## Licences and credits
 
@@ -253,6 +263,6 @@ Saxony extract (`sachsen-latest.osm.pbf`).
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
 | Stadtbaumkataster | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
 
-The viewer shows both credits in the footer of its settings panel (the
-street-tree credit joins them while the experimental option is on). The
-derived lamp and wall files carry the OSM credit inside the file as well.
+The viewer shows all three credits in the footer of its settings panel.
+The derived lamp, wall and hedge files carry the OSM credit inside the
+file as well, the street-tree file the city's.

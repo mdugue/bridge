@@ -38,7 +38,7 @@ describe("load stages", () => {
     const withDivider = loadStageStates({}).filter(
       (stage) => stage.showsDividerBefore
     );
-    expect(withDivider.map((stage) => stage.id)).toEqual(["vegetation"]);
+    expect(withDivider.map((stage) => stage.id)).toEqual(["surroundings"]);
   });
 
   test("an unreported stage is pending, not active", () => {
@@ -62,17 +62,17 @@ describe("load stages", () => {
 
   test("skipped stages complete the bar and say so", () => {
     const states = loadStageStates(
-      { buildings: 1, terrain: 1, light: 1, vegetation: 1, rails: 1 },
-      { neighbours: true }
+      { buildings: 1, terrain: 1, light: 1, details: 1 },
+      { surroundings: true }
     );
-    const neighbours = states.find((stage) => stage.id === "neighbours");
-    expect(neighbours?.skipped).toBe(true);
-    expect(neighbours?.done).toBe(true);
-    expect(neighbours?.stateText).toBe("entfällt");
+    const surroundings = states.find((stage) => stage.id === "surroundings");
+    expect(surroundings?.skipped).toBe(true);
+    expect(surroundings?.done).toBe(true);
+    expect(surroundings?.stateText).toBe("entfällt");
     expect(
       loadPercent(
-        { buildings: 1, terrain: 1, light: 1, vegetation: 1, rails: 1 },
-        { neighbours: true }
+        { buildings: 1, terrain: 1, light: 1, details: 1 },
+        { surroundings: true }
       )
     ).toBe(100);
   });
@@ -103,17 +103,17 @@ describe("load stages", () => {
     // layers are still to come.
     const firstFrame = loadStageStates({ buildings: 1, terrain: 1, light: 1 });
     expect(streamingTitle(firstFrame)).toBe("Rest wird geladen");
-    expect(streamingTitle(loadStageStates({ neighbours: 0.5 }))).toBe(
-      "Nachbarkacheln laden"
+    expect(streamingTitle(loadStageStates({ surroundings: 0.5 }))).toBe(
+      "Umgebung lädt"
     );
     const all = Object.fromEntries(LOAD_STAGES.map((s) => [s.id, 1]));
     expect(streamingTitle(loadStageStates(all))).toBe("Alles geladen");
   });
 
   test("the pill counts finished stages", () => {
-    expect(stagesDoneLabel(loadStageStates({}))).toBe("0/6");
+    expect(stagesDoneLabel(loadStageStates({}))).toBe("0/5");
     expect(
       stagesDoneLabel(loadStageStates({ buildings: 1, terrain: 0.5 }))
-    ).toBe("1/6");
+    ).toBe("1/5");
   });
 });

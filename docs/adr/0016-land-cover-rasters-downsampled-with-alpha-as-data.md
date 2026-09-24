@@ -1,6 +1,6 @@
 # ADR 0016: Land-cover rasters downsampled to 2048² with the alpha channel treated as data
 
-- **Status:** accepted (a follow-up, plan 016, is open)
+- **Status:** superseded by [ADR 0023](./0023-land-cover-colours-painted-at-runtime.md)
 - **Date:** 2026-09-20/21 (PRs #28, #29)
 
 ## Context

@@ -4,8 +4,9 @@ Inputs (all in <study_dir>, see build_grids.py / tin-study.ts):
   lsc_ground.npz            class-2 ground points, 90/10 train/test split
   <grid>.f32                raw float32 n*n grids (row 0 = north, pixel centres)
   <grid>_tin<cm>.{coords,tris}.u32   Delatin meshes of those grids
-Plus the committed data/dlm/walls_<tile>.geojson and the prepared 512²
-neighbour heightfields (.cache/prepare-data/) for the seam check.
+Plus the committed data/dlm/walls_<tile>.geojson and the neighbours'
+committed DGMs, resampled to the 512² grid the viewer then drew beyond the
+primary, for the seam check.
 
 Metrics:
   1. main-step width (10–90 % of the step between the plateaus 2–3.5 m either
@@ -23,11 +24,10 @@ included, so its accuracy numbers are slightly optimistic; V2 is strictly
 out-of-sample.
 
 Run:
-  uv run --with numpy --with scipy --with matplotlib python \
+  uv run --with numpy --with scipy --with matplotlib --with rasterio python \
       scripts/terrain-study/metrics.py <study_dir> <out.json>
 """
 
-import gzip
 import json
 import sys
 from pathlib import Path
@@ -275,11 +275,18 @@ def accuracy(surfaces, test_xy, test_z, subsets):
 
 
 def neighbour_grid(tile, n=512):
-    cache = ROOT / ".cache/prepare-data"
-    h = json.loads((cache / f"dgm1_{tile}.heightfield-{n}.json").read_text())
-    raw = np.frombuffer(gzip.decompress((cache / f"dgm1_{tile}.heightfield-{n}.u16.gz").read_bytes()), "<u2")
-    z = h["zMin"] + raw.astype(np.float64) * h["zScale"]
-    return h["bounds"], z.reshape(n, n)
+    """A neighbour's committed DGM, bilinear-resampled to n² pixel centres
+    (the grid bake's resample, scripts/bake-tiles.ts readDgm)."""
+    import rasterio
+
+    with rasterio.open(ROOT / f"data/dgm/dgm1_{tile}_tiff/dgm1_{tile}.tif") as src:
+        full = src.read(1).astype(np.float64)
+        b = src.bounds
+    size = full.shape[0]
+    centres = (np.arange(n) + 0.5) * size / n - 0.5
+    rows, cols = np.meshgrid(centres, centres, indexing="ij")
+    z = map_coordinates(full, [rows, cols], order=1, mode="nearest")
+    return [b.left, b.bottom, b.right, b.top], z
 
 
 def seam_edges(surfaces):

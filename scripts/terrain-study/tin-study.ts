@@ -3,24 +3,24 @@
  * metrics.py). Reproducible from the committed inputs + the gitignored LAZ:
  *
  *   bun scripts/terrain-study/tin-study.ts grids <study_dir>
- *     V0  = the SHIPPED bake (bakeHeightfield → 1024², decoded), and V0c =
- *           V0 + the client's wall conflation (what the viewer walks on);
+ *     V0  = the 1024² grid (readDgm, bilinear — the grid bake before the
+ *           TIN), and V0c = V0 + the wall conflation burned into it;
  *     V1c / V2c = the wall conflation applied to v1_2000 / v2_4000 at their
  *           native resolution (the "burn breaklines at bake time" option).
  *   bun scripts/terrain-study/tin-study.ts tin <study_dir> <grid> <tolerances…>
  *     Delatin error-bounded TIN of <grid>.f32 at each tolerance (m), coarse to
  *     fine (one incremental refinement), written as <grid>_tin<cm>.{coords,tris}.u32
- *     + a stats JSON line (vertices, triangles, gz bytes of the shipping
- *     encoding, bake ms).
+ *     + a stats JSON line (vertices, triangles, gz bytes of the shipped
+ *     glTF — meshopt, quantised, gzipped — and bake ms).
  *   bun scripts/terrain-study/tin-study.ts client <study_dir> <grid> <cm>
- *     Client-side cost of one variant: inflate + decode + BufferGeometry +
- *     normals + three-mesh-bvh, and the triangle index heightAt uses.
+ *     Client-side cost of one variant past the glTF decode: normals,
+ *     three-mesh-bvh, and the triangle index heightAt uses (cm 0 = the grid,
+ *     which needs none).
  *
  * Not part of the app; nothing imports it. See docs/transformations.md
  * ("Terrain TIN") for the results. The whole study, in order (STUDY = any
  * scratch dir, e.g. data/_raw/lsc/derived/33412_5656_2_sn_tin; the LAZ is the
- * gitignored GeoSN laser scan of the primary tile; `bun scripts/prepare-data.ts`
- * first, for the cached neighbour heightfields the seam check reads):
+ * gitignored GeoSN laser scan of the spawn tile):
  *
  *   PY="uv run --with numpy --with rasterio --with scipy --with matplotlib \
  *       --with laspy[lazrs] python"
@@ -36,12 +36,11 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { gzipSync } from "node:zlib";
 import Delatin from "delatin";
 import { BufferAttribute, BufferGeometry } from "three";
 import { computeBoundsTree } from "three-mesh-bvh";
 import type { WallFeature } from "../../lib/city/features";
-import { decodeHeightfield } from "../../lib/city/heightfield";
 import { conflateWalls, type WallLine } from "../../lib/city/terrain-conflate";
 import {
   buildTerrainGeometryData,
@@ -49,13 +48,16 @@ import {
 } from "../../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,
-  decodeTerrainTin,
-  encodeTerrainTin,
-  TinIndex,
+  type TerrainTin,
+  tinFromDelatin,
+  tinIndex,
 } from "../../lib/city/terrain-tin";
-import { dgmSourceFiles, PRIMARY_TILE } from "../../lib/city/tile";
-import { bakeHeightfield } from "../bake-heightfield";
+import { dgmSourceFiles, tileIds } from "../../lib/city/tile";
+import { currentSite } from "../../sites";
+import { readDgm } from "../bake-tiles";
+import { writeMeshGlb } from "../tile-glb";
 
+const PRIMARY_TILE = tileIds(currentSite())[0];
 const BOUNDS: TerrainBounds = [412_000, 5_656_000, 414_000, 5_658_000];
 const OFFSET = { cx: 413_000, cy: 5_657_000 };
 
@@ -93,15 +95,10 @@ function wallLines(): WallLine[] {
 async function grids(dir: string): Promise<void> {
   const src = dgmSourceFiles(PRIMARY_TILE);
   const tif = readFileSync(src.tif);
-  const baked = await bakeHeightfield(
+  const { elevations: v0 } = await readDgm(
     tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
     readFileSync(src.tfw, "utf8"),
     1024
-  );
-  const raw = gunzipSync(baked.data);
-  const v0 = decodeHeightfield(
-    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
-    baked.header
   );
   writeFileSync(join(dir, "v0_1024.f32"), v0);
   const walls = wallLines();
@@ -116,7 +113,44 @@ async function grids(dir: string): Promise<void> {
   conflate("v2c", readF32(join(dir, "v2_4000.f32")), 4000);
 }
 
-function tin(dir: string, grid: string, tolerances: number[]): void {
+function tinOf(
+  data: Float32Array,
+  n: number,
+  coords: ArrayLike<number>,
+  triangles: ArrayLike<number>
+): TerrainTin {
+  return tinFromDelatin({
+    bounds: BOUNDS,
+    n,
+    coords,
+    triangles,
+    heightAt: (x: number, y: number) => data[y * n + x],
+  });
+}
+
+/** Gzipped bytes of the glTF the viewer would stream for this TIN. */
+async function shippedBytes(tin: TerrainTin): Promise<number> {
+  const { positions, indices } = buildTinGeometryData(tin, OFFSET);
+  const g = new BufferGeometry();
+  g.setAttribute("position", new BufferAttribute(positions, 3));
+  g.setIndex(new BufferAttribute(indices, 1));
+  g.computeVertexNormals();
+  const glb = await writeMeshGlb({
+    name: "terrain",
+    extras: {},
+    positions,
+    normals: g.getAttribute("normal").array as Float32Array,
+    indices,
+    weld: true,
+  });
+  return gzipSync(glb, { level: 9 }).byteLength;
+}
+
+async function tin(
+  dir: string,
+  grid: string,
+  tolerances: number[]
+): Promise<void> {
   const n = gridN(grid);
   const data = readF32(join(dir, `${grid}.f32`));
   const t0 = performance.now();
@@ -129,14 +163,7 @@ function tin(dir: string, grid: string, tolerances: number[]): void {
     const cm = Math.round(tol * 100);
     writeFileSync(join(dir, `${grid}_tin${cm}.coords.u32`), coords);
     writeFileSync(join(dir, `${grid}_tin${cm}.tris.u32`), tris);
-    const enc = encodeTerrainTin({
-      bounds: BOUNDS,
-      n,
-      coords,
-      triangles: tris,
-      heightAt: (x, y) => data[y * n + x],
-    });
-    const gz = gzipSync(enc.data).byteLength;
+    const gz = await shippedBytes(tinOf(data, n, coords, tris));
     const naive = gzipSync(
       Buffer.concat([Buffer.from(coords.buffer), Buffer.from(tris.buffer)])
     ).byteLength;
@@ -176,82 +203,46 @@ function finishGeometry(
 
 function client(dir: string, grid: string, cm: number): void {
   const log: string[] = [];
+  const n = gridN(grid);
+  const data = readF32(join(dir, `${grid}.f32`));
   if (cm === 0) {
-    // The shipped path: the gzipped uint16 grid → dequantise → conflate →
-    // grid mesh (the header/data prepare-data cached for the primary).
-    const n = gridN(grid);
-    const cache = `.cache/prepare-data/dgm1_${PRIMARY_TILE}.heightfield-${n}`;
-    const header = JSON.parse(readFileSync(`${cache}.json`, "utf8")) as {
-      zMin: number;
-      zScale: number;
-    };
-    const gz = readFileSync(`${cache}.u16.gz`);
-    const decoded = timed(
-      "inflate+decode",
-      () => {
-        const raw = gunzipSync(gz);
-        return decodeHeightfield(
-          raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
-          { n, ...header }
-        );
-      },
-      log
-    );
-    const data = timed(
+    // The grid fallback: conflated at bake time, meshed as is; its ground
+    // height is a bilinear sample of the grid, so it needs no index.
+    const conflated = timed(
       "conflate",
       () =>
         conflateWalls({
-          elevations: decoded,
+          elevations: data,
           n,
           bounds: BOUNDS,
           walls: wallLines(),
         }),
       log
     );
-    const positions = timed(
+    const geo = timed(
       "mesh",
       () =>
         buildTerrainGeometryData({
-          elevations: data,
+          elevations: conflated,
           n,
           bounds: BOUNDS,
           offset: OFFSET,
         }),
       log
     );
-    finishGeometry(positions.positions, positions.indices, log);
+    finishGeometry(geo.positions, geo.indices, log);
     out(`${grid} grid: ${log.join(", ")}`);
     return;
   }
-  const n = gridN(grid);
-  const data = readF32(join(dir, `${grid}.f32`));
   const coords = new Uint32Array(
     readFileSync(join(dir, `${grid}_tin${cm}.coords.u32`)).buffer
   );
   const tris = new Uint32Array(
     readFileSync(join(dir, `${grid}_tin${cm}.tris.u32`)).buffer
   );
-  const enc = encodeTerrainTin({
-    bounds: BOUNDS,
-    n,
-    coords,
-    triangles: tris,
-    heightAt: (x, y) => data[y * n + x],
-  });
-  const gz = gzipSync(enc.data);
-  const tin = timed(
-    "inflate+decode",
-    () => {
-      const raw = gunzipSync(gz);
-      return decodeTerrainTin(
-        raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
-        enc.header
-      );
-    },
-    log
-  );
-  const geo = timed("mesh", () => buildTinGeometryData(tin, OFFSET), log);
-  timed("index", () => new TinIndex(tin), log);
+  const t = tinOf(data, n, coords, tris);
+  const geo = timed("mesh", () => buildTinGeometryData(t, OFFSET), log);
+  timed("index", () => tinIndex(t), log);
   finishGeometry(geo.positions, geo.indices, log);
   out(`${grid} tin${cm}: ${log.join(", ")}`);
 }
@@ -260,7 +251,7 @@ const [cmd, dir, ...rest] = process.argv.slice(2);
 if (cmd === "grids" && dir) {
   await grids(dir);
 } else if (cmd === "tin" && dir && rest.length > 1) {
-  tin(dir, rest[0], rest.slice(1).map(Number));
+  await tin(dir, rest[0], rest.slice(1).map(Number));
 } else if (cmd === "client" && dir && rest.length === 2) {
   client(dir, rest[0], Number(rest[1]));
 } else {

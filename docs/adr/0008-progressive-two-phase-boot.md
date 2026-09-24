@@ -1,6 +1,6 @@
 # ADR 0008: Progressive two-phase boot — first frame from the primary tile, everything else streamed
 
-- **Status:** accepted
+- **Status:** accepted; the second phase is now the tile stream's dressing gate ([ADR 0024](./0024-site-streams-as-3d-tiles.md))
 - **Date:** 2026-09-21 (plan 015)
 
 ## Context

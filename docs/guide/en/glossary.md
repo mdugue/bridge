@@ -76,8 +76,9 @@ the *first* from the top of a tree or a roof, the *last* from the ground
 beneath. The surface model uses the first echoes, the terrain model the
 ground-classified points.
 
-**GDAL / ogr2ogr** — the open-source geodata toolkit the bake scripts use
-to clip, reproject, rasterise and convert.
+**GDAL** — the open-source geodata toolkit the bakes use to clip,
+reproject, rasterise and convert. It comes inside the Python libraries of
+the bake package, so it needs no separate installation.
 
 **GeoJSON** — a simple JSON format for points, lines and polygons with
 attributes. All small per-tile vector files are GeoJSON.
@@ -97,7 +98,8 @@ sampling distance*): 20 cm for the DOP, 1 m for the height models.
 
 **Land-cover class** — the land-use category of a pixel in the baked class
 raster: background, farmland/meadow, forest, copse, built-up, railway,
-path, road, water (ids 0–8).
+path, road, water (ids 0–8). The file holds only these numbers; the
+browser paints each class in its pastel colour (see *Splatmap*).
 
 **LiDAR / laser scanning** — *light detection and ranging*: measuring
 distances with laser pulses from an aircraft; the survey method behind the
@@ -133,9 +135,11 @@ dl-de/by-2-0".
 
 **OSM / Overpass** — *OpenStreetMap*, the volunteer world map, mapped from
 GPS traces, surveys and traced aerial imagery, updated continuously, with
-no accuracy guarantee; and the *Overpass API*, a query service for it. The
-viewer's lamps, walls, platforms and bridge structure types come from it.
-[Fact sheet](./data-sources.md#osm--openstreetmap).
+no accuracy guarantee. The viewer's lamps, walls, platforms and bridge
+structure types come from it; the bakes read it from the Geofabrik extract.
+The *Overpass API* is a live query service for it; the bakes no longer use
+it, but the committed lamp, platform and bridge-structure files were still
+fetched through it. [Fact sheet](./data-sources.md#osm--openstreetmap).
 
 **.osm.pbf** — the compact binary file format of OpenStreetMap extracts.
 
@@ -148,8 +152,9 @@ comes as one file set per object type.
 
 **Tile / Kachel** — a 2 km × 2 km square of the state's tiling scheme. The
 name `33412_5656_2_sn` means UTM zone 33, easting 412 km, northing 5656 km
-(the south-west corner), 2 km edge, Saxony. The viewer loads a block of
-four; the one you spawn on is the *primary* tile.
+(the south-west corner), 2 km edge, Saxony. The site config lists four of
+them for Dresden; the first is the *spawn tile*. The viewer streams them
+(see *Tileset*).
 
 ## Rendering
 
@@ -162,19 +167,44 @@ through WebGL; the whole scene is built with it.
 triangles with a material. The buildings of a tile are one mesh; a
 "building" is identified per vertex so that one can be demolished.
 
-**Heightfield** — a regular grid of heights; the terrain mesh is built from
-it (one vertex per grid cell).
+**glTF** — the standard file format for 3D models, often called "the JPEG
+of 3D". The buildings and the terrain reach the browser as glTF files,
+compressed and gzipped (`.glb.gz`), so any glTF viewer can open them.
+
+**3D Tiles** — an open standard (by the OGC, the body behind many geodata
+standards) for streaming large 3D worlds: a small index file describes a
+tree of tiles and their levels of detail, and the files themselves are
+usually glTF. The viewer reads it with the library 3DTilesRendererJS.
+
+**Tileset / streaming** — the index file `tileset.json` lists every tile's
+buildings and its terrain at two levels of detail, a coarse one (within
+50 cm of the terrain model) and a detailed one (within 15 cm) that
+replaces it when the camera comes close. From it the viewer decides what to load: only what the
+camera can see, in detail near you, coarse far away; what you leave far
+behind can be dropped again.
+
+**Heightfield** — a regular grid of heights, such as the DGM1. The build
+step turns it into a ready-made terrain mesh (a *TIN*); the browser no
+longer receives the grid itself.
+
+**TIN** — *triangulated irregular network*: a terrain mesh of triangles of
+any size, placed where the ground needs them. The build adds points to it
+until every point of the 1 m grid lies within a set tolerance (15 cm near
+the camera, 50 cm far away), so a flat river is a few large triangles and
+a wall's slope many small ones.
 
 **Splatmap** — a texture that tells the ground shader which colour to use
-where. Here: the pastel land-use raster; its transparency channel encodes
-water coverage.
+where. Here it is not downloaded: the browser paints it once per tile on
+the graphics card, from the land-use class raster and one pastel palette;
+its transparency channel encodes water coverage, softened at the shore.
 
 **Instancing / InstancedMesh** — drawing thousands of copies of one shape
 (trees, lamp posts) in a single draw call, each with its own position and
 scale.
 
 **LOD** — *level of detail*: a cheaper version of a shape drawn when it is
-far away (the tree crown has two versions).
+far away (the tree crown has two versions, the terrain two levels; see
+*Tileset*).
 
 **Shadow map** — a depth image rendered from the sun's point of view; every
 pixel then checks whether it is the closest thing to the sun. Soft edges
@@ -209,10 +239,18 @@ it draws the scene on the CPU, slowly and without the real look.
 ## Project
 
 **Bake** — any offline or build-time step that turns a heavy input into a
-small, ready-to-use artifact.
+small, ready-to-use artifact. The offline bakes are one Python package
+(`pipeline/`), run with `bun run bake`; the build-time one is
+`scripts/prepare-data.ts`.
 
-**Artifact** — one of the prepared files the browser may request; the full
-list lives in `lib/city/tile.ts`.
+**Artifact** — one of the prepared files the browser may request. The
+tileset names all of them; the list of a tile's side files (rasters and
+feature files) lives in `lib/city/tile.ts`.
+
+**Site config** — `sites/dresden.ts`: everything about the place that is
+not data — its name, coordinate system, tiles, spawn tile, viewpoints and
+credits. The bakes and the viewer both read it; one build shows one
+site.
 
 **Manifest** — `public/data/manifest.json`, mapping plain file names to the
 fingerprinted names they are served under.
@@ -220,8 +258,8 @@ fingerprinted names they are served under.
 **Content hash** — the eight-character fingerprint in a served file name;
 changes whenever the content changes, so caches never serve stale data.
 
-**Lite profile** — `?scene=lite`: one tile, tiny shadow map, half
-resolution; for automated tests only.
+**Lite profile** — `?scene=lite`: the spawn tile only, tiny shadow map,
+half resolution; for automated tests only.
 
 **Snapshot** — the JSON text that captures camera, date/time and every
 slider, used to reproduce a view.
@@ -229,8 +267,12 @@ slider, used to reproduce a view.
 **Scenic view / Aussichtspunkt** — one of the five authored vantages the
 camera can glide to.
 
-**Primary tile / neighbour tiles** — the tile you spawn on (full detail,
-collision, demolish) and the three around it (backdrop, lower resolution).
+**Spawn tile** — the tile you start on, the first in the site config. The
+first picture waits only for it; after that it has no special role:
+distance from the camera, not the tile, decides what is drawn in detail,
+and walking, collision and the demolish tool work on every tile in view.
+(Earlier versions loaded a fixed block of four and called this the
+*primary* tile.)
 
 **ADR** — *architecture decision record*: a short document stating one
 decision, its context and consequences; see [docs/adr](../../adr/README.md).

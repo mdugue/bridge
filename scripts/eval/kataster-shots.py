@@ -73,7 +73,7 @@ def snapshot(ex, ey, z, heading, pitch, mode, cx, cy):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--raw", default=str(ROOT / "data" / "_raw" / "baumkataster"))
+    ap.add_argument("--raw", default=str(ROOT / "data" / "_raw" / "dresden" / "downloads"))
     args = ap.parse_args()
     raw = json.load(open(Path(args.raw) / f"stadtbaum_{TILE}.geojson"))
     cx, cy = offset()

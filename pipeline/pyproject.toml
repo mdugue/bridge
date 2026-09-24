@@ -1,0 +1,31 @@
+[project]
+name = "bridge-bake"
+version = "0.1.0"
+description = "The offline geodata bakes: provider downloads -> the per-tile artifacts under data/"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "numpy==2.3.3",
+  "pillow==11.3.0",
+  "pyogrio==0.11.1",
+  "pyproj==3.7.2",
+  "rasterio==1.4.3",
+  "scikit-image==0.26.0",
+  "scipy==1.16.2",
+  "shapely==2.1.2",
+]
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "ruff==0.16.8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

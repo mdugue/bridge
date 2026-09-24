@@ -3,9 +3,9 @@
 
 Reproducible analysis behind the 🧪 "tree inventory" entry in
 docs/transformations.md. Reads only committed artifacts plus the raw cadastre
-cache that scripts/extract-trees.sh writes:
+cache the cadastre ingest writes (pipeline/bake/ingest_trees_dresden.py):
 
-  data/_raw/baumkataster/stadtbaum_<tile>.geojson   (raw WFS, all attributes)
+  data/_raw/dresden/downloads/stadtbaum_<tile>.geojson  (raw WFS, all attributes)
   data/dlm/canopy_<tile>.geojson                    (DOM1 canopy points, `h`)
   data/dlm/vegrows_<tile>.geojson                   (DLM tree rows)
   data/dlm/landcover_<tile>.png  (+ .json legend)   (DLM class ids, 4096²)
@@ -19,7 +19,7 @@ Answers:
   b. height — cadastre height vs the nearest matched canopy point's `h`
   c. leaf-off NDVI as an evergreen/leaf-off classifier, sampled exactly like
      vegetation-layer.ts (5×5 footprint max, byte/255)
-  d. archetype coverage (scripts/tree_archetypes.py)
+  d. archetype coverage (pipeline/bake/tree_archetypes.py)
 
 Run (the system numpy is broken; uv supplies a clean one):
   uv run --with numpy --with scipy --with pillow \
@@ -38,7 +38,7 @@ from PIL import Image
 from scipy.spatial import cKDTree
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "pipeline" / "bake"))
 import tree_archetypes as ta  # noqa: E402
 
 TILES = ["33412_5656_2_sn", "33410_5656_2_sn", "33410_5658_2_sn", "33412_5658_2_sn"]
@@ -46,7 +46,7 @@ PRIMARY = TILES[0]
 DLM = ROOT / "data" / "dlm"
 MIN_MATCH_R = 3.5  # m: the canopy grid is 7 m, so half a cell is the floor
 TREE_SPACING = 9.0  # vegetation-layer.ts TREE_SPACING (rows)
-CANOPY_MINH = 3.0  # extract-canopy.sh MINH
+CANOPY_MINH = 3.0  # pipeline/bake/canopy.py MIN_H
 
 
 def tile_bounds(tile):
@@ -248,7 +248,7 @@ def classifier(values, truth):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--raw", default=str(ROOT / "data" / "_raw" / "baumkataster"))
+    ap.add_argument("--raw", default=str(ROOT / "data" / "_raw" / "dresden" / "downloads"))
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
     raw = Path(args.raw)

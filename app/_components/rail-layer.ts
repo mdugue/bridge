@@ -21,15 +21,15 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
  * a flat land-cover colour painted on the DGM (a brown smear; bridges sank into
  * the Elbe). This builds stylized geometry from the baked GeoJSONs
- * (scripts/extract-rail.sh), redesigned after the first pass z-fought into ragged
+ * (pipeline/bake/rail.py), redesigned after the first pass z-fought into ragged
  * edges and stacked into "2-story" bridges:
  *
  *  - Ballast yards: ONE merged surface from the DISSOLVED Basis-DLM ver03_f area
  *    polygons (no per-line overlap → no z-fight). The recoloured class-5 splat
  *    sits underneath, so any sub-pixel gap reads as ballast, not a seam.
- *  - Rails: Basis-DLM ver03_l centrelines (heavy rail), built ONCE for the whole
- *    tile block on the cross-tile heightAt and split at NoData gaps, so tracks run
- *    continuously across tile seams instead of fragmenting.
+ *  - Rails: Basis-DLM ver03_l centrelines (heavy rail), built per fine terrain
+ *    tile on the cross-tile heightAt (every loaded terrain) and split at NoData
+ *    gaps, so tracks follow the ground across tile seams.
  *  - Bridges: ONE clean slab volume per Basis-DLM ver06_f deck polygon (top +
  *    continuous fascia), flush parapet walls (no floating cap), piers dropped even
  *    over the river. Rails ride the deck directly (no ballast stacked on top).

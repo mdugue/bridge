@@ -1,27 +1,31 @@
 /**
- * Prepares the tile block for the browser. Two stages:
+ * Prepares the site for the browser: bakes its tiles into an OGC 3D Tiles
+ * tileset (lib/city/tileset.ts) and publishes everything under
+ * content-hashed names. Four steps:
  *
- *  1. **Bake** — every artifact the viewer may request (lib/city/tile.ts,
- *     `tileArtifacts`) is either a committed per-tile file under data/ or is
- *     produced here from one (the DGM GeoTIFF → heightfield, see
- *     lib/city/heightfield.ts; the 4096² land-cover rasters → their 2048²
- *     variants, see downsample-raster.ts; CityJSON → the building mesh).
- *     Baked outputs live in `.cache/prepare-data/` (gitignored) with
- *     mtime-based staleness against the inputs AND the bake's own source
- *     files, so a rerun is cheap and a changed bake never serves a stale
- *     cache. Every `required` artifact must come out of this stage.
- *  2. **Publish** — each artifact is copied into `public/data/` under a
- *     content-hashed name and `manifest.json` maps logical → hashed names.
- *     Hashed names let `/data/*` be served as immutable (next.config.ts) while
- *     a re-bake still reaches every client through the manifest. Stale files
- *     in public/data/ are pruned, so a removed optional source really turns
- *     its feature off instead of serving an old copy forever.
+ *  1. **Side files** — each tile's rasters and feature collections
+ *     (lib/city/tile.ts, `tileArtifacts`): committed files under data/dlm/
+ *     as they are, plus the 2048² class raster downsampled from the 4096²
+ *     one (downsample-raster.ts).
+ *  2. **Content** — per tile, the buildings (CityJSON → glTF with a
+ *     per-object table, bake-city-mesh.ts) and the terrain at two levels
+ *     (DGM → an error-bounded TIN per level, or the grid for a DGM with
+ *     NoData → glTF, bake-tiles.ts), each glTF naming its side files in
+ *     `extras`. Pre-gzipped (`.glb.gz`): static hosts do not compress binary
+ *     types, and the viewer inflates natively (DecompressionStream).
+ *  3. **Tilesets** — the tree over all tiles, and one over the spawn tile
+ *     alone (the `lite` profile).
+ *  4. **Publish** — `manifest.json` maps logical → hashed names; it is the
+ *     one file served `no-cache` (next.config.ts), everything else is
+ *     immutable. Files the manifest no longer references are pruned.
  *
+ * Baked outputs are cached in `.cache/prepare-data/` (gitignored) under a
+ * key of their inputs, the bake's own sources and the names they reference,
+ * so a rerun is cheap and a changed bake never serves a stale cache.
  * Runs ahead of `dev` and `build`; public/data/ is gitignored.
  */
 import { createHash } from "node:crypto";
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -30,43 +34,53 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
+import type { WallFeature } from "../lib/city/features";
+import { tileExtentOf } from "../lib/city/site";
+import type { WallLine } from "../lib/city/terrain-conflate";
 import {
-  HEIGHTFIELD_VERSION,
-  type HeightfieldHeader,
-  parseHeightfieldHeader,
-} from "../lib/city/heightfield";
-import {
-  parseTerrainTinHeader,
-  TERRAIN_TIN_VERSION,
-  type TerrainTinHeader,
-} from "../lib/city/terrain-tin";
-import {
-  cityMeshDataFile,
-  cityMeshMetaFile,
   cityMeshSourceFiles,
   type DataManifest,
   dgmSourceFiles,
-  heightfieldDataFile,
-  heightfieldHeaderFile,
   MANIFEST_FILE,
-  terrainTinDataFile,
-  terrainTinHeaderFile,
-  TILE_BLOCK,
   tileArtifacts,
+  tileIds,
 } from "../lib/city/tile";
+import {
+  type BakedTile,
+  buildTileset,
+  type CityExtras,
+  type DressingFiles,
+  TERRAIN_LEVELS,
+  type TerrainExtras,
+  type TerrainSurface,
+  TILESET_FILE,
+  TILESET_SPAWN_FILE,
+  type TilesetExtras,
+} from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
-import { bakeCityMesh } from "./bake-city-mesh";
-import { bakeHeightfield } from "./bake-heightfield";
-import { bakeTerrainTin } from "./bake-terrain-tin";
+import { currentSite } from "../sites";
+import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
+import {
+  cityMesh,
+  type Dgm,
+  hasNoData,
+  readDgm,
+  type TerrainMesh,
+  terrainMesh,
+  tinTerrainMesh,
+} from "./bake-tiles";
 import { bakeWissenHero } from "./bake-wissen-hero";
-import { downsampleRaster } from "./downsample-raster";
+import { downsampleClassRaster } from "./downsample-raster";
+import { writeMeshGlb } from "./tile-glb";
 
-const OUT_DIR = "public/data";
-const CACHE_DIR = ".cache/prepare-data";
+const OUT_DIR = join(process.cwd(), "public/data");
+const CACHE_DIR = join(process.cwd(), ".cache/prepare-data");
+const SITE = currentSite();
+const TILES = tileIds(SITE);
 
 function fail(message: string): never {
   process.stderr.write(`prepare-data: ${message}\n`);
@@ -77,409 +91,444 @@ function log(message: string): void {
   process.stdout.write(`prepare-data: ${message}\n`);
 }
 
-// --- bake: copies ---------------------------------------------------------
+const at = (path: string) => join(process.cwd(), path);
+const utf8 = (value: unknown) =>
+  new TextEncoder().encode(`${JSON.stringify(value)}\n`);
+const parse = <T>(bytes: Uint8Array): T =>
+  JSON.parse(new TextDecoder().decode(bytes)) as T;
+const readJson = <T>(path: string): T =>
+  JSON.parse(readFileSync(path, "utf8")) as T;
 
-/** Logical artifact name → the on-disk file to publish from (source or cache). */
-const toPublish = new Map<string, string>();
+// --- publish ------------------------------------------------------------------
 
-const artifacts = TILE_BLOCK.flatMap((spec) =>
-  Object.values(tileArtifacts(spec)).filter((a) => a.source !== null)
-);
-for (const artifact of artifacts) {
-  const src = join(process.cwd(), `data/${artifact.source}/${artifact.file}`);
-  if (existsSync(src)) {
-    toPublish.set(artifact.file, src);
-  } else if (artifact.required) {
-    fail(`missing source file data/${artifact.source}/${artifact.file}`);
-  } else {
-    // The loader treats a missing optional artifact as "feature off"; the
-    // prune below makes sure an earlier copy doesn't keep it on.
-    log(`optional source absent, skipping ${artifact.file}`);
-  }
-}
-
-// --- bake: downsampled rasters ----------------------------------------------
-// The DLM bake writes 4096² land-cover rasters. A neighbour tile is backdrop
-// and is served at 2048²; phones get 2048² for the primary tile as well (see
-// MOBILE_RASTER_PX) — a quarter of the texture memory per raster. The class
-// raster keeps NEAREST (ids must not blend); the pastel RGB splat (alpha =
-// water coverage) is Lanczos-filtered. Which variants exist is decided by
-// tileArtifacts() (lib/city/tile.ts), not here; HOW they are resampled by
-// scripts/downsample-raster.ts — read its header before touching either.
-
-/** The bake's own sources: the resampler, and the kernel each variant
- *  declares. A change to either re-bakes every variant. */
-const RASTER_BAKE_SOURCES = [
-  join(process.cwd(), "scripts/downsample-raster.ts"),
-  join(process.cwd(), "lib/city/tile.ts"),
-];
-
-async function bakeRasters(): Promise<void> {
-  for (const spec of TILE_BLOCK) {
-    for (const artifact of Object.values(tileArtifacts(spec))) {
-      const { bakedFrom, raster, resample } = artifact;
-      if (!(bakedFrom && raster && resample) || toPublish.has(artifact.file)) {
-        continue;
-      }
-      const source = `data/${bakedFrom.source}/${bakedFrom.file}`;
-      const src = join(process.cwd(), source);
-      if (!existsSync(src)) {
-        fail(`missing source file ${source}`);
-      }
-      const dest = join(process.cwd(), CACHE_DIR, artifact.file);
-      toPublish.set(artifact.file, dest);
-      if (!isStale(dest, src, ...RASTER_BAKE_SOURCES)) {
-        continue;
-      }
-      mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, await downsampleRaster(src, raster, resample));
-      log(`downsampled ${bakedFrom.file} to ${raster}² (${resample})`);
-    }
-  }
-}
-
-await bakeRasters();
-
-// --- bake: DGM -> heightfield ---------------------------------------------
-// The resample + encode lives in scripts/bake-heightfield.ts; this stage owns
-// the paths, the staleness check and the registration for publish.
-
-function readArrayBuffer(path: string): ArrayBuffer {
-  const buf = readFileSync(path);
-  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-}
-
-/** True when `dest` is missing or older than any of its sources. */
-function isStale(dest: string, ...sources: string[]): boolean {
-  if (!existsSync(dest)) {
-    return true;
-  }
-  const destTime = statSync(dest).mtimeMs;
-  return sources.some(
-    (src) => existsSync(src) && statSync(src).mtimeMs > destTime
-  );
-}
-
-/** A cached header is only reusable if it still parses at this version. */
-function headerIsCurrent(path: string): boolean {
-  try {
-    return (
-      parseHeightfieldHeader(JSON.parse(readFileSync(path, "utf8"))).version ===
-      HEIGHTFIELD_VERSION
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** The heightfield bake's own sources — the resampler, the codec and the .tfw
- *  reader. A change to any of them re-bakes every tile, as the header
- *  promises: a quantisation or z-scale edit must never serve a stale cache
- *  just because HEIGHTFIELD_VERSION was not bumped. */
-const HEIGHTFIELD_BAKE_SOURCES = [
-  join(process.cwd(), "scripts/bake-heightfield.ts"),
-  join(process.cwd(), "lib/city/heightfield.ts"),
-  join(process.cwd(), "lib/city/tfw.ts"),
-];
-
-async function bakeHeightfieldTile(tile: string, n: number): Promise<void> {
-  const source = dgmSourceFiles(tile);
-  const tifPath = join(process.cwd(), source.tif);
-  const tfwPath = join(process.cwd(), source.tfw);
-  if (!existsSync(tifPath)) {
-    fail(`missing source file ${source.tif}`);
-  }
-  const headerName = heightfieldHeaderFile(tile, n);
-  const dataName = heightfieldDataFile(tile, n);
-  const headerPath = join(process.cwd(), CACHE_DIR, headerName);
-  const dataPath = join(process.cwd(), CACHE_DIR, dataName);
-  toPublish.set(headerName, headerPath);
-  toPublish.set(dataName, dataPath);
-  const stale =
-    isStale(headerPath, tifPath, tfwPath, ...HEIGHTFIELD_BAKE_SOURCES) ||
-    isStale(dataPath, tifPath, tfwPath, ...HEIGHTFIELD_BAKE_SOURCES) ||
-    !headerIsCurrent(headerPath);
-  if (!stale) {
-    return;
-  }
-
-  const baked = await bakeHeightfield(
-    readArrayBuffer(tifPath),
-    existsSync(tfwPath) ? readFileSync(tfwPath, "utf8") : null,
-    n
-  ).catch((err: unknown) =>
-    fail(`${tile}: ${err instanceof Error ? err.message : String(err)}`)
-  );
-  const header: HeightfieldHeader = {
-    ...baked.header,
-    // Logical sibling name; publish() rewrites it to the hashed one.
-    data: dataName,
-  };
-  mkdirSync(dirname(dataPath), { recursive: true });
-  writeFileSync(dataPath, baked.data);
-  writeFileSync(headerPath, `${JSON.stringify(header, null, 2)}\n`);
-  log(
-    `built ${headerName} (${n}x${n} from ${baked.source.width}x${baked.source.height}, bounds [${header.bounds.join(", ")}])`
-  );
-}
-
-for (const { tile, n } of TILE_BLOCK) {
-  await bakeHeightfieldTile(tile, n);
-}
-
-// --- bake: DGM -> terrain TIN (the ground the viewer meshes) ----------------
-// For every tile whose spec names a tolerance (lib/city/tile.ts: primary
-// ±0.15 m, neighbours ±0.25 m). Delatin refinement of the native 1 m DGM
-// lives in scripts/bake-terrain-tin.ts.
-
-const TIN_BAKE_SOURCES = [
-  join(process.cwd(), "scripts/bake-terrain-tin.ts"),
-  join(process.cwd(), "scripts/bake-heightfield.ts"),
-  join(process.cwd(), "lib/city/terrain-tin.ts"),
-  join(process.cwd(), "lib/city/tfw.ts"),
-];
-
-function tinHeaderIsCurrent(path: string): boolean {
-  try {
-    return (
-      parseTerrainTinHeader(JSON.parse(readFileSync(path, "utf8"))).version ===
-      TERRAIN_TIN_VERSION
-    );
-  } catch {
-    return false;
-  }
-}
-
-async function bakeTerrainTinTile(
-  tile: string,
-  maxError: number
-): Promise<void> {
-  const source = dgmSourceFiles(tile);
-  const tifPath = join(process.cwd(), source.tif);
-  const tfwPath = join(process.cwd(), source.tfw);
-  const headerName = terrainTinHeaderFile(tile, maxError);
-  const dataName = terrainTinDataFile(tile, maxError);
-  const headerPath = join(process.cwd(), CACHE_DIR, headerName);
-  const dataPath = join(process.cwd(), CACHE_DIR, dataName);
-  toPublish.set(headerName, headerPath);
-  toPublish.set(dataName, dataPath);
-  const inputs = [tifPath, tfwPath, ...TIN_BAKE_SOURCES];
-  if (
-    !(
-      isStale(headerPath, ...inputs) ||
-      isStale(dataPath, ...inputs) ||
-      !tinHeaderIsCurrent(headerPath)
-    )
-  ) {
-    return;
-  }
-  const baked = await bakeTerrainTin(
-    readArrayBuffer(tifPath),
-    existsSync(tfwPath) ? readFileSync(tfwPath, "utf8") : null,
-    maxError
-  ).catch((err: unknown) =>
-    fail(`${tile} TIN: ${err instanceof Error ? err.message : String(err)}`)
-  );
-  const header: TerrainTinHeader = { ...baked.header, data: dataName };
-  mkdirSync(dirname(dataPath), { recursive: true });
-  writeFileSync(dataPath, baked.data);
-  writeFileSync(headerPath, `${JSON.stringify(header, null, 2)}\n`);
-  log(
-    `built ${headerName} (${header.vertexCount} vertices, ${header.triangleCount} triangles, ±${maxError} m, ${Math.round(baked.ms)} ms)`
-  );
-}
-
-for (const { tile, tinMaxError } of TILE_BLOCK) {
-  if (tinMaxError !== undefined) {
-    await bakeTerrainTinTile(tile, tinMaxError);
-  }
-}
-
-// --- bake: CityJSON -> building mesh ---------------------------------------
-// The browser used to parse 8–11 MB of CityJSON per tile (earcut + attribute
-// annotation, ~0.5 s of main thread each). scripts/bake-city-mesh.ts does it
-// once here; the primary tile goes first because the neighbours share its
-// recenter matrix (the same rule the browser used to apply at load time).
-
-/** The bake's own sources: a change to either invalidates every tile. */
-const CITY_BAKE_SOURCES = [
-  join(process.cwd(), "scripts/bake-city-mesh.ts"),
-  join(process.cwd(), "lib/city/city-mesh.ts"),
-  join(process.cwd(), "lib/city/building-tint.ts"),
-  join(process.cwd(), "lib/city/minimap.ts"),
-];
-
-function bakeCityMeshes(): void {
-  let sharedMatrix: Matrix4 | null = null;
-  const stale = TILE_BLOCK.some(({ tile }) => {
-    const src = cityMeshSourceFiles(tile);
-    const inputs = [
-      join(process.cwd(), src.city),
-      join(process.cwd(), src.roofColor),
-      ...CITY_BAKE_SOURCES,
-    ];
-    return (
-      isStale(
-        join(process.cwd(), CACHE_DIR, cityMeshMetaFile(tile)),
-        ...inputs
-      ) ||
-      isStale(join(process.cwd(), CACHE_DIR, cityMeshDataFile(tile)), ...inputs)
-    );
-  });
-  for (const { tile } of TILE_BLOCK) {
-    const metaPath = join(process.cwd(), CACHE_DIR, cityMeshMetaFile(tile));
-    const dataPath = join(process.cwd(), CACHE_DIR, cityMeshDataFile(tile));
-    toPublish.set(cityMeshMetaFile(tile), metaPath);
-    toPublish.set(cityMeshDataFile(tile), dataPath);
-    if (!stale) {
-      continue;
-    }
-    const src = cityMeshSourceFiles(tile);
-    const cityPath = join(process.cwd(), src.city);
-    if (!existsSync(cityPath)) {
-      fail(`missing source file ${src.city}`);
-    }
-    const doc = JSON.parse(readFileSync(cityPath, "utf8")) as CityJsonDocument;
-    const roofPath = join(process.cwd(), src.roofColor);
-    const roofLut = existsSync(roofPath)
-      ? (JSON.parse(readFileSync(roofPath, "utf8")) as { roofs?: RoofColorLut })
-          .roofs
-      : undefined;
-    const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix);
-    sharedMatrix ??= baked.matrix;
-    mkdirSync(dirname(dataPath), { recursive: true });
-    writeFileSync(dataPath, gzipSync(Buffer.from(baked.bytes)));
-    writeFileSync(metaPath, JSON.stringify(baked.meta));
-    log(
-      `built ${cityMeshMetaFile(tile)} (${baked.meta.objects.length} objects, ${baked.meta.vertexCount} vertices${roofLut ? ", DOP roof colours" : ""})`
-    );
-  }
-}
-
-bakeCityMeshes();
-
-// --- bake: the /wissen picture ---------------------------------------------
-// The block's pastel land-cover splat as one map (scripts/bake-wissen-hero.ts)
-// for the knowledge-base pages, which let next/image size it. Not a viewer
-// artifact: optional, and skipped quietly if a splat is missing.
-
-const HERO_FILE = "wissen-hero.webp";
-const HERO_WIDTH = 1600;
-const HERO_BAKE_SOURCES = [join(process.cwd(), "scripts/bake-wissen-hero.ts")];
-
-async function bakeHero(): Promise<void> {
-  const tiles = TILE_BLOCK.map(({ tile }) => tile);
-  const rasterOf = (tile: string) =>
-    join(process.cwd(), `data/dlm/landcover_rgb_${tile}.png`);
-  if (!tiles.every((tile) => existsSync(rasterOf(tile)))) {
-    log("land-cover splat missing, skipping the /wissen picture");
-    return;
-  }
-  const dest = join(process.cwd(), CACHE_DIR, HERO_FILE);
-  toPublish.set(HERO_FILE, dest);
-  if (!isStale(dest, ...tiles.map(rasterOf), ...HERO_BAKE_SOURCES)) {
-    return;
-  }
-  mkdirSync(dirname(dest), { recursive: true });
-  writeFileSync(dest, await bakeWissenHero(tiles, rasterOf, HERO_WIDTH));
-  log(`baked ${HERO_FILE}`);
-}
-
-await bakeHero();
-
-// Every required artifact must have come out of a stage above. A kind that
-// is neither a committed source nor covered by a bake step (or a spec whose
-// raster edge is 0/NaN and so skipped the raster bake) fails here — not as
-// a 404 the loader turns into "feature off" on every client.
-for (const spec of TILE_BLOCK) {
-  for (const artifact of Object.values(tileArtifacts(spec))) {
-    if (artifact.required && !toPublish.has(artifact.file)) {
-      fail(`required artifact ${artifact.file} was neither copied nor baked`);
-    }
-  }
-}
-
-// --- publish: hashed names + manifest -------------------------------------
-
-/** `name.ext` → `name.<8 hex of sha1(content)>.ext` (`.u16.gz` keeps both). */
-function hashedName(file: string, content: Buffer): string {
-  const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
-  const ext = file.endsWith(".u16.gz") ? ".u16.gz" : extname(file);
-  const stem = basename(file, ext);
-  return `${stem}.${hash}${ext}`;
-}
-
-const outDir = join(process.cwd(), OUT_DIR);
-mkdirSync(outDir, { recursive: true });
+mkdirSync(OUT_DIR, { recursive: true });
 const manifest: DataManifest = { version: 1, files: {} };
 const keep = new Set<string>([MANIFEST_FILE]);
 let published = 0;
 
-/** Publishes one artifact; `content` overrides the file on disk when given. */
-function publish(logical: string, path: string, content?: Buffer): void {
-  const bytes = content ?? readFileSync(path);
-  const hashed = hashedName(logical, bytes);
+/** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz` keeps both). */
+function hashedName(file: string, content: Uint8Array): string {
+  const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
+  const ext = file.match(/(\.glb\.gz|\.[^.]+)$/u)?.[0] ?? "";
+  return `${basename(file, ext)}.${hash}${ext}`;
+}
+
+/** Publishes one artifact and returns the name it is served under. */
+function publish(logical: string, content: Uint8Array): string {
+  const hashed = hashedName(logical, content);
   manifest.files[logical] = hashed;
   keep.add(hashed);
-  const dest = join(outDir, hashed);
-  if (existsSync(dest)) {
-    return;
-  }
-  if (content) {
+  const dest = join(OUT_DIR, hashed);
+  if (!existsSync(dest)) {
     writeFileSync(dest, content);
-  } else {
-    copyFileSync(path, dest);
+    published++;
   }
-  published++;
+  return hashed;
 }
 
-// Data files first: a heightfield or TIN header names its data sibling, so
-// the header can only be published once the data's hashed name is known.
-const headerParsers = new Map<string, (json: unknown) => { data: string }>();
-for (const { tile, n, tinMaxError } of TILE_BLOCK) {
-  headerParsers.set(heightfieldHeaderFile(tile, n), parseHeightfieldHeader);
-  if (tinMaxError !== undefined) {
-    headerParsers.set(
-      terrainTinHeaderFile(tile, tinMaxError),
-      parseTerrainTinHeader
-    );
-  }
-}
-for (const [logical, path] of toPublish) {
-  if (!headerParsers.has(logical)) {
-    publish(logical, path);
-  }
-}
-for (const [logical, path] of toPublish) {
-  const parse = headerParsers.get(logical);
-  if (parse) {
-    const header = parse(JSON.parse(readFileSync(path, "utf8")));
-    const data = manifest.files[header.data];
-    if (!data) {
-      fail(`header ${logical} names unpublished data ${header.data}`);
+// --- cache --------------------------------------------------------------------
+
+/** The bake's own sources: a change to any of them re-bakes everything. */
+const BAKE_SOURCES = [
+  "scripts/prepare-data.ts",
+  "scripts/bake-tiles.ts",
+  "scripts/bake-city-mesh.ts",
+  "scripts/tile-glb.ts",
+  "scripts/downsample-raster.ts",
+  "lib/city/city-mesh.ts",
+  "lib/city/building-tint.ts",
+  "lib/city/minimap.ts",
+  "lib/city/terrain-geometry.ts",
+  "lib/city/terrain-conflate.ts",
+  "lib/city/terrain-tin.ts",
+  "lib/city/tileset.ts",
+].map(at);
+
+/** A cache key over input files (by mtime + size) and any extra values. */
+function cacheKey(inputs: string[], ...extra: unknown[]): string {
+  const h = createHash("sha1");
+  for (const path of [...inputs, ...BAKE_SOURCES]) {
+    if (existsSync(path)) {
+      const { mtimeMs, size } = statSync(path);
+      h.update(`${path}:${mtimeMs}:${size};`);
     }
-    publish(
-      logical,
-      path,
-      Buffer.from(`${JSON.stringify({ ...header, data }, null, 2)}\n`)
-    );
   }
+  h.update(JSON.stringify(extra));
+  return h.digest("hex").slice(0, 12);
 }
 
-writeFileSync(
-  join(outDir, MANIFEST_FILE),
-  `${JSON.stringify(manifest, null, 2)}\n`
+/** The cached bytes for `key`, or the baked ones (then cached). */
+async function cached(
+  name: string,
+  key: string,
+  bake: () => Promise<Uint8Array> | Uint8Array
+): Promise<Uint8Array> {
+  const path = join(CACHE_DIR, `${key}.${name}`);
+  if (existsSync(path)) {
+    return readFileSync(path);
+  }
+  const bytes = await bake();
+  mkdirSync(CACHE_DIR, { recursive: true });
+  // One entry per name: drop this artifact's stale keys.
+  for (const entry of readdirSync(CACHE_DIR)) {
+    if (entry.endsWith(`.${name}`)) {
+      rmSync(join(CACHE_DIR, entry));
+    }
+  }
+  writeFileSync(path, bytes);
+  return bytes;
+}
+
+// --- 1. side files --------------------------------------------------------------
+
+/** tile → artifact kind → published name (absent optional files: missing) */
+const sideFiles = new Map<string, Partial<Record<string, string>>>();
+
+for (const tile of TILES) {
+  const names: Partial<Record<string, string>> = {};
+  for (const [kind, artifact] of Object.entries(tileArtifacts(tile))) {
+    if (artifact.bakedFrom) {
+      const src = at(`data/dlm/${artifact.bakedFrom.file}`);
+      if (!existsSync(src)) {
+        fail(`missing source file data/dlm/${artifact.bakedFrom.file}`);
+      }
+      const { raster } = artifact.bakedFrom;
+      const bytes = await cached(artifact.file, cacheKey([src]), () =>
+        downsampleClassRaster(src, raster)
+      );
+      names[kind] = publish(artifact.file, bytes);
+      continue;
+    }
+    const src = at(`data/dlm/${artifact.file}`);
+    if (existsSync(src)) {
+      names[kind] = publish(artifact.file, readFileSync(src));
+    } else if (artifact.required) {
+      fail(`missing source file data/dlm/${artifact.file}`);
+    } else {
+      // The loader treats a missing optional artifact as "feature off".
+      log(`optional source absent, skipping ${artifact.file}`);
+    }
+  }
+  sideFiles.set(tile, names);
+}
+
+// --- 2. content -----------------------------------------------------------------
+
+/**
+ * Every tile is recentered on one offset: the spawn tile's CityJSON loader
+ * matrix, reused for the rest (the frame snapshots are recorded in).
+ */
+let sharedMatrix: Matrix4 | null = null;
+
+function parseCity(tile: string): BakedCityMesh {
+  const src = cityMeshSourceFiles(tile);
+  if (!existsSync(at(src.city))) {
+    fail(`missing source file ${src.city}`);
+  }
+  if (!sharedMatrix && tile !== TILES[0]) {
+    parseCity(TILES[0]);
+  }
+  const doc = readJson<CityJsonDocument>(at(src.city));
+  const roofLut = existsSync(at(src.roofColor))
+    ? readJson<{ roofs?: RoofColorLut }>(at(src.roofColor)).roofs
+    : undefined;
+  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix);
+  sharedMatrix ??= baked.matrix;
+  return baked;
+}
+
+/** The shared offset and CRS, cached with the spawn tile's CityJSON. */
+const frame = parse<{ cx: number; cy: number; epsg: number }>(
+  await cached(
+    "frame.json",
+    cacheKey([at(cityMeshSourceFiles(TILES[0]).city)]),
+    () => {
+      const baked = parseCity(TILES[0]);
+      return utf8({ ...baked.offset, epsg: baked.epsg });
+    }
+  )
+);
+const offset = { cx: frame.cx, cy: frame.cy };
+
+const gz = (bytes: Uint8Array) => gzipSync(bytes, { level: 9 });
+
+/** A tile's buildings: footprints JSON + glTF, both from one parse. */
+async function bakeCity(
+  tile: string
+): Promise<{ file: string; footprints: string; maxZ: number }> {
+  const src = cityMeshSourceFiles(tile);
+  const inputs = [at(src.city), at(src.roofColor)];
+  const key = cacheKey(inputs, offset);
+  let mesh: ReturnType<typeof cityMesh> | null = null;
+  const built = () => {
+    mesh ??= cityMesh(parseCity(tile));
+    return mesh;
+  };
+  const footprintsFile = `footprints_${tile}.json`;
+  const footprints = publish(
+    footprintsFile,
+    await cached(footprintsFile, key, () => utf8(built().footprints))
+  );
+  const { maxZ } = parse<{ maxZ: number }>(
+    await cached(`city_${tile}.json`, key, () =>
+      utf8({ maxZ: built().maxElevation })
+    )
+  );
+  const extras: CityExtras = { kind: "city", tileId: tile };
+  const name = `city_${tile}.glb.gz`;
+  const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
+    gz(
+      await writeMeshGlb({
+        ...built().input,
+        name: "city",
+        extras: { ...extras },
+      })
+    )
+  );
+  return { file: publish(name, glb), footprints, maxZ };
+}
+
+/** The tile's OSM walls as the lines the grid fallback's conflation burns in. */
+function wallLines(tile: string): WallLine[] {
+  const path = at(`data/dlm/${tileArtifacts(tile).walls.file}`);
+  if (!existsSync(path)) {
+    return [];
+  }
+  const { features } = readJson<{ features: WallFeature[] }>(path);
+  return features.flatMap((f) =>
+    f.geometry?.type === "LineString"
+      ? [{ coords: f.geometry.coordinates, kind: f.properties?.kind ?? "wall" }]
+      : []
+  );
+}
+
+function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
+  const pick = (kind: keyof DressingFiles) => names[kind] ?? "";
+  return {
+    bridge: pick("bridge"),
+    canopy: pick("canopy"),
+    canopyx: pick("canopyx"),
+    lamps: pick("lamps"),
+    lowveg: pick("lowveg"),
+    platform: pick("platform"),
+    rail: pick("rail"),
+    railarea: pick("railarea"),
+    trees: pick("trees"),
+    vegrows: pick("vegrows"),
+    walls: pick("walls"),
+  };
+}
+
+/** The native DGM of a tile, read once for both levels (the TIN's input). */
+const dgmCache = new Map<string, Promise<Dgm>>();
+
+function readTileDgm(tile: string, n?: number): Promise<Dgm> {
+  const source = dgmSourceFiles(tile);
+  const key = `${tile}:${n ?? "native"}`;
+  let dgm = dgmCache.get(key);
+  if (!dgm) {
+    const buf = readFileSync(at(source.tif));
+    dgm = readDgm(
+      buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+      existsSync(at(source.tfw)) ? readFileSync(at(source.tfw), "utf8") : null,
+      n
+    );
+    dgmCache.set(key, dgm);
+  }
+  return dgm;
+}
+
+/**
+ * A tile's terrain at one level: the TIN of its native DGM at the level's
+ * tolerance, or — for a DGM with NoData, which a TIN cannot mesh — the
+ * level's grid with the walls burned in.
+ */
+async function terrainOf(
+  tile: string,
+  level: 0 | 1
+): Promise<{
+  bounds: TerrainExtras["bounds"];
+  mesh: TerrainMesh;
+  surface: TerrainSurface;
+}> {
+  const { maxError, n } = TERRAIN_LEVELS[level];
+  const native = await readTileDgm(tile);
+  if (!hasNoData(native)) {
+    return {
+      bounds: native.bounds,
+      mesh: tinTerrainMesh(native, maxError, offset),
+      surface: { kind: "tin", maxError },
+    };
+  }
+  log(
+    `${tile}: the DGM has NoData — level ${level} falls back to the ${n}² grid`
+  );
+  const dgm = await readTileDgm(tile, n);
+  return {
+    bounds: dgm.bounds,
+    mesh: terrainMesh(dgm, wallLines(tile), offset),
+    surface: { kind: "grid", n },
+  };
+}
+
+/** A tile's terrain at one level: glTF + its extent and elevation range. */
+async function bakeTerrain(
+  tile: string,
+  level: 0 | 1
+): Promise<{ file: string; maxZ: number; minZ: number }> {
+  const source = dgmSourceFiles(tile);
+  const tif = at(source.tif);
+  const tfw = at(source.tfw);
+  if (!existsSync(tif)) {
+    fail(`missing source file ${source.tif}`);
+  }
+  const names = sideFiles.get(tile) ?? {};
+  const inputs = [tif, tfw, at(`data/dlm/${tileArtifacts(tile).walls.file}`)];
+  const stem = `terrain_${tile}_l${level}`;
+  const described = {
+    kind: "terrain" as const,
+    tileId: tile,
+    level,
+    landcover: (level === 0 ? names.landcover : names.landcoverLow) ?? "",
+    landcoverLow: names.landcoverLow ?? "",
+    ...(names.ndvi ? { ndvi: names.ndvi } : {}),
+    ...(level === 0 ? { dressing: dressingOf(names) } : {}),
+  };
+  const key = cacheKey(inputs, offset, described, TERRAIN_LEVELS[level]);
+  let built: Awaited<ReturnType<typeof terrainOf>> | null = null;
+  const build = async () => {
+    if (!built) {
+      const t0 = performance.now();
+      built = await terrainOf(tile, level);
+      log(
+        `built ${stem} (${built.surface.kind}, ${built.mesh.triangleCount} triangles, ${Math.round(performance.now() - t0)} ms)`
+      );
+    }
+    return built;
+  };
+  const meta = parse<{
+    bounds: TerrainExtras["bounds"];
+    maxZ: number;
+    minZ: number;
+    surface: TerrainSurface;
+  }>(
+    await cached(`${stem}.json`, key, async () => {
+      const { bounds, mesh, surface } = await build();
+      return utf8({
+        bounds,
+        minZ: mesh.minElevation,
+        maxZ: mesh.maxElevation,
+        surface,
+      });
+    })
+  );
+  const extras: TerrainExtras = {
+    ...described,
+    bounds: meta.bounds,
+    minElevation: meta.minZ,
+    surface: meta.surface,
+  };
+  const name = `${stem}.glb.gz`;
+  const glb = await cached(name, key, async () =>
+    gz(
+      await writeMeshGlb({
+        ...(await build()).mesh.input,
+        name: "terrain",
+        extras: { ...extras },
+      })
+    )
+  );
+  return { file: publish(name, glb), minZ: meta.minZ, maxZ: meta.maxZ };
+}
+
+const baked: BakedTile[] = [];
+const footprintFiles = new Map<string, string>();
+for (const [i, tile] of TILES.entries()) {
+  const city = await bakeCity(tile);
+  footprintFiles.set(tile, city.footprints);
+  const fine = await bakeTerrain(tile, 0);
+  const coarse = await bakeTerrain(tile, 1);
+  dgmCache.clear();
+  const minZ = Math.min(fine.minZ, coarse.minZ);
+  const maxZ = Math.max(fine.maxZ, coarse.maxZ, city.maxZ);
+  baked.push({
+    id: tile,
+    bounds: tileExtentOf(SITE, SITE.tiles[i]),
+    city: city.file,
+    terrain: { 0: fine.file, 1: coarse.file },
+    zRange: [
+      Number.isFinite(minZ) ? minZ : 0,
+      Number.isFinite(maxZ) ? maxZ : 1,
+    ],
+  });
+}
+log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
+
+// --- 3. tilesets ------------------------------------------------------------------
+
+const extras: TilesetExtras = {
+  site: SITE.id,
+  epsg: frame.epsg,
+  offset,
+  tiles: baked.map((t) => ({
+    id: t.id,
+    bounds: t.bounds,
+    footprints: footprintFiles.get(t.id) ?? "",
+    minimap: sideFiles.get(t.id)?.landcoverLow ?? "",
+  })),
+};
+publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
+publish(
+  TILESET_SPAWN_FILE,
+  utf8(
+    buildTileset(baked.slice(0, 1), {
+      ...extras,
+      tiles: extras.tiles.slice(0, 1),
+    })
+  )
 );
 
-// Prune whatever the manifest no longer references (old hashes, removed
-// optional sources, the pre-manifest flat copies).
+// --- the /wissen picture ------------------------------------------------------------
+// The block's land cover in the viewer's palette as one map
+// (scripts/bake-wissen-hero.ts) for the knowledge-base pages, which let
+// next/image size it. Not a viewer artifact: optional.
+
+const HERO_FILE = "wissen-hero.webp";
+const rasters = TILES.map((tile) =>
+  at(`data/dlm/${tileArtifacts(tile).landcover.file}`)
+);
+if (rasters.every((path) => existsSync(path))) {
+  const heroSources = [
+    ...rasters,
+    at("scripts/bake-wissen-hero.ts"),
+    at("lib/city/landcover.ts"),
+  ];
+  const hero = await cached(HERO_FILE, cacheKey(heroSources), () =>
+    bakeWissenHero(
+      TILES,
+      (tile) => rasters[TILES.indexOf(tile)],
+      1600,
+      SITE.tileKm
+    )
+  );
+  publish(HERO_FILE, hero);
+} else {
+  log("land-cover raster missing, skipping the /wissen picture");
+}
+
+// --- 4. manifest + prune -------------------------------------------------------------
+
+writeFileSync(
+  join(OUT_DIR, MANIFEST_FILE),
+  `${JSON.stringify(manifest, null, 2)}\n`
+);
 let pruned = 0;
-for (const entry of readdirSync(outDir)) {
+for (const entry of readdirSync(OUT_DIR)) {
   if (!keep.has(entry)) {
-    rmSync(join(outDir, entry), { recursive: true });
+    rmSync(join(OUT_DIR, entry), { recursive: true });
     pruned++;
   }
 }
 log(
-  `${Object.keys(manifest.files).length} artifacts in ${OUT_DIR} (${published} new, ${pruned} pruned)`
+  `${Object.keys(manifest.files).length} artifacts in public/data (${published} new, ${pruned} pruned)`
 );

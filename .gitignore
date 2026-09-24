@@ -59,4 +59,9 @@ shots/
 
 # Build cache of scripts/prepare-data.ts (baked heightfields etc.)
 /.cache/
+
+# the offline pipeline's Python environment and caches (pipeline/)
+/pipeline/.venv/
 __pycache__/
+.pytest_cache/
+.ruff_cache/

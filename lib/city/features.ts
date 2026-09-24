@@ -1,5 +1,5 @@
 /**
- * The GeoJSON feature shapes the offline bakes write (scripts/extract-*.sh)
+ * The GeoJSON feature shapes the offline bakes write (pipeline/bake/)
  * and the layers read — the one contract between data/dlm and the viewer.
  * features.test.ts checks every committed file against it, so a bake that
  * changes a property name fails there, not as an empty layer in the browser.
@@ -36,13 +36,13 @@ export interface FeatureCollection<F> {
   features?: F[];
 }
 
-/** ATKIS veg04 hedges and tree rows (extract-dlm.sh). */
+/** ATKIS veg04 hedges and tree rows (pipeline/bake/landcover.py). */
 export interface VegRowFeature {
   geometry: LineGeometry;
   properties: { kind: "hedge" | "treerow" } | null;
 }
 
-/** DOM1-derived canopy points with the measured tree height (extract-canopy.sh). */
+/** DOM1-derived canopy points with the measured tree height (pipeline/bake/canopy.py). */
 export interface CanopyFeature {
   geometry: PointGeometry;
   properties: { h: number } | null;
@@ -50,7 +50,7 @@ export interface CanopyFeature {
 
 /**
  * Individually surveyed trees — the Dresden street-tree cadastre
- * (extract-trees.sh, dl-de/by-2-0 "Landeshauptstadt Dresden"). Heights and
+ * (pipeline/bake/trees.py, dl-de/by-2-0 "Landeshauptstadt Dresden"). Heights and
  * crown diameters in metres (imputed in the bake where the cadastre has
  * none); `a` is the archetype id (lib/city/tree-inventory.ts
  * TREE_ARCHETYPES), `l` the leaf type ("e" evergreen, "d" deciduous), `c` a
@@ -71,7 +71,7 @@ export interface TreeFeature {
   } | null;
 }
 
-/** Laser-scan crown peaks outside the canopy mask (extract-lowveg.sh),
+/** Laser-scan crown peaks outside the canopy mask (pipeline/bake/lowveg.py),
  *  already thinned against the street-tree cadastre: a canopy point plus
  *  the crown radius, so it drops into the tree layer. */
 export interface CanopyExtraFeature extends CanopyFeature {
@@ -79,7 +79,7 @@ export interface CanopyExtraFeature extends CanopyFeature {
 }
 
 /**
- * Hedges (extract-lowveg.sh): the OSM `barrier=hedge` lines with their height
+ * Hedges (pipeline/bake/lowveg.py): the OSM `barrier=hedge` lines with their height
  * and width in metres. `src` says where the height came from — "osm+lsc"
  * (the GeoSN laser scan measured it) or "osm" (the tag, or a default).
  */
@@ -95,21 +95,21 @@ export interface LowVegFeature {
 
 export type LowVegSource = "osm" | "osm+lsc";
 
-/** OSM street lamps (extract-lamps.sh, ODbL); the post height is a
+/** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
  *  lamp-layer constant, so no property is read. */
 export interface LampFeature {
   geometry: PointGeometry;
   properties: Record<string, unknown> | null;
 }
 
-/** OSM retaining/city walls (extract-walls.sh, ODbL): the barrier/man_made
+/** OSM retaining/city walls (pipeline/bake/walls.py, ODbL): the barrier/man_made
  *  kind (only retaining kinds reshape the terrain) and the height in metres. */
 export interface WallFeature {
   geometry: LineGeometry;
   properties: { h: number; kind: string } | null;
 }
 
-/** Basis-DLM ver03_l railway centrelines (extract-rail.sh). */
+/** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
 export interface RailFeature {
   geometry: LineGeometry;
   properties: { electrified?: number; tracks?: number } | null;

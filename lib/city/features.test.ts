@@ -14,7 +14,8 @@ import type {
   VegRowFeature,
   WallFeature,
 } from "./features";
-import { TILE_BLOCK, type TileArtifact, tileArtifacts } from "./tile";
+import { DRESDEN } from "../../sites/dresden";
+import { type TileArtifact, tileArtifacts, tileIds } from "./tile";
 
 // The committed bakes under data/dlm, checked against the shapes the layers
 // read. Every tile, every kind — a renamed property or a geometry type the
@@ -45,8 +46,8 @@ const isLine = (coords: unknown): boolean =>
 const isRing = (ring: unknown): boolean =>
   Array.isArray(ring) && ring.length >= 4 && ring.every(isPoint2);
 
-const cases = TILE_BLOCK.map(
-  (spec) => [spec.tile, tileArtifacts(spec)] as const
+const cases = tileIds(DRESDEN).map(
+  (tile) => [tile, tileArtifacts(tile)] as const
 );
 
 test.each(cases)("%s: tree rows are hedge/treerow LineStrings", (_, a) => {

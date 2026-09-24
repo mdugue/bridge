@@ -42,7 +42,7 @@ const MIN_PLAUSIBLE_ELEVATION = -1000;
  */
 export const SKIRT_DEPTH = 30;
 
-/** NoData is NaN in the baked heightfield (heightfield.ts); implausible
+/** NoData is NaN in the resampled DGM (scripts/bake-tiles.ts); implausible
  *  depths count too, so a raw raster sentinel can never become a spike. */
 export function isInvalidElevation(z: number): boolean {
   return !Number.isFinite(z) || z < MIN_PLAUSIBLE_ELEVATION;
