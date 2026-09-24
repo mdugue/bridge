@@ -241,6 +241,30 @@ async function newRenderer(): Promise<WebGLRenderer> {
     forceWebGL: gpuMode() === "webgl2",
   });
   await renderer.init();
+  // SPIKE: name every node build over 20 ms (the flight probe lists them).
+  const nodes = (renderer as unknown as { _nodes: Record<string, unknown> })
+    ._nodes;
+  for (const fn of ["getForRender", "getForRenderAsync"]) {
+    const original = (nodes[fn] as (ro: unknown) => unknown).bind(nodes);
+    nodes[fn] = (ro: {
+      material: { name: string; type: string };
+      object: { name: string; type: string };
+    }) => {
+      const start = performance.now();
+      const done = <T>(value: T): T => {
+        const duration = performance.now() - start;
+        if (duration > 20) {
+          performance.measure(
+            `${fn === "getForRender" ? "sync" : "async"}:${ro.material.type}:${ro.object.name || ro.object.type}`,
+            { start, duration }
+          );
+        }
+        return value;
+      };
+      const result = original(ro);
+      return result instanceof Promise ? result.then(done) : done(result);
+    };
+  }
   // reason: spike — the calls create-app makes (size, pixel ratio, shadow
   // map, tone mapping, animation loop, info, dispose) exist on both.
   return renderer as unknown as WebGLRenderer;

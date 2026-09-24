@@ -3,6 +3,7 @@ import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
   type Camera,
   type Group,
+  type Material,
   Matrix4,
   type Mesh,
   type Object3D,
@@ -372,7 +373,15 @@ class DressingPlugin {
       });
   }
 
-  disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
+  disposeTile(tile: {
+    engineData?: { materials?: Material[] | null; scene?: Object3D | null };
+  }): void {
+    // Runs before the renderer frees the tile's materials: keep the shared
+    // ones (userData.shared) out of that list, they serve every tile.
+    const data = tile.engineData;
+    if (data?.materials) {
+      data.materials = data.materials.filter((m) => !m.userData.shared);
+    }
     const scene = tile.engineData?.scene;
     const dressed = scene ? this.dressed.get(scene) : undefined;
     if (!(scene && dressed)) {

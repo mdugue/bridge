@@ -16,6 +16,7 @@ import { nodeRenderer } from "./gpu-mode";
 import {
   createNodeCrownMaterial,
   createNodeTrunkMaterial,
+  nodeHedgeMaterial,
 } from "./vegetation-node";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
@@ -644,8 +645,10 @@ function buildHedges(
 ): InstancedMesh[] {
   const geo = new BoxGeometry(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
   geo.translate(0, HEDGE_H / 2, 0);
-  const mat = new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
-  if (heightFog) {
+  const mat = nodeRenderer()
+    ? nodeHedgeMaterial()
+    : new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
+  if (heightFog && !nodeRenderer()) {
     mat.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
   }
   const meshes: InstancedMesh[] = [];

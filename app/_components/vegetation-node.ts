@@ -38,7 +38,23 @@ import { MeshStandardNodeMaterial, type Node } from "three/webgpu";
  */
 
 type Live = { value: number };
-const live = (ref: Live) => uniform(ref.value).onRenderUpdate(() => ref.value);
+
+/**
+ * The crown and trunk materials are shared by every tile's vegetation (three
+ * keys a node graph by its nodes' ids, so a per-tile copy would be
+ * translated anew for each tile). Every tile's look refs carry the same
+ * values; the shared uniforms read whichever tile built last.
+ */
+let refs: {
+  leafBright: Live;
+  leafFlutter: Live;
+  shimmer: Live;
+  translucency: Live;
+} | null = null;
+let crownShared: MeshStandardMaterial | null = null;
+const trunkShared = new Map<number, MeshStandardMaterial>();
+const live = (pick: (r: NonNullable<typeof refs>) => Live) =>
+  uniform(0).onRenderUpdate(() => (refs ? pick(refs).value : 0));
 
 /** Smoothed value noise over a hash lattice (the GLSL leafNoise). */
 function valueNoise(p: Node<"vec2">): Node<"float"> {
@@ -61,7 +77,12 @@ export function createNodeCrownMaterial(
   leafFlutter: Live,
   leafBright: Live
 ): MeshStandardMaterial {
+  refs = { leafBright, leafFlutter, shimmer, translucency };
+  if (crownShared) {
+    return crownShared;
+  }
   const m = new MeshStandardNodeMaterial({ color: 0xa6_bf_92, roughness: 1 });
+  m.userData.shared = true;
   const sunDir = uniform(sunDirection).onRenderUpdate(() => sunDirection);
 
   // Wind sway, after instancing (positionLocal is already the tree's frame
@@ -100,35 +121,63 @@ export function createNodeCrownMaterial(
     .mul(dayGate)
     .mul(float(0.3).add(sunFace.mul(0.7)))
     .mul(float(1).sub(smoothstep(150, 420, camDist).mul(0.7)));
-  const flutter = live(leafFlutter);
+  const flutter = live((r) => r.leafFlutter);
   const base = materialColor.rgb;
   const luma = dot(base, vec3(0.299, 0.587, 0.114));
   const under = mix(base, vec3(luma.mul(1.25).add(0.06)), 0.6);
   const leaf = mix(base, under, clamp(flutter.mul(twinkle), 0, 1));
   // Sway-coupled brightness: the crown brightens leaning into the gust.
-  m.colorNode = leaf.mul(float(1).add(live(leafBright).mul(swayOut).mul(0.18)));
+  m.colorNode = leaf.mul(
+    float(1).add(
+      live((r) => r.leafBright)
+        .mul(swayOut)
+        .mul(0.18)
+    )
+  );
 
   const nearOrDay = float(1)
     .sub(smoothstep(120, 260, camDist))
     .mul(dayGate);
   m.emissiveNode = vec3(0.95, 0.85, 0.45)
-    .mul(live(shimmer).mul(pow(back, 3.6)))
+    .mul(live((r) => r.shimmer).mul(pow(back, 3.6)))
     .add(
       vec3(0.45, 0.62, 0.3).mul(
-        live(translucency).mul(pow(back, 1.6)).mul(nearOrDay)
+        live((r) => r.translucency)
+          .mul(pow(back, 1.6))
+          .mul(nearOrDay)
       )
     )
     .add(vec3(0.9, 0.95, 0.6).mul(flutter.mul(twinkle).mul(0.14)));
   // reason: spike — callers only set colour/visibility on it.
-  return m as unknown as MeshStandardMaterial;
+  crownShared = m as unknown as MeshStandardMaterial;
+  return crownShared;
 }
 
 export function createNodeTrunkMaterial(
   trunkHeight: number
 ): MeshStandardMaterial {
+  const cached = trunkShared.get(trunkHeight);
+  if (cached) {
+    return cached;
+  }
   const m = new MeshStandardNodeMaterial({ color: 0x8a_7c_68, roughness: 1 });
+  m.userData.shared = true;
   const t = clamp(positionGeometry.y.div(trunkHeight), 0, 1);
   m.colorNode = materialColor.rgb.mul(mix(0.74, 1.05, smoothstep(0, 0.6, t)));
   // reason: spike — see createNodeCrownMaterial.
-  return m as unknown as MeshStandardMaterial;
+  const trunk = m as unknown as MeshStandardMaterial;
+  trunkShared.set(trunkHeight, trunk);
+  return trunk;
+}
+
+let hedgeShared: MeshStandardMaterial | null = null;
+
+/** The hedge material, shared like the crowns. */
+export function nodeHedgeMaterial(): MeshStandardMaterial {
+  if (!hedgeShared) {
+    const m = new MeshStandardNodeMaterial({ color: 0x55_6b_3e, roughness: 1 });
+    m.userData.shared = true;
+    hedgeShared = m as unknown as MeshStandardMaterial;
+  }
+  return hedgeShared;
 }

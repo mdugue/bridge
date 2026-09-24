@@ -64,7 +64,12 @@ export function createNodePostStack(
   scene: Scene,
   camera: PerspectiveCamera
 ): PostStack {
-  const pipeline = new RenderPipeline(renderer);
+  // Two pipelines, with and without DoF, both built once: DoF drops while
+  // the camera moves, and swapping one pipeline's output node would
+  // re-translate the whole post graph (GTAO, DoF, SMAA, grading) on the main
+  // thread every time a flight starts or stops.
+  const withDofPipeline = new RenderPipeline(renderer);
+  const plainPipeline = new RenderPipeline(renderer);
   // sRGB is the last node of the chain, not the renderer's: the renderer
   // stays linear and untonemapped, which is the state three renders the
   // scene pass in anyway. No tone mapping: today's WebGL path has none
@@ -76,7 +81,8 @@ export function createNodePostStack(
   // (compile below) is the very one the pass uses.
   renderer.toneMapping = NoToneMapping;
   renderer.outputColorSpace = LinearSRGBColorSpace;
-  pipeline.outputColorTransform = false;
+  withDofPipeline.outputColorTransform = false;
+  plainPipeline.outputColorTransform = false;
   const scenePass = pass(scene, camera);
   const color = scenePass.getTextureNode("output");
   const depth = scenePass.getTextureNode("depth");
@@ -133,14 +139,12 @@ export function createNodePostStack(
 
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
-  let current: Node<"vec4"> | null = null;
+  withDofPipeline.outputNode = withDof;
+  plainPipeline.outputNode = withoutDof;
+  let pipeline = plainPipeline;
+  let warm = false;
   const applyGating = () => {
-    const next = dofWanted && !regressed ? withDof : withoutDof;
-    if (next !== current) {
-      current = next;
-      pipeline.outputNode = next;
-      pipeline.needsUpdate = true;
-    }
+    pipeline = dofWanted && !regressed ? withDofPipeline : plainPipeline;
   };
   applyGating();
 
@@ -171,6 +175,12 @@ export function createNodePostStack(
     },
     render: () => {
       updateFocus();
+      if (!warm) {
+        // Build both graphs up front (the first frames are under the load
+        // screen), so the first toggle costs nothing.
+        warm = true;
+        (pipeline === plainPipeline ? withDofPipeline : plainPipeline).render();
+      }
       pipeline.render();
     },
     getFocusInfo: () => ({
@@ -197,6 +207,9 @@ export function createNodePostStack(
         focusPoint.copy(point);
       }
     },
-    dispose: () => pipeline.dispose(),
+    dispose: () => {
+      withDofPipeline.dispose();
+      plainPipeline.dispose();
+    },
   };
 }
