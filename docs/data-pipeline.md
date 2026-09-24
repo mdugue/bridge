@@ -129,7 +129,11 @@ downloads a file twice (the ZIPs stay in `downloads/`):
   unpacked as `dom1/<tile>.tif` and `dop/<tile>.tif`.
 - **Basis-DLM:** the statewide Shape package (one ZIP of ZIPs, ~1.2 GB),
   unpacked flat into `dlm/`.
-- **OpenStreetMap:** Geofabrik's `sachsen-latest.osm.pbf` into `osm/`. If
+- **OpenStreetMap:** Geofabrik's `sachsen-latest.osm.pbf` into `osm/`
+  (from the Claude Code cloud container Geofabrik resets the connection;
+  there, BBBike's city extract
+  `https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf` does the
+  same job — the bakes read the newest `.osm.pbf` under `osm/`). If
   the download fails the adapter says so and carries on; put any
   `.osm.pbf` covering the site there by hand.
 

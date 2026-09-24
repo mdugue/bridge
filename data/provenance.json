@@ -99,6 +99,15 @@
         "platforms": { "query": "railway=platform, or public_transport=platform on a railway feature; each platform owned by the tile its centroid lies in", "dataAsOf": "2026-06-15 (re-baked 2026-09-24)" },
         "bridgeStructure": { "query": "man_made=bridge bridge:structure", "dataAsOf": "2026-06-15 (re-baked 2026-09-24)" }
       }
+    },
+    "bbbike": {
+      "$comment": "City extract used where download.geofabrik.de is unreachable (it resets connections from the Claude Code cloud container). Same OSM data and licence, cut to a bounding box (13.43–14.18 E, 50.88–51.23 N) that covers every Dresden tile; osm.py reads whichever .osm.pbf under osm/ is newest.",
+      "download": "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf",
+      "raw": "data/_raw/<site>/osm/Dresden.osm.pbf",
+      "extract": "Dresden.osm.pbf (BBBike, Last-Modified 2026-09-19)",
+      "products": {
+        "stairs": { "query": "highway=steps (+ area:highway=steps outlines for the width)", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" }
+      }
     }
   }
 }
