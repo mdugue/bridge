@@ -318,7 +318,7 @@ scene: it re-renders everything into a buffer each frame (~2× cost).
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
 lamps, rails and walls are built tile by tile behind a HUD chip
-(`status.phase === "streaming"`). `onLoaded` flips it to `ready` once the
+(the streaming pill). `onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow
 map (`invalidateShadows()`, which the stream's change handler does) and

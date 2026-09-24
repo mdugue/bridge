@@ -26,7 +26,7 @@ import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /**
  * One tile's terrain at one level: the baked glTF mesh (scripts/bake-tiles.ts,
- * streamed by tile-content.ts) dressed with the land-cover material, its
+ * streamed by tile-stream.ts) dressed with the land-cover material, its
  * water and mist sheets, and a ground-height sampler read from its grid.
  */
 export interface TerrainLayer {

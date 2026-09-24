@@ -135,8 +135,10 @@ level in the Altstadt:
 - first frame and `ready` times on a cold cache.
 
 Good: within ±10 % of `main`. Knobs: the LRU cache limits and
-`errorTarget` in `tile-stream.ts`; the phone budget already streams the
-spawn-only tileset (`TILESET_SPAWN_FILE`).
+`errorTarget` in `tile-stream.ts`. Phones stream the full tileset with
+the 2048² rasters (`lowRasters`); if they struggle, `TILESET_SPAWN_FILE`
+(spawn tile only, what the lite profile uses) is the fallback to wire to
+the mobile tier in `scene-profile.ts`.
 
 ### 7. Phones
 

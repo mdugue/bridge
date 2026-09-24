@@ -36,7 +36,7 @@ export interface SunRig {
   follow: (position: Vector3, direction: Vector3, groundY: number) => void;
   /** Forces a one-off shadow-map re-render. The map is otherwise only redrawn
    * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
-   * (demolish / insert) must call this or stale shadows linger. */
+   * (demolish, a tile landing or leaving) must call this or stale shadows linger. */
   invalidateShadow: () => void;
   /** Advances the sky dome's drifting clouds (call per frame with elapsed s). */
   setTime: (seconds: number) => void;

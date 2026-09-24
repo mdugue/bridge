@@ -1,8 +1,9 @@
 # docs/ — the project knowledge base
 
-Durable, version-controlled documentation for the Dresden 3D city walker:
-what it shows, where the data comes from, how it is built, which decisions
-were taken and why, and what is still open. It lives in the repository so it
+Durable, version-controlled documentation for the 3D city walker (one site
+per build; Dresden is the one site so far): what it shows, where the data
+comes from, how it is built, which decisions were taken and why, and what
+is still open. It lives in the repository so it
 survives across chat threads and contributors.
 
 The site publishes this folder as it is: the guide under `/wissen`, the rest
@@ -15,11 +16,11 @@ pages follow.
 | You are… | Read |
 |---|---|
 | a **user** or a curious non-developer | the [guide](./guide/README.md) — in English and German: [how it works](./guide/en/how-it-works.md), [where the data comes from](./guide/en/data-sources.md), [from download to browser](./guide/en/data-journey.md), [using the viewer](./guide/en/using-the-viewer.md), [glossary](./guide/en/glossary.md) |
-| a **developer** new to the repo | [AGENTS.md](../AGENTS.md) for stack, commands and gotchas, then [rendering.md](./rendering.md) and [data-pipeline.md](./data-pipeline.md) |
+| a **developer** new to the repo | [AGENTS.md](../AGENTS.md) for stack, commands and gotchas, then [rendering.md](./rendering.md) and [data-pipeline.md](./data-pipeline.md); the current architecture is recorded in ADRs [0023](./adr/0023-land-cover-colours-painted-at-runtime.md) (runtime palette), [0024](./adr/0024-site-streams-as-3d-tiles.md) (3D Tiles streaming), [0025](./adr/0025-bakes-are-one-python-package.md) (the Python bakes) and [0026](./adr/0026-one-site-config-per-build.md) (the site config) |
 | about to **change a data → feature transformation** | [data-flow.md](./data-flow.md) + [transformations.md](./transformations.md) (and the rule below) |
-| about to **render another place** | [portability.md](./portability.md) |
-| wondering **why** something is the way it is | [adr/](./adr/README.md), the architecture decision records |
-| looking for **what is planned or was rejected** | [plans/](./plans/README.md), the implementation plans, backlog and audit history |
+| about to **render another place** | [portability.md](./portability.md), the site config ([ADR 0026](./adr/0026-one-site-config-per-build.md)) and [plan 017](./plans/017-germany-wide-sites.md) |
+| wondering **why** something is the way it is | [adr/](./adr/README.md), the architecture decision records — including the proposed move to WebGPU + TSL ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md)) |
+| looking for **what is planned or was rejected** | [plans/](./plans/README.md), the implementation plans, backlog and audit history — open now: [019](./plans/019-gpu-verification.md) (verify the 3D Tiles branch on a real GPU), [020](./plans/020-webgpu-tsl.md) (WebGPU + TSL spike), [021](./plans/021-wissen-astro-starlight.md) (`/wissen` on Astro Starlight) |
 | a **coding agent** doing rendering, data or perf work | the [city-walker skill](../.claude/skills/city-walker/SKILL.md) |
 
 ## Map
@@ -30,8 +31,8 @@ docs/
 ├── guide/                 user-facing, EN + DE (no jargon; every term in the glossary)
 │   ├── en/  how-it-works · data-sources · data-journey · using-the-viewer · glossary
 │   └── de/  the same five pages in German
-├── rendering.md           how data becomes pixels: scene graph, visual-encoding codebook, light, post, budget, boot
-├── data-pipeline.md       the bakes, the build step, artifact contracts, sizes, provenance, regeneration
+├── rendering.md           how data becomes pixels: scene graph, visual-encoding codebook, light, post, budget, streaming boot
+├── data-pipeline.md       the Python bakes, the tileset build step, artifact contracts, sizes, provenance, regeneration
 ├── data-flow.md           source → feature provenance diagram + feature table
 ├── transformations.md     the ledger: every transformation built / experimental / planned / discontinued, with why
 ├── portability.md         degradation matrix + porting checklist for other locations

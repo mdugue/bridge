@@ -18,7 +18,8 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * not a CityJSON building, so it "goes missing". OSM has it as tagged lines with
  * heights; this renders those as vertical sandstone ribbons sitting on the DGM1
  * ground (base draped via the cross-tile `heightAt`, top = base + the OSM
- * height). Built ONCE for the whole tile block; authored Y-up → added to `scene`.
+ * height). Built per fine terrain tile by the dressing plugin (tile-stream.ts);
+ * authored Y-up, so it lives in the Y-up frame.
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 

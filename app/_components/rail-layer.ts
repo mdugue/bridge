@@ -27,9 +27,9 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  *  - Ballast yards: ONE merged surface from the DISSOLVED Basis-DLM ver03_f area
  *    polygons (no per-line overlap → no z-fight). The recoloured class-5 splat
  *    sits underneath, so any sub-pixel gap reads as ballast, not a seam.
- *  - Rails: Basis-DLM ver03_l centrelines (heavy rail), built ONCE for the whole
- *    tile block on the cross-tile heightAt and split at NoData gaps, so tracks run
- *    continuously across tile seams instead of fragmenting.
+ *  - Rails: Basis-DLM ver03_l centrelines (heavy rail), built per fine terrain
+ *    tile on the cross-tile heightAt (every loaded terrain) and split at NoData
+ *    gaps, so tracks follow the ground across tile seams.
  *  - Bridges: ONE clean slab volume per Basis-DLM ver06_f deck polygon (top +
  *    continuous fascia), flush parapet walls (no floating cap), piers dropped even
  *    over the river. Rails ride the deck directly (no ballast stacked on top).
