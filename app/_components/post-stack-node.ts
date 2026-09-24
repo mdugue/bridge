@@ -1,4 +1,11 @@
-import { type PerspectiveCamera, type Scene, Vector3 } from "three";
+import {
+  LinearSRGBColorSpace,
+  NoToneMapping,
+  type PerspectiveCamera,
+  SRGBColorSpace,
+  type Scene,
+  Vector3,
+} from "three";
 import { dof } from "three/examples/jsm/tsl/display/DepthOfFieldNode.js";
 import { ao } from "three/examples/jsm/tsl/display/GTAONode.js";
 import { smaa } from "three/examples/jsm/tsl/display/SMAANode.js";
@@ -10,18 +17,13 @@ import {
   fract,
   length,
   mix,
-  mrt,
   nodeObject,
-  normalView,
-  output,
-  packNormalToRGB,
   pass,
-  sample,
+  renderOutput,
   screenCoordinate,
   screenUV,
   smoothstep,
   uniform,
-  unpackRGBToNormal,
   vec2,
   vec3,
   vec4,
@@ -63,15 +65,23 @@ export function createNodePostStack(
   camera: PerspectiveCamera
 ): PostStack {
   const pipeline = new RenderPipeline(renderer);
+  // Tone mapping and sRGB are the last node of the chain, not the
+  // renderer's: the renderer stays linear and untonemapped, which is the
+  // state three renders the scene pass in anyway. With no MRT either (GTAO
+  // reconstructs normals from depth), a shader compiled ahead of time
+  // (compile below) is the very one the pass uses.
+  const toneMapping = renderer.toneMapping;
+  renderer.toneMapping = NoToneMapping;
+  renderer.outputColorSpace = LinearSRGBColorSpace;
+  pipeline.outputColorTransform = false;
   const scenePass = pass(scene, camera);
-  scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView) }));
   const color = scenePass.getTextureNode("output");
-  const normalColor = scenePass.getTextureNode("normal");
   const depth = scenePass.getTextureNode("depth");
   const viewZ = scenePass.getViewZNode();
-  const normal = sample((uv) => unpackRGBToNormal(normalColor.sample(uv)));
 
-  const aoPass = ao(depth, normal, camera);
+  // reason: GTAONode takes null to reconstruct normals from depth; the
+  // @types signature does not say so.
+  const aoPass = ao(depth, null as never, camera);
   aoPass.resolutionScale = 0.5;
   aoPass.radius.value = AO_RADIUS_M;
   const contact = uniform(LOOK_DEFAULTS.contact);
@@ -113,8 +123,10 @@ export function createNodePostStack(
     );
     return vec4(graded.mul(vignette).mul(paper), aa.a);
   };
-  const withDof = finish(focused);
-  const withoutDof = finish(lit);
+  const output = (node: Node<"vec4">): Node<"vec4"> =>
+    renderOutput(node, toneMapping, SRGBColorSpace);
+  const withDof = output(finish(focused));
+  const withoutDof = output(finish(lit));
 
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
@@ -143,29 +155,20 @@ export function createNodePostStack(
     focusRange.value = focusRangeFor(d);
   };
 
-  // The scene pass renders into its own target with the normal MRT, and a
-  // WebGPU pipeline is specific to its attachments: compile against those,
-  // or the render would build a second pipeline synchronously anyway. The
-  // pass sizes its target on its first render, so compiles wait for that.
-  let rendered = false;
+  // A WebGPU pipeline is specific to the attachments it draws into: compile
+  // against the scene pass's target, which compileAsync reads synchronously
+  // (the shader state it reads later is the renderer's, identical above).
   return {
     compile: (object) => {
-      if (!rendered) {
-        return Promise.resolve();
-      }
       const target = renderer.getRenderTarget();
-      const attachments = renderer.getMRT();
       renderer.setRenderTarget(scenePass.renderTarget);
-      renderer.setMRT(scenePass.getMRT());
       const done = renderer.compileAsync(object, camera, scene);
-      renderer.setMRT(attachments);
       renderer.setRenderTarget(target);
       return done.then(() => undefined);
     },
     render: () => {
       updateFocus();
       pipeline.render();
-      rendered = true;
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,
