@@ -201,14 +201,30 @@ const GRASS_MOTTLE = /* glsl */ `
   float grDetail = grMeadow * ( 1.0 - smoothstep( 0.5, 2.5, grFw ) );
   float grMottle = sin( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.7
                  + sin( vWorldXY.x * 2.7 - 0.5 ) * sin( vWorldXY.y * 2.3 + 1.1 ) * 0.3;
-  baseCol *= 1.0 + grMottle * 0.06 * grDetail;
+  baseCol *= 1.0 + grMottle * 0.035 * grDetail;
+`;
+
+/**
+ * Calm the ground's shading. The DGM1 carries every kerb, rut and survey
+ * wobble, and the baked normals are quantised to 8 bits, so lit by a low
+ * sun a street, a meadow or a quay reads as coarse dark-and-light flecks —
+ * "dirty" rather than drawn. Near-flat normals (under ~12°) are pulled to
+ * straight up, keeping a trace of the relief; real slopes (embankments, the
+ * valley sides) keep their full shading, and the contour ink carries the
+ * rest of the terrain's form.
+ */
+const TERRAIN_NORMAL = /* glsl */ `
+  #include <normal_fragment_begin>
+  vec3 tnUp = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
+  float tnKeep = 1.0 - smoothstep( 0.93, 0.985, dot( normal, tnUp ) );
+  normal = normalize( mix( tnUp, normal, max( tnKeep, 0.12 ) ) );
 `;
 
 const GRASS_NORMAL = /* glsl */ `
-  #include <normal_fragment_begin>
+  ${TERRAIN_NORMAL}
   float grGx = cos( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.85;
   float grGy = sin( vWorldXY.x * 0.85 + 1.3 ) * cos( vWorldXY.y * 0.78 - 0.7 ) * 0.78;
-  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.12 * grDetail );
+  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.06 * grDetail );
 `;
 
 /**
@@ -220,11 +236,47 @@ const GRASS_NORMAL = /* glsl */ `
  * a tiny `step` gates out zero/nodata texels (keep the base sage, don't grey out).
  */
 const MEADOW_NDVI = /* glsl */ `
-  float grNdvi = texture2D( uNdvi, vSplatUv ).r;
-  float grNdviT = clamp( ( grNdvi - 0.1 ) / 0.5, 0.0, 1.0 );
-  vec3 grTint = mix( baseCol * vec3( 1.14, 1.02, 0.82 ),  // dry: paler warm hay
-                     baseCol * vec3( 0.70, 1.12, 0.52 ), grNdviT );  // lush: deep grass
+  // Read from a coarser mip: the 2 m raster carries every path, tree shadow
+  // and bare patch, which painted the meadows in dark flecks. Averaged over
+  // ~10 m it is what it should be — broad lush and dry drifts.
+  float grNdvi = texture2D( uNdvi, vSplatUv, 2.5 ).r;
+  float grNdviT = smoothstep( 0.1, 0.6, grNdvi );
+  vec3 grTint = mix( baseCol * vec3( 1.08, 1.02, 0.88 ),  // dry: paler warm hay
+                     baseCol * vec3( 0.84, 1.06, 0.74 ), grNdviT );  // lush: deeper grass
   baseCol = mix( baseCol, grTint, uMeadowNdvi * grMeadow * step( 0.012, grNdvi ) );
+`;
+
+/**
+ * Sketch contour lines (2 m minor / 10 m major) on the data-frame elevation,
+ * one pixel wide via fwidth. Each set fades out once its lines crowd closer
+ * than a few pixels: past that a 1 px line per contour is no longer a line
+ * but a grey stipple, and on the gently rolling DGM (streets, meadows, the
+ * river surface) it read as dirty blotches across the whole middle distance.
+ */
+const CONTOUR_INK = /* glsl */ `
+  float minorD = vElevation / 2.0;
+  float minorW = fwidth( minorD );
+  float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / minorW, 1.0 );
+  minor *= 1.0 - smoothstep( 0.08, 0.2, minorW );
+  float majorD = vElevation / 10.0;
+  float majorW = fwidth( majorD );
+  float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / majorW, 1.0 );
+  major *= 1.0 - smoothstep( 0.06, 0.16, majorW );
+  float ink = clamp( minor * 0.08 + major * 0.14, 0.0, 0.22 );
+`;
+
+/**
+ * Where contours mean nothing, drop them: on near-flat ground (a street,
+ * a meadow, the river's DGM surface) every centimetre of measurement noise
+ * crosses the 2 m level in a squiggle — the lines only belong on real slopes.
+ * The slope is the elevation change per metre across the pixel footprint.
+ * Under water the ink is gone too (the sheet is translucent, it showed).
+ */
+const CONTOUR_SPLAT_GATE = /* glsl */ `
+  float ctRun = max( length( fwidth( vWorldXY ) ), 1e-4 );
+  float ctSlope = fwidth( vElevation ) / ctRun;
+  ink *= smoothstep( 0.025, 0.09, ctSlope );
+  ink *= 1.0 - smoothstep( 0.05, 0.4, texture2D( uSplat, vSplatUv ).a );
 `;
 
 /**
@@ -302,20 +354,16 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
       `${hasSplat ? baseColExpr : "vec3 baseCol = diffuse;"}
          ${hasSplat ? GRASS_MOTTLE : ""}
          ${hasNdvi ? MEADOW_NDVI : ""}
-         float minorD = vElevation / 2.0;
-         float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
-         float majorD = vElevation / 10.0;
-         float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / fwidth( majorD ), 1.0 );
-         float ink = clamp( minor * 0.10 + major * 0.15, 0.0, 0.26 );
+         ${CONTOUR_INK}
+         ${hasSplat ? CONTOUR_SPLAT_GATE : ""}
          vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
     );
-  if (hasSplat) {
-    // Meadow-only shading-normal break-up (grDetail declared above, in scope).
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <normal_fragment_begin>",
-      GRASS_NORMAL
-    );
-  }
+  // Calmed ground normals; with the class raster also the meadow-only
+  // shading break-up (grDetail declared above, in scope).
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <normal_fragment_begin>",
+    hasSplat ? GRASS_NORMAL : TERRAIN_NORMAL
+  );
 }
 
 function createTerrainMaterial(

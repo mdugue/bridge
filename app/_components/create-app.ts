@@ -382,6 +382,13 @@ async function bootApp(
   // Shared valley height-fog uniforms (by reference): folded into every
   // fog-receiving material; the start follows the lowest terrain landed.
   const heightFog = createHeightFogUniforms();
+  // The site's world XZ rectangle: EPSG north is world −Z.
+  heightFog.uFogSiteRect.value.set(
+    siteBounds[0] - offset.cx,
+    -(siteBounds[3] - offset.cy),
+    siteBounds[2] - offset.cx,
+    -(siteBounds[1] - offset.cy)
+  );
   // Shared meadow-NDVI tint strength (by reference) for the HUD slider.
   const meadowNdvi = { value: LOOK_DEFAULTS.meadowNdvi };
   // The lowest real terrain elevation so far (the Elbe surface): the floor
