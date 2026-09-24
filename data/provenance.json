@@ -23,7 +23,7 @@
     "DOM1": {
       "layer": 4,
       "committed": null,
-      "raw": "data/_raw/dom1/dom1_<tile>_tiff/",
+      "raw": "data/_raw/<site>/dom1/<tile>.tif (+ .tfw), via pipeline/bake/ingest_sn.py",
       "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
@@ -59,7 +59,7 @@
       "$comment": "`stand` is the flight date. 19 March 2024 is a leaf-off spring flight: deciduous crowns are bare, which is why the NDVI raster is low and median-centred and the crown colour remap recentres on that median.",
       "layer": 17,
       "committed": "derived only: data/dop/roofcolor_<tile>.json, data/dlm/ndvi_<tile>.png",
-      "raw": "data/_raw/DOP_RGBI/dop20rgbi_<tile>_tiff/",
+      "raw": "data/_raw/<site>/dop/<tile>.tif, via pipeline/bake/ingest_sn.py",
       "usedBy": ["pipeline/bake/roof_colour.py", "pipeline/bake/ndvi.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5656_2_sn_tiff.zip" },
@@ -71,7 +71,7 @@
     "Basis-DLM": {
       "$comment": "One statewide package, replaced quarterly under the same URL, so the edition of a past download cannot be read from the portal afterwards. The derived files were baked from the package current in June 2026 (commits of 2026-06-12) and re-baked for rails and walls on 2026-09-18; the package on the share was dated 2026-07-28 (Last-Modified, 1.23 GB) when this file was written. Record the package's Last-Modified and the metadata inside the ZIP at the next download.",
       "committed": "derived only: data/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge_<tile>.geojson",
-      "raw": "data/_raw/basis-dlm/basisdlm_sn_shape/",
+      "raw": "data/_raw/<site>/dlm/*.shp, via pipeline/bake/ingest_sn.py",
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
       "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
