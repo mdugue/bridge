@@ -13,7 +13,7 @@ export const BERLIN: Site = {
   label: "Berlin · Mitte",
   name: "Berlin",
   provider: BERLIN_SENSBW,
-  start: "pariser-platz",
+  spawn: "pariser-platz",
   tiles: [
     { e: 390, n: 5818 },
     { e: 388, n: 5818 },

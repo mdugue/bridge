@@ -396,18 +396,21 @@ function Viewpoints({
   onRestore,
   onTravel,
   remembered,
+  showKeys,
 }: {
   onForget: () => void;
   onRemember: () => void;
   onRestore: () => void;
   onTravel: (id: string) => void;
   remembered: boolean;
+  /** show each card's 1–9 shortcut (keyboard devices) */
+  showKeys: boolean;
 }) {
   return (
     <div className="flex flex-col gap-2 px-3 pt-1 pb-3.5">
       <span className={`${SECTION_LABEL} px-1`}>Aussichtspunkte</span>
       <div className="grid grid-cols-2 gap-2">
-        {currentSite().viewpoints.map((view) => (
+        {currentSite().viewpoints.map((view, index) => (
           <button
             className="flex min-h-16.5 flex-col gap-2 rounded-lg border bg-background p-2.5 text-left hover:border-ring"
             key={view.id}
@@ -422,6 +425,11 @@ function Viewpoints({
                 <FootprintsIcon className="size-3" />
               )}
               {view.mode === "fly" ? "Aus der Luft" : "Auf Augenhöhe"}
+              {showKeys && index < 9 && (
+                <kbd className="ml-auto rounded-sm bg-muted px-1 font-sans text-[10px] leading-4">
+                  {index + 1}
+                </kbd>
+              )}
             </span>
             <span className="font-medium text-xs leading-tight">
               {view.label}
@@ -709,6 +717,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 }
               }}
               remembered={props.rememberedView !== null}
+              showKeys={!props.coarse}
             />
             {/* Below the vantages, and quiet: one-click travel is the reason
                 to open this tab, while walk/fly is a mode you set once. Same

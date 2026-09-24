@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import { DEFAULT_SITE, SITES } from "../../sites";
 import { DRESDEN } from "../../sites/dresden";
+import { directionOf } from "./pose";
 import {
   osmExtractUrl,
   siteAttribution,
+  overlook,
   siteTitle,
-  startViewpoint,
+  spawnViewpoint,
   TILE_KM,
   tileExtentOf,
   tileIdOf,
@@ -53,15 +55,10 @@ test.each(sites)(
 );
 
 test.each(sites)(
-  "%s: the start viewpoint exists, on the spawn tile",
+  "%s: the spawn is a viewpoint on the first tile",
   (_, site) => {
-    if (site.start === undefined) {
-      return;
-    }
-    const start = startViewpoint(site);
-    expect(start).toBeDefined();
+    const { x, y } = spawnViewpoint(site).epsg;
     const [x0, y0, x1, y1] = tileExtentOf(site.tiles[0]);
-    const { x, y } = start?.epsg ?? { x: Number.NaN, y: Number.NaN };
     expect(x >= x0 && x < x1 && y >= y0 && y < y1).toBe(true);
   }
 );
@@ -83,4 +80,42 @@ test("Dresden keeps its tile ids, credits and extract", () => {
 
 test("a site without an open Basis-DLM credits OSM for its land cover", () => {
   expect(siteAttribution(SITES.hamburg)[1]).toStartWith("Landbedeckung");
+});
+
+const DEG = Math.PI / 180;
+
+test("overlook puts the target under the crosshair", () => {
+  const target = { x: 1000, y: 2000 };
+  const view = overlook(target, {
+    id: "t",
+    label: "T",
+    description: "",
+    altitude: 100,
+    headingDeg: 135,
+    pitchDeg: -45,
+  });
+  expect(view.mode).toBe("fly");
+  expect(view.aboveGround).toBe(100);
+  // Follow the view ray from the camera down to the ground (EPSG: x east,
+  // y north; the world frame's −Z is north, so north = −d.z).
+  const d = directionOf(view.headingDeg * DEG, view.pitchDeg * DEG);
+  const t = view.aboveGround / -d.y;
+  expect(view.epsg.x + d.x * t).toBeCloseTo(target.x, -0.5);
+  expect(view.epsg.y - d.z * t).toBeCloseTo(target.y, -0.5);
+});
+
+test("overlook refuses a vantage that does not look down", () => {
+  expect(() =>
+    overlook(
+      { x: 0, y: 0 },
+      {
+        id: "flat",
+        label: "",
+        description: "",
+        altitude: 50,
+        headingDeg: 0,
+        pitchDeg: 0,
+      }
+    )
+  ).toThrow();
 });

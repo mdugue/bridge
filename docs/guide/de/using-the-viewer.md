@@ -30,7 +30,8 @@ lädt* oben im Bild (siehe
 | `W` `A` `S` `D` | gehen (oder fliegen) |
 | `Shift` | sprinten |
 | `F` | zwischen Gehen und Fliegen wechseln |
-| `Leertaste` / `Shift` | hoch / runter im Flug |
+| `Leertaste` / `Shift` (oder `E` / `Q`) | hoch / runter im Flug |
+| `1` – `9` | zum ersten bis neunten Aussichtspunkt gleiten |
 | Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin |
 | Klick auf die Minikarte | dorthin teleportieren |
@@ -41,11 +42,14 @@ lädt* oben im Bild (siehe
 |---|---|
 | Ziehen | umsehen |
 | Joystick (unten links) | gehen |
+| Flugzeug-Knopf (unten rechts) | zwischen Gehen und Fliegen wechseln |
+| Höhenregler (unten rechts, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | dorthin |
 | Zwei Finger zusammenziehen | zoomen |
 
 Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
-und Mauern an. Beim Fliegen gibt es keine Kollision. Jede Eingabe bricht
+und Mauern an. Beim Fliegen gibt es keine Kollision; nur sinken kannst du
+nicht tiefer als bis auf Augenhöhe über dem Boden. Jede Eingabe bricht
 einen laufenden Gleitflug ab.
 
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
@@ -62,14 +66,23 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   und den Grundrissen der gerade geladenen Gebäude. Deine Position und
   Blickrichtung sind eingezeichnet; ein Klick teleportiert.
 - **Gehen / Fliegen** — der Bewegungsmodus.
-- **Aussichtspunkte** — fünf handverlesene Standpunkte, zu denen die Kamera
-  gleitet: *Carolabrücke* (über dem Fluss), *Elbe-Panorama* (hoch über der
-  Flussbiegung), *Über den Dächern* (ein tiefer Gleitflug über die
-  Altstadtdächer), *Canaletto-Blick* (zu Fuß auf der Elbwiese, die Altstadt
-  jenseits des Grases) und *Elbufer* (ein Spaziergang am baumbestandenen
-  Neustädter Ufer). Die sechste Karte, *Aktuelle Sicht merken*, merkt sich,
-  wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin zurückspringt,
-  mit einem ✕ zum Vergessen.
+- **Aussichtspunkte** — handverlesene Standpunkte, zu denen die Kamera
+  gleitet (am Rechner auch mit den Tasten `1` – `9`):
+  - *aus der Luft*: *Altstadt-Silhouette* (der Startblick, tief über der
+    Elbe), Draufsichten auf *Frauenkirche*, *Brühlsche Terrasse*,
+    *Albertplatz*, *Alaunpark* und *Zwinger & Semperoper*, ein tiefer Flug
+    über die *Äußere Neustadt*, dazu *Carolabrücke* (über dem Fluss),
+    *Elbe-Panorama* (hoch über der Flussbiegung) und *Über den Dächern*
+    (ein tiefer Gleitflug über die Altstadtdächer);
+  - *auf Augenhöhe*: *Canaletto-Blick* (auf der Elbwiese, die Altstadt
+    jenseits des Grases), *Elbufer* (am baumbestandenen Neustädter Ufer),
+    *Am Japanischen Palais* (auf der Neustädter Elbwiese, wo Canaletto
+    malte) und *Neumarkt* (vor der Frauenkirche).
+
+  Der Große Garten liegt knapp südlich des Gebiets und hat deshalb noch
+  keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
+  sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
+  zurückspringt, mit einem ✕ zum Vergessen.
 - **Steuerung** — die vollständige Tastentabelle.
 
 ### Szene

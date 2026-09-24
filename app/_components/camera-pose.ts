@@ -16,7 +16,7 @@ import {
   RAD2DEG,
   type Xyz,
 } from "@/lib/city/pose";
-import { createCameraFlight } from "./camera-flight";
+import { createCameraFlight, type FlightTarget } from "./camera-flight";
 import {
   createFpsMovement,
   type FpsMovementOptions,
@@ -68,8 +68,6 @@ export interface CameraPose {
    * the instant applyCameraState), landing in the viewpoint's movement mode.
    */
   flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
-  /** Puts the camera at a vantage at once (the glide's end pose). */
-  standAt: (viewpoint: ViewpointGeometry) => void;
   /**
    * The pose as a vantage the glide can fly back to. Height is captured
    * ABOVE THE TERRAIN, like the curated viewpoints, so the saved view still
@@ -80,6 +78,11 @@ export interface CameraPose {
   getCameraState: () => CameraState;
   getMode: () => MovementMode;
   getPose: () => PlayerPose;
+  /**
+   * Puts the camera on a viewpoint at once, no glide — the spawn. Lands in
+   * the viewpoint's movement mode.
+   */
+  placeAt: (viewpoint: ViewpointGeometry) => void;
   /** Mouse-look (pointer lock): motion in CSS px, the view follows it. */
   look: (dxPx: number, dyPx: number) => void;
   /** A movement key went down (other codes are ignored). */
@@ -87,6 +90,8 @@ export interface CameraPose {
   release: (code: string) => void;
   /** Drops every held key and the stick — the window lost focus. */
   releaseAll: () => void;
+  /** analog altitude-stick input (fly mode): +1 climbs, −1 sinks */
+  setClimbInput: (v: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
@@ -179,6 +184,18 @@ export function createCameraPose(
     camera.updateProjectionMatrix();
   };
 
+  /** Where a viewpoint puts the camera, on the ground as it stands now. */
+  const targetOf = (viewpoint: ViewpointGeometry): FlightTarget => {
+    const { x, y } = viewpoint.epsg;
+    const w = epsgToWorld(x, y, offset);
+    return {
+      pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
+      headingDeg: viewpoint.headingDeg,
+      pitchDeg: clampPitch(viewpoint.pitchDeg * DEG2RAD) * RAD2DEG,
+      fov: viewpoint.fov,
+    };
+  };
+
   /** Yaw/pitch the view by radians; the player took the wheel. */
   const rotate = (yaw: number, pitch: number) => {
     cancelGlide();
@@ -187,28 +204,6 @@ export function createCameraPose(
     euler.x = clampPitch(euler.x + pitch);
     euler.z = 0;
     camera.quaternion.setFromEuler(euler);
-  };
-
-  const applyCameraState = (s: CameraState): void => {
-    cancelGlide();
-    // Fly first so the ground clamp doesn't yank an aerial pose down to eye
-    // height before the frame even renders.
-    settle(s.mode);
-    camera.position.set(s.pos.x, s.pos.y, s.pos.z);
-    const d = directionOf(
-      s.headingDeg * DEG2RAD,
-      clampPitch(s.pitchDeg * DEG2RAD)
-    );
-    camera.lookAt(
-      camera.position.x + d.x,
-      camera.position.y + d.y,
-      camera.position.z + d.z
-    );
-    if (s.fov > 0) {
-      camera.fov = s.fov;
-      camera.updateProjectionMatrix();
-    }
-    poseJumped();
   };
 
   return {
@@ -231,7 +226,27 @@ export function createCameraPose(
         fov: camera.fov,
       };
     },
-    applyCameraState,
+    applyCameraState: (s) => {
+      cancelGlide();
+      // Fly first so the ground clamp doesn't yank an aerial pose down to eye
+      // height before the frame even renders.
+      settle(s.mode);
+      camera.position.set(s.pos.x, s.pos.y, s.pos.z);
+      const d = directionOf(
+        s.headingDeg * DEG2RAD,
+        clampPitch(s.pitchDeg * DEG2RAD)
+      );
+      camera.lookAt(
+        camera.position.x + d.x,
+        camera.position.y + d.y,
+        camera.position.z + d.z
+      );
+      if (s.fov > 0) {
+        camera.fov = s.fov;
+        camera.updateProjectionMatrix();
+      }
+      poseJumped();
+    },
     teleportTo: (epsgX, epsgY) => {
       cancelGlide();
       const w = epsgToWorld(epsgX, epsgY, offset);
@@ -264,31 +279,30 @@ export function createCameraPose(
         mode: movement.getMode(),
       };
     },
-    standAt: (viewpoint) => {
-      const { x, y } = viewpoint.epsg;
-      const w = epsgToWorld(x, y, offset);
-      applyCameraState({
-        mode: viewpoint.mode,
-        headingDeg: viewpoint.headingDeg,
-        pitchDeg: viewpoint.pitchDeg,
-        fov: viewpoint.fov,
-        epsg: { x, y },
-        pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
-      });
-    },
     flyToViewpoint: (viewpoint) => {
-      const { x, y } = viewpoint.epsg;
-      const w = epsgToWorld(x, y, offset);
       // Fly during the glide so the ground clamp can't fight the vertical arc;
       // pendingMode restores walk (and snaps to the ground) once it settles.
       settle("fly");
-      flight.start({
-        pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
-        headingDeg: viewpoint.headingDeg,
-        pitchDeg: clampPitch(viewpoint.pitchDeg * DEG2RAD) * RAD2DEG,
-        fov: viewpoint.fov,
-      });
+      flight.start(targetOf(viewpoint));
       pendingMode = viewpoint.mode;
+    },
+    placeAt: (viewpoint) => {
+      cancelGlide();
+      const target = targetOf(viewpoint);
+      camera.position.set(target.pos.x, target.pos.y, target.pos.z);
+      const d = directionOf(
+        target.headingDeg * DEG2RAD,
+        target.pitchDeg * DEG2RAD
+      );
+      camera.lookAt(
+        camera.position.x + d.x,
+        camera.position.y + d.y,
+        camera.position.z + d.z
+      );
+      camera.fov = target.fov;
+      camera.updateProjectionMatrix();
+      settle(viewpoint.mode);
+      poseJumped();
     },
     cancelGlide,
     step: (dt) => {
@@ -314,6 +328,12 @@ export function createCameraPose(
     },
     release: movement.release,
     releaseAll: movement.releaseAll,
+    setClimbInput: (v) => {
+      if (v !== 0) {
+        cancelGlide();
+      }
+      movement.setVertical(v);
+    },
     setMoveInput: (x, y) => {
       if (x !== 0 || y !== 0) {
         cancelGlide();

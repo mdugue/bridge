@@ -13,7 +13,7 @@ export const MUENCHEN: Site = {
   name: "München",
   provider: BAVARIA,
   osm: "europe/germany/bayern/oberbayern",
-  start: "marienplatz",
+  spawn: "marienplatz",
   tiles: [
     { e: 690, n: 5334 },
     { e: 692, n: 5334 },

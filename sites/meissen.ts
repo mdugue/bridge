@@ -12,7 +12,7 @@ export const MEISSEN: Site = {
   label: "Meißen · Burgberg",
   name: "Meißen",
   provider: SAXONY,
-  start: "elbufer",
+  spawn: "elbufer",
   tiles: [{ e: 392, n: 5668 }],
   fallbackLatLng: { lat: 51.16, lng: 13.47 },
   viewpoints: [

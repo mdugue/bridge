@@ -258,8 +258,8 @@ half resolution; for automated tests only.
 **Snapshot** — the JSON text that captures camera, date/time and every
 slider, used to reproduce a view.
 
-**Scenic view / Aussichtspunkt** — one of the five authored vantages the
-camera can glide to.
+**Scenic view / Aussichtspunkt** — one of the authored vantages the
+camera can glide to; one of them is the start view.
 
 **Spawn tile** — the tile you start on, the first in the site config. The
 first picture waits only for it; after that it has no special role:

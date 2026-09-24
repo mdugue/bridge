@@ -13,7 +13,7 @@ export const UNNA: Site = {
   name: "Unna",
   provider: NRW,
   osm: "europe/germany/nordrhein-westfalen/arnsberg-regbez",
-  start: "kirchplatz",
+  spawn: "kirchplatz",
   tiles: [
     { e: 408, n: 5710 },
     { e: 408, n: 5708 },

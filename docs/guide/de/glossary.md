@@ -274,8 +274,8 @@ Schattenkarte, halbe Auflösung; nur für automatische Tests.
 **Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit und jeden Regler
 festhält, um eine Ansicht zu reproduzieren.
 
-**Aussichtspunkt** — einer der fünf gestalteten Standpunkte, zu denen die
-Kamera gleiten kann.
+**Aussichtspunkt** — einer der gestalteten Standpunkte, zu denen die
+Kamera gleiten kann; einer davon ist der Startblick.
 
 **Startkachel** — die Kachel, auf der du startest, die erste in der
 Standort-Konfiguration. Das erste Bild wartet nur auf sie; danach hat sie

@@ -115,7 +115,8 @@ config change.
   - input/camera: `camera-pose.ts` (the one owner of where the player
     stands and looks, walk/fly and the scenic glides; every input cancels a
     glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
-    `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`
+    `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
+    `altitude-stick.tsx` (the fly-mode climb control opposite it)
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing

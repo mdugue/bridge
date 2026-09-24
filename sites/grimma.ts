@@ -12,7 +12,7 @@ export const GRIMMA: Site = {
   label: "Grimma · Altstadt",
   name: "Grimma",
   provider: SAXONY,
-  start: "muldeufer",
+  spawn: "muldeufer",
   tiles: [
     { e: 340, n: 5678 },
     { e: 342, n: 5678 },

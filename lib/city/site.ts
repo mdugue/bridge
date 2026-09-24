@@ -43,6 +43,50 @@ export interface Viewpoint {
  */
 export type ViewpointGeometry = Omit<Viewpoint, "description" | "id" | "label">;
 
+/**
+ * An aerial vantage over a landmark, authored the way you would frame it:
+ * WHAT to look at, from which compass direction, how steeply and how high.
+ * The camera stands back from `target` along `headingDeg` by
+ * `altitude / tan(−pitch)` so the landmark sits under the crosshair (on
+ * level ground; the DGM's few metres of relief barely move it). The result
+ * is an ordinary fly-mode Viewpoint.
+ */
+export function overlook(
+  target: { x: number; y: number },
+  frame: {
+    /** metres above the terrain */
+    altitude: number;
+    description: string;
+    fov?: number;
+    headingDeg: number;
+    id: string;
+    label: string;
+    /** degrees below the horizon, negative (−90 = straight down) */
+    pitchDeg: number;
+  }
+): Viewpoint {
+  const { altitude, headingDeg, pitchDeg } = frame;
+  if (!(pitchDeg < 0)) {
+    throw new Error(`overlook ${frame.id}: pitch must look down`);
+  }
+  const back = altitude / Math.tan((-pitchDeg * Math.PI) / 180);
+  const heading = (headingDeg * Math.PI) / 180;
+  return {
+    id: frame.id,
+    label: frame.label,
+    description: frame.description,
+    mode: "fly",
+    epsg: {
+      x: Math.round(target.x - Math.sin(heading) * back),
+      y: Math.round(target.y - Math.cos(heading) * back),
+    },
+    aboveGround: altitude,
+    headingDeg,
+    pitchDeg,
+    fov: frame.fov ?? 60,
+  };
+}
+
 /** A tile of the site's grid by its south-west corner, in km. */
 export interface TileCell {
   e: number;
@@ -106,17 +150,24 @@ export interface Site {
    *  site (same form as `Provider.osm`) */
   osm?: string;
   provider: Provider;
-  /** the viewpoint (by id, on the spawn tile) the player starts at; without
-   *  one, at street level in the middle of the spawn tile */
-  start?: string;
+  /**
+   * The id of the viewpoint the player starts at. It must lie on the first
+   * tile: that one is always streamed (the lite profile streams it alone)
+   * and the boot waits for it.
+   */
+  spawn: string;
   /** the tiles to fetch, bake and load; the FIRST is where the player spawns */
   tiles: TileCell[];
   viewpoints: Viewpoint[];
 }
 
-/** The viewpoint the player starts at, if the site names one. */
-export function startViewpoint(site: Site): Viewpoint | undefined {
-  return site.viewpoints.find((v) => v.id === site.start);
+/** The viewpoint a site starts at (its `spawn`). */
+export function spawnViewpoint(site: Site): Viewpoint {
+  const view = site.viewpoints.find((v) => v.id === site.spawn);
+  if (!view) {
+    throw new Error(`site ${site.id}: spawn "${site.spawn}" is no viewpoint`);
+  }
+  return view;
 }
 
 /** UTM zone of an ETRS89/UTM EPSG code. */

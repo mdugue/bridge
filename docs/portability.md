@@ -111,9 +111,11 @@ the planned fallback. ✅ built · ❌ not built.
 **In a Land that has a provider** (Saxony, NRW, Bavaria, Hamburg, Berlin):
 
 1. **Write the site.** `sites/<id>.ts` — `id`, `name`, `label`, the
-   provider, the tiles (even 2 km cells, spawn first), 3–5 viewpoints and
+   provider, the tiles (even 2 km cells, spawn first), 3–5 viewpoints
+   (aerials over a landmark are easiest framed with `overlook`), the
+   `spawn` viewpoint the player starts at (on the first tile) and
    `fallbackLatLng` — and one line in `sites/index.ts`. `site.test.ts`
-   checks that every viewpoint stands on a tile. Pick walk viewpoints on
+   checks that every viewpoint stands on a tile and the spawn on the first. Pick walk viewpoints on
    open ground: not in a building, not on water, and not on a bridge (the
    DGM has no deck, so eye height would put you on the river).
 2. **Select it.** `SITE=<id>` in `.env.local`.

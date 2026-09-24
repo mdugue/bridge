@@ -1,6 +1,6 @@
 "use client";
 
-import { SlidersHorizontalIcon } from "lucide-react";
+import { PlaneIcon, SlidersHorizontalIcon } from "lucide-react";
 import {
   type CSSProperties,
   startTransition,
@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -32,6 +33,7 @@ import {
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { AltitudeStick } from "./altitude-stick";
 import { ControlHintBar } from "./control-hints";
 import { VEIL_HOLD_MS } from "./handover";
 import {
@@ -102,28 +104,56 @@ function SettingsToggle() {
 }
 
 /**
- * The overlays that belong to the scene, not to the panel: the key hints and
- * the joystick. Both step aside while the sidebar is open — on a phone the
- * sidebar is a sheet, so a joystick left mounted underneath would be a dead
- * control the player can still see.
+ * The overlays that belong to the scene, not to the panel: the key hints, the
+ * joystick and — in fly mode — the altitude stick opposite it. On a touch
+ * screen a walk/fly button sits above that, the F key's stand-in. All of it
+ * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
+ * so a joystick left mounted underneath would be a dead control the player
+ * can still see.
  */
 function SceneOverlays({
   coarse,
+  mode,
+  onClimb,
   onMove,
+  onToggleMode,
 }: {
   coarse: boolean;
+  mode: MovementMode;
+  onClimb: (v: number) => void;
   onMove: (x: number, y: number) => void;
+  onToggleMode: () => void;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
   if (isMobile ? openMobile : state === "expanded") {
     return null;
   }
+  const flying = mode === "fly";
   return (
     <>
       <ControlHintBar coarse={coarse} />
       {/* Clear of the hint bar even when it wraps to two rows on a phone. */}
       <div className="absolute bottom-24 left-5">
         <VirtualJoystick onChange={onMove} />
+      </div>
+      <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
+        {coarse && (
+          <button
+            aria-label="Fliegen"
+            aria-pressed={flying}
+            className={cn(
+              "flex size-11 items-center justify-center rounded-full border shadow-lg backdrop-blur-lg",
+              flying
+                ? "border-white/60 bg-white/85 text-black"
+                : "border-white/30 bg-hud/85 text-hud-foreground"
+            )}
+            onClick={onToggleMode}
+            type="button"
+          >
+            <PlaneIcon className="size-5" />
+          </button>
+        )}
+        {flying && <AltitudeStick onChange={onClimb} />}
       </div>
     </>
   );
@@ -456,7 +486,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              mode={mode}
+              onClimb={(v) => handleRef.current?.setClimbInput(v)}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+              onToggleMode={() =>
+                handleRef.current?.setMovementMode(
+                  mode === "fly" ? "walk" : "fly"
+                )
+              }
             />
           </>
         )}

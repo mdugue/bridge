@@ -14,7 +14,7 @@ export const LEIPZIG: Site = {
   label: "Leipzig · Innenstadt",
   name: "Leipzig",
   provider: SAXONY,
-  start: "markt",
+  spawn: "markt",
   tiles: [
     { e: 316, n: 5690 },
     { e: 318, n: 5690 },

@@ -13,7 +13,7 @@ export const HAMBURG: Site = {
   label: "Hamburg · Innenstadt",
   name: "Hamburg",
   provider: HAMBURG_LGV,
-  start: "jungfernstieg",
+  spawn: "jungfernstieg",
   tiles: [
     { e: 564, n: 5934 },
     { e: 564, n: 5932 },
