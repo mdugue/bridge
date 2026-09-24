@@ -21,7 +21,7 @@
   builds on is verified); three r186 or later
 - **Decision record**: ADR 0027 (proposed)
 - **Planned at**: commit `2c2f228`, 2026-09-24
-- **Status**: TODO — Phase 0 needs a GPU
+- **Status**: IN PROGRESS — Phase 0 spike run 2026-09-24 (see "Phase 0 findings"); the gate awaits the maintainer
 
 ## Why this matters
 
@@ -72,6 +72,77 @@ On a throwaway branch:
 rejects ADR 0027. Reject if the WebGL2 backend is > 25 % slower than today
 on the same GPU (phones without WebGPU would pay it), or if the clay cannot
 be matched.
+
+## Phase 0 findings (2026-09-24, Apple Silicon Mac, Chrome, 1600×1000 @2×)
+
+The spike lives on the local branch `spike/webgpu-tsl` (worktree
+`../webgpu-spike`): `?gpu=webgpu` and `?gpu=webgl2` switch the same build to
+`WebGPURenderer` (WebGPU backend, or forced onto its WebGL2 backend); no
+parameter is today's path. Ported to TSL: the clay (complete), the terrain
+colour (splat + contour ink), a simple water sheet (coverage, colour,
+Fresnel tint), the land-cover paint pass, the sky (`SkyMesh`), and the post
+as a `RenderPipeline` (GTAO half-res, vignette, SMAA). Not ported: DoF,
+depth grading, paper grain, height fog, meadow mottle / NDVI, water
+ripples / glitter / mist, crown sway / shimmer, rail and wall fog. Every
+material with an `onBeforeCompile` patch simply renders unpatched.
+`e2e/spike-probe.ts` boots each mode, flies to four viewpoints, measures
+frames over 8 s and writes plates.
+
+**Look.** The TSL clay is indistinguishable from the GLSL clay at the
+rooftop and aerial views (tint, roof vibrance, storey lines, eave, rim);
+terrain palette and contours match; the sky is paler (`SkyMesh` vs `Sky`,
+and no depth grading). GTAO reads darker and harder than N8AO and needs
+tuning by eye. PCF shadows look slightly harder (check `shadow.radius`
+under node shadows).
+
+**Frame rate (fps, vsync-capped ~120; same views):**
+
+| View | today (WebGL, full post) | WebGPURenderer → WebGL2 | WebGPURenderer → WebGPU |
+|---|---|---|---|
+| Canaletto (eye level) | 34 | 73 | 94 |
+| Über den Dächern | 23 | 44 | 45 |
+| Elbe-Panorama (246 m) | 19 | 40 | **15** |
+| Carolabrücke (70 m) | 29 | 67 | **21** |
+
+Ready (`__poc.ready`, dev server): today 9.6 s, node paths ≈ 21 s.
+
+Reading the numbers:
+- **Not apples to apples against today**: the node path renders no DoF,
+  grading, grain, height fog or any of the patched detail. The
+  two-to-one lead of the WebGL2 backend is mostly that.
+- **Apples to apples between the two backends** (same scene, same
+  materials): WebGPU is faster at eye level and **2–3× slower in the wide
+  views**, where the draw count is highest (every streamed tile, every
+  250 m vegetation cell, lamps, rails, walls). That points at three's
+  per-draw CPU cost on the WebGPU backend, not the GPU. Before Phase 1,
+  profile one wide view (Chrome performance panel, `renderer.info`).
+- The first boot doubles: node materials compile on first use. Warm them
+  with `renderer.compileAsync` under the overlay (backlog item 12).
+
+**What had to change for WebGPU at all:**
+- **Quantised vertex attributes.** `KHR_mesh_quantization` writes positions
+  as snorm16×3 and normals as snorm8×3; **WebGPU has no 3-component 8/16-bit
+  vertex formats** (only ×2/×4), so pipeline creation failed and nothing
+  rendered. The spike dequantises to Float32 on load (losing the GPU-memory
+  saving). The real fix is in the bake: pad positions/normals to 4
+  components (valid glTF with a byte stride, but three then needs an
+  `itemSize` 3 view) or write floats for the WebGPU path.
+- **Integer attributes.** `_FEATURE_ID_0` / `_ROOF` as integers against a
+  TSL `attribute(…, "float")` fail on the WebGL2 backend (buildings
+  missing); read them as ints in TSL or bake them as floats.
+- **`ImageBitmap` textures.** Closing the bitmap in `onUpdate` left the
+  class raster empty on node paths (the renderer uploads again); keep it,
+  or upload from a typed array.
+- 3DTilesRendererJS itself needed no change.
+
+**Gate reading.** The WebGL2 backend is not slower than today — on this
+machine and at this feature level it is faster — so the plan's reject
+criterion does not trigger. But the WebGPU backend's wide-view cost is
+the open question for the maintainer: phones with WebGPU (recent Safari)
+would take that path. Suggested decision: accept ADR 0027 on the condition
+that Phase 1 starts with the profiling above and the bake change for
+4-component attributes; or defer until three's WebGPU backend improves
+its per-draw cost.
 
 ## Phase 1 — Renderer and post (M)
 
