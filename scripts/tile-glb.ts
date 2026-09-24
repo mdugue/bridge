@@ -36,11 +36,12 @@ export interface PropertyTable {
 }
 
 export interface MeshInput {
-  /** custom vertex attributes (glTF names, `_UPPER_CASE`) */
-  attributes?: Record<
-    string,
-    Uint8Array<ArrayBuffer> | Uint16Array<ArrayBuffer>
-  >;
+  /**
+   * custom vertex attributes (glTF names, `_UPPER_CASE`). Float32: three's
+   * WebGPU backend has no 1-component 8/16-bit vertex format, and every
+   * renderer reads these as floats anyway (whole-number feature ids).
+   */
+  attributes?: Record<string, Float32Array<ArrayBuffer>>;
   /** glTF `extras` of the scene: whatever the runtime needs next to the mesh */
   extras: Record<string, unknown>;
   indices?: Uint32Array<ArrayBuffer>;
@@ -110,7 +111,15 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
     .createScene(input.name)
     .addChild(doc.createNode(input.name).setMesh(mesh));
   scene.setExtras(input.extras);
-  const transforms = [quantize({ quantizePosition: 16, quantizeNormal: 8 })];
+  // Only positions and normals are quantised: the custom attributes are ids
+  // and flags that must stay exact (quantize would squeeze them to 12 bits).
+  const transforms = [
+    quantize({
+      pattern: /^(POSITION|NORMAL)$/,
+      quantizePosition: 16,
+      quantizeNormal: 8,
+    }),
+  ];
   if (input.weld) {
     // Merged and reordered for the vertex cache — and for meshopt, which
     // compresses a cache-ordered stream far better. (Terrain keeps its grid

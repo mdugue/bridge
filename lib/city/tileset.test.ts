@@ -24,6 +24,7 @@ const extras: TilesetExtras = {
     {
       id: "a",
       bounds: [412_000, 5_656_000, 414_000, 5_658_000],
+      footprints: "f.json",
       minimap: "m.png",
     },
   ],

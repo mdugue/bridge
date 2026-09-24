@@ -69,18 +69,18 @@
       }
     },
     "Basis-DLM": {
-      "$comment": "One statewide package, replaced quarterly under the same URL, so the edition of a past download cannot be read from the portal afterwards. The derived files were baked from the package current in June 2026 (commits of 2026-06-12) and re-baked for rails and walls on 2026-09-18; the package on the share was dated 2026-07-28 (Last-Modified, 1.23 GB) when this file was written. Record the package's Last-Modified and the metadata inside the ZIP at the next download.",
+      "$comment": "One statewide package, replaced quarterly under the same URL, so the edition of a past download cannot be read from the portal afterwards. The derived files were baked from the package current in June 2026 (commits of 2026-06-12) and re-baked for rails and walls on 2026-09-18 and for rails, ballast and bridges again on 2026-09-24 (package downloaded that day); the package on the share was dated 2026-07-28 (Last-Modified, 1.23 GB) when this file was written. Record the package's Last-Modified and the metadata inside the ZIP at the next download.",
       "committed": "derived only: data/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge_<tile>.geojson",
       "raw": "data/_raw/<site>/dlm/*.shp, via pipeline/bake/ingest_sn.py",
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
       "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
-      "editionInUse": "quarterly package current in June 2026 (exact release date unrecorded)"
+      "editionInUse": "land cover and veg rows: the quarterly package current in June 2026; rail, ballast, bridges: the package downloaded 2026-09-24 (exact release dates unrecorded)"
     }
   },
   "openstreetmap": {
     "overpass": {
-      "$comment": "How the committed platform and bridge-structure files were fetched (lamps until 2026-09-24) (the bash bakes, cached under data/_raw/osm/*.json). The Python pipeline reads all OSM layers from the Geofabrik extract below instead; the next re-bake moves these products there.",
+      "$comment": "How the lamp, platform and bridge-structure files were fetched until 2026-09-24 (the bash bakes). Every OSM layer is now read from the Geofabrik extract below; kept for the history.",
       "endpoint": "https://overpass-api.de/api/interpreter",
       "products": {
         "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
@@ -95,7 +95,9 @@
       "extract": "sachsen-260615.osm.pbf (Geofabrik, 2026-06-15)",
       "products": {
         "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; identical geometry)" },
-        "lamps": { "query": "highway=street_lamp", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; the same lamps as the Overpass bake)" }
+        "lamps": { "query": "highway=street_lamp", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; the same lamps as the Overpass bake)" },
+        "platforms": { "query": "railway=platform, or public_transport=platform on a railway feature; each platform owned by the tile its centroid lies in", "dataAsOf": "2026-06-15 (re-baked 2026-09-24)" },
+        "bridgeStructure": { "query": "man_made=bridge bridge:structure", "dataAsOf": "2026-06-15 (re-baked 2026-09-24)" }
       }
     }
   }

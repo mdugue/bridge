@@ -1,7 +1,6 @@
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
-  BufferAttribute,
   type Camera,
   type Group,
   Matrix4,
@@ -27,8 +26,7 @@ import type {
   TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
-import { nodeRenderer } from "./gpu-mode";
-import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
+import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildRail } from "./rail-layer";
@@ -59,6 +57,8 @@ export interface TileDressing {
 }
 
 export interface TileStreamContext {
+  /** compiles an object's shaders before it shows (PostStack.compile) */
+  compile: (object: Object3D) => Promise<void>;
   /** resolves when the HUD lets the heavy dressing start (create-app's
    *  startStreaming): the first frames only wait on terrain + buildings */
   dressingGate: Promise<void>;
@@ -130,30 +130,6 @@ class GzipContentPlugin {
 }
 
 type Features<T> = Promise<T[]>;
-
-/**
- * SPIKE (plan 020): three's WebGPU backend maps 3-component 8/16-bit
- * attributes (the quantised positions and normals) to padded ×4 formats,
- * but has no mapping for 1-component 8/16-bit ones — the per-vertex
- * feature id (uint16) and roof flag (uint8) — so their pipeline failed; the
- * WebGL2 backend rejects them against TSL's float attribute too. Widen
- * just those two to Float32 on load (a few hundred KB per city tile).
- */
-function floatAttributes(mesh: Mesh): void {
-  const geometry = mesh.geometry;
-  for (const [name, attr] of Object.entries(geometry.attributes)) {
-    if (attr.itemSize !== 1 || attr.array instanceof Float32Array) {
-      continue;
-    }
-    const out = new Float32Array(attr.count * attr.itemSize);
-    for (let i = 0; i < attr.count; i++) {
-      for (let c = 0; c < attr.itemSize; c++) {
-        out[i * attr.itemSize + c] = attr.getComponent(i, c);
-      }
-    }
-    geometry.setAttribute(name, new BufferAttribute(out, attr.itemSize));
-  }
-}
 
 function dressingParts(d: TileDressing): Object3D[] {
   return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
@@ -259,26 +235,23 @@ class DressingPlugin {
     if (!mesh) {
       return;
     }
-    if (nodeRenderer()) {
-      floatAttributes(mesh);
-    }
     if (extras.kind === "city") {
-      await this.dressCity(scene, mesh, extras);
+      this.dressCity(scene, mesh, extras);
     } else if (extras.kind === "terrain") {
       await this.dressTerrain(scene, mesh, extras);
     }
+    // The renderer shows the tile once this resolves: its programs are
+    // ready by then instead of compiling inside a frame.
+    await this.ctx.compile(scene);
   }
 
-  private async dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras) {
+  private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
     const demolished = this.stream.demolished.get(extras.tileId) ?? new Set();
     const city = dressCity(
       mesh,
       extras.tileId,
       this.ctx.styleResources,
       demolished
-    );
-    city.footprints = await fetchOptionalJson<[number, number][][][]>(
-      this.url(extras.footprints)
     );
     this.stream.cities.add(city);
     this.dressed.set(scene, { city });
@@ -335,6 +308,7 @@ class DressingPlugin {
           this.url
         );
         const parts = dressingParts(dressing);
+        await Promise.all(parts.map((part) => this.ctx.compile(part)));
         if (this.dressed.get(scene) !== entry) {
           disposeDressing(dressing);
           return;

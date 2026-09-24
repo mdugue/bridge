@@ -37,9 +37,9 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
 /** The mesh as non-indexed triangles, flat per-face vertices. */
 export interface CityVertices {
   /** 1 on RoofSurface vertices, 0 elsewhere */
-  isRoof: Uint8Array<ArrayBuffer>;
+  isRoof: Float32Array<ArrayBuffer>;
   /** index into the object table */
-  objectIds: Uint16Array<ArrayBuffer>;
+  objectIds: Float32Array<ArrayBuffer>;
   /** recentered data-frame (Z-up) positions, 3 per vertex */
   positions: Float32Array<ArrayBuffer>;
 }
@@ -67,8 +67,8 @@ function collectVertices(loaderScene: {
   const n = chunks.reduce((s, c) => s + c.objectid.length, 0);
   const out = {
     positions: new Float32Array(n * 3),
-    objectIds: new Uint16Array(n),
-    isRoof: new Uint8Array(n),
+    objectIds: new Float32Array(n),
+    isRoof: new Float32Array(n),
   };
   let at = 0;
   for (const c of chunks) {

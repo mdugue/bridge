@@ -1,15 +1,18 @@
 /**
- * The load pipeline as the HUD shows it: six named stages with a fixed share
+ * The load pipeline as the HUD shows it: five named stages with a fixed share
  * of the bar each, declared ONCE. `create-app.ts` reports a fraction per stage
  * (see `CityWalkOptions.onStage`), the loading screen renders the stack and the
- * list from these states, and the streaming pill renders the same six stages as
+ * list from these states, and the streaming pill renders the same stages as
  * segments — one model, two sizes.
  *
  * The order is the order the scene actually loads in, not a designed ideal: the
  * spawn tile's buildings land first, then its terrain, then the sun
  * rig and the materials. Those three are everything the first frame needs, so
  * they end at WALKABLE_PERCENT — the handover point where the overlay becomes
- * the pill and you can start walking. The rest streams in behind the scene.
+ * the pill and you can start walking. The rest streams in behind the scene,
+ * and "the rest" is what the cameras see, not the whole site: the tiles in
+ * view (the tile renderer's own load progress) and their details. Tiles out
+ * of view are never part of the bar; a flight loads them later.
  *
  * No THREE, no DOM: `create-app.ts` and the HUD both import it, and the unit
  * test drives it directly.
@@ -17,11 +20,10 @@
 
 export type LoadStageId =
   | "buildings"
+  | "details"
   | "light"
-  | "neighbours"
-  | "rails"
-  | "terrain"
-  | "vegetation";
+  | "surroundings"
+  | "terrain";
 
 export interface LoadStageDef {
   /** swatch / plate colour — the layer's own material read as a flat tone */
@@ -39,7 +41,7 @@ export interface LoadStageDef {
   status: string;
   /** the same thing at pill size, where there is room for three words */
   streaming: string;
-  /** share of the whole bar, in percent; the six sum to 100 */
+  /** share of the whole bar, in percent; they sum to 100 */
   weight: number;
 }
 
@@ -87,34 +89,24 @@ export const LOAD_STAGES: readonly LoadStageDef[] = [
     weight: 7,
   },
   {
-    id: "vegetation",
-    label: "Vegetation & Lampen",
-    meta: "DOM1-Kronen · Basis-DLM",
-    status: "Bereit — Vegetation kommt dazu",
-    streaming: "Vegetation lädt",
-    color: "#a6bf92",
-    plate: true,
-    weight: 16,
-  },
-  {
-    id: "neighbours",
-    label: "Nachbarkacheln",
-    meta: "Umgebung · Kontext ringsum",
-    status: "Bereit — Nachbarkacheln kommen dazu",
-    streaming: "Nachbarkacheln laden",
+    id: "surroundings",
+    label: "Umgebung",
+    meta: "Kacheln im Blick · nah detailliert, fern grob",
+    status: "Bereit — die Umgebung kommt dazu",
+    streaming: "Umgebung lädt",
     color: "#e6e0d1",
     plate: true,
     weight: 22,
   },
   {
-    id: "rails",
-    label: "Schienen, Brücken, Mauern",
-    meta: "Basis-DLM · OpenStreetMap",
-    status: "Bereit — Schienen und Mauern kommen dazu",
-    streaming: "Schienen & Mauern laden",
-    color: "#9aa6b2",
+    id: "details",
+    label: "Bäume, Lampen, Schienen, Mauern",
+    meta: "DOM1-Kronen · Basis-DLM · OpenStreetMap",
+    status: "Bereit — Bäume, Lampen und Schienen kommen dazu",
+    streaming: "Details laden",
+    color: "#a6bf92",
     plate: true,
-    weight: 10,
+    weight: 26,
   },
 ];
 
@@ -134,8 +126,8 @@ export interface LoadStageUpdate {
 export type StageFractions = Readonly<Partial<Record<LoadStageId, number>>>;
 
 /**
- * Stages the scene will never run — the `lite` profile loads no neighbour
- * tiles, and a tile without rail or wall artifacts skips those. They count as
+ * Stages the scene will never run — the `lite` profile streams the spawn
+ * tile alone, so it has no surroundings. They count as
  * complete so the bar still reaches 100, but the list says so.
  */
 export type SkippedStages = Readonly<Partial<Record<LoadStageId, boolean>>>;
@@ -180,7 +172,7 @@ function stateTextFor(
 }
 
 /**
- * The six stages resolved against what has been reported so far. A stage is
+ * The stages resolved against what has been reported so far. A stage is
  * "active" once anything has been reported for it and it is not finished, so
  * the headline and the pulsing plate follow the scene rather than a timer.
  */

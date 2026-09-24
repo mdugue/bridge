@@ -319,15 +319,43 @@ def bridges(tile: Tile, structures: list[tuple[float, float, str]]) -> list[dict
 # --- platforms ---------------------------------------------------------------------
 
 
+# GDAL's OSM driver gives `railway` a column only on `lines`; on
+# `multipolygons` it and `public_transport` sit in the `other_tags` hstore.
+# Pre-filter on the hstore text, then decide with the parsed tags.
+PLATFORM_WHERE = (
+    'other_tags LIKE \'%"railway"=>"platform"%\' '
+    'OR other_tags LIKE \'%"public_transport"=>"platform"%\''
+)
+
+
+def is_platform(railway: str | None, other_tags: str | None) -> bool:
+    """railway=platform, or public_transport=platform on a railway feature."""
+    railway = railway or tag(other_tags, "railway")
+    if railway == "platform":
+        return True
+    return tag(other_tags, "public_transport") == "platform" and railway is not None
+
+
 def platforms(tile: Tile) -> list[dict]:
-    where = "railway = 'platform' OR (public_transport = 'platform' AND railway IS NOT NULL)"
+    """Platform polygons, each owned by the tile its centroid falls in — read
+    with a margin (so none is missed at a seam) but never written twice."""
+    box = shapely.box(*tile.bounds)
     features = []
     for layer in ("multipolygons", "lines"):
-        try:
-            geoms, _ = read_osm(tile, layer, where, ["railway", "public_transport"], margin=0.0005)
-        except Exception:  # a layer without the public_transport column
-            geoms, _ = read_osm(tile, layer, "railway = 'platform'", ["railway"], margin=0.0005)
-        for g in geoms:
+        if layer == "lines":
+            where = f"railway = 'platform' OR {PLATFORM_WHERE}"
+            columns = ["railway", "other_tags"]
+        else:
+            where, columns = PLATFORM_WHERE, ["other_tags"]
+        geoms, fields = read_osm(tile, layer, where, columns, margin=0.0005)
+        for g, railway, other in zip(
+            geoms,
+            column(fields, "railway", geoms),
+            column(fields, "other_tags", geoms),
+            strict=True,
+        ):
+            if not is_platform(railway, other):
+                continue
             for part in shapely.get_parts(g):
                 if (
                     isinstance(part, shapely.LineString)
@@ -335,7 +363,7 @@ def platforms(tile: Tile) -> list[dict]:
                     and len(part.coords) >= 4
                 ):
                     part = shapely.Polygon(part.coords)
-                if not part.is_empty:
+                if not part.is_empty and box.contains(part.representative_point()):
                     features.append(feature(geometry_json(part)))
     return features
 

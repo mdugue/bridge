@@ -82,8 +82,6 @@ export interface TerrainExtras {
 }
 
 export interface CityExtras {
-  /** minimap footprints per object: `[object][polygon][vertex] = [x, y]` */
-  footprints: string;
   kind: "city";
   tileId: string;
 }
@@ -92,6 +90,12 @@ export type ContentExtras = CityExtras | TerrainExtras;
 
 export interface TilesetTileInfo {
   bounds: TerrainBounds;
+  /**
+   * minimap footprints per object: `[object][polygon][vertex] = [x, y]`.
+   * Here rather than in the city content, so the minimap shows every
+   * building from the start, whatever has streamed in.
+   */
+  footprints: string;
   id: string;
   /** a ≤ 2048² class raster for the minimap */
   minimap: string;

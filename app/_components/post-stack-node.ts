@@ -143,10 +143,29 @@ export function createNodePostStack(
     focusRange.value = focusRangeFor(d);
   };
 
+  // The scene pass renders into its own target with the normal MRT, and a
+  // WebGPU pipeline is specific to its attachments: compile against those,
+  // or the render would build a second pipeline synchronously anyway. The
+  // pass sizes its target on its first render, so compiles wait for that.
+  let rendered = false;
   return {
+    compile: (object) => {
+      if (!rendered) {
+        return Promise.resolve();
+      }
+      const target = renderer.getRenderTarget();
+      const attachments = renderer.getMRT();
+      renderer.setRenderTarget(scenePass.renderTarget);
+      renderer.setMRT(scenePass.getMRT());
+      const done = renderer.compileAsync(object, camera, scene);
+      renderer.setMRT(attachments);
+      renderer.setRenderTarget(target);
+      return done.then(() => undefined);
+    },
     render: () => {
       updateFocus();
       pipeline.render();
+      rendered = true;
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,

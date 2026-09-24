@@ -14,14 +14,12 @@ import {
   type CityObjectTable,
   countBuildings as countLiveBuildings,
   doomedObjects,
-  footprintPolys,
   liveTriangles,
   OBJECT_TEXEL_BANDS,
   OBJECT_TEXTURE_WIDTH,
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
-import type { FootprintPoly } from "@/lib/city/minimap";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial, type StyleResources } from "./visual-style";
 
@@ -37,8 +35,6 @@ export interface CityLayer {
   /** drops the object's building tree; true when anything changed */
   demolish: (objectIndex: number) => boolean;
   dispose: () => void;
-  /** per-object minimap footprints, once fetched */
-  footprints: [number, number][][][] | null;
   mesh: Mesh;
   table: CityObjectTable;
   tile: string;
@@ -177,7 +173,6 @@ export function dressCity(
     mesh,
     table,
     alive,
-    footprints: null,
     demolish: (objectIndex) => {
       const doomed = doomedObjects(table.root, objectIndex);
       if (doomed.size === 0) {
@@ -223,11 +218,4 @@ export function pickCityObject(
 
 export function countBuildings(layer: CityLayer): number {
   return countLiveBuildings(layer.table.building, (i) => layer.alive[i] === 1);
-}
-
-/** Live building footprints (EPSG) for the minimap. */
-export function cityFootprints(layer: CityLayer): FootprintPoly[] {
-  return layer.footprints
-    ? footprintPolys(layer.footprints, (i) => layer.alive[i] === 1)
-    : [];
 }

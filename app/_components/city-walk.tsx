@@ -158,6 +158,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     skipped: SkippedStages;
   }>({ fractions: {}, skipped: {} });
   const [streamError, setStreamError] = useState<string | null>(null);
+  // After the first full load: tiles or their details streaming in (flights).
+  const [streamingMore, setStreamingMore] = useState(false);
   // Kept past the handover: the city arrives behind the frosted screen, which
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
@@ -234,6 +236,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       onLoaded: () => {
         if (!cancelled) {
           updatePocDebug({ ready: true });
+        }
+      },
+      onBusy: (isBusy) => {
+        if (!cancelled) {
+          startTransition(() => setStreamingMore(isBusy));
         }
       },
       onError: (message) => {
@@ -447,7 +454,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
 
             {/* The loading screen, at pill size. It retires itself once the
                 last layer has landed and it has been readable for a moment. */}
-            <StreamPill stages={stages} />
+            <StreamPill busy={streamingMore} stages={stages} />
 
             {streamError && (
               <output

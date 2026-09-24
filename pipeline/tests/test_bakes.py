@@ -6,7 +6,7 @@ import shapely
 from bake.common import round_coords
 from bake.landcover import CLASSES
 from bake.osm import tag
-from bake.rail import buffer_line, merge_lines
+from bake.rail import buffer_line, is_platform, merge_lines
 from bake.walls import height, lines_of
 
 
@@ -69,3 +69,11 @@ def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
 def test_a_polygon_clipped_away_yields_no_wall():
     clipped = shapely.intersection(shapely.box(10, 10, 11, 11), shapely.box(0, 0, 1, 1))
     assert lines_of(clipped) == []
+
+
+def test_platforms_come_from_railway_or_public_transport_on_a_railway():
+    assert is_platform("platform", None)
+    assert is_platform(None, '"railway"=>"platform"')
+    assert is_platform(None, '"public_transport"=>"platform","railway"=>"platform_edge"')
+    assert not is_platform(None, '"public_transport"=>"platform","highway"=>"bus_stop"')
+    assert not is_platform(None, None)

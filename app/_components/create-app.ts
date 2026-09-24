@@ -24,6 +24,7 @@ import {
   type SceneLookKey,
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
+import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
@@ -32,9 +33,9 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import { currentSite } from "@/sites";
 import { createCameraPose } from "./camera-pose";
-import { cityFootprints, countBuildings, pickCityObject } from "./city-layer";
+import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
-import { fetchRequiredJson } from "./fetch-optional";
+import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { installNodeFog } from "./height-fog-node";
@@ -118,6 +119,11 @@ export interface CityWalkOptions {
   onFps?: (fps: number) => void;
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
+  /**
+   * After `onLoaded`: whether tiles or their details are loading right now
+   * (a flight streams new tiles in). Fires on changes only.
+   */
+  onBusy?: (busy: boolean) => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -479,8 +485,16 @@ async function bootApp(
 
   // The stream: what lands and leaves, and everything that follows from it.
   let onChange: () => void = () => undefined;
+  // Shader compiles go through the post stack (it knows the target the
+  // scene renders into); it exists from the "light" stage on, and anything
+  // landing before that is compiled with the handover below.
+  let compileWith: ((object: Object3D) => Promise<void>) | null = null;
   const stream = createTileStream(
     {
+      compile: (object) =>
+        compileWith
+          ? compileWith(object).catch(() => undefined)
+          : Promise.resolve(),
       dressingGate,
       heightAt,
       heightFog,
@@ -515,6 +529,7 @@ async function bootApp(
   let tilesIdle = false;
   stream.tiles.addEventListener("tiles-load-start", () => {
     tilesIdle = false;
+    onChange();
   });
   stream.tiles.addEventListener("tiles-load-end", () => {
     tilesIdle = true;
@@ -572,6 +587,7 @@ async function bootApp(
       )
     : createPostStack(renderer, scene, camera, aoQualityFor(budget.profile));
   cleanups.push(() => postStack.dispose());
+  compileWith = postStack.compile;
 
   // The look store is the one source of every slider value: applied now, on
   // every change, and (in tile-stream.ts) to each tile that lands later. The
@@ -684,6 +700,27 @@ async function bootApp(
       },
     });
   };
+  // Every tile's building footprints for the minimap, independent of what
+  // has streamed in (a few hundred KB for the site): the map shows the whole
+  // city from the start, and demolished buildings via `stream.demolished`.
+  const footprints = new Map<string, [number, number][][][]>();
+  function loadFootprints(): void {
+    for (const tile of extras.tiles) {
+      fetchOptionalJson<[number, number][][][]>(
+        new URL(tile.footprints, tilesetUrl).href,
+        opts.signal
+      )
+        .then((polys) => {
+          if (polys && !disposed) {
+            footprints.set(tile.id, polys);
+            emitStats();
+          }
+        })
+        .catch(() => undefined);
+    }
+  }
+
+  loadFootprints();
 
   // Everything that follows from the tile set changing: the ground, the
   // lamp heads, the fog floor, the shadows, the stats.
@@ -933,6 +970,9 @@ async function bootApp(
     poll();
   });
   onChange();
+  // Whatever landed before the post stack existed: compile it now, under the
+  // overlay, instead of in the first visible frame.
+  await postStack.compile(scene).catch(() => undefined);
   // Stand on the spawn tile now that its ground exists (the pose was placed
   // before any terrain had landed, on the fallback floor).
   pose.teleportTo(offset.cx, offset.cy);
@@ -945,25 +985,55 @@ async function bootApp(
   // the cameras); the dressing waits for the gate. "Loaded" is the first
   // moment after the gate at which nothing is loading and nothing waits to
   // be dressed.
-  function checkLoaded(): void {
-    const others = extras.tiles.length - 1;
-    const landedOthers = new Set(
-      [...stream.terrains].map((t) => t.tile).filter((t) => t !== spawn.id)
-    ).size;
-    if (others === 0) {
-      stage("neighbours", 1, true);
+  // The two stages after the first frame measure what the cameras see:
+  // the tile renderer's own load progress, and the details (vegetation,
+  // lamps, rails, walls) built per fine tile against those still queued.
+  // Both only ever move forward, and both end when everything in view is in.
+  let surroundings = 0;
+  let details = 0;
+  let busy = false;
+  function reportProgress(spawnDressed: boolean): void {
+    if (extras.tiles.length === 1) {
+      stage("surroundings", 1, true);
     } else {
-      stage("neighbours", Math.min(landedOthers / others, 1));
+      const progress = tilesIdle
+        ? 1
+        : Math.min(stream.tiles.loadProgress, 0.99);
+      surroundings = Math.max(surroundings, progress);
+      stage("surroundings", surroundings);
     }
+    if (streamingStarted) {
+      const built = stream.dressings.size;
+      const queued = stream.pendingDressings();
+      const progress =
+        queued === 0 && spawnDressed
+          ? 1
+          : Math.min(built / Math.max(built + queued, 1), 0.99);
+      details = Math.max(details, progress);
+      stage("details", details);
+    }
+  }
+
+  function checkLoaded(): void {
     const spawnDressed = [...stream.dressings].some((d) => d.tile === spawn.id);
-    stage("vegetation", spawnDressed ? 1 : 0);
     const idleNow = tilesIdle && stream.pendingDressings() === 0;
-    if (!loaded && streamingStarted && spawnDressed && idleNow) {
-      loaded = true;
-      worldPartial = false;
-      applyFog();
-      stage("rails", 1);
-      opts.onLoaded?.();
+    if (!loaded) {
+      reportProgress(spawnDressed);
+      if (streamingStarted && spawnDressed && idleNow) {
+        loaded = true;
+        worldPartial = false;
+        applyFog();
+        stage("surroundings", 1);
+        stage("details", 1);
+        opts.onLoaded?.();
+      }
+      return;
+    }
+    // Later loads (a flight, a turn) no longer move the bar; the HUD shows
+    // a small "loading" hint instead.
+    if (busy !== !idleNow) {
+      busy = !idleNow;
+      opts.onBusy?.(busy);
     }
   }
 
@@ -979,7 +1049,7 @@ async function bootApp(
       return;
     }
     streamingStarted = true;
-    stage("rails", 0);
+    stage("details", 0);
     openGate();
     scheduleIndexing();
     checkLoaded();
@@ -1011,7 +1081,10 @@ async function bootApp(
     setMoveInput: pose.setMoveInput,
     startStreaming,
     getFootprints: (): FootprintPoly[] =>
-      stream.visibleCities().flatMap(cityFootprints),
+      [...footprints].flatMap(([tile, polys]) => {
+        const gone = stream.demolished.get(tile);
+        return footprintPolys(polys, (i) => !gone?.has(i));
+      }),
     landcoverTiles: extras.tiles.map((t) => ({
       src: new URL(t.minimap, tilesetUrl).href,
       bounds: t.bounds,
