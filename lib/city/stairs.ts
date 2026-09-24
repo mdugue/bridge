@@ -11,11 +11,12 @@
  * - `raiseTerraces` lifts the ground inside the raised OSM areas the bake
  *   found a lifted flight climbing onto (the Brühlsche Terrasse stands on
  *   casemates, so the bare-earth DGM runs flat under it);
- * - `burnStairs` lowers the terrain grid under the flight to just below the
- *   ramp through the steps' inner corners — every grid vertex whose
- *   triangles reach under the flight, so no ground pokes through a tread
- *   (only ever lowers, and never across a wall: a flight between walls does
- *   not dig into the terrace beyond them);
+ * - `burnStairs` sets the terrain grid under the flight to just below the
+ *   ramp through the steps' inner corners — lifting it where the DGM runs
+ *   below (the player walks on the grid, so the ground must climb with the
+ *   steps) — and lowers every grid vertex beside it whose triangles reach
+ *   under the flight, so no ground pokes through a tread (never across a
+ *   wall: a flight between walls does not dig into the terrace beyond them);
  * - `stairGeometry` builds the flight as solid blocks: a tread per step, a
  *   riser at each step's front and the two side cheeks, reaching below the
  *   bottom landing.
@@ -228,12 +229,14 @@ export interface StairBurnInput {
 }
 
 /**
- * Lowers the grid under every flight to `STAIR_BURN_M` below its ramp, in a
- * COPY of the elevations: every vertex within half the width plus
- * `BURN_REACH_CELLS` cells of the axis (its ends included), so no triangle
- * under a tread keeps a vertex above it. A vertex beyond the flight's edge
- * with a wall between it and the axis is left alone. NoData stays NoData;
- * nothing is ever raised.
+ * Sets the grid under every flight to `STAIR_BURN_M` below its ramp, in a
+ * COPY of the elevations. Vertices under the flight take the ramp height
+ * whether the DGM lies above it or below — the player walks on this grid,
+ * so a flight onto a structure the DGM lacks must lift it. Vertices beyond
+ * the flight's edge, up to `BURN_REACH_CELLS` cells out (its ends
+ * included), are only lowered, so no triangle under a tread keeps a vertex
+ * above it; one with a wall between it and the axis is left alone. NoData
+ * stays NoData.
  */
 export function burnStairs(input: StairBurnInput): Float32Array {
   const { elevations, n, bounds, stairs } = input;
@@ -277,7 +280,11 @@ export function burnStairs(input: StairBurnInput): Float32Array {
         if (hit.d > half && behindWall(walls, [x, y], [hit.px, hit.py])) {
           continue;
         }
-        out[idx] = Math.min(z, rampAt(stair, hit.s, length) - STAIR_BURN_M);
+        const target = rampAt(stair, hit.s, length) - STAIR_BURN_M;
+        // Under the flight the ground IS the ramp, lifted where the DGM runs
+        // below it (a flight onto a structure the DGM lacks): the player
+        // walks on this grid, not on the steps. Beside it, only lowered.
+        out[idx] = hit.d <= half && !hit.beyond ? target : Math.min(z, target);
       }
     }
   }

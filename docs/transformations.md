@@ -272,10 +272,12 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   the tagged rise wins and the area goes to `terraces_<tile>.geojson` at the
   flight's top level — the Brühlsche Terrasse, 118.3 m over the
   Schlossplatz's 112.2 m. At build, `lib/city/stairs.ts` lifts the ground
-  inside each terrace (`raiseTerraces`, after the wall conflation), then
-  `burnStairs` lowers the terrain under each flight to 12 cm below the ramp
-  through the steps' inner corners — every vertex whose triangles reach
-  under it, never across a wall. `stair-layer.ts` stands the flight as
+  inside each terrace (`raiseTerraces`, after the wall conflation; holes in
+  the OSM area filled), then `burnStairs` sets the terrain under each
+  flight to 12 cm below the ramp through the steps' inner corners — lifting
+  it where the DGM runs below, since the player walks on the grid — and
+  lowers every vertex beside it whose triangles reach under it, never
+  across a wall. `stair-layer.ts` stands the flight as
   sandstone blocks — treads, darker risers, side cheeks down past the
   bottom landing — on the tile owning its middle.
   **Why:** the DGM1 smooths a staircase into a bank (the flight beside the

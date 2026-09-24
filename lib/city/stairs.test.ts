@@ -69,7 +69,7 @@ test("the burn puts the ground under a flight below its ramp", () => {
   expect(el[0]).toBe(grid()[0]); // the input is not mutated
 });
 
-test("the burn never raises the ground, and leaves it alone away from the flight", () => {
+test("over a bank the burn only lowers, and leaves the ground alone away from the flight", () => {
   const el = grid();
   const out = burnStairs({
     elevations: el,
@@ -114,6 +114,29 @@ test("no terrain triangle under a flight keeps a vertex above its tread", () => 
       expect(ground ?? Number.NaN).toBeLessThan(tread);
     }
   }
+});
+
+test("a flight the DGM runs flat under lifts the walkable ground with it", () => {
+  // The Freitreppe case: flat ground, a flight climbing 6 m onto a terrace.
+  const flat = new Float32Array(N * N).fill(100);
+  const lifted: StairLine = { ...FLIGHT, n: 40, z: [100, 106] };
+  const out = burnStairs({
+    elevations: flat,
+    n: N,
+    bounds: BOUNDS,
+    stairs: [lifted],
+  });
+  for (let y = 41; y < 60; y += 2) {
+    const ramp = 100 + ((y - 40) / 20) * 6;
+    const ground = sampleHeightfield(
+      { elevations: out, n: N, bounds: BOUNDS },
+      50,
+      y
+    );
+    expect(ground ?? Number.NaN).toBeGreaterThan(ramp - 1);
+    expect(ground ?? Number.NaN).toBeLessThanOrEqual(ramp);
+  }
+  expect(at(out, 60, 50)).toBe(100); // beside the flight: untouched
 });
 
 test("the burn never reaches across a wall", () => {

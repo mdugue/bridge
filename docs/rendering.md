@@ -104,7 +104,7 @@ is the codebook.
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
 | Wall ribbon | line + `h`, base draped on every loaded terrain | OSM | `wall-layer.ts` |
 | Raised terrace | a `layer` ≥ 1 OSM area a lifted flight lands on: the ground inside lifted to its level `z` at build | OSM (+ tagged steps) | `lib/city/stairs.ts` `raiseTerraces` |
-| Ground under stairs | flight axis + `w` + landings `z`: every vertex within `w`/2 + 1.5 cells lowered to 12 cm below the ramp at build, never across a wall | OSM + DGM1 | `lib/city/stairs.ts` `burnStairs` |
+| Ground under stairs | flight axis + `w` + landings `z`: under the flight set to 12 cm below the ramp (lifted where the DGM runs below — the walkable ground); beside it, out to `w`/2 + 1.5 cells, only lowered, never across a wall | OSM + DGM1 | `lib/city/stairs.ts` `burnStairs` |
 | Steps | `n` treads at z0 + (k+1)·rise across `w`, cheeks down to z0 − 0.6 m; sandstone `0xc4b090`, risers × 0.62, cheeks × 0.8 | OSM + DGM1 | `stair-layer.ts`, `lib/city/stairs.ts` `stairGeometry` |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |

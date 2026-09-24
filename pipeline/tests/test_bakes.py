@@ -264,3 +264,12 @@ def test_only_plain_raised_areas_count_as_terraces():
     assert not is_raised({"other_tags": '"layer"=>"1"', "building": "yes"})
     assert not is_raised({"other_tags": '"layer"=>"1","railway"=>"platform"'})
     assert not is_raised({"other_tags": '"layer"=>"1"', "landuse": "railway"})
+
+
+def test_a_terrace_platform_fills_the_holes_of_its_area():
+    from bake.stairs import platform
+
+    promenade = shapely.Polygon(
+        [(0, 0), (40, 0), (40, 20), (0, 20)], holes=[[(10, 5), (20, 5), (20, 15), (10, 15)]]
+    )
+    assert platform(promenade).area == 800

@@ -307,9 +307,15 @@ def outlines(tile: Tile) -> list:
     return out
 
 
+def platform(area: shapely.Geometry) -> shapely.Geometry:
+    """A raised area's platform: its outer rings, holes filled — the lawns,
+    fountains and monuments cut out of a promenade stand on it too."""
+    return shapely.union_all([shapely.Polygon(p.exterior) for p in shapely.get_parts(area)])
+
+
 def terrace_features(lifted_flights: list[dict]) -> list[dict]:
-    """One terrace per raised area a lifted flight reaches, at the highest
-    top landing of the flights that reach it."""
+    """One terrace per raised area a lifted flight reaches (its platform),
+    at the highest top landing of the flights that reach it."""
     levels: dict[int, tuple[shapely.Geometry, float]] = {}
     for f in lifted_flights:
         area = f["terrace"]
@@ -317,7 +323,7 @@ def terrace_features(lifted_flights: list[dict]) -> list[dict]:
         key = id(area)
         if key not in levels or top > levels[key][1]:
             levels[key] = (area, top)
-    return [feature(geometry_json(a), {"z": round(z, 2)}) for a, z in levels.values()]
+    return [feature(geometry_json(platform(a)), {"z": round(z, 2)}) for a, z in levels.values()]
 
 
 def run(tile: Tile) -> None:

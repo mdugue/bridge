@@ -37,16 +37,20 @@ in the ingest adapter and the Geofabrik extract is already read.
   3 m of a raised OSM area (`layer` ≥ 1; no building, bridge or railway
   area), the tagged rise is taken from the lower landing, and the area is
   written to `terraces_<tile>.geojson` at the flight's top level (the
-  highest, when several reach it).
+  highest, when several reach it) — its outer rings, holes filled: the
+  lawns, fountain and monuments cut out of the promenade stand on the
+  platform too.
 - **Build** (`lib/city/stairs.ts`, after the wall conflation):
   `raiseTerraces` lifts the grid inside each terrace to its level; then
-  `burnStairs` lowers the grid under each flight to 12 cm below the ramp
-  through the steps' inner corners — every vertex within the half width
-  plus 1.5 cells of the axis, its ends included, because each vertex of a
-  triangle under a tread lies within √2 cells of it. It only ever lowers,
-  and never across a wall: a vertex beyond the flight's edge with a wall
-  between it and the axis is left alone, so a flight between walls does
-  not dig into the terrace beyond them.
+  `burnStairs` sets the grid under each flight to 12 cm below the ramp
+  through the steps' inner corners, lifting it where the DGM runs below
+  — the player walks on the grid, not on the steps, so under a lifted
+  flight the ground must climb with it. Beside the flight, every vertex
+  out to half the width plus 1.5 cells (its ends included, because each
+  vertex of a triangle under a tread lies within √2 cells of it) is only
+  lowered, and never across a wall: a vertex with a wall between it and
+  the axis is left alone, so a flight between walls does not dig into the
+  terrace beyond them.
 - **Viewer** (`stair-layer.ts`): each flight is built as stone blocks —
   a tread per step at z0 + (k+1)·rise (the last tread is the top landing),
   a riser at each step's front, and side cheeks reaching 0.6 m below the
@@ -57,8 +61,12 @@ in the ingest adapter and the Geofabrik extract is already read.
 
 ## Consequences
 
-- The player still walks on the terrain, now 12 cm under the ramp — below
-  the eye's noticing; stairs are not colliders.
+- The player walks on the terrain, 12 cm under the ramp — below the eye's
+  noticing; stairs are not colliders. (The first lifted Freitreppe only
+  lowered the ground, so walking up it led underneath the steps.)
+- One level per terrace: the DOM1 puts the Brühlsche Terrasse at 118.3 m
+  in the west and 117.4 m in the east, so the east end sits up to ~1 m
+  high.
 - A flight's heights come from the raw DGM, before the wall conflation;
   where a flight ends at a conflated wall step, its landing and the
   terrain may differ by the wall's feathering.
