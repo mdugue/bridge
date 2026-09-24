@@ -14,7 +14,11 @@ Der Ladebildschirm listet sechs Stufen und einen Balken. Die ersten drei
 (Gebäude, Gelände, Licht) enden an der Marke *begehbar*: Ab da löst sich
 der Vorhang auf, und du kannst dich bewegen, während die übrigen Stufen
 (Bäume und Lampen, Nachbarkacheln, Schienen und Mauern) hinter einer
-kleinen Pille in der Ecke nachladen. *Alles geladen* heißt, alles ist da.
+kleinen Pille oben im Bild nachladen. *Alles geladen* heißt, alles um dich
+herum ist da. Danach lädt der Viewer still weiter, während du dich
+bewegst: Die Stadt wird Kachel für Kachel gestreamt, in deiner Nähe
+detailliert, weiter weg grob (siehe
+[Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
 
 ## Bewegen
 
@@ -52,9 +56,9 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 
 ### Erkunden
 
-- **Minikarte** — der Kachelblock von oben, mit den Landnutzungsfarben und
-  den Gebäudegrundrissen. Deine Position und Blickrichtung sind
-  eingezeichnet; ein Klick teleportiert.
+- **Minikarte** — das ganze Gebiet von oben, mit den Landnutzungsfarben
+  und den Grundrissen der gerade geladenen Gebäude. Deine Position und
+  Blickrichtung sind eingezeichnet; ein Klick teleportiert.
 - **Gehen / Fliegen** — der Bewegungsmodus.
 - **Aussichtspunkte** — fünf handverlesene Standpunkte, zu denen die Kamera
   gleitet: *Carolabrücke* (über dem Fluss), *Elbe-Panorama* (hoch über der
@@ -110,7 +114,7 @@ zurück, sobald du stehst.
 ### Erweitert
 
 - **Werkzeuge** — *Gebäude unter dem Fadenkreuz abreißen* entfernt das
-  Gebäude, das du anschaust (wie `R`); das geht nur auf der Startkachel und
+  Gebäude, das du anschaust (wie `R`), auf jeder Kachel im Blick; das
   lässt sich nicht rückgängig machen. *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und Uhrzeit
@@ -119,8 +123,8 @@ zurück, sobald du stehst.
   bestimmte Ansicht geteilt oder für einen Screenshot reproduziert. Ein
   fehlerhafter Snapshot wird mit einer Meldung abgelehnt, statt die Szene
   zu zerstören.
-- **Statistik** — Anzahl der Gebäude, Geländepunkte, geschätzter
-  Grafikspeicher und die Bildrate.
+- **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
+  Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
 Die Fußzeile nennt die Datenquellen: die sächsische Landesvermessung für
 die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden für Lampen,
@@ -137,6 +141,6 @@ etwas von Ko-fi lädt.
   20:00 im Sommer.
 - Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten* und
   schalte *Tiefenschärfe* aus, um mehr Bilder pro Sekunde zu bekommen.
-- `?scene=lite` in der Adresszeile lädt nur die Startkachel mit groben
-  Schatten. Das ist für automatische Tests gedacht und nicht, wie die
-  Szene aussehen soll.
+- `?scene=lite` in der Adresszeile streamt nur die Startkachel, mit
+  groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
+  die Szene aussehen soll.

@@ -16,9 +16,10 @@ in the south-east. You start on the south-eastern quarter, near the
 Carolabrücke, and can walk at street level or fly above the roofs.
 
 Nothing is installed, nothing is stored about you, and no server computes
-the picture. Your browser downloads a handful of prepared files (about
-10 MB in total) and your own graphics card draws every frame, using a
-library called **three.js**.
+the picture. Your browser downloads prepared files as you move — about
+4 MB for the tile you start on, up to about 17 MB if you visit every
+corner — and your own graphics card draws every frame, using a library
+called **three.js**.
 
 The look is deliberately not photo-realistic. It is a soft, pastel,
 "watercolour on paper" rendering: buildings are matte clay volumes, the
@@ -32,8 +33,8 @@ documented in the [art-direction notes](../../transformations.md).
 flowchart LR
   A["Open geodata<br/>(Saxony + OpenStreetMap)"] --> B["Prepared once, offline<br/>by the maintainer"]
   B --> C["Small per-tile files<br/>stored in the repository"]
-  C --> D["Packaged at build time<br/>(hashed file names)"]
-  D --> E["Your browser<br/>downloads ~10 MB"]
+  C --> D["Packaged at build time<br/>(3D Tiles, hashed file names)"]
+  D --> E["Your browser<br/>streams what the camera sees"]
   E --> F["Your graphics card<br/>draws the city"]
 ```
 
@@ -48,8 +49,8 @@ and each is a mix of measured fact and deliberate simplification.
 
 | Layer | What it shows | Where it comes from | Real or stylised? |
 |---|---|---|---|
-| **Ground** | The shape of the terrain: river banks, the slope up to the Neustadt, embankments | The official 1 m terrain model (**DGM1**) | Real heights, rounded to centimetres. Vertical walls are smoothed into ramps by the source, so the viewer sharpens them again where OpenStreetMap knows a wall |
-| **Ground colours** | Roads grey, paths sand, meadows sage, forest moss, built-up areas pale clay, water blue | The official land-use map (**Basis-DLM**) | Real classification; the colours are a designed pastel palette, not photographs |
+| **Ground** | The shape of the terrain: river banks, the slope up to the Neustadt, embankments | The official 1 m terrain model (**DGM1**) | Real heights, on a grid of about 2 m near you and 4 m further away. Vertical walls are smoothed into ramps by the source, so the project sharpens them again where OpenStreetMap knows a wall |
+| **Ground colours** | Roads grey, paths sand, meadows sage, forest moss, built-up areas pale clay, water blue | The official land-use map (**Basis-DLM**) | Real classification; the colours are a designed pastel palette, painted in your browser, not photographs |
 | **Water** | The Elbe and smaller water bodies, with a gently moving surface and drifting mist | Basis-DLM water areas, laid on the real terrain | Real outline, invented ripples |
 | **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 16,000 buildings and building parts in the four tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
 | **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
@@ -62,8 +63,12 @@ and each is a mix of measured fact and deliberate simplification.
 
 ## How a visit unfolds
 
-The scene is not loaded all at once. Two things happen in sequence, and the
-loading screen shows both:
+The scene is not loaded all at once, and it never has to be loaded
+completely. The city is cut into 2 km tiles, and the viewer **streams**
+them: it fetches what the camera can see, in detail near you and coarser
+further away, and can let go of what you have left far behind. The first
+picture needs only the tile you start on; the loading screen shows the
+rest arriving:
 
 ```mermaid
 flowchart LR
@@ -73,16 +78,19 @@ flowchart LR
   end
   subgraph P2["Phase 2 — streamed while you already walk"]
     direction LR
-    d["Trees and lamps"] --> e["The three neighbouring tiles"] --> f["Rails, bridges, walls"]
+    d["Trees, lamps, rails and walls<br/>of your tile"] --> e["The tiles around you<br/>detailed near, coarse far"]
   end
   P1 --> P2
 ```
 
 Phase 1 ends when the loading screen says *begehbar* ("walkable"): the
 overlay dissolves and you can move. Phase 2 continues in the background; a
-small pill in the corner counts the stages as they arrive. Until the
-neighbours are in, the horizon is deliberately hazy so the missing tiles do
-not read as a cliff edge.
+small pill at the top of the screen counts the stages as they arrive.
+Until everything around you is in, the horizon is deliberately hazy so the
+missing tiles do not read as a cliff edge. After that the streaming simply
+goes on as you move: a distant tile shows its buildings on coarse ground,
+and gets its trees, lamps, rails and walls once you are close enough for
+the detailed ground.
 
 ## What is real, what is not
 
@@ -115,8 +123,8 @@ furniture other than lamps, vehicles, people, vegetation smaller than about
   is new in one dataset may be missing in another. See the edition table in
   [Where the data comes from](./data-sources.md#dataset-editions-in-use).
 - A tile is a 2 km square. At the **seams** between tiles a small step or a
-  colour change can show; the three neighbouring tiles are drawn at lower
-  resolution than the one you stand on.
+  colour change can show, and tiles further away are drawn with coarser
+  ground and without trees, lamps, rails or walls until you come closer.
 - Aerial photos look slightly **sideways** at tall buildings, so a sampled
   roof colour can include a bit of facade. The sampling avoids the edge of
   each roof to reduce this.
