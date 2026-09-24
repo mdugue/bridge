@@ -8,6 +8,7 @@
 
 ## Status
 
+- **Status**: DONE (this branch) — see "Result" at the end.
 - **Priority**: P1 (the maintainer's next direction)
 - **Effort**: L
 - **Risk**: MED — Dresden must build byte-identically after its data moves;
@@ -162,3 +163,31 @@ reviews after phases 1–3 and at the end.
 - A portal is unreachable from the container → write the adapter from the
   documentation, mark it untested in the provider table's comment and in
   the report, and leave the fetch for the maintainer's machine.
+
+## Result (2026-09-24)
+
+- **Dresden unchanged:** after the move to `data/dresden/` the build's
+  `manifest.json` is byte-identical.
+- **Fetched, baked and built in the agent's container** (headless lite
+  shots from every viewpoint): Leipzig (4 tiles), Meißen (1), Grimma (2)
+  from GeoSN; Unna (2) from Geobasis NRW; München (4) from LDBV; Hamburg
+  (4) from LGV with OSM land cover. Sizes of `data/<site>/`: 18–76 MB.
+  Geofabrik was unreachable there, so Leipzig's, Hamburg's and München's
+  OSM layers were baked from BBBike city extracts (local only, nothing
+  committed); Meißen, Grimma and Unna have no lamps/walls yet.
+- **Berlin is configured but not fetched:** `gdi.berlin.de` failed TLS
+  from the container; the adapter follows the ATOM feeds' documented URLs.
+  The block is 3×2 so that both the Brandenburger Tor and the Fernsehturm
+  are in it.
+- **Walk viewpoints** were checked against OSM when chosen and against the
+  fetched data by `bun run site` (none inside a building or on water).
+- **OSM land cover vs. the DLM** on Leipzig's centre tile: 71 % of texels
+  agree (water 95 %, settlement 78 %, roads 55 %).
+- **Two code reviews** (subagents) ran after the pipeline and after the
+  fixes; their findings are fixed (district-cut orthophotos in Hamburg,
+  half-written products counted as done, partial DLM, Berlin URL and
+  extraction bugs, report logic).
+- **Open, for a real GPU:** small black squares in some headless
+  SwiftShader shots (likely a lite-profile artifact of one dressing layer)
+  — look once with `bun run shots` on a real GPU. Brick cities (Hamburg)
+  may want a per-site building tint.
