@@ -4,7 +4,7 @@
  *  1. **Bake** — every artifact the viewer may request (lib/city/tile.ts,
  *     `tileArtifacts`) is either a committed per-tile file under data/ or is
  *     produced here from one (the DGM GeoTIFF → heightfield, see
- *     lib/city/heightfield.ts; the 4096² land-cover rasters → their 2048²
+ *     lib/city/heightfield.ts; the 4096² class rasters → their 2048²
  *     variants, see downsample-raster.ts; CityJSON → the building mesh).
  *     Baked outputs live in `.cache/prepare-data/` (gitignored) with
  *     mtime-based staleness against the inputs AND the bake's own source
@@ -55,7 +55,7 @@ import type { CityJsonDocument } from "../lib/city/types";
 import { bakeCityMesh } from "./bake-city-mesh";
 import { bakeHeightfield } from "./bake-heightfield";
 import { bakeWissenHero } from "./bake-wissen-hero";
-import { downsampleRaster } from "./downsample-raster";
+import { downsampleClassRaster } from "./downsample-raster";
 
 const OUT_DIR = "public/data";
 const CACHE_DIR = ".cache/prepare-data";
@@ -91,15 +91,14 @@ for (const artifact of artifacts) {
 }
 
 // --- bake: downsampled rasters ----------------------------------------------
-// The DLM bake writes 4096² land-cover rasters. A neighbour tile is backdrop
-// and is served at 2048²; phones get 2048² for the primary tile as well (see
-// MOBILE_RASTER_PX) — a quarter of the texture memory per raster. The class
-// raster keeps NEAREST (ids must not blend); the pastel RGB splat (alpha =
-// water coverage) is Lanczos-filtered. Which variants exist is decided by
-// tileArtifacts() (lib/city/tile.ts), not here; HOW they are resampled by
-// scripts/downsample-raster.ts — read its header before touching either.
+// The DLM bake writes 4096² class rasters. A neighbour tile is backdrop and
+// is served at 2048²; phones get 2048² for the primary tile as well (see
+// MOBILE_RASTER_PX) — a quarter of the texture memory per raster (the colour
+// splat the client paints from it follows the class raster's size). NEAREST,
+// so no class ids blend. Which variants exist is decided by tileArtifacts()
+// (lib/city/tile.ts), not here.
 
-/** The bake's own sources: the resampler, and the kernel each variant
+/** The bake's own sources: the resampler, and the sizes each variant
  *  declares. A change to either re-bakes every variant. */
 const RASTER_BAKE_SOURCES = [
   join(process.cwd(), "scripts/downsample-raster.ts"),
@@ -109,8 +108,8 @@ const RASTER_BAKE_SOURCES = [
 async function bakeRasters(): Promise<void> {
   for (const spec of TILE_BLOCK) {
     for (const artifact of Object.values(tileArtifacts(spec))) {
-      const { bakedFrom, raster, resample } = artifact;
-      if (!(bakedFrom && raster && resample) || toPublish.has(artifact.file)) {
+      const { bakedFrom, raster } = artifact;
+      if (!(bakedFrom && raster) || toPublish.has(artifact.file)) {
         continue;
       }
       const source = `data/${bakedFrom.source}/${bakedFrom.file}`;
@@ -124,8 +123,8 @@ async function bakeRasters(): Promise<void> {
         continue;
       }
       mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, await downsampleRaster(src, raster, resample));
-      log(`downsampled ${bakedFrom.file} to ${raster}² (${resample})`);
+      writeFileSync(dest, await downsampleClassRaster(src, raster));
+      log(`downsampled ${bakedFrom.file} to ${raster}² (nearest)`);
     }
   }
 }
@@ -283,20 +282,24 @@ function bakeCityMeshes(): void {
 bakeCityMeshes();
 
 // --- bake: the /wissen picture ---------------------------------------------
-// The block's pastel land-cover splat as one map (scripts/bake-wissen-hero.ts)
-// for the knowledge-base pages, which let next/image size it. Not a viewer
-// artifact: optional, and skipped quietly if a splat is missing.
+// The block's land cover in the viewer's palette as one map
+// (scripts/bake-wissen-hero.ts) for the knowledge-base pages, which let
+// next/image size it. Not a viewer artifact: optional, and skipped quietly
+// if a class raster is missing.
 
 const HERO_FILE = "wissen-hero.webp";
 const HERO_WIDTH = 1600;
-const HERO_BAKE_SOURCES = [join(process.cwd(), "scripts/bake-wissen-hero.ts")];
+const HERO_BAKE_SOURCES = [
+  join(process.cwd(), "scripts/bake-wissen-hero.ts"),
+  join(process.cwd(), "lib/city/landcover.ts"),
+];
 
 async function bakeHero(): Promise<void> {
   const tiles = TILE_BLOCK.map(({ tile }) => tile);
   const rasterOf = (tile: string) =>
-    join(process.cwd(), `data/dlm/landcover_rgb_${tile}.png`);
+    join(process.cwd(), `data/dlm/landcover_${tile}.png`);
   if (!tiles.every((tile) => existsSync(rasterOf(tile)))) {
-    log("land-cover splat missing, skipping the /wissen picture");
+    log("land-cover raster missing, skipping the /wissen picture");
     return;
   }
   const dest = join(process.cwd(), CACHE_DIR, HERO_FILE);

@@ -23,14 +23,14 @@ test("the artifact map reproduces the served file names", () => {
   );
   expect(a.walls.file).toBe("walls_33412_5656_2_sn.geojson");
   expect(a.ndvi.file).toBe("ndvi_33412_5656_2_sn.png");
-  expect(a.landcoverRgb.file).toBe("landcover_rgb_33412_5656_2_sn.png");
+  expect("landcoverRgb" in a).toBe(false);
 });
 
-test("exactly ten artifacts are required", () => {
+test("exactly eight artifacts are required", () => {
   const required = Object.values(tileArtifacts(primary)).filter(
     (a) => a.required
   );
-  expect(required).toHaveLength(10);
+  expect(required).toHaveLength(8);
 });
 
 test("land-cover rasters: the primary serves the bake, phones a 2048² variant", () => {
@@ -45,8 +45,7 @@ test("land-cover rasters: the primary serves the bake, phones a 2048² variant",
     file: "landcover_33412_5656_2_sn.png",
     source: "dlm",
   });
-  expect(a.landcoverLow.resample).toBe("nearest");
-  expect(a.landcoverRgbLow.resample).toBe("lanczos3");
+  expect(a.landcoverLow.raster).toBe(2048);
   // A neighbour is already served at 2048²: the low variant IS its raster.
   const neighbour = tileArtifacts({
     tile: "33410_5656_2_sn",
@@ -69,9 +68,6 @@ test("tileUrlsFrom prefixes the /data route and serves phones the low rasters", 
   );
   const phone = tileUrlsFrom(primary, null, true);
   expect(phone.landcover).toBe("/data/landcover_33412_5656_2_sn.r2048.png");
-  expect(phone.landcoverRgb).toBe(
-    "/data/landcover_rgb_33412_5656_2_sn.r2048.png"
-  );
   expect(phone.ndvi).toBe(desktop.ndvi);
 });
 

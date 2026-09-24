@@ -25,29 +25,14 @@ export interface WaterLayer {
   update: (seconds: number, skyColor: Color) => void;
 }
 
-/** The splat texture the water mask samples, plus which channel it carries. */
-interface WaterMask {
-  /** true when `texture` is the RGBA colour splat (alpha = water coverage) */
-  hasColor: boolean;
-  texture: Texture;
-}
-
 /**
- * Water coverage at a splat uv, as a GLSL helper over the bound `uSplat`.
- *
- * The RGBA splatmap's ALPHA channel is a pre-blurred coverage field sampled
- * LINEAR + mipmapped + anisotropic, so the shoreline is hardware anti-aliased.
- * When that bake is missing we fall back to the NEAREST class-id raster and
- * test the water class (8) exactly — a stair-stepped but CORRECT bank. Reading
- * `.a` off the class PNG instead would decode to 1 everywhere and drown the
- * whole tile in water and mist.
+ * Water coverage at a splat uv, as a GLSL helper over the bound `uSplat`: the
+ * ALPHA channel of the palette-painted colour splat (landcover-splat.ts), a
+ * soft coverage field sampled LINEAR + mipmapped + anisotropic, so the
+ * shoreline is hardware anti-aliased.
  */
-function waterCoverageGlsl(hasColorMask: boolean): string {
-  const body = hasColorMask
-    ? "return texture2D( uSplat, uv ).a;"
-    : "return 1.0 - step( 0.5, abs( floor( texture2D( uSplat, uv ).r * 255.0 + 0.5 ) - 8.0 ) );";
-  return `float waterCoverage( vec2 uv ) { ${body} }`;
-}
+const WATER_COVERAGE =
+  "float waterCoverage( vec2 uv ) { return texture2D( uSplat, uv ).a; }";
 
 // Drifting river haze as a SINGLE masked sheet sharing the Z-up terrain geometry
 // (the right tool — thousands of particles over a river is not). A scrolling
@@ -69,14 +54,14 @@ const MIST_VERT = /* glsl */ `
     gl_Position = projectionMatrix * modelViewMatrix * vec4( raised, 1.0 );
   }
 `;
-const mistFragment = (hasColorMask: boolean) => /* glsl */ `
+const MIST_FRAG = /* glsl */ `
   varying vec2 vSplatUv;
   varying vec2 vMistXY;
   uniform sampler2D uSplat;
   uniform float uTime;
   uniform vec3 uSkyTint;
   uniform float uStrength;
-  ${waterCoverageGlsl(hasColorMask)}
+  ${WATER_COVERAGE}
   float mistHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
   float mistNoise( vec2 p ) {
     vec2 i = floor( p );
@@ -113,7 +98,7 @@ const mistFragment = (hasColorMask: boolean) => /* glsl */ `
 
 function createWaterMist(
   geometry: BufferGeometry,
-  mask: WaterMask,
+  mask: Texture,
   origin: number[],
   size: number[],
   uTime: { value: number },
@@ -122,7 +107,7 @@ function createWaterMist(
   const uStrength = { value: LOOK_DEFAULTS.waterMist };
   const material = new ShaderMaterial({
     uniforms: {
-      uSplat: { value: mask.texture },
+      uSplat: { value: mask },
       uTime,
       uOrigin: { value: origin },
       uSize: { value: size },
@@ -130,7 +115,7 @@ function createWaterMist(
       uStrength,
     },
     vertexShader: MIST_VERT,
-    fragmentShader: mistFragment(mask.hasColor),
+    fragmentShader: MIST_FRAG,
     transparent: true,
     depthWrite: false,
   });
@@ -197,20 +182,13 @@ export function createWaterLayer(
     polygonOffsetUnits: -1,
   });
 
-  // Prefer the LINEAR + mipmapped + anisotropic colour splat's ALPHA channel
-  // for water coverage — the GPU anti-aliases the shoreline at grazing angles,
-  // unlike the NEAREST class raster which stair-stepped. See waterCoverageGlsl.
-  const mask: WaterMask = splat.colorTexture
-    ? { texture: splat.colorTexture, hasColor: true }
-    : { texture: splat.texture, hasColor: false };
-  // The emitted GLSL branches on `mask.hasColor` and on `heightFog`, but three
-  // keys its program cache on `onBeforeCompile.toString()` — identical for
-  // every tile's material. Without this key a tile whose colour splat failed
-  // to load could be handed another tile's compiled program.
-  material.customProgramCacheKey = () =>
-    `water-${mask.hasColor}-${heightFog !== undefined}`;
+  // The colour splat's ALPHA channel is the water coverage (see WATER_COVERAGE).
+  const mask = splat.colorTexture;
+  // The emitted GLSL branches on `heightFog`, but three keys its program cache
+  // on `onBeforeCompile.toString()` — identical for every tile's material.
+  material.customProgramCacheKey = () => `water-${heightFog !== undefined}`;
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.uSplat = { value: mask.texture };
+    shader.uniforms.uSplat = { value: mask };
     shader.uniforms.uTime = uTime;
     shader.uniforms.uOrigin = { value: origin };
     shader.uniforms.uSize = { value: size };
@@ -253,11 +231,10 @@ export function createWaterLayer(
          uniform vec3 uSunColor;
          uniform float uFresnel;
          uniform float uGlitter;
-         ${waterCoverageGlsl(mask.hasColor)}`
+         ${WATER_COVERAGE}`
       )
-      // A widened, feathered band dissolves the bank instead of stair-stepping
-      // (a no-op on the binary class-raster fallback). Then a view-angle Fresnel
-      // tints toward the sky colour.
+      // A widened, feathered band dissolves the bank instead of stair-stepping.
+      // Then a view-angle Fresnel tints toward the sky colour.
       .replace(
         "#include <map_fragment>",
         `#include <map_fragment>

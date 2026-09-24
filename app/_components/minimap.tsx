@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { landcoverSrgb } from "@/lib/city/landcover";
 import {
   epsgToMapPx,
   type FootprintPoly,
@@ -19,23 +20,10 @@ const INK_FILL = "rgba(50, 53, 62, 0.35)";
 const FRAME = "rgba(50, 53, 62, 0.25)";
 const PLAYER = "#2563eb";
 
-// Muted map tints per land-cover class id (see scripts/extract-dlm.sh), a touch
-// lighter than the 3D palette so the ink footprints stay legible on top.
-const MAP_PALETTE: [number, number, number][] = [
-  [230, 224, 209], // 0 background  warm pale taupe
-  [197, 211, 170], // 1 farmland    soft sage
-  [150, 176, 138], // 2 forest      muted moss
-  [175, 195, 158], // 3 copse       light moss
-  [228, 219, 203], // 4 built-up    warm pale clay
-  [197, 183, 178], // 5 railway     dusty mauve
-  [224, 205, 168], // 6 path        pale warm sand
-  [200, 200, 206], // 7 road        soft grey-lavender
-  [164, 192, 209], // 8 water       dusty blue
-];
-
 /**
- * Recolors the class-id splatmap into a small map-tinted canvas. NEAREST
- * sampling (smoothing off) keeps class boundaries crisp under downscaling.
+ * Recolors the class-id raster into a small canvas in the viewer's palette
+ * (lib/city/landcover.ts). NEAREST sampling (smoothing off) keeps class
+ * boundaries crisp under downscaling.
  */
 function colorizeLandcover(
   img: HTMLImageElement,
@@ -53,7 +41,7 @@ function colorizeLandcover(
   const image = ctx.getImageData(0, 0, size, size);
   const { data } = image;
   for (let i = 0; i < data.length; i += 4) {
-    const tint = MAP_PALETTE[data[i]] ?? MAP_PALETTE[0];
+    const tint = landcoverSrgb(data[i]);
     data[i] = tint[0];
     data[i + 1] = tint[1];
     data[i + 2] = tint[2];

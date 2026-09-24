@@ -1,16 +1,14 @@
 /**
- * The picture on the /wissen pages: the tile block's pastel land-cover splat
- * (the ground the viewer paints, from the Basis-DLM) as one map of the city,
- * so the knowledge base opens on the project's own data rather than on a
- * stock image. Baked by scripts/prepare-data.ts next to the viewer's data and
- * published under a content-hashed name like every other artifact; the pages
- * hand it to next/image, which serves the widths they need.
- *
- * The splat's alpha channel is water COVERAGE (see downsample-raster.ts), so
- * alpha is dropped before any resize – kept, it would turn every land texel
- * transparent or, through sharp's premultiplied resize, black.
+ * The picture on the /wissen pages: the tile block's land cover (the ground
+ * the viewer paints, from the Basis-DLM) in the viewer's own palette
+ * (lib/city/landcover.ts), as one map of the city, so the knowledge base
+ * opens on the project's own data rather than on a stock image. Baked by
+ * scripts/prepare-data.ts next to the viewer's data and published under a
+ * content-hashed name like every other artifact; the pages hand it to
+ * next/image, which serves the widths they need.
  */
 import sharp from "sharp";
+import { landcoverSrgb } from "../lib/city/landcover";
 
 /** Where a tile sits in the block: easting grows east, northing north. */
 function gridOf(tiles: readonly string[]) {
@@ -28,9 +26,25 @@ function gridOf(tiles: readonly string[]) {
   }));
 }
 
+/** A class raster painted in the palette, as a raw RGB image. */
+async function paint(classRaster: string) {
+  const { data, info } = await sharp(classRaster)
+    .removeAlpha()
+    .toColourspace("b-w")
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const rgb = new Uint8Array(info.width * info.height * 3);
+  for (let i = 0; i < data.length; i++) {
+    rgb.set(landcoverSrgb(data[i]), i * 3);
+  }
+  return sharp(rgb, {
+    raw: { width: info.width, height: info.height, channels: 3 },
+  });
+}
+
 /**
- * The block as a square WebP `size` px wide. `rasterOf(tile)` is the RGB
- * splat of that tile (any edge; each is scaled to its cell).
+ * The block as a square WebP `size` px wide. `rasterOf(tile)` is the class
+ * raster of that tile (any edge; each is scaled to its cell).
  */
 export async function bakeWissenHero(
   tiles: readonly string[],
@@ -42,14 +56,9 @@ export async function bakeWissenHero(
   const cell = Math.round(size / cols);
   const layers = await Promise.all(
     grid.map(async ({ tile, col, row }) => {
-      // Alpha off first, on the full-size raster: no resize has seen it yet.
-      const { data, info } = await sharp(rasterOf(tile))
-        .removeAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-      const input = await sharp(data, {
-        raw: { width: info.width, height: info.height, channels: 3 },
-      })
+      const input = await (
+        await paint(rasterOf(tile))
+      )
         .resize(cell, cell, { kernel: "lanczos3", fit: "fill" })
         .png()
         .toBuffer();

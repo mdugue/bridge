@@ -544,7 +544,7 @@ async function bootApp(
       onBytes,
       url: tile.heightfieldHeader,
       landcoverUrl: tile.landcover,
-      landcoverRgbUrl: tile.landcoverRgb,
+      renderer,
       ndviUrl: tile.ndvi,
       // Retaining/city walls are burned into THIS tile's heightfield as steps so
       // the ground breaks at the wall instead of the DGM's smooth bank.

@@ -123,54 +123,9 @@ if [ -f "$SRC/veg04_l.shp" ]; then
   echo "wrote $VEGROWS"
 fi
 
-# --- pastel RGBA splatmap (the version the terrain + water actually sample) --
-# RGB = curated pastel palette; A = water coverage. Both blurred only lightly:
-# the terrain and water sample this with LINEAR + mipmaps + anisotropy, so the
-# GPU anti-aliases boundaries at grazing angles (no NEAREST stair-steps) WITHOUT
-# needing heavy pre-blur — keeping roads crisp. The water plane reads coverage
-# from the alpha channel and smoothsteps it for a clean, straight shoreline.
-#
-# Tune crispness with LANDCOVER_BLUR (px @ ${RES}); water edge with WATER_BLUR:
-#   LANDCOVER_BLUR=0.4 WATER_BLUR=1.2 bash scripts/extract-dlm.sh 33412_5656
-BLUR="${LANDCOVER_BLUR:-0.3}"
-WBLUR="${WATER_BLUR:-1.0}"
-RGB="$OUTDIR/landcover_rgb_${TILE}_${SUFFIX}.png"
-python3 - "$OUTDIR/$NAME.png" "$RGB" "$BLUR" "$WBLUR" <<'PY'
-import sys
-from PIL import Image, ImageFilter
-src, dst, blur, wblur = (
-    sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
-)
-# Curated pastel earth-tone palette (high value, low saturation, analogous)
-PAL = {
-    0: (230, 224, 209),  # background  warm pale taupe
-    1: (197, 211, 170),  # farmland    soft sage
-    2: (150, 176, 138),  # forest      muted moss
-    3: (175, 195, 158),  # copse       light moss
-    4: (228, 219, 203),  # built-up    warm pale clay
-    5: (178, 169, 160),  # railway     warm ballast grey (tracks/decks drawn on top)
-    6: (224, 205, 168),  # path        pale warm sand
-    7: (200, 200, 206),  # road        soft grey-lavender
-    8: (164, 192, 209),  # water       dusty blue
-}
-cls = Image.open(src).convert("L")
-# Vectorised palette map (C-level, fast at 4096²): build a 256-entry palette,
-# unknown ids fall back to the background tint; alpha = water (class 8) coverage.
-flat = []
-for i in range(256):
-    flat.extend(PAL.get(i, PAL[0]))
-pal_img = Image.frombytes("P", cls.size, cls.tobytes())
-pal_img.putpalette(flat)
-rgb = pal_img.convert("RGB")
-alpha = cls.point(lambda c: 255 if c == 8 else 0, mode="L")
-if blur > 0:
-    rgb = rgb.filter(ImageFilter.GaussianBlur(blur))
-if wblur > 0:
-    alpha = alpha.filter(ImageFilter.GaussianBlur(wblur))
-rgb.putalpha(alpha)
-rgb.save(dst)
-print(f"wrote {dst} (rgb blur {blur}, water blur {wblur})")
-PY
+# No colour is baked here: the client paints the class ids with the palette in
+# lib/city/landcover.ts (the terrain on the GPU, app/_components/landcover-
+# splat.ts, which also derives the soft water coverage the water sheet reads).
 
 cat > "$OUTDIR/$NAME.json" <<JSON
 {
