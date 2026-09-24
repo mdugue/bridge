@@ -18,7 +18,20 @@ open-geodata portal, [geodaten.sachsen.de](https://www.geodaten.sachsen.de/).
 All of them are cut into the same **2 km × 2 km tiles**, which is why the
 viewer thinks in tiles too. Which tiles it shows is written down in one
 place, the site config `sites/dresden.ts`: the four tiles (the first is the
-one you start on), the viewpoints and the credits.
+one you start on) and the viewpoints; the credits come from the provider.
+
+**Other places, other providers.** Every German state runs its own survey
+office, and the viewer can draw on five of them: GeoSN for Dresden,
+Leipzig, Meißen and Grimma; **Geobasis NRW** for Unna; the **Bavarian
+survey administration (LDBV)** for Munich; Hamburg's **LGV**; and Berlin's
+**Senate department for urban development**. They publish the same kinds
+of datasets in different cuts — 1 km tiles, one archive for the whole
+city, aerial photos without the infrared band — and a small adapter per
+office cuts them into the viewer's 2 km tiles. Hamburg and Berlin do not
+publish the landscape model in the form the viewer reads, so their ground
+colours come from OpenStreetMap instead. Which site a build shows is set by
+one variable, `SITE`; the list of offices with their licences is in
+`sites/providers.ts`.
 
 **OpenStreetMap (OSM)** — the world map maintained by volunteers. It fills
 gaps the official datasets leave: street lamps, station platforms,
@@ -192,7 +205,9 @@ publishes, for every tile and product, a currency field ("Stand") through
 the download service behind its portal; the values below were read from it
 on 2026-09-22 and match the metadata files shipped in the tile ZIPs. The
 machine-readable version, with the download link of every file, is
-[`data/provenance.json`](../../../data/provenance.json). "Committed" is the
+[`data/dresden/provenance.json`](../../../data/dresden/provenance.json).
+The editions below are Dresden's; another site's are read from the same
+kind of service when its data is fetched. "Committed" is the
 date a file entered the repository; the download happened on or shortly
 before it.
 
@@ -232,13 +247,14 @@ the "Stand" of each tile. The folders are per product and format:
 | Basis-DLM (Shape, statewide, 1.23 GB) | `…/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip` | [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html) |
 
 `…` stands for `https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/`.
-The folder tokens can rotate; the durable index is the download service
-described in [data-pipeline.md](../../data-pipeline.md#provenance), which
-lists the current link and "Stand" for any tile. `bun run bake --ingest`
-uses that service to fetch the surface model and the aerial photo of each
-tile, and fetches the statewide Basis-DLM package and the OpenStreetMap
-extract as well; the DGM1 and the LoD2 are committed and downloaded by
-hand. OpenStreetMap data now comes only from the Geofabrik Saxony extract
+The folder tokens can rotate; the download service described in
+[data-pipeline.md](../../data-pipeline.md#provenance) lists the "Stand" for
+any tile, and GeoSN's batch-download page carries the current tokens.
+`bun run fetch` reads those tokens from the batch page and fetches every
+product of each tile — terrain, surface model, building model (converted
+to CityJSON on the way), aerial photo — plus the statewide Basis-DLM
+package and the OpenStreetMap extract. Dresden's terrain and building
+models are committed as they were first downloaded. OpenStreetMap data now comes only from the Geofabrik Saxony extract
 (`sachsen-latest.osm.pbf`); the committed lamp, platform and
 bridge-structure files still date from earlier Overpass API queries.
 
@@ -247,7 +263,11 @@ bridge-structure files still date from earlier Overpass API queries.
 | Source | Licence | Required credit |
 |---|---|---|
 | GeoSN datasets (DGM1, DOM1, LoD2, Basis-DLM, DOP) | *Datenlizenz Deutschland – Namensnennung – Version 2.0* (`dl-de/by-2-0`), per GeoSN's [terms of use](https://www.landesvermessung.sachsen.de/allgemeine-nutzungsbedingungen-8954.html) (checked 2026-09-22) | "Quelle: GeoSN, dl-de/by-2-0" |
+| Geobasis NRW (Unna) | *Datenlizenz Deutschland – Zero – Version 2.0* (`dl-de/zero-2-0`): no credit required | given anyway: "Geobasis NRW, dl-de/zero-2-0" |
+| Bavarian survey administration (Munich) | *CC BY 4.0* | "Bayerische Vermessungsverwaltung – www.geodaten.bayern.de, CC BY 4.0" |
+| LGV Hamburg | `dl-de/by-2-0` | "Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung (LGV), dl-de/by-2-0" |
+| Geoportal Berlin | `dl-de/zero-2-0`: no credit required | given anyway: "Geoportal Berlin, dl-de/zero-2-0" |
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
 
-The viewer shows both credits in the footer of its settings panel. The
-derived lamp and wall files carry the OSM credit inside the file as well.
+The viewer shows the credit of the site's provider and the OSM credit in
+the footer of its settings panel. The derived lamp and wall files carry the OSM credit inside the file as well.

@@ -42,7 +42,14 @@ visual-variable codebook is in
   with. The minimap and the `/wissen` picture use the same table; a colour
   change is a look change, not a re-bake
   ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)).
-  `terrain-layer.ts`.
+  `terrain-layer.ts`. **Fallback: OpenStreetMap** where the provider
+  publishes no Basis-DLM in the Shape profile (Hamburg, Berlin):
+  `pipeline/bake/landcover_osm.py` writes the same class raster, legend and
+  hedge / tree-row lines from `landuse`/`natural`/`leisure` areas, buildings
+  and amenity areas (as settlement, burned first because OSM nests the green
+  inside it), buffered highways, waterways and rail. On Leipzig's centre
+  tile 71 % of texels agree with the DLM raster — water 95 %, settlement
+  78 %, roads 55 % ([ADR 0028](./adr/0028-sites-providers-and-per-site-data.md)).
 - **Meadow NDVI tint** (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
   DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
   shifts the pastel sage lush deep-green↔dry hay. In the terrain fragment shader

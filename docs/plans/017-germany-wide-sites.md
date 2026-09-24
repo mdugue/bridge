@@ -23,9 +23,23 @@
   folds in option 6 (bake runner + provenance) in `docs/plans/README.md`
 - **Category**: portability / data pipeline
 - **Planned at**: commit `cf8602a`, 2026-09-23
-- **Status**: PARTIAL. Phases 1 and 2 are done for Saxony, in a different
-  shape than written below (see "Progress"). Phase 3 is half done, Phase 4
-  and the NRW adapter are open, and Phase 5 is partial.
+- **Status**: PARTIAL. Phases 1, 2, 4 and 5 are done (see both "Progress"
+  sections — the shape differs from what is written below). Open: NAS
+  input (phase 3) and OSM rails / bridge decks for providers without a DLM.
+
+## Progress, second round (plan 023)
+
+[Plan 023](./023-many-sites-one-env-var.md) and
+[ADR 0028](../adr/0028-sites-providers-and-per-site-data.md) finished most
+of what is open below, in a different shape again: a typed `Provider` per
+Land instead of `Site.ingest`; `bun run fetch` with one adapter per
+provider — Saxony, NRW, Bavaria, Hamburg (tested), Berlin (untested) — that
+also fetches the DGM1 and the LoD2 (CityGML converted in-house, no
+citygml-tools/cjio); per-site data in `data/<site>/`, downloads per
+provider; OSM land cover where the Basis-DLM is not open as Shape (phase 4,
+tracks and decks excepted); `bun run site` (phase 5's `site:check`);
+tests over every site. Still open: NAS input (phase 3), OSM rails and
+bridge decks.
 
 ## Progress (2026-09-24, branch `claude/architecture-review-redesign-kddx6u`)
 

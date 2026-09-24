@@ -48,12 +48,13 @@ history. Decisions that came out of plans are written up as
 | 014 | Bring AGENTS.md, the skill, `docs/`, comments and the OSM attribution in line with the code | DONE | [completed.md](./completed.md#014--knowledge-base-currency--done) |
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0023 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
-| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **PARTIAL** — phases 1–2 done for Saxony (site config in TS, Python bakes, `ingest_sn`); 3 half; 4 (OSM land cover), NRW, 5 (rest) open | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
+| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **PARTIAL** — phases 1, 2, 4 and 5 done through plan 023 (providers for SN, NW, BY, HH, BE; OSM land cover; `bun run site`); open: NAS input (phase 3), OSM rails/bridges without a DLM | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
 | 019 | Verify and tune the 3D Tiles branch on a real GPU (palette, quantisation, LOD, seams, shadows, frame time, phones, deploy host) | **TODO** — needs a GPU | [019-gpu-verification.md](./019-gpu-verification.md) |
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | **IN PROGRESS** — Phase 0 spike done (look matches; WebGPU 40–80 % faster than today, WebGL2 backend on par but stalls while compiling); gate awaits the maintainer | [020-webgpu-tsl.md](./020-webgpu-tsl.md) |
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
 | 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
+| 023 | Many sites, one env var: `SITE` in `.env.local`, providers, per-site data, `bun run fetch` → `bake` → build, eight sites with viewpoints | **DONE** (this branch) — Berlin's adapter untested; committing sites other than Dresden is the maintainer's call | [023-many-sites-one-env-var.md](./023-many-sites-one-env-var.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -64,10 +65,10 @@ S/M/L.
 1. **Plan 019 (S–M, GPU) — first.** The 3D Tiles branch (ADRs 0023–0026)
    was verified headless only; look at it on a real GPU, tune the LOD and
    cache knobs, check phones and the deploy host.
-2. **Plan 017, the rest (M).** OSM land cover as a DLM substitute (now a
-   class raster only), the NRW adapter and a second site, `site:check`.
-   Run the OSM bakes once against a Geofabrik extract (unreachable from
-   the environment that ported them).
+2. **Plan 017, the rest (S–M).** OSM rails and bridge decks for providers
+   without a DLM (Hamburg, Berlin), a NAS reader for Hamburg's open
+   Basis-DLM, and a first run of Berlin's adapter. Decide which sites to
+   commit and deploy (plan 023, ADR 0028).
 3. **Plan 020 (L, GPU-gated).** WebGPU + TSL; removes every
    `onBeforeCompile` patch, two post libraries and plan 008 step 7.
 4. **Plan 008, steps 5–7 (S).** The coverage artifact; the remaining

@@ -8,34 +8,38 @@ see [portability.md](./portability.md).
 
 ```mermaid
 flowchart LR
-  PROV["provider downloads<br/>GeoSN · Geofabrik"] -->|"bun run bake --ingest<br/>ingest adapter, per Land"| RAW["data/_raw/dresden/<br/>(gitignored)"]
-  RAW -->|"bun run bake<br/>pipeline/bake (Python, uv)"| DER["data/dlm · data/dop<br/>committed derivatives"]
-  COM["data/dgm · data/cityjson<br/>(committed sources)"] --> DER
+  PROV["provider portals<br/>GeoSN · NRW · LDBV · LGV · Berlin · Geofabrik"] -->|"bun run fetch<br/>adapter per provider"| RAW["data/_raw/&lt;provider&gt;/<br/>(gitignored, shared)"]
+  PROV -->|"bun run fetch<br/>compact DGM · CityGML→CityJSON"| COM["data/&lt;site&gt;/dgm · cityjson<br/>(build sources)"]
+  RAW -->|"bun run bake<br/>pipeline/bake (Python, uv)"| DER["data/&lt;site&gt;/dlm · dop<br/>derived"]
+  COM --> DER
   COM --> PUB
   DER -->|"scripts/prepare-data.ts<br/>bun dev · bun build"| PUB["public/data/<br/>3D Tiles tileset + manifest.json"]
   PUB -->|"3DTilesRendererJS<br/>tile-stream.ts"| APP["app/_components/*<br/>dressing"]
 ```
 
-Two stages, one language each ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)):
-**Python** turns provider downloads into the small per-tile files committed
-under `data/`, and runs by hand; **TypeScript** turns `data/` into the
-tileset the browser streams, and runs on every `bun dev` / `bun build`.
+Two languages, three stages ([ADR 0025](./adr/0025-bakes-are-one-python-package.md),
+[ADR 0028](./adr/0028-sites-providers-and-per-site-data.md)): **Python**
+fetches (`bun run fetch`) and bakes (`bun run bake`) — by hand, per site;
+**TypeScript** turns `data/<site>/` into the tileset the browser streams,
+on every `bun dev` / `bun build`.
 
-## Sites and tiles
+## Sites, providers and tiles
 
 Everything about a place that is not data lives in one site config
 ([ADR 0026](./adr/0026-one-site-config-per-build.md)): `sites/<id>.ts`,
-typed by `lib/city/site.ts`, picked at build time by `SITE=<id>` (default
-`dresden`; the registry is `sites/index.ts`, and `next.config.ts` inlines
-the id for the client as `NEXT_PUBLIC_SITE`). The bakes and the build step
-read the same registry, so the HUD and the data always describe one place.
+typed by `lib/city/site.ts`, registered in `sites/index.ts` and picked by
+`SITE=<id>` — from `.env.local` (Bun loads it for every script, Next for
+dev and build), or the host's environment in a deployment; default
+`dresden`. `next.config.ts` inlines the id for the client as
+`NEXT_PUBLIC_SITE`. A site names its **provider** (`sites/providers.ts`):
+the Land's CRS (25832 or 25833), licence and credit, open products and
+OSM extract ([ADR 0028](./adr/0028-sites-providers-and-per-site-data.md)).
 
-A site lists its tiles as `{e, n}` cells — the south-west corner in km of
-the site's grid (`tileKm`) in its CRS (`epsg`, 25832 or 25833). The **first
-tile is the spawn tile**; the order of the rest does not matter.
-`tileIdOf` names a cell `<UTM zone><e>_<n>_<tileKm><tileSuffix>`, the
-scheme Saxony's downloads use, and every file name under `data/` carries
-that id; `tileExtentOf` gives its extent. Dresden:
+A site lists its tiles as `{e, n}` cells — the south-west corner in km,
+2 km edge (`TILE_KM`), in the provider's CRS. The **first tile is the
+spawn tile**; the order of the rest does not matter. `tileIdOf` names a
+cell `<UTM zone><e>_<n>_2<tileSuffix>`, and every file name under
+`data/<site>/` carries that id; `tileExtentOf` gives its extent. Dresden:
 
 ```
         N
@@ -54,93 +58,106 @@ role beyond "where you start": which tile is detailed is decided by camera
 distance at runtime ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)),
 and collision, demolish and picking work on every loaded tile. Two further
 DGM tiles (`33414_5656`, `33414_5658`, ~28 MB) are committed under
-`data/dgm/` but belong to no site; keeping or dropping them is a
-maintainer decision (recorded in [plans/README.md](./plans/README.md)).
+`data/dresden/dgm/` but belong to no tile of the site; keeping or dropping
+them is a maintainer decision (recorded in [plans/README.md](./plans/README.md)).
 
-## Stage 1 — the bakes (`pipeline/`, `bun run bake`)
+`bun run site` prints where the current site stands — per tile, the files
+the build needs that are missing, the optional ones that are off, and the
+command to run next — and checks each walk viewpoint against the data (not
+inside a building footprint, not on water). `bun run site --all` lists
+every site with its size on disk.
+
+## Stage 1 — fetch and bake (`pipeline/`)
 
 `pipeline/` is a [uv](https://docs.astral.sh/uv/) project:
-`pipeline/pyproject.toml` pins numpy, rasterio, pyogrio, shapely, pyproj
-and Pillow exactly (Python 3.12–3.13), `pipeline/uv.lock` locks the rest.
-GDAL comes inside the rasterio and pyogrio wheels, with the OSM driver —
-there is no system GDAL, no `gdal_calc.py` and no bash. `uv` on `PATH` is
+`pipeline/pyproject.toml` pins numpy, rasterio, pyogrio, shapely, pyproj,
+Pillow and zipfile-deflate64 exactly (Python 3.12–3.13), `pipeline/uv.lock`
+locks the rest. GDAL comes inside the rasterio and pyogrio wheels, with the
+OSM driver — there is no system GDAL, no Java, no bash. `uv` on `PATH` is
 the whole setup; `uv run` creates the environment on first use.
 
 ```bash
+bun run fetch                       # download what the site needs (skips what is there)
+bun run fetch 33316_5690_2_sn       # one tile
 bun run bake                        # every tile of the site, every step
 bun run bake 33412_5656_2_sn        # one tile
-bun run bake --ingest               # fetch the raw inputs first (ingest adapter)
 bun run bake --step canopy          # one step: landcover, canopy, ndvi,
                                     #   roof-colour, lamps, walls, rail
 bun run test:pipeline               # pytest + ruff check + ruff format --check
 ```
 
-`scripts/bake.ts` reads the site and, per tile, runs
-`uv run --project pipeline python -m bake <step> --tile … --bounds … --epsg
-… --raw data/_raw/<site> --data data` — the extent and CRS come from the
-site, never from the tile name. With `--ingest` it first runs the site's
-adapter, `python -m bake.ingest_<site.ingest>`. The modules in
-`pipeline/bake/`:
+`scripts/pipeline.ts` turns the site into one JSON spec (provider, CRS,
+products, the raw and data folders, the OSM extract, every tile's id and
+extent) and runs `uv run --project pipeline python -m bake {fetch|bake}
+--spec …`; `bake/spec.py` parses it. The extent and CRS come from the site,
+never from the tile name. The modules in `pipeline/bake/`:
 
 | Module | Role |
 |---|---|
-| `__main__.py` | the step table and CLI; `all` runs the steps in dependency order |
-| `common.py` | `Tile` (id, extent, CRS, raw and data folders), reading vector layers without geopandas, the GeoJSON writer |
+| `__main__.py` | the CLI; `bake` runs the steps in dependency order, `fetch` the fetch |
+| `spec.py` | the site spec from `scripts/pipeline.ts` |
+| `common.py` | `Tile` (id, extent, CRS, raw and data folders, the OSM extract, the provider's products), the DLM layers the bakes read, reading vector layers without geopandas, the GeoJSON writer |
+| `fetch.py` | the fetch: calls the provider's adapter per product and tile, skips what exists, writes the results into place |
+| `providers/{sn,nw,by,hh,be}.py` | one adapter per provider: `dgm`, `dom`, `dop`, `lod2` return the provider's own files covering a tile; `dlm` fills `dlm/` |
+| `rasters.py` | mosaics a provider's rasters over a tile at 1 m / 20 cm; the DGM compact (DEFLATE, float predictor, centimetres) |
+| `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre |
+| `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
 | `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS |
-| `landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`, `rail.py` | one step each (table below) |
-| `ingest_sn.py` | the Saxony ingest adapter |
+| `landcover.py`, `landcover_osm.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`, `rail.py` | one step each (table below); `landcover_osm.py` stands in for the DLM where a provider has none |
 
-`pipeline/tests/test_bakes.py` covers the pure helpers (line merging, deck
-outlines, wall heights, coordinate rounding, the class ids the client's
-palette is keyed by). CI's `pipeline` job runs it with ruff after
-`uv sync --locked`. The bakes themselves need the raw downloads and run on
-the maintainer's machine.
+`pipeline/tests/` covers the pure helpers (line merging, deck outlines,
+wall heights, coordinate rounding, the class ids the client's palette is
+keyed by, the CityGML converter on a fixture, the provider grid, XYZ
+gridding, the OSM class mapping, the spec). CI's `pipeline` job runs it
+with ruff after `uv sync --locked`. Fetch and bakes need the network and
+the raw downloads and run on the maintainer's machine.
 
-### The canonical raw layout
+### The layouts
 
-The bakes know no provider. They read one layout, which an ingest adapter
-writes (gitignored, never committed — no Git-LFS):
+The bakes know no provider. They read two folders (the raw one gitignored,
+never committed — no Git-LFS):
 
 ```
-data/_raw/<site>/
-  dom1/<tile>.tif (+ .tfw)   DOM1 surface model, 1 m
-  dop/<tile>.tif             orthophoto, 4 bands (R, G, B, NIR)
-  dlm/*.shp                  Basis-DLM, AdV Shape profile (veg01_f, ver01_l, …)
-  osm/*.osm.pbf              OpenStreetMap extract (the newest is read)
-  downloads/                 the adapter's cache of provider ZIPs
+data/_raw/<provider>/        shared by every site of the provider
+  dom1/<tile>.tif            surface model, 1 m (Bavaria: DOM20 averaged)
+  dop/<tile>.tif             orthophoto, 20 cm, R G B (+ NIR)
+  dlm/*.shp                  Basis-DLM, AdV Shape profile — the 15 layers read
+  osm/<extract>.osm.pbf      the site's Geofabrik extract
+  downloads/                 statewide packages, fetched once
+data/<site>/
+  dgm/dgm1_<tile>_tiff/dgm1_<tile>.tif     DGM1, the build's terrain source
+  cityjson/lod2_<tile>.city.json          LoD2, the build's building source
+  dlm/, dop/                               the bakes' outputs
+  provenance.json                          editions and downloads (Dresden)
 ```
 
-The DGM1 GeoTIFF (`data/dgm/dgm1_<tile>_tiff/`) and the LoD2 CityJSON
-(`data/cityjson/lod2_<tile>.city.json`) are **not** raw: they stay
-committed ([ADR 0004](./adr/0004-commit-derived-artifacts-not-raw-data.md)),
-because the build step reads them on every build. The bakes read them from
-there too.
+A tile's own downloads live in a scratch folder only until its products
+are written — the products are the cache, and a rerun skips them. Delete a
+product to fetch it again.
 
-### The Saxony ingest adapter (`ingest_sn.py`)
+**Moving from the old layout** (`data/_raw/dresden/`, before ADR 0028):
+`mv data/_raw/dresden data/_raw/sn` keeps the downloads. The fetch now
+keeps only the 15 Basis-DLM layers the bakes read; the others in `dlm/`
+can be deleted.
 
-`bun run bake --ingest` fills the layout from GeoSN and Geofabrik and never
-downloads a file twice (the ZIPs stay in `downloads/`):
+### The adapters
 
-- **DOM1 and DOP RGBI, per tile:** the portal's own download-link service
-  (layers 4 and 17, see [Provenance](#provenance)) is queried with a point
-  inside the tile; the ZIP it names is fetched and its `.tif` / `.tfw`
-  unpacked as `dom1/<tile>.tif` and `dop/<tile>.tif`.
-- **Basis-DLM:** the statewide Shape package (one ZIP of ZIPs, ~1.2 GB),
-  unpacked flat into `dlm/`.
-- **OpenStreetMap:** Geofabrik's `sachsen-latest.osm.pbf` into `osm/`. If
-  the download fails the adapter says so and carries on; put any
-  `.osm.pbf` covering the site there by hand.
+| Provider | How `bun run fetch` finds the files |
+|---|---|
+| Saxony (`sn`) | the batch-download page embeds each product's live share id and file-name template (`batchConfig.products`); one ZIP per 2 km tile. The Basis-DLM is a statewide ZIP of ZIPs (~1.2 GB, kept in `downloads/`). GeoSN's link service (see [Provenance](#provenance)) still names a retired LoD2 share, so it is not used |
+| NRW (`nw`) | 1 km files named with their acquisition year; each folder's `index.json` is read and the newest year taken. The Basis-DLM (4.7 GB) is never downloaded whole: its 15 layers are read out of the remote ZIP by range |
+| Bavaria (`by`) | predictable `download1.bayernwolke.de` URLs: DGM1, DOM20, DOP20 per km, LoD2 per 2 km; the Basis-DLM layers by range (the package uses Deflate64) |
+| Hamburg (`hh`) | one ZIP per product for the whole city, 1 km tiles inside, read by range; DOP per district, the district found by its directory. Dated URLs in `providers/hh.py` |
+| Berlin (`be`) | INSPIRE ATOM: 2 km XYZ heights gridded to GeoTIFF, 1 km LoD2 ZIPs, TrueDOP JPEG 2000 per district by range. Untested so far |
 
-Skipped inputs are skipped by *presence*: an existing `dom1/<tile>.tif` or
-any `dlm/*.shp` is not fetched again. Delete it to refresh.
-
-**Every OSM input comes from that local extract** (ADR 0025 tightening
+**Every OSM input comes from the local extract** (ADR 0025 tightening
 [ADR 0012](./adr/0012-openstreetmap-for-what-official-data-lacks.md)):
-walls, lamps, platforms and the bridge structure. There are no Overpass
-queries any more — a re-bake is reproducible from the recorded extract. The
-*committed* lamp, platform and bridge-structure data still comes from the
-old Overpass bakes; the next re-bake moves it (see
-[Provenance](#provenance)).
+walls, lamps, platforms, the bridge structure and, without a DLM, the land
+cover. There are no Overpass queries — a re-bake is reproducible from the
+recorded extract. If Geofabrik is unreachable the fetch says so and carries
+on; put the extract at the path it names. The *committed* Dresden lamp,
+platform and bridge-structure data still comes from the old Overpass bakes;
+the next re-bake moves it (see [Provenance](#provenance)).
 
 ### The steps
 
@@ -264,8 +281,8 @@ open in any glTF or 3D Tiles tool.
 
 | File | From | Via | Contents |
 |---|---|---|---|
-| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/dlm/walls_<t>.geojson` | `scripts/bake-tiles.ts` (`readDgm`, `terrainMesh`) | The DGM resampled bilinear to 1024² / 512² (NoData = NaN), the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), the grid plus a 30 m skirt, baked normals. The first n·n vertices are the grid, row 0 = north: the runtime samples ground height from them. `extras`: `kind`, `tileId`, `level`, `n`, `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 2048² for L1), `landcoverLow`, `ndvi`, and on L0 the `dressing` file names |
-| `city_<t>.glb.gz` | `data/cityjson/lod2_<t>.city.json` + `data/dop/roofcolor_<t>.json` (optional) | `scripts/bake-city-mesh.ts` (runs `cityjson-threejs-loader` once) → `bake-tiles.ts` `cityMesh` → `tile-glb.ts` `writeMeshGlb` + `addPropertyTable` | One welded mesh per tile. `_FEATURE_ID_0` per vertex (`EXT_mesh_features`) into an `EXT_structural_metadata` property table, one row per object: `tint`, `roof` (DOP colour folded in), `baseZ`, `eaveH`, `storeyH`, `glow`, `rough`, `building`, `root` (the demolish tree); `_ROOF` flags roof vertices. `extras`: `kind`, `tileId`, `footprints` |
+| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/<site>/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/<site>/dlm/walls_<t>.geojson` | `scripts/bake-tiles.ts` (`readDgm`, `terrainMesh`) | The DGM resampled bilinear to 1024² / 512² (NoData = NaN), the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), the grid plus a 30 m skirt, baked normals. The first n·n vertices are the grid, row 0 = north: the runtime samples ground height from them. `extras`: `kind`, `tileId`, `level`, `n`, `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 2048² for L1), `landcoverLow`, `ndvi`, and on L0 the `dressing` file names |
+| `city_<t>.glb.gz` | `data/<site>/cityjson/lod2_<t>.city.json` + `data/<site>/dop/roofcolor_<t>.json` (optional) | `scripts/bake-city-mesh.ts` (runs `cityjson-threejs-loader` once) → `bake-tiles.ts` `cityMesh` → `tile-glb.ts` `writeMeshGlb` + `addPropertyTable` | One welded mesh per tile. `_FEATURE_ID_0` per vertex (`EXT_mesh_features`) into an `EXT_structural_metadata` property table, one row per object: `tint`, `roof` (DOP colour folded in), `baseZ`, `eaveH`, `storeyH`, `glow`, `rough`, `building`, `root` (the demolish tree); `_ROOF` flags roof vertices. `extras`: `kind`, `tileId`, `footprints` |
 | `footprints_<t>.json` | the same parse | `cityMesh` | per-object 2D footprints for the minimap, `[object][polygon][vertex] = [x, y]` |
 
 Scene `extras` name the tile under **`tileId`, never `tile`**: the renderer
@@ -308,7 +325,7 @@ serves `/data/*` as `public, max-age=31536000, immutable` and the manifest
 as `no-cache` ([ADR 0007](./adr/0007-content-hashed-publishing-with-a-manifest.md)).
 
 A `required` side file that is missing fails the build
-(`prepare-data: missing source file data/dlm/…`) rather than becoming a
+(`prepare-data: missing source file data/<site>/dlm/… — run bun run fetch and bun run bake`) rather than becoming a
 404 on every client; so do a missing DGM GeoTIFF or CityJSON. A missing
 optional one is logged and the feature is off.
 
@@ -383,13 +400,13 @@ GeoTIFF (13.6–15.3 MB/tile) and the CityJSON (7.8–10.5 MB/tile).
 
 ## Provenance
 
-`data/provenance.json` is the machine-readable record: for every tile and
-GeoSN product the provider's currency field ("Stand") and the download URL,
-plus what is known about the OSM inputs. The guide's
+`data/dresden/provenance.json` is the machine-readable record for Dresden:
+for every tile and GeoSN product the provider's currency field ("Stand")
+and the download URL, plus what is known about the OSM inputs. The guide's
 [dataset table](./guide/en/data-sources.md#dataset-editions-in-use) (and its
 German twin) is the prose version. Update both when a source is
-re-downloaded — `bun run bake --ingest` keeps every ZIP it fetched under
-`data/_raw/<site>/downloads/`, named as the provider named it.
+re-downloaded. A site committed later gets its own
+`data/<site>/provenance.json` in the same shape.
 
 **Where the GeoSN values come from.** The portal's download app
 (`geoviewer.sachsen.de/mapviewer/resources/apps/produktdownload/`) reads an
@@ -398,9 +415,11 @@ the fields `Produkt`, `Kachel` (the tile as `<easting km><northing km>`,
 e.g. `4125656`), `Download` (the ZIP on `geocloud.landesvermessung.sachsen.de`)
 and `Stand`. Layers: 1 LSC · 2 LoD1 · 3 LoD2 (`Download_CityGML`,
 `Download_DXF`, `Download_Shape`) · 4 DOM1 · 6 DGM1 · 7 DOP_RGB · 17
-DOP_RGBI · 18 P10 · 8–16 DTK sheets. The Saxony ingest adapter resolves
-its DOM1 and DOP downloads through this service (a point query per tile).
-This queries the whole Dresden site for one layer, with the `Stand`:
+DOP_RGBI · 18 P10 · 8–16 DTK sheets. It is the best source of the
+`Stand`, but its share ids go stale (LoD2 pointed at a retired share in
+2026-09), so the Saxony adapter takes its links from the batch-download
+page instead. This queries the whole Dresden site for one layer, with the
+`Stand`:
 
 ```bash
 L=17   # 6 = DGM1, 4 = DOM1, 3 = LoD2, 17 = DOP_RGBI, 1 = LSC
@@ -413,15 +432,18 @@ curl -sS -G "https://geodienste.sachsen.de/ags-relay/ArcGISServer/guest/arcgis/r
 ```
 
 The ZIPs themselves are on public Nextcloud folders (one token per product
-and format); the tokens can rotate, the service is the durable index. The
+and format); the tokens can rotate. The batch page
+(`www.geodaten.sachsen.de/batch-download-4719.html`) carries the live
+token and file-name template per product in `batchConfig.products`, which
+is what `providers/sn.py` reads. The
 Basis-DLM is one statewide package replaced quarterly under the same URL
 (`basisdlm_sn_shape.zip`, 1.23 GB, `Last-Modified` 2026-07-28 when
-checked; `BASIS_DLM` in `ingest_sn.py`), so its edition must be noted at
+checked; `BASIS_DLM` in `providers/sn.py`), so its edition must be noted at
 download time: `curl -sI -r 0-0` on the URL prints the file date, and the
 ZIP carries a metadata file.
 
 **Where the OSM values come from.** The pipeline reads the Geofabrik
-extract in `data/_raw/<site>/osm/`; its timestamp is printed by
+extract in `data/_raw/<provider>/osm/`; its timestamp is printed by
 `osmium fileinfo -e <file>.osm.pbf` (`osmosis_replication_timestamp`).
 The committed walls came from such an extract; the committed lamps,
 platforms and bridge structures came from Overpass queries in the old bash
@@ -430,32 +452,25 @@ bakes, whose cached responses carried the data timestamp in
 No raw file is committed, so the record keeps git dates as bounds until
 someone reads the timestamps.
 
-**Licences.** *Datenlizenz Deutschland – Namensnennung 2.0* (`dl-de/by-2-0`)
-for the GeoSN products and ODbL for OSM; both credits are in the HUD footer
-(`scene-sidebar.tsx`), whose lines come from the site's `attribution`.
+**Licences.** Per provider in `sites/providers.ts` (`licence`, `credit`):
+*Datenlizenz Deutschland – Namensnennung 2.0* for GeoSN and Hamburg,
+*– Zero 2.0* for NRW and Berlin (credited anyway), CC BY 4.0 for Bavaria;
+ODbL for OSM. The HUD footer (`scene-sidebar.tsx`) shows
+`siteAttribution(site)`: the provider's credit and the OSM line, which
+names the land cover when OSM supplies it.
 
 ## Regenerating or adding a tile
 
 ```bash
-bun run bake 33412_5656_2_sn --ingest   # fetch DOM1, DOP, Basis-DLM, OSM; bake all steps
+bun run fetch 33412_5656_2_sn           # fetch what is missing for the tile
+bun run bake 33412_5656_2_sn            # bake all steps
 bun run bake 33412_5656_2_sn --step rail   # or one step again
 bun scripts/prepare-data.ts             # tileset + publish → public/data
-bun test                                # features.test.ts checks the new files
+bun test                                # features.test.ts checks the files
 ```
 
-For a new tile also:
-
-1. Commit its DGM GeoTIFF (+ `.tfw`, `_akt.csv`) under
-   `data/dgm/dgm1_<t>_tiff/` and its LoD2 as CityJSON under
-   `data/cityjson/lod2_<t>.city.json`, with EPSG:25832 or 25833 declared in
-   `metadata.referenceSystem` (reproject with
-   `cjio in.city.json reproject 25833 save out.city.json`). The ingest
-   adapter fetches neither: both are committed sources, not raw inputs.
-2. Add the cell to the site's `tiles` in `sites/<id>.ts` (the first stays
-   the spawn tile).
-3. Bake and build as above; `bun test` runs `features.test.ts` over the
-   committed files.
-
-A new place is a new site file and, outside Saxony, a new ingest adapter;
-what exists for that, and what is missing, is in
+A new tile is a new cell in the site's `tiles` in `sites/<id>.ts` (the
+first stays the spawn tile); `bun run fetch` brings its DGM and LoD2 like
+everything else. A new place is a new site file and, in a new Land, a new
+provider and adapter; what exists for that, and what is missing, is in
 [portability.md](./portability.md).
