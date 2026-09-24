@@ -131,12 +131,14 @@ export interface TileArtifact {
 export const TILE_URL_KINDS = [
   "bridge",
   "canopy",
+  "canopyx",
   "cityMeshData",
   "cityMeshMeta",
   "heightfieldHeader",
   "lamps",
   "landcover",
   "landcoverRgb",
+  "lowveg",
   "ndvi",
   "platform",
   "rail",
@@ -229,6 +231,10 @@ export function tileArtifacts(
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
     walls: dlm(`walls_${tile}.geojson`),
+    // 🧪 behind ?veg=low / ?veg=trees only (extract-lowveg.sh); optional, and
+    // fetched only when the flag is on, so the default page never asks.
+    lowveg: dlm(`lowveg_${tile}.geojson`),
+    canopyx: dlm(`canopyx_${tile}.geojson`),
   };
 }
 
