@@ -1,6 +1,6 @@
 # ADR 0013: Rail layer from dissolved ballast areas and centreline-driven decks, built once per block
 
-- **Status:** accepted
+- **Status:** accepted; built per tile on the heights of every loaded terrain since [ADR 0024](./0024-site-streams-as-3d-tiles.md), baked by the Python pipeline ([ADR 0025](./0025-bakes-are-one-python-package.md))
 - **Date:** 2026-06 (v2 after the v1 per-line approach), re-baked 2026-09
 
 ## Context

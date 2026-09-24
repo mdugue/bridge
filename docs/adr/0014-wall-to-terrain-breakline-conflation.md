@@ -1,6 +1,6 @@
 # ADR 0014: Burn OSM wall lines into the heightfield as breaklines
 
-- **Status:** accepted
+- **Status:** accepted; applied at bake time since [ADR 0024](./0024-site-streams-as-3d-tiles.md)
 - **Date:** 2026-06
 
 ## Context

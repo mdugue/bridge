@@ -1,6 +1,6 @@
 # ADR 0022: Stream tiles around the camera with a hand-written tile manager
 
-- **Status:** proposed (supersedes ADR 0006 once plan 018 Phase 3 lands)
+- **Status:** superseded by [ADR 0024](./0024-site-streams-as-3d-tiles.md) (never accepted)
 - **Date:** 2026-09
 
 ## Context
