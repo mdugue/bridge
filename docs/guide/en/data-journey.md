@@ -57,10 +57,12 @@ tile-sized files. It runs on the maintainer's machine with one command,
 `bun run bake`, which reads the **site config** (`sites/dresden.ts`: which
 tiles, where they lie, which coordinate system) and runs seven steps per
 tile. The Python environment is pinned, and its geodata libraries bring
-GDAL with them, so nothing else has to be installed. With `--ingest` it
-first fetches the downloads itself: the surface model and the aerial photo
-of each tile from the survey office's download service, the statewide
-landscape model, and the OpenStreetMap extract for Saxony from Geofabrik.
+GDAL with them, so nothing else has to be installed. Before it, `bun run
+fetch` fetches the downloads themselves: every product of each tile from
+the survey office (the building model converted to CityJSON on the way),
+the statewide landscape model, and the OpenStreetMap extract from
+Geofabrik. Which place — and so which survey office — is set by one
+variable, `SITE`.
 
 The steps run in a fixed order, because some read the output of an
 earlier one:

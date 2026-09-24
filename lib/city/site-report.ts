@@ -25,17 +25,41 @@ export interface TileReport {
   tile: string;
 }
 
-/** The raw inputs a tile's bakes read, by what the provider publishes:
- *  the land cover needs the Basis-DLM, or without one the OSM extract. */
-function rawInputs(site: Site, tile: string): string[] {
+/**
+ * The Basis-DLM layers the bakes read (AdV Shape profile) — the same list
+ * as `DLM_LAYERS` in pipeline/bake/common.py (site-report.test.ts holds
+ * the two together).
+ */
+export const DLM_LAYERS = [
+  "veg01_f",
+  "veg02_f",
+  "veg03_f",
+  "veg04_l",
+  "sie02_f",
+  "gew01_f",
+  "gew01_l",
+  "gew02_f",
+  "ver01_f",
+  "ver01_l",
+  "ver02_l",
+  "ver03_f",
+  "ver03_l",
+  "ver06_f",
+  "ver06_l",
+] as const;
+
+/** What the required land cover is baked from: the complete Basis-DLM, or
+ *  without one the OSM extract. The optional surface model and orthophoto
+ *  do not hold a tile back — without them their features are off. */
+function landCoverInputs(site: Site): string[] {
   const raw = providerRawDir(site);
-  const { dom, dop, dlm } = site.provider.products;
-  const extract = osmExtractUrl(site).split("/").at(-1) ?? "";
-  return [
-    ...(dom ? [`${raw}/dom1/${tile}.tif`] : []),
-    ...(dop ? [`${raw}/dop/${tile}.tif`] : []),
-    dlm ? `${raw}/dlm/veg01_f.shp` : `${raw}/osm/${extract}`,
-  ];
+  if (site.provider.products.dlm) {
+    return DLM_LAYERS.flatMap((l) => [
+      `${raw}/dlm/${l}.shp`,
+      `${raw}/dlm/${l}.dbf`,
+    ]);
+  }
+  return [`${raw}/osm/${osmExtractUrl(site).split("/").at(-1) ?? ""}`];
 }
 
 export function tileReport(
@@ -58,7 +82,7 @@ export function tileReport(
     .filter((a) => !a.required)
     .map((a) => sideFileSource(site, a.file))
     .filter((p) => !exists(p));
-  const unfetched = [...sources, ...rawInputs(site, tile)].some(
+  const unfetched = [...sources, ...landCoverInputs(site)].some(
     (p) => !exists(p)
   );
   // Buildable is ready, even without the raw inputs (Dresden's derived

@@ -19,7 +19,7 @@ from PIL import Image
 from rasterio.features import rasterize
 
 from . import landcover_osm
-from .common import Tile, column, feature, geometry_json, read_layer, write_geojson
+from .common import Tile, column, dlm_complete, feature, geometry_json, read_layer, write_geojson
 from .osm import has_extract
 
 # id → key: the legend the client's palette is keyed by (lib/city/landcover.ts).
@@ -107,9 +107,9 @@ def veg_rows(tile: Tile) -> list[dict]:
 
 def run(tile: Tile, px: int = 4096) -> None:
     if tile.products.dlm:
-        if not any(tile.dlm.glob("*.shp")):
+        if not dlm_complete(tile.dlm):
             raise SystemExit(
-                f"{tile.id}: no Basis-DLM under {tile.dlm} — the land cover is required; "
+                f"{tile.id}: no complete Basis-DLM under {tile.dlm} — the land cover is required; "
                 "run `bun run fetch` first"
             )
         order, rows, source = burn_order(tile), veg_rows(tile), "Basis-DLM"

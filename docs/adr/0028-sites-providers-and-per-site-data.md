@@ -1,6 +1,9 @@
 # ADR 0028: Sites pick a provider; data per site, downloads per provider; fetch → bake → build
 
-- **Status:** accepted (extends [ADR 0026](./0026-one-site-config-per-build.md))
+- **Status:** accepted (extends [ADR 0026](./0026-one-site-config-per-build.md);
+  amends [ADR 0025](./0025-bakes-are-one-python-package.md): `scripts/bake.ts`,
+  `ingest_sn.py` and `bake --ingest` became `scripts/pipeline.ts`,
+  `providers/sn.py` and `bun run fetch`)
 - **Date:** 2026-09
 
 ## Context

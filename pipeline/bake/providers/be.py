@@ -9,6 +9,7 @@ was refused there); the URL scheme is from the ATOM feeds, 2026-09."""
 
 from __future__ import annotations
 
+import urllib.parse
 from pathlib import Path
 
 import numpy as np
@@ -76,7 +77,8 @@ def dop(ctx: Ctx, tile: Tile) -> list[Path]:
         found = []
         for district in DISTRICTS:
             dest = ctx.scratch / "truedop" / district
-            found += remote_zip_members(TRUEDOP.format(district), rf"{e}_{n}[^/]*\.jp2$", dest)
+            url = TRUEDOP.format(urllib.parse.quote(district))
+            found += remote_zip_members(url, rf"{e}_{n}[^/]*\.jp2$", dest)
         if not found:
             raise FileNotFoundError(f"TrueDOP: no sheet for {e}_{n}")
         out += found
@@ -88,7 +90,7 @@ def lod2(ctx: Ctx, tile: Tile) -> list[Path]:
     for e, n in cells(tile, 1):
         name = f"LoD2_{e}_{n}.zip"
         zip_path = download(f"{ATOM}/a_lod2/atom/{name}", ctx.scratch / "lod2" / name)
-        out += unzip_members(zip_path, r"\.(xml|gml)$", ctx.scratch / "lod2" / name)
+        out += unzip_members(zip_path, r"\.(xml|gml)$", ctx.scratch / "lod2" / f"{e}_{n}")
     return out
 
 

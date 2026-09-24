@@ -152,8 +152,8 @@ flowchart LR
     iDOM["DOM1<br/>dom1/*.tif"]
     iDOP["DOP RGBI<br/>dop/*.tif"]
     iOSM["OSM extract<br/>osm/*.osm.pbf"]
-    iDGM["DGM1 GeoTIFF<br/>data/dgm (committed)"]
-    iCJ["LoD2 CityJSON<br/>data/cityjson (committed)"]
+    iDGM["DGM1 GeoTIFF<br/>data/&lt;site&gt;/dgm"]
+    iCJ["LoD2 CityJSON<br/>data/&lt;site&gt;/cityjson"]
   end
 
   subgraph PY["pipeline/bake — Python (uv)"]

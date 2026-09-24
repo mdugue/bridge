@@ -254,7 +254,8 @@ any tile, and GeoSN's batch-download page carries the current tokens.
 product of each tile — terrain, surface model, building model (converted
 to CityJSON on the way), aerial photo — plus the statewide Basis-DLM
 package and the OpenStreetMap extract. Dresden's terrain and building
-models are committed as they were first downloaded. OpenStreetMap data now comes only from the Geofabrik Saxony extract
+models are committed as they were first downloaded. OpenStreetMap data now
+comes only from the Geofabrik Saxony extract
 (`sachsen-latest.osm.pbf`); the committed lamp, platform and
 bridge-structure files still date from earlier Overpass API queries.
 
@@ -270,4 +271,5 @@ bridge-structure files still date from earlier Overpass API queries.
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
 
 The viewer shows the credit of the site's provider and the OSM credit in
-the footer of its settings panel. The derived lamp and wall files carry the OSM credit inside the file as well.
+the footer of its settings panel. The derived lamp and wall files carry
+the OSM credit inside the file as well.

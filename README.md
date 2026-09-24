@@ -82,7 +82,9 @@ The fetch step is one adapter per Land in `pipeline/bake/providers/`
 (Saxony, NRW, Bavaria, Hamburg, Berlin): it mosaics and clips each
 provider's grid to our 2 km tiles, writes the DGM compactly and converts the
 LoD2 CityGML to CityJSON with its own converter (no Java, no extra tools).
-Downloads are cached per provider, so sites in one Land share them.
+The bulky downloads — surface model, orthophotos, the statewide Basis-DLM,
+the OSM extract — are kept per provider, so sites in one Land share them;
+a tile's DGM and LoD2 go straight into `data/<site>/`.
 
 Tile id scheme: `<UTM zone><easting km>_<northing km>_2_<provider>` — Dresden
 spawns on `33412_5656_2_sn`, spanning 412000–414000 E / 5656000–5658000 N in

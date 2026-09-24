@@ -119,16 +119,29 @@ class RemoteFile(io.RawIOBase):
     def readinto(self, buffer) -> int:
         if self.pos >= self.size:
             return 0
-        if self.stream is None or self.stream_pos != self.pos:
+        want = min(len(buffer), self.size - self.pos)
+        try:
+            data = self._stream().read(want)
+        except OSError:
+            data = b""
+        if not data:
+            # A server may drop a stream left idle while a tile was processed:
+            # one fresh request from here before giving up.
             self._close_stream()
-            self.stream = _request(self.url, {"Range": f"bytes={self.pos}-"})
-        data = self.stream.read(min(len(buffer), self.size - self.pos))
+            data = self._stream().read(want)
         if not data:
             raise OSError(f"{self.url}: the connection ended at byte {self.pos} of {self.size}")
         buffer[: len(data)] = data
         self.pos += len(data)
         self.stream_pos = self.pos
         return len(data)
+
+    def _stream(self):
+        if self.stream is None or self.stream_pos != self.pos:
+            self._close_stream()
+            self.stream = _request(self.url, {"Range": f"bytes={self.pos}-"})
+            self.stream_pos = self.pos
+        return self.stream
 
     def _close_stream(self) -> None:
         if self.stream is not None:

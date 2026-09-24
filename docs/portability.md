@@ -90,14 +90,15 @@ the planned fallback. ✅ built · ❌ not built.
 | **Surface model** (DOM1; Bavaria's DOM20 averaged to 1 m) | canopy heights (nDOM); bridge deck surface | ✅ the canopy step skips with a note and the build treats the canopy as optional (trees come from the hedge / tree rows only); ✅ rail decks fall back to the DGM abutment ramp (no viaduct lift) | — |
 | **Basis-DLM** (AdV Shape profile) | class raster (surface colours, water, the tree and lamp gates), hedge / tree rows, rail tracks + ballast, bridge decks | ✅ a provider without it (`products.dlm: false`) gets the class raster, legend and veg rows **from OSM**, and the canopy's forest/park gate from the class raster plus OSM parks. ❌ rails, ballast and bridge decks are off (optional at runtime). A DLM provider whose package is missing on disk stops the land-cover step (`bun run fetch` first) | OSM tracks (`railway=rail`) and decks (`man_made=bridge`); a NAS reader for Hamburg's open NAS package |
 | **DOP** (RGB + NIR) | roof colour per building; NDVI (crown colour, meadow tint) | ✅ both steps skip; an RGB-only DOP (Bavaria) skips the NDVI only; the runtime uses the synthesized roof palette and hash-only sage crowns (`ndvi` and the roof LUT are optional) | — |
-| **OSM extract** (`.osm.pbf`) | retaining walls (+ terrain breaklines), street lamps, platforms, bridge structure (arches); the land cover where there is no DLM | ✅ the lamps and walls steps skip with a note, and the rail step writes bridges without structure; none of them empties a file already there (platforms stay as committed). Lamps, walls and platforms are optional at runtime | — |
+| **OSM extract** (`.osm.pbf`) | retaining walls (+ terrain breaklines), street lamps, platforms, bridge structure (arches); the land cover where there is no DLM | ✅ the lamps and walls steps skip with a note, and the rail step writes bridges without structure; none of them empties a file already there (platforms stay as committed). Lamps, walls and platforms are optional at runtime. ❌ Where the land cover comes from OSM (Hamburg, Berlin) the land-cover step stops ("run bun run fetch first") — the extract is then required | — |
 
 **Lower quality or different shape** is mostly untested:
 
 - The canopy and rail bakes read DGM1 and DOM1 on the tile's **1 m grid**
-  (`nDOM = DOM1 − DGM1` texel by texel), so a coarser DEM or a DOM on
-  another grid needs resampling in the ingest adapter first. The terrain
-  bake itself resamples any GeoTIFF to its 1024² / 512² grids.
+  (`nDOM = DOM1 − DGM1` texel by texel); the fetch resamples every
+  provider's heights to that grid (`rasters.py`), so a coarser model reads
+  as a blurrier one (Bavaria's DOM20 is averaged down, which is fine). The
+  terrain bake itself resamples the DGM to its 1024² / 512² grids.
 - An **RGB-only DOP** (no NIR band) skips the NDVI step; the roof colours
   only need bands 1–3.
 - The raster edges are per tile, not per metre: a 4096² class raster and

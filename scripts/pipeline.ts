@@ -51,6 +51,11 @@ if (import.meta.main) {
   }
   const site = currentSite();
   const step = args.indexOf("--step");
+  const unknown = args.filter((a) => a.startsWith("--") && a !== "--step");
+  if (unknown.length > 0) {
+    process.stderr.write(`${command}: unknown option ${unknown.join(" ")}\n`);
+    process.exit(2);
+  }
   if (step >= 0 && command === "fetch") {
     process.stderr.write("fetch: --step is a bake option\n");
     process.exit(2);

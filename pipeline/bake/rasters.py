@@ -52,7 +52,12 @@ def write_tile_raster(
     finally:
         for ds in datasets:
             ds.close()
-    valid = mosaic != nodata if nodata is not None else np.ones(mosaic.shape, dtype=bool)
+    if nodata is None:
+        valid = np.ones(mosaic.shape, dtype=bool)
+    elif np.isnan(nodata):
+        valid = ~np.isnan(mosaic)
+    else:
+        valid = mosaic != nodata
     if not valid.any() or (nodata is None and not mosaic.any()):
         raise ValueError(f"{dest.name}: the sources hold no data inside the tile")
     if heights:

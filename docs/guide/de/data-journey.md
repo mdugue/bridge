@@ -62,11 +62,12 @@ einzigen Befehl, `bun run bake`, der die **Standort-Konfiguration** liest
 (`sites/dresden.ts`: welche Kacheln, wo sie liegen, welches
 Koordinatensystem) und je Kachel sieben Schritte ausführt. Die
 Python-Umgebung ist festgeschrieben, und ihre Geodaten-Bibliotheken bringen
-GDAL gleich mit, sodass nichts weiter installiert werden muss. Mit
-`--ingest` holt es die Downloads vorher selbst: Oberflächenmodell und
-Luftbild jeder Kachel über den Download-Dienst der Landesvermessung, das
-landesweite Landschaftsmodell und den OpenStreetMap-Auszug für Sachsen von
-Geofabrik.
+GDAL gleich mit, sodass nichts weiter installiert werden muss. Davor holt
+`bun run fetch` die Downloads selbst: jedes Produkt jeder Kachel von der
+Landesvermessung (das Gebäudemodell unterwegs nach CityJSON umgewandelt),
+das landesweite Landschaftsmodell und den OpenStreetMap-Auszug von
+Geofabrik. Welcher Ort — und damit welche Landesvermessung — legt eine
+einzige Variable fest, `SITE`.
 
 Die Schritte laufen in fester Reihenfolge, weil manche die Ausgabe eines
 früheren lesen:

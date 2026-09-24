@@ -34,6 +34,14 @@ DLM_LAYERS = (
     "ver06_f",
     "ver06_l",
 )
+
+
+def dlm_complete(dlm: Path) -> bool:
+    """Whether every layer the bakes read is in `dlm` (an interrupted fetch
+    may have left some): the fetch, the bakes and `bun run site` agree."""
+    return all((dlm / f"{layer}{ext}").exists() for layer in DLM_LAYERS for ext in (".shp", ".dbf"))
+
+
 DLM_MEMBERS = rf"(^|/)({'|'.join(DLM_LAYERS)})\.(shp|shx|dbf|prj|cpg)$"
 
 
@@ -98,8 +106,8 @@ class Tile:
         if not self.products.dlm:
             print(f"{self.id}: the provider publishes no Basis-DLM — skipping {what}")
             return False
-        if not any(self.dlm.glob("*.shp")):
-            print(f"{self.id}: no Basis-DLM under {self.dlm} — skipping {what}")
+        if not dlm_complete(self.dlm):
+            print(f"{self.id}: no complete Basis-DLM under {self.dlm} — skipping {what}")
             return False
         return True
 

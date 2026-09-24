@@ -30,7 +30,7 @@ from typing import Protocol
 from rasterio.enums import Resampling
 
 from .citygml import write_cityjson
-from .common import DLM_LAYERS, Tile
+from .common import Tile, dlm_complete
 from .net import download
 from .rasters import write_tile_raster
 from .spec import Spec
@@ -101,13 +101,6 @@ def _scratch(raw: Path, name: str) -> Iterator[Path]:
         shutil.rmtree(path, ignore_errors=True)
 
 
-def has_dlm(raw: Path) -> bool:
-    """Whether every layer the bakes read is there (an interrupted fetch may
-    have left some)."""
-    dlm = raw / "dlm"
-    return all((dlm / f"{layer}{ext}").exists() for layer in DLM_LAYERS for ext in (".shp", ".dbf"))
-
-
 def fetch_tile(spec: Spec, tile: Tile, source: Adapter) -> None:
     with _scratch(spec.raw, tile.id) as scratch:
         ctx = Ctx(spec.raw, scratch, spec.epsg)
@@ -152,16 +145,19 @@ def fetch_osm(spec: Spec) -> None:
         return
     try:
         download(spec.osm_url, spec.osm)
-    except OSError as err:
+    except Exception as err:  # noqa: BLE001 — the tiles do not need it
         print(f"OSM extract not downloaded ({err}); put {spec.osm_url} at {spec.osm}")
 
 
 def run(spec: Spec, tiles: list[Tile]) -> None:
     spec.raw.mkdir(parents=True, exist_ok=True)
     source = adapter(spec.provider)
-    if spec.products.dlm and not has_dlm(spec.raw):
-        with _scratch(spec.raw, "dlm") as scratch:
-            source.dlm(Ctx(spec.raw, scratch, spec.epsg))
+    if spec.products.dlm and not dlm_complete(spec.raw / "dlm"):
+        try:
+            with _scratch(spec.raw, "dlm") as scratch:
+                source.dlm(Ctx(spec.raw, scratch, spec.epsg))
+        except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
+            print(f"Basis-DLM not fetched ({type(err).__name__}: {err})")
     fetch_osm(spec)
     for tile in tiles:
         fetch_tile(spec, tile, source)

@@ -268,7 +268,10 @@ export function createCameraPose(
       const { x, y } = viewpoint.epsg;
       const w = epsgToWorld(x, y, offset);
       applyCameraState({
-        ...viewpoint,
+        mode: viewpoint.mode,
+        headingDeg: viewpoint.headingDeg,
+        pitchDeg: viewpoint.pitchDeg,
+        fov: viewpoint.fov,
         epsg: { x, y },
         pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
       });
