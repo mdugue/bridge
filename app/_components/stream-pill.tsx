@@ -70,7 +70,51 @@ function Segment({ stage }: { stage: LoadStageState }) {
   );
 }
 
-export function StreamPill({ stages }: { stages: LoadStageState[] }) {
+/**
+ * After the first full load the stages are done for good, but a flight still
+ * streams tiles in. A small, late hint says so: it appears only once loading
+ * has lasted HINT_DELAY_MS (a quick top-up stays invisible) and leaves as
+ * soon as everything in view is in.
+ */
+const HINT_DELAY_MS = 1200;
+
+function StreamingHint({ busy }: { busy: boolean }) {
+  // True once the current busy spell has lasted HINT_DELAY_MS; reset when
+  // it ends, so the next one waits again.
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    if (!busy) {
+      return;
+    }
+    const timer = setTimeout(() => setLate(true), HINT_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+      setLate(false);
+    };
+  }, [busy]);
+  const shown = busy && late;
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute top-4 left-1/2 z-20 flex h-7 -translate-x-1/2 items-center gap-2 rounded-full px-3 text-[11px] text-hud-foreground transition-opacity duration-400",
+        shown ? "opacity-100" : "opacity-0"
+      )}
+    >
+      <span className="absolute inset-0 rounded-full bg-hud/70 backdrop-blur-lg" />
+      <span className="relative size-1.5 animate-pulse rounded-full bg-hud-foreground" />
+      <span className="relative">Umgebung lädt</span>
+    </div>
+  );
+}
+
+export function StreamPill({
+  busy,
+  stages,
+}: {
+  busy: boolean;
+  stages: LoadStageState[];
+}) {
   const allDone = stages.every((stage) => stage.done);
   const [mountedAt] = useState(() => Date.now());
   const [phase, setPhase] = useState<"gone" | "leaving" | "shown">("shown");
@@ -98,7 +142,7 @@ export function StreamPill({ stages }: { stages: LoadStageState[] }) {
   }, [phase]);
 
   if (phase === "gone") {
-    return null;
+    return <StreamingHint busy={busy} />;
   }
   return (
     <div

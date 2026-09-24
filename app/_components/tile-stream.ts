@@ -26,7 +26,7 @@ import type {
   TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
-import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
+import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildRail } from "./rail-layer";
@@ -57,6 +57,8 @@ export interface TileDressing {
 }
 
 export interface TileStreamContext {
+  /** compiles an object's shaders before it shows (PostStack.compile) */
+  compile: (object: Object3D) => Promise<void>;
   /** resolves when the HUD lets the heavy dressing start (create-app's
    *  startStreaming): the first frames only wait on terrain + buildings */
   dressingGate: Promise<void>;
@@ -234,22 +236,22 @@ class DressingPlugin {
       return;
     }
     if (extras.kind === "city") {
-      await this.dressCity(scene, mesh, extras);
+      this.dressCity(scene, mesh, extras);
     } else if (extras.kind === "terrain") {
       await this.dressTerrain(scene, mesh, extras);
     }
+    // The renderer shows the tile once this resolves: its programs are
+    // ready by then instead of compiling inside a frame.
+    await this.ctx.compile(scene);
   }
 
-  private async dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras) {
+  private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
     const demolished = this.stream.demolished.get(extras.tileId) ?? new Set();
     const city = dressCity(
       mesh,
       extras.tileId,
       this.ctx.styleResources,
       demolished
-    );
-    city.footprints = await fetchOptionalJson<[number, number][][][]>(
-      this.url(extras.footprints)
     );
     this.stream.cities.add(city);
     this.dressed.set(scene, { city });
@@ -306,6 +308,7 @@ class DressingPlugin {
           this.url
         );
         const parts = dressingParts(dressing);
+        await Promise.all(parts.map((part) => this.ctx.compile(part)));
         if (this.dressed.get(scene) !== entry) {
           disposeDressing(dressing);
           return;

@@ -242,7 +242,9 @@ const offset = { cx: frame.cx, cy: frame.cy };
 const gz = (bytes: Uint8Array) => gzipSync(bytes, { level: 9 });
 
 /** A tile's buildings: footprints JSON + glTF, both from one parse. */
-async function bakeCity(tile: string): Promise<{ file: string; maxZ: number }> {
+async function bakeCity(
+  tile: string
+): Promise<{ file: string; footprints: string; maxZ: number }> {
   const src = cityMeshSourceFiles(tile);
   const inputs = [at(src.city), at(src.roofColor)];
   const key = cacheKey(inputs, offset);
@@ -261,7 +263,7 @@ async function bakeCity(tile: string): Promise<{ file: string; maxZ: number }> {
       utf8({ maxZ: built().maxElevation })
     )
   );
-  const extras: CityExtras = { kind: "city", tileId: tile, footprints };
+  const extras: CityExtras = { kind: "city", tileId: tile };
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
     gz(
@@ -272,7 +274,7 @@ async function bakeCity(tile: string): Promise<{ file: string; maxZ: number }> {
       })
     )
   );
-  return { file: publish(name, glb), maxZ };
+  return { file: publish(name, glb), footprints, maxZ };
 }
 
 /** The tile's OSM walls as the lines the terrain conflation burns in. */
@@ -373,8 +375,10 @@ async function bakeTerrain(
 }
 
 const baked: BakedTile[] = [];
+const footprintFiles = new Map<string, string>();
 for (const [i, tile] of TILES.entries()) {
   const city = await bakeCity(tile);
+  footprintFiles.set(tile, city.footprints);
   const fine = await bakeTerrain(tile, 0);
   const coarse = await bakeTerrain(tile, 1);
   const minZ = Math.min(fine.minZ, coarse.minZ);
@@ -401,6 +405,7 @@ const extras: TilesetExtras = {
   tiles: baked.map((t) => ({
     id: t.id,
     bounds: t.bounds,
+    footprints: footprintFiles.get(t.id) ?? "",
     minimap: sideFiles.get(t.id)?.landcoverLow ?? "",
   })),
 };

@@ -10,14 +10,16 @@ leichteres Render-Budget.
 
 ## Laden
 
-Der Ladebildschirm listet sechs Stufen und einen Balken. Die ersten drei
+Der Ladebildschirm listet fünf Stufen und einen Balken. Die ersten drei
 (Gebäude, Gelände, Licht) enden an der Marke *begehbar*: Ab da löst sich
-der Vorhang auf, und du kannst dich bewegen, während die übrigen Stufen
-(Bäume und Lampen, Nachbarkacheln, Schienen und Mauern) hinter einer
-kleinen Pille oben im Bild nachladen. *Alles geladen* heißt, alles um dich
-herum ist da. Danach lädt der Viewer still weiter, während du dich
-bewegst: Die Stadt wird Kachel für Kachel gestreamt, in deiner Nähe
-detailliert, weiter weg grob (siehe
+der Vorhang auf, und du kannst dich bewegen, während die übrigen zwei
+(die Umgebung im Blick, dann Bäume, Lampen, Schienen und Mauern) hinter
+einer kleinen Pille oben im Bild nachladen. *Alles geladen* heißt, alles
+in deinem Blick ist da – nicht die ganze Stadt. Danach lädt der Viewer
+weiter, während du dich bewegst: Die Stadt wird Kachel für Kachel
+gestreamt, in deiner Nähe detailliert, weiter weg grob. Dauert das einen
+Moment, etwa bei einem langen Flug, zeigt ein kleiner Hinweis *Umgebung
+lädt* oben im Bild (siehe
 [Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
 
 ## Bewegen

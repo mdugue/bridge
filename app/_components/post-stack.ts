@@ -7,7 +7,7 @@ import {
   SMAAEffect,
   VignetteEffect,
 } from "postprocessing";
-import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
+import type { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { HalfFloatType, Vector2, Vector3 } from "three";
 import {
   type FocusMode,
@@ -50,6 +50,13 @@ export interface FocusInfo {
 }
 
 export interface PostStack {
+  /**
+   * Compiles `object`'s shaders off the frame, for the target the scene pass
+   * renders into (a program depends on it: colour space, tone mapping; on
+   * WebGPU also the attachment formats). Tiles await it before they show,
+   * so a landing tile never stalls a frame on a synchronous compile.
+   */
+  compile: (object: Object3D) => Promise<void>;
   /**
    * Pushes the rendering rows of the look — depth grading, contact shadows,
    * paper grain, depth of field and its focus mode/distance — into the passes.
@@ -194,6 +201,15 @@ export function createPostStack(
   };
 
   return {
+    compile: (object) => {
+      // The synchronous half of compileAsync reads the current target;
+      // restore it at once, the render loop sets its own.
+      const previous = renderer.getRenderTarget();
+      renderer.setRenderTarget(composer.inputBuffer);
+      const done = renderer.compileAsync(object, camera, scene);
+      renderer.setRenderTarget(previous);
+      return done.then(() => undefined);
+    },
     render: (deltaSeconds) => composer.render(deltaSeconds),
     getFocusInfo: () => ({
       focusDistance: dof.cocMaterial.focusDistance,

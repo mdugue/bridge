@@ -9,14 +9,16 @@ are supported: they automatically get a lighter render budget.
 
 ## Loading
 
-The loading screen lists six stages and a bar. The first three (buildings,
-terrain, light) end at the mark labelled *begehbar* ("walkable"): from that
-moment the overlay dissolves and you can move, while the remaining stages
-(trees and lamps, neighbouring tiles, rails and walls) stream in behind a
-small pill at the top of the screen. *Alles geladen* means everything
-around you is in. After that the viewer keeps loading quietly as you move:
-the city is streamed tile by tile, detailed near you and coarse further
-away (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
+The loading screen lists five stages and a bar. The first three
+(buildings, terrain, light) end at the mark labelled *begehbar*
+("walkable"): from that moment the overlay dissolves and you can move,
+while the remaining two (the surroundings in view, then trees, lamps,
+rails and walls) stream in behind a small pill at the top of the screen.
+*Alles geladen* means everything in your view is in – not the whole city.
+After that the viewer keeps loading as you move: the city is streamed tile
+by tile, detailed near you and coarse further away. When that takes a
+moment, on a long flight for instance, a small *Umgebung lädt* ("loading
+surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
 
 ## Moving around
 
