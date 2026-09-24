@@ -65,12 +65,15 @@ export function createNodePostStack(
   camera: PerspectiveCamera
 ): PostStack {
   const pipeline = new RenderPipeline(renderer);
-  // Tone mapping and sRGB are the last node of the chain, not the
-  // renderer's: the renderer stays linear and untonemapped, which is the
-  // state three renders the scene pass in anyway. With no MRT either (GTAO
+  // sRGB is the last node of the chain, not the renderer's: the renderer
+  // stays linear and untonemapped, which is the state three renders the
+  // scene pass in anyway. No tone mapping: today's WebGL path has none
+  // either — three tone-maps only direct-to-screen renders, the composer
+  // renders to a target and postprocessing's passes are toneMapped: false,
+  // so renderer.toneMapping = ACES there is inert. ACES here washed the
+  // clay out. With no MRT either (GTAO
   // reconstructs normals from depth), a shader compiled ahead of time
   // (compile below) is the very one the pass uses.
-  const toneMapping = renderer.toneMapping;
   renderer.toneMapping = NoToneMapping;
   renderer.outputColorSpace = LinearSRGBColorSpace;
   pipeline.outputColorTransform = false;
@@ -124,7 +127,7 @@ export function createNodePostStack(
     return vec4(graded.mul(vignette).mul(paper), aa.a);
   };
   const output = (node: Node<"vec4">): Node<"vec4"> =>
-    renderOutput(node, toneMapping, SRGBColorSpace);
+    renderOutput(node, NoToneMapping, SRGBColorSpace);
   const withDof = output(finish(focused));
   const withoutDof = output(finish(lit));
 
