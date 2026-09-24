@@ -121,3 +121,19 @@ test("tileUrlsFrom resolves hashed names through the manifest", () => {
     "/data/city_33412_5656_2_sn.mesh.json"
   );
 });
+
+test("tileUrlsFrom only requests canopyx where the manifest published it", () => {
+  const file = tileArtifacts(primary).canopyx.file;
+  const published = {
+    version: 1 as const,
+    files: { [file]: "canopyx.abc.geojson" },
+  };
+  expect(tileUrlsFrom(primary, published, false).canopyx).toBe(
+    "/data/canopyx.abc.geojson"
+  );
+  expect(tileUrlsFrom(primary, { version: 1, files: {} }, false).canopyx).toBe(
+    undefined
+  );
+  // no manifest (dev fallback): request the logical name as before
+  expect(tileUrlsFrom(primary, null, false).canopyx).toBe(`/data/${file}`);
+});

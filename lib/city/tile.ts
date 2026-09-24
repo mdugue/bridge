@@ -164,7 +164,6 @@ export interface TileArtifact {
 export const TILE_URL_KINDS = [
   "bridge",
   "canopy",
-  "canopyx",
   "cityMeshData",
   "cityMeshMeta",
   "heightfieldHeader",
@@ -186,6 +185,7 @@ export type TileUrlKind = (typeof TILE_URL_KINDS)[number];
 /** Every artifact prepare-data publishes: the served kinds plus the bake-only ones. */
 export type TileArtifactKind =
   | TileUrlKind
+  | "canopyx"
   | "heightfieldData"
   | "landcoverLow"
   | "landcoverRgbLow";
@@ -337,6 +337,10 @@ export function manifestUrl(
 export type TileUrls = Record<TileUrlKind, string> & {
   /** the terrain TIN's header, on tiles that have one (TileSpec.tinMaxError) */
   terrainTin?: string;
+  /** the laser-scan crowns outside the canopy mask; only tiles with a
+   *  laser scan have them, so a manifest without the file means "none" and
+   *  the viewer does not request a URL that can only 404 */
+  canopyx?: string;
 };
 
 /**
@@ -363,6 +367,9 @@ export function tileUrlsFrom(
   }
   if (artifacts.terrainTinHeader) {
     out.terrainTin = url(artifacts.terrainTinHeader);
+  }
+  if (!manifest || manifest.files[artifacts.canopyx.file]) {
+    out.canopyx = url(artifacts.canopyx);
   }
   return out;
 }
