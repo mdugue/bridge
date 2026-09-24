@@ -117,8 +117,10 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 | **Aktualisierung** | Wie die Höhenmodelle (27.–30. November 2024 für diese Kacheln). |
 | **Auflösung und Genauigkeit** | Unregelmäßige Punkte, mehrere je Quadratmeter; ±0,15 m in der Höhe, ±0,30 m in der Lage, laut GeoSN. |
 | **Allgemein geeignet für** | Alles, was die Raster wegvereinfachen: einzelne Baumkronen, Dachkanten, Mauerflächen, Freileitungen. |
-| **Hier genutzt für** | Noch nicht. Einzelbäume daraus zu segmentieren steht auf der Ideenliste. |
-| **Format und Download** | LAZ je 2-km-Kachel, groß; dieselbe Portalseite wie das DGM1. |
+| **Hier genutzt für** | Nur in einem Experiment, das man einschalten muss (`?veg=low`, `?veg=trees` in der Adresse): Hecken und Sträucher unter 3 m sowie Bäume in Höfen und Gärten, die die Landnutzungskarte nicht als Grün führt. Bisher nur für die mittlere Kachel. |
+| **Stärken** | Sieht unter 3 m und zwischen die Häuser, wo die Höhenraster und die Landnutzungskarte nichts sehen. Jeder Punkt weiß, wie hell sein Echo war und ob sich der Puls geteilt hat — hohe Bäume teilen ihn fast immer, Dächer fast nie. |
+| **Schwächen** | Die Klassen trennen Vegetation nicht von Gebäuden, Autos oder Zäunen. Eine geschnittene Hecke teilt einen Puls selten, deshalb stützt sich der Viewer bei niedrigen Pflanzen stattdessen auf die Grünheit des (Frühjahrs-)Luftbilds; eine Hecke unter einer Baumkrone bleibt unsichtbar. |
+| **Format und Download** | LAZ je 2-km-Kachel, groß (≈380 MB für 60 Millionen Punkte); dieselbe Portalseite wie das DGM1. |
 
 ### LoD2 — das 3D-Gebäudemodell
 

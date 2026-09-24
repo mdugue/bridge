@@ -24,6 +24,7 @@ The diagram convention encodes the *kind* of relation:
 flowchart LR
   classDef planned fill:#fef3c7,stroke:#d97706,stroke-dasharray:4 3,color:#92400e;
   classDef synth fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
+  classDef exp fill:#ecfdf5,stroke:#059669,stroke-dasharray:2 2,color:#065f46;
 
   subgraph SRC["📦 Data sources — Saxon open geodata (+ OSM)"]
     direction TB
@@ -33,6 +34,7 @@ flowchart LR
     DLM["Basis-DLM (ATKIS)<br/>land cover + veg rows"]
     OSM["OpenStreetMap<br/>(local .pbf extract)"]
     DOP["DOP orthophoto<br/>RGB + near-IR"]
+    LSC["Laser scan (LAZ)<br/>primary tile only"]
   end
 
   HASH["deterministic hash"]:::synth
@@ -46,6 +48,7 @@ flowchart LR
     BLD["Buildings<br/>(geometry)"]
     DET["Building detailing<br/>tint · roof · eave · glow"]
     VEG["Trees &amp; hedges"]
+    LOW["Hedges &amp; shrubs<br/>🧪 ?veg=low"]:::exp
     LAMP["Street lamps"]
     RAIL["Railway tracks"]
     BRG["Bridges"]
@@ -79,6 +82,14 @@ flowchart LR
   DGM ==>|"nDOM base term"| VEG
   DLM -. "gates: no trees on roads/water" .-> VEG
   DOP -. "NDVI → crown colour" .-> VEG
+  LSC -. "🧪 ?veg=trees: crown peaks outside the canopy mask" .-> VEG
+
+  %% 🧪 low vegetation (flag-gated)
+  LSC ==>|"nDOM 0.5–3 m + low-return intensity/echo"| LOW
+  DOP -. "NDVI: the evergreen cue" .-> LOW
+  OSM -. "barrier=hedge geometry wins · scrub relaxes the cue" .-> LOW
+  CJ -. "footprint exclusion" .-> LOW
+  DGM -. ground-clamp .-> LOW
 
   %% lamps
   OSM ==>|"point positions"| LAMP
@@ -113,7 +124,8 @@ flowchart LR
 | **Water (Elbe)** | Basis-DLM (alpha = water) **+** DGM1 (geometry) | — | `water-layer.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → build-time mesh (`.mesh.bin.gz` + `.mesh.json`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`, `lib/city/city-mesh.ts`); `city-layer.ts` |
 | **Building detailing** | CityJSON attrs + `surfacetype` (baked per object) | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `city-mesh.ts` `buildDetailAttributes`, `visual-style.ts`, `lib/city/building-tint.ts`; bake `extract-roof-colour.sh` |
-| **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `extract-dlm.sh` + `extract-canopy.sh` + `extract-ndvi.sh` |
+| **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI (crown colour) · 🧪 LSC crown peaks outside the mask (`?veg=trees`) | `vegetation-layer.ts`; baked by `extract-dlm.sh` + `extract-canopy.sh` + `extract-ndvi.sh` |
+| 🧪 **Hedges & shrubs** (`?veg=low`) | LSC (nDOM 0.5–3 m + cue) **+** OSM hedges (geometry wins) | DOP NDVI (cue) · LoD2/walls/bridges (exclusions) · DGM1 (ground-clamp); OSM-only where no LAZ | `low-vegetation-layer.ts`; baked by `extract-lowveg.sh` |
 | **Street lamps** | OSM | DGM1 (ground-clamp); gated off water + railway | baked by `scripts/extract-lamps.sh`; `lamp-layer.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `scripts/extract-rail.sh` |

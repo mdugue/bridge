@@ -229,6 +229,80 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **DOP-lean caveat (recorded):** standard DOP has building lean (tall roofs
   displaced over facades). Mitigated in the bake by eroding the roof footprint
   inward + a robust median; revisit with true-orthophotos if available.
+- **Low vegetation — hedges & shrubs 0.5–3 m** (`?veg=low`) and **trees
+  outside the canopy mask** (`?veg=trees`; `?veg=low,trees` for both). Off by
+  default; nothing is fetched without the flag. Primary tile only (the one LSC
+  tile on disk); the neighbours get the OSM-only fallback.
+  - *Why:* `extract-canopy.sh` keeps nothing under `MINH = 3 m` and only
+    forest/copse/sport-and-leisure areas, so courtyard and garden trees are
+    dropped at any height; the Basis-DLM carries a hedge only when it is
+    landscape-shaping (≥ 200 m) — `vegrows` on 33412_5656 has **0 hedges**.
+  - *Inputs:* GeoSN laser scan (LAZ, 2024-11-30, leaf-off) → PDAL 0.5 m
+    rasters: ground (classes 2/8/30), surface max (2/20), non-ground count, its
+    multi-echo share, and the mean **intensity of the low returns** (0.25–4 m
+    above ground). DOP NDVI (2024-03-19). OSM `barrier=hedge`,
+    `natural=scrub|shrubbery|shrub`. Exclusions: LoD2 surfaces (+1 m), OSM
+    walls (+0.75 m), bridges, water/rail classes, the rim (1 m) of any > 3 m
+    crown.
+  - *Cue — measured, and not the one expected:* per-pixel AUC of OSM-hedge
+    pixels against cars (road class) / OSM fences / building rims: **NDVI
+    0.94 / 0.71 / 0.89**, low-return intensity 0.70 / 0.83 / 0.80,
+    multi-echo ratio 0.76 / **0.28** / 0.42. The echo ratio separates tall
+    trees from roofs perfectly (≥ 0.5 on 100 % of > 5 m forest pixels, 3 % of
+    roofs) but not low vegetation: only 26 % of hedge pixels reach it, against
+    56 % of fence pixels — a clipped hedge rarely splits a pulse, and 1–2 m
+    above ground the two echoes are too close to separate. The leaf-off NDVI
+    works *because* the city's hedges are largely evergreen. Rule: `NDVI ≥
+    0.12 ∨ (intensity ≥ 1250 ∧ echo ≥ 0.3)`; inside OSM scrub `NDVI ≥ 0.06 ∨
+    echo ≥ 0.3`. Then close 3×3, open 2×2, blobs ≥ 2 m².
+  - *Shape:* elongated components (skeleton ≥ 4 m, length/width ≥ 3, width ≤
+    3 m from the distance transform on the skeleton, few spurs) → skeleton →
+    polyline → Douglas-Peucker 0.4 m, `h` = median ridge nDOM, `w` = 2 × median
+    inscribed radius; compact ones → one shrub (centroid, equivalent radius,
+    p90 height), beds > 12 m² → shrubs at height peaks ≥ 1.5 m apart.
+    **OSM geometry wins**: a mapped hedge keeps its line and takes the LSC
+    height where ≥ 30 % of it is supported (`src: "osm+lsc"`), else its
+    `height` tag or 1.5 m (`"osm"`); LSC hedges within 2 m of it are dropped,
+    the rest fill the unmapped ones (`"lsc"`).
+  - *Evaluation (33412_5656):* only **47 %** of the 4.3 km of OSM hedges is
+    observable at all — 53 % runs under a > 3 m crown, invisible to a first-
+    surface model. Of the observable length, the mask comes within 1.5 m of
+    **58 %** (echo ≥ 0.5 alone: 25 %, NDVI alone: 48 %, no cue at all: 76 %
+    but 9.7 ha of mask instead of 2.6 ha). Fences: 3 % of 17.9 km of OSM fence
+    (> 3 m from a hedge) is hit — the 2×2 opening removes them. Mask
+    breakdown: 30 % lies 1–2 m from a > 3 m crown (understory *or* crown-edge
+    false positives — the main remaining risk), 1.9 % on the road class
+    (cars), 1.8 % 1–2 m from a building, 2 % beside a fence. Checked by eye on
+    DSM-hillshade overlays: a clipped evergreen hedge beside a row of parked
+    cars is taken and the cars are not; grave shrubs on the Trinitatisfriedhof
+    come out as shrubs; a branchy scrub mass was first mis-skeletonised into a
+    "hedge network" (fixed by the inscribed-width + spur test).
+    Output: 594 hedges (65 OSM, 51 OSM+LSC, 478 LSC-only; 7.3 km) and
+    3 226 shrubs; 574 KB raw / 43 KB gzipped.
+  - *Trees outside the mask* (`canopyx`): crown peaks of the multi-echo (≥ 0.5)
+    > 3 m canopy, ≥ 3 m apart, more than 5 m from any current canopy point —
+    **8 006 trees** on top of today's 5 118 (96 % built-up class; 57 % more
+    than 15 m from the DLM road area, 1 969 of them enclosed by buildings on
+    ≥ 6 of 8 rays = courtyards; 16 % street-side). Rendered as ordinary canopy
+    trees. 910 KB raw / 70 KB gzipped.
+  - *Rendering* (`low-vegetation-layer.ts`, separate from the tree layer):
+    hedges are chains of superellipsoid "clay" blocks (288 tris, ≤ 2.5 m
+    pieces, 0.6 m overlap), shrubs a lobed dome (144 tris); rooted-base
+    darkening + a static world-space foliage mottle; 250 m chunks; cast and
+    receive shadows, no animation (ADR 0020).
+  - *Cost* (real GPU, 3200×2000, full block): `?veg=low` +9 364 instances
+    (5 882 hedge pieces + 3 482 shrubs; ≈ 2.2 M triangles built), +11–13 draw
+    calls/frame, +0.9–1.4 % triangles drawn, frame time 19.8 → 20.2 ms on the
+    fly-over (measured with a 216-triangle hedge block; the final one has 288). `?veg=trees` +8 006 trees
+    (+24 k instances incl. both crown LODs), +4.9–7 % triangles drawn, fly-over
+    19.8 → 23.0 ms.
+  - *Verdict so far:* the trees are the big visual win (the estates and
+    courtyards stop being bare); hedges read well along streets and parks;
+    shrubs add detail but facet at arm's length. Dedup with the municipal tree
+    cadastre: cadastre wins position/species; drop an LSC crown peak within
+    max(4 m, cadastre crown radius) of a cadastre tree; keep the LSC `h`
+    where the cadastre has none.
+  - Bake: `scripts/extract-lowveg.sh` (+ `extract-lowveg.py`, run under `uv`).
 
 ---
 
@@ -250,7 +324,9 @@ research that produced them):
 5. **Dappled canopy shadow** — alpha-tested colour-less proxy caster per chunk
    (mind the `WebGLShadowMap` alphaMap-override gotcha; see skill).
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
-   per-tree position/height/crown; bake to per-tile GeoJSON.
+   per-tree position/height/crown; bake to per-tile GeoJSON. *(First step 🧪
+   above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only;
+   the renderer still sizes a crown from `h` alone.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). Sizeable integration.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
@@ -295,6 +371,8 @@ research that produced them):
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | N8AO runs permanently at `halfRes`; only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
 | **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
+| **Multi-echo ratio as the low-vegetation cue** (LSC, 🧪 low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
+| **OSM scrub polygons filled with shrubs** (OSM-only tiles) | A jittered 3–4 m grid gave 4–9 k shrubs per neighbour tile — more than the laser scan finds on the primary — mostly under existing crowns. | OSM-only tiles get hedges + `natural=shrub` nodes only. |
 | **Camera-follow grass tuft ring** | Shadow-casting instances rewritten every frame; reads as confetti. | Meadow mottle + normal perturbation in the terrain shader (✅ above). |
 | **Per-lamp real point lights** | three bakes the light count into every program → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above). |
