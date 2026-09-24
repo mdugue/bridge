@@ -99,6 +99,7 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `lamps_<tile>.geojson` | lamp positions | up to 60 kB |
 | | `walls_<tile>.geojson` | wall lines with kind and height | 50–120 kB |
 | | `stairs_<tile>.geojson` | flights of steps: axis, width, step count, the heights at foot and head | a few kB |
+| | `terraces_<tile>.geojson` | raised areas the terrain model lacks (the Brühlsche Terrasse) with their level | a few kB |
 | | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |
 | | `bridge_<tile>.geojson` | bridge deck outlines with a height per corner, kind and structure | a few kB |
 | | `platform_<tile>.geojson` | station platforms | a few kB |

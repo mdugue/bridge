@@ -37,15 +37,25 @@ import { basename, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
-import type { StairFeature, WallFeature } from "../lib/city/features";
+import type {
+  StairFeature,
+  TerraceFeature,
+  WallFeature,
+} from "../lib/city/features";
 import { tileExtentOf } from "../lib/city/site";
-import { type StairLine, stairLineOf } from "../lib/city/stairs";
+import {
+  type StairLine,
+  stairLineOf,
+  type Terrace,
+  terraceOf,
+} from "../lib/city/stairs";
 import type { WallLine } from "../lib/city/terrain-conflate";
 import {
   cityMeshSourceFiles,
   type DataManifest,
   dgmSourceFiles,
   MANIFEST_FILE,
+  terraceSourceFile,
   tileArtifacts,
   tileIds,
 } from "../lib/city/tile";
@@ -303,6 +313,16 @@ function stairLines(tile: string): StairLine[] {
   return features.flatMap((f) => stairLineOf(f) ?? []);
 }
 
+/** The raised areas the terrain bake lifts to their level. */
+function terraces(tile: string): Terrace[] {
+  const path = at(terraceSourceFile(tile));
+  if (!existsSync(path)) {
+    return [];
+  }
+  const { features } = readJson<{ features: TerraceFeature[] }>(path);
+  return features.flatMap((f) => terraceOf(f) ?? []);
+}
+
 function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
   const pick = (kind: keyof DressingFiles) => names[kind] ?? "";
   return {
@@ -337,6 +357,7 @@ async function bakeTerrain(
     tfw,
     at(`data/dlm/${artifacts.walls.file}`),
     at(`data/dlm/${artifacts.stairs.file}`),
+    at(terraceSourceFile(tile)),
   ];
   const stem = `terrain_${tile}_l${level}`;
   const described = {
@@ -361,7 +382,10 @@ async function bakeTerrain(
         n
       );
       bounds = dgm.bounds;
-      mesh = terrainMesh(dgm, wallLines(tile), offset, stairLines(tile));
+      mesh = terrainMesh(dgm, wallLines(tile), offset, {
+        stairs: stairLines(tile),
+        terraces: terraces(tile),
+      });
     }
     return mesh;
   };

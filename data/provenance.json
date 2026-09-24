@@ -106,7 +106,8 @@
       "raw": "data/_raw/<site>/osm/Dresden.osm.pbf",
       "extract": "Dresden.osm.pbf (BBBike, Last-Modified 2026-09-19)",
       "products": {
-        "stairs": { "query": "highway=steps (+ area:highway=steps outlines for the width)", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" }
+        "stairs": { "query": "highway=steps (+ area:highway=steps outlines and barrier=wall/retaining_wall/city_wall for the width)", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" },
+        "terraces": { "query": "multipolygons on layer >= 1 (no building, man_made, landuse, bridge, railway or public_transport) that a flight the DGM runs flat under climbs onto", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" }
       }
     }
   }

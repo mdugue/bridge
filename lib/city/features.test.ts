@@ -9,11 +9,17 @@ import type {
   LampFeature,
   RailFeature,
   StairFeature,
+  TerraceFeature,
   VegRowFeature,
   WallFeature,
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
-import { type TileArtifact, tileArtifacts, tileIds } from "./tile";
+import {
+  type TileArtifact,
+  terraceSourceFile,
+  tileArtifacts,
+  tileIds,
+} from "./tile";
 
 // The committed bakes under data/dlm, checked against the shapes the layers
 // read. Every tile, every kind — a renamed property or a geometry type the
@@ -122,6 +128,22 @@ test.each(cases)(
       expect(Number.isInteger(f.properties?.n)).toBe(true);
       const [lo, hi] = f.properties?.z ?? [Number.NaN, Number.NaN];
       expect(hi).toBeGreaterThan(lo);
+    }
+  }
+);
+
+test.each(tileIds(DRESDEN))(
+  "%s: terraces are polygons with a level above the ground",
+  (tile) => {
+    const path = join(DATA, "..", "..", terraceSourceFile(tile));
+    const doc = existsSync(path)
+      ? (JSON.parse(
+          readFileSync(path, "utf8")
+        ) as FeatureCollection<TerraceFeature>)
+      : { features: [] };
+    for (const f of doc.features ?? []) {
+      expect(["Polygon", "MultiPolygon"]).toContain(f.geometry?.type ?? "");
+      expect(f.properties?.z).toBeGreaterThan(50);
     }
   }
 );

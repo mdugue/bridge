@@ -9,7 +9,12 @@
 import { fromArrayBuffer } from "geotiff";
 import { BufferAttribute, BufferGeometry } from "three";
 import { objectTable } from "../lib/city/city-mesh";
-import { burnStairs, type StairLine } from "../lib/city/stairs";
+import {
+  burnStairs,
+  raiseTerraces,
+  type StairLine,
+  type Terrace,
+} from "../lib/city/stairs";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
 import {
   buildTerrainGeometryData,
@@ -110,10 +115,18 @@ export interface TerrainMesh {
   maxElevation: number;
 }
 
+/** What the terrain bake shapes the DGM with besides the walls. */
+export interface TerrainFeatures {
+  stairs?: StairLine[];
+  terraces?: Terrace[];
+}
+
 /**
- * The terrain grid (+ its 30 m skirt) with the walls burned in as steps
- * (lib/city/terrain-conflate.ts) and the ground under each flight of stairs
- * lowered below its treads (lib/city/stairs.ts), in the recentered frame. The first n·n
+ * The terrain grid (+ its 30 m skirt) in the recentered frame, the DGM
+ * shaped in three passes: the walls burned in as steps
+ * (lib/city/terrain-conflate.ts), the raised areas the DGM lacks lifted to
+ * their level, then the ground under each flight of stairs lowered below its
+ * treads (lib/city/stairs.ts). The first n·n
  * vertices are the grid, row 0 = north: the runtime samples ground height
  * straight from them.
  */
@@ -121,17 +134,21 @@ export function terrainMesh(
   dgm: Dgm,
   walls: WallLine[],
   offset: { cx: number; cy: number },
-  stairs: StairLine[] = []
+  features: TerrainFeatures = {}
 ): TerrainMesh {
   const { n, bounds } = dgm;
-  const conflated =
-    walls.length > 0
-      ? conflateWalls({ elevations: dgm.elevations, n, bounds, walls })
-      : dgm.elevations;
-  const elevations =
-    stairs.length > 0
-      ? burnStairs({ elevations: conflated, n, bounds, stairs })
-      : conflated;
+  const { stairs = [], terraces = [] } = features;
+  let elevations: Float32Array = dgm.elevations;
+  if (walls.length > 0) {
+    elevations = conflateWalls({ elevations, n, bounds, walls });
+  }
+  if (terraces.length > 0) {
+    elevations = raiseTerraces({ elevations, n, bounds, terraces });
+  }
+  if (stairs.length > 0) {
+    const lines = walls.map((w) => w.coords);
+    elevations = burnStairs({ elevations, n, bounds, stairs, walls: lines });
+  }
   const { positions, indices, minElevation } = buildTerrainGeometryData({
     elevations,
     n,

@@ -93,6 +93,12 @@ export function tileArtifacts(
   };
 }
 
+/** The committed terraces (raised OSM areas, pipeline/bake/stairs.py): a
+ *  terrain bake input under data/dlm/, never served. */
+export function terraceSourceFile(tile: string): string {
+  return `data/dlm/terraces_${tile}.geojson`;
+}
+
 /** The committed DGM GeoTIFF (+ its .tfw sidecar) the heightfield bake reads. */
 export function dgmSourceFiles(tile: string): { tif: string; tfw: string } {
   const dir = `data/dgm/dgm1_${tile}_tiff`;

@@ -203,3 +203,64 @@ def test_cliffs_come_through_as_walls_of_their_own_kind(tmp_path, monkeypatch):
     assert f["properties"] == {"kind": "cliff", "h": 3.0}
     assert walls.kind_of(None, None, '"natural"=>"cliff"') == "cliff"
     assert walls.kind_of("retaining_wall", None, '"natural"=>"cliff"') == "retaining_wall"
+
+
+class _Bank:
+    """A DGM stub: 100 m south of y = 0, rising 4 m to y = 20 across all x."""
+
+    def at(self, x, y):
+        return 100 + 4 * min(max(y / 20, 0), 1)
+
+
+class _Flat:
+    def at(self, x, y):
+        return 112.0
+
+
+def test_an_untagged_flight_spans_the_slope_between_its_walls():
+    from bake.stairs import flight
+
+    walls = [
+        shapely.LineString([(-7, -5), (-7, 25)]),  # 7 m left
+        shapely.LineString([(11, -5), (11, 25)]),  # 11 m right
+    ]
+    f = flight(shapely.LineString([(0, 1), (0, 19)]), None, [], _Bank(), walls, [])
+    w = f["properties"]["w"]
+    assert abs(w - (18 - 0.6)) < 1e-6
+    (x0, _), (x1, _) = f["geometry"]["coordinates"]
+    assert x0 == x1 == 2.0  # re-centred between the walls
+
+
+def test_walls_too_far_or_on_one_side_leave_the_default_width():
+    from bake.stairs import DEFAULT_W, flight
+
+    line = shapely.LineString([(0, 1), (0, 19)])
+    one_side = [shapely.LineString([(-3, -5), (-3, 25)])]
+    assert flight(line, None, [], _Bank(), one_side, [])["properties"]["w"] == DEFAULT_W
+    far = [shapely.LineString([(-30, -5), (-30, 25)]), shapely.LineString([(30, -5), (30, 25)])]
+    assert flight(line, None, [], _Bank(), far, [])["properties"]["w"] == DEFAULT_W
+
+
+def test_a_flight_onto_a_raised_area_the_dgm_lacks_takes_its_tagged_rise():
+    from bake.stairs import flight
+
+    terrace = shapely.box(20, -10, 60, 10)
+    tags = '"step_count"=>"41","step:height"=>"0.15","incline"=>"up","width"=>"20"'
+    line = shapely.LineString([(0, 0), (21, 0)])  # drawn upwards, ends on the terrace
+    f = flight(line, tags, [], _Flat(), [], [terrace])
+    assert f["properties"]["z"] == [112.0, 118.15]
+    assert f["properties"]["n"] == 41
+    assert f["terrace"] is terrace
+    # Without a raised area at its top, the flight stays as flat as the DGM.
+    assert flight(line, tags, [], _Flat(), [], []) is None
+
+
+def test_only_plain_raised_areas_count_as_terraces():
+    from bake.stairs import is_raised
+
+    assert is_raised({"other_tags": '"layer"=>"1","highway"=>"pedestrian"'})
+    assert not is_raised({"other_tags": '"layer"=>"-1"'})
+    assert not is_raised({"other_tags": '"layer"=>"0"'})
+    assert not is_raised({"other_tags": '"layer"=>"1"', "building": "yes"})
+    assert not is_raised({"other_tags": '"layer"=>"1","railway"=>"platform"'})
+    assert not is_raised({"other_tags": '"layer"=>"1"', "landuse": "railway"})

@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import {
   axisMiddle,
   burnStairs,
-  MARGIN_DIG_M,
   projectOntoAxis,
+  raiseTerraces,
   STAIR_BURN_M,
   STAIR_RISER,
   STAIR_TREAD,
@@ -11,6 +11,7 @@ import {
   stairGeometry,
   stairLineOf,
 } from "./stairs";
+import { sampleHeightfield } from "./terrain-geometry";
 
 // A 100 m tile at 2 m/cell whose DGM is the smoothed bank a flight of steps
 // becomes: 100 m south of y = 40, 104 m north of y = 60, a ramp between —
@@ -84,8 +85,8 @@ test("the burn never raises the ground, and leaves it alone away from the flight
   expect(at(out, 51, 30)).toBe(at(el, 51, 30)); // below the bottom
 });
 
-test("the margin beside a flight sinks by at most MARGIN_DIG_M", () => {
-  // A terrace 3 m above the ramp right beside the flight.
+test("no terrain triangle under a flight keeps a vertex above its tread", () => {
+  // A terrace 3 m above the ramp right beside the flight, no wall between.
   const el = grid();
   for (let row = 0; row < N; row++) {
     for (let col = 0; col < N; col++) {
@@ -100,8 +101,62 @@ test("the margin beside a flight sinks by at most MARGIN_DIG_M", () => {
     bounds: BOUNDS,
     stairs: [FLIGHT],
   });
-  const x = 55; // outside the core (2 m + 1 m), inside the reach
-  expect(at(el, x, 50) - at(out, x, 50)).toBeCloseTo(MARGIN_DIG_M, 4);
+  // The ground, as the mesh interpolates it, stays under every tread of
+  // the 4 m flight (x 48–52), right to its edges.
+  for (let y = 40.5; y < 60; y += 0.25) {
+    const tread = 100 + (Math.floor(((y - 40) / 20) * 25) + 1) * 0.16;
+    for (const x of [48, 49, 51, 52]) {
+      const ground = sampleHeightfield(
+        { elevations: out, n: N, bounds: BOUNDS },
+        x,
+        y
+      );
+      expect(ground ?? Number.NaN).toBeLessThan(tread);
+    }
+  }
+});
+
+test("the burn never reaches across a wall", () => {
+  const el = grid();
+  const wall: [number, number][] = [
+    [52.5, 30],
+    [52.5, 70],
+  ];
+  const out = burnStairs({
+    elevations: el,
+    n: N,
+    bounds: BOUNDS,
+    stairs: [FLIGHT],
+    walls: [wall],
+  });
+  expect(at(out, 53.5, 50)).toBe(at(el, 53.5, 50)); // beyond the wall
+  expect(at(out, 46.5, 50)).toBeLessThan(at(el, 46.5, 50)); // no wall there
+});
+
+test("a terrace lifts the ground inside it and nowhere else", () => {
+  const el = grid();
+  const square: [number, number][] = [
+    [10, 10],
+    [30, 10],
+    [30, 30],
+    [10, 30],
+    [10, 10],
+  ];
+  const out = raiseTerraces({
+    elevations: el,
+    n: N,
+    bounds: BOUNDS,
+    terraces: [{ polygons: [[square]], z: 108 }],
+  });
+  expect(at(out, 20, 20)).toBe(108);
+  expect(at(out, 40, 20)).toBe(at(el, 40, 20));
+  const low = raiseTerraces({
+    elevations: el,
+    n: N,
+    bounds: BOUNDS,
+    terraces: [{ polygons: [[square]], z: 90 }],
+  });
+  expect(at(low, 20, 20)).toBe(at(el, 20, 20)); // never lowers
 });
 
 test("a point projects onto the axis only between its ends", () => {

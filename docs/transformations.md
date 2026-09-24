@@ -261,15 +261,23 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Flights of steps** (*Freitreppe am Italienischen Dörfchen &c.*) — OSM
   `highway=steps` (ODbL). `pipeline/bake/stairs.py` → `stairs_<tile>.geojson`:
   the axis oriented bottom → top, `w` from `width` (else an
-  `area:highway=steps` outline: area ÷ axis length; else 2.5 m), `z` = the two
+  `area:highway=steps` outline: area ÷ axis length; else the gap between the
+  OSM walls either side when the slope fills it, the axis re-centred; else
+  2.5 m), `z` = the two
   landing heights from the DGM 1 m beyond each end (3×3 m median), `n` from
   `step_count` when its riser is 8–25 cm, else rise ÷ 16 cm. Indoor,
   underground, tunnel and bridge flights and anything flatter than 30 cm are
-  left out. At build, `lib/city/stairs.ts` `burnStairs` lowers the terrain
-  under each flight to 12 cm below the ramp through the steps' inner corners
-  (after the wall conflation; only ever lowers; the margin beside a flight
-  sinks ≤ 0.5 m). `stair-layer.ts` stands the flight as stone blocks —
-  treads, darker risers, side cheeks — on the tile owning its middle.
+  left out. Where the DGM lacks the structure a flight climbs (less than
+  half its tagged rise) and its top lands on a raised OSM area (`layer` ≥ 1),
+  the tagged rise wins and the area goes to `terraces_<tile>.geojson` at the
+  flight's top level — the Brühlsche Terrasse, 118.3 m over the
+  Schlossplatz's 112.2 m. At build, `lib/city/stairs.ts` lifts the ground
+  inside each terrace (`raiseTerraces`, after the wall conflation), then
+  `burnStairs` lowers the terrain under each flight to 12 cm below the ramp
+  through the steps' inner corners — every vertex whose triangles reach
+  under it, never across a wall. `stair-layer.ts` stands the flight as
+  sandstone blocks — treads, darker risers, side cheeks down past the
+  bottom landing — on the tile owning its middle.
   **Why:** the DGM1 smooths a staircase into a bank (the flight beside the
   Italienisches Dörfchen read as a grassy slope) and its ~2 m grid cannot
   hold a 16 cm riser ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md)).

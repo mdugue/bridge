@@ -21,22 +21,38 @@ in the ingest adapter and the Geofabrik extract is already read.
   not indoor, underground, in a tunnel or on a bridge becomes a flight:
   its axis oriented bottom → top, the two landing heights read from the DGM
   a metre beyond each end (3×3 m median), the width from `width`, else an
-  `area:highway=steps` outline over the way (area ÷ axis length), else
+  `area:highway=steps` outline over the way (area ÷ axis length), else the
+  gap between the OSM walls either side (within 15 m, the axis re-centred
+  between them) when the slope fills that gap — both edges climb at least
+  half the axis's rise, as beside the Italienisches Dörfchen — else
   2.5 m, and the step count from `step_count` when it gives a riser of
   8–25 cm, else the rise ÷ 16 cm. Flatter than 30 cm: left out (the DGM
   cannot place it). Unclipped; the viewer stands a flight on the tile that
   owns its middle.
-- **Build** (`lib/city/stairs.ts` `burnStairs`, after the wall conflation):
-  the terrain grid under the flight is lowered to 12 cm below the ramp
-  through the steps' inner corners, so no ground pokes through a tread.
-  It only ever lowers; the cells beside the flight whose triangles reach
-  under its edge may sink by at most 0.5 m, so a flight along a retaining
-  wall does not dig into the terrace above it.
+- **Structures the DGM lacks**: the Brühlsche Terrasse stands on casemates,
+  so the bare-earth DGM runs flat under it and the Freitreppe from the
+  Schlossplatz came out as two 18 cm steps. When the DGM gives a flight
+  less than half its tagged rise (`step_count` × `step:height`, 15 cm
+  untagged), its `incline` says which end is up, and that end lies within
+  3 m of a raised OSM area (`layer` ≥ 1; no building, bridge or railway
+  area), the tagged rise is taken from the lower landing, and the area is
+  written to `terraces_<tile>.geojson` at the flight's top level (the
+  highest, when several reach it).
+- **Build** (`lib/city/stairs.ts`, after the wall conflation):
+  `raiseTerraces` lifts the grid inside each terrace to its level; then
+  `burnStairs` lowers the grid under each flight to 12 cm below the ramp
+  through the steps' inner corners — every vertex within the half width
+  plus 1.5 cells of the axis, its ends included, because each vertex of a
+  triangle under a tread lies within √2 cells of it. It only ever lowers,
+  and never across a wall: a vertex beyond the flight's edge with a wall
+  between it and the axis is left alone, so a flight between walls does
+  not dig into the terrace beyond them.
 - **Viewer** (`stair-layer.ts`): each flight is built as stone blocks —
   a tread per step at z0 + (k+1)·rise (the last tread is the top landing),
   a riser at each step's front, and side cheeks reaching 0.6 m below the
-  ramp. Risers are shaded darker than treads, cheeks between, so the steps
-  read under flat light. A bend closes its outer wedge instead of mitring
+  bottom landing, so a lifted flight is a solid block down to the ground.
+  The stone is a warm sandstone a shade deeper than the pale ground, risers
+  at 62 %, cheeks at 80 % of it, so the steps read under flat light. A bend closes its outer wedge instead of mitring
   (a mitred inner edge folds back on a short step).
 
 ## Consequences
@@ -47,6 +63,13 @@ in the ingest adapter and the Geofabrik extract is already read.
   where a flight ends at a conflated wall step, its landing and the
   terrain may differ by the wall's feathering.
 - A step count is a tag or an estimate, never measured.
+- A terrace is only as good as its OSM outline: the Brühlsche Terrasse
+  area is the promenade strip, not the whole platform; the buildings on the
+  platform keep their LoD2 bases.
+- The first rendering had a margin capped at 0.5 m and a 2.5 m default
+  width for the Dörfchen flight: the ground beside the steps covered their
+  edges like snow, and the flight was a seventh of its real width. Both
+  were reported and are what the wall rules above replace.
 - Portable: any DEM plus any OSM extract; no DOM or DOP needed.
 
 ## Alternatives
@@ -55,6 +78,9 @@ in the ingest adapter and the Geofabrik extract is already read.
   coarse level); a 30 cm tread cannot exist in it.
 - **A textured ramp** (a stripe shader on the slope): no silhouette, no
   shadows between steps, and the ramp keeps the DGM's rounded profile.
+- **Trusting a tagged rise everywhere the DGM disagrees**: the top of such
+  a flight would float in the air wherever nothing raises the ground to
+  meet it; the rise is only taken where a raised area is there to lift.
 - **Treads raised over the untouched DGM**: the smoothed profile bulges
   above the straight line between the landings, so the ground cut through
   the lower half of the treads (a zebra of terrain and stone).

@@ -33,11 +33,12 @@ export interface StairContext {
   offset: RecenterOffset;
 }
 
-/** Pale sandstone, a shade lighter than the walls (0xc9bda4). */
-const STONE = new Color(0xd8_ce_b9);
-/** Risers a touch darker than the treads, cheeks between: the flight reads
- *  as steps even under a flat, overcast light. */
-const SHADE = { tread: 1, riser: 0.82, cheek: 0.9 };
+/** Warm sandstone, a shade deeper than the pale ground around a flight so
+ *  it never reads as a snow-covered bank. */
+const STONE = new Color(0xc4_b0_90);
+/** Risers clearly darker than the treads, cheeks between: every step edge
+ *  reads, even under a flat, overcast light. */
+const SHADE = { tread: 1, riser: 0.62, cheek: 0.8 };
 
 function shadeOf(kind: number): number {
   if (kind === STAIR_RISER) {

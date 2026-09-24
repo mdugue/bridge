@@ -8,20 +8,23 @@
  * read as a grassy slope). The bake gives each flight its axis (bottom →
  * top), width, step count and the two landing heights; here
  *
+ * - `raiseTerraces` lifts the ground inside the raised OSM areas the bake
+ *   found a lifted flight climbing onto (the Brühlsche Terrasse stands on
+ *   casemates, so the bare-earth DGM runs flat under it);
  * - `burnStairs` lowers the terrain grid under the flight to just below the
- *   ramp through the steps' inner corners, so no ground pokes through a
- *   tread (only ever lowers; a narrow margin beside the flight may sink by
- *   at most `MARGIN_DIG_M`, so a flight along a retaining wall does not dig
- *   into the terrace above it);
+ *   ramp through the steps' inner corners — every grid vertex whose
+ *   triangles reach under the flight, so no ground pokes through a tread
+ *   (only ever lowers, and never across a wall: a flight between walls does
+ *   not dig into the terrace beyond them);
  * - `stairGeometry` builds the flight as solid blocks: a tread per step, a
- *   riser at each step's front and the two side cheeks, all reaching below
- *   the burned ground.
+ *   riser at each step's front and the two side cheeks, reaching below the
+ *   bottom landing.
  *
  * Step k (0-based) spans [k, k+1]·L/n along the axis with its tread at
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
-import type { StairFeature } from "./features";
+import type { StairFeature, TerraceFeature } from "./features";
 import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
 import { isInvalidElevation, type TerrainBounds } from "./terrain-geometry";
@@ -39,10 +42,20 @@ export interface StairLine {
 
 /** How far below the ramp the burn puts the ground (m). */
 export const STAIR_BURN_M = 0.12;
-/** The most the margin beside a flight may sink (m). */
-export const MARGIN_DIG_M = 0.5;
-/** How far below the ramp the cheeks and the first riser reach (m). */
+/** How far beyond the flight's edge the burn reaches, in grid cells: every
+ *  vertex of a triangle under the flight lies within √2 cells of it. */
+const BURN_REACH_CELLS = 1.5;
+/** How far below the bottom landing the cheeks and the first riser reach
+ *  (m): the flight is a solid block, whatever the ground does beside it. */
 const BURY_M = 0.6;
+
+/** A raised area the build lifts the ground to (pipeline/bake/stairs.py). */
+export interface Terrace {
+  /** polygons, each outer ring then holes, EPSG coordinates */
+  polygons: Point2[][][];
+  /** the level (m) */
+  z: number;
+}
 
 /** The bake's feature as a flight, or null when it is not one. */
 export function stairLineOf(f: StairFeature): StairLine | null {
@@ -60,6 +73,17 @@ export function stairLineOf(f: StairFeature): StairLine | null {
     return null;
   }
   return { coords, n: Math.round(p.n), w: p.w, z: [p.z[0], p.z[1]] };
+}
+
+/** The bake's terrace feature, or null when it is not one. */
+export function terraceOf(f: TerraceFeature): Terrace | null {
+  const z = f.properties?.z;
+  const g = f.geometry;
+  if (!(g && Number.isFinite(z))) {
+    return null;
+  }
+  const polygons = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+  return polygons.length > 0 ? { polygons, z: z as number } : null;
 }
 
 /** Cumulative arc length at each vertex. */
@@ -94,15 +118,24 @@ function rampAt(stair: StairLine, s: number, length: number): number {
   return stair.z[0] + (stair.z[1] - stair.z[0]) * t;
 }
 
-/** Where a point projects onto the axis: arc length and distance, or null
- *  when it lies beyond either end. */
-export function projectOntoAxis(
+interface AxisHit {
+  /** distance from the axis (m) */
+  d: number;
+  /** the nearest point on the axis */
+  px: number;
+  py: number;
+  /** arc length of that point, clamped to the axis */
+  s: number;
+}
+
+/** The nearest point on the axis, and whether it is past either end. */
+function nearestOnAxis(
   coords: Point2[],
   x: number,
   y: number
-): { d: number; s: number } | null {
+): (AxisHit & { beyond: boolean }) | null {
   const lengths = arcLengths(coords);
-  let best: { d: number; s: number; beyond: boolean } | null = null;
+  let best: (AxisHit & { beyond: boolean }) | null = null;
   const last = coords.length - 2;
   for (let i = 0; i <= last; i++) {
     const [x0, y0] = coords[i];
@@ -113,13 +146,73 @@ export function projectOntoAxis(
     }
     const raw = ((x - x0) * (x1 - x0) + (y - y0) * (y1 - y0)) / (len * len);
     const t = Math.min(Math.max(raw, 0), 1);
-    const d = Math.hypot(x - (x0 + (x1 - x0) * t), y - (y0 + (y1 - y0) * t));
+    const px = x0 + (x1 - x0) * t;
+    const py = y0 + (y1 - y0) * t;
+    const d = Math.hypot(x - px, y - py);
     if (!best || d < best.d) {
       const beyond = (i === 0 && raw < 0) || (i === last && raw > 1);
-      best = { d, s: lengths[i] + t * len, beyond };
+      best = { d, px, py, s: lengths[i] + t * len, beyond };
     }
   }
-  return best && !best.beyond ? { d: best.d, s: best.s } : null;
+  return best;
+}
+
+/** Where a point projects onto the axis: arc length and distance, or null
+ *  when it lies beyond either end. */
+export function projectOntoAxis(
+  coords: Point2[],
+  x: number,
+  y: number
+): { d: number; s: number } | null {
+  const hit = nearestOnAxis(coords, x, y);
+  return hit && !hit.beyond ? { d: hit.d, s: hit.s } : null;
+}
+
+/** Whether segments ab and cd cross. */
+function crosses(a: Point2, b: Point2, c: Point2, d: Point2): boolean {
+  const side = (p: Point2, q: Point2, r: Point2) =>
+    (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const d1 = side(c, d, a);
+  const d2 = side(c, d, b);
+  const d3 = side(a, b, c);
+  const d4 = side(a, b, d);
+  return d1 * d2 < 0 && d3 * d4 < 0;
+}
+
+/** Whether any wall runs between a point and the axis point nearest it. */
+function behindWall(walls: Point2[][], from: Point2, to: Point2): boolean {
+  for (const wall of walls) {
+    for (let i = 0; i < wall.length - 1; i++) {
+      if (crosses(from, to, wall[i], wall[i + 1])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** The walls whose extent overlaps the axis's, grown by `reach` (a cheap
+ *  prefilter). */
+function wallsNear(
+  walls: Point2[][],
+  coords: Point2[],
+  reach: number
+): Point2[][] {
+  const box = (pts: Point2[], pad: number) => {
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    return [
+      Math.min(...xs) - pad,
+      Math.min(...ys) - pad,
+      Math.max(...xs) + pad,
+      Math.max(...ys) + pad,
+    ];
+  };
+  const [ax0, ay0, ax1, ay1] = box(coords, reach);
+  return walls.filter((w) => {
+    const [wx0, wy0, wx1, wy1] = box(w, 0);
+    return wx0 <= ax1 && wx1 >= ax0 && wy0 <= ay1 && wy1 >= ay0;
+  });
 }
 
 export interface StairBurnInput {
@@ -130,14 +223,17 @@ export interface StairBurnInput {
   /** grid size (n x n) */
   n: number;
   stairs: StairLine[];
+  /** wall lines (EPSG): the burn never reaches across one */
+  walls?: Point2[][];
 }
 
 /**
  * Lowers the grid under every flight to `STAIR_BURN_M` below its ramp, in a
- * COPY of the elevations. Cells within half the width (+ half a cell) of the
- * axis sink as far as that takes; cells up to a cell and a half further out
- * — the triangles that reach under the flight's edge — by at most
- * `MARGIN_DIG_M`. NoData stays NoData; nothing is ever raised.
+ * COPY of the elevations: every vertex within half the width plus
+ * `BURN_REACH_CELLS` cells of the axis (its ends included), so no triangle
+ * under a tread keeps a vertex above it. A vertex beyond the flight's edge
+ * with a wall between it and the axis is left alone. NoData stays NoData;
+ * nothing is ever raised.
  */
 export function burnStairs(input: StairBurnInput): Float32Array {
   const { elevations, n, bounds, stairs } = input;
@@ -151,8 +247,9 @@ export function burnStairs(input: StairBurnInput): Float32Array {
     if (length === 0) {
       continue;
     }
-    const core = stair.w / 2 + cell / 2;
-    const reach = core + cell;
+    const half = stair.w / 2;
+    const reach = half + cell * BURN_REACH_CELLS;
+    const walls = wallsNear(input.walls ?? [], stair.coords, reach);
     const xs = stair.coords.map((p) => p[0]);
     const ys = stair.coords.map((p) => p[1]);
     const col0 = Math.max(0, Math.floor((Math.min(...xs) - reach - minX) / dx));
@@ -170,17 +267,73 @@ export function burnStairs(input: StairBurnInput): Float32Array {
       for (let col = col0; col <= col1; col++) {
         const idx = row * n + col;
         const z = out[idx];
-        if (isInvalidElevation(z)) {
-          continue;
-        }
-        const hit = projectOntoAxis(stair.coords, minX + (col + 0.5) * dx, y);
+        const x = minX + (col + 0.5) * dx;
+        const hit = isInvalidElevation(z)
+          ? null
+          : nearestOnAxis(stair.coords, x, y);
         if (!hit || hit.d > reach) {
           continue;
         }
-        const target = rampAt(stair, hit.s, length) - STAIR_BURN_M;
-        const floor =
-          hit.d <= core ? target : Math.max(target, z - MARGIN_DIG_M);
-        out[idx] = Math.min(z, floor);
+        if (hit.d > half && behindWall(walls, [x, y], [hit.px, hit.py])) {
+          continue;
+        }
+        out[idx] = Math.min(z, rampAt(stair, hit.s, length) - STAIR_BURN_M);
+      }
+    }
+  }
+  return out;
+}
+
+/** Even-odd point-in-polygon over every ring (holes included). */
+function insidePolygon(rings: Point2[][], x: number, y: number): boolean {
+  let inside = false;
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+  }
+  return inside;
+}
+
+export interface TerraceRaiseInput {
+  bounds: TerrainBounds;
+  elevations: ArrayLike<number>;
+  n: number;
+  terraces: Terrace[];
+}
+
+/**
+ * Lifts every grid vertex inside a terrace to its level, in a COPY of the
+ * elevations; never lowers, NoData stays NoData.
+ */
+export function raiseTerraces(input: TerraceRaiseInput): Float32Array {
+  const { elevations, n, bounds, terraces } = input;
+  const out = Float32Array.from(elevations);
+  const [minX, minY, maxX, maxY] = bounds;
+  const dx = (maxX - minX) / n;
+  const dy = (maxY - minY) / n;
+  for (const terrace of terraces) {
+    for (const rings of terrace.polygons) {
+      const outer = rings[0] ?? [];
+      const xs = outer.map((p) => p[0]);
+      const ys = outer.map((p) => p[1]);
+      const col0 = Math.max(0, Math.floor((Math.min(...xs) - minX) / dx));
+      const col1 = Math.min(n - 1, Math.ceil((Math.max(...xs) - minX) / dx));
+      const row0 = Math.max(0, Math.floor((maxY - Math.max(...ys)) / dy));
+      const row1 = Math.min(n - 1, Math.ceil((maxY - Math.min(...ys)) / dy));
+      for (let row = row0; row <= row1; row++) {
+        const y = maxY - (row + 0.5) * dy;
+        for (let col = col0; col <= col1; col++) {
+          const idx = row * n + col;
+          const x = minX + (col + 0.5) * dx;
+          if (!isInvalidElevation(out[idx]) && insidePolygon(rings, x, y)) {
+            out[idx] = Math.max(out[idx], terrace.z);
+          }
+        }
       }
     }
   }
@@ -346,7 +499,7 @@ export function stairGeometry(
   const rise = (stair.z[1] - stair.z[0]) / stair.n;
   const half = stair.w / 2;
   const tread = (k: number) => stair.z[0] + (k + 1) * rise;
-  const base = (s: number) => rampAt(stair, s, length) - BURY_M;
+  const base = stair.z[0] - BURY_M;
   const stepOf = (s: number) =>
     Math.min(stair.n - 1, Math.floor((s / length) * stair.n + 1e-6));
   const edge = (c: Section, side: 1 | -1): [number, number] => [
@@ -368,8 +521,8 @@ export function stairGeometry(
       [0, 0, 1],
       STAIR_TREAD
     );
-    cheek(out, bl, al, [base(b.s), base(a.s)], h, [a.px, a.py]);
-    cheek(out, ar, br, [base(a.s), base(b.s)], h, [-a.px, -a.py]);
+    cheek(out, bl, al, [base, base], h, [a.px, a.py]);
+    cheek(out, ar, br, [base, base], h, [-a.px, -a.py]);
   };
   for (const [j, sections] of segments.entries()) {
     for (let i = 0; i < sections.length - 1; i++) {
@@ -378,7 +531,7 @@ export function stairGeometry(
     const next = segments[j + 1]?.[0];
     const end = sections.at(-1);
     if (next && end) {
-      joint(out, end, next, half, tread(stepOf(end.s)), base(end.s));
+      joint(out, end, next, half, tread(stepOf(end.s)), base);
     }
   }
   // A riser at the front of every step, facing down the flight.
@@ -389,7 +542,7 @@ export function stairGeometry(
     if (!c) {
       continue;
     }
-    const lo = k === 0 ? base(0) : tread(k - 1);
+    const lo = k === 0 ? base : tread(k - 1);
     const [l, r] = [edge(c, 1), edge(c, -1)];
     // −tangent: the left perpendicular turned counter-clockwise
     out.quad(

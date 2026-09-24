@@ -103,8 +103,9 @@ is the codebook.
 | Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
 | Wall ribbon | line + `h`, base draped on every loaded terrain | OSM | `wall-layer.ts` |
-| Ground under stairs | flight axis + `w` + landings `z`: lowered to 12 cm below the ramp at build, the margin ≤ 0.5 m | OSM + DGM1 | `lib/city/stairs.ts` `burnStairs` |
-| Steps | `n` treads at z0 + (k+1)·rise across `w`; risers × 0.82, cheeks × 0.9 of the stone colour | OSM + DGM1 | `stair-layer.ts`, `lib/city/stairs.ts` `stairGeometry` |
+| Raised terrace | a `layer` ≥ 1 OSM area a lifted flight lands on: the ground inside lifted to its level `z` at build | OSM (+ tagged steps) | `lib/city/stairs.ts` `raiseTerraces` |
+| Ground under stairs | flight axis + `w` + landings `z`: every vertex within `w`/2 + 1.5 cells lowered to 12 cm below the ramp at build, never across a wall | OSM + DGM1 | `lib/city/stairs.ts` `burnStairs` |
+| Steps | `n` treads at z0 + (k+1)·rise across `w`, cheeks down to z0 − 0.6 m; sandstone `0xc4b090`, risers × 0.62, cheeks × 0.8 | OSM + DGM1 | `stair-layer.ts`, `lib/city/stairs.ts` `stairGeometry` |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
 | Valley fog | world height below a floor derived from the lowest terrain landed so far | DGM1 | `height-fog.ts` (*Talnebel*) |

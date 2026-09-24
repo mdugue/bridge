@@ -70,6 +70,14 @@ export interface StairFeature {
   properties: { n: number; w: number; z: [number, number] } | null;
 }
 
+/** Raised OSM areas a flight climbs onto that the DGM lacks (the Brühlsche
+ *  Terrasse; pipeline/bake/stairs.py, ODbL): the level (m) the build lifts
+ *  the ground inside them to. */
+export interface TerraceFeature {
+  geometry: MultiPolygonGeometry | PolygonGeometry | null;
+  properties: { z: number } | null;
+}
+
 /** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
 export interface RailFeature {
   geometry: LineGeometry;
