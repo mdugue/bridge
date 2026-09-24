@@ -22,6 +22,12 @@ viewer thinks in tiles too.
 gaps the official datasets leave: street lamps, station platforms,
 retaining walls with their heights, and what kind of structure a bridge is.
 
+**Landeshauptstadt Dresden** — the city itself. Its street-tree register
+(*Stadtbaumkataster*) lists about 124,000 municipal trees with species,
+height and crown width. It is used only by an experimental option (open the
+viewer with `?trees=kataster`), which plants those trees where they really
+stand.
+
 ## The datasets at a glance
 
 | Dataset | Plain-English name | Provider | What the viewer uses it for |
@@ -32,6 +38,7 @@ retaining walls with their heights, and what kind of structure a bridge is.
 | **Basis-DLM** | Digital landscape model (the land-use map) | GeoSN | Ground colours, water outlines, hedges and tree rows, railway areas and tracks, bridge outlines |
 | **DOP** | Digital orthophoto, 20 cm, with a near-infrared channel | GeoSN | Roof colours; vegetation greenness for tree crowns and meadows |
 | **OSM** | OpenStreetMap | Volunteers | Street lamps, station platforms, walls, bridge structure types |
+| **Stadtbaumkataster** *(experimental)* | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width and a crown shape from the species (`?trees=kataster` only) |
 
 Available from the same portal but **not used yet**: the laser-scan point
 cloud (individual tree crowns would come from it), the cadastral parcels
@@ -242,6 +249,8 @@ Saxony extract (`sachsen-latest.osm.pbf`).
 |---|---|---|
 | GeoSN datasets (DGM1, DOM1, LoD2, Basis-DLM, DOP) | *Datenlizenz Deutschland – Namensnennung – Version 2.0* (`dl-de/by-2-0`), per GeoSN's [terms of use](https://www.landesvermessung.sachsen.de/allgemeine-nutzungsbedingungen-8954.html) (checked 2026-09-22) | "Quelle: GeoSN, dl-de/by-2-0" |
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
+| Stadtbaumkataster *(experimental)* | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
 
-The viewer shows both credits in the footer of its settings panel. The
+The viewer shows both credits in the footer of its settings panel (the
+street-tree credit joins them while the experimental option is on). The
 derived lamp and wall files carry the OSM credit inside the file as well.

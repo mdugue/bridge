@@ -32,6 +32,15 @@ export type SceneProfile = "full" | "lite";
 
 export type DeviceTier = "desktop" | "mobile";
 
+/**
+ * Where the trees come from. `canopy` is the product: DLM tree rows plus the
+ * DOM1 canopy points. `kataster` (🧪, `?trees=kataster`) adds the Dresden
+ * street-tree cadastre at its surveyed positions, heights, crown widths and
+ * archetype shapes (tree-inventory-layer.ts), and drops the row/canopy trees
+ * standing inside a cadastre tree's crown.
+ */
+export type TreeSource = "canopy" | "kataster";
+
 /** The N8AO quality modes this scene uses (the pass also knows Low/High/Ultra). */
 export type AoQuality = "Medium" | "Performance";
 
@@ -54,6 +63,8 @@ export interface SceneBudget {
   /** `?terrain=tin` opts into the terrain TIN experiment; default `grid` */
   terrain: TerrainMode;
   tier: DeviceTier;
+  /** the tree inputs (experimental: `?trees=kataster`) */
+  trees: TreeSource;
 }
 
 /** Parses the terrain mode out of a `location.search` string. Pure. */
@@ -73,6 +84,13 @@ export function sceneProfileFromSearch(search: string): SceneProfile {
  */
 export function liteKeepsBlockFromSearch(search: string): boolean {
   return new URLSearchParams(search).get("block") === "1";
+}
+
+/** `?trees=kataster` opts into the tree-cadastre prototype. Pure. */
+export function treeSourceFromSearch(search: string): TreeSource {
+  return new URLSearchParams(search).get("trees") === "kataster"
+    ? "kataster"
+    : "canopy";
 }
 
 /** The media query that marks a touch-first device (also drives the touch HUD). */
@@ -96,6 +114,7 @@ export function sceneBudgetFor(
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
     lowRasters: tier === "mobile",
     terrain: terrainModeFromSearch(search),
+    trees: treeSourceFromSearch(search),
   };
 }
 

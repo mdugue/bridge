@@ -32,6 +32,7 @@ import type {
   CanopyFeature,
   LampFeature,
   RailFeature,
+  TreeFeature,
   VegRowFeature,
   WallFeature,
 } from "@/lib/city/features";
@@ -87,6 +88,7 @@ import {
   trackedTextureBytes,
 } from "./three-utils";
 import { attachTouchControls } from "./touch-controls";
+import { buildTreeInventory } from "./tree-inventory-layer";
 import {
   buildVegetation,
   loadNdviSampler,
@@ -599,19 +601,39 @@ async function bootApp(
     t: TerrainLayer,
     onFetched?: () => void
   ): Promise<void> => {
-    const [rows, canopy, ndviAt, lampFeatures] = await Promise.all([
-      fetchFeatures<VegRowFeature>(tile.vegrows, opts.signal),
-      fetchFeatures<CanopyFeature>(tile.canopy, opts.signal),
-      loadNdviSampler(tile.ndvi, t.bounds, opts.signal),
-      fetchFeatures<LampFeature>(tile.lamps, opts.signal),
-    ]);
+    const [rows, canopy, ndviAt, lampFeatures, inventoryTrees] =
+      await Promise.all([
+        fetchFeatures<VegRowFeature>(tile.vegrows, opts.signal),
+        fetchFeatures<CanopyFeature>(tile.canopy, opts.signal),
+        loadNdviSampler(tile.ndvi, t.bounds, opts.signal),
+        fetchFeatures<LampFeature>(tile.lamps, opts.signal),
+        // 🧪 ?trees=kataster: the street-tree cadastre (tree-inventory-layer.ts)
+        budget.trees === "kataster"
+          ? fetchFeatures<TreeFeature>(tile.trees, opts.signal)
+          : Promise.resolve([]),
+      ]);
     ensureAlive();
     // The features are in; the canopy build is the other half of the wait.
     onFetched?.();
     const ground = { offset, heightAt: t.heightAt };
+    const vegCtx = { ...ground, sunDirection, heightFog };
+    const inventory =
+      inventoryTrees.length > 0
+        ? buildTreeInventory(inventoryTrees, vegCtx, ndviAt ?? undefined)
+        : null;
+    if (inventory) {
+      scene.add(inventory.control.group);
+      vegControls.push(inventory.control);
+      inventory.control.applyLook(opts.look.get());
+    }
     const vegetation = buildVegetation(
-      { rows, canopy, ndviAt: ndviAt ?? undefined },
-      { ...ground, sunDirection, heightFog }
+      {
+        rows,
+        canopy,
+        ndviAt: ndviAt ?? undefined,
+        keepTree: inventory?.keepTree,
+      },
+      vegCtx
     );
     // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
     scene.add(vegetation.group);

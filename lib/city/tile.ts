@@ -169,6 +169,7 @@ export const TILE_URL_KINDS = [
   "platform",
   "rail",
   "railarea",
+  "trees",
   "vegrows",
   "walls",
 ] as const;
@@ -262,6 +263,7 @@ export function tileArtifacts(spec: TileSpec): TileArtifacts {
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
     walls: dlm(`walls_${tile}.geojson`),
+    trees: dlm(`trees_${tile}.geojson`),
     ...tinArtifacts(spec),
   };
 }

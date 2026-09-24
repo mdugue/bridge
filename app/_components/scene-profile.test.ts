@@ -7,6 +7,7 @@ import {
   sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapSizeFor,
+  treeSourceFromSearch,
 } from "./scene-profile";
 
 test("sceneProfileFromSearch defaults to the full product scene", () => {
@@ -63,6 +64,7 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     neighbourTiles: true,
     lowRasters: false,
     terrain: "grid",
+    trees: "canopy",
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
     profile: "lite",
@@ -70,6 +72,7 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     neighbourTiles: false,
     lowRasters: true,
     terrain: "grid",
+    trees: "canopy",
   });
   // The terrain TIN is an opt-in experiment; anything else keeps the grid.
   expect(sceneBudgetFor("?terrain=tin", false).terrain).toBe("tin");
@@ -79,6 +82,15 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     true
   );
   expect(sceneBudgetFor("?block=1", false).neighbourTiles).toBe(true);
+});
+
+test("the tree cadastre is opt-in via ?trees=kataster, orthogonal to the profile", () => {
+  expect(treeSourceFromSearch("")).toBe("canopy");
+  expect(treeSourceFromSearch("?trees=osm")).toBe("canopy");
+  expect(treeSourceFromSearch("?trees=kataster")).toBe("kataster");
+  expect(sceneBudgetFor("?scene=lite&trees=kataster", false).trees).toBe(
+    "kataster"
+  );
 });
 
 test("aoQualityFor drops to Performance only in the lite profile", () => {

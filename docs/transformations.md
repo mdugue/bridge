@@ -293,6 +293,52 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   support (the bake refuses holes), crease-angle normals, and a TIN per
   neighbour (±0.25–0.5 m would undercut their 512² grids in bytes and
   triangles, from the committed DGMs alone).
+- **Tree inventory from the Dresden street-tree cadastre** (`?trees=kataster`)
+  — *inputs:* the city's *Stadtbaumkataster* (WFS `cls:L1261`, dl-de/by-2-0
+  "Landeshauptstadt Dresden"; street trees, parks, schools — not the Großer
+  Garten, not private ground): position, height, crown diameter, taxon.
+  `scripts/extract-trees.sh` bakes `data/dlm/trees_<tile>.geojson` (h, d,
+  archetype id, leaf type, foliage colour; missing h/d imputed from the genus
+  median / the archetype's d:h), with the taxonomy in
+  `scripts/tree_archetypes.py`: genus + cultivar + German name → six
+  archetypes (round 66 %, oval 15 %, small ornamental 12 % incl. 276 globe
+  cultivars, columnar 5 %, conifer 1.8 %, weeping 0.1 % of the block's 18 444
+  trees), leaf type (318 evergreen; *Larix/Metasequoia/Taxodium* are
+  leaf-off) and 193 purple / 40 golden cultivars. *What it does:*
+  `tree-inventory-layer.ts` plants each tree at its surveyed spot; the
+  per-instance scale is non-uniform (crown width = `d`, crown depth = `h`
+  minus an archetype clear stem), so round/oval/small share the lobed
+  broadleaf crown and only three silhouettes get geometry of their own (a
+  flame for fastigiate cultivars, a tiered lathe cone for conifers, a
+  curtained dome for weeping trees) — same crown material, LOD swap and
+  250 m chunks as the canopy. Evergreens, purple and golden cultivars are
+  tinted from the cadastre; deciduous crowns keep the NDVI remap. Row and
+  canopy trees inside a cadastre crown (radius max(d/2, 3.5 m)) are dropped
+  unless they overtop it by max(5 m, 30 %) (`lib/city/tree-inventory.ts`).
+  *Findings* (`scripts/eval/kataster-eval.py`): only **31 %** of cadastre
+  trees have a canopy point (21 % on the primary tile) — the canopy mask
+  misses 99 % of the trees standing on road pixels and 67 % of those on
+  built-up land; 7 743 of the missing trees are ≥ 8 m tall. 41 % of the DLM
+  tree-row samples duplicate a cadastre tree. Where both exist, heights agree
+  to a 2.8 m median absolute difference (canopy 1.0 m lower, r = 0.72).
+  **Leaf-off NDVI cannot assign a leaf type**: AUC 0.87, but at the best
+  balanced threshold (NDVI ≥ 0.37) precision for "evergreen" is 6.5 %
+  (265 of 4 073 flagged), and it would flag 31 % of all canopy points; the
+  best raw accuracy (98.3 %) is no better than calling everything leaf-off.
+  *Look* (`bun run shots`, `SHOTS_QUERY='?trees=kataster'`): bare streets
+  and squares (Radeberger Straße, Albertplatz, Stolpener Straße) become
+  avenues, the fly-over reads as an inhabited city; dense parks (Rosengarten)
+  get visibly thinner, because the canopy's uniform scale draws every 7 m
+  cell as a 0.77·h-wide crown where the cadastre draws measured crowns.
+  *Cost* (`scripts/eval/kataster-cost.ts`, block): +62 ms tile builds,
+  +16 % built triangles, vegetation meshes 675 → 1 944, main-pass draw calls
+  ~2.6× at street level (Albertstraße 222 → 581; ~400 if the broadleaf crowns
+  and trunks were merged into the canopy's chunk meshes), +179 KB gzipped
+  transfer; on an M1 Max at 3200×2000 with vsync off
+  (`scripts/eval/kataster-perf.ts`, best of 3) −4 to −9 % fps across the
+  seven views and no measurable change in time-to-ready (~6.4 s). *Fallback:* flag off, or no `trees_<tile>.geojson` → today's
+  rows + canopy, unchanged. *Portability:* any city's tree register (or
+  segmented LiDAR trees) fills the same contract.
 
 - **DOP-lean caveat (recorded):** standard DOP has building lean (tall roofs
   displaced over facades). Mitigated in the bake by eroding the roof footprint

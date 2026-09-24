@@ -23,6 +23,12 @@ Viewer in Kacheln denkt.
 füllt Lücken, die die amtlichen Datensätze lassen: Straßenlampen,
 Bahnsteige, Stützmauern mit Höhen und den Tragwerkstyp von Brücken.
 
+**Landeshauptstadt Dresden** — die Stadt selbst. Ihr Stadtbaumkataster
+verzeichnet rund 124.000 städtische Bäume mit Art, Höhe und
+Kronendurchmesser. Genutzt wird es nur von einer experimentellen Option
+(den Viewer mit `?trees=kataster` öffnen), die diese Bäume dort pflanzt, wo
+sie wirklich stehen.
+
 ## Die Datensätze im Überblick
 
 | Datensatz | Auf Deutsch | Anbieter | Wofür der Viewer ihn nutzt |
@@ -33,6 +39,7 @@ Bahnsteige, Stützmauern mit Höhen und den Tragwerkstyp von Brücken.
 | **Basis-DLM** | Digitales Landschaftsmodell (die Landnutzungskarte) | GeoSN | Bodenfarben, Gewässerumrisse, Hecken und Baumreihen, Bahnflächen und Gleise, Brückenumrisse |
 | **DOP** | Digitales Orthophoto, 20 cm, mit Nahinfrarot-Kanal | GeoSN | Dachfarben; Vegetationsgrün für Baumkronen und Wiesen |
 | **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Bahnsteige, Mauern, Brücken-Tragwerkstypen |
+| **Stadtbaumkataster** *(experimentell)* | Das Baumverzeichnis der Stadt | Landeshauptstadt Dresden | Straßen- und Parkbäume an ihrem vermessenen Standort, mit Höhe, Kronenbreite und einer Kronenform nach der Art (nur mit `?trees=kataster`) |
 
 Im selben Portal verfügbar, aber **noch nicht genutzt**: die
 Laserscan-Punktwolke (aus ihr kämen einzelne Baumkronen), die Flurstücke
@@ -246,7 +253,10 @@ Sachsen (`sachsen-latest.osm.pbf`).
 |---|---|---|
 | GeoSN-Datensätze (DGM1, DOM1, LoD2, Basis-DLM, DOP) | *Datenlizenz Deutschland – Namensnennung – Version 2.0* (`dl-de/by-2-0`), laut den [Nutzungsbedingungen](https://www.landesvermessung.sachsen.de/allgemeine-nutzungsbedingungen-8954.html) des GeoSN (geprüft am 2026-09-22) | „Quelle: GeoSN, dl-de/by-2-0“ |
 | OpenStreetMap | *Open Database License* (ODbL) | „© OpenStreetMap-Mitwirkende“ |
+| Stadtbaumkataster *(experimentell)* | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
 
-Der Viewer zeigt beide Vermerke in der Fußzeile seines Einstellungsfelds.
+Der Viewer zeigt beide Vermerke in der Fußzeile seines Einstellungsfelds
+(der Stadtbaum-Vermerk kommt hinzu, solange die experimentelle Option an
+ist).
 Die abgeleiteten Lampen- und Mauerdateien tragen den OSM-Vermerk zusätzlich
 in der Datei selbst.

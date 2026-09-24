@@ -8,6 +8,7 @@ import type {
   FeatureCollection,
   LampFeature,
   RailFeature,
+  TreeFeature,
   VegRowFeature,
   WallFeature,
 } from "./features";
@@ -109,3 +110,18 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
     }
   }
 });
+
+test.each(cases)(
+  "%s: inventory trees carry height, crown, archetype and leaf type",
+  (_, a) => {
+    for (const f of load<TreeFeature>(a.trees)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      const p = f.properties;
+      expect(Number.isFinite(p?.h)).toBe(true);
+      expect(Number.isFinite(p?.d)).toBe(true);
+      expect(Number.isInteger(p?.a)).toBe(true);
+      expect(["d", "e"]).toContain(p?.l ?? "");
+    }
+  }
+);
