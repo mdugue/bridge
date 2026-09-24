@@ -35,11 +35,35 @@ await page.evaluate(() => {
   };
   requestAnimationFrame(tick);
 });
+const cdp = process.env.PROFILE ? await page.context().newCDPSession(page) : null;
+if (cdp) {
+  await cdp.send("Profiler.enable");
+  await cdp.send("Profiler.setSamplingInterval", { interval: 500 });
+  await cdp.send("Profiler.start");
+}
 const t0 = Date.now();
 for (const id of HOPS) {
   const vp = DRESDEN.viewpoints.find((v) => v.id === id);
   await page.evaluate((v) => window.__poc?.handle.flyToViewpoint(v), vp);
   await page.waitForTimeout(7000);
+}
+if (cdp) {
+  type Node = { id: number; callFrame: { functionName: string; url: string; lineNumber: number } };
+  const { profile } = (await cdp.send("Profiler.stop")) as unknown as {
+    profile: { nodes: Node[]; samples: number[]; timeDeltas: number[] };
+  };
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  const self = new Map<string, number>();
+  profile.samples.forEach((id, i) => {
+    const n = byId.get(id);
+    if (!n) return;
+    const f = n.callFrame;
+    const file = f.url.split("/").pop()?.split("?")[0] ?? "";
+    const key = `${f.functionName || "(anon)"} ${file}:${f.lineNumber}`;
+    self.set(key, (self.get(key) ?? 0) + (profile.timeDeltas[i] ?? 0) / 1000);
+  });
+  const top = [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+  for (const [k, ms] of top) process.stdout.write(`${Math.round(ms)}ms ${k}\n`);
 }
 const ft: number[] = await page.evaluate(() => window.__ft ?? []);
 const sorted = [...ft].sort((a, b) => a - b);
