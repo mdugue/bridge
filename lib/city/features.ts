@@ -36,33 +36,33 @@ export interface FeatureCollection<F> {
   features?: F[];
 }
 
-/** ATKIS veg04 hedges and tree rows (extract-dlm.sh). */
+/** ATKIS veg04 hedges and tree rows (pipeline/bake/landcover.py). */
 export interface VegRowFeature {
   geometry: LineGeometry;
   properties: { kind: "hedge" | "treerow" } | null;
 }
 
-/** DOM1-derived canopy points with the measured tree height (extract-canopy.sh). */
+/** DOM1-derived canopy points with the measured tree height (pipeline/bake/canopy.py). */
 export interface CanopyFeature {
   geometry: PointGeometry;
   properties: { h: number } | null;
 }
 
-/** OSM street lamps (extract-lamps.sh, ODbL); the post height is a
+/** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
  *  lamp-layer constant, so no property is read. */
 export interface LampFeature {
   geometry: PointGeometry;
   properties: Record<string, unknown> | null;
 }
 
-/** OSM retaining/city walls (extract-walls.sh, ODbL): the barrier/man_made
+/** OSM retaining/city walls (pipeline/bake/walls.py, ODbL): the barrier/man_made
  *  kind (only retaining kinds reshape the terrain) and the height in metres. */
 export interface WallFeature {
   geometry: LineGeometry;
   properties: { h: number; kind: string } | null;
 }
 
-/** Basis-DLM ver03_l railway centrelines (extract-rail.sh). */
+/** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
 export interface RailFeature {
   geometry: LineGeometry;
   properties: { electrified?: number; tracks?: number } | null;

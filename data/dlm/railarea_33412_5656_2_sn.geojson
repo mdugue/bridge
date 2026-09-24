@@ -1,9 +1,1 @@
-{
-"type": "FeatureCollection",
-"name": "SELECT",
-"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::25833" } },
-"xy_coordinate_resolution": 0.01,
-"features": [
-{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[412000.0,5658000.0],[412027.12,5658000.0],[412015.93,5657989.69],[412000.0,5657974.08],[412000.0,5658000.0]]]}}
-]
-}
+{"type": "FeatureCollection", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::25833"}}, "features": []}

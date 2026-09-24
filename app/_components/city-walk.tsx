@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import {
-  LOAD_STAGES,
   loadPercent,
   type LoadStageState,
   loadStageStates,
@@ -33,7 +32,6 @@ import {
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import type { TileUrls } from "@/lib/city/tile";
 import { ControlHintBar } from "./control-hints";
 import { VEIL_HOLD_MS } from "./handover";
 import {
@@ -45,23 +43,19 @@ import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
-import type { ViewpointGeometry } from "./viewpoints";
+import type { ViewpointGeometry } from "@/lib/city/site";
 import { SceneSidebar } from "./scene-sidebar";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import type { SunState } from "./sun-rig";
 import { VirtualJoystick } from "./virtual-joystick";
-import { hasWebGl2 } from "./webgl-support";
+import { missingPrerequisite } from "./webgl-support";
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
   budget: SceneBudget;
-  /** Neighbouring tiles rendered around the primary one for context */
-  extraTiles?: TileUrls[];
-  /** Optional glTF/GLB to insert; falls back to a marker box */
-  insertedModelUrl?: string;
-  /** The spawn tile's URLs (see lib/city/tile.ts) */
-  primary: TileUrls;
+  /** the tileset the scene streams (lib/city/tileset.ts) */
+  tilesetUrl: string;
 }
 
 /**
@@ -135,30 +129,21 @@ function SceneOverlays({
   );
 }
 
-export default function CityWalk({
-  budget,
-  primary,
-  extraTiles,
-  insertedModelUrl,
-}: Props) {
+export default function CityWalk({ budget, tilesetUrl }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
 
   // Probed once, before the renderer is created: three's raw "Error creating
-  // WebGL context" is replaced by a sentence naming the one prerequisite.
-  const [webGl2] = useState(hasWebGl2);
+  // WebGL context" (or a tile's bare ReferenceError) is replaced by a
+  // sentence naming the missing prerequisite.
+  const [missing] = useState(missingPrerequisite);
+  const supported = missing === null;
   const [status, setStatus] = useState<Status>(() =>
-    webGl2
+    missing === null
       ? { phase: "loading" }
-      : {
-          phase: "error",
-          message:
-            "Dieser Viewer braucht WebGL2, das dieser Browser oder dieses Gerät " +
-            "nicht bereitstellt. Bitte einen aktuellen Desktop- oder Mobil-Browser " +
-            "mit aktivierter Hardwarebeschleunigung verwenden.",
-        }
+      : { phase: "error", message: missing }
   );
   // What the scene has reported per load stage (lib/city/load-stages.ts): the
   // loading screen, the handover and the pill all read this. One piece of
@@ -168,6 +153,8 @@ export default function CityWalk({
     skipped: SkippedStages;
   }>({ fractions: {}, skipped: {} });
   const [streamError, setStreamError] = useState<string | null>(null);
+  // After the first full load: tiles or their details streaming in (flights).
+  const [streamingMore, setStreamingMore] = useState(false);
   // Kept past the handover: the city arrives behind the frosted screen, which
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
@@ -209,7 +196,7 @@ export default function CityWalk({
     }
     // The WebGL2 preflight already failed (see the status initializer): no
     // renderer, no handle, nothing to clean up.
-    if (!webGl2) {
+    if (!supported) {
       return;
     }
     let cancelled = false;
@@ -223,9 +210,7 @@ export default function CityWalk({
       container,
       budget,
       look,
-      primary,
-      extraTiles,
-      insertedModelUrl,
+      tilesetUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
       onStage: ({ id, fraction, skipped: isSkipped }) => {
@@ -248,23 +233,21 @@ export default function CityWalk({
           updatePocDebug({ ready: true });
         }
       },
+      onBusy: (isBusy) => {
+        if (!cancelled) {
+          startTransition(() => setStreamingMore(isBusy));
+        }
+      },
       onError: (message) => {
         if (cancelled) {
           return;
         }
+        // One tile (or one tile's dressing) failed after the first frame: it
+        // leaves a hole, and the rest keeps streaming — the stages still
+        // finish on their own (a failed tile counts as done), so they are
+        // not settled here. A failure before the first frame rejects the
+        // boot instead.
         setStreamError(message);
-        // loadRest threw: whatever had not landed is not coming. Settle those
-        // stages, or the pill would claim forever that a layer is loading and
-        // never reach the state where it unmounts.
-        setProgress((prev) => {
-          const settled = { ...prev.skipped };
-          for (const stage of LOAD_STAGES) {
-            if ((prev.fractions[stage.id] ?? 0) < 1) {
-              settled[stage.id] = true;
-            }
-          }
-          return { ...prev, skipped: settled };
-        });
       },
       onStats: (s) => {
         if (cancelled) {
@@ -318,7 +301,7 @@ export default function CityWalk({
         setStatus({ phase: "running" });
         // Then the glass is removed, in one frame, with nothing in between.
         veilTimer = setTimeout(() => setVeilUp(false), VEIL_HOLD_MS);
-        // The neighbour tiles, the vegetation and the terrain BVH wait until
+        // The dressing (vegetation, lamps, rails, walls) and the terrain BVHs wait until
         // then: each is a long synchronous task, and the frames while the city
         // is arriving — and the first ones the player actually steers — are
         // the worst possible place for them (see create-app's startStreaming).
@@ -355,7 +338,7 @@ export default function CityWalk({
         look: undefined,
       });
     };
-  }, [budget, look, primary, extraTiles, insertedModelUrl, webGl2]);
+  }, [budget, look, tilesetUrl, supported]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);
@@ -459,7 +442,7 @@ export default function CityWalk({
 
             {/* The loading screen, at pill size. It retires itself once the
                 last layer has landed and it has been readable for a moment. */}
-            <StreamPill stages={stages} />
+            <StreamPill busy={streamingMore} stages={stages} />
 
             {streamError && (
               <output

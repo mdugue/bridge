@@ -1,10 +1,10 @@
 /**
- * Bakes one tile's CityJSON into the binary building mesh the viewer loads
- * (lib/city/city-mesh.ts). Runs the same cityjson-threejs-loader parse the
- * browser used to run at every visit, then folds in everything the clay style
- * needs per building (tints, roof colour incl. the DOP LUT, storey/eave
- * heights, dusk glow, roughness jitter), the demolish tree and the minimap
- * footprints. Called by scripts/prepare-data.ts; no DOM.
+ * Parses one tile's CityJSON into the building mesh the viewer streams (as
+ * glTF, scripts/bake-tiles.ts): runs cityjson-threejs-loader once, then
+ * folds in everything the clay style needs per building (tints, roof colour
+ * incl. the DOP LUT, storey/eave heights, dusk glow, roughness jitter), the
+ * demolish tree and the minimap footprints. Called by
+ * scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import type { BufferGeometry, Matrix4, Mesh } from "three";
@@ -16,13 +16,7 @@ import {
   roughJitter,
   storeyHeight,
 } from "../lib/city/building-tint";
-import {
-  CITY_MESH_VERSION,
-  type CityMeshMeta,
-  type CityMeshObject,
-  type CityMeshVertices,
-  encodeCityMesh,
-} from "../lib/city/city-mesh";
+import type { CityObjectRow } from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { buildingFootprintPolys } from "../lib/city/minimap";
 import { recenterOffset } from "../lib/city/recenter";
@@ -40,10 +34,20 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
   r3(c[2]),
 ];
 
+/** The mesh as non-indexed triangles, flat per-face vertices. */
+export interface CityVertices {
+  /** 1 on RoofSurface vertices, 0 elsewhere */
+  isRoof: Float32Array<ArrayBuffer>;
+  /** index into the object table */
+  objectIds: Float32Array<ArrayBuffer>;
+  /** recentered data-frame (Z-up) positions, 3 per vertex */
+  positions: Float32Array<ArrayBuffer>;
+}
+
 /** Concatenates the loader's chunk meshes into one vertex stream. */
 function collectVertices(loaderScene: {
   traverse: (cb: (o: unknown) => void) => void;
-}): CityMeshVertices & { surface: Int32Array } {
+}): CityVertices {
   const chunks: {
     objectid: ArrayLike<number>;
     position: ArrayLike<number>;
@@ -63,9 +67,8 @@ function collectVertices(loaderScene: {
   const n = chunks.reduce((s, c) => s + c.objectid.length, 0);
   const out = {
     positions: new Float32Array(n * 3),
-    objectIds: new Uint16Array(n),
-    isRoof: new Uint8Array(n),
-    surface: new Int32Array(n).fill(-1),
+    objectIds: new Float32Array(n),
+    isRoof: new Float32Array(n),
   };
   let at = 0;
   for (const c of chunks) {
@@ -76,7 +79,6 @@ function collectVertices(loaderScene: {
       out.positions[(at + i) * 3 + 2] = c.position[i * 3 + 2];
       out.objectIds[at + i] = c.objectid[i];
       const surface = c.surfacetype ? c.surfacetype[i] : -1;
-      out.surface[at + i] = surface;
       out.isRoof[at + i] = surface === ROOF_SURFACE_TYPE ? 1 : 0;
     }
     at += count;
@@ -101,14 +103,17 @@ function rootOf(doc: CityJsonDocument, keys: string[], index: number): number {
 }
 
 export interface BakedCityMesh {
-  bytes: Uint8Array;
+  epsg: number;
   /** the recenter matrix, to be shared with the block's other tiles */
   matrix: Matrix4;
-  meta: CityMeshMeta;
+  objects: CityObjectRow[];
+  /** recenter offset: mesh x = epsgX − cx, mesh y = epsgY − cy (Z-up) */
+  offset: { cx: number; cy: number };
+  vertices: CityVertices;
 }
 
 /**
- * Parses and annotates one tile. `sharedMatrix` is the primary tile's
+ * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
  */
@@ -149,7 +154,7 @@ export function bakeCityMesh(
     }
   }
 
-  const objects: CityMeshObject[] = keys.map((id, index) => {
+  const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const attrs = o.attributes ?? {};
     const baseZ = minZ.get(index) ?? 0;
@@ -157,14 +162,12 @@ export function bakeCityMesh(
     const measured =
       typeof attrs.measuredHeight === "number" ? attrs.measuredHeight : total;
     const roofMin = roofMinZ.get(index);
-    const extent = (o as { geographicalExtent?: number[] }).geographicalExtent;
     const footprints = buildingFootprintPolys({
       ...doc,
       CityObjects: { [id]: o },
     }).map((p) => p.pts.map(([x, y]): [number, number] => [cm(x), cm(y)]));
-    const entry: CityMeshObject = {
-      id,
-      type: o.type,
+    return {
+      building: o.type === "Building",
       root: rootOf(doc, keys, index),
       baseZ: cm(baseZ),
       eaveH: cm(roofMin === undefined ? total : Math.max(roofMin - baseZ, 0)),
@@ -175,21 +178,7 @@ export function bakeCityMesh(
       roof: rgb(roofColor(id, attrs, roofLut)),
       footprints,
     };
-    if (o.type === "Building" && extent && extent.length >= 6) {
-      entry.extent = extent.map(cm);
-    }
-    return entry;
   });
 
-  const { bytes, quant } = encodeCityMesh(v);
-  const meta: CityMeshMeta = {
-    version: CITY_MESH_VERSION,
-    tile,
-    epsg,
-    offset,
-    quant,
-    vertexCount: v.objectIds.length,
-    objects,
-  };
-  return { bytes, matrix, meta };
+  return { epsg, matrix, objects, offset, vertices: v };
 }

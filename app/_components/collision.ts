@@ -19,16 +19,6 @@ const BODY_RADIUS = 0.6;
 const KNEE_DROP = 1.2;
 const MIN_STEP_SQ = 1e-10;
 
-/** Builds BVHs for all batched city meshes that don't have one yet. */
-export function buildCityBvh(root: Object3D): void {
-  root.traverse((obj) => {
-    const mesh = obj as Mesh & { isCityObjectMesh?: boolean };
-    if (mesh.isCityObjectMesh && !mesh.geometry.boundsTree) {
-      mesh.geometry.computeBoundsTree();
-    }
-  });
-}
-
 export interface CityCollider {
   /**
    * Adjusts a proposed horizontal step so it cannot cross a building wall:
@@ -39,8 +29,8 @@ export interface CityCollider {
 }
 
 /**
- * Wall collision against whatever `getTargets` returns — the city group of the
- * primary tile, plus the inserted building when there is one.
+ * Wall collision against whatever `getTargets` returns — the building meshes
+ * of every visible tile.
  */
 export function createCityCollider(getTargets: () => Object3D[]): CityCollider {
   const raycaster = new Raycaster();

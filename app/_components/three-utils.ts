@@ -80,6 +80,14 @@ export function trackTexture(texture: Texture, bytes: number): void {
   });
 }
 
+/**
+ * Forgets a texture whose owner frees it without disposing the texture
+ * itself — a render target's `dispose()` fires on the target only.
+ */
+export function untrackTexture(texture: Texture): void {
+  trackedTextures.delete(texture);
+}
+
 /** Bytes of every live tracked texture. */
 export function trackedTextureBytes(): number {
   let total = 0;

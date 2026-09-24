@@ -9,7 +9,9 @@ const FLY_SPEED = 35;
 /** seconds — eye-height smoothing over the ~4 m DGM grid */
 const GROUND_TAU = 0.12;
 
-export type MovementMode = "walk" | "fly";
+import type { MovementMode } from "@/lib/city/site";
+
+export type { MovementMode };
 
 /** The key codes movement reads — pressing one is the player taking the wheel. */
 export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([

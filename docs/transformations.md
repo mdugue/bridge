@@ -21,59 +21,94 @@ visual-variable codebook is in
 ## ✅ Active
 
 ### Geometry & ground
-- **Terrain heightfield** — DGM1 → triangulated heightfield + edge skirt to hide
-  inter-tile seams. The GeoTIFF is resampled **at build time**
-  (`scripts/prepare-data.ts` → `<tile>.heightfield-<n>.json` + `.u16.gz`, primary
-  tile 1024², neighbours 512², NoData stored as `0xFFFF` and decoded to NaN — see
-  `lib/city/heightfield.ts`); the browser fetches the gzipped uint16 (cm) grid and never
-  decodes a raster. `terrain-layer.ts`, `lib/city/terrain-geometry.ts`.
-- **Surface splatmap** — Basis-DLM land-cover → 4096² RGBA PNG (RGB = pastel
-  palette per class, A = water coverage), sampled with anisotropy 16.
-  `extract-dlm.sh` → `terrain-layer.ts`.
+- **Terrain (glTF, two levels)** — DGM1 → a triangulated grid + a 30 m edge
+  skirt to hide inter-tile seams, at two levels per tile: **L1 512²** (coarse,
+  geometric error 40 m) replaced by **L0 1024²** near the camera. The GeoTIFF
+  is resampled **at build time** (`scripts/bake-tiles.ts` `readDgm`, bilinear,
+  NoData → NaN → the quads touching it are left out), the wall breaklines are
+  burned in (below), normals computed, and the mesh written as glTF
+  (`EXT_meshopt_compression` + `KHR_mesh_quantization`, pre-gzipped
+  `terrain_<tile>_l0|l1.glb.gz`). The browser never decodes the DGM: it reads
+  ground height back from the grid vertices (`gridElevations`).
+  `scripts/bake-tiles.ts`, `lib/city/terrain-geometry.ts`, `terrain-layer.ts`
+  ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
+- **Surface colours** — Basis-DLM land-cover → a 4096² **class-id raster**
+  (8-bit, ids 0–8, burned lowest priority first so water wins;
+  `pipeline/bake/landcover.py` → `landcover_<tile>.png` + legend). The colours
+  are **not** baked: `lib/city/landcover.ts` holds the one pastel palette, and
+  `landcover-splat.ts` paints it on the GPU once per tile at load (RGB =
+  palette, A = water coverage from a 3×3 tent over class 8) into an sRGB,
+  mipmapped, anisotropy-16 target — what the baked PNG used to be sampled
+  with. The minimap and the `/wissen` picture use the same table; a colour
+  change is a look change, not a re-bake
+  ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)).
+  `terrain-layer.ts`.
 - **Meadow NDVI tint** (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
   DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
   shifts the pastel sage lush deep-green↔dry hay. In the terrain fragment shader
   (`uNdvi`/`uMeadowNdvi`, gated by the class raster `grMeadow`), HUD slider
   *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
-- **Water** — DLM alpha (water mask, `smoothstep`ed shoreline) + DGM1 geometry +
-  animated normal wobble. `water-layer.ts`. Missing RGBA splat → coverage falls
-  back to the NEAREST class raster tested against class 8 (hard-edged bank);
-  the class PNG's own alpha decodes to 1 everywhere and must never be read.
-- **Progressive first frame** — the primary tile's terrain + buildings render
-  first; vegetation, lamps, the neighbour tiles, rails and walls stream in
-  afterwards (`loadRest` in `create-app.ts`), each addition re-rendering the
-  shadow map. Until the block is complete the fog far plane is clamped to
-  ~1.1 km so the missing neighbours read as haze.
-- **Rasters at 2048²** — `prepare-data.ts` downsamples the land-cover rasters
-  (class ids NEAREST, RGB splat Lanczos; `scripts/downsample-raster.ts`) to a
-  quarter of the texture memory: for the three backdrop tiles on every device,
-  and for the primary tile too on phones (`MOBILE_RASTER_PX`, chosen by the
-  client per device tier). The splat's colour and its alpha (= water coverage)
-  are resized as two separate images: sharp premultiplies alpha across a
-  resize, which turned every land texel of the first version of this bake
-  black. Cost: ~1 m instead of ~0.5 m class boundaries — on desktop only on
-  the neighbours (visible near a tile seam or flying low), on phones
+- **Water** — the painted splat's alpha (water coverage, `smoothstep`ed
+  shoreline) + the terrain geometry + animated normal wobble; the water and
+  mist sheets hang next to their terrain mesh and leave with the tile.
+  `water-layer.ts`. Missing class raster → no splat, no water: the tile's
+  ground falls back to the flat sage.
+- **Streaming site (3D Tiles)** — `scripts/prepare-data.ts` bakes the site
+  into an OGC 3D Tiles 1.1 tileset (`lib/city/tileset.ts`): per site tile the
+  buildings (refine ADD, loaded whenever the tile is in view) over the two
+  terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
+  screen-space error (16 px) from the view camera **and the sun's shadow
+  camera**, so a tile casting into the view stays loaded. Only the fine level
+  is dressed (vegetation, lamps, rails, walls); distance, not a "primary"
+  role, decides which tile is detailed, and collision, demolish, focus and
+  double-tap work on every visible tile. Everything a tile adds leaves with
+  it (`tile-stream.ts`, `processTileModel` / `disposeTile`)
+  ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)). The lite e2e
+  profile streams `tileset-spawn.json`, the spawn tile alone.
+- **Progressive first frame** — the spawn tile's buildings + any of its
+  terrain levels render first; the heavy dressing waits behind a gate the HUD
+  opens after the handover (`startStreaming` in `create-app.ts`) and is built
+  one tile at a time, each landing re-rendering the shadow map. Until the site
+  has first loaded the fog far plane is clamped to ~1.1 km so tiles still in
+  flight read as haze ([ADR 0008](./adr/0008-progressive-two-phase-boot.md)).
+- **Rasters at 2048²** — `prepare-data.ts` downsamples the 4096² class raster
+  NEAREST, one band (`scripts/downsample-raster.ts` `downsampleClassRaster`),
+  to a quarter of the texture memory: for the coarse terrain level on every
+  device, for every level on phones (`MOBILE_RASTER_PX`, chosen by the
+  client per device tier), and for the minimap. No raster whose alpha is
+  data goes through an image resize any more (the painted splat has the
+  only such alpha, and it is made on the GPU). Cost: ~1 m instead of ~0.5 m
+  class boundaries — on desktop only on the far terrain, on phones
   everywhere.
-- **Buildings** — CityJSON LoD2 → **build-time** binary mesh (one merged
-  mesh/tile, per-vertex `objectid`, uint16-quantised positions, gzipped) + a
-  meta JSON with the per-object style table, demolish tree and footprints
-  (`scripts/bake-city-mesh.ts`, `lib/city/city-mesh.ts`); demolish = filter the
-  building tree out of the vertex stream + rebuild; BVH picking/collision.
-  `city-layer.ts`. The DOP roof LUT is folded in at bake time.
-- **Ground-clamp** — DGM1 sampled to seat buildings, trees, lamps, and the player
-  on terrain. `lib/city/ground-clamp.ts`.
+- **Buildings** — CityJSON LoD2 → **build-time** glTF per tile:
+  `scripts/bake-city-mesh.ts` runs cityjson-threejs-loader, and
+  `scripts/bake-tiles.ts` `cityMesh` welds it into one mesh with an
+  `EXT_mesh_features` feature id per vertex (`_FEATURE_ID_0`) and a roof
+  flag. The per-object style (tint, roof colour, base, eave and storey
+  heights, glow, roughness) and the demolish tree ride as an
+  `EXT_structural_metadata` **property table** (`scripts/tile-glb.ts`); the
+  client packs it into an RGBA32F texture the clay shader `texelFetch`es
+  (`lib/city/city-mesh.ts` `packObjectTexels`), so the style lives once per
+  building, not once per vertex. Footprints go to `footprints_<tile>.json`
+  for the minimap. Demolish = filter the building tree out of the index
+  buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
+  roof LUT is folded in at bake time.
+- **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
+  seat trees, lamps, rails, walls and the player on terrain.
+  `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
 
 ### Building detailing (all keyed off CityJSON attrs + the loader's `surfacetype`)
 - **Per-building clay tint** (*Farbvariation*) — deterministic `hash(objectid)` +
   `function` family + `measuredHeight` nudge → muted per-building wall colour.
   **Source preference:** real per-building colour *(planned: DOP)* would replace
   the hash; the hash exists precisely so the look survives when `function` is 86 %
-  "unspecified". `lib/city/building-tint.ts`, `visual-style.ts`.
+  "unspecified". `lib/city/building-tint.ts` (at bake time, into the property
+  table's `tint`), `visual-style.ts`.
 - **Roof colour** (*Dachfarbe*) — real **DOP-sampled** colour per building when
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
-  terracotta pitched / slate flat). Bake: `scripts/extract-roof-colour.sh`.
+  terracotta pitched / slate flat). Bake: `pipeline/bake/roof_colour.py`.
 - **Roof vividness** (*Dachsättigung*) — raw DOP reads drab/hazy (audited: 38 %
   near-grey, mean R−B slightly negative). `uRoofVibrance` (default **0.5**, HUD
   slider *Dachsättigung*) applies a **hue-preserving chroma
@@ -94,17 +129,19 @@ visual-variable codebook is in
 
 ### Vegetation
 - **Tree/hedge rows** — Basis-DLM hedge & tree-row lines → InstancedMesh, chunked
-  into 250 m cells for frustum culling. `vegetation-layer.ts`.
+  into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
+  (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
 - **Canopy fill** — `nDOM = DOM1 − DGM1`, one tree per ~7 m cell at the tallest
   pixel, scaled to measured height, **gated off road/bridge/water** via the DLM
-  class raster. `extract-canopy.sh`.
+  class raster. `pipeline/bake/canopy.py`.
 - **NDVI crown colour** — per-tree DOP greenness (`ndvi_<tile>.png`, sampled on
   the CPU at placement) shifts the crown dry pale-sage → lush deep green.
-  `extract-ndvi.sh` → `vegetation-layer.ts` `crownColor`; falls back to the
-  hash-only sage when no NDVI raster (graceful — see portability). Sampled with a
-  **5×5 footprint max** + a remap recentred on the low NDVI median: the raster is
-  ~2 m/px and median-zero, so a single-pixel sample left ~95 % of crowns reading
-  "dry" (invisible); the footprint max + recentre make lush↔dry read clearly.
+  `pipeline/bake/ndvi.py` → `vegetation-layer.ts` `crownColor`; falls back to
+  the hash-only sage when no NDVI raster (graceful — see portability).
+  Sampled with a **5×5 footprint max** + a remap recentred on the low NDVI
+  median: the raster is ~2 m/px and median-zero, so a single-pixel sample
+  left ~95 % of crowns reading "dry" (invisible); the footprint max +
+  recentre make lush↔dry read clearly.
   The low median has a cause: the DOP was flown on **2024-03-19**, leaf-off
   (`data/provenance.json`), so deciduous crowns are bare in the imagery and
   the index mostly separates evergreens and grass from everything else. A
@@ -124,32 +161,40 @@ visual-variable codebook is in
   **sway-coupled brightness** (the crown brightens leaning into the same gust,
   centred so the mean colour is unchanged). Flutter & brightness are independent
   HUD sliders (*Blattflimmern* / *Windhelligkeit*) — zero one to preview the other.
-- **Street lamps** — OSM lamp points → instanced lamp posts (ODbL). `extract-lamps.sh`.
+- **Street lamps** — OSM lamp points (the local Geofabrik extract, only those
+  the tile owns: west and south edges in, east and north out, so a seam lamp
+  stands once) → instanced lamp posts (ODbL). `pipeline/bake/lamps.py`; the
+  viewer applies the same ownership to older files (`ownsPoint`).
   Gated off **water (8) and railway (5)** land-cover so no poles stand in the
-  Elbe or the track bed (the rail corridor is now its own layer).
+  Elbe or the track bed (the rail corridor is now its own layer). Built per
+  fine terrain tile; the three real lights go to the nearest heads of the
+  visible tiles.
 
 ### Railway & bridges
-All baked by `scripts/extract-rail.sh`, built **once for the whole tile block** in
-`app/_components/rail-layer.ts` (Y-up scene; on the cross-tile `heightAt` so tracks
-don't truncate at seams). Replaces the old "brown smear". All geometry is
+All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in
+`app/_components/rail-layer.ts` (Y-up, part of the tile's dressing) on the
+cross-tile `heightAt` over every loaded terrain, so tracks don't truncate at
+seams (until [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md) it was built
+once for the fixed block). Replaces the old "brown smear". All geometry is
 hand-wound to match its supplied normal (`pushTri`), so every material is
 `FrontSide` (halves shadow/fill cost). *(Redesigned after the v1 per-line approach
 z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — see
 🗃️ below.)*
 - **Ballast yards** — Basis-DLM `ver03_f` (railway AREA, `OBJART=42010`),
-  **dissolved** with spatialite `ST_Union(ST_MakeValid())` in the bake and clipped
+  **dissolved** with shapely `union_all(make_valid())` in the bake and clipped
   to the tile (~5 non-overlapping parts) → **one merged surface**, so dozens of
   yard tracks can't z-fight. Per-vertex ground-clamp + `BALLAST_RAISE`, short edge
   fascia, `polygonOffset`. The recoloured class-5 splat sits underneath so any gap
   reads as ballast, not seam.
 - **Steel rails** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`; trams
   `SPW=3000`/`BKT=1201` run in the street, excluded). Short ATKIS fragments are
-  **snap-merged by shared endpoints** in the bake (≈91→9 continuous lines/tile); at
+  **snap-merged by shared endpoints** (1 m) in the bake (≈91→9 lines/tile); at
   runtime a polyline is **split into runs of valid ground** (never bridged across a
   NoData gap) and each track gets a thin rail pair (`±GAUGE/2`, count from `GLS`)
   with a small web. Draped on terrain; **lifted onto a rail bridge's deck** (point-
-  in-deck test) so they ride the deck with no ballast stacked on top. Railway splat
-  recoloured dusty-mauve → **ballast warm-grey** (`extract-dlm.sh` + terrain shader).
+  in-deck test) so they ride the deck with no ballast stacked on top. Railway
+  class recoloured dusty-mauve → **ballast warm-grey** (class 5 in
+  `lib/city/landcover.ts`).
 - **Bridge decks** — driven by the **complete `ver06_l` (`BWF=1800`) centreline
   set** (carries every road/rail/path bridge + `NAM`), each snapped to a clean
   **`ver06_f` deck AREA footprint** where one matches (≤50 m) else **buffered by
@@ -160,59 +205,70 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   water. **Flush parapet walls** (no floating cap). **Kind** (rail/road/path) from
   rasterising the networks + sampling the *centreline*. *(Tried ver06_f-only — it
   dropped the road/path bridges, which lack area polygons; see 🗃️.)*
-- **Bridge arches** — OSM `man_made=bridge` `bridge:structure` (ODbL, nearest-
-  centroid match ≤60 m → deck `structure`) drives the under-deck shape: where it
-  contains **`arch`** (Augustus-/Marienbrücke), `addArches` builds segmental
-  spandrel walls (arched intrados, high at the crown, springing low) on both deck
-  edges, carried on slim **river piers** — a masonry-viaduct read. `beam`/absent →
-  flat soffit + box piers. Gated on real deck clearance (`ARCH_MIN_RISE`) so flat
-  bridges don't get spurious arches. Falls back to box piers when no OSM/structure.
+- **Bridge arches** — OSM `man_made=bridge` `bridge:structure` (ODbL, from the
+  local extract; nearest-centroid match ≤60 m → deck `structure`) drives the
+  under-deck shape: where it contains **`arch`** (Augustus-/Marienbrücke),
+  `addArches` builds segmental spandrel walls (arched intrados, high at the
+  crown, springing low) on both deck edges, carried on slim **river piers** —
+  a masonry-viaduct read. `beam`/absent → flat soffit + box piers. Gated on
+  real deck clearance (`ARCH_MIN_RISE`) so flat bridges don't get spurious
+  arches. Falls back to box piers when no OSM/structure.
 - **Station platforms** — OSM `railway=platform` (ODbL) → triangulated flat slabs
   (`ShapeUtils.triangulateShape`), per-vertex terrain-clamped. The OSM half of the
-  blend (Basis-DLM has no platform geometry); absent/empty when Overpass is down.
+  blend (Basis-DLM has no platform geometry); absent/empty when the site has
+  no `.osm.pbf` extract.
 
 ### Retaining / city walls
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
   wall` + `man_made=embankment` (ODbL), with the tagged `height` (e.g. the
-  8.5–9 m city walls). `extract-walls.sh` → `wall-layer.ts`: vertical sandstone
-  ribbons, base draped on the DGM via the cross-tile `heightAt`, top = base +
-  height, nudged slightly onto the low side so the face skins the (now stepped)
+  8.5–9 m city walls). `pipeline/bake/walls.py` → `wall-layer.ts`: vertical
+  sandstone ribbons, built per fine terrain tile, base draped on the DGM via
+  the cross-tile `heightAt` over every loaded terrain, top = base + height,
+  nudged slightly onto the low side so the face skins the (now stepped)
   terrain. **Why OSM:** the monumental wall is NOT in the elevation data —
   DGM1/DOM1/**LiDAR-ground all smooth it into a gentle bank** (verified by
   sampling: ground ≈ DGM across the wall), and it's not a CityJSON building, so it
   "went missing". OSM has it as explicit vector lines with heights.
   **Source:** a LOCAL Geofabrik `.osm.pbf` read via GDAL's OSM driver (both the
   `lines` and `multipolygons` layers — GDAL files closed barrier ways as
-  polygons), so the whole block bakes in one pass with **no Overpass rate limits**
-  and reproducibly (verified feature-for-feature identical to the old Overpass
-  bake: 436 walls, same kinds/lengths/heights).
+  polygons), with **no Overpass rate limits** and reproducibly (the bash-era
+  version of this bake was verified feature-for-feature identical to the old
+  Overpass bake: 436 walls, same kinds/lengths/heights). Since
+  [ADR 0025](./adr/0025-bakes-are-one-python-package.md) every OSM layer
+  comes from that extract (`pipeline/bake/osm.py`).
 
-### Wall → terrain conflation (heightfield breakline burn)
-- **Stepped ground at walls** — `lib/city/terrain-conflate.ts`, applied inside
-  `loadTerrain` before the mesh is built. The DGM blurs a vertical wall into a
-  ramp, so the OSM ribbon used to float over it / get swallowed and the ground
-  never "stepped". The conflation reads the terrain's natural shelf level a short
-  way out on each side of each wall line, then snaps nearby cells toward the
-  **high-side** level on one side and the **low-side** level on the other — a
-  sharp step concentrated AT the line, feathering back to the untouched DGM within
-  a ~11 m band (nearest-wall-wins). The wall ribbon then skins a real step.
-  **Deterministic + source-portable** (any DEM + any OSM wall lines). **Gated** to
-  earth-retaining kinds (`retaining_wall`/`city_wall`/`embankment`) and only where
-  the two sides actually differ by ≥1.5 m, so freestanding garden walls and flat
-  fountain rims leave the ground alone; a ≤18 m clamp stops a bad height tag
-  gouging a canyon. Pure + unit-tested (`terrain-conflate.test.ts`).
+### Wall → terrain conflation (breakline burn at build time)
+- **Stepped ground at walls** — `lib/city/terrain-conflate.ts`, applied at build
+  time to both terrain levels before the grid is meshed (`scripts/bake-tiles.ts`
+  `terrainMesh`; it ran in the browser at load until
+  [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)). The DGM blurs a vertical
+  wall into a ramp, so the OSM ribbon used to float over it / get swallowed and
+  the ground never "stepped". The conflation reads the terrain's natural shelf
+  level a short way out on each side of each wall line, then snaps nearby cells
+  toward the **high-side** level on one side and the **low-side** level on the
+  other — a sharp step concentrated AT the line, feathering back to the
+  untouched DGM within a ~11 m band (nearest-wall-wins). The wall ribbon then
+  skins a real step. **Deterministic + source-portable** (any DEM + any OSM wall
+  lines). **Gated** to earth-retaining kinds
+  (`retaining_wall`/`city_wall`/`embankment`) and only where the two sides
+  actually differ by ≥1.5 m, so freestanding garden walls and flat fountain rims
+  leave the ground alone; a ≤18 m clamp stops a bad height tag gouging a canyon.
+  Pure + unit-tested (`terrain-conflate.test.ts`).
 
 ### Lighting
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
-  `castShadow=false`; `normalBias=0`; tight camera-following frustum. Full recipe
-  and dead-ends in the [city-walker skill](../.claude/skills/city-walker/SKILL.md).
+  `castShadow=false`; `normalBias=0`; tight camera-following frustum, whose
+  camera also drives the tile streaming (casters behind the player stay
+  loaded). Full recipe and dead-ends in the
+  [city-walker skill](../.claude/skills/city-walker/SKILL.md).
 
 ### Atmosphere & time of day
 - **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
   pooling in low ground, folded into every fog-receiving material via
   `onBeforeCompile`; HUD *Talnebel*. `height-fog.ts`.
-- **River mist** — DLM water mask (the water surface) → a drifting, sun-lit
-  mist sheet over the Elbe; HUD *Flussnebel*. `water-layer.ts` `createWaterMist`.
+- **River mist** — DLM water mask (the painted splat's alpha) → a drifting,
+  sun-lit mist sheet over the Elbe; HUD *Flussnebel*. `water-layer.ts`
+  `createWaterMist`.
 - **Drifting clouds** — sun instant → the sky dome's `time`/`cloudSpeed` so the
   cloud cover moves with the frame. `sun-rig.ts`.
 - **Golden/blue-hour palette stops** — sun altitude → sky/fog/hemisphere colours
@@ -252,7 +308,10 @@ research that produced them):
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
    per-tree position/height/crown; bake to per-tile GeoJSON.
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
-   low-sun shadows clip the 110 m frustum). Sizeable integration.
+   low-sun shadows clip the 110 m frustum). Sizeable integration on WebGL;
+   `CSMShadowNode` comes with the proposed move to WebGPURenderer + TSL
+   ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
+   [plan 020](./plans/020-webgpu-tsl.md)), as its own decision.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
    while the camera moves (`lib/city/regression.ts`, plan 007). AO is **not**
    — gating it made the contact shadows blink on every step, so N8AO runs
@@ -291,13 +350,19 @@ research that produced them):
 | **Orthophoto as the *only* tint source** | Leaves everything identical where imagery is flat; no facade info. | Hash carries variation; DOP augments roofs. |
 | **Per-line ballast ribbons** (rail v1: one ~9.6 m ribbon per `ver03_l` line) | 42+ overlapping coplanar ribbons in the yard z-fought into ragged/torn edges. | Replaced by the **dissolved `ver03_f` area** as one merged surface. |
 | **`ver06_l` centreline-buffered decks** (rail v1) | Buffered planks stacked deck-top + ballast + parapet-cap → "2-story" bridges, and one plank merged the parallel Marienbrücke spans. | Replaced by **`ver06_f` deck polygons** (one slab per real footprint); kept as the no-`ver06_f` portability fallback. |
-| **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build **once for the block** on the cross-tile `heightAt`. |
+| **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build on the **cross-tile `heightAt`** — once for the block until ADR 0024, now per fine terrain tile over every loaded terrain. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | N8AO runs permanently at `halfRes`; only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
 | **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Camera-follow grass tuft ring** | Shadow-casting instances rewritten every frame; reads as confetti. | Meadow mottle + normal perturbation in the terrain shader (✅ above). |
 | **Per-lamp real point lights** | three bakes the light count into every program → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above). |
+| **Baked RGB splatmap** (`landcover_rgb_<tile>.png`: RGB = pastel palette, A = water coverage, plus a 2048² variant) | The look lived in the bake: a colour change meant re-baking every tile, and the palette was spelled three times (bake, minimap, shader fallback). Its alpha was data, so every resize had to split colour from alpha — sharp premultiplies alpha across a resize, which once turned every land texel black ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md), superseding ADR 0016). | The bake writes class ids only; the one palette (`lib/city/landcover.ts`) is painted on the GPU at load. A per-fragment palette lookup was rejected too: class ids cannot be mipmapped, so far boundaries would alias. |
+| **Overpass-based OSM bakes** (lamps, platforms, bridge structure) | Live queries: rate-limited and not reproducible, and one more way of reading OSM next to the local extract the walls already used ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)). | Every OSM layer comes from one local Geofabrik `.osm.pbf` via GDAL's OSM driver (`pipeline/bake/osm.py`). The committed lamp/platform/bridge-structure files still predate this; the next re-bake moves them (`data/provenance.json`). |
+| **Bash bakes** (`scripts/extract-*.sh` + Python/Pillow heredocs) | Three languages, string-built paths, tile names and CRS spelled per script; numpy and `gdal_calc.py` were missing, so raster maths was written around Pillow ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)). | One package, `pipeline/bake/`, on numpy/rasterio/pyogrio/shapely in a uv environment, driven per site tile by `bun run bake`. |
+| **uint16 heightfield + custom building vertex-stream codecs** (`<tile>.heightfield-<n>.json` + `.u16.gz`; vertex stream + meta JSON) | Private formats with a codec on each side that no other tool could open, and the browser still burned the wall breaklines into the grid at load ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)). | Standard glTF 2.0 (meshopt + quantisation) with an `EXT_structural_metadata` table; the bake does the breaklines. Costs wire size (≈1.0 + 1.1 MB → ≈1.4 + 1.5 + 0.4 MB per tile); a heightmap-PNG custom content type is the fallback if that ever matters more than tooling. |
+| **Fixed 2×2 block loaded at boot** (one primary tile + three neighbours, never unloaded) | The world was bounded by boot cost, nothing ever unloaded, and collision/demolish stopped at the primary tile's edge. The hand-written tile manager proposed instead (ADR 0022, never accepted) would have re-built the schedule, LRU and worker 3DTilesRendererJS already has ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)). | The site streams as a 3D Tiles tileset; distance, not a role, decides which tile is detailed. |
+| **Inserted building** (a glTF model, else an orange marker box, dropped at a fixed Dresden spot; once on the B key) | No caller since the B key was disabled — dead plumbing through the HUD, the scene and a Dresden-only constant; removed with the site config ([ADR 0026](./adr/0026-one-site-config-per-build.md)). | Revisit only with a concrete use (e.g. a planned building to preview). |
 
 ---
 

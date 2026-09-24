@@ -23,7 +23,56 @@
   folds in option 6 (bake runner + provenance) in `docs/plans/README.md`
 - **Category**: portability / data pipeline
 - **Planned at**: commit `cf8602a`, 2026-09-23
-- **Status**: TODO
+- **Status**: PARTIAL. Phases 1 and 2 are done for Saxony, in a different
+  shape than written below (see "Progress"). Phase 3 is half done, Phase 4
+  and the NRW adapter are open, and Phase 5 is partial.
+
+## Progress (2026-09-24, branch `claude/architecture-review-redesign-kddx6u`)
+
+The phases below were written for bash bakes and a JSON site file. What was
+built instead, and what that leaves open:
+
+- **Phase 1 is done, as TypeScript.** `lib/city/site.ts` holds the `Site`
+  type (id, label, title, EPSG 25832/25833, `tileKm`, `tileSuffix`, the tile
+  list as `{e, n}` km cells, fallback lat/lng, attribution, viewpoints,
+  ingest adapter) plus `tileIdOf` / `tileExtentOf` / `utmZoneOf`.
+  `sites/dresden.ts` is the one site, and `SITE` picks it at build time
+  (`NEXT_PUBLIC_SITE` inlines it into the client; `sites/index.ts`
+  `currentSite()`). Dresden keeps its tile names through
+  `tileSuffix: "_sn"`. A `.ts` file instead of JSON: the viewpoints are
+  typed and use code constants, and no validator is needed. The client does
+  not read the site from `manifest.json`; the build inlines it. The
+  inserted-building plumbing (`insertAt`) was removed instead of
+  configured.
+- **The tile block is gone entirely** ([ADR 0024](../adr/0024-site-streams-as-3d-tiles.md)):
+  the site's tiles become a 3D Tiles tileset, and "primary" is now just the
+  spawn tile.
+- **Phase 2 is done for Saxony, as Python.** The seven bash bakes became one
+  package, `pipeline/bake/` (uv, numpy, rasterio, pyogrio, shapely;
+  [ADR 0025](../adr/0025-bakes-are-one-python-package.md)). `bun run bake
+  [tile] [--ingest] [--step X]` runs it with the site's extent and CRS. The
+  canonical raw layout is `data/_raw/<site>/{dom1,dop,dlm,osm,downloads}`.
+  The DGM1 and the CityJSON stay committed under `data/`, not raw.
+  `pipeline/bake/ingest_sn.py` is the Saxony adapter: it resolves each
+  tile's download through GeoSN's download-link service and fetches the
+  statewide Basis-DLM and the Geofabrik extract. Compared with the committed
+  artifacts on the spawn tile: NDVI identical, land cover 99.95 %, roof
+  colours 3658/3668 identical, bridges 3 = 3, canopy 5104 vs 5118 trees.
+  The differences trace to the newer Basis-DLM edition. The OSM bakes
+  (walls, lamps, platforms, bridge structure) could not be run here because
+  Geofabrik was unreachable. The per-tile provenance file (step 4) was not
+  built; `data/provenance.json` stays the record.
+- **Phase 3 is half done.** The layer → class table is data at the top of
+  `pipeline/bake/landcover.py` (`CLASSES`, `burn_order`,
+  `ROAD_HALF_WIDTH`), not a TSV. The colours no longer live in the bake at
+  all ([ADR 0023](../adr/0023-land-cover-colours-painted-at-runtime.md)). NAS
+  input is open.
+- **Phase 4 (OSM land cover) and the NRW adapter are open.** With runtime
+  colours, the OSM bake now only needs to write a class raster and a legend
+  (no splat step to share).
+- **Phase 5 is partial.** Missing DOM1 or DOP skips the canopy, NDVI and
+  roof-colour bakes with a note, and rail decks fall back to the DGM ramp.
+  `site:check`, the portability rewrite and a second site are open.
 
 ## Why this matters
 

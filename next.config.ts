@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // The site this build renders (sites/index.ts); the bake scripts read the
+  // same SITE, so the data and the HUD always describe one place.
+  env: { NEXT_PUBLIC_SITE: process.env.SITE ?? "dresden" },
   reactCompiler: true,
   reactStrictMode: true,
   // Everything under /data is published under a content-hashed name by

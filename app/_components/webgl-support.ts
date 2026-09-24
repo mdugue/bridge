@@ -11,3 +11,27 @@ export function hasWebGl2(): boolean {
     return false;
   }
 }
+
+/**
+ * What this browser lacks for the viewer, as the sentence the HUD shows, or
+ * null. WebGL2 renders; DecompressionStream inflates the pre-gzipped tile
+ * content (tile-stream.ts) — without it every tile would fail with a bare
+ * ReferenceError instead of this explanation.
+ */
+export function missingPrerequisite(): string | null {
+  if (!hasWebGl2()) {
+    return (
+      "Dieser Viewer braucht WebGL2, das dieser Browser oder dieses Gerät " +
+      "nicht bereitstellt. Bitte einen aktuellen Desktop- oder Mobil-Browser " +
+      "mit aktivierter Hardwarebeschleunigung verwenden."
+    );
+  }
+  if (typeof DecompressionStream === "undefined") {
+    return (
+      "Dieser Browser ist zu alt für den Viewer (es fehlt " +
+      "DecompressionStream, z. B. Safari vor 16.4). Bitte den Browser " +
+      "aktualisieren."
+    );
+  }
+  return null;
+}

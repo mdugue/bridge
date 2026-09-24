@@ -3,7 +3,7 @@ import { PerspectiveCamera } from "three";
 import { EYE_HEIGHT, PITCH_LIMIT, RAD2DEG } from "@/lib/city/pose";
 import { type CameraPoseOptions, createCameraPose } from "./camera-pose";
 import type { MovementMode } from "./fps-movement";
-import type { Viewpoint } from "./viewpoints";
+import type { Viewpoint } from "@/lib/city/site";
 
 const OFFSET = { cx: 412_000, cy: 5_657_000 };
 const GROUND = 100;

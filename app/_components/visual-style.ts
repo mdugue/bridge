@@ -1,11 +1,12 @@
-import type { Group, Material, Mesh } from "three";
-import { MeshStandardMaterial } from "three";
+import { type DataTexture, MeshStandardMaterial } from "three";
+import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import {
   type ClayLookKey,
   LOOK_DEFAULTS,
   type LookValues,
 } from "@/lib/city/look-controls";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { DATA_POSITION } from "./shader-chunks";
 
 /**
  * The city is rendered in one style: archviz clay — opaque, cheap, and the
@@ -38,23 +39,32 @@ export interface ClayDetailUniforms {
   uTint: { value: number };
 }
 
+/**
+ * What every tile's clay material shares: the live facade uniforms, the
+ * height fog, and the material settings the look drives. Each tile's
+ * buildings get their own material (it binds that tile's object table) —
+ * the program is shared, three caches it by the material's key.
+ */
 export interface StyleResources {
-  clay: MeshStandardMaterial;
   /** Live uniforms for the clay Boden-Verlauf + Streiflicht. */
   clayDetail: ClayDetailUniforms;
-  dispose: () => void;
+  /** every live clay material, for the look (transparency) fan-out */
+  materials: Set<MeshStandardMaterial>;
+  heightFog?: HeightFogUniforms;
+  /** the current transparency, applied to materials created later too */
+  transparency: number;
 }
 
 /**
  * Procedural facade detail injected into the opaque clay material, keyed to each
- * building's OWN base (the `aBaseZ` attribute written in city-layer) so it works
+ * building's OWN base (its row of the object table, lib/city/city-mesh.ts —
+ * read per vertex from `uObjects` by the `featureId` attribute) so it works
  * despite buildings standing on terrain at different elevations:
  *  - Farbvariation (uTint): blends each building's own muted clay-family colour
- *    (the per-vertex `aTint` attribute from city-layer) into the flat base so a
- *    dense block stops reading as one uniform mass. Applied FIRST so the shading
- *    below (ground-darken, contour lines) modulates the tinted colour. A missing
- *    `aTint` reads as (0,0,0); we treat that as "no tint" rather than letting it
- *    darken the building to black.
+ *    into the flat base so a dense block stops reading as one uniform mass.
+ *    Applied FIRST so the shading below (ground-darken, contour lines)
+ *    modulates the tinted colour. A zero tint reads as "no tint" rather than
+ *    darkening the building to black.
  *  - Boden-Verlauf (uAO): a soft darkening over the lowest ~5 m (ambient-occlusion
  *    surrogate that gives the massing physical contact with the ground).
  *  - Höhenlinien (uBands): thin, crisp horizontal contour strokes every storey
@@ -64,19 +74,22 @@ export interface StyleResources {
  *  - Streiflicht (uRim): a Fresnel rim that separates silhouettes from like-
  *    coloured neighbours. Strength is squared-Fresnel + a healthy multiplier
  *    because the rim competes with ACES tone-mapping and there is no bloom.
- * `aBaseZ`/`position.z` are LOCAL data-frame Z (elevation, pre −90° world spin);
- * normals/positions for the rim are taken in world space via `modelMatrix`.
- * The uniforms are passed by reference so a setter can retune them live.
+ * Heights come from world space (world Y is elevation), normals/positions
+ * for the rim too, via `modelMatrix`. The uniforms are passed by reference
+ * so a setter can retune them live.
  */
 function addClayDetail(
   material: MeshStandardMaterial,
   uniforms: ClayDetailUniforms,
+  objects: { rows: number; texture: DataTexture },
   heightFog?: HeightFogUniforms
 ): void {
   // The closure branches on `heightFog`, but three keys its program cache on
   // `onBeforeCompile.toString()` — identical either way. Name the branch.
   material.customProgramCacheKey = () => `clay-${heightFog !== undefined}`;
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.uObjects = { value: objects.texture };
+    shader.uniforms.uObjectRows = { value: objects.rows };
     shader.uniforms.uAO = uniforms.uAO;
     shader.uniforms.uBands = uniforms.uBands;
     shader.uniforms.uRim = uniforms.uRim;
@@ -90,7 +103,7 @@ function addClayDetail(
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float aBaseZ;\nattribute vec3 aTint;\nattribute vec4 aBuild;\nattribute float aRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+        "#include <common>\nattribute float featureId;\nattribute float roof;\nuniform highp sampler2D uObjects;\nuniform int uObjectRows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
       )
       .replace(
         "#include <beginnormal_vertex>",
@@ -98,7 +111,22 @@ function addClayDetail(
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\n vLocalH = position.z - aBaseZ;\n vClayWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n vClayTint = aTint;\n vClayBuild = aBuild;\n vClayRough = aRough;"
+        [
+          "#include <begin_vertex>",
+          DATA_POSITION,
+          // The object's three texels: (tint, baseZ) (roof, eaveH)
+          // (storeyH, glow, rough) — lib/city/city-mesh.ts packObjectTexels.
+          `int clayId = int( featureId + 0.5 );`,
+          `ivec2 clayAt = ivec2( clayId % ${OBJECT_TEXTURE_WIDTH}, clayId / ${OBJECT_TEXTURE_WIDTH} );`,
+          "vec4 clayA = texelFetch( uObjects, clayAt, 0 );",
+          "vec4 clayB = texelFetch( uObjects, clayAt + ivec2( 0, uObjectRows ), 0 );",
+          "vec4 clayC = texelFetch( uObjects, clayAt + ivec2( 0, 2 * uObjectRows ), 0 );",
+          "vLocalH = dataPos.z - clayA.w;",
+          "vClayWP = dataWP.xyz;",
+          "vClayTint = roof > 0.5 ? clayB.rgb : clayA.rgb;",
+          "vClayBuild = vec4( roof, clayC.x, clayB.w, clayC.y );",
+          "vClayRough = clayC.z;",
+        ].join("\n")
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -116,9 +144,9 @@ function addClayDetail(
         [
           "#include <map_fragment>",
           // Farbvariation: blend in the building's own clay-family colour first,
-          // so the shading below modulates it. Roof faces (aBuild.x = 1) carry the
+          // so the shading below modulates it. Roof faces (build.x = 1) carry the
           // roof colour at the roof mix strength, walls the wall colour. A zero
-          // aTint = attribute absent → keep the base, don't mix toward black.
+          // tint = no colour known → keep the base, don't mix toward black.
           "float clayIsRoof = step(0.5, vClayBuild.x);",
           "float clayTintMix = mix(uTint, uRoofTint, clayIsRoof);",
           // Dachsättigung (uRoofVibrance): lift the REAL roof colour into a confident
@@ -162,7 +190,7 @@ function addClayDetail(
           "clayFres *= clayFres;",
           "totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
           // Abendlicht: warm interior glow on commercial/public buildings at
-          // dusk (aBuild.w = 1), gated by nightFactor, walls only.
+          // dusk (build.w = 1), gated by nightFactor, walls only.
           "float clayGlow = vClayBuild.w * uDuskGlow * uNight;",
           "totalEmissiveRadiance += clayGlow * clayWall * vec3(1.0, 0.82, 0.5) * 0.5;",
         ].join("\n")
@@ -173,21 +201,13 @@ function addClayDetail(
   };
 }
 
-/** Shared materials, created once per app instance. `night` is a uniform ref
- *  the sun rig mutates (0 = day, 1 = night) to gate the dusk glow live. */
+/** The shared clay state, created once per app instance. `night` is a
+ *  uniform ref the sun rig mutates (0 = day, 1 = night) to gate the dusk
+ *  glow live. */
 export function createStyleResources(
   heightFog?: HeightFogUniforms,
   night?: { value: number }
 ): StyleResources {
-  const clay = new MeshStandardMaterial({
-    color: 0xec_e7_df,
-    roughness: 1,
-    metalness: 0,
-    // Hash-dithered transparency (see setCityTransparency) — opaque-pass
-    // compositing keeps occlusion correct on the batched mesh.
-    opacity: 1 - LOOK_DEFAULTS.transparency,
-    alphaHash: LOOK_DEFAULTS.transparency > 0,
-  });
   // Booted at the table defaults; applyCityLook retunes them live.
   const clayDetail: ClayDetailUniforms = {
     uAO: { value: LOOK_DEFAULTS.groundShade },
@@ -201,16 +221,32 @@ export function createStyleResources(
     uNight: night ?? { value: 0 },
     uRough: { value: LOOK_DEFAULTS.roughness },
   };
-  addClayDetail(clay, clayDetail, heightFog);
-
-  // Shared across reloads — disposeObject3D must not free it mid-session.
-  clay.userData.shared = true;
-
   return {
-    clay,
     clayDetail,
-    dispose: () => clay.dispose(),
+    heightFog,
+    materials: new Set(),
+    transparency: LOOK_DEFAULTS.transparency,
   };
+}
+
+/**
+ * One tile's clay material, reading that tile's object table. Registered in
+ * `resources.materials` until the tile disposes it.
+ */
+export function createClayMaterial(
+  resources: StyleResources,
+  objects: { rows: number; texture: DataTexture }
+): MeshStandardMaterial {
+  const clay = new MeshStandardMaterial({
+    color: 0xec_e7_df,
+    roughness: 1,
+    metalness: 0,
+  });
+  addClayDetail(clay, resources.clayDetail, objects, resources.heightFog);
+  applyTransparency(clay, resources.transparency);
+  resources.materials.add(clay);
+  clay.addEventListener("dispose", () => resources.materials.delete(clay));
+  return clay;
 }
 
 /**
@@ -227,18 +263,23 @@ export function createStyleResources(
  * until something else (e.g. the sun light count changing at sunrise)
  * happens to force a rebuild.
  */
-export function setCityTransparency(
-  resources: StyleResources,
-  transparency: number
-): void {
-  const t = Math.min(Math.max(transparency, 0), 1);
-  const clay = resources.clay;
+function applyTransparency(clay: MeshStandardMaterial, t: number): void {
   const wasHashed = clay.alphaHash;
   clay.opacity = 1 - t;
   clay.alphaHash = t > 0;
   clay.transparent = false;
   if (clay.alphaHash !== wasHashed) {
     clay.needsUpdate = true;
+  }
+}
+
+export function setCityTransparency(
+  resources: StyleResources,
+  transparency: number
+): void {
+  resources.transparency = Math.min(Math.max(transparency, 0), 1);
+  for (const clay of resources.materials) {
+    applyTransparency(clay, resources.transparency);
   }
 }
 
@@ -263,7 +304,7 @@ const CLAY_UNIFORM_FOR: Record<
 };
 
 /**
- * Pushes the building rows of the look into the shared clay: the nine facade
+ * Pushes the building rows of the look into the clay: the nine facade
  * detail uniforms (live references, no recompile) and the transparency.
  */
 export function applyCityLook(
@@ -277,39 +318,4 @@ export function applyCityLook(
     resources.clayDetail[uniform].value = look[key];
   }
   setCityTransparency(resources, look.transparency);
-}
-
-interface StyledCityMesh extends Mesh {
-  isCityObjectMesh?: boolean;
-}
-
-/**
- * Puts the shared clay material on every batched city mesh in the loader
- * group. After a demolish-reload the new meshes start out with the loader's
- * own per-type materials again, so call this after every (re)load.
- *
- * The material it replaces is dropped for good (nothing switches back), so
- * it is disposed here — the loader builds a fresh set per parse, and each
- * one that survives the swap is a leaked compiled program per reload.
- */
-export function applyCityStyle(
-  cityGroup: Group,
-  resources: StyleResources
-): void {
-  const replaced = new Set<Material>();
-  cityGroup.traverse((obj) => {
-    const mesh = obj as StyledCityMesh;
-    if (!mesh.isCityObjectMesh || mesh.material === resources.clay) {
-      return;
-    }
-    for (const material of [mesh.material].flat()) {
-      if (!material.userData.shared) {
-        replaced.add(material);
-      }
-    }
-    mesh.material = resources.clay;
-  });
-  for (const material of replaced) {
-    material.dispose();
-  }
 }

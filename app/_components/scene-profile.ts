@@ -2,10 +2,10 @@
  * Scene profile and render budget — how much world the viewer builds and how
  * expensive each frame is allowed to be.
  *
- * `full` is the product: the primary tile plus its 2x2 neighbour block, a
+ * `full` is the product: the whole site streams (lib/city/tileset.ts), a
  * 3072² shadow map and Medium-quality SSAO. `lite` exists for the headless
  * e2e suite, where every frame is rasterized on the CPU by SwiftShader: it
- * loads the primary tile only, shrinks the shadow map, halves the render
+ * streams the spawn tile only, shrinks the shadow map, halves the render
  * scale and runs N8AO in its Performance mode — the four knobs that actually
  * cost seconds a frame there. Everything a test asserts on — the loaders, the
  * layer construction, the shader programs of every style, the HUD wiring —
@@ -38,7 +38,7 @@ export type AoQuality = "Medium" | "Performance";
 export interface SceneBudget {
   /** phones take the 2048² land-cover rasters (lib/city/tile.ts, MOBILE_RASTER_PX) */
   lowRasters: boolean;
-  /** whether the neighbour tiles load: always in `full`, in `lite` only with `?block=1` */
+  /** whether the rest of the site streams: always in `full`, in `lite` only with `?block=1` */
   neighbourTiles: boolean;
   profile: SceneProfile;
   tier: DeviceTier;
@@ -50,8 +50,8 @@ export function sceneProfileFromSearch(search: string): SceneProfile {
 }
 
 /**
- * `?scene=lite&block=1` keeps the neighbour tiles in the lite profile — a QA
- * knob for exercising the tile streaming (loadRest in create-app.ts) headless,
+ * `?scene=lite&block=1` streams the whole site in the lite profile — a QA
+ * knob for exercising the tile streaming (tile-stream.ts) headless,
  * where the full profile's shadow map and pixel count are unaffordable. Pure.
  */
 export function liteKeepsBlockFromSearch(search: string): boolean {

@@ -12,13 +12,14 @@ import { subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
- * Retaining / city walls from OSM (`scripts/extract-walls.sh`). Monumental walls
+ * Retaining / city walls from OSM (`pipeline/bake/walls.py`). Monumental walls
  * like the Brühlsche Terrasse are NOT a feature in the elevation data — the DGM1
  * / DOM1 / LiDAR all smooth the sandstone wall into a gentle bank, and a wall is
  * not a CityJSON building, so it "goes missing". OSM has it as tagged lines with
  * heights; this renders those as vertical sandstone ribbons sitting on the DGM1
  * ground (base draped via the cross-tile `heightAt`, top = base + the OSM
- * height). Built ONCE for the whole tile block; authored Y-up → added to `scene`.
+ * height). Built per fine terrain tile by the dressing plugin (tile-stream.ts);
+ * authored Y-up, so it lives in the Y-up frame.
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 

@@ -1,4 +1,4 @@
-import type { Box3, Scene } from "three";
+import type { Box3, Camera, Scene } from "three";
 import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { atmosphereAt } from "@/lib/city/atmosphere";
@@ -36,10 +36,13 @@ export interface SunRig {
   follow: (position: Vector3, direction: Vector3, groundY: number) => void;
   /** Forces a one-off shadow-map re-render. The map is otherwise only redrawn
    * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
-   * (demolish / insert) must call this or stale shadows linger. */
+   * (demolish, a tile landing or leaving) must call this or stale shadows linger. */
   invalidateShadow: () => void;
   /** Advances the sky dome's drifting clouds (call per frame with elapsed s). */
   setTime: (seconds: number) => void;
+  /** The sun's shadow camera: the tile stream loads what it sees too, so a
+   *  building behind the player still casts into the view. */
+  shadowCamera: Camera;
   /** GPU bytes of the shadow map (RGBA8 depth-packed, no mipmaps). */
   shadowMapBytes: number;
   /** True when the next render will redraw the shadow map. */
@@ -279,6 +282,7 @@ export function createSunRig(
     // flag stays raised (and is consumed at sunrise), so it is not "pending".
     shadowPending: () => sun.visible && sun.shadow.needsUpdate,
     shadowMapBytes: shadowMapSize * shadowMapSize * 4,
+    shadowCamera: sun.shadow.camera,
     dispose: () => sun.dispose(),
   };
 }

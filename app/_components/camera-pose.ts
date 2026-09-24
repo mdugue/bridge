@@ -23,7 +23,7 @@ import {
   MOVEMENT_KEYS,
   type MovementMode,
 } from "./fps-movement";
-import type { ViewpointGeometry } from "./viewpoints";
+import type { ViewpointGeometry } from "@/lib/city/site";
 
 /** rad per CSS px of grab-look drag — a full phone-width swipe ≈ 90° */
 const GRAB_RADIANS_PER_PX = 0.004;
@@ -34,7 +34,7 @@ export interface CameraPoseOptions {
   /**
    * The lowest real terrain elevation (world Y) so far: where the player
    * stands when a spot lies off every tile's DGM. A getter because it drops
-   * as the neighbour tiles land.
+   * as more tiles land.
    */
   groundFloor: () => number;
   /** ground elevation (world Y) at EPSG (x, y); null = off every tile */
@@ -71,7 +71,7 @@ export interface CameraPose {
   /**
    * The pose as a vantage the glide can fly back to. Height is captured
    * ABOVE THE TERRAIN, like the curated viewpoints, so the saved view still
-   * lands correctly once a neighbour tile refines the ground under it.
+   * lands correctly once a finer tile refines the ground under it.
    */
   captureViewpoint: () => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
