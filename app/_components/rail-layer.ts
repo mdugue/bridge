@@ -21,7 +21,7 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
  * a flat land-cover colour painted on the DGM (a brown smear; bridges sank into
  * the Elbe). This builds stylized geometry from the baked GeoJSONs
- * (scripts/extract-rail.sh), redesigned after the first pass z-fought into ragged
+ * (pipeline/bake/rail.py), redesigned after the first pass z-fought into ragged
  * edges and stacked into "2-story" bridges:
  *
  *  - Ballast yards: ONE merged surface from the DISSOLVED Basis-DLM ver03_f area

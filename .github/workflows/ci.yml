@@ -52,6 +52,24 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
+  # The offline bakes (pipeline/, Python in its own uv environment): their
+  # unit tests and ruff. The bakes themselves need the raw downloads and run
+  # on the maintainer's machine (bun run bake), never here.
+  pipeline:
+    name: Pipeline (pytest + ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --locked
+      - run: uv run pytest -q tests
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
   # Build and e2e share ONE job. They used to be two, each doing its own
   # `next build` on its own runner — the same work billed twice. This job's
   # build step is the build check; the Playwright step then serves the artifact
@@ -76,10 +94,12 @@ jobs:
         run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      # The e2e half is skipped on PRs that cannot affect it (docs, the data
-      # pipeline scripts, this workflow). The job itself always runs and always
-      # builds, so the status check stays green rather than "skipped" — which
-      # branch protection would treat as never reported.
+      # The e2e half is skipped on PRs that cannot affect it (docs, the
+      # offline pipeline, this workflow). scripts/, data/ and sites/ do: the
+      # tileset the viewer streams is baked from them at build time. The job
+      # itself always runs and always builds, so the status check stays green
+      # rather than "skipped" — which branch protection would treat as never
+      # reported.
       - name: Decide whether the e2e half has to run
         id: scope
         env:
@@ -94,7 +114,7 @@ jobs:
           # It over-reports (changes that landed on main since the PR branched
           # count too), which errs towards running the suite.
           if git diff --name-only "$BASE_SHA" HEAD -- \
-              app components hooks lib e2e public types \
+              app components hooks lib e2e public types scripts data sites \
               playwright.config.ts next.config.ts package.json bun.lock \
               | grep -q .; then
             echo "run=true" >> "$GITHUB_OUTPUT"

@@ -12,7 +12,7 @@ import { subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
- * Retaining / city walls from OSM (`scripts/extract-walls.sh`). Monumental walls
+ * Retaining / city walls from OSM (`pipeline/bake/walls.py`). Monumental walls
  * like the Brühlsche Terrasse are NOT a feature in the elevation data — the DGM1
  * / DOM1 / LiDAR all smooth the sandstone wall into a gentle bank, and a wall is
  * not a CityJSON building, so it "goes missing". OSM has it as tagged lines with

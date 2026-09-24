@@ -13,6 +13,7 @@ export const DRESDEN: Site = {
   label: "Dresden · Altstadt",
   title: "City Walk — Dresden",
   epsg: 25_833,
+  ingest: "sn",
   tileKm: 2,
   tileSuffix: "_sn",
   tiles: [

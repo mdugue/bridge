@@ -1,6 +1,6 @@
 /**
  * The land-cover classes and the ONE palette that paints them. The DLM bake
- * (scripts/extract-dlm.sh) writes only class ids; every consumer colours
+ * (pipeline/bake/landcover.py) writes only class ids; every consumer colours
  * them from this table at runtime — the terrain (a GPU pass,
  * app/_components/landcover-splat.ts), the minimap and the /wissen picture
  * (scripts/bake-wissen-hero.ts). Changing a colour here is a look change,

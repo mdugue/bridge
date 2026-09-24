@@ -52,6 +52,9 @@ export interface Site {
   /** where the sun is computed when the tiles cannot be reprojected */
   fallbackLatLng: { lat: number; lng: number };
   id: string;
+  /** the ingest adapter that turns the provider's downloads into the bakes'
+   *  canonical raw layout (pipeline/bake/ingest_<id>.py) */
+  ingest: "sn";
   /** the place, as the HUD names it ("Dresden · Altstadt") */
   label: string;
   /** optional suffix of the provider's tile names (Saxony: "_sn") */

@@ -12,7 +12,7 @@
     "DGM1": {
       "layer": 6,
       "committed": "data/dgm/dgm1_<tile>_tiff/",
-      "usedBy": ["scripts/prepare-data.ts", "scripts/extract-canopy.sh", "scripts/extract-rail.sh"],
+      "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5658_2_sn_tiff.zip" },
@@ -24,7 +24,7 @@
       "layer": 4,
       "committed": null,
       "raw": "data/_raw/dom1/dom1_<tile>_tiff/",
-      "usedBy": ["scripts/extract-canopy.sh", "scripts/extract-rail.sh"],
+      "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5658_2_sn_tiff.zip" },
@@ -47,7 +47,7 @@
       "$comment": "`stand` is the model's production year with the currency of its inputs in parentheses (laser scan for the roofs, Basis-DLM for the footprints, DGM for the ground); `creationDate` inside the CityJSON is the export date of each object.",
       "layer": 3,
       "committed": "data/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
-      "usedBy": ["scripts/prepare-data.ts", "scripts/extract-roof-colour.sh"],
+      "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/roof_colour.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-06-28 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5656_2_sn_citygml.zip" },
         "33410_5658_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-26 (most objects; some 2021-01, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5658_2_sn_citygml.zip" },
@@ -60,7 +60,7 @@
       "layer": 17,
       "committed": "derived only: data/dop/roofcolor_<tile>.json, data/dlm/ndvi_<tile>.png",
       "raw": "data/_raw/DOP_RGBI/dop20rgbi_<tile>_tiff/",
-      "usedBy": ["scripts/extract-roof-colour.sh", "scripts/extract-ndvi.sh"],
+      "usedBy": ["pipeline/bake/roof_colour.py", "pipeline/bake/ndvi.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5658_2_sn_tiff.zip" },
@@ -80,7 +80,7 @@
   },
   "openstreetmap": {
     "overpass": {
-      "$comment": "Point queries fetched once and cached under data/_raw/osm/*.json; the cached response's `osm3s.timestamp_osm_base` is the exact data timestamp.",
+      "$comment": "How the committed lamp, platform and bridge-structure files were fetched (the bash bakes, cached under data/_raw/osm/*.json). The Python pipeline reads all OSM layers from the Geofabrik extract below instead; the next re-bake moves these products there.",
       "endpoint": "https://overpass-api.de/api/interpreter",
       "products": {
         "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
@@ -89,9 +89,9 @@
       }
     },
     "geofabrik": {
-      "$comment": "Regional extract read by scripts/extract-walls.sh. `osmium fileinfo -e <file>` prints the extract's replication timestamp.",
+      "$comment": "Regional extract read by pipeline/bake/osm.py (walls, lamps, platforms, bridge structure). `osmium fileinfo -e <file>` prints the extract's replication timestamp.",
       "download": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
-      "raw": "data/_raw/osm/*.osm.pbf",
+      "raw": "data/_raw/<site>/osm/*.osm.pbf",
       "products": { "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-09-18 or shortly before (walls re-baked that day)" } }
     }
   }
