@@ -28,7 +28,8 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | `W` `A` `S` `D` | walk (or fly) |
 | `Shift` | sprint |
 | `F` | switch between walking and flying |
-| `Space` / `Shift` | up / down while flying |
+| `Space` / `Shift` (or `E` / `Q`) | up / down while flying |
+| `1` – `9` | glide to the first to ninth viewpoint |
 | Mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide |
 | Click on the minimap | teleport there |
@@ -39,11 +40,14 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 |---|---|
 | Drag | look around |
 | Joystick (bottom left) | walk |
+| Plane button (bottom right) | switch between walking and flying |
+| Altitude slider (bottom right, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there |
 | Two-finger pinch | zoom |
 
 While walking you are held at eye height on the terrain and collide with
-buildings and walls. While flying there is no collision. Any input cancels
+buildings and walls. While flying there is no collision; only sinking
+stops at eye height above the ground. Any input cancels
 a glide that is in progress.
 
 A floating bar shows the four essential controls until you dismiss it with
@@ -60,13 +64,23 @@ The button in the corner opens a panel with three tabs.
   the footprints of the buildings currently loaded. Your position and view
   direction are drawn on it; a click teleports.
 - **Gehen / Fliegen** — walk or fly.
-- **Aussichtspunkte** ("viewpoints") — five hand-picked vantages the camera
-  glides to: *Carolabrücke* (over the river), *Elbe-Panorama* (high above
-  the bend), *Über den Dächern* (a low glide over the old town roofs),
-  *Canaletto-Blick* (on foot on the Elbe meadow, the old town across the
-  grass) and *Elbufer* (a walk along the tree-lined Neustadt bank). The
-  sixth card, *Aktuelle Sicht merken*, remembers where you stand; it then
-  becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to forget it.
+- **Aussichtspunkte** ("viewpoints") — hand-picked vantages the camera
+  glides to (on a keyboard also with `1` – `9`):
+  - *from the air*: *Altstadt-Silhouette* (the start view, low over the
+    Elbe), views from above onto the *Frauenkirche*, the *Brühlsche
+    Terrasse*, *Albertplatz*, *Alaunpark* and *Zwinger & Semperoper*, a
+    low flight over the *Äußere Neustadt*, plus *Carolabrücke* (over the
+    river), *Elbe-Panorama* (high above the bend) and *Über den Dächern*
+    (a low glide over the old town roofs);
+  - *at eye level*: *Canaletto-Blick* (on the Elbe meadow, the old town
+    across the grass), *Elbufer* (the tree-lined Neustadt bank), *Am
+    Japanischen Palais* (on the Neustadt meadow where Canaletto painted)
+    and *Neumarkt* (in front of the Frauenkirche).
+
+  The Großer Garten lies just south of the area, so it has no viewpoint
+  yet. The last card, *Aktuelle Sicht merken*, remembers where you stand;
+  it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
+  forget it.
 - **Steuerung** — the full controls table.
 
 ### Szene ("Scene")
