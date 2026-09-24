@@ -214,8 +214,9 @@ sequenceDiagram
   B->>S: manifest.json (no-cache)
   B->>S: tileset.json (hashed, extras: CRS, offset, tile list)
   Note over B: renderer, sun rig, lamp light pool, post stack, tile stream
-  B->>S: spawn tile: buildings glb + footprints, a terrain level + class raster, NDVI
-  Note over B: dress: clay + object texture + BVH · splat painted + water
+  B->>S: every tile's footprints (minimap)
+  B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
+  Note over B: dress: clay + object texture + BVH · splat painted + water · compileAsync
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
@@ -230,7 +231,10 @@ again on the spawn tile's ground, which did not exist when the pose was
 first set. Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own
-load, so no tile is shown half-dressed. The heavy dressing — vegetation,
+load, so no tile is shown half-dressed. Before a tile or a dressing shows,
+its shaders are compiled with `compileAsync` against the target the scene
+pass renders into (`PostStack.compile`), so a landing tile never compiles
+inside a frame. The heavy dressing — vegetation,
 lamps, rails, walls — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
 second phase) and is built one tile at a time. **Ready** (`onLoaded`,
@@ -239,8 +243,18 @@ is dressed, the renderer is idle and no dressing is pending; it also lifts
 the fog clamp. A tile that fails to load leaves a hole and one `onError`
 message; a dressing that fails leaves its tile bare — neither takes the
 scene down. Collision, demolish, autofocus and double-tap work on every
-visible tile. The HUD's six load stages and their weights are declared once
-in `lib/city/load-stages.ts`.
+visible tile; the two ground rays (double-tap travel, autofocus) march the
+terrain's height grid (`lib/city/ground-ray.ts`) — the terrain has no BVH.
+
+The HUD's five load stages and their weights are declared once in
+`lib/city/load-stages.ts`. The first three are the first frame; the other
+two measure **what the cameras see**, not the whole site: *Umgebung* is
+the tile renderer's own load progress, *Details* the dressings built
+against those queued. Both only move forward. Once everything in view is
+in, the pill leaves; later loads (a flight) show a small, late *Umgebung
+lädt* hint instead (`onBusy`). The minimap loads every tile's footprints
+up front (named in the tileset's root extras), so it is complete from the
+start.
 
 ## Verifying a change
 
