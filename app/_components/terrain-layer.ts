@@ -22,6 +22,11 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { textureBytes, trackTexture } from "./three-utils";
+import { nodeRenderer } from "./gpu-mode";
+import {
+  createNodeTerrainMaterial,
+  createNodeWaterLayer,
+} from "./terrain-node";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /**
@@ -104,10 +109,15 @@ async function loadBitmapTexture(
   // `texture.image`. Twelve of them took mobile Safari past its per-tab
   // memory limit. Once the GPU has the texels the CPU copy is dead weight:
   // release it right after the upload (mipmaps are generated on the GPU).
-  texture.onUpdate = () => {
-    bitmap.close();
-    texture.onUpdate = null;
-  };
+  // SPIKE (plan 020): WebGPURenderer may upload again after onUpdate (the
+  // node paint pass reads the class raster before the terrain does); keep
+  // the bitmap on node pages.
+  if (!nodeRenderer()) {
+    texture.onUpdate = () => {
+      bitmap.close();
+      texture.onUpdate = null;
+    };
+  }
   return { texture, width: bitmap.width, height: bitmap.height };
 }
 
@@ -407,7 +417,9 @@ export async function dressTerrain(
         }
       : undefined;
 
-  mesh.material = createTerrainMaterial(splat, opts.heightFog);
+  mesh.material = nodeRenderer()
+    ? createNodeTerrainMaterial(splat)
+    : createTerrainMaterial(splat, opts.heightFog);
   mesh.name = "terrain";
   // The terrain only RECEIVES shadows. If it also cast, the grazing sun makes
   // every triangle face self-shadow → the jagged "staircase"/triangle acne
@@ -420,9 +432,16 @@ export async function dressTerrain(
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
   // the tile.
-  const water = splat
-    ? createWaterLayer(mesh.geometry, splat, opts.sunDirection, opts.heightFog)
-    : undefined;
+  const water = !splat
+    ? undefined
+    : nodeRenderer()
+      ? createNodeWaterLayer(mesh.geometry, splat)
+      : createWaterLayer(
+          mesh.geometry,
+          splat,
+          opts.sunDirection,
+          opts.heightFog
+        );
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {
       sheet.position.copy(mesh.position);

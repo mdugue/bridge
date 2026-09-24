@@ -40,7 +40,10 @@ import { createHeightFogUniforms } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
+import { gpuMode, nodeRenderer } from "./gpu-mode";
 import { createPostStack } from "./post-stack";
+import { createNodePostStack } from "./post-stack-node";
+import type { WebGPURenderer } from "three/webgpu";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import {
   aoQualityFor,
@@ -212,18 +215,35 @@ export interface CityWalkHandle {
   terrainBounds: TerrainBounds;
 }
 
-function createRenderer(
+async function newRenderer(): Promise<WebGLRenderer> {
+  if (!nodeRenderer()) {
+    // No MSAA: everything renders through the EffectComposer and SMAA carries
+    // the AA (see post-stack.ts); a multisampled default framebuffer would only
+    // be resolved for a full-screen quad.
+    return new WebGLRenderer({
+      antialias: false,
+      powerPreference: "high-performance",
+    });
+  }
+  // SPIKE (plan 020): WebGPURenderer, loaded only on ?gpu=… pages.
+  const { WebGPURenderer } = await import("three/webgpu");
+  const renderer = new WebGPURenderer({
+    antialias: false,
+    powerPreference: "high-performance",
+    forceWebGL: gpuMode() === "webgl2",
+  });
+  await renderer.init();
+  // reason: spike — the calls create-app makes (size, pixel ratio, shadow
+  // map, tone mapping, animation loop, info, dispose) exist on both.
+  return renderer as unknown as WebGLRenderer;
+}
+
+async function createRenderer(
   container: HTMLElement,
   profile: SceneProfile,
   tier: DeviceTier
-): WebGLRenderer {
-  // No MSAA: everything renders through the EffectComposer and SMAA carries
-  // the AA (see post-stack.ts); a multisampled default framebuffer would only
-  // be resolved for a full-screen quad.
-  const renderer = new WebGLRenderer({
-    antialias: false,
-    powerPreference: "high-performance",
-  });
+): Promise<WebGLRenderer> {
+  const renderer = await newRenderer();
   // The `lite` profile renders at half linear resolution (a quarter of the
   // pixels) and lets the browser upscale. The canvas fills the viewport and
   // the HUD needs a desktop-width window to lay out, so this — not the
@@ -272,7 +292,7 @@ export async function createCityWalkApp(
   opts: CityWalkOptions
 ): Promise<CityWalkHandle> {
   const { profile, tier } = opts.budget;
-  const renderer = createRenderer(opts.container, profile, tier);
+  const renderer = await createRenderer(opts.container, profile, tier);
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
   const fogRange = fogRangeFor(opts.look.get().fogAmount);
@@ -539,12 +559,14 @@ async function bootApp(
   applyFog();
 
   stage("light", 0);
-  const postStack = createPostStack(
-    renderer,
-    scene,
-    camera,
-    aoQualityFor(budget.profile)
-  );
+  const postStack = nodeRenderer()
+    ? createNodePostStack(
+        // reason: spike — newRenderer() built a WebGPURenderer on this path.
+        renderer as unknown as WebGPURenderer,
+        scene,
+        camera
+      )
+    : createPostStack(renderer, scene, camera, aoQualityFor(budget.profile));
   cleanups.push(() => postStack.dispose());
 
   // The look store is the one source of every slider value: applied now, on

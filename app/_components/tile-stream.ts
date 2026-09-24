@@ -1,6 +1,7 @@
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
+  BufferAttribute,
   type Camera,
   type Group,
   Matrix4,
@@ -26,6 +27,7 @@ import type {
   TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
+import { nodeRenderer } from "./gpu-mode";
 import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
@@ -128,6 +130,31 @@ class GzipContentPlugin {
 }
 
 type Features<T> = Promise<T[]>;
+
+/**
+ * SPIKE (plan 020): WebGPU has no 3-component 8/16-bit vertex formats
+ * (snorm16x3, snorm8x3 — only x2/x4), which is exactly what
+ * KHR_mesh_quantization writes for positions and normals; and TSL's
+ * `attribute(…, "float")` must not meet an integer buffer on the WebGL2
+ * backend. Dequantise every non-float attribute to Float32 on load (the
+ * node transform keeps the dequantisation scale). Costs the quantisation's
+ * GPU-memory saving; the bake could pad to x4 instead.
+ */
+function floatAttributes(mesh: Mesh): void {
+  const geometry = mesh.geometry;
+  for (const [name, attr] of Object.entries(geometry.attributes)) {
+    if (attr.array instanceof Float32Array) {
+      continue;
+    }
+    const out = new Float32Array(attr.count * attr.itemSize);
+    for (let i = 0; i < attr.count; i++) {
+      for (let c = 0; c < attr.itemSize; c++) {
+        out[i * attr.itemSize + c] = attr.getComponent(i, c);
+      }
+    }
+    geometry.setAttribute(name, new BufferAttribute(out, attr.itemSize));
+  }
+}
 
 function dressingParts(d: TileDressing): Object3D[] {
   return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
@@ -232,6 +259,9 @@ class DressingPlugin {
     const mesh = scene.getObjectByProperty("isMesh", true) as Mesh | undefined;
     if (!mesh) {
       return;
+    }
+    if (nodeRenderer()) {
+      floatAttributes(mesh);
     }
     if (extras.kind === "city") {
       await this.dressCity(scene, mesh, extras);

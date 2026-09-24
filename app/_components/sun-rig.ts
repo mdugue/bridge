@@ -1,6 +1,8 @@
 import type { Box3, Camera, Scene } from "three";
 import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
+import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
+import { nodeRenderer } from "./gpu-mode";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import {
   fitShadowRadius,
@@ -53,7 +55,34 @@ export interface SunRig {
 
 const SUN_INTENSITY = 2.4;
 
-function createSkyDome(scene: Scene): Sky {
+/** The two sky domes' shared surface: the GLSL `Sky` or (spike) the TSL `SkyMesh`. */
+interface SkyDome {
+  setSun: (x: number, y: number, z: number) => void;
+  setTime: (seconds: number) => void;
+}
+
+/** SPIKE (plan 020): the TSL twin of Sky.js, same knobs; its clouds read TSL `time`. */
+function createNodeSkyDome(scene: Scene): SkyDome {
+  const sky = new SkyMesh();
+  sky.scale.setScalar(4500);
+  sky.turbidity.value = 6;
+  sky.rayleigh.value = 1.6;
+  sky.mieCoefficient.value = 0.004;
+  sky.mieDirectionalG.value = 0.75;
+  sky.cloudCoverage.value = 0.3;
+  sky.cloudDensity.value = 0.3;
+  sky.cloudSpeed.value = 0.0001;
+  scene.add(sky);
+  return {
+    setSun: (x, y, z) => sky.sunPosition.value.set(x, y, z),
+    setTime: () => undefined,
+  };
+}
+
+function createSkyDome(scene: Scene): SkyDome {
+  if (nodeRenderer()) {
+    return createNodeSkyDome(scene);
+  }
   const sky = new Sky();
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
@@ -72,7 +101,13 @@ function createSkyDome(scene: Scene): Sky {
   // Slow drift — a barely-moving Dresden sky, not racing clouds.
   u.cloudSpeed.value = 0.0001;
   scene.add(sky);
-  return sky;
+  return {
+    setSun: (x, y, z) =>
+      (sky.material.uniforms.sunPosition.value as Vector3).set(x, y, z),
+    setTime: (seconds) => {
+      sky.material.uniforms.time.value = seconds;
+    },
+  };
 }
 
 /**
@@ -247,11 +282,7 @@ export function createSunRig(
       (0.45 + 0.6 * Math.max(dir.y, 0)) * (1 - 0.75 * nightFactor);
 
     // Sky dome follows the same sun; fog + fill colors follow the palette.
-    (sky.material.uniforms.sunPosition.value as Vector3).set(
-      dir.x,
-      dir.y,
-      dir.z
-    );
+    sky.setSun(dir.x, dir.y, dir.z);
     const palette = atmosphereAt(altitudeDeg);
     if (scene.fog instanceof Fog) {
       scene.fog.color.set(palette.fog);
@@ -266,7 +297,7 @@ export function createSunRig(
   };
 
   const setTime = (seconds: number) => {
-    sky.material.uniforms.time.value = seconds;
+    sky.setTime(seconds);
   };
 
   const invalidateShadow = () => {
