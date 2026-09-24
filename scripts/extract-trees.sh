@@ -29,6 +29,10 @@
 #   a  archetype id (0 round, 1 oval, 2 columnar, 3 conifer, 4 weeping, 5 small)
 #   l  leaf type ("e" evergreen, "d" deciduous)
 #   c  foliage colour (0 green, 1 purple, 2 golden)   g  1 = globe cultivar
+#   f  1 = stands in DLM forest/copse (class 2/3 of the committed class raster
+#      data/dlm/landcover_<tile>.png, extract-dlm.sh): the viewer does not let
+#      such a tree veto the canopy trees around it (a park's measured canopy
+#      is denser than the municipal register — see docs/transformations.md)
 #
 # Usage:  bash scripts/extract-trees.sh [tile]      (default 33412_5656)
 #   TREES_RAW_DIR overrides the raw cache (default data/_raw/baumkataster).
@@ -110,13 +114,27 @@ PY
 fi
 
 OUT="$OUTDIR/trees_${TILE}_${SUFFIX}.geojson"
-python3 - "$ROOT/scripts" "$RAW" "$OUT" "$XMIN" "$YMIN" "$XMAX" "$YMAX" <<'PY'
+LANDCOVER="$OUTDIR/landcover_${TILE}_${SUFFIX}.png"
+[ -f "$LANDCOVER" ] || { echo "error: $LANDCOVER missing (run extract-dlm.sh first)" >&2; exit 1; }
+python3 - "$ROOT/scripts" "$RAW" "$OUT" "$XMIN" "$YMIN" "$XMAX" "$YMAX" "$LANDCOVER" <<'PY'
 import json, statistics, sys
+from PIL import Image
 sys.path.insert(0, sys.argv[1])
 import tree_archetypes as ta
 
 raw_p, out_p = sys.argv[2], sys.argv[3]
 xmin, ymin, xmax, ymax = (float(v) for v in sys.argv[4:8])
+# DLM class raster (row 0 = north): 2 forest, 3 copse — see extract-dlm.sh.
+landcover = Image.open(sys.argv[8])
+lc_w, lc_h = landcover.size
+lc_px = landcover.load()
+WOODLAND = {2, 3}
+
+
+def woodland(x, y):
+    c = min(lc_w - 1, int((x - xmin) / (xmax - xmin) * lc_w))
+    r = min(lc_h - 1, int((ymax - y) / (ymax - ymin) * lc_h))
+    return lc_px[c, r] in WOODLAND
 H_MIN, H_MAX, D_MIN, D_MAX = 1.5, 40.0, 0.8, 30.0
 
 
@@ -164,6 +182,8 @@ for t in trees:
         props["c"] = t["foliage"]
     if t["globe"]:
         props["g"] = 1
+    if woodland(t["x"], t["y"]):
+        props["f"] = 1
     feats.append({
         "type": "Feature",
         "properties": props,

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 #
-# extract-lowveg.sh — bake hedges, shrubs (0.5–3 m) and out-of-mask trees for
-# one tile, from the GeoSN laser scan (LSC) + OSM.  🧪 EXPERIMENTAL: the viewer
-# only draws the result behind `?veg=low` (see docs/transformations.md).
+# extract-lowveg.sh — bake the OSM hedges (at their laser-scan height) and the
+# trees outside the canopy mask for one tile, from the GeoSN laser scan (LSC)
+# + OSM. The viewer draws both by default (low-vegetation-layer.ts, and the
+# extra trees join the canopy). The laser-scan-only hedges and the shrubs the
+# bake also finds are NOT shipped (docs/transformations.md, "Low vegetation":
+# ~30 % crown-rim false positives, faceted "boulders" up close) — set
+# LOWVEG_ALL=1 to write every candidate to
+# data/_raw/lsc/derived/<tile>/lowveg_all_<tile>.geojson for research.
 #
 # MANUAL, one-off step. Needs (all gitignored, under data/_raw/ — override the
 # root with RAW_ROOT=/path/to/data/_raw, e.g. from a git worktree):
@@ -11,15 +16,18 @@
 #   - the committed bakes this one depends on: data/dlm/landcover_<tile>.png
 #     (extract-dlm.sh), ndvi_<tile>.png (extract-ndvi.sh), walls_<tile>.geojson
 #     (extract-walls.sh), bridge_<tile>.geojson (extract-rail.sh),
-#     canopy_<tile>.geojson (extract-canopy.sh), data/cityjson/, data/dgm/
+#     canopy_<tile>.geojson (extract-canopy.sh), trees_<tile>.geojson
+#     (extract-trees.sh — the extra trees are thinned against it: the
+#     cadastre wins within max(4 m, its crown radius)), data/cityjson/, data/dgm/
 #   - PDAL ≥ 2.10 and GDAL on PATH; `uv` (the bake needs numpy, scipy,
 #     scikit-image, shapely, rasterio — the system Python has none of them)
 #   - curl, for the one Overpass query (cached; OVERPASS_URL overrides the
 #     endpoint when overpass-api.de is overloaded)
 #
 # Without the LAZ the tile falls back to OSM only: mapped hedges at their tagged
-# (or a default) height and natural=shrub nodes (scrub polygons are NOT filled —
-# see extract-lowveg.py) — see docs/portability.md.
+# (or a default) height, and no extra trees — see docs/portability.md. The
+# three neighbour tiles are baked that way (RAW_ROOT pointed at a raw root that
+# holds only the Overpass caches), which is what is committed.
 #
 # Pipeline:
 #   1. PDAL → 0.5 m rasters under data/_raw/lsc/derived/<tile>/ (skipped when
@@ -32,7 +40,7 @@
 #      components → hedge polylines / shrub points, merged with OSM
 #
 # Output (small, COMMITTED):
-#   data/dlm/lowveg_<tile>_2_sn.geojson   hedges {kind, h, w, src} + shrubs {kind, h, r, src}
+#   data/dlm/lowveg_<tile>_2_sn.geojson   OSM hedges {kind, h, w, src: osm|osm+lsc}
 #   data/dlm/canopyx_<tile>_2_sn.geojson  extra trees {h, r} (LSC only)
 #
 # Usage:  bash scripts/extract-lowveg.sh [tile]      (default 33412_5656)
@@ -141,4 +149,6 @@ uv run --quiet --with numpy==2.5.3 --with scipy==1.18.1 \
   --cityjson "$ROOT/data/cityjson/lod2_${T}.city.json" \
   --walls "$OUTDIR/walls_${T}.geojson" --bridge "$OUTDIR/bridge_${T}.geojson" \
   --osm "$OSM" --canopy "$OUTDIR/canopy_${T}.geojson" \
-  --out "$OUTDIR/lowveg_${T}.geojson" --out-canopyx "$OUTDIR/canopyx_${T}.geojson"
+  --trees "$OUTDIR/trees_${T}.geojson" \
+  --out "$OUTDIR/lowveg_${T}.geojson" --out-canopyx "$OUTDIR/canopyx_${T}.geojson" \
+  ${LOWVEG_ALL:+--out-all "$DER/lowveg_all_${T}.geojson"}

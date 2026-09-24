@@ -55,7 +55,8 @@ export interface CanopyFeature {
  * none); `a` is the archetype id (lib/city/tree-inventory.ts
  * TREE_ARCHETYPES), `l` the leaf type ("e" evergreen, "d" deciduous), `c` a
  * foliage colour (1 purple, 2 golden; absent = green), `g` = 1 marks a globe
- * cultivar.
+ * cultivar, `f` = 1 a tree standing in DLM forest/copse (it vetoes no
+ * canopy tree — lib/city/tree-inventory.ts).
  */
 export interface TreeFeature {
   geometry: PointGeometry;
@@ -63,45 +64,36 @@ export interface TreeFeature {
     a: number;
     c?: number;
     d: number;
+    f?: number;
     g?: number;
     h: number;
     l: "d" | "e";
   } | null;
 }
 
-/** 🧪 Laser-scan crown peaks outside the canopy mask (extract-lowveg.sh):
- *  a canopy point plus the crown radius, so it drops into the tree layer. */
+/** Laser-scan crown peaks outside the canopy mask (extract-lowveg.sh),
+ *  already thinned against the street-tree cadastre: a canopy point plus
+ *  the crown radius, so it drops into the tree layer. */
 export interface CanopyExtraFeature extends CanopyFeature {
   properties: { h: number; r: number } | null;
 }
 
 /**
- * 🧪 Low vegetation (extract-lowveg.sh: the GeoSN laser scan + OSM hedges):
- * hedge polylines with their height and width, shrub points with height and
- * radius (metres). `src` says where the geometry came from — "osm", "lsc"
- * (laser scan only) or "osm+lsc" (OSM line, laser-scan height).
+ * Hedges (extract-lowveg.sh): the OSM `barrier=hedge` lines with their height
+ * and width in metres. `src` says where the height came from — "osm+lsc"
+ * (the GeoSN laser scan measured it) or "osm" (the tag, or a default).
  */
-export type LowVegFeature =
-  | {
-      geometry: LineGeometry;
-      properties: {
-        h: number;
-        kind: "hedge";
-        src: LowVegSource;
-        w: number;
-      } | null;
-    }
-  | {
-      geometry: PointGeometry;
-      properties: {
-        h: number;
-        kind: "shrub";
-        r: number;
-        src: LowVegSource;
-      } | null;
-    };
+export interface LowVegFeature {
+  geometry: LineGeometry;
+  properties: {
+    h: number;
+    kind: "hedge";
+    src: LowVegSource;
+    w: number;
+  } | null;
+}
 
-export type LowVegSource = "lsc" | "osm" | "osm+lsc";
+export type LowVegSource = "osm" | "osm+lsc";
 
 /** OSM street lamps (extract-lamps.sh, ODbL); the post height is a
  *  lamp-layer constant, so no property is read. */

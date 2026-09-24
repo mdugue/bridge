@@ -4,7 +4,6 @@ import type { LowVegFeature } from "@/lib/city/features";
 import {
   buildHedgeGeo,
   buildLowVegetation,
-  buildShrubGeo,
   hedgePieces,
 } from "./low-vegetation-layer";
 import { sceneCensus } from "./scene-census";
@@ -13,12 +12,7 @@ const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 
 const hedge = (coords: [number, number][], h = 1.5): LowVegFeature => ({
   geometry: { type: "LineString", coordinates: coords },
-  properties: { kind: "hedge", h, w: 1, src: "lsc" },
-});
-
-const shrub = (x: number): LowVegFeature => ({
-  geometry: { type: "Point", coordinates: [x, 0] },
-  properties: { kind: "shrub", h: 1.2, r: 0.9, src: "lsc" },
+  properties: { kind: "hedge", h, w: 1, src: "osm+lsc" },
 });
 
 test("a hedge is cut into ≤2.5 m pieces that follow every corner", () => {
@@ -40,32 +34,23 @@ test("a hedge is cut into ≤2.5 m pieces that follow every corner", () => {
   expect(total).toBeCloseTo(13);
 });
 
-test("hedges and shrubs become instances; off-terrain ones are skipped", () => {
-  const group = buildLowVegetation(
-    [
-      hedge([
-        [0, 0],
-        [5, 0],
-      ]),
-      shrub(3),
-      shrub(8),
-    ],
-    ctx
-  );
-  expect(sceneCensus([group]).instances).toBe(2 + 2);
-  const off = buildLowVegetation([shrub(3)], { ...ctx, heightAt: () => null });
+test("hedges become instances; off-terrain ones are skipped", () => {
+  const line = hedge([
+    [0, 0],
+    [5, 0],
+  ]);
+  expect(sceneCensus([buildLowVegetation([line], ctx)]).instances).toBe(2);
+  const off = buildLowVegetation([line], { ...ctx, heightAt: () => null });
   expect(off.children).toHaveLength(0);
 });
 
-test("the unit geometries stay small and sit on the ground", () => {
-  for (const geo of [buildHedgeGeo(), buildShrubGeo()]) {
-    geo.computeBoundingBox();
-    const box = geo.boundingBox;
-    expect(box?.min.y ?? -1).toBeGreaterThan(-0.2);
-    expect(box?.max.y ?? 9).toBeLessThan(1.2);
-  }
+test("the unit hedge block stays small and sits on the ground", () => {
+  const geo = buildHedgeGeo();
+  geo.computeBoundingBox();
+  const box = geo.boundingBox;
+  expect(box?.min.y ?? -1).toBeGreaterThan(-0.2);
+  expect(box?.max.y ?? 9).toBeLessThan(1.2);
   // cheap enough to instance thousands of times (the shadow pass pays twice):
-  // both below the cheap tree crown (320)
-  expect(sceneCensus([new Mesh(buildShrubGeo())]).triangles).toBeLessThan(160);
+  // below the cheap tree crown (320)
   expect(sceneCensus([new Mesh(buildHedgeGeo())]).triangles).toBeLessThan(320);
 });

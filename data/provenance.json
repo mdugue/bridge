@@ -33,7 +33,7 @@
       }
     },
     "LSC": {
-      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the 🧪 low-vegetation bake (0.5 m PDAL rasters under data/_raw/lsc/derived/<tile>/, never committed); downloaded for the primary tile only, the neighbours fall back to OSM.",
+      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the low-vegetation bake (0.5 m PDAL rasters under data/_raw/lsc/derived/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask. Baked for the primary tile only; the neighbours are baked OSM-only.",
       "layer": 1,
       "committed": "derived only: data/dlm/lowveg_33412_5656_2_sn.geojson, data/dlm/canopyx_33412_5656_2_sn.geojson",
       "raw": "data/_raw/lsc/lsc_<tile>_laz/",
@@ -81,7 +81,7 @@
     }
   },
   "dresden": {
-    "$comment": "Landeshauptstadt Dresden open data. 🧪 Experimental: only read behind ?trees=kataster. The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; extract-trees.sh checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
+    "$comment": "Landeshauptstadt Dresden open data, drawn by default (tree-inventory-layer.ts); also thins the laser-scan extra trees (extract-lowveg.sh). The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; extract-trees.sh checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
     "Stadtbaumkataster": {
       "service": "https://kommisdd.dresden.de/net3/public/ogcsl.ashx?NODEID=1633&Service=WFS",
       "typeName": "cls:L1261",
@@ -91,7 +91,7 @@
       "retrieved": "2026-09-23",
       "raw": "data/_raw/baumkataster/stadtbaum_<tile>.geojson (+ .meta.json)",
       "committed": "data/dlm/trees_<tile>.geojson",
-      "usedBy": ["scripts/extract-trees.sh", "scripts/eval/kataster-eval.py"],
+      "usedBy": ["scripts/extract-trees.sh", "scripts/extract-lowveg.sh", "scripts/eval/kataster-eval.py"],
       "numberMatched": {
         "$comment": "per tile bbox incl. the 10 m margin; after the half-open tile clip: 3195, 3663, 6121, 5465 trees",
         "33410_5656_2_sn": 3301,

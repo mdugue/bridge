@@ -66,22 +66,17 @@ test.each(cases)("%s: canopy points carry a finite height", (_, a) => {
 });
 
 test.each(cases)(
-  "%s: low vegetation — hedge lines (h, w) and shrub points (h, r)",
+  "%s: hedges are OSM lines (h, w); extra trees are points (h, r)",
   (_, a) => {
     for (const f of load<LowVegFeature>(a.lowveg)) {
       const p = f.properties;
-      expect(["lsc", "osm", "osm+lsc"]).toContain(p?.src ?? "");
+      // Only what renders is shipped: no laser-scan-only hedges, no shrubs.
+      expect(["osm", "osm+lsc"]).toContain(p?.src ?? "");
+      expect(p?.kind).toBe("hedge");
+      expect(f.geometry.type).toBe("LineString");
+      expect(isLine(f.geometry.coordinates)).toBe(true);
       expect(Number.isFinite(p?.h)).toBe(true);
-      if (f.geometry.type === "LineString") {
-        expect(p?.kind).toBe("hedge");
-        expect(isLine(f.geometry.coordinates)).toBe(true);
-        expect(p?.kind === "hedge" && Number.isFinite(p.w)).toBe(true);
-      } else {
-        expect(f.geometry.type).toBe("Point");
-        expect(p?.kind).toBe("shrub");
-        expect(isPoint2(f.geometry.coordinates)).toBe(true);
-        expect(p?.kind === "shrub" && Number.isFinite(p.r)).toBe(true);
-      }
+      expect(Number.isFinite(p?.w)).toBe(true);
     }
     for (const f of load<CanopyExtraFeature>(a.canopyx)) {
       expect(f.geometry.type).toBe("Point");

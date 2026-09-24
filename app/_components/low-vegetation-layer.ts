@@ -14,8 +14,11 @@ import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
- * 🧪 Low vegetation — hedges and shrubs under 3 m (scripts/extract-lowveg.sh:
- * the laser scan + OSM), drawn only behind `?veg=low` (scene-profile.ts).
+ * Hedges — the OSM `barrier=hedge` lines, at the laser-scan height where the
+ * scan sees one (scripts/extract-lowveg.sh). The bake's laser-scan-only
+ * hedges and its shrubs are not shipped (docs/transformations.md: about 30 %
+ * of them are crown rims, and a shrub dome reads as a faceted boulder up
+ * close), so the artifact holds only what this layer draws.
  *
  * Kept apart from vegetation-layer.ts on purpose: nothing here animates (a
  * trimmed hedge does not sway, and ADR 0020 keeps casters static anyway), so
@@ -24,8 +27,7 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * - A hedge is a chain of soft superellipsoid "clay" blocks, one instance per
  *   ≤2.5 m piece of the polyline, stretched to the piece's length and to the
  *   baked height and width, overlapping so the joins read as waists, not seams.
- * - A shrub is a low lobed dome (≈140 triangles) scaled to its radius and height.
- * Both use one material recipe: pastel moss with a darker rooted base (the
+ * The material: pastel moss with a darker rooted base (the
  * trunks' trick), a static world-space foliage mottle, per-instance tint
  * jitter and the valley height fog.
  * Chunked into 250 m cells like the trees, so off-screen cells cull out of the
@@ -46,7 +48,6 @@ const HEDGE_P_BASE = 7;
 /** sanity clamps on the baked sizes */
 const H_RANGE: [number, number] = [0.4, 3.5];
 const W_RANGE: [number, number] = [0.5, 3];
-const R_RANGE: [number, number] = [0.4, 3];
 
 function clamp(v: number, [lo, hi]: [number, number]): number {
   return Math.min(Math.max(v, lo), hi);
@@ -157,61 +158,15 @@ export function buildHedgeGeo(): BufferGeometry {
 }
 
 /**
- * Unit shrub: a lobed dome of radius 1 and height 1 (base slightly below 0).
- * A 12×7 UV sphere (≈140 triangles): at walking distance the 80-triangle
- * icosphere read as a faceted egg; this keeps a round silhouette for less
- * than half the cheap tree crown. Smooth normals, bent toward the radial
- * direction like the crowns', so the dome shades as one soft mass.
- */
-export function buildShrubGeo(): BufferGeometry {
-  const g = new SphereGeometry(1, 12, 7);
-  const lobes = [
-    new Vector3(0.7, 0.5, 0.2),
-    new Vector3(-0.6, 0.4, 0.55),
-    new Vector3(0.1, 0.45, -0.8),
-    new Vector3(-0.5, 0.7, -0.4),
-  ].map((l) => l.normalize());
-  const pos = g.attributes.position;
-  const v = new Vector3();
-  const dir = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
-    dir.fromBufferAttribute(pos, i).normalize();
-    let bulge = 0;
-    for (const l of lobes) {
-      const d = Math.max(0, dir.dot(l));
-      bulge += d * d * 0.28;
-    }
-    const r = 0.82 + Math.min(bulge, 0.3);
-    v.copy(dir).multiplyScalar(r);
-    // Dome: squash the lower half flat onto the ground, lift the centre.
-    v.y = v.y >= 0 ? v.y * 0.62 + 0.38 : v.y * 0.45 + 0.38;
-    pos.setXYZ(i, v.x, v.y, v.z);
-  }
-  g.computeVertexNormals();
-  const nrm = g.attributes.normal;
-  const n = new Vector3();
-  for (let i = 0; i < pos.count; i++) {
-    n.fromBufferAttribute(nrm, i);
-    v.set(pos.getX(i), pos.getY(i) - 0.38, pos.getZ(i)).normalize();
-    n.lerp(v, 0.5).normalize();
-    nrm.setXYZ(i, n.x, n.y, n.z);
-  }
-  nrm.needsUpdate = true;
-  g.computeBoundingSphere();
-  return g;
-}
-
-/**
  * Pastel moss with a rooted base: the unit geometry's own Y (0 at the ground,
  * 1 at the top, before the instance scale) darkens the lower third — the soft
  * contact shading that seats a hedge on the lawn in the watercolour look.
  */
-function buildLowVegMaterial(
-  kind: "hedge" | "shrub",
+function buildHedgeMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   const m = new MeshStandardMaterial({ color: 0xff_ff_ff, roughness: 1 });
-  m.customProgramCacheKey = () => `lowveg-${kind}-${heightFog !== undefined}`;
+  m.customProgramCacheKey = () => `lowveg-hedge-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace(
@@ -264,13 +219,9 @@ function buildLowVegMaterial(
   return m;
 }
 
-/** Hedges read a touch deeper and cooler than crowns; shrubs vary more. */
-function tintColor(col: Color, kind: "hedge" | "shrub", t: number): void {
-  if (kind === "hedge") {
-    col.setHSL(0.27 + t * 0.03, 0.34 + t * 0.06, 0.5 + t * 0.07);
-  } else {
-    col.setHSL(0.25 + t * 0.06, 0.32 + t * 0.1, 0.57 + t * 0.1);
-  }
+/** Hedges read a touch deeper and cooler than crowns. */
+function tintColor(col: Color, t: number): void {
+  col.setHSL(0.27 + t * 0.03, 0.34 + t * 0.06, 0.5 + t * 0.07);
 }
 
 function bucket(items: Instance[]): Instance[][] {
@@ -290,14 +241,13 @@ function bucket(items: Instance[]): Instance[][] {
 function buildChunks(
   items: Instance[],
   geo: BufferGeometry,
-  mat: MeshStandardMaterial,
-  kind: "hedge" | "shrub"
+  mat: MeshStandardMaterial
 ): InstancedMesh[] {
   const dummy = new Object3D();
   const col = new Color();
   return bucket(items).map((cell) => {
     const mesh = new InstancedMesh(geo, mat, cell.length);
-    mesh.name = `lowveg-${kind}`;
+    mesh.name = "lowveg-hedge";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     cell.forEach((p, i) => {
@@ -306,7 +256,7 @@ function buildChunks(
       dummy.scale.set(p.sx, p.sy, p.sz);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      tintColor(col, kind, p.tint);
+      tintColor(col, p.tint);
       mesh.setColorAt(i, col);
     });
     mesh.instanceMatrix.needsUpdate = true;
@@ -325,7 +275,7 @@ function hedgeInstances(
 ): Instance[] {
   const out: Instance[] = [];
   for (const f of features) {
-    if (f.geometry?.type !== "LineString" || f.properties?.kind !== "hedge") {
+    if (f.geometry?.type !== "LineString" || !f.properties) {
       continue;
     }
     const h = clamp(f.properties.h ?? 1.5, H_RANGE);
@@ -355,45 +305,12 @@ function hedgeInstances(
   return out;
 }
 
-function shrubInstances(
-  features: LowVegFeature[],
-  ctx: GroundContext
-): Instance[] {
-  const out: Instance[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "Point" || f.properties?.kind !== "shrub") {
-      continue;
-    }
-    const [ex, ey] = f.geometry.coordinates;
-    const ground = ctx.heightAt(ex, ey);
-    if (ground === null) {
-      continue;
-    }
-    const r = clamp(f.properties.r ?? 1, R_RANGE);
-    const h = clamp(f.properties.h ?? 1.5, H_RANGE);
-    const seed = ex * 0.13 + ey * 0.29;
-    const world = epsgToWorld(ex, ey, ctx.offset);
-    const squash = 0.9 + hash(seed) * 0.2;
-    out.push({
-      x: world.x,
-      y: ground - SINK_M,
-      z: world.z,
-      rot: hash(seed * 1.7) * Math.PI * 2,
-      sx: r * squash,
-      sy: h + SINK_M,
-      sz: r / squash,
-      tint: hash(seed * 2.3) - 0.5,
-    });
-  }
-  return out;
-}
-
 export interface LowVegetationContext extends GroundContext {
   heightFog?: HeightFogUniforms;
 }
 
 /**
- * Builds one tile's hedges and shrubs onto a Y-up group (add it to `scene`,
+ * Builds one tile's hedges onto a Y-up group (add it to `scene`,
  * not the Z-up `world`). Empty input → an empty group; the meshes are freed
  * with the scene (disposeObject3D).
  */
@@ -404,25 +321,9 @@ export function buildLowVegetation(
   const group = new Group();
   group.name = "low-vegetation";
   const hedges = hedgeInstances(features, ctx);
-  const shrubs = shrubInstances(features, ctx);
   if (hedges.length > 0) {
     group.add(
-      ...buildChunks(
-        hedges,
-        buildHedgeGeo(),
-        buildLowVegMaterial("hedge", ctx.heightFog),
-        "hedge"
-      )
-    );
-  }
-  if (shrubs.length > 0) {
-    group.add(
-      ...buildChunks(
-        shrubs,
-        buildShrubGeo(),
-        buildLowVegMaterial("shrub", ctx.heightFog),
-        "shrub"
-      )
+      ...buildChunks(hedges, buildHedgeGeo(), buildHedgeMaterial(ctx.heightFog))
     );
   }
   return group;

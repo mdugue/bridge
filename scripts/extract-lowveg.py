@@ -5,15 +5,20 @@ Called by scripts/extract-lowveg.sh (which prepares the laser-scan rasters and
 the Overpass cache and runs this under `uv` — the bake needs numpy/scipy/
 scikit-image/shapely/rasterio, which the system Python lacks). Read that file's
 header for the inputs; the method and the evidence behind every threshold are in
-docs/transformations.md (🧪 "Low vegetation") — keep the two in step.
+docs/transformations.md ("Low vegetation") — keep the two in step.
 
 Outputs (small, COMMITTED):
-  data/dlm/lowveg_<tile>.geojson   hedge LineStrings {kind:"hedge", h, w, src}
-                                   + shrub Points {kind:"shrub", h, r, src}
+  data/dlm/lowveg_<tile>.geojson   the OSM hedge LineStrings {kind:"hedge", h,
+                                   w, src: "osm" | "osm+lsc"} — only what the
+                                   viewer draws
   data/dlm/canopyx_<tile>.geojson  LSC crown peaks > 3 m that the current
                                    canopy (canopy_<tile>.geojson) does not cover
-                                   {h, r} — courtyard and garden trees
-Both EPSG:25833, never recentred. `src` is "osm", "lsc" or "osm+lsc".
+                                   and no cadastre tree (trees_<tile>.geojson)
+                                   claims {h, r} — courtyard and garden trees
+  --out-all (research, never committed): every candidate, incl. the
+                                   laser-scan-only hedges (src "lsc") and the
+                                   shrub Points {kind:"shrub", h, r, src}
+All EPSG:25833, never recentred.
 """
 
 import argparse
@@ -510,6 +515,36 @@ def shrub_feature(p, h, r, src):
     }
 
 
+# A scan tree this close to a cadastre tree (or inside its crown, when that
+# is wider) is the same tree: the cadastre wins — it has the surveyed spot,
+# crown and taxon. Radius, not 1:1 matching: one big crown often yields two
+# scan peaks, and both belong to it.
+CADASTRE_DEDUP_M = 4.0
+
+
+def cadastre_filter(extra, trees_path):
+    """Drops the scan trees within max(4 m, crown radius) of a cadastre tree."""
+    if not trees_path or not os.path.exists(trees_path):
+        return extra, 0
+    from scipy.spatial import cKDTree
+
+    cad = [f for f in json.load(open(trees_path))["features"] if f.get("geometry")]
+    if not cad:
+        return extra, 0
+    xy = np.array([f["geometry"]["coordinates"] for f in cad])
+    r = np.array([max(CADASTRE_DEDUP_M, (f["properties"] or {}).get("d", 0) / 2) for f in cad])
+    index = cKDTree(xy)
+    reach = float(r.max())
+    kept = []
+    for f in extra:
+        p = f["geometry"]["coordinates"]
+        near = index.query_ball_point(p, reach)
+        if any(math.dist(p, xy[i]) <= r[i] for i in near):
+            continue
+        kept.append(f)
+    return kept, len(extra) - len(kept)
+
+
 def canopy_extra(I, canopy_path):
     """LSC crown peaks (>3 m, multi-echo) the current canopy leaves out."""
     grid, ndom, cls = I["grid"], I["ndom"], I["cls"]
@@ -570,15 +605,26 @@ def main():
     p.add_argument("--canopy")
     p.add_argument("--out", required=True)
     p.add_argument("--out-canopyx")
+    p.add_argument("--trees", help="the street-tree cadastre (extract-trees.sh) the extra trees are thinned against")
+    p.add_argument("--out-all", help="also write every candidate (laser-scan-only hedges, shrubs) here, for research")
     a = p.parse_args()
     I, feats, stats, _ = build(a)
     attribution = "Quelle: GeoSN, dl-de/by-2-0 (laser scan); © OpenStreetMap contributors (ODbL)" if I["has_lsc"] else "© OpenStreetMap contributors (ODbL)"
-    write_fc(a.out, feats, attribution)
-    log(f"wrote {a.out}: {json.dumps(stats)}")
+    if a.out_all:
+        write_fc(a.out_all, feats, attribution)
+        log(f"wrote {a.out_all}: every candidate, for research")
+    # Shipped: the OSM hedges only (their height from the scan where it has
+    # one). The laser-scan-only hedges and all shrubs stay out of the viewer:
+    # ~30 % of them are crown rims, and a shrub dome reads as a faceted
+    # boulder up close (docs/transformations.md, "Low vegetation").
+    shipped = [f for f in feats if f["properties"]["kind"] == "hedge" and f["properties"]["src"] != "lsc"]
+    write_fc(a.out, shipped, attribution)
+    log(f"wrote {a.out}: {len(shipped)} OSM hedges shipped of {len(feats)} candidates; {json.dumps(stats)}")
     if a.out_canopyx and I["has_lsc"]:
         extra, peaks = canopy_extra(I, a.canopy)
+        extra, dropped = cadastre_filter(extra, a.trees)
         write_fc(a.out_canopyx, extra, "Quelle: GeoSN, dl-de/by-2-0 (laser scan)")
-        log(f"wrote {a.out_canopyx}: {len(extra)} extra trees of {peaks} crown peaks")
+        log(f"wrote {a.out_canopyx}: {len(extra)} extra trees of {peaks} crown peaks ({dropped} dropped as cadastre trees)")
 
 
 if __name__ == "__main__":
