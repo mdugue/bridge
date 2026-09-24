@@ -743,6 +743,9 @@ test.describe("whole site streamed", () => {
   test("several tiles load, dress and settle without errors", async ({
     browser,
   }) => {
+    // Its own boot, and a longer one than the spawn-only specs: several
+    // tiles' terrain, buildings and dressings, all shaded on the CPU.
+    test.setTimeout(slow(240_000));
     const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
     const page = await context.newPage();
     const errors = watchErrors(page);
