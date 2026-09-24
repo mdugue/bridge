@@ -346,3 +346,55 @@ selective bloom.
 5 m; `MAX_REAL_LAMPS = 3`; `nightFactor = smoothstep(2°, −6°)`.
 
 See [ADR 0020](../adr/0020-fixed-light-pool-and-static-shadow-casters.md).
+
+## 016 — `Bun.Image` instead of sharp for the raster downsample · REJECTED (premise gone)
+
+**Problem.** sharp, the build step's only native dependency, existed for
+one downsample, and its premultiplied-alpha resize had painted the ground
+black when the RGB splat's alpha carried water coverage (fixed in #29 by
+resizing colour and alpha separately).
+
+**Outcome.** Overtaken by [ADR 0023](../adr/0023-land-cover-colours-painted-at-runtime.md):
+the RGB splat is no longer baked, so no raster whose alpha is data goes
+through an image tool. The trap, the split-resize workaround and its
+AGENTS.md paragraph are gone. What is left of sharp is a nearest-neighbour
+resize of the single-band class raster and the `/wissen` map picture's WebP
+encode.
+
+**Keep in mind.** Measured 2026-09-21 (Bun 1.4.2 vs sharp 0.35.4, 4096² →
+2048²): `Bun.Image` produced equivalent pixels, but its PNGs were ~21 %
+larger for the class raster, because it standardises on RGBA8. Revisit
+dropping sharp when `Bun.Image` writes single-band PNG and WebP, or fold
+the remaining resize into the Python land-cover bake (Pillow `NEAREST`).
+
+## 018 — Stream tiles around the camera · REJECTED (superseded by ADR 0024)
+
+**Problem.** A fixed 2×2 block loaded at boot and never unloaded. GPU
+memory (one 4096² RGBA splat ≈ 85 MB with mips), main-thread cost (terrain
+BVH 0.4–1.5 s per tile, canopy builds) and the primary-only collision and
+demolish made "more of the city" a boot-cost problem. The plan proposed a
+hand-written tile manager with a pure schedule, a loader worker, 1 km near
+cells, per-device budgets and KTX2 for the RGB splat. It rejected
+3DTilesRendererJS because adopting it "means rewriting every bake".
+
+**Outcome.** Plan 017 was going to rewrite every bake anyway, so the
+library won ([ADR 0024](../adr/0024-site-streams-as-3d-tiles.md)). The site
+bakes into an OGC 3D Tiles 1.1 tileset: per tile, buildings over terrain at
+two levels. 3DTilesRendererJS streams it with screen-space-error LOD, an
+LRU cache and the shadow camera as a second camera. Dressing is a renderer
+plugin with `disposeTile`, and collision and demolish work on every visible
+tile. Phase 7 (KTX2 splat) became moot with ADR 0023, since the colour
+splat is painted on the GPU from the 1 B/px class raster. The 1 km cells
+(Phase 6) became the two terrain levels. The proposed ADR 0022 was never
+accepted.
+
+**Keep in mind.**
+- The recenter offset stays one constant from the spawn tile's CityJSON
+  matrix. float32 keeps ~1 mm at 10 km and ~4 mm at 50 km from the
+  origin; a floating origin only matters beyond ~30 km.
+- Anything added after the first frame must re-render the shadow map and
+  respect disposal. With streaming it also has to leave again: build it
+  in the tile plugin, never in `bootApp`.
+- The fixed lamp light pool (ADR 0020) is fed from the visible dressings;
+  its size never changes at runtime.
+- Class and NDVI rasters stay lossless (ids must be exact, `NEAREST`).

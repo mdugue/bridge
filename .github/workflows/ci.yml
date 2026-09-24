@@ -95,9 +95,9 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
       # The e2e half is skipped on PRs that cannot affect it (docs, the
-      # offline pipeline, this workflow). scripts/, data/ and sites/ do: the
-      # tileset the viewer streams is baked from them at build time. The job
-      # itself always runs and always builds, so the status check stays green
+      # offline pipeline, this workflow). scripts/, data/, sites/ and patches/
+      # do: the tileset the viewer streams is baked from them at build time.
+      # The job itself always runs and always builds, so the status check stays green
       # rather than "skipped" — which branch protection would treat as never
       # reported.
       - name: Decide whether the e2e half has to run
@@ -114,8 +114,9 @@ jobs:
           # It over-reports (changes that landed on main since the PR branched
           # count too), which errs towards running the suite.
           if git diff --name-only "$BASE_SHA" HEAD -- \
-              app components hooks lib e2e public types scripts data sites \
-              playwright.config.ts next.config.ts package.json bun.lock \
+              app components hooks lib e2e public types scripts data sites patches \
+              playwright.config.ts next.config.ts tsconfig.json postcss.config.mjs \
+              package.json bun.lock \
               | grep -q .; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else

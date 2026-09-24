@@ -87,7 +87,7 @@ on the camera cell's terrain and buildings (ADR 0008).
 
 ## References
 
-- [Plan 018](../plans/018-tile-streaming.md); [plan 017](../plans/017-germany-wide-sites.md) (site config and tile grid, which the manager builds on); ADR 0006, 0007, 0008, 0013,
+- Plan 018 ([condensed record](../plans/completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024)); [plan 017](../plans/017-germany-wide-sites.md) (site config and tile grid, which the manager builds on); ADR 0006, 0007, 0008, 0013,
   0018, 0020.
 - `lib/city/tile.ts`, `app/_components/create-app.ts` (`loadRest`,
   `loadNeighbours`, `loadTileTerrain`, `loadTileDressing`).
