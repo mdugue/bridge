@@ -69,6 +69,40 @@ export interface TreeFeature {
   } | null;
 }
 
+/** 🧪 Laser-scan crown peaks outside the canopy mask (extract-lowveg.sh):
+ *  a canopy point plus the crown radius, so it drops into the tree layer. */
+export interface CanopyExtraFeature extends CanopyFeature {
+  properties: { h: number; r: number } | null;
+}
+
+/**
+ * 🧪 Low vegetation (extract-lowveg.sh: the GeoSN laser scan + OSM hedges):
+ * hedge polylines with their height and width, shrub points with height and
+ * radius (metres). `src` says where the geometry came from — "osm", "lsc"
+ * (laser scan only) or "osm+lsc" (OSM line, laser-scan height).
+ */
+export type LowVegFeature =
+  | {
+      geometry: LineGeometry;
+      properties: {
+        h: number;
+        kind: "hedge";
+        src: LowVegSource;
+        w: number;
+      } | null;
+    }
+  | {
+      geometry: PointGeometry;
+      properties: {
+        h: number;
+        kind: "shrub";
+        r: number;
+        src: LowVegSource;
+      } | null;
+    };
+
+export type LowVegSource = "lsc" | "osm" | "osm+lsc";
+
 /** OSM street lamps (extract-lamps.sh, ODbL); the post height is a
  *  lamp-layer constant, so no property is read. */
 export interface LampFeature {

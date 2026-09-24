@@ -33,9 +33,11 @@
       }
     },
     "LSC": {
-      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1, not used by the viewer yet.",
+      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the 🧪 low-vegetation bake (0.5 m PDAL rasters under data/_raw/lsc/derived/<tile>/, never committed); downloaded for the primary tile only, the neighbours fall back to OSM.",
       "layer": 1,
-      "committed": null,
+      "committed": "derived only: data/dlm/lowveg_33412_5656_2_sn.geojson, data/dlm/canopyx_33412_5656_2_sn.geojson",
+      "raw": "data/_raw/lsc/lsc_<tile>_laz/",
+      "usedBy": ["scripts/extract-lowveg.sh"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5656_2_sn_laz.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5658_2_sn_laz.zip" },
@@ -106,7 +108,8 @@
       "products": {
         "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
         "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dlm/platform_*.geojson)" },
-        "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" }
+        "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" },
+        "lowveg": { "query": "way[barrier=hedge], way/relation[natural~scrub|shrubbery], node[natural=shrub]", "dataAsOf": "2026-09-23 (timestamp_osm_base 16:16–16:20Z, data/_raw/osm/lowveg_<tile>.json; fetched from the maps.mail.ru Overpass mirror, overpass-api.de was overloaded)", "usedBy": ["scripts/extract-lowveg.sh"] }
       }
     },
     "geofabrik": {

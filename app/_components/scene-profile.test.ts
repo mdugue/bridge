@@ -8,6 +8,7 @@ import {
   sceneProfileFromSearch,
   shadowMapSizeFor,
   treeSourceFromSearch,
+  vegExtrasFromSearch,
 } from "./scene-profile";
 
 test("sceneProfileFromSearch defaults to the full product scene", () => {
@@ -65,6 +66,7 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     lowRasters: false,
     terrain: "grid",
     trees: "canopy",
+    vegExtras: { low: false, trees: false },
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
     profile: "lite",
@@ -73,6 +75,7 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     lowRasters: true,
     terrain: "grid",
     trees: "canopy",
+    vegExtras: { low: false, trees: false },
   });
   // The terrain TIN is an opt-in experiment; anything else keeps the grid.
   expect(sceneBudgetFor("?terrain=tin", false).terrain).toBe("tin");
@@ -91,6 +94,24 @@ test("the tree cadastre is opt-in via ?trees=kataster, orthogonal to the profile
   expect(sceneBudgetFor("?scene=lite&trees=kataster", false).trees).toBe(
     "kataster"
   );
+});
+
+test("the experimental vegetation layers are opt-in via ?veg=", () => {
+  expect(vegExtrasFromSearch("")).toEqual({ low: false, trees: false });
+  expect(vegExtrasFromSearch("?veg=low")).toEqual({ low: true, trees: false });
+  expect(vegExtrasFromSearch("?veg=trees")).toEqual({
+    low: false,
+    trees: true,
+  });
+  expect(vegExtrasFromSearch("?scene=lite&veg=low,trees")).toEqual({
+    low: true,
+    trees: true,
+  });
+  expect(vegExtrasFromSearch("?veg=all")).toEqual({ low: true, trees: true });
+  expect(vegExtrasFromSearch("?veg=lowish")).toEqual({
+    low: false,
+    trees: false,
+  });
 });
 
 test("aoQualityFor drops to Performance only in the lite profile", () => {

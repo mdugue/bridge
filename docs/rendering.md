@@ -70,6 +70,9 @@ is the codebook.
 | Crown detail | distance (in 220 m / out 300 m per 250 m chunk) | — | `updateLod` (*Detaillierte Kronen*) |
 | 🧪 Inventory tree (`?trees=kataster`) | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
+| 🧪 Hedge (`?veg=low`) | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height | LSC, OSM, DOP NDVI (cue) | `low-vegetation-layer.ts` |
+| 🧪 Shrub (`?veg=low`) | point → lobed dome scaled to `r` × `h` | LSC (+ OSM `natural=shrub`) | `low-vegetation-layer.ts` |
+| 🧪 Extra tree (`?veg=trees`) | LSC crown peak + `h`, appended to the canopy points | LSC | `create-app.ts` → `vegetation-layer.ts` |
 | Lamp post | point, 5 m default | OSM | `lamp-layer.ts` |
 | Lamp light | nearest three heads get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |

@@ -164,6 +164,12 @@ not sky.
 - **Tree LOD (shipped):** per-chunk distance swaps the rich crown in near the
   camera and the cheap one far away; a swap invalidates the shadow map
   (plan 009).
+- **🧪 Low vegetation (`?veg=low`, `?veg=trees`):** `low-vegetation-layer.ts`
+  (hedge superellipsoid chains + shrub domes, static, chunked) from
+  `extract-lowveg.sh`. Measured lesson: the LSC **multi-echo ratio is a
+  tall-tree cue, not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5);
+  low vegetation is found by leaf-off DOP NDVI (evergreen hedges) + the
+  intensity of the low returns. Numbers in `docs/transformations.md`.
 
 ### Sandbox crown — what is left to port
 
@@ -264,6 +270,7 @@ bash scripts/extract-roof-colour.sh 33412_5656 # roof-colour LUT (DOP + CityJSON
 bash scripts/extract-lamps.sh 33412_5656       # street lamps (Overpass; needs the class raster)
 bash scripts/extract-walls.sh 33412_5656       # retaining walls (local .osm.pbf in data/_raw/osm)
 bash scripts/extract-rail.sh 33412_5656        # rails, ballast, bridges (Basis-DLM + DOM1/DGM1) + platforms (Overpass)
+bash scripts/extract-lowveg.sh 33412_5656      # 🧪 hedges/shrubs + extra trees (LSC LAZ via PDAL + Overpass; runs under uv)
 bun scripts/prepare-data.ts                    # refresh public/data
 ```
 

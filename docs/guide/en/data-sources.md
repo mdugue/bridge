@@ -122,8 +122,10 @@ repository, because the build step reads it directly. See
 | **Update cycle** | The same as the height models (27–30 November 2024 for these tiles). |
 | **Resolution and accuracy** | Irregular points, several per square metre; ±0.15 m in height, ±0.30 m in position, per GeoSN. |
 | **Generally suited for** | Everything the grids simplify away: individual tree crowns, roof edges, wall faces, power lines. |
-| **Used here for** | Not used yet. Segmenting individual trees from it is on the ideas list. |
-| **Format and download** | LAZ per 2 km tile, large; same portal page as the DGM1. |
+| **Used here for** | Only in an experiment you have to switch on (`?veg=low`, `?veg=trees` in the address): hedges and shrubs under 3 m, and trees in courtyards and gardens that the land-use map does not mark as green. Only for the central tile so far. |
+| **Strengths** | Sees below 3 m and between buildings, where the height grids and the land-use map see nothing. Each point knows how bright its echo was and whether the pulse split — tall trees split it almost always, roofs almost never. |
+| **Weaknesses** | Its classes do not separate vegetation from buildings, cars or fences. A clipped hedge rarely splits a pulse, so for low plants the viewer leans on the greenness of the (spring) aerial photo instead; a hedge under a tree crown stays invisible. |
+| **Format and download** | LAZ per 2 km tile, large (≈380 MB for 60 million points); same portal page as the DGM1. |
 
 ### LoD2 — the 3D building model
 

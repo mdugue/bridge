@@ -4,9 +4,11 @@ import { join } from "node:path";
 import type {
   AreaFeature,
   BridgeFeature,
+  CanopyExtraFeature,
   CanopyFeature,
   FeatureCollection,
   LampFeature,
+  LowVegFeature,
   RailFeature,
   TreeFeature,
   VegRowFeature,
@@ -62,6 +64,33 @@ test.each(cases)("%s: canopy points carry a finite height", (_, a) => {
     expect(Number.isFinite(f.properties?.h)).toBe(true);
   }
 });
+
+test.each(cases)(
+  "%s: low vegetation — hedge lines (h, w) and shrub points (h, r)",
+  (_, a) => {
+    for (const f of load<LowVegFeature>(a.lowveg)) {
+      const p = f.properties;
+      expect(["lsc", "osm", "osm+lsc"]).toContain(p?.src ?? "");
+      expect(Number.isFinite(p?.h)).toBe(true);
+      if (f.geometry.type === "LineString") {
+        expect(p?.kind).toBe("hedge");
+        expect(isLine(f.geometry.coordinates)).toBe(true);
+        expect(p?.kind === "hedge" && Number.isFinite(p.w)).toBe(true);
+      } else {
+        expect(f.geometry.type).toBe("Point");
+        expect(p?.kind).toBe("shrub");
+        expect(isPoint2(f.geometry.coordinates)).toBe(true);
+        expect(p?.kind === "shrub" && Number.isFinite(p.r)).toBe(true);
+      }
+    }
+    for (const f of load<CanopyExtraFeature>(a.canopyx)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      expect(Number.isFinite(f.properties?.h)).toBe(true);
+      expect(Number.isFinite(f.properties?.r)).toBe(true);
+    }
+  }
+);
 
 test.each(cases)(
   "%s: lamps are points, walls are LineStrings with a height",

@@ -27,13 +27,13 @@ test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
  */
 
 const SHOTS_DIR = join(process.cwd(), "shots");
-
 /**
- * Before/after pairs of a flag-gated experiment: `SHOTS_QUERY=terrain=tin`
- * loads `/?terrain=tin` instead of `/`, and `SHOTS_TAG=tin` writes
- * `shots/<name>.tin.png` so the flag-off plate is not overwritten.
+ * Before/after pairs from one set of snapshots — the ONE mechanism:
+ * `SHOTS_QUERY` is appended to the page URL (with or without its leading
+ * `?`, e.g. `SHOTS_QUERY=scene=lite`), and `SHOTS_TAG=x` writes
+ * `shots/<name>.x.png` so the untagged plate is not overwritten.
  */
-const SHOTS_QUERY = process.env.SHOTS_QUERY ?? "";
+const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
 
 function snapshotFiles(): string[] {

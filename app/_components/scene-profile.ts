@@ -65,11 +65,36 @@ export interface SceneBudget {
   tier: DeviceTier;
   /** the tree inputs (experimental: `?trees=kataster`) */
   trees: TreeSource;
+  /** 🧪 experimental vegetation layers, opt-in via `?veg=` (see vegExtrasFromSearch) */
+  vegExtras: VegExtras;
 }
 
 /** Parses the terrain mode out of a `location.search` string. Pure. */
 export function terrainModeFromSearch(search: string): TerrainMode {
   return new URLSearchParams(search).get("terrain") === "tin" ? "tin" : "grid";
+}
+
+/**
+ * 🧪 Opt-in vegetation from the laser-scan bake (scripts/extract-lowveg.sh),
+ * off by default so a normal visit is unchanged: `low` = hedges + shrubs
+ * under 3 m, `trees` = crown peaks outside the canopy mask (courtyards,
+ * gardens). Both are extra requests, extra instances and extra shadow casters.
+ */
+export interface VegExtras {
+  low: boolean;
+  trees: boolean;
+}
+
+/** `?veg=low`, `?veg=trees`, `?veg=low,trees` or `?veg=all`. Pure, for tests. */
+export function vegExtrasFromSearch(search: string): VegExtras {
+  const parts = (new URLSearchParams(search).get("veg") ?? "")
+    .split(",")
+    .map((p) => p.trim());
+  const all = parts.includes("all");
+  return {
+    low: all || parts.includes("low"),
+    trees: all || parts.includes("trees"),
+  };
 }
 
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
@@ -115,6 +140,7 @@ export function sceneBudgetFor(
     lowRasters: tier === "mobile",
     terrain: terrainModeFromSearch(search),
     trees: treeSourceFromSearch(search),
+    vegExtras: vegExtrasFromSearch(search),
   };
 }
 
