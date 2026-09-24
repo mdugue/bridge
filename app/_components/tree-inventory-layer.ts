@@ -30,12 +30,12 @@ import {
   buildCrownGeo,
   buildCrownGeoRich,
   buildCrownMaterial,
-  CHUNK_SIZE,
+  bucketByCell,
+  type CellLod,
   crownColor,
   hash,
-  LOD_NEAR_IN_M,
-  LOD_NEAR_OUT_M,
   type RasterSampler,
+  swapCrownLod,
   TRUNK_H,
   type TreeInstance,
   type TreeVeto,
@@ -327,18 +327,7 @@ function writeCrowns(
   items: InventoryTree[],
   fit: FittedGeo
 ): void {
-  const m = new Matrix4();
-  const q = new Quaternion();
-  const p = new Vector3();
-  const s = new Vector3();
-  items.forEach((t, i) => {
-    const sy = (t.ext.crownTop - t.ext.crownBase) / fit.height;
-    const sxz = t.ext.crownWidth / fit.width;
-    p.set(t.x, t.ground + t.ext.crownBase - fit.minY * sy, t.z);
-    q.setFromAxisAngle(Y_AXIS, t.rot);
-    s.set(sxz, sy, sxz);
-    mesh.setMatrixAt(i, m.compose(p, q, s));
-  });
+  items.forEach((t, i) => mesh.setMatrixAt(i, crownMatrix(t, fit)));
   mesh.instanceMatrix.needsUpdate = true;
   // Without this the cull test uses the origin-centred geometry sphere and
   // culls the whole chunk whenever the world origin is off-screen.
@@ -425,25 +414,6 @@ function paint(mesh: InstancedMesh, items: InventoryTree[]): void {
   if (mesh.instanceColor) {
     mesh.instanceColor.needsUpdate = true;
   }
-}
-
-interface CellLod {
-  cheap: InstancedMesh;
-  rich: InstancedMesh;
-}
-
-function bucket<T extends { x: number; z: number }>(items: T[]): T[][] {
-  const cells = new Map<string, T[]>();
-  for (const it of items) {
-    const key = `${Math.floor(it.x / CHUNK_SIZE)},${Math.floor(it.z / CHUNK_SIZE)}`;
-    const cell = cells.get(key);
-    if (cell) {
-      cell.push(it);
-    } else {
-      cells.set(key, [it]);
-    }
-  }
-  return [...cells.values()];
 }
 
 function crownPair(
@@ -539,7 +509,7 @@ export function buildTreeInventory(
       leafBright,
       ctx.heightFog
     );
-    for (const cell of bucket(trees.filter((t) => t.shape !== "broad"))) {
+    for (const cell of bucketByCell(trees.filter((t) => t.shape !== "broad"))) {
       for (const shape of CROWN_SHAPES) {
         const items = cell.filter((t) => t.shape === shape);
         if (items.length === 0) {
@@ -570,26 +540,8 @@ export function buildTreeInventory(
       setTime: (seconds) => {
         uTime.value = seconds;
       },
-      // Same rule as the canopy (vegetation-layer.ts updateLod): rich crowns
-      // within LOD_NEAR_IN_M of the nearest tree, cheap again past _OUT_M.
-      updateLod: (cameraPos) => {
-        let changed = false;
-        for (const c of cells) {
-          const sphere = c.cheap.boundingSphere;
-          const near = sphere
-            ? cameraPos.distanceTo(sphere.center) - sphere.radius
-            : Number.POSITIVE_INFINITY;
-          const wantRich =
-            multiTuft &&
-            near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
-          if (wantRich !== c.rich.visible) {
-            changed = true;
-          }
-          c.rich.visible = wantRich;
-          c.cheap.visible = !wantRich;
-        }
-        return changed;
-      },
+      // Same rule as the canopy (vegetation-layer.ts swapCrownLod).
+      updateLod: (cameraPos) => swapCrownLod(cells, cameraPos, multiTuft),
     },
   };
 }

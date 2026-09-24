@@ -116,9 +116,38 @@ export interface VegetationControl {
   updateLod: (cameraPos: Vector3) => boolean;
 }
 
-interface CellLod {
+/** A chunk's two crown meshes; exactly one is visible (swapCrownLod). */
+export interface CellLod {
   cheap: InstancedMesh;
   rich: InstancedMesh;
+}
+
+/**
+ * Rich crown only near the camera (and only when multi-tuft is enabled);
+ * far chunks fall back to the cheap crown. Distance is to the NEAREST tree
+ * in the chunk (sphere centre minus radius) with enter/exit hysteresis.
+ * Returns true when any chunk swapped (the shadow map must then be redrawn).
+ */
+export function swapCrownLod(
+  cells: CellLod[],
+  cameraPos: Vector3,
+  multiTuft: boolean
+): boolean {
+  let changed = false;
+  for (const c of cells) {
+    const sphere = c.cheap.boundingSphere;
+    const near = sphere
+      ? cameraPos.distanceTo(sphere.center) - sphere.radius
+      : Number.POSITIVE_INFINITY;
+    const wantRich =
+      multiTuft && near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
+    if (wantRich !== c.rich.visible) {
+      changed = true;
+    }
+    c.rich.visible = wantRich;
+    c.cheap.visible = !wantRich;
+  }
+  return changed;
 }
 
 const TREE_SPACING = 9; // metres between trees along a row
@@ -203,9 +232,11 @@ function cellKey(x: number, z: number): string {
   return `${Math.floor(x / CHUNK_SIZE)},${Math.floor(z / CHUNK_SIZE)}`;
 }
 
-/** Groups placements into CHUNK_SIZE cells so each becomes its own mesh. */
-function bucketByCell(items: Placement[]): Placement[][] {
-  const cells = new Map<string, Placement[]>();
+/** Groups Y-up items into CHUNK_SIZE cells so each becomes its own mesh. */
+export function bucketByCell<T extends { x: number; z: number }>(
+  items: T[]
+): T[][] {
+  const cells = new Map<string, T[]>();
   for (const p of items) {
     const key = cellKey(p.x, p.z);
     const cell = cells.get(key);
@@ -955,22 +986,6 @@ export function buildVegetation(
     // Rich crown only near the camera (and only when multi-tuft is enabled);
     // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in
     // the chunk (sphere centre minus radius) with enter/exit hysteresis.
-    updateLod: (cameraPos) => {
-      let changed = false;
-      for (const c of cells) {
-        const sphere = c.cheap.boundingSphere;
-        const near = sphere
-          ? cameraPos.distanceTo(sphere.center) - sphere.radius
-          : Number.POSITIVE_INFINITY;
-        const wantRich =
-          multiTuft && near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
-        if (wantRich !== c.rich.visible) {
-          changed = true;
-        }
-        c.rich.visible = wantRich;
-        c.cheap.visible = !wantRich;
-      }
-      return changed;
-    },
+    updateLod: (cameraPos) => swapCrownLod(cells, cameraPos, multiTuft),
   };
 }

@@ -548,26 +548,33 @@ async function bootApp(
   ): Promise<TerrainLayer> => {
     // OSM walls feed the ribbon geometry built for the whole block later —
     // and, on a tile meshed from its heightfield, the conflation step.
-    const walls = await fetchFeatures<WallFeature>(tile.walls, opts.signal);
-    const t = await loadTerrain({
-      onBytes,
-      url: tile.heightfieldHeader,
-      // A tile with a TIN (every tile of the block, lib/city/tile.ts) is
-      // meshed from it (lib/city/terrain-tin.ts), with nothing burned in;
-      // only a tile without one falls back to the heightfield.
-      tinUrl: tile.terrainTin,
-      landcoverUrl: tile.landcover,
-      landcoverRgbUrl: tile.landcoverRgb,
-      ndviUrl: tile.ndvi,
-      // Grid tiles only: retaining/city walls are burned into the heightfield
-      // as steps (ADR 0014). A TIN ignores them — the ribbons snap instead.
-      wallLines: wallLinesFrom(walls),
-      offset,
-      signal: opts.signal,
-      sunDirection,
-      heightFog,
-      meadowNdvi,
-    });
+    const wallsFetch = fetchFeatures<WallFeature>(tile.walls, opts.signal);
+    const terrainFrom = (walls: WallFeature[]) =>
+      loadTerrain({
+        onBytes,
+        url: tile.heightfieldHeader,
+        // A tile with a TIN (every tile of the block, lib/city/tile.ts) is
+        // meshed from it (lib/city/terrain-tin.ts), with nothing burned in;
+        // only a tile without one falls back to the heightfield.
+        tinUrl: tile.terrainTin,
+        landcoverUrl: tile.landcover,
+        landcoverRgbUrl: tile.landcoverRgb,
+        ndviUrl: tile.ndvi,
+        // Grid tiles only: retaining/city walls are burned into the
+        // heightfield as steps (ADR 0014). A TIN ignores them — the ribbons
+        // snap instead.
+        wallLines: wallLinesFrom(walls),
+        offset,
+        signal: opts.signal,
+        sunDirection,
+        heightFog,
+        meadowNdvi,
+      });
+    // A TIN burns nothing in, so its terrain need not wait for the walls.
+    const [walls, t] = await Promise.all([
+      wallsFetch,
+      tile.terrainTin ? terrainFrom([]) : wallsFetch.then(terrainFrom),
+    ]);
     // Nothing may join the scene once the instance has been torn down
     // (StrictMode remount): a mesh added after dispose() would never be
     // freed, and neither would one built after it — so free it here.

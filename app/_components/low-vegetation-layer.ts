@@ -12,6 +12,7 @@ import type { LowVegFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { bucketByCell, hash } from "./vegetation-layer";
 
 /**
  * Hedges — the OSM `barrier=hedge` lines, at the laser-scan height where the
@@ -34,7 +35,6 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * main AND the shadow pass.
  */
 
-const CHUNK_SIZE = 250;
 /** longest hedge piece (m); longer runs are split so the lumps stay hedge-sized */
 const HEDGE_PIECE_M = 2.5;
 /** each piece reaches this far into its neighbours so the chain has no gaps */
@@ -51,12 +51,6 @@ const W_RANGE: [number, number] = [0.5, 3];
 
 function clamp(v: number, [lo, hi]: [number, number]): number {
   return Math.min(Math.max(v, lo), hi);
-}
-
-/** Deterministic [0,1) jitter so the layer rebuilds identically. */
-function hash(i: number): number {
-  const s = Math.sin(i * 12.9898) * 43_758.5453;
-  return s - Math.floor(s);
 }
 
 /** One hedge instance: centre, heading and extents, in EPSG metres. */
@@ -224,20 +218,6 @@ function tintColor(col: Color, t: number): void {
   col.setHSL(0.27 + t * 0.03, 0.34 + t * 0.06, 0.5 + t * 0.07);
 }
 
-function bucket(items: Instance[]): Instance[][] {
-  const cells = new Map<string, Instance[]>();
-  for (const p of items) {
-    const key = `${Math.floor(p.x / CHUNK_SIZE)},${Math.floor(p.z / CHUNK_SIZE)}`;
-    const cell = cells.get(key);
-    if (cell) {
-      cell.push(p);
-    } else {
-      cells.set(key, [p]);
-    }
-  }
-  return [...cells.values()];
-}
-
 function buildChunks(
   items: Instance[],
   geo: BufferGeometry,
@@ -245,7 +225,7 @@ function buildChunks(
 ): InstancedMesh[] {
   const dummy = new Object3D();
   const col = new Color();
-  return bucket(items).map((cell) => {
+  return bucketByCell(items).map((cell) => {
     const mesh = new InstancedMesh(geo, mat, cell.length);
     mesh.name = "lowveg-hedge";
     mesh.castShadow = true;

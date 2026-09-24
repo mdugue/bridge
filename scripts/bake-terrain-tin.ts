@@ -66,7 +66,8 @@ export function tinFromGrid(
  * Reads the GeoTIFF in `tif` at its native resolution and bakes the TIN.
  * `tfw` is the sidecar's text (null when absent), consulted only when the
  * GeoTIFF carries no georeferencing of its own. The raster must be square
- * and free of NoData (a tile with holes keeps the heightfield).
+ * and free of NoData: a tile with holes throws, failing the data build, until
+ * its `tinMaxError` is dropped (it then keeps the heightfield).
  */
 export async function bakeTerrainTin(
   tif: ArrayBuffer,

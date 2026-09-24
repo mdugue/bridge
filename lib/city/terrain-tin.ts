@@ -25,8 +25,9 @@
  * Vertices sit on the source grid's pixel centres, like the heightfield's; the
  * outermost ring is snapped to the true tile edge so neighbouring tiles meet.
  * Triangles are wound counter-clockwise seen from above (+Z in the data frame).
- * A TIN has no NoData: the bake refuses a grid with holes (that tile keeps the
- * heightfield). No THREE, no DOM.
+ * A TIN has no NoData: the bake refuses a grid with holes and fails the data
+ * build — drop that tile's `tinMaxError` (tile.ts) to keep its heightfield.
+ * No THREE, no DOM.
  */
 import { SKIRT_DEPTH, type TerrainBounds } from "./terrain-geometry";
 

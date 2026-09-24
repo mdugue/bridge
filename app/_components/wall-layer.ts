@@ -223,7 +223,9 @@ function wallColumns(f: WallFeature, ctx: WallContext): (WallCol | null)[] {
   return pts.map((p, i) => {
     const [px, py] = perps[i];
     const step = steps[i];
-    return step
+    // smoothSnaps fills gaps from the neighbours; a vertex off every tile
+    // must still break the ribbon (columnAt's rule), not get a filled column.
+    return step && ctx.heightAt(p[0], p[1]) !== null
       ? snappedColumn(p[0], p[1], px, py, h, step, ctx)
       : columnAt(p[0], p[1], px, py, h, ctx);
   });
