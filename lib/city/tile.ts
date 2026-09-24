@@ -55,6 +55,7 @@ export type TileArtifactKind =
   | "platform"
   | "rail"
   | "railarea"
+  | "stairs"
   | "vegrows"
   | "walls";
 
@@ -88,6 +89,7 @@ export function tileArtifacts(
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
     walls: dlm(`walls_${tile}.geojson`),
+    stairs: dlm(`stairs_${tile}.geojson`),
   };
 }
 

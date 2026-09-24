@@ -1,7 +1,7 @@
 /**
  * Builds a tile's streamed content (lib/city/tileset.ts): the terrain mesh
  * per level from the DGM GeoTIFF (with the OSM retaining walls burned in as
- * breaklines) and the building mesh from the CityJSON, both as glTF
+ * breaklines and the ground lowered under the OSM stairs) and the building mesh from the CityJSON, both as glTF
  * (scripts/tile-glb.ts). Everything the browser used to compute at load —
  * resampling, conflation, the grid, normals — happens here once. Called by
  * scripts/prepare-data.ts, which owns paths, caching and publishing; no DOM.
@@ -9,6 +9,7 @@
 import { fromArrayBuffer } from "geotiff";
 import { BufferAttribute, BufferGeometry } from "three";
 import { objectTable } from "../lib/city/city-mesh";
+import { burnStairs, type StairLine } from "../lib/city/stairs";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
 import {
   buildTerrainGeometryData,
@@ -111,20 +112,26 @@ export interface TerrainMesh {
 
 /**
  * The terrain grid (+ its 30 m skirt) with the walls burned in as steps
- * (lib/city/terrain-conflate.ts), in the recentered frame. The first n·n
+ * (lib/city/terrain-conflate.ts) and the ground under each flight of stairs
+ * lowered below its treads (lib/city/stairs.ts), in the recentered frame. The first n·n
  * vertices are the grid, row 0 = north: the runtime samples ground height
  * straight from them.
  */
 export function terrainMesh(
   dgm: Dgm,
   walls: WallLine[],
-  offset: { cx: number; cy: number }
+  offset: { cx: number; cy: number },
+  stairs: StairLine[] = []
 ): TerrainMesh {
   const { n, bounds } = dgm;
-  const elevations =
+  const conflated =
     walls.length > 0
       ? conflateWalls({ elevations: dgm.elevations, n, bounds, walls })
       : dgm.elevations;
+  const elevations =
+    stairs.length > 0
+      ? burnStairs({ elevations: conflated, n, bounds, stairs })
+      : conflated;
   const { positions, indices, minElevation } = buildTerrainGeometryData({
     elevations,
     n,

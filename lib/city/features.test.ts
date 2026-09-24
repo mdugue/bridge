@@ -8,6 +8,7 @@ import type {
   FeatureCollection,
   LampFeature,
   RailFeature,
+  StairFeature,
   VegRowFeature,
   WallFeature,
 } from "./features";
@@ -110,3 +111,17 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
     }
   }
 });
+
+test.each(cases)(
+  "%s: stairs run bottom → top with a width, steps and landings",
+  (_, a) => {
+    for (const f of load<StairFeature>(a.stairs)) {
+      expect(f.geometry.type).toBe("LineString");
+      expect(isLine(f.geometry.coordinates)).toBe(true);
+      expect(f.properties?.w).toBeGreaterThan(0);
+      expect(Number.isInteger(f.properties?.n)).toBe(true);
+      const [lo, hi] = f.properties?.z ?? [Number.NaN, Number.NaN];
+      expect(hi).toBeGreaterThan(lo);
+    }
+  }
+);

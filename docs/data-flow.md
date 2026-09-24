@@ -53,6 +53,7 @@ flowchart LR
     BRG["Bridges"]
     PLT["Station platforms"]
     WAL["Retaining walls"]
+    STR["Stairs"]
     MM["Minimap"]
     LIGHT["Light &amp; shadow"]
   end
@@ -93,9 +94,12 @@ flowchart LR
   DOM -. "deck surface (viaducts)" .-> BRG
   OSM -. "bridge:structure → arches" .-> BRG
   OSM ==>|"railway=platform polygons"| PLT
-  OSM ==>|"barrier=retaining_wall/city_wall + height"| WAL
+  OSM ==>|"barrier=retaining_wall/city_wall · natural=cliff + height"| WAL
   DGM -. "drape base onto stepped terrain" .-> WAL
   WAL -. "breakline conflation: a step burned into the terrain at build" .-> TER
+  OSM ==>|"highway=steps + width · step_count"| STR
+  DGM -. "landing heights" .-> STR
+  STR -. "ground lowered under the flight at build" .-> TER
   DGM -. ground-clamp .-> PLT
 
   %% minimap + lighting (derived, not raw data)
@@ -110,7 +114,7 @@ flowchart LR
 
 | Feature | Primary source | Also needs / modifiers | Code |
 |---|---|---|---|
-| **Terrain ground** | DGM1 GeoTIFF → glTF terrain at two levels (1024² / 512², baked normals, 30 m skirt) | OSM walls (burned in as a step at build) | baked by `scripts/bake-tiles.ts` (`terrainMesh`, `lib/city/terrain-conflate.ts`) in `scripts/prepare-data.ts`; `terrain-layer.ts`, `tile-stream.ts` |
+| **Terrain ground** | DGM1 GeoTIFF → glTF terrain at two levels (1024² / 512², baked normals, 30 m skirt) | OSM walls (burned in as a step at build) · OSM stairs (ground lowered under the flight at build) | baked by `scripts/bake-tiles.ts` (`terrainMesh`, `lib/city/terrain-conflate.ts`, `lib/city/stairs.ts`) in `scripts/prepare-data.ts`; `terrain-layer.ts`, `tile-stream.ts` |
 | **Surface colours** | Basis-DLM class raster (ids 0–8), painted with the palette on the GPU at load | DOP NDVI (meadow tint, class 1) | `landcover-splat.ts`, `lib/city/landcover.ts` (the one palette), `terrain-layer.ts` (samples the splat + `uNdvi`); baked by `pipeline/bake/landcover.py` + `ndvi.py` |
 | **Water (Elbe)** | Basis-DLM class 8 (water coverage from the painted splat) **+** DGM1 (the terrain geometry it drapes on) | — | `water-layer.ts`, `landcover-splat.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts` |
@@ -120,7 +124,8 @@ flowchart LR
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
-| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall` + `height` (Geofabrik extract) | DGM1 (base drape + terrain conflated to a step) — *the wall isn't in DGM/DOM/LiDAR* | `wall-layer.ts`, `lib/city/terrain-conflate.ts` (at build); baked by `pipeline/bake/walls.py` |
+| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (base drape + terrain conflated to a step) — *the wall isn't in DGM/DOM/LiDAR* | `wall-layer.ts`, `lib/city/terrain-conflate.ts` (at build); baked by `pipeline/bake/walls.py` |
+| **Stairs** | OSM `highway=steps` + `width` · `step_count` (else an `area:highway=steps` outline; else defaults) | DGM1 (landing heights; the terrain lowered under the flight) — *the DGM smooths steps into a bank* | `stair-layer.ts`, `lib/city/stairs.ts` (burn at build + step geometry); baked by `pipeline/bake/stairs.py` |
 | **Minimap** | tile bounds (tileset `extras`) + the 2048² class raster in the palette + CityJSON footprints (`footprints_<tile>.json`) | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*`, `lib/city/landcover.ts` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
 
@@ -164,6 +169,7 @@ flowchart LR
     bROOF["roof_colour.py"]
     bLAMP["lamps.py"]
     bWALL["walls.py"]
+    bSTR["stairs.py"]
     bRAIL["rail.py"]
   end
 
@@ -175,6 +181,7 @@ flowchart LR
     dROOF["roofcolor JSON"]
     dLAMP["lamps"]
     dWALL["walls"]
+    dSTR["stairs"]
     dRAIL["rail · railarea<br/>bridge · platform"]
   end
 
@@ -198,6 +205,8 @@ flowchart LR
   dCLS ==>|gates| bLAMP
   bLAMP ==> dLAMP
   iOSM ==> bWALL ==> dWALL
+  iOSM ==> bSTR ==> dSTR
+  iDGM -. "landings" .-> bSTR
   iDLM ==> bRAIL
   iDGM ==> bRAIL
   iDOM -. "deck surface" .-> bRAIL
@@ -206,6 +215,7 @@ flowchart LR
 
   iDGM ==> tTER
   dWALL -. breaklines .-> tTER
+  dSTR -. "lowered ground" .-> tTER
   iCJ ==> tCITY
   dROOF -. "roof colour" .-> tCITY
   dCLS ==> tSIDE
@@ -213,6 +223,7 @@ flowchart LR
   dNDVI -.-> tSIDE
   dLAMP -.-> tSIDE
   dWALL -.-> tSIDE
+  dSTR -.-> tSIDE
   dRAIL -.-> tSIDE
 ```
 

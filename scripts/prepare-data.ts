@@ -37,8 +37,9 @@ import { basename, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
-import type { WallFeature } from "../lib/city/features";
+import type { StairFeature, WallFeature } from "../lib/city/features";
 import { tileExtentOf } from "../lib/city/site";
+import { type StairLine, stairLineOf } from "../lib/city/stairs";
 import type { WallLine } from "../lib/city/terrain-conflate";
 import {
   cityMeshSourceFiles,
@@ -130,6 +131,7 @@ const BAKE_SOURCES = [
   "lib/city/minimap.ts",
   "lib/city/terrain-geometry.ts",
   "lib/city/terrain-conflate.ts",
+  "lib/city/stairs.ts",
   "lib/city/tileset.ts",
 ].map(at);
 
@@ -291,6 +293,16 @@ function wallLines(tile: string): WallLine[] {
   );
 }
 
+/** The tile's OSM stairs, whose ground the terrain bake lowers. */
+function stairLines(tile: string): StairLine[] {
+  const path = at(`data/dlm/${tileArtifacts(tile).stairs.file}`);
+  if (!existsSync(path)) {
+    return [];
+  }
+  const { features } = readJson<{ features: StairFeature[] }>(path);
+  return features.flatMap((f) => stairLineOf(f) ?? []);
+}
+
 function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
   const pick = (kind: keyof DressingFiles) => names[kind] ?? "";
   return {
@@ -300,6 +312,7 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
     platform: pick("platform"),
     rail: pick("rail"),
     railarea: pick("railarea"),
+    stairs: pick("stairs"),
     vegrows: pick("vegrows"),
     walls: pick("walls"),
   };
@@ -318,7 +331,13 @@ async function bakeTerrain(
   }
   const names = sideFiles.get(tile) ?? {};
   const { n } = TERRAIN_LEVELS[level];
-  const inputs = [tif, tfw, at(`data/dlm/${tileArtifacts(tile).walls.file}`)];
+  const artifacts = tileArtifacts(tile);
+  const inputs = [
+    tif,
+    tfw,
+    at(`data/dlm/${artifacts.walls.file}`),
+    at(`data/dlm/${artifacts.stairs.file}`),
+  ];
   const stem = `terrain_${tile}_l${level}`;
   const described = {
     kind: "terrain" as const,
@@ -342,7 +361,7 @@ async function bakeTerrain(
         n
       );
       bounds = dgm.bounds;
-      mesh = terrainMesh(dgm, wallLines(tile), offset);
+      mesh = terrainMesh(dgm, wallLines(tile), offset, stairLines(tile));
     }
     return mesh;
   };

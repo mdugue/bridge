@@ -220,7 +220,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 
 ### Retaining / city walls
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
-  wall` + `man_made=embankment` (ODbL), with the tagged `height` (e.g. the
+  wall` + `man_made=embankment` + `natural=cliff` (kind `cliff`, default 3 m;
+  read from `other_tags`, since GDAL has no `natural` column on `lines`)
+  (ODbL), with the tagged `height` (e.g. the
   8.5–9 m city walls). `pipeline/bake/walls.py` → `wall-layer.ts`: vertical
   sandstone ribbons, built per fine terrain tile, base draped on the DGM via
   the cross-tile `heightAt` over every loaded terrain, top = base + height,
@@ -250,10 +252,31 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   untouched DGM within a ~11 m band (nearest-wall-wins). The wall ribbon then
   skins a real step. **Deterministic + source-portable** (any DEM + any OSM wall
   lines). **Gated** to earth-retaining kinds
-  (`retaining_wall`/`city_wall`/`embankment`) and only where the two sides
+  (`retaining_wall`/`city_wall`/`embankment`/`cliff`) and only where the two sides
   actually differ by ≥1.5 m, so freestanding garden walls and flat fountain rims
   leave the ground alone; a ≤18 m clamp stops a bad height tag gouging a canyon.
   Pure + unit-tested (`terrain-conflate.test.ts`).
+
+### Stairs (OSM steps over a lowered terrain)
+- **Flights of steps** (*Freitreppe am Italienischen Dörfchen &c.*) — OSM
+  `highway=steps` (ODbL). `pipeline/bake/stairs.py` → `stairs_<tile>.geojson`:
+  the axis oriented bottom → top, `w` from `width` (else an
+  `area:highway=steps` outline: area ÷ axis length; else 2.5 m), `z` = the two
+  landing heights from the DGM 1 m beyond each end (3×3 m median), `n` from
+  `step_count` when its riser is 8–25 cm, else rise ÷ 16 cm. Indoor,
+  underground, tunnel and bridge flights and anything flatter than 30 cm are
+  left out. At build, `lib/city/stairs.ts` `burnStairs` lowers the terrain
+  under each flight to 12 cm below the ramp through the steps' inner corners
+  (after the wall conflation; only ever lowers; the margin beside a flight
+  sinks ≤ 0.5 m). `stair-layer.ts` stands the flight as stone blocks —
+  treads, darker risers, side cheeks — on the tile owning its middle.
+  **Why:** the DGM1 smooths a staircase into a bank (the flight beside the
+  Italienisches Dörfchen read as a grassy slope) and its ~2 m grid cannot
+  hold a 16 cm riser ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md)).
+  **Fallback:** no `.osm.pbf` → the step is skipped, the committed file stays;
+  no file → no stairs, the terrain as before. Pure + unit-tested
+  (`stairs.test.ts`, the bake end-to-end against a synthetic OSM extract in
+  `pipeline/tests`).
 
 ### Lighting
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
@@ -301,6 +324,10 @@ research that produced them):
    behind a slider, judge on GPU before committing.
 3. **ALKIS parcels** — plot boundaries → per-parcel ground tint, garden/courtyard
    vs street, fences along lot lines; richer `Gebäudefunktion` than CityGML.
+   The same download would carry the surveyed stairs and walls
+   (`AX_SonstigesBauwerkOderSonstigeEinrichtung`: *Treppe*, *Mauer*,
+   *Stützmauer*) — a second, official source for `stairs.py` and `walls.py`
+   where OSM is thin (ADR 0028).
 4. **Cartographic minimap** — DTK / basemap.de P10 raster tile + Ortsteile labels
    replacing the math-drawn minimap.
 5. **Dappled canopy shadow** — alpha-tested colour-less proxy caster per chunk

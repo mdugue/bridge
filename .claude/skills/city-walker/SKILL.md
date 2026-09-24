@@ -50,7 +50,8 @@ chip. Every tile change re-renders the shadow map. The layers:
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
   tile. No CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
-  resampled with the wall breaklines burned in at bake time,
+  resampled with the wall breaklines burned in and the ground lowered
+  under OSM stairs at bake time,
   `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
   land-cover material; also hangs the water and mist sheets.
 - `landcover-splat.ts` — paints the class raster with the one palette
@@ -279,7 +280,7 @@ CRS, land cover first:
 ```bash
 bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|rail
+bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|stairs|rail
 bun run test:pipeline                  # pytest + ruff
 ```
 

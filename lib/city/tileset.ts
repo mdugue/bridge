@@ -72,6 +72,7 @@ export interface DressingFiles {
   platform: string;
   rail: string;
   railarea: string;
+  stairs: string;
   vegrows: string;
   walls: string;
 }

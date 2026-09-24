@@ -77,6 +77,7 @@ export type LayerName =
   | "city"
   | "lamps"
   | "rail"
+  | "stairs"
   | "terrain"
   | "vegetation"
   | "walls"
@@ -697,6 +698,7 @@ async function bootApp(
         lamps: census(dressings.map((d) => d.lamps?.group)),
         rail: census(dressings.map((d) => d.rail)),
         walls: census(dressings.map((d) => d.walls)),
+        stairs: census(dressings.map((d) => d.stairs)),
       },
     });
   };

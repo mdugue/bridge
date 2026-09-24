@@ -77,6 +77,7 @@ flowchart LR
   NDVI["ndvi<br/>Grün-Raster"]
   ROOF["roof-colour<br/>Dachfarben-Tabelle"]
   WALL["walls<br/>Mauerlinien"]
+  STAIR["stairs<br/>Treppenläufe"]
   RAIL["rail<br/>Gleise · Schotter · Brücken · Bahnsteige"]
 ```
 
@@ -103,6 +104,7 @@ enthält je Kachel:
 | | `canopy_<Kachel>.geojson` | ein Punkt je Baum mit Höhe (5 000–16 000 je Kachel) | 0,6–1,8 MB |
 | | `lamps_<Kachel>.geojson` | Lampenpositionen | bis 60 kB |
 | | `walls_<Kachel>.geojson` | Mauerlinien mit Art und Höhe | 50–120 kB |
+| | `stairs_<Kachel>.geojson` | Treppenläufe: Achse, Breite, Stufenzahl, Höhe an Fuß und Kopf | wenige kB |
 | | `rail_<Kachel>.geojson`, `railarea_<Kachel>.geojson` | Gleislinien mit Gleiszahl; verschmolzene Schotterflächen | wenige kB |
 | | `bridge_<Kachel>.geojson` | Brückendeck-Umrisse mit Höhe je Ecke, Art und Tragwerk | wenige kB |
 | | `platform_<Kachel>.geojson` | Bahnsteige | wenige kB |
@@ -121,7 +123,7 @@ Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
 | Bäume | Basis-DLM + DOM1 + DGM1 | Baumpunkte, Heckenreihen | — | wie eingecheckt |
 | Grün | DOP | das NDVI-PNG | — | wie eingecheckt |
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
-| Lampen, Mauern, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
+| Lampen, Mauern, Treppen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
 | Gleise, Schotter, Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
@@ -133,7 +135,7 @@ Es tut drei Dinge:
    das Gelände-GeoTIFF zu zwei fertigen Geländenetzen: einem detaillierten
    auf einem Raster von 1024 × 1024 Punkten und einem groben auf
    512 × 512, mit den hohen Mauern aus OpenStreetMap als scharfe Kanten
-   eingearbeitet und einer kurzen Schürze am Rand, damit an den Nahtstellen
+   eingearbeitet, dem Boden unter ihren Treppen leicht abgesenkt und einer kurzen Schürze am Rand, damit an den Nahtstellen
    zwischen Kacheln keine Lücke sichtbar wird. Das CityJSON wird zu einem
    Gebäudenetz je Kachel mit einer Tabelle von Stilwerten je Gebäude, dazu
    einer Liste der Gebäudegrundrisse für die Minikarte. Jedes Netz wird als
@@ -206,7 +208,7 @@ Was **im Browser berechnet** statt heruntergeladen wird: die Bodenfarben
 (einmal je Kachel auf der Grafikkarte gemalt, aus den
 Landnutzungsklassen und einer Pastellpalette), die Wasseroberfläche, jeder
 Baum aus seinem Punkt und seiner Höhe, Laternenmasten aus ihren Punkten,
-Mauern und Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
+Mauern, Treppen und Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
 und Schatten und der gesamte Nachbearbeitungs-Look.
 
 ## Was neu gemacht werden muss, wenn sich etwas ändert
@@ -217,7 +219,7 @@ und Schatten und der gesamte Nachbearbeitungs-Look.
 | Neues Gebäudemodell | nach CityJSON umwandeln, in `data/cityjson/` ersetzen; das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
 | Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps` und `rail` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
 | Neue Luftbilder | die Bakes `ndvi` und `roof-colour` neu ausführen | die Dachfarben werden beim nächsten Build ins Netz eingearbeitet |
-| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `walls` und `rail` neu ausführen | — |
+| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `walls`, `stairs` und `rail` neu ausführen | — |
 | Andere Bodenfarben | die eine Palette im Code ändern | nichts neu zu backen: Der Browser malt die Farben |
 | Eine neue Kachel | Gelände- und Gebäudemodell von Hand laden (das Gebäudemodell nach CityJSON umgewandelt) und beide einchecken; die Kachel in die Standort-Konfiguration `sites/dresden.ts` eintragen; `bun run bake --ingest` holt den Rest und führt alle sieben Bakes aus | der Build nimmt sie ins Tileset auf und veröffentlicht sie |
 

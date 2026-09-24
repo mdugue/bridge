@@ -16,10 +16,12 @@ import type {
   CanopyFeature,
   LampFeature,
   RailFeature,
+  StairFeature,
   VegRowFeature,
   WallFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
+import { axisMiddle } from "@/lib/city/stairs";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -33,6 +35,7 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildRail } from "./rail-layer";
 import { dressTerrain, type TerrainLayer } from "./terrain-layer";
+import { buildStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import {
   buildVegetation,
@@ -53,6 +56,7 @@ import { buildWalls } from "./wall-layer";
 export interface TileDressing {
   lamps?: LampControl;
   rail?: Group;
+  stairs?: Group;
   tile: string;
   vegetation?: VegetationControl;
   walls?: Group;
@@ -138,9 +142,13 @@ class GzipContentPlugin {
 type Features<T> = Promise<T[]>;
 
 function dressingParts(d: TileDressing): Object3D[] {
-  return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
-    (part): part is Group => part !== undefined
-  );
+  return [
+    d.vegetation?.group,
+    d.lamps?.group,
+    d.rail,
+    d.walls,
+    d.stairs,
+  ].filter((part): part is Group => part !== undefined);
 }
 
 /**
@@ -210,6 +218,7 @@ async function buildDressing(
     ballast,
     platforms,
     walls,
+    stairs,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -222,6 +231,7 @@ async function buildDressing(
     get<AreaFeature>(d.railarea),
     get<AreaFeature>(d.platform),
     get<WallFeature>(d.walls),
+    get<StairFeature>(d.stairs),
   ]);
   // Rails and walls may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -255,7 +265,26 @@ async function buildDressing(
     { ...ground, heightFog: ctx.heightFog }
   );
   const wallGroup = buildWalls(walls, { ...ground, heightFog: ctx.heightFog });
-  return { tile, vegetation, lamps: lampControl, rail, walls: wallGroup };
+  // A flight across a seam is in both tiles' files; its middle's owner
+  // stands it.
+  const ownStairs = extent
+    ? stairs.filter((f) => {
+        const [x, y] = axisMiddle(f.geometry.coordinates);
+        return ownsPoint(extent, x, y);
+      })
+    : stairs;
+  const stairGroup = buildStairs(ownStairs, {
+    offset: ctx.offset,
+    heightFog: ctx.heightFog,
+  });
+  return {
+    tile,
+    vegetation,
+    lamps: lampControl,
+    rail,
+    walls: wallGroup,
+    stairs: stairGroup,
+  };
 }
 
 /**

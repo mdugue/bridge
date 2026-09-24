@@ -30,13 +30,14 @@ flowchart TB
   SCENE --> WORLD
   WORLD --> TILES
   TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH"]
-  TILES --> TER["terrain, L1 512² → L0 1024² (REPLACE)<br/>glTF grid + 30 m skirt, walls burned in<br/>palette-painted splat, receives shadows only"]
+  TILES --> TER["terrain, L1 512² → L0 1024² (REPLACE)<br/>glTF grid + 30 m skirt, walls burned in, lowered under stairs<br/>palette-painted splat, receives shadows only"]
   TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
   DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
   DRESS --> WALL["walls<br/>vertical ribbons draped on the ground"]
+  DRESS --> STAIR["stairs<br/>treads, risers, cheeks per flight"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
 ```
@@ -68,7 +69,7 @@ is the codebook.
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
 | Ground height | DGM resampled at build time to the terrain grid (1024² fine, 512² coarse); heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
-| Ground step at walls | wall line + `kind` ∈ retaining/city/embankment, height ≥ 1.5 m, burned in at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
+| Ground step at walls | wall line + `kind` ∈ retaining/city/embankment/cliff, height ≥ 1.5 m, burned in at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
 | Contour lines | data-frame elevation (`DATA_POSITION`), 2 m minor / 10 m major | DGM1 | `terrain-layer.ts` |
 | Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`) | DOP | `terrain-layer.ts` |
@@ -102,6 +103,8 @@ is the codebook.
 | Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
 | Wall ribbon | line + `h`, base draped on every loaded terrain | OSM | `wall-layer.ts` |
+| Ground under stairs | flight axis + `w` + landings `z`: lowered to 12 cm below the ramp at build, the margin ≤ 0.5 m | OSM + DGM1 | `lib/city/stairs.ts` `burnStairs` |
+| Steps | `n` treads at z0 + (k+1)·rise across `w`; risers × 0.82, cheeks × 0.9 of the stone colour | OSM + DGM1 | `stair-layer.ts`, `lib/city/stairs.ts` `stairGeometry` |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
 | Valley fog | world height below a floor derived from the lowest terrain landed so far | DGM1 | `height-fog.ts` (*Talnebel*) |
@@ -220,7 +223,7 @@ sequenceDiagram
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
-  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, rail, bridge, platform, walls
+  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, rail, bridge, platform, walls, stairs
   Note over B: each change: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```

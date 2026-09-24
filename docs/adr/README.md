@@ -37,6 +37,7 @@ each data → look transformation does and its status.
 | [0025](./0025-bakes-are-one-python-package.md) | The bakes are one Python package in a uv environment; OSM comes only from a local extract | accepted |
 | [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted |
 | [0027](./0027-webgpu-renderer-and-tsl.md) | Move to WebGPURenderer and TSL node materials | proposed (GPU spike, plan 020) |
+| [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
 
 ## Format
 
