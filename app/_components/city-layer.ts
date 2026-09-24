@@ -1,155 +1,200 @@
 import {
   BufferAttribute,
-  BufferGeometry,
   type Camera,
-  Group,
-  Mesh,
-  MeshStandardMaterial,
+  DataTexture,
+  FloatType,
+  type Mesh,
+  NearestFilter,
+  type Object3D,
+  RGBAFormat,
   Raycaster,
   Vector2,
 } from "three";
 import {
-  buildDetailAttributes,
-  type CityMeshMeta,
-  type CityMeshVertices,
+  type CityObjectTable,
   countBuildings as countLiveBuildings,
-  decodeCityMesh,
   doomedObjects,
-  filterVertices,
   footprintPolys,
-  parseCityMeshMeta,
+  liveTriangles,
+  OBJECT_TEXEL_BANDS,
+  OBJECT_TEXTURE_WIDTH,
+  objectBandRows,
+  packObjectTexels,
 } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
-import type { TileUrls } from "@/lib/city/tile";
-import { buildCityBvh } from "./collision";
-import {
-  type BytesProgress,
-  fetchGzipped,
-  fetchRequiredJson,
-} from "./fetch-optional";
-import { disposeObject3D } from "./three-utils";
+import { textureBytes, trackTexture } from "./three-utils";
+import { createClayMaterial, type StyleResources } from "./visual-style";
 
 /**
- * One tile's buildings: the baked mesh (scripts/bake-city-mesh.ts, format in
- * lib/city/city-mesh.ts) as a single batched Mesh with the per-vertex
- * attributes the clay style reads. Demolish filters the vertex stream and
- * rebuilds the geometry — no CityJSON and no parser in the browser.
+ * One tile's buildings: the streamed glTF mesh (scripts/bake-tiles.ts), its
+ * per-object table (EXT_structural_metadata, read by 3DTilesRendererJS) as a
+ * float texture the clay shader reads per vertex, and the demolish state.
+ * Demolish filters the index buffer — no re-parse, no vertex copies.
  */
 export interface CityLayer {
-  /** false for objects demolished this session (index into meta.objects) */
+  /** false for objects demolished this session */
   alive: Uint8Array;
-  /** current mesh, wrapped in a group (re-created on every demolish) */
-  group: Group;
-  meta: CityMeshMeta;
-  /** the live vertex stream (shrinks when demolishing) */
-  vertices: CityMeshVertices;
+  /** drops the object's building tree; true when anything changed */
+  demolish: (objectIndex: number) => boolean;
+  dispose: () => void;
+  /** per-object minimap footprints, once fetched */
+  footprints: [number, number][][][] | null;
+  mesh: Mesh;
+  table: CityObjectTable;
+  tile: string;
 }
 
-/** Marker the style/collision helpers look for on batched city meshes. */
-interface CityMesh extends Mesh {
+/** Marker the collision helpers look for on city meshes. */
+export interface CityMesh extends Mesh {
   isCityObjectMesh?: boolean;
 }
 
-/**
- * Fetches a tile's baked mesh (meta + inflated vertex stream). `onBytes`
- * reports the vertex stream's download progress — the primary tile's is the
- * largest single wait before the first frame.
- */
-export async function fetchCityMesh(
-  tile: Pick<TileUrls, "cityMeshData" | "cityMeshMeta">,
-  signal?: AbortSignal,
-  onBytes?: BytesProgress
-): Promise<{ meta: CityMeshMeta; vertices: CityMeshVertices }> {
-  const [metaJson, buffer] = await Promise.all([
-    fetchRequiredJson<unknown>(tile.cityMeshMeta, signal),
-    fetchGzipped(tile.cityMeshData, signal, onBytes),
-  ]);
-  const meta = parseCityMeshMeta(metaJson);
-  return { meta, vertices: decodeCityMesh(buffer, meta) };
+/** The property table as 3DTilesRendererJS exposes it (one row per id). */
+interface StructuralMetadataLike {
+  getPropertyTableData: (table: number, id: number) => Record<string, unknown>;
+  tableAccessors: { count: number }[];
+}
+
+const xyz = (v: unknown): number[] => {
+  const p = v as { x?: number; y?: number; z?: number } | number[];
+  return Array.isArray(p) ? p : [p.x ?? 0, p.y ?? 0, p.z ?? 0];
+};
+
+/** Reads the whole property table into typed columns. */
+export function readObjectTable(
+  metadata: StructuralMetadataLike,
+  count: number
+): CityObjectTable {
+  const table: CityObjectTable = {
+    count,
+    baseZ: new Float32Array(count),
+    building: new Uint8Array(count),
+    eaveH: new Float32Array(count),
+    glow: new Uint8Array(count),
+    roof: new Float32Array(count * 3),
+    root: new Uint32Array(count),
+    rough: new Float32Array(count),
+    storeyH: new Float32Array(count),
+    tint: new Float32Array(count * 3),
+  };
+  for (let i = 0; i < count; i++) {
+    const row = metadata.getPropertyTableData(0, i);
+    table.baseZ[i] = Number(row.baseZ);
+    table.building[i] = Number(row.building);
+    table.eaveH[i] = Number(row.eaveH);
+    table.glow[i] = Number(row.glow);
+    table.roof.set(xyz(row.roof), i * 3);
+    table.root[i] = Number(row.root);
+    table.rough[i] = Number(row.rough);
+    table.storeyH[i] = Number(row.storeyH);
+    table.tint.set(xyz(row.tint), i * 3);
+  }
+  return table;
+}
+
+function objectTexture(table: CityObjectTable): {
+  rows: number;
+  texture: DataTexture;
+} {
+  const rows = objectBandRows(table.count);
+  const height = rows * OBJECT_TEXEL_BANDS;
+  const texture = new DataTexture(
+    packObjectTexels(table),
+    OBJECT_TEXTURE_WIDTH,
+    height,
+    RGBAFormat,
+    FloatType
+  );
+  texture.magFilter = NearestFilter;
+  texture.minFilter = NearestFilter;
+  texture.needsUpdate = true;
+  trackTexture(texture, textureBytes(OBJECT_TEXTURE_WIDTH, height, 16, false));
+  return { rows, texture };
 }
 
 /**
- * Builds the batched mesh from a vertex stream. Flat per-face normals come
- * from computeVertexNormals on the non-indexed stream; the clay attributes
- * (aBaseZ, aTint, aBuild, aRough — see visual-style.ts) expand the meta's
- * per-object table. The placeholder material is swapped for the shared clay
- * by applyCityStyle right after.
+ * Dresses a streamed city mesh: the glTF feature id and roof flag under the
+ * names the clay shader reads, the tile's clay material, a BVH for collision
+ * and picks. `demolished` replays this session's demolitions of the tile.
  */
-function buildMesh(meta: CityMeshMeta, v: CityMeshVertices): Group {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(v.positions, 3));
-  geometry.setAttribute("objectid", new BufferAttribute(v.objectIds, 1));
-  const detail = buildDetailAttributes(meta, v);
-  geometry.setAttribute("aBaseZ", new BufferAttribute(detail.baseZ, 1));
-  geometry.setAttribute("aTint", new BufferAttribute(detail.tint, 3));
-  geometry.setAttribute("aBuild", new BufferAttribute(detail.build, 4));
-  geometry.setAttribute("aRough", new BufferAttribute(detail.rough, 1));
-  geometry.computeVertexNormals();
-  const mesh: CityMesh = new Mesh(geometry, new MeshStandardMaterial());
-  mesh.isCityObjectMesh = true;
-  mesh.name = `city:${meta.tile}`;
+export function dressCity(
+  mesh: Mesh,
+  tile: string,
+  resources: StyleResources,
+  demolished: ReadonlySet<number>
+): CityLayer {
+  const geometry = mesh.geometry;
+  const metadata = mesh.userData.structuralMetadata as StructuralMetadataLike;
+  const count = metadata.tableAccessors[0]?.count ?? 0;
+  for (const [from, to] of [
+    ["_feature_id_0", "featureId"],
+    ["_roof", "roof"],
+  ] as const) {
+    const attribute = geometry.getAttribute(from);
+    if (attribute) {
+      geometry.setAttribute(to, attribute);
+      geometry.deleteAttribute(from);
+    }
+  }
+  const table = readObjectTable(metadata, count);
+  const objects = objectTexture(table);
+  mesh.material = createClayMaterial(resources, objects);
+  (mesh as CityMesh).isCityObjectMesh = true;
+  mesh.name = `city:${tile}`;
   // Casting works with three's default depth pass; receiving works because
   // the clay material is a lit MeshStandardMaterial.
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  const group = new Group();
-  group.name = `city-tile:${meta.tile}`;
-  group.add(mesh);
-  // BVHs make per-frame collision rays (and demolish picks) cheap.
-  buildCityBvh(group);
-  return group;
-}
 
-/** The vertex stream of a layer that will never be demolished. */
-const NO_VERTICES: CityMeshVertices = {
-  positions: new Float32Array(0),
-  objectIds: new Uint16Array(0),
-  isRoof: new Uint8Array(0),
-};
-
-export function createCityLayer(
-  meta: CityMeshMeta,
-  vertices: CityMeshVertices,
-  world: Group,
-  /** false for context tiles: they never demolish, so the ~15 bytes per
-   *  vertex the filter would need are not kept (the GPU-side attributes
-   *  three retains for raycasting are separate) */
-  demolishable = true
-): CityLayer {
-  const group = buildMesh(meta, vertices);
-  world.add(group);
-  return {
-    meta,
-    vertices: demolishable ? vertices : NO_VERTICES,
-    alive: new Uint8Array(meta.objects.length).fill(1),
-    group,
+  const alive = new Uint8Array(count).fill(1);
+  const featureIds = geometry.getAttribute("featureId");
+  const rebuild = () => {
+    const index = geometry.getIndex();
+    if (!index) {
+      return;
+    }
+    geometry.setIndex(
+      new BufferAttribute(
+        liveTriangles(index.array, featureIds.array, (i) => alive[i] === 1),
+        1
+      )
+    );
+    geometry.disposeBoundsTree();
+    // BVHs make per-frame collision rays (and demolish picks) cheap.
+    geometry.computeBoundsTree();
   };
-}
-
-/**
- * Demolish = drop the object's whole building tree from the vertex stream
- * and rebuild the batched mesh. Hiding one building in a batched mesh is
- * impossible, but filtering ~400k vertices is a few milliseconds.
- */
-export function demolishObject(
-  layer: CityLayer,
-  world: Group,
-  objectIndex: number
-): CityLayer {
-  const doomed = doomedObjects(layer.meta, objectIndex);
-  if (doomed.size === 0 || layer.vertices.objectIds.length === 0) {
-    return layer;
-  }
-  const alive = layer.alive.slice();
-  for (const i of doomed) {
+  for (const i of demolished) {
     alive[i] = 0;
   }
-  const vertices = filterVertices(layer.vertices, (i) => alive[i] === 1);
-  world.remove(layer.group);
-  disposeObject3D(layer.group);
-  const group = buildMesh(layer.meta, vertices);
-  world.add(group);
-  return { meta: layer.meta, vertices, alive, group };
+  if (demolished.size > 0) {
+    rebuild();
+  } else {
+    geometry.computeBoundsTree();
+  }
+
+  const layer: CityLayer = {
+    tile,
+    mesh,
+    table,
+    alive,
+    footprints: null,
+    demolish: (objectIndex) => {
+      const doomed = doomedObjects(table.root, objectIndex);
+      if (doomed.size === 0) {
+        return false;
+      }
+      for (const i of doomed) {
+        alive[i] = 0;
+      }
+      rebuild();
+      return true;
+    },
+    dispose: () => {
+      geometry.disposeBoundsTree();
+      objects.texture.dispose();
+    },
+  };
+  return layer;
 }
 
 // Hoisted: demolish picks happen on a key press, but there's no reason to
@@ -159,27 +204,30 @@ const pickRaycaster = new Raycaster();
 pickRaycaster.firstHitOnly = true;
 const SCREEN_CENTER = new Vector2(0, 0);
 
-/** Raycasts the screen center and resolves the aimed object index, or null. */
-export function pickCityObjectIndex(
+/** Raycasts the screen center over `layers`: the nearest aimed object. */
+export function pickCityObject(
   camera: Camera,
-  layer: CityLayer
-): number | null {
+  layers: readonly CityLayer[]
+): { layer: CityLayer; objectIndex: number } | null {
   pickRaycaster.setFromCamera(SCREEN_CENTER, camera);
-  const hit = pickRaycaster.intersectObject(layer.group, true)[0];
+  const meshes: Object3D[] = layers.map((l) => l.mesh);
+  const hit = pickRaycaster.intersectObjects(meshes, false)[0];
   const face = hit?.face;
-  if (!face) {
+  const layer = layers.find((l) => l.mesh === hit?.object);
+  if (!(face && layer)) {
     return null;
   }
-  const geometry = (hit.object as Mesh).geometry;
-  const ids = geometry.getAttribute("objectid");
-  return ids ? ids.getX(face.a) : null;
+  const ids = layer.mesh.geometry.getAttribute("featureId");
+  return ids ? { layer, objectIndex: ids.getX(face.a) } : null;
 }
 
 export function countBuildings(layer: CityLayer): number {
-  return countLiveBuildings(layer.meta, (i) => layer.alive[i] === 1);
+  return countLiveBuildings(layer.table.building, (i) => layer.alive[i] === 1);
 }
 
 /** Live building footprints (EPSG) for the minimap. */
 export function cityFootprints(layer: CityLayer): FootprintPoly[] {
-  return footprintPolys(layer.meta, (i) => layer.alive[i] === 1);
+  return layer.footprints
+    ? footprintPolys(layer.footprints, (i) => layer.alive[i] === 1)
+    : [];
 }

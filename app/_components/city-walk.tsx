@@ -33,7 +33,6 @@ import {
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import type { TileUrls } from "@/lib/city/tile";
 import { ControlHintBar } from "./control-hints";
 import { VEIL_HOLD_MS } from "./handover";
 import {
@@ -56,10 +55,8 @@ import { hasWebGl2 } from "./webgl-support";
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
   budget: SceneBudget;
-  /** Neighbouring tiles rendered around the primary one for context */
-  extraTiles?: TileUrls[];
-  /** The spawn tile's URLs (see lib/city/tile.ts) */
-  primary: TileUrls;
+  /** the tileset the scene streams (lib/city/tileset.ts) */
+  tilesetUrl: string;
 }
 
 /**
@@ -133,7 +130,7 @@ function SceneOverlays({
   );
 }
 
-export default function CityWalk({ budget, primary, extraTiles }: Props) {
+export default function CityWalk({ budget, tilesetUrl }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
@@ -216,8 +213,7 @@ export default function CityWalk({ budget, primary, extraTiles }: Props) {
       container,
       budget,
       look,
-      primary,
-      extraTiles,
+      tilesetUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
       onStage: ({ id, fraction, skipped: isSkipped }) => {
@@ -245,7 +241,7 @@ export default function CityWalk({ budget, primary, extraTiles }: Props) {
           return;
         }
         setStreamError(message);
-        // loadRest threw: whatever had not landed is not coming. Settle those
+        // Streaming failed: whatever had not landed is not coming. Settle those
         // stages, or the pill would claim forever that a layer is loading and
         // never reach the state where it unmounts.
         setProgress((prev) => {
@@ -310,7 +306,7 @@ export default function CityWalk({ budget, primary, extraTiles }: Props) {
         setStatus({ phase: "running" });
         // Then the glass is removed, in one frame, with nothing in between.
         veilTimer = setTimeout(() => setVeilUp(false), VEIL_HOLD_MS);
-        // The neighbour tiles, the vegetation and the terrain BVH wait until
+        // The dressing (vegetation, lamps, rails, walls) and the terrain BVHs wait until
         // then: each is a long synchronous task, and the frames while the city
         // is arriving — and the first ones the player actually steers — are
         // the worst possible place for them (see create-app's startStreaming).
@@ -347,7 +343,7 @@ export default function CityWalk({ budget, primary, extraTiles }: Props) {
         look: undefined,
       });
     };
-  }, [budget, look, primary, extraTiles, webGl2]);
+  }, [budget, look, tilesetUrl, webGl2]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);

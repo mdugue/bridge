@@ -6,7 +6,7 @@
  * segments — one model, two sizes.
  *
  * The order is the order the scene actually loads in, not a designed ideal: the
- * primary tile's building mesh is fetched first, then its terrain, then the sun
+ * spawn tile's buildings land first, then its terrain, then the sun
  * rig and the materials. Those three are everything the first frame needs, so
  * they end at WALKABLE_PERCENT — the handover point where the overlay becomes
  * the pill and you can start walking. The rest streams in behind the scene.
@@ -59,7 +59,7 @@ export const LOAD_STAGES: readonly LoadStageDef[] = [
   {
     id: "buildings",
     label: "Gebäude",
-    meta: "LoD2 · Baukörper der Primärkachel",
+    meta: "LoD2 · Baukörper der Startkachel",
     status: "Gebäude werden geladen",
     streaming: "Gebäude laden",
     color: "#ece7df",
@@ -126,7 +126,7 @@ export interface LoadStageUpdate {
   /** 0..1 within the stage */
   fraction: number;
   id: LoadStageId;
-  /** the scene will never run this stage (no neighbours in the lite profile) */
+  /** the scene will never run this stage (no other tiles in the lite profile) */
   skipped?: boolean;
 }
 

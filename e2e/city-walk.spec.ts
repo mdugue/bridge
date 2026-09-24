@@ -425,19 +425,49 @@ test.describe("desktop viewer", () => {
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
-    // Runs after the read-only tests: re-parsing the tile also rebuilds the
-    // minimap's 2369 footprint polygons, and a main thread busy with that
+    // Runs after the read-only tests: a demolish rebuilds the tile's BVH and
+    // the minimap's 2369 footprint polygons, and a main thread busy with that
     // makes Playwright's actionability checks on the minimap crawl.
-    const cityMeta = (await (
+    // The spawn tile's minimap footprints (one list of polygons per object,
+    // published next to its glTF): aim at a mid-sized single-polygon
+    // building whose bounding-box centre lies inside it — a perimeter block's
+    // centre is its courtyard, and the ray would hit the ground.
+    const footprints = (await (
       await page.request.get(
-        await dataUrl(page, "city_33412_5656_2_sn.mesh.json")
+        await dataUrl(page, "footprints_33412_5656_2_sn.json")
       )
-    ).json()) as { objects: { type: string; extent?: number[] }[] };
-    const target = cityMeta.objects.find(
-      (o) => o.type === "Building" && o.extent
-    );
-    expect(target?.extent).toBeDefined();
-    const [minX, minY, minZ, maxX, maxY, maxZ] = target?.extent ?? [];
+    ).json()) as [number, number][][][];
+    const inside = ([x, y]: number[], ring: [number, number][]) => {
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+          hit = !hit;
+        }
+      }
+      return hit;
+    };
+    const target = footprints
+      .filter((polys) => polys.length === 1)
+      .map(([ring]) => {
+        const xs = ring.map((p) => p[0]);
+        const ys = ring.map((p) => p[1]);
+        const [x0, y0, x1, y1] = [
+          Math.min(...xs),
+          Math.min(...ys),
+          Math.max(...xs),
+          Math.max(...ys),
+        ];
+        return {
+          ring,
+          centre: [(x0 + x1) / 2, (y0 + y1) / 2],
+          area: (x1 - x0) * (y1 - y0),
+        };
+      })
+      .find((b) => b.area > 300 && b.area < 3000 && inside(b.centre, b.ring));
+    expect(target).toBeDefined();
+    const [centreX, centreY] = target?.centre ?? [0, 0];
     const buildingsBefore = await page.evaluate(
       () => window.__poc?.stats?.buildingCount ?? 0
     );
@@ -446,25 +476,24 @@ test.describe("desktop viewer", () => {
       () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );
     await page.evaluate(
-      ([easting, northing, midHeight, top]) => {
+      ([easting, northing]) => {
         const api = window.__poc?.handle;
         if (!api) {
           throw new Error("scene handle not published");
         }
+        // Stand on the ground there to learn its height, then hover above.
+        api.teleportTo(easting, northing);
+        const ground = api.getCameraState().pos.y - 1.7;
         // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
         const x = easting - api.offset.cx;
         const z = -(northing - api.offset.cy);
         // Approach at an angle (not straight down: a view direction parallel
         // to the camera's up vector makes lookAt degenerate) and aim the
-        // crosshair at the building's mid-height.
-        api.flyTo({ x, y: top + 120, z: z + 80 }, { x, y: midHeight, z });
+        // crosshair a few metres above the ground inside the footprint —
+        // through the roof.
+        api.flyTo({ x, y: ground + 150, z: z + 80 }, { x, y: ground + 4, z });
       },
-      [
-        ((minX ?? 0) + (maxX ?? 0)) / 2,
-        ((minY ?? 0) + (maxY ?? 0)) / 2,
-        ((minZ ?? 0) + (maxZ ?? 0)) / 2,
-        maxZ ?? 0,
-      ]
+      [centreX, centreY]
     );
     // Let the new pose reach a rendered frame before picking. flyTo refreshes
     // the camera's own matrixWorld, but the crosshair ray is cast against the
@@ -477,7 +506,7 @@ test.describe("desktop viewer", () => {
       buildingsBefore,
       { timeout: slow(30_000) }
     );
-    // The mesh itself shrank, not just the filtered document.
+    // The mesh itself shrank (its index was filtered), not just the count.
     const trianglesAfter = await page.evaluate(
       () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );

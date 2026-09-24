@@ -1,76 +1,30 @@
 /**
- * The tiles the viewer loads, and the names of the files prepared for them.
- * The tile list is the site's (lib/city/site.ts, sites/): `scripts/prepare-
- * data.ts` bakes exactly `tileBlock(site)` into `public/data/`, and
- * `app/_components/city-walk-client.tsx` builds its URLs from the same list.
- * No THREE, no DOM.
+ * The per-tile files the viewer loads next to a tile's glTF content (the
+ * rasters and feature collections the terrain is dressed with), and where
+ * their committed sources live. The tile list is the site's
+ * (lib/city/site.ts); the glTF content and the tileset that references all
+ * of it are baked by scripts/prepare-data.ts (lib/city/tileset.ts). No
+ * THREE, no DOM.
  */
 import { type Site, tileIdOf } from "./site";
 
-/**
- * Heightfield grid size per role. The primary tile carries the silhouette the
- * player walks over and is sampled for ground height, so it gets 1024² (~2 m
- * over a 2 km tile); the neighbours are backdrop and load at 512².
- */
-export const PRIMARY_HEIGHTFIELD_N = 1024;
-export const NEIGHBOUR_HEIGHTFIELD_N = 512;
-
-/**
- * Land-cover raster edge (px) baked per role. The DLM bake writes 4096²
- * (≈0.5 m per texel over a 2 km tile); the neighbours are backdrop and are
- * downsampled at prepare time to 2048² (≈1 m) — a quarter of the texture
- * memory, which is what keeps a 2×2 block inside a phone's GPU budget. What a
- * device is actually served is tier-dependent: see MOBILE_RASTER_PX.
- */
-export const PRIMARY_RASTER_PX = 4096;
-export const NEIGHBOUR_RASTER_PX = 2048;
-/** The edge the DLM bake writes (the committed source rasters). */
-export const BAKED_RASTER_PX = 4096;
-/** The edge phones get for EVERY tile, the primary included: the colour
- *  splat painted from a 4096² class raster is 85 MB of GPU memory with its
- *  mip chain, four times what a phone should spend on the ground colour of
- *  one tile. */
+/** The edge phones get for EVERY tile, and the coarse terrain everywhere:
+ *  the colour splat painted from a 4096² class raster is 85 MB of GPU memory
+ *  with its mip chain, four times what a phone should spend on the ground
+ *  colour of one tile. */
 export const MOBILE_RASTER_PX = 2048;
 
-export interface TileSpec {
-  /** heightfield grid size baked and served for this tile */
-  n: number;
-  /** land-cover raster edge baked for this tile (px); desktops are served
-   *  it as is, phones take min(raster, MOBILE_RASTER_PX) */
-  raster: number;
-  tile: string;
+/** The site's tile ids, the spawn tile first. */
+export function tileIds(site: Site): string[] {
+  return site.tiles.map((cell) => tileIdOf(site, cell));
 }
-
-/**
- * Every tile of the site with the grid size it is served at: the first
- * (the spawn tile, "primary") at full resolution, the rest as backdrop.
- */
-export function tileBlock(site: Site): TileSpec[] {
-  return site.tiles.map((cell, i) => ({
-    tile: tileIdOf(site, cell),
-    n: i === 0 ? PRIMARY_HEIGHTFIELD_N : NEIGHBOUR_HEIGHTFIELD_N,
-    raster: i === 0 ? PRIMARY_RASTER_PX : NEIGHBOUR_RASTER_PX,
-  }));
-}
-
-// File names under /data (= public/data/) and their bake inputs, all derived
-// from the tile id.
 
 /** The committed CityJSON (data/cityjson/): a bake input, never served. */
 export function cityJsonFile(tile: string): string {
   return `lod2_${tile}.city.json`;
 }
 
-/** The baked building mesh (lib/city/city-mesh.ts): vertex stream + meta. */
-export function cityMeshDataFile(tile: string): string {
-  return `city_${tile}.mesh.bin.gz`;
-}
-
-export function cityMeshMetaFile(tile: string): string {
-  return `city_${tile}.mesh.json`;
-}
-
-/** The committed inputs of the building-mesh bake (CityJSON + DOP roof LUT). */
+/** The committed inputs of the building bake (CityJSON + DOP roof LUT). */
 export function cityMeshSourceFiles(tile: string): {
   city: string;
   roofColor: string;
@@ -81,120 +35,49 @@ export function cityMeshSourceFiles(tile: string): {
   };
 }
 
-export function heightfieldHeaderFile(tile: string, n: number): string {
-  return `dgm1_${tile}.heightfield-${n}.json`;
-}
-
-export function heightfieldDataFile(tile: string, n: number): string {
-  return `dgm1_${tile}.heightfield-${n}.u16.gz`;
-}
-
-/** Where a committed source lives under data/ (null = baked by prepare-data
- *  from committed sources — the heightfield from the DGM GeoTIFF, the building
- *  mesh from CityJSON + the DOP roof LUT). */
-export type ArtifactSource = "dlm" | null;
-
 export interface TileArtifact {
-  /** for a downsampled raster: the committed full-size file it is baked from,
-   *  and where under data/ that file lives */
-  bakedFrom?: { file: string; source: Exclude<ArtifactSource, null> };
-  /** file name under public/data (= the URL's last segment) */
+  /** for a downsampled raster: the committed full-size file it is baked
+   *  from (under data/dlm/) and its edge (px) */
+  bakedFrom?: { file: string; raster: number };
+  /** file name under public/data (before content hashing) */
   file: string;
-  /** for a downsampled raster: its edge (px) */
-  raster?: number;
-  /** false = the loader treats a 404 as "feature off" */
+  /** false = the loader treats a missing file as "feature off" */
   required: boolean;
-  source: ArtifactSource;
 }
 
-/**
- * The kinds the viewer requests (see `tileUrlsFrom`). The `…Low` raster
- * is not a kind of its own on this side — `landcover` resolves to the
- * device's variant — and the heightfield data is reached
- * through its header, which names the published sibling
- * (lib/city/heightfield.ts).
- */
-export const TILE_URL_KINDS = [
-  "bridge",
-  "canopy",
-  "cityMeshData",
-  "cityMeshMeta",
-  "heightfieldHeader",
-  "lamps",
-  "landcover",
-  "ndvi",
-  "platform",
-  "rail",
-  "railarea",
-  "vegrows",
-  "walls",
-] as const;
-
-export type TileUrlKind = (typeof TILE_URL_KINDS)[number];
-
-/** Every artifact prepare-data publishes: the served kinds plus the bake-only ones. */
-export type TileArtifactKind = TileUrlKind | "heightfieldData" | "landcoverLow";
+export type TileArtifactKind =
+  | "bridge"
+  | "canopy"
+  | "lamps"
+  | "landcover"
+  | "landcoverLow"
+  | "ndvi"
+  | "platform"
+  | "rail"
+  | "railarea"
+  | "vegrows"
+  | "walls";
 
 /**
- * The land-cover class raster at `px`: the committed 4096² bake as is, or a
- * variant prepare-data downsamples from it (`.r<px>.png`), NEAREST so no
- * class ids blend. Colour is not an artifact: the client paints it from the
- * class ids (lib/city/landcover.ts).
- */
-function landcoverArtifact(tile: string, px: number): TileArtifact {
-  const base = `landcover_${tile}`;
-  if (px >= BAKED_RASTER_PX) {
-    return { file: `${base}.png`, required: true, source: "dlm" };
-  }
-  return {
-    file: `${base}.r${px}.png`,
-    required: true,
-    source: null,
-    bakedFrom: { file: `${base}.png`, source: "dlm" },
-    raster: px,
-  };
-}
-
-/**
- * Every file the viewer may request for a tile — the ONE list that
- * scripts/prepare-data.ts copies and city-walk-client.tsx requests. Add an
- * artifact here, nowhere else. The `…Low` raster is what phones load (see
- * MOBILE_RASTER_PX); for a tile already served at that size they are the same
- * file.
+ * Every side file of a tile — the ONE list scripts/prepare-data.ts publishes
+ * and names in the tile's glTF extras. Committed under data/dlm/, except the
+ * `landcoverLow` class raster, which prepare-data downsamples (NEAREST) from
+ * the committed 4096² one.
  */
 export function tileArtifacts(
-  spec: TileSpec
+  tile: string
 ): Record<TileArtifactKind, TileArtifact> {
-  const { tile, n } = spec;
-  const low = Math.min(spec.raster, MOBILE_RASTER_PX);
   const dlm = (file: string, required = false): TileArtifact => ({
     file,
     required,
-    source: "dlm",
   });
   return {
-    cityMeshMeta: {
-      file: cityMeshMetaFile(tile),
+    landcover: dlm(`landcover_${tile}.png`, true),
+    landcoverLow: {
+      file: `landcover_${tile}.r${MOBILE_RASTER_PX}.png`,
       required: true,
-      source: null,
+      bakedFrom: { file: `landcover_${tile}.png`, raster: MOBILE_RASTER_PX },
     },
-    cityMeshData: {
-      file: cityMeshDataFile(tile),
-      required: true,
-      source: null,
-    },
-    heightfieldHeader: {
-      file: heightfieldHeaderFile(tile, n),
-      required: true,
-      source: null,
-    },
-    heightfieldData: {
-      file: heightfieldDataFile(tile, n),
-      required: true,
-      source: null,
-    },
-    landcover: landcoverArtifact(tile, spec.raster),
-    landcoverLow: landcoverArtifact(tile, low),
     vegrows: dlm(`vegrows_${tile}.geojson`, true),
     canopy: dlm(`canopy_${tile}.geojson`, true),
     ndvi: dlm(`ndvi_${tile}.png`),
@@ -234,35 +117,4 @@ export function manifestUrl(
   base = "/data"
 ): string {
   return `${base}/${manifest?.files[file] ?? file}`;
-}
-
-/**
- * Every URL the viewer may request for one tile — what create-app.ts loads
- * from. The optional artifacts are URLs too; their loaders treat a 404 as
- * "feature off".
- */
-export type TileUrls = Record<TileUrlKind, string>;
-
-/**
- * The artifact map as served URLs, resolved through the manifest.
- * `lowRasters` serves the 2048² land-cover variant (phones, see
- * MOBILE_RASTER_PX); everything else is the same data for every device.
- */
-export function tileUrlsFrom(
-  spec: TileSpec,
-  manifest: DataManifest | null,
-  lowRasters: boolean,
-  base = "/data"
-): TileUrls {
-  const artifacts = tileArtifacts(spec);
-  const url = (artifact: TileArtifact) =>
-    manifestUrl(manifest, artifact.file, base);
-  const out = {} as TileUrls;
-  for (const kind of TILE_URL_KINDS) {
-    out[kind] = url(artifacts[kind]);
-  }
-  if (lowRasters) {
-    out.landcover = url(artifacts.landcoverLow);
-  }
-  return out;
 }

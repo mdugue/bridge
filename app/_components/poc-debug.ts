@@ -15,7 +15,7 @@ import type { CityWalkHandle, CityWalkStats } from "./create-app";
 
 export interface PocDebugInfo {
   /**
-   * True once the primary tile is on screen and `handle` exists; `ready`
+   * True once the spawn tile is on screen and `handle` exists; `ready`
    * follows when every layer has streamed in (neighbours, vegetation, rails).
    */
   firstFrame: boolean;

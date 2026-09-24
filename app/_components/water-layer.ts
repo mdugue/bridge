@@ -9,6 +9,7 @@ import {
 } from "three";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { DATA_POSITION } from "./shader-chunks";
 import type { SplatLayer } from "./terrain-layer";
 
 /** Animated water surface, masked to the land-cover "water" class (id 8). */
@@ -45,13 +46,14 @@ const MIST_VERT = /* glsl */ `
   uniform vec2 uOrigin;
   uniform vec2 uSize;
   void main() {
-    vSplatUv = vec2( ( position.x - uOrigin.x ) / uSize.x, ( uOrigin.y - position.y ) / uSize.y );
-    vMistXY = position.xy;
-    // Float the sheet a few metres above the water (Z is data-frame up here) so
-    // it has vertical presence — a sheet lying ON the water is edge-on (and so
+    vec3 transformed = position;
+    ${DATA_POSITION}
+    vSplatUv = vec2( ( dataPos.x - uOrigin.x ) / uSize.x, ( uOrigin.y - dataPos.y ) / uSize.y );
+    vMistXY = dataPos.xy;
+    // Float the sheet a few metres above the water (world Y is up) so it has
+    // vertical presence — a sheet lying ON the water is edge-on (and so
     // invisible) from street level.
-    vec3 raised = vec3( position.x, position.y, position.z + 4.0 );
-    gl_Position = projectionMatrix * modelViewMatrix * vec4( raised, 1.0 );
+    gl_Position = projectionMatrix * viewMatrix * ( dataWP + vec4( 0.0, 4.0, 0.0, 0.0 ) );
   }
 `;
 const MIST_FRAG = /* glsl */ `
@@ -150,7 +152,8 @@ function createWaterMist(
  * they are derived from a world-space varying (`vWaterWP`) and `cameraPosition`,
  * NOT the data-frame ripple normal used for shading.
  *
- * Geometry is SHARED with the terrain mesh — do not dispose it here.
+ * Geometry is SHARED with the terrain mesh — do not dispose it here. Both
+ * sheets sit beside the terrain mesh with its transform.
  */
 export function createWaterLayer(
   geometry: BufferGeometry,
@@ -211,10 +214,10 @@ export function createWaterLayer(
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
-         vSplatUv = vec2( ( position.x - uOrigin.x ) / uSize.x, ( uOrigin.y - position.y ) / uSize.y );
-         vWorldXY = position.xy;
-         // World (Y-up) position — modelMatrix bakes the -90° world rotation.
-         vWaterWP = ( modelMatrix * vec4( position, 1.0 ) ).xyz;`
+         ${DATA_POSITION}
+         vSplatUv = vec2( ( dataPos.x - uOrigin.x ) / uSize.x, ( uOrigin.y - dataPos.y ) / uSize.y );
+         vWorldXY = dataPos.xy;
+         vWaterWP = dataWP.xyz;`
       );
 
     shader.fragmentShader = shader.fragmentShader

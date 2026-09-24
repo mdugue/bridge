@@ -1,85 +1,69 @@
 import {
-  BufferAttribute,
-  BufferGeometry,
   LinearFilter,
   LinearMipmapLinearFilter,
-  Mesh,
+  Matrix4,
+  type Mesh,
   MeshStandardMaterial,
   NearestFilter,
   NoColorSpace,
   RedFormat,
   Texture,
   TextureLoader,
-  type Vector3,
+  Vector3,
   type WebGLRenderer,
 } from "three";
-import type { WallFeature } from "@/lib/city/features";
 import {
-  decodeHeightfield,
-  parseHeightfieldHeader,
-  resolveSiblingUrl,
-} from "@/lib/city/heightfield";
-import { conflateWalls, type WallLine } from "@/lib/city/terrain-conflate";
-import {
-  buildTerrainGeometryData,
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
-import {
-  type BytesProgress,
-  fetchGzipped,
-  fetchRequiredJson,
-  isAbortError,
-} from "./fetch-optional";
+import type { TerrainExtras } from "@/lib/city/tileset";
+import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { DATA_POSITION } from "./shader-chunks";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
+/**
+ * One tile's terrain at one level: the baked glTF mesh (scripts/bake-tiles.ts,
+ * streamed by tile-content.ts) dressed with the land-cover material, its
+ * water and mist sheets, and a ground-height sampler read from its grid.
+ */
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
   bounds: TerrainBounds;
-  /** Frees the rasters. Geometry and materials are freed with the scene
-   *  (disposeObject3D); the tracked textures are this layer's to free. */
+  /** Frees the rasters (the tile's geometry and materials go with it). */
   dispose: () => void;
   /** bilinear elevation lookup at projected (not recentered) coordinates */
   heightAt: (x: number, y: number) => number | null;
+  level: 0 | 1;
   mesh: Mesh;
   /** lowest valid elevation (m) on this tile — the valley/river floor */
   minElevation: number;
+  tile: string;
   vertexCount: number;
-  /** animated water surface, present only when a splatmap was loaded */
+  /** animated water surface, present only when the class raster loaded */
   water?: WaterLayer;
 }
 
 export interface TerrainOptions {
+  /** resolves a file named in the tile's extras to its URL */
+  fileUrl: (file: string) => string;
   /** shared valley height-fog uniforms (by reference); patched into the
    * terrain + water materials so the river/floor pools haze without a seam */
   heightFog?: HeightFogUniforms;
-  /** optional ATKIS land-cover class raster (PNG); the palette paints it
-   *  (landcover-splat.ts) */
-  landcoverUrl?: string;
+  /** phones sample the ≤ 2048² class raster */
+  lowRasters: boolean;
   /** shared meadow-NDVI tint strength (by reference) for the HUD slider */
   meadowNdvi?: { value: number };
-  /** download progress of the heightfield raster, 0..1 (the loading screen) */
-  onBytes?: BytesProgress;
-  /** optional DOP NDVI raster for the meadow tint (needs `landcoverUrl`) */
-  ndviUrl?: string;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** paints the colour splat from the class raster (one GPU pass) */
   renderer: WebGLRenderer;
-  /** aborts the raster download */
+  /** aborts the raster downloads */
   signal?: AbortSignal;
   /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
   sunDirection?: Vector3;
-  /** URL of the heightfield header JSON (see lib/city/heightfield.ts); the
-   * grid size and bounds come from it, baked by scripts/prepare-data.ts */
-  url: string;
-  /** OSM wall lines (EPSG:25833) for this tile, already fetched; retaining/city
-   * walls are burned into the heightfield as steps so they sit on a real edge,
-   * not the smooth bank the DGM blurs them into (lib/city/terrain-conflate.ts) */
-  wallLines?: WallLine[];
 }
 
 /**
@@ -186,33 +170,6 @@ async function loadNdviTexture(
   }
 }
 
-/** Maps baked wall features to the LineStrings the conflation step burns in. */
-export function wallLinesFrom(features: WallFeature[]): WallLine[] {
-  const out: WallLine[] = [];
-  for (const f of features) {
-    if (f.geometry?.type === "LineString") {
-      out.push({
-        coords: f.geometry.coordinates,
-        kind: f.properties?.kind ?? "wall",
-      });
-    }
-  }
-  return out;
-}
-
-/** Returns the DGM elevations with retaining/city walls burned in as steps, or
- *  the untouched raster when there are no wall lines for this tile. */
-function conflateTerrain(
-  base: ArrayLike<number>,
-  grid: { bounds: TerrainBounds; n: number },
-  walls: WallLine[] | undefined
-): ArrayLike<number> {
-  if (!walls || walls.length === 0) {
-    return base;
-  }
-  return conflateWalls({ elevations: base, ...grid, walls });
-}
-
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
 export interface SplatLayer {
   bounds: TerrainBounds;
@@ -272,15 +229,15 @@ const MEADOW_NDVI = /* glsl */ `
 
 /**
  * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
- * major) drawn in the fragment shader. The geometry lives in the Z-up data
- * frame, so `position.z` IS the absolute elevation.
+ * major) drawn in the fragment shader, on the data-frame elevation derived
+ * from world space (DATA_POSITION).
  *
  * When a `splat` is given, the base diffuse comes from the ATKIS land-cover
  * at each fragment (streets, water, meadow, …) instead of the flat sage; the
  * contour ink is composited on top. The colours are the palette-painted
  * splat (landcover-splat.ts; LINEAR, soft boundaries).
- * UVs are derived from the recentered world XY and the tile bounds — the
- * terrain geometry carries no uv attribute.
+ * UVs are derived from the recentered data-frame XY and the tile bounds —
+ * the terrain geometry carries no uv attribute.
  */
 /** The slice of an `onBeforeCompile` shader object the terrain patches touch. */
 interface TerrainShader {
@@ -312,7 +269,7 @@ function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
     ? "varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform vec2 uSplatOrigin;\nuniform vec2 uSplatSize;"
     : "";
   const assign = hasSplat
-    ? "vSplatUv = vec2( ( position.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - position.y ) / uSplatSize.y );\n         vWorldXY = position.xy;"
+    ? "vSplatUv = vec2( ( dataPos.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - dataPos.y ) / uSplatSize.y );\n         vWorldXY = dataPos.xy;"
     : "";
   shader.vertexShader = shader.vertexShader
     .replace(
@@ -321,7 +278,7 @@ function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
     )
     .replace(
       "#include <begin_vertex>",
-      `#include <begin_vertex>\n         vElevation = position.z;\n         ${assign}`
+      `#include <begin_vertex>\n         ${DATA_POSITION}\n         vElevation = dataPos.z;\n         ${assign}`
     );
 }
 
@@ -389,46 +346,43 @@ function createTerrainMaterial(
   return material;
 }
 
-export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
-  // The raster arrives ready to use: scripts/prepare-data.ts resampled the DGM
-  // GeoTIFF to n x n at build time (quantised uint16, gzipped); decoding it
-  // is one dequantising pass and NoData comes out as NaN, so there is no
-  // nodata sentinel to carry around.
-  const header = parseHeightfieldHeader(
-    await fetchRequiredJson(opts.url, opts.signal)
-  );
-  const { n, bounds } = header;
-  const samples = decodeHeightfield(
-    await fetchGzipped(
-      resolveSiblingUrl(opts.url, header.data),
-      opts.signal,
-      opts.onBytes
-    ),
-    header
-  );
-  const elevations = conflateTerrain(samples, { n, bounds }, opts.wallLines);
+/**
+ * The grid's elevations in the data frame, read back from the mesh: the bake
+ * wrote the n·n grid first (row 0 = north), quantised, with the node carrying
+ * the dequantisation and the renderer the glTF→3D Tiles up-axis turn. `toData`
+ * is that chain up to (not including) the viewer's `world` group.
+ */
+function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
+  const position = mesh.geometry.getAttribute("position");
+  const out = new Float32Array(n * n);
+  const v = new Vector3();
+  for (let i = 0; i < out.length; i++) {
+    out[i] = v.fromBufferAttribute(position, i).applyMatrix4(toData).z;
+  }
+  return out;
+}
 
-  const { positions, indices, minElevation } = buildTerrainGeometryData({
-    elevations,
-    n,
-    bounds,
-    offset: opts.offset,
-  });
+/**
+ * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
+ * the colour splat, swaps in the land-cover material and hangs the water and
+ * mist sheets under it. `toData` maps the mesh's local frame to the data
+ * frame (see gridElevations). The mesh stays owned by the tile.
+ */
+export async function dressTerrain(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  opts: TerrainOptions
+): Promise<TerrainLayer> {
+  const { bounds, n } = extras;
+  const elevations = gridElevations(mesh, n, toData);
 
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-
-  // Decoded one after another on purpose: three 4096² rasters decoding at
-  // once (times four tiles loading concurrently) is a ~800 MB peak that
-  // mobile Safari kills the tab for. Sequential keeps it to one raster's
-  // worth per tile in flight.
-  const classRaster = opts.landcoverUrl
-    ? await loadSplatTexture(opts.landcoverUrl, opts.signal)
+  // Decoded one after another on purpose: several 4096² rasters decoding at
+  // once is a peak mobile Safari kills the tab for.
+  const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
+  const classRaster = classFile
+    ? await loadSplatTexture(opts.fileUrl(classFile), opts.signal)
     : null;
-  const splatTexture = classRaster?.texture ?? null;
   const painted: LandcoverSplat | null = classRaster
     ? paintLandcoverSplat(
         opts.renderer,
@@ -438,13 +392,13 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
       )
     : null;
   const ndviTexture =
-    splatTexture && opts.ndviUrl
-      ? await loadNdviTexture(opts.ndviUrl, opts.signal)
+    classRaster && extras.ndvi
+      ? await loadNdviTexture(opts.fileUrl(extras.ndvi), opts.signal)
       : null;
   const splat: SplatLayer | undefined =
-    splatTexture && painted
+    classRaster && painted
       ? {
-          texture: splatTexture,
+          texture: classRaster.texture,
           colorTexture: painted.texture,
           ndviTexture: ndviTexture ?? undefined,
           meadowNdvi: opts.meadowNdvi,
@@ -453,7 +407,7 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
         }
       : undefined;
 
-  const mesh = new Mesh(geometry, createTerrainMaterial(splat, opts.heightFog));
+  mesh.material = createTerrainMaterial(splat, opts.heightFog);
   mesh.name = "terrain";
   // The terrain only RECEIVES shadows. If it also cast, the grazing sun makes
   // every triangle face self-shadow → the jagged "staircase"/triangle acne
@@ -463,20 +417,32 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   mesh.castShadow = false;
   mesh.receiveShadow = true;
 
-  // Water re-uses the terrain geometry, masked to the water class.
+  // Water re-uses the terrain geometry, masked to the water class: siblings
+  // of the mesh with its (dequantising) transform, so they come and go with
+  // the tile.
   const water = splat
-    ? createWaterLayer(geometry, splat, opts.sunDirection, opts.heightFog)
+    ? createWaterLayer(mesh.geometry, splat, opts.sunDirection, opts.heightFog)
     : undefined;
+  if (water) {
+    for (const sheet of [water.mesh, water.mistMesh]) {
+      sheet.position.copy(mesh.position);
+      sheet.quaternion.copy(mesh.quaternion);
+      sheet.scale.copy(mesh.scale);
+      mesh.parent?.add(sheet);
+    }
+  }
 
   return {
     mesh,
-    vertexCount: positions.length / 3,
+    tile: extras.tileId,
+    level: extras.level,
+    vertexCount: mesh.geometry.getAttribute("position").count,
     bounds,
-    minElevation,
+    minElevation: extras.minElevation,
     water,
     heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
     dispose: () => {
-      for (const texture of [splatTexture, ndviTexture]) {
+      for (const texture of [classRaster?.texture, ndviTexture]) {
         texture?.dispose();
       }
       painted?.dispose();
