@@ -29,6 +29,7 @@ import { type CityLayer, dressCity } from "./city-layer";
 import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
+import { timed } from "./perf-mark";
 import { buildRail } from "./rail-layer";
 import { dressTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
@@ -184,27 +185,32 @@ async function buildDressing(
   // Rails and walls may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
-  const vegetation = buildVegetation(
-    { rows, canopy, ndviAt: ndviAt ?? undefined },
-    {
-      offset: ctx.offset,
-      heightAt: terrain.heightAt,
-      sunDirection: ctx.sunDirection,
-      heightFog: ctx.heightFog,
-    }
+  const vegetation = timed("vegetation", () =>
+    buildVegetation(
+      { rows, canopy, ndviAt: ndviAt ?? undefined },
+      {
+        offset: ctx.offset,
+        heightAt: terrain.heightAt,
+        sunDirection: ctx.sunDirection,
+        heightFog: ctx.heightFog,
+      }
+    )
   );
   // Born with the current look, not the default.
   vegetation.applyLook(ctx.look.get());
-  const lampControl = buildLamps(lamps, {
-    ...ground,
-    heightAt: terrain.heightAt,
-  });
-  lampControl.setNightFactor(ctx.night());
-  const rail = buildRail(
-    { rails, bridges, ballast, platforms },
-    { ...ground, heightFog: ctx.heightFog }
+  const lampControl = timed("lamps", () =>
+    buildLamps(lamps, { ...ground, heightAt: terrain.heightAt })
   );
-  const wallGroup = buildWalls(walls, { ...ground, heightFog: ctx.heightFog });
+  lampControl.setNightFactor(ctx.night());
+  const rail = timed("rail", () =>
+    buildRail(
+      { rails, bridges, ballast, platforms },
+      { ...ground, heightFog: ctx.heightFog }
+    )
+  );
+  const wallGroup = timed("walls", () =>
+    buildWalls(walls, { ...ground, heightFog: ctx.heightFog })
+  );
   return { tile, vegetation, lamps: lampControl, rail, walls: wallGroup };
 }
 
@@ -247,11 +253,8 @@ class DressingPlugin {
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
     const demolished = this.stream.demolished.get(extras.tileId) ?? new Set();
-    const city = dressCity(
-      mesh,
-      extras.tileId,
-      this.ctx.styleResources,
-      demolished
+    const city = timed("city", () =>
+      dressCity(mesh, extras.tileId, this.ctx.styleResources, demolished)
     );
     this.stream.cities.add(city);
     this.dressed.set(scene, { city });

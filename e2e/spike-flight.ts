@@ -18,6 +18,14 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, de
 await page.goto(`${BASE}/${mode === "webgl" ? "" : `?gpu=${mode}`}`);
 await page.waitForFunction(() => window.__poc?.ready === true, undefined, { timeout: 240_000 });
 await page.evaluate(() => {
+  const w = window as unknown as { __lt: [number, number][] };
+  w.__lt = [];
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) {
+      w.__lt.push([Math.round(e.startTime), Math.round(e.duration)]);
+    }
+  }).observe({ type: "longtask" });
+  performance.clearMeasures();
   window.__ft = [];
   let last = performance.now();
   const tick = (t: number) => {
@@ -47,5 +55,29 @@ const report = {
   worst: Math.round(sorted.at(-1) ?? 0),
   stalledMs: Math.round(ft.filter((d) => d > 100).reduce((s, d) => s + d, 0)),
 };
-process.stdout.write(`${JSON.stringify(report)}\n`);
+const detail = await page.evaluate(() => {
+  const measures = performance
+    .getEntriesByType("measure")
+    .filter((m) => m.duration > 50)
+    .map((m) => [m.name, Math.round(m.startTime), Math.round(m.duration)]);
+  const tasks = (window as unknown as { __lt: [number, number][] }).__lt.filter(
+    ([, d]) => d > 100
+  );
+  return { measures, tasks };
+});
+const byName: Record<string, { n: number; ms: number; max: number }> = {};
+for (const [name, , d] of detail.measures as [string, number, number][]) {
+  const e = (byName[name] ??= { n: 0, ms: 0, max: 0 });
+  e.n++;
+  e.ms += d;
+  e.max = Math.max(e.max, d);
+}
+const explained = (start: number, dur: number) =>
+  (detail.measures as [string, number, number][]).some(
+    ([, s, d]) => s < start + dur && s + d > start
+  );
+const unexplained = detail.tasks.filter(([s, d]) => !explained(s, d));
+process.stdout.write(
+  `${JSON.stringify({ ...report, steps: byName, longTasks: detail.tasks.length, unexplained })}\n`
+);
 await browser.close();

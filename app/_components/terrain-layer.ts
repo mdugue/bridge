@@ -23,6 +23,7 @@ import { DATA_POSITION } from "./shader-chunks";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { textureBytes, trackTexture } from "./three-utils";
 import { nodeRenderer } from "./gpu-mode";
+import { timed } from "./perf-mark";
 import {
   createNodeTerrainMaterial,
   createNodeWaterLayer,
@@ -394,11 +395,13 @@ export async function dressTerrain(
     ? await loadSplatTexture(opts.fileUrl(classFile), opts.signal)
     : null;
   const painted: LandcoverSplat | null = classRaster
-    ? paintLandcoverSplat(
-        opts.renderer,
-        classRaster.texture,
-        classRaster.width,
-        classRaster.height
+    ? timed("splat-paint", () =>
+        paintLandcoverSplat(
+          opts.renderer,
+          classRaster.texture,
+          classRaster.width,
+          classRaster.height
+        )
       )
     : null;
   const ndviTexture =

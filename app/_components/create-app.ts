@@ -44,6 +44,7 @@ import { createLampLights } from "./lamp-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { gpuMode, nodeRenderer } from "./gpu-mode";
 import { createPostStack } from "./post-stack";
+import { timed } from "./perf-mark";
 import { createNodePostStack } from "./post-stack-node";
 import type { WebGPURenderer } from "three/webgpu";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -941,7 +942,7 @@ async function bootApp(
       indexing = false;
       return;
     }
-    t.mesh.geometry.computeBoundsTree();
+    timed("terrain-bvh", () => t.mesh.geometry.computeBoundsTree());
     idle(indexTerrain);
   };
   // Re-armed whenever a tile lands; a running chain just keeps going.
