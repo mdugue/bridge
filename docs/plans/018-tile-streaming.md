@@ -1,4 +1,4 @@
-# Plan 017: Stream tiles around the camera (tile manager, loader worker, 1 km near cells)
+# Plan 018: Stream tiles around the camera (tile manager, loader worker, 1 km near cells)
 
 > **Executor instructions**: This is a multi-phase plan. Execute **one phase
 > per PR**, in order. Each phase ends with a verification block, so run it and
@@ -23,6 +23,13 @@
   it shrink as well.
 - **Depends on**: nothing merged. Phase 1 *is* backlog item 12 (split
   `bootApp`) for the tile path.
+- **Overlaps with [plan 017](./017-germany-wide-sites.md)** (any German
+  city). Its Phase 1 replaces `TILE_BLOCK` with a site config, adds its own
+  2 km grid and tile-id parser (`parseTile`), and moves the block into
+  `manifest.json`. If 017 Phase 1 has landed, this plan's Phase 2 **reuses**
+  those pieces instead of adding parallel ones (see Phase 2). If it has
+  not, do this plan's Phase 2 in a form 017 can adopt: grid functions
+  parameterised by zone and cell size, with no Dresden constants.
 - **Decision record**: [ADR 0022](../adr/0022-stream-tiles-around-the-camera.md)
   (proposed). It supersedes [ADR 0006](../adr/0006-tile-block-with-one-primary-and-one-artifact-map.md)
   once Phase 3 lands.
@@ -234,7 +241,10 @@ refactors and may proceed.
      upgrading), and it drops out of the L0 area after that.
 3. `available` comes from the manifest, not from `TILE_BLOCK`. Add a
    `tiles` array (id, level, bounds) to `manifest.json` in
-   `prepare-data.ts`. `lib/city/features.test.ts` / `tile.test.ts` must
+   `prepare-data.ts`. If plan 017 Phase 1 has already put the site's block
+   into the manifest, extend that entry with `level` and `bounds` rather
+   than adding a second list; likewise use its `parseTile` in
+   `tile-grid.ts`. `lib/city/features.test.ts` / `tile.test.ts` must
    keep checking every committed file.
 
 **Verify:** `bun test lib/city/tile-grid.test.ts lib/city/tile-schedule.test.ts`
