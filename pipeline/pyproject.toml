@@ -10,6 +10,7 @@ dependencies = [
   "pyproj==3.7.2",
   "rasterio==1.4.3",
   "shapely==2.1.2",
+  "zipfile-deflate64==0.2.0",
 ]
 
 [dependency-groups]

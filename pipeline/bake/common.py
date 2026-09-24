@@ -14,19 +14,54 @@ from rasterio.transform import from_bounds
 
 OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
 
+# The Basis-DLM layers (AdV Shape profile) the bakes read: land cover and
+# tree rows (landcover, canopy), rails, ballast and bridges (rail). A fetch
+# adapter that can pick members of a statewide package takes only these.
+DLM_LAYERS = (
+    "veg01_f",
+    "veg02_f",
+    "veg03_f",
+    "veg04_l",
+    "sie02_f",
+    "gew01_f",
+    "gew01_l",
+    "gew02_f",
+    "ver01_f",
+    "ver01_l",
+    "ver02_l",
+    "ver03_f",
+    "ver03_l",
+    "ver06_f",
+    "ver06_l",
+)
+DLM_MEMBERS = rf"(^|/)({'|'.join(DLM_LAYERS)})\.(shp|shx|dbf|prj|cpg)$"
+
+
+@dataclass(frozen=True)
+class Products:
+    """What the site's provider publishes openly (sites/providers.ts)."""
+
+    dom: bool
+    dop: str | None  # "rgbi", "rgb" or None
+    dlm: bool
+
 
 @dataclass(frozen=True)
 class Tile:
     """One site tile: its id (the file-name key), extent and CRS, and where
-    its inputs and outputs live. The canonical raw layout is what an ingest
-    adapter (ingest_sn.py) writes: `<raw>/{dgm1,dom1,dop}/<tile>.tif`,
-    `<raw>/dlm/*.shp` (AdV Shape profile), `<raw>/osm/*.osm.pbf`."""
+    its inputs and outputs live. `raw` is the provider's raw folder, shared
+    by every site of that provider (tile ids are coordinates, so they never
+    collide): `<raw>/{dom1,dop}/<tile>.tif`, `<raw>/dlm/*.shp` (AdV Shape
+    profile). `data` is the site's folder, `data/<site>/`. `osm` is the
+    site's OpenStreetMap extract."""
 
     id: str
     bounds: tuple[float, float, float, float]
     epsg: int
     raw: Path
     data: Path
+    osm: Path | None = None
+    products: Products = Products(dom=True, dop="rgbi", dlm=True)
 
     @property
     def size(self) -> tuple[float, float]:
@@ -48,6 +83,10 @@ class Tile:
     def dgm(self) -> Path:
         return self.data / "dgm" / f"dgm1_{self.id}_tiff" / f"dgm1_{self.id}.tif"
 
+    @property
+    def cityjson(self) -> Path:
+        return self.data / "cityjson" / f"lod2_{self.id}.city.json"
+
     def out(self, folder: str, name: str) -> Path:
         path = self.data / folder / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,14 +95,16 @@ class Tile:
     def has_dlm(self, what: str) -> bool:
         """Whether the Basis-DLM is there; if not, say what is skipped. A step
         without it leaves its committed files alone rather than emptying them."""
+        if not self.products.dlm:
+            print(f"{self.id}: the provider publishes no Basis-DLM — skipping {what}")
+            return False
         if not any(self.dlm.glob("*.shp")):
             print(f"{self.id}: no Basis-DLM under {self.dlm} — skipping {what}")
             return False
         return True
 
     def osm_extract(self) -> Path | None:
-        found = sorted((self.raw / "osm").glob("*.osm.pbf"), key=lambda p: p.stat().st_mtime)
-        return found[-1] if found else None
+        return self.osm if self.osm is not None and self.osm.exists() else None
 
 
 def owns(bounds: tuple[float, float, float, float], x: float, y: float) -> bool:

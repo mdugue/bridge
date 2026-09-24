@@ -1,5 +1,7 @@
 """Basis-DLM → the land-cover class raster (one byte per texel, 4096² over a
-2 km tile), its legend, and the hedge / tree-row lines.
+2 km tile), its legend, and the hedge / tree-row lines. Without an open
+Basis-DLM (Provider.products.dlm) the same three files come from
+OpenStreetMap (landcover_osm.py).
 
 The client paints the classes with the palette in lib/city/landcover.ts; this
 bake writes ids only. Classes burn lowest priority first, so water (8) wins
@@ -16,7 +18,9 @@ import shapely
 from PIL import Image
 from rasterio.features import rasterize
 
+from . import landcover_osm
 from .common import Tile, column, feature, geometry_json, read_layer, write_geojson
+from .osm import has_extract
 
 # id → key: the legend the client's palette is keyed by (lib/city/landcover.ts).
 CLASSES = {
@@ -73,10 +77,12 @@ def burn_order(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
     ]
 
 
-def class_raster(tile: Tile, px: int) -> np.ndarray:
+def class_raster(
+    tile: Tile, px: int, order: list[tuple[int, list[shapely.Geometry]]]
+) -> np.ndarray:
     raster = np.zeros((px, px), dtype=np.uint8)
     transform = tile.transform(px)
-    for cls, geoms in burn_order(tile):
+    for cls, geoms in order:
         valid = [g for g in geoms if g is not None and not g.is_empty]
         if valid:
             rasterize(
@@ -100,14 +106,20 @@ def veg_rows(tile: Tile) -> list[dict]:
 
 
 def run(tile: Tile, px: int = 4096) -> None:
-    if not any(tile.dlm.glob("*.shp")):
-        raise SystemExit(
-            f"{tile.id}: no Basis-DLM under {tile.dlm} — the land cover is required; "
-            "run `bun run bake --ingest` first"
-        )
-    raster = class_raster(tile, px)
+    if tile.products.dlm:
+        if not any(tile.dlm.glob("*.shp")):
+            raise SystemExit(
+                f"{tile.id}: no Basis-DLM under {tile.dlm} — the land cover is required; "
+                "run `bun run fetch` first"
+            )
+        order, rows, source = burn_order(tile), veg_rows(tile), "Basis-DLM"
+    else:
+        if not has_extract(tile, "the land cover"):
+            raise SystemExit(f"{tile.id}: the land cover is required; run `bun run fetch` first")
+        (order, rows), source = landcover_osm.burn_order(tile), "OpenStreetMap"
+    raster = class_raster(tile, px, order)
     if not raster.any():
-        raise SystemExit(f"{tile.id}: nothing rasterized (no DLM features in the tile?)")
+        raise SystemExit(f"{tile.id}: nothing rasterized (no {source} features in the tile?)")
     Image.fromarray(raster, mode="L").save(
         tile.out("dlm", f"landcover_{tile.id}.png"), optimize=True
     )
@@ -116,8 +128,9 @@ def run(tile: Tile, px: int = 4096) -> None:
         "crs": f"EPSG:{tile.epsg}",
         "bounds": [round(b) for b in tile.bounds],
         "size": px,
+        "source": source,
         "classes": {str(k): v for k, v in CLASSES.items()},
     }
     tile.out("dlm", f"landcover_{tile.id}.json").write_text(json.dumps(legend, indent=2) + "\n")
-    write_geojson(tile.out("dlm", f"vegrows_{tile.id}.geojson"), veg_rows(tile), tile.epsg)
-    print(f"{tile.id}: land cover {px}², {int(np.count_nonzero(raster))} classified texels")
+    write_geojson(tile.out("dlm", f"vegrows_{tile.id}.geojson"), rows, tile.epsg)
+    print(f"{tile.id}: land cover {px}² from {source} ({landcover_osm.stats(raster)})")

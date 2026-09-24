@@ -34,6 +34,7 @@ dependencies = [
     { name = "pyproj" },
     { name = "rasterio" },
     { name = "shapely" },
+    { name = "zipfile-deflate64" },
 ]
 
 [package.dev-dependencies]
@@ -50,6 +51,7 @@ requires-dist = [
     { name = "pyproj", specifier = "==3.7.2" },
     { name = "rasterio", specifier = "==1.4.3" },
     { name = "shapely", specifier = "==2.1.2" },
+    { name = "zipfile-deflate64", specifier = "==0.2.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -403,3 +405,9 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/8e/605c76808d73503c9333af8f6cbe7e1354d2d238bda5f88eea36bfe0f42a/shapely-2.1.2-cp313-cp313t-win32.whl", hash = "sha256:c8876673449f3401f278c86eb33224c5764582f72b653a415d0e6672fde887bf", size = 1559178, upload-time = "2025-09-24T13:51:10.73Z" },
     { url = "https://files.pythonhosted.org/packages/36/f7/d317eb232352a1f1444d11002d477e54514a4a6045536d49d0c59783c0da/shapely-2.1.2-cp313-cp313t-win_amd64.whl", hash = "sha256:4a44bc62a10d84c11a7a3d7c1c4fe857f7477c3506e24c9062da0db0ae0c449c", size = 1739756, upload-time = "2025-09-24T13:51:12.105Z" },
 ]
+
+[[package]]
+name = "zipfile-deflate64"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/1b/f397f821b48156ee94c5ca7ad82dc5cdb73cbcbc4377b9c1b21556f3ce8c/zipfile-deflate64-0.2.0.tar.gz", hash = "sha256:875a3299de102edf1c17f8cafcc528b1ca80b62dc4814b9cb56867ec59fbfd18", size = 62896, upload-time = "2022-01-05T09:24:39.575Z" }

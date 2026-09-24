@@ -1,13 +1,14 @@
-"""`python -m bake <step> --tile ID --bounds XMIN YMIN XMAX YMAX --epsg N`
-(the arguments come from the site config; `bun run bake` passes them)."""
+"""`python -m bake {fetch,bake} --spec JSON [--step S] [--tile ID ...]`.
+
+`bun run fetch` / `bun run bake` (scripts/pipeline.ts) call this with the
+site spec (bake/spec.py) written from the TypeScript site config."""
 
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
-from . import canopy, lamps, landcover, ndvi, rail, roof_colour, walls
-from .common import Tile
+from . import canopy, fetch, lamps, landcover, ndvi, rail, roof_colour, walls
+from .spec import parse
 
 STEPS = {
     "landcover": landcover.run,
@@ -22,17 +23,23 @@ STEPS = {
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake")
-    parser.add_argument("step", choices=[*STEPS, "all"])
-    parser.add_argument("--tile", required=True)
-    parser.add_argument("--bounds", nargs=4, type=float, required=True)
-    parser.add_argument("--epsg", type=int, required=True)
-    parser.add_argument("--raw", type=Path, required=True, help="the site's canonical raw folder")
-    parser.add_argument("--data", type=Path, default=Path("data"))
+    parser.add_argument("command", choices=["fetch", "bake"])
+    parser.add_argument("--spec", required=True, help="the site spec as JSON")
+    parser.add_argument("--step", choices=[*STEPS, "all"], default="all")
+    parser.add_argument("--tile", nargs="*", default=[], help="only these tile ids")
     args = parser.parse_args()
-    tile = Tile(args.tile, tuple(args.bounds), args.epsg, args.raw, args.data)
+    spec = parse(args.spec)
+    unknown = set(args.tile) - {t.id for t in spec.tiles}
+    if unknown:
+        parser.error(f"not a tile of {spec.site}: {', '.join(sorted(unknown))}")
+    tiles = [t for t in spec.tiles if not args.tile or t.id in args.tile]
+    if args.command == "fetch":
+        fetch.run(spec, tiles)
+        return
     steps = list(STEPS) if args.step == "all" else [args.step]
-    for step in steps:
-        STEPS[step](tile)
+    for tile in tiles:
+        for step in steps:
+            STEPS[step](tile)
 
 
 if __name__ == "__main__":

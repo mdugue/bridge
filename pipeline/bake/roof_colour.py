@@ -43,7 +43,7 @@ def roof_rings(geometry: dict):
 
 
 def run(tile: Tile, erode: int = 5) -> None:
-    city_path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
+    city_path = tile.cityjson
     if not (tile.raw_raster("dop").exists() and city_path.exists()):
         print(f"{tile.id}: no DOP or CityJSON — skipping roof colours (palette fallback)")
         return
