@@ -60,18 +60,22 @@ maintainer decision (recorded in [plans/README.md](./plans/README.md)).
 ## Stage 1 — the bakes (`pipeline/`, `bun run bake`)
 
 `pipeline/` is a [uv](https://docs.astral.sh/uv/) project:
-`pipeline/pyproject.toml` pins numpy, rasterio, pyogrio, shapely, pyproj
-and Pillow exactly (Python 3.12–3.13), `pipeline/uv.lock` locks the rest.
+`pipeline/pyproject.toml` pins numpy, rasterio, pyogrio, shapely, pyproj,
+Pillow, scipy and scikit-image exactly (Python 3.12–3.13), `pipeline/uv.lock`
+locks the rest.
 GDAL comes inside the rasterio and pyogrio wheels, with the OSM driver —
 there is no system GDAL, no `gdal_calc.py` and no bash. `uv` on `PATH` is
-the whole setup; `uv run` creates the environment on first use.
+the whole setup; `uv run` creates the environment on first use. One step
+needs a tool outside it: `lowveg` grids the laser scan with the **PDAL CLI**
+(`pdal` on `PATH`), and only when a tile has a scan.
 
 ```bash
 bun run bake                        # every tile of the site, every step
 bun run bake 33412_5656_2_sn        # one tile
 bun run bake --ingest               # fetch the raw inputs first (ingest adapter)
 bun run bake --step canopy          # one step: landcover, canopy, ndvi,
-                                    #   roof-colour, lamps, walls, rail
+                                    #   roof-colour, lamps, walls, rail,
+                                    #   trees, lowveg
 bun run test:pipeline               # pytest + ruff check + ruff format --check
 ```
 
@@ -79,7 +83,9 @@ bun run test:pipeline               # pytest + ruff check + ruff format --check
 `uv run --project pipeline python -m bake <step> --tile … --bounds … --epsg
 … --raw data/_raw/<site> --data data` — the extent and CRS come from the
 site, never from the tile name. With `--ingest` it first runs the site's
-adapter, `python -m bake.ingest_<site.ingest>`. The modules in
+adapter, `python -m bake.ingest_<site.ingest>`, and, for a site with a
+street-tree cadastre, its cadastre adapter
+(`python -m bake.ingest_trees_<site.trees>`). The modules in
 `pipeline/bake/`:
 
 | Module | Role |
@@ -87,12 +93,16 @@ adapter, `python -m bake.ingest_<site.ingest>`. The modules in
 | `__main__.py` | the step table and CLI; `all` runs the steps in dependency order |
 | `common.py` | `Tile` (id, extent, CRS, raw and data folders), reading vector layers without geopandas, the GeoJSON writer |
 | `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS |
-| `landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`, `rail.py` | one step each (table below) |
+| `landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`, `rail.py`, `trees.py`, `lowveg.py` | one step each (table below) |
+| `tree_archetypes.py` | taxon → crown archetype, leaf type, foliage colour (pure Python; `scripts/eval/kataster-eval.py` reuses it) |
 | `ingest_sn.py` | the Saxony ingest adapter |
+| `ingest_trees_dresden.py` | Dresden's street-tree cadastre (WFS) → the canonical `trees/` layout |
 
 `pipeline/tests/test_bakes.py` covers the pure helpers (line merging, deck
 outlines, wall heights, coordinate rounding, the class ids the client's
-palette is keyed by). CI's `pipeline` job runs it with ruff after
+palette is keyed by); `test_vegetation_bakes.py` the cadastre mapping,
+classification and imputation, the hedge skeleton and component split, and
+the scan trees' cadastre thinning. CI's `pipeline` job runs it with ruff after
 `uv sync --locked`. The bakes themselves need the raw downloads and run on
 the maintainer's machine.
 
@@ -107,7 +117,11 @@ data/_raw/<site>/
   dop/<tile>.tif             orthophoto, 4 bands (R, G, B, NIR)
   dlm/*.shp                  Basis-DLM, AdV Shape profile (veg01_f, ver01_l, …)
   osm/*.osm.pbf              OpenStreetMap extract (the newest is read)
-  downloads/                 the adapter's cache of provider ZIPs
+  trees/<tile>.geojson       street-tree cadastre, canonical points {taxon,
+                             name, h, d} + `attribution` (a cadastre adapter)
+  lsc/<tile>.laz             classified laser scan (LAS 1.4), placed by hand;
+  lsc/derived/<tile>/        the 0.5 m rasters `lowveg` grids from it (PDAL)
+  downloads/                 the adapters' cache of provider ZIPs and responses
 ```
 
 The DGM1 GeoTIFF (`data/dgm/dgm1_<tile>_tiff/`) and the LoD2 CityJSON
@@ -134,6 +148,19 @@ downloads a file twice (the ZIPs stay in `downloads/`):
 Skipped inputs are skipped by *presence*: an existing `dom1/<tile>.tif` or
 any `dlm/*.shp` is not fetched again. Delete it to refresh.
 
+### The Dresden cadastre adapter (`ingest_trees_dresden.py`)
+
+The city's WFS 2.0, feature type `cls:L1261` "Stadtbäume" (street trees,
+parks, schools and other municipal land — not the Großer Garten, not
+private courtyards; dl-de/by-2-0, "Landeshauptstadt Dresden"). The service
+implements no paging, so one BBOX request (+10 m) per tile returns every
+tree; the response is trusted only when its feature count equals the
+server's `numberMatched`, and cached in `downloads/stadtbaum_<t>.geojson`
+(+ `.meta.json`: request, date, count). It writes the canonical points —
+surveyed UTM position, taxon, German name, height and crown diameter —
+without trunk stumps (`Stammstück`). The GeoSN laser scan has no adapter
+yet: put the tile's LAZ at `lsc/<tile>.laz`.
+
 **Every OSM input comes from that local extract** (ADR 0025 tightening
 [ADR 0012](./adr/0012-openstreetmap-for-what-official-data-lacks.md)):
 walls, lamps, platforms and the bridge structure. There are no Overpass
@@ -147,7 +174,8 @@ old Overpass bakes; the next re-bake moves it (see
 Each step writes into `data/` in the site's CRS (2 decimals for lines and
 polygons, 1 for points) with a named-CRS member; the loaders never
 reproject. Order matters where noted: `landcover` writes the class raster
-that `canopy` and `lamps` gate on.
+that `canopy`, `lamps` and `trees` gate on, and `lowveg` reads the walls,
+bridges, canopy and cadastre trees.
 
 | Step | Reads | Writes (`data/…`) | Notes |
 |---|---|---|---|
@@ -158,9 +186,13 @@ that `canopy` and `lamps` gate on.
 | `lamps` | OSM `highway=street_lamp`, the class raster | `dlm/lamps_<t>.geojson` (points, `h` = 5 m) | Only the lamps the tile owns (west and south edges in, east and north out), so a seam lamp stands once when both tiles are dressed; the viewer applies the same rule (`ownsPoint`) to older files. Lamps over railway (5) or water (8) are dropped. No `.osm.pbf`: skipped with a note, the file already there stays |
 | `walls` | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment` | `dlm/walls_<t>.geojson` (lines with `kind`, `h`) | Both the `lines` and `multipolygons` layers — GDAL routes closed ways with an area key into the latter; polygons contribute their outer ring. Heights from `height`/`est_height`, clamped 0.5–30 m, else per kind (city_wall 6, retaining_wall 3, wall 1.5, embankment 2.5). Clipped to the tile. No `.osm.pbf`: skipped with a note, the file already there stays |
 | `rail` | `ver03_f`, `ver03_l`, `ver06_f`, `ver06_l`, `ver01_l`, `ver02_l`; DGM1 + DOM1; OSM `man_made=bridge`, `railway=platform` | `dlm/railarea_<t>.geojson` (ballast polygons), `dlm/rail_<t>.geojson` (lines with `tracks`, `electrified`), `dlm/bridge_<t>.geojson` (polygons with per-vertex `deck`, `kind`, `name`, `structure`), `dlm/platform_<t>.geojson` | Ballast: `OBJART=42010` made valid, unioned (shapely) and clipped. Rails: heavy rail only (`SPW=1000`, trams excluded), fragments merged at 1 m. Decks: every `ver06_l` centreline (`BWF=1800`), snapped to a `ver06_f` footprint ≤ 50 m away, else buffered by kind width; deck height = the DGM abutment ramp lifted to the DOM surface, plus camber; `kind` from the rail/road/path networks under it; `structure` (arches) from the nearest OSM bridge ≤ 60 m. **No Basis-DLM: the step is skipped, the files already there stay. No DOM1: decks use the DGM ramp. No `.osm.pbf`: bridges without structure, the platform file already there stays.** Every other output is written, even when empty |
+| `trees` | `trees/<t>.geojson` (the cadastre adapter), the class raster | `dlm/trees_<t>.geojson` (points with `h`, `d`, archetype `a`, leaf type `l`, optional foliage `c`, globe `g`, forest/copse `f`; `attribution` and `archetypes` members) | Only the trees the tile owns (`owns`), so a seam tree lands once. Taxon → archetype / leaf / colour in `tree_archetypes.py`. A missing height or crown is imputed from this tile's genus median height and the archetype's median crown-to-height ratio; clamped 1.5–40 m / 0.8–30 m. `f = 1` where the tree stands in DLM forest/copse: such a tree vetoes no canopy tree. **No cadastre: skipped, the file already there stays.** Analysis: `scripts/eval/kataster-eval.py` |
+| `lowveg` | OSM `barrier=hedge` lines and `natural=scrub/shrubbery` areas; `lsc/<t>.laz` → PDAL 0.5 m rasters (DTM, DSM, non-ground and multi-echo counts, low-return intensity; made when missing); the class raster, NDVI, CityJSON, DGM, walls, bridges, canopy, cadastre trees | `dlm/lowveg_<t>.geojson` (the OSM hedge lines with `h`, `w`, `src` `osm`/`osm+lsc`), `dlm/canopyx_<t>.geojson` (scan crown peaks `h`, `r`) | The OSM line is the hedge; the scan's low-vegetation mask (0.5–3 m band, NDVI or intensity + multi-echo cue, minus buildings, walls, bridges, crown rims, rail and water) gives its height where it sees ≥ 30 % of it, and the width of the scan hedge beside it; else the `height` tag or 1.5 m, width 1 m. `canopyx`: crown peaks > 3 m, multi-echo, off buildings/bridges/roads/water, ≥ 5 m from a canopy point and outside max(4 m, crown radius) of every cadastre tree. PDAL `writers.gdal` needs `binmode`, one writer per pipeline. **No LAZ: the hedges keep their tag, no `canopyx`. No `.osm.pbf`: skipped.** The scan's own hedges and shrubs are not derived any more (not shipped — ledger "Low vegetation") |
 
-The OSM-derived files (`lamps`, `walls`, `bridge`, `platform`) carry
-`"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign member.
+The OSM-derived files (`lamps`, `walls`, `bridge`, `platform`, `lowveg`)
+carry `"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign
+member (`lowveg` and `canopyx` also credit the GeoSN laser scan, `trees` the
+city).
 (The committed platform files predate that and carry none; the HUD footer
 has the credit either way.)
 
@@ -204,7 +236,13 @@ fresh GeoSN downloads:
 | ballast | none vs one small corner sliver committed |
 
 The differences trace to the newer Basis-DLM edition on the portal, not to
-the port. The OSM steps (walls, lamps, platforms, bridge structure) were
+the port. The `trees` and `lowveg` steps were ported later, from the bash
+and Python bakes that made the committed `trees_`, `lowveg_` and `canopyx_`
+files; they have not been re-run against those files yet (no raw inputs in
+that environment) — the unit tests pin their pure parts. The hedge input
+moved from an Overpass query to the local extract.
+
+The OSM steps (walls, lamps, platforms, bridge structure) were
 not run against the committed files: Geofabrik was unreachable from that
 environment.
 
@@ -243,10 +281,11 @@ root                                   refine ADD
 ```
 
 The buildings load whenever the tile is in view. The terrain refines from
-512² to 1024² by screen-space error — at the renderer's 16 px target, 40 m
-switches at ≈ 1.2 km from the tile on a 1080p screen. Only L0 is
-*dressed*: vegetation, lamps, rails, walls and the water and mist sheets
-are built when a fine terrain tile arrives and leave with it. The root's
+the ±0.5 m TIN to the ±0.15 m one by screen-space error — at the renderer's
+16 px target, 40 m switches at ≈ 1.2 km from the tile on a 1080p screen.
+Only L0 is *dressed*: vegetation, cadastre trees, hedges, lamps, rails,
+walls and the water and mist sheets are built when a fine terrain tile
+arrives and leave with it. The root's
 `extras` carry what the viewer needs before any content: the site id, the
 EPSG code, the recenter offset `(cx, cy)` and per tile its id, extent and
 minimap raster.
@@ -264,7 +303,7 @@ open in any glTF or 3D Tiles tool.
 
 | File | From | Via | Contents |
 |---|---|---|---|
-| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/dlm/walls_<t>.geojson` | `scripts/bake-tiles.ts` (`readDgm`, `terrainMesh`) | The DGM resampled bilinear to 1024² / 512² (NoData = NaN), the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), the grid plus a 30 m skirt, baked normals. The first n·n vertices are the grid, row 0 = north: the runtime samples ground height from them. `extras`: `kind`, `tileId`, `level`, `n`, `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 2048² for L1), `landcoverLow`, `ndvi`, and on L0 the `dressing` file names |
+| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/dlm/walls_<t>.geojson` (fallback only) | `scripts/bake-tiles.ts` (`readDgm`, `tinTerrainMesh`; fallback `terrainMesh`) | An error-bounded **TIN** of the native 2000² DGM ([ADR 0028](./adr/0028-terrain-tin-per-tile-and-wall-snap.md), `lib/city/terrain-tin.ts`): Delatin inserts the worst-fitting grid point until every one lies within ±0.15 m (L0) / ±0.5 m (L1); nothing burned in; plus a 30 m skirt and baked normals, welded and reordered. Dresden: L0 290–480k triangles, 0.9–1.5 MB; L1 47–86k, 0.17–0.31 MB; ≈2 s per tile at ±0.15 m. **A DGM with NoData** falls back to the grid: resampled bilinear to 1024² / 512², the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), the first n·n vertices the grid (row 0 = north). `extras`: `kind`, `tileId`, `level`, `surface` (`{kind: "tin", maxError}` or `{kind: "grid", n}` — how the runtime reads ground height), `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 2048² for L1), `landcoverLow`, `ndvi`, and on L0 the `dressing` file names |
 | `city_<t>.glb.gz` | `data/cityjson/lod2_<t>.city.json` + `data/dop/roofcolor_<t>.json` (optional) | `scripts/bake-city-mesh.ts` (runs `cityjson-threejs-loader` once) → `bake-tiles.ts` `cityMesh` → `tile-glb.ts` `writeMeshGlb` + `addPropertyTable` | One welded mesh per tile. `_FEATURE_ID_0` per vertex (`EXT_mesh_features`) into an `EXT_structural_metadata` property table, one row per object: `tint`, `roof` (DOP colour folded in), `baseZ`, `eaveH`, `storeyH`, `glow`, `rough`, `building`, `root` (the demolish tree); `_ROOF` flags roof vertices. `extras`: `kind`, `tileId`, `footprints` |
 | `footprints_<t>.json` | the same parse | `cityMesh` | per-object 2D footprints for the minimap, `[object][polygon][vertex] = [x, y]` |
 
@@ -320,7 +359,7 @@ optional one is logged and the feature is off.
 | Every side file of a tile, its `required` flag (land cover, its 2048² variant, veg rows) and its source | `lib/city/tile.ts` (`tileArtifacts`) | `tile.test.ts`; `prepare-data.ts` publishes exactly this list and names it in the glTF `extras` — add an artifact there and nowhere else |
 | The tileset tree and its `extras` | `lib/city/tileset.ts` (`buildTileset`, `parseTilesetExtras`) | `tileset.test.ts` |
 | glTF encoding: meshopt, quantisation, Y-up, the property table | `scripts/tile-glb.ts` | `tile-glb.test.ts` |
-| DGM → terrain grid, `.tfw` fallback | `scripts/bake-tiles.ts` | `bake-tiles.test.ts` (reads the committed spawn-tile DGM) |
+| DGM → terrain TIN (every grid point within the tolerance) or the grid fallback, `.tfw` fallback | `scripts/bake-tiles.ts`, `lib/city/terrain-tin.ts` | `bake-tiles.test.ts` (reads the committed spawn-tile DGM), `terrain-tin.test.ts` (winding, skirt, the triangle index) |
 | The per-object table and its texture packing, demolish | `lib/city/city-mesh.ts` | `city-mesh.test.ts` |
 | Class ids ↔ palette | `lib/city/landcover.ts`, `pipeline/bake/landcover.py` | `landcover.test.ts` (every committed legend), `test_bakes.py` |
 | The 2048² class raster keeps exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
@@ -361,24 +400,25 @@ Measured 2026-09-24 on the current build (Dresden, gzipped wire sizes):
 | Per tile | Wire |
 |---|---|
 | buildings `city_<t>.glb.gz` | 1.1–1.5 MB |
-| fine terrain L0 | 1.5–2.0 MB |
-| coarse terrain L1 | 0.41–0.54 MB |
+| fine terrain L0 (±0.15 m TIN) | 0.89–1.47 MB |
+| coarse terrain L1 (±0.5 m TIN) | 0.17–0.31 MB |
 | minimap footprints | 0.05–0.08 MB (0.23–0.33 MB raw) |
 | class raster 4096² / 2048² | 0.22–0.25 MB / ≈ 0.08 MB |
 | NDVI 1024² | 0.32–0.45 MB |
-| canopy GeoJSON | 0.04–0.11 MB (0.6–1.8 MB raw) |
+| canopy GeoJSON | 0.03–0.10 MB gzipped |
+| cadastre trees · scan trees (spawn tile) · hedges | 0.03–0.06 · 0.05 · < 0.01 MB gzipped |
 | everything else (veg rows, lamps, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
-| **tile total** | **3.9–4.9 MB** (phones, without the 4096² raster: 3.6–4.7 MB) |
+| **tile total** | **3.0–4.3 MB** (phones, without the 4096² raster: 2.8–4.0 MB) |
 
-The whole Dresden site is ≈ 17.1 MB on the wire (≈ 16.2 MB for a phone),
-the spawn tile alone — the `lite` profile — ≈ 4.1 MB. A visit fetches
+The whole Dresden site is ≈ 14.1 MB on the wire (≈ 13.2 MB for a phone),
+the spawn tile alone — the `lite` profile — ≈ 3.3 MB. A visit fetches
 less: streaming loads a tile's content only when it is in view, and a far
-tile stops at its coarse terrain (≈ 2.0–2.6 MB per tile: buildings,
+tile stops at its coarse terrain (≈ 1.7–2.4 MB per tile: buildings,
 footprints, the coarse terrain with its 2048² raster and the NDVI).
 Before the tileset a desktop visit loaded the same site whole at boot,
-≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
-(≈ 1.4 + 1.5 + 0.4 MB of buildings and terrain per tile now vs
-≈ 1.0 + 1.1 MB). Sources on disk that are never served: the DGM
+≈ 10.6 MB. The first tileset (grid terrain) was ≈ 17.1 MB; the TIN levels
+(ADR 0028) cut the terrain from ≈ 1.5 + 0.4 MB to ≈ 1.1 + 0.2 MB per tile
+(1.1–1.5 MB of buildings on top). Sources on disk that are never served: the DGM
 GeoTIFF (13.6–15.3 MB/tile) and the CityJSON (7.8–10.5 MB/tile).
 
 ## Provenance
@@ -424,20 +464,29 @@ ZIP carries a metadata file.
 extract in `data/_raw/<site>/osm/`; its timestamp is printed by
 `osmium fileinfo -e <file>.osm.pbf` (`osmosis_replication_timestamp`).
 The committed walls came from such an extract; the committed lamps,
-platforms and bridge structures came from Overpass queries in the old bash
-bakes, whose cached responses carried the data timestamp in
-`osm3s.timestamp_osm_base`. `data/provenance.json` records both sources.
+platforms, bridge structures and hedges came from Overpass queries in the
+old bash bakes, whose cached responses carried the data timestamp in
+`osm3s.timestamp_osm_base`.
+
+**The cadastre and the laser scan.** The street-tree cadastre's request,
+date and `numberMatched` are written next to the cached response
+(`downloads/stadtbaum_<t>.meta.json`); `data/provenance.json` records the
+committed fetch. The laser scan (GeoSN LSC, layer 1 of the service above)
+exists as a committed derivative only for the spawn tile (`canopyx_`, and
+the measured hedge heights in `lowveg_`); the other tiles' hedges were
+baked without a scan. `data/provenance.json` records both sources.
 No raw file is committed, so the record keeps git dates as bounds until
 someone reads the timestamps.
 
 **Licences.** *Datenlizenz Deutschland – Namensnennung 2.0* (`dl-de/by-2-0`)
-for the GeoSN products and ODbL for OSM; both credits are in the HUD footer
-(`scene-sidebar.tsx`), whose lines come from the site's `attribution`.
+for the GeoSN products and the Dresden street-tree cadastre, ODbL for OSM;
+the credits are in the HUD footer (`scene-sidebar.tsx`), whose lines come
+from the site's `attribution`.
 
 ## Regenerating or adding a tile
 
 ```bash
-bun run bake 33412_5656_2_sn --ingest   # fetch DOM1, DOP, Basis-DLM, OSM; bake all steps
+bun run bake 33412_5656_2_sn --ingest   # fetch DOM1, DOP, Basis-DLM, OSM, the cadastre; bake all steps
 bun run bake 33412_5656_2_sn --step rail   # or one step again
 bun scripts/prepare-data.ts             # tileset + publish → public/data
 bun test                                # features.test.ts checks the new files
@@ -450,7 +499,9 @@ For a new tile also:
    `data/cityjson/lod2_<t>.city.json`, with EPSG:25832 or 25833 declared in
    `metadata.referenceSystem` (reproject with
    `cjio in.city.json reproject 25833 save out.city.json`). The ingest
-   adapter fetches neither: both are committed sources, not raw inputs.
+   adapter fetches neither: both are committed sources, not raw inputs. For
+   measured hedge heights and the scan trees, put its laser scan at
+   `data/_raw/<site>/lsc/<t>.laz`.
 2. Add the cell to the site's `tiles` in `sites/<id>.ts` (the first stays
    the spawn tile).
 3. Bake and build as above; `bun test` runs `features.test.ts` over the

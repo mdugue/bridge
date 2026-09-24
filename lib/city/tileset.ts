@@ -7,8 +7,12 @@
  * Tree, per site tile:
  *
  *   tile           content: buildings            refine ADD   (always, once visible)
- *     └ terrain L1 content: 512² terrain         refine REPLACE
- *         └ terrain L0 content: 1024² terrain + the tile's dressing
+ *     └ terrain L1 content: ±0.5 m TIN          refine REPLACE
+ *         └ terrain L0 content: ±0.15 m TIN + the tile's dressing
+ *
+ * Each terrain level is an error-bounded TIN of the native DGM
+ * (lib/city/terrain-tin.ts); a tile whose DGM has NoData falls back to the
+ * regular grid (1024² / 512²) with the OSM walls burned in.
  *
  * The buildings of a tile load whenever the tile is in view; the terrain
  * refines from the coarse level to the fine one by screen-space error, and
@@ -42,7 +46,18 @@ export const TILESET_FILE = "tileset.json";
 export const TILESET_SPAWN_FILE = "tileset-spawn.json";
 
 export interface TerrainLevel {
-  /** heightfield grid edge */
+  /**
+   * Delatin tolerance (m) of the level's TIN: every 1 m DGM point lies
+   * within it. The fine level is walked on: at ±0.15 m a Dresden tile is
+   * 290–480k triangles (a fifth of a 1024² grid) in 0.6× its bytes and
+   * matches or beats it on every metric of the terrain study
+   * (docs/transformations.md, "Terrain TIN"). The coarse level is seen from
+   * afar: at ±0.5 m it is 47–86k triangles in 0.17–0.31 MB, a tenth of the
+   * 512² grid's triangles in half its bytes, and still sharper at walls
+   * than the grid's 4 m cells.
+   */
+  maxError: number;
+  /** grid edge of the fallback for a DGM with NoData (no TIN) */
   n: number;
   /** land-cover raster edge the level samples on desktops (phones: ≤ 2048) */
   raster: number;
@@ -50,8 +65,8 @@ export interface TerrainLevel {
 
 /** Fine (0) and coarse (1) terrain. */
 export const TERRAIN_LEVELS: Record<0 | 1, TerrainLevel> = {
-  0: { n: 1024, raster: 4096 },
-  1: { n: 512, raster: 2048 },
+  0: { maxError: 0.15, n: 1024, raster: 4096 },
+  1: { maxError: 0.5, n: 512, raster: 2048 },
 };
 
 /**
@@ -68,10 +83,16 @@ const TILE_ERROR = 100_000;
 export interface DressingFiles {
   bridge: string;
   canopy: string;
+  /** laser-scan crowns outside the canopy mask (tiles with a scan only) */
+  canopyx: string;
   lamps: string;
+  /** OSM hedges at their measured height */
+  lowveg: string;
   platform: string;
   rail: string;
   railarea: string;
+  /** the street-tree cadastre */
+  trees: string;
   vegrows: string;
   walls: string;
 }
@@ -88,12 +109,21 @@ export interface TerrainExtras {
   level: 0 | 1;
   /** lowest valid elevation (m) — the valley floor */
   minElevation: number;
-  /** grid edge; the first n·n vertices are the grid, row 0 = north */
-  n: number;
+  /**
+   * How the mesh is built. "tin": an error-bounded TIN, nothing burned in;
+   * the runtime indexes its triangles for ground height and the walls snap
+   * to the measured step. "grid": the n×n fallback for a DGM with NoData,
+   * walls burned in; its first n·n vertices are the grid, row 0 = north.
+   */
+  surface: TerrainSurface;
   ndvi?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
 }
+
+export type TerrainSurface =
+  | { kind: "grid"; n: number }
+  | { kind: "tin"; maxError: number };
 
 export interface CityExtras {
   kind: "city";

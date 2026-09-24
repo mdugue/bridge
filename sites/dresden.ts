@@ -14,6 +14,7 @@ export const DRESDEN: Site = {
   title: "City Walk — Dresden",
   epsg: 25_833,
   ingest: "sn",
+  trees: "dresden",
   tileKm: 2,
   tileSuffix: "_sn",
   tiles: [
@@ -25,7 +26,8 @@ export const DRESDEN: Site = {
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
   attribution: [
     "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Mauern, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
+    "Lampen, Mauern, Hecken, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
+    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
   ],
   viewpoints: [
     {

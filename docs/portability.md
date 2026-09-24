@@ -77,18 +77,22 @@ the planned fallback. ✅ built · ❌ not built.
 | **DOM1** | canopy heights (nDOM); bridge deck surface | ✅ the canopy step skips with a note and the build treats the canopy as optional (trees come from the hedge / tree rows only); ✅ rail decks fall back to the DGM abutment ramp (no viaduct lift) | row-only trees at default heights ([plan 017](./plans/017-germany-wide-sites.md), phase 5) |
 | **Basis-DLM** | class raster (surface colours, water, the tree and lamp gates), hedge / tree rows, rail tracks + ballast, bridge decks | ❌ the land-cover step stops ("nothing rasterized"); the class raster and veg rows are `required` by the build. The rail step skips with a note and leaves the committed rail files alone | the **same class raster and legend from OSM** (`landuse`/`natural`/`highway`/`water`), tree rows from `natural=tree_row`/`barrier=hedge`, tracks from `railway=rail`, decks from `man_made=bridge` (plan 017, phase 4). NAS-only Länder: a NAS class table (phase 3) |
 | **DOP** (RGB + NIR) | roof colour per building; NDVI (crown colour, meadow tint) | ✅ both steps skip; the runtime uses the synthesized roof palette and hash-only sage crowns (`ndvi` and the roof LUT are optional) | — |
-| **OSM extract** (`.osm.pbf`) | retaining walls (+ terrain breaklines), street lamps, platforms, bridge structure (arches) | ✅ the lamps and walls steps skip with a note, and the rail step writes bridges without structure; none of them empties a file already there (platforms stay as committed). Lamps, walls and platforms are optional at runtime | — |
+| **OSM extract** (`.osm.pbf`) | retaining walls, street lamps, platforms, bridge structure (arches), hedges | ✅ the lamps, walls and hedge steps skip with a note, and the rail step writes bridges without structure; none of them empties a file already there (platforms stay as committed). Lamps, walls, hedges and platforms are optional at runtime | — |
+| **Laser scan** (LAZ, placed by hand) | hedge heights and widths; trees outside the canopy mask (`canopyx`) | ✅ the hedges keep their `height` tag (or 1.5 m); no extra trees, and `canopyx` is optional | sparser points (< 4 /m²) leave holes in the 0.5 m rasters — bin at 1 m and raise `MIN_AREA_M2`; classified low vegetation (ASPRS 3/4) would replace the NDVI + intensity cue outright |
+| **Street-tree cadastre** (a city's own, Dresden's WFS) | surveyed trees with height, crown and taxon; they veto the canopy/row trees inside their crowns | ✅ no `trees` file, the canopy and rows stand alone (the file is optional). Another city needs its own cadastre adapter (`ingest_trees_<id>.py`) that writes the canonical `trees/<tile>.geojson`; the taxon table (`tree_archetypes.py`) is botanical names, not Dresden's | — |
 
 **Lower quality or different shape** is mostly untested:
 
 - The canopy and rail bakes read DGM1 and DOM1 on the tile's **1 m grid**
   (`nDOM = DOM1 − DGM1` texel by texel), so a coarser DEM or a DOM on
   another grid needs resampling in the ingest adapter first. The terrain
-  bake itself resamples any GeoTIFF to its 1024² / 512² grids.
+  bake meshes any **square** GeoTIFF as a TIN at its native resolution (a
+  coarser DEM simply gives fewer vertices); a DGM with NoData falls back to
+  the 1024² / 512² grids (ADR 0028).
 - An **RGB-only DOP** (no NIR band) breaks the NDVI step, which reads band
   4; the roof colours only need bands 1–3.
-- The raster edges are per tile, not per metre: a 4096² class raster and
-  1024² terrain over a 2 km tile. `tileKm` other than 2 is typed but
+- The raster edges are per tile, not per metre: a 4096² class raster over a
+  2 km tile (the TIN tolerances are in metres). `tileKm` other than 2 is typed but
   untried.
 - **LoD1** buildings (boxes, no roof shape) have not been tried through the
   building bake.

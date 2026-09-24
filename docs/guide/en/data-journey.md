@@ -55,7 +55,7 @@ and two bakes need it as well. This is a deliberate decision
 One Python package, `pipeline/bake/`, turns the raw downloads into small,
 tile-sized files. It runs on the maintainer's machine with one command,
 `bun run bake`, which reads the **site config** (`sites/dresden.ts`: which
-tiles, where they lie, which coordinate system) and runs seven steps per
+tiles, where they lie, which coordinate system) and runs nine steps per
 tile. The Python environment is pinned, and its geodata libraries bring
 GDAL with them, so nothing else has to be installed. With `--ingest` it
 first fetches the downloads itself: the surface model and the aerial photo
@@ -73,12 +73,21 @@ flowchart LR
   ROOF["roof-colour<br/>roof colour table"]
   WALL["walls<br/>wall lines"]
   RAIL["rail<br/>tracks · ballast · bridges · platforms"]
+  DLM --> TREES["trees<br/>street-tree register"]
+  CAN --> LOW["lowveg<br/>hedges · laser-scan trees"]
+  TREES --> LOW
+  WALL --> LOW
+  RAIL --> LOW
 ```
 
 Each step says what it "sees" in the raw data and how it simplifies it.
 When the surface model or the aerial photo of a tile is missing, the steps
 that need it (trees, greenness, roof colours) are skipped with a note
-instead of failing. The developer page
+instead of failing. Two inputs come from elsewhere: the city of Dresden's
+street-tree register, which `--ingest` fetches from the city's own map
+service, and the survey office's laser scan, which is placed by hand (it is
+large) and turned into half-metre height grids by a tool called PDAL.
+Without the scan the hedges keep the height OpenStreetMap gives them. The developer page
 [data-pipeline.md](../../data-pipeline.md) documents every step's inputs,
 outputs and tuning knobs.
 
@@ -95,6 +104,9 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `ndvi_<tile>.png` | greenness index from the aerial photo, 1024² | 0.3–0.5 MB |
 | | `vegrows_<tile>.geojson` | hedge and tree-row lines | a few kB |
 | | `canopy_<tile>.geojson` | one point per tree with its height (5,000–16,000 per tile) | 0.6–1.8 MB |
+| | `trees_<tile>.geojson` | the city's street trees: height, crown width, crown shape | 0.4–0.8 MB |
+| | `lowveg_<tile>.geojson` | hedge lines with height and width | 10–30 kB |
+| | `canopyx_<tile>.geojson` | trees the laser scan finds in courtyards and gardens (start tile only) | 0.65 MB |
 | | `lamps_<tile>.geojson` | lamp positions | up to 60 kB |
 | | `walls_<tile>.geojson` | wall lines with kind and height | 50–120 kB |
 | | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |
@@ -109,10 +121,11 @@ In total the repository carries about 125 MB of data for the four tiles
 
 | Layer in the viewer | Truth (provider) | Committed in the repo | Produced at build time | Sent to the browser |
 |---|---|---|---|---|
-| Ground | DGM1 GeoTIFF | the GeoTIFF itself | two **terrain meshes** per tile (a detailed and a coarse one), with the walls sharpened in, as **glTF** | the mesh the camera needs |
+| Ground | DGM1 GeoTIFF | the GeoTIFF itself | two **triangle meshes** per tile (a detailed and a coarse one) that follow the 1 m grid within 15 cm and 50 cm, as **glTF** | the mesh the camera needs |
 | Buildings | LoD2 CityGML | the CityJSON conversion | one **glTF building mesh** per tile with a table of per-building style values (roof colour folded in), plus the footprints for the minimap | mesh + footprints |
 | Ground colours | Basis-DLM shapefiles | the land-use class PNG and its legend | a half-size (2048²) copy for phones, distant terrain and the minimap | the class PNGs; the colours are painted in the browser |
-| Trees | Basis-DLM + DOM1 + DGM1 | tree points, hedge rows | — | as committed |
+| Trees | Basis-DLM + DOM1 + DGM1; the street-tree register; the laser scan | tree points, hedge rows, street trees, laser-scan trees | — | as committed |
+| Hedges | OpenStreetMap + the laser scan | hedge lines with height | — | as committed |
 | Greenness | DOP | the NDVI PNG | — | as committed |
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
 | Lamps, walls, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
@@ -124,15 +137,17 @@ Every `bun dev` and `bun build` starts by running this script. It does
 three things:
 
 1. **Bakes the heavy inputs into a tileset.** For every tile, the terrain
-   GeoTIFF becomes two ready-made terrain meshes: a detailed one on a
-   1024 × 1024 grid and a coarse one on a 512 × 512 grid, with the tall
-   walls from OpenStreetMap sharpened in and a short skirt hanging from
-   its edge so no gap shows at the seams between tiles. The CityJSON
+   GeoTIFF becomes two ready-made terrain meshes of irregular triangles:
+   a detailed one that stays within 15 cm of every point of the 1 m grid
+   and a coarse one within 50 cm. Flat ground such as the river becomes a
+   few large triangles, and the triangles crowd where the ground bends —
+   at embankments and walls. A short skirt hangs from the edge so no gap
+   shows at the seams between tiles. The CityJSON
    becomes one building mesh per tile with a table of per-building style
    values, and a list of building footprints for the minimap. Every mesh
    is written as **glTF**,
    the standard file format for 3D models, compressed and gzipped: about
-   1.1–1.5 MB of buildings, 1.5–2.0 MB of detailed and 0.4–0.55 MB of
+   1.1–1.5 MB of buildings, 0.9–1.5 MB of detailed and 0.17–0.31 MB of
    coarse terrain per tile, instead of the 13.6 MB GeoTIFF and the
    8–11 MB CityJSON. A small index file, `tileset.json`, in the open
    **3D Tiles** format, lists every tile's buildings and its two terrain
@@ -156,8 +171,8 @@ The browser fetches the manifest and the tileset, then **streams**: a
 library called 3DTilesRendererJS decides, from where the camera stands and
 where it looks, which files to fetch. The first picture waits only for the
 buildings and the terrain of the tile you start on. Tiles near the camera
-get the detailed terrain and are then *dressed* with trees, lamps, rails
-and walls; tiles further away show their buildings on the coarse terrain;
+get the detailed terrain and are then *dressed* with trees, hedges, lamps,
+rails and walls; tiles further away show their buildings on the coarse terrain;
 tiles out of sight are not fetched, and tiles you have left behind can be
 dropped from memory again. Measured on the current data (compressed size,
 as sent over the network):
@@ -166,25 +181,29 @@ as sent over the network):
 |---|---|---|---|
 | Buildings (with the style table) | 1.34 MB | 1.09–1.46 MB | the tile is in view |
 | Building footprints (minimap) | 48 kB | 59–76 kB | with the buildings |
-| Coarse terrain (512²) | 0.41 MB | 0.44–0.54 MB | the tile is in view |
-| Detailed terrain (1024²) | 1.53 MB | 1.57–1.95 MB | the camera comes close |
+| Coarse terrain (within 50 cm) | 0.17 MB | 0.19–0.31 MB | the tile is in view |
+| Detailed terrain (within 15 cm) | 0.90 MB | 0.89–1.47 MB | the camera comes close |
 | Land-use classes, 2048² | 0.08 MB | 0.07–0.08 MB | at the start (minimap), then for the coarse terrain |
 | Land-use classes, 4096² | 0.22 MB | 0.22–0.25 MB | with the detailed terrain (desktop only) |
 | Greenness (NDVI) | 0.39 MB | 0.32–0.45 MB | with the terrain |
 | Tree points | 36 kB | 54–106 kB | with the detailed terrain |
+| Street trees (register) | 59 kB | 31–53 kB | with the detailed terrain |
+| Laser-scan trees | 51 kB | — | with the detailed terrain |
+| Hedges | 4 kB | 2–3 kB | with the detailed terrain |
 | Walls | 12 kB | 8–22 kB | with the detailed terrain |
 | Lamps, rails, ballast, bridges, platforms, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
-| **Per tile, in full detail** | **≈ 4.1 MB** | **≈ 3.9–4.9 MB** | |
-| **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 2.0–2.6 MB | |
+| **Per tile, in full detail** | **≈ 3.3 MB** | **≈ 3.0–4.3 MB** | |
+| **Per tile, as distant backdrop** | ≈ 2.0 MB | ≈ 1.8–2.4 MB | |
 
 How much a visit downloads therefore depends on where you go. With every
-tile in full detail, a desktop has fetched about **17 MB** for the four
-tiles; a phone about 16 MB (it takes the 2048² land-use raster for every
+tile in full detail, a desktop has fetched about **14 MB** for the four
+tiles; a phone about 13 MB (it takes the 2048² land-use raster for every
 tile); the test-only "lite" profile, which streams the start tile alone,
-about 4 MB. That is more than before the switch to streaming (a full visit
-used to be about 10.6 MB), because the terrain now arrives as a ready-made
-mesh instead of a compact grid of heights; in exchange every file is in a
-standard format that common 3D tools can open.
+about 3.3 MB. That is more than before the switch to streaming (a full
+visit used to be about 10.6 MB), because the terrain now arrives as a
+ready-made mesh instead of a compact grid of heights; in exchange every
+file is in a standard format that common 3D tools can open. (The first
+streaming version, with regular-grid terrain, was about 17 MB.)
 
 What is **never** sent: the 13.6 MB terrain GeoTIFF, the 10 MB CityJSON,
 and any of the raw downloads. The browser parses no CityJSON and builds no

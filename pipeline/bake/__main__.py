@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from . import canopy, lamps, landcover, ndvi, rail, roof_colour, walls
+from . import canopy, lamps, landcover, lowveg, ndvi, rail, roof_colour, trees, walls
 from .common import Tile
 
 STEPS = {
@@ -17,6 +17,10 @@ STEPS = {
     "lamps": lamps.run,
     "walls": walls.run,
     "rail": rail.run,
+    # after the land cover (woodland flag); the hedges and scan trees after
+    # the canopy, walls, bridges and cadastre trees they are gated on
+    "trees": trees.run,
+    "lowveg": lowveg.run,
 }
 
 

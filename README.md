@@ -2,9 +2,11 @@
 
 A client-side, stylized **3D city walker**: spawn into a pastel rendering of
 Dresden built from Saxon open geodata and walk (or fly) through it. Buildings
-come from LoD2 **CityJSON**, the ground from **DGM1** elevation rasters,
-surfaces (roads, water, meadow, …) from an **ATKIS Basis-DLM** land-cover
-raster, and trees from DLM hedge/tree rows plus a **DOM1**-derived canopy. The
+come from LoD2 **CityJSON**, the ground from **DGM1** elevation rasters (as
+an error-bounded TIN), surfaces (roads, water, meadow, …) from an **ATKIS
+Basis-DLM** land-cover raster, and trees from DLM hedge/tree rows, a
+**DOM1**-derived canopy, the city's street-tree register and laser-scan
+crowns, plus OSM hedges. The
 build turns it into an [OGC 3D Tiles](https://www.ogc.org/standard/3dtiles/)
 tileset of glTF, which the browser streams with
 [3DTilesRendererJS](https://github.com/NASA-AMMOS/3DTilesRendererJS) and renders
@@ -54,8 +56,9 @@ Tile id scheme: `<UTM zone 33><easting km>_<northing km>_<edge km>_sn`. The
 spawn tile spans 412000–414000 E / 5656000–5658000 N in **EPSG:25833**.
 
 Neither the DGM1 GeoTIFF nor the CityJSON is served. `prepare-data.ts`
-resamples the DGM into terrain meshes (1024² and 512² grids, with retaining
-walls burned in as breaklines) and runs the CityJSON parser once at build
+meshes the native DGM as error-bounded TINs (±0.15 m near, ±0.5 m far —
+retaining walls are not burned in; their ribbons snap to the measured step)
+and runs the CityJSON parser once at build
 time; both are written as standard glTF (meshopt-compressed, quantised,
 buildings with an `EXT_mesh_features` / `EXT_structural_metadata` table) into
 a tileset ([`lib/city/tileset.ts`](lib/city/tileset.ts)). Every `/data` file

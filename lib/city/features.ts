@@ -1,5 +1,5 @@
 /**
- * The GeoJSON feature shapes the offline bakes write (scripts/extract-*.sh)
+ * The GeoJSON feature shapes the offline bakes write (pipeline/bake/)
  * and the layers read — the one contract between data/dlm and the viewer.
  * features.test.ts checks every committed file against it, so a bake that
  * changes a property name fails there, not as an empty layer in the browser.
@@ -47,6 +47,53 @@ export interface CanopyFeature {
   geometry: PointGeometry;
   properties: { h: number } | null;
 }
+
+/**
+ * Individually surveyed trees — the Dresden street-tree cadastre
+ * (pipeline/bake/trees.py, dl-de/by-2-0 "Landeshauptstadt Dresden"). Heights and
+ * crown diameters in metres (imputed in the bake where the cadastre has
+ * none); `a` is the archetype id (lib/city/tree-inventory.ts
+ * TREE_ARCHETYPES), `l` the leaf type ("e" evergreen, "d" deciduous), `c` a
+ * foliage colour (1 purple, 2 golden; absent = green), `g` = 1 marks a globe
+ * cultivar, `f` = 1 a tree standing in DLM forest/copse (it vetoes no
+ * canopy tree — lib/city/tree-inventory.ts).
+ */
+export interface TreeFeature {
+  geometry: PointGeometry;
+  properties: {
+    a: number;
+    c?: number;
+    d: number;
+    f?: number;
+    g?: number;
+    h: number;
+    l: "d" | "e";
+  } | null;
+}
+
+/** Laser-scan crown peaks outside the canopy mask (pipeline/bake/lowveg.py),
+ *  already thinned against the street-tree cadastre: a canopy point plus
+ *  the crown radius, so it drops into the tree layer. */
+export interface CanopyExtraFeature extends CanopyFeature {
+  properties: { h: number; r: number } | null;
+}
+
+/**
+ * Hedges (pipeline/bake/lowveg.py): the OSM `barrier=hedge` lines with their height
+ * and width in metres. `src` says where the height came from — "osm+lsc"
+ * (the GeoSN laser scan measured it) or "osm" (the tag, or a default).
+ */
+export interface LowVegFeature {
+  geometry: LineGeometry;
+  properties: {
+    h: number;
+    kind: "hedge";
+    src: LowVegSource;
+    w: number;
+  } | null;
+}
+
+export type LowVegSource = "osm" | "osm+lsc";
 
 /** OSM street lamps (pipeline/bake/lamps.py, ODbL); the post height is a
  *  lamp-layer constant, so no property is read. */

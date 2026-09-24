@@ -59,7 +59,7 @@ Ein Python-Paket, `pipeline/bake/`, verwandelt die Rohdownloads in kleine,
 kachelgroße Dateien. Es läuft auf dem Rechner des Betreibers mit einem
 einzigen Befehl, `bun run bake`, der die **Standort-Konfiguration** liest
 (`sites/dresden.ts`: welche Kacheln, wo sie liegen, welches
-Koordinatensystem) und je Kachel sieben Schritte ausführt. Die
+Koordinatensystem) und je Kachel neun Schritte ausführt. Die
 Python-Umgebung ist festgeschrieben, und ihre Geodaten-Bibliotheken bringen
 GDAL gleich mit, sodass nichts weiter installiert werden muss. Mit
 `--ingest` holt es die Downloads vorher selbst: Oberflächenmodell und
@@ -78,12 +78,22 @@ flowchart LR
   ROOF["roof-colour<br/>Dachfarben-Tabelle"]
   WALL["walls<br/>Mauerlinien"]
   RAIL["rail<br/>Gleise · Schotter · Brücken · Bahnsteige"]
+  DLM --> TREES["trees<br/>Stadtbaumkataster"]
+  CAN --> LOW["lowveg<br/>Hecken · Laserscan-Bäume"]
+  TREES --> LOW
+  WALL --> LOW
+  RAIL --> LOW
 ```
 
 Jeder Schritt beschreibt, was er in den Rohdaten „sieht“ und wie er
 vereinfacht. Fehlen für eine Kachel Oberflächenmodell oder Luftbild, werden
 die Schritte, die sie brauchen (Bäume, Grün, Dachfarben), mit einem Hinweis
-übersprungen, statt abzubrechen. Die Entwicklerseite
+übersprungen, statt abzubrechen. Zwei Eingaben kommen von anderswo: das
+Stadtbaumkataster der Landeshauptstadt Dresden, das `--ingest` vom
+Kartendienst der Stadt holt, und der Laserscan der Landesvermessung, der
+von Hand abgelegt wird (er ist groß) und mit einem Werkzeug namens PDAL in
+Halbmeter-Höhenraster verwandelt wird. Ohne Scan behalten die Hecken die
+Höhe, die OpenStreetMap ihnen gibt. Die Entwicklerseite
 [data-pipeline.md](../../data-pipeline.md) (englisch) dokumentiert
 Eingaben, Ausgaben und Stellschrauben jedes Schritts.
 
@@ -101,6 +111,9 @@ enthält je Kachel:
 | | `ndvi_<Kachel>.png` | Grünindex aus dem Luftbild, 1024² | 0,3–0,5 MB |
 | | `vegrows_<Kachel>.geojson` | Hecken- und Baumreihenlinien | wenige kB |
 | | `canopy_<Kachel>.geojson` | ein Punkt je Baum mit Höhe (5 000–16 000 je Kachel) | 0,6–1,8 MB |
+| | `trees_<Kachel>.geojson` | die Stadtbäume: Höhe, Kronenbreite, Kronenform | 0,4–0,8 MB |
+| | `lowveg_<Kachel>.geojson` | Heckenlinien mit Höhe und Breite | 10–30 kB |
+| | `canopyx_<Kachel>.geojson` | Bäume, die der Laserscan in Höfen und Gärten findet (nur Startkachel) | 0,65 MB |
 | | `lamps_<Kachel>.geojson` | Lampenpositionen | bis 60 kB |
 | | `walls_<Kachel>.geojson` | Mauerlinien mit Art und Höhe | 50–120 kB |
 | | `rail_<Kachel>.geojson`, `railarea_<Kachel>.geojson` | Gleislinien mit Gleiszahl; verschmolzene Schotterflächen | wenige kB |
@@ -115,10 +128,11 @@ Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
 
 | Schicht im Viewer | Wahrheit (Anbieter) | Im Repository eingecheckt | Beim Build erzeugt | An den Browser gesendet |
 |---|---|---|---|---|
-| Gelände | DGM1-GeoTIFF | das GeoTIFF selbst | zwei **Geländenetze** je Kachel (ein detailliertes und ein grobes), mit eingearbeiteten Mauerkanten, als **glTF** | das Netz, das die Kamera gerade braucht |
+| Gelände | DGM1-GeoTIFF | das GeoTIFF selbst | zwei **Dreiecksnetze** je Kachel (ein detailliertes und ein grobes), die dem 1-m-Raster auf 15 cm bzw. 50 cm genau folgen, als **glTF** | das Netz, das die Kamera gerade braucht |
 | Gebäude | LoD2-CityGML | die CityJSON-Umwandlung | ein **glTF-Gebäudenetz** je Kachel mit einer Tabelle von Stilwerten je Gebäude (Dachfarbe eingearbeitet), dazu die Grundrisse für die Minikarte | Netz + Grundrisse |
 | Bodenfarben | Basis-DLM-Shapefiles | das Landnutzungsklassen-PNG mit Legende | eine halb so große Kopie (2048²) für Handys, ferne Geländeteile und die Minikarte | die Klassen-PNGs; die Farben malt der Browser |
-| Bäume | Basis-DLM + DOM1 + DGM1 | Baumpunkte, Heckenreihen | — | wie eingecheckt |
+| Bäume | Basis-DLM + DOM1 + DGM1; das Stadtbaumkataster; der Laserscan | Baumpunkte, Heckenreihen, Stadtbäume, Laserscan-Bäume | — | wie eingecheckt |
+| Hecken | OpenStreetMap + der Laserscan | Heckenlinien mit Höhe | — | wie eingecheckt |
 | Grün | DOP | das NDVI-PNG | — | wie eingecheckt |
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
 | Lampen, Mauern, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
@@ -130,16 +144,18 @@ Jedes `bun dev` und `bun build` beginnt damit, dieses Skript auszuführen.
 Es tut drei Dinge:
 
 1. **Backt die schweren Eingaben zu einem Tileset.** Für jede Kachel wird
-   das Gelände-GeoTIFF zu zwei fertigen Geländenetzen: einem detaillierten
-   auf einem Raster von 1024 × 1024 Punkten und einem groben auf
-   512 × 512, mit den hohen Mauern aus OpenStreetMap als scharfe Kanten
-   eingearbeitet und einer kurzen Schürze am Rand, damit an den Nahtstellen
-   zwischen Kacheln keine Lücke sichtbar wird. Das CityJSON wird zu einem
+   das Gelände-GeoTIFF zu zwei fertigen Netzen aus unregelmäßigen
+   Dreiecken: einem detaillierten, das jedem Punkt des 1-m-Rasters auf
+   15 cm nahekommt, und einem groben auf 50 cm. Flacher Boden wie der Fluss
+   wird zu wenigen großen Dreiecken, und die Dreiecke drängen sich dort, wo
+   der Boden sich biegt — an Böschungen und Mauern. Eine kurze Schürze am
+   Rand sorgt dafür, dass an den Nahtstellen zwischen Kacheln keine Lücke
+   sichtbar wird. Das CityJSON wird zu einem
    Gebäudenetz je Kachel mit einer Tabelle von Stilwerten je Gebäude, dazu
    einer Liste der Gebäudegrundrisse für die Minikarte. Jedes Netz wird als
    **glTF** geschrieben, das Standardformat für 3D-Modelle, komprimiert und
-   gezippt: etwa 1,1–1,5 MB Gebäude, 1,5–2,0 MB detailliertes und
-   0,4–0,55 MB grobes Gelände je Kachel, statt des 13,6-MB-GeoTIFFs und
+   gezippt: etwa 1,1–1,5 MB Gebäude, 0,9–1,5 MB detailliertes und
+   0,17–0,31 MB grobes Gelände je Kachel, statt des 13,6-MB-GeoTIFFs und
    des 8–11-MB-CityJSONs. Eine kleine Indexdatei, `tileset.json`, im
    offenen **3D-Tiles**-Format, listet für jede Kachel die Gebäude und die
    zwei Geländestufen und legt fest, ab welcher Nähe die detaillierte Stufe
@@ -166,7 +182,7 @@ Bibliothek namens 3DTilesRendererJS entscheidet danach, wo die Kamera
 steht und wohin sie schaut, welche Dateien geladen werden. Das erste Bild
 wartet nur auf Gebäude und Gelände der Kachel, auf der du startest.
 Kacheln nahe der Kamera bekommen das detaillierte Gelände und werden dann
-mit Bäumen, Lampen, Gleisen und Mauern *ausgestattet*; weiter entfernte
+mit Bäumen, Hecken, Lampen, Gleisen und Mauern *ausgestattet*; weiter entfernte
 Kacheln zeigen ihre Gebäude auf dem groben Gelände; Kacheln außer Sicht
 werden gar nicht geladen, und Kacheln, die du hinter dir gelassen hast,
 können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
@@ -176,26 +192,30 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 |---|---|---|---|
 | Gebäude (mit Stiltabelle) | 1,34 MB | 1,09–1,46 MB | die Kachel im Blick ist |
 | Gebäudegrundrisse (Minikarte) | 48 kB | 59–76 kB | mit den Gebäuden |
-| Grobes Gelände (512²) | 0,41 MB | 0,44–0,54 MB | die Kachel im Blick ist |
-| Detailliertes Gelände (1024²) | 1,53 MB | 1,57–1,95 MB | die Kamera nahe kommt |
+| Grobes Gelände (auf 50 cm) | 0,17 MB | 0,19–0,31 MB | die Kachel im Blick ist |
+| Detailliertes Gelände (auf 15 cm) | 0,90 MB | 0,89–1,47 MB | die Kamera nahe kommt |
 | Landnutzungsklassen, 2048² | 0,08 MB | 0,07–0,08 MB | beim Start (Minikarte), dann fürs grobe Gelände |
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,22–0,25 MB | mit dem detaillierten Gelände (nur Desktop) |
 | Grün (NDVI) | 0,39 MB | 0,32–0,45 MB | mit dem Gelände |
 | Baumpunkte | 36 kB | 54–106 kB | mit dem detaillierten Gelände |
+| Stadtbäume (Kataster) | 59 kB | 31–53 kB | mit dem detaillierten Gelände |
+| Laserscan-Bäume | 51 kB | — | mit dem detaillierten Gelände |
+| Hecken | 4 kB | 2–3 kB | mit dem detaillierten Gelände |
 | Mauern | 12 kB | 8–22 kB | mit dem detaillierten Gelände |
 | Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
-| **Je Kachel, volle Detailstufe** | **≈ 4,1 MB** | **≈ 3,9–4,9 MB** | |
-| **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 2,0–2,6 MB | |
+| **Je Kachel, volle Detailstufe** | **≈ 3,3 MB** | **≈ 3,0–4,3 MB** | |
+| **Je Kachel, nur als ferne Kulisse** | ≈ 2,0 MB | ≈ 1,8–2,4 MB | |
 
 Wie viel ein Besuch lädt, hängt also davon ab, wohin du gehst. Mit jeder
-Kachel in voller Detailstufe hat ein Desktop-Browser etwa **17 MB** für die
-vier Kacheln geladen; ein Handy etwa 16 MB (es nimmt für jede Kachel das
+Kachel in voller Detailstufe hat ein Desktop-Browser etwa **14 MB** für die
+vier Kacheln geladen; ein Handy etwa 13 MB (es nimmt für jede Kachel das
 2048²-Landnutzungsraster); das nur für Tests gedachte „lite“-Profil, das
-allein die Startkachel streamt, etwa 4 MB. Das ist mehr als vor der
+allein die Startkachel streamt, etwa 3,3 MB. Das ist mehr als vor der
 Umstellung aufs Streamen (ein vollständiger Besuch lag bei etwa 10,6 MB),
 weil das Gelände jetzt als fertiges Netz statt als kompaktes Höhenraster
 ankommt; dafür ist jede Datei ein Standardformat, das gängige 3D-Werkzeuge
-öffnen können.
+öffnen können. (Die erste Streaming-Fassung mit regelmäßigem
+Geländeraster lag bei etwa 17 MB.)
 
 Was **nie** gesendet wird: das 13,6-MB-Gelände-GeoTIFF, das 10-MB-CityJSON
 und keiner der Rohdownloads. Der Browser parst kein CityJSON und baut kein

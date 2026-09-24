@@ -9,7 +9,8 @@
  *     one (downsample-raster.ts).
  *  2. **Content** — per tile, the buildings (CityJSON → glTF with a
  *     per-object table, bake-city-mesh.ts) and the terrain at two levels
- *     (DGM → glTF, bake-tiles.ts), each glTF naming its side files in
+ *     (DGM → an error-bounded TIN per level, or the grid for a DGM with
+ *     NoData → glTF, bake-tiles.ts), each glTF naming its side files in
  *     `extras`. Pre-gzipped (`.glb.gz`): static hosts do not compress binary
  *     types, and the viewer inflates natively (DecompressionStream).
  *  3. **Tilesets** — the tree over all tiles, and one over the spawn tile
@@ -55,6 +56,7 @@ import {
   type DressingFiles,
   TERRAIN_LEVELS,
   type TerrainExtras,
+  type TerrainSurface,
   TILESET_FILE,
   TILESET_SPAWN_FILE,
   type TilesetExtras,
@@ -62,7 +64,15 @@ import {
 import type { CityJsonDocument } from "../lib/city/types";
 import { currentSite } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
-import { cityMesh, readDgm, terrainMesh } from "./bake-tiles";
+import {
+  cityMesh,
+  type Dgm,
+  hasNoData,
+  readDgm,
+  type TerrainMesh,
+  terrainMesh,
+  tinTerrainMesh,
+} from "./bake-tiles";
 import { bakeWissenHero } from "./bake-wissen-hero";
 import { downsampleClassRaster } from "./downsample-raster";
 import { writeMeshGlb } from "./tile-glb";
@@ -130,6 +140,7 @@ const BAKE_SOURCES = [
   "lib/city/minimap.ts",
   "lib/city/terrain-geometry.ts",
   "lib/city/terrain-conflate.ts",
+  "lib/city/terrain-tin.ts",
   "lib/city/tileset.ts",
 ].map(at);
 
@@ -277,7 +288,7 @@ async function bakeCity(
   return { file: publish(name, glb), footprints, maxZ };
 }
 
-/** The tile's OSM walls as the lines the terrain conflation burns in. */
+/** The tile's OSM walls as the lines the grid fallback's conflation burns in. */
 function wallLines(tile: string): WallLine[] {
   const path = at(`data/dlm/${tileArtifacts(tile).walls.file}`);
   if (!existsSync(path)) {
@@ -296,12 +307,67 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
   return {
     bridge: pick("bridge"),
     canopy: pick("canopy"),
+    canopyx: pick("canopyx"),
     lamps: pick("lamps"),
+    lowveg: pick("lowveg"),
     platform: pick("platform"),
     rail: pick("rail"),
     railarea: pick("railarea"),
+    trees: pick("trees"),
     vegrows: pick("vegrows"),
     walls: pick("walls"),
+  };
+}
+
+/** The native DGM of a tile, read once for both levels (the TIN's input). */
+const dgmCache = new Map<string, Promise<Dgm>>();
+
+function readTileDgm(tile: string, n?: number): Promise<Dgm> {
+  const source = dgmSourceFiles(tile);
+  const key = `${tile}:${n ?? "native"}`;
+  let dgm = dgmCache.get(key);
+  if (!dgm) {
+    const buf = readFileSync(at(source.tif));
+    dgm = readDgm(
+      buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+      existsSync(at(source.tfw)) ? readFileSync(at(source.tfw), "utf8") : null,
+      n
+    );
+    dgmCache.set(key, dgm);
+  }
+  return dgm;
+}
+
+/**
+ * A tile's terrain at one level: the TIN of its native DGM at the level's
+ * tolerance, or — for a DGM with NoData, which a TIN cannot mesh — the
+ * level's grid with the walls burned in.
+ */
+async function terrainOf(
+  tile: string,
+  level: 0 | 1
+): Promise<{
+  bounds: TerrainExtras["bounds"];
+  mesh: TerrainMesh;
+  surface: TerrainSurface;
+}> {
+  const { maxError, n } = TERRAIN_LEVELS[level];
+  const native = await readTileDgm(tile);
+  if (!hasNoData(native)) {
+    return {
+      bounds: native.bounds,
+      mesh: tinTerrainMesh(native, maxError, offset),
+      surface: { kind: "tin", maxError },
+    };
+  }
+  log(
+    `${tile}: the DGM has NoData — level ${level} falls back to the ${n}² grid`
+  );
+  const dgm = await readTileDgm(tile, n);
+  return {
+    bounds: dgm.bounds,
+    mesh: terrainMesh(dgm, wallLines(tile), offset),
+    surface: { kind: "grid", n },
   };
 }
 
@@ -317,55 +383,56 @@ async function bakeTerrain(
     fail(`missing source file ${source.tif}`);
   }
   const names = sideFiles.get(tile) ?? {};
-  const { n } = TERRAIN_LEVELS[level];
   const inputs = [tif, tfw, at(`data/dlm/${tileArtifacts(tile).walls.file}`)];
   const stem = `terrain_${tile}_l${level}`;
   const described = {
     kind: "terrain" as const,
     tileId: tile,
     level,
-    n,
     landcover: (level === 0 ? names.landcover : names.landcoverLow) ?? "",
     landcoverLow: names.landcoverLow ?? "",
     ...(names.ndvi ? { ndvi: names.ndvi } : {}),
     ...(level === 0 ? { dressing: dressingOf(names) } : {}),
   };
-  const key = cacheKey(inputs, offset, described);
-  let mesh: ReturnType<typeof terrainMesh> | null = null;
-  let bounds: TerrainExtras["bounds"] = [0, 0, 0, 0];
-  const built = async () => {
-    if (!mesh) {
-      const buf = readFileSync(tif);
-      const dgm = await readDgm(
-        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-        existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
-        n
+  const key = cacheKey(inputs, offset, described, TERRAIN_LEVELS[level]);
+  let built: Awaited<ReturnType<typeof terrainOf>> | null = null;
+  const build = async () => {
+    if (!built) {
+      const t0 = performance.now();
+      built = await terrainOf(tile, level);
+      log(
+        `built ${stem} (${built.surface.kind}, ${built.mesh.triangleCount} triangles, ${Math.round(performance.now() - t0)} ms)`
       );
-      bounds = dgm.bounds;
-      mesh = terrainMesh(dgm, wallLines(tile), offset);
     }
-    return mesh;
+    return built;
   };
   const meta = parse<{
     bounds: TerrainExtras["bounds"];
     maxZ: number;
     minZ: number;
+    surface: TerrainSurface;
   }>(
     await cached(`${stem}.json`, key, async () => {
-      const m = await built();
-      return utf8({ bounds, minZ: m.minElevation, maxZ: m.maxElevation });
+      const { bounds, mesh, surface } = await build();
+      return utf8({
+        bounds,
+        minZ: mesh.minElevation,
+        maxZ: mesh.maxElevation,
+        surface,
+      });
     })
   );
   const extras: TerrainExtras = {
     ...described,
     bounds: meta.bounds,
     minElevation: meta.minZ,
+    surface: meta.surface,
   };
   const name = `${stem}.glb.gz`;
   const glb = await cached(name, key, async () =>
     gz(
       await writeMeshGlb({
-        ...(await built()).input,
+        ...(await build()).mesh.input,
         name: "terrain",
         extras: { ...extras },
       })
@@ -381,6 +448,7 @@ for (const [i, tile] of TILES.entries()) {
   footprintFiles.set(tile, city.footprints);
   const fine = await bakeTerrain(tile, 0);
   const coarse = await bakeTerrain(tile, 1);
+  dgmCache.clear();
   const minZ = Math.min(fine.minZ, coarse.minZ);
   const maxZ = Math.max(fine.maxZ, coarse.maxZ, city.maxZ);
   baked.push({

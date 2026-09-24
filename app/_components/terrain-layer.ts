@@ -1,4 +1,6 @@
 import {
+  BufferAttribute,
+  BufferGeometry,
   LinearFilter,
   LinearMipmapLinearFilter,
   Matrix4,
@@ -16,6 +18,7 @@ import {
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
+import { TriangleIndex } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
@@ -27,7 +30,7 @@ import { createWaterLayer, type WaterLayer } from "./water-layer";
 /**
  * One tile's terrain at one level: the baked glTF mesh (scripts/bake-tiles.ts,
  * streamed by tile-stream.ts) dressed with the land-cover material, its
- * water and mist sheets, and a ground-height sampler read from its grid.
+ * water and mist sheets, and a ground-height sampler read from its mesh.
  */
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
@@ -347,26 +350,88 @@ function createTerrainMaterial(
 }
 
 /**
- * The grid's elevations in the data frame, read back from the mesh: the bake
- * wrote the n·n grid first (row 0 = north), quantised, with the node carrying
- * the dequantisation and the renderer the glTF→3D Tiles up-axis turn. `toData`
- * is that chain up to (not including) the viewer's `world` group.
+ * The mesh's vertices in the data frame, read back from the streamed glTF:
+ * positions are quantised, with the node carrying the dequantisation and the
+ * renderer the glTF→3D Tiles up-axis turn. `toData` is that chain up to (not
+ * including) the viewer's `world` group. `xy` is projected (offset added
+ * back), so it answers `heightAt` queries directly.
  */
-function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
+function dataVertices(
+  mesh: Mesh,
+  count: number,
+  toData: Matrix4,
+  offset: { cx: number; cy: number }
+): { xy: Float64Array; z: Float32Array } {
   const position = mesh.geometry.getAttribute("position");
-  const out = new Float32Array(n * n);
+  const xy = new Float64Array(count * 2);
+  const z = new Float32Array(count);
   const v = new Vector3();
-  for (let i = 0; i < out.length; i++) {
-    out[i] = v.fromBufferAttribute(position, i).applyMatrix4(toData).z;
+  for (let i = 0; i < count; i++) {
+    v.fromBufferAttribute(position, i).applyMatrix4(toData);
+    xy[2 * i] = v.x + offset.cx;
+    xy[2 * i + 1] = v.y + offset.cy;
+    z[i] = v.z;
   }
-  return out;
+  return { xy, z };
+}
+
+/**
+ * Ground height over the mesh the GPU draws. A TIN is indexed by triangle
+ * (TriangleIndex), so ground-clamp, collision and the drawn ground agree to
+ * the quantisation step. The grid fallback wrote its n·n grid first (row 0 =
+ * north): a bilinear sample of those, no index needed.
+ */
+function groundSampler(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  offset: { cx: number; cy: number }
+): (x: number, y: number) => number | null {
+  const { bounds, surface } = extras;
+  if (surface.kind === "grid") {
+    const { n } = surface;
+    const { z: elevations } = dataVertices(mesh, n * n, toData, offset);
+    return (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y);
+  }
+  const position = mesh.geometry.getAttribute("position");
+  const index = mesh.geometry.getIndex();
+  const { xy, z } = dataVertices(mesh, position.count, toData, offset);
+  const triangles = index
+    ? index.array
+    : Uint32Array.from({ length: position.count }, (_, i) => i);
+  const tin = new TriangleIndex(xy, z, triangles, bounds);
+  return (x, y) => tin.heightAt(x, y);
+}
+
+/**
+ * A geometry sharing `geometry`'s positions and index with every normal
+ * pointing straight up. A TIN spans the river with a few huge triangles
+ * whose vertex normals are averaged with the steep bank faces they share a
+ * vertex with, so the water's shading would fan out in faint streaks across
+ * them. Local +Y is up: the glTF is Y-up, and the node's dequantisation is a
+ * pure scale, which the normal matrix leaves pointing up. The sheets hang in
+ * the tile's content, so the renderer frees the twin with it.
+ */
+function upFacingTwin(geometry: BufferGeometry): BufferGeometry {
+  const position = geometry.getAttribute("position");
+  const normals = new Float32Array(position.count * 3);
+  for (let i = 1; i < normals.length; i += 3) {
+    normals[i] = 1;
+  }
+  const twin = new BufferGeometry();
+  twin.setAttribute("position", position);
+  twin.setAttribute("normal", new BufferAttribute(normals, 3));
+  twin.setIndex(geometry.getIndex());
+  twin.boundingBox = geometry.boundingBox?.clone() ?? null;
+  twin.boundingSphere = geometry.boundingSphere?.clone() ?? null;
+  return twin;
 }
 
 /**
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
  * mist sheets under it. `toData` maps the mesh's local frame to the data
- * frame (see gridElevations). The mesh stays owned by the tile.
+ * frame (see dataVertices). The mesh stays owned by the tile.
  */
 export async function dressTerrain(
   mesh: Mesh,
@@ -374,8 +439,8 @@ export async function dressTerrain(
   toData: Matrix4,
   opts: TerrainOptions
 ): Promise<TerrainLayer> {
-  const { bounds, n } = extras;
-  const elevations = gridElevations(mesh, n, toData);
+  const { bounds } = extras;
+  const heightAt = groundSampler(mesh, extras, toData, opts.offset);
 
   // Decoded one after another on purpose: several 4096² rasters decoding at
   // once is a peak mobile Safari kills the tab for.
@@ -419,9 +484,11 @@ export async function dressTerrain(
 
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
-  // the tile.
+  // the tile. On a TIN it gets the up-facing twin (see upFacingTwin).
+  const waterGeometry =
+    extras.surface.kind === "tin" ? upFacingTwin(mesh.geometry) : mesh.geometry;
   const water = splat
-    ? createWaterLayer(mesh.geometry, splat, opts.sunDirection, opts.heightFog)
+    ? createWaterLayer(waterGeometry, splat, opts.sunDirection, opts.heightFog)
     : undefined;
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {
@@ -440,7 +507,7 @@ export async function dressTerrain(
     bounds,
     minElevation: extras.minElevation,
     water,
-    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
+    heightAt,
     dispose: () => {
       for (const texture of [classRaster?.texture, ndviTexture]) {
         texture?.dispose();

@@ -23,7 +23,7 @@ each data → look transformation does and its status.
 | [0011](./0011-motion-keyed-quality-regression.md) | Motion-keyed quality regression: DoF off while moving, SSAO never gated | accepted |
 | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | OpenStreetMap for what the official data lacks (walls, lamps, platforms, bridge structure), from a local extract where possible | accepted (always local: 0025) |
 | [0013](./0013-rail-layer-from-dissolved-areas-and-centreline-driven-decks.md) | Rail layer from dissolved ballast areas and centreline-driven decks, built once per block | accepted (per tile: 0024) |
-| [0014](./0014-wall-to-terrain-breakline-conflation.md) | Burn OSM wall lines into the heightfield as breaklines | accepted (at bake time: 0024) |
+| [0014](./0014-wall-to-terrain-breakline-conflation.md) | Burn OSM wall lines into the heightfield as breaklines | superseded by 0028 (in force only for the grid fallback) |
 | [0015](./0015-roof-colour-from-orthophotos-with-vibrance-lift.md) | Roof colour from orthophotos with a hue-preserving vibrance lift | accepted |
 | [0016](./0016-land-cover-rasters-downsampled-with-alpha-as-data.md) | Land-cover rasters downsampled to 2048² with the alpha channel treated as data | superseded by 0023 |
 | [0017](./0017-look-controls-table-and-snapshot-contract.md) | Look controls declared in one table; the Snapshot is a validated, versioned contract | accepted |
@@ -37,6 +37,7 @@ each data → look transformation does and its status.
 | [0025](./0025-bakes-are-one-python-package.md) | The bakes are one Python package in a uv environment; OSM comes only from a local extract | accepted |
 | [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted |
 | [0027](./0027-webgpu-renderer-and-tsl.md) | Move to WebGPURenderer and TSL node materials | proposed (GPU spike, plan 020) |
+| [0028](./0028-terrain-tin-per-tile-and-wall-snap.md) | Mesh every terrain level from an error-bounded TIN; snap walls to the measured step | accepted |
 
 ## Format
 

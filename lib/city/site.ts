@@ -65,6 +65,9 @@ export interface Site {
   tiles: TileCell[];
   /** the page title */
   title: string;
+  /** the street-tree cadastre's ingest adapter, where the city publishes
+   *  one (pipeline/bake/ingest_trees_<id>.py); absent = no cadastre trees */
+  trees?: "dresden";
   viewpoints: Viewpoint[];
 }
 

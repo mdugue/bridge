@@ -59,7 +59,7 @@ import {
   estimateGeometryBytes,
   trackedTextureBytes,
 } from "./three-utils";
-import { createTileStream } from "./tile-stream";
+import { createTileStream, vegetationOf } from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
 import { applyCityLook, createStyleResources } from "./visual-style";
 
@@ -76,6 +76,7 @@ const SKY_COLOR = 0x9f_b6_cc;
 export type LayerName =
   | "city"
   | "lamps"
+  | "lowVegetation"
   | "rail"
   | "terrain"
   | "vegetation"
@@ -624,7 +625,9 @@ async function bootApp(
     }
     postStack.applyLook(look);
     for (const d of stream.dressings) {
-      d.vegetation?.applyLook(look);
+      for (const v of vegetationOf(d)) {
+        v.applyLook(look);
+      }
     }
   };
   applyLook(opts.look.get());
@@ -693,7 +696,10 @@ async function bootApp(
         water: census(
           terrains.flatMap((t) => [t.water?.mesh, t.water?.mistMesh])
         ),
-        vegetation: census(dressings.map((d) => d.vegetation?.group)),
+        vegetation: census(
+          dressings.flatMap((d) => vegetationOf(d).map((v) => v.group))
+        ),
+        lowVegetation: census(dressings.map((d) => d.lowVegetation)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
         rail: census(dressings.map((d) => d.rail)),
         walls: census(dressings.map((d) => d.walls)),
@@ -867,10 +873,12 @@ async function bootApp(
   const stepVegetation = (elapsed: number) => {
     let lodChanged = false;
     for (const d of stream.dressings) {
-      if (d.vegetation?.updateLod(camera.position)) {
-        lodChanged = true;
+      for (const v of vegetationOf(d)) {
+        if (v.updateLod(camera.position)) {
+          lodChanged = true;
+        }
+        v.setTime(elapsed);
       }
-      d.vegetation?.setTime(elapsed);
     }
     if (lodChanged) {
       invalidateShadows();

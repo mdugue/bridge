@@ -190,15 +190,22 @@ selbst sind meist glTF. Der Viewer liest ihn mit der Bibliothek
 3DTilesRendererJS.
 
 **Tileset / Streamen** — die Indexdatei `tileset.json` listet für jede
-Kachel die Gebäude und das Gelände in zwei Detailstufen, einer groben
-(512²-Raster) und einer detaillierten (1024²-Raster), die sie ersetzt,
-sobald die Kamera nahe kommt. Daraus entscheidet der Viewer, was er lädt:
+Kachel die Gebäude und das Gelände in zwei Detailstufen, einer groben (auf
+50 cm genau am Geländemodell) und einer detaillierten (auf 15 cm), die sie
+ersetzt, sobald die Kamera nahe kommt. Daraus entscheidet der Viewer, was er lädt:
 nur, was die Kamera sehen kann, nah detailliert, fern grob; was du weit
 hinter dir lässt, kann wieder entfallen.
 
 **Höhenfeld** — ein regelmäßiges Gitter von Höhen, etwa das DGM1. Der
-Build-Schritt macht daraus ein fertiges Geländenetz; der Browser bekommt
-das Gitter selbst nicht mehr.
+Build-Schritt macht daraus ein fertiges Geländenetz (ein *TIN*); der
+Browser bekommt das Gitter selbst nicht mehr.
+
+**TIN** — *Triangulated Irregular Network*, ein unregelmäßiges
+Dreiecksnetz: ein Geländenetz aus Dreiecken beliebiger Größe, gesetzt, wo
+der Boden sie braucht. Der Build fügt so lange Punkte hinzu, bis jeder
+Punkt des 1-m-Rasters innerhalb einer Toleranz liegt (15 cm nahe der
+Kamera, 50 cm weit weg) — ein flacher Fluss wird zu wenigen großen
+Dreiecken, die Böschung einer Mauer zu vielen kleinen.
 
 **Splatmap** — eine Textur, die dem Boden-Shader sagt, welche Farbe wo
 hingehört. Hier wird sie nicht heruntergeladen: Der Browser malt sie einmal

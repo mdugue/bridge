@@ -1,8 +1,15 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { writeArrayBuffer } from "geotiff";
+import { TriangleIndex } from "../lib/city/terrain-tin";
 import { dgmSourceFiles } from "../lib/city/tile";
-import { readDgm, terrainMesh } from "./bake-tiles";
+import {
+  type Dgm,
+  hasNoData,
+  readDgm,
+  terrainMesh,
+  tinTerrainMesh,
+} from "./bake-tiles";
 
 const PRIMARY_TILE = "33412_5656_2_sn";
 
@@ -56,4 +63,80 @@ test("a raster without georeferencing is placed by its .tfw, or refused", async 
   // are the pixel edges.
   const dgm = await readDgm(bare, "1\n0\n0\n-1\n412000.5\n5657999.5\n", 4);
   expect(dgm.bounds).toEqual([412_000, 5_657_996, 412_004, 5_658_000]);
+});
+
+// 65×65 cells of 1 m: a gentle slope with an 8 m retaining wall across it,
+// ramped over one cell — the shape the native DGM1 gives a wall.
+const N = 65;
+function wallDgm(): Dgm {
+  const elevations = new Float32Array(N * N);
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      const wall = col < 30 ? 0 : col > 31 ? 8 : (col - 30) * 4;
+      elevations[row * N + col] = 100 + row * 0.02 + wall;
+    }
+  }
+  return { bounds: [0, 0, N, N], elevations, n: N };
+}
+
+/** The index over a baked mesh, as the viewer builds it (skirt included). */
+function indexOf(
+  mesh: ReturnType<typeof tinTerrainMesh>,
+  bounds: Dgm["bounds"]
+) {
+  const p = mesh.input.positions;
+  const count = p.length / 3;
+  const xy = new Float64Array(count * 2);
+  const z = new Float64Array(count);
+  for (let i = 0; i < count; i++) {
+    xy[2 * i] = p[3 * i];
+    xy[2 * i + 1] = p[3 * i + 1];
+    z[i] = p[3 * i + 2];
+  }
+  return new TriangleIndex(xy, z, mesh.input.indices ?? [], bounds);
+}
+
+test("every grid point lies within the tolerance of the TIN", () => {
+  const dgm = wallDgm();
+  const mesh = tinTerrainMesh(dgm, 0.1, { cx: 0, cy: 0 });
+  // A plane and one wall need a few dozen triangles, not 2 × 64².
+  expect(mesh.triangleCount).toBeLessThan(500);
+  expect(mesh.input.weld).toBe(true);
+  const index = indexOf(mesh, dgm.bounds);
+  let worst = 0;
+  // Interior pixel centres (the border ring is snapped to the tile edge).
+  for (let row = 1; row < N - 1; row++) {
+    for (let col = 1; col < N - 1; col++) {
+      const h = index.heightAt(col + 0.5, N - row - 0.5);
+      expect(h).not.toBeNull();
+      worst = Math.max(
+        worst,
+        Math.abs((h as number) - dgm.elevations[row * N + col])
+      );
+    }
+  }
+  // tolerance + float32 rounding
+  expect(worst).toBeLessThanOrEqual(0.1 + 1e-4);
+});
+
+test("a DGM with holes is flagged and refused by the TIN", () => {
+  const dgm = wallDgm();
+  expect(hasNoData(dgm)).toBe(false);
+  dgm.elevations[100] = Number.NaN;
+  expect(hasNoData(dgm)).toBe(true);
+  expect(() => tinTerrainMesh(dgm, 0.1, { cx: 0, cy: 0 })).toThrow();
+});
+
+test("meshes the committed spawn-tile DGM at its native resolution", async () => {
+  const src = dgmSourceFiles(PRIMARY_TILE);
+  const dgm = await readDgm(
+    arrayBufferOf(readFileSync(src.tif)),
+    readFileSync(src.tfw, "utf8")
+  );
+  expect(dgm.n).toBe(2000);
+  const mesh = tinTerrainMesh(dgm, 2, { cx: 413_000, cy: 5_657_000 });
+  // The Elbe crosses the tile: its surface (~104–105 m) is the lowest ground.
+  expect(mesh.minElevation).toBeGreaterThan(100);
+  expect(mesh.minElevation).toBeLessThan(110);
+  expect(mesh.triangleCount).toBeGreaterThan(100);
 });

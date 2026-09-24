@@ -1,6 +1,6 @@
 # ADR 0024: The site streams as OGC 3D Tiles with glTF content through 3DTilesRendererJS
 
-- **Status:** accepted (supersedes [ADR 0006](./0006-tile-block-with-one-primary-and-one-artifact-map.md) and the never-accepted [ADR 0022](./0022-stream-tiles-around-the-camera.md))
+- **Status:** accepted (supersedes [ADR 0006](./0006-tile-block-with-one-primary-and-one-artifact-map.md) and the never-accepted [ADR 0022](./0022-stream-tiles-around-the-camera.md)); the terrain levels are TINs since [ADR 0028](./0028-terrain-tin-per-tile-and-wall-snap.md)
 - **Date:** 2026-09
 
 ## Context

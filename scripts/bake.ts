@@ -7,12 +7,14 @@
  *   bun run bake --ingest             fetch the raw inputs first (the site's
  *                                     ingest adapter, e.g. GeoSN for Saxony)
  *   bun run bake --step canopy        one step (landcover, canopy, ndvi,
- *                                     roof-colour, lamps, walls, rail)
+ *                                     roof-colour, lamps, walls, rail,
+ *                                     trees, lowveg)
  *
  * The site (SITE, default dresden; sites/) supplies the tiles, their extent
  * and CRS; raw inputs live in data/_raw/<site>/ (gitignored). The steps run
  * in dependency order — land cover first, the canopy and lamps are gated on
- * it. Then `bun scripts/prepare-data.ts` turns data/ into the tileset.
+ * it; the cadastre trees, then the hedges and scan trees last. A site with a
+ * street-tree cadastre (`trees` in its config) fetches it with `--ingest` too. Then `bun scripts/prepare-data.ts` turns data/ into the tileset.
  */
 import { spawnSync } from "node:child_process";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
@@ -56,6 +58,16 @@ for (const cell of SITE.tiles) {
       "--bounds",
       ...bounds,
     ]);
+    if (SITE.trees) {
+      python(`bake.ingest_trees_${SITE.trees}`, [
+        "--raw",
+        raw,
+        "--tile",
+        tile,
+        "--bounds",
+        ...bounds,
+      ]);
+    }
   }
   python("bake", [
     step,

@@ -31,13 +31,14 @@ retargeted/lowered as tiles land.
 
 **Streaming** (`tile-stream.ts`, ADR 0024): the build bakes the site into an
 OGC 3D Tiles tileset (`lib/city/tileset.ts`): per site tile the buildings
-(refine ADD) over the terrain at two levels (512², geometric error 40 m,
-replaced by 1024² near the camera). Content is glTF (meshopt, quantised,
+(refine ADD) over the terrain at two levels (a ±0.5 m TIN, geometric error
+40 m, replaced by a ±0.15 m TIN near the camera — ADR 0028). Content is glTF (meshopt, quantised,
 pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
 camera, so casters outside the view stay loaded. A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
-heavy part (vegetation, lamps, rails, walls on the fine terrain level) waits
+heavy part (vegetation, cadastre trees, hedges, lamps, rails, walls on the
+fine terrain level) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
 chip. Every tile change re-renders the shadow map. The layers:
 
@@ -49,17 +50,28 @@ chip. Every tile change re-renders the shadow map. The layers:
   the index buffer and rebuild the tile's BVH (you can't hide one building
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
   tile. No CityJSON reaches the browser.
-- `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
-  resampled with the wall breaklines burned in at bake time,
-  `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
-  land-cover material; also hangs the water and mist sheets.
+- `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF TIN (an
+  error-bounded Delatin mesh of the native 1 m DGM1, `scripts/bake-tiles.ts`
+  `tinTerrainMesh` + `lib/city/terrain-tin.ts`) gets the land-cover material
+  and a ground-height sampler over its own triangles (`TriangleIndex`); also
+  hangs the water and mist sheets (on a TIN over an up-facing normal twin).
+  No wall conflation on a TIN: the ribbons snap to the measured step
+  (`lib/city/wall-snap.ts`, ADR 0028). A DGM with NoData falls back to the
+  grid (resampled, wall breaklines burned in: `terrain-geometry.ts`,
+  `terrain-conflate.ts`, ADR 0014). Study and numbers in the ledger's
+  "Terrain TIN" entry.
 - `landcover-splat.ts` — paints the class raster with the one palette
   (`lib/city/landcover.ts`) into the colour splat on the GPU (ADR 0023).
 - `water-layer.ts` — sheets over the terrain geometry, masked by the splat's
   alpha (water coverage), animated normal wobble.
-- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy) and hedges,
-  chunked for culling. Lives in the **Y-up frame** (a tile's content root),
-  never inside the rotated `world` group itself.
+- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy + the
+  laser-scan extra trees + the cadastre's trunks and broadleaf crowns, passed
+  in as precomputed `TreeInstance`s) and DLM hedges, chunked for culling.
+  Lives in the **Y-up frame** (a tile's content root), never inside the
+  rotated `world` group itself. `tree-inventory-layer.ts` draws only the
+  cadastre's reshaped silhouettes (flame / cone / dome) and vetoes canopy
+  trees inside its crowns (not in forest/copse); `low-vegetation-layer.ts`
+  draws the OSM hedges.
 - `shader-chunks.ts` — `DATA_POSITION`: glTF positions are quantised, so
   shaders derive data-frame coordinates from world space.
 - `sun-rig.ts` — directional light + shadow camera, sky dome, hemisphere fill,
@@ -184,6 +196,16 @@ not sky.
 - **Tree LOD (shipped):** per-chunk distance swaps the rich crown in near the
   camera and the cheap one far away; a swap invalidates the shadow map
   (plan 009).
+- **Cadastre + laser scan + hedges (all default-on):** the street-tree
+  cadastre (`pipeline/bake/trees.py`), the laser-scan trees outside the canopy
+  mask (`canopyx`, thinned in the bake against the cadastre within max(4 m,
+  crown radius)) and the OSM hedges with their laser-scan height
+  (`low-vegetation-layer.ts`, superellipsoid chains, static, chunked) from
+  `pipeline/bake/lowveg.py`. The laser-scan-only hedges and shrubs are NOT
+  shipped (~30 % crown-rim false positives), and the Python port no longer
+  derives them (the research bake is in git history, `extract-lowveg.py`). Measured lesson: the LSC **multi-echo ratio is a tall-tree cue,
+  not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5). Draw-call model:
+  `scripts/eval/kataster-cost.ts`. Numbers in `docs/transformations.md`.
 
 ### Sandbox crown — what is left to port
 
@@ -221,6 +243,8 @@ change yourself:
 # drop the snapshot JSON into shots/, then:
 bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
+# Before/after pairs: SHOTS_QUERY=scene=lite SHOTS_TAG=x bun run shots
+# appends the query to the page URL and writes shots/<name>.x.png.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
@@ -271,7 +295,10 @@ build time and the canopy/rail bakes read it.
 
 **Stage 1, the offline bakes** (ADR 0025): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
-Pillow; GDAL inside the wheels, with the OSM driver). If a tool is missing,
+Pillow, scipy, scikit-image; GDAL inside the wheels, with the OSM driver).
+The hedge/scan-tree step also needs the **PDAL CLI** to grid the laser scan
+(`<raw>/lsc/<tile>.laz`, placed by hand); the cadastre trees come from the
+site's cadastre adapter (`ingest_trees_dresden.py`, the city's WFS). If a tool is missing,
 fix the environment (`pipeline/pyproject.toml`), don't bend the code.
 `bun run bake` runs every step for every tile of the site with its extent and
 CRS, land cover first:
@@ -279,7 +306,7 @@ CRS, land cover first:
 ```bash
 bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|rail
+bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|rail|trees|lowveg
 bun run test:pipeline                  # pytest + ruff
 ```
 

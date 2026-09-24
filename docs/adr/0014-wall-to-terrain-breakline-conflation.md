@@ -1,6 +1,6 @@
 # ADR 0014: Burn OSM wall lines into the heightfield as breaklines
 
-- **Status:** accepted; applied at bake time since [ADR 0024](./0024-site-streams-as-3d-tiles.md)
+- **Status:** superseded by [ADR 0028](./0028-terrain-tin-per-tile-and-wall-snap.md) (a TIN burns nothing in; walls snap to the measured step); in force only for a tile whose DGM has NoData, which falls back to the grid — applied at bake time since [ADR 0024](./0024-site-streams-as-3d-tiles.md)
 - **Date:** 2026-06
 
 ## Context
@@ -39,7 +39,29 @@ step. The function is pure and unit-tested.
 - **Raise only the ribbon and ignore the ground:** the state before; the
   ribbon floated.
 - **Take the step from the laser point cloud:** the wall is smoothed there
-  too.
+  too. *(Corrected 2026-09 — see Update.)*
+
+## Update (2026-09, terrain study)
+
+Measured against held-out laser-scan ground returns, the premise and the
+remedy both need qualifying (ledger 🧪 "Terrain TIN"). The laser ground
+steps within ~0.75 m and the native 1 m DGM1 within ~1.7 m; the ~3 m bank
+was mostly our 1024² resample. The burn sharpens the step but raises the
+error in the 20 m band around walls from 0.43 to 0.76 m RMSE: the 11 m
+probe reads the top of terraced walls (the Jungfernbastei's three levels
+become one cliff) and the step lands on the OSM line, which misses the
+measured edge by −0.5…+1 m (4 m at one bastion face). This ADR stays in
+force for the default heightfield; the `?terrain=tin` experiment meshes the
+native DGM1 without the burn and snaps the ribbon to the measured step
+instead (`lib/city/wall-snap.ts`). If that is adopted, this ADR is
+superseded for TIN tiles.
+
+## Update (2026-09, adopted)
+
+The TIN was adopted for every terrain level of every tile
+([ADR 0028](./0028-terrain-tin-per-tile-and-wall-snap.md)): the fine level
+at ±0.15 m, the coarse one at ±0.5 m. This decision now applies only to a
+tile whose DGM has NoData, which the bake meshes as the grid instead.
 
 ## References
 

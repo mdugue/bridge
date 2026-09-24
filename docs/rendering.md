@@ -18,7 +18,8 @@ CRS, [ADR 0026](./adr/0026-one-site-config-per-build.md)) and Z-up. A
 the tileset's frame *is* the recentered data frame, and the renderer turns
 each Y-up glTF into it. That turn cancels the `world` group's, so a tile's
 content root sits, in effect, in the scene's Y-up frame — which is why the
-Y-up dressing (vegetation, lamps, rails, walls) hangs directly under the
+Y-up dressing (vegetation, cadastre trees, hedges, lamps, rails, walls)
+hangs directly under the
 fine terrain's content root and leaves with its tile. Mixing the frames up
 applies the rotation twice (the classic "trees shoot skyward" bug).
 
@@ -30,13 +31,15 @@ flowchart TB
   SCENE --> WORLD
   WORLD --> TILES
   TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH"]
-  TILES --> TER["terrain, L1 512² → L0 1024² (REPLACE)<br/>glTF grid + 30 m skirt, walls burned in<br/>palette-painted splat, receives shadows only"]
-  TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
+  TILES --> TER["terrain, L1 ±0.5 m → L0 ±0.15 m TIN (REPLACE)<br/>glTF TIN + 30 m skirt, nothing burned in<br/>palette-painted splat, receives shadows only"]
+  TER --> WAT["water + mist sheets<br/>terrain geometry (up-facing normals) masked by splat alpha"]
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
-  DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges"]
+  DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges<br/>canopy + scan + cadastre trees share the meshes"]
+  DRESS --> INV["cadastre silhouettes<br/>flame / cone / dome per 250 m cell"]
+  DRESS --> LOW["OSM hedges<br/>clay block chains per 250 m cell"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
-  DRESS --> WALL["walls<br/>vertical ribbons draped on the ground"]
+  DRESS --> WALL["walls<br/>ribbons snapped to the measured step"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
 ```
@@ -67,8 +70,9 @@ is the codebook.
 
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
-| Ground height | DGM resampled at build time to the terrain grid (1024² fine, 512² coarse); heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
-| Ground step at walls | wall line + `kind` ∈ retaining/city/embankment, height ≥ 1.5 m, burned in at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
+| Ground height + mesh density | error-bounded TIN of the native 1 m DGM1, baked at build time: vertices where the ground bends, within ±0.15 m (fine level) / ±0.5 m (coarse) everywhere; heights read from the drawn triangles (`TriangleIndex`) | DGM1 | `scripts/bake-tiles.ts`, `terrain-layer.ts`, `lib/city/terrain-tin.ts` |
+| Wall ribbon placement | earth-retaining walls snap to the measured step (face at the ramp foot, cap to the crest) | DGM1 + OSM walls | `lib/city/wall-snap.ts` |
+| Ground step at walls (grid fallback only) | wall line + `kind` ∈ retaining/city/embankment, height ≥ 1.5 m, burned in at build time into a tile whose DGM has NoData | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
 | Contour lines | data-frame elevation (`DATA_POSITION`), 2 m minor / 10 m major | DGM1 | `terrain-layer.ts` |
 | Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`) | DOP | `terrain-layer.ts` |
@@ -93,7 +97,10 @@ is the codebook.
 | Crown colour | NDVI 5×5 footprint max, recentred on the median | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
 | Crown detail | distance (in 220 m / out 300 m per 250 m chunk) | — | `updateLod` (*Detaillierte Kronen*) |
+| Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
+| OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
+| Extra tree | LSC crown peak + `h` outside the canopy mask and away from any cadastre tree, appended to the canopy points | LSC | `tile-stream.ts` → `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
 | Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
@@ -101,7 +108,7 @@ is the codebook.
 | Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
 | Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
-| Wall ribbon | line + `h`, base draped on every loaded terrain | OSM | `wall-layer.ts` |
+| Wall ribbon | line + `h`, base draped on every loaded terrain; on a TIN tile snapped to the measured step with a coping cap | OSM | `wall-layer.ts` |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
 | Valley fog | world height below a floor derived from the lowest terrain landed so far | DGM1 | `height-fog.ts` (*Talnebel*) |
@@ -168,14 +175,17 @@ patch materials with `onBeforeCompile` and are deliberately not used.
 
 The bottleneck is **fill-rate** (post FX and the shadow depth pass), not
 draw calls: buildings are one mesh per tile, vegetation one instanced mesh
-per 250 m cell. Two orthogonal switches size the work
+per 250 m cell (the cadastre's trunks and broadleaf crowns ride in the
+canopy's cell meshes; only its flame/cone/dome silhouettes add meshes —
+`scripts/eval/kataster-cost.ts` models the calls per view). Two orthogonal
+switches size the work
 (`app/_components/scene-profile.ts`), and the tiles renderer decides how
 much of the site is loaded (screen-space error target 16 px, an LRU cache):
 
 | Knob | full · desktop | full · mobile | lite (tests) |
 |---|---|---|---|
 | Tiles | the whole site streams (`tileset.json`) | same | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
-| Terrain grid | L0 1024² near, L1 512² beyond (≈1.2 km at 1080p) | same | same |
+| Terrain | L0 ±0.15 m TIN near, L1 ±0.5 m TIN beyond (≈1.2 km at 1080p) | same | same |
 | Shadow map | 3072² | 2048² | 512² |
 | Pixel ratio | ≤ 2 | ≤ 1.5 | 0.5 |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere | L0 4096², L1 2048² |
@@ -187,19 +197,20 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | Content | Wire size per tile | Triangles |
 |---|---|---|
 | buildings `city_<tile>.glb.gz` | 1.1–1.5 MB | ≈143 k on the spawn tile |
-| fine terrain `terrain_<tile>_l0.glb.gz` | 1.5–2.0 MB | ≈2.1 M (1024² grid + skirt) |
-| coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
+| fine terrain `terrain_<tile>_l0.glb.gz` | 0.89–1.47 MB | 290–480 k (±0.15 m TIN + skirt) |
+| coarse terrain `terrain_<tile>_l1.glb.gz` | 0.17–0.31 MB | 47–86 k (±0.5 m TIN + skirt) |
 | footprints (minimap) | 0.23–0.33 MB | — |
 | class raster 4096² / 2048² | 0.22–0.25 / ≈0.08 MB | — |
 | NDVI raster | 0.3–0.45 MB | — |
 | canopy points (fine level) | 0.6–1.8 MB | — |
+| cadastre trees, scan trees, hedges (fine level) | 0.4–0.8, ≈0.65 (spawn tile only), < 0.03 MB | — |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB
-heightfield; quantised meshes cost more on the wire than a height blob,
-the price of a standard format
-([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)). The terrain is the
-triangle-heavy layer, but it never casts, so it stays out of the shadow
-depth pass.
+heightfield; the first tileset's grid terrain cost more on the wire
+(1.5–2.0 + 0.4–0.55 MB), the TIN levels
+([ADR 0028](./adr/0028-terrain-tin-per-tile-and-wall-snap.md)) cost less
+than either for a seventh of the fine grid's triangles. The terrain never
+casts, so it stays out of the shadow depth pass.
 
 While the camera moves, DoF is dropped and restored after 250 ms of
 stillness (`lib/city/regression.ts`); SSAO stays on because gating it made
@@ -220,7 +231,7 @@ sequenceDiagram
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
-  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, rail, bridge, platform, walls
+  B->>S: per fine terrain tile: canopy, rows, cadastre + scan trees, hedges, NDVI, lamps, rail, bridge, platform, walls
   Note over B: each change: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```
@@ -234,7 +245,7 @@ unloads by screen-space error from both cameras, and a `DressingPlugin`
 load, so no tile is shown half-dressed. Before a tile or a dressing shows,
 its shaders are compiled with `compileAsync` against the target the scene
 pass renders into (`PostStack.compile`), so a landing tile never compiles
-inside a frame. The heavy dressing — vegetation,
+inside a frame. The heavy dressing — vegetation, cadastre trees, hedges,
 lamps, rails, walls — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
 second phase) and is built one tile at a time. **Ready** (`onLoaded`,
@@ -244,7 +255,9 @@ the fog clamp. A tile that fails to load leaves a hole and one `onError`
 message; a dressing that fails leaves its tile bare — neither takes the
 scene down. Collision, demolish, autofocus and double-tap work on every
 visible tile; the two ground rays (double-tap travel, autofocus) march the
-terrain's height grid (`lib/city/ground-ray.ts`) — the terrain has no BVH.
+terrain's ground height (`lib/city/ground-ray.ts`) — the terrain has no BVH,
+only the bucket index over its triangles that `heightAt` reads
+(`TriangleIndex`, built when the terrain is dressed).
 
 The HUD's five load stages and their weights are declared once in
 `lib/city/load-stages.ts`. The first three are the first frame; the other

@@ -87,17 +87,23 @@ Look at `shore-eye` and `meadow-eye` against `main`.
 `roof-close` and a flat street at grazing sun.
 
 - Good: no visible faceting on roofs, no banding in flat-ground shading.
-  8-bit normals are the usual glTF choice; the terrain grid is 2 m.
+  8-bit normals are the usual glTF choice. The terrain is a TIN
+  (ADR 0028): its flat areas are a few large triangles, so watch the Elbe
+  meadows and the river for shading streaks.
 - Knob: `scripts/tile-glb.ts` quantisation bits (normals 8 → 10/16), then
   `bun dev` re-bakes. Note the wire-size change in the findings.
 
 ### 3. LOD switch and seams (ADR 0024)
 
 Fly slowly from `oblique-400` down to eye level and back; watch the
-terrain under the horizon switch 512² ↔ 1024².
+terrain under the horizon switch between the ±0.5 m and ±0.15 m TIN
+(ADR 0028).
 
 - Good: no visible pop at the switch, no cracks at tile seams (both levels
-  have a 30 m skirt), no colour step at a seam.
+  have a 30 m skirt; two TINs, or a fine and a coarse one, meet with
+  different border vertices), no colour step at a seam.
+- Knobs: `TERRAIN_LEVELS[].maxError` in `lib/city/tileset.ts` (the coarse
+  tolerance; 0.25 m costs ~2.5× its triangles).
 - Knobs: `COARSE_TERRAIN_ERROR` in `lib/city/tileset.ts` (geometric error
   of the coarse level; higher = the fine level loads earlier), the
   renderer's `errorTarget` (default 16 px, `app/_components/tile-stream.ts`).
@@ -116,13 +122,27 @@ terrain under the horizon switch 512² ↔ 1024².
 
 ### 5. Rails and walls across seams
 
-`seam-eye` where a rail line or retaining wall crosses the tile border.
+`seam-eye` where a rail line or retaining wall crosses the tile border,
+and the Brühlsche Terrasse / Jungfernbastei up close.
 
 - Good: continuous; a deck or ribbon may be split at the seam but must not
-  gap or double up visibly.
+  gap or double up visibly. The ribbons are snapped to the measured step
+  (`lib/city/wall-snap.ts`): the face must hide the TIN's ramp, the coping
+  cap must sit on the crest, and no slot may open behind the wall. This was
+  checked on a GPU before the 3D Tiles port only.
 - If it gaps: each tile builds its features clipped to its own tile; the
   fix is a small overlap in the bake (`pipeline/bake/rail.py`,
   `walls.py`) or building from both neighbours' data.
+
+### 5b. Cadastre trees, scan trees and hedges per tile
+
+Albertplatz and the Rosengarten at eye level, and a fly-over.
+
+- Good: the street trees stand at their surveyed spots on every dressed
+  tile, the canopy trees inside their crowns are gone (not in forest or
+  copse), the courtyard trees of the spawn tile appear, hedges sit on the
+  ground across seams. They were verified on a GPU while the block still
+  loaded whole; the draw-call model is `scripts/eval/kataster-cost.ts`.
 
 ### 6. Frame time and memory
 

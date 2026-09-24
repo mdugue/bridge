@@ -122,8 +122,9 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   ];
   if (input.weld) {
     // Merged and reordered for the vertex cache — and for meshopt, which
-    // compresses a cache-ordered stream far better. (Terrain keeps its grid
-    // order: the runtime reads ground height from it.)
+    // compresses a cache-ordered stream far better. (A grid terrain keeps its
+    // order: the runtime reads ground height from it. A TIN is indexed by
+    // triangle at runtime, so it welds and reorders.)
     transforms.unshift(weld(), reorder({ encoder: MeshoptEncoder }));
   }
   await doc.transform(...transforms);
