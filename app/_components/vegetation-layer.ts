@@ -6,6 +6,7 @@ import {
   Group,
   IcosahedronGeometry,
   InstancedMesh,
+  type Material,
   Matrix4,
   MeshStandardMaterial,
   Object3D,
@@ -31,14 +32,31 @@ export type RasterSampler = (x: number, y: number) => number | undefined;
 /**
  * Veto on a row or canopy tree at EPSG (x, y) with its measured height `h`
  * (canopy points only): false drops it because a surveyed inventory tree
- * already stands there (tree-inventory-layer.ts, `?trees=kataster`).
+ * already stands there (tree-inventory-layer.ts).
  */
 export type TreeVeto = (x: number, y: number, h?: number) => boolean;
+
+/**
+ * A tree placed by precomputed transforms rather than a uniform scale — the
+ * street-tree cadastre's (tree-inventory-layer.ts). It joins the canopy's own
+ * chunk meshes, so it costs instances, not draw calls: its trunk always, its
+ * crown when it has the broadleaf shape the canopy draws (`crown`; the other
+ * silhouettes are the inventory layer's own meshes).
+ */
+export interface TreeInstance {
+  crown?: { cheap: Matrix4; colour: Color; rich: Matrix4 };
+  trunk: Matrix4;
+  /** Y-up world position, for the chunk bucketing */
+  x: number;
+  z: number;
+}
 
 /** One tile's decoded vegetation inputs. */
 export interface VegetationFeatures {
   /** DOM1-derived canopy points (trees scaled to their measured height) */
   canopy: CanopyFeature[];
+  /** precomputed trees drawn in the same chunk meshes (TreeInstance) */
+  extraTrees?: TreeInstance[];
   /** optional TreeVeto; hedges are never vetoed */
   keepTree?: TreeVeto;
   /** the DOP NDVI sampler (loadNdviSampler), for lush↔dry crown colour */
@@ -180,11 +198,16 @@ function collectPlacements(
   return { trees, hedges };
 }
 
+/** The CHUNK_SIZE cell a Y-up world position falls in. */
+function cellKey(x: number, z: number): string {
+  return `${Math.floor(x / CHUNK_SIZE)},${Math.floor(z / CHUNK_SIZE)}`;
+}
+
 /** Groups placements into CHUNK_SIZE cells so each becomes its own mesh. */
 function bucketByCell(items: Placement[]): Placement[][] {
   const cells = new Map<string, Placement[]>();
   for (const p of items) {
-    const key = `${Math.floor(p.x / CHUNK_SIZE)},${Math.floor(p.z / CHUNK_SIZE)}`;
+    const key = cellKey(p.x, p.z);
     const cell = cells.get(key);
     if (cell) {
       cell.push(p);
@@ -195,7 +218,34 @@ function bucketByCell(items: Placement[]): Placement[][] {
   return [...cells.values()];
 }
 
-function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
+/** One chunk's trees: the uniform-scale placements plus the precomputed ones. */
+interface TreeCell {
+  extras: TreeInstance[];
+  trees: Placement[];
+}
+
+function bucketTrees(trees: Placement[], extras: TreeInstance[]): TreeCell[] {
+  const cells = new Map<string, TreeCell>();
+  const cellAt = (x: number, z: number): TreeCell => {
+    const key = cellKey(x, z);
+    let cell = cells.get(key);
+    if (!cell) {
+      cell = { trees: [], extras: [] };
+      cells.set(key, cell);
+    }
+    return cell;
+  };
+  for (const p of trees) {
+    cellAt(p.x, p.z).trees.push(p);
+  }
+  for (const e of extras) {
+    cellAt(e.x, e.z).extras.push(e);
+  }
+  return [...cells.values()];
+}
+
+/** Writes the placements' uniform-scale matrices from slot 0 on. */
+function writePlacements(mesh: InstancedMesh, items: Placement[]): void {
   const dummy = new Object3D();
   for (let i = 0; i < items.length; i++) {
     const p = items[i];
@@ -205,11 +255,20 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
     dummy.updateMatrix();
     mesh.setMatrixAt(i, dummy.matrix);
   }
+}
+
+/** Uploads the matrices and fits the cull sphere to the instances. */
+function finishInstances(mesh: InstancedMesh): void {
   mesh.instanceMatrix.needsUpdate = true;
   // Without this the cull test uses the (origin-centred) geometry sphere and
   // wrongly culls the whole spread-out instance cloud whenever the world
   // origin is off-screen.
   mesh.computeBoundingSphere();
+}
+
+function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
+  writePlacements(mesh, items);
+  finishInstances(mesh);
 }
 
 /**
@@ -571,21 +630,87 @@ export function crownColor(col: Color, p: Placement, v: number): void {
   );
 }
 
-/** Deterministic per-tree crown variation (hash jitter + optional NDVI). */
-function paintCrowns(crowns: InstancedMesh, cell: Placement[]): void {
+/** Deterministic per-tree crown variation (hash jitter + optional NDVI);
+ *  the precomputed trees bring their own colour, after the placements. */
+function paintCrowns(
+  crowns: InstancedMesh,
+  cell: Placement[],
+  extras: TreeInstance[] = []
+): void {
   const col = new Color();
   for (let i = 0; i < cell.length; i++) {
     const v = hash(cell[i].x * 0.3 + cell[i].z * 0.7) - 0.5;
     crownColor(col, cell[i], v);
     crowns.setColorAt(i, col);
   }
+  extras.forEach((e, i) => {
+    if (e.crown) {
+      crowns.setColorAt(cell.length + i, e.crown.colour);
+    }
+  });
   if (crowns.instanceColor) {
     crowns.instanceColor.needsUpdate = true;
   }
 }
 
+/**
+ * One chunk's meshes: a trunk per tree, and — when the chunk has any crown
+ * — the cheap and the rich crown (only one is visible; updateLod swaps).
+ * The placements fill the first slots, the precomputed trees the rest.
+ */
+function buildTreeCell(
+  cell: TreeCell,
+  geos: { cheap: BufferGeometry; rich: BufferGeometry; trunk: BufferGeometry },
+  trunkMat: Material,
+  crownMat: Material
+): { lod: CellLod | null; meshes: InstancedMesh[] } {
+  const { trees } = cell;
+  const trunks = new InstancedMesh(
+    geos.trunk,
+    trunkMat,
+    trees.length + cell.extras.length
+  );
+  trunks.castShadow = true;
+  writePlacements(trunks, trees);
+  cell.extras.forEach((e, i) => trunks.setMatrixAt(trees.length + i, e.trunk));
+  finishInstances(trunks);
+  const crowned = cell.extras.filter((e) => e.crown);
+  if (trees.length + crowned.length === 0) {
+    return { lod: null, meshes: [trunks] };
+  }
+  const cheap = new InstancedMesh(
+    geos.cheap,
+    crownMat,
+    trees.length + crowned.length
+  );
+  const rich = new InstancedMesh(
+    geos.rich,
+    crownMat,
+    trees.length + crowned.length
+  );
+  for (const [mesh, which] of [
+    [cheap, "cheap"],
+    [rich, "rich"],
+  ] as const) {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    writePlacements(mesh, trees);
+    crowned.forEach((e, i) => {
+      if (e.crown) {
+        mesh.setMatrixAt(trees.length + i, e.crown[which]);
+      }
+    });
+    finishInstances(mesh);
+    paintCrowns(mesh, trees, crowned);
+  }
+  // updateLod() decides which crown is visible each frame; start on cheap.
+  rich.visible = false;
+  return { lod: { cheap, rich }, meshes: [trunks, cheap, rich] };
+}
+
 function buildTrees(
   trees: Placement[],
+  extras: TreeInstance[],
   sunDirection: Vector3,
   shimmer: { value: number },
   uTime: { value: number },
@@ -610,26 +735,15 @@ function buildTrees(
     heightFog
   );
 
+  const geos = { cheap: cheapGeo, rich: richGeo, trunk: trunkGeo };
   const meshes: InstancedMesh[] = [];
   const cells: CellLod[] = [];
-  for (const cell of bucketByCell(trees)) {
-    const trunks = new InstancedMesh(trunkGeo, trunkMat, cell.length);
-    const cheap = new InstancedMesh(cheapGeo, crownMat, cell.length);
-    const rich = new InstancedMesh(richGeo, crownMat, cell.length);
-    trunks.castShadow = true;
-    for (const c of [cheap, rich]) {
-      c.castShadow = true;
-      c.receiveShadow = true;
+  for (const cell of bucketTrees(trees, extras)) {
+    const built = buildTreeCell(cell, geos, trunkMat, crownMat);
+    meshes.push(...built.meshes);
+    if (built.lod) {
+      cells.push(built.lod);
     }
-    writeInstances(trunks, cell);
-    writeInstances(cheap, cell);
-    writeInstances(rich, cell);
-    paintCrowns(cheap, cell);
-    paintCrowns(rich, cell);
-    // updateLod() decides which crown is visible each frame; start on cheap.
-    rich.visible = false;
-    meshes.push(trunks, cheap, rich);
-    cells.push({ cheap, rich });
   }
   return { cells, meshes };
 }
@@ -807,9 +921,11 @@ export function buildVegetation(
     keepTree
   );
   trees.push(...collectCanopy(features.canopy, ctx, ndviAt, keepTree));
-  if (trees.length > 0) {
+  const extras = features.extraTrees ?? [];
+  if (trees.length + extras.length > 0) {
     const built = buildTrees(
       trees,
+      extras,
       sunDirection,
       shimmer,
       uTime,

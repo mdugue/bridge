@@ -21,7 +21,7 @@ const canopy = (x: number): CanopyFeature => ({
   properties: { h: 12 },
 });
 
-test("one trunk per tree plus a cheap and a rich crown per shape present", () => {
+test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the canopy", () => {
   // round + oval + small share the broadleaf crown; columnar, conifer and
   // weeping each get their own.
   const inv = buildTreeInventory(
@@ -37,9 +37,20 @@ test("one trunk per tree plus a cheap and a rich crown per shape present", () =>
   );
   expect(inv.counts).toEqual({ broad: 3, spindle: 1, cone: 1, weep: 1 });
   const census = sceneCensus([inv.control.group]);
-  // 1 trunk mesh + 4 shapes × 2 LODs, all in one 250 m chunk
-  expect(census.meshes).toBe(1 + 4 * 2);
-  expect(census.instances).toBe(6 + 6 * 2);
+  // 3 reshaped shapes × 2 LODs, all in one 250 m chunk; no trunk mesh
+  expect(census.meshes).toBe(3 * 2);
+  expect(census.instances).toBe(3 * 2);
+  // Every trunk and the 3 broadleaf crowns ride in the canopy's meshes: one
+  // trunk mesh + the cheap and the rich crown, no extra draw call.
+  expect(inv.instances).toHaveLength(6);
+  expect(inv.instances.filter((t) => t.crown)).toHaveLength(3);
+  const veg = buildVegetation(
+    { rows: [], canopy: [canopy(100)], extraTrees: inv.instances },
+    ctx
+  );
+  const merged = sceneCensus([veg.group]);
+  expect(merged.meshes).toBe(3);
+  expect(merged.instances).toBe(1 + 6 + (1 + 3) * 2);
 });
 
 test("crowns stand on the ground, never NaN (a NaN matrix culls the chunk)", () => {
@@ -66,11 +77,22 @@ test("keepTree vetoes the canopy points inside an inventory crown", () => {
   expect(sceneCensus([veg.group]).instances).toBe(3);
 });
 
+test("a tree in forest/copse (f = 1) vetoes no canopy tree", () => {
+  const woodland: TreeFeature = {
+    geometry: { type: "Point", coordinates: [0, 0] },
+    properties: { a: 0, d: 10, h: 12, l: "d", f: 1 },
+  };
+  const inv = buildTreeInventory([woodland], ctx);
+  expect(inv.keepTree(3, 0)).toBe(true);
+  expect(inv.instances).toHaveLength(1);
+});
+
 test("empty input builds nothing and vetoes nothing; the control still works", () => {
   const inv = buildTreeInventory([], ctx);
   expect(inv.control.group.children).toHaveLength(0);
+  expect(inv.instances).toHaveLength(0);
   expect(inv.keepTree(0, 0)).toBe(true);
-  const built = buildTreeInventory([tree(5, 0)], ctx);
+  const built = buildTreeInventory([tree(5, 2)], ctx);
   expect(() => built.control.applyLook(LOOK_DEFAULTS)).not.toThrow();
   expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(true);
   expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(false);

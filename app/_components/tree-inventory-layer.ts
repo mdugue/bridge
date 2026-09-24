@@ -30,8 +30,6 @@ import {
   buildCrownGeo,
   buildCrownGeoRich,
   buildCrownMaterial,
-  buildTrunkGeo,
-  buildTrunkMaterial,
   CHUNK_SIZE,
   crownColor,
   hash,
@@ -39,15 +37,16 @@ import {
   LOD_NEAR_OUT_M,
   type RasterSampler,
   TRUNK_H,
+  type TreeInstance,
   type TreeVeto,
   type VegetationContext,
   type VegetationControl,
 } from "./vegetation-layer";
 
 /**
- * 🧪 Tree inventory layer (`?trees=kataster`): the Dresden street-tree
- * cadastre (scripts/extract-trees.sh) drawn at each tree's surveyed position,
- * height and crown diameter, with an archetype silhouette per genus/cultivar
+ * Tree inventory layer: the Dresden street-tree cadastre
+ * (scripts/extract-trees.sh) drawn at each tree's surveyed position, height
+ * and crown diameter, with an archetype silhouette per genus/cultivar
  * (lib/city/tree-inventory.ts).
  *
  * It reuses everything the canopy trees are made of — the lobed crown and the
@@ -60,11 +59,12 @@ import {
  * a non-uniform instance scale (width = crown diameter, depth = height minus
  * the clear stem), so round, oval and small ornamentals share one mesh.
  *
- * Cost: per 250 m chunk one trunk mesh plus one crown mesh per shape present
- * (at most four; broadleaf nearly everywhere, flame often, cone and dome
- * rarely), each doubled by the invisible other LOD. Merged into the canopy's
- * own chunk meshes the broadleaf share would cost no draw call at all — the
- * prototype keeps a separate group so the flag stays a clean toggle.
+ * Cost: the trunks and the broadleaf crowns (≈93 % of the trees) are not
+ * meshes of this layer at all — they are handed to the canopy
+ * (`instances`, vegetation-layer.ts TreeInstance) and ride in its chunk
+ * meshes, so they cost instances, not draw calls. Only the three reshaped
+ * silhouettes get meshes here: per 250 m chunk one per shape present (flame
+ * often, cone and dome rarely), each doubled by the invisible other LOD.
  */
 
 /** Unit-space silhouette: a direction on the unit sphere (its height `dy`
@@ -350,20 +350,48 @@ function trunkGirth(t: InventoryTree): number {
   return Math.min(Math.max((t.ext.crownTop / 5.8) * 0.8, 0.45), 5);
 }
 
-function writeTrunks(mesh: InstancedMesh, items: InventoryTree[]): void {
-  const m = new Matrix4();
-  const q = new Quaternion();
-  const p = new Vector3();
-  const s = new Vector3();
-  items.forEach((t, i) => {
-    const girth = trunkGirth(t);
-    p.set(t.x, t.ground, t.z);
-    q.setFromAxisAngle(Y_AXIS, t.rot);
-    s.set(girth, t.ext.trunkTop / TRUNK_H, girth);
-    mesh.setMatrixAt(i, m.compose(p, q, s));
+function trunkMatrix(t: InventoryTree): Matrix4 {
+  const girth = trunkGirth(t);
+  return new Matrix4().compose(
+    new Vector3(t.x, t.ground, t.z),
+    new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
+    new Vector3(girth, t.ext.trunkTop / TRUNK_H, girth)
+  );
+}
+
+/** The crown's local box fitted to the tree's crown (see writeCrowns). */
+function crownMatrix(t: InventoryTree, fit: FittedGeo): Matrix4 {
+  const sy = (t.ext.crownTop - t.ext.crownBase) / fit.height;
+  const sxz = t.ext.crownWidth / fit.width;
+  return new Matrix4().compose(
+    new Vector3(t.x, t.ground + t.ext.crownBase - fit.minY * sy, t.z),
+    new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
+    new Vector3(sxz, sy, sxz)
+  );
+}
+
+/**
+ * What the canopy draws for the inventory: every trunk, and the broadleaf
+ * crowns (fitted to the canopy's own cheap and rich crown geometry, which
+ * are the very geometries `broad` holds).
+ */
+function canopyInstances(
+  trees: InventoryTree[],
+  broad: ShapeGeos["broad"]
+): TreeInstance[] {
+  return trees.map((t) => {
+    const out: TreeInstance = { x: t.x, z: t.z, trunk: trunkMatrix(t) };
+    if (t.shape === "broad") {
+      const colour = new Color();
+      inventoryColor(colour, t, hash(t.x * 0.3 + t.z * 0.7) - 0.5);
+      out.crown = {
+        cheap: crownMatrix(t, broad.cheap),
+        rich: crownMatrix(t, broad.rich),
+        colour,
+      };
+    }
+    return out;
   });
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.computeBoundingSphere();
 }
 
 /**
@@ -439,17 +467,23 @@ function crownPair(
 }
 
 export interface TreeInventory {
+  /** the reshaped silhouettes (flame, cone, dome) — this layer's own meshes */
   control: VegetationControl;
   /** per-tile census of what was built, for the cost report */
   counts: Record<CrownShape, number>;
+  /** every trunk and the broadleaf crowns, for the canopy's chunk meshes
+   *  (VegetationFeatures.extraTrees) */
+  instances: TreeInstance[];
   /** false where an inventory tree stands (VegetationFeatures.keepTree);
-   *  a canopy point that clearly overtops it is kept (tree-inventory.ts) */
+   *  a canopy point that clearly overtops it is kept, and a tree in DLM
+   *  forest/copse (`f`) vetoes nothing (tree-inventory.ts) */
   keepTree: TreeVeto;
 }
 
 /**
- * Builds one tile's inventory trees. Empty input yields an empty group and a
- * `keepTree` that vetoes nothing. Added to the Y-up `scene`, like every tree.
+ * Builds one tile's inventory trees. Empty input yields an empty group, no
+ * instances and a `keepTree` that vetoes nothing. The group is added to the
+ * Y-up `scene`, like every tree; the instances go to buildVegetation.
  */
 export function buildTreeInventory(
   features: TreeFeature[],
@@ -472,9 +506,12 @@ export function buildTreeInventory(
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   const counts = { broad: 0, spindle: 0, cone: 0, weep: 0 };
 
+  // A tree in DLM forest/copse (the bake's `f`) vetoes nothing: there the
+  // measured canopy is denser than the register, and letting the register
+  // thin it made parks and woods visibly sparser.
   const covers = footprintIndex(
     features.flatMap((f) =>
-      f.geometry?.type === "Point" && f.properties
+      f.geometry?.type === "Point" && f.properties && f.properties.f !== 1
         ? [
             {
               x: f.geometry.coordinates[0],
@@ -488,10 +525,11 @@ export function buildTreeInventory(
   );
   const trees = collectTrees(features, ctx, ndviAt);
   const cells: CellLod[] = [];
+  let instances: TreeInstance[] = [];
   if (trees.length > 0) {
     const geos = buildShapeGeos();
-    const trunkGeo = buildTrunkGeo();
-    const trunkMat = buildTrunkMaterial(ctx.heightFog);
+    instances = canopyInstances(trees, geos.broad);
+    counts.broad = trees.filter((t) => t.shape === "broad").length;
     const crownMat = buildCrownMaterial(
       ctx.sunDirection ?? new Vector3(0, 1, 0),
       shimmer,
@@ -501,13 +539,7 @@ export function buildTreeInventory(
       leafBright,
       ctx.heightFog
     );
-    for (const cell of bucket(trees)) {
-      const trunks = new InstancedMesh(trunkGeo, trunkMat, cell.length);
-      trunks.castShadow = true;
-      // What each mesh is, for the cost model (scripts/eval/kataster-cost.ts).
-      trunks.userData.treePart = "trunk";
-      writeTrunks(trunks, cell);
-      group.add(trunks);
+    for (const cell of bucket(trees.filter((t) => t.shape !== "broad"))) {
       for (const shape of CROWN_SHAPES) {
         const items = cell.filter((t) => t.shape === shape);
         if (items.length === 0) {
@@ -525,6 +557,7 @@ export function buildTreeInventory(
 
   return {
     counts,
+    instances,
     keepTree: (x, y, h) => !covers(x, y, h),
     control: {
       group,

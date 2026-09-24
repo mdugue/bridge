@@ -32,15 +32,6 @@ export type SceneProfile = "full" | "lite";
 
 export type DeviceTier = "desktop" | "mobile";
 
-/**
- * Where the trees come from. `canopy` is the product: DLM tree rows plus the
- * DOM1 canopy points. `kataster` (🧪, `?trees=kataster`) adds the Dresden
- * street-tree cadastre at its surveyed positions, heights, crown widths and
- * archetype shapes (tree-inventory-layer.ts), and drops the row/canopy trees
- * standing inside a cadastre tree's crown.
- */
-export type TreeSource = "canopy" | "kataster";
-
 /** The N8AO quality modes this scene uses (the pass also knows Low/High/Ultra). */
 export type AoQuality = "Medium" | "Performance";
 
@@ -51,33 +42,6 @@ export interface SceneBudget {
   neighbourTiles: boolean;
   profile: SceneProfile;
   tier: DeviceTier;
-  /** the tree inputs (experimental: `?trees=kataster`) */
-  trees: TreeSource;
-  /** 🧪 experimental vegetation layers, opt-in via `?veg=` (see vegExtrasFromSearch) */
-  vegExtras: VegExtras;
-}
-
-/**
- * 🧪 Opt-in vegetation from the laser-scan bake (scripts/extract-lowveg.sh),
- * off by default so a normal visit is unchanged: `low` = hedges + shrubs
- * under 3 m, `trees` = crown peaks outside the canopy mask (courtyards,
- * gardens). Both are extra requests, extra instances and extra shadow casters.
- */
-export interface VegExtras {
-  low: boolean;
-  trees: boolean;
-}
-
-/** `?veg=low`, `?veg=trees`, `?veg=low,trees` or `?veg=all`. Pure, for tests. */
-export function vegExtrasFromSearch(search: string): VegExtras {
-  const parts = (new URLSearchParams(search).get("veg") ?? "")
-    .split(",")
-    .map((p) => p.trim());
-  const all = parts.includes("all");
-  return {
-    low: all || parts.includes("low"),
-    trees: all || parts.includes("trees"),
-  };
 }
 
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
@@ -92,13 +56,6 @@ export function sceneProfileFromSearch(search: string): SceneProfile {
  */
 export function liteKeepsBlockFromSearch(search: string): boolean {
   return new URLSearchParams(search).get("block") === "1";
-}
-
-/** `?trees=kataster` opts into the tree-cadastre prototype. Pure. */
-export function treeSourceFromSearch(search: string): TreeSource {
-  return new URLSearchParams(search).get("trees") === "kataster"
-    ? "kataster"
-    : "canopy";
 }
 
 /** The media query that marks a touch-first device (also drives the touch HUD). */
@@ -121,8 +78,6 @@ export function sceneBudgetFor(
     tier,
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
     lowRasters: tier === "mobile",
-    trees: treeSourceFromSearch(search),
-    vegExtras: vegExtrasFromSearch(search),
   };
 }
 

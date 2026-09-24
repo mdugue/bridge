@@ -498,7 +498,6 @@ export default function CityWalk({
           onDefaultTime={() => updateSun(day, INITIAL_MINUTES)}
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
-          treeCadastre={budget.trees === "kataster"}
           rememberedView={rememberedView}
           resetLook={() => look.set(LOOK_DEFAULTS)}
           setRememberedView={setRememberedView}

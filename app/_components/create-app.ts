@@ -514,7 +514,8 @@ async function bootApp(
   // Per-tile vegetation handles, kept so the loop can drive crown LOD and the
   // HUD can retune shimmer / multi-tuft.
   const vegControls: VegetationControl[] = [];
-  // 🧪 ?veg=low hedges + shrubs, one group per tile (static: no per-frame work).
+  // OSM hedges (low-vegetation-layer.ts), one group per tile (static: no
+  // per-frame work).
   const lowVegGroups: Group[] = [];
   // Per-tile lamp visuals; the real (shared, fixed) point-light pool is built
   // once after all tiles load so NUM_POINT_LIGHTS stays constant.
@@ -597,22 +598,6 @@ async function bootApp(
     return t;
   };
 
-  // 🧪 The opt-in laser-scan vegetation (scene-profile.ts `vegExtras`): only
-  // requested when its flag is on, so the default page makes no extra request.
-  const fetchVegExtras = async (
-    tile: TileUrls
-  ): Promise<{ low: LowVegFeature[]; trees: CanopyExtraFeature[] }> => {
-    const [low, trees] = await Promise.all([
-      budget.vegExtras.low
-        ? fetchFeatures<LowVegFeature>(tile.lowveg, opts.signal)
-        : [],
-      budget.vegExtras.trees
-        ? fetchFeatures<CanopyExtraFeature>(tile.canopyx, opts.signal)
-        : [],
-    ]);
-    return { low, trees };
-  };
-
   /** The night factor of the last setSun, applied to lamps that arrive later. */
   let currentNight = 0;
 
@@ -624,18 +609,25 @@ async function bootApp(
     t: TerrainLayer,
     onFetched?: () => void
   ): Promise<void> => {
-    const [rows, canopy, ndviAt, lampFeatures, inventoryTrees, extras] =
-      await Promise.all([
-        fetchFeatures<VegRowFeature>(tile.vegrows, opts.signal),
-        fetchFeatures<CanopyFeature>(tile.canopy, opts.signal),
-        loadNdviSampler(tile.ndvi, t.bounds, opts.signal),
-        fetchFeatures<LampFeature>(tile.lamps, opts.signal),
-        // 🧪 ?trees=kataster: the street-tree cadastre (tree-inventory-layer.ts)
-        budget.trees === "kataster"
-          ? fetchFeatures<TreeFeature>(tile.trees, opts.signal)
-          : Promise.resolve([]),
-        fetchVegExtras(tile),
-      ]);
+    const [
+      rows,
+      canopy,
+      ndviAt,
+      lampFeatures,
+      inventoryTrees,
+      scanTrees,
+      hedges,
+    ] = await Promise.all([
+      fetchFeatures<VegRowFeature>(tile.vegrows, opts.signal),
+      fetchFeatures<CanopyFeature>(tile.canopy, opts.signal),
+      loadNdviSampler(tile.ndvi, t.bounds, opts.signal),
+      fetchFeatures<LampFeature>(tile.lamps, opts.signal),
+      // the street-tree cadastre (tree-inventory-layer.ts)
+      fetchFeatures<TreeFeature>(tile.trees, opts.signal),
+      // laser-scan crowns outside the canopy mask (primary tile only)
+      fetchFeatures<CanopyExtraFeature>(tile.canopyx, opts.signal),
+      fetchFeatures<LowVegFeature>(tile.lowveg, opts.signal),
+    ]);
     ensureAlive();
     // The features are in; the canopy build is the other half of the wait.
     onFetched?.();
@@ -653,16 +645,20 @@ async function bootApp(
     const vegetation = buildVegetation(
       {
         rows,
-        // 🧪 ?veg=trees: laser-scan crowns outside the canopy mask join the
-        // canopy as ordinary trees (they carry the same measured `h`).
-        canopy: extras.trees.length > 0 ? [...canopy, ...extras.trees] : canopy,
+        // The laser-scan crowns outside the canopy mask join the canopy as
+        // ordinary trees (they carry the same measured `h`); the bake already
+        // dropped the ones a cadastre tree claims.
+        canopy: scanTrees.length > 0 ? [...canopy, ...scanTrees] : canopy,
         ndviAt: ndviAt ?? undefined,
         keepTree: inventory?.keepTree,
+        // The cadastre's trunks and broadleaf crowns ride in the canopy's
+        // chunk meshes (instances, not draw calls).
+        extraTrees: inventory?.instances,
       },
       vegCtx
     );
-    if (extras.low.length > 0) {
-      const low = buildLowVegetation(extras.low, { ...ground, heightFog });
+    if (hedges.length > 0) {
+      const low = buildLowVegetation(hedges, { ...ground, heightFog });
       scene.add(low);
       lowVegGroups.push(low);
     }

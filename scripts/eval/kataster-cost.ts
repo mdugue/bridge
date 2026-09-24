@@ -1,8 +1,11 @@
 /**
- * Cost of the 🧪 tree-cadastre layer (`?trees=kataster`), measured the way
+ * Cost of the tree cadastre and the laser-scan vegetation, measured the way
  * the renderer would pay it — without a GPU. For the whole 2×2 block it
- * builds the vegetation twice (today's rows + canopy; the same plus the
- * cadastre with the canopy/row veto), then reports:
+ * builds the vegetation three ways — `canopy` (rows + canopy only, the look
+ * before the cadastre), `kataster` (the same plus the cadastre with the
+ * canopy/row veto, its trunks and broadleaf crowns merged into the canopy's
+ * chunk meshes) and `shipped` (that plus the laser-scan extra trees and the
+ * OSM hedges: what the viewer draws) — then reports:
  *
  *   - build: CPU time of the tile builds, and what was built (the census:
  *     meshes, instances, triangles — both crown LODs included)
@@ -29,14 +32,17 @@ import {
   Vector3,
 } from "three";
 import { sceneCensus } from "../../app/_components/scene-census";
+import { buildLowVegetation } from "../../app/_components/low-vegetation-layer";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
 import {
   buildVegetation,
   type VegetationControl,
 } from "../../app/_components/vegetation-layer";
 import type {
+  CanopyExtraFeature,
   CanopyFeature,
   FeatureCollection,
+  LowVegFeature,
   TreeFeature,
   VegRowFeature,
 } from "../../lib/city/features";
@@ -55,12 +61,19 @@ const manifest = JSON.parse(
   readFileSync(join(PUB, "manifest.json"), "utf8")
 ) as DataManifest;
 const served = (file: string) => join(PUB, manifest.files[file] ?? file);
-const features = <F>(file: string): F[] =>
-  (
-    JSON.parse(
-      readFileSync(join(ROOT, "data", "dlm", file), "utf8")
-    ) as FeatureCollection<F>
-  ).features ?? [];
+const features = <F>(file: string): F[] => {
+  try {
+    return (
+      (
+        JSON.parse(
+          readFileSync(join(ROOT, "data", "dlm", file), "utf8")
+        ) as FeatureCollection<F>
+      ).features ?? []
+    );
+  } catch {
+    return []; // an optional artifact this tile does not have
+  }
+};
 
 const primary = TILE_BLOCK[0];
 const meta = JSON.parse(
@@ -83,12 +96,18 @@ function heightAtFor(tile: string, n: number) {
     sampleHeightfield({ elevations, n, bounds: header.bounds }, x, y);
 }
 
-type Mode = "canopy" | "kataster";
-const controls: Record<Mode, VegetationControl[]> = {
+const MODES = ["canopy", "kataster", "shipped"] as const;
+type Mode = (typeof MODES)[number];
+/** What a mode built: its vegetation controls plus any static groups. */
+const controls: Record<
+  Mode,
+  { group: Object3D; updateLod?: VegetationControl["updateLod"] }[]
+> = {
   canopy: [],
   kataster: [],
+  shipped: [],
 };
-const buildMs: Record<Mode, number> = { canopy: 0, kataster: 0 };
+const buildMs: Record<Mode, number> = { canopy: 0, kataster: 0, shipped: 0 };
 const heights: ((x: number, y: number) => number | null)[] = [];
 
 for (const spec of TILE_BLOCK) {
@@ -98,6 +117,8 @@ for (const spec of TILE_BLOCK) {
   const rows = features<VegRowFeature>(`vegrows_${spec.tile}.geojson`);
   const canopy = features<CanopyFeature>(`canopy_${spec.tile}.geojson`);
   const trees = features<TreeFeature>(`trees_${spec.tile}.geojson`);
+  const scan = features<CanopyExtraFeature>(`canopyx_${spec.tile}.geojson`);
+  const hedges = features<LowVegFeature>(`lowveg_${spec.tile}.geojson`);
   let t0 = performance.now();
   controls.canopy.push(buildVegetation({ rows, canopy }, ctx));
   buildMs.canopy += performance.now() - t0;
@@ -105,9 +126,28 @@ for (const spec of TILE_BLOCK) {
   const inv = buildTreeInventory(trees, ctx);
   controls.kataster.push(
     inv.control,
-    buildVegetation({ rows, canopy, keepTree: inv.keepTree }, ctx)
+    buildVegetation(
+      { rows, canopy, keepTree: inv.keepTree, extraTrees: inv.instances },
+      ctx
+    )
   );
   buildMs.kataster += performance.now() - t0;
+  t0 = performance.now();
+  const inv2 = buildTreeInventory(trees, ctx);
+  controls.shipped.push(
+    inv2.control,
+    buildVegetation(
+      {
+        rows,
+        canopy: [...canopy, ...scan],
+        keepTree: inv2.keepTree,
+        extraTrees: inv2.instances,
+      },
+      ctx
+    ),
+    { group: buildLowVegetation(hedges, ctx) }
+  );
+  buildMs.shipped += performance.now() - t0;
 }
 
 const groundAt = (x: number, y: number): number => {
@@ -146,42 +186,18 @@ function meshesOf(roots: Object3D[]): InstancedMesh[] {
   return out;
 }
 
-const CHUNK = 250;
-const tmp = new Matrix4();
-const at = new Vector3();
-/** The 250 m chunk an instanced mesh belongs to (its first instance). */
-function chunkOf(m: InstancedMesh): string {
-  m.getMatrixAt(0, tmp);
-  at.setFromMatrixPosition(tmp);
-  return `${Math.floor(at.x / CHUNK)},${Math.floor(at.z / CHUNK)}`;
-}
-
-/** Inventory parts that would fold into the canopy's own chunk meshes if the
- *  layer were merged (same crown / trunk geometry and material). */
-const MERGEABLE = new Set(["trunk", "broad"]);
-
 function passCost(
   meshes: InstancedMesh[],
   test: (m: InstancedMesh) => boolean
-): PassCost & { callsIfMerged: number } {
-  const cost = { calls: 0, triangles: 0, callsIfMerged: 0 };
-  const canopyChunks = new Set<string>();
-  const mergeable: InstancedMesh[] = [];
+): PassCost {
+  const cost = { calls: 0, triangles: 0 };
   for (const m of meshes) {
     if (!m.boundingSphere || !test(m)) {
       continue;
     }
     cost.calls += 1;
     cost.triangles += trisOf(m) * m.count;
-    const part = m.userData.treePart as string | undefined;
-    if (part === undefined) {
-      canopyChunks.add(chunkOf(m));
-    } else if (MERGEABLE.has(part)) {
-      mergeable.push(m);
-    }
   }
-  const folded = mergeable.filter((m) => canopyChunks.has(chunkOf(m))).length;
-  cost.callsIfMerged = cost.calls - folded;
   return cost;
 }
 
@@ -200,14 +216,10 @@ const shots = readdirSync(shotsDir)
   .sort();
 
 const report: Record<string, unknown> = {
-  buildMs: {
-    canopy: Math.round(buildMs.canopy),
-    kataster: Math.round(buildMs.kataster),
-  },
-  built: {
-    canopy: sceneCensus(controls.canopy.map((c) => c.group)),
-    kataster: sceneCensus(controls.kataster.map((c) => c.group)),
-  },
+  buildMs: Object.fromEntries(MODES.map((m) => [m, Math.round(buildMs[m])])),
+  built: Object.fromEntries(
+    MODES.map((m) => [m, sceneCensus(controls[m].map((c) => c.group))])
+  ),
 };
 
 const views: Record<
@@ -235,9 +247,9 @@ for (const file of shots) {
   const ahead = shadowFocusAhead(radius);
   const focus = new Vector3(pos.x + d.x * ahead, ground, pos.z + d.z * ahead);
   const entry = {} as Record<Mode, { main: PassCost; shadow: PassCost }>;
-  for (const mode of ["canopy", "kataster"] as Mode[]) {
+  for (const mode of MODES) {
     for (const c of controls[mode]) {
-      c.updateLod(cam.position);
+      c.updateLod?.(cam.position);
     }
     const meshes = meshesOf(controls[mode].map((c) => c.group));
     entry[mode] = {
