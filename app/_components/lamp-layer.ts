@@ -6,6 +6,7 @@ import {
   CanvasTexture,
   CircleGeometry,
   CylinderGeometry,
+  InstancedBufferAttribute,
   Group,
   InstancedMesh,
   MeshBasicMaterial,
@@ -14,8 +15,12 @@ import {
   PointLight,
   Points,
   PointsMaterial,
+  Sprite,
   Vector3,
 } from "three";
+import { instancedBufferAttribute } from "three/tsl";
+import { PointsNodeMaterial } from "three/webgpu";
+import { nodeRenderer } from "./gpu-mode";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { LampFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
@@ -143,6 +148,9 @@ function buildGlow(heads: Vector3[], sprite: CanvasTexture): Points {
     positions[i * 3 + 1] = heads[i].y;
     positions[i * 3 + 2] = heads[i].z;
   }
+  if (nodeRenderer()) {
+    return buildNodeGlow(positions, heads.length, sprite);
+  }
   const geo = new BufferGeometry();
   geo.setAttribute("position", new BufferAttribute(positions, 3));
   geo.computeBoundingSphere();
@@ -161,6 +169,39 @@ function buildGlow(heads: Vector3[], sprite: CanvasTexture): Points {
   points.name = "lamp-glow";
   points.visible = false;
   return points;
+}
+
+/**
+ * SPIKE (plan 020): WebGPU draws point primitives 1 px wide, whatever their
+ * size, so the halos are an instanced Sprite with a PointsNodeMaterial —
+ * three's way to get sized, attenuated points on the node renderer.
+ */
+function buildNodeGlow(
+  positions: Float32Array,
+  count: number,
+  sprite: CanvasTexture
+): Points {
+  const mat = new PointsNodeMaterial({
+    map: sprite,
+    size: GLOW_SIZE,
+    sizeAttenuation: true,
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+    color: 0xff_d0_89,
+    opacity: 0,
+  });
+  mat.positionNode = instancedBufferAttribute(
+    new InstancedBufferAttribute(positions, 3)
+  );
+  const glow = new Sprite(mat);
+  glow.count = count;
+  glow.frustumCulled = false;
+  glow.name = "lamp-glow";
+  glow.visible = false;
+  // reason: spike — callers only touch visible and material.opacity.
+  return glow as unknown as Points;
 }
 
 /** Flat additive disc on the pavement — the "pool" that sells night. */

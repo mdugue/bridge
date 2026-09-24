@@ -124,7 +124,7 @@ async function main(): Promise<void> {
           (s) => window.__poc?.handle.applyCameraState(s),
           states[id]
         );
-        await page.waitForTimeout(2500);
+        await page.waitForTimeout(10_000);
         fps[id] = Math.round((await measure(page)) * 10) / 10;
         await page
           .locator("canvas[data-engine]")

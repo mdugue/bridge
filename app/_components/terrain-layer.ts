@@ -435,7 +435,7 @@ export async function dressTerrain(
   const water = !splat
     ? undefined
     : nodeRenderer()
-      ? createNodeWaterLayer(mesh.geometry, splat)
+      ? createNodeWaterLayer(mesh.geometry, splat, opts.sunDirection)
       : createWaterLayer(
           mesh.geometry,
           splat,

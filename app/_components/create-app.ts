@@ -37,6 +37,7 @@ import { createCityCollider } from "./collision";
 import { fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
+import { installNodeFog } from "./height-fog-node";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
@@ -395,6 +396,9 @@ async function bootApp(
   // Shared valley height-fog uniforms (by reference): folded into every
   // fog-receiving material; the start follows the lowest terrain landed.
   const heightFog = createHeightFogUniforms();
+  if (nodeRenderer()) {
+    installNodeFog(scene, heightFog);
+  }
   // Shared meadow-NDVI tint strength (by reference) for the HUD slider.
   const meadowNdvi = { value: LOOK_DEFAULTS.meadowNdvi };
   // The lowest real terrain elevation so far (the Elbe surface): the floor

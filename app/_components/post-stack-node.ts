@@ -1,36 +1,61 @@
-import type { PerspectiveCamera, Scene } from "three";
+import { type PerspectiveCamera, type Scene, Vector3 } from "three";
+import { dof } from "three/examples/jsm/tsl/display/DepthOfFieldNode.js";
 import { ao } from "three/examples/jsm/tsl/display/GTAONode.js";
 import { smaa } from "three/examples/jsm/tsl/display/SMAANode.js";
 import {
-  unpackRGBToNormal,
-  packNormalToRGB,
+  clamp,
+  dot,
   float,
+  floor,
+  fract,
   length,
   mix,
   mrt,
+  nodeObject,
   normalView,
   output,
+  packNormalToRGB,
   pass,
   sample,
+  screenCoordinate,
   screenUV,
   smoothstep,
   uniform,
+  unpackRGBToNormal,
+  vec2,
+  vec3,
   vec4,
 } from "three/tsl";
-import { RenderPipeline, type WebGPURenderer } from "three/webgpu";
-import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { type Node, RenderPipeline, type WebGPURenderer } from "three/webgpu";
+import { type FocusMode, LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { PostStack } from "./post-stack";
 
-/** GTAO radius in metres (view space). N8AO's was 12 m of a different
- *  algorithm; tuned by eye on the spike's plates. */
+/** GTAO radius in metres (view space); N8AO ran 12 m of a different algorithm. */
 const AO_RADIUS_M = 6;
+/** Initial focus distance before the first crosshair raycast lands. */
+const HYPERFOCAL_M = 600;
+/** Same lens model as post-stack.ts: the sharp band scales with distance. */
+function focusRangeFor(distance: number): number {
+  return Math.min(Math.max(distance * 0.7, 12), 2500);
+}
+/** Depth grading reaches full strength at this view distance (m). */
+const GRADE_DISTANCE_M = 800;
+
+/** The paper-grain hash of paper-grain-effect.ts. */
+function hash21(p: Node<"vec2">): Node<"float"> {
+  const q = fract(p.mul(vec2(123.34, 456.21)));
+  const r = q.add(dot(q, q.add(45.32)));
+  return fract(r.x.mul(r.y));
+}
 
 /**
- * SPIKE (plan 020): the node post pipeline on WebGPURenderer — scene pass
- * with a normal MRT → GTAO at half resolution, multiplied in by the
- * contact-shadows slider → vignette → SMAA. Tone mapping and the sRGB
- * conversion are the pipeline's output transform. Not ported for the
- * spike: DoF, depth grading, paper grain.
+ * SPIKE (plan 020): the post stack of post-stack.ts on three's node pipeline —
+ * scene pass with a normal MRT → GTAO (half res) × contact slider →
+ * DoF (`DepthOfFieldNode`, crosshair autofocus, dropped while moving) → SMAA →
+ * depth grading (warm near, cool + desaturated far) → vignette → paper grain.
+ * Tone mapping and sRGB are the pipeline's output transform. Everything is a
+ * few lines of TSL; `postprocessing`, `n8ao` and the two custom effect
+ * classes have no counterpart here.
  */
 export function createNodePostStack(
   renderer: WebGPURenderer,
@@ -43,6 +68,7 @@ export function createNodePostStack(
   const color = scenePass.getTextureNode("output");
   const normalColor = scenePass.getTextureNode("normal");
   const depth = scenePass.getTextureNode("depth");
+  const viewZ = scenePass.getViewZNode();
   const normal = sample((uv) => unpackRGBToNormal(normalColor.sample(uv)));
 
   const aoPass = ao(depth, normal, camera);
@@ -50,23 +76,102 @@ export function createNodePostStack(
   aoPass.radius.value = AO_RADIUS_M;
   const contact = uniform(LOOK_DEFAULTS.contact);
   const occlusion = mix(float(1), aoPass.getTextureNode().r, contact);
+  const lit = vec4(color.rgb.mul(occlusion), color.a);
 
-  // The old VignetteEffect (offset 0.28, darkness 0.5), approximately.
-  const edge = length(screenUV.sub(0.5)).mul(2);
-  const vignette = mix(float(1), float(0.5), smoothstep(0.28, 1.4, edge));
+  const focusDistance = uniform(HYPERFOCAL_M);
+  const focusRange = uniform(focusRangeFor(HYPERFOCAL_M));
+  const focused = nodeObject(
+    dof(lit, viewZ, focusDistance, focusRange, uniform(1))
+  ) as unknown as Node<"vec4">;
 
-  const lit = vec4(color.rgb.mul(occlusion).mul(vignette), color.a);
-  pipeline.outputNode = smaa(lit);
+  const grading = uniform(LOOK_DEFAULTS.grading);
+  const grain = uniform(LOOK_DEFAULTS.grain);
+  const finish = (input: Node<"vec4">): Node<"vec4"> => {
+    // reason: the effect nodes' types don't carry their vec4 output.
+    const aa = nodeObject(smaa(input)) as unknown as Node<"vec4">;
+    const t = smoothstep(
+      0.04,
+      1,
+      clamp(viewZ.negate().div(GRADE_DISTANCE_M), 0, 1)
+    ).mul(grading);
+    const tinted = aa.rgb.mul(
+      mix(vec3(1.045, 1, 0.94), vec3(0.91, 0.965, 1.06), t)
+    );
+    const luma = dot(tinted, vec3(0.2126, 0.7152, 0.0722));
+    const graded = mix(tinted, vec3(luma), t.mul(0.3));
+    const edge = length(screenUV.sub(0.5)).mul(2);
+    const vignette = mix(float(1), float(0.5), smoothstep(0.28, 1.4, edge));
+    const cell = floor(screenCoordinate.xy.div(1.6));
+    const speckle = hash21(cell)
+      .mul(0.65)
+      .add(hash21(cell.mul(0.31).add(17)).mul(0.35));
+    const fiber = hash21(vec2(cell.y.mul(0.713), 3.7))
+      .sub(0.5)
+      .mul(0.045);
+    const paper = float(1).add(
+      speckle.sub(0.5).mul(0.13).add(fiber).mul(grain)
+    );
+    return vec4(graded.mul(vignette).mul(paper), aa.a);
+  };
+  const withDof = finish(focused);
+  const withoutDof = finish(lit);
+
+  let dofWanted = LOOK_DEFAULTS.dof;
+  let regressed = false;
+  let current: Node<"vec4"> | null = null;
+  const applyGating = () => {
+    const next = dofWanted && !regressed ? withDof : withoutDof;
+    if (next !== current) {
+      current = next;
+      pipeline.outputNode = next;
+      pipeline.needsUpdate = true;
+    }
+  };
+  applyGating();
+
+  let focusMode: FocusMode = LOOK_DEFAULTS.focusMode;
+  let manualDistance = LOOK_DEFAULTS.focusDistanceM;
+  const focusPoint = new Vector3(0, 0, -HYPERFOCAL_M);
+  const inView = new Vector3();
+  const updateFocus = () => {
+    let d = manualDistance;
+    if (focusMode === "auto") {
+      inView.copy(focusPoint).applyMatrix4(camera.matrixWorldInverse);
+      d = Math.max(1, -inView.z);
+    }
+    focusDistance.value = d;
+    focusRange.value = focusRangeFor(d);
+  };
 
   return {
-    render: () => pipeline.render(),
-    getFocusInfo: () => ({ focusDistance: 0, focusRange: 0, bokehScale: 0 }),
+    render: () => {
+      updateFocus();
+      pipeline.render();
+    },
+    getFocusInfo: () => ({
+      focusDistance: focusDistance.value,
+      focusRange: focusRange.value,
+      bokehScale: 1,
+    }),
     setSize: () => undefined, // the pipeline follows the renderer's size
     applyLook: (look) => {
       contact.value = look.contact;
+      grading.value = Math.min(Math.max(look.grading, 0), 1);
+      grain.value = Math.min(Math.max(look.grain, 0), 1);
+      dofWanted = look.dof;
+      focusMode = look.focusMode;
+      manualDistance = Math.max(1, look.focusDistanceM);
+      applyGating();
     },
-    setRegressed: () => undefined,
-    setFocusTarget: () => undefined,
+    setRegressed: (on) => {
+      regressed = on;
+      applyGating();
+    },
+    setFocusTarget: (point) => {
+      if (focusMode === "auto" && point) {
+        focusPoint.copy(point);
+      }
+    },
     dispose: () => pipeline.dispose(),
   };
 }
