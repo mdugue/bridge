@@ -7,7 +7,7 @@
 
 [ADR 0006](./0006-tile-block-with-one-primary-and-one-artifact-map.md)
 fixed the world to a 2×2 block of 2 km tiles, loaded in full at boot, with
-one "primary" tile for collision and demolish. The maintainer wants more of
+one "primary" tile (spawn, recenter origin, full resolution). The maintainer wants more of
 the city. Loading more tiles up front does not scale:
 
 - Wire cost is small: ~2.2–2.7 MB per neighbour tile.
@@ -16,7 +16,8 @@ the city. Loading more tiles up front does not scale:
   and a building mesh.
 - Each tile that lands costs main-thread time: the canopy build, a terrain
   BVH and a texture upload.
-- Collision and demolish stop at the primary tile's edge.
+- Collision and demolish cover every loaded tile (since PR #46), but only
+  the fixed block — nothing beyond it is walkable.
 
 The serving side is not a constraint. The data is static, content-hashed
 files behind an `immutable` cache header (ADR 0007), so the number of files
