@@ -55,6 +55,31 @@ export interface LampFeature {
   properties: Record<string, unknown> | null;
 }
 
+/**
+ * Fountains, statues, memorial stones and columns (pipeline/bake/monuments.py):
+ * the Basis-DLM's monument points (GeoSN, the official names) conflated with
+ * OSM's `amenity=fountain` (ODbL, the basin outlines). A fountain with an
+ * outline is a Polygon — the rim, its hole (when there is one) the water;
+ * everything else is a Point.
+ */
+export type MonumentKind = "column" | "fountain" | "statue" | "stone";
+
+/** How a fountain's basin is dressed: a raised rim with jets, jets on flush
+ *  paving (a splash pad), or a still pool without any. */
+export type FountainStyle = "basin" | "pool" | "splash";
+
+export interface MonumentFeature {
+  geometry: PointGeometry | PolygonGeometry;
+  properties: {
+    /** a fountain with a DLM monument on it: a figure stands in the water */
+    figure?: boolean;
+    kind: MonumentKind;
+    name?: string;
+    source?: "dlm" | "dlm+osm" | "osm";
+    style?: FountainStyle;
+  } | null;
+}
+
 /** OSM retaining/city walls (pipeline/bake/walls.py, ODbL): the barrier/man_made
  *  kind (only retaining kinds reshape the terrain) and the height in metres. */
 export interface WallFeature {

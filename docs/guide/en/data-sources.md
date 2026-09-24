@@ -22,7 +22,8 @@ one you start on), the viewpoints and the credits.
 
 **OpenStreetMap (OSM)** — the world map maintained by volunteers. It fills
 gaps the official datasets leave: street lamps, station platforms,
-retaining walls with their heights, and what kind of structure a bridge is.
+retaining walls with their heights, what kind of structure a bridge is, and
+the shape of fountain basins.
 
 ## The datasets at a glance
 
@@ -31,9 +32,9 @@ retaining walls with their heights, and what kind of structure a bridge is.
 | **DGM1** | Terrain model, 1 m grid | GeoSN | The ground; seating every object on it; bridge abutment heights; the input for tree heights |
 | **DOM1** | Surface model, 1 m grid (terrain *plus* everything standing on it) | GeoSN | Tree heights (surface minus terrain); bridge deck heights |
 | **LoD2** | 3D building model with roof shapes | GeoSN | Every building's footprint, height, roof shape and attributes |
-| **Basis-DLM** | Digital landscape model (the land-use map) | GeoSN | Ground colours, water outlines, hedges and tree rows, railway areas and tracks, bridge outlines |
+| **Basis-DLM** | Digital landscape model (the land-use map) | GeoSN | Ground colours, water outlines, hedges and tree rows, railway areas and tracks, bridge outlines, monuments and fountains (position and official name) |
 | **DOP** | Digital orthophoto, 20 cm, with a near-infrared channel | GeoSN | Roof colours; vegetation greenness for tree crowns and meadows |
-| **OSM** | OpenStreetMap | Volunteers | Street lamps, station platforms, walls, bridge structure types |
+| **OSM** | OpenStreetMap | Volunteers | Street lamps, station platforms, walls, bridge structure types, fountain basins |
 
 Available from the same portal but **not used yet**: the laser-scan point
 cloud (individual tree crowns would come from it), the cadastral parcels
@@ -143,9 +144,9 @@ repository, because the build step reads it directly. See
 | **Update cycle** | Two rhythms, per GeoSN: a *basic update* in which every object is checked every 3–5 years, and a *priority update* in which important objects (roads, railways and the like) are checked every 3, 6 or 12 months. The download package is refreshed quarterly. |
 | **Resolution and accuracy** | Positional accuracy ±3 m for the essential line objects (roads, rails, rivers) and ±15 m for everything else, per GeoSN. Roads are centrelines with a width attribute, not surfaces. |
 | **Generally suited for** | A consistent, attributed base layer for GIS: joining specialist data to it, routing and navigation, land-use statistics, cartography at scales of about 1:10 000 to 1:25 000. |
-| **Used here for** | The ground colours (nine land-cover classes), the water outline, hedge and tree rows, the vegetation mask that gates tree placement, railway areas and track lines with track count, bridge centrelines and, where present, deck outlines. |
+| **Used here for** | The ground colours (nine land-cover classes), the water outline, hedge and tree rows, the vegetation mask that gates tree placement, railway areas and track lines with track count, bridge centrelines and, where present, deck outlines; the monuments, memorial stones, columns and named fountains (the Albertplatz fountains "Stilles Wasser" and "Stürmische Wogen", the Neptunbrunnen, …) with their official names. |
 | **Strengths** | Authoritative classification with useful attributes: road widths, number of tracks, electrification, bridge names. |
-| **Weaknesses** | Anything small or exact: roads must be widened by rule, railway lines come in short fragments that need merging, deck outlines exist mostly for major bridges, there is no street furniture and no platforms. At ±3 m a road edge can sit a lane off. |
+| **Weaknesses** | Anything small or exact: roads must be widened by rule, railway lines come in short fragments that need merging, deck outlines exist mostly for major bridges, there is no street furniture and no platforms. Monuments are points with a name only: no size, no shape, and nothing says which of them is a fountain — the viewer draws a stylised figure on a plinth, and takes a fountain's basin from OpenStreetMap. At ±3 m a road edge can sit a lane off. |
 | **Format and download** | Statewide package in Shape (or NAS or GeoPackage), about 1.2 GB; the project clips each tile out of it. [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html). |
 
 ### DOP20 RGBI — the aerial photos
@@ -180,7 +181,7 @@ repository, because the build step reads it directly. See
 | **Update cycle** | Continuous: edits are live within minutes. Extracts for download (Geofabrik) are rebuilt daily; the project reads such an extract, not the live database. |
 | **Resolution and accuracy** | No guarantee; in a well-mapped city typically metre-level positions. Completeness and tag consistency vary from street to street and mapper to mapper. |
 | **Generally suited for** | Things no official dataset has: street furniture, points of interest, names, informal paths, structure types; near-worldwide coverage; quick to fetch. |
-| **Used here for** | Lamp positions (`highway=street_lamp`), station platforms (`railway=platform`), retaining walls, city walls and embankments (`barrier=*`, `man_made=embankment`) with their `height` tag, and whether a bridge is an arch bridge (`bridge:structure`). |
+| **Used here for** | Lamp positions (`highway=street_lamp`), station platforms (`railway=platform`), retaining walls, city walls and embankments (`barrier=*`, `man_made=embankment`) with their `height` tag, whether a bridge is an arch bridge (`bridge:structure`), and fountains (`amenity=fountain`): the outline of each basin, whether it is a splash pad or a still pool, and the many small fountains the landscape model does not list. Where an official monument stands in an OSM basin, the fountain keeps the official name. |
 | **Strengths** | Human-readable tags for exactly the details the survey office does not model; the Brühlsche Terrasse exists here and nowhere else. |
 | **Weaknesses** | Not every lamp is mapped, heights are often missing (the viewer uses defaults per wall type), tags vary. Volunteer data must be credited (ODbL). |
 | **Download and licence** | One regional extract of the whole state, `sachsen-latest.osm.pbf`, downloaded from [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) (about 250 MB) and read locally, which avoids rate limits and makes the result reproducible. The lamp, platform and bridge-structure files committed today are older: they were fetched through the **Overpass API**, a live query service, before the bakes switched to the extract, and move to the extract at their next re-bake. Licence: **ODbL**, credit "© OpenStreetMap contributors". |
@@ -204,6 +205,7 @@ before it.
 | DOP (RGBI) | all four | flown **2024-03-19** (leaf-off) | GeoSN download service | derived roof colours and NDVI 2026-06-16/17 |
 | Basis-DLM | statewide package | the quarterly package current in **June 2026**; the exact release date was not noted and cannot be read from the portal afterwards because the package is replaced under the same file name (the share's file was dated 2026-07-28 when checked) | download page: "updated quarterly"; git history | derived files 2026-06-12, rail and bridge files re-baked 2026-09-18 |
 | OSM via Overpass (no longer used by the bakes; the committed lamp, platform and bridge-structure files still come from it) | all four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
+| OSM via BBBike | Dresden extract | the extract of 2026-09-19 (fountains only: Geofabrik could not be reached from the build machine that day) | `data/provenance.json` | 2026-09-24 |
 | OSM via Geofabrik | statewide extract | the daily extract of 2026-09-18 or shortly before | git history (walls re-baked that day); `osmium fileinfo -e` on the raw file prints the exact timestamp | 2026-09-18 |
 
 Note the **mismatch of dates inside one picture**: the ground and the tree
@@ -250,4 +252,5 @@ bridge-structure files still date from earlier Overpass API queries.
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
 
 The viewer shows both credits in the footer of its settings panel. The
-derived lamp and wall files carry the OSM credit inside the file as well.
+derived lamp and wall files carry the OSM credit inside the file as well;
+the monument file carries both credits, because it combines the two.

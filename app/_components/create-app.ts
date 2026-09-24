@@ -76,6 +76,7 @@ const SKY_COLOR = 0x9f_b6_cc;
 export type LayerName =
   | "city"
   | "lamps"
+  | "monuments"
   | "rail"
   | "terrain"
   | "vegetation"
@@ -699,6 +700,7 @@ async function bootApp(
         ),
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
+        monuments: census(dressings.map((d) => d.monuments)),
         rail: census(dressings.map((d) => d.rail)),
         walls: census(dressings.map((d) => d.walls)),
       },

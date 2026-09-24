@@ -252,6 +252,9 @@ test.describe("desktop viewer", () => {
     expect(stats.vegetation.instances).toBeGreaterThan(1000);
     // 339 OSM lamps: posts + heads + decals are instanced
     expect(stats.lamps.instances).toBeGreaterThan(100);
+    // 48 fountains, statues and stones (Albertplatz and around): plinths,
+    // figures and jets are instanced
+    expect(stats.monuments.instances).toBeGreaterThan(20);
     // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
     expect(stats.rail.triangles).toBeGreaterThan(0);
     // 292 wall lines

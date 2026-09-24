@@ -60,7 +60,7 @@ visual-variable codebook is in
   terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
   screen-space error (16 px) from the view camera **and the sun's shadow
   camera**, so a tile casting into the view stays loaded. Only the fine level
-  is dressed (vegetation, lamps, rails, walls); distance, not a "primary"
+  is dressed (vegetation, lamps, monuments, rails, walls); distance, not a "primary"
   role, decides which tile is detailed, and collision, demolish, focus and
   double-tap work on every visible tile. Everything a tile adds leaves with
   it (`tile-stream.ts`, `processTileModel` / `disposeTile`)
@@ -95,7 +95,7 @@ visual-variable codebook is in
   buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
   roof LUT is folded in at bake time.
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
-  seat trees, lamps, rails, walls and the player on terrain.
+  seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
 
 ### Building detailing (all keyed off CityJSON attrs + the loader's `surfacetype`)
@@ -169,6 +169,22 @@ visual-variable codebook is in
   Elbe or the track bed (the rail corridor is now its own layer). Built per
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
+
+- **Fountains, statues, memorial stones, columns** — the Basis-DLM's
+  monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with
+  their official names; GeoSN) conflated with OSM's `amenity=fountain`
+  points and basin outlines (ODbL; the DLM names none of its monuments a
+  fountain and gives no basin size). A DLM monument on an OSM fountain names
+  it and stands in it as a figure; the other OSM fountains are added.
+  `pipeline/bake/monuments.py` → `monument-layer.ts`: basins are the OSM
+  outline extruded into a sandstone rim (the water its 0.35 m inset) seated
+  over the highest ground under it, with jets that grow with the basin
+  (splash pads flush, reflecting pools still); a point fountain is a 2.2 m
+  round basin; statues are one stylised bronze figure on a plinth, stones
+  a slab, columns a 7 m shaft — the DLM gives no shape, so these are fixed
+  proportions (`lib/city/monuments.ts`). Instanced/merged, six draw calls
+  per tile. Not walk-blocking (collision is buildings only); the jets are
+  static.
 
 ### Railway & bridges
 All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in

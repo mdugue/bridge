@@ -7,6 +7,7 @@ import type {
   CanopyFeature,
   FeatureCollection,
   LampFeature,
+  MonumentFeature,
   RailFeature,
   VegRowFeature,
   WallFeature,
@@ -110,3 +111,28 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
     }
   }
 });
+
+test.each(cases)(
+  "%s: monuments are kinded points, fountains may be basin rings",
+  (_, a) => {
+    for (const f of load<MonumentFeature>(a.monuments)) {
+      const kind = f.properties?.kind;
+      expect(["column", "fountain", "statue", "stone"]).toContain(kind ?? "");
+      const g = f.geometry;
+      if (g.type === "Polygon") {
+        // Only a fountain has an outline: the rim, its hole the water.
+        expect(kind).toBe("fountain");
+        expect(g.coordinates.length).toBeLessThanOrEqual(2);
+        expect(g.coordinates.every(isRing)).toBe(true);
+      } else {
+        expect(g.type).toBe("Point");
+        expect(isPoint2(g.coordinates)).toBe(true);
+      }
+      if (kind === "fountain") {
+        expect(["basin", "pool", "splash"]).toContain(
+          f.properties?.style ?? ""
+        );
+      }
+    }
+  }
+);

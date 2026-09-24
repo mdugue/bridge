@@ -15,6 +15,7 @@ import type {
   BridgeFeature,
   CanopyFeature,
   LampFeature,
+  MonumentFeature,
   RailFeature,
   VegRowFeature,
   WallFeature,
@@ -31,6 +32,7 @@ import { type CityLayer, dressCity } from "./city-layer";
 import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
+import { buildMonuments } from "./monument-layer";
 import { buildRail } from "./rail-layer";
 import { dressTerrain, type TerrainLayer } from "./terrain-layer";
 import { disposeObject3D } from "./three-utils";
@@ -46,12 +48,13 @@ import { buildWalls } from "./wall-layer";
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
  * 3DTilesRendererJS, which decides what to load and unload from the cameras,
  * the screen-space error and a memory budget. This module only dresses what
- * lands — the terrain material, water, buildings, vegetation, lamps, rails,
- * walls — and undresses what leaves, so every tile is one handle whose
+ * lands — the terrain material, water, buildings, vegetation, lamps,
+ * monuments, rails, walls — and undresses what leaves, so every tile is one handle whose
  * content comes and goes with it.
  */
 export interface TileDressing {
   lamps?: LampControl;
+  monuments?: Group;
   rail?: Group;
   tile: string;
   vegetation?: VegetationControl;
@@ -138,9 +141,13 @@ class GzipContentPlugin {
 type Features<T> = Promise<T[]>;
 
 function dressingParts(d: TileDressing): Object3D[] {
-  return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
-    (part): part is Group => part !== undefined
-  );
+  return [
+    d.vegetation?.group,
+    d.lamps?.group,
+    d.monuments,
+    d.rail,
+    d.walls,
+  ].filter((part): part is Group => part !== undefined);
 }
 
 /**
@@ -205,6 +212,7 @@ async function buildDressing(
     canopy,
     ndviAt,
     lamps,
+    monuments,
     rails,
     bridges,
     ballast,
@@ -217,6 +225,7 @@ async function buildDressing(
       ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
       : Promise.resolve(null),
     get<LampFeature>(d.lamps),
+    get<MonumentFeature>(d.monuments),
     get<RailFeature>(d.rail),
     get<BridgeFeature>(d.bridge),
     get<AreaFeature>(d.railarea),
@@ -255,7 +264,20 @@ async function buildDressing(
     { ...ground, heightFog: ctx.heightFog }
   );
   const wallGroup = buildWalls(walls, { ...ground, heightFog: ctx.heightFog });
-  return { tile, vegetation, lamps: lampControl, rail, walls: wallGroup };
+  // The bake writes only the monuments a tile owns; a basin that reaches
+  // past the seam samples the neighbour's ground.
+  const monumentGroup = buildMonuments(monuments, {
+    ...ground,
+    heightFog: ctx.heightFog,
+  });
+  return {
+    tile,
+    vegetation,
+    lamps: lampControl,
+    monuments: monumentGroup,
+    rail,
+    walls: wallGroup,
+  };
 }
 
 /**

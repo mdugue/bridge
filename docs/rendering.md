@@ -18,7 +18,7 @@ CRS, [ADR 0026](./adr/0026-one-site-config-per-build.md)) and Z-up. A
 the tileset's frame *is* the recentered data frame, and the renderer turns
 each Y-up glTF into it. That turn cancels the `world` group's, so a tile's
 content root sits, in effect, in the scene's Y-up frame — which is why the
-Y-up dressing (vegetation, lamps, rails, walls) hangs directly under the
+Y-up dressing (vegetation, lamps, monuments, rails, walls) hangs directly under the
 fine terrain's content root and leaves with its tile. Mixing the frames up
 applies the rotation twice (the classic "trees shoot skyward" bug).
 
@@ -35,6 +35,7 @@ flowchart TB
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
   DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
+  DRESS --> MON["monuments<br/>fountain rims + water, jets, statues, stones"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
   DRESS --> WALL["walls<br/>vertical ribbons draped on the ground"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
@@ -96,6 +97,10 @@ is the codebook.
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
 | Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
+| Fountain basin | OSM outline → rim (+0.5 m over the highest ground; 0.3 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
+| Fountain jets | `0.3·√area`, clamped 1.2–4.5 m; one centred, or four round a figure (only those on the water) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`) |
+| Fountain figure | a DLM monument in the basin (`figure`); size `0.28·√area`, 1.6–4.5 m | Basis-DLM | `fountainFigure` |
+| Statue / stone / column | DLM `BWF` + name → fixed proportions (figure on a 1.7 m plinth · 1.1 m slab · 7 m shaft), a stable yaw from the position | Basis-DLM | `MONUMENT_SHAPE` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
 | Rails | `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`), draped or lifted onto a deck | Basis-DLM | `buildRails` |
 | Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
@@ -220,7 +225,7 @@ sequenceDiagram
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
-  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, rail, bridge, platform, walls
+  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, monuments, rail, bridge, platform, walls
   Note over B: each change: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```
@@ -235,7 +240,7 @@ load, so no tile is shown half-dressed. Before a tile or a dressing shows,
 its shaders are compiled with `compileAsync` against the target the scene
 pass renders into (`PostStack.compile`), so a landing tile never compiles
 inside a frame. The heavy dressing — vegetation,
-lamps, rails, walls — waits behind a gate the HUD opens after the handover
+lamps, monuments, rails, walls — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
 second phase) and is built one tile at a time. **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile

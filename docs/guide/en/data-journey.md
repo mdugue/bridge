@@ -72,6 +72,7 @@ flowchart LR
   NDVI["ndvi<br/>greenness raster"]
   ROOF["roof-colour<br/>roof colour table"]
   WALL["walls<br/>wall lines"]
+  MON["monuments<br/>fountains · statues · stones"]
   RAIL["rail<br/>tracks · ballast · bridges · platforms"]
 ```
 
@@ -96,6 +97,7 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `vegrows_<tile>.geojson` | hedge and tree-row lines | a few kB |
 | | `canopy_<tile>.geojson` | one point per tree with its height (5,000–16,000 per tile) | 0.6–1.8 MB |
 | | `lamps_<tile>.geojson` | lamp positions | up to 60 kB |
+| | `monuments_<tile>.geojson` | fountain basins and monument points with kind and official name | 2–55 kB |
 | | `walls_<tile>.geojson` | wall lines with kind and height | 50–120 kB |
 | | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |
 | | `bridge_<tile>.geojson` | bridge deck outlines with a height per corner, kind and structure | a few kB |
@@ -115,6 +117,7 @@ In total the repository carries about 125 MB of data for the four tiles
 | Trees | Basis-DLM + DOM1 + DGM1 | tree points, hedge rows | — | as committed |
 | Greenness | DOP | the NDVI PNG | — | as committed |
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
+| Monuments and fountains | Basis-DLM (names, positions) + OpenStreetMap (basins) | the GeoJSON files | — | as committed |
 | Lamps, walls, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
 | Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
 
@@ -206,7 +209,7 @@ post-processing look.
 | New building model | convert to CityJSON, replace in `data/cityjson/`; re-run the `roof-colour` bake | the building mesh is re-baked on the next build |
 | New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps` and `rail` (they read the class raster) | the 2048² copies are re-baked |
 | New aerial photos | re-run the `ndvi` and `roof-colour` bakes | the roof colours are folded into the mesh on the next build |
-| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `walls` and `rail` bakes | — |
+| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `monuments`, `walls` and `rail` bakes | — |
 | Different ground colours | edit the one palette in the code | nothing to re-bake: the browser paints the colours |
 | A new tile | download its terrain and building model by hand (the building model converted to CityJSON) and commit both; add the tile to the site config `sites/dresden.ts`; `bun run bake --ingest` fetches the rest and runs all seven bakes | the build adds it to the tileset and publishes it |
 
