@@ -730,3 +730,60 @@ test.describe("mobile", () => {
     expectNoErrors(errors);
   });
 });
+
+/**
+ * The whole site streamed, still at the lite render cost: `&block=1` keeps
+ * every tile in the tileset (scene-profile.ts). The specs above stream the
+ * spawn tile alone, so this is the one that walks the multi-tile path — tile
+ * events arriving while the spawn tile boots, dressings queued for several
+ * tiles, the site-wide minimap footprints. A load event that throws there
+ * leaves `ready` false forever, which is exactly what this waits on.
+ */
+test.describe("whole site streamed", () => {
+  test("several tiles load, dress and settle without errors", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    try {
+      await page.goto(`${LITE}&block=1`);
+      const webgl = await hasWebGl(page);
+      if (process.env.CI) {
+        expect(webgl).toBe(true);
+      }
+      test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
+
+      await page.waitForFunction(
+        () => window.__poc?.ready === true,
+        undefined,
+        {
+          timeout: slow(150_000),
+        }
+      );
+      const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
+      // More than the spawn tile is in view from the spawn pose: terrain and
+      // buildings of at least one neighbour came through the stream.
+      expect(stats?.terrain.meshes ?? 0).toBeGreaterThan(1);
+      expect(stats?.city.meshes ?? 0).toBeGreaterThan(1);
+      expect(stats?.vegetation.instances ?? 0).toBeGreaterThan(1000);
+
+      // The minimap names every site tile's footprints up front, streamed
+      // or not: some lie west of the spawn tile (412 000 E).
+      const westmost = await page.evaluate(() => {
+        const polys = window.__poc?.handle?.getFootprints() ?? [];
+        let minX = Number.POSITIVE_INFINITY;
+        for (const poly of polys) {
+          for (const [x] of poly.pts) {
+            minX = Math.min(minX, x);
+          }
+        }
+        return minX;
+      });
+      expect(westmost).toBeLessThan(412_000);
+      expectNoErrors(errors);
+    } finally {
+      await context.close();
+    }
+  });
+});
