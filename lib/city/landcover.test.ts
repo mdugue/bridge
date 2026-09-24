@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import {
   LANDCOVER_CLASSES,
   landcoverSrgb,
@@ -18,13 +18,17 @@ test("class ids are the table index, 0..8", () => {
 });
 
 test("every committed legend names the same classes", () => {
-  const dir = "data/dlm";
-  const legends = readdirSync(dir).filter(
-    (f) => f.startsWith("landcover_") && f.endsWith(".json")
-  );
+  // every site folder with baked data (data/_raw is the downloads)
+  const legends = readdirSync("data")
+    .filter((site) => !site.startsWith("_") && existsSync(`data/${site}/dlm`))
+    .flatMap((site) =>
+      readdirSync(`data/${site}/dlm`)
+        .filter((f) => f.startsWith("landcover_") && f.endsWith(".json"))
+        .map((f) => `data/${site}/dlm/${f}`)
+    );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
-    const { classes } = JSON.parse(readFileSync(`${dir}/${file}`, "utf8")) as {
+    const { classes } = JSON.parse(readFileSync(file, "utf8")) as {
       classes: Record<string, string>;
     };
     for (const c of LANDCOVER_CLASSES) {

@@ -29,7 +29,7 @@ import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
-import type { ViewpointGeometry } from "@/lib/city/site";
+import { startViewpoint, type ViewpointGeometry } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import { currentSite } from "@/sites";
@@ -968,8 +968,14 @@ async function bootApp(
   // the first visible frame.
   await postStack.compile(scene).catch(() => undefined);
   // Stand on the spawn tile now that its ground exists (the pose was placed
-  // before any terrain had landed, on the fallback floor).
-  pose.teleportTo(offset.cx, offset.cy);
+  // before any terrain had landed, on the fallback floor): at the site's
+  // start viewpoint, or in the middle of the tile.
+  const start = startViewpoint(currentSite());
+  if (start) {
+    pose.standAt(start);
+  } else {
+    pose.teleportTo(offset.cx, offset.cy);
+  }
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);

@@ -11,20 +11,27 @@ import type {
   VegRowFeature,
   WallFeature,
 } from "./features";
-import { DRESDEN } from "../../sites/dresden";
-import { type TileArtifact, tileArtifacts, tileIds } from "./tile";
+import { SITES } from "../../sites";
+import { sideFileSource, tileArtifacts, tileIds } from "./tile";
 
-// The committed bakes under data/dlm, checked against the shapes the layers
-// read. Every tile, every kind — a renamed property or a geometry type the
-// bake starts writing shows up here, not as a silently empty layer.
-const DATA = join(import.meta.dir, "..", "..", "data", "dlm");
+// The bakes under data/<site>/dlm, checked against the shapes the layers
+// read. Every site whose bakes are all on disk (Dresden's are committed;
+// another site's once `bun run bake` has finished — a half-baked one is
+// skipped, `bun run site` reports it), every tile, every kind — a renamed
+// property or a geometry type the bake starts writing shows up here, not as
+// a silently empty layer.
+const ROOT = join(import.meta.dir, "..", "..");
 
-function load<F>(artifact: TileArtifact): F[] {
-  const path = join(DATA, artifact.file);
+interface Source {
+  path: string;
+  required: boolean;
+}
+
+function load<F>({ path, required }: Source): F[] {
   if (!existsSync(path)) {
     // An optional artifact may be absent (the loader treats it as "off"); a
-    // required one must be committed, or prepare-data fails at build time.
-    expect(artifact.required).toBe(false);
+    // required one must be there, or prepare-data fails at build time.
+    expect(required).toBe(false);
     return [];
   }
   const doc = JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>;
@@ -43,9 +50,33 @@ const isLine = (coords: unknown): boolean =>
 const isRing = (ring: unknown): boolean =>
   Array.isArray(ring) && ring.length >= 4 && ring.every(isPoint2);
 
-const cases = tileIds(DRESDEN).map(
-  (tile) => [tile, tileArtifacts(tile)] as const
-);
+const baked = (site: (typeof SITES)[keyof typeof SITES]) =>
+  tileIds(site).every((tile) =>
+    Object.values(tileArtifacts(tile))
+      .filter((a) => a.required && !a.bakedFrom)
+      .every((a) => existsSync(join(ROOT, sideFileSource(site, a.file))))
+  );
+
+const cases = Object.values(SITES)
+  .filter(baked)
+  .flatMap((site) =>
+    tileIds(site).map((tile) => {
+      const sources = Object.fromEntries(
+        Object.entries(tileArtifacts(tile)).map(([kind, a]) => [
+          kind,
+          {
+            path: join(ROOT, sideFileSource(site, a.file)),
+            required: a.required,
+          },
+        ])
+      ) as Record<keyof ReturnType<typeof tileArtifacts>, Source>;
+      return [tile, sources] as const;
+    })
+  );
+
+test("Dresden's committed data is among the checked sites", () => {
+  expect(cases.some(([tile]) => tile === "33412_5656_2_sn")).toBe(true);
+});
 
 test.each(cases)("%s: tree rows are hedge/treerow LineStrings", (_, a) => {
   for (const f of load<VegRowFeature>(a.vegrows)) {

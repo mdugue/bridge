@@ -68,6 +68,8 @@ export interface CameraPose {
    * the instant applyCameraState), landing in the viewpoint's movement mode.
    */
   flyToViewpoint: (viewpoint: ViewpointGeometry) => void;
+  /** Puts the camera at a vantage at once (the glide's end pose). */
+  standAt: (viewpoint: ViewpointGeometry) => void;
   /**
    * The pose as a vantage the glide can fly back to. Height is captured
    * ABOVE THE TERRAIN, like the curated viewpoints, so the saved view still
@@ -187,6 +189,28 @@ export function createCameraPose(
     camera.quaternion.setFromEuler(euler);
   };
 
+  const applyCameraState = (s: CameraState): void => {
+    cancelGlide();
+    // Fly first so the ground clamp doesn't yank an aerial pose down to eye
+    // height before the frame even renders.
+    settle(s.mode);
+    camera.position.set(s.pos.x, s.pos.y, s.pos.z);
+    const d = directionOf(
+      s.headingDeg * DEG2RAD,
+      clampPitch(s.pitchDeg * DEG2RAD)
+    );
+    camera.lookAt(
+      camera.position.x + d.x,
+      camera.position.y + d.y,
+      camera.position.z + d.z
+    );
+    if (s.fov > 0) {
+      camera.fov = s.fov;
+      camera.updateProjectionMatrix();
+    }
+    poseJumped();
+  };
+
   return {
     getMode: movement.getMode,
     getPose,
@@ -207,27 +231,7 @@ export function createCameraPose(
         fov: camera.fov,
       };
     },
-    applyCameraState: (s) => {
-      cancelGlide();
-      // Fly first so the ground clamp doesn't yank an aerial pose down to eye
-      // height before the frame even renders.
-      settle(s.mode);
-      camera.position.set(s.pos.x, s.pos.y, s.pos.z);
-      const d = directionOf(
-        s.headingDeg * DEG2RAD,
-        clampPitch(s.pitchDeg * DEG2RAD)
-      );
-      camera.lookAt(
-        camera.position.x + d.x,
-        camera.position.y + d.y,
-        camera.position.z + d.z
-      );
-      if (s.fov > 0) {
-        camera.fov = s.fov;
-        camera.updateProjectionMatrix();
-      }
-      poseJumped();
-    },
+    applyCameraState,
     teleportTo: (epsgX, epsgY) => {
       cancelGlide();
       const w = epsgToWorld(epsgX, epsgY, offset);
@@ -259,6 +263,15 @@ export function createCameraPose(
         fov: camera.fov,
         mode: movement.getMode(),
       };
+    },
+    standAt: (viewpoint) => {
+      const { x, y } = viewpoint.epsg;
+      const w = epsgToWorld(x, y, offset);
+      applyCameraState({
+        ...viewpoint,
+        epsg: { x, y },
+        pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
+      });
     },
     flyToViewpoint: (viewpoint) => {
       const { x, y } = viewpoint.epsg;

@@ -1,9 +1,14 @@
 /**
  * A site: the place the viewer renders and everything about it that is not
- * data — its name, where its tiles are, where to spawn, its curated vantages
- * and the credit line its sources require. One site is compiled in per build
- * (`SITE=<id>`, default `dresden`; the registry is `sites/index.ts`), so the
- * app stays a static bundle (ADR 0001). No THREE, no DOM.
+ * data — its name, where its tiles are, where to spawn and its curated
+ * vantages — plus the data provider it draws on. One site is compiled in
+ * per build (`SITE=<id>`, from `.env.local` or the host's environment; the
+ * registry is `sites/index.ts`), so the app stays a static bundle
+ * (ADR 0001). No THREE, no DOM.
+ *
+ * What belongs to the Land rather than the place — CRS, licence and credit,
+ * which products are open, the OSM extract — is the `Provider`, shared by
+ * every site of that Land (ADR 0028).
  */
 
 export type MovementMode = "fly" | "walk";
@@ -44,51 +49,118 @@ export interface TileCell {
   n: number;
 }
 
-export interface Site {
-  /** credit lines the HUD footer shows (licence terms of the sources) */
-  attribution: string[];
-  /** ETRS89 / UTM: 25832 (zone 32) or 25833 (zone 33) */
+/** Edge of every tile, km. The rasters (4096² classes, 1024² terrain) and
+ *  the phone budgets are sized for it; providers with another download grid
+ *  are cut to it by their fetch adapter. */
+export const TILE_KM = 2;
+
+/** The ingest adapters that exist (pipeline/bake/providers/<id>.py). */
+export type ProviderId = "be" | "by" | "hh" | "nw" | "sn";
+
+/**
+ * A data provider — in Germany the Land's surveying office — and what it
+ * publishes as open data. DGM1 and LoD2 are required of every provider;
+ * the rest degrades (docs/portability.md#degradation-matrix).
+ */
+export interface Provider {
+  /** the credit line its licence requires, in the HUD footer */
+  credit: string;
+  /** ETRS89 / UTM: 25832 (zone 32) or 25833 (zone 33) — one per Land */
   epsg: 25832 | 25833;
+  id: ProviderId;
+  /** licence of its products (SPDX-like short name) */
+  licence: string;
+  /** the office, as people know it */
+  name: string;
+  /** Geofabrik extract covering the Land, path under download.geofabrik.de
+   *  without `-latest.osm.pbf` (e.g. "europe/germany/sachsen") */
+  osm: string;
+  /** the portal a person would start from */
+  portal: string;
+  /** the optional products it publishes openly */
+  products: {
+    /** a surface model (tree heights, bridge decks), fetched as 1 m */
+    dom: boolean;
+    /** orthophoto bands: "rgbi" feeds roof colours and NDVI, "rgb" roof
+     *  colours only */
+    dop: "rgb" | "rgbi" | null;
+    /** ATKIS Basis-DLM in the AdV Shape profile (land cover, tree rows,
+     *  rails, bridge decks); without it land cover comes from OSM */
+    dlm: boolean;
+  };
+  /** suffix of tile ids (`33412_5656_2_sn`), after the provider */
+  tileSuffix: string;
+}
+
+export interface Site {
   /** where the sun is computed when the tiles cannot be reprojected */
   fallbackLatLng: { lat: number; lng: number };
+  /** the `SITE` value and the data folder, `data/<id>/` */
   id: string;
-  /** the ingest adapter that turns the provider's downloads into the bakes'
-   *  canonical raw layout (pipeline/bake/ingest_<id>.py) */
-  ingest: "sn";
-  /** the place, as the HUD names it ("Dresden · Altstadt") */
+  /** the place and the part of it shown, as the HUD names it
+   *  ("Dresden · Altstadt") */
   label: string;
-  /** optional suffix of the provider's tile names (Saxony: "_sn") */
-  tileSuffix: string;
-  /** edge of one tile, km */
-  tileKm: number;
-  /** the tiles to bake and load; the FIRST is where the player spawns */
+  /** the place alone ("Dresden"): page titles, the knowledge base */
+  name: string;
+  /** a smaller Geofabrik extract than the provider's, when one covers the
+   *  site (same form as `Provider.osm`) */
+  osm?: string;
+  provider: Provider;
+  /** the viewpoint (by id, on the spawn tile) the player starts at; without
+   *  one, at street level in the middle of the spawn tile */
+  start?: string;
+  /** the tiles to fetch, bake and load; the FIRST is where the player spawns */
   tiles: TileCell[];
-  /** the page title */
-  title: string;
   viewpoints: Viewpoint[];
 }
 
+/** The viewpoint the player starts at, if the site names one. */
+export function startViewpoint(site: Site): Viewpoint | undefined {
+  return site.viewpoints.find((v) => v.id === site.start);
+}
+
 /** UTM zone of an ETRS89/UTM EPSG code. */
-export function utmZoneOf(epsg: Site["epsg"]): number {
+export function utmZoneOf(epsg: Provider["epsg"]): number {
   return epsg - 25_800;
 }
 
 /**
  * A tile's id: `<zone><easting km>_<northing km>_<edge km><suffix>`, the
  * scheme Saxony's downloads use (`33412_5656_2_sn`), which every file name
- * under data/ carries.
+ * under data/<site>/ carries. Unique across sites: it is a coordinate.
  */
 export function tileIdOf(site: Site, cell: TileCell): string {
-  return `${utmZoneOf(site.epsg)}${cell.e}_${cell.n}_${site.tileKm}${site.tileSuffix}`;
+  const { epsg, tileSuffix } = site.provider;
+  return `${utmZoneOf(epsg)}${cell.e}_${cell.n}_${TILE_KM}${tileSuffix}`;
 }
 
 /** A tile's projected extent [minX, minY, maxX, maxY] (m). */
-export function tileExtentOf(
-  site: Site,
-  cell: TileCell
-): [number, number, number, number] {
-  const size = site.tileKm * 1000;
+export function tileExtentOf(cell: TileCell): [number, number, number, number] {
+  const size = TILE_KM * 1000;
   const minX = cell.e * 1000;
   const minY = cell.n * 1000;
   return [minX, minY, minX + size, minY + size];
+}
+
+/** The page title. */
+export function siteTitle(site: Site): string {
+  return `City Walk — ${site.name}`;
+}
+
+/** The OSM credit, naming what the site takes from OSM. */
+function osmCredit(site: Site): string {
+  const layers = site.provider.products.dlm
+    ? "Lampen, Mauern, Bahnsteige und Brücken"
+    : "Landbedeckung, Lampen, Mauern, Bahnsteige und Brücken";
+  return `${layers} © OpenStreetMap-Mitwirkende (ODbL)`;
+}
+
+/** The credit lines the HUD footer shows (the sources' licence terms). */
+export function siteAttribution(site: Site): string[] {
+  return [site.provider.credit, osmCredit(site)];
+}
+
+/** The Geofabrik URL of the site's OSM extract. */
+export function osmExtractUrl(site: Site): string {
+  return `https://download.geofabrik.de/${site.osm ?? site.provider.osm}-latest.osm.pbf`;
 }

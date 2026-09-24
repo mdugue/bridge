@@ -77,7 +77,7 @@ import { Minimap } from "./minimap";
 import { CONTROL_HINTS, TOUCH_HINTS } from "./control-hints";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
-import type { ViewpointGeometry } from "@/lib/city/site";
+import { siteAttribution, type ViewpointGeometry } from "@/lib/city/site";
 import { currentSite } from "@/sites";
 
 /**
@@ -903,7 +903,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t px-4 pt-2.5 pb-3 text-[10px] text-muted-foreground leading-snug">
-        <p>{currentSite().attribution.join(" · ")}</p>
+        <p>{siteAttribution(currentSite()).join(" · ")}</p>
         <div className="mt-1.5 flex items-center gap-3">
           <Link
             className="underline underline-offset-2 hover:text-foreground"

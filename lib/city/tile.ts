@@ -8,6 +8,24 @@
  */
 import { type Site, tileIdOf } from "./site";
 
+/**
+ * A site's committed (or fetched) data: `data/<site>/` with `dgm/`,
+ * `cityjson/` (the build's sources), `dlm/`, `dop/` (the bakes' outputs)
+ * and `provenance.json`. Paths are relative to the repo root.
+ */
+export function siteDataDir(site: Site): string {
+  return `data/${site.id}`;
+}
+
+/**
+ * The provider's raw downloads, `data/_raw/<provider>/`, shared by all of
+ * its sites (gitignored, never committed): `dom1/`, `dop/` per tile, `dlm/`,
+ * `osm/`, and the download cache `downloads/`.
+ */
+export function providerRawDir(site: Site): string {
+  return `data/_raw/${site.provider.id}`;
+}
+
 /** The edge phones get for EVERY tile, and the coarse terrain everywhere:
  *  the colour splat painted from a 4096² class raster is 85 MB of GPU memory
  *  with its mip chain, four times what a phone should spend on the ground
@@ -19,25 +37,26 @@ export function tileIds(site: Site): string[] {
   return site.tiles.map((cell) => tileIdOf(site, cell));
 }
 
-/** The committed CityJSON (data/cityjson/): a bake input, never served. */
+/** The site's CityJSON (data/<site>/cityjson/): a build input, never served. */
 export function cityJsonFile(tile: string): string {
   return `lod2_${tile}.city.json`;
 }
 
-/** The committed inputs of the building bake (CityJSON + DOP roof LUT). */
-export function cityMeshSourceFiles(tile: string): {
-  city: string;
-  roofColor: string;
-} {
+/** The inputs of the building bake (CityJSON + DOP roof LUT). */
+export function cityMeshSourceFiles(
+  site: Site,
+  tile: string
+): { city: string; roofColor: string } {
+  const dir = siteDataDir(site);
   return {
-    city: `data/cityjson/${cityJsonFile(tile)}`,
-    roofColor: `data/dop/roofcolor_${tile}.json`,
+    city: `${dir}/cityjson/${cityJsonFile(tile)}`,
+    roofColor: `${dir}/dop/roofcolor_${tile}.json`,
   };
 }
 
 export interface TileArtifact {
   /** for a downsampled raster: the committed full-size file it is baked
-   *  from (under data/dlm/) and its edge (px) */
+   *  from (under data/<site>/dlm/) and its edge (px) */
   bakedFrom?: { file: string; raster: number };
   /** file name under public/data (before content hashing) */
   file: string;
@@ -60,7 +79,7 @@ export type TileArtifactKind =
 
 /**
  * Every side file of a tile — the ONE list scripts/prepare-data.ts publishes
- * and names in the tile's glTF extras. Committed under data/dlm/, except the
+ * and names in the tile's glTF extras. Under data/<site>/dlm/, except the
  * `landcoverLow` class raster, which prepare-data downsamples (NEAREST) from
  * the committed 4096² one.
  */
@@ -91,9 +110,17 @@ export function tileArtifacts(
   };
 }
 
-/** The committed DGM GeoTIFF (+ its .tfw sidecar) the heightfield bake reads. */
-export function dgmSourceFiles(tile: string): { tif: string; tfw: string } {
-  const dir = `data/dgm/dgm1_${tile}_tiff`;
+/** Where a side file's source lives (`tileArtifacts` names the file). */
+export function sideFileSource(site: Site, file: string): string {
+  return `${siteDataDir(site)}/dlm/${file}`;
+}
+
+/** The DGM GeoTIFF (+ its .tfw sidecar) the heightfield bake reads. */
+export function dgmSourceFiles(
+  site: Site,
+  tile: string
+): { tif: string; tfw: string } {
+  const dir = `${siteDataDir(site)}/dgm/dgm1_${tile}_tiff`;
   return { tif: `${dir}/dgm1_${tile}.tif`, tfw: `${dir}/dgm1_${tile}.tfw` };
 }
 

@@ -1,5 +1,6 @@
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site } from "@/lib/city/site";
+import { SAXONY } from "./providers";
 
 /**
  * Dresden, Altstadt and Neustadt either side of the Elbe: a 2×2 block of
@@ -11,11 +12,8 @@ import type { Site } from "@/lib/city/site";
 export const DRESDEN: Site = {
   id: "dresden",
   label: "Dresden · Altstadt",
-  title: "City Walk — Dresden",
-  epsg: 25_833,
-  ingest: "sn",
-  tileKm: 2,
-  tileSuffix: "_sn",
+  name: "Dresden",
+  provider: SAXONY,
   tiles: [
     { e: 412, n: 5656 },
     { e: 410, n: 5656 },
@@ -23,10 +21,6 @@ export const DRESDEN: Site = {
     { e: 412, n: 5658 },
   ],
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
-  attribution: [
-    "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Mauern, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
-  ],
   viewpoints: [
     {
       id: "carolabruecke",

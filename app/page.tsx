@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { siteTitle } from "@/lib/city/site";
 import { currentSite } from "@/sites";
 import { CityWalkClient } from "./_components/city-walk-client";
 
+const site = currentSite();
+
 export const metadata: Metadata = {
-  title: currentSite().title,
-  description:
-    "Walkable LoD1 city model on DGM terrain with sun/shadow simulation",
+  title: siteTitle(site),
+  description: `${site.name} zum Durchlaufen: ein 3D-Stadtmodell aus offenen Geodaten, mit Gelände, Sonne und Schatten`,
 };
 
 // App-like fullscreen canvas: no pinch-zooming the page itself (the canvas

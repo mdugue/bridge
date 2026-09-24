@@ -38,11 +38,11 @@ test("the site's tiles, the spawn tile first", () => {
     "33410_5658_2_sn",
     "33412_5658_2_sn",
   ]);
-  expect(dgmSourceFiles(PRIMARY_TILE).tif).toBe(
-    "data/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif"
+  expect(dgmSourceFiles(DRESDEN, PRIMARY_TILE).tif).toBe(
+    "data/dresden/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif"
   );
-  expect(cityMeshSourceFiles(PRIMARY_TILE).city).toBe(
-    "data/cityjson/lod2_33412_5656_2_sn.city.json"
+  expect(cityMeshSourceFiles(DRESDEN, PRIMARY_TILE).city).toBe(
+    "data/dresden/cityjson/lod2_33412_5656_2_sn.city.json"
   );
 });
 

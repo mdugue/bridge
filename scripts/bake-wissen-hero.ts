@@ -9,19 +9,15 @@
  */
 import sharp from "sharp";
 import { landcoverSrgb } from "../lib/city/landcover";
+import { TILE_KM, type TileCell } from "../lib/city/site";
 
-/** Where a tile sits in the block: easting grows east, northing north. */
-function gridOf(tiles: readonly string[], step: number) {
-  const coords = tiles.map((tile) => {
-    const [, e, n] = tile.match(/^(\d+)_(\d+)/u) ?? [];
-    return { tile, e: Number(e), n: Number(n) };
-  });
-  const minE = Math.min(...coords.map((c) => c.e));
-  const maxN = Math.max(...coords.map((c) => c.n));
-  return coords.map((c) => ({
-    tile: c.tile,
-    col: (c.e - minE) / step,
-    row: (maxN - c.n) / step,
+/** Where each cell sits in the block: easting grows east, northing north. */
+function gridOf(cells: readonly TileCell[]) {
+  const minE = Math.min(...cells.map((c) => c.e));
+  const maxN = Math.max(...cells.map((c) => c.n));
+  return cells.map((c) => ({
+    col: (c.e - minE) / TILE_KM,
+    row: (maxN - c.n) / TILE_KM,
   }));
 }
 
@@ -42,23 +38,22 @@ async function paint(classRaster: string) {
 }
 
 /**
- * The block as a square WebP `size` px wide. `rasterOf(tile)` is the class
- * raster of that tile (any edge; each is scaled to its cell); `tileKm` the
- * tile edge in the names' units.
+ * The block as a WebP `size` px wide: `rasters[i]` is the class raster of
+ * `cells[i]` (any edge; each is scaled to its cell).
  */
 export async function bakeWissenHero(
-  tiles: readonly string[],
-  rasterOf: (tile: string) => string,
-  size: number,
-  tileKm: number
+  cells: readonly TileCell[],
+  rasters: readonly string[],
+  size: number
 ): Promise<Buffer> {
-  const grid = gridOf(tiles, tileKm);
+  const grid = gridOf(cells);
   const cols = Math.max(...grid.map((g) => g.col)) + 1;
+  const rows = Math.max(...grid.map((g) => g.row)) + 1;
   const cell = Math.round(size / cols);
   const layers = await Promise.all(
-    grid.map(async ({ tile, col, row }) => {
+    grid.map(async ({ col, row }, i) => {
       const input = await (
-        await paint(rasterOf(tile))
+        await paint(rasters[i])
       )
         .resize(cell, cell, { kernel: "lanczos3", fit: "fill" })
         .png()
@@ -69,7 +64,7 @@ export async function bakeWissenHero(
   return sharp({
     create: {
       width: cell * cols,
-      height: cell * cols,
+      height: cell * rows,
       channels: 3,
       background: "#ffffff",
     },

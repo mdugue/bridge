@@ -39,6 +39,7 @@ import {
   titleFor,
 } from "../_lib/docs";
 import { renderDoc } from "../_lib/markdown";
+import { currentSite } from "@/sites";
 
 interface Props {
   params: Promise<{ slug?: string[] }>;
@@ -90,7 +91,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const route = routeOf(file) ?? undefined;
   const lang = langOf(file);
   return {
-    title: `${titleFor(file)} · Wissen · City Walk Dresden`,
+    title: `${titleFor(file)} · Wissen · City Walk ${currentSite().name}`,
     description: descriptionOf(readDoc(file)) ?? undefined,
     alternates: {
       canonical: route,

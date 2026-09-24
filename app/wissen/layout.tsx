@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import "./wissen.css";
+import { currentSite } from "@/sites";
 
 /**
  * The knowledge base on the site: docs/ rendered as pages (ADR 0021). A plain
@@ -22,7 +23,7 @@ export default function WissenLayout({ children }: { children: ReactNode }) {
               aria-hidden
               className="size-3 rotate-45 rounded-xs border-2 border-primary"
             />
-            City Walk Dresden
+            City Walk {currentSite().name}
           </Link>
           <span aria-hidden className="text-muted-foreground/60">
             /

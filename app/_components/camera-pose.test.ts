@@ -251,3 +251,15 @@ test("flyTo drops the camera at a world position in fly mode, facing the target"
   expect(Math.abs(s.headingDeg)).toBeCloseTo(180, 6);
   expect(s.pitchDeg).toBeCloseTo(Math.atan2(-150, 100) * RAD2DEG, 6);
 });
+
+test("standAt puts the camera at a vantage at once, in its mode", () => {
+  const { camera, pose } = rig();
+  pose.standAt({ ...VIEW, pitchDeg: 4 });
+  const s = pose.getCameraState();
+  expect(s.mode).toBe("walk");
+  expect(s.epsg.x).toBeCloseTo(VIEW.epsg.x, 6);
+  expect(s.epsg.y).toBeCloseTo(VIEW.epsg.y, 6);
+  expect(s.headingDeg).toBeCloseTo(90, 6);
+  expect(s.pitchDeg).toBeCloseTo(4, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+});

@@ -14,6 +14,7 @@ import {
 import type { HeroImage } from "../_lib/docs";
 import { docIcon } from "./doc-icon";
 import { SECTION_LABEL } from "./doc-nav";
+import { currentSite } from "@/sites";
 
 export interface LandingEntry {
   file: string;
@@ -56,13 +57,13 @@ export function Landing({
         <div className="mx-auto max-w-7xl px-4 pt-20 pb-24 sm:pt-28 sm:pb-32">
           <p className={cn(SECTION_LABEL, "text-primary")}>Wissen</p>
           <h1 className="mt-4 max-w-2xl text-balance font-heading font-semibold text-4xl leading-[1.1] tracking-tight sm:text-5xl">
-            Wie aus offenen Geodaten ein begehbares Dresden wird
+            Wie aus offenen Geodaten ein begehbares {currentSite().name} wird
           </h1>
           <p className="mt-5 max-w-xl text-pretty text-base text-foreground/75 leading-relaxed sm:text-lg">
             Alles, was du im Viewer siehst, ist aus offenen Daten abgeleitet:
-            von der sächsischen Landesvermessung und von OpenStreetMap. Hier
-            steht, woher sie kommen, wie sie zu einer Szene werden und wie viel
-            davon echt ist.
+            von der Landesvermessung und von OpenStreetMap. Hier steht, woher
+            sie kommen, wie sie zu einer Szene werden und wie viel davon echt
+            ist.
           </p>
           <div className="mt-8 flex flex-wrap gap-2">
             {first ? (

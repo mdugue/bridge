@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { writeArrayBuffer } from "geotiff";
 import { dgmSourceFiles } from "../lib/city/tile";
+import { DRESDEN } from "../sites/dresden";
 import { readDgm, terrainMesh } from "./bake-tiles";
 
 const PRIMARY_TILE = "33412_5656_2_sn";
@@ -11,7 +12,7 @@ function arrayBufferOf(buf: Buffer<ArrayBuffer>): ArrayBuffer {
 }
 
 test("the committed spawn-tile DGM resamples to a grid on the Elbe", async () => {
-  const src = dgmSourceFiles(PRIMARY_TILE);
+  const src = dgmSourceFiles(DRESDEN, PRIMARY_TILE);
   const dgm = await readDgm(
     arrayBufferOf(readFileSync(src.tif)),
     readFileSync(src.tfw, "utf8"),
