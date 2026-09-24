@@ -3,8 +3,9 @@
 # extract-walls.sh — bake OSM retaining/city walls for one tile into a GeoJSON.
 #
 # MANUAL, one-off step. Monumental retaining walls (e.g. the Brühlsche Terrasse)
-# are NOT a clean feature in the terrain data: the DGM1/DOM1/LiDAR all smooth the
-# sandstone wall into a gentle bank, and it's not a CityJSON building either — so
+# are NOT a clean feature in the terrain data: no 2.5D product has a vertical
+# face (the DGM1 turns the wall into a 1–2 m ramp, the 1024² heightfield into a
+# ~3 m bank — docs/transformations.md), and it's not a CityJSON building — so
 # it "goes missing". OSM HAS it as tagged vector lines with heights
 # (`barrier=retaining_wall|city_wall|wall`, `man_made=embankment`), which the
 # wall-layer renders as vertical geometry and the terrain-conflation burns into

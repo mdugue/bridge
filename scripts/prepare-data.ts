@@ -40,6 +40,11 @@ import {
   parseHeightfieldHeader,
 } from "../lib/city/heightfield";
 import {
+  parseTerrainTinHeader,
+  TERRAIN_TIN_VERSION,
+  type TerrainTinHeader,
+} from "../lib/city/terrain-tin";
+import {
   cityMeshDataFile,
   cityMeshMetaFile,
   cityMeshSourceFiles,
@@ -48,12 +53,15 @@ import {
   heightfieldDataFile,
   heightfieldHeaderFile,
   MANIFEST_FILE,
+  terrainTinDataFile,
+  terrainTinHeaderFile,
   TILE_BLOCK,
   tileArtifacts,
 } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { bakeCityMesh } from "./bake-city-mesh";
 import { bakeHeightfield } from "./bake-heightfield";
+import { bakeTerrainTin } from "./bake-terrain-tin";
 import { bakeWissenHero } from "./bake-wissen-hero";
 import { downsampleRaster } from "./downsample-raster";
 
@@ -219,6 +227,74 @@ for (const { tile, n } of TILE_BLOCK) {
   await bakeHeightfieldTile(tile, n);
 }
 
+// --- bake: DGM -> terrain TIN (the `?terrain=tin` experiment) ---------------
+// Only for tiles whose spec names a tolerance (lib/city/tile.ts,
+// PRIMARY_TIN_MAX_ERROR). Delatin refinement of the native 1 m DGM lives in
+// scripts/bake-terrain-tin.ts; the default viewer never requests the result.
+
+const TIN_BAKE_SOURCES = [
+  join(process.cwd(), "scripts/bake-terrain-tin.ts"),
+  join(process.cwd(), "scripts/bake-heightfield.ts"),
+  join(process.cwd(), "lib/city/terrain-tin.ts"),
+  join(process.cwd(), "lib/city/tfw.ts"),
+];
+
+function tinHeaderIsCurrent(path: string): boolean {
+  try {
+    return (
+      parseTerrainTinHeader(JSON.parse(readFileSync(path, "utf8"))).version ===
+      TERRAIN_TIN_VERSION
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function bakeTerrainTinTile(
+  tile: string,
+  maxError: number
+): Promise<void> {
+  const source = dgmSourceFiles(tile);
+  const tifPath = join(process.cwd(), source.tif);
+  const tfwPath = join(process.cwd(), source.tfw);
+  const headerName = terrainTinHeaderFile(tile, maxError);
+  const dataName = terrainTinDataFile(tile, maxError);
+  const headerPath = join(process.cwd(), CACHE_DIR, headerName);
+  const dataPath = join(process.cwd(), CACHE_DIR, dataName);
+  toPublish.set(headerName, headerPath);
+  toPublish.set(dataName, dataPath);
+  const inputs = [tifPath, tfwPath, ...TIN_BAKE_SOURCES];
+  if (
+    !(
+      isStale(headerPath, ...inputs) ||
+      isStale(dataPath, ...inputs) ||
+      !tinHeaderIsCurrent(headerPath)
+    )
+  ) {
+    return;
+  }
+  const baked = await bakeTerrainTin(
+    readArrayBuffer(tifPath),
+    existsSync(tfwPath) ? readFileSync(tfwPath, "utf8") : null,
+    maxError
+  ).catch((err: unknown) =>
+    fail(`${tile} TIN: ${err instanceof Error ? err.message : String(err)}`)
+  );
+  const header: TerrainTinHeader = { ...baked.header, data: dataName };
+  mkdirSync(dirname(dataPath), { recursive: true });
+  writeFileSync(dataPath, baked.data);
+  writeFileSync(headerPath, `${JSON.stringify(header, null, 2)}\n`);
+  log(
+    `built ${headerName} (${header.vertexCount} vertices, ${header.triangleCount} triangles, ±${maxError} m, ${Math.round(baked.ms)} ms)`
+  );
+}
+
+for (const { tile, tinMaxError } of TILE_BLOCK) {
+  if (tinMaxError !== undefined) {
+    await bakeTerrainTinTile(tile, tinMaxError);
+  }
+}
+
 // --- bake: CityJSON -> building mesh ---------------------------------------
 // The browser used to parse 8–11 MB of CityJSON per tile (earcut + attribute
 // annotation, ~0.5 s of main thread each). scripts/bake-city-mesh.ts does it
@@ -357,26 +433,30 @@ function publish(logical: string, path: string, content?: Buffer): void {
   published++;
 }
 
-// Data files first: a heightfield header names its data sibling, so the
-// header can only be published once the data's hashed name is known.
-const headerNames = new Set(
-  TILE_BLOCK.map(({ tile, n }) => heightfieldHeaderFile(tile, n))
-);
+// Data files first: a heightfield or TIN header names its data sibling, so
+// the header can only be published once the data's hashed name is known.
+const headerParsers = new Map<string, (json: unknown) => { data: string }>();
+for (const { tile, n, tinMaxError } of TILE_BLOCK) {
+  headerParsers.set(heightfieldHeaderFile(tile, n), parseHeightfieldHeader);
+  if (tinMaxError !== undefined) {
+    headerParsers.set(
+      terrainTinHeaderFile(tile, tinMaxError),
+      parseTerrainTinHeader
+    );
+  }
+}
 for (const [logical, path] of toPublish) {
-  if (!headerNames.has(logical)) {
+  if (!headerParsers.has(logical)) {
     publish(logical, path);
   }
 }
 for (const [logical, path] of toPublish) {
-  if (headerNames.has(logical)) {
-    const header = parseHeightfieldHeader(
-      JSON.parse(readFileSync(path, "utf8"))
-    );
+  const parse = headerParsers.get(logical);
+  if (parse) {
+    const header = parse(JSON.parse(readFileSync(path, "utf8")));
     const data = manifest.files[header.data];
     if (!data) {
-      fail(
-        `heightfield header ${logical} names unpublished data ${header.data}`
-      );
+      fail(`header ${logical} names unpublished data ${header.data}`);
     }
     publish(
       logical,

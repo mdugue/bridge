@@ -27,6 +27,17 @@ export const PRIMARY_HEIGHTFIELD_N = 1024;
 export const NEIGHBOUR_HEIGHTFIELD_N = 512;
 
 /**
+ * Delatin tolerance (m) of the primary tile's error-bounded terrain TIN
+ * (lib/city/terrain-tin.ts, baked from the NATIVE 1 m DGM1 by
+ * scripts/bake-terrain-tin.ts). Served only to `?terrain=tin` — the default
+ * viewer keeps the heightfield. At 0.15 m the TIN is ~305k triangles (a
+ * seventh of the 1024² grid) in about the grid's bytes, and matches or beats
+ * it on every accuracy metric of the terrain study (docs/transformations.md,
+ * "Terrain TIN").
+ */
+export const PRIMARY_TIN_MAX_ERROR = 0.15;
+
+/**
  * Land-cover raster edge (px) baked per role. The DLM bake writes 4096²
  * (≈0.5 m per texel over a 2 km tile); the neighbours are backdrop and are
  * downsampled at prepare time to 2048² (≈1 m) — a quarter of the texture
@@ -49,11 +60,19 @@ export interface TileSpec {
    *  it as is, phones take min(raster, MOBILE_RASTER_PX) */
   raster: number;
   tile: string;
+  /** Delatin tolerance (m) of the terrain TIN baked for this tile (the
+   *  `?terrain=tin` experiment); absent = no TIN, the tile keeps its grid */
+  tinMaxError?: number;
 }
 
 /** Every tile the app loads, with the grid size it is served at. */
 export const TILE_BLOCK: TileSpec[] = [
-  { tile: PRIMARY_TILE, n: PRIMARY_HEIGHTFIELD_N, raster: PRIMARY_RASTER_PX },
+  {
+    tile: PRIMARY_TILE,
+    n: PRIMARY_HEIGHTFIELD_N,
+    raster: PRIMARY_RASTER_PX,
+    tinMaxError: PRIMARY_TIN_MAX_ERROR,
+  },
   ...NEIGHBOUR_TILES.map((tile) => ({
     tile,
     n: NEIGHBOUR_HEIGHTFIELD_N,
@@ -95,6 +114,15 @@ export function heightfieldHeaderFile(tile: string, n: number): string {
 
 export function heightfieldDataFile(tile: string, n: number): string {
   return `dgm1_${tile}.heightfield-${n}.u16.gz`;
+}
+
+/** The terrain TIN (lib/city/terrain-tin.ts), named by its tolerance in cm. */
+export function terrainTinHeaderFile(tile: string, maxError: number): string {
+  return `dgm1_${tile}.tin-${Math.round(maxError * 100)}cm.json`;
+}
+
+export function terrainTinDataFile(tile: string, maxError: number): string {
+  return `dgm1_${tile}.tin-${Math.round(maxError * 100)}cm.bin.gz`;
 }
 
 /** Where a committed source lives under data/ (null = baked by prepare-data
@@ -154,6 +182,13 @@ export type TileArtifactKind =
   | "landcoverLow"
   | "landcoverRgbLow";
 
+/** The kinds only a tile with a terrain TIN (`TileSpec.tinMaxError`) has. */
+export type TinArtifactKind = "terrainTinData" | "terrainTinHeader";
+
+/** A tile's artifact map: every kind, plus the TIN pair when it has one. */
+export type TileArtifacts = Record<TileArtifactKind, TileArtifact> &
+  Partial<Record<TinArtifactKind, TileArtifact>>;
+
 /**
  * A land-cover raster at `px`: the committed 4096² bake as is, or a variant
  * prepare-data downsamples from it (`.r<px>.png`), class ids NEAREST so none
@@ -185,9 +220,7 @@ function landcoverArtifact(
  * MOBILE_RASTER_PX); for a tile already served at that size they are the same
  * file.
  */
-export function tileArtifacts(
-  spec: TileSpec
-): Record<TileArtifactKind, TileArtifact> {
+export function tileArtifacts(spec: TileSpec): TileArtifacts {
   const { tile, n } = spec;
   const low = Math.min(spec.raster, MOBILE_RASTER_PX);
   const dlm = (file: string, required = false): TileArtifact => ({
@@ -229,6 +262,29 @@ export function tileArtifacts(
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
     walls: dlm(`walls_${tile}.geojson`),
+    ...tinArtifacts(spec),
+  };
+}
+
+/** The TIN header + payload, baked from the DGM by prepare-data; optional,
+ *  since only the `?terrain=tin` viewer asks for them. */
+function tinArtifacts(
+  spec: TileSpec
+): Partial<Record<TinArtifactKind, TileArtifact>> {
+  if (spec.tinMaxError === undefined) {
+    return {};
+  }
+  return {
+    terrainTinHeader: {
+      file: terrainTinHeaderFile(spec.tile, spec.tinMaxError),
+      required: false,
+      source: null,
+    },
+    terrainTinData: {
+      file: terrainTinDataFile(spec.tile, spec.tinMaxError),
+      required: false,
+      source: null,
+    },
   };
 }
 
@@ -266,7 +322,10 @@ export function manifestUrl(
  * from. The optional artifacts are URLs too; their loaders treat a 404 as
  * "feature off".
  */
-export type TileUrls = Record<TileUrlKind, string>;
+export type TileUrls = Record<TileUrlKind, string> & {
+  /** the terrain TIN's header, on tiles that have one (TileSpec.tinMaxError) */
+  terrainTin?: string;
+};
 
 /**
  * The artifact map as served URLs, resolved through the manifest.
@@ -289,6 +348,9 @@ export function tileUrlsFrom(
   if (lowRasters) {
     out.landcover = url(artifacts.landcoverLow);
     out.landcoverRgb = url(artifacts.landcoverRgbLow);
+  }
+  if (artifacts.terrainTinHeader) {
+    out.terrainTin = url(artifacts.terrainTinHeader);
   }
   return out;
 }

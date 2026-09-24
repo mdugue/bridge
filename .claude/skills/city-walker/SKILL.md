@@ -40,6 +40,10 @@ retargeted/lowered as tiles land. The layers:
 - `terrain-layer.ts` — baked DGM1 heightfield (`.heightfield-<n>.json` + `.u16.gz`,
   produced by `prepare-data.ts`) → mesh + the surface splat; also
   builds the water layer. `lib/city/terrain-geometry.ts` is the pure math.
+  🧪 `?terrain=tin` meshes the primary tile from an error-bounded TIN of the
+  native 1 m DGM1 instead (`lib/city/terrain-tin.ts`, no wall conflation;
+  ribbons snap to the measured step via `lib/city/wall-snap.ts`) — study and
+  numbers in the ledger's "Terrain TIN" entry.
 - `water-layer.ts` — clone of terrain geometry, masked by the splat's alpha
   (water coverage), animated normal wobble.
 - `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy) and hedges,

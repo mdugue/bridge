@@ -177,10 +177,17 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   8.5–9 m city walls). `extract-walls.sh` → `wall-layer.ts`: vertical sandstone
   ribbons, base draped on the DGM via the cross-tile `heightAt`, top = base +
   height, nudged slightly onto the low side so the face skins the (now stepped)
-  terrain. **Why OSM:** the monumental wall is NOT in the elevation data —
-  DGM1/DOM1/**LiDAR-ground all smooth it into a gentle bank** (verified by
-  sampling: ground ≈ DGM across the wall), and it's not a CityJSON building, so it
-  "went missing". OSM has it as explicit vector lines with heights.
+  terrain. **Why OSM:** no elevation product has the wall as a *vertical face*
+  (a 2.5D surface cannot), and it's not a CityJSON building, so it "went
+  missing". OSM has it as explicit vector lines with heights. *(Corrected by
+  the terrain study, 🧪 "Terrain TIN" below: the source data does NOT smooth
+  the wall into a gentle bank. The laser ground returns step within ~0.75 m
+  (median, 7 tall walls) and the native 1 m DGM1 within ~1.7 m at 77° —
+  Jungfernbastei: 108.6 → 117.3 m over 2 m, then two more terrace levels at
+  119.7 and 121.1 m. It is our 1024² resample that widens the step to ~2.9 m
+  at 69°, the "bank" the viewer showed. The earlier claim "LiDAR-ground ≈
+  DGM" was right about the level — the two agree to 0.00 ± 0.05 m tile-wide
+  — but not about the edge.)*
   **Source:** a LOCAL Geofabrik `.osm.pbf` read via GDAL's OSM driver (both the
   `lines` and `multipolygons` layers — GDAL files closed barrier ways as
   polygons), so the whole block bakes in one pass with **no Overpass rate limits**
@@ -201,6 +208,11 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   the two sides actually differ by ≥1.5 m, so freestanding garden walls and flat
   fountain rims leave the ground alone; a ≤18 m clamp stops a bad height tag
   gouging a canyon. Pure + unit-tested (`terrain-conflate.test.ts`).
+  **Measured cost (terrain study, 🧪 "Terrain TIN"):** against held-out laser
+  ground it raises the RMSE in the 20 m band around walls from 0.43 to 0.76 m
+  (p95 0.80 → 1.62 m) — the 11 m probe reads the *top* of a terraced wall, and
+  the step lands on the OSM line, not the measured edge. The `?terrain=tin`
+  experiment skips it and snaps the ribbons to the measured step instead.
 
 ### Lighting
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
@@ -225,6 +237,62 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 ---
 
 ## 🧪 Experimental
+
+- **Terrain TIN** (`?terrain=tin`, primary tile only; default unchanged) —
+  DGM1 at its **native 1 m (2000²)** → Delatin error-bounded TIN at **±0.15 m**
+  (every source grid point within 15 cm of the mesh), baked by
+  `scripts/bake-terrain-tin.ts` inside `prepare-data.ts` from the committed
+  GeoTIFF (no new committed input). Format + mesh + `heightAt` bucket index in
+  `lib/city/terrain-tin.ts`; loader `terrain-layer.ts` (`loadTinSurface`, the
+  water sheet gets an up-facing normal twin). **No wall conflation** on the TIN:
+  the earth-retaining ribbons instead snap to the step the ground measures
+  (`lib/city/wall-snap.ts`: steepest metre within 6 m of the OSM line, running
+  medians along the wall, face just in front of the ramp foot + a coping cap to
+  the crest). Neighbours keep their conflated 512² grids.
+  **Study** (`scripts/terrain-study/`, reproducible from the committed DGM + the
+  gitignored LSC LAZ; held-out = a seeded 10 % of the 34 M class-2 ground
+  returns, 3.4 M points; 35 profiles across the 7 tallest OSM retaining/city
+  walls; DGM1 was made from all returns, so its numbers are slightly
+  optimistic):
+
+  | variant | main-step width (m, median) | profile RMSE vs laser (m) | RMSE / p95 tile (m) | RMSE / p95 20 m wall band (m) | triangles | gz |
+  |---|---|---|---|---|---|---|
+  | laser ground (0.25 m bins) | 0.75 | — | — | — | — | — |
+  | V0 shipped 1024² grid | 2.85 | 0.79 | 0.095 / 0.114 | 0.43 / 0.80 | 2.09 M | 1.08 MB |
+  | V0 + client conflation (what the viewer shows) | 1.75 | **1.47** | 0.140 / 0.122 | **0.76 / 1.62** | 2.09 M | 1.08 MB |
+  | V1 DGM1 2000² grid | 1.70 | 0.29 | 0.048 / 0.053 | 0.23 / 0.18 | 8.0 M | 3.7 MB |
+  | V2 laser ground 0.5 m grid | 1.20 | 0.16 | 0.046 / 0.046 | 0.22 / 0.10 | 32 M | 12.8 MB |
+  | **TIN of V1 ±0.15 m (the prototype)** | **1.30** | **0.23** | **0.066 / 0.108** | **0.22 / 0.15** | **0.30 M** | **1.04 MB** |
+  | TIN of V1 ±0.10 / ±0.25 m | 1.30 / 1.40 | 0.23 / 0.22 | 0.056 / 0.091 | 0.22 / 0.22 | 0.55 / 0.14 M | 1.79 / 0.49 MB |
+  | TIN of V2 ±0.25 / ±0.10 m | 1.00 / 1.10 | 0.17 / 0.16 | 0.089 / 0.054 | 0.23 / 0.22 | 0.23 / 1.03 M | 0.85 / 3.72 MB |
+  | TIN of V1 + conflation burned in ±0.10 m | 0.60 | 1.40 | 0.135 / 0.084 | 0.78 / 1.52 | 0.55 M | 1.78 MB |
+
+  Client cost (Bun, decode → mesh → normals, then the idle-time BVH): grid
+  ~300 ms + 470 ms BVH → TIN ±0.15 m ~115 ms + 90 ms BVH; GPU geometry ~50 → ~9 MB,
+  and the terrain, water and mist sheets each draw a seventh of the triangles.
+  Findings: (1) most of the "wall smear" is our resample, not the data;
+  (2) the laser-scan DTM beats DGM1 only at the sharpest quay walls
+  (0.6–0.75 m vs 0.9–1.05 m) for 2–4× the triangles and a committed LSC-derived
+  artifact — not worth it; (3) the breakline burn *sharpens* steps but
+  *triples* the wall-band error: it flattens terraced walls (the Jungfernbastei
+  climbs 108.6 → 117.4 → 119.7 → 121.1 m within 8 m and gets one cliff to
+  121.1 m) and puts the step on the OSM line, which misses the measured step by
+  −0.5…+1.0 m (4 m at the bastion's south face). Pitfalls checked: LSC class 30
+  (under buildings) and class 8 (water) are the DGM1 values to the mm (synthetic
+  fill, not measurements); LSC vs DGM1 datum bias 0.000 m; the TIN's seam step
+  against the 512² neighbours is unchanged on average (0.14 m, max 3.1 vs
+  2.5 m where a wall crosses the edge; the skirt hides it).
+  **Visual (real GPU, `shots/tin-*.png` vs `*.tin.png`):** terraced
+  Jungfernbastei reads correctly (terrace levels kept, trees on the first
+  level visible), quay walls straight and clean from the air; residue: a few
+  sub-metre ground spikes at wall feet and faint shading bands on snapped wall
+  faces, faint facet streaks on the water next to bridge piers.
+  **What a TIN rollout still needs:** constrained breaklines (a vertical wall is
+  two vertices at one xy — Delatin cannot, a constrained Delaunay with the
+  snapped wall line could, and would remove the spikes and the cap), NoData
+  support (the bake refuses holes), crease-angle normals, and a TIN per
+  neighbour (±0.25–0.5 m would undercut their 512² grids in bytes and
+  triangles, from the committed DGMs alone).
 
 - **DOP-lean caveat (recorded):** standard DOP has building lean (tall roofs
   displaced over facades). Mitigated in the bake by eroding the roof footprint

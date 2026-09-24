@@ -543,6 +543,9 @@ async function bootApp(
     const t = await loadTerrain({
       onBytes,
       url: tile.heightfieldHeader,
+      // ?terrain=tin: a tile that has a TIN is meshed from it instead
+      // (lib/city/terrain-tin.ts); the rest keep their heightfield.
+      tinUrl: budget.terrain === "tin" ? tile.terrainTin : undefined,
       landcoverUrl: tile.landcover,
       landcoverRgbUrl: tile.landcoverRgb,
       ndviUrl: tile.ndvi,
@@ -709,7 +712,13 @@ async function bootApp(
       return;
     }
     stage("rails", 0.85);
-    const walls = buildWalls(wallFeatures, { offset, heightAt, heightFog });
+    const walls = buildWalls(wallFeatures, {
+      offset,
+      heightAt,
+      heightFog,
+      // ?terrain=tin: the ribbons follow the measured steps (wall-snap.ts)
+      snapToStep: budget.terrain === "tin",
+    });
     scene.add(walls);
     wallGroups.push(walls);
   };

@@ -48,7 +48,7 @@ function isPixelSpaceBounds(
  * parsed instead — and a tile with neither fails loudly rather than being
  * silently misplaced.
  */
-function resolveBounds(
+export function resolveBounds(
   embedded: number[] | null,
   width: number,
   height: number,

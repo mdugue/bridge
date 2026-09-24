@@ -45,6 +45,7 @@ is the codebook.
 |---|---|---|---|
 | Ground height | heightfield sample | DGM1 | `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
 | Ground step at walls | wall line + `kind` ∈ retaining/city/embankment, height ≥ 1.5 m | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
+| 🧪 Ground mesh density (`?terrain=tin`) | vertices where the native 1 m DGM1 bends, ±0.15 m everywhere; walls' ribbons snap to the measured step (face at the ramp foot, cap to the crest) | DGM1 (+ OSM walls for the ribbon) | `lib/city/terrain-tin.ts`, `lib/city/wall-snap.ts` |
 | Ground colour | land-cover class (pastel palette), anisotropy-16 sampled | Basis-DLM | `extract-dlm.sh` palette, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`) | DOP | `terrain-layer.ts` |
 | Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `GRASS_MOTTLE` / `GRASS_NORMAL` |

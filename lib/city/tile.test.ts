@@ -75,6 +75,25 @@ test("tileUrlsFrom prefixes the /data route and serves phones the low rasters", 
   expect(phone.ndvi).toBe(desktop.ndvi);
 });
 
+test("only a tile with a TIN tolerance serves the terrain TIN, optionally", () => {
+  const withTin = tileArtifacts({ ...primary, tinMaxError: 0.15 });
+  expect(withTin.terrainTinHeader?.file).toBe(
+    "dgm1_33412_5656_2_sn.tin-15cm.json"
+  );
+  expect(withTin.terrainTinData?.file).toBe(
+    "dgm1_33412_5656_2_sn.tin-15cm.bin.gz"
+  );
+  expect(withTin.terrainTinHeader?.required).toBe(false);
+  expect(tileArtifacts(primary).terrainTinHeader).toBeUndefined();
+  expect(
+    tileUrlsFrom({ ...primary, tinMaxError: 0.15 }, null, false).terrainTin
+  ).toBe("/data/dgm1_33412_5656_2_sn.tin-15cm.json");
+  expect(tileUrlsFrom(primary, null, false).terrainTin).toBeUndefined();
+  // In the shipped block only the primary carries one.
+  expect(TILE_BLOCK.filter((s) => s.tinMaxError !== undefined)).toHaveLength(1);
+  expect(TILE_BLOCK[0].tinMaxError).toBeDefined();
+});
+
 test("the tile block lists the primary first", () => {
   expect(TILE_BLOCK[0].tile).toBe(PRIMARY_TILE);
   expect(dgmSourceFiles(PRIMARY_TILE).tif).toBe(

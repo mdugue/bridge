@@ -85,7 +85,7 @@ documentation.
 | **Generally suited for** | Any "how high is the ground here" question: terrain analysis, flood and drainage modelling, visibility studies, slope maps, rectifying aerial photos. |
 | **Used here for** | The ground itself; seating buildings, trees, lamps and the player on it; the abutment heights of bridges; the base term of the tree heights. |
 | **Strengths** | The true shape of the ground, including river banks, embankments and the terraces of the old town, to a few centimetres. |
-| **Weaknesses** | Anything vertical: a laser-scanned wall is smoothed into a ramp about a metre wide, so monumental walls such as the Brühlsche Terrasse "disappear" into a gentle bank. Bridges are removed by definition, so a deck taken from this model would sink to the river bed. The viewer fixes both with other sources. |
+| **Weaknesses** | Anything vertical: a laser-scanned wall becomes a steep ramp one to two metres wide, never a vertical face — and once the viewer resamples the 1 m grid to its 2 m mesh, monumental walls such as the Brühlsche Terrasse "disappear" into a gentle bank about 3 m wide. Bridges are removed by definition, so a deck taken from this model would sink to the river bed. The viewer fixes both with other sources. |
 | **Format and download** | GeoTIFF, 2000 × 2000 pixels of 32-bit floats, 13.6 MB per 2 km tile, with a `.tfw` world file and an `_akt.csv` stating the survey date. Heights in metres above sea level (**DHHN2016**). [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html). |
 
 Special role: this is the only bulk raw dataset committed to the
