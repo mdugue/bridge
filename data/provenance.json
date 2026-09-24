@@ -80,7 +80,7 @@
   },
   "openstreetmap": {
     "overpass": {
-      "$comment": "How the committed lamp, platform and bridge-structure files were fetched (the bash bakes, cached under data/_raw/osm/*.json). The Python pipeline reads all OSM layers from the Geofabrik extract below instead; the next re-bake moves these products there.",
+      "$comment": "How the committed platform and bridge-structure files were fetched (lamps until 2026-09-24) (the bash bakes, cached under data/_raw/osm/*.json). The Python pipeline reads all OSM layers from the Geofabrik extract below instead; the next re-bake moves these products there.",
       "endpoint": "https://overpass-api.de/api/interpreter",
       "products": {
         "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
@@ -92,7 +92,11 @@
       "$comment": "Regional extract read by pipeline/bake/osm.py (walls, lamps, platforms, bridge structure). `osmium fileinfo -e <file>` prints the extract's replication timestamp.",
       "download": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
       "raw": "data/_raw/<site>/osm/*.osm.pbf",
-      "products": { "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-09-18 or shortly before (walls re-baked that day)" } }
+      "extract": "sachsen-260615.osm.pbf (Geofabrik, 2026-06-15)",
+      "products": {
+        "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; identical geometry)" },
+        "lamps": { "query": "highway=street_lamp", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; the same lamps as the Overpass bake)" }
+      }
     }
   }
 }

@@ -341,6 +341,8 @@ def platforms(tile: Tile) -> list[dict]:
 
 
 def run(tile: Tile) -> None:
+    if not tile.has_dlm("the rail layer (tracks, ballast, bridges, platforms)"):
+        return
     write_geojson(tile.out("dlm", f"railarea_{tile.id}.geojson"), ballast(tile), tile.epsg)
     write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), rails(tile), tile.epsg)
     has_osm = has_extract(tile, "bridge structure and platforms")

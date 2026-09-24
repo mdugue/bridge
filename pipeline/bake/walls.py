@@ -29,6 +29,8 @@ def lines_of(geom: shapely.Geometry) -> list[shapely.Geometry]:
     """Lines as they are; polygons as their exterior rings (holes are no walls)."""
     out = []
     for part in shapely.get_parts(geom):
+        if part.is_empty:  # a polygon clipped away entirely
+            continue
         if isinstance(part, shapely.Polygon):
             out.append(part.exterior)
         elif isinstance(part, shapely.LineString) and len(part.coords) >= 2:

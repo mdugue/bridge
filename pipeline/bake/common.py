@@ -53,6 +53,14 @@ class Tile:
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
+    def has_dlm(self, what: str) -> bool:
+        """Whether the Basis-DLM is there; if not, say what is skipped. A step
+        without it leaves its committed files alone rather than emptying them."""
+        if not any(self.dlm.glob("*.shp")):
+            print(f"{self.id}: no Basis-DLM under {self.dlm} — skipping {what}")
+            return False
+        return True
+
     def osm_extract(self) -> Path | None:
         found = sorted((self.raw / "osm").glob("*.osm.pbf"), key=lambda p: p.stat().st_mtime)
         return found[-1] if found else None

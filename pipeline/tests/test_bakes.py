@@ -50,3 +50,22 @@ def test_the_class_ids_are_the_client_palette_order():
     # lib/city/landcover.ts keys its palette by these ids and names.
     assert list(CLASSES) == list(range(9))
     assert CLASSES[8] == "water"
+
+
+def test_rail_without_a_dlm_leaves_committed_files_alone(tmp_path):
+    from bake import rail
+    from bake.common import Tile
+
+    out = tmp_path / "data" / "dlm"
+    out.mkdir(parents=True)
+    committed = out / "rail_t.geojson"
+    committed.write_text('{"features": [1]}')
+    tile = Tile("t", (0.0, 0.0, 2000.0, 2000.0), 25833, tmp_path / "raw", tmp_path / "data")
+    rail.run(tile)
+    assert committed.read_text() == '{"features": [1]}'
+    assert sorted(p.name for p in out.iterdir()) == ["rail_t.geojson"]
+
+
+def test_a_polygon_clipped_away_yields_no_wall():
+    clipped = shapely.intersection(shapely.box(10, 10, 11, 11), shapely.box(0, 0, 1, 1))
+    assert lines_of(clipped) == []

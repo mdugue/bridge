@@ -100,6 +100,11 @@ def veg_rows(tile: Tile) -> list[dict]:
 
 
 def run(tile: Tile, px: int = 4096) -> None:
+    if not any(tile.dlm.glob("*.shp")):
+        raise SystemExit(
+            f"{tile.id}: no Basis-DLM under {tile.dlm} — the land cover is required; "
+            "run `bun run bake --ingest` first"
+        )
     raster = class_raster(tile, px)
     if not raster.any():
         raise SystemExit(f"{tile.id}: nothing rasterized (no DLM features in the tile?)")
