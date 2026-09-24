@@ -49,6 +49,7 @@ history. Decisions that came out of plans are written up as
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | **TODO** — gated on the deploy container's Bun version; premise drift noted in the file | [016-bun-image-raster-downsample.md](./016-bun-image-raster-downsample.md) |
 | 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **TODO** — five phases, each its own PR | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
+| 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | **TODO** — Phase 0 (area, data location, ADR 0022) awaits the maintainer | [018-tile-streaming.md](./018-tile-streaming.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -63,10 +64,16 @@ S/M/L.
    off with green CI). See the plan.
 2. **Plan 016 (S, gated).** `Bun.Image` instead of `sharp`; first confirm
    from a deploy log that install *and* build run Bun 1.4.x.
-3. **Pixel-ratio drop while moving (S, GPU).** Plan 007 step 4:
+3. **Plan 018 (L, phased; gated on Phase 0).** More of the city: stream
+   tiles around the camera instead of the fixed 2×2 block. Phases 1–2
+   (extract the tile loader from `bootApp`, the pure schedule) are safe
+   refactors that can start now; they also cover item 12 for the tile path
+   and item 15 for per-tile resources. See the plan and
+   [ADR 0022](../adr/0022-stream-tiles-around-the-camera.md) (proposed).
+4. **Pixel-ratio drop while moving (S, GPU).** Plan 007 step 4:
    `setPixelRatio` reallocates every render target, so hold ~1 s before
    restoring; judge on a real GPU.
-4. **Atmospheric motes (S, GPU).** The one unbuilt item of the aesthetic
+5. **Atmospheric motes (S, GPU).** The one unbuilt item of the aesthetic
    roadmap. Design: camera-local `Points` (2–4 k) with a toroidal wrap on
    the camera-relative offset (R ≈ 30 m), additive, `depthWrite: false`,
    `depthTest: true`, `toneMapped: false`, `fog: false` (fog would brighten
@@ -74,48 +81,48 @@ S/M/L.
    driving opacity *and* `setDrawRange`, `material.map` disposed
    explicitly. +1 draw call, sub-0.1 ms of JS; vertex-shader-only beyond
    ~8 k points. Ledger: 📋 planned #10.
-5. **Water and mist sheets draw the whole terrain geometry (M, bake +
+6. **Water and mist sheets draw the whole terrain geometry (M, bake +
    GPU).** ≈7.3 M of the ≈10.9 M terrain-derived triangles per frame belong
    to transparent sheets that `discard` on ~95 % of each tile. Fix: a
    water-only index buffer over the shared positions from a baked coarse
    water mask.
-6. **Far crown LOD tier (S–M, GPU).** A third InstancedMesh per cell
+7. **Far crown LOD tier (S–M, GPU).** A third InstancedMesh per cell
    (detail 1 or 0, trunk hidden) beyond ~500 m; today a tree 2 km away
    draws ~400 triangles in the main and every shadow pass. Ledger 📋 #11.
-7. **Terrain BVH → heightfield ray-march (M).** The synchronous
+8. **Terrain BVH → heightfield ray-march (M).** The synchronous
    `computeBoundsTree()` over ≈3.6 M triangles at boot (≈1–1.5 s) serves
    two rays per second that a bilinear march answers in microseconds. Pure
    `lib/city/heightfield-ray.ts` + tests.
-8. **Shadow centre biased ahead at eye level (S, GPU).** Plan 009's
+9. **Shadow centre biased ahead at eye level (S, GPU).** Plan 009's
    leftover: push the re-centre 20–30 m along the view direction so long
    low-sun shadows clip less (the altitude fit only pushes ahead above the
    base radius). Long shadows beyond the frustum are otherwise a CSM
    problem (ledger 📋 #7).
-9. **First-frame decode/compile (S, GPU).** Eight 4096² `<img>` decodes and
+10. **First-frame decode/compile (S, GPU).** Eight 4096² `<img>` decodes and
    every program compile land in the first visible frame;
    `ImageBitmapLoader` + `renderer.compileAsync` under the overlay.
-10. **Bundle: `GLTFLoader` and `proj4` for paths that never run (S).**
+11. **Bundle: `GLTFLoader` and `proj4` for paths that never run (S).**
     Dynamic-import the loader behind `modelUrl`; a 40-line UTM inverse for
     zones 32/33 replaces proj4. Sizes unmeasured.
-11. **Split the 900-line `bootApp` (L).** `tile-loader.ts`,
+12. **Split the 900-line `bootApp` (L).** `tile-loader.ts`,
     `focus-controller.ts`, …; plans 010–012 and the camera-pose extraction
     already shrank it.
-12. **`lib/city/math.ts` and one `densify` (S–M).** `clamp` re-implemented
+13. **`lib/city/math.ts` and one `densify` (S–M).** `clamp` re-implemented
     dozens of times; four polyline resamplers with divergent carry
     semantics; unifying changes geometry slightly and needs a shot
     comparison.
-13. **Pure-helper tests (S each, when a module is next touched).** Rail
+14. **Pure-helper tests (S each, when a module is next touched).** Rail
     geometry (`pushTri`, `deckLift`, `addArches`, `buildRails` — none run in
     CI because the lite tile has no rail lines and the only arch bridge is
     on a neighbour), vegetation (`sampleLine`, `bucketByCell`, `crownColor`,
     `updateLod`), lamps, walls, `prepare-data`'s staleness helpers, the
     NaN/`nodata: null` terrain path.
-14. **`dispose()` leaves textures, the shadow map and the GL context to the
+15. **`dispose()` leaves textures, the shadow map and the GL context to the
     GC (S).** Bounded today (only dev/CI unmount).
-15. **Materials whose GLSL depends on `heightFog` but whose cache key does
+16. **Materials whose GLSL depends on `heightFog` but whose cache key does
     not (S).** Latent while every caller passes it; one
     `customProgramCacheKey` each.
-16. **Low-confidence, investigate not fix:** NoData smearing in the
+17. **Low-confidence, investigate not fix:** NoData smearing in the
     bilinear bake before the sentinel compare; `worldBounds.min.y` (with
     the 30 m skirt) as the ground fallback; the minimap assumes square
     bounds; the joystick releases on any `pointerup`; the `crs.ts`
@@ -237,3 +244,6 @@ source); the production deploy environment.
   plans condensed into [completed.md](./completed.md), decisions into
   [ADRs](../adr/README.md), open items into the backlog above, rejected
   data → look ideas into the ledger. Full texts: git history at `761d609`.
+- **2026-09-23**: plan 018 (tile streaming) and ADR 0022 (proposed) written
+  by hand after a Q&A on adding more tiles: Next.js/Bun is not the limit,
+  GPU memory, the main thread and the committed source size are.
