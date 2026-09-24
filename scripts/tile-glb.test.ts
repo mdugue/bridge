@@ -49,8 +49,8 @@ test("a feature table rides along as EXT_structural_metadata", async () => {
     positions,
     normals,
     attributes: {
-      _FEATURE_ID_0: new Uint16Array([0, 0, 0, 1, 1, 1]),
-      _ROOF: new Uint8Array([0, 0, 0, 1, 1, 1]),
+      _FEATURE_ID_0: new Float32Array([0, 0, 0, 1, 1, 1]),
+      _ROOF: new Float32Array([0, 0, 0, 1, 1, 1]),
     },
     weld: true,
     extras: { kind: "city", tileId: "t" },
@@ -72,6 +72,7 @@ test("a feature table rides along as EXT_structural_metadata", async () => {
     },
   });
   const json = gltfJson(glb) as {
+    accessors: { componentType: number; normalized?: boolean }[];
     bufferViews: { byteLength: number; byteOffset: number }[];
     extensions: {
       EXT_structural_metadata: {
@@ -91,12 +92,21 @@ test("a feature table rides along as EXT_structural_metadata", async () => {
     extensionsUsed: string[];
     meshes: {
       primitives: {
+        attributes: Record<string, number>;
         extensions: {
           EXT_mesh_features: { featureIds: { featureCount: number }[] };
         };
       }[];
     }[];
   };
+  // Ids and flags stay plain floats: never quantised, never normalised
+  // (WebGPU has no 1-component 8/16-bit vertex format).
+  const { attributes } = json.meshes[0].primitives[0];
+  for (const name of ["_FEATURE_ID_0", "_ROOF"]) {
+    const accessor = json.accessors[attributes[name]];
+    expect(accessor.componentType).toBe(5126);
+    expect(accessor.normalized ?? false).toBe(false);
+  }
   expect(json.extensionsUsed).toContain("EXT_mesh_features");
   expect(json.extensionsUsed).toContain("EXT_structural_metadata");
   const meta = json.extensions.EXT_structural_metadata;
