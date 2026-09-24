@@ -7,8 +7,10 @@ Entrypoint for coding agents working on this repo.
 A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
 rendering of Dresden built from Saxon open geodata and walk (or fly) through it.
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
-rasters, surfaces (roads/water/meadow/…) from an **ATKIS Basis-DLM** "splatmap",
-and trees from DLM hedge/tree-rows plus a **DOM1**-derived canopy. Everything
+rasters (as an error-bounded TIN per tile), surfaces (roads/water/meadow/…)
+from an **ATKIS Basis-DLM** "splatmap", and trees from DLM hedge/tree-rows, a
+**DOM1**-derived canopy, the city's **street-tree cadastre** and laser-scan
+crowns, plus OSM hedges. Everything
 renders in the browser with **three.js**; there is no backend.
 
 Single-page Next.js app. The 3D scene is imperative three.js code mounted into a

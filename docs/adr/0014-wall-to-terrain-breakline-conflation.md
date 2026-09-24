@@ -1,6 +1,6 @@
 # ADR 0014: Burn OSM wall lines into the heightfield as breaklines
 
-- **Status:** accepted
+- **Status:** superseded by ADR-0023 for TIN tiles (every tile of the shipped block); in force for a tile meshed from its heightfield
 - **Date:** 2026-06
 
 ## Context
@@ -55,6 +55,12 @@ force for the default heightfield; the `?terrain=tin` experiment meshes the
 native DGM1 without the burn and snaps the ribbon to the measured step
 instead (`lib/city/wall-snap.ts`). If that is adopted, this ADR is
 superseded for TIN tiles.
+
+## Update (2026-09, adopted)
+
+The TIN was adopted for every tile ([ADR 0023](./0023-terrain-tin-per-tile-and-wall-snap.md)):
+the primary at ±0.15 m, the neighbours at ±0.25 m. This decision now applies
+only to a tile whose spec names no TIN tolerance.
 
 ## References
 

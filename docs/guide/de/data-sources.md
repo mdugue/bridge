@@ -25,9 +25,9 @@ Bahnsteige, Stützmauern mit Höhen und den Tragwerkstyp von Brücken.
 
 **Landeshauptstadt Dresden** — die Stadt selbst. Ihr Stadtbaumkataster
 verzeichnet rund 124.000 städtische Bäume mit Art, Höhe und
-Kronendurchmesser. Genutzt wird es nur von einer experimentellen Option
-(den Viewer mit `?trees=kataster` öffnen), die diese Bäume dort pflanzt, wo
-sie wirklich stehen.
+Kronendurchmesser. Der Viewer pflanzt diese Bäume dort, wo sie wirklich
+stehen, mit gemessener Höhe und Krone und einer Kronenform, die der Art
+folgt.
 
 ## Die Datensätze im Überblick
 
@@ -38,11 +38,11 @@ sie wirklich stehen.
 | **LoD2** | 3D-Gebäudemodell mit Dachformen | GeoSN | Grundriss, Höhe, Dachform und Attribute jedes Gebäudes |
 | **Basis-DLM** | Digitales Landschaftsmodell (die Landnutzungskarte) | GeoSN | Bodenfarben, Gewässerumrisse, Hecken und Baumreihen, Bahnflächen und Gleise, Brückenumrisse |
 | **DOP** | Digitales Orthophoto, 20 cm, mit Nahinfrarot-Kanal | GeoSN | Dachfarben; Vegetationsgrün für Baumkronen und Wiesen |
-| **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Bahnsteige, Mauern, Brücken-Tragwerkstypen |
-| **Stadtbaumkataster** *(experimentell)* | Das Baumverzeichnis der Stadt | Landeshauptstadt Dresden | Straßen- und Parkbäume an ihrem vermessenen Standort, mit Höhe, Kronenbreite und einer Kronenform nach der Art (nur mit `?trees=kataster`) |
+| **LSC** | Laserscan-Punktwolke | GeoSN | Heckenhöhen; Bäume in Höfen und Gärten (mittlere Kachel) |
+| **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Bahnsteige, Mauern, Hecken, Brücken-Tragwerkstypen |
+| **Stadtbaumkataster** | Das Baumverzeichnis der Stadt | Landeshauptstadt Dresden | Straßen- und Parkbäume an ihrem vermessenen Standort, mit Höhe, Kronenbreite und einer Kronenform nach der Art |
 
-Im selben Portal verfügbar, aber **noch nicht genutzt**: die
-Laserscan-Punktwolke (aus ihr kämen einzelne Baumkronen), die Flurstücke
+Im selben Portal verfügbar, aber **noch nicht genutzt**: die Flurstücke
 (**ALKIS**) und die topographische Grundkarte (**DTK**). Der Abschnitt
 „Planned“ des [Transformations-Verzeichnisses](../../transformations.md)
 (englisch) hält fest, was sie beitragen könnten.
@@ -92,7 +92,7 @@ Produktdokumentation des Anbieters.
 | **Aktualisierung** | Gebietsweise nach jeder neuen Laserbefliegung. Für Dresden stammte der vorige Scan von 2016, der aktuelle vom 27.–30. November 2024. |
 | **Auflösung und Genauigkeit** | 1-m-Zellen, Höhe in der Zellenmitte. Höhengenauigkeit bis ±0,15 m, Lagegenauigkeit ±0,30 m bei 95 % Sicherheit, laut GeoSN. |
 | **Allgemein geeignet für** | Jede Frage „wie hoch liegt der Boden hier“: Geländeanalysen, Hochwasser- und Abflussmodelle, Sichtbarkeitsstudien, Hangneigungskarten, Entzerrung von Luftbildern. |
-| **Hier genutzt für** | Den Boden selbst; das Absetzen von Gebäuden, Bäumen, Lampen und Spieler darauf; die Widerlagerhöhen von Brücken; den Grundterm der Baumhöhen. |
+| **Hier genutzt für** | Den Boden selbst — ein Dreiecksnetz, das jeden Punkt des 1-m-Rasters auf 15 cm genau trifft (25 cm auf den äußeren Kacheln), dicht, wo der Boden sich biegt, und grob, wo er flach ist, sodass Mauern und Böschungen ihre Kanten behalten; das Absetzen von Gebäuden, Bäumen, Lampen und Spieler darauf; die Widerlagerhöhen von Brücken; den Grundterm der Baumhöhen. |
 | **Stärken** | Die wahre Form des Bodens, einschließlich Flussufern, Dämmen und den Terrassen der Altstadt, auf wenige Zentimeter. |
 | **Schwächen** | Alles Senkrechte: Eine gelaserte Mauer wird zu einer steilen, ein bis zwei Meter breiten Rampe, nie zu einer senkrechten Wand — und sobald der Viewer das 1-m-Raster auf sein 2-m-Netz umrechnet, „verschwinden“ monumentale Mauern wie die Brühlsche Terrasse in einer etwa 3 m breiten, sanften Böschung. Brücken sind per Definition entfernt, ein Deck aus diesem Modell würde auf den Flussgrund sinken. Der Viewer behebt beides mit anderen Quellen. |
 | **Format und Download** | GeoTIFF, 2000 × 2000 Pixel als 32-Bit-Gleitkommazahlen, 13,6 MB je 2-km-Kachel, mit `.tfw`-Weltdatei und einer `_akt.csv` mit dem Erfassungsdatum. Höhen in Metern über Normalhöhennull (**DHHN2016**). [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html). |
@@ -124,7 +124,7 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 | **Aktualisierung** | Wie die Höhenmodelle (27.–30. November 2024 für diese Kacheln). |
 | **Auflösung und Genauigkeit** | Unregelmäßige Punkte, mehrere je Quadratmeter; ±0,15 m in der Höhe, ±0,30 m in der Lage, laut GeoSN. |
 | **Allgemein geeignet für** | Alles, was die Raster wegvereinfachen: einzelne Baumkronen, Dachkanten, Mauerflächen, Freileitungen. |
-| **Hier genutzt für** | Nur in einem Experiment, das man einschalten muss (`?veg=low`, `?veg=trees` in der Adresse): Hecken und Sträucher unter 3 m sowie Bäume in Höfen und Gärten, die die Landnutzungskarte nicht als Grün führt. Bisher nur für die mittlere Kachel. |
+| **Hier genutzt für** | Die Höhe der in OpenStreetMap kartierten Hecken sowie Bäume in Höfen und Gärten, die die Landnutzungskarte nicht als Grün führt (außer dort, wo das Stadtbaumkataster schon einen Baum hat). Bisher nur für die mittlere Kachel. Hecken und Sträucher, die nur der Scan findet, werden nicht gezeigt: etwa ein Drittel davon waren Ränder von Baumkronen. |
 | **Stärken** | Sieht unter 3 m und zwischen die Häuser, wo die Höhenraster und die Landnutzungskarte nichts sehen. Jeder Punkt weiß, wie hell sein Echo war und ob sich der Puls geteilt hat — hohe Bäume teilen ihn fast immer, Dächer fast nie. |
 | **Schwächen** | Die Klassen trennen Vegetation nicht von Gebäuden, Autos oder Zäunen. Eine geschnittene Hecke teilt einen Puls selten, deshalb stützt sich der Viewer bei niedrigen Pflanzen stattdessen auf die Grünheit des (Frühjahrs-)Luftbilds; eine Hecke unter einer Baumkrone bleibt unsichtbar. |
 | **Format und Download** | LAZ je 2-km-Kachel, groß (≈380 MB für 60 Millionen Punkte); dieselbe Portalseite wie das DGM1. |
@@ -189,7 +189,7 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 | **Aktualisierung** | Laufend: Änderungen sind binnen Minuten live. Download-Auszüge (Geofabrik) werden täglich neu gebaut; die Overpass-API fragt die Live-Datenbank ab. |
 | **Auflösung und Genauigkeit** | Keine Garantie; in einer gut kartierten Stadt typischerweise meterngenaue Lagen. Vollständigkeit und Tag-Konsistenz schwanken von Straße zu Straße und Mapper zu Mapper. |
 | **Allgemein geeignet für** | Dinge, die kein amtlicher Datensatz hat: Straßenmöbel, Points of Interest, Namen, informelle Wege, Tragwerkstypen; nahezu weltweite Abdeckung; schnell abzurufen. |
-| **Hier genutzt für** | Lampenpositionen (`highway=street_lamp`), Bahnsteige (`railway=platform`), Stütz- und Stadtmauern sowie Böschungen (`barrier=*`, `man_made=embankment`) mit ihrem `height`-Tag, und ob eine Brücke eine Bogenbrücke ist (`bridge:structure`). |
+| **Hier genutzt für** | Lampenpositionen (`highway=street_lamp`), Bahnsteige (`railway=platform`), Stütz- und Stadtmauern sowie Böschungen (`barrier=*`, `man_made=embankment`) mit ihrem `height`-Tag, Hecken (`barrier=hedge`), und ob eine Brücke eine Bogenbrücke ist (`bridge:structure`). |
 | **Stärken** | Lesbare Tags für genau die Details, die die Landesvermessung nicht modelliert; die Brühlsche Terrasse existiert hier und sonst nirgends. |
 | **Schwächen** | Nicht jede Lampe ist erfasst, Höhen fehlen oft (der Viewer nutzt Standardwerte je Mauertyp), Tags variieren. Freiwilligendaten müssen genannt werden (ODbL). |
 | **Download und Lizenz** | Zwei Wege: kleine Punktabfragen über die **Overpass-API**, lokal zwischengespeichert, sodass der Dienst nur einmal angefragt wird; Mauern aus einem regionalen Auszug des ganzen Bundeslandes, einmal von [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) geladen (etwa 250 MB), was Ratenlimits vermeidet und das Ergebnis reproduzierbar macht. Lizenz: **ODbL**, Vermerk „© OpenStreetMap-Mitwirkende“. |
@@ -255,7 +255,7 @@ Sachsen (`sachsen-latest.osm.pbf`).
 |---|---|---|
 | GeoSN-Datensätze (DGM1, DOM1, LoD2, Basis-DLM, DOP) | *Datenlizenz Deutschland – Namensnennung – Version 2.0* (`dl-de/by-2-0`), laut den [Nutzungsbedingungen](https://www.landesvermessung.sachsen.de/allgemeine-nutzungsbedingungen-8954.html) des GeoSN (geprüft am 2026-09-22) | „Quelle: GeoSN, dl-de/by-2-0“ |
 | OpenStreetMap | *Open Database License* (ODbL) | „© OpenStreetMap-Mitwirkende“ |
-| Stadtbaumkataster *(experimentell)* | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
+| Stadtbaumkataster | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
 
 Der Viewer zeigt beide Vermerke in der Fußzeile seines Einstellungsfelds
 (der Stadtbaum-Vermerk kommt hinzu, solange die experimentelle Option an

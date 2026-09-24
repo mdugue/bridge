@@ -24,9 +24,9 @@ retaining walls with their heights, and what kind of structure a bridge is.
 
 **Landeshauptstadt Dresden** — the city itself. Its street-tree register
 (*Stadtbaumkataster*) lists about 124,000 municipal trees with species,
-height and crown width. It is used only by an experimental option (open the
-viewer with `?trees=kataster`), which plants those trees where they really
-stand.
+height and crown width. The viewer plants those trees where they really
+stand, with their measured height and crown and a crown shape that follows
+the species.
 
 ## The datasets at a glance
 
@@ -37,11 +37,11 @@ stand.
 | **LoD2** | 3D building model with roof shapes | GeoSN | Every building's footprint, height, roof shape and attributes |
 | **Basis-DLM** | Digital landscape model (the land-use map) | GeoSN | Ground colours, water outlines, hedges and tree rows, railway areas and tracks, bridge outlines |
 | **DOP** | Digital orthophoto, 20 cm, with a near-infrared channel | GeoSN | Roof colours; vegetation greenness for tree crowns and meadows |
-| **OSM** | OpenStreetMap | Volunteers | Street lamps, station platforms, walls, bridge structure types |
-| **Stadtbaumkataster** *(experimental)* | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width and a crown shape from the species (`?trees=kataster` only) |
+| **LSC** | Laser-scan point cloud | GeoSN | Hedge heights; trees in courtyards and gardens (central tile) |
+| **OSM** | OpenStreetMap | Volunteers | Street lamps, station platforms, walls, hedges, bridge structure types |
+| **Stadtbaumkataster** | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width and a crown shape from the species |
 
-Available from the same portal but **not used yet**: the laser-scan point
-cloud (individual tree crowns would come from it), the cadastral parcels
+Available from the same portal but **not used yet**: the cadastral parcels
 (**ALKIS**), and the topographic base map (**DTK**). The planned section of
 the [transformation ledger](../../transformations.md) records what they
 could add.
@@ -90,7 +90,7 @@ documentation.
 | **Update cycle** | Region by region, after each new laser flight. For Dresden the previous scan dated from 2016, the current one from 27–30 November 2024. |
 | **Resolution and accuracy** | 1 m cells, height stored in the cell centre. Height accuracy up to ±0.15 m and position ±0.30 m at 95 % confidence, per GeoSN. |
 | **Generally suited for** | Any "how high is the ground here" question: terrain analysis, flood and drainage modelling, visibility studies, slope maps, rectifying aerial photos. |
-| **Used here for** | The ground itself; seating buildings, trees, lamps and the player on it; the abutment heights of bridges; the base term of the tree heights. |
+| **Used here for** | The ground itself — a triangle mesh that keeps every point of the 1 m grid within 15 cm (25 cm on the outer tiles), dense where the ground bends and sparse where it is flat, so walls and embankments keep their edges; seating buildings, trees, lamps and the player on it; the abutment heights of bridges; the base term of the tree heights. |
 | **Strengths** | The true shape of the ground, including river banks, embankments and the terraces of the old town, to a few centimetres. |
 | **Weaknesses** | Anything vertical: a laser-scanned wall becomes a steep ramp one to two metres wide, never a vertical face — and once the viewer resamples the 1 m grid to its 2 m mesh, monumental walls such as the Brühlsche Terrasse "disappear" into a gentle bank about 3 m wide. Bridges are removed by definition, so a deck taken from this model would sink to the river bed. The viewer fixes both with other sources. |
 | **Format and download** | GeoTIFF, 2000 × 2000 pixels of 32-bit floats, 13.6 MB per 2 km tile, with a `.tfw` world file and an `_akt.csv` stating the survey date. Heights in metres above sea level (**DHHN2016**). [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html). |
@@ -122,7 +122,7 @@ repository, because the build step reads it directly. See
 | **Update cycle** | The same as the height models (27–30 November 2024 for these tiles). |
 | **Resolution and accuracy** | Irregular points, several per square metre; ±0.15 m in height, ±0.30 m in position, per GeoSN. |
 | **Generally suited for** | Everything the grids simplify away: individual tree crowns, roof edges, wall faces, power lines. |
-| **Used here for** | Only in an experiment you have to switch on (`?veg=low`, `?veg=trees` in the address): hedges and shrubs under 3 m, and trees in courtyards and gardens that the land-use map does not mark as green. Only for the central tile so far. |
+| **Used here for** | The height of the hedges mapped in OpenStreetMap, and trees in courtyards and gardens that the land-use map does not mark as green (unless the city's tree register already has a tree there). Only for the central tile so far. Hedges and shrubs found in the scan alone are not shown: about a third of them turned out to be the rims of tree crowns. |
 | **Strengths** | Sees below 3 m and between buildings, where the height grids and the land-use map see nothing. Each point knows how bright its echo was and whether the pulse split — tall trees split it almost always, roofs almost never. |
 | **Weaknesses** | Its classes do not separate vegetation from buildings, cars or fences. A clipped hedge rarely splits a pulse, so for low plants the viewer leans on the greenness of the (spring) aerial photo instead; a hedge under a tree crown stays invisible. |
 | **Format and download** | LAZ per 2 km tile, large (≈380 MB for 60 million points); same portal page as the DGM1. |
@@ -187,7 +187,7 @@ repository, because the build step reads it directly. See
 | **Update cycle** | Continuous: edits are live within minutes. Extracts for download (Geofabrik) are rebuilt daily; the Overpass API queries the live database. |
 | **Resolution and accuracy** | No guarantee; in a well-mapped city typically metre-level positions. Completeness and tag consistency vary from street to street and mapper to mapper. |
 | **Generally suited for** | Things no official dataset has: street furniture, points of interest, names, informal paths, structure types; near-worldwide coverage; quick to fetch. |
-| **Used here for** | Lamp positions (`highway=street_lamp`), station platforms (`railway=platform`), retaining walls, city walls and embankments (`barrier=*`, `man_made=embankment`) with their `height` tag, and whether a bridge is an arch bridge (`bridge:structure`). |
+| **Used here for** | Lamp positions (`highway=street_lamp`), station platforms (`railway=platform`), retaining walls, city walls and embankments (`barrier=*`, `man_made=embankment`) with their `height` tag, hedges (`barrier=hedge`), and whether a bridge is an arch bridge (`bridge:structure`). |
 | **Strengths** | Human-readable tags for exactly the details the survey office does not model; the Brühlsche Terrasse exists here and nowhere else. |
 | **Weaknesses** | Not every lamp is mapped, heights are often missing (the viewer uses defaults per wall type), tags vary. Volunteer data must be credited (ODbL). |
 | **Download and licence** | Two routes: small point queries through the **Overpass API**, cached locally so the service is hit once; walls from a regional extract of the whole state, downloaded once from [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) (about 250 MB), which avoids rate limits and makes the result reproducible. Licence: **ODbL**, credit "© OpenStreetMap contributors". |
@@ -251,7 +251,7 @@ Saxony extract (`sachsen-latest.osm.pbf`).
 |---|---|---|
 | GeoSN datasets (DGM1, DOM1, LoD2, Basis-DLM, DOP) | *Datenlizenz Deutschland – Namensnennung – Version 2.0* (`dl-de/by-2-0`), per GeoSN's [terms of use](https://www.landesvermessung.sachsen.de/allgemeine-nutzungsbedingungen-8954.html) (checked 2026-09-22) | "Quelle: GeoSN, dl-de/by-2-0" |
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
-| Stadtbaumkataster *(experimental)* | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
+| Stadtbaumkataster | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
 
 The viewer shows both credits in the footer of its settings panel (the
 street-tree credit joins them while the experimental option is on). The

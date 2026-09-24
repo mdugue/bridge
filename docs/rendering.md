@@ -21,10 +21,12 @@ flowchart TB
   SCENE["scene (Y-up)"]
   WORLD["world group (Z-up data frame, rotated −90° about X)"]
   SCENE --> WORLD
-  WORLD --> TER["terrain mesh<br/>heightfield → triangles + 30 m skirt<br/>splat-coloured, receives shadows only"]
+  WORLD --> TER["terrain mesh<br/>error-bounded TIN + 30 m skirt<br/>splat-coloured, receives shadows only"]
   WORLD --> WAT["water + mist sheets<br/>terrain geometry masked by water alpha"]
   WORLD --> CITY["city mesh per tile<br/>one merged mesh, per-vertex objectid<br/>opaque clay + facade detail"]
-  SCENE --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges"]
+  SCENE --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges<br/>canopy + scan + cadastre trees share the meshes"]
+  SCENE --> INV["cadastre silhouettes<br/>flame / cone / dome per 250 m cell"]
+  SCENE --> LOW["OSM hedges<br/>clay block chains per 250 m cell"]
   SCENE --> LAMP["lamps<br/>instanced posts + 3 real point lights"]
   SCENE --> RAIL["rail layer (whole block)<br/>ballast, rails, decks, arches, platforms"]
   SCENE --> WALL["walls<br/>vertical ribbons draped on the DGM"]
@@ -43,9 +45,9 @@ is the codebook.
 
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
-| Ground height | heightfield sample | DGM1 | `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
-| Ground step at walls | wall line + `kind` ∈ retaining/city/embankment, height ≥ 1.5 m | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
-| 🧪 Ground mesh density (`?terrain=tin`) | vertices where the native 1 m DGM1 bends, ±0.15 m everywhere; walls' ribbons snap to the measured step (face at the ramp foot, cap to the crest) | DGM1 (+ OSM walls for the ribbon) | `lib/city/terrain-tin.ts`, `lib/city/wall-snap.ts` |
+| Ground height + mesh density | error-bounded TIN of the native 1 m DGM1: vertices where the ground bends, within ±0.15 m (primary) / ±0.25 m (neighbours) everywhere | DGM1 | `terrain-layer.ts`, `lib/city/terrain-tin.ts` |
+| Wall ribbon placement | earth-retaining walls snap to the measured step (face at the ramp foot, cap to the crest) | DGM1 + OSM walls | `lib/city/wall-snap.ts` |
+| Ground step at walls (heightfield fallback only) | wall line + `kind` ∈ retaining/city/embankment, height ≥ 1.5 m, burned into a tile without a TIN | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
 | Ground colour | land-cover class (pastel palette), anisotropy-16 sampled | Basis-DLM | `extract-dlm.sh` palette, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`) | DOP | `terrain-layer.ts` |
 | Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `GRASS_MOTTLE` / `GRASS_NORMAL` |
@@ -68,11 +70,10 @@ is the codebook.
 | Crown colour | NDVI 5×5 footprint max, recentred on the median | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
 | Crown detail | distance (in 220 m / out 300 m per 250 m chunk) | — | `updateLod` (*Detaillierte Kronen*) |
-| 🧪 Inventory tree (`?trees=kataster`) | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
+| Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
-| 🧪 Hedge (`?veg=low`) | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height | LSC, OSM, DOP NDVI (cue) | `low-vegetation-layer.ts` |
-| 🧪 Shrub (`?veg=low`) | point → lobed dome scaled to `r` × `h` | LSC (+ OSM `natural=shrub`) | `low-vegetation-layer.ts` |
-| 🧪 Extra tree (`?veg=trees`) | LSC crown peak + `h`, appended to the canopy points | LSC | `create-app.ts` → `vegetation-layer.ts` |
+| OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
+| Extra tree | LSC crown peak + `h` outside the canopy mask and away from any cadastre tree, appended to the canopy points | LSC | `create-app.ts` → `vegetation-layer.ts` |
 | Lamp post | point, 5 m default | OSM | `lamp-layer.ts` |
 | Lamp light | nearest three heads get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
@@ -134,7 +135,9 @@ construction-time settings.
 
 The bottleneck is **fill-rate** (post FX and the shadow depth pass), not
 draw calls: buildings are one mesh per tile, vegetation one instanced mesh
-per 250 m cell. Two orthogonal switches size the work
+per 250 m cell (the cadastre's trunks and broadleaf crowns ride in the
+canopy's cell meshes; only its flame/cone/dome silhouettes add meshes —
+`scripts/eval/kataster-cost.ts` models the calls per view). Two orthogonal switches size the work
 (`app/_components/scene-profile.ts`):
 
 | Knob | full · desktop | full · mobile | lite (tests) |
@@ -156,10 +159,10 @@ sequenceDiagram
   participant B as Browser
   participant S as static host
   B->>S: manifest.json (no-cache)
-  B->>S: primary: city mesh + meta, heightfield header + data, rasters
+  B->>S: primary: city mesh + meta, terrain TIN header + data, rasters
   Note over B: build renderer, terrain, water, city layer, sun rig, post stack
   Note over B: first frame → overlay drops (HUD phase "streaming")
-  B->>S: primary vegetation, NDVI, lamps
+  B->>S: primary vegetation (rows, canopy, scan trees, cadastre, hedges), NDVI, lamps
   B->>S: neighbours (all fetched concurrently, parsed in tile order)
   B->>S: rail, bridge, platform, wall files for the block
   Note over B: each step: ensureAlive() · invalidateShadows()

@@ -21,12 +21,85 @@ visual-variable codebook is in
 ## ✅ Active
 
 ### Geometry & ground
-- **Terrain heightfield** — DGM1 → triangulated heightfield + edge skirt to hide
-  inter-tile seams. The GeoTIFF is resampled **at build time**
-  (`scripts/prepare-data.ts` → `<tile>.heightfield-<n>.json` + `.u16.gz`, primary
-  tile 1024², neighbours 512², NoData stored as `0xFFFF` and decoded to NaN — see
-  `lib/city/heightfield.ts`); the browser fetches the gzipped uint16 (cm) grid and never
-  decodes a raster. `terrain-layer.ts`, `lib/city/terrain-geometry.ts`.
+- **Terrain TIN** (every tile: primary **±0.15 m**, the three neighbours
+  **±0.25 m**, `lib/city/tile.ts` `tinMaxError`) — DGM1 at its **native 1 m
+  (2000²)** → Delatin error-bounded TIN (every source grid point within the
+  tolerance of the mesh), baked by
+  `scripts/bake-terrain-tin.ts` inside `prepare-data.ts` from the committed
+  GeoTIFF (no new committed input). Format + mesh + `heightAt` bucket index in
+  `lib/city/terrain-tin.ts`; loader `terrain-layer.ts` (`loadTinSurface`, the
+  water sheet gets an up-facing normal twin). **No wall conflation** on the TIN:
+  the earth-retaining ribbons instead snap to the step the ground measures
+  (`lib/city/wall-snap.ts`: steepest metre within 6 m of the OSM line, running
+  medians along the wall, face just in front of the ramp foot + a coping cap to
+  the crest) — on every tile, since every tile is a TIN. A tile whose spec
+  names no tolerance falls back to the heightfield below (+ conflation).
+  **Rollout to the neighbours** (after the primary-only prototype): baked from
+  their committed DGMs, 147 k / 168 k / 236 k triangles (33410_5656 /
+  33410_5658 / 33412_5658) — a third of their 512² grids (≈3.9 m spacing,
+  which smeared every wall and embankment) — for 0.50 / 0.60 / 0.84 MB
+  gzipped, 1.6–2.2× the grid's bytes (+~0.94 MB transfer for the block). No
+  NoData on any of the four tiles.
+  **Study** (`scripts/terrain-study/`, reproducible from the committed DGM + the
+  gitignored LSC LAZ; held-out = a seeded 10 % of the 34 M class-2 ground
+  returns, 3.4 M points; 35 profiles across the 7 tallest OSM retaining/city
+  walls; DGM1 was made from all returns, so its numbers are slightly
+  optimistic):
+
+  | variant | main-step width (m, median) | profile RMSE vs laser (m) | RMSE / p95 tile (m) | RMSE / p95 20 m wall band (m) | triangles | gz |
+  |---|---|---|---|---|---|---|
+  | laser ground (0.25 m bins) | 0.75 | — | — | — | — | — |
+  | V0 shipped 1024² grid | 2.85 | 0.79 | 0.095 / 0.114 | 0.43 / 0.80 | 2.09 M | 1.08 MB |
+  | V0 + client conflation (what the viewer shows) | 1.75 | **1.47** | 0.140 / 0.122 | **0.76 / 1.62** | 2.09 M | 1.08 MB |
+  | V1 DGM1 2000² grid | 1.70 | 0.29 | 0.048 / 0.053 | 0.23 / 0.18 | 8.0 M | 3.7 MB |
+  | V2 laser ground 0.5 m grid | 1.20 | 0.16 | 0.046 / 0.046 | 0.22 / 0.10 | 32 M | 12.8 MB |
+  | **TIN of V1 ±0.15 m (the prototype)** | **1.30** | **0.23** | **0.066 / 0.108** | **0.22 / 0.15** | **0.30 M** | **1.04 MB** |
+  | TIN of V1 ±0.10 / ±0.25 m | 1.30 / 1.40 | 0.23 / 0.22 | 0.056 / 0.091 | 0.22 / 0.22 | 0.55 / 0.14 M | 1.79 / 0.49 MB |
+  | TIN of V2 ±0.25 / ±0.10 m | 1.00 / 1.10 | 0.17 / 0.16 | 0.089 / 0.054 | 0.23 / 0.22 | 0.23 / 1.03 M | 0.85 / 3.72 MB |
+  | TIN of V1 + conflation burned in ±0.10 m | 0.60 | 1.40 | 0.135 / 0.084 | 0.78 / 1.52 | 0.55 M | 1.78 MB |
+
+  Client cost (Bun, decode → mesh → normals, then the idle-time BVH): grid
+  ~300 ms + 470 ms BVH → TIN ±0.15 m ~115 ms + 90 ms BVH; GPU geometry ~50 → ~9 MB,
+  and the terrain, water and mist sheets each draw a seventh of the triangles.
+  Findings: (1) most of the "wall smear" is our resample, not the data;
+  (2) the laser-scan DTM beats DGM1 only at the sharpest quay walls
+  (0.6–0.75 m vs 0.9–1.05 m) for 2–4× the triangles and a committed LSC-derived
+  artifact — not worth it; (3) the breakline burn *sharpens* steps but
+  *triples* the wall-band error: it flattens terraced walls (the Jungfernbastei
+  climbs 108.6 → 117.4 → 119.7 → 121.1 m within 8 m and gets one cliff to
+  121.1 m) and puts the step on the OSM line, which misses the measured step by
+  −0.5…+1.0 m (4 m at the bastion's south face). Pitfalls checked: LSC class 30
+  (under buildings) and class 8 (water) are the DGM1 values to the mm (synthetic
+  fill, not measurements); LSC vs DGM1 datum bias 0.000 m; the TIN's seam step
+  against the 512² neighbours is unchanged on average (0.14 m, max 3.1 vs
+  2.5 m where a wall crosses the edge; the skirt hides it).
+  **Visual (real GPU, the primary-only prototype):** terraced
+  Jungfernbastei reads correctly (terrace levels kept, trees on the first
+  level visible), quay walls straight and clean from the air; residue: a few
+  sub-metre ground spikes at wall feet and faint shading bands on snapped wall
+  faces, faint facet streaks on the water next to bridge piers.
+  **Still open:** constrained breaklines (a vertical wall is two vertices at
+  one xy — Delatin cannot, a constrained Delaunay with the snapped wall line
+  could, and would remove the spikes and the cap), NoData support (the bake
+  refuses holes), crease-angle normals. Two independent TINs meet at a seam
+  with different border vertices (T-junctions, each tile's own edge
+  heights); the skirt hides the crack. **Neighbour check (real GPU, full
+  block):** the Brühlsche Terrasse west of the seam (33410_5656), the
+  Terrassenufer across the 33410/33412 seam, the Altstadt around the
+  Frauenkirche from the air and the northern seam (33412_5658) show no
+  ground step, crack or wall break at the tile edges; the terrace wall reads
+  as one continuous face across the seam. The one seam artifact left is on
+  the Elbe: a faint light line / band where two tiles' water sheets meet — it
+  was there with the grid too (grid-grid, grid-TIN), so it is not the TIN's.
+- **Terrain heightfield** (fallback, and the neighbours' minimap bounds) —
+  DGM1 → triangulated heightfield + edge skirt to hide inter-tile seams. The
+  GeoTIFF is resampled **at build time** (`scripts/prepare-data.ts` →
+  `<tile>.heightfield-<n>.json` + `.u16.gz`, primary 1024², neighbours 512²,
+  NoData stored as `0xFFFF` and decoded to NaN — see `lib/city/heightfield.ts`).
+  Still baked for every tile, but only meshed for a tile whose spec has no TIN
+  tolerance (none in the shipped block); the viewer reads the neighbours'
+  headers for the minimap bounds. `terrain-layer.ts` `loadGridSurface`,
+  `lib/city/terrain-geometry.ts`.
 - **Surface splatmap** — Basis-DLM land-cover → 4096² RGBA PNG (RGB = pastel
   palette per class, A = water coverage), sampled with anisotropy 16.
   `extract-dlm.sh` → `terrain-layer.ts`.
@@ -124,6 +197,141 @@ visual-variable codebook is in
   **sway-coupled brightness** (the crown brightens leaning into the same gust,
   centred so the mean colour is unchanged). Flutter & brightness are independent
   HUD sliders (*Blattflimmern* / *Windhelligkeit*) — zero one to preview the other.
+- **Tree inventory from the Dresden street-tree cadastre** (every tile, by
+  default) — *inputs:* the city's *Stadtbaumkataster* (WFS `cls:L1261`, dl-de/by-2-0
+  "Landeshauptstadt Dresden"; street trees, parks, schools — not the Großer
+  Garten, not private ground): position, height, crown diameter, taxon.
+  `scripts/extract-trees.sh` bakes `data/dlm/trees_<tile>.geojson` (h, d,
+  archetype id, leaf type, foliage colour; missing h/d imputed from the genus
+  median / the archetype's d:h), with the taxonomy in
+  `scripts/tree_archetypes.py`: genus + cultivar + German name → six
+  archetypes (round 66 %, oval 15 %, small ornamental 12 % incl. 276 globe
+  cultivars, columnar 5 %, conifer 1.8 %, weeping 0.1 % of the block's 18 444
+  trees), leaf type (318 evergreen; *Larix/Metasequoia/Taxodium* are
+  leaf-off) and 193 purple / 40 golden cultivars. *What it does:*
+  `tree-inventory-layer.ts` plants each tree at its surveyed spot; the
+  per-instance scale is non-uniform (crown width = `d`, crown depth = `h`
+  minus an archetype clear stem), so round/oval/small share the lobed
+  broadleaf crown and only three silhouettes get geometry of their own (a
+  flame for fastigiate cultivars, a tiered lathe cone for conifers, a
+  curtained dome for weeping trees) — same crown material, LOD swap and
+  250 m chunks as the canopy. Evergreens, purple and golden cultivars are
+  tinted from the cadastre; deciduous crowns keep the NDVI remap. Row and
+  canopy trees inside a cadastre crown (radius max(d/2, 3.5 m)) are dropped
+  unless they overtop it by max(5 m, 30 %) (`lib/city/tree-inventory.ts`) —
+  **except around a cadastre tree in DLM forest/copse** (classes 2/3; the bake
+  flags it `f = 1`, 599 of 18 444 trees): there the measured canopy is kept
+  whole, because the veto made parks and woods visibly thinner (the canopy
+  draws every 7 m cell, the register only the trees it tends). **Draw calls:**
+  the trunks and the broadleaf crowns (≈93 % of the trees) are handed to
+  `buildVegetation` as precomputed `TreeInstance`s and ride in the canopy's
+  own chunk meshes; only the flame/cone/dome silhouettes are meshes of the
+  inventory layer.
+  *Findings* (`scripts/eval/kataster-eval.py`): only **31 %** of cadastre
+  trees have a canopy point (21 % on the primary tile) — the canopy mask
+  misses 99 % of the trees standing on road pixels and 67 % of those on
+  built-up land; 7 743 of the missing trees are ≥ 8 m tall. 41 % of the DLM
+  tree-row samples duplicate a cadastre tree. Where both exist, heights agree
+  to a 2.8 m median absolute difference (canopy 1.0 m lower, r = 0.72).
+  **Leaf-off NDVI cannot assign a leaf type**: AUC 0.87, but at the best
+  balanced threshold (NDVI ≥ 0.37) precision for "evergreen" is 6.5 %
+  (265 of 4 073 flagged), and it would flag 31 % of all canopy points; the
+  best raw accuracy (98.3 %) is no better than calling everything leaf-off.
+  *Look* (prototype, `shots/kat-*`): bare streets
+  and squares (Radeberger Straße, Albertplatz, Stolpener Straße) become
+  avenues, the fly-over reads as an inhabited city; dense parks (Rosengarten)
+  get visibly thinner, because the canopy's uniform scale draws every 7 m
+  cell as a 0.77·h-wide crown where the cadastre draws measured crowns.
+  *Cost* (`scripts/eval/kataster-cost.ts`, block, main-pass vegetation draw
+  calls after the LOD swap; canopy only → prototype as a separate layer →
+  merged, as shipped): Albertstraße 222 → 581 → **401**, Albertplatz 168 →
+  432 → 297, Rosengarten 140 → 385 → 259, fly-over 61 → 180 → 126 (the
+  merge removes ~50 % of the added calls; what is left is the reshaped
+  silhouettes, up to three per chunk). Built vegetation meshes 675 → 1 944 →
+  1 367; +179 KB gzipped transfer; the prototype measured −4 to −9 % fps on
+  an M1 Max (`scripts/eval/kataster-perf.ts`) and no change in time-to-ready.
+  *Fallback:* no `trees_<tile>.geojson` → rows + canopy, unchanged.
+  *Portability:* any city's tree register (or segmented LiDAR trees) fills
+  the same contract.
+
+- **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
+  (laser scan) — on by default. The laser scan is baked for the primary tile
+  only; the neighbours are baked OSM-only (hedges at their tag / 1.5 m, no
+  extra trees). **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
+  `osm+lsc`) and the extra trees. **Not shipped** (🗃️ below): the
+  laser-scan-only hedges and all shrubs — the bake still finds them
+  (`LOWVEG_ALL=1` writes every candidate under `data/_raw/` for research),
+  but the committed `lowveg_<tile>.geojson` holds only what renders.
+  - *Why:* `extract-canopy.sh` keeps nothing under `MINH = 3 m` and only
+    forest/copse/sport-and-leisure areas, so courtyard and garden trees are
+    dropped at any height; the Basis-DLM carries a hedge only when it is
+    landscape-shaping (≥ 200 m) — `vegrows` on 33412_5656 has **0 hedges**.
+  - *Inputs:* GeoSN laser scan (LAZ, 2024-11-30, leaf-off) → PDAL 0.5 m
+    rasters: ground (classes 2/8/30), surface max (2/20), non-ground count, its
+    multi-echo share, and the mean **intensity of the low returns** (0.25–4 m
+    above ground). DOP NDVI (2024-03-19). OSM `barrier=hedge`,
+    `natural=scrub|shrubbery|shrub`. Exclusions: LoD2 surfaces (+1 m), OSM
+    walls (+0.75 m), bridges, water/rail classes, the rim (1 m) of any > 3 m
+    crown.
+  - *Cue — measured, and not the one expected:* per-pixel AUC of OSM-hedge
+    pixels against cars (road class) / OSM fences / building rims: **NDVI
+    0.94 / 0.71 / 0.89**, low-return intensity 0.70 / 0.83 / 0.80,
+    multi-echo ratio 0.76 / **0.28** / 0.42. The echo ratio separates tall
+    trees from roofs perfectly (≥ 0.5 on 100 % of > 5 m forest pixels, 3 % of
+    roofs) but not low vegetation: only 26 % of hedge pixels reach it, against
+    56 % of fence pixels — a clipped hedge rarely splits a pulse, and 1–2 m
+    above ground the two echoes are too close to separate. The leaf-off NDVI
+    works *because* the city's hedges are largely evergreen. Rule: `NDVI ≥
+    0.12 ∨ (intensity ≥ 1250 ∧ echo ≥ 0.3)`; inside OSM scrub `NDVI ≥ 0.06 ∨
+    echo ≥ 0.3`. Then close 3×3, open 2×2, blobs ≥ 2 m².
+  - *Shape:* elongated components (skeleton ≥ 4 m, length/width ≥ 3, width ≤
+    3 m from the distance transform on the skeleton, few spurs) → skeleton →
+    polyline → Douglas-Peucker 0.4 m, `h` = median ridge nDOM, `w` = 2 × median
+    inscribed radius; compact ones → one shrub (centroid, equivalent radius,
+    p90 height), beds > 12 m² → shrubs at height peaks ≥ 1.5 m apart.
+    **OSM geometry wins**: a mapped hedge keeps its line and takes the LSC
+    height where ≥ 30 % of it is supported (`src: "osm+lsc"`), else its
+    `height` tag or 1.5 m (`"osm"`); LSC hedges within 2 m of it are dropped,
+    the rest fill the unmapped ones (`"lsc"`).
+  - *Evaluation (33412_5656):* only **47 %** of the 4.3 km of OSM hedges is
+    observable at all — 53 % runs under a > 3 m crown, invisible to a first-
+    surface model. Of the observable length, the mask comes within 1.5 m of
+    **58 %** (echo ≥ 0.5 alone: 25 %, NDVI alone: 48 %, no cue at all: 76 %
+    but 9.7 ha of mask instead of 2.6 ha). Fences: 3 % of 17.9 km of OSM fence
+    (> 3 m from a hedge) is hit — the 2×2 opening removes them. Mask
+    breakdown: 30 % lies 1–2 m from a > 3 m crown (understory *or* crown-edge
+    false positives — the main remaining risk), 1.9 % on the road class
+    (cars), 1.8 % 1–2 m from a building, 2 % beside a fence. Checked by eye on
+    DSM-hillshade overlays: a clipped evergreen hedge beside a row of parked
+    cars is taken and the cars are not; grave shrubs on the Trinitatisfriedhof
+    come out as shrubs; a branchy scrub mass was first mis-skeletonised into a
+    "hedge network" (fixed by the inscribed-width + spur test).
+    Candidates: 594 hedges (65 OSM, 51 OSM+LSC, 478 LSC-only; 7.3 km) and
+    3 226 shrubs. **Shipped: the 116 OSM hedges** (4.3 km; 54 / 94 / 45 on
+    the OSM-only neighbours).
+  - *Trees outside the mask* (`canopyx`): crown peaks of the multi-echo (≥ 0.5)
+    > 3 m canopy, ≥ 3 m apart, more than 5 m from any current canopy point —
+    8 006 peaks (96 % built-up class; 57 % more than 15 m from the DLM road
+    area, 1 969 of them enclosed by buildings on ≥ 6 of 8 rays = courtyards;
+    16 % street-side). **Deduplicated against the cadastre in the bake**: the
+    cadastre wins position and species, and a peak within max(4 m, the
+    cadastre crown radius) of a cadastre tree is dropped (radius match, not
+    1:1 — one big crown often yields two peaks) → **5 739 shipped, 2 267
+    dropped**. (Taking the scan height where the cadastre has none is not
+    done: the cadastre bake imputes missing heights and does not mark them.)
+    Rendered as ordinary canopy trees.
+  - *Rendering* (`low-vegetation-layer.ts`, separate from the tree layer):
+    hedges are chains of superellipsoid "clay" blocks (288 tris, ≤ 2.5 m
+    pieces, 0.6 m overlap); rooted-base darkening + a static world-space
+    foliage mottle; 250 m chunks; cast and receive shadows, no animation
+    (ADR 0020).
+  - *Cost* (prototype, real GPU, 3200×2000, full block, all candidates):
+    hedges + shrubs +11–13 draw calls/frame, frame time 19.8 → 20.2 ms on the
+    fly-over; the 8 006 extra trees +4.9–7 % triangles drawn, 19.8 → 23.0 ms.
+    Shipped (OSM hedges + 5 739 trees), `kataster-cost.ts`: +9–58 draw calls
+    in the main pass over the merged cadastre (fly-over 126 → 144,
+    Albertstraße 401 → 459).
+  - Bake: `scripts/extract-lowveg.sh` (+ `extract-lowveg.py`, run under `uv`).
 - **Street lamps** — OSM lamp points → instanced lamp posts (ODbL). `extract-lamps.sh`.
   Gated off **water (8) and railway (5)** land-cover so no poles stand in the
   Elbe or the track bed (the rail corridor is now its own layer).
@@ -180,7 +388,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   terrain. **Why OSM:** no elevation product has the wall as a *vertical face*
   (a 2.5D surface cannot), and it's not a CityJSON building, so it "went
   missing". OSM has it as explicit vector lines with heights. *(Corrected by
-  the terrain study, 🧪 "Terrain TIN" below: the source data does NOT smooth
+  the terrain study, "Terrain TIN" above: the source data does NOT smooth
   the wall into a gentle bank. The laser ground returns step within ~0.75 m
   (median, 7 tall walls) and the native 1 m DGM1 within ~1.7 m at 77° —
   Jungfernbastei: 108.6 → 117.3 m over 2 m, then two more terrace levels at
@@ -195,6 +403,10 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   bake: 436 walls, same kinds/lengths/heights).
 
 ### Wall → terrain conflation (heightfield breakline burn)
+*Superseded on TIN tiles — which is every tile of the shipped block* ([ADR
+0014](./adr/0014-wall-to-terrain-breakline-conflation.md)): it now runs only
+for a tile meshed from its heightfield. On TIN ground the wall ribbons snap to
+the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Stepped ground at walls** — `lib/city/terrain-conflate.ts`, applied inside
   `loadTerrain` before the mesh is built. The DGM blurs a vertical wall into a
   ramp, so the OSM ribbon used to float over it / get swallowed and the ground
@@ -208,11 +420,11 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   the two sides actually differ by ≥1.5 m, so freestanding garden walls and flat
   fountain rims leave the ground alone; a ≤18 m clamp stops a bad height tag
   gouging a canyon. Pure + unit-tested (`terrain-conflate.test.ts`).
-  **Measured cost (terrain study, 🧪 "Terrain TIN"):** against held-out laser
+  **Measured cost (terrain study, "Terrain TIN"):** against held-out laser
   ground it raises the RMSE in the 20 m band around walls from 0.43 to 0.76 m
   (p95 0.80 → 1.62 m) — the 11 m probe reads the *top* of a terraced wall, and
-  the step lands on the OSM line, not the measured edge. The `?terrain=tin`
-  experiment skips it and snaps the ribbons to the measured step instead.
+  the step lands on the OSM line, not the measured edge. The terrain TIN
+  skips it and snaps the ribbons to the measured step instead.
 
 ### Lighting
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
@@ -238,185 +450,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 
 ## 🧪 Experimental
 
-- **Terrain TIN** (`?terrain=tin`, primary tile only; default unchanged) —
-  DGM1 at its **native 1 m (2000²)** → Delatin error-bounded TIN at **±0.15 m**
-  (every source grid point within 15 cm of the mesh), baked by
-  `scripts/bake-terrain-tin.ts` inside `prepare-data.ts` from the committed
-  GeoTIFF (no new committed input). Format + mesh + `heightAt` bucket index in
-  `lib/city/terrain-tin.ts`; loader `terrain-layer.ts` (`loadTinSurface`, the
-  water sheet gets an up-facing normal twin). **No wall conflation** on the TIN:
-  the earth-retaining ribbons instead snap to the step the ground measures
-  (`lib/city/wall-snap.ts`: steepest metre within 6 m of the OSM line, running
-  medians along the wall, face just in front of the ramp foot + a coping cap to
-  the crest). Neighbours keep their conflated 512² grids.
-  **Study** (`scripts/terrain-study/`, reproducible from the committed DGM + the
-  gitignored LSC LAZ; held-out = a seeded 10 % of the 34 M class-2 ground
-  returns, 3.4 M points; 35 profiles across the 7 tallest OSM retaining/city
-  walls; DGM1 was made from all returns, so its numbers are slightly
-  optimistic):
-
-  | variant | main-step width (m, median) | profile RMSE vs laser (m) | RMSE / p95 tile (m) | RMSE / p95 20 m wall band (m) | triangles | gz |
-  |---|---|---|---|---|---|---|
-  | laser ground (0.25 m bins) | 0.75 | — | — | — | — | — |
-  | V0 shipped 1024² grid | 2.85 | 0.79 | 0.095 / 0.114 | 0.43 / 0.80 | 2.09 M | 1.08 MB |
-  | V0 + client conflation (what the viewer shows) | 1.75 | **1.47** | 0.140 / 0.122 | **0.76 / 1.62** | 2.09 M | 1.08 MB |
-  | V1 DGM1 2000² grid | 1.70 | 0.29 | 0.048 / 0.053 | 0.23 / 0.18 | 8.0 M | 3.7 MB |
-  | V2 laser ground 0.5 m grid | 1.20 | 0.16 | 0.046 / 0.046 | 0.22 / 0.10 | 32 M | 12.8 MB |
-  | **TIN of V1 ±0.15 m (the prototype)** | **1.30** | **0.23** | **0.066 / 0.108** | **0.22 / 0.15** | **0.30 M** | **1.04 MB** |
-  | TIN of V1 ±0.10 / ±0.25 m | 1.30 / 1.40 | 0.23 / 0.22 | 0.056 / 0.091 | 0.22 / 0.22 | 0.55 / 0.14 M | 1.79 / 0.49 MB |
-  | TIN of V2 ±0.25 / ±0.10 m | 1.00 / 1.10 | 0.17 / 0.16 | 0.089 / 0.054 | 0.23 / 0.22 | 0.23 / 1.03 M | 0.85 / 3.72 MB |
-  | TIN of V1 + conflation burned in ±0.10 m | 0.60 | 1.40 | 0.135 / 0.084 | 0.78 / 1.52 | 0.55 M | 1.78 MB |
-
-  Client cost (Bun, decode → mesh → normals, then the idle-time BVH): grid
-  ~300 ms + 470 ms BVH → TIN ±0.15 m ~115 ms + 90 ms BVH; GPU geometry ~50 → ~9 MB,
-  and the terrain, water and mist sheets each draw a seventh of the triangles.
-  Findings: (1) most of the "wall smear" is our resample, not the data;
-  (2) the laser-scan DTM beats DGM1 only at the sharpest quay walls
-  (0.6–0.75 m vs 0.9–1.05 m) for 2–4× the triangles and a committed LSC-derived
-  artifact — not worth it; (3) the breakline burn *sharpens* steps but
-  *triples* the wall-band error: it flattens terraced walls (the Jungfernbastei
-  climbs 108.6 → 117.4 → 119.7 → 121.1 m within 8 m and gets one cliff to
-  121.1 m) and puts the step on the OSM line, which misses the measured step by
-  −0.5…+1.0 m (4 m at the bastion's south face). Pitfalls checked: LSC class 30
-  (under buildings) and class 8 (water) are the DGM1 values to the mm (synthetic
-  fill, not measurements); LSC vs DGM1 datum bias 0.000 m; the TIN's seam step
-  against the 512² neighbours is unchanged on average (0.14 m, max 3.1 vs
-  2.5 m where a wall crosses the edge; the skirt hides it).
-  **Visual (real GPU, `shots/tin-*.png` vs `*.tin.png`):** terraced
-  Jungfernbastei reads correctly (terrace levels kept, trees on the first
-  level visible), quay walls straight and clean from the air; residue: a few
-  sub-metre ground spikes at wall feet and faint shading bands on snapped wall
-  faces, faint facet streaks on the water next to bridge piers.
-  **What a TIN rollout still needs:** constrained breaklines (a vertical wall is
-  two vertices at one xy — Delatin cannot, a constrained Delaunay with the
-  snapped wall line could, and would remove the spikes and the cap), NoData
-  support (the bake refuses holes), crease-angle normals, and a TIN per
-  neighbour (±0.25–0.5 m would undercut their 512² grids in bytes and
-  triangles, from the committed DGMs alone).
-- **Tree inventory from the Dresden street-tree cadastre** (`?trees=kataster`)
-  — *inputs:* the city's *Stadtbaumkataster* (WFS `cls:L1261`, dl-de/by-2-0
-  "Landeshauptstadt Dresden"; street trees, parks, schools — not the Großer
-  Garten, not private ground): position, height, crown diameter, taxon.
-  `scripts/extract-trees.sh` bakes `data/dlm/trees_<tile>.geojson` (h, d,
-  archetype id, leaf type, foliage colour; missing h/d imputed from the genus
-  median / the archetype's d:h), with the taxonomy in
-  `scripts/tree_archetypes.py`: genus + cultivar + German name → six
-  archetypes (round 66 %, oval 15 %, small ornamental 12 % incl. 276 globe
-  cultivars, columnar 5 %, conifer 1.8 %, weeping 0.1 % of the block's 18 444
-  trees), leaf type (318 evergreen; *Larix/Metasequoia/Taxodium* are
-  leaf-off) and 193 purple / 40 golden cultivars. *What it does:*
-  `tree-inventory-layer.ts` plants each tree at its surveyed spot; the
-  per-instance scale is non-uniform (crown width = `d`, crown depth = `h`
-  minus an archetype clear stem), so round/oval/small share the lobed
-  broadleaf crown and only three silhouettes get geometry of their own (a
-  flame for fastigiate cultivars, a tiered lathe cone for conifers, a
-  curtained dome for weeping trees) — same crown material, LOD swap and
-  250 m chunks as the canopy. Evergreens, purple and golden cultivars are
-  tinted from the cadastre; deciduous crowns keep the NDVI remap. Row and
-  canopy trees inside a cadastre crown (radius max(d/2, 3.5 m)) are dropped
-  unless they overtop it by max(5 m, 30 %) (`lib/city/tree-inventory.ts`).
-  *Findings* (`scripts/eval/kataster-eval.py`): only **31 %** of cadastre
-  trees have a canopy point (21 % on the primary tile) — the canopy mask
-  misses 99 % of the trees standing on road pixels and 67 % of those on
-  built-up land; 7 743 of the missing trees are ≥ 8 m tall. 41 % of the DLM
-  tree-row samples duplicate a cadastre tree. Where both exist, heights agree
-  to a 2.8 m median absolute difference (canopy 1.0 m lower, r = 0.72).
-  **Leaf-off NDVI cannot assign a leaf type**: AUC 0.87, but at the best
-  balanced threshold (NDVI ≥ 0.37) precision for "evergreen" is 6.5 %
-  (265 of 4 073 flagged), and it would flag 31 % of all canopy points; the
-  best raw accuracy (98.3 %) is no better than calling everything leaf-off.
-  *Look* (`bun run shots`, `SHOTS_QUERY='?trees=kataster'`): bare streets
-  and squares (Radeberger Straße, Albertplatz, Stolpener Straße) become
-  avenues, the fly-over reads as an inhabited city; dense parks (Rosengarten)
-  get visibly thinner, because the canopy's uniform scale draws every 7 m
-  cell as a 0.77·h-wide crown where the cadastre draws measured crowns.
-  *Cost* (`scripts/eval/kataster-cost.ts`, block): +62 ms tile builds,
-  +16 % built triangles, vegetation meshes 675 → 1 944, main-pass draw calls
-  ~2.6× at street level (Albertstraße 222 → 581; ~400 if the broadleaf crowns
-  and trunks were merged into the canopy's chunk meshes), +179 KB gzipped
-  transfer; on an M1 Max at 3200×2000 with vsync off
-  (`scripts/eval/kataster-perf.ts`, best of 3) −4 to −9 % fps across the
-  seven views and no measurable change in time-to-ready (~6.4 s). *Fallback:* flag off, or no `trees_<tile>.geojson` → today's
-  rows + canopy, unchanged. *Portability:* any city's tree register (or
-  segmented LiDAR trees) fills the same contract.
-
 - **DOP-lean caveat (recorded):** standard DOP has building lean (tall roofs
   displaced over facades). Mitigated in the bake by eroding the roof footprint
   inward + a robust median; revisit with true-orthophotos if available.
-- **Low vegetation — hedges & shrubs 0.5–3 m** (`?veg=low`) and **trees
-  outside the canopy mask** (`?veg=trees`; `?veg=low,trees` for both). Off by
-  default; nothing is fetched without the flag. Primary tile only (the one LSC
-  tile on disk); the neighbours get the OSM-only fallback.
-  - *Why:* `extract-canopy.sh` keeps nothing under `MINH = 3 m` and only
-    forest/copse/sport-and-leisure areas, so courtyard and garden trees are
-    dropped at any height; the Basis-DLM carries a hedge only when it is
-    landscape-shaping (≥ 200 m) — `vegrows` on 33412_5656 has **0 hedges**.
-  - *Inputs:* GeoSN laser scan (LAZ, 2024-11-30, leaf-off) → PDAL 0.5 m
-    rasters: ground (classes 2/8/30), surface max (2/20), non-ground count, its
-    multi-echo share, and the mean **intensity of the low returns** (0.25–4 m
-    above ground). DOP NDVI (2024-03-19). OSM `barrier=hedge`,
-    `natural=scrub|shrubbery|shrub`. Exclusions: LoD2 surfaces (+1 m), OSM
-    walls (+0.75 m), bridges, water/rail classes, the rim (1 m) of any > 3 m
-    crown.
-  - *Cue — measured, and not the one expected:* per-pixel AUC of OSM-hedge
-    pixels against cars (road class) / OSM fences / building rims: **NDVI
-    0.94 / 0.71 / 0.89**, low-return intensity 0.70 / 0.83 / 0.80,
-    multi-echo ratio 0.76 / **0.28** / 0.42. The echo ratio separates tall
-    trees from roofs perfectly (≥ 0.5 on 100 % of > 5 m forest pixels, 3 % of
-    roofs) but not low vegetation: only 26 % of hedge pixels reach it, against
-    56 % of fence pixels — a clipped hedge rarely splits a pulse, and 1–2 m
-    above ground the two echoes are too close to separate. The leaf-off NDVI
-    works *because* the city's hedges are largely evergreen. Rule: `NDVI ≥
-    0.12 ∨ (intensity ≥ 1250 ∧ echo ≥ 0.3)`; inside OSM scrub `NDVI ≥ 0.06 ∨
-    echo ≥ 0.3`. Then close 3×3, open 2×2, blobs ≥ 2 m².
-  - *Shape:* elongated components (skeleton ≥ 4 m, length/width ≥ 3, width ≤
-    3 m from the distance transform on the skeleton, few spurs) → skeleton →
-    polyline → Douglas-Peucker 0.4 m, `h` = median ridge nDOM, `w` = 2 × median
-    inscribed radius; compact ones → one shrub (centroid, equivalent radius,
-    p90 height), beds > 12 m² → shrubs at height peaks ≥ 1.5 m apart.
-    **OSM geometry wins**: a mapped hedge keeps its line and takes the LSC
-    height where ≥ 30 % of it is supported (`src: "osm+lsc"`), else its
-    `height` tag or 1.5 m (`"osm"`); LSC hedges within 2 m of it are dropped,
-    the rest fill the unmapped ones (`"lsc"`).
-  - *Evaluation (33412_5656):* only **47 %** of the 4.3 km of OSM hedges is
-    observable at all — 53 % runs under a > 3 m crown, invisible to a first-
-    surface model. Of the observable length, the mask comes within 1.5 m of
-    **58 %** (echo ≥ 0.5 alone: 25 %, NDVI alone: 48 %, no cue at all: 76 %
-    but 9.7 ha of mask instead of 2.6 ha). Fences: 3 % of 17.9 km of OSM fence
-    (> 3 m from a hedge) is hit — the 2×2 opening removes them. Mask
-    breakdown: 30 % lies 1–2 m from a > 3 m crown (understory *or* crown-edge
-    false positives — the main remaining risk), 1.9 % on the road class
-    (cars), 1.8 % 1–2 m from a building, 2 % beside a fence. Checked by eye on
-    DSM-hillshade overlays: a clipped evergreen hedge beside a row of parked
-    cars is taken and the cars are not; grave shrubs on the Trinitatisfriedhof
-    come out as shrubs; a branchy scrub mass was first mis-skeletonised into a
-    "hedge network" (fixed by the inscribed-width + spur test).
-    Output: 594 hedges (65 OSM, 51 OSM+LSC, 478 LSC-only; 7.3 km) and
-    3 226 shrubs; 574 KB raw / 43 KB gzipped.
-  - *Trees outside the mask* (`canopyx`): crown peaks of the multi-echo (≥ 0.5)
-    > 3 m canopy, ≥ 3 m apart, more than 5 m from any current canopy point —
-    **8 006 trees** on top of today's 5 118 (96 % built-up class; 57 % more
-    than 15 m from the DLM road area, 1 969 of them enclosed by buildings on
-    ≥ 6 of 8 rays = courtyards; 16 % street-side). Rendered as ordinary canopy
-    trees. 910 KB raw / 70 KB gzipped.
-  - *Rendering* (`low-vegetation-layer.ts`, separate from the tree layer):
-    hedges are chains of superellipsoid "clay" blocks (288 tris, ≤ 2.5 m
-    pieces, 0.6 m overlap), shrubs a lobed dome (144 tris); rooted-base
-    darkening + a static world-space foliage mottle; 250 m chunks; cast and
-    receive shadows, no animation (ADR 0020).
-  - *Cost* (real GPU, 3200×2000, full block): `?veg=low` +9 364 instances
-    (5 882 hedge pieces + 3 482 shrubs; ≈ 2.2 M triangles built), +11–13 draw
-    calls/frame, +0.9–1.4 % triangles drawn, frame time 19.8 → 20.2 ms on the
-    fly-over (measured with a 216-triangle hedge block; the final one has 288). `?veg=trees` +8 006 trees
-    (+24 k instances incl. both crown LODs), +4.9–7 % triangles drawn, fly-over
-    19.8 → 23.0 ms.
-  - *Verdict so far:* the trees are the big visual win (the estates and
-    courtyards stop being bare); hedges read well along streets and parks;
-    shrubs add detail but facet at arm's length. Dedup with the municipal tree
-    cadastre: cadastre wins position/species; drop an LSC crown peak within
-    max(4 m, cadastre crown radius) of a cadastre tree; keep the LSC `h`
-    where the cadastre has none.
-  - Bake: `scripts/extract-lowveg.sh` (+ `extract-lowveg.py`, run under `uv`).
 
 ---
 
@@ -438,9 +474,10 @@ research that produced them):
 5. **Dappled canopy shadow** — alpha-tested colour-less proxy caster per chunk
    (mind the `WebGLShadowMap` alphaMap-override gotcha; see skill).
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
-   per-tree position/height/crown; bake to per-tile GeoJSON. *(First step 🧪
-   above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only;
-   the renderer still sizes a crown from `h` alone.)*
+   per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
+   above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,
+   thinned against the cadastre; the renderer still sizes a crown from `h`
+   alone.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). Sizeable integration.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
@@ -485,8 +522,10 @@ research that produced them):
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | N8AO runs permanently at `halfRes`; only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
 | **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
-| **Multi-echo ratio as the low-vegetation cue** (LSC, 🧪 low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
-| **OSM scrub polygons filled with shrubs** (OSM-only tiles) | A jittered 3–4 m grid gave 4–9 k shrubs per neighbour tile — more than the laser scan finds on the primary — mostly under existing crowns. | OSM-only tiles get hedges + `natural=shrub` nodes only. |
+| **Multi-echo ratio as the low-vegetation cue** (LSC, low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
+| **OSM scrub polygons filled with shrubs** (OSM-only tiles) | A jittered 3–4 m grid gave 4–9 k shrubs per neighbour tile — more than the laser scan finds on the primary — mostly under existing crowns. | OSM-only tiles get the OSM hedges only. |
+| **Laser-scan-only hedges** (LSC, the 478 unmapped "hedges" of the low-vegetation bake) | ~30 % of the low-vegetation mask lies 1–2 m from a > 3 m crown: crown-rim false positives a first-surface model cannot tell from understory, and they read as stray hedges along tree rows. | Only the OSM hedges ship (with the LSC height). The bake still finds them (`LOWVEG_ALL=1`); revisit with a leaf-on scan or a crown-rim test. |
+| **Shrubs** (LSC blobs + OSM `natural=shrub` nodes, 3 226 on the primary) | Same crown-rim false positives, and the lobed dome reads as a faceted grey "boulder" at arm's length. | Kept in the bake behind `LOWVEG_ALL=1`; a better shrub shape is shape polish, not data. |
 | **Camera-follow grass tuft ring** | Shadow-casting instances rewritten every frame; reads as confetti. | Meadow mottle + normal perturbation in the terrain shader (✅ above). |
 | **Per-lamp real point lights** | three bakes the light count into every program → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above). |

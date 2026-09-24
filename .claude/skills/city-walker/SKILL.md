@@ -37,17 +37,26 @@ retargeted/lowered as tiles land. The layers:
   table at load. Demolish = filter the object's building tree out of the
   vertex stream and rebuild (you can't hide one building in a batched mesh).
   Picking/collision use `three-mesh-bvh`. No CityJSON reaches the browser.
-- `terrain-layer.ts` — baked DGM1 heightfield (`.heightfield-<n>.json` + `.u16.gz`,
-  produced by `prepare-data.ts`) → mesh + the surface splat; also
-  builds the water layer. `lib/city/terrain-geometry.ts` is the pure math.
-  🧪 `?terrain=tin` meshes the primary tile from an error-bounded TIN of the
-  native 1 m DGM1 instead (`lib/city/terrain-tin.ts`, no wall conflation;
-  ribbons snap to the measured step via `lib/city/wall-snap.ts`) — study and
-  numbers in the ledger's "Terrain TIN" entry.
+- `terrain-layer.ts` — every tile is meshed from an error-bounded TIN of
+  the native 1 m DGM1 (`dgm1_<t>.tin-<cm>cm.json` + `.bin.gz`, baked by
+  `scripts/bake-terrain-tin.ts` inside `prepare-data.ts`; primary ±0.15 m,
+  neighbours ±0.25 m — `tinMaxError` in `lib/city/tile.ts`; format + the
+  `heightAt` bucket index in `lib/city/terrain-tin.ts`) + the surface splat;
+  also builds the water layer (an up-facing normal twin of the TIN). No wall
+  conflation on a TIN: the ribbons snap to the measured step
+  (`lib/city/wall-snap.ts`, ADR 0023). A tile without a tolerance falls back
+  to the baked heightfield (`.heightfield-<n>.json` + `.u16.gz`,
+  `lib/city/terrain-geometry.ts`) + `terrain-conflate.ts` (ADR 0014). Study
+  and numbers in the ledger's "Terrain TIN" entry.
 - `water-layer.ts` — clone of terrain geometry, masked by the splat's alpha
   (water coverage), animated normal wobble.
-- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy) and hedges,
-  chunked for culling. Added to the **Y-up `scene`**, not `world`.
+- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy + the
+  laser-scan extra trees + the cadastre's trunks and broadleaf crowns, passed
+  in as precomputed `TreeInstance`s) and DLM hedges, chunked for culling.
+  Added to the **Y-up `scene`**, not `world`. `tree-inventory-layer.ts` draws
+  only the cadastre's reshaped silhouettes (flame / cone / dome) and vetoes
+  canopy trees inside its crowns (not in forest/copse);
+  `low-vegetation-layer.ts` draws the OSM hedges.
 - `sun-rig.ts` — directional light + shadow camera, sky dome, hemisphere fill,
   fog/atmosphere by time of day.
 - `post-stack.ts` — pmndrs `postprocessing`: SSAO, DoF, SMAA, depth grading,
@@ -164,12 +173,16 @@ not sky.
 - **Tree LOD (shipped):** per-chunk distance swaps the rich crown in near the
   camera and the cheap one far away; a swap invalidates the shadow map
   (plan 009).
-- **🧪 Low vegetation (`?veg=low`, `?veg=trees`):** `low-vegetation-layer.ts`
-  (hedge superellipsoid chains + shrub domes, static, chunked) from
-  `extract-lowveg.sh`. Measured lesson: the LSC **multi-echo ratio is a
-  tall-tree cue, not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5);
-  low vegetation is found by leaf-off DOP NDVI (evergreen hedges) + the
-  intensity of the low returns. Numbers in `docs/transformations.md`.
+- **Cadastre + laser scan + hedges (all default-on):** the street-tree
+  cadastre (`extract-trees.sh`), the laser-scan trees outside the canopy
+  mask (`canopyx`, thinned in the bake against the cadastre within max(4 m,
+  crown radius)) and the OSM hedges with their laser-scan height
+  (`low-vegetation-layer.ts`, superellipsoid chains, static, chunked) from
+  `extract-lowveg.sh`. The bake's laser-scan-only hedges and shrubs are NOT
+  shipped (~30 % crown-rim false positives; `LOWVEG_ALL=1` writes them for
+  research). Measured lesson: the LSC **multi-echo ratio is a tall-tree cue,
+  not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5). Draw-call model:
+  `scripts/eval/kataster-cost.ts`. Numbers in `docs/transformations.md`.
 
 ### Sandbox crown — what is left to port
 
@@ -207,6 +220,8 @@ change yourself:
 # drop the snapshot JSON into shots/, then:
 bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
+# Before/after pairs: SHOTS_QUERY=scene=lite SHOTS_TAG=x bun run shots
+# appends the query to the page URL and writes shots/<name>.x.png.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
@@ -259,7 +274,7 @@ heightfield there (primary 1024², neighbours 512²; `lib/city/heightfield.ts`
 owns the format, `lib/city/tile.ts` the tile list) — the `.tif` itself is
 never served. **numpy and `gdal_calc.py`
 are unavailable** — do raster math in Python/Pillow (palette mode for speed; mode
-`F` for float GeoTIFFs). Regenerate one tile — all seven bakes, in dependency
+`F` for float GeoTIFFs). Regenerate one tile — all nine bakes, in dependency
 order:
 
 ```bash
@@ -270,7 +285,8 @@ bash scripts/extract-roof-colour.sh 33412_5656 # roof-colour LUT (DOP + CityJSON
 bash scripts/extract-lamps.sh 33412_5656       # street lamps (Overpass; needs the class raster)
 bash scripts/extract-walls.sh 33412_5656       # retaining walls (local .osm.pbf in data/_raw/osm)
 bash scripts/extract-rail.sh 33412_5656        # rails, ballast, bridges (Basis-DLM + DOM1/DGM1) + platforms (Overpass)
-bash scripts/extract-lowveg.sh 33412_5656      # 🧪 hedges/shrubs + extra trees (LSC LAZ via PDAL + Overpass; runs under uv)
+bash scripts/extract-trees.sh 33412_5656       # street-tree cadastre (Dresden WFS; needs the class raster)
+bash scripts/extract-lowveg.sh 33412_5656      # OSM hedges + extra trees (LSC LAZ via PDAL + Overpass + the cadastre; runs under uv)
 bun scripts/prepare-data.ts                    # refresh public/data
 ```
 
