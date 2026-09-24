@@ -98,8 +98,10 @@ the planned fallback. ✅ built · ❌ not built.
 1. **Write the site.** `sites/<id>.ts` with its CRS (25832 or 25833 — the
    `Site` type allows nothing else, and `lib/city/crs.ts` reprojects only
    those two for the sun), `tileKm`, `tileSuffix`, the tiles (spawn first),
-   viewpoints, `fallbackLatLng` and the **attribution lines its licences
-   require**; register it in `sites/index.ts`. The world frame
+   viewpoints (aerials over a landmark are easiest framed with `overlook`),
+   the `spawn` viewpoint the player starts at (it must stand on the first
+   tile — `lib/city/site.test.ts` checks), `fallbackLatLng` and the
+   **attribution lines its licences require**; register it in `sites/index.ts`. The world frame
    (`x = epsgX − cx`, `z = −(epsgY − cy)`, `y = elevation`) is CRS-agnostic;
    the build takes `(cx, cy)` from the spawn tile's CityJSON.
 2. **Commit the two sources the build reads.** Per tile, the DGM1 GeoTIFF

@@ -12,8 +12,9 @@ the [glossary](./glossary.md).
 A stylised, walkable 3D model of the centre of Dresden: a square of
 4 km × 4 km on both banks of the Elbe, with the historic Altstadt in the
 south-west, the Inner and Outer Neustadt in the north and the Johannstadt
-in the south-east. You start on the south-eastern quarter, near the
-Carolabrücke, and can walk at street level or fly above the roofs.
+in the south-east. You start low over the Elbe near the Carolabrücke,
+looking at the Altstadt skyline, and can walk at street level or fly above
+the roofs.
 
 Nothing is installed, nothing is stored about you, and no server computes
 the picture. Your browser downloads prepared files as you move — about

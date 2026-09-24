@@ -665,6 +665,19 @@ test.describe("mobile", () => {
     await dismiss.tap();
     await expect(dismiss).toHaveCount(0);
 
+    // The start view is aerial, so the altitude stick stands opposite the
+    // joystick; the plane button — the F key's stand-in — lands you on foot
+    // and takes the stick away with fly mode.
+    await expect(page.getByTestId("altitude-stick")).toBeVisible();
+    const flyButton = page.getByRole("button", { name: "Fliegen" });
+    await expect(flyButton).toHaveAttribute("aria-pressed", "true");
+    await flyButton.tap();
+    await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
+    await expect(flyButton).toHaveAttribute("aria-pressed", "false");
+    expect(
+      await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)
+    ).toBe("walk");
+
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
     const headingBefore = await page.evaluate(

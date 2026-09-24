@@ -251,3 +251,46 @@ test("flyTo drops the camera at a world position in fly mode, facing the target"
   expect(Math.abs(s.headingDeg)).toBeCloseTo(180, 6);
   expect(s.pitchDeg).toBeCloseTo(Math.atan2(-150, 100) * RAD2DEG, 6);
 });
+
+test("placeAt lands on a viewpoint at once, in its mode, no glide", () => {
+  const { camera, modes, pose, poses } = rig();
+  pose.placeAt({
+    ...VIEW,
+    mode: "fly",
+    aboveGround: 70,
+    headingDeg: 222,
+    pitchDeg: -7,
+    fov: 58,
+  });
+  const s = pose.getCameraState();
+  expect(s.mode).toBe("fly");
+  expect(modes.at(-1)).toBe("fly");
+  expect(s.epsg.x).toBeCloseTo(VIEW.epsg.x, 6);
+  expect(s.epsg.y).toBeCloseTo(VIEW.epsg.y, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + 70, 6);
+  expect(s.headingDeg).toBeCloseTo(-138, 4); // 222° as a signed bearing
+  expect(s.pitchDeg).toBeCloseTo(-7, 4);
+  expect(camera.fov).toBe(58);
+  expect(poses.at(-1)).toBeCloseTo(VIEW.epsg.x, 6);
+  // Nothing left to glide: a step with no input keeps the pose.
+  pose.step(1 / 60);
+  expect(camera.position.y).toBeCloseTo(GROUND + 70, 6);
+});
+
+test("the climb input lifts the camera in fly mode and cancels a glide", () => {
+  const { camera, pose } = rig();
+  pose.setMovementMode("fly");
+  const start = camera.position.y;
+  pose.setClimbInput(1);
+  pose.step(1);
+  expect(camera.position.y).toBeGreaterThan(start + 10);
+
+  pose.setClimbInput(0);
+  pose.flyToViewpoint(VIEW);
+  pose.setClimbInput(-1);
+  const before = camera.position.clone();
+  pose.step(1 / 60);
+  // The glide was dropped: the step sank the camera instead of arcing it.
+  expect(camera.position.y).toBeLessThanOrEqual(before.y);
+  expect(camera.position.x).toBeCloseTo(before.x, 6);
+});

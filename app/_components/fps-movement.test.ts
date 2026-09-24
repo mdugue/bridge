@@ -159,15 +159,70 @@ test("fly mode moves vertically with Space and Shift", () => {
   expect(up.camera.position.y).toBeCloseTo(EYE + FLY_STEP, 5);
 
   const down = rig();
+  down.camera.position.y = 100;
   down.movement.setMode("fly");
   down.movement.press("ShiftLeft");
   down.movement.update(1);
-  expect(down.camera.position.y).toBeCloseTo(EYE - FLY_STEP, 5);
+  expect(down.camera.position.y).toBeCloseTo(100 - FLY_STEP, 5);
 
   const walking = rig();
   walking.movement.press("ShiftLeft");
   walking.movement.update(1);
   expect(walking.camera.position.y).toBeCloseTo(EYE, 5);
+});
+
+test("E and Q climb and sink like Space and Shift", () => {
+  const { camera, movement } = rig();
+  camera.position.y = 100;
+  movement.setMode("fly");
+  movement.press("KeyE");
+  movement.update(1);
+  expect(camera.position.y).toBeCloseTo(100 + FLY_STEP, 5);
+  movement.release("KeyE");
+  movement.press("KeyQ");
+  movement.update(1);
+  expect(camera.position.y).toBeCloseTo(100, 5);
+});
+
+test("the altitude stick climbs in proportion and adds to the keys", () => {
+  const { camera, movement } = rig();
+  camera.position.y = 100;
+  movement.setMode("fly");
+  movement.setVertical(0.5);
+  movement.update(1);
+  expect(camera.position.y).toBeCloseTo(100 + FLY_STEP / 2, 5);
+  // Stick + key saturate at full speed, not beyond.
+  movement.press("Space");
+  movement.update(1);
+  expect(camera.position.y).toBeCloseTo(100 + FLY_STEP * 1.5, 5);
+  movement.releaseAll();
+  movement.update(1);
+  expect(camera.position.y).toBeCloseTo(100 + FLY_STEP * 1.5, 5);
+});
+
+test("sinking in fly mode stops at eye height above the ground", () => {
+  const { camera, movement } = rig({ groundHeight: () => 20 });
+  camera.position.y = 30;
+  movement.setMode("fly");
+  movement.setVertical(-1);
+  movement.update(1);
+  expect(camera.position.y).toBeCloseTo(20 + EYE, 5);
+  // Off the terrain there is no floor to stop at.
+  const off = rig({ groundHeight: () => null });
+  off.camera.position.y = 30;
+  off.movement.setMode("fly");
+  off.movement.setVertical(-1);
+  off.movement.update(1);
+  expect(off.camera.position.y).toBeCloseTo(30 - FLY_STEP, 5);
+});
+
+test("a pose already below the floor is held, not yanked up", () => {
+  const { camera, movement } = rig({ groundHeight: () => 20 });
+  camera.position.y = 5;
+  movement.setMode("fly");
+  movement.press("ShiftLeft");
+  movement.update(1);
+  expect(camera.position.y).toBeCloseTo(5, 5);
 });
 
 test("snapToGround sets the eye height without smoothing", () => {
