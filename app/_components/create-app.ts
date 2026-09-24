@@ -48,7 +48,7 @@ import {
   createCityLayer,
   demolishObject,
   fetchCityMesh,
-  pickCityObjectIndex,
+  pickCityObject,
 } from "./city-layer";
 import { createCityCollider } from "./collision";
 import {
@@ -456,11 +456,12 @@ async function bootApp(
         "ETRS89/UTM (EPSG:25832 or 25833). Reproject the CityJSON before baking."
     );
   }
-  let cityLayer: CityLayer = createCityLayer(
-    primaryCity.meta,
-    primaryCity.vertices,
-    world
-  );
+  // Every tile's buildings, primary first (slot order, like the terrain).
+  // All of them are the real world: walked into, demolished, counted. A
+  // demolish swaps the layer in its slot, so read this live, never cache it.
+  const cityLayers: CityLayer[] = [
+    createCityLayer(primaryCity.meta, primaryCity.vertices, world),
+  ];
   stage("buildings", 1);
   // The recenter offset was captured at bake time from the primary tile and
   // shared with the neighbours, so every layer subtracts the same origin.
@@ -492,8 +493,7 @@ async function bootApp(
   // seam vertex the same way every run. Each tile joins the scene and this
   // ledger in one synchronous step (loadTileTerrain), so a neighbour that
   // fails to load leaves nothing behind that heightAt, the raycasts, the
-  // census or dispose would miss. Collision and demolish stay on the primary
-  // tile (neighbours are passive visual context).
+  // census or dispose would miss.
   const landedTerrain = new Map<number, TerrainLayer>();
   let terrains: TerrainLayer[] = [];
   const landTerrain = (slot: number, t: TerrainLayer) => {
@@ -504,7 +504,6 @@ async function bootApp(
   };
   /** every tile's OSM walls, fetched once for conflation AND the ribbons */
   const wallFeatures: WallFeature[] = [];
-  const extraCities: CityLayer[] = [];
   // Per-tile vegetation handles, kept so the loop can drive crown LOD and the
   // HUD can retune shimmer / multi-tuft.
   const vegControls: VegetationControl[] = [];
@@ -636,8 +635,10 @@ async function bootApp(
   // Neighbouring tiles stream in AFTER the first frame (loadRest): their
   // buildings share the primary recenter offset so they line up; terrain,
   // water and trees land the same way.
+  // Footprints per layer object: a demolish replaces the layer, so the cache
+  // misses exactly for the tile that changed.
   const footprintCache = new WeakMap<CityLayer, FootprintPoly[]>();
-  const neighbourFootprints = (layer: CityLayer): FootprintPoly[] => {
+  const layerFootprints = (layer: CityLayer): FootprintPoly[] => {
     let polys = footprintCache.get(layer);
     if (!polys) {
       polys = cityFootprints(layer);
@@ -832,7 +833,7 @@ async function bootApp(
   const styleResources = createStyleResources(heightFog, clayNight);
   cleanups.push(() => styleResources.dispose());
   // The neighbour tiles are dressed the same way as they land (loadRest).
-  applyCityStyle(cityLayer.group, styleResources);
+  applyCityStyle(cityLayers[0].group, styleResources);
   const postStack = createPostStack(
     renderer,
     scene,
@@ -884,12 +885,14 @@ async function bootApp(
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
 
-  // Wall collision against the CURRENT city group (demolish swaps it).
-  // Declared before the collider so the inserted building can join the
-  // collision/focus targets the moment it exists.
+  // Wall collision against every tile's CURRENT city group (demolish swaps
+  // it; neighbours join as they stream in). Declared before the collider so
+  // the inserted building can join the collision/focus targets the moment it
+  // exists.
   let inserted: Object3D | null = null;
+  const cityGroups = (): Object3D[] => cityLayers.map((c) => c.group);
   const collider = createCityCollider(() =>
-    inserted ? [cityLayer.group, inserted] : [cityLayer.group]
+    inserted ? [...cityGroups(), inserted] : cityGroups()
   );
   // Where the player stands and looks, walk/fly, the scenic glides — and the
   // one rule that any player input cancels a glide (camera-pose.ts).
@@ -937,15 +940,12 @@ async function bootApp(
     sunRig.shadowMapBytes;
   const emitStats = () => {
     opts.onStats?.({
-      buildingCount: countBuildings(cityLayer),
+      buildingCount: cityLayers.reduce((n, c) => n + countBuildings(c), 0),
       terrainVertexCount: terrain.vertexCount,
       shadowsEnabled: renderer.shadowMap.enabled,
       gpuMegabytes: Math.round(gpuBytes() / 1_048_576),
       layerStats: {
-        city: sceneCensus([
-          cityLayer.group,
-          ...extraCities.map((c) => c.group),
-        ]),
+        city: sceneCensus(cityGroups()),
         terrain: sceneCensus(terrains.map((t) => t.mesh)),
         water: sceneCensus(
           terrains.flatMap((t) =>
@@ -961,13 +961,18 @@ async function bootApp(
   };
 
   const demolishAtCrosshair = () => {
-    const objectIndex = pickCityObjectIndex(camera, cityLayer);
-    if (objectIndex === null) {
+    const pick = pickCityObject(camera, cityLayers);
+    if (pick === null) {
       return;
     }
-    cityLayer = demolishObject(cityLayer, world, objectIndex);
+    const layer = demolishObject(
+      cityLayers[pick.layerIndex],
+      world,
+      pick.objectIndex
+    );
+    cityLayers[pick.layerIndex] = layer;
     // The rebuilt mesh starts with a placeholder material — re-dress it.
-    applyCityStyle(cityLayer.group, styleResources);
+    applyCityStyle(layer.group, styleResources);
     invalidateShadows();
     emitStats();
   };
@@ -1027,25 +1032,22 @@ async function bootApp(
   const focusRaycaster = new Raycaster();
   focusRaycaster.firstHitOnly = true;
   focusRaycaster.far = 6000;
-  // Stable focus-raycast context: neighbour-tile buildings + every tile's
-  // terrain. WITHOUT the neighbour buildings, the crosshair on a distant
+  // Focus-raycast context: every tile's buildings + every tile's terrain.
+  // WITHOUT the neighbour buildings, the crosshair on a distant
   // (neighbour-tile) silhouette hits nothing and autofocus falls back — so the
-  // far city blurred. The primary cityLayer.group is prepended fresh each call
-  // because demolish swaps it.
+  // far city blurred. The city groups are read fresh each call because
+  // demolish swaps them.
   // Terrain joins as each tile's BVH lands (indexedTerrain): a brute-force
   // ray through ~2M unindexed triangles ten times a second would freeze the
   // first seconds, and the DoF merely focuses on buildings until then.
-  // Neighbour buildings join as they stream in (extraCities is live).
+  // Neighbour buildings join as they stream in (cityLayers is live).
   const focusCrosshair = new Vector2(0, 0);
   let lastFocusHit: { dist: number; name: string } | null = null;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
-    const targets: Object3D[] = [cityLayer.group];
+    const targets: Object3D[] = [...cityGroups()];
     if (inserted) {
       targets.push(inserted);
-    }
-    for (const c of extraCities) {
-      targets.push(c.group);
     }
     targets.push(...indexedTerrain);
     const hit = focusRaycaster.intersectObjects(targets, true)[0];
@@ -1229,9 +1231,9 @@ async function bootApp(
     ensureAlive();
     unitDone();
     for (const { meta, vertices } of meshes) {
-      const layer = createCityLayer(meta, vertices, world, false);
+      const layer = createCityLayer(meta, vertices, world);
       applyCityStyle(layer.group, styleResources);
-      extraCities.push(layer);
+      cityLayers.push(layer);
     }
     invalidateShadows();
     emitStats();
@@ -1348,12 +1350,7 @@ async function bootApp(
     setMovementMode: pose.setMovementMode,
     setMoveInput: pose.setMoveInput,
     startStreaming,
-    // Neighbours are never demolished, so their footprints are computed once
-    // per layer (they stream in after the first frame) and reused thereafter.
-    getFootprints: () => [
-      ...cityFootprints(cityLayer),
-      ...extraCities.flatMap(neighbourFootprints),
-    ],
+    getFootprints: () => cityLayers.flatMap(layerFootprints),
     landcoverTiles,
     latLng,
     terrainBounds: unionBounds,

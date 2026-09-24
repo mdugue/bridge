@@ -1,7 +1,8 @@
 # ADR 0006: A 2×2 tile block with one primary tile, and one artifact map shared by bake and client
 
 - **Status:** accepted
-- **Date:** 2026-06 (block), 2026-09 (artifact map, plan 010)
+- **Date:** 2026-06 (block), 2026-09 (artifact map, plan 010), 2026-09
+  (neighbours made walkable and demolishable)
 
 ## Context
 
@@ -15,9 +16,12 @@ derived at runtime by string replacement; a typo degraded silently to
 ## Decision
 
 - The viewer loads a **2×2 block**: the primary tile `33412_5656_2_sn`
-  (spawn, collision, demolish, full resolution) plus three neighbours as
-  backdrop at lower resolution (heightfield 512² instead of 1024²,
-  rasters 2048² instead of 4096²).
+  (spawn, full resolution) plus three neighbours at lower resolution
+  (heightfield 512² instead of 1024², rasters 2048² instead of 4096²).
+  Collision, ground clamp and demolish apply on **every** tile: a
+  neighbour is the same real world, only coarser. (Until 2026-09 collision
+  and demolish were primary-only — walking onto a neighbour meant walking
+  through its buildings.)
 - `lib/city/tile.ts` is the **single home** of the tile list
   (`TILE_BLOCK`) and of every artifact a tile has (`tileArtifacts(spec)`:
   file name, source folder, `required` flag, resample kind).
@@ -38,8 +42,9 @@ derived at runtime by string replacement; a typo degraded silently to
   `features.test.ts` checks every committed file.
 - A required artifact missing at build time fails the build instead of
   becoming a client 404.
-- Neighbour seams are visible at close range; the neighbours are backdrop
-  by design.
+- Neighbour seams are visible at close range (the coarser heightfield).
+- Every tile keeps its CPU-side vertex stream for demolish (~15 bytes per
+  vertex); the neighbours' BVHs were already built for autofocus.
 - Changing the block means editing `TILE_BLOCK` and committing the tiles'
   data.
 

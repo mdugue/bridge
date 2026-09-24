@@ -229,8 +229,9 @@ slider, used to reproduce a view.
 **Scenic view / Aussichtspunkt** — one of the five authored vantages the
 camera can glide to.
 
-**Primary tile / neighbour tiles** — the tile you spawn on (full detail,
-collision, demolish) and the three around it (backdrop, lower resolution).
+**Primary tile / neighbour tiles** — the tile you spawn on (full detail) and
+the three around it (lower resolution). Collision and demolish work on all
+four.
 
 **ADR** — *architecture decision record*: a short document stating one
 decision, its context and consequences; see [docs/adr](../../adr/README.md).

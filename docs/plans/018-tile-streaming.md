@@ -53,9 +53,9 @@ past a handful:
   already served 2048² for every tile to stay inside their budget.
 - **Main thread:** every tile that lands costs a canopy build, a terrain BVH
   (~0.4–1.5 s) and a texture upload, all on the main thread.
-- **Correctness:** collision and demolish only work on the primary tile. A
-  player who walks 1 km east is on a tile they can walk *through* the
-  buildings of.
+- **Correctness:** collision and demolish work on every loaded tile (PR
+  #46), so the fixed block is solid; beyond its edge there is nothing to
+  walk on.
 
 Next.js/Bun is **not** a constraint here. The data is served as static,
 content-hashed files (ADR 0007, `next.config.ts` `immutable` headers), so
@@ -120,10 +120,11 @@ Where each fact lives, so the executor can re-verify quickly:
 - **Ground:** `heightAt` already walks **every** landed terrain ("first
   covering tile wins"), so the walk clamp, the shadow frustum
   (`groundUnderCamera`) and double-tap travel already work across tiles.
-- **Collision:** `createCityCollider(() => [cityLayer.group, inserted?])`
-  covers the primary city only. Demolish uses `pickCityObjectIndex(camera,
-  cityLayer)`, also primary only. Autofocus targets `extraCities` +
-  `indexedTerrain` as well.
+- **Collision:** one live list `cityLayers` (primary first, slot order)
+  feeds the collider (`createCityCollider(() => [...cityGroups(),
+  inserted?])`), `pickCityObject(camera, cityLayers)` (nearest hit across
+  tiles, returns `{ layerIndex, objectIndex }`) and autofocus (plus
+  `indexedTerrain`). A demolish replaces the layer in its slot.
 - **Fog edge:** `worldPartial` clamps fog to `PARTIAL_WORLD_FOG_FAR`
   (1100 m) until `restoreFog()`. This is a one-way switch.
 - **Minimap:** `landcoverTiles` and `terrainBounds: unionBounds` are
@@ -268,7 +269,7 @@ first), budget eviction order, and upgrading L1→L0 without a hole.
    - **Collision / demolish:** `createCityCollider` takes the city groups of
      the camera cell and its ring-1 neighbours (a player stands within
      ~0.5 m of a seam's buildings). `demolishAtCrosshair` picks across the
-     loaded L0 cities (`pickCityObjectIndex` per layer, nearest hit wins).
+     loaded L0 cities (`pickCityObject`, nearest hit wins).
      Demolished ids are kept per tile id, so a tile that unloads and reloads
      stays demolished within the session.
    - **Fog:** replace the `worldPartial` boolean with the distance from the

@@ -100,27 +100,20 @@ function buildMesh(meta: CityMeshMeta, v: CityMeshVertices): Group {
   return group;
 }
 
-/** The vertex stream of a layer that will never be demolished. */
-const NO_VERTICES: CityMeshVertices = {
-  positions: new Float32Array(0),
-  objectIds: new Uint16Array(0),
-  isRoof: new Uint8Array(0),
-};
-
+/**
+ * Every tile's layer is demolishable, so the vertex stream (~15 bytes per
+ * vertex the filter needs) is kept for all of them.
+ */
 export function createCityLayer(
   meta: CityMeshMeta,
   vertices: CityMeshVertices,
-  world: Group,
-  /** false for context tiles: they never demolish, so the ~15 bytes per
-   *  vertex the filter would need are not kept (the GPU-side attributes
-   *  three retains for raycasting are separate) */
-  demolishable = true
+  world: Group
 ): CityLayer {
   const group = buildMesh(meta, vertices);
   world.add(group);
   return {
     meta,
-    vertices: demolishable ? vertices : NO_VERTICES,
+    vertices,
     alive: new Uint8Array(meta.objects.length).fill(1),
     group,
   };
@@ -159,20 +152,35 @@ const pickRaycaster = new Raycaster();
 pickRaycaster.firstHitOnly = true;
 const SCREEN_CENTER = new Vector2(0, 0);
 
-/** Raycasts the screen center and resolves the aimed object index, or null. */
-export function pickCityObjectIndex(
+/** What a demolish pick aimed at: a layer (by index) and an object in it. */
+export interface CityPick {
+  layerIndex: number;
+  objectIndex: number;
+}
+
+/**
+ * Raycasts the screen center against every tile's buildings and resolves the
+ * nearest aimed object, or null.
+ */
+export function pickCityObject(
   camera: Camera,
-  layer: CityLayer
-): number | null {
+  layers: readonly CityLayer[]
+): CityPick | null {
   pickRaycaster.setFromCamera(SCREEN_CENTER, camera);
-  const hit = pickRaycaster.intersectObject(layer.group, true)[0];
+  const hit = pickRaycaster.intersectObjects(
+    layers.map((l) => l.group),
+    true
+  )[0];
   const face = hit?.face;
   if (!face) {
     return null;
   }
-  const geometry = (hit.object as Mesh).geometry;
-  const ids = geometry.getAttribute("objectid");
-  return ids ? ids.getX(face.a) : null;
+  const layerIndex = layers.findIndex((l) => l.group === hit.object.parent);
+  const ids = (hit.object as Mesh).geometry.getAttribute("objectid");
+  if (layerIndex < 0 || !ids) {
+    return null;
+  }
+  return { layerIndex, objectIndex: ids.getX(face.a) };
 }
 
 export function countBuildings(layer: CityLayer): number {

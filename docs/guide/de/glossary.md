@@ -240,8 +240,8 @@ festhält, um eine Ansicht zu reproduzieren.
 Kamera gleiten kann.
 
 **Primärkachel / Nachbarkacheln** — die Kachel, auf der du startest (volle
-Detailstufe, Kollision, Abriss) und die drei drumherum (Kulisse, geringere
-Auflösung).
+Detailstufe) und die drei drumherum (geringere Auflösung). Kollision und
+Abriss gelten auf allen vier.
 
 **ADR** — *Architecture Decision Record*: ein kurzes Dokument, das eine
 Entscheidung, ihren Kontext und ihre Folgen festhält; siehe
