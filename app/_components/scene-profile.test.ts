@@ -7,6 +7,7 @@ import {
   sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapSizeFor,
+  vegExtrasFromSearch,
 } from "./scene-profile";
 
 test("sceneProfileFromSearch defaults to the full product scene", () => {
@@ -62,18 +63,38 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     tier: "desktop",
     neighbourTiles: true,
     lowRasters: false,
+    vegExtras: { low: false, trees: false },
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
     profile: "lite",
     tier: "mobile",
     neighbourTiles: false,
     lowRasters: true,
+    vegExtras: { low: false, trees: false },
   });
   // The QA knob keeps the block in the lite profile; alone it does nothing.
   expect(sceneBudgetFor("?scene=lite&block=1", false).neighbourTiles).toBe(
     true
   );
   expect(sceneBudgetFor("?block=1", false).neighbourTiles).toBe(true);
+});
+
+test("the experimental vegetation layers are opt-in via ?veg=", () => {
+  expect(vegExtrasFromSearch("")).toEqual({ low: false, trees: false });
+  expect(vegExtrasFromSearch("?veg=low")).toEqual({ low: true, trees: false });
+  expect(vegExtrasFromSearch("?veg=trees")).toEqual({
+    low: false,
+    trees: true,
+  });
+  expect(vegExtrasFromSearch("?scene=lite&veg=low,trees")).toEqual({
+    low: true,
+    trees: true,
+  });
+  expect(vegExtrasFromSearch("?veg=all")).toEqual({ low: true, trees: true });
+  expect(vegExtrasFromSearch("?veg=lowish")).toEqual({
+    low: false,
+    trees: false,
+  });
 });
 
 test("aoQualityFor drops to Performance only in the lite profile", () => {

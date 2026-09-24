@@ -27,6 +27,11 @@ test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
  */
 
 const SHOTS_DIR = join(process.cwd(), "shots");
+/** Optional query for the page (e.g. `?veg=low`) and a suffix for the PNG
+ *  name, so one set of snapshots yields before/after pairs:
+ *  `SHOTS_QUERY='?veg=low' SHOTS_SUFFIX=-after bun run shots`. */
+const QUERY = process.env.SHOTS_QUERY ?? "";
+const SUFFIX = process.env.SHOTS_SUFFIX ?? "";
 
 function snapshotFiles(): string[] {
   try {
@@ -48,7 +53,7 @@ for (const file of snapshotFiles()) {
     }
     const snap: Snapshot = parsed.snapshot;
 
-    await page.goto("/");
+    await page.goto(`/${QUERY}`);
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: 120_000,
     });
@@ -100,6 +105,6 @@ for (const file of snapshotFiles()) {
 
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();
-    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}.png`) });
+    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}${SUFFIX}.png`) });
   });
 }

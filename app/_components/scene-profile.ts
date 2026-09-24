@@ -42,6 +42,31 @@ export interface SceneBudget {
   neighbourTiles: boolean;
   profile: SceneProfile;
   tier: DeviceTier;
+  /** 🧪 experimental vegetation layers, opt-in via `?veg=` (see vegExtrasFromSearch) */
+  vegExtras: VegExtras;
+}
+
+/**
+ * 🧪 Opt-in vegetation from the laser-scan bake (scripts/extract-lowveg.sh),
+ * off by default so a normal visit is unchanged: `low` = hedges + shrubs
+ * under 3 m, `trees` = crown peaks outside the canopy mask (courtyards,
+ * gardens). Both are extra requests, extra instances and extra shadow casters.
+ */
+export interface VegExtras {
+  low: boolean;
+  trees: boolean;
+}
+
+/** `?veg=low`, `?veg=trees`, `?veg=low,trees` or `?veg=all`. Pure, for tests. */
+export function vegExtrasFromSearch(search: string): VegExtras {
+  const parts = (new URLSearchParams(search).get("veg") ?? "")
+    .split(",")
+    .map((p) => p.trim());
+  const all = parts.includes("all");
+  return {
+    low: all || parts.includes("low"),
+    trees: all || parts.includes("trees"),
+  };
 }
 
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
@@ -78,6 +103,7 @@ export function sceneBudgetFor(
     tier,
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
     lowRasters: tier === "mobile",
+    vegExtras: vegExtrasFromSearch(search),
   };
 }
 
