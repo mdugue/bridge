@@ -159,13 +159,31 @@ MRT, tone mapping and colour space at that time, so the spike's pass has
 no MRT (GTAO reconstructs normals from depth), the renderer stays linear
 and untonemapped, and `renderOutput(ACES, sRGB)` is the last node.
 
-What remains on WebGPU is **geometry upload**: a CPU profile of the flight
-puts `writeBuffer` at 2.5 s, and the three long tasks left (0.5–0.9 s)
-land when a fine terrain tile arrives — ≈ 1 M vertices and a 25 MB
-Uint32 index buffer uploaded in one piece. The WebGL path pays the same
-upload in far less time. Fix for Phase 1: cut the fine terrain level into
-smaller chunks at bake time (e.g. 4 × 512² per tile, or 16 × 256² with
-16-bit indices), so each upload is small and chunks cull on their own.
+What remains on WebGPU (two long tasks of 0.6–1.2 s early in a flight)
+is **the first shadow render of newly landed content**: the CPU profile's
+longest task sits in `render › updateBefore › render` — the sun's shadow
+map redrawn while a receiving object draws, creating the shadow pass's
+render objects and pipelines for the new objects synchronously.
+`compileAsync` only primes the main pass. Neither geometry upload nor tile
+size is the cause (an earlier reading of the profile blamed `writeBuffer`;
+that time is spread over every frame), and more, smaller tiles would add
+objects. Next steps for Phase 1: prime the shadow pass (compile against
+the shadow camera and map), or ask upstream.
+
+Also tried and dropped: one shared terrain / water / clay material with
+the per-tile textures bound per draw via `onObjectUpdate`. The per-object
+textures did not reach the draws (grey ground, untinted clay), and node
+builds per tile material turned out cheap (none over 20 ms). Shared
+materials stay for the trees, which carry no per-tile data. The post
+stack keeps two prebuilt pipelines (with and without DoF) instead of
+swapping one pipeline's output node when the camera starts or stops.
+
+**Colour:** today's WebGL path applies **no tone mapping**. three
+tone-maps only renders straight to the screen; the composer renders to a
+target and postprocessing's passes are `toneMapped: false`, so
+`renderer.toneMapping = ACESFilmicToneMapping` in `create-app.ts` is
+inert. The spike first applied ACES in its output node, which washed the
+clay out; it now outputs plain sRGB like today.
 
 **The WebGL2 backend** of WebGPURenderer stalls far worse than either:
 it compiles node shaders synchronously even under `compileAsync`. Browsers
