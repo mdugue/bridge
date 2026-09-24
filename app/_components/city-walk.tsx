@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import {
-  LOAD_STAGES,
   loadPercent,
   type LoadStageState,
   loadStageStates,
@@ -50,7 +49,7 @@ import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import type { SunState } from "./sun-rig";
 import { VirtualJoystick } from "./virtual-joystick";
-import { hasWebGl2 } from "./webgl-support";
+import { missingPrerequisite } from "./webgl-support";
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
@@ -137,18 +136,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const coarse = useCoarsePointer();
 
   // Probed once, before the renderer is created: three's raw "Error creating
-  // WebGL context" is replaced by a sentence naming the one prerequisite.
-  const [webGl2] = useState(hasWebGl2);
+  // WebGL context" (or a tile's bare ReferenceError) is replaced by a
+  // sentence naming the missing prerequisite.
+  const [missing] = useState(missingPrerequisite);
+  const supported = missing === null;
   const [status, setStatus] = useState<Status>(() =>
-    webGl2
+    missing === null
       ? { phase: "loading" }
-      : {
-          phase: "error",
-          message:
-            "Dieser Viewer braucht WebGL2, das dieser Browser oder dieses Gerät " +
-            "nicht bereitstellt. Bitte einen aktuellen Desktop- oder Mobil-Browser " +
-            "mit aktivierter Hardwarebeschleunigung verwenden.",
-        }
+      : { phase: "error", message: missing }
   );
   // What the scene has reported per load stage (lib/city/load-stages.ts): the
   // loading screen, the handover and the pill all read this. One piece of
@@ -201,7 +196,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     }
     // The WebGL2 preflight already failed (see the status initializer): no
     // renderer, no handle, nothing to clean up.
-    if (!webGl2) {
+    if (!supported) {
       return;
     }
     let cancelled = false;
@@ -247,19 +242,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         if (cancelled) {
           return;
         }
+        // One tile (or one tile's dressing) failed after the first frame: it
+        // leaves a hole, and the rest keeps streaming — the stages still
+        // finish on their own (a failed tile counts as done), so they are
+        // not settled here. A failure before the first frame rejects the
+        // boot instead.
         setStreamError(message);
-        // Streaming failed: whatever had not landed is not coming. Settle those
-        // stages, or the pill would claim forever that a layer is loading and
-        // never reach the state where it unmounts.
-        setProgress((prev) => {
-          const settled = { ...prev.skipped };
-          for (const stage of LOAD_STAGES) {
-            if ((prev.fractions[stage.id] ?? 0) < 1) {
-              settled[stage.id] = true;
-            }
-          }
-          return { ...prev, skipped: settled };
-        });
       },
       onStats: (s) => {
         if (cancelled) {
@@ -350,7 +338,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         look: undefined,
       });
     };
-  }, [budget, look, tilesetUrl, webGl2]);
+  }, [budget, look, tilesetUrl, supported]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);

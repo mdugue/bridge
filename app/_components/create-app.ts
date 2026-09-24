@@ -476,8 +476,8 @@ async function bootApp(
   // The stream: what lands and leaves, and everything that follows from it.
   let onChange: () => void = () => undefined;
   // Shader compiles go through the post stack (it knows the target the
-  // scene renders into); it exists from the "light" stage on, and anything
-  // landing before that is compiled with the handover below.
+  // scene renders into). It is created a few lines below, before the render
+  // loop runs the stream's first update, so no tile lands without it.
   let compileWith: ((object: Object3D) => Promise<void>) | null = null;
   const stream = createTileStream(
     {
@@ -497,6 +497,7 @@ async function bootApp(
       renderer,
       styleResources,
       sunDirection,
+      tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
       tilesetUrl,
     },
     world,
@@ -526,13 +527,26 @@ async function bootApp(
     onChange();
   });
   // A tile that fails to load (or to dress) leaves a hole, not a dead scene:
-  // the HUD says so once, the rest keeps streaming.
+  // the HUD says so once, the rest keeps streaming. Before the first frame
+  // the spawn tile (or the tileset itself) failing is fatal instead: the
+  // boot below rejects rather than waiting for content that never comes.
   let reportedError = false;
+  let firstFrameShown = false;
+  let bootFailure: Error | null = null;
   stream.tiles.addEventListener("load-error", (event) => {
+    const { error, tile, url } = event as {
+      error?: unknown;
+      tile?: unknown;
+      url?: unknown;
+    };
+    const failure = error instanceof Error ? error : new Error(String(error));
+    if (!firstFrameShown && (tile === null || String(url).includes(spawn.id))) {
+      bootFailure ??= failure;
+      return;
+    }
     if (!(disposed || reportedError)) {
       reportedError = true;
-      const { error } = event as { error?: unknown };
-      opts.onError?.(error instanceof Error ? error.message : String(error));
+      opts.onError?.(failure.message);
     }
   });
 
@@ -919,14 +933,21 @@ async function bootApp(
   let details = 0;
   let busy = false;
   // --- the first frame: the spawn tile's buildings and terrain ------------
+  // Landed = shown by the renderer, not merely dressed: a dressed tile can
+  // still be waiting on its compile, and the spawn teleport below needs
+  // ground that is really there.
   const spawnLanded = () => ({
-    city: [...stream.cities].some((c) => c.tile === spawn.id),
-    terrain: [...stream.terrains].some((t) => t.tile === spawn.id),
+    city: stream.visibleCities().some((c) => c.tile === spawn.id),
+    terrain: stream.visibleTerrains().some((t) => t.tile === spawn.id),
   });
   await new Promise<void>((resolve, reject) => {
     const poll = () => {
       if (disposed || opts.signal?.aborted) {
         reject(new DOMException("CityWalk startup aborted", "AbortError"));
+        return;
+      }
+      if (bootFailure) {
+        reject(bootFailure);
         return;
       }
       const landed = spawnLanded();
@@ -940,9 +961,11 @@ async function bootApp(
     };
     poll();
   });
+  firstFrameShown = true;
   onChange();
-  // Whatever landed before the post stack existed: compile it now, under the
-  // overlay, instead of in the first visible frame.
+  // Tiles compile themselves before they show; this covers the rest of the
+  // scene (sky, sun rig, lamp light pool), under the overlay instead of in
+  // the first visible frame.
   await postStack.compile(scene).catch(() => undefined);
   // Stand on the spawn tile now that its ground exists (the pose was placed
   // before any terrain had landed, on the fallback floor).
@@ -983,7 +1006,9 @@ async function bootApp(
   }
 
   function checkLoaded(): void {
-    const spawnDressed = [...stream.dressings].some((d) => d.tile === spawn.id);
+    // Tried, not necessarily built: a dressing that failed, or whose tile
+    // left before its turn, must not hold the scene short of "loaded".
+    const spawnDressed = stream.dressingSettled(spawn.id);
     const idleNow = tilesIdle && stream.pendingDressings() === 0;
     if (!loaded) {
       reportProgress(spawnDressed);

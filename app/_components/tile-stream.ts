@@ -20,10 +20,12 @@ import type {
   WallFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
-import type {
-  CityExtras,
-  ContentExtras,
-  TerrainExtras,
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import {
+  type CityExtras,
+  type ContentExtras,
+  ownsPoint,
+  type TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
 import { fetchFeatures } from "./fetch-optional";
@@ -78,6 +80,8 @@ export interface TileStreamContext {
   renderer: WebGLRenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
+  /** a site tile's exact extent (the tileset's root extras) */
+  tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
 }
 
@@ -85,6 +89,8 @@ export interface TileStream {
   cities: Set<CityLayer>;
   /** dressings queued or being built */
   pendingDressings: () => number;
+  /** whether a tile's dressing was tried: built, failed, or its tile left */
+  dressingSettled: (tileId: string) => boolean;
   /** demolished object indices per tile, kept across unload/reload */
   demolished: Map<string, Set<number>>;
   dispose: () => void;
@@ -231,7 +237,15 @@ async function buildDressing(
   );
   // Born with the current look, not the default.
   vegetation.applyLook(ctx.look.get());
-  const lampControl = buildLamps(lamps, {
+  // The bake reads lamps with a margin around the tile; a lamp on or past a
+  // seam is its owner's, or two tiles would stand it twice.
+  const extent = ctx.tileBounds(tile);
+  const ownLamps = extent
+    ? lamps.filter((f) =>
+        ownsPoint(extent, f.geometry.coordinates[0], f.geometry.coordinates[1])
+      )
+    : lamps;
+  const lampControl = buildLamps(ownLamps, {
     ...ground,
     heightAt: terrain.heightAt,
   });
@@ -252,6 +266,14 @@ async function buildDressing(
 class DressingPlugin {
   name = "BRIDGE_DRESSING";
   readonly dressed = new WeakMap<Object3D, Dressed>();
+  /** the content root a tile is being dressed for (before the renderer
+   *  records it in engineData, which it skips when the load is aborted) */
+  private readonly sceneOf = new WeakMap<object, Object3D>();
+  /** content roots whose tile was disposed; whatever lands for them later
+   *  is released on the spot */
+  private readonly released = new WeakSet<Object3D>();
+  /** tiles whose dressing was tried (see TileStream.dressingSettled) */
+  readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
 
   constructor(
@@ -265,12 +287,13 @@ class DressingPlugin {
   private url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
-  async processTileModel(scene: Object3D): Promise<void> {
+  async processTileModel(scene: Object3D, tile: object): Promise<void> {
     const extras = scene.userData as ContentExtras;
     const mesh = scene.getObjectByProperty("isMesh", true) as Mesh | undefined;
     if (!mesh) {
       return;
     }
+    this.sceneOf.set(tile, scene);
     if (extras.kind === "city") {
       this.dressCity(scene, mesh, extras);
     } else if (extras.kind === "terrain") {
@@ -279,6 +302,11 @@ class DressingPlugin {
     // The renderer shows the tile once this resolves: its programs are
     // ready by then instead of compiling inside a frame.
     await withinCompileWait(this.ctx.compile(scene));
+    // Disposed while it was being dressed: the renderer drops an aborted
+    // load without ever recording the scene, so nothing else frees it.
+    if (this.released.has(scene)) {
+      this.release(scene);
+    }
   }
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
@@ -365,14 +393,24 @@ class DressingPlugin {
       })
       .finally(() => {
         this.pending--;
+        this.settled.add(extras.tileId);
         this.ctx.onChange();
       });
   }
 
   disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
-    const scene = tile.engineData?.scene;
-    const dressed = scene ? this.dressed.get(scene) : undefined;
-    if (!(scene && dressed)) {
+    const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
+    this.sceneOf.delete(tile);
+    if (scene) {
+      this.released.add(scene);
+      this.release(scene);
+    }
+  }
+
+  /** Frees everything dressed onto one content root. */
+  private release(scene: Object3D): void {
+    const dressed = this.dressed.get(scene);
+    if (!dressed) {
       return;
     }
     this.dressed.delete(scene);
@@ -411,6 +449,36 @@ export function createTileStream(
   // the spot); three's own frustum culling keeps them out of the main pass.
   tiles.displayActiveTiles = true;
   tiles.autoDisableRendererCulling = false;
+  // What is shown changes only with these events, so the visible lists are
+  // worked out once per change, not on every call (the collider asks for
+  // the cities every frame).
+  let version = 0;
+  const changed = () => {
+    version++;
+    ctx.onChange();
+  };
+  const memo = <T>(list: () => T[]): (() => T[]) => {
+    let at = -1;
+    let cached: T[] = [];
+    return () => {
+      if (at !== version) {
+        at = version;
+        cached = list();
+      }
+      return cached;
+    };
+  };
+  // A content root is shown while it is a child of the renderer's group.
+  // Walk up from any object inside it; the membership test is not redundant:
+  // an active but hidden tile keeps the group as its parent without being
+  // one of its children (for raycasting).
+  const isShown = (object: Object3D | null): boolean => {
+    let root: Object3D | null = object;
+    while (root && root.parent !== tiles.group) {
+      root = root.parent;
+    }
+    return root !== null && tiles.group.children.includes(root);
+  };
   const stream: TileStream = {
     tiles,
     group: tiles.group,
@@ -419,35 +487,34 @@ export function createTileStream(
     dressings: new Set(),
     demolished: new Map(),
     pendingDressings: () => 0,
-    visibleTerrains: () =>
+    dressingSettled: () => false,
+    visibleTerrains: memo(() =>
       [...stream.terrains]
         .filter((t) => isShown(t.mesh))
-        .sort((a, b) => a.level - b.level),
-    visibleCities: () => [...stream.cities].filter((c) => isShown(c.mesh)),
-    visibleDressings: () =>
+        .sort((a, b) => a.level - b.level)
+    ),
+    visibleCities: memo(() =>
+      [...stream.cities].filter((c) => isShown(c.mesh))
+    ),
+    visibleDressings: memo(() =>
       [...stream.dressings].filter((d) =>
         isShown(d.vegetation?.group ?? d.lamps?.group ?? d.rail ?? null)
-      ),
+      )
+    ),
     dispose: () => {
       tiles.dispose();
     },
   };
-  const isShown = (object: Object3D | null): boolean => {
-    let root: Object3D | null = object;
-    while (root && root.parent !== tiles.group) {
-      root = root.parent;
-    }
-    return root !== null && tiles.group.children.includes(root);
-  };
-  const dressing = new DressingPlugin(ctx, stream);
+  const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
+  stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {
     tiles.setCamera(camera);
     tiles.setResolution(camera, width, height);
   }
-  tiles.addEventListener("load-model", ctx.onChange);
-  tiles.addEventListener("tile-visibility-change", ctx.onChange);
+  tiles.addEventListener("load-model", changed);
+  tiles.addEventListener("tile-visibility-change", changed);
   world.add(tiles.group);
   return stream;
 }

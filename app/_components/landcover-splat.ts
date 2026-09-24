@@ -16,7 +16,7 @@ import {
   linearPalette,
   WATER_CLASS,
 } from "@/lib/city/landcover";
-import { textureBytes, trackTexture } from "./three-utils";
+import { textureBytes, trackTexture, untrackTexture } from "./three-utils";
 
 /**
  * The terrain's colour splat, painted on the GPU from the class-id raster and
@@ -105,5 +105,11 @@ export function paintLandcoverSplat(
   quad.geometry.dispose();
   material.dispose();
   trackTexture(target.texture, textureBytes(width, height, 4, true));
-  return { texture: target.texture, dispose: () => target.dispose() };
+  return {
+    texture: target.texture,
+    dispose: () => {
+      untrackTexture(target.texture);
+      target.dispose();
+    },
+  };
 }

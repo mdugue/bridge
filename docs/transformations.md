@@ -161,8 +161,10 @@ visual-variable codebook is in
   **sway-coupled brightness** (the crown brightens leaning into the same gust,
   centred so the mean colour is unchanged). Flutter & brightness are independent
   HUD sliders (*Blattflimmern* / *Windhelligkeit*) — zero one to preview the other.
-- **Street lamps** — OSM lamp points (the local Geofabrik extract, ~50 m past
-  the tile edge) → instanced lamp posts (ODbL). `pipeline/bake/lamps.py`.
+- **Street lamps** — OSM lamp points (the local Geofabrik extract, only those
+  the tile owns: west and south edges in, east and north out, so a seam lamp
+  stands once) → instanced lamp posts (ODbL). `pipeline/bake/lamps.py`; the
+  viewer applies the same ownership to older files (`ownsPoint`).
   Gated off **water (8) and railway (5)** land-cover so no poles stand in the
   Elbe or the track bed (the rail corridor is now its own layer). Built per
   fine terrain tile; the three real lights go to the nearest heads of the

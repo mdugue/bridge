@@ -22,6 +22,20 @@
  */
 import type { TerrainBounds } from "./terrain-geometry";
 
+/**
+ * Whether a tile owns the point: west and south edges in, east and north
+ * edges out, so a point on a seam belongs to exactly one tile. Features a bake
+ * reads with a margin (lamps near the edge) are dressed by their owner only.
+ */
+export function ownsPoint(
+  bounds: TerrainBounds,
+  x: number,
+  y: number
+): boolean {
+  const [minX, minY, maxX, maxY] = bounds;
+  return x >= minX && x < maxX && y >= minY && y < maxY;
+}
+
 /** Logical names; published under content-hashed names via the manifest. */
 export const TILESET_FILE = "tileset.json";
 /** The spawn tile alone — the `lite` scene profile (headless tests). */

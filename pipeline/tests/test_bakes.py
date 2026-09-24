@@ -3,7 +3,7 @@ against the committed artifacts is in docs/data-pipeline.md)."""
 
 import shapely
 
-from bake.common import round_coords
+from bake.common import owns, round_coords
 from bake.landcover import CLASSES
 from bake.osm import tag
 from bake.rail import buffer_line, is_platform, merge_lines
@@ -77,3 +77,11 @@ def test_platforms_come_from_railway_or_public_transport_on_a_railway():
     assert is_platform(None, '"public_transport"=>"platform","railway"=>"platform_edge"')
     assert not is_platform(None, '"public_transport"=>"platform","highway"=>"bus_stop"')
     assert not is_platform(None, None)
+
+
+def test_a_point_on_a_seam_belongs_to_one_tile():
+    west = (410_000.0, 5_656_000.0, 412_000.0, 5_658_000.0)
+    east = (412_000.0, 5_656_000.0, 414_000.0, 5_658_000.0)
+    assert not owns(west, 412_000.0, 5_657_000.0)
+    assert owns(east, 412_000.0, 5_657_000.0)
+    assert not owns(east, 411_950.0, 5_657_000.0)
