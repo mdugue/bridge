@@ -17,6 +17,7 @@ import {
 import { fogRangeFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
 import { worldToEpsg } from "@/lib/city/ground-clamp";
+import { groundRayDistance } from "@/lib/city/ground-ray";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
   LOOK_DEFAULTS,
@@ -458,6 +459,19 @@ async function bootApp(
     }
     return null;
   };
+  // The same ground in world coordinates, for rays (lib/city/ground-ray.ts).
+  const groundAtWorld = (x: number, z: number): number | null => {
+    const e = worldToEpsg(x, z, offset);
+    return heightAt(e.x, e.y);
+  };
+  const rayOrigin = new Vector3();
+  const rayDirection = new Vector3();
+  /** Distance along a camera ray (NDC) to the ground, or null. */
+  const groundAlong = (ray: Raycaster, far: number): number | null => {
+    rayOrigin.copy(ray.ray.origin);
+    rayDirection.copy(ray.ray.direction);
+    return groundRayDistance(rayOrigin, rayDirection, groundAtWorld, { far });
+  };
 
   // The stream: what lands and leaves, and everything that follows from it.
   let onChange: () => void = () => undefined;
@@ -632,12 +646,10 @@ async function bootApp(
     onDoubleTap: (ndcX, ndcY) => {
       // Travel to the tapped spot on the terrain.
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
-      const hit = tapRaycaster.intersectObjects(
-        terrains.map((t) => t.mesh),
-        false
-      )[0];
-      if (hit) {
-        const epsg = worldToEpsg(hit.point.x, hit.point.z, offset);
+      const t = groundAlong(tapRaycaster, 6000);
+      if (t !== null) {
+        const hit = tapRaycaster.ray.at(t, new Vector3());
+        const epsg = worldToEpsg(hit.x, hit.z, offset);
         pose.teleportTo(epsg.x, epsg.y);
       }
     },
@@ -711,7 +723,6 @@ async function bootApp(
     );
     invalidateShadows();
     emitStats();
-    scheduleIndexing();
     checkLoaded();
   };
 
@@ -759,9 +770,8 @@ async function bootApp(
   cleanups.push(() => resizeObserver.disconnect());
 
   // Crosshair autofocus for the photographic DoF (throttled like the pose):
-  // every visible tile's buildings, and each terrain once its BVH exists — a
-  // brute-force ray through millions of unindexed triangles ten times a
-  // second would freeze the first seconds.
+  // every visible tile's buildings (their BVHs), and the ground by marching
+  // its height grid — the nearer hit wins.
   const focusRaycaster = new Raycaster();
   focusRaycaster.firstHitOnly = true;
   focusRaycaster.far = 6000;
@@ -769,11 +779,21 @@ async function bootApp(
   let lastFocusHit: { dist: number; name: string } | null = null;
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
-    const targets: Object3D[] = [
-      ...stream.visibleCities().map((c) => c.mesh),
-      ...terrains.filter((t) => t.mesh.geometry.boundsTree).map((t) => t.mesh),
-    ];
+    const targets: Object3D[] = stream.visibleCities().map((c) => c.mesh);
     const hit = focusRaycaster.intersectObjects(targets, false)[0];
+    const ground = groundAlong(
+      focusRaycaster,
+      hit?.distance ?? focusRaycaster.far
+    );
+    if (ground !== null && (!hit || ground < hit.distance)) {
+      const point = focusRaycaster.ray.at(ground, new Vector3());
+      lastFocusHit = {
+        dist: camera.position.distanceTo(point),
+        name: "terrain",
+      };
+      postStack.setFocusTarget(point);
+      return;
+    }
     lastFocusHit = hit
       ? {
           dist: camera.position.distanceTo(hit.point),
@@ -890,9 +910,6 @@ async function bootApp(
   });
   cleanups.push(() => renderer.setAnimationLoop(null));
 
-  // Terrain BVHs (the autofocus ray) off the critical path: one tile per
-  // idle slot, after the gate. Until a tile is indexed the double-tap ray
-  // still hits it (three-mesh-bvh falls back to the plain raycast), slower.
   let streamingStarted = false;
   /** Set once, the first time everything in view is loaded and dressed. */
   let loaded = false;
@@ -901,31 +918,6 @@ async function bootApp(
   let surroundings = 0;
   let details = 0;
   let busy = false;
-  const idle = (fn: () => void): void => {
-    if (typeof requestIdleCallback === "function") {
-      requestIdleCallback(fn, { timeout: 1500 });
-    } else {
-      setTimeout(fn, 50);
-    }
-  };
-  let indexing = false;
-  const indexTerrain = () => {
-    const t = terrains.find((landed) => !landed.mesh.geometry.boundsTree);
-    if (disposed || !t) {
-      indexing = false;
-      return;
-    }
-    t.mesh.geometry.computeBoundsTree();
-    idle(indexTerrain);
-  };
-  // Re-armed whenever a tile lands; a running chain just keeps going.
-  function scheduleIndexing(): void {
-    if (streamingStarted && !indexing) {
-      indexing = true;
-      idle(indexTerrain);
-    }
-  }
-
   // --- the first frame: the spawn tile's buildings and terrain ------------
   const spawnLanded = () => ({
     city: [...stream.cities].some((c) => c.tile === spawn.id),
@@ -1027,7 +1019,6 @@ async function bootApp(
     streamingStarted = true;
     stage("details", 0);
     openGate();
-    scheduleIndexing();
     checkLoaded();
   };
 
