@@ -9,12 +9,14 @@ import shapely
 from PIL import Image
 
 from .common import OSM_ATTRIBUTION, Tile, feature, write_geojson
-from .osm import read_osm
+from .osm import has_extract, read_osm
 
 BLOCKED = (5, 8)  # railway, water
 
 
 def run(tile: Tile, lamp_height: float = 5.0) -> None:
+    if not has_extract(tile, "the lamps"):
+        return
     # ~50 m around the tile, so lamps at its edge are not cut off.
     geoms, _ = read_osm(tile, "points", "highway = 'street_lamp'", ["highway"], margin=0.0005)
     cls = np.asarray(Image.open(tile.out("dlm", f"landcover_{tile.id}.png")).convert("L"))

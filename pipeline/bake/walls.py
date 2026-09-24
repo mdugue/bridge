@@ -10,7 +10,7 @@ import re
 import shapely
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, write_geojson
-from .osm import read_osm, tag
+from .osm import has_extract, read_osm, tag
 
 WHERE = "barrier IN ('retaining_wall','city_wall','wall') OR man_made = 'embankment'"
 DEFAULT_H = {"city_wall": 6.0, "retaining_wall": 3.0, "wall": 1.5, "embankment": 2.5}
@@ -37,6 +37,8 @@ def lines_of(geom: shapely.Geometry) -> list[shapely.Geometry]:
 
 
 def run(tile: Tile) -> None:
+    if not has_extract(tile, "the walls"):
+        return
     box = shapely.box(*tile.bounds)
     features = []
     for layer in ("lines", "multipolygons"):

@@ -26,6 +26,15 @@ def wgs84_bbox(tile: Tile, margin: float = 0.001) -> tuple[float, float, float, 
     return min(lons) - margin, min(lats) - margin, max(lons) + margin, max(lats) + margin
 
 
+def has_extract(tile: Tile, what: str) -> bool:
+    """Whether the site has an extract; if not, say what is skipped. A step
+    without one leaves its committed file alone rather than emptying it."""
+    if tile.osm_extract() is None:
+        print(f"{tile.id}: no .osm.pbf under {tile.raw / 'osm'} — skipping {what}")
+        return False
+    return True
+
+
 def read_osm(
     tile: Tile, layer: str, where: str, columns: list[str], margin: float = 0.001
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:

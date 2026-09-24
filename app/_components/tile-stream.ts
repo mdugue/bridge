@@ -105,18 +105,25 @@ interface Dressed {
 
 /**
  * The tiles' `.glb.gz` content is pre-gzipped (static hosts do not compress
- * binary types); inflate it natively before the loader sees it.
+ * binary types); inflate it natively before the loader sees it. Judged on the
+ * gzip magic, not the URL alone: a host that serves `.gz` with
+ * `Content-Encoding: gzip` has the browser inflate it already.
  */
 class GzipContentPlugin {
   name = "BRIDGE_GZIP_CONTENT";
-  fetchData(url: string, options: RequestInit): Promise<Response> {
-    return fetch(url, options).then((res) =>
-      url.endsWith(".gz") && res.ok && res.body
-        ? new Response(res.body.pipeThrough(new DecompressionStream("gzip")), {
-            status: res.status,
-          })
-        : res
-    );
+  async fetchData(url: string, options: RequestInit): Promise<Response> {
+    const res = await fetch(url, options);
+    if (!(url.endsWith(".gz") && res.ok)) {
+      return res;
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const body =
+      bytes[0] === 0x1f && bytes[1] === 0x8b
+        ? new Blob([bytes])
+            .stream()
+            .pipeThrough(new DecompressionStream("gzip"))
+        : bytes;
+    return new Response(body, { status: res.status });
   }
 }
 

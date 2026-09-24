@@ -23,7 +23,7 @@ import shapely
 from rasterio.features import rasterize
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, read_layer, write_geojson
-from .osm import read_osm, tag
+from .osm import has_extract, read_osm, tag
 
 WIDTH = {"rail": 9.0, "road": 11.0, "path": 3.5, "other": 8.0}
 CAMBER = 0.012
@@ -343,9 +343,7 @@ def platforms(tile: Tile) -> list[dict]:
 def run(tile: Tile) -> None:
     write_geojson(tile.out("dlm", f"railarea_{tile.id}.geojson"), ballast(tile), tile.epsg)
     write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), rails(tile), tile.epsg)
-    has_osm = tile.osm_extract() is not None
-    if not has_osm:
-        print(f"{tile.id}: no .osm.pbf — bridges without structure, no platforms")
+    has_osm = has_extract(tile, "bridge structure and platforms")
     structures = osm_structures(tile) if has_osm else []
     write_geojson(
         tile.out("dlm", f"bridge_{tile.id}.geojson"),
@@ -353,10 +351,11 @@ def run(tile: Tile) -> None:
         tile.epsg,
         OSM_ATTRIBUTION,
     )
-    write_geojson(
-        tile.out("dlm", f"platform_{tile.id}.geojson"),
-        platforms(tile) if has_osm else [],
-        tile.epsg,
-        OSM_ATTRIBUTION,
-    )
+    if has_osm:
+        write_geojson(
+            tile.out("dlm", f"platform_{tile.id}.geojson"),
+            platforms(tile),
+            tile.epsg,
+            OSM_ATTRIBUTION,
+        )
     print(f"{tile.id}: rail layer written")

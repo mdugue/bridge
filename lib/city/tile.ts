@@ -79,7 +79,8 @@ export function tileArtifacts(
       bakedFrom: { file: `landcover_${tile}.png`, raster: MOBILE_RASTER_PX },
     },
     vegrows: dlm(`vegrows_${tile}.geojson`, true),
-    canopy: dlm(`canopy_${tile}.geojson`, true),
+    // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
+    canopy: dlm(`canopy_${tile}.geojson`),
     ndvi: dlm(`ndvi_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),

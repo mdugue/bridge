@@ -28,7 +28,7 @@ test("exactly four artifacts are required", () => {
     .filter(([, a]) => a.required)
     .map(([kind]) => kind)
     .sort();
-  expect(required).toEqual(["canopy", "landcover", "landcoverLow", "vegrows"]);
+  expect(required).toEqual(["landcover", "landcoverLow", "vegrows"]);
 });
 
 test("the site's tiles, the spawn tile first", () => {
