@@ -11,6 +11,8 @@
  * every site of that Land (ADR 0028).
  */
 
+import type { FacadeMaterial } from "./building-tint";
+
 export type MovementMode = "fly" | "walk";
 
 /**
@@ -137,6 +139,9 @@ export interface Provider {
 }
 
 export interface Site {
+  /** what the walls are mostly made of — the building tint's palette
+   *  (lib/city/building-tint.ts); default "render" */
+  facades?: FacadeMaterial;
   /** where the sun is computed when the tiles cannot be reprojected */
   fallbackLatLng: { lat: number; lng: number };
   /** the `SITE` value and the data folder, `data/<id>/` */

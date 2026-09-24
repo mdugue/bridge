@@ -110,8 +110,14 @@ visual-variable codebook is in
   `function` family + `measuredHeight` nudge → muted per-building wall colour.
   **Source preference:** real per-building colour *(planned: DOP)* would replace
   the hash; the hash exists precisely so the look survives when `function` is 86 %
-  "unspecified". `lib/city/building-tint.ts` (at bake time, into the property
-  table's `tint`), `visual-style.ts`.
+  "unspecified". **Per site:** `Site.facades` picks the wall material —
+  `"render"` (default: sand, ochre, soft terracotta plaster) or `"brick"`
+  (Hamburg: four clinker swatches from orange brick to dark red-brown plus
+  one pale render; civic buildings keep their cool stone). The brick
+  swatches are saturated because the shader mixes them 60 % into the pale
+  clay in linear light, where they land on a washed, dusty brick.
+  `lib/city/building-tint.ts` (at bake time, into the property table's
+  `tint`), `visual-style.ts`.
 - **Roof colour** (*Dachfarbe*) — real **DOP-sampled** colour per building when
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →

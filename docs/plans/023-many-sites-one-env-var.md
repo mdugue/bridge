@@ -189,5 +189,6 @@ reviews after phases 1–3 and at the end.
   extraction bugs, report logic).
 - **Open, for a real GPU:** small black squares in some headless
   SwiftShader shots (likely a lite-profile artifact of one dressing layer)
-  — look once with `bun run shots` on a real GPU. Brick cities (Hamburg)
-  may want a per-site building tint.
+  — look once with `bun run shots` on a real GPU.
+- **Brick cities** got a per-site wall palette afterwards
+  (`Site.facades: "brick"`, Hamburg).

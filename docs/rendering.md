@@ -78,7 +78,7 @@ is the codebook.
 | River mist | water mask + sun, drifting | Basis-DLM (mask) | `createWaterMist` |
 | Building silhouette | solid geometry | LoD2 | `city-layer.ts` |
 | Per-building attributes (the rows below) | `_FEATURE_ID_0` per vertex → `EXT_structural_metadata` property table → RGBA32F texture, three texels per object, `texelFetch`ed per vertex | LoD2 (+ DOP) | `city-layer.ts`, `lib/city/city-mesh.ts` `packObjectTexels`, `visual-style.ts` |
-| Wall tint | `hash(objectid)` + `function` family + `measuredHeight` nudge (column `tint`) | LoD2 (+ synth) | `lib/city/building-tint.ts` at bake time (*Farbvariation*) |
+| Wall tint | `hash(objectid)` + `function` family + `measuredHeight` nudge, palette by `Site.facades` (render / brick) (column `tint`) | LoD2 (+ synth) | `lib/city/building-tint.ts` at bake time (*Farbvariation*) |
 | Roof colour | DOP median per roof when sampled, else palette from `roofType` / `Dachneigung` (column `roof`) | DOP, LoD2 | `roofColor()`, baked into the property table (*Dachfarbe*) |
 | Roof chroma | hue-preserving vibrance lift, strongest on drab roofs | — | `visual-style.ts` (*Dachsättigung*) |
 | Storey bands | `storeyHeight(measuredHeight)` (column `storeyH`; the storeys attribute is ~4 % populated) | LoD2 | `visual-style.ts` (*Höhenlinien*) |

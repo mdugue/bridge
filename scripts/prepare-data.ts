@@ -72,6 +72,7 @@ const OUT_DIR = join(process.cwd(), "public/data");
 const CACHE_DIR = join(process.cwd(), ".cache/prepare-data");
 const SITE = currentSite();
 const TILES = tileIds(SITE);
+const FACADES = SITE.facades ?? "render";
 /** What a missing source means for a site that has not been fetched yet. */
 const HINT = ` — run \`bun run fetch\` and \`bun run bake\` for SITE=${SITE.id}`;
 
@@ -226,7 +227,7 @@ function parseCity(tile: string): BakedCityMesh {
   const roofLut = existsSync(at(src.roofColor))
     ? readJson<{ roofs?: RoofColorLut }>(at(src.roofColor)).roofs
     : undefined;
-  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix);
+  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix, FACADES);
   sharedMatrix ??= baked.matrix;
   return baked;
 }
@@ -252,7 +253,7 @@ async function bakeCity(
 ): Promise<{ file: string; footprints: string; maxZ: number }> {
   const src = cityMeshSourceFiles(SITE, tile);
   const inputs = [at(src.city), at(src.roofColor)];
-  const key = cacheKey(inputs, offset);
+  const key = cacheKey(inputs, offset, FACADES);
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
     mesh ??= cityMesh(parseCity(tile));
@@ -270,14 +271,17 @@ async function bakeCity(
   );
   const extras: CityExtras = { kind: "city", tileId: tile };
   const name = `city_${tile}.glb.gz`;
-  const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
-    gz(
-      await writeMeshGlb({
-        ...built().input,
-        name: "city",
-        extras: { ...extras },
-      })
-    )
+  const glb = await cached(
+    name,
+    cacheKey(inputs, offset, FACADES, extras),
+    async () =>
+      gz(
+        await writeMeshGlb({
+          ...built().input,
+          name: "city",
+          extras: { ...extras },
+        })
+      )
   );
   return { file: publish(name, glb), footprints, maxZ };
 }

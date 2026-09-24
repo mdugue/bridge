@@ -11,6 +11,7 @@ import type { BufferGeometry, Matrix4, Mesh } from "three";
 import {
   buildingGlows,
   buildingTint,
+  type FacadeMaterial,
   type RoofColorLut,
   roofColor,
   roughJitter,
@@ -116,12 +117,14 @@ export interface BakedCityMesh {
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
+ * `facades` is the site's wall material (the tint palette).
  */
 export function bakeCityMesh(
   tile: string,
   doc: CityJsonDocument,
   roofLut: RoofColorLut | undefined,
-  sharedMatrix: Matrix4 | null
+  sharedMatrix: Matrix4 | null,
+  facades: FacadeMaterial = "render"
 ): BakedCityMesh {
   const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
   if (epsg === null) {
@@ -174,7 +177,7 @@ export function bakeCityMesh(
       storeyH: cm(storeyHeight(measured)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
-      tint: rgb(buildingTint(id, attrs)),
+      tint: rgb(buildingTint(id, attrs, facades)),
       roof: rgb(roofColor(id, attrs, roofLut)),
       footprints,
     };

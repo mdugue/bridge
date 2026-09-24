@@ -124,3 +124,19 @@ test("roughJitter: deterministic, in [-1,1]", () => {
     expect(v).toBeLessThanOrEqual(1);
   }
 });
+
+test("a brick city paints housing and commerce in brick, civic keeps its stone", () => {
+  const redness = ([r, , b]: [number, number, number]) => r - b;
+  let brick = 0;
+  for (let i = 0; i < 200; i++) {
+    const t = buildingTint(`B${i}`, { function: "31001_9998" }, "brick");
+    if (redness(t) > 0.15) {
+      brick++;
+    }
+  }
+  // four of the five brick swatches are brick red, one pale render
+  expect(brick).toBeGreaterThan(120);
+  const civic = { function: "31001_3021" };
+  expect(buildingTint("c", civic, "brick")).toEqual(buildingTint("c", civic));
+  expect(buildingTint("h", {}, "render")).toEqual(buildingTint("h", {}));
+});

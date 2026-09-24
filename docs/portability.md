@@ -74,9 +74,10 @@ centrelines; the DLM whole street spaces).
 
 **One palette, painted at runtime**
 ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)). The
-bakes write class ids only; the colours are `lib/city/landcover.ts`. (The
-building tint still defaults to Dresden's old-town terracotta,
-`lib/city/building-tint.ts` — brick cities may want a per-site preset.)
+bakes write class ids only; the colours are `lib/city/landcover.ts`. The
+building tint has one per-site switch, `facades: "brick"` for clinker
+cities (Hamburg); the default is Dresden's rendered plaster
+(`lib/city/building-tint.ts`).
 
 ## Degradation matrix
 
@@ -147,7 +148,6 @@ new source in the guide's data-sources page (both languages) and in
 - **Berlin's adapter is untested** (the portal's certificate chain was
   refused in the environment that wrote it), and so is its XYZ gridding on
   real files.
-- **A per-site building tint** for brick cities (Hamburg).
 - **Data outside git** for deployments beyond a handful of sites
   (ADR 0028, alternatives).
 - **Outside Germany** — OSM buildings, a flat or public-DEM terrain, and a
