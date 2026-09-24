@@ -3,11 +3,14 @@ import {
   cityMeshSourceFiles,
   type DataManifest,
   dgmSourceFiles,
-  PRIMARY_TILE,
-  TILE_BLOCK,
   tileArtifacts,
+  tileBlock,
   tileUrlsFrom,
 } from "./tile";
+import { DRESDEN } from "../../sites/dresden";
+
+const TILE_BLOCK = tileBlock(DRESDEN);
+const PRIMARY_TILE = "33412_5656_2_sn";
 
 const primary = { tile: PRIMARY_TILE, n: 1024, raster: 4096 };
 
@@ -71,8 +74,19 @@ test("tileUrlsFrom prefixes the /data route and serves phones the low rasters", 
   expect(phone.ndvi).toBe(desktop.ndvi);
 });
 
-test("the tile block lists the primary first", () => {
-  expect(TILE_BLOCK[0].tile).toBe(PRIMARY_TILE);
+test("the tile block lists the primary first, at full resolution", () => {
+  expect(TILE_BLOCK.map((t) => t.tile)).toEqual([
+    PRIMARY_TILE,
+    "33410_5656_2_sn",
+    "33410_5658_2_sn",
+    "33412_5658_2_sn",
+  ]);
+  expect(TILE_BLOCK.map((t) => [t.n, t.raster])).toEqual([
+    [1024, 4096],
+    [512, 2048],
+    [512, 2048],
+    [512, 2048],
+  ]);
   expect(dgmSourceFiles(PRIMARY_TILE).tif).toBe(
     "data/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif"
   );

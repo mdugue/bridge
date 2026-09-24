@@ -398,7 +398,7 @@ test.describe("desktop viewer", () => {
       if (!api) {
         throw new Error("scene handle not published");
       }
-      // SCENIC_VIEWS[0] (viewpoints.ts) — inside the primary tile.
+      // The first viewpoint of sites/dresden.ts — inside the primary tile.
       // The glide takes the geometry only (ViewpointGeometry); the copy that
       // names a vantage is the HUD's business.
       api.flyToViewpoint({

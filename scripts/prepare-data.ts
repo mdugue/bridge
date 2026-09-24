@@ -48,16 +48,20 @@ import {
   heightfieldDataFile,
   heightfieldHeaderFile,
   MANIFEST_FILE,
-  TILE_BLOCK,
   tileArtifacts,
+  tileBlock,
 } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { bakeCityMesh } from "./bake-city-mesh";
 import { bakeHeightfield } from "./bake-heightfield";
 import { bakeWissenHero } from "./bake-wissen-hero";
+import { currentSite } from "../sites";
 import { downsampleClassRaster } from "./downsample-raster";
 
 const OUT_DIR = "public/data";
+/** The site this build renders (SITE, default dresden) and its tiles. */
+const SITE = currentSite();
+const TILE_BLOCK = tileBlock(SITE);
 const CACHE_DIR = ".cache/prepare-data";
 
 function fail(message: string): never {
@@ -308,7 +312,10 @@ async function bakeHero(): Promise<void> {
     return;
   }
   mkdirSync(dirname(dest), { recursive: true });
-  writeFileSync(dest, await bakeWissenHero(tiles, rasterOf, HERO_WIDTH));
+  writeFileSync(
+    dest,
+    await bakeWissenHero(tiles, rasterOf, HERO_WIDTH, SITE.tileKm)
+  );
   log(`baked ${HERO_FILE}`);
 }
 

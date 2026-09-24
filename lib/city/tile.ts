@@ -1,22 +1,11 @@
 /**
  * The tiles the viewer loads, and the names of the files prepared for them.
- * One home for the tile ids: `scripts/prepare-data.ts` bakes exactly these
- * into `public/data/`, and `app/_components/city-walk-client.tsx` builds its
- * URLs from the same list. No THREE, no DOM.
- *
- * Tile id scheme (Saxony open data):
- * `<UTM zone><easting km>_<northing km>_<edge km>_sn`.
+ * The tile list is the site's (lib/city/site.ts, sites/): `scripts/prepare-
+ * data.ts` bakes exactly `tileBlock(site)` into `public/data/`, and
+ * `app/_components/city-walk-client.tsx` builds its URLs from the same list.
+ * No THREE, no DOM.
  */
-
-/** Spawn tile — the one that is walked on, collided with and demolished. */
-export const PRIMARY_TILE = "33412_5656_2_sn";
-
-/** The rest of the 2x2 block, loaded for context only. */
-export const NEIGHBOUR_TILES = [
-  "33410_5656_2_sn",
-  "33410_5658_2_sn",
-  "33412_5658_2_sn",
-];
+import { type Site, tileIdOf } from "./site";
 
 /**
  * Heightfield grid size per role. The primary tile carries the silhouette the
@@ -52,15 +41,17 @@ export interface TileSpec {
   tile: string;
 }
 
-/** Every tile the app loads, with the grid size it is served at. */
-export const TILE_BLOCK: TileSpec[] = [
-  { tile: PRIMARY_TILE, n: PRIMARY_HEIGHTFIELD_N, raster: PRIMARY_RASTER_PX },
-  ...NEIGHBOUR_TILES.map((tile) => ({
-    tile,
-    n: NEIGHBOUR_HEIGHTFIELD_N,
-    raster: NEIGHBOUR_RASTER_PX,
-  })),
-];
+/**
+ * Every tile of the site with the grid size it is served at: the first
+ * (the spawn tile, "primary") at full resolution, the rest as backdrop.
+ */
+export function tileBlock(site: Site): TileSpec[] {
+  return site.tiles.map((cell, i) => ({
+    tile: tileIdOf(site, cell),
+    n: i === 0 ? PRIMARY_HEIGHTFIELD_N : NEIGHBOUR_HEIGHTFIELD_N,
+    raster: i === 0 ? PRIMARY_RASTER_PX : NEIGHBOUR_RASTER_PX,
+  }));
+}
 
 // File names under /data (= public/data/) and their bake inputs, all derived
 // from the tile id.

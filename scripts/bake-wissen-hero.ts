@@ -11,14 +11,13 @@ import sharp from "sharp";
 import { landcoverSrgb } from "../lib/city/landcover";
 
 /** Where a tile sits in the block: easting grows east, northing north. */
-function gridOf(tiles: readonly string[]) {
+function gridOf(tiles: readonly string[], step: number) {
   const coords = tiles.map((tile) => {
     const [, e, n] = tile.match(/^(\d+)_(\d+)/u) ?? [];
     return { tile, e: Number(e), n: Number(n) };
   });
   const minE = Math.min(...coords.map((c) => c.e));
   const maxN = Math.max(...coords.map((c) => c.n));
-  const step = 2; // km per tile, in the names' units
   return coords.map((c) => ({
     tile: c.tile,
     col: (c.e - minE) / step,
@@ -44,14 +43,16 @@ async function paint(classRaster: string) {
 
 /**
  * The block as a square WebP `size` px wide. `rasterOf(tile)` is the class
- * raster of that tile (any edge; each is scaled to its cell).
+ * raster of that tile (any edge; each is scaled to its cell); `tileKm` the
+ * tile edge in the names' units.
  */
 export async function bakeWissenHero(
   tiles: readonly string[],
   rasterOf: (tile: string) => string,
-  size: number
+  size: number,
+  tileKm: number
 ): Promise<Buffer> {
-  const grid = gridOf(tiles);
+  const grid = gridOf(tiles, tileKm);
   const cols = Math.max(...grid.map((g) => g.col)) + 1;
   const cell = Math.round(size / cols);
   const layers = await Promise.all(

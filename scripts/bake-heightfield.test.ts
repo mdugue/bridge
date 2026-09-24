@@ -6,7 +6,10 @@ import {
   decodeHeightfield,
   parseHeightfieldHeader,
 } from "../lib/city/heightfield";
-import { dgmSourceFiles, PRIMARY_TILE } from "../lib/city/tile";
+import { dgmSourceFiles, tileBlock } from "../lib/city/tile";
+import { DRESDEN } from "../sites/dresden";
+
+const PRIMARY_TILE = tileBlock(DRESDEN)[0].tile;
 import { bakeHeightfield } from "./bake-heightfield";
 
 function arrayBufferOf(buf: Buffer<ArrayBuffer>): ArrayBuffer {

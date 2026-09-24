@@ -16,8 +16,8 @@ import {
   WebGLRenderer,
 } from "three";
 import { fogRangeFor } from "@/lib/city/atmosphere";
-import { FALLBACK_LAT_LNG, utmToLatLng } from "@/lib/city/crs";
-import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
+import { utmToLatLng } from "@/lib/city/crs";
+import { worldToEpsg } from "@/lib/city/ground-clamp";
 import { parseHeightfieldHeader } from "@/lib/city/heightfield";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
@@ -59,7 +59,6 @@ import {
 } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
-import { createInsertedBuilding } from "./inserted-building";
 import { attachKeyboardControls } from "./keyboard-controls";
 import {
   buildLamps,
@@ -92,12 +91,13 @@ import {
   loadNdviSampler,
   type VegetationControl,
 } from "./vegetation-layer";
-import type { ViewpointGeometry } from "./viewpoints";
+import type { ViewpointGeometry } from "@/lib/city/site";
 import {
   applyCityLook,
   applyCityStyle,
   createStyleResources,
 } from "./visual-style";
+import { currentSite } from "@/sites";
 import { buildWalls } from "./wall-layer";
 
 /**
@@ -105,8 +105,6 @@ import { buildWalls } from "./wall-layer";
  * walking perspective; wider than ~60° starts to feel fisheye/distorted.
  */
 const DEFAULT_FOV = 55;
-/** EPSG:25833 spot for the inserted building (mid-tile of 33412_5656). */
-const DEFAULT_INSERT_AT = { x: 413_000, y: 5_657_000 };
 /** Fog far plane (m) while only the primary tile exists: its half-size plus
  *  a margin, so the missing neighbours read as haze, not as an edge. */
 const PARTIAL_WORLD_FOG_FAR = 1100;
@@ -142,8 +140,6 @@ export interface CityWalkOptions {
   /** neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileUrls[];
   initialDate: Date;
-  insertAt?: { x: number; y: number };
-  insertedModelUrl?: string;
   /**
    * The look store (HUD-owned; lib/city/look-state.ts): the scene applies its
    * current values at boot, on every change, and to each tile that lands
@@ -235,7 +231,6 @@ export interface CityWalkHandle {
     programs: number;
     triangles: number;
   };
-  insertBuilding: () => Promise<void>;
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
   landcoverTiles: { bounds: TerrainBounds; src: string }[];
   /** the scene's geographic position — the HUD's sunrise/sunset times */
@@ -347,7 +342,9 @@ function tileLatLng(
   epsg: number,
   offset: { cx: number; cy: number }
 ): { lat: number; lng: number } {
-  return utmToLatLng(epsg, offset.cx, offset.cy) ?? FALLBACK_LAT_LNG;
+  return (
+    utmToLatLng(epsg, offset.cx, offset.cy) ?? currentSite().fallbackLatLng
+  );
 }
 
 export async function createCityWalkApp(
@@ -610,7 +607,7 @@ async function bootApp(
       { rows, canopy, ndviAt: ndviAt ?? undefined },
       { ...ground, sunDirection, heightFog }
     );
-    // Y-up scene frame (like the inserted building), NOT the Z-up `world`.
+    // Y-up scene frame, NOT the Z-up `world`.
     scene.add(vegetation.group);
     vegControls.push(vegetation);
     // Born with the current look, not the default: a slider moved while
@@ -885,12 +882,7 @@ async function bootApp(
   cleanups.push(opts.look.subscribe(applyLook));
 
   // Wall collision against the CURRENT city group (demolish swaps it).
-  // Declared before the collider so the inserted building can join the
-  // collision/focus targets the moment it exists.
-  let inserted: Object3D | null = null;
-  const collider = createCityCollider(() =>
-    inserted ? [cityLayer.group, inserted] : [cityLayer.group]
-  );
+  const collider = createCityCollider(() => [cityLayer.group]);
   // Where the player stands and looks, walk/fly, the scenic glides — and the
   // one rule that any player input cancels a glide (camera-pose.ts).
   const pose = createCameraPose(camera, {
@@ -972,35 +964,6 @@ async function bootApp(
     emitStats();
   };
 
-  const insertBuilding = async () => {
-    const at = opts.insertAt ?? DEFAULT_INSERT_AT;
-    const obj = await createInsertedBuilding(opts.insertedModelUrl);
-    if (disposed) {
-      // The app was torn down while the glTF was in flight; nothing will ever
-      // add this object to a scene, so free it here or it leaks.
-      disposeObject3D(obj);
-      return;
-    }
-    if (inserted) {
-      scene.remove(inserted);
-      disposeObject3D(inserted);
-    }
-    const ground = heightAt(at.x, at.y) ?? groundFloor;
-    // Data frame (x, y, z-up) -> scene frame (x, z, -y), recentered.
-    const w = epsgToWorld(at.x, at.y, offset);
-    obj.position.set(w.x, ground, w.z);
-    // BVHs keep the per-frame collision rays cheap for real glTF models.
-    obj.traverse((child) => {
-      const mesh = child as Mesh;
-      if (mesh.isMesh && !mesh.geometry.boundsTree) {
-        mesh.geometry.computeBoundsTree();
-      }
-    });
-    scene.add(obj);
-    invalidateShadows();
-    inserted = obj;
-  };
-
   cleanups.push(
     attachKeyboardControls(
       { document, window },
@@ -1041,9 +1004,6 @@ async function bootApp(
   const updateFocus = () => {
     focusRaycaster.setFromCamera(focusCrosshair, camera);
     const targets: Object3D[] = [cityLayer.group];
-    if (inserted) {
-      targets.push(inserted);
-    }
     for (const c of extraCities) {
       targets.push(c.group);
     }
@@ -1324,7 +1284,6 @@ async function bootApp(
 
   return {
     setSun,
-    insertBuilding,
     demolishAtCrosshair,
     enterImmersive: canvasControls.lockPointer,
     flyTo: pose.flyTo,

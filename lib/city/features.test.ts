@@ -11,7 +11,10 @@ import type {
   VegRowFeature,
   WallFeature,
 } from "./features";
-import { TILE_BLOCK, type TileArtifact, tileArtifacts } from "./tile";
+import { DRESDEN } from "../../sites/dresden";
+import { type TileArtifact, tileArtifacts, tileBlock } from "./tile";
+
+const TILE_BLOCK = tileBlock(DRESDEN);
 
 // The committed bakes under data/dlm, checked against the shapes the layers
 // read. Every tile, every kind — a renamed property or a geometry type the

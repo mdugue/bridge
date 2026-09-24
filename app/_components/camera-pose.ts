@@ -23,7 +23,7 @@ import {
   MOVEMENT_KEYS,
   type MovementMode,
 } from "./fps-movement";
-import type { ViewpointGeometry } from "./viewpoints";
+import type { ViewpointGeometry } from "@/lib/city/site";
 
 /** rad per CSS px of grab-look drag — a full phone-width swipe ≈ 90° */
 const GRAB_RADIANS_PER_PX = 0.004;

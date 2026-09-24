@@ -45,7 +45,7 @@ import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
-import type { ViewpointGeometry } from "./viewpoints";
+import type { ViewpointGeometry } from "@/lib/city/site";
 import { SceneSidebar } from "./scene-sidebar";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
@@ -58,8 +58,6 @@ interface Props {
   budget: SceneBudget;
   /** Neighbouring tiles rendered around the primary one for context */
   extraTiles?: TileUrls[];
-  /** Optional glTF/GLB to insert; falls back to a marker box */
-  insertedModelUrl?: string;
   /** The spawn tile's URLs (see lib/city/tile.ts) */
   primary: TileUrls;
 }
@@ -135,12 +133,7 @@ function SceneOverlays({
   );
 }
 
-export default function CityWalk({
-  budget,
-  primary,
-  extraTiles,
-  insertedModelUrl,
-}: Props) {
+export default function CityWalk({ budget, primary, extraTiles }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
@@ -225,7 +218,6 @@ export default function CityWalk({
       look,
       primary,
       extraTiles,
-      insertedModelUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
       onStage: ({ id, fraction, skipped: isSkipped }) => {
@@ -355,7 +347,7 @@ export default function CityWalk({
         look: undefined,
       });
     };
-  }, [budget, look, primary, extraTiles, insertedModelUrl, webGl2]);
+  }, [budget, look, primary, extraTiles, webGl2]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);

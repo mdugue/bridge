@@ -6,6 +6,7 @@ import {
   WALKABLE_PERCENT,
 } from "@/lib/city/load-stages";
 import { cn } from "cn";
+import { currentSite } from "@/sites";
 
 /**
  * "Laden" — the full-bleed screen shown until the primary tile is walkable.
@@ -132,7 +133,7 @@ export function LoadScreen({
             City Walk
           </span>
           <span className="font-semibold text-lg leading-tight sm:text-xl">
-            Dresden · Altstadt
+            {currentSite().label}
           </span>
         </div>
 

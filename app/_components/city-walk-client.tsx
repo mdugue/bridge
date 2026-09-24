@@ -6,9 +6,10 @@ import { loadStageStates } from "@/lib/city/load-stages";
 import {
   type DataManifest,
   MANIFEST_FILE,
-  TILE_BLOCK,
+  tileBlock,
   tileUrlsFrom,
 } from "@/lib/city/tile";
+import { currentSite } from "@/sites";
 import { LoadScreen } from "./load-screen";
 import { currentSceneBudget, type SceneBudget } from "./scene-profile";
 
@@ -38,7 +39,7 @@ const CityWalk = dynamic(() => import("./city-walk"), {
   loading: () => <BootScreen />,
 });
 
-const [PRIMARY_SPEC, ...NEIGHBOUR_SPECS] = TILE_BLOCK;
+const [PRIMARY_SPEC, ...NEIGHBOUR_SPECS] = tileBlock(currentSite());
 
 /**
  * The artifact manifest (logical → content-hashed file names, see
@@ -67,8 +68,8 @@ function useDataManifest(): DataManifest | null | undefined {
 
 export function CityWalkClient() {
   const manifest = useDataManifest();
-  // Primary tile (spawn here) + the rest of the 2 x 2 block around it, in the
-  // order lib/city/tile.ts lists them (the same list prepare-data.ts bakes).
+  // Primary tile (spawn here) + the rest of the site's block, in the order
+  // the site lists them (the same list prepare-data.ts bakes).
   // Memoised so the references stay stable across renders (the HUD effect
   // keys on them).
   const tiles = useMemo(() => {
