@@ -31,8 +31,17 @@
   trees ride in the cadastre's instances instead of a layer of their own;
   vine rows are not seasonal yet (plan 025's plumbing does not exist).
   Colony paths (OSM footways, paths, service roads) are carved out of the
-  raster. Open: the plates (the Johannstadt / Großer Garten colonies) and
-  the vineyard plate once the site grows east.
+  raster. **Redesigned (2026-09-25, maintainer feedback on a phone):**
+  the bed bands and the NEAREST colony-id raster showed the raster's
+  staircase and read as a glitch, so the raster is now a signed distance
+  to the garden land (LINEAR: a soft, wandering edge) plus the axis, and
+  the gardens are analytic — plots with thin soft paths, soft greens, a
+  few warm beds, flower dots, shrub mottles — box-filtered and faded with
+  distance; the jittered-grid bands are 🗃️ in the ledger. prepare-data
+  crops the raster to the colonies (8 MiB → 0.4–7.6 MiB of GPU memory per
+  tile) and phones read a half-resolution twin. Open: the plates (the
+  Johannstadt / Großer Garten colonies, 33410_5658 from 180 m up) and the
+  vineyard plate once the site grows east.
 
 ## Why this matters
 

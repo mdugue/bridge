@@ -3,6 +3,7 @@
 import math
 
 import numpy as np
+import pytest
 import rasterio
 import shapely
 
@@ -93,31 +94,62 @@ def test_a_flat_vineyard_runs_along_its_long_axis(tmp_path):
     assert abs(math.cos(contour_angle(tile, v))) < 1e-6
 
 
-def test_the_colony_raster_codes_the_axis_and_leaves_its_paths_out(tmp_path):
+def _metres(code: int) -> float:
+    return (int(code) - 128) / 20.0
+
+
+def test_the_colony_raster_holds_the_distance_to_the_garden_edge_and_the_axis(tmp_path):
     tile = _tile(tmp_path)
     x0, y0 = tile.bounds[:2]
     colony = shapely.box(x0 + 20, y0 + 20, x0 + 120, y0 + 60)  # long east–west
     path = shapely.buffer(shapely.LineString([(x0 + 70, y0), (x0 + 70, y0 + 200)]), 1.0)
     raster = colony_raster(tile, 200, [colony], [], [path], None)
     r, g = raster[..., 0], raster[..., 1]
-    row = 200 - 40  # y = 40 m
-    assert r[row, 40] == 1 + axis_code(0.0) == 1
-    assert r[row, 70] == 0 and r[row, 69] == 0  # the path
-    assert r[row, 150] == 0  # outside
-    assert (g == 255).all()  # no parcels
+    row = 200 - 40  # y = 40 m (texel centre 39.5 m)
+    # texel centre x = 40.5 m: 20.5 m from the west edge, 19.5 m from the
+    # south and north ones — past the ±6.35 m the byte holds
+    assert r[row, 40] == 255
+    # 2.5 m inside the west edge (x = 22.5 m), 1.5 m outside it
+    assert _metres(r[row, 22]) == pytest.approx(2.5, abs=0.05)
+    assert _metres(r[row, 18]) == pytest.approx(-1.5, abs=0.05)
+    # the path's middle (x = 69.5–70.5 m): 0.5 m into the 2 m cut
+    assert _metres(r[row, 69]) == pytest.approx(-0.5, abs=0.05)
+    assert _metres(r[row, 72]) == pytest.approx(1.5, abs=0.05)
+    assert r[row, 150] == 0  # far outside
+    assert g[row, 40] == 1 + axis_code(0.0) == 1
+    assert g[row, 69] == 1  # the axis carries across the path…
+    assert g[row, 16] == 1  # …and a few metres out, where the edge fades
+    assert g[row, 150] == 0
 
 
-def test_mapped_parcels_carry_their_axis_and_the_distance_to_their_border(tmp_path):
+def test_the_edge_follows_a_diagonal_without_the_rasters_staircase(tmp_path):
+    tile = _tile(tmp_path)
+    x0, y0 = tile.bounds[:2]
+    colony = shapely.Polygon([(x0 + 20, y0 + 20), (x0 + 180, y0 + 20), (x0 + 20, y0 + 180)])
+    r = colony_raster(tile, 200, [colony], [], [], None)[..., 0]
+    # along the hypotenuse x + y = 200 the distance is |x + y − 200| / √2
+    cols = np.arange(60, 140)
+    rows = 200 - (200 - cols)  # texel (col, row) centre: x = col + .5, y = 200 − row − .5
+    for off in (-3, -1, 1, 3):
+        d = np.array([_metres(r[rw - off, c]) for c, rw in zip(cols, rows, strict=True)])
+        true = -(cols + 0.5 + (200 - (rows - off) - 0.5) - 200) / math.sqrt(2)
+        assert np.abs(d - true).max() < 0.3
+
+
+def test_a_mapped_parcel_takes_its_own_axis_and_a_seam_along_its_border(tmp_path):
     tile = _tile(tmp_path)
     x0, y0 = tile.bounds[:2]
     colony = shapely.box(x0 + 20, y0 + 20, x0 + 120, y0 + 60)
     plot = shapely.box(x0 + 30, y0 + 30, x0 + 40, y0 + 50)  # long north–south
     raster = colony_raster(tile, 200, [colony], [plot], [], None)
     r, g = raster[..., 0], raster[..., 1]
-    assert r[200 - 40, 35] == 128 + axis_code(math.pi / 2)
-    assert g[200 - 40, 35] < g[200 - 40, 34] + 1  # the middle is farthest…
-    assert g[200 - 40, 30] <= 20  # …the border near 0
-    assert g[200 - 40, 60] == 255  # the colony outside the plot
+    assert g[200 - 40, 35] == 1 + axis_code(math.pi / 2)
+    assert g[200 - 40, 60] == 1 + axis_code(0.0)
+    # the seam: the garden edge 0.25 m either side of x = 30 m (to the
+    # 0.5 m grid the distance is measured on)
+    assert _metres(r[200 - 40, 29]) == pytest.approx(0.25, abs=0.3)
+    assert _metres(r[200 - 40, 30]) < _metres(r[200 - 40, 29])
+    assert _metres(r[200 - 40, 35]) > 4
 
 
 def test_build_counts_colonies_and_plants_only_unmapped_orchards_on_the_grid(tmp_path):

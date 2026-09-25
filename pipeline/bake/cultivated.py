@@ -27,14 +27,19 @@ generated sheds — the sheds are in LoD2, the hedges are lowveg.py's.
 `cultivated_<tile>.png` (2048², ≈1 m) is two bytes per texel interleaved in
 an 8-bit greyscale PNG twice as wide (R0 G0 R1 G1 …, lib/city/png-raster.ts):
 
-    R = 0 outside a colony (and on its paths, water, rail and roads);
-        1 + o   in a colony without a mapped parcel, o = its long axis
-                over 0–180° in 0..126;
-        128 + o in a mapped parcel, o its own long axis
-    G = 20 · the distance (m) to the parcel's border, 0–12.75 m (255 far,
-        or no parcel) — the lawn edge the shader draws along it
+    R = 128 + 20 · the signed distance (m) to the edge of the garden land,
+        positive inside, clamped to 1..255 (±6.35 m); 0 where it is farther
+        outside. The garden land is the colony less its paths (OSM
+        footways, paths, service roads, tracks), roads, rail and water, and
+        less a 0.5 m seam along each mapped parcel's border. The distance
+        is measured at 0.5 m and averaged onto the grid, so the viewer's
+        LINEAR sample has a smooth edge, not the raster's staircase
+    G = 1 + o, o = the long axis over 0–180° in 0..126 of the colony (or
+        of the mapped parcel) the texel lies in or nearest to, within
+        `AXIS_REACH_M` outside it; 0 elsewhere
 
-The terrain shader paints beds on it (app/_components/cultivated-layer.ts).
+The terrain shader paints the gardens on it (app/_components/cultivated-
+layer.ts); prepare-data crops it to the texels that carry a colony.
 """
 
 from __future__ import annotations
@@ -67,6 +72,9 @@ PARCEL_MIN_SHARE = 0.5  # a garden is a colony's parcel when half of it lies ins
 PATH_HALF_WIDTH = {"footway": 1.0, "path": 1.0, "service": 2.5, "track": 1.5, "steps": 1.0}
 NO_BEDS = (5, 7, 8)  # rail, road, water
 EDGE_SCALE = 20.0
+PARCEL_SEAM_M = 0.25  # half the seam carved along a mapped parcel's border
+AXIS_REACH_M = 8.0  # the axis spreads this far past the garden land's edge
+FINE = 2  # the distance is measured on a grid this many times finer
 
 
 def long_axis(g: shapely.Geometry) -> float:
@@ -158,45 +166,55 @@ def vine_rows(g: shapely.Geometry, angle: float, spacing: float = VINE_ROW_SPACI
     return out
 
 
+def signed_distance(inside: np.ndarray, res: float) -> np.ndarray:
+    """Metres from each cell centre to the edge of `inside` (positive
+    inside): the edge lies half a cell past the last cell centre."""
+    if not inside.any():
+        return np.full(inside.shape, -np.inf)
+    if inside.all():
+        return np.full(inside.shape, np.inf)
+    din = ndi.distance_transform_edt(inside)
+    dout = ndi.distance_transform_edt(~inside)
+    return np.where(inside, din - 0.5, -(dout - 0.5)) * res
+
+
 def colony_raster(
     tile: Tile, px: int, colonies: list, parcels: list, paths: list, cls: np.ndarray | None
 ) -> np.ndarray:
     """The R and G planes (see the module docstring), (px, px, 2)."""
-    transform = tile.transform(px)
-    r = np.zeros((px, px), np.uint8)
-    g = np.full((px, px), 255, np.uint8)
-    shapes = [(c, 1 + axis_code(long_axis(c))) for c in colonies if not c.is_empty]
-    if shapes:
-        rasterize(shapes, out=r, transform=transform, dtype=np.uint8)
-    if parcels:
-        ids = np.zeros((px, px), np.int32)
-        rasterize(
-            [(p, i + 1) for i, p in enumerate(parcels)],
-            out=ids,
-            transform=transform,
-            dtype=np.int32,
-        )
-        codes = np.array([0] + [128 + axis_code(long_axis(p)) for p in parcels], np.uint8)
-        inside = ids > 0
-        r = np.where(inside, codes[ids], r)
-        # distance to a different parcel (or to outside), per texel
-        res = (tile.bounds[2] - tile.bounds[0]) / px
-        edge = np.zeros((px, px), bool)
-        edge[:-1] |= ids[:-1] != ids[1:]
-        edge[1:] |= ids[:-1] != ids[1:]
-        edge[:, :-1] |= ids[:, :-1] != ids[:, 1:]
-        edge[:, 1:] |= ids[:, :-1] != ids[:, 1:]
-        dist = ndi.distance_transform_edt(~edge) * res
-        g = np.where(inside, np.clip(np.round(dist * EDGE_SCALE), 0, 254), 255).astype(np.uint8)
-    blocked = np.zeros((px, px), bool)
-    if paths:
-        blocked |= rasterize(
-            [(p, 1) for p in paths], out_shape=(px, px), transform=transform, dtype=np.uint8
+    fine = px * FINE
+    res = (tile.bounds[2] - tile.bounds[0]) / fine
+    transform = tile.transform(fine)
+    colonies = [c for c in colonies if not c.is_empty]
+    if not colonies:
+        return np.zeros((px, px, 2), np.uint8)
+    garden = rasterize(
+        [(c, 1) for c in colonies], out_shape=(fine, fine), transform=transform, dtype=np.uint8
+    ).astype(bool)
+    cuts = list(paths) + [
+        shapely.buffer(shapely.boundary(p), PARCEL_SEAM_M) for p in parcels if not p.is_empty
+    ]
+    if cuts:
+        garden &= ~rasterize(
+            [(c, 1) for c in cuts], out_shape=(fine, fine), transform=transform, dtype=np.uint8
         ).astype(bool)
     if cls is not None:
-        k = cls.shape[0] // px
-        blocked |= np.isin(cls[::k, ::k][:px, :px], NO_BEDS)
-    r = np.where(blocked, 0, r)
+        idx = (np.arange(fine) * cls.shape[0]) // fine
+        garden &= ~np.isin(cls[np.ix_(idx, idx)], NO_BEDS)
+    d = signed_distance(garden, res).reshape(px, FINE, px, FINE).mean(axis=(1, 3))
+    q = np.round(128 + EDGE_SCALE * np.clip(d, -6.35, 6.35))
+    r = np.where(d < -6.3, 0, np.clip(q, 1, 255)).astype(np.uint8)
+    # the axis: each colony's, a mapped parcel's over it; spread outward to
+    # the nearest texel that has one, as far as the fade reaches
+    coarse = tile.transform(px)
+    shapes = [(c, 1 + axis_code(long_axis(c))) for c in colonies]
+    shapes += [(p, 1 + axis_code(long_axis(p))) for p in parcels if not p.is_empty]
+    g = rasterize(shapes, out_shape=(px, px), transform=coarse, dtype=np.uint8)
+    if g.any():
+        dist, (ri, ci) = ndi.distance_transform_edt(g == 0, return_indices=True)
+        reach = dist * (tile.bounds[2] - tile.bounds[0]) / px <= AXIS_REACH_M
+        g = np.where(reach, g[ri, ci], 0).astype(np.uint8)
+    g = np.where(r > 0, g, 0).astype(np.uint8)
     return np.stack([r, g], axis=-1)
 
 

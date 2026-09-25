@@ -413,21 +413,32 @@ visual-variable codebook is in
   (and `leisure=garden` plots inside a colony) → `pipeline/bake/cultivated.py`:
   `cultivated_<tile>.geojson` (colonies, parcels, orchards with their trees,
   vineyards with their rows) and a 2048² colony raster
-  (`cultivated_<tile>.png`, two bytes per texel: the colony or parcel with
-  its long axis, the distance to a parcel's border). No new land-cover
-  class (ADR 0023): dressing only. **Allotments** get a garden texture in
-  the terrain's fragment pass (`cultivated-layer.ts` `COLONY_BEDS_GLSL`):
-  1.2 m beds of soil and green in ≈12 m plots — the cells of a jittered
-  Voronoi, each along the colony's long axis or across it, a dark green
-  line where two meet — faded with distance to the plot's tone; the
-  colony's paths (OSM footways, paths, service roads), roads, rail and
-  water are left out in the bake. A mapped parcel would take its own axis
-  and a lawn edge along its border. **STOP measured:** of the 66 colonies
+  (`cultivated_<tile>.png`, two bytes per texel: the signed distance to
+  the edge of the garden land and the colony's long axis; the viewer gets
+  it cropped to the colonies, phones at half resolution). No new
+  land-cover class (ADR 0023): dressing only. **Allotments** get little
+  gardens in the terrain's fragment pass (`cultivated-layer.ts`
+  `COLONY_GARDEN_GLSL`): the colony's edge is the baked distance field
+  (the colony less its paths — OSM footways, paths, service roads, tracks —
+  roads, rail and water), sampled LINEAR and faded over a metre with a
+  slow wobble, so it is soft and organic from walking height to 200 m up;
+  inside, everything is analytic in the data frame — plots ≈12 × 17 m
+  (a jittered Voronoi in the colony's axis frame, borders meandering by a
+  domain warp and drawn as thin soft paths), each a lawn in one of a few
+  soft greens, a third with warm vegetable beds, some with sparse pastel
+  flower dots, the rest with darker shrub mottles, and a faint hedge green
+  inside the rim. Every line and band is box-filtered over the pixel
+  footprint; with distance the detail gives way to the plots' tones and
+  then to one calm colony tone (no moiré). *Redesigned 2026-09-25 after
+  the maintainer looked at it on a phone* — see 🗃️ *Allotment bed bands*.
+  A mapped parcel takes its own axis and a 0.5 m seam along its border.
+  **STOP measured:** of the 66 colonies
   (77.9 ha) in the four tiles, **0** carry mapped parcels (the 351
   `leisure=garden` areas lie elsewhere; inside the colonies OSM maps
-  sheds, 196 footways and 123 fences) — under the plan's one-third, so the
-  texture ships at a low strength (`COLONY_BEDS.strength` 0.45 of
-  *Bodendetail*) and invents no parcel outline. **Orchards**: the mapped
+  sheds, 196 footways and 123 fences) — under the plan's one-third, so
+  the plots are invented texture, kept low in contrast
+  (`COLONY_GARDEN.strength` 0.85 of *Bodendetail*), and no parcel outline
+  is claimed as data. **Orchards**: the mapped
   `natural=tree` inside, else a grid 8 m apart along the long axis,
   centred (4 orchards, 0.1 ha, 7 trees), drawn by the tree layer as the
   cadastre's "small" archetype (a round crown on a ≈1.3 m stem).
@@ -1120,6 +1131,7 @@ research that produced them):
 |---|---|---|
 | **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four tiles (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
+| **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
 | **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |

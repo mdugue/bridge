@@ -1,24 +1,30 @@
 import { expect, test } from "bun:test";
 import {
   COLONY_AXIS_STEPS,
-  colonyTexel,
+  colonyAxis,
+  colonyCropUv,
+  colonyEdgeMetres,
   orchardTrees,
-  PARCEL_BASE,
   vineRows,
 } from "./cultivated";
 import type { CultivatedFeature } from "./features";
 import { TREE_ARCHETYPES } from "./tree-inventory";
 
-test("the colony byte decodes to its axis and whether it is a parcel", () => {
-  expect(colonyTexel(0)).toBeNull();
-  expect(colonyTexel(1)).toEqual({ axis: 0, parcel: false });
-  const across = colonyTexel(1 + COLONY_AXIS_STEPS / 2);
-  expect(across?.axis).toBeCloseTo(Math.PI / 2, 9);
-  expect(across?.parcel).toBe(false);
-  expect(colonyTexel(PARCEL_BASE + COLONY_AXIS_STEPS)).toEqual({
-    axis: Math.PI,
-    parcel: true,
-  });
+test("the colony bytes decode to the edge distance and the axis", () => {
+  expect(colonyEdgeMetres(0)).toBeNull();
+  expect(colonyEdgeMetres(128)).toBe(0);
+  expect(colonyEdgeMetres(178)).toBe(2.5);
+  expect(colonyEdgeMetres(98)).toBe(-1.5);
+  expect(colonyAxis(0)).toBeNull();
+  expect(colonyAxis(1)).toBe(0);
+  expect(colonyAxis(1 + COLONY_AXIS_STEPS / 2)).toBeCloseTo(Math.PI / 2, 9);
+});
+
+test("a cropped colony raster maps to its part of the tile", () => {
+  expect(colonyCropUv()).toEqual([0, 0, 1, 1]);
+  expect(colonyCropUv([512, 1024, 256, 128, 2048])).toEqual([
+    0.25, 0.5, 0.125, 0.0625,
+  ]);
 });
 
 const features: CultivatedFeature[] = [
