@@ -18,7 +18,7 @@ CRS, [ADR 0026](./adr/0026-one-site-config-per-build.md)) and Z-up. A
 the tileset's frame *is* the recentered data frame, and the renderer turns
 each Y-up glTF into it. That turn cancels the `world` group's, so a tile's
 content root sits, in effect, in the scene's Y-up frame — which is why the
-Y-up dressing (vegetation, lamps, rails) hangs directly under the
+Y-up dressing (vegetation, lamps, monuments, rails) hangs directly under the
 fine terrain's content root and leaves with its tile. Mixing the frames up
 applies the rotation twice (the classic "trees shoot skyward" bug).
 
@@ -37,6 +37,7 @@ flowchart TB
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
   DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
+  DRESS --> MON["monuments<br/>fountain rims + water, water bells,<br/>measured sculptures, markers"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
@@ -98,6 +99,12 @@ is the codebook.
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
 | Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
+| Fountain basin | OSM outline → clay rim (+0.35 m over the highest ground; 0.2 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
+| Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain; breathes ±7 % on a per-jet phase, streaks run down the curtain; warm glow × `nightFactor`), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
+| Monument / fountain sculpture | `relief` (nDOM patch, 1 m) → ×4 bilinear, one [1 2 1] pass, fringe below 0.08 m sunk; heights over the terrain per sample; the buildings' clay; a fountain's sculpture uplit warm × `nightFactor`, fading over its lowest 2.5 m above the water | DOM1 − DGM1, Basis-DLM | `reliefSurface`, `reliefMesh`, `uplight` |
+| Fountain water | three crossing swells perturb the normal and the emissive (shimmer); a cool glow × `nightFactor` | — | `animateWater` |
+| Unmeasured statue / stone / column | abstract clay marker: rounded pillar 2.2 m · slab 1 m · shaft 4.5 m, a stable yaw from the position | Basis-DLM | `MARKER_SHAPE` |
+| Canopy on a monument | a canopy point on a relief cell is dropped (the DOM1 "tree" was the monument) | DOM1, Basis-DLM | `onRelief` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
 | Rails | `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`), draped or lifted onto a deck | Basis-DLM | `buildRails` |
 | Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
@@ -232,7 +239,7 @@ sequenceDiagram
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
-  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, rail, bridge, platform
+  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, monuments, rail, bridge, platform
   Note over B: each change: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```
@@ -247,7 +254,7 @@ load, so no tile is shown half-dressed. Before a tile or a dressing shows,
 its shaders are compiled with `compileAsync` against the target the scene
 pass renders into (`PostStack.compile`), so a landing tile never compiles
 inside a frame. The heavy dressing — vegetation,
-lamps, rails — waits behind a gate the HUD opens after the handover
+lamps, monuments, rails — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
 second phase) and is built one tile at a time. **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile

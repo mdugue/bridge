@@ -60,8 +60,8 @@ visual-variable codebook is in
   terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
   screen-space error (16 px) from the view camera **and the sun's shadow
   camera**, so a tile casting into the view stays loaded. Only the fine level
-  is dressed (vegetation, lamps, rails; its stairs and walls are baked into
-  it); distance, not a "primary"
+  is dressed (vegetation, lamps, monuments, rails; its stairs and walls are
+  baked into it); distance, not a "primary"
   role, decides which tile is detailed, and collision, demolish, focus and
   double-tap work on every visible tile. Everything a tile adds leaves with
   it (`tile-stream.ts`, `processTileModel` / `disposeTile`)
@@ -96,7 +96,7 @@ visual-variable codebook is in
   buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
   roof LUT is folded in at bake time.
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
-  seat trees, lamps, rails, walls and the player on terrain.
+  seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
 
 ### Building detailing (all keyed off CityJSON attrs + the loader's `surfacetype`)
@@ -170,6 +170,44 @@ visual-variable codebook is in
   Elbe or the track bed (the rail corridor is now its own layer). Built per
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
+
+- **Fountains, statues, memorial stones, columns** — the Basis-DLM's
+  monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with
+  their official names; GeoSN) conflated with OSM's `amenity=fountain`
+  points and basin outlines (ODbL; the DLM names none of its monuments a
+  fountain and gives no basin size). A DLM monument on an OSM fountain names
+  it; the other OSM fountains are added. **What a monument looks like is in
+  no register, but its bulk is measured:** DOM1 − DGM1 (the canopy's nDOM)
+  holds the sculpture groups of the Albertplatz fountains as ~4 × 5 m bodies
+  3.7 m tall, the Goldener Reiter as 7 m. Where that body stands clear — one
+  connected patch within 6 m (or inside the basin's water), ≤ 60 cells,
+  below 8.5 m and touching nothing taller (a leafless crown reads the same
+  on a 1 m grid) — the bake writes it as `relief` (27 of 174 monuments). 
+  `pipeline/bake/monuments.py` → `monument-layer.ts`: a relief is smoothed
+  (`reliefSurface`: ×4 bilinear, one binomial pass) into one soft form in
+  the buildings' clay, seated per sample on the terrain; a monument nothing
+  measured is an abstract clay marker (rounded pillar · slab · shaft,
+  `MARKER_SHAPE`) — no invented figure. Basins are the OSM outline as a low
+  clay rim (the water its 0.35 m inset) over the highest ground under it,
+  with translucent water bells that grow with the basin, round a measured
+  sculpture when there is one (splash pads flush, reflecting pools still);
+  a point fountain is a 2.2 m round basin. The canopy loses the "trees" its
+  own bake planted on a measured monument (`onRelief`). The fountains move
+  gently — each bell breathes on its own phase, droplets run down its
+  curtain, light shimmers across the water — and by night the water glows
+  and a fountain's sculpture is lit warm from its basin (`setFountainTime`,
+  `setFountainNight`, one shared clock and night factor). Merged/instanced,
+  seven draw calls per tile at most. Not walk-blocking (collision is
+  buildings only).
+  **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
+  (March 2024) were both taken while Dresden's fountains are drained and
+  their sculptures boxed for winter — the Albertplatz "bodies" are those
+  housings (flat-topped, ~3.7 m), right in size and place, not the figures.
+  The DOP shows the gilded Goldener Reiter only as glare (its shadow holds
+  the horse's silhouette), so no colour is sampled. The laser point cloud
+  (LSC, the only official source with more form) was unreachable from
+  GeoSN's share when this was built; no openly licensed 3D scan of the
+  landmarks was found.
 
 ### Railway & bridges
 All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in

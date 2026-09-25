@@ -20,7 +20,7 @@ import { Vector4 } from "three";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 
 /** Shape passed to a material's `onBeforeCompile` (the bits we touch). */
-interface OnBeforeCompileShader {
+export interface OnBeforeCompileShader {
   fragmentShader: string;
   uniforms: Record<string, { value: unknown }>;
   vertexShader: string;
