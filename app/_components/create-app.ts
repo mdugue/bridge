@@ -702,7 +702,7 @@ async function bootApp(
         lamps: census(dressings.map((d) => d.lamps?.group)),
         rail: census(dressings.map((d) => d.rail)),
         walls: census(dressings.map((d) => d.walls)),
-        stairs: census(dressings.map((d) => d.stairs)),
+        stairs: census(terrains.map((t) => t.stairs)),
       },
     });
   };

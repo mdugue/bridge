@@ -50,8 +50,8 @@ chip. Every tile change re-renders the shadow map. The layers:
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
   tile. No CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
-  resampled with the wall breaklines burned in and the ground lowered
-  under OSM stairs at bake time,
+  resampled with the wall breaklines burned in, the ground shaped under
+  OSM stairs and the steps themselves as a `stairs` node, all at bake time,
   `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
   land-cover material; also hangs the water and mist sheets.
 - `landcover-splat.ts` — paints the class raster with the one palette

@@ -55,6 +55,7 @@ import {
   type DataManifest,
   dgmSourceFiles,
   MANIFEST_FILE,
+  stairSourceFile,
   terraceSourceFile,
   tileArtifacts,
   tileIds,
@@ -73,7 +74,7 @@ import {
 import type { CityJsonDocument } from "../lib/city/types";
 import { currentSite } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
-import { cityMesh, readDgm, terrainMesh } from "./bake-tiles";
+import { cityMesh, readDgm, stairMesh, terrainMesh } from "./bake-tiles";
 import { bakeWissenHero } from "./bake-wissen-hero";
 import { downsampleClassRaster } from "./downsample-raster";
 import { writeMeshGlb } from "./tile-glb";
@@ -303,14 +304,26 @@ function wallLines(tile: string): WallLine[] {
   );
 }
 
-/** The tile's OSM stairs, whose ground the terrain bake lowers. */
+/** The tile's OSM stairs: the terrain bake shapes the ground under them and
+ *  writes them into the fine level's glTF. */
 function stairLines(tile: string): StairLine[] {
-  const path = at(`data/dlm/${tileArtifacts(tile).stairs.file}`);
+  const path = at(stairSourceFile(tile));
   if (!existsSync(path)) {
     return [];
   }
   const { features } = readJson<{ features: StairFeature[] }>(path);
   return features.flatMap((f) => stairLineOf(f) ?? []);
+}
+
+/** The fine level's stairs node, if the tile owns any flight. */
+function stairChildren(
+  level: 0 | 1,
+  tile: string,
+  bounds: TerrainExtras["bounds"]
+): NonNullable<Parameters<typeof writeMeshGlb>[0]["children"]> {
+  const stairs =
+    level === 0 ? stairMesh(stairLines(tile), offset, bounds) : null;
+  return stairs ? [stairs] : [];
 }
 
 /** The raised areas the terrain bake lifts to their level. */
@@ -332,7 +345,6 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
     platform: pick("platform"),
     rail: pick("rail"),
     railarea: pick("railarea"),
-    stairs: pick("stairs"),
     vegrows: pick("vegrows"),
     walls: pick("walls"),
   };
@@ -356,7 +368,7 @@ async function bakeTerrain(
     tif,
     tfw,
     at(`data/dlm/${artifacts.walls.file}`),
-    at(`data/dlm/${artifacts.stairs.file}`),
+    at(stairSourceFile(tile)),
     at(terraceSourceFile(tile)),
   ];
   const stem = `terrain_${tile}_l${level}`;
@@ -411,6 +423,9 @@ async function bakeTerrain(
         ...(await built()).input,
         name: "terrain",
         extras: { ...extras },
+        // The fine level carries the tile's stairs, baked from the same
+        // flights the ground was shaped for.
+        children: stairChildren(level, tile, meta.bounds),
       })
     )
   );

@@ -16,12 +16,10 @@ import type {
   CanopyFeature,
   LampFeature,
   RailFeature,
-  StairFeature,
   VegRowFeature,
   WallFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
-import { axisMiddle } from "@/lib/city/stairs";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -35,7 +33,7 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildRail } from "./rail-layer";
 import { dressTerrain, type TerrainLayer } from "./terrain-layer";
-import { buildStairs } from "./stair-layer";
+import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import {
   buildVegetation,
@@ -56,7 +54,6 @@ import { buildWalls } from "./wall-layer";
 export interface TileDressing {
   lamps?: LampControl;
   rail?: Group;
-  stairs?: Group;
   tile: string;
   vegetation?: VegetationControl;
   walls?: Group;
@@ -141,14 +138,26 @@ class GzipContentPlugin {
 
 type Features<T> = Promise<T[]>;
 
+function firstMesh(root: Object3D): Mesh | undefined {
+  return root.getObjectByProperty("isMesh", true) as Mesh | undefined;
+}
+
+/** The mesh on a glTF node of that name (the loader names the node's mesh
+ *  after it). */
+function meshNamed(root: Object3D, name: string): Mesh | undefined {
+  let found: Mesh | undefined;
+  root.traverse((o) => {
+    if (!found && (o as Mesh).isMesh && o.name === name) {
+      found = o as Mesh;
+    }
+  });
+  return found;
+}
+
 function dressingParts(d: TileDressing): Object3D[] {
-  return [
-    d.vegetation?.group,
-    d.lamps?.group,
-    d.rail,
-    d.walls,
-    d.stairs,
-  ].filter((part): part is Group => part !== undefined);
+  return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
+    (part): part is Group => part !== undefined
+  );
 }
 
 /**
@@ -218,7 +227,6 @@ async function buildDressing(
     ballast,
     platforms,
     walls,
-    stairs,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -231,7 +239,6 @@ async function buildDressing(
     get<AreaFeature>(d.railarea),
     get<AreaFeature>(d.platform),
     get<WallFeature>(d.walls),
-    get<StairFeature>(d.stairs),
   ]);
   // Rails and walls may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -265,25 +272,12 @@ async function buildDressing(
     { ...ground, heightFog: ctx.heightFog }
   );
   const wallGroup = buildWalls(walls, { ...ground, heightFog: ctx.heightFog });
-  // A flight across a seam is in both tiles' files; its middle's owner
-  // stands it.
-  const ownStairs = extent
-    ? stairs.filter((f) => {
-        const [x, y] = axisMiddle(f.geometry.coordinates);
-        return ownsPoint(extent, x, y);
-      })
-    : stairs;
-  const stairGroup = buildStairs(ownStairs, {
-    offset: ctx.offset,
-    heightFog: ctx.heightFog,
-  });
   return {
     tile,
     vegetation,
     lamps: lampControl,
     rail,
     walls: wallGroup,
-    stairs: stairGroup,
   };
 }
 
@@ -318,7 +312,9 @@ class DressingPlugin {
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
     const extras = scene.userData as ContentExtras;
-    const mesh = scene.getObjectByProperty("isMesh", true) as Mesh | undefined;
+    // The content's own mesh by its node name ("terrain", "city"); the fine
+    // terrain also carries a "stairs" node.
+    const mesh = meshNamed(scene, extras.kind) ?? firstMesh(scene);
     if (!mesh) {
       return;
     }
@@ -370,6 +366,11 @@ class DressingPlugin {
       sunDirection: this.ctx.sunDirection,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
+    const stairs = meshNamed(scene, "stairs");
+    if (stairs) {
+      dressStairs(stairs, this.ctx.heightFog);
+      terrain.stairs = stairs;
+    }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });
     if (extras.dressing) {

@@ -51,8 +51,14 @@ in the ingest adapter and the Geofabrik extract is already read.
   lowered, and never across a wall: a vertex with a wall between it and
   the axis is left alone, so a flight between walls does not dig into the
   terrace beyond them.
-- **Viewer** (`stair-layer.ts`): each flight is built as stone blocks —
-  a tread per step at z0 + (k+1)·rise (the last tread is the top landing),
+- **Geometry, baked** (`lib/city/stairs.ts` `stairGeometry`, written by
+  `scripts/bake-tiles.ts` `stairMesh`): the fine terrain glTF carries a
+  `stairs` node next to its grid, the flights the tile owns (the one owning
+  a flight's middle) with their shades as 8-bit vertex colours — built by
+  the same build step, from the same file, that shapes the ground under
+  them, so ground and steps cannot disagree, and the browser computes
+  nothing. `stair-layer.ts` only gives the node its material. Each flight
+  is stone blocks — a tread per step at z0 + (k+1)·rise (the last tread is the top landing),
   a riser at each step's front, and side cheeks reaching 0.6 m below the
   bottom landing, so a lifted flight is a solid block down to the ground.
   The stone is a warm sandstone a shade deeper than the pale ground, risers
@@ -71,6 +77,9 @@ in the ingest adapter and the Geofabrik extract is already read.
   where a flight ends at a conflated wall step, its landing and the
   terrain may differ by the wall's feathering.
 - A step count is a tag or an estimate, never measured.
+- The stairs cost the fine terrain glTF 20–60 kB per tile (gzipped, 16–43 k
+  vertices); `stairs_<tile>.geojson` is a build input and no longer served.
+  The stairs arrive with the terrain, not behind the dressing gate.
 - A terrace is only as good as its OSM outline: the Brühlsche Terrasse
   area is the promenade strip, not the whole platform; the buildings on the
   platform keep their LoD2 bases.
@@ -84,6 +93,10 @@ in the ingest adapter and the Geofabrik extract is already read.
 
 - **Burning the steps into the heightfield**: the grid is 2 m (4 m on the
   coarse level); a 30 cm tread cannot exist in it.
+- **Building the steps in the browser from the GeoJSON** (the first
+  version, like the walls): the same arrays computed on every tile load,
+  and two sources of truth for one flight — the ground baked, the steps
+  not. The steps depend on nothing the runtime knows, so they are baked.
 - **A textured ramp** (a stripe shader on the slope): no silhouette, no
   shadows between steps, and the ramp keeps the DGM's rounded profile.
 - **Trusting a tagged rise everywhere the DGM disagrees**: the top of such

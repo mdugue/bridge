@@ -126,7 +126,7 @@ flowchart LR
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (base drape + terrain conflated to a step) — *the wall isn't in DGM/DOM/LiDAR* | `wall-layer.ts`, `lib/city/terrain-conflate.ts` (at build); baked by `pipeline/bake/walls.py` |
-| **Stairs** | OSM `highway=steps` + `width` · `step_count` (else an `area:highway=steps` outline; else the gap between the OSM walls either side; else defaults) | DGM1 (landing heights; the terrain lowered under the flight) — *the DGM smooths steps into a bank*; OSM `layer` ≥ 1 areas the DGM lacks (the Brühlsche Terrasse), lifted to the flight's tagged top | `stair-layer.ts`, `lib/city/stairs.ts` (burn at build + step geometry); baked by `pipeline/bake/stairs.py` |
+| **Stairs** | OSM `highway=steps` + `width` · `step_count` (else an `area:highway=steps` outline; else the gap between the OSM walls either side; else defaults) | DGM1 (landing heights; the terrain lowered under the flight) — *the DGM smooths steps into a bank*; OSM `layer` ≥ 1 areas the DGM lacks (the Brühlsche Terrasse), lifted to the flight's tagged top | `lib/city/stairs.ts` (burn + step geometry, both at build, into the fine terrain glTF), `stair-layer.ts` (material); baked by `pipeline/bake/stairs.py` |
 | **Minimap** | tile bounds (tileset `extras`) + the 2048² class raster in the palette + CityJSON footprints (`footprints_<tile>.json`) | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*`, `lib/city/landcover.ts` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
 
@@ -216,7 +216,7 @@ flowchart LR
 
   iDGM ==> tTER
   dWALL -. breaklines .-> tTER
-  dSTR -. "lowered ground · lifted terraces" .-> tTER
+  dSTR -. "lowered ground · lifted terraces · the steps (L0)" .-> tTER
   iCJ ==> tCITY
   dROOF -. "roof colour" .-> tCITY
   dCLS ==> tSIDE
@@ -224,7 +224,6 @@ flowchart LR
   dNDVI -.-> tSIDE
   dLAMP -.-> tSIDE
   dWALL -.-> tSIDE
-  dSTR -.-> tSIDE
   dRAIL -.-> tSIDE
 ```
 

@@ -98,7 +98,8 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts`, `stair-layer.ts`, `lamp-layer.ts`,
+    `rail-layer.ts`, `wall-layer.ts`, `stair-layer.ts` (only the material:
+    the stairs are baked into the fine terrain glTF), `lamp-layer.ts`,
     `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`

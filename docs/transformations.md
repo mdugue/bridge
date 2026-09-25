@@ -277,9 +277,10 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   flight to 12 cm below the ramp through the steps' inner corners — lifting
   it where the DGM runs below, since the player walks on the grid — and
   lowers every vertex beside it whose triangles reach under it, never
-  across a wall. `stair-layer.ts` stands the flight as
-  sandstone blocks — treads, darker risers, side cheeks down past the
-  bottom landing — on the tile owning its middle.
+  across a wall. The same build step writes each flight as sandstone blocks
+  — treads, darker risers, side cheeks down past the bottom landing — into
+  the fine terrain glTF of the tile owning its middle (a `stairs` node,
+  vertex colours); `stair-layer.ts` only gives it its material.
   **Why:** the DGM1 smooths a staircase into a bank (the flight beside the
   Italienisches Dörfchen read as a grassy slope) and its ~2 m grid cannot
   hold a 16 cm riser ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md)).

@@ -42,6 +42,11 @@ export interface MeshInput {
    * renderer reads these as floats anyway (whole-number feature ids).
    */
   attributes?: Record<string, Float32Array<ArrayBuffer>>;
+  /** further meshes, each on a node of its own next to this one (a tile's
+   *  stairs beside its terrain); only their geometry is read */
+  children?: Omit<MeshInput, "children" | "extras" | "table" | "weld">[];
+  /** linear RGB per vertex (COLOR_0) */
+  colors?: Float32Array<ArrayBuffer>;
   /** glTF `extras` of the scene: whatever the runtime needs next to the mesh */
   extras: Record<string, unknown>;
   indices?: Uint32Array<ArrayBuffer>;
@@ -73,7 +78,10 @@ function toYUp(xyz: Float32Array): Float32Array<ArrayBuffer> {
   return out;
 }
 
-function addPrimitive(doc: Document, input: MeshInput): Primitive {
+function addPrimitive(
+  doc: Document,
+  input: Omit<MeshInput, "children" | "extras">
+): Primitive {
   const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
   type Array =
     | Float32Array<ArrayBuffer>
@@ -86,6 +94,9 @@ function addPrimitive(doc: Document, input: MeshInput): Primitive {
     .createPrimitive()
     .setAttribute("POSITION", accessor(toYUp(input.positions), "VEC3"))
     .setAttribute("NORMAL", accessor(toYUp(input.normals), "VEC3"));
+  if (input.colors) {
+    prim.setAttribute("COLOR_0", accessor(input.colors, "VEC3"));
+  }
   for (const [name, array] of Object.entries(input.attributes ?? {})) {
     prim.setAttribute(name, accessor(array, "SCALAR"));
   }
@@ -95,7 +106,8 @@ function addPrimitive(doc: Document, input: MeshInput): Primitive {
   return prim;
 }
 
-/** The glb for one mesh, meshopt-compressed, optionally with a feature table. */
+/** The glb for one mesh (plus any `children`, each on its own node),
+ *  meshopt-compressed, optionally with a feature table. */
 export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   const doc = new Document();
   doc
@@ -110,14 +122,22 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   const scene = doc
     .createScene(input.name)
     .addChild(doc.createNode(input.name).setMesh(mesh));
+  for (const child of input.children ?? []) {
+    const childMesh = doc
+      .createMesh(child.name)
+      .addPrimitive(addPrimitive(doc, child));
+    scene.addChild(doc.createNode(child.name).setMesh(childMesh));
+  }
   scene.setExtras(input.extras);
-  // Only positions and normals are quantised: the custom attributes are ids
-  // and flags that must stay exact (quantize would squeeze them to 12 bits).
+  // Only positions, normals and colours are quantised: the custom
+  // attributes are ids and flags that must stay exact (quantize would
+  // squeeze them to 12 bits).
   const transforms = [
     quantize({
-      pattern: /^(POSITION|NORMAL)$/,
+      pattern: /^(POSITION|NORMAL|COLOR_0)$/,
       quantizePosition: 16,
       quantizeNormal: 8,
+      quantizeColor: 8,
     }),
   ];
   if (input.weld) {

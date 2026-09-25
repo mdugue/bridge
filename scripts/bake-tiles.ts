@@ -10,11 +10,15 @@ import { fromArrayBuffer } from "geotiff";
 import { BufferAttribute, BufferGeometry } from "three";
 import { objectTable } from "../lib/city/city-mesh";
 import {
+  axisMiddle,
   burnStairs,
   raiseTerraces,
+  stairColors,
   type StairLine,
+  stairGeometry,
   type Terrace,
 } from "../lib/city/stairs";
+import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
 import {
   buildTerrainGeometryData,
@@ -164,6 +168,52 @@ export function terrainMesh(
     input: { positions, normals: normalsOf(positions, index), indices: index },
     minElevation,
     maxElevation,
+  };
+}
+
+/** World frame (Y-up) → the recentered data frame (Z-up) the glTF writer
+ *  takes: (x, y, z) → (x, −z, y). */
+function worldToData(xyz: number[]): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(xyz.length);
+  for (let i = 0; i < xyz.length; i += 3) {
+    out[i] = xyz[i];
+    out[i + 1] = -xyz[i + 2];
+    out[i + 2] = xyz[i + 1];
+  }
+  return out;
+}
+
+/**
+ * The flights of stairs this tile owns (the tile owning a flight's middle
+ * stands it; a flight across a seam is burned into both terrains) as one
+ * mesh: treads, risers and cheeks with their stone shades as vertex colours
+ * (lib/city/stairs.ts). Null when the tile owns none.
+ */
+export function stairMesh(
+  stairs: StairLine[],
+  offset: { cx: number; cy: number },
+  bounds: TerrainBounds
+): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const kinds: number[] = [];
+  for (const stair of stairs) {
+    const [x, y] = axisMiddle(stair.coords);
+    const data = ownsPoint(bounds, x, y) ? stairGeometry(stair, offset) : null;
+    if (data) {
+      positions.push(...data.positions);
+      normals.push(...data.normals);
+      kinds.push(...data.kinds);
+    }
+  }
+  if (positions.length === 0) {
+    return null;
+  }
+  return {
+    name: "stairs",
+    positions: worldToData(positions),
+    normals: worldToData(normals),
+    colors: stairColors(kinds),
   };
 }
 

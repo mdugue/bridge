@@ -55,7 +55,6 @@ export type TileArtifactKind =
   | "platform"
   | "rail"
   | "railarea"
-  | "stairs"
   | "vegrows"
   | "walls";
 
@@ -89,8 +88,13 @@ export function tileArtifacts(
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
     walls: dlm(`walls_${tile}.geojson`),
-    stairs: dlm(`stairs_${tile}.geojson`),
   };
+}
+
+/** The committed stairs (pipeline/bake/stairs.py): a terrain bake input
+ *  under data/dlm/ — the fine terrain glTF carries them — never served. */
+export function stairSourceFile(tile: string): string {
+  return `data/dlm/stairs_${tile}.geojson`;
 }
 
 /** The committed terraces (raised OSM areas, pipeline/bake/stairs.py): a

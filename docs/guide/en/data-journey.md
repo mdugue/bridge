@@ -118,7 +118,8 @@ In total the repository carries about 125 MB of data for the four tiles
 | Trees | Basis-DLM + DOM1 + DGM1 | tree points, hedge rows | — | as committed |
 | Greenness | DOP | the NDVI PNG | — | as committed |
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
-| Lamps, walls, stairs, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
+| Lamps, walls, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
+| Stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped under them, the steps as part of the mesh | inside the terrain mesh |
 | Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
@@ -129,8 +130,8 @@ three things:
 1. **Bakes the heavy inputs into a tileset.** For every tile, the terrain
    GeoTIFF becomes two ready-made terrain meshes: a detailed one on a
    1024 × 1024 grid and a coarse one on a 512 × 512 grid, with the tall
-   walls from OpenStreetMap sharpened in, the ground under its stairs
-   lowered a little, and a short skirt hanging from
+   walls from OpenStreetMap sharpened in, the ground shaped under its
+   stairs and the steps themselves built in, and a short skirt hanging from
    its edge so no gap shows at the seams between tiles. The CityJSON
    becomes one building mesh per tile with a table of per-building style
    values, and a list of building footprints for the minimap. Every mesh
@@ -198,8 +199,8 @@ feature files.
 What is **computed in the browser** rather than downloaded: the ground
 colours (painted once per tile on the graphics card, from the land-use
 classes and one pastel palette), the water surface, every tree from its
-point and height, lamp posts from their points, walls, stairs and bridges
-from their outlines, the sun position, all lighting and shadows, and the whole
+point and height, lamp posts from their points, walls and bridges from
+their outlines, the sun position, all lighting and shadows, and the whole
 post-processing look.
 
 ## What has to be redone when something changes

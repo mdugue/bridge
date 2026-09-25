@@ -124,7 +124,8 @@ Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
 | Bäume | Basis-DLM + DOM1 + DGM1 | Baumpunkte, Heckenreihen | — | wie eingecheckt |
 | Grün | DOP | das NDVI-PNG | — | wie eingecheckt |
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
-| Lampen, Mauern, Treppen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
+| Lampen, Mauern, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
+| Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden unter ihnen geformt, die Stufen Teil des Netzes | im Geländenetz |
 | Gleise, Schotter, Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
@@ -135,8 +136,9 @@ Es tut drei Dinge:
 1. **Backt die schweren Eingaben zu einem Tileset.** Für jede Kachel wird
    das Gelände-GeoTIFF zu zwei fertigen Geländenetzen: einem detaillierten
    auf einem Raster von 1024 × 1024 Punkten und einem groben auf
-   512 × 512, mit den hohen Mauern aus OpenStreetMap als scharfe Kanten
-   eingearbeitet, dem Boden unter ihren Treppen leicht abgesenkt und einer kurzen Schürze am Rand, damit an den Nahtstellen
+   512 × 512 – mit den hohen Mauern aus OpenStreetMap als scharfen Kanten,
+   mit den Treppen samt passend geformtem Boden darunter und mit einer
+   kurzen Schürze am Rand, damit an den Nahtstellen
    zwischen Kacheln keine Lücke sichtbar wird. Das CityJSON wird zu einem
    Gebäudenetz je Kachel mit einer Tabelle von Stilwerten je Gebäude, dazu
    einer Liste der Gebäudegrundrisse für die Minikarte. Jedes Netz wird als
@@ -209,7 +211,7 @@ Was **im Browser berechnet** statt heruntergeladen wird: die Bodenfarben
 (einmal je Kachel auf der Grafikkarte gemalt, aus den
 Landnutzungsklassen und einer Pastellpalette), die Wasseroberfläche, jeder
 Baum aus seinem Punkt und seiner Höhe, Laternenmasten aus ihren Punkten,
-Mauern, Treppen und Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
+Mauern und Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
 und Schatten und der gesamte Nachbearbeitungs-Look.
 
 ## Was neu gemacht werden muss, wenn sich etwas ändert

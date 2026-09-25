@@ -356,6 +356,32 @@ export interface StairGeometryData {
   positions: number[];
 }
 
+/** Warm sandstone (sRGB), a shade deeper than the pale ground around a
+ *  flight so it never reads as a snow-covered bank. */
+export const STAIR_STONE = 0xc4_b0_90;
+/** Risers clearly darker than the treads, cheeks between: every step edge
+ *  reads, even under a flat, overcast light. */
+const STAIR_SHADE = [1, 0.62, 0.8];
+
+function srgbToLinear(c: number): number {
+  return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+/** Linear RGB per vertex for a flight's `kinds` (the mesh's COLOR_0). */
+export function stairColors(kinds: number[]): Float32Array<ArrayBuffer> {
+  const stone = [16, 8, 0].map((shift) =>
+    srgbToLinear(((STAIR_STONE >> shift) & 0xff) / 255)
+  );
+  const out = new Float32Array(kinds.length * 3);
+  for (const [i, kind] of kinds.entries()) {
+    const shade = STAIR_SHADE[kind] ?? 1;
+    out[i * 3] = stone[0] * shade;
+    out[i * 3 + 1] = stone[1] * shade;
+    out[i * 3 + 2] = stone[2] * shade;
+  }
+  return out;
+}
+
 export const STAIR_TREAD = 0;
 export const STAIR_RISER = 1;
 export const STAIR_CHEEK = 2;

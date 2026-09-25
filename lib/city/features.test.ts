@@ -15,6 +15,7 @@ import type {
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
 import {
+  stairSourceFile,
   type TileArtifact,
   terraceSourceFile,
   tileArtifacts,
@@ -118,10 +119,22 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
   }
 });
 
-test.each(cases)(
+/** A terrain-bake input under data/dlm (never served), or none. */
+function loadSource<F>(file: string): F[] {
+  const path = join(DATA, "..", "..", file);
+  if (!existsSync(path)) {
+    return [];
+  }
+  return (
+    (JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>).features ??
+    []
+  );
+}
+
+test.each(tileIds(DRESDEN))(
   "%s: stairs run bottom → top with a width, steps and landings",
-  (_, a) => {
-    for (const f of load<StairFeature>(a.stairs)) {
+  (tile) => {
+    for (const f of loadSource<StairFeature>(stairSourceFile(tile))) {
       expect(f.geometry.type).toBe("LineString");
       expect(isLine(f.geometry.coordinates)).toBe(true);
       expect(f.properties?.w).toBeGreaterThan(0);
@@ -135,13 +148,7 @@ test.each(cases)(
 test.each(tileIds(DRESDEN))(
   "%s: terraces are polygons with a level above the ground",
   (tile) => {
-    const path = join(DATA, "..", "..", terraceSourceFile(tile));
-    const doc = existsSync(path)
-      ? (JSON.parse(
-          readFileSync(path, "utf8")
-        ) as FeatureCollection<TerraceFeature>)
-      : { features: [] };
-    for (const f of doc.features ?? []) {
+    for (const f of loadSource<TerraceFeature>(terraceSourceFile(tile))) {
       expect(["Polygon", "MultiPolygon"]).toContain(f.geometry?.type ?? "");
       expect(f.properties?.z).toBeGreaterThan(50);
     }
