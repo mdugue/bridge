@@ -1,7 +1,7 @@
 /**
  * Builds a tile's streamed content (lib/city/tileset.ts): the terrain mesh
  * per level from the DGM GeoTIFF (with the OSM retaining walls burned in as
- * breaklines) and the building mesh from the CityJSON, both as glTF
+ * breaklines and the ground lowered under the OSM stairs) and the building mesh from the CityJSON, both as glTF
  * (scripts/tile-glb.ts). Everything the browser used to compute at load —
  * resampling, conflation, the grid, normals — happens here once. Called by
  * scripts/prepare-data.ts, which owns paths, caching and publishing; no DOM.
@@ -9,7 +9,18 @@
 import { fromArrayBuffer } from "geotiff";
 import { BufferAttribute, BufferGeometry } from "three";
 import { objectTable } from "../lib/city/city-mesh";
+import {
+  axisMiddle,
+  burnStairs,
+  raiseTerraces,
+  stairColors,
+  type StairLine,
+  stairGeometry,
+  type Terrace,
+} from "../lib/city/stairs";
+import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
+import { type WallRibbon, wallGeometry } from "../lib/city/walls";
 import {
   buildTerrainGeometryData,
   type TerrainBounds,
@@ -104,27 +115,47 @@ function normalsOf(
 }
 
 export interface TerrainMesh {
+  /** the shaped grid (n·n, row 0 = north): what the runtime walks on */
+  elevations: Float32Array;
   input: Omit<MeshInput, "extras" | "name">;
   minElevation: number;
   maxElevation: number;
 }
 
+/** What the terrain bake shapes the DGM with besides the walls. */
+export interface TerrainFeatures {
+  stairs?: StairLine[];
+  terraces?: Terrace[];
+}
+
 /**
- * The terrain grid (+ its 30 m skirt) with the walls burned in as steps
- * (lib/city/terrain-conflate.ts), in the recentered frame. The first n·n
+ * The terrain grid (+ its 30 m skirt) in the recentered frame, the DGM
+ * shaped in three passes: the walls burned in as steps
+ * (lib/city/terrain-conflate.ts), the raised areas the DGM lacks lifted to
+ * their level, then the ground under each flight of stairs lowered below its
+ * treads (lib/city/stairs.ts). The first n·n
  * vertices are the grid, row 0 = north: the runtime samples ground height
  * straight from them.
  */
 export function terrainMesh(
   dgm: Dgm,
   walls: WallLine[],
-  offset: { cx: number; cy: number }
+  offset: { cx: number; cy: number },
+  features: TerrainFeatures = {}
 ): TerrainMesh {
   const { n, bounds } = dgm;
-  const elevations =
-    walls.length > 0
-      ? conflateWalls({ elevations: dgm.elevations, n, bounds, walls })
-      : dgm.elevations;
+  const { stairs = [], terraces = [] } = features;
+  let elevations: Float32Array = dgm.elevations;
+  if (walls.length > 0) {
+    elevations = conflateWalls({ elevations, n, bounds, walls });
+  }
+  if (terraces.length > 0) {
+    elevations = raiseTerraces({ elevations, n, bounds, terraces });
+  }
+  if (stairs.length > 0) {
+    const lines = walls.map((w) => w.coords);
+    elevations = burnStairs({ elevations, n, bounds, stairs, walls: lines });
+  }
   const { positions, indices, minElevation } = buildTerrainGeometryData({
     elevations,
     n,
@@ -137,10 +168,77 @@ export function terrainMesh(
     maxElevation = Math.max(maxElevation, positions[i * 3 + 2]);
   }
   return {
+    elevations,
     input: { positions, normals: normalsOf(positions, index), indices: index },
     minElevation,
     maxElevation,
   };
+}
+
+/** World frame (Y-up) → the recentered data frame (Z-up) the glTF writer
+ *  takes: (x, y, z) → (x, −z, y). */
+function worldToData(xyz: number[]): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(xyz.length);
+  for (let i = 0; i < xyz.length; i += 3) {
+    out[i] = xyz[i];
+    out[i + 1] = -xyz[i + 2];
+    out[i + 2] = xyz[i + 1];
+  }
+  return out;
+}
+
+/**
+ * The flights of stairs this tile owns (the tile owning a flight's middle
+ * stands it; a flight across a seam is burned into both terrains) as one
+ * mesh: treads, risers and cheeks with their stone shades as vertex colours
+ * (lib/city/stairs.ts). Null when the tile owns none.
+ */
+export function stairMesh(
+  stairs: StairLine[],
+  offset: { cx: number; cy: number },
+  bounds: TerrainBounds
+): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const kinds: number[] = [];
+  for (const stair of stairs) {
+    const [x, y] = axisMiddle(stair.coords);
+    const data = ownsPoint(bounds, x, y) ? stairGeometry(stair, offset) : null;
+    if (data) {
+      positions.push(...data.positions);
+      normals.push(...data.normals);
+      kinds.push(...data.kinds);
+    }
+  }
+  if (positions.length === 0) {
+    return null;
+  }
+  return {
+    name: "stairs",
+    positions: worldToData(positions),
+    normals: worldToData(normals),
+    colors: stairColors(kinds),
+  };
+}
+
+/**
+ * The tile's walls as one ribbon mesh, standing on `heightAt` — the final
+ * fine ground of every tile of the site, so a wall near a seam reads its
+ * neighbour's. Null when no wall stands.
+ */
+export function wallMesh(
+  walls: WallRibbon[],
+  heightAt: (x: number, y: number) => number | null,
+  offset: { cx: number; cy: number }
+): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
+  const data = wallGeometry(walls, heightAt, offset);
+  return data
+    ? {
+        name: "walls",
+        positions: worldToData(data.positions),
+        normals: worldToData(data.normals),
+      }
+    : null;
 }
 
 export interface CityMesh {

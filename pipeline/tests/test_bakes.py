@@ -174,3 +174,191 @@ def test_a_monument_under_a_tree_crown_has_no_relief():
     assert measure_relief(ndom, (0.0, 40.0), point, "statue") is not None
     ndom[15:19, 17:24] = 12.0  # a crown right beside it
     assert measure_relief(ndom, (0.0, 40.0), point, "statue") is None
+
+
+def _osm_tile(tmp_path, monkeypatch, ways: str):
+    """A 200 m tile with a DGM that rises 4 m between y = 80 and y = 100 and
+    an OSM XML extract holding `ways` over nodes 1–6: the flight's ends (1, 2),
+    and the corners of a 6 m × 30 m outline around it (3–6)."""
+    import numpy as np
+    import rasterio
+    from pyproj import Transformer
+
+    from bake.common import Tile
+
+    x0, y0 = 411000.0, 5656000.0
+    tile = Tile("t", (x0, y0, x0 + 200, y0 + 200), 25833, tmp_path / "raw", tmp_path / "data")
+    tile.dgm.parent.mkdir(parents=True)
+    rows = np.arange(200)[:, None] + 0.5  # row 0 = north
+    y = 200 - rows
+    z = np.broadcast_to(100 + 4 * np.clip((y - 80) / 20, 0, 1), (200, 200)).astype("float32")
+    with rasterio.open(
+        tile.dgm,
+        "w",
+        driver="GTiff",
+        width=200,
+        height=200,
+        count=1,
+        dtype="float32",
+        crs="EPSG:25833",
+        transform=tile.transform(200),
+    ) as dst:
+        dst.write(z, 1)
+    back = Transformer.from_crs(25833, 4326, always_xy=True)
+    pts = [(100, 105), (100, 75), (97, 75), (103, 75), (103, 105), (97, 105)]
+    nodes = "".join(
+        f'<node id="{i + 1}" lat="{lat:.9f}" lon="{lon:.9f}" version="1"/>'
+        for i, (px, py) in enumerate(pts)
+        for lon, lat in [back.transform(x0 + px, y0 + py)]
+    )
+    osm = tmp_path / "raw" / "osm" / "t.osm"
+    osm.parent.mkdir(parents=True)
+    osm.write_text(f'<?xml version="1.0"?><osm version="0.6">{nodes}{ways}</osm>')
+    monkeypatch.setattr(Tile, "osm_extract", lambda self: osm)
+    return tile
+
+
+def _read(tile, name):
+    import json
+
+    return json.loads((tile.data / "dlm" / f"{name}_t.geojson").read_text())
+
+
+def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path, monkeypatch):
+    from bake import stairs
+
+    # Drawn top → bottom; 25 steps over the 4 m rise is a 16 cm riser.
+    way = (
+        '<way id="1" version="1"><nd ref="1"/><nd ref="2"/>'
+        '<tag k="highway" v="steps"/><tag k="step_count" v="25"/><tag k="width" v="3 m"/></way>'
+    )
+    tile = _osm_tile(tmp_path, monkeypatch, way)
+    stairs.run(tile)
+    doc = _read(tile, "stairs")
+    assert doc["attribution"].startswith("©")
+    [f] = doc["features"]
+    (xa, ya), (xb, yb) = f["geometry"]["coordinates"]
+    assert ya < yb  # reversed to run bottom → top
+    assert f["properties"]["w"] == 3.0
+    assert f["properties"]["n"] == 25
+    lo, hi = f["properties"]["z"]
+    assert abs(lo - 100) < 0.1 and abs(hi - 104) < 0.1
+
+
+def test_a_flight_without_a_width_takes_it_from_its_outline_and_derives_steps(
+    tmp_path, monkeypatch
+):
+    from bake import stairs
+
+    ways = (
+        '<way id="1" version="1"><nd ref="2"/><nd ref="1"/><tag k="highway" v="steps"/>'
+        '<tag k="step_count" v="3"/></way>'  # a 1.3 m riser: a typo, derived instead
+        '<way id="2" version="1"><nd ref="3"/><nd ref="4"/><nd ref="5"/><nd ref="6"/>'
+        '<nd ref="3"/><tag k="area:highway" v="steps"/></way>'
+        '<way id="3" version="1"><nd ref="3"/><nd ref="4"/><tag k="highway" v="footway"/></way>'
+    )
+    tile = _osm_tile(tmp_path, monkeypatch, ways)
+    stairs.run(tile)
+    [f] = _read(tile, "stairs")["features"]
+    assert abs(f["properties"]["w"] - 6.0) < 0.05
+    assert f["properties"]["n"] == 25
+
+
+def test_flat_indoor_and_bridge_flights_are_left_out():
+    from bake.stairs import skipped, step_count, width_of
+
+    assert skipped('"indoor"=>"yes"')
+    assert skipped('"bridge"=>"yes"')
+    assert skipped('"level"=>"-1"')
+    assert not skipped('"level"=>"0"')
+    assert not skipped(None)
+    assert step_count(1.6, None) == 10
+    line = shapely.LineString([(0, 0), (10, 0)])
+    outline = shapely.box(-1, -3, 11, 3)  # 12 m × 6 m around a 10 m axis
+    assert width_of(line, None, [outline]) == 7.2  # area / length inside
+    assert width_of(line, '"width"=>"100"', [outline]) == 30.0
+
+
+def test_cliffs_come_through_as_walls_of_their_own_kind(tmp_path, monkeypatch):
+    from bake import walls
+
+    ways = (
+        '<way id="1" version="1"><nd ref="3"/><nd ref="4"/><tag k="natural" v="cliff"/></way>'
+        '<way id="2" version="1"><nd ref="5"/><nd ref="6"/><tag k="natural" v="tree_row"/></way>'
+    )
+    tile = _osm_tile(tmp_path, monkeypatch, ways)
+    walls.run(tile)
+    [f] = _read(tile, "walls")["features"]
+    assert f["properties"] == {"kind": "cliff", "h": 3.0}
+    assert walls.kind_of(None, None, '"natural"=>"cliff"') == "cliff"
+    assert walls.kind_of("retaining_wall", None, '"natural"=>"cliff"') == "retaining_wall"
+
+
+class _Bank:
+    """A DGM stub: 100 m south of y = 0, rising 4 m to y = 20 across all x."""
+
+    def at(self, x, y):
+        return 100 + 4 * min(max(y / 20, 0), 1)
+
+
+class _Flat:
+    def at(self, x, y):
+        return 112.0
+
+
+def test_an_untagged_flight_spans_the_slope_between_its_walls():
+    from bake.stairs import flight
+
+    walls = [
+        shapely.LineString([(-7, -5), (-7, 25)]),  # 7 m left
+        shapely.LineString([(11, -5), (11, 25)]),  # 11 m right
+    ]
+    f = flight(shapely.LineString([(0, 1), (0, 19)]), None, [], _Bank(), walls, [])
+    w = f["properties"]["w"]
+    assert abs(w - (18 - 0.6)) < 1e-6
+    (x0, _), (x1, _) = f["geometry"]["coordinates"]
+    assert x0 == x1 == 2.0  # re-centred between the walls
+
+
+def test_walls_too_far_or_on_one_side_leave_the_default_width():
+    from bake.stairs import DEFAULT_W, flight
+
+    line = shapely.LineString([(0, 1), (0, 19)])
+    one_side = [shapely.LineString([(-3, -5), (-3, 25)])]
+    assert flight(line, None, [], _Bank(), one_side, [])["properties"]["w"] == DEFAULT_W
+    far = [shapely.LineString([(-30, -5), (-30, 25)]), shapely.LineString([(30, -5), (30, 25)])]
+    assert flight(line, None, [], _Bank(), far, [])["properties"]["w"] == DEFAULT_W
+
+
+def test_a_flight_onto_a_raised_area_the_dgm_lacks_takes_its_tagged_rise():
+    from bake.stairs import flight
+
+    terrace = shapely.box(20, -10, 60, 10)
+    tags = '"step_count"=>"41","step:height"=>"0.15","incline"=>"up","width"=>"20"'
+    line = shapely.LineString([(0, 0), (21, 0)])  # drawn upwards, ends on the terrace
+    f = flight(line, tags, [], _Flat(), [], [terrace])
+    assert f["properties"]["z"] == [112.0, 118.15]
+    assert f["properties"]["n"] == 41
+    assert f["terrace"] is terrace
+    # Without a raised area at its top, the flight stays as flat as the DGM.
+    assert flight(line, tags, [], _Flat(), [], []) is None
+
+
+def test_only_plain_raised_areas_count_as_terraces():
+    from bake.stairs import is_raised
+
+    assert is_raised({"other_tags": '"layer"=>"1","highway"=>"pedestrian"'})
+    assert not is_raised({"other_tags": '"layer"=>"-1"'})
+    assert not is_raised({"other_tags": '"layer"=>"0"'})
+    assert not is_raised({"other_tags": '"layer"=>"1"', "building": "yes"})
+    assert not is_raised({"other_tags": '"layer"=>"1","railway"=>"platform"'})
+    assert not is_raised({"other_tags": '"layer"=>"1"', "landuse": "railway"})
+
+
+def test_a_terrace_platform_fills_the_holes_of_its_area():
+    from bake.stairs import platform
+
+    promenade = shapely.Polygon(
+        [(0, 0), (40, 0), (40, 20), (0, 20)], holes=[[(10, 5), (20, 5), (20, 15), (10, 15)]]
+    )
+    assert platform(promenade).area == 800

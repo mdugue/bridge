@@ -34,7 +34,7 @@ the shape of fountain basins.
 | **LoD2** | 3D building model with roof shapes | GeoSN | Every building's footprint, height, roof shape and attributes |
 | **Basis-DLM** | Digital landscape model (the land-use map) | GeoSN | Ground colours, water outlines, hedges and tree rows, railway areas and tracks, bridge outlines, monuments and fountains (position and official name) |
 | **DOP** | Digital orthophoto, 20 cm, with a near-infrared channel | GeoSN | Roof colours; vegetation greenness for tree crowns and meadows |
-| **OSM** | OpenStreetMap | Volunteers | Street lamps, station platforms, walls, bridge structure types, fountain basins |
+| **OSM** | OpenStreetMap | Volunteers | Street lamps, station platforms, walls, cliff edges, stairs, bridge structure types, fountain basins |
 
 Available from the same portal but **not used yet**: the laser-scan point
 cloud (individual tree crowns would come from it), the cadastral parcels
@@ -181,7 +181,7 @@ repository, because the build step reads it directly. See
 | **Update cycle** | Continuous: edits are live within minutes. Extracts for download (Geofabrik) are rebuilt daily; the project reads such an extract, not the live database. |
 | **Resolution and accuracy** | No guarantee; in a well-mapped city typically metre-level positions. Completeness and tag consistency vary from street to street and mapper to mapper. |
 | **Generally suited for** | Things no official dataset has: street furniture, points of interest, names, informal paths, structure types; near-worldwide coverage; quick to fetch. |
-| **Used here for** | Lamp positions (`highway=street_lamp`), station platforms (`railway=platform`), retaining walls, city walls and embankments (`barrier=*`, `man_made=embankment`) with their `height` tag, whether a bridge is an arch bridge (`bridge:structure`), and fountains (`amenity=fountain`): the outline of each basin, whether it is a splash pad or a still pool, and the many small fountains the landscape model does not list. Where an official monument stands in an OSM basin, the fountain keeps the official name. |
+| **Used here for** | Lamp positions (`highway=street_lamp`), station platforms (`railway=platform`), retaining walls, city walls, embankments and cliff edges (`barrier=*`, `man_made=embankment`, `natural=cliff`) with their `height` tag, flights of steps (`highway=steps` with `width` and `step_count`, the width else from an `area:highway=steps` outline), whether a bridge is an arch bridge (`bridge:structure`), and fountains (`amenity=fountain`): the outline of each basin, whether it is a splash pad or a still pool, and the many small fountains the landscape model does not list. Where an official monument stands in an OSM basin, the fountain keeps the official name. |
 | **Strengths** | Human-readable tags for exactly the details the survey office does not model; the Brühlsche Terrasse exists here and nowhere else. |
 | **Weaknesses** | Not every lamp is mapped, heights are often missing (the viewer uses defaults per wall type), tags vary. Volunteer data must be credited (ODbL). |
 | **Download and licence** | One regional extract of the whole state, `sachsen-latest.osm.pbf`, downloaded from [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) (about 250 MB) and read locally, which avoids rate limits and makes the result reproducible. The lamp, platform and bridge-structure files committed today are older: they were fetched through the **Overpass API**, a live query service, before the bakes switched to the extract, and move to the extract at their next re-bake. Licence: **ODbL**, credit "© OpenStreetMap contributors". |
@@ -207,6 +207,7 @@ before it.
 | OSM via Overpass (no longer used by the bakes; the committed lamp, platform and bridge-structure files still come from it) | all four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
 | OSM via BBBike | Dresden extract | the extract of 2026-09-19 (fountains only: Geofabrik could not be reached from the build machine that day) | `data/provenance.json` | 2026-09-24 |
 | OSM via Geofabrik | statewide extract | the daily extract of 2026-09-18 or shortly before | git history (walls re-baked that day); `osmium fileinfo -e` on the raw file prints the exact timestamp | 2026-09-18 |
+| OSM via BBBike (stairs) | the Dresden city extract | the extract of 2026-09-19 | the file's `Last-Modified`; `data/provenance.json` | 2026-09-24 |
 
 Note the **mismatch of dates inside one picture**: the ground and the tree
 heights are from late 2024, the building shapes from a 2016 laser scan with

@@ -9,11 +9,20 @@ import type {
   LampFeature,
   MonumentFeature,
   RailFeature,
+  StairFeature,
+  TerraceFeature,
   VegRowFeature,
   WallFeature,
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
-import { type TileArtifact, tileArtifacts, tileIds } from "./tile";
+import {
+  stairSourceFile,
+  type TileArtifact,
+  terraceSourceFile,
+  tileArtifacts,
+  tileIds,
+  wallSourceFile,
+} from "./tile";
 
 // The committed bakes under data/dlm, checked against the shapes the layers
 // read. Every tile, every kind — a renamed property or a geometry type the
@@ -31,6 +40,18 @@ function load<F>(artifact: TileArtifact): F[] {
   const doc = JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>;
   expect(Array.isArray(doc.features)).toBe(true);
   return doc.features ?? [];
+}
+
+/** A terrain-bake input under data/dlm (never served), or none. */
+function loadSource<F>(file: string): F[] {
+  const path = join(DATA, "..", "..", file);
+  if (!existsSync(path)) {
+    return [];
+  }
+  return (
+    (JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>).features ??
+    []
+  );
 }
 
 const isPoint2 = (p: unknown): boolean =>
@@ -64,14 +85,17 @@ test.each(cases)("%s: canopy points carry a finite height", (_, a) => {
   }
 });
 
-test.each(cases)(
-  "%s: lamps are points, walls are LineStrings with a height",
-  (_, a) => {
-    for (const f of load<LampFeature>(a.lamps)) {
-      expect(f.geometry.type).toBe("Point");
-      expect(isPoint2(f.geometry.coordinates)).toBe(true);
-    }
-    for (const f of load<WallFeature>(a.walls)) {
+test.each(cases)("%s: lamps are points", (_, a) => {
+  for (const f of load<LampFeature>(a.lamps)) {
+    expect(f.geometry.type).toBe("Point");
+    expect(isPoint2(f.geometry.coordinates)).toBe(true);
+  }
+});
+
+test.each(tileIds(DRESDEN))(
+  "%s: walls are LineStrings with a kind and a height",
+  (tile) => {
+    for (const f of loadSource<WallFeature>(wallSourceFile(tile))) {
       expect(f.geometry.type).toBe("LineString");
       expect(isLine(f.geometry.coordinates)).toBe(true);
       expect(typeof f.properties?.kind).toBe("string");
@@ -133,6 +157,30 @@ test.each(cases)(
           f.properties?.style ?? ""
         );
       }
+    }
+  }
+);
+
+test.each(tileIds(DRESDEN))(
+  "%s: stairs run bottom → top with a width, steps and landings",
+  (tile) => {
+    for (const f of loadSource<StairFeature>(stairSourceFile(tile))) {
+      expect(f.geometry.type).toBe("LineString");
+      expect(isLine(f.geometry.coordinates)).toBe(true);
+      expect(f.properties?.w).toBeGreaterThan(0);
+      expect(Number.isInteger(f.properties?.n)).toBe(true);
+      const [lo, hi] = f.properties?.z ?? [Number.NaN, Number.NaN];
+      expect(hi).toBeGreaterThan(lo);
+    }
+  }
+);
+
+test.each(tileIds(DRESDEN))(
+  "%s: terraces are polygons with a level above the ground",
+  (tile) => {
+    for (const f of loadSource<TerraceFeature>(terraceSourceFile(tile))) {
+      expect(["Polygon", "MultiPolygon"]).toContain(f.geometry?.type ?? "");
+      expect(f.properties?.z).toBeGreaterThan(50);
     }
   }
 );
