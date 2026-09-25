@@ -367,12 +367,26 @@ export function phenologyOf(genus: number): Phenology {
   return PHENOLOGY[TREE_GENERA[genus] ?? ""];
 }
 
-/** Days since 1 January (0-based, fractional), UTC; a 29 February folds
- *  into 28 February's day so the table stays a common year's. */
+/**
+ * Days since 1 January (0-based, fractional) on the local calendar — the
+ * one the HUD composes the scene date in (city-walk.tsx), so a scrub
+ * through the time of day never crosses into another day of the year. Read
+ * from the wall-clock fields, so a daylight-saving switch shifts nothing.
+ * A 29 February folds into 28 February's day so the table stays a common
+ * year's.
+ */
 export function dayOfYear(date: Date): number {
-  const t = date.getTime();
-  const year = date.getUTCFullYear();
-  const day = (t - Date.UTC(year, 0, 1)) / 86_400_000;
+  const year = date.getFullYear();
+  const wall = Date.UTC(
+    year,
+    date.getMonth(),
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+    date.getMilliseconds()
+  );
+  const day = (wall - Date.UTC(year, 0, 1)) / 86_400_000;
   const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
   return leap && day >= 59 ? Math.max(day - 1, 58) : day;
 }

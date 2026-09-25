@@ -110,17 +110,17 @@ test("the canopy's crowns follow the season through the vegetation control", () 
 test("the clock re-seasons on a new calendar day only, throttled, the last day winning", async () => {
   const days: number[] = [];
   const clock = createSeasonClock(
-    new Date(Date.UTC(2026, 6, 10, 9)),
+    new Date(2026, 6, 10, 9),
     (d) => days.push(d),
     40
   );
   expect(clock.day()).toBe(JUL_10);
-  clock.set(new Date(Date.UTC(2026, 6, 10, 18))); // same day, later hour
+  clock.set(new Date(2026, 6, 10, 18)); // same day, later hour
   expect(days).toEqual([]);
-  clock.set(new Date(Date.UTC(2026, 0, 10, 12))); // applied at once
+  clock.set(new Date(2026, 0, 10, 12)); // applied at once
   expect(days).toEqual([JAN_10]);
-  clock.set(new Date(Date.UTC(2026, 9, 1, 12))); // inside the throttle
-  clock.set(new Date(Date.UTC(2026, 9, 20, 12)));
+  clock.set(new Date(2026, 9, 1, 12)); // inside the throttle
+  clock.set(new Date(2026, 9, 20, 12));
   expect(days).toEqual([JAN_10]);
   await new Promise((resolve) => setTimeout(resolve, 80));
   expect(days).toEqual([JAN_10, OCT_20]);
