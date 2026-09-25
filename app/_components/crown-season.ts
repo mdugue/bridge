@@ -1,10 +1,14 @@
 import {
+  BackSide,
   BufferGeometry,
   Color,
+  DoubleSide,
+  FrontSide,
   InstancedBufferAttribute,
-  type InstancedMesh,
+  InstancedMesh,
   type Material,
   MeshDepthMaterial,
+  type Side,
   type WebGLProgramParametersWithUniforms,
 } from "three";
 import {
@@ -69,22 +73,27 @@ const twigUniform = { value: new Color(TWIG_COLOR) };
 
 // A fixed rotation (rows (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3) turns the cell
 // grid off the crown's axes, so the cells do not line up in visible rows;
-// the instance's ground position offsets it, so neighbours differ.
+// a seed from the instance's ground position offsets the hash, so
+// neighbours differ. The seed is added to the integer cell, after the
+// pixel-scale floor: added to the position it would be multiplied by that
+// scale too (thousands up close), and the hash's sin() would lose its
+// precision to arguments near 1e6 — banding on mobile GPUs.
 const VERTEX_DECL = [
   "attribute float aBare;",
   "varying float vBare;",
   "varying vec3 vCrownCell;",
+  "varying vec2 vCrownSeed;",
 ].join("\n");
 
 const VERTEX_BODY = [
   "vBare = aBare;",
   "#ifdef USE_INSTANCING",
-  " vec2 crownSeed = fract(instanceMatrix[3].xz * 0.0137) * 97.0;",
+  " vCrownSeed = fract(instanceMatrix[3].xz * 0.0137) * 97.0;",
   "#else",
-  " vec2 crownSeed = vec2(0.0);",
+  " vCrownSeed = vec2(0.0);",
   "#endif",
   "const mat3 crownTurn = mat3(0.6667, 0.6667, 0.3333, 0.6667, -0.3333, -0.6667, 0.3333, -0.6667, 0.6667);",
-  "vCrownCell = crownTurn * position + vec3(crownSeed, 0.0);",
+  "vCrownCell = crownTurn * position;",
 ].join("\n");
 
 // three's getAlphaHashThreshold (alphahash_pars_fragment), renamed so it
@@ -92,13 +101,14 @@ const VERTEX_BODY = [
 const FRAGMENT_DECL = [
   "varying float vBare;",
   "varying vec3 vCrownCell;",
+  "varying vec2 vCrownSeed;",
   "float crownHash2(vec2 v) { return fract(1.0e4 * sin(17.0 * v.x + 0.1 * v.y) * (0.1 + abs(sin(13.0 * v.y + v.x)))); }",
   "float crownHash3(vec3 v) { return crownHash2(vec2(crownHash2(v.xy), v.z)); }",
-  "float crownThreshold(vec3 p) {",
+  "float crownThreshold(vec3 p, vec3 seed) {",
   " float maxDeriv = max(length(dFdx(p)), length(dFdy(p)));",
   ` float pixScale = 1.0 / (${HASH_PIXELS.toFixed(2)} * max(maxDeriv, 1e-6));`,
   " vec2 pixScales = vec2(exp2(floor(log2(pixScale))), exp2(ceil(log2(pixScale))));",
-  " vec2 alpha = vec2(crownHash3(floor(pixScales.x * p)), crownHash3(floor(pixScales.y * p)));",
+  " vec2 alpha = vec2(crownHash3(floor(pixScales.x * p) + seed), crownHash3(floor(pixScales.y * p) + seed));",
   " float lerpFactor = fract(log2(pixScale));",
   " float x = (1.0 - lerpFactor) * alpha.x + lerpFactor * alpha.y;",
   " float a = min(lerpFactor, 1.0 - lerpFactor);",
@@ -113,7 +123,7 @@ const FRAGMENT_DECL = [
  *  any branch, as GLSL requires. */
 const FRAGMENT_BODY = [
   "float crownTwig = 0.0;",
-  "float crownCellH = crownThreshold(vCrownCell);",
+  "float crownCellH = crownThreshold(vCrownCell, vec3(vCrownSeed, 0.0));",
   `if (vBare > ${BARE_EPS}) {`,
   " float crownLeafy = 1.0 - vBare;",
   ` if (crownCellH >= max(crownLeafy, ${TWIG_DENSITY})) discard;`,
@@ -198,6 +208,77 @@ export interface CrownMaterials {
   bare: Material;
   /** the plain crown (all instances in full leaf) */
   leafy: Material;
+}
+
+/** The side three's shadow pass gives a depth material for a caster of each
+ *  side (WebGLShadowMap `getDepthMaterial`, non-VSM). */
+const SHADOW_SIDE: Record<Side, Side> = {
+  [FrontSide]: BackSide,
+  [BackSide]: FrontSide,
+  [DoubleSide]: DoubleSide,
+};
+
+/**
+ * Stand-ins that take the crown programs a date change switches to through
+ * the scene's compile path ahead of time. A tile compiles what its meshes
+ * wear (tile-stream.ts `compileRepresentatives`): in summer the plain crown
+ * only, in winter the seasonal one only, and no depth program at all —
+ * three's compile never looks at the shadow pass's materials (a crown's
+ * `customDepthMaterial`, or three's own depth material a leafy crown casts
+ * with). Without these, the first drag across the leaf fall would compile
+ * the other crown and its depth program inside a frame. Programs are
+ * shared by their cache key, not by material, so one set per scene covers
+ * every tile's crowns.
+ */
+export interface CrownWarmup {
+  /** the seasonal crown's depth material (crownDepthMaterial()) and a plain
+   *  depth material like the one three's shadow pass gives a leafy crown,
+   *  each on the side that pass sets: compile them the way it draws (no
+   *  fog) */
+  depth: InstancedMesh[];
+  /** frees the stand-ins' own materials and geometry (never the shared
+   *  crown depth material) */
+  dispose: () => void;
+  /** wear the seasonal and the plain crown: compile against the scene */
+  main: InstancedMesh[];
+}
+
+/**
+ * Builds the stand-ins over a crown geometry and a pair of crown materials
+ * of the scene's kind (the same program keys as a tile's), each an
+ * instanced mesh with instance colours and `aBare`, as a crown is. They
+ * are never added to the scene; keep them (and so their programs) until
+ * the scene goes, then `dispose`.
+ */
+export function crownWarmup(
+  geometry: BufferGeometry,
+  materials: CrownMaterials
+): CrownWarmup {
+  const view = withBare(
+    geometry,
+    new InstancedBufferAttribute(new Float32Array(1), 1)
+  );
+  const stand = (material: Material): InstancedMesh => {
+    const mesh = new InstancedMesh(view, material, 1);
+    mesh.setColorAt(0, new Color(1, 1, 1));
+    return mesh;
+  };
+  const crown = materials.bare;
+  const shadowSide = crown.shadowSide ?? SHADOW_SIDE[crown.side];
+  const seasonal = crownDepthMaterial();
+  seasonal.side = shadowSide;
+  const plain = new MeshDepthMaterial({ side: shadowSide });
+  return {
+    main: [stand(materials.bare), stand(materials.leafy)],
+    depth: [stand(seasonal), stand(plain)],
+    dispose: () => {
+      materials.bare.dispose();
+      materials.leafy.dispose();
+      plain.dispose();
+      view.dispose();
+      geometry.dispose();
+    },
+  };
 }
 
 const scratch = new Color();

@@ -95,10 +95,25 @@ test("an unknown genus index follows the generic curve", () => {
   expect(seasonAt(200, 999)).toEqual(seasonAt(200, 0));
 });
 
+// Dates built from local fields, as the HUD builds them: the assertions
+// hold in every timezone the tests run in.
 test("day of year is 0 on 1 January and folds 29 February", () => {
-  expect(dayOfYear(new Date(Date.UTC(2026, 0, 1)))).toBe(0);
-  expect(dayOfYear(new Date(Date.UTC(2026, 9, 1)))).toBe(273);
-  expect(dayOfYear(new Date(Date.UTC(2028, 2, 1)))).toBe(59); // leap year
-  expect(dayOfYear(new Date(Date.UTC(2028, 1, 29, 12)))).toBeCloseTo(58.5);
-  expect(dayOfYear(new Date(Date.UTC(2026, 11, 31, 12)))).toBeCloseTo(364.5);
+  expect(dayOfYear(new Date(2026, 0, 1))).toBe(0);
+  expect(dayOfYear(new Date(2026, 9, 1))).toBe(273);
+  expect(dayOfYear(new Date(2028, 2, 1))).toBe(59); // leap year
+  expect(dayOfYear(new Date(2028, 1, 29, 12))).toBeCloseTo(58.5);
+  expect(dayOfYear(new Date(2026, 11, 31, 12))).toBeCloseTo(364.5);
+});
+
+test("day of year follows the local calendar through the whole day", () => {
+  // The HUD's scene date: local midnight plus the time-of-day slider. Every
+  // minute of 1 October is day 273, whatever the UTC date of that instant.
+  for (const minutes of [0, 30, 60 * 5, 60 * 12, 60 * 23 + 59]) {
+    const date = new Date(2026, 9, 1, 0, minutes);
+    expect(Math.floor(dayOfYear(date))).toBe(273);
+  }
+  expect(dayOfYear(new Date(2026, 9, 1, 6))).toBeCloseTo(273.25);
+  // A daylight-saving night (Europe: 29 March, 25 October) is no shorter.
+  expect(dayOfYear(new Date(2026, 2, 29, 12))).toBeCloseTo(87.5);
+  expect(dayOfYear(new Date(2026, 9, 25, 12))).toBeCloseTo(297.5);
 });

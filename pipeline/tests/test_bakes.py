@@ -943,20 +943,88 @@ def test_an_osm_tree_needs_a_taxon_or_a_leaf_type():
     assert osm_tree(0, 0, '"natural"=>"tree","denotation"=>"urban"') is None
 
 
-def test_the_cadastre_wins_within_three_metres_and_fills_osm_sizes():
-    from bake.trees import complement, impute, osm_tree, parse_trees, size_stats
+def test_an_osm_taxon_must_name_a_genus_the_bake_knows():
+    from bake.tree_archetypes import CONIFER, GENERA, ROUND
+    from bake.trees import osm_tree
 
-    cadastre = parse_trees(
-        {"features": [_cadastre_tree(float(i) * 20, 0.0, 10, 5) for i in range(3)]},
-        (0.0, -1.0, 100.0, 100.0),
-    )
+    def tree(tags: str) -> dict:
+        t = osm_tree(0, 0, '"natural"=>"tree",' + tags)
+        assert t is not None
+        return t
+
+    # A German common name is no genus: read by its last word, or the leaf
+    # type decides — never a round deciduous "Gemeine".
+    spruce = tree('"species"=>"Gemeine Fichte","leaf_type"=>"needleleaved"')
+    assert (spruce["archetype"], spruce["leaf"]) == (CONIFER, "e")
+    assert GENERA[tree('"genus"=>"Linden","leaf_type"=>"broadleaved"')["gn"]] == "Tilia"
+    assert GENERA[tree('"species"=>"Winter-Linde"')["gn"]] == "Tilia"
+    assert GENERA[tree('"species"=>"Eberesche"')["gn"]] == "Sorbus"
+    assert GENERA[tree('"species"=>"Rosskastanie"')["gn"]] == "Aesculus"
+    # A family or an English name: the leaf type, or nothing.
+    fir = tree('"species"=>"Pinaceae","leaf_type"=>"needleleaved"')
+    assert (fir["archetype"], fir["gn"]) == (CONIFER, 0)
+    mulberry = tree('"species"=>"White Mulberry","leaf_type"=>"broadleaved"')
+    assert (mulberry["archetype"], mulberry["gn"]) == (ROUND, 0)
+    assert osm_tree(0, 0, '"natural"=>"tree","species"=>"Pinaceae"') is None
+    # A lower-case genus is still the genus; a bare epithet only when it
+    # names one tree.
+    assert GENERA[tree('"genus"=>"tilia"')["gn"]] == "Tilia"
+    assert GENERA[tree('"species"=>"hippocastanum"')["gn"]] == "Aesculus"
+    assert osm_tree(0, 0, '"natural"=>"tree","species"=>"domestica"') is None
+    # A later key that reads as a genus serves when the first does not.
+    assert GENERA[tree('"species"=>"Gingo","genus"=>"Ginkgo"')["gn"]] == "Ginkgo"
+
+
+def test_an_osm_leaf_type_or_cycle_overrides_the_taxon():
+    from bake.tree_archetypes import CONIFER
+    from bake.trees import osm_tree
+
+    # A needle-leaved "lime": the taxon is the suspect.
+    t = osm_tree(0, 0, '"natural"=>"tree","genus"=>"Tilia","leaf_type"=>"needleleaved"')
+    assert t is not None
+    assert (t["archetype"], t["leaf"], t["gn"]) == (CONIFER, "e", 0)
+    # Agreeing tags keep the genus; leaf_cycle sets the leaf type.
+    t = osm_tree(0, 0, '"natural"=>"tree","genus"=>"Larix","leaf_type"=>"needleleaved"')
+    assert t is not None
+    assert (t["archetype"], t["leaf"]) == (CONIFER, "d")
+    t = osm_tree(0, 0, '"natural"=>"tree","genus"=>"Magnolia","leaf_cycle"=>"evergreen"')
+    assert t is not None
+    assert t["leaf"] == "e"
+
+
+def test_the_cadastre_wins_within_three_metres_and_fills_osm_sizes():
+    from bake.trees import cadastre_points, complement, impute, osm_tree, parse_trees, size_stats
+
+    raw = {"features": [_cadastre_tree(float(i) * 20, 0.0, 10, 5) for i in range(3)]}
+    cadastre = parse_trees(raw, (0.0, -1.0, 100.0, 100.0))
     tags = '"natural"=>"tree","genus"=>"Tilia"'
     osm = [osm_tree(2.5, 0.0, tags), osm_tree(23.5, 0.0, tags), osm_tree(50.0, 0.0, tags)]
-    kept = complement([t for t in osm if t], cadastre)
+    kept = complement([t for t in osm if t], cadastre_points(raw))
     assert [t["x"] for t in kept] == [23.5, 50.0]
     sizes, imputed_h, _ = impute(kept, size_stats(cadastre))
     assert imputed_h == 2
     assert sizes[0] == (10, 5)  # the cadastre's lime median and crown ratio
+
+
+def test_a_cadastre_tree_across_the_seam_claims_its_osm_twin():
+    from bake.trees import cadastre_points, complement, osm_tree, parse_trees
+
+    # The WFS answer's margin: a tree 1 m past the tile's east seam.
+    raw = {"features": [_cadastre_tree(101.0, 50.0, 10, 5), _cadastre_tree(50.0, 50.0, 10, 5)]}
+    assert len(parse_trees(raw, (0.0, 0.0, 100.0, 100.0))) == 1
+    twin = osm_tree(99.0, 50.0, '"natural"=>"tree","genus"=>"Tilia"')
+    assert twin is not None
+    assert complement([twin], cadastre_points(raw)) == []
+    assert complement([twin], cadastre_points({"features": []})) == [twin]
+
+
+def test_an_implausible_trunk_is_dropped_not_clamped():
+    from bake.trees import T_MAX, tree_props
+
+    tree = {"archetype": 0, "leaf": "d", "foliage": 0, "globe": False}
+    assert "t" not in tree_props({**tree, "t": 120.0}, 5.0, 4.0)  # a 5 m tree
+    assert tree_props({**tree, "t": 120.0}, 20.0, 12.0)["t"] == 120
+    assert "t" not in tree_props({**tree, "t": T_MAX + 50}, 40.0, 20.0)
 
 
 def test_only_the_osm_hedges_ship():

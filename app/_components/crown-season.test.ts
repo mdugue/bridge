@@ -1,16 +1,22 @@
 import { expect, test } from "bun:test";
 import {
+  BackSide,
   Color,
   IcosahedronGeometry,
   InstancedMesh,
   type Material,
   MeshBasicMaterial,
+  MeshDepthMaterial,
+  ShaderLib,
+  type WebGLProgramParametersWithUniforms,
 } from "three";
 import { TREE_GENERA } from "@/lib/city/tree-season";
 import {
   createSeasonClock,
   crownDepthMaterial,
   type CrownSeasonKey,
+  crownWarmup,
+  injectCrownSeason,
   seasonCrowns,
 } from "./crown-season";
 import { buildVegetation } from "./vegetation-layer";
@@ -110,19 +116,64 @@ test("the canopy's crowns follow the season through the vegetation control", () 
 test("the clock re-seasons on a new calendar day only, throttled, the last day winning", async () => {
   const days: number[] = [];
   const clock = createSeasonClock(
-    new Date(Date.UTC(2026, 6, 10, 9)),
+    new Date(2026, 6, 10, 9),
     (d) => days.push(d),
     40
   );
   expect(clock.day()).toBe(JUL_10);
-  clock.set(new Date(Date.UTC(2026, 6, 10, 18))); // same day, later hour
+  clock.set(new Date(2026, 6, 10, 18)); // same day, later hour
   expect(days).toEqual([]);
-  clock.set(new Date(Date.UTC(2026, 0, 10, 12))); // applied at once
+  clock.set(new Date(2026, 0, 10, 12)); // applied at once
   expect(days).toEqual([JAN_10]);
-  clock.set(new Date(Date.UTC(2026, 9, 1, 12))); // inside the throttle
-  clock.set(new Date(Date.UTC(2026, 9, 20, 12)));
+  clock.set(new Date(2026, 9, 1, 12)); // inside the throttle
+  clock.set(new Date(2026, 9, 20, 12));
   expect(days).toEqual([JAN_10]);
   await new Promise((resolve) => setTimeout(resolve, 80));
   expect(days).toEqual([JAN_10, OCT_20]);
   clock.dispose();
+});
+
+test("the warm-up stands in for both crown variants and the crowns' shadow pass", () => {
+  const geo = new IcosahedronGeometry(1, 1);
+  const leafy = new MeshBasicMaterial();
+  const bare = new MeshBasicMaterial();
+  const warm = crownWarmup(geo, { leafy, bare });
+  expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);
+  const [seasonal, plain] = warm.depth.map((m) => m.material as Material);
+  expect(seasonal).toBe(crownDepthMaterial());
+  expect(plain).toBeInstanceOf(MeshDepthMaterial); // as three's own
+  // As a crown: instanced, with instance colours and its leaf cover.
+  for (const mesh of [...warm.main, ...warm.depth]) {
+    expect(mesh.instanceColor).not.toBeNull();
+    expect(mesh.geometry.getAttribute("aBare")).toBeDefined();
+  }
+  // The side three's shadow pass gives a front-sided caster's depth
+  // material: part of the program's key.
+  expect(seasonal.side).toBe(BackSide);
+  expect(plain.side).toBe(BackSide);
+  let freed = 0;
+  for (const m of [leafy, bare, plain]) {
+    m.addEventListener("dispose", () => freed++);
+  }
+  let depthFreed = false;
+  crownDepthMaterial().addEventListener("dispose", () => {
+    depthFreed = true;
+  });
+  warm.dispose();
+  expect(freed).toBe(3);
+  expect(depthFreed).toBe(false); // the scene's one depth material stays
+});
+
+test("the dither's per-crown seed joins the integer cell, not the position", () => {
+  // Added to the position, the seed was scaled by the pixel scale too and
+  // the hash's sin() saw arguments near 1e6 up close.
+  const sh = {
+    vertexShader: ShaderLib.depth.vertexShader,
+    fragmentShader: ShaderLib.depth.fragmentShader,
+    uniforms: {},
+  } as unknown as WebGLProgramParametersWithUniforms;
+  injectCrownSeason(sh, false);
+  expect(sh.vertexShader).toContain("vCrownCell = crownTurn * position;");
+  expect(sh.fragmentShader).toContain("floor(pixScales.x * p) + seed");
+  expect(sh.fragmentShader).toContain("floor(pixScales.y * p) + seed");
 });

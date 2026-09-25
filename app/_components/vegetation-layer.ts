@@ -23,12 +23,19 @@ import {
 } from "@/lib/city/look-controls";
 import { samplePolyline } from "@/lib/city/polyline";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { TRUNK_FOOT_R, TRUNK_TOP_R } from "@/lib/city/tree-inventory";
+import {
+  TRUNK_FOOT_R,
+  TRUNK_ROWS,
+  TRUNK_TOP_R,
+  trunkFlare,
+} from "@/lib/city/tree-inventory";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
   type CrownMaterials,
   type CrownSeasonKey,
+  type CrownWarmup,
+  crownWarmup,
   injectCrownSeason,
   type SeasonalCrowns,
   seasonCrowns,
@@ -676,7 +683,15 @@ export function buildCrownMaterial(
  * identically — they belong on a near-distance LOD crown.
  */
 export function buildTrunkGeo(): BufferGeometry {
-  const t = new CylinderGeometry(TRUNK_TOP_R, TRUNK_FOOT_R, TRUNK_H, 7, 5);
+  // The profile (rows, taper, flare) is lib/city/tree-inventory.ts's, so a
+  // measured trunk is fitted to the radius drawn (`trunkRadiusAt`).
+  const t = new CylinderGeometry(
+    TRUNK_TOP_R,
+    TRUNK_FOOT_R,
+    TRUNK_H,
+    7,
+    TRUNK_ROWS
+  );
   t.translate(0, TRUNK_H / 2, 0);
   const bend = 0.05 * TRUNK_H;
   const bx = 0.82;
@@ -689,7 +704,7 @@ export function buildTrunkGeo(): BufferGeometry {
     const r = Math.hypot(v.x, v.z);
     const ang = Math.atan2(v.z, v.x);
     if (r > 1e-4) {
-      const flare = tt < 0.16 ? 1 + ((0.16 - tt) / 0.16) * 0.9 : 1;
+      const flare = trunkFlare(tt);
       const bump = 1 + (hash(ang * 2.4 + v.y * 1.7) - 0.5) * 0.2;
       const nr = r * flare * bump;
       v.x = Math.cos(ang) * nr;
@@ -926,6 +941,27 @@ export function buildCrownMaterials(
       bare
     );
   return { leafy: make(false), bare: make(true) };
+}
+
+/**
+ * The crown programs a date change may switch to, for the scene to compile
+ * once ahead of time (crown-season.ts `crownWarmup`): a crown geometry and
+ * the two crown materials, built as a tile builds them (the uniforms'
+ * values do not reach the program key).
+ */
+export function buildCrownWarmup(heightFog?: HeightFogUniforms): CrownWarmup {
+  const materials = buildCrownMaterials(
+    {
+      sunDirection: new Vector3(0, 1, 0),
+      shimmer: { value: LOOK_DEFAULTS.shimmer },
+      uTime: { value: 0 },
+      translucency: { value: LOOK_DEFAULTS.translucency },
+      leafFlutter: { value: LOOK_DEFAULTS.leafFlutter },
+      leafBright: { value: LOOK_DEFAULTS.leafBright },
+    },
+    heightFog
+  );
+  return crownWarmup(buildCrownGeo(), materials);
 }
 
 function buildTrees(

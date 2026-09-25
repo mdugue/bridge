@@ -240,6 +240,54 @@ RED_MAPLE_CULTIVARS = {
 RED_OAKS = {"Quercus rubra", "Quercus palustris", "Quercus coccinea"}
 # Synonyms the cadastre and OSM use for a genus of the table.
 GENUS_SYNONYMS = {"Styphnolobium": "Sophora"}
+# Genera no table above names: the rarer ones in the Dresden cadastre and
+# OSM, a round deciduous crown on the generic phenology curve.
+OTHER_GENERA = {
+    "Albizia",
+    "Broussonetia",
+    "Camellia",
+    "Carya",
+    "Cercidiphyllum",
+    "Cladrastis",
+    "Cryptomeria",
+    "Davidia",
+    "Elaeagnus",
+    "Gymnocladus",
+    "Halesia",
+    "Hamamelis",
+    "Hippophae",
+    "Maclura",
+    "Morus",
+    "Nyssa",
+    "Paulownia",
+    "Phellodendron",
+    "Philadelphus",
+    "Ptelea",
+    "Pterocarya",
+    "Rhamnus",
+    "Rhododendron",
+    "Staphylea",
+}
+# Every genus the classifier knows by name. A first word outside it is not a
+# botanical name the bake can read — a German or English common name, a
+# family ("Pinaceae"), a bare epithet ("hippocastanum") — and classifying it
+# as a genus would make it a round deciduous tree whatever it is.
+BOTANICAL_GENERA = (
+    EVERGREEN_CONIFERS
+    | DECIDUOUS_CONIFERS
+    | EVERGREEN_BROADLEAF
+    | SMALL_GENERA
+    | OVAL_GENERA
+    | OTHER_GENERA
+    | set(GENUS_SYNONYMS)
+    | {name.split()[0] for name in GENERA if name}
+    | {name.split()[0] for name in SMALL_SPECIES | OVAL_SPECIES | EVERGREEN_SPECIES}
+)
+
+
+def is_genus(name: str) -> bool:
+    """Whether `name` is a botanical genus the classifier knows."""
+    return name in BOTANICAL_GENERA
 
 
 def genus_id(botanical: str) -> int:

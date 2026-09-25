@@ -170,7 +170,9 @@ the shadow map.
   a per-chunk geometry view over the shared crown buffers.
 - A chunk wears the seasonal (discarding) material only while one of its
   crowns is out of full leaf; in summer the plain crown keeps early depth
-  testing. The first switch compiles the variant once per session.
+  testing. Both variants and both crown depth programs are compiled once
+  per scene before the first tree lands (`crownWarmup`, see the review
+  fixes below), so the first switch compiles nothing inside a frame.
 - The dither is a hashed alpha test (three's `alphaHash` method, cells
   ~1.25 px at every distance, in crown space), not a fixed cell grid: the
   first cut's fixed cells (~8 per crown, with a solid twig-tinted crown past
@@ -179,8 +181,39 @@ the shadow map.
   check; the check itself is still open.
 - The genus table is shared through the artifact (`genera` member,
   checked against `TREE_GENERA` by `features.test.ts`), not a third file.
-- The 3 m rule looks at the tile's own cadastre file only; a cadastre tree
-  just across a seam does not veto an OSM tree (a 3 m band).
+- ~~The 3 m rule looks at the tile's own cadastre file only~~ — fixed in
+  the review below: it looks at every tree of the cached WFS answer, the
+  10 m margin across the seams included.
+
+**Review fixes (2026-09-25).** A review of this phase found, and the
+branch fixed (each with a test):
+- *Compile before it shows*: the seasonal crown variant and the crown
+  depth program were never pre-compiled (a tile compiles what its meshes
+  wear; three's compile never reaches `customDepthMaterial`), so the first
+  date drag across the leaf fall compiled them inside a frame. The
+  dressing chain now compiles stand-ins for both crown variants and both
+  crown depth programs once per scene (`crown-season.ts` `crownWarmup`,
+  `PostStack.compile(…, "shadow")` without fog). Headless: booting on 10
+  July then setting 10 January went 49 → 51 programs before, 51 → 51
+  now; booting in January then setting July adds none.
+- A tile whose compile was still pending missed a date change (and a
+  night or look change): the dressing now catches up when it joins the
+  stream (`tile-stream.ts` `catchUp`).
+- `dayOfYear` read UTC while the HUD composes the date in local time; it
+  now reads the local calendar.
+- The OSM taxon: any first word counted as a genus (`species=Gemeine
+  Fichte` became a round deciduous tree, `species=hippocastanum` the
+  generic curve). A taxon now counts only when it names a genus the
+  classifier knows; German names map by their last word, lower-case
+  genera and unambiguous bare epithets are read, a contradicting
+  `leaf_type` wins and `leaf_cycle` sets the leaf type.
+- The trunk fit assumed a linear taper, but the geometry has a flared foot
+  ring: a 25 m tree's measured trunk drew ~50 % too thick. `trunkGirth`
+  now fits the drawn profile (`trunkRadiusAt`); the bake drops a trunk
+  diameter implausible for the height instead of clamping it.
+- The dither's per-crown seed was added before the pixel-scale floor (sin
+  arguments near 1e6 up close); it now joins the integer cell.
+Re-baked on all fifteen tiles: see `docs/data-pipeline.md` (`trees`).
 
 **Numbers.** `scripts/eval/season-cost.ts` (whole site, 58 988 seasonal
 crowns, CPU of the container): a date change costs 4–7 ms median (July →
