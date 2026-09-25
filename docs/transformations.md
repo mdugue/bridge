@@ -417,9 +417,9 @@ visual-variable codebook is in
   the same contract.
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
-  (laser scan) — on by default. The laser scan is baked for the spawn tile
-  only; the neighbours are baked OSM-only (hedges at their tag / 1.5 m, no
-  extra trees). **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
+  (laser scan) — on by default. The laser scan is baked for every tile of the
+  site (`bun run bake --ingest --lsc`); a tile without one would bake
+  OSM-only (hedges at their tag / 1.5 m, no extra trees). **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
   `osm+lsc`) and the extra trees. **Not shipped** (🗃️ below): the
   laser-scan-only hedges and all shrubs — the bake still finds them
   (`bun run bake --step lowveg --research` writes every candidate under

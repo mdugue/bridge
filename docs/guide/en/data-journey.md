@@ -184,7 +184,7 @@ as sent over the network):
 | Street furniture | 19 kB | 0.3–19 kB | with the detailed terrain |
 | Lamps, rails, ballast, bridges, platforms, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
 | Paving and road-edge rasters | 2.18 MB | 0.28–2.76 MB | with the detailed terrain |
-| **Per tile, in full detail** | **≈ 6.4 MB** | **≈ 3.9–9.5 MB** | |
+| **Per tile, in full detail** | **≈ 6.4 MB** | **≈ 4.0–9.7 MB** | |
 | **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 1.3–3.3 MB | |
 
 How much a visit downloads therefore depends on where you go. With every

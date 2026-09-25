@@ -195,7 +195,7 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | Stadtmöbel | 19 kB | 0,3–19 kB | mit dem detaillierten Gelände |
 | Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
 | Belag- und Straßenkanten-Raster | 2,18 MB | 0,28–2,76 MB | mit dem detaillierten Gelände |
-| **Je Kachel, volle Detailstufe** | **≈ 6,4 MB** | **≈ 3,9–9,5 MB** | |
+| **Je Kachel, volle Detailstufe** | **≈ 6,4 MB** | **≈ 4,0–9,7 MB** | |
 | **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 1,3–3,3 MB | |
 
 Wie viel ein Besuch lädt, hängt also davon ab, wohin du gehst. Mit jeder

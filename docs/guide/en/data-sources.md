@@ -41,7 +41,7 @@ the species.
 | **LoD2** | 3D building model with roof shapes | GeoSN | Every building's footprint, height, roof shape and attributes |
 | **Basis-DLM** | Digital landscape model (the land-use map) | GeoSN | Ground colours, water outlines, hedges and tree rows, railway areas and tracks, bridge outlines, monuments and fountains (position and official name) |
 | **DOP** | Digital orthophoto, 20 cm, with a near-infrared channel | GeoSN | Roof colours; vegetation greenness for tree crowns and meadows |
-| **LSC** | Laser-scan point cloud | GeoSN | Hedge heights; trees in courtyards and gardens (central tile) |
+| **LSC** | Laser-scan point cloud | GeoSN | Hedge heights; trees in courtyards and gardens |
 | **OSM** | OpenStreetMap | Volunteers | Street lamps, hedges, street furniture (benches, bins, bicycle stands, bollards, post boxes, stop shelters), playgrounds and their equipment, station platforms, walls, cliff edges, stairs, bridge structure types, fountain basins, what streets, pavements and car parks are paved with, sports grounds |
 | **Stadtbaumkataster** | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width and a crown shape from the species |
 
@@ -126,7 +126,7 @@ repository, because the build step reads it directly. See
 | **Update cycle** | The same as the height models (27–30 November 2024 for these tiles). |
 | **Resolution and accuracy** | Irregular points, several per square metre; ±0.15 m in height, ±0.30 m in position, per GeoSN. |
 | **Generally suited for** | Everything the grids simplify away: individual tree crowns, roof edges, wall faces, power lines. |
-| **Used here for** | The height of the hedges mapped in OpenStreetMap, and trees in courtyards and gardens that the land-use map does not mark as green (unless the city's tree register already has a tree there). Only for the central tile so far. Hedges and shrubs found in the scan alone are not shown: about a third of them turned out to be the rims of tree crowns. |
+| **Used here for** | The height of the hedges mapped in OpenStreetMap, and trees in courtyards and gardens that the land-use map does not mark as green (unless the city's tree register already has a tree there). Hedges and shrubs found in the scan alone are not shown: about a third of them turned out to be the rims of tree crowns. |
 | **Strengths** | Sees below 3 m and between buildings, where the height grids and the land-use map see nothing. Each point knows how bright its echo was and whether the pulse split — tall trees split it almost always, roofs almost never. |
 | **Weaknesses** | Its classes do not separate vegetation from buildings, cars or fences. A clipped hedge rarely splits a pulse, so for low plants the viewer leans on the greenness of the (spring) aerial photo instead; a hedge under a tree crown stays invisible. |
 | **Format and download** | LAZ per 2 km tile, large (≈380 MB for 60 million points); same portal page as the DGM1. |
@@ -240,7 +240,7 @@ the "Stand" of each tile. The folders are per product and format:
 |---|---|---|
 | DGM1 (GeoTIFF + `.tfw` + `_akt.csv`) | `…/JCcXyifaNdLDnxZ/dgm1_<tile>_tiff.zip` | [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html) |
 | DOM1 (GeoTIFF) | `…/S6wwnFwX7882sZm/dom1_<tile>_tiff.zip` | same page |
-| Laser-scan point cloud (LAZ), unused | `…/rqcqdt8QMcLFUvC/lsc_<tile>_laz.zip` | same page |
+| Laser-scan point cloud (LAZ) | `…/EpkzyJHScGb5ndd/lsc_<tile>_laz.zip` | same page |
 | LoD2 (CityGML) | `…/GVzwbSyp7Yl7mBD/lod2_<tile>_citygml.zip` | [Digitale 3D-Stadtmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-3d-stadtmodelle-4875.html) |
 | DOP20 RGBI (GeoTIFF) | `…/sX3GPcdBMGrfXT9/dop20rgbi_<tile>_tiff.zip` | [DOP](https://www.geodaten.sachsen.de/downloadbereich-dop-4826.html) |
 | Basis-DLM (Shape, statewide, 1.23 GB) | `…/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip` | [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html) |
