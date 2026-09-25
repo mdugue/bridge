@@ -19,8 +19,59 @@
 - **Effort**: M (bake S, geometry M, gates S)
 - **Risk**: MED — 78 km of line work; triangle and fill budget
 - **Planned at**: 2026-09-25
-- **Status**: PARTIAL — phases 1–2 built; open: the plates on a real GPU
-  (none was available to the executor)
+- **Status**: PARTIAL — phases 1–2 built, the look restyled to one calm
+  band after the maintainer's review on a phone (below); open: the plates
+  on a real GPU (none was available to the executor)
+
+## Review fixes and restyle (2026-09-25)
+
+- **Look — restyled** — the drawn panels below (dark iron bars every
+  12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m, alpha-cut and
+  dithered) were, on a real phone, "zu hart und kleinteilig", and then
+  "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu
+  Artefakten": the fine bars and the dither aliased (moiré, shimmer). A
+  fence is now **one low, calm band** (`lib/city/fences.ts`
+  `bandHeight`: ¾ of the tagged height, 0.4–1 m; a handrail only its top
+  15 cm; a boom 15 cm at the band's top) in one muted tone near the
+  ground's (`fence-layer.ts`: warm grey-sage, wood a warm stone, a gate's
+  leaf a lighter stone), a breath deeper at the foot, lighter toward the
+  top edge (the see-through impression by colour alone), fading toward the
+  pale ground from 40 to 160 m, lit as the ground it stands on (its
+  normal the world's up: lit as a vertical quad, the side away from the
+  sun was a dark grey sheet on the first headless plate). Opaque: no discard,
+  no dither, no posts, no end-post quads, nothing finer than the band's
+  height. It casts no shadow (an opaque band would cast a solid one, a
+  light one needs the dithered depth pass that crawled), so the custom
+  depth material is gone. The UV carries only the kind now. 13 506 /
+  38 612 / 12 734 / 19 032 triangles per tile (was 14 366 / 41 208 /
+  13 510 / 20 048). Checked headless (SwiftShader) at walking height and
+  from 150 m: no stripes, no moiré; the colour itself still wants a real-GPU
+  plate.
+- **Seam artefacts** — `walls.py` clipped an area's polygon to the tile
+  before taking its ring, so a fenced or walled area across a seam got a
+  ruler-straight line along the tile edge: 1.52 km of fence in 10 rings
+  (e.g. 328.7 m of railing along x = 412000 in `33410_5658` and
+  `33412_5658`, 263 m along the site's north edge) and 216 m of wall in 2
+  (107.8 m along x = 412000, pre-existing). Now every ring is cut at the
+  tile edge as a line (`clipped_lines`, with a pytest). The committed walls
+  stayed verbatim but for those two, whose on-edge segment was cut off
+  (identical, Hausdorff 0, to what the fixed bake writes for them); the
+  fences and gates were re-baked from the BBBike extract. 0 m of wall or
+  fence on any tile edge (`features.test.ts` guards it). Fences 99.3 →
+  97.7 km (15.5 / 45.0 / 14.7 / 22.5 km per tile), 1 287 → 1 284 lines
+  (pieces of one ring now join across its closing vertex); gates
+  unchanged (875: 746 on fences, 129 on walls).
+- **Gates** — a gate at a closed ring's closing vertex cut only the half
+  of its gap on one side (14 of them in the committed data): `cutGaps` now
+  opens a ring at a gap's start, so the gap wraps round the closure (and no
+  piece ends there). A neighbour's gate whose gap reaches over the seam
+  comes along as `{seam: true}` and cuts this tile's piece too, drawing
+  its leaf's share there (none in today's four tiles). `swing_gate` is a
+  boom like `lift_gate` and `cycle_barrier`.
+- Size: the fine terrain glTF shrinks by 11.3 / 25.6 / 10.4 / 10.7 kB
+  gzipped (−0.65 / −1.42 / −0.63 / −0.52 %) against the drawn-panel build
+  (fewer quads, and a `u` that carries only the kind compresses to
+  nearly nothing); the coarse level and the buildings are unchanged.
 
 ## Outcome (2026-09-25)
 

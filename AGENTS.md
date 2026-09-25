@@ -109,7 +109,7 @@ config change.
     (their goals, posts and nets), `rail-layer.ts`, `wall-layer.ts`,
     `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
     materials: walls, kerbs, stairs and fences are baked into the fine
-    terrain glTF; the fences' pattern is drawn by their shader),
+    terrain glTF; a fence is one low band in a muted tone — no pattern),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `furniture-layer.ts` (benches, bins, bicycle stands, bollards, post
     boxes, stop shelters, playgrounds with their mapped equipment),
@@ -361,6 +361,10 @@ its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
 Before a tile or its dressing shows, its shaders are compiled with
 `compileAsync` against the scene pass's target (`PostStack.compile`) —
 add new per-tile objects inside that path, or they compile inside a frame.
+`compileAsync` never reaches a mesh's `customDepthMaterial` (three r186
+compiles `object.material` only); `PostStack.compile` compiles those
+through stand-ins (`depthMaterialStandIns` in `three-utils.ts`) set up as
+the shadow pass sets them, so the shadow pass finds the program cached.
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the

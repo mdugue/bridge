@@ -409,7 +409,10 @@ visual-variable codebook is in
   front is not one strip) on the dusk-glow slider × `nightFactor`. No window
   structure (the grid is a recorded veto, 🗃️ below). 1 555 of 1 855 ground-
   floor points placed (per-tile sums); 264–323 objects with a shop per
-  tile, 1 188 in all. STOP check:
+  tile, 1 188 in all, matched directly — a part also carries its root
+  Building's flags (a Saxon LoD2 Building with parts has no geometry of its
+  own; `inheritedFlags`, like the attributes), so 2 060 drawn objects show
+  the wash (759 / 359 / 513 / 429). STOP check:
   8.2 % of the placed points (2 of a seeded 20) land in a footprint more
   than 20 m from any street centreline (a courtyard building) — under the
   plan's 20 %, so the join stays containment-first. Strength 0.4, **not
@@ -418,7 +421,8 @@ visual-variable codebook is in
   outlines with `heritage=*` (167 touch the four tiles) mark the LoD2 objects
   they cover ≥ 50 % (842 objects: 478 / 28 / 139 / 197 on `33410_5656` /
   `33410_5658` / `33412_5656` / `33412_5658` — the Zwinger, the Schloss and
-  the Altstadt blocks are many parts each). A barely-there warm lift of the
+  the Altstadt blocks are many parts each; with a root's flag handed to its
+  parts, 882 drawn: 513 / 28 / 141 / 200). A barely-there warm lift of the
   wall tint (+3.5 % red at full *Farbvariation*) and a finer second cornice
   line 0.45 m under the eave. The official list (LfD Sachsen,
   *Kulturdenkmale_Flaeche*) is reachable only as a WMS here: a possible
@@ -1031,36 +1035,49 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   `{kind: "fence", type, h}`: `fence_type` railing/metal/bars → `railing`,
   wire/chain_link/chain/temporary → `mesh`, wood/split_rail/pales →
   `picket`, untagged → `railing` (Dresden's wrought iron), a handrail →
-  `rail` (posts and a rail, no infill); `height` when 0.3–4 m, else 1.2 m
-  (a handrail 1.0 m). Last come the gates (`barrier=gate|lift_gate|
-  swing_gate|cycle_barrier` points within 0.5 m of a wall or fence line,
-  snapped onto it, `{kind: "gate", w, on}`: `width`, else 1.2 m, a lift
-  gate 4 m). 99 km of fence and 875 gates on a line in the four tiles
-  (15.7 / 45.9 / 14.7 / 22.9 km on `33410_5656` / `33410_5658` /
+  `rail`; `height` when 0.3–4 m, else 1.2 m (a handrail 1.0 m). Every line
+  is clipped to the tile **as a line** — an area's outer ring first, then
+  the ring cut at the tile edge; clipping the area as a polygon first had
+  closed its ring along the edge, a ruler-straight fence or wall on the
+  seam that stands nowhere (1.52 km of fence in 10 rings and 216 m of wall
+  in 2, e.g. 328.7 m of railing along x = 412000; now 0 m on any tile
+  edge, guarded by `features.test.ts`). Last come the gates
+  (`barrier=gate|lift_gate|swing_gate|cycle_barrier` points within 0.5 m of
+  a wall or fence line, snapped onto it, `{kind: "gate", w, on}`: `width`,
+  else 1.2 m, a lift gate 4 m); a neighbour's gate whose gap reaches over
+  the seam comes along as `{seam: true}` and cuts this tile's piece too
+  (none in today's four tiles). 97.7 km of fence and 875 gates on a line
+  (15.5 / 45.0 / 14.7 / 22.5 km on `33410_5656` / `33410_5658` /
   `33412_5656` / `33412_5658`; 746 gates on fences, 129 on walls; about 520
   gate points stand on no mapped line and are dropped). **Baked into the
   fine terrain glTF** as a `fences` node (`lib/city/fences.ts`,
-  `scripts/bake-tiles.ts` `fenceMesh`, ADR 0029): one flat, double-sided
-  panel per ≤ 2.5 m between posts on the fine TIN, cut `w` wide at each
-  gate with a closed leaf (or a boom, for a lift gate or cycle barrier) in
-  the gap; gates on a freestanding wall (`kind` wall) cut that wall's
-  ribbon the same way. Fences never enter the conflation, the stair burn or
-  the step snap: they stand on their OSM line. The pattern — bars every
-  12.5 cm, a wire diamond mesh, pickets, a gate's denser bars, and each
-  panel's post and top rail — is procedural in `fence-layer.ts`,
-  box-filtered over the pixel footprint; where the bars fall under a pixel
-  or beyond 40–60 m the infill fades to a lighter veil of its mean
-  coverage, dithered (the plan's STOP fallback against alpha-test shimmer,
-  taken up front). The shadow pass casts posts and rails in full and the
-  infill dithered by its coverage, which the PCF softens into a partial
-  shadow. 14 366 / 41 208 / 13 510 / 20 048 triangles per tile; the fine
-  terrain glTF grows by 46 / 115 / 44 / 53 kB gzipped (+2.7 / +6.8 / +2.7
-  / +2.7 %, under the plan's 10 %). Posts and rails as boxes (the first
-  cut: 125–361 k triangles per tile) cost +12–32 % and were folded into the
-  pattern. The walls file keeps its walls verbatim (the terrain study
-  addresses them by index); only fences and gates were appended, from the
-  BBBike extract of 2026-09-19. **Not yet judged on a real GPU** (plan 029,
-  plan 019). Plan 029.
+  `scripts/bake-tiles.ts` `fenceMesh`, ADR 0029): **one low, calm band**
+  along the line on the fine TIN — a flat, double-sided quad per ≤ 2.5 m at
+  ¾ of the tagged height (0.4–1 m; a handrail only its top 15 cm) — cut
+  `w` wide at each gate with a leaf in a lighter tone in the gap (a boom
+  at the band's top for a lift gate, swing gate or cycle barrier); a closed
+  ring is cut across its closing vertex too (14 gates at a ring's closure
+  had cut only half their gap). Gates on a freestanding wall (`kind` wall)
+  cut that wall's ribbon the same way. Fences never enter the conflation,
+  the stair burn or the step snap: they stand on their OSM line.
+  `fence-layer.ts` gives the band one muted tone close to the ground's and
+  the hedges' (a warm grey-sage; wood a warm stone), a breath deeper at the
+  foot, lighter toward the top edge (a see-through impression by colour
+  alone), fading toward the pale ground from 40 to 160 m, and lit as the ground it
+  stands on (its normal the world's up), so no side turns dark; opaque, no discard, no
+  dither; it receives shadows and casts none. 13 506 / 38 612 / 12 734 /
+  19 032 triangles per tile. The walls file keeps its walls verbatim from
+  the Geofabrik bake (the terrain study addresses them by index) but for
+  the two seam artefacts, cut off exactly as the fixed bake cuts them; the
+  fences and gates come from the BBBike extract of 2026-09-19. **Not yet
+  judged on a real GPU** (plan 029, plan 019). Plan 029.
+  - *Discontinued first look* (🗃️ below): a procedural panel — bars every
+    12.5 cm, a wire diamond mesh, pickets, a post every 2.5 m and a top
+    rail, alpha-cut, a dithered veil far off and a dithered partial shadow.
+    On a phone it was "zu hart und kleinteilig" and then "stärker
+    stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten"
+    (maintainer, 2026-09-25): dark iron read as ink against the pastel
+    scene, and the fine bars and the dither aliased (moiré, shimmer).
 
 ### Wall → terrain conflation (breakline burn at build time)
 *The coarse level only since the fine one became a TIN* ([ADR
@@ -1277,6 +1294,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four tiles (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |

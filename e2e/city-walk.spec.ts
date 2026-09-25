@@ -272,7 +272,8 @@ test.describe("desktop viewer", () => {
     expect(stats.names.triangles).toBeGreaterThan(0);
     // 292 wall lines
     expect(stats.walls.triangles).toBeGreaterThan(0);
-    // 277 fence lines and 114 gates on them, baked with the fine terrain
+    // 277 fence lines and 145 gates (114 on a fence, 31 on a wall), baked
+    // with the fine terrain
     expect(stats.fences.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);
   });

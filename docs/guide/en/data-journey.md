@@ -101,7 +101,7 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `lamps_<tile>.geojson` | lamp positions | up to 60 kB |
 | | `furniture_<tile>.geojson` | benches, bins, bicycle stands, bollards, post boxes and shelters, each with the way it faces | 50–180 kB |
 | | `monuments_<tile>.geojson` | fountain basins and monument points with kind and official name | 2–55 kB |
-| | `walls_<tile>.geojson` | wall lines with kind and height, then the fences and railings (with their kind of panel) and the gates on them | 130–290 kB |
+| | `walls_<tile>.geojson` | wall lines with kind and height, then the fences and railings (with their kind) and the gates on them | 130–290 kB |
 | | `stairs_<tile>.geojson` | flights of steps: axis, width, step count, the heights at foot and head | a few kB |
 | | `terraces_<tile>.geojson` | raised areas the terrain model lacks (the Brühlsche Terrasse) with their level | a few kB |
 | | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |

@@ -10,6 +10,7 @@ import {
   OBJECT_FLAG_SHOP,
   OBJECT_TEXTURE_WIDTH,
   objectBandRows,
+  inheritedFlags,
   objectFlags,
   objectTable,
   packObjectTexels,
@@ -82,6 +83,13 @@ test("objectFlags sums the OSM facts as bits, hasObjectFlag reads them", () => {
   expect(hasObjectFlag(both, OBJECT_FLAG_HERITAGE)).toBe(true);
   expect(hasObjectFlag(OBJECT_FLAG_HERITAGE, OBJECT_FLAG_SHOP)).toBe(false);
   expect(hasObjectFlag(OBJECT_FLAG_SHOP, OBJECT_FLAG_HERITAGE)).toBe(false);
+});
+
+test("inheritedFlags is the object's own facts or its root's", () => {
+  expect(inheritedFlags(undefined, undefined)).toBe(0);
+  expect(inheritedFlags({ shop: 1 }, undefined)).toBe(OBJECT_FLAG_SHOP);
+  expect(inheritedFlags(undefined, { heritage: 1 })).toBe(OBJECT_FLAG_HERITAGE);
+  expect(inheritedFlags({ shop: 1 }, { shop: 1, heritage: 1 })).toBe(3);
 });
 
 test("doomedObjects takes the whole building tree", () => {

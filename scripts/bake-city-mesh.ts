@@ -3,6 +3,7 @@
  * glTF, scripts/bake-tiles.ts): runs cityjson-threejs-loader once, then
  * folds in everything the clay style needs per building (tints, roof colour
  * incl. the DOP LUT, storey/eave heights, dusk glow, roughness jitter), the
+ * OSM flags (shop, heritage; a part carries its Building's too), the
  * demolish tree and the minimap footprints. Called by
  * scripts/prepare-data.ts; no DOM.
  */
@@ -19,8 +20,8 @@ import {
 } from "../lib/city/building-tint";
 import {
   type CityObjectRow,
+  inheritedFlags,
   type OsmBuildingLut,
-  objectFlags,
 } from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { buildingFootprintPolys } from "../lib/city/minimap";
@@ -121,7 +122,8 @@ export interface BakedCityMesh {
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
- * `osmLut` holds what OSM knows per object (shops, heritage), when baked.
+ * `osmLut` holds what OSM knows per object (shops, heritage), when baked;
+ * a part carries its own flags and its root Building's.
  */
 export function bakeCityMesh(
   tile: string,
@@ -185,7 +187,7 @@ export function bakeCityMesh(
       root,
       baseZ: cm(baseZ),
       eaveH: cm(roofMin === undefined ? total : Math.max(roofMin - baseZ, 0)),
-      flags: objectFlags(osmLut?.[id]),
+      flags: inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
       storeyH: cm(storeyHeight(measured)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),

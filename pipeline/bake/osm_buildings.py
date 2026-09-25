@@ -11,8 +11,12 @@ object table (like the DOP roof colours):
 - `heritage`: an OSM building with `heritage=*` covering at least half
   the footprint.
 
-A marked part marks its root Building too. OSM's construction dates are too
-sparse to use (plan 027 phase 3, rejected): the file carries no era."""
+A marked part marks its root Building too, and the building bake
+(`scripts/bake-city-mesh.ts`) hands a root's flags down to every part of it
+(the part's own or the root's): a Saxon LoD2 Building with parts has no
+geometry of its own, so the whole building shows what one part carries.
+OSM's construction dates are too sparse to use (plan 027 phase 3,
+rejected): the file carries no era."""
 
 from __future__ import annotations
 
@@ -115,6 +119,8 @@ def covered_by(areas, polys: list[shapely.Geometry], tree: shapely.STRtree) -> l
 
 
 def flag(objects: dict, city: dict, oid: str, key: str) -> None:
+    """Marks the object and its root Building (the bake hands the root's
+    flags down to all its parts)."""
     for target in {oid, root_of(city, oid)}:
         objects.setdefault(target, {})[key] = 1
 

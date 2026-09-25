@@ -229,13 +229,16 @@ export interface FenceFeature {
 }
 
 /** OSM gates standing on a wall or fence line, last in the walls file
- *  (walls.py, ODbL): the gap's width (m), the line's kind, and `lift_gate`
- *  or `cycle_barrier` where the gate is a boom. */
+ *  (walls.py, ODbL): the gap's width (m), the line's kind, the barrier
+ *  (`lift_gate`, `swing_gate`, `cycle_barrier`) where it is not a plain
+ *  gate, and `seam` on a neighbouring tile's gate whose gap reaches over
+ *  the seam (it cuts this tile's piece of the line too). */
 export interface GateFeature {
   geometry: PointGeometry;
   properties: {
     kind: "gate";
     on: "fence" | "wall";
+    seam?: true;
     type?: string;
     w: number;
   } | null;

@@ -24,6 +24,7 @@ import type {
   KerbFeature,
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
+import { tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import {
   stairSourceFile,
@@ -209,6 +210,37 @@ test.each(tileIds(DRESDEN))(
     expect(ranks).toEqual(ranks.toSorted((a, b) => a - b));
   }
 );
+
+test.each(
+  DRESDEN.tiles.map((cell) => [tileIdOf(DRESDEN, cell), cell] as const)
+)("%s: no wall or fence runs along the tile's edge", (tile, cell) => {
+  // An area clipped as a polygon closes its ring along the tile edge: a
+  // wall or fence on the seam that stands nowhere (walls.py clips rings).
+  const [x0, y0, x1, y1] = tileExtentOf(DRESDEN, cell);
+  const onEdge = (a: number[], b: number[]) =>
+    [
+      [0, x0],
+      [0, x1],
+      [1, y0],
+      [1, y1],
+    ].some(
+      ([axis, v]) =>
+        Math.abs(a[axis] - v) < 0.005 && Math.abs(b[axis] - v) < 0.005
+    );
+  let metres = 0;
+  for (const f of loadSource<WallFileFeature>(wallSourceFile(tile))) {
+    if (f.geometry.type !== "LineString") {
+      continue;
+    }
+    const c = f.geometry.coordinates;
+    for (let i = 1; i < c.length; i++) {
+      if (onEdge(c[i - 1], c[i])) {
+        metres += Math.hypot(c[i][0] - c[i - 1][0], c[i][1] - c[i - 1][1]);
+      }
+    }
+  }
+  expect(metres).toBe(0);
+});
 
 test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
   for (const f of load<RailFeature>(a.rail)) {

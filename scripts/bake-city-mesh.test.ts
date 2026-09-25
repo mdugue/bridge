@@ -108,3 +108,18 @@ test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
   expect(flags?.componentType).toBe("UINT8");
   expect([...(flags?.values ?? [])]).toEqual([0, 1, 3]);
 });
+
+test("a part carries its root Building's flags as well as its own", () => {
+  // osm_buildings.py marks the root of a part it finds: a listing on the
+  // Building reaches the part that draws it; the part's own shop stays.
+  const baked = bakeCityMesh("t", fixture(), undefined, null, {
+    shop: { heritage: 1 },
+    "shop-part": { shop: 1 },
+  });
+  expect(baked.objects.map((o) => o.flags)).toEqual([2, 3, 0]);
+  // A flag on the root alone still reaches the part.
+  const rootOnly = bakeCityMesh("t", fixture(), undefined, null, {
+    shop: { shop: 1 },
+  });
+  expect(rootOnly.objects.map((o) => o.flags)).toEqual([1, 1, 0]);
+});

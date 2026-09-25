@@ -32,7 +32,11 @@
   the shop wash rides *Abendlicht*, the heritage lift *Farbvariation* and
   *Traufkante*). Objects with a shop: 321 / 264 / 323 / 280; listed: 478 /
   28 / 139 / 197 (`33410_5656` / `33410_5658` / `33412_5656` /
-  `33412_5658`). City glTF +0.5–0.6 kB per tile (gzipped).
+  `33412_5658`). The bake marks a part's root Building too, and since the
+  review a part carries its root's flags as well as its own
+  (`inheritedFlags` in `bakeCityMesh`; the root has no geometry of its
+  own): drawn with a shop 759 / 359 / 513 / 429, listed 513 / 28 / 141 /
+  200. City glTF +0.5–0.6 kB per tile (gzipped).
 - **STOP checks** — courtyard: 8.2 % of all placed shop points (2 of a
   seeded 20) sit in a footprint > 20 m from any street centreline, under the
   20 % bar, so the join stays "inside, else the nearest footprint within
