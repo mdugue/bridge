@@ -179,3 +179,26 @@ def test_the_cadastre_query_carries_the_sites_crs():
 
     q = REGISTERS["dresden"].query((0.0, 0.0, 2000.0, 2000.0), 25832, resultType="hits")
     assert "EPSG%3A%3A25832" in q and "cls%3AL1261" in q and "resultType=hits" in q
+
+
+def test_saxony_links_come_from_the_batch_pages_current_shares(tmp_path, monkeypatch):
+    # The link service has named retired shares (LoD2 and the laser scan
+    # answered 503), so every tile product is taken from the catalogue the
+    # batch page embeds today.
+    from bake.fetch import Ctx
+    from bake.providers import sn
+
+    page = (
+        "<script>batchConfig.products="
+        '{"LSC":{"share_id":"NewLsc123","packagesize":2000,'
+        '"filename":"lsc_33$Rechtswert$_$Hochwert$_2_sn_laz.zip"}};</script>'
+    )
+    fetched = []
+    monkeypatch.setattr(sn, "fetch_text", lambda url: page)
+    monkeypatch.setattr(sn, "download", lambda url, dest: fetched.append(url) or dest)
+    sn.products.cache_clear()
+    try:
+        sn._zip(Ctx(tmp_path, tmp_path, 25833), "LSC", 414, 5656)
+    finally:
+        sn.products.cache_clear()
+    assert fetched == [f"{sn.CLOUD}/NewLsc123/lsc_33414_5656_2_sn_laz.zip"]

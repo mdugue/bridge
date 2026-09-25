@@ -1,13 +1,13 @@
 {
   "$comment": "Where the committed data came from, per tile and product. GeoSN rows were read from the portal's download-links service on the date in `retrieved` (see docs/data-pipeline.md#provenance for the query); `stand` is the provider's own currency field. Share tokens in the URLs are the portal's public folders and may rotate; the service is the durable index. OSM rows carry what the repository can prove; exact timestamps live in the raw files.",
   "version": 1,
-  "retrieved": "2026-09-22",
+  "retrieved": "2026-09-22 (the eight tiles added south and east and the three added west: 2026-09-25)",
   "service": "https://geodienste.sachsen.de/ags-relay/ArcGISServer/guest/arcgis/rest/services/geosn/rest_geosn_downloadlinks/MapServer",
   "licence": {
     "geosn": "Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0); credit: Quelle: GeoSN, dl-de/by-2-0",
     "osm": "Open Database License (ODbL); credit: © OpenStreetMap contributors"
   },
-  "tiles": ["33410_5656_2_sn", "33410_5658_2_sn", "33412_5656_2_sn", "33412_5658_2_sn"],
+  "tiles": ["33408_5654_2_sn", "33408_5656_2_sn", "33408_5658_2_sn", "33410_5654_2_sn", "33410_5656_2_sn", "33410_5658_2_sn", "33412_5654_2_sn", "33412_5656_2_sn", "33412_5658_2_sn", "33414_5654_2_sn", "33414_5656_2_sn", "33414_5658_2_sn", "33416_5654_2_sn", "33416_5656_2_sn", "33416_5658_2_sn"],
   "geosn": {
     "DGM1": {
       "layer": 6,
@@ -17,7 +17,18 @@
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5658_2_sn_tiff.zip" },
         "33412_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33412_5656_2_sn_tiff.zip" },
-        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33412_5658_2_sn_tiff.zip" }
+        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33412_5658_2_sn_tiff.zip" },
+        "33410_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5654_2_sn_tiff.zip" },
+        "33412_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33412_5654_2_sn_tiff.zip" },
+        "33414_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33414_5654_2_sn_tiff.zip" },
+        "33414_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33414_5656_2_sn_tiff.zip" },
+        "33414_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33414_5658_2_sn_tiff.zip" },
+        "33416_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33416_5656_2_sn_tiff.zip" },
+        "33416_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33416_5654_2_sn_tiff.zip" },
+        "33416_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33416_5658_2_sn_tiff.zip" },
+        "33408_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33408_5654_2_sn_tiff.zip" },
+        "33408_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33408_5656_2_sn_tiff.zip" },
+        "33408_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33408_5658_2_sn_tiff.zip" }
       }
     },
     "DOM1": {
@@ -29,32 +40,65 @@
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5658_2_sn_tiff.zip" },
         "33412_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33412_5656_2_sn_tiff.zip" },
-        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33412_5658_2_sn_tiff.zip" }
+        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33412_5658_2_sn_tiff.zip" },
+        "33410_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5654_2_sn_tiff.zip" },
+        "33412_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33412_5654_2_sn_tiff.zip" },
+        "33414_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33414_5654_2_sn_tiff.zip" },
+        "33414_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33414_5656_2_sn_tiff.zip" },
+        "33414_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33414_5658_2_sn_tiff.zip" },
+        "33416_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33416_5656_2_sn_tiff.zip" },
+        "33416_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33416_5654_2_sn_tiff.zip" },
+        "33416_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33416_5658_2_sn_tiff.zip" },
+        "33408_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33408_5654_2_sn_tiff.zip" },
+        "33408_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33408_5656_2_sn_tiff.zip" },
+        "33408_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33408_5658_2_sn_tiff.zip" }
       }
     },
     "LSC": {
-      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the low-vegetation bake (pipeline/bake/lowveg.py; 0.5 m PDAL rasters under data/_raw/<site>/lsc/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask. Baked for the spawn tile only; the neighbours are baked OSM-only. On 2026-09-25 the download service still named these ZIPs, but the share answered 503 (Sabre NotFound).",
+      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the low-vegetation bake (pipeline/bake/lowveg.py; 0.5 m PDAL rasters under data/_raw/sn/lsc/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask. Baked for every tile. The spawn tile was baked first from a LAZ placed by hand; the other fourteen on 2026-09-25 by `bun run bake --ingest --lsc`. That day the download-links service still named the retired share rqcqdt8QMcLFUvC (503, Sabre NotFound); the current one, EpkzyJHScGb5ndd, is the `share_id` of LSC on the batch-download page, which the Saxony adapter (pipeline/bake/providers/sn.py) reads every link from; `bun run fetch --lsc` fetches it.",
       "layer": 1,
-      "committed": "derived only: data/dlm/lowveg_33412_5656_2_sn.geojson, data/dlm/canopyx_33412_5656_2_sn.geojson",
-      "raw": "data/_raw/<site>/lsc/<tile>.laz (placed by hand; the committed files were baked from data/_raw/lsc/lsc_<tile>_laz/)",
+      "committed": "derived only: data/dresden/dlm/lowveg_<tile>.geojson, data/dresden/dlm/canopyx_<tile>.geojson",
+      "raw": "data/_raw/sn/lsc/<tile>.laz, via `bun run fetch --lsc` (33412_5656 was baked from a LAZ placed by hand)",
       "usedBy": ["pipeline/bake/lowveg.py"],
       "tiles": {
-        "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5656_2_sn_laz.zip" },
-        "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5658_2_sn_laz.zip" },
-        "33412_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33412_5656_2_sn_laz.zip" },
-        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33412_5658_2_sn_laz.zip" }
+        "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33410_5656_2_sn_laz.zip" },
+        "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33410_5658_2_sn_laz.zip" },
+        "33412_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33412_5656_2_sn_laz.zip" },
+        "33412_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33412_5658_2_sn_laz.zip" },
+        "33410_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33410_5654_2_sn_laz.zip" },
+        "33412_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33412_5654_2_sn_laz.zip" },
+        "33414_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33414_5654_2_sn_laz.zip" },
+        "33414_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33414_5656_2_sn_laz.zip" },
+        "33414_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33414_5658_2_sn_laz.zip" },
+        "33416_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33416_5656_2_sn_laz.zip" },
+        "33416_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33416_5654_2_sn_laz.zip" },
+        "33416_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33416_5658_2_sn_laz.zip" },
+        "33408_5654_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33408_5654_2_sn_laz.zip" },
+        "33408_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33408_5656_2_sn_laz.zip" },
+        "33408_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33408_5658_2_sn_laz.zip" }
       }
     },
     "LoD2": {
-      "$comment": "`stand` is the model's production year with the currency of its inputs in parentheses (laser scan for the roofs, Basis-DLM for the footprints, DGM for the ground); `creationDate` inside the CityJSON is the export date of each object.",
+      "$comment": "`stand` is the model's production year with the currency of its inputs in parentheses (laser scan for the roofs, Basis-DLM for the footprints, DGM for the ground); `creationDate` inside the CityJSON is the export date of each object. On 2026-09-25 the download-links service still listed the retired share GVzwbSyp7Yl7mBD (NotFound); the current one, AyJqXpJAZJXomCb, comes from the batch-download page (geodaten.sachsen.de/batch-download-4719.html, `share_id` of LoD2_CityGML). The eleven tiles added that day were converted with citygml4j 3.2.4 (the library citygml-tools wraps: CityJSON 2.0, 3 decimals); re-converting 33412_5656 that way reproduced the committed file object for object and vertex for vertex.",
       "layer": 3,
       "committed": "data/dresden/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
       "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/roof_colour.py"],
       "tiles": {
-        "33410_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-06-28 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5656_2_sn_citygml.zip" },
-        "33410_5658_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-26 (most objects; some 2021-01, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5658_2_sn_citygml.zip" },
-        "33412_5656_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-07-04 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33412_5656_2_sn_citygml.zip" },
-        "33412_5658_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-07-07 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33412_5658_2_sn_citygml.zip" }
+        "33410_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-06-28 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33410_5656_2_sn_citygml.zip" },
+        "33410_5658_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-26 (most objects; some 2021-01, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33410_5658_2_sn_citygml.zip" },
+        "33412_5656_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-07-04 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33412_5656_2_sn_citygml.zip" },
+        "33412_5658_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-07-07 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33412_5658_2_sn_citygml.zip" },
+        "33410_5654_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-07-04 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33410_5654_2_sn_citygml.zip" },
+        "33412_5654_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2020, DGM: 2016)", "creationDate": "2025-07-04 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33412_5654_2_sn_citygml.zip" },
+        "33414_5654_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2020, DGM: 2016)", "creationDate": "2025-07-04 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33414_5654_2_sn_citygml.zip" },
+        "33414_5656_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-06-29 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33414_5656_2_sn_citygml.zip" },
+        "33414_5658_2_sn": { "stand": "2024 (LSC: 2016, Basis-DLM: 2022, DGM: 2016)", "creationDate": "2025-04-26 (most objects)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33414_5658_2_sn_citygml.zip" },
+        "33416_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2023, DGM: 2016)", "creationDate": "2025-07-08 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33416_5656_2_sn_citygml.zip" },
+        "33416_5654_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2024, DGM: 2016)", "creationDate": "2025-04-23 (most objects; some 2021-01, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33416_5654_2_sn_citygml.zip" },
+        "33416_5658_2_sn": { "stand": "2021 (LSC: 2016, Basis-DLM: 2023, DGM: 2016)", "creationDate": "2025-04-26 (the tile's only object)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33416_5658_2_sn_citygml.zip" },
+        "33408_5654_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-09 (most objects; some 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33408_5654_2_sn_citygml.zip" },
+        "33408_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-08 (most objects; some 2021-01, 2022-02, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33408_5656_2_sn_citygml.zip" },
+        "33408_5658_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-09 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33408_5658_2_sn_citygml.zip" }
       }
     },
     "DOP_RGBI": {
@@ -67,7 +111,18 @@
         "33410_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5658_2_sn_tiff.zip" },
         "33412_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33412_5656_2_sn_tiff.zip" },
-        "33412_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33412_5658_2_sn_tiff.zip" }
+        "33412_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33412_5658_2_sn_tiff.zip" },
+        "33410_5654_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5654_2_sn_tiff.zip" },
+        "33412_5654_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33412_5654_2_sn_tiff.zip" },
+        "33414_5654_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33414_5654_2_sn_tiff.zip" },
+        "33414_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33414_5656_2_sn_tiff.zip" },
+        "33414_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33414_5658_2_sn_tiff.zip" },
+        "33416_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33416_5656_2_sn_tiff.zip" },
+        "33416_5654_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33416_5654_2_sn_tiff.zip" },
+        "33416_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33416_5658_2_sn_tiff.zip" },
+        "33408_5654_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33408_5654_2_sn_tiff.zip" },
+        "33408_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33408_5656_2_sn_tiff.zip" },
+        "33408_5658_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33408_5658_2_sn_tiff.zip" }
       }
     },
     "Basis-DLM": {
@@ -81,23 +136,34 @@
     }
   },
   "dresden": {
-    "$comment": "Landeshauptstadt Dresden open data, drawn by default (tree-inventory-layer.ts); also thins the laser-scan extra trees (pipeline/bake/lowveg.py). The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; the ingest adapter (pipeline/bake/ingest_sn.py ingest_trees; extract-trees.sh when the committed files were baked) checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
+    "$comment": "Landeshauptstadt Dresden open data, drawn by default (tree-inventory-layer.ts); also thins the laser-scan extra trees (pipeline/bake/lowveg.py). The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; `bun run fetch` (pipeline/bake/cadastre.py; extract-trees.sh when the committed files were baked) checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
     "Stadtbaumkataster": {
       "service": "https://kommisdd.dresden.de/net3/public/ogcsl.ashx?NODEID=1633&Service=WFS",
       "typeName": "cls:L1261",
       "metadata": "https://www.geoportal.sachsen.de/md/4a9020f2-d9da-4731-a203-594eb10f0e3e",
       "licence": "dl-de/by-2-0; credit: Landeshauptstadt Dresden",
       "coverage": "street trees, parks, schools and other municipal land; not the Großer Garten, not private ground",
-      "retrieved": "2026-09-23",
-      "raw": "data/_raw/<site>/trees/<tile>.geojson (+ .meta.json); the committed files were baked from data/_raw/baumkataster/stadtbaum_<tile>.geojson",
-      "committed": "data/dlm/trees_<tile>.geojson",
+      "retrieved": "2026-09-23 (the eleven tiles this branch adds: 2026-09-25)",
+      "raw": "data/_raw/sn/trees/<tile>.geojson (+ .meta.json), via `bun run fetch` (pipeline/bake/cadastre.py); the committed files were baked from data/_raw/baumkataster/stadtbaum_<tile>.geojson",
+      "committed": "data/dresden/dlm/trees_<tile>.geojson",
       "usedBy": ["pipeline/bake/trees.py", "pipeline/bake/lowveg.py", "scripts/eval/kataster-eval.py"],
       "numberMatched": {
         "$comment": "per tile bbox incl. the 10 m margin; after the half-open tile clip: 3195, 3663, 6121, 5465 trees",
         "33410_5656_2_sn": 3301,
         "33410_5658_2_sn": 3755,
         "33412_5656_2_sn": 6214,
-        "33412_5658_2_sn": 5567
+        "33412_5658_2_sn": 5567,
+        "33408_5654_2_sn": 3905,
+        "33408_5656_2_sn": 2376,
+        "33408_5658_2_sn": 2318,
+        "33410_5654_2_sn": 6963,
+        "33412_5654_2_sn": 5292,
+        "33414_5654_2_sn": 5979,
+        "33414_5656_2_sn": 6754,
+        "33414_5658_2_sn": 1481,
+        "33416_5654_2_sn": 2542,
+        "33416_5656_2_sn": 943,
+        "33416_5658_2_sn": 0
       }
     }
   },

@@ -20,18 +20,30 @@ export interface FootprintPoly {
   pts: [number, number][];
 }
 
+/**
+ * Canvas pixels per metre for a map `widthPx` wide. The map keeps the site's
+ * aspect ratio (Dresden: 10 × 6 km, a landscape map), so one scale serves
+ * both axes: no padding around the site, no squashing.
+ */
+function pxPerMetre(bounds: TerrainBounds, widthPx: number): number {
+  return widthPx / Math.max(bounds[2] - bounds[0], 1);
+}
+
+/** The map's height for a given width: the site's own aspect ratio. */
+export function mapHeightPx(bounds: TerrainBounds, widthPx: number): number {
+  return Math.round((bounds[3] - bounds[1]) * pxPerMetre(bounds, widthPx));
+}
+
 /** Projected EPSG coordinates -> canvas pixels (north-up). */
 export function epsgToMapPx(
   x: number,
   y: number,
   bounds: TerrainBounds,
-  sizePx: number
+  widthPx: number
 ): { px: number; py: number } {
-  const [minX, minY, maxX, maxY] = bounds;
-  return {
-    px: ((x - minX) / (maxX - minX)) * sizePx,
-    py: ((maxY - y) / (maxY - minY)) * sizePx,
-  };
+  const [minX, , , maxY] = bounds;
+  const k = pxPerMetre(bounds, widthPx);
+  return { px: (x - minX) * k, py: (maxY - y) * k };
 }
 
 /** Canvas pixels -> projected EPSG coordinates. */
@@ -39,13 +51,11 @@ export function mapPxToEpsg(
   px: number,
   py: number,
   bounds: TerrainBounds,
-  sizePx: number
+  widthPx: number
 ): { x: number; y: number } {
-  const [minX, minY, maxX, maxY] = bounds;
-  return {
-    x: minX + (px / sizePx) * (maxX - minX),
-    y: maxY - (py / sizePx) * (maxY - minY),
-  };
+  const [minX, , , maxY] = bounds;
+  const k = pxPerMetre(bounds, widthPx);
+  return { x: minX + px / k, y: maxY - py / k };
 }
 
 /**

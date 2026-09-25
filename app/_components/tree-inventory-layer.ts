@@ -531,6 +531,10 @@ export function buildTreeInventory(
     keepTree: (x, y, h) => !covers(x, y, h),
     control: {
       group,
+      // Its trunks and broadleaf crowns ride in the canopy's chunks
+      // (`instances`); only its own silhouettes are here.
+      chunks: [],
+      multiTuft: () => multiTuft,
       applyLook: (look) => {
         for (const key of Object.keys(rowUniform) as VegetationLookKey[]) {
           rowUniform[key].value = look[key];

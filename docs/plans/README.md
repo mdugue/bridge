@@ -132,8 +132,8 @@ S/M/L.
     `customProgramCacheKey` each.
 19. **Low-confidence, investigate not fix:** NoData next to valid samples
     in the terrain bake's resample (`scripts/bake-tiles.ts`); the lowest
-    terrain bound (with the 30 m skirt) as the ground fallback; the minimap assumes square
-    bounds; the joystick releases on any `pointerup`; the `crs.ts`
+    terrain bound (with the 30 m skirt) as the ground fallback; the
+    joystick releases on any `pointerup`; the `crs.ts`
     trailing-slash regex.
 
 ### Direction — options for the maintainer (choices, not defects)
@@ -169,11 +169,11 @@ S/M/L.
 5. **A user-facing quality tier (S–M).** The device tier already halves
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
-6. **A provenance manifest per tile (S).** `bun run bake [tile]
-   [--ingest]` exists (plan 017 phase 2); what is left is writing
+6. **A provenance manifest per tile (S).** `bun run fetch [tile]`
+   exists (plan 024); what is left is writing
    `data/<site>/<tile>.provenance.json` (dataset, edition, download date,
-   licence) from the ingest adapter, for the HUD footer to read. The guide's
-   dataset table and `data/provenance.json` are the hand-kept version.
+   licence) from the provider's adapter, for the HUD footer to read. The guide's
+   dataset table and `data/<site>/provenance.json` are the hand-kept version.
 
 ### Maintainer actions
 
@@ -183,8 +183,6 @@ S/M/L.
 - Plan 021's Phase 0 (a second framework for `/wissen`, the URL scheme).
 
 - Close the superseded Dependabot PRs (#3, #12, #13, #15, #26).
-- Decide on the two unused `33414_*` DGM tiles (~28 MB): delete, or move to
-  `data/_raw/`.
 - Decide where `aesthetic-sandbox.html` (the historical crown playground at
   the repo root) should live, or delete it — the layer files are the source
   of truth.

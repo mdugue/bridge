@@ -350,9 +350,17 @@ visual-variable codebook is in
   the index mostly separates evergreens and grass from everything else. A
   summer DOP would make the recentre less necessary and the meadow tint truer.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
-  the cheap crown is a detail-2 icosphere (≈320 tris) with lobes;
-  **multi-tuft crown LOD** (rich ~1 440-tri crown near / cheap icosphere far,
-  per-chunk distance, 220 m in / 300 m out);
+  the mid crown is a detail-2 icosphere (180 tris) with lobes;
+  **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
+  planned over every loaded tile at once: the rich ~1 440-tri multi-tuft
+  crown near (220 m in / 300 m out) but only while the site's rich trees fit
+  a budget of 2 500, nearest chunks first; the mid crown + trunk; and past
+  650 m (back at 550 m) a detail-1 crown (80 tris) without trunk, dense
+  chunks (≥ 400 trees) thinned to every other tree drawn 1.35× wider. Before
+  the budget, a camera in the Dresdner Heide's forest tiles (one tree per
+  7 m) put ~9 000 rich crowns on screen — ~80 M triangles per pass over the
+  site, which stalled the GPU into a lost context; the same view is now
+  ~23 M;
   **backlight shimmer** (one shadow-gated sample, far cheaper than transmission).
 - **Canopy motion** — per-frame in `buildCrownMaterial`, **main pass only** (the
   shadow/depth material has none of it → no shadow-pass cost, no extra buffers):
@@ -368,7 +376,7 @@ visual-variable codebook is in
   default) — *inputs:* the city's *Stadtbaumkataster* (WFS `cls:L1261`, dl-de/by-2-0
   "Landeshauptstadt Dresden"; street trees, parks, schools — not the Großer
   Garten, not private ground): position, height, crown diameter, taxon.
-  `pipeline/bake/trees.py` bakes `data/dlm/trees_<tile>.geojson` (from the WFS cache the ingest adapter writes) (h, d,
+  `pipeline/bake/trees.py` bakes `data/<site>/dlm/trees_<tile>.geojson` (from the WFS cache `bun run fetch` writes, `cadastre.py`) (h, d,
   archetype id, leaf type, foliage colour; missing h/d imputed from the genus
   median / the archetype's d:h), with the taxonomy in
   `pipeline/bake/tree_archetypes.py`: genus + cultivar + German name → six
@@ -422,9 +430,9 @@ visual-variable codebook is in
   the same contract.
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
-  (laser scan) — on by default. The laser scan is baked for the spawn tile
-  only; the neighbours are baked OSM-only (hedges at their tag / 1.5 m, no
-  extra trees). **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
+  (laser scan) — on by default. The laser scan is baked for every tile of the
+  site (`bun run fetch --lsc`, then `bun run bake`); a tile without one would bake
+  OSM-only (hedges at their tag / 1.5 m, no extra trees). **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
   `osm+lsc`) and the extra trees. **Not shipped** (🗃️ below): the
   laser-scan-only hedges and all shrubs — the bake still finds them
   (`bun run bake --step lowveg --research` writes every candidate under
@@ -817,10 +825,10 @@ research that produced them):
     additive, `depthWrite: false`, `fog: false` (fog would brighten distant
     motes), hash-seeded so snapshots reproduce, opacity + `setDrawRange` on
     one slider. +1 draw call. Design notes in [plans/README.md](./plans/README.md#open-work).
-11. **Far crown LOD tier** — a third InstancedMesh per 250 m cell (detail 1 or 0,
-    trunk hidden) beyond ~500 m; today a tree 2 km away still draws ~400
-    triangles in the main and every shadow pass. The swap mechanism exists
-    (`updateLod`); the look needs the `--headed` harness.
+11. **Far crown LOD tier** — ✅ shipped (see *Crown shaping* above); still to
+    judge on a real GPU with the `--headed` harness: whether the far tier's
+    pop at 650 m and the thinned forest read well, and whether a detail-0
+    crown (20 tris) beyond ~1.5 km is worth a fourth tier.
 12. **Ground, the rest of plan [023](./plans/023-ground-detail.md)** — a
     raised pavement (today the kerb stone stands on a pavement at road
     level); DGM1 micro-relief as a

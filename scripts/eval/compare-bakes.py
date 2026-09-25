@@ -2,7 +2,7 @@
 that a port of a bake reproduces what it replaces.
 
   uv run --project pipeline python scripts/eval/compare-bakes.py [--ref HEAD]
-      trees_/lowveg_/canopyx_<tile>.geojson under data/dlm against the same
+      trees_/lowveg_/canopyx_<tile>.geojson under data/dresden/dlm against the same
       files at a git ref (default HEAD): features only in one of them,
       properties that differ, line lengths that moved. Order is ignored.
 

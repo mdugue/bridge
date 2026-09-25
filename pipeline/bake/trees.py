@@ -4,7 +4,7 @@ one point per tree with its height, crown and silhouette archetype.
 Street trees, parks, schools and other municipal land (not the Großer
 Garten, not private courtyards); licence dl-de/by-2-0, credit
 "Landeshauptstadt Dresden" — the output carries an `attribution` member.
-The ingest adapter caches the WFS response as `<raw>/trees/<tile>.geojson`
+`bun run fetch` caches the WFS response as `<raw>/trees/<tile>.geojson`
 (`bun run fetch`, cadastre.py; only for a site that names a register); this step:
 
   1. keeps the trees whose `gis_x_utm`/`gis_y_utm` (= the geometry, verified
@@ -134,13 +134,16 @@ def run(tile: Tile) -> None:
         print(f"{tile.id}: no tree cadastre at {raw_path} — skipping the inventory trees")
         return
     trees = parse_trees(json.loads(raw_path.read_text()), tile.bounds)
-    if not trees:
-        print(f"{tile.id}: the tree cadastre has no tree here — nothing written")
-        return
-    sizes, imputed_h, imputed_d = impute(trees)
-    landcover = tile.out("dlm", f"landcover_{tile.id}.png")
-    cls = np.asarray(Image.open(landcover).convert("L")) if landcover.exists() else None
-    features = tree_features(trees, sizes, cls, tile.bounds)
+    # A tile the cadastre has no tree on (all forest) still gets its file,
+    # empty: "baked, nothing here" is not "never baked" (lib/city/tile-data.test.ts
+    # holds every tile to the same set of files).
+    features = []
+    imputed_h = imputed_d = 0
+    if trees:
+        sizes, imputed_h, imputed_d = impute(trees)
+        landcover = tile.out("dlm", f"landcover_{tile.id}.png")
+        cls = np.asarray(Image.open(landcover).convert("L")) if landcover.exists() else None
+        features = tree_features(trees, sizes, cls, tile.bounds)
     doc = {
         "type": "FeatureCollection",
         "attribution": tile.tree_cadastre.credit,
