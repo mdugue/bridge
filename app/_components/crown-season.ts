@@ -69,22 +69,27 @@ const twigUniform = { value: new Color(TWIG_COLOR) };
 
 // A fixed rotation (rows (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3) turns the cell
 // grid off the crown's axes, so the cells do not line up in visible rows;
-// the instance's ground position offsets it, so neighbours differ.
+// a seed from the instance's ground position offsets the hash, so
+// neighbours differ. The seed is added to the integer cell, after the
+// pixel-scale floor: added to the position it would be multiplied by that
+// scale too (thousands up close), and the hash's sin() would lose its
+// precision to arguments near 1e6 — banding on mobile GPUs.
 const VERTEX_DECL = [
   "attribute float aBare;",
   "varying float vBare;",
   "varying vec3 vCrownCell;",
+  "varying vec2 vCrownSeed;",
 ].join("\n");
 
 const VERTEX_BODY = [
   "vBare = aBare;",
   "#ifdef USE_INSTANCING",
-  " vec2 crownSeed = fract(instanceMatrix[3].xz * 0.0137) * 97.0;",
+  " vCrownSeed = fract(instanceMatrix[3].xz * 0.0137) * 97.0;",
   "#else",
-  " vec2 crownSeed = vec2(0.0);",
+  " vCrownSeed = vec2(0.0);",
   "#endif",
   "const mat3 crownTurn = mat3(0.6667, 0.6667, 0.3333, 0.6667, -0.3333, -0.6667, 0.3333, -0.6667, 0.6667);",
-  "vCrownCell = crownTurn * position + vec3(crownSeed, 0.0);",
+  "vCrownCell = crownTurn * position;",
 ].join("\n");
 
 // three's getAlphaHashThreshold (alphahash_pars_fragment), renamed so it
@@ -92,13 +97,14 @@ const VERTEX_BODY = [
 const FRAGMENT_DECL = [
   "varying float vBare;",
   "varying vec3 vCrownCell;",
+  "varying vec2 vCrownSeed;",
   "float crownHash2(vec2 v) { return fract(1.0e4 * sin(17.0 * v.x + 0.1 * v.y) * (0.1 + abs(sin(13.0 * v.y + v.x)))); }",
   "float crownHash3(vec3 v) { return crownHash2(vec2(crownHash2(v.xy), v.z)); }",
-  "float crownThreshold(vec3 p) {",
+  "float crownThreshold(vec3 p, vec3 seed) {",
   " float maxDeriv = max(length(dFdx(p)), length(dFdy(p)));",
   ` float pixScale = 1.0 / (${HASH_PIXELS.toFixed(2)} * max(maxDeriv, 1e-6));`,
   " vec2 pixScales = vec2(exp2(floor(log2(pixScale))), exp2(ceil(log2(pixScale))));",
-  " vec2 alpha = vec2(crownHash3(floor(pixScales.x * p)), crownHash3(floor(pixScales.y * p)));",
+  " vec2 alpha = vec2(crownHash3(floor(pixScales.x * p) + seed), crownHash3(floor(pixScales.y * p) + seed));",
   " float lerpFactor = fract(log2(pixScale));",
   " float x = (1.0 - lerpFactor) * alpha.x + lerpFactor * alpha.y;",
   " float a = min(lerpFactor, 1.0 - lerpFactor);",
@@ -113,7 +119,7 @@ const FRAGMENT_DECL = [
  *  any branch, as GLSL requires. */
 const FRAGMENT_BODY = [
   "float crownTwig = 0.0;",
-  "float crownCellH = crownThreshold(vCrownCell);",
+  "float crownCellH = crownThreshold(vCrownCell, vec3(vCrownSeed, 0.0));",
   `if (vBare > ${BARE_EPS}) {`,
   " float crownLeafy = 1.0 - vBare;",
   ` if (crownCellH >= max(crownLeafy, ${TWIG_DENSITY})) discard;`,

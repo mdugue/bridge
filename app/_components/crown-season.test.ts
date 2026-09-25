@@ -5,12 +5,15 @@ import {
   InstancedMesh,
   type Material,
   MeshBasicMaterial,
+  ShaderLib,
+  type WebGLProgramParametersWithUniforms,
 } from "three";
 import { TREE_GENERA } from "@/lib/city/tree-season";
 import {
   createSeasonClock,
   crownDepthMaterial,
   type CrownSeasonKey,
+  injectCrownSeason,
   seasonCrowns,
 } from "./crown-season";
 import { buildVegetation } from "./vegetation-layer";
@@ -125,4 +128,18 @@ test("the clock re-seasons on a new calendar day only, throttled, the last day w
   await new Promise((resolve) => setTimeout(resolve, 80));
   expect(days).toEqual([JAN_10, OCT_20]);
   clock.dispose();
+});
+
+test("the dither's per-crown seed joins the integer cell, not the position", () => {
+  // Added to the position, the seed was scaled by the pixel scale too and
+  // the hash's sin() saw arguments near 1e6 up close.
+  const sh = {
+    vertexShader: ShaderLib.depth.vertexShader,
+    fragmentShader: ShaderLib.depth.fragmentShader,
+    uniforms: {},
+  } as unknown as WebGLProgramParametersWithUniforms;
+  injectCrownSeason(sh, false);
+  expect(sh.vertexShader).toContain("vCrownCell = crownTurn * position;");
+  expect(sh.fragmentShader).toContain("floor(pixScales.x * p) + seed");
+  expect(sh.fragmentShader).toContain("floor(pixScales.y * p) + seed");
 });
