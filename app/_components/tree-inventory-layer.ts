@@ -453,8 +453,9 @@ function crownPair(
     paint(mesh, items);
   }
   rich.visible = false;
+  // the cheap tier is the season's "mid": the pair shares one colour buffer
   const season = seasonCrowns(
-    { cheap, rich },
+    { mid: cheap, rich },
     items.map((t) => t.season),
     materials
   );
