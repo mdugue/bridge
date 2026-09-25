@@ -106,8 +106,9 @@ config change.
     green in the terrain's fragment pass), `sport-ground.ts` (sports
     grounds: surface and lines in the same pass), `sport-fixtures.ts`
     (their goals, posts and nets), `rail-layer.ts`, `wall-layer.ts`,
-    `kerb-layer.ts` and `stair-layer.ts` (only their
-    materials: walls and stairs are baked into the fine terrain glTF),
+    `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
+    materials: walls, kerbs, stairs and fences are baked into the fine
+    terrain glTF; the fences' pattern is drawn by their shader),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `furniture-layer.ts` (benches, bins, bicycle stands, bollards, post
     boxes, stop shelters, playgrounds with their mapped equipment),
@@ -136,9 +137,9 @@ config change.
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
   policy, the look table + store, the Snapshot codec, `terrain-tin.ts`
   (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
-  the measured step), `tree-inventory.ts` (the cadastre's archetypes and
-  veto), `site.ts` (the site
-  type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
+  the measured step), `fences.ts` (fence panels and gate gaps),
+  `tree-inventory.ts` (the cadastre's archetypes and veto), `site.ts` (the
+  site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
   (the per-object table: packing, demolish, footprints), `tile.ts` (each
@@ -368,8 +369,8 @@ scene: it re-renders everything into a buffer each frame (~2× cost).
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps and rails are built tile by tile behind a HUD chip (stairs and
-walls are baked into the fine terrain glTF and arrive with it)
+lamps and rails are built tile by tile behind a HUD chip (stairs, walls,
+kerbs and fences are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). `onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow

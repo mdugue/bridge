@@ -34,6 +34,7 @@ flowchart TB
   TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
   TER --> STAIR["L0: stairs node, baked with the ground<br/>treads, risers, cheeks per flight"]
   TER --> WALL["L0: walls node, baked on every tile's TIN<br/>sandstone ribbons snapped to the measured step"]
+  TER --> FENCE["L0: fences node, baked on every tile's TIN<br/>one panel per post pair, cut at the gates"]
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
   DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges<br/>canopy + scan + cadastre trees share the meshes"]
   DRESS --> INV["cadastre silhouettes<br/>flame / cone / dome per 250 m cell"]
@@ -131,7 +132,10 @@ is the codebook.
 | Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
 | Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
-| Wall ribbon | line + `h`, base on every tile's shaped fine ground, top on the high shelf — baked into the fine terrain glTF | OSM | `lib/city/walls.ts` at build, `wall-layer.ts` (material) |
+| Wall ribbon | line + `h`, base on every tile's shaped fine ground, top on the high shelf — baked into the fine terrain glTF; a freestanding wall is cut at its gates | OSM | `lib/city/walls.ts` at build, `wall-layer.ts` (material) |
+| Fence panel | line + `h` on the fine ground: one flat double-sided quad per ≤ 2.5 m, its post and top rail drawn by the pattern; `type` picks the infill (bars every 12.5 cm, a wire diamond mesh, pickets, none for a handrail) and the tone (the furniture's slate a step darker, its honey for wood), box-filtered; the infill fades to a lighter dithered veil where its bars fall under a pixel or beyond 40–60 m | OSM | `lib/city/fences.ts` at build, `fence-layer.ts` |
+| Gate | a `w`-wide gap in its fence (or freestanding wall), a closed leaf of denser bars in a darker frame — a boom at 1 m for a lift gate or cycle barrier | OSM | `lib/city/fences.ts` `cutGaps` |
+| Fence shadow | posts and rails in full; the infill dithered by its coverage per shadow texel, softened by the PCF into a partial shadow (a custom depth material, discards — no alpha map) | OSM | `fence-layer.ts` |
 | Raised terrace | a `layer` ≥ 1 OSM area a lifted flight lands on: the ground inside lifted to its level `z` at build | OSM (+ tagged steps) | `lib/city/stairs.ts` `raiseTerraces` |
 | Ground under stairs | flight axis + `w` + landings `z`: under the flight set to 12 cm below the ramp (lifted where the DGM runs below — the walkable ground); beside it, out to `w`/2 + 1.5 cells, only lowered, never across a wall | OSM + DGM1 | `lib/city/stairs.ts` `burnStairs` |
 | Steps | `n` treads at z0 + (k+1)·rise across `w`, cheeks down to z0 − 0.6 m; sandstone `0xc4b090`, risers × 0.62, cheeks × 0.8 — baked into the fine terrain glTF (vertex colours) | OSM + DGM1 | `lib/city/stairs.ts` `stairGeometry`/`stairColors` at build, `stair-layer.ts` (material) |

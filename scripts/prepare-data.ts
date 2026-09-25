@@ -42,9 +42,16 @@ import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
   KerbFeature,
   StairFeature,
+  GateFeature,
   TerraceFeature,
-  WallFeature,
+  WallFileFeature,
 } from "../lib/city/features";
+import {
+  cutWallGates,
+  type FenceLine,
+  type FenceType,
+  type GatePoint,
+} from "../lib/city/fences";
 import type { Point2 } from "../lib/city/polyline";
 import { tileExtentOf } from "../lib/city/site";
 import {
@@ -85,6 +92,7 @@ import { currentSite } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
 import {
   cityMesh,
+  fenceMesh,
   kerbMesh,
   readDgm,
   stairMesh,
@@ -167,6 +175,7 @@ const BAKE_SOURCES = [
   "lib/city/stairs.ts",
   "lib/city/walls.ts",
   "lib/city/kerbs.ts",
+  "lib/city/fences.ts",
   "lib/city/polyline.ts",
   "lib/city/ground-clamp.ts",
   "lib/city/tileset.ts",
@@ -332,25 +341,65 @@ function kerbLines(tile: string): Point2[][] {
   );
 }
 
-/** The tile's OSM walls: the lines the terrain conflation burns in, and the
- *  ribbons the fine level carries. */
-function wallLines(tile: string): (WallLine & WallRibbon)[] {
+/** Everything the tile's walls file carries: walls, fences, gates. */
+function wallFile(tile: string): WallFileFeature[] {
   const path = at(wallSourceFile(tile));
-  if (!existsSync(path)) {
-    return [];
-  }
-  const { features } = readJson<{ features: WallFeature[] }>(path);
-  return features.flatMap((f) =>
-    f.geometry?.type === "LineString"
+  return existsSync(path)
+    ? readJson<{ features: WallFileFeature[] }>(path).features
+    : [];
+}
+
+/** The tile's OSM walls: the lines the terrain conflation burns in, and the
+ *  ribbons the fine level carries. Not the fences: they never shape the
+ *  ground. */
+function wallLines(tile: string): (WallLine & WallRibbon)[] {
+  return wallFile(tile).flatMap((f) =>
+    f.geometry?.type === "LineString" && f.properties?.kind !== "fence"
       ? [
           {
             coords: f.geometry.coordinates,
             kind: f.properties?.kind ?? "wall",
-            h: f.properties?.h ?? 2,
+            h: (f.properties as { h?: number } | null)?.h ?? 2,
           },
         ]
       : []
   );
+}
+
+const FENCE_TYPES = new Set<FenceType>(["mesh", "picket", "rail", "railing"]);
+
+/** The tile's OSM fences and railings, standing on their lines. */
+function fenceLines(tile: string): FenceLine[] {
+  return wallFile(tile).flatMap((f) => {
+    if (f.geometry?.type !== "LineString" || f.properties?.kind !== "fence") {
+      return [];
+    }
+    const p = f.properties as { h?: number; type?: string };
+    const type = FENCE_TYPES.has(p.type as FenceType)
+      ? (p.type as FenceType)
+      : "railing";
+    return [{ coords: f.geometry.coordinates, h: p.h ?? 1.2, type }];
+  });
+}
+
+/** The tile's gates on a wall or fence line. */
+function gatePoints(tile: string): GatePoint[] {
+  const isGate = (f: WallFileFeature): f is GateFeature =>
+    f.geometry?.type === "Point" && f.properties?.kind === "gate";
+  return wallFile(tile)
+    .filter(isGate)
+    .flatMap((f) =>
+      f.properties
+        ? [
+            {
+              at: f.geometry.coordinates,
+              on: f.properties.on,
+              w: f.properties.w,
+              ...(f.properties.type ? { type: f.properties.type } : {}),
+            },
+          ]
+        : []
+    );
 }
 
 /** The tile's OSM stairs: the terrain bake shapes the ground under them and
@@ -474,18 +523,28 @@ async function siteGround(): Promise<{
 }
 
 /** The fine level's own nodes beside the grid: the stairs it owns, its
- *  walls and its kerb stones, standing on every tile's shaped ground. */
+ *  walls, its kerb stones and its fences, standing on every tile's shaped
+ *  ground. Gates cut the fences and the freestanding walls. */
 async function fineChildren(
   tile: string,
   bounds: TerrainExtras["bounds"]
 ): Promise<NonNullable<Parameters<typeof writeMeshGlb>[0]["children"]>> {
   const stairs = stairMesh(stairLines(tile), offset, bounds);
   const ground = await siteGround();
-  const walls = wallMesh(wallLines(tile), ground.heightAt, offset, {
+  const gates = gatePoints(tile);
+  const cut = cutWallGates(wallLines(tile), gates);
+  const walls = wallMesh(cut.walls, ground.heightAt, offset, {
     snapToStep: ground.tin,
   });
   const kerbs = kerbMesh(kerbLines(tile), ground.heightAt, offset);
-  return [stairs, walls, kerbs].filter((m) => m !== null);
+  const fences = fenceMesh(
+    fenceLines(tile),
+    gates,
+    ground.heightAt,
+    offset,
+    cut.leaves
+  );
+  return [stairs, walls, kerbs, fences].filter((m) => m !== null);
 }
 
 /** A tile's terrain at one level: glTF + its extent and elevation range. */

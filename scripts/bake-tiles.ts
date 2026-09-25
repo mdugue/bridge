@@ -27,6 +27,11 @@ import {
   type WallRibbon,
   wallGeometry,
 } from "../lib/city/walls";
+import {
+  type FenceLine,
+  fenceGeometry,
+  type GatePoint,
+} from "../lib/city/fences";
 import { kerbGeometry } from "../lib/city/kerbs";
 import type { Point2 } from "../lib/city/polyline";
 import {
@@ -372,6 +377,31 @@ export function wallMesh(
         name: "walls",
         positions: worldToData(data.positions),
         normals: worldToData(data.normals),
+      }
+    : null;
+}
+
+/**
+ * The tile's fences, railings and gates as one mesh (lib/city/fences.ts),
+ * standing on `heightAt` — the final fine ground of every tile, like the
+ * walls. `wallLeaves` are the gates cut into freestanding walls. Null when
+ * nothing stands.
+ */
+export function fenceMesh(
+  fences: FenceLine[],
+  gates: GatePoint[],
+  heightAt: (x: number, y: number) => number | null,
+  offset: { cx: number; cy: number },
+  wallLeaves: Parameters<typeof fenceGeometry>[4] = []
+): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
+  const data = fenceGeometry(fences, gates, heightAt, offset, wallLeaves);
+  return data
+    ? {
+        name: "fences",
+        positions: worldToData(data.positions),
+        normals: worldToData(data.normals),
+        uvs: new Float32Array(data.uvs),
+        indices: new Uint32Array(data.indices),
       }
     : null;
 }

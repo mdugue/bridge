@@ -56,6 +56,9 @@ export interface MeshInput {
   positions: Float32Array;
   /** per-feature table; requires a `_FEATURE_ID_0` attribute */
   table?: PropertyTable;
+  /** texture coordinates (TEXCOORD_0), two per vertex, within [0, 1]: they
+   *  are quantised to 16 bits (a fence's pattern code and position) */
+  uvs?: Float32Array<ArrayBuffer>;
   /** reorder vertices and triangles for the vertex cache and meshopt (the
    *  fine terrain's TIN: nothing reads its order; the grid keeps its own) */
   reorder?: boolean;
@@ -92,7 +95,7 @@ function addPrimitive(
     | Uint8Array<ArrayBuffer>
     | Uint16Array<ArrayBuffer>
     | Uint32Array<ArrayBuffer>;
-  const accessor = (array: Array, type: "SCALAR" | "VEC3") =>
+  const accessor = (array: Array, type: "SCALAR" | "VEC2" | "VEC3") =>
     doc.createAccessor().setArray(array).setType(type).setBuffer(buffer);
   const prim = doc
     .createPrimitive()
@@ -100,6 +103,9 @@ function addPrimitive(
     .setAttribute("NORMAL", accessor(toYUp(input.normals), "VEC3"));
   if (input.colors) {
     prim.setAttribute("COLOR_0", accessor(input.colors, "VEC3"));
+  }
+  if (input.uvs) {
+    prim.setAttribute("TEXCOORD_0", accessor(input.uvs, "VEC2"));
   }
   for (const [name, array] of Object.entries(input.attributes ?? {})) {
     prim.setAttribute(name, accessor(array, "SCALAR"));
@@ -133,15 +139,16 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
     scene.addChild(doc.createNode(child.name).setMesh(childMesh));
   }
   scene.setExtras(input.extras);
-  // Only positions, normals and colours are quantised: the custom
-  // attributes are ids and flags that must stay exact (quantize would
-  // squeeze them to 12 bits).
+  // Only positions, normals, colours and texture coordinates are quantised:
+  // the custom attributes are ids and flags that must stay exact (quantize
+  // would squeeze them to 12 bits).
   const transforms = [
     quantize({
-      pattern: /^(POSITION|NORMAL|COLOR_0)$/,
+      pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/,
       quantizePosition: 16,
       quantizeNormal: 8,
       quantizeColor: 8,
+      quantizeTexcoord: 16,
     }),
   ];
   if (input.weld || input.reorder) {

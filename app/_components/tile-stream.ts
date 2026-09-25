@@ -47,6 +47,7 @@ import {
   type GroundUniforms,
   type TerrainLayer,
 } from "./terrain-layer";
+import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
@@ -553,6 +554,11 @@ class DressingPlugin {
     if (kerbs) {
       dressKerbs(kerbs, this.ctx.heightFog);
       terrain.kerbs = kerbs;
+    }
+    const fences = meshNamed(scene, "fences");
+    if (fences) {
+      dressFences(fences, this.ctx.heightFog);
+      terrain.fences = fences;
     }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });

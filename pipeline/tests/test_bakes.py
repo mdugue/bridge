@@ -297,6 +297,56 @@ def test_cliffs_come_through_as_walls_of_their_own_kind(tmp_path, monkeypatch):
     assert walls.kind_of("retaining_wall", None, '"natural"=>"cliff"') == "retaining_wall"
 
 
+def test_fences_follow_the_walls_and_gates_on_a_line_come_last(tmp_path, monkeypatch):
+    from bake import walls
+
+    nodes = _osm_nodes(
+        11,
+        [
+            (100.2, 75, {"barrier": "gate"}),  # 20 cm off the fence: on it
+            (100, 150, {"barrier": "gate"}),  # on no line: dropped
+            (100, 105, {"barrier": "lift_gate"}),  # on the wall
+        ],
+    )
+    ways = (
+        '<way id="1" version="1"><nd ref="3"/><nd ref="4"/><tag k="barrier" v="fence"/>'
+        '<tag k="fence_type" v="chain_link"/></way>'
+        '<way id="2" version="1"><nd ref="6"/><nd ref="5"/><tag k="barrier" v="wall"/></way>'
+    )
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
+    walls.run(tile)
+    doc = _read(tile, "walls")
+    assert doc["attribution"].startswith("©")
+    wall, fence, gate_on_fence, gate_on_wall = doc["features"]
+    assert wall["properties"] == {"kind": "wall", "h": 1.5}
+    assert fence["properties"] == {"kind": "fence", "type": "mesh", "h": 1.2}
+    assert gate_on_fence["properties"] == {"kind": "gate", "w": 1.2, "on": "fence"}
+    x, y = gate_on_fence["geometry"]["coordinates"]
+    assert abs(y - 5656075) < 0.02  # snapped onto the line
+    assert gate_on_wall["properties"] == {
+        "kind": "gate",
+        "w": 4.0,
+        "on": "wall",
+        "type": "lift_gate",
+    }
+
+
+def test_fence_types_and_heights_come_from_the_tags():
+    from bake.walls import fence_height, fence_type, gate_width
+
+    assert fence_type("fence", None) == "railing"  # Dresden's wrought iron
+    assert fence_type("fence", '"fence_type"=>"wood"') == "picket"
+    assert fence_type("fence", '"fence_type"=>"metal"') == "railing"
+    assert fence_type("fence", '"fence_type"=>"concrete"') == "railing"
+    assert fence_type("handrail", '"fence_type"=>"wire"') == "rail"
+    assert fence_height("fence", '"height"=>"1.8 m"') == 1.8
+    assert fence_height("fence", '"height"=>"25"') == 1.2  # implausible: default
+    assert fence_height("handrail", None) == 1.0
+    assert gate_width("gate", '"width"=>"3"') == 3.0
+    assert gate_width("lift_gate", None) == 4.0
+    assert gate_width("gate", None) == 1.2
+
+
 class _Bank:
     """A DGM stub: 100 m south of y = 0, rising 4 m to y = 20 across all x."""
 

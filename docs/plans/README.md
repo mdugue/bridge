@@ -60,7 +60,7 @@ history. Decisions that came out of plans are written up as
 | 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | **TODO** | [026-road-markings.md](./026-road-markings.md) |
 | 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **PARTIAL** — 0–2 built (1 682 parts regain their use; 1 188 shop objects, 842 listed), 3 REJECTED (0.8 % dated); open: dusk plates on a GPU | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |
 | 028 | Cultivated land: allotment colonies, orchards, vineyards | **TODO** | [028-cultivated-land.md](./028-cultivated-land.md) |
-| 029 | Fences, railings and gates, baked into the fine terrain | **TODO** | [029-fences-and-gates.md](./029-fences-and-gates.md) |
+| 029 | Fences, railings and gates, baked into the fine terrain | **PARTIAL** — 1–2 built (99 km, 875 gates; one pattern-drawn quad per panel, +2.7–6.8 % fine glTF); open: plates on a GPU | [029-fences-and-gates.md](./029-fences-and-gates.md) |
 | 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | **TODO** | [030-street-furniture-2.md](./030-street-furniture-2.md) |
 | 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | **TODO** | [031-elbe-riverside.md](./031-elbe-riverside.md) |
 | 032 | Street names: map lettering in fly mode, a caption on foot | **TODO** | [032-street-names.md](./032-street-names.md) |

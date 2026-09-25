@@ -66,6 +66,8 @@ export interface TerrainLayer {
   stairs?: Mesh;
   /** the tile's baked kerb stones (fine level only; kerb-layer.ts) */
   kerbs?: Mesh;
+  /** the tile's baked fences and gates (fine level only; fence-layer.ts) */
+  fences?: Mesh;
   /** the tile's baked walls (fine level only; wall-layer.ts) */
   walls?: Mesh;
   /** lowest valid elevation (m) on this tile — the valley/river floor */

@@ -19,7 +19,52 @@
 - **Effort**: M (bake S, geometry M, gates S)
 - **Risk**: MED — 78 km of line work; triangle and fill budget
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: PARTIAL — phases 1–2 built; open: the plates on a real GPU
+  (none was available to the executor)
+
+## Outcome (2026-09-25)
+
+- **Bake** — `pipeline/bake/walls.py` appends `{kind: "fence", type, h}`
+  lines and `{kind: "gate", w, on, type?}` points (on a wall or fence line
+  within 0.5 m, snapped onto it) after the walls. The committed wall
+  features stayed verbatim (Geofabrik 2026-06-15; the terrain study
+  addresses them by index); the fences and gates come from the BBBike
+  extract of 2026-09-19. 99 km of fence (15.7 / 45.9 / 14.7 / 22.9 km on
+  `33410_5656` / `33410_5658` / `33412_5656` / `33412_5658`), 875 gates on
+  a line (746 on fences, 129 on walls); about 520 gate points on no line
+  are dropped. `lowveg.py` and the terrain study ignore fences and gates;
+  `prepare-data.ts` keeps them out of the conflation, the stair burn and
+  the step snap.
+- **Geometry — deviation** — one flat double-sided quad per ≤ 2.5 m panel
+  (`lib/city/fences.ts`), its post and top rail drawn by the pattern, a
+  narrow quad for a run's last post. The first cut built posts (4 × 4 cm
+  boxes) and a rail as geometry: 125–361 k triangles per tile and +12 to
+  +32 % on the fine terrain glTF — over the 10 % STOP. Lean: 14.4 / 41.2 /
+  13.5 / 20.0 k triangles, +46 / +115 / +44 / +53 kB gzipped (+2.7 / +6.8 /
+  +2.7 / +2.7 %).
+- **Pattern — deviation** — procedural in `fence-layer.ts` from the first UV
+  set (code + distance along, 16-bit), box-filtered over the pixel
+  footprint, not a baked 64 × 64 atlas: no image in the glTF, and exact
+  coverage at any distance. The shimmer STOP's fallback (fade to a flat,
+  lighter tint far off) is taken up front: where the infill's bars fall
+  under a pixel, or beyond 40–60 m, it becomes a lighter veil of its mean
+  coverage, dithered in screen space.
+- **Shadows** — a custom depth material with the same discards (no alpha
+  map: three copies a colour material's alphaMap/alphaTest onto the depth
+  material); posts and rails cast in full, the infill dithered by coverage
+  per shadow texel, softened by the PCF.
+- **Gates** — a `w`-wide gap with a closed leaf (denser bars, darker), a
+  boom at 1 m for a lift gate or cycle barrier; gates on a freestanding
+  wall (`kind` wall) cut that ribbon too (119 leaves); retaining walls are
+  never cut.
+- **STOP checks** — size: under 10 % on every tile (above). Crossing: 5.4 %
+  of the fence lines run > 1 m inside a LoD2 footprint (inset 0.3 m; 3.3 /
+  9.0 / 2.5 / 2.6 % per tile), mostly ends tucked into a wall and hidden by
+  the clay; 9.7 % run > 1 m over the DLM road class (18.7 / 8.1 / 7.9 /
+  6.1 %), which is ±3 m and includes pavements — the check has to be
+  visual on a GPU; lines are not shifted. Shimmer and the look: GPU.
+- Headless (SwiftShader, `?scene=lite`): boots with no shader or console
+  errors; the spawn tile's fences census 13 500 triangles.
 
 ## Why this matters
 

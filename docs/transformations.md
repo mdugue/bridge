@@ -669,7 +669,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   blend (Basis-DLM has no platform geometry); absent/empty when the site has
   no `.osm.pbf` extract.
 
-### Retaining / city walls
+### Walls and fences
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
   wall` + `man_made=embankment` + `natural=cliff` (kind `cliff`, default 3 m;
   read from `other_tags`, since GDAL has no `natural` column on `lines`)
@@ -702,6 +702,41 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   Overpass bake: 436 walls, same kinds/lengths/heights). Since
   [ADR 0025](./adr/0025-bakes-are-one-python-package.md) every OSM layer
   comes from that extract (`pipeline/bake/osm.py`).
+- **Fences, railings and gates** — OSM `barrier=fence|handrail` (lines and
+  the outer ring of areas) ride the walls file after the walls, as
+  `{kind: "fence", type, h}`: `fence_type` railing/metal/bars → `railing`,
+  wire/chain_link/chain/temporary → `mesh`, wood/split_rail/pales →
+  `picket`, untagged → `railing` (Dresden's wrought iron), a handrail →
+  `rail` (posts and a rail, no infill); `height` when 0.3–4 m, else 1.2 m
+  (a handrail 1.0 m). Last come the gates (`barrier=gate|lift_gate|
+  swing_gate|cycle_barrier` points within 0.5 m of a wall or fence line,
+  snapped onto it, `{kind: "gate", w, on}`: `width`, else 1.2 m, a lift
+  gate 4 m). 99 km of fence and 875 gates on a line in the four tiles
+  (15.7 / 45.9 / 14.7 / 22.9 km on `33410_5656` / `33410_5658` /
+  `33412_5656` / `33412_5658`; 746 gates on fences, 129 on walls; about 520
+  gate points stand on no mapped line and are dropped). **Baked into the
+  fine terrain glTF** as a `fences` node (`lib/city/fences.ts`,
+  `scripts/bake-tiles.ts` `fenceMesh`, ADR 0029): one flat, double-sided
+  panel per ≤ 2.5 m between posts on the fine TIN, cut `w` wide at each
+  gate with a closed leaf (or a boom, for a lift gate or cycle barrier) in
+  the gap; gates on a freestanding wall (`kind` wall) cut that wall's
+  ribbon the same way. Fences never enter the conflation, the stair burn or
+  the step snap: they stand on their OSM line. The pattern — bars every
+  12.5 cm, a wire diamond mesh, pickets, a gate's denser bars, and each
+  panel's post and top rail — is procedural in `fence-layer.ts`,
+  box-filtered over the pixel footprint; where the bars fall under a pixel
+  or beyond 40–60 m the infill fades to a lighter veil of its mean
+  coverage, dithered (the plan's STOP fallback against alpha-test shimmer,
+  taken up front). The shadow pass casts posts and rails in full and the
+  infill dithered by its coverage, which the PCF softens into a partial
+  shadow. 14 366 / 41 208 / 13 510 / 20 048 triangles per tile; the fine
+  terrain glTF grows by 46 / 115 / 44 / 53 kB gzipped (+2.7 / +6.8 / +2.7
+  / +2.7 %, under the plan's 10 %). Posts and rails as boxes (the first
+  cut: 125–361 k triangles per tile) cost +12–32 % and were folded into the
+  pattern. The walls file keeps its walls verbatim (the terrain study
+  addresses them by index); only fences and gates were appended, from the
+  BBBike extract of 2026-09-19. **Not yet judged on a real GPU** (plan 029,
+  plan 019). Plan 029.
 
 ### Wall → terrain conflation (breakline burn at build time)
 *The coarse level only since the fine one became a TIN* ([ADR
@@ -860,7 +895,7 @@ research that produced them):
     [plans/](./plans/README.md): trams with contact wire (024), trees by
     species and season (025), road markings (026), shop glow and
     heritage from OSM on the buildings (027: ✅ above; the era is 🗃️), allotments, orchards and
-    vineyards (028), fences and gates (029), more street furniture (030),
+    vineyards (028), fences and gates (029: ✅ above), more street furniture (030),
     Elbe landing stages, groynes and ferries (031), street names (032),
     sky-view factor and a baked horizon map (033), small structures from
     DOM − LoD2 (034), a hidden soundscape (035).

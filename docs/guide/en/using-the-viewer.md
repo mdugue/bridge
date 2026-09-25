@@ -168,8 +168,9 @@ cannot resolve it in motion) and comes back when you stop.
   view, estimated graphics memory and the frame rate.
 
 The footer credits the data sources: the Saxon survey office for the
-official datasets and OpenStreetMap contributors for lamps, walls,
-platforms and bridge structures. Next to it, *Unterstützen* (support)
+official datasets and OpenStreetMap contributors for, among others, lamps,
+walls and fences, platforms, bridge structures, shops and listed buildings.
+Next to it, *Unterstützen* (support)
 leads to the project's Ko-fi page; it is a plain link that loads nothing
 from Ko-fi until it is clicked.
 

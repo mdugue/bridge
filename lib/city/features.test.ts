@@ -16,7 +16,7 @@ import type {
   TerraceFeature,
   TreeFeature,
   VegRowFeature,
-  WallFeature,
+  WallFileFeature,
   KerbFeature,
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
@@ -157,14 +157,36 @@ test.each(tileIds(DRESDEN))("%s: kerbs are LineStrings", (tile) => {
 });
 
 test.each(tileIds(DRESDEN))(
-  "%s: walls are LineStrings with a kind and a height",
+  "%s: walls and fences are LineStrings with a kind and a height, gates points with a width",
   (tile) => {
-    for (const f of loadSource<WallFeature>(wallSourceFile(tile))) {
+    const kinds: string[] = [];
+    for (const f of loadSource<WallFileFeature>(wallSourceFile(tile))) {
+      const kind = f.properties?.kind ?? "";
+      kinds.push(kind);
+      if (f.geometry.type === "Point") {
+        expect(kind).toBe("gate");
+        expect(isPoint2(f.geometry.coordinates)).toBe(true);
+        const gate = f.properties as { on?: string; w?: number } | null;
+        expect(["fence", "wall"]).toContain(gate?.on ?? "");
+        expect(gate?.w ?? 0).toBeGreaterThan(0);
+        continue;
+      }
       expect(f.geometry.type).toBe("LineString");
       expect(isLine(f.geometry.coordinates)).toBe(true);
-      expect(typeof f.properties?.kind).toBe("string");
-      expect(Number.isFinite(f.properties?.h)).toBe(true);
+      expect(typeof kind).toBe("string");
+      expect(Number.isFinite((f.properties as { h?: number } | null)?.h)).toBe(
+        true
+      );
+      if (kind === "fence") {
+        const type = (f.properties as { type?: string } | null)?.type ?? "";
+        expect(["railing", "mesh", "picket", "rail"]).toContain(type);
+      }
     }
+    // The walls first (the terrain study addresses them by index), then the
+    // fences, then the gates.
+    const rank = (k: string) => (k === "gate" ? 2 : k === "fence" ? 1 : 0);
+    const ranks = kinds.map(rank);
+    expect(ranks).toEqual(ranks.toSorted((a, b) => a - b));
   }
 );
 

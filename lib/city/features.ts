@@ -198,6 +198,30 @@ export interface WallFeature {
   properties: { h: number; kind: string } | null;
 }
 
+/** OSM fences and railings, in the walls file after the walls (walls.py,
+ *  ODbL): the panel (`railing`, `mesh`, `picket`, or `rail` for a handrail)
+ *  and the height in metres. */
+export interface FenceFeature {
+  geometry: LineGeometry;
+  properties: { h: number; kind: "fence"; type: string } | null;
+}
+
+/** OSM gates standing on a wall or fence line, last in the walls file
+ *  (walls.py, ODbL): the gap's width (m), the line's kind, and `lift_gate`
+ *  or `cycle_barrier` where the gate is a boom. */
+export interface GateFeature {
+  geometry: PointGeometry;
+  properties: {
+    kind: "gate";
+    on: "fence" | "wall";
+    type?: string;
+    w: number;
+  } | null;
+}
+
+/** Everything the walls file carries. */
+export type WallFileFeature = FenceFeature | GateFeature | WallFeature;
+
 /** The kerb lines (pipeline/bake/edges.py, from the Basis-DLM road class):
  *  the smoothed carriageway edge, the road on each line's left. */
 export interface KerbFeature {

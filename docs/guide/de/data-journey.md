@@ -107,7 +107,7 @@ enthält je Kachel:
 | | `lamps_<Kachel>.geojson` | Lampenpositionen | bis 60 kB |
 | | `furniture_<Kachel>.geojson` | Bänke, Papierkörbe, Fahrradbügel, Poller, Briefkästen und Wartehäuschen, jeweils mit ihrer Blickrichtung | 50–180 kB |
 | | `monuments_<Kachel>.geojson` | Brunnenbecken und Denkmalpunkte mit Art und amtlichem Namen | 2–55 kB |
-| | `walls_<Kachel>.geojson` | Mauerlinien mit Art und Höhe | 50–120 kB |
+| | `walls_<Kachel>.geojson` | Mauerlinien mit Art und Höhe, dazu die Zäune und Geländer (mit Bauart) und die Tore darauf | 130–290 kB |
 | | `stairs_<Kachel>.geojson` | Treppenläufe: Achse, Breite, Stufenzahl, Höhe an Fuß und Kopf | wenige kB |
 | | `terraces_<Kachel>.geojson` | erhöhte Flächen, die dem Geländemodell fehlen (die Brühlsche Terrasse), mit ihrer Höhe | wenige kB |
 | | `rail_<Kachel>.geojson`, `railarea_<Kachel>.geojson` | Gleislinien mit Gleiszahl; verschmolzene Schotterflächen | wenige kB |
@@ -132,7 +132,7 @@ Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
 | Ladenfronten, Baudenkmale | OpenStreetMap + LoD2 | die Tabelle je Gebäude | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
 | Denkmäler und Brunnen | Basis-DLM (Namen, Lage) + OpenStreetMap (Becken) | die GeoJSON-Dateien | — | wie eingecheckt |
 | Lampen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
-| Mauern, Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden an und unter ihnen geformt, Mauern und Stufen Teil des Netzes | im Geländenetz |
+| Mauern, Zäune, Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden an und unter ihnen geformt, Mauern, Zäune und Stufen Teil des Netzes | im Geländenetz |
 | Gleise, Schotter, Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)

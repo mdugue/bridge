@@ -101,7 +101,7 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `lamps_<tile>.geojson` | lamp positions | up to 60 kB |
 | | `furniture_<tile>.geojson` | benches, bins, bicycle stands, bollards, post boxes and shelters, each with the way it faces | 50–180 kB |
 | | `monuments_<tile>.geojson` | fountain basins and monument points with kind and official name | 2–55 kB |
-| | `walls_<tile>.geojson` | wall lines with kind and height | 50–120 kB |
+| | `walls_<tile>.geojson` | wall lines with kind and height, then the fences and railings (with their kind of panel) and the gates on them | 130–290 kB |
 | | `stairs_<tile>.geojson` | flights of steps: axis, width, step count, the heights at foot and head | a few kB |
 | | `terraces_<tile>.geojson` | raised areas the terrain model lacks (the Brühlsche Terrasse) with their level | a few kB |
 | | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |
@@ -126,7 +126,7 @@ In total the repository carries about 125 MB of data for the four tiles
 | Shop fronts, listed buildings | OpenStreetMap + LoD2 | the per-building table | folded into the building mesh's table | inside the building mesh |
 | Monuments and fountains | Basis-DLM (names, positions) + OpenStreetMap (basins) | the GeoJSON files | — | as committed |
 | Lamps, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
-| Walls, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls and steps as part of the mesh | inside the terrain mesh |
+| Walls, fences, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls, fences and steps as part of the mesh | inside the terrain mesh |
 | Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)

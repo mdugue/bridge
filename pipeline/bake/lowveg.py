@@ -594,7 +594,12 @@ def load_inputs(tile: Tile, grid: Grid) -> dict:
         else np.zeros((grid.n, grid.n), np.float32)
     )
     inputs["bld"] = building_mask(grid, tile.data / "cityjson" / f"lod2_{tile.id}.city.json")
-    walls = _features(dlm("walls").with_suffix(".geojson"))
+    # The walls file also carries fences and gates (walls.py): only walls mask.
+    walls = [
+        f
+        for f in _features(dlm("walls").with_suffix(".geojson"))
+        if f["properties"].get("kind") not in ("fence", "gate")
+    ]
     inputs["walls"] = grid.burn([shape(f["geometry"]).buffer(WALL_BUF_M) for f in walls])
     bridges = _features(dlm("bridge").with_suffix(".geojson"))
     inputs["bridge"] = grid.burn([shape(f["geometry"]) for f in bridges])

@@ -176,8 +176,9 @@ zurück, sobald du stehst.
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
 Die Fußzeile nennt die Datenquellen: die sächsische Landesvermessung für
-die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden für Lampen,
-Mauern, Bahnsteige und Brückentragwerke. Daneben führt *Unterstützen* zur
+die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden unter anderem
+für Lampen, Mauern und Zäune, Bahnsteige, Brückentragwerke, Läden und
+Baudenkmale. Daneben führt *Unterstützen* zur
 Ko-fi-Seite des Projekts; es ist ein einfacher Link, der erst beim Klick
 etwas von Ko-fi lädt.
 

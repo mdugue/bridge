@@ -85,6 +85,7 @@ export type LayerName =
   | "terrain"
   | "vegetation"
   | "walls"
+  | "fences"
   | "water";
 
 export interface CityWalkStats {
@@ -743,6 +744,7 @@ async function bootApp(
         rail: census(dressings.map((d) => d.rail)),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
+        fences: census(terrains.map((t) => t.fences)),
       },
     });
   };
