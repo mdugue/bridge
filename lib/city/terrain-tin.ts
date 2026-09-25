@@ -177,6 +177,8 @@ export interface TinGeometryData {
   minElevation: number;
   /** vertex positions in the recentered Z-up data frame, skirt ring appended */
   positions: Float32Array<ArrayBuffer>;
+  /** the surface's share of `indices`; the skirt's triangles follow it */
+  surfaceIndexCount: number;
 }
 
 /** The border vertices of one side, sorted along it. */
@@ -257,7 +259,12 @@ export function buildTinGeometryData(
   const indices = new Uint32Array(tin.triangles.length + skirt.length);
   indices.set(tin.triangles, 0);
   indices.set(skirt, tin.triangles.length);
-  return { positions, indices, minElevation };
+  return {
+    positions,
+    indices,
+    minElevation,
+    surfaceIndexCount: tin.triangles.length,
+  };
 }
 
 // --- heightAt ------------------------------------------------------------------

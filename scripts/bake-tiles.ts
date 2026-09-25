@@ -141,6 +141,29 @@ function normalsOf(
   return geometry.getAttribute("normal").array as Float32Array;
 }
 
+/**
+ * A terrain mesh's normals from its SURFACE triangles alone. The skirt shares
+ * the border vertices with the surface, and a 30 m vertical wall outweighs the
+ * ground's triangles in three's area-weighted average: the border normals came
+ * out nearly horizontal and lit a bright band along every tile seam, one
+ * triangle wide (on a TIN's flat road, metres). The skirt's bottom ring faces
+ * straight up, so a glimpse of it reads as ground.
+ */
+function terrainNormals(
+  positions: Float32Array,
+  indices: Uint32Array,
+  surfaceIndexCount: number,
+  surfaceVertexCount: number
+): Float32Array {
+  const normals = normalsOf(positions, indices.subarray(0, surfaceIndexCount));
+  for (let i = surfaceVertexCount; i < positions.length / 3; i++) {
+    normals[3 * i] = 0;
+    normals[3 * i + 1] = 0;
+    normals[3 * i + 2] = 1;
+  }
+  return normals;
+}
+
 export interface TerrainMesh {
   /** ground height at projected (EPSG) x, y over the very triangles the
    *  mesh draws — what the walls and kerbs stand on; null off the tile */
@@ -221,16 +244,16 @@ export function terrainMesh(
     burnWalls: true,
     stairMargin: 0,
   });
-  const { positions, indices, minElevation } = buildTerrainGeometryData({
-    elevations,
-    n,
-    bounds,
-    offset,
-  });
+  const { positions, indices, minElevation, surfaceIndexCount } =
+    buildTerrainGeometryData({ elevations, n, bounds, offset });
   const index = Uint32Array.from(indices);
   return {
     heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
-    input: { positions, normals: normalsOf(positions, index), indices: index },
+    input: {
+      positions,
+      normals: terrainNormals(positions, index, surfaceIndexCount, n * n),
+      indices: index,
+    },
     minElevation,
     maxElevation: maxZ(positions, n * n),
   };
@@ -263,16 +286,19 @@ export function tinTerrainMesh(
   } catch {
     return null;
   }
-  const { positions, indices, minElevation } = buildTinGeometryData(
-    tin,
-    offset
-  );
+  const { positions, indices, minElevation, surfaceIndexCount } =
+    buildTinGeometryData(tin, offset);
   const index = new TinIndex(tinSurface(tin));
   return {
     heightAt: (x, y) => index.heightAt(x, y),
     input: {
       positions,
-      normals: normalsOf(positions, indices),
+      normals: terrainNormals(
+        positions,
+        indices,
+        surfaceIndexCount,
+        tin.z.length
+      ),
       indices,
       reorder: true,
     },
