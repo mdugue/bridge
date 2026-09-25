@@ -182,6 +182,14 @@ reviews after phases 1–3 and at the end.
   Meißen 16, Unna 11, and Hamburg 33 fountains from OSM alone (no open
   DLM, so no statues). Baking them showed the spec's integer tile bounds
   leaking numpy integers into the GeoJSON — fixed in `bake/spec.py`.
+- **Main's later features, for every fetched site:** the paving and
+  parking raster, the road/lawn edges with their kerb stones, street
+  furniture and playgrounds, sports grounds and (where there is a DLM)
+  the road islands carved out of it were baked for Leipzig, Meißen,
+  Grimma, Unna, München and Hamburg and build into their tilesets; they
+  read only OSM and the class raster, so no provider needs its own path.
+  The one Saxon leftover was the `/wissen` hero caption crediting GeoSN
+  for every site (now `landcoverCredit`).
 - **Berlin is configured but not fetched:** `gdi.berlin.de` failed TLS
   from the container; the adapter follows the ATOM feeds' documented URLs.
   The block is 3×2 so that both the Brandenburger Tor and the Fernsehturm
