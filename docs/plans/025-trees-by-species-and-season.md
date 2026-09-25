@@ -18,7 +18,11 @@
 - **Effort**: M (OSM trees S, season model S, crown shader M, bare crowns M)
 - **Risk**: MED — bare crowns must not read as noise; shadows must follow
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: **PARTIAL** (2026-09-25) — A, B and C are built, tested and
+  checked headless; the GPU plates (every phase's) are open: the look of
+  the autumn hues and whether the bare-crown stipple reads as noise in
+  motion (the first STOP condition) have not been judged on a real GPU.
+  See "Execution record" at the end.
 
 ## Why this matters
 
@@ -125,3 +129,68 @@ Ledger (Vegetation: species colour + season ✅), `data-flow.md`,
   site: throttle to the drag end.
 - OSM-only trees duplicate visible cadastre or canopy trees in a plate:
   tighten the 3 m rule and the canopy veto, do not add a second veto path.
+
+## Execution record (2026-09-25)
+
+Built without a GPU; everything measurable was measured, the look was not
+judged.
+
+**A — bake.** `trees.py` writes `gn` (genus index; `tree_archetypes.GENERA`,
+38 entries incl. "Acer rubrum" and "Quercus rubra" for their red autumn),
+`t` (trunk diameter, cm, from `stammdurchmesser_akt` or an OSM
+`circumference`), `s: "osm"`, and the `genera` member; the attribution
+names both credits when OSM trees were added. Re-baked all four tiles
+from the WFS of 2026-09-25 and the BBBike extract of 2026-09-19: the
+18 444 cadastre trees are the same set with the same positions and
+properties as the committed ones (checked as a multiset; only the order
+differed, and the output is now sorted by position). Genus coverage
+17 228 / 18 444 (93 %); trunk 17 254. OSM: 6 018 `natural=tree` in the
+tiles, 4 384 with a taxon or `leaf_type`, 2 564 within 3 m of a cadastre
+tree, **1 820 added** (854 / 251 / 369 / 346), 207 with a genus.
+`trunkGirth` fits a measured trunk at 1.3 m (× 1.3 style factor).
+
+**B — model.** `lib/city/tree-season.ts` as designed (per-genus leaf-out,
+colouring, fall, hue, marcescent `hold` for oak, beech, hornbeam; ±6 days
+jitter; `dayOfYear` folds 29 February), unit-tested.
+
+**C — scene.** `app/_components/crown-season.ts`; `VegetationControl.
+setSeason(day)`; `TileStreamContext.season()`; `create-app.ts` keeps a
+season clock that re-seasons only on a change of calendar day, at most
+once per 150 ms (trailing), and redraws the shadow map when a crown
+changed. Headless (`/?scene=lite`, SwiftShader): no console errors or
+shader compile errors; booting in July and setting 20 October / 10
+January adds the two seasonal programs (crown + depth) and re-renders
+the shadow map.
+
+**Deviations.**
+- The autumn colour is mixed on the CPU into the per-instance colour three
+  already carries (divided by the crown material's base colour), not in the
+  fragment shader from an `aGenus` attribute: the hue table stays in the
+  pure, tested module, and the GPU gets one float per crown (`aBare`), on
+  a per-chunk geometry view over the shared crown buffers.
+- A chunk wears the seasonal (discarding) material only while one of its
+  crowns is out of full leaf; in summer the plain crown keeps early depth
+  testing. The first switch compiles the variant once per session.
+- The dither is a hashed alpha test (three's `alphaHash` method, cells
+  ~1.25 px at every distance, in crown space), not a fixed cell grid: the
+  first cut's fixed cells (~8 per crown, with a solid twig-tinted crown past
+  160–320 m) made big trees look like flat brown shards on the headless
+  plates. This is the plan's first STOP remedy applied ahead of the GPU
+  check; the check itself is still open.
+- The genus table is shared through the artifact (`genera` member,
+  checked against `TREE_GENERA` by `features.test.ts`), not a third file.
+- The 3 m rule looks at the tile's own cadastre file only; a cadastre tree
+  just across a seam does not veto an OSM tree (a 3 m band).
+
+**Numbers.** `scripts/eval/season-cost.ts` (whole site, 58 988 seasonal
+crowns, CPU of the container): a date change costs 4–7 ms median (July →
+20 October 6.4 ms, → 10 January 3.6 ms, first-run JIT outlier 24–34 ms) —
+under the 16 ms bar, throttled anyway.
+
+**Open.** The GPU plates of every phase (Zwinger courtyard for OSM
+duplicates; 15 Oct / 1 Nov at the Königsufer and a lime avenue; 10 Jan at
+noon and low sun, and a motion check of the stipple). Canopy and row trees
+(species unknown) use the generic curve, including any conifers among
+them. Hedges and the low vegetation stay green. A site without a cadastre
+gets no OSM trees (the step is skipped); an OSM-only `trees` artifact
+would be a small change in `trees.run`.

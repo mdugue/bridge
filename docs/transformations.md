@@ -407,6 +407,62 @@ visual-variable codebook is in
   *Fallback:* no `trees_<tile>.geojson` → rows + canopy, unchanged.
   *Portability:* any city's tree register (or segmented LiDAR trees) fills
   the same contract.
+- **OSM trees beside the cadastre, genus and trunk** (plan 025 phase A,
+  every tile) — *inputs:* the site's OSM extract (`natural=tree` nodes,
+  ODbL) and the cadastre's `stammdurchmesser_akt`. `trees.py` writes each
+  tree's **genus** `gn` (an index into `tree_archetypes.GENERA`, 38
+  entries, the file's `genera` member; the red maples and red oaks are
+  entries of their own because their autumn is) — 17 228 of the 18 444
+  cadastre trees (93 %) have one, the rest follow the generic curve — and
+  the **trunk diameter** `t` (cm, 17 254 trees). The viewer fits a
+  measured trunk's girth to its diameter at 1.3 m (× 1.3 for the
+  seven-sided, barkless trunk; `tree-inventory.ts` `trunkGirth`), the
+  height rule stays where none is measured. **OSM trees**: the BBBike
+  extract (2026-09-19) has 6 018 `natural=tree` in the four tiles; 4 384
+  carry a taxon (`species`/`taxon`/`genus`, German names such as
+  "Platane" mapped) or at least `leaf_type`, the rest are dropped (the DOM
+  canopy covers unknown trees; no species is invented). **The cadastre
+  wins**: an OSM tree within 3 m of a cadastre tree is taken to be it
+  (2 564 dropped), leaving **1 820** (854 / 251 / 369 / 346 per tile,
+  `s: "osm"`, 207 with a genus) — courts, the Zwinger, Free-State and
+  private ground. Their height/crown/circumference tags are read (53 / 1 /
+  2 in the extract), the gaps filled from the cadastre's own statistics
+  for the tile. They join the cadastre's veto path (`keepTree`), so an OSM
+  tree replaces the canopy or laser-scan crown it stands in. The re-bake
+  left the cadastre trees unchanged (same set, positions, properties);
+  features are now sorted by position so a re-bake diffs by content.
+- **Trees by season** (plan 025 phases B–C, every tile; look **not yet
+  judged on a GPU**) — *inputs:* the genus above and the scene date.
+  `lib/city/tree-season.ts` maps (day of year, genus, per-tree jitter of
+  ±6 days) → `{ leaf, autumn }`: leaf-out mid-April → early May, colouring
+  in October, leaf fall late October → late November, per genus (limes
+  early and butter yellow, horse-chestnuts browned from August by the leaf
+  miner, oaks late, russet and holding 30 % dead leaves through winter,
+  the ginkgo bare within days, larch and dawn redwood rust then bare);
+  evergreens never change; canopy and row trees (species unknown) follow a
+  generic deciduous curve. `crown-season.ts` writes, **on a change of
+  calendar day only** (never per frame; throttled to one run per 150 ms),
+  each crown's colour (summer green → the genus hue, divided by the crown
+  material's base so it lands as itself) into the per-instance colour
+  three already carries, and `aBare` = 1 − leaf into a per-chunk
+  instanced attribute. A chunk with any bare crown switches to the
+  **seasonal crown material**: a hashed alpha test in the crown's own
+  local space (Wyman & McGuire's method, as three's `alphaHash`: cells
+  about 1.25 px wide at every distance, fixed to the tree so they sway
+  with it) discards the leafless part down to a 25 % grey-brown twig
+  stipple; the matching **custom depth material** thins the shadow the
+  same way (PCF softens the stipple into a lighter shadow). The first cut
+  used fixed cells in crown space (~8 across a crown) with a solid,
+  twig-tinted crown past 160–320 m: headless plates showed big trees
+  shattered into flat brown shards up close, so it was replaced before
+  shipping. A chunk in full leaf keeps the plain material (no
+  discard, early depth test intact). A season change redraws the shadow
+  map. *Cost* (`scripts/eval/season-cost.ts`, the whole site, 58 988
+  crowns, CPU): 4–7 ms median per date change (July → October 6.4 ms,
+  October → January 3.6 ms), under the plan's 16 ms bar; the upload is 16 B
+  per crown. *Not seasonal:* hedges and trunks. *Unverified:* the autumn
+  hues and whether the bare-crown dither reads as noise in motion (the
+  plan's STOP condition) need the `--headed` plates on a real GPU.
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for the spawn tile
@@ -820,7 +876,7 @@ research that produced them):
 
 13. **The 2026-09-25 batch** — each with its own plan in
     [plans/](./plans/README.md): trams with contact wire (024), trees by
-    species and season (025), road markings (026), shop glow / heritage /
+    species and season (025 — built, GPU plates open), road markings (026), shop glow / heritage /
     era from OSM on the buildings (027), allotments, orchards and
     vineyards (028), fences and gates (029), more street furniture (030),
     Elbe landing stages, groynes and ferries (031), street names (032),
