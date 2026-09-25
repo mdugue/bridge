@@ -32,6 +32,18 @@ visual-variable codebook is in
   ground height back from the grid vertices (`gridElevations`).
   `scripts/bake-tiles.ts`, `lib/city/terrain-geometry.ts`, `terrain-layer.ts`
   ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
+- **Squares and islands from OSM** (*Plätze, Inseln*) — the DLM draws many
+  squares as one road area: the Albertplatz's pedestrian island, its lawns
+  and fountains were grey carriageway with no kerb. The land-cover bake
+  carves them back out, over road texels only: OSM `highway=pedestrian` /
+  `area:highway` (footway, pedestrian, traffic island) areas and fountain
+  basins become built-up (4), `leisure=park|garden` and
+  `landuse=grass|village_green|meadow|flowerbed` meadow (1), the lawn
+  winning inside a pedestrian area. Idempotent, so `bun run bake --step
+  islands` applies it to the committed raster without the raw DLM
+  (2026-09-25: ≈ 0.2–0.7 M texels per tile, Prager Straße and the Altmarkt
+  among them). The legend then carries the OSM credit.
+  `pipeline/bake/landcover.py` `carve_islands`.
 - **Surface colours** — Basis-DLM land-cover → a 4096² **class-id raster**
   (8-bit, ids 0–8, burned lowest priority first so water wins;
   `pipeline/bake/landcover.py` → `landcover_<tile>.png` + legend). The colours
@@ -49,6 +61,69 @@ visual-variable codebook is in
   (`uNdvi`/`uMeadowNdvi`, gated by the class raster `grMeadow`), HUD slider
   *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
+- **Kerbs and lawn edges** (*Bordsteine, Rasenkanten*) — the DLM road
+  class (7) is the surveyed carriageway, so its edge is the kerb line.
+  `pipeline/bake/edges.py` measures, from the committed class raster, the
+  signed distance to the road edge and to the meadow edge (urban green
+  included) out to ±6 m, box-smoothed so the isolines run straight along a
+  diagonal instead of following the 0.5 m staircase → `edges_<tile>.png`
+  (2048², two bytes per texel). From the road's 0-isoline it also writes
+  the **kerb lines** (`kerbs_<tile>.geojson`, road on the left) where the
+  far side is ground (not water or railway). The terrain bake stands a
+  **kerb stone** on them in the fine terrain glTF (`lib/city/kerbs.ts`,
+  12 cm above the road, 24 cm wide, its top level at the higher side, face
+  toward the road; `kerb-layer.ts`, casts shadow) — the DGM1 smooths the
+  step away and the 2 m grid cannot hold it. In the fragment pass
+  (`ground-detail.ts`) the distance draws a pale stone band on the
+  pavement side and a darker gutter on the road side (the coarse level's
+  kerb), a lawn lip with a normal kink, the parking lanes and the paving
+  rows along the kerb. The first cut drew the kerb as a shading-normal
+  step from the class texels alone; on the raster's staircase it read as
+  dashes and odd shadow flecks (replaced 2026-09-25). The stone's own
+  shadow on the road is drawn from the sun: when the sun stands behind the
+  kerb, the strip out to 12 cm · cot(elevation) is shaded — a shadow the
+  shadow map cannot hold (7 cm texels spread by the soft PCF, less the depth
+  bias). HUD *Bodendetail*.
+  Plan [023](./plans/023-ground-detail.md).
+- **Paving materials** (*Beläge*) — OSM `surface=*` on the highways (plus
+  `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
+  squares, parking lots) → a 2048² two-byte raster per tile
+  (`pipeline/bake/surface.py` → `surface_<tile>.png`, greyscale, the bytes
+  interleaved so the viewer's own PNG decoder reads it exactly): R packs the
+  carriageway's and the pavement's material (asphalt, concrete, slabs, sett,
+  unpaved, grass pavers; `park · 64 + walk · 8 + road`), G the way's
+  direction. The
+  shader reads `road` on class 7 and `walk` elsewhere; unknown falls back to
+  asphalt / slabs (class 4) / sand (class 6). Patterns in the street's own
+  frame — slabs in running bond (low-contrast joints), concrete plates,
+  gravel and asphalt mottles, grass pavers; sett as a darker, warmer tone
+  with a fine direction-free grain (the drawn stone grid with pillow
+  shading read as busy and seamed where two streets' frames met, and was
+  abstracted away on review) — fade out by `fwidth` before they alias; the material's tint
+  stays at any distance. Coverage (Dresden, 2026-09-19 extract): ~87 % of the
+  highway ways carry `surface`, ~68 % of the DLM carriageway texels get a
+  material. Fine terrain level only; absent raster → the class defaults.
+  HUD *Bodendetail*. `ground-detail.ts`, `terrain-layer.ts`.
+- **Parking** (*Parkplätze*) — OSM street parking (`parking:{left,right,both}`
+  = lane / yes / street_side / on_kerb …, with `:orientation`) and car parks
+  on the ground (`amenity=parking`, `amenity=parking_space`; the
+  `service=parking_aisle` driveways cleared) → the paving raster's top two
+  bits. On the carriageway a parking lane from the kerb distance — 2 m with
+  bays every 5.5 m (parallel) or 5 m with bays every 2.5 m (perpendicular /
+  diagonal) — with its edge line; in a car park bay lines every 2.5 m across
+  the aisle (or, without a mapped aisle, the lot's long axis). Pale painted
+  lines, faded out past ~15 cm/px; a car park without `surface` is asphalt.
+  Dresden: ~600 surface car parks, ~530 mapped bays, ~780 aisles, street
+  parking on ~1 000 roads. No cars (not in any dataset). HUD *Bodendetail*.
+  `ground-detail.ts`.
+- **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
+  courtyards, front gardens and parks inside the settlement alike. Where
+  the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM
+  does not call the ground paved, `edges.py` counts it as meadow; the
+  shader paints it exactly as meadow — its colour, mottle, NDVI tint and
+  lawn edge. The first cut blended toward the meadow colour at 0.85 ×
+  slider and read as barely there. HUD *Stadtgrün* (default 1).
+  `ground-detail.ts` `urbanGreen`.
 - **Water** — the painted splat's alpha (water coverage, `smoothstep`ed
   shoreline) + the terrain geometry + animated normal wobble; the water and
   mist sheets hang next to their terrain mesh and leave with the tile.
@@ -354,6 +429,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Meadow mottle** — DLM class 1 (farmland/meadow) → a low-frequency
   colour + normal mottle so grass reads as ground, not paint. `terrain-layer.ts`
   `GRASS_MOTTLE`/`GRASS_NORMAL`.
+- **Contour ink guard** — a flat terrain quad lying exactly on a 2 m or 10 m
+  contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
+  lines on flat roads). No slope, no contour line. `terrain-layer.ts`.
 
 ---
 
@@ -411,6 +489,15 @@ research that produced them):
     trunk hidden) beyond ~500 m; today a tree 2 km away still draws ~400
     triangles in the main and every shadow pass. The swap mechanism exists
     (`updateLod`); the look needs the `--headed` harness.
+12. **Ground, the rest of plan [023](./plans/023-ground-detail.md)** — a
+    raised pavement (today the kerb stone stands on a pavement at road
+    level); DGM1 micro-relief as a
+    1 m normal texture over the 2 m mesh; shell-textured grass near the
+    camera (4–8 shells, meadow only, no shadow casting — judge the fill-rate
+    on a real GPU); parks, cemeteries and sports grounds split out of the
+    DLM's built-up class by object type (`sie02_f` `OBJART`/`FKT`, needs the
+    raw DLM); the laser-scan intensity (LSC) as a measured surface-material
+    map where OSM is silent.
 
 ---
 

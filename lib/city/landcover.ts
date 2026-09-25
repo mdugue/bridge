@@ -32,6 +32,86 @@ export const LANDCOVER_CLASSES: readonly LandcoverClass[] = [
 
 export const WATER_CLASS = 8;
 export const MEADOW_CLASS = 1;
+export const BUILTUP_CLASS = 4;
+export const PATH_CLASS = 6;
+export const ROAD_CLASS = 7;
+
+/**
+ * The paving materials of the OSM surface raster (pipeline/bake/surface.py
+ * `SURFACES`; the ids are its bytes): which pattern the terrain shader draws
+ * on a street or a walkway. 0 = unknown — the shader falls back to the land-
+ * cover class (asphalt on the carriageway, slabs on the pavement, a sanded
+ * path on class 6).
+ */
+export const SURFACE_KINDS = [
+  "unknown",
+  "asphalt",
+  "concrete",
+  "paving",
+  "sett",
+  "unpaved",
+  "grass",
+] as const;
+export type SurfaceKind = (typeof SURFACE_KINDS)[number];
+
+/** A surface kind's id (its index), for the shader's constants. */
+export function surfaceId(kind: SurfaceKind): number {
+  return SURFACE_KINDS.indexOf(kind);
+}
+
+/**
+ * Bytes per metre of the edge-distance raster (pipeline/bake/edges.py
+ * `EDGE_SCALE`, its legend's `scale`): a byte is 128 + scale · the signed
+ * distance to the road or the meadow edge.
+ */
+export const EDGE_SCALE = 20;
+
+/**
+ * The period (m) the paving raster stores the along-street coordinate
+ * modulo (pipeline/bake/surface.py `ALONG_PERIOD`, and its legend's
+ * `alongPeriod`); every pattern length along a street must divide it.
+ */
+export const SURFACE_ALONG_PERIOD = 165;
+
+/**
+ * Where cars park, the raster's top two bits (pipeline/bake/surface.py
+ * `PARKING`): a parking lane beside the carriageway with parallel or
+ * perpendicular/diagonal bays (laid out from the kerb), or a car park (bay
+ * lines across its direction, its aisles left clear).
+ */
+export const PARKING_KINDS = [
+  "none",
+  "street-parallel",
+  "street-perpendicular",
+  "lot",
+] as const;
+export type ParkingKind = (typeof PARKING_KINDS)[number];
+
+/** A parking kind's id (its index), for the shader's constants. */
+export function parkingId(kind: ParkingKind): number {
+  return PARKING_KINDS.indexOf(kind);
+}
+
+/**
+ * What one texel of the raster packs (`R = park * 64 + walk * 8 + road`):
+ * the carriageway's and the pavement's material (each 0..7) and the parking
+ * kind (0..3).
+ */
+export function unpackSurface(byte: number): {
+  park: number;
+  road: number;
+  walk: number;
+} {
+  return { road: byte & 7, walk: (byte >> 3) & 7, park: byte >> 6 };
+}
+
+/**
+ * The street direction the raster's G channel stores (0 = unknown, else
+ * 1 + bearing mod 180° over 0..254) in radians from east, or null.
+ */
+export function surfaceHeading(byte: number): number | null {
+  return byte === 0 ? null : ((byte - 1) / 254) * Math.PI;
+}
 
 /** sRGB tint of a class id; unknown ids take the background tint. */
 export function landcoverSrgb(id: number): readonly [number, number, number] {

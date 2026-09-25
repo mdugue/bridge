@@ -54,7 +54,7 @@ import {
   shadowMapSizeFor,
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
-import type { TerrainLayer } from "./terrain-layer";
+import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   disposeObject3D,
   estimateGeometryBytes,
@@ -394,8 +394,12 @@ async function bootApp(
     siteBounds[2] - offset.cx,
     -(siteBounds[1] - offset.cy)
   );
-  // Shared meadow-NDVI tint strength (by reference) for the HUD slider.
-  const meadowNdvi = { value: LOOK_DEFAULTS.meadowNdvi };
+  // Shared ground look strengths (by reference) for the HUD sliders.
+  const ground: GroundUniforms = {
+    groundDetail: { value: LOOK_DEFAULTS.groundDetail },
+    meadowNdvi: { value: LOOK_DEFAULTS.meadowNdvi },
+    urbanGreen: { value: LOOK_DEFAULTS.urbanGreen },
+  };
   // The lowest real terrain elevation so far (the Elbe surface): the floor
   // the player stands on off every tile and the valley height-fog's start,
   // lowered as each tile lands (a uniform write, no recompile).
@@ -502,7 +506,7 @@ async function bootApp(
       heightFog,
       look: opts.look,
       lowRasters: budget.lowRasters,
-      meadowNdvi,
+      ground,
       night: () => currentNight,
       offset,
       onChange: () => onChange(),
@@ -615,8 +619,14 @@ async function bootApp(
     heightFog: (strength) => {
       heightFog.uFogHeightStrength.value = strength;
     },
+    groundDetail: (strength) => {
+      ground.groundDetail.value = strength;
+    },
     meadowNdvi: (strength) => {
-      meadowNdvi.value = strength;
+      ground.meadowNdvi.value = strength;
+    },
+    urbanGreen: (strength) => {
+      ground.urbanGreen.value = strength;
     },
     waterMist: (strength) => {
       for (const t of stream.terrains) {

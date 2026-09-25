@@ -98,7 +98,9 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts` and `stair-layer.ts` (only their
+    `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
+    green in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts`,
+    `kerb-layer.ts` and `stair-layer.ts` (only their
     materials: walls and stairs are baked into the fine terrain glTF),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `shader-chunks.ts` (data-frame positions from world space)
@@ -128,9 +130,9 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py`, `osm.py`;
-  `ingest_sn.py` is Saxony's download adapter; tests in `pipeline/tests/`),
-  run by `bun run bake`
+  `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py`,
+  `surface.py`, `edges.py`, `osm.py`; `ingest_sn.py` is Saxony's download adapter; tests
+  in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
@@ -241,7 +243,7 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   (`relief`, when it stands clear of trees/facades), smoothed at runtime —
   never an invented figure.
 - All OSM layers (walls, cliffs, stairs, lamps, fountains, platforms,
-  bridge structure) come from the site's Geofabrik `.osm.pbf` via GDAL's
+  bridge structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's
   OSM driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.

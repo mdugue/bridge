@@ -13,6 +13,7 @@ import type {
   TerraceFeature,
   VegRowFeature,
   WallFeature,
+  KerbFeature,
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
 import {
@@ -22,6 +23,7 @@ import {
   tileArtifacts,
   tileIds,
   wallSourceFile,
+  kerbSourceFile,
 } from "./tile";
 
 // The committed bakes under data/dlm, checked against the shapes the layers
@@ -89,6 +91,13 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   for (const f of load<LampFeature>(a.lamps)) {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
+  }
+});
+
+test.each(tileIds(DRESDEN))("%s: kerbs are LineStrings", (tile) => {
+  for (const f of loadSource<KerbFeature>(kerbSourceFile(tile))) {
+    expect(f.geometry.type).toBe("LineString");
+    expect(isLine(f.geometry.coordinates)).toBe(true);
   }
 });
 
