@@ -226,6 +226,18 @@ footprint; keep new lines on it (no `smoothstep` lines — they shimmer).
 Goals, posts and nets are dressing (`sport-fixtures.ts`), one merged mesh
 per tile, owned by the tile holding the ground's centre.
 
+**Road markings and allotment beds** (plans 026, 028) are two more
+chunks in the same pass, fine level only. `road-markings.ts` reads a
+table of rotated rectangles (crossings, stop lines; axis across the road)
+and an RGBA raster (`markings.py`: 16-bit row in R + 256·A, per-side
+cycle-lane bit and centre-line bit in G, the signed offset to the
+carriageway's middle in B — the side is resolved in the bake because the
+paving raster's bearing is modulo 180°). Every stripe is box-filtered
+exactly (`rmStripes`), and along-street periods divide 165 m.
+`cultivated-layer.ts` paints faint beds on the colony raster
+(`cultivated.py`) in jittered-Voronoi plots — no colony in the four tiles
+maps its parcels, so keep it faint.
+
 ## Terrain seams
 
 Vertices sit at pixel centres, so a tile stops half a pixel short of its bounds;

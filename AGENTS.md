@@ -111,8 +111,13 @@ config change.
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `furniture-layer.ts` (benches, bins, bicycle stands, bollards, post
     boxes, stop shelters, playgrounds with their mapped equipment),
-    `shader-chunks.ts` (data-frame positions from world space)
-  - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
+    `road-markings.ts` (crossings, stop, cycle and centre lines in the
+    terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
+    vine rows), `shader-chunks.ts` (data-frame positions from world space)
+  - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
+    factor on the ambient light, the far horizon on the sun; its raster
+    shared by a tile's terrain and buildings through `shared-rasters.ts`),
+    `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
@@ -151,7 +156,8 @@ config change.
   (`bake/landcover.py`, `canopy.py`, `trees.py` (+ `tree_archetypes.py`),
   `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `ndvi.py`, `roof_colour.py`,
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
-  `rail.py`, `surface.py`, `edges.py`, `sport.py`, `osm.py`; `ingest_sn.py` is Saxony's
+  `rail.py`, `surface.py`, `edges.py`, `sport.py`, `markings.py`,
+  `cultivated.py`, `skyview.py`, `osm.py`; `ingest_sn.py` is Saxony's
   download adapter; tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
