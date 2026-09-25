@@ -38,6 +38,7 @@ each data → look transformation does and its status.
 | [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted |
 | [0027](./0027-webgpu-renderer-and-tsl.md) | Move to WebGPURenderer and TSL node materials | proposed (GPU spike, plan 020) |
 | [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
+| [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
 
 ## Format
 

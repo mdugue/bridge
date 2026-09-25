@@ -40,6 +40,8 @@ export interface TerrainLayer {
   mesh: Mesh;
   /** the tile's baked stairs (fine level only; stair-layer.ts) */
   stairs?: Mesh;
+  /** the tile's baked walls (fine level only; wall-layer.ts) */
+  walls?: Mesh;
   /** lowest valid elevation (m) on this tile — the valley/river floor */
   minElevation: number;
   tile: string;

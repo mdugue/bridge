@@ -37,7 +37,8 @@ pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
 camera, so casters outside the view stay loaded. A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
-heavy part (vegetation, lamps, rails, walls on the fine terrain level) waits
+heavy part (vegetation, lamps, rails on the fine terrain level; its walls
+and stairs are baked into the glTF) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
 chip. Every tile change re-renders the shadow map. The layers:
 
@@ -51,7 +52,8 @@ chip. Every tile change re-renders the shadow map. The layers:
   tile. No CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
   resampled with the wall breaklines burned in, the ground shaped under
-  OSM stairs and the steps themselves as a `stairs` node, all at bake time,
+  OSM stairs, and the steps and wall ribbons as `stairs`/`walls` nodes, all
+  at bake time,
   `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
   land-cover material; also hangs the water and mist sheets.
 - `landcover-splat.ts` — paints the class raster with the one palette

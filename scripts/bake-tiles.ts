@@ -20,6 +20,7 @@ import {
 } from "../lib/city/stairs";
 import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
+import { type WallRibbon, wallGeometry } from "../lib/city/walls";
 import {
   buildTerrainGeometryData,
   type TerrainBounds,
@@ -114,6 +115,8 @@ function normalsOf(
 }
 
 export interface TerrainMesh {
+  /** the shaped grid (n·n, row 0 = north): what the runtime walks on */
+  elevations: Float32Array;
   input: Omit<MeshInput, "extras" | "name">;
   minElevation: number;
   maxElevation: number;
@@ -165,6 +168,7 @@ export function terrainMesh(
     maxElevation = Math.max(maxElevation, positions[i * 3 + 2]);
   }
   return {
+    elevations,
     input: { positions, normals: normalsOf(positions, index), indices: index },
     minElevation,
     maxElevation,
@@ -215,6 +219,26 @@ export function stairMesh(
     normals: worldToData(normals),
     colors: stairColors(kinds),
   };
+}
+
+/**
+ * The tile's walls as one ribbon mesh, standing on `heightAt` — the final
+ * fine ground of every tile of the site, so a wall near a seam reads its
+ * neighbour's. Null when no wall stands.
+ */
+export function wallMesh(
+  walls: WallRibbon[],
+  heightAt: (x: number, y: number) => number | null,
+  offset: { cx: number; cy: number }
+): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
+  const data = wallGeometry(walls, heightAt, offset);
+  return data
+    ? {
+        name: "walls",
+        positions: worldToData(data.positions),
+        normals: worldToData(data.normals),
+      }
+    : null;
 }
 
 export interface CityMesh {

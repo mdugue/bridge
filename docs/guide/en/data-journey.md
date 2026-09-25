@@ -118,8 +118,8 @@ In total the repository carries about 125 MB of data for the four tiles
 | Trees | Basis-DLM + DOM1 + DGM1 | tree points, hedge rows | — | as committed |
 | Greenness | DOP | the NDVI PNG | — | as committed |
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
-| Lamps, walls, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
-| Stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped under them, the steps as part of the mesh | inside the terrain mesh |
+| Lamps, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
+| Walls, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls and steps as part of the mesh | inside the terrain mesh |
 | Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
@@ -161,8 +161,8 @@ The browser fetches the manifest and the tileset, then **streams**: a
 library called 3DTilesRendererJS decides, from where the camera stands and
 where it looks, which files to fetch. The first picture waits only for the
 buildings and the terrain of the tile you start on. Tiles near the camera
-get the detailed terrain and are then *dressed* with trees, lamps, rails
-and walls; tiles further away show their buildings on the coarse terrain;
+get the detailed terrain — with their walls and stairs already built in —
+and are then *dressed* with trees, lamps and rails; tiles further away show their buildings on the coarse terrain;
 tiles out of sight are not fetched, and tiles you have left behind can be
 dropped from memory again. Measured on the current data (compressed size,
 as sent over the network):
@@ -172,14 +172,13 @@ as sent over the network):
 | Buildings (with the style table) | 1.34 MB | 1.09–1.46 MB | the tile is in view |
 | Building footprints (minimap) | 48 kB | 59–76 kB | with the buildings |
 | Coarse terrain (512²) | 0.41 MB | 0.44–0.54 MB | the tile is in view |
-| Detailed terrain (1024²) | 1.53 MB | 1.57–1.95 MB | the camera comes close |
+| Detailed terrain (1024², with its walls and stairs) | 1.62 MB | 1.62–2.03 MB | the camera comes close |
 | Land-use classes, 2048² | 0.08 MB | 0.07–0.08 MB | at the start (minimap), then for the coarse terrain |
 | Land-use classes, 4096² | 0.22 MB | 0.22–0.25 MB | with the detailed terrain (desktop only) |
 | Greenness (NDVI) | 0.39 MB | 0.32–0.45 MB | with the terrain |
 | Tree points | 36 kB | 54–106 kB | with the detailed terrain |
-| Walls | 12 kB | 8–22 kB | with the detailed terrain |
 | Lamps, rails, ballast, bridges, platforms, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
-| **Per tile, in full detail** | **≈ 4.1 MB** | **≈ 3.9–4.9 MB** | |
+| **Per tile, in full detail** | **≈ 4.2 MB** | **≈ 4.0–5.0 MB** | |
 | **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 2.0–2.6 MB | |
 
 How much a visit downloads therefore depends on where you go. With every
@@ -199,8 +198,8 @@ feature files.
 What is **computed in the browser** rather than downloaded: the ground
 colours (painted once per tile on the graphics card, from the land-use
 classes and one pastel palette), the water surface, every tree from its
-point and height, lamp posts from their points, walls and bridges from
-their outlines, the sun position, all lighting and shadows, and the whole
+point and height, lamp posts from their points, bridges from their
+outlines, the sun position, all lighting and shadows, and the whole
 post-processing look.
 
 ## What has to be redone when something changes

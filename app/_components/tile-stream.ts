@@ -17,7 +17,6 @@ import type {
   LampFeature,
   RailFeature,
   VegRowFeature,
-  WallFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -41,7 +40,7 @@ import {
   type VegetationControl,
 } from "./vegetation-layer";
 import type { StyleResources } from "./visual-style";
-import { buildWalls } from "./wall-layer";
+import { dressWalls } from "./wall-layer";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
@@ -56,7 +55,6 @@ export interface TileDressing {
   rail?: Group;
   tile: string;
   vegetation?: VegetationControl;
-  walls?: Group;
 }
 
 export interface TileStreamContext {
@@ -155,7 +153,7 @@ function meshNamed(root: Object3D, name: string): Mesh | undefined {
 }
 
 function dressingParts(d: TileDressing): Object3D[] {
-  return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
+  return [d.vegetation?.group, d.lamps?.group, d.rail].filter(
     (part): part is Group => part !== undefined
   );
 }
@@ -217,30 +215,20 @@ async function buildDressing(
   }
   const get = <T>(file: string): Features<T> =>
     file ? fetchFeatures<T>(url(file)) : Promise.resolve([]);
-  const [
-    rows,
-    canopy,
-    ndviAt,
-    lamps,
-    rails,
-    bridges,
-    ballast,
-    platforms,
-    walls,
-  ] = await Promise.all([
-    get<VegRowFeature>(d.vegrows),
-    get<CanopyFeature>(d.canopy),
-    extras.ndvi
-      ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
-      : Promise.resolve(null),
-    get<LampFeature>(d.lamps),
-    get<RailFeature>(d.rail),
-    get<BridgeFeature>(d.bridge),
-    get<AreaFeature>(d.railarea),
-    get<AreaFeature>(d.platform),
-    get<WallFeature>(d.walls),
-  ]);
-  // Rails and walls may run past the tile edge: they sample the ground over
+  const [rows, canopy, ndviAt, lamps, rails, bridges, ballast, platforms] =
+    await Promise.all([
+      get<VegRowFeature>(d.vegrows),
+      get<CanopyFeature>(d.canopy),
+      extras.ndvi
+        ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
+        : Promise.resolve(null),
+      get<LampFeature>(d.lamps),
+      get<RailFeature>(d.rail),
+      get<BridgeFeature>(d.bridge),
+      get<AreaFeature>(d.railarea),
+      get<AreaFeature>(d.platform),
+    ]);
+  // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
   const vegetation = buildVegetation(
@@ -271,13 +259,11 @@ async function buildDressing(
     { rails, bridges, ballast, platforms },
     { ...ground, heightFog: ctx.heightFog }
   );
-  const wallGroup = buildWalls(walls, { ...ground, heightFog: ctx.heightFog });
   return {
     tile,
     vegetation,
     lamps: lampControl,
     rail,
-    walls: wallGroup,
   };
 }
 
@@ -366,10 +352,16 @@ class DressingPlugin {
       sunDirection: this.ctx.sunDirection,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
+    // The fine level's baked stairs and walls: only their materials here.
     const stairs = meshNamed(scene, "stairs");
     if (stairs) {
       dressStairs(stairs, this.ctx.heightFog);
       terrain.stairs = stairs;
+    }
+    const walls = meshNamed(scene, "walls");
+    if (walls) {
+      dressWalls(walls, this.ctx.heightFog);
+      terrain.walls = walls;
     }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });

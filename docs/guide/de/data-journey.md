@@ -124,8 +124,8 @@ Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
 | Bäume | Basis-DLM + DOM1 + DGM1 | Baumpunkte, Heckenreihen | — | wie eingecheckt |
 | Grün | DOP | das NDVI-PNG | — | wie eingecheckt |
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
-| Lampen, Mauern, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
-| Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden unter ihnen geformt, die Stufen Teil des Netzes | im Geländenetz |
+| Lampen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
+| Mauern, Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden an und unter ihnen geformt, Mauern und Stufen Teil des Netzes | im Geländenetz |
 | Gleise, Schotter, Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
@@ -170,8 +170,9 @@ Der Browser holt das Manifest und das Tileset und **streamt** dann: Eine
 Bibliothek namens 3DTilesRendererJS entscheidet danach, wo die Kamera
 steht und wohin sie schaut, welche Dateien geladen werden. Das erste Bild
 wartet nur auf Gebäude und Gelände der Kachel, auf der du startest.
-Kacheln nahe der Kamera bekommen das detaillierte Gelände und werden dann
-mit Bäumen, Lampen, Gleisen und Mauern *ausgestattet*; weiter entfernte
+Kacheln nahe der Kamera bekommen das detaillierte Gelände – Mauern und
+Treppen sind darin schon eingebaut – und werden dann mit Bäumen, Lampen und
+Gleisen *ausgestattet*; weiter entfernte
 Kacheln zeigen ihre Gebäude auf dem groben Gelände; Kacheln außer Sicht
 werden gar nicht geladen, und Kacheln, die du hinter dir gelassen hast,
 können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
@@ -182,14 +183,13 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | Gebäude (mit Stiltabelle) | 1,34 MB | 1,09–1,46 MB | die Kachel im Blick ist |
 | Gebäudegrundrisse (Minikarte) | 48 kB | 59–76 kB | mit den Gebäuden |
 | Grobes Gelände (512²) | 0,41 MB | 0,44–0,54 MB | die Kachel im Blick ist |
-| Detailliertes Gelände (1024²) | 1,53 MB | 1,57–1,95 MB | die Kamera nahe kommt |
+| Detailliertes Gelände (1024², mit seinen Mauern und Treppen) | 1,62 MB | 1,62–2,03 MB | die Kamera nahe kommt |
 | Landnutzungsklassen, 2048² | 0,08 MB | 0,07–0,08 MB | beim Start (Minikarte), dann fürs grobe Gelände |
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,22–0,25 MB | mit dem detaillierten Gelände (nur Desktop) |
 | Grün (NDVI) | 0,39 MB | 0,32–0,45 MB | mit dem Gelände |
 | Baumpunkte | 36 kB | 54–106 kB | mit dem detaillierten Gelände |
-| Mauern | 12 kB | 8–22 kB | mit dem detaillierten Gelände |
 | Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
-| **Je Kachel, volle Detailstufe** | **≈ 4,1 MB** | **≈ 3,9–4,9 MB** | |
+| **Je Kachel, volle Detailstufe** | **≈ 4,2 MB** | **≈ 4,0–5,0 MB** | |
 | **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 2,0–2,6 MB | |
 
 Wie viel ein Besuch lädt, hängt also davon ab, wohin du gehst. Mit jeder
@@ -211,7 +211,7 @@ Was **im Browser berechnet** statt heruntergeladen wird: die Bodenfarben
 (einmal je Kachel auf der Grafikkarte gemalt, aus den
 Landnutzungsklassen und einer Pastellpalette), die Wasseroberfläche, jeder
 Baum aus seinem Punkt und seiner Höhe, Laternenmasten aus ihren Punkten,
-Mauern und Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
+Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
 und Schatten und der gesamte Nachbearbeitungs-Look.
 
 ## Was neu gemacht werden muss, wenn sich etwas ändert

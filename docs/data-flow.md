@@ -125,7 +125,7 @@ flowchart LR
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
-| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (base drape + terrain conflated to a step) — *the wall isn't in DGM/DOM/LiDAR* | `wall-layer.ts`, `lib/city/terrain-conflate.ts` (at build); baked by `pipeline/bake/walls.py` |
+| **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (base drape + terrain conflated to a step) — *the wall isn't in DGM/DOM/LiDAR* | `lib/city/terrain-conflate.ts` + `lib/city/walls.ts` (both at build, into the fine terrain glTF), `wall-layer.ts` (material); baked by `pipeline/bake/walls.py` |
 | **Stairs** | OSM `highway=steps` + `width` · `step_count` (else an `area:highway=steps` outline; else the gap between the OSM walls either side; else defaults) | DGM1 (landing heights; the terrain lowered under the flight) — *the DGM smooths steps into a bank*; OSM `layer` ≥ 1 areas the DGM lacks (the Brühlsche Terrasse), lifted to the flight's tagged top | `lib/city/stairs.ts` (burn + step geometry, both at build, into the fine terrain glTF), `stair-layer.ts` (material); baked by `pipeline/bake/stairs.py` |
 | **Minimap** | tile bounds (tileset `extras`) + the 2048² class raster in the palette + CityJSON footprints (`footprints_<tile>.json`) | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*`, `lib/city/landcover.ts` |
 | **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
@@ -215,7 +215,7 @@ flowchart LR
   bRAIL ==> dRAIL
 
   iDGM ==> tTER
-  dWALL -. breaklines .-> tTER
+  dWALL -. "breaklines · the ribbons (L0)" .-> tTER
   dSTR -. "lowered ground · lifted terraces · the steps (L0)" .-> tTER
   iCJ ==> tCITY
   dROOF -. "roof colour" .-> tCITY
@@ -223,7 +223,6 @@ flowchart LR
   dCAN ==> tSIDE
   dNDVI -.-> tSIDE
   dLAMP -.-> tSIDE
-  dWALL -.-> tSIDE
   dRAIL -.-> tSIDE
 ```
 

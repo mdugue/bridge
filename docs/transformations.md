@@ -60,7 +60,8 @@ visual-variable codebook is in
   terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
   screen-space error (16 px) from the view camera **and the sun's shadow
   camera**, so a tile casting into the view stays loaded. Only the fine level
-  is dressed (vegetation, lamps, rails, walls); distance, not a "primary"
+  is dressed (vegetation, lamps, rails; its stairs and walls are baked into
+  it); distance, not a "primary"
   role, decides which tile is detailed, and collision, demolish, focus and
   double-tap work on every visible tile. Everything a tile adds leaves with
   it (`tile-stream.ts`, `processTileModel` / `disposeTile`)
@@ -223,11 +224,15 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   wall` + `man_made=embankment` + `natural=cliff` (kind `cliff`, default 3 m;
   read from `other_tags`, since GDAL has no `natural` column on `lines`)
   (ODbL), with the tagged `height` (e.g. the
-  8.5–9 m city walls). `pipeline/bake/walls.py` → `wall-layer.ts`: vertical
-  sandstone ribbons, built per fine terrain tile, base draped on the DGM via
-  the cross-tile `heightAt` over every loaded terrain, top = base + height,
-  nudged slightly onto the low side so the face skins the (now stepped)
-  terrain. **Why OSM:** the monumental wall is NOT in the elevation data —
+  8.5–9 m city walls). `pipeline/bake/walls.py` → vertical sandstone
+  ribbons (`lib/city/walls.ts`), **baked into the fine terrain glTF** as a
+  `walls` node (`scripts/bake-tiles.ts` `wallMesh`,
+  [ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md)):
+  base on the shaped ground of every tile's fine grid (so a wall near a seam
+  reads its neighbour's), top on the high shelf, nudged slightly onto the
+  low side so the face skins the (stepped) terrain; `wall-layer.ts` only
+  gives it its material. Until then the browser built the ribbons from the
+  GeoJSON over whichever terrains were loaded. **Why OSM:** the monumental wall is NOT in the elevation data —
   DGM1/DOM1/**LiDAR-ground all smooth it into a gentle bank** (verified by
   sampling: ground ≈ DGM across the wall), and it's not a CityJSON building, so it
   "went missing". OSM has it as explicit vector lines with heights.

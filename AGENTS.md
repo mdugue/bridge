@@ -98,8 +98,9 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts`, `stair-layer.ts` (only the material:
-    the stairs are baked into the fine terrain glTF), `lamp-layer.ts`,
+    `rail-layer.ts`, `wall-layer.ts` and `stair-layer.ts` (only their
+    materials: walls and stairs are baked into the fine terrain glTF),
+    `lamp-layer.ts`,
     `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
@@ -324,7 +325,8 @@ scene: it re-renders everything into a buffer each frame (~2× cost).
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps, rails and walls are built tile by tile behind a HUD chip
+lamps and rails are built tile by tile behind a HUD chip (stairs and
+walls are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). `onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow

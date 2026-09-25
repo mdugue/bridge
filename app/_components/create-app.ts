@@ -210,7 +210,7 @@ export interface CityWalkHandle {
   setMovementMode: (mode: MovementMode) => void;
   setSun: (date: Date) => SunState;
   /**
-   * Lets the heavy dressing start — vegetation, lamps, rails, walls — and
+   * Lets the heavy dressing start — vegetation, lamps, rails — and
    * the terrain BVHs. Held back so its synchronous chunks cannot stutter the
    * frames the city arrives in; idempotent, and a no-op once the scene is
    * disposed.
@@ -701,7 +701,7 @@ async function bootApp(
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
         rail: census(dressings.map((d) => d.rail)),
-        walls: census(dressings.map((d) => d.walls)),
+        walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
       },
     });
@@ -993,7 +993,7 @@ async function bootApp(
   // be dressed.
   // The two stages after the first frame measure what the cameras see:
   // the tile renderer's own load progress, and the details (vegetation,
-  // lamps, rails, walls) built per fine tile against those still queued.
+  // lamps, rails) built per fine tile against those still queued.
   // Both only ever move forward, and both end when everything in view is in.
   function reportProgress(spawnDressed: boolean): void {
     if (extras.tiles.length === 1) {
