@@ -571,6 +571,15 @@ research that produced them):
     raw DLM); the laser-scan intensity (LSC) as a measured surface-material
     map where OSM is silent.
 
+13. **The 2026-09-25 batch** — each with its own plan in
+    [plans/](./plans/README.md): trams with contact wire (024), trees by
+    species and season (025), road markings (026), shop glow / heritage /
+    era from OSM on the buildings (027), allotments, orchards and
+    vineyards (028), fences and gates (029), more street furniture (030),
+    Elbe landing stages, groynes and ferries (031), street names (032),
+    sky-view factor and a baked horizon map (033), small structures from
+    DOM − LoD2 (034), a hidden soundscape (035).
+
 ---
 
 ## 🗃️ Discontinued / rejected (do not retry blindly)

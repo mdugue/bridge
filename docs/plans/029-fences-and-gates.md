@@ -1,0 +1,94 @@
+# Plan 029: Fences, railings and gates
+
+> **Executor instructions**: Read fully first. Phases in order. Look is
+> judged on a real GPU (`bun run shots --headed`, full profile, oblique).
+> Update the status row in `docs/plans/README.md` when a phase lands.
+>
+> **Base**: `feat/tin-kataster-lowveg` reads OSM `barrier=hedge` for its
+> hedges. If it has merged, share its line reader and leave hedges to it;
+> this plan never touches hedges.
+>
+> **Drift check (run first)**:
+> `git log --oneline -5 -- pipeline/bake/walls.py lib/city/walls.ts scripts/bake-tiles.ts scripts/prepare-data.ts`
+
+## Status
+
+- **Priority**: P2 (fences edge almost every yard, park and school)
+- **Effort**: M (bake S, geometry M, gates S)
+- **Risk**: MED — 78 km of line work; triangle and fill budget
+- **Planned at**: 2026-09-25
+- **Status**: TODO
+
+## Why this matters
+
+Walls are drawn (`walls.py`: wall, retaining_wall, city_wall), fences are
+not read anywhere. In the four tiles (BBBike 2026-09-19): **1 174
+`barrier=fence` ways, 77.8 km** (plus 52 closed as areas), `fence_type`
+mostly untagged (railing 42, metal 30, wire 30, wood 10, chain_link 6,
+bars 6); `barrier=handrail` 27 ways; gates as **1 142 `barrier=gate`
+points** on walls and fences, 35 gate ways, 171 `lift_gate`, 33
+`cycle_barrier`.
+
+## Design
+
+Fences are static and follow the ground, like walls and kerbs — so they
+are **baked into the fine terrain glTF** as a child node
+([ADR 0029](../adr/0029-static-dressing-baked-into-the-fine-terrain.md)),
+not built at runtime.
+
+### Bake — extend `pipeline/bake/walls.py`
+
+- Add `barrier IN ('fence','handrail')` from `lines` and the exterior ring
+  of `multipolygons`, as `{kind: "fence", type, h}`: `type` from
+  `fence_type` (railing/metal/bars → `railing`, wire/chain_link →
+  `mesh`, wood → `picket`, untagged → `railing`, Dresden's default
+  wrought-iron look), `h` from `height`, else 1.2 m (handrail 1.0 m).
+- Gates: `barrier IN ('gate','lift_gate','swing_gate','cycle_barrier')`
+  points **on** a wall or fence line (≤ 0.5 m) → `{kind: "gate", w}`
+  (`width`, else 1.2 m; lift gates 4 m) in the same file, so the builder
+  can cut the gap.
+- Fences never enter the terrain conflation (`CONFLATE_KINDS` stays as
+  it is).
+- Tests: a fence way, a gate on it, a gate off any line (dropped).
+
+### Build — `lib/city/fences.ts` → `fenceMesh` in `scripts/bake-tiles.ts`
+
+- Along each fence, sampled every 2.5 m on the fine terrain surface: a
+  thin post every 2.5 m (4 × 4 cm, 6 faces), a top rail, and one
+  **alpha-tested double-sided panel** strip between posts whose texture
+  (a tiny generated atlas: bars / mesh / pickets, 64 × 64 each) gives
+  the see-through look. The atlas is built at bake time and written into
+  the glTF (no runtime fetch).
+- Gate gaps: the fence is cut `w` wide at each gate; a gate leaf (the same
+  panel, a darker frame) stands in the gap, closed.
+- Budget: ≈ 31 k posts × 10 triangles + ≈ 62 k panel triangles across the
+  four tiles, well below the kerbs' 130–200 k per tile.
+
+### Runtime — `app/_components/fence-layer.ts`
+
+Only its material, like `wall-layer.ts`: dark iron/grey tones from the
+furniture palette, `alphaTest`, `side: DoubleSide`, cast shadows with a
+`customDepthMaterial` that honours the alpha (see the skill on the
+`WebGLShadowMap` alphaMap-override gotcha before touching this).
+
+### Docs
+
+Ledger (Retaining / city walls → "Walls and fences"), `data-flow.md`,
+`rendering.md` codebook, `data-pipeline.md`, provenance, guide OSM row
+(en + de).
+
+## Phases
+
+1. Bake + fence geometry + material. Plates: the Großer Garten edge, a
+   school yard, a Neustadt courtyard, noon and low sun.
+2. Gates and gaps.
+
+## STOP conditions
+
+- Alpha-tested panels shimmer at distance: fade panel alpha to a flat,
+  lighter tint beyond ~60 m in the fragment shader before anything else.
+- The fine terrain glTF grows > 10 % per tile: drop panels to every other
+  segment far from paths, or report.
+- A fence visibly crosses a building or the carriageway in > 1 in 10
+  checked: the OSM line is misaligned with LoD2/DLM; report, do not
+  shift lines heuristically.

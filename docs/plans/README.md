@@ -55,6 +55,18 @@ history. Decisions that came out of plans are written up as
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
 | 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
 | 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
+| 024 | Trams: OSM tracks (street, grass, ballast), contact wire, masts, span wires, stop signs | **TODO** | [024-tram-and-catenary.md](./024-tram-and-catenary.md) |
+| 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | **TODO** — blocked on `feat/tin-kataster-lowveg` | [025-trees-by-species-and-season.md](./025-trees-by-species-and-season.md) |
+| 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | **TODO** | [026-road-markings.md](./026-road-markings.md) |
+| 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **TODO** | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |
+| 028 | Cultivated land: allotment colonies, orchards, vineyards | **TODO** | [028-cultivated-land.md](./028-cultivated-land.md) |
+| 029 | Fences, railings and gates, baked into the fine terrain | **TODO** | [029-fences-and-gates.md](./029-fences-and-gates.md) |
+| 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | **TODO** | [030-street-furniture-2.md](./030-street-furniture-2.md) |
+| 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | **TODO** | [031-elbe-riverside.md](./031-elbe-riverside.md) |
+| 032 | Street names: map lettering in fly mode, a caption on foot | **TODO** | [032-street-names.md](./032-street-names.md) |
+| 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | **TODO** | [033-sky-view-and-horizon-shading.md](./033-sky-view-and-horizon-shading.md) |
+| 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | **TODO** — blocked on `feat/tin-kataster-lowveg` and raw data | [034-dom-minus-lod2.md](./034-dom-minus-lod2.md) |
+| 035 | A hidden, opt-in soundscape synthesised from the scene's data | **TODO** | [035-soundscape.md](./035-soundscape.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -134,6 +146,24 @@ S/M/L.
     terrain bound (with the 30 m skirt) as the ground fallback; the minimap assumes square
     bounds; the joystick releases on any `pointerup`; the `crs.ts`
     trailing-slash regex.
+
+### Data → scene: plans 024–035 (planned 2026-09-25)
+
+A batch of features derived from OSM, the DGM and the laser scan, each its
+own plan. OSM counts in the plans are from the BBBike Dresden extract of
+2026-09-19 over the four tiles. Suggested order, by leverage and
+independence:
+
+1. **033** sky-view factor + horizon shading (committed inputs only; also
+   the cheap answer to the far-shadow limit, ledger 📋 #7).
+2. **027 phase 0** — BuildingParts do not inherit `function` (wrong tint
+   and dusk glow on the parts of 90 non-housing buildings in one tile).
+3. **024** trams, then **030** street furniture (shares the stop sign).
+4. **026** road markings, **029** fences and gates.
+5. **027** phases 1–3, **032** street names, **031** the Elbe.
+6. **025** and **034** after `feat/tin-kataster-lowveg` merges (they build
+   on its cadastre and laser-scan rasters); **028** reuses its hedges.
+7. **035** the soundscape, last, once the data it listens to exists.
 
 ### Direction — options for the maintainer (choices, not defects)
 
