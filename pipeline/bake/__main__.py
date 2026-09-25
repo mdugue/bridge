@@ -17,6 +17,7 @@ from . import (
     ndvi,
     rail,
     roof_colour,
+    skyview,
     sport,
     stairs,
     surface,
@@ -41,6 +42,8 @@ STEPS = {
     "surface": surface.run,
     "edges": edges.run,
     "sport": sport.run,
+    # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
+    "skyview": skyview.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,
