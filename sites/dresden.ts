@@ -21,12 +21,13 @@ const WALDSCHLOESSCHENBRUECKE = { x: 414_292, y: 5_657_618 };
 const HAUPTBAHNHOF = { x: 411_066, y: 5_655_082 };
 
 /**
- * Dresden either side of the Elbe, twelve of Saxony's 2 km tiles (GeoSN
- * open data, EPSG:25833): a 4×3 block from the Hauptbahnhof and the Großer
- * Garten in the south to the Neustadt in the north, and upriver past the
- * Waldschlößchenbrücke to Blasewitz, Loschwitz and the Blaues Wunder. The
- * spawn tile (the Elbe from the Carolabrücke to the Johannstadt) is the
- * second column of the middle row. The vantages are anchored to the baked
+ * Dresden either side of the Elbe, fifteen of Saxony's 2 km tiles (GeoSN
+ * open data, EPSG:25833): a 5×3 block from Löbtau, the Hauptbahnhof and the
+ * Großer Garten in the south to Pieschen and the Neustadt in the north, from
+ * the Friedrichstadt in the west upriver past the Waldschlößchenbrücke to
+ * Blasewitz, Loschwitz and the Blaues Wunder. The spawn tile (the Elbe from
+ * the Carolabrücke to the Johannstadt) is the third column of the middle
+ * row. The vantages are anchored to the baked
  * bridge centrelines and the DGM profile (the Elbe channel sits at ~104 m
  * between banks at ~114 m). The aerials over a landmark are framed with
  * `overlook`: the landmark sits under the crosshair.
@@ -56,6 +57,11 @@ export const DRESDEN: Site = {
     { e: 416, n: 5656 },
     { e: 416, n: 5654 },
     { e: 416, n: 5658 },
+    // West, behind the Altstadt as seen from the start: Löbtau and Plauen,
+    // the Friedrichstadt with the Yenidze and the Ostragehege, Pieschen
+    { e: 408, n: 5654 },
+    { e: 408, n: 5656 },
+    { e: 408, n: 5658 },
   ],
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
   attribution: [

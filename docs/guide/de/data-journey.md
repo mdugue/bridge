@@ -115,7 +115,7 @@ enthält je Kachel:
 | | `platform_<Kachel>.geojson` | Bahnsteige | wenige kB |
 | `data/dop/` | `roofcolor_<Kachel>.json` | eine Farbe je Gebäude, aus dem Luftbild abgetastet | 0,2 MB |
 
-Insgesamt trägt das Repository etwa 300 MB Daten für die zwölf Kacheln.
+Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 
 **Eine Wahrheit gegenüber Derivat, auf einen Blick:**
 
@@ -199,8 +199,8 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 1,3–3,3 MB | |
 
 Wie viel ein Besuch lädt, hängt also davon ab, wohin du gehst. Mit jeder
-Kachel in voller Detailstufe hat ein Desktop-Browser etwa **83 MB** für die
-zwölf Kacheln geladen; ein Handy etwa 82 MB (es nimmt für jede Kachel das
+Kachel in voller Detailstufe hat ein Desktop-Browser etwa **103 MB** für die
+fünfzehn Kacheln geladen; ein Handy etwa 100 MB (es nimmt für jede Kachel das
 2048²-Landnutzungsraster); das nur für Tests gedachte „lite“-Profil, das
 allein die Startkachel streamt, etwa 7 MB. Das ist mehr als vor der
 Umstellung aufs Streamen (ein vollständiger Besuch lag bei etwa 10,6 MB),

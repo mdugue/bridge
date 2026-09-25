@@ -39,25 +39,25 @@ that id; `tileExtentOf` gives its extent. Dresden:
 
 ```
         N
-  ┌─────────────────┬─────────────────┬─────────────────┬─────────────────┐
-  │ 33410_5658_2_sn │ 33412_5658_2_sn │ 33414_5658_2_sn │ 33416_5658_2_sn │
-  │ Innere Neustadt │ Äußere Neustadt │ Waldschlößchen- │ Dresdner Heide, │
-  │                 │                 │ brücke          │ Loschwitz slope │
-  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┤
-  │ 33410_5656_2_sn │ 33412_5656_2_sn │ 33414_5656_2_sn │ 33416_5656_2_sn │
-  │ Altstadt        │ Johannstadt ★   │ Elbwiesen,      │ Blaues Wunder,  │
-  │                 │                 │ Elbschlösser    │ Loschwitz       │
-  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┤
-  │ 33410_5654_2_sn │ 33412_5654_2_sn │ 33414_5654_2_sn │ 33416_5654_2_sn │
-  │ Hauptbahnhof    │ Großer Garten   │ Striesen        │ Blasewitz       │
-  └─────────────────┴─────────────────┴─────────────────┴─────────────────┘
-                                                                          E
+  ┌─────────────────┬─────────────────┬─────────────────┬─────────────────┬─────────────────┐
+  │ 33408_5658_2_sn │ 33410_5658_2_sn │ 33412_5658_2_sn │ 33414_5658_2_sn │ 33416_5658_2_sn │
+  │ Pieschen,       │ Innere Neustadt │ Äußere Neustadt │ Waldschlößchen- │ Dresdner Heide, │
+  │ Mickten         │                 │                 │ brücke          │ Loschwitz slope │
+  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
+  │ 33408_5656_2_sn │ 33410_5656_2_sn │ 33412_5656_2_sn │ 33414_5656_2_sn │ 33416_5656_2_sn │
+  │ Friedrichstadt, │ Altstadt        │ Johannstadt ★   │ Elbwiesen,      │ Blaues Wunder,  │
+  │ Ostragehege     │                 │                 │ Elbschlösser    │ Loschwitz       │
+  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
+  │ 33408_5654_2_sn │ 33410_5654_2_sn │ 33412_5654_2_sn │ 33414_5654_2_sn │ 33416_5654_2_sn │
+  │ Löbtau, Plauen  │ Hauptbahnhof    │ Großer Garten   │ Striesen        │ Blasewitz       │
+  └─────────────────┴─────────────────┴─────────────────┴─────────────────┴─────────────────┘
+                                                                                            E
   ★ spawn tile (sites/dresden.ts, first in the list)
 ```
 
 The spawn tile spans 412 000–414 000 E / 5 656 000–5 658 000 N
 (EPSG:25833) — roughly 51.049–51.067° N, 13.745–13.773° E; the site as a
-whole covers 410 000–418 000 E / 5 654 000–5 660 000 N, a 4×3 block of twelve
+whole covers 408 000–418 000 E / 5 654 000–5 660 000 N, a 5×3 block of fifteen
 tiles. No
 tile has a role beyond "where you start": which tile is detailed is decided
 by camera distance at runtime
@@ -402,7 +402,7 @@ Measured 2026-09-25 on the current build (Dresden, gzipped wire sizes):
 | everything else (veg rows, lamps, monuments, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
 | **tile total** | **4.2–9.0 MB** (phones, without the 4096² raster: 4.1–8.8 MB) |
 
-The whole Dresden site is ≈ 83.4 MB on the wire (≈ 81.7 MB for a phone),
+The whole Dresden site is ≈ 102.5 MB on the wire (≈ 100.5 MB for a phone),
 the spawn tile alone — the `lite` profile — ≈ 6.8 MB. A visit fetches
 less: streaming loads a tile's content only when it is in view, and a far
 tile stops at its coarse terrain (≈ 1.3–3.3 MB per tile: buildings,

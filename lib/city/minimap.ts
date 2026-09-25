@@ -51,7 +51,7 @@ export function mapPxToEpsg(
 /**
  * The square map frame around a site's extent: the shorter axis is padded
  * evenly on both sides. The minimap is a square canvas, and a site that is
- * wider than tall (Dresden: 8 × 6 km) mapped straight onto it came out
+ * wider than tall (Dresden: 10 × 6 km) mapped straight onto it came out
  * squashed — every drawing, the player marker and the teleport click then
  * share one undistorted metres-per-pixel scale.
  */

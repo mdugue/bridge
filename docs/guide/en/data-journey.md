@@ -109,7 +109,7 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `platform_<tile>.geojson` | station platforms | a few kB |
 | `data/dop/` | `roofcolor_<tile>.json` | one colour per building, sampled from the aerial photo | 0.2 MB |
 
-In total the repository carries about 300 MB of data for the twelve tiles.
+In total the repository carries about 400 MB of data for the fifteen tiles.
 
 **Single source of truth versus derivative, at a glance:**
 
@@ -188,8 +188,8 @@ as sent over the network):
 | **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 1.3–3.3 MB | |
 
 How much a visit downloads therefore depends on where you go. With every
-tile in full detail, a desktop has fetched about **83 MB** for the twelve
-tiles; a phone about 82 MB (it takes the 2048² land-use raster for every
+tile in full detail, a desktop has fetched about **103 MB** for the fifteen
+tiles; a phone about 100 MB (it takes the 2048² land-use raster for every
 tile); the test-only "lite" profile, which streams the start tile alone,
 about 7 MB. That is more than before the switch to streaming (a full visit
 used to be about 10.6 MB), because the terrain now arrives as a ready-made

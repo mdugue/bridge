@@ -9,10 +9,11 @@ davon „echt“ ist. Begriffe in **Fettschrift** stehen im
 
 ## Was du siehst
 
-Ein stilisiertes, begehbares 3D-Modell der Dresdner Innenstadt: zwölf
-Kacheln zu 2 km × 2 km auf beiden Elbseiten, 8 km × 6 km, mit der
-historischen Altstadt, Innerer und Äußerer Neustadt, der Johannstadt, dem
-Hauptbahnhof und dem Großen Garten im Süden und elbaufwärts vorbei an der
+Ein stilisiertes, begehbares 3D-Modell der Dresdner Innenstadt: fünfzehn
+Kacheln zu 2 km × 2 km auf beiden Elbseiten, 10 km × 6 km, mit der
+historischen Altstadt, Innerer und Äußerer Neustadt, der Johannstadt, der
+Friedrichstadt, Löbtau und Pieschen im Westen, dem Hauptbahnhof und dem
+Großen Garten im Süden und elbaufwärts vorbei an der
 Waldschlößchenbrücke bis Blasewitz, Loschwitz und zum Blauen Wunder. Du
 startest tief über der Elbe nahe der Carolabrücke, mit Blick auf die
 Altstadt-Silhouette, und kannst auf Straßenniveau gehen oder über die
@@ -59,7 +60,7 @@ bewusster Vereinfachung.
 | **Sportplätze** | Fußballplätze mit Mähstreifen, Tennisplätze aus Sand, Tartanbahnen mit ihren Bahnen, Basketballfelder, Beachvolleyball-Sand — jeweils mit Linien, Toren, Basketballkörben und Netzen | **OpenStreetMap** (`leisure=pitch`, `leisure=track`, mit `sport` und `surface`) | Umriss, Sportart und Belag sind, was Freiwillige erfasst haben; ohne Belag zeigt der Viewer den für die Sportart üblichen (Fußball auf Rasen, Tennis auf Sand). Die Linien sind die Standardmaße, auf die erfasste Größe skaliert, nicht vermessen; Tore und Netze sind schlichte Platzhalter, nicht die echten |
 | **Bordsteine und Beläge** | Eine Bordsteinkante, wo Straße auf Gehweg trifft; Asphalt, Gehwegplatten, Kopfsteinpflaster oder Kies unter den Füßen; markierte Stellplätze am Straßenrand und auf Parkplätzen; begrünte Höfe | Straßenränder aus dem **Basis-DLM**, Material und Parkplätze aus **OpenStreetMap** (`surface`, `parking`), das Grün aus dem Infrarot-Luftbild (**NDVI**) | Der Bordstein (eine flache 12-cm-Stufe mit Schatten) folgt der vermessenen Fahrbahnbreite; das Material ist, was Freiwillige erfasst haben (etwa zwei Drittel der Straßen), der Rest zeigt Asphalt oder Platten als Vorgabe; die Muster sind gezeichnet, nicht fotografiert, und der Gehweg hinter dem Bordstein liegt auf Straßenniveau |
 | **Wasser** | Die Elbe und kleinere Gewässer mit leicht bewegter Oberfläche und treibendem Nebel | Wasserflächen aus dem Basis-DLM, auf das echte Gelände gelegt | Echter Umriss, erfundene Wellen |
-| **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 46 000 Gebäude und Gebäudeteile in den zwölf Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
+| **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 58 000 Gebäude und Gebäudeteile in den fünfzehn Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
 | **Gebäudefarben** | Dachfarben; eine leichte Tönung je Gebäude; abends ein warmes Leuchten in Läden und öffentlichen Bauten | Dachfarbe aus Luftbildern (**DOP**) gemessen; der Rest aus Gebäudeattributen abgeleitet | Dachfarben sind echt (etwa 83 % Abdeckung), Wandtöne sind synthetisch |
 | **Bäume und Hecken** | Einzelbäume mit Kronen in gemessener Höhe; Hecken und Baumreihen | Baumpositionen und -höhen aus der Differenz von Oberflächenmodell (**DOM1**) und Geländemodell; Reihen aus dem Basis-DLM; Grünfärbung aus dem Infrarot-Luftbild (**NDVI**) | Positionen und Höhen sind gemessen; die Kronenform ist generisch, die Baumart unbekannt |
 | **Straßenlampen** | Laternen an Straßen und Plätzen | **OpenStreetMap** | Echte Positionen, Standardhöhe |
