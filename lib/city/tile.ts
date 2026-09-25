@@ -75,6 +75,8 @@ export type TileArtifactKind =
   | "platform"
   | "rail"
   | "railarea"
+  | "surface"
+  | "edges"
   | "vegrows";
 
 /**
@@ -101,6 +103,13 @@ export function tileArtifacts(
     // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
     canopy: dlm(`canopy_${tile}.geojson`),
     ndvi: dlm(`ndvi_${tile}.png`),
+    // Optional: the OSM paving raster (pipeline/bake/surface.py); without
+    // it the ground draws the land-cover class's default pattern.
+    surface: dlm(`surface_${tile}.png`),
+    // Optional: the smoothed road/meadow edge distances
+    // (pipeline/bake/edges.py); without them the shader reads the class
+    // texels (kerb band only, no parking lanes).
+    edges: dlm(`edges_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),
@@ -120,6 +129,13 @@ export function sideFileSource(site: Site, file: string): string {
  *  ribbons in the fine terrain glTF — never served. */
 export function wallSourceFile(site: Site, tile: string): string {
   return `${siteDataDir(site)}/dlm/walls_${tile}.geojson`;
+}
+
+/** The kerb lines (pipeline/bake/edges.py): a terrain bake input under
+ *  data/<site>/dlm/ — the fine terrain glTF stands a kerb stone on them —
+ *  never served. */
+export function kerbSourceFile(site: Site, tile: string): string {
+  return `${siteDataDir(site)}/dlm/kerbs_${tile}.geojson`;
 }
 
 /** The stairs (pipeline/bake/stairs.py): a terrain bake input under

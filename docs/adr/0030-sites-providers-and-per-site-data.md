@@ -83,5 +83,5 @@ prefixing every command with `SITE=`.
 - `sites/`, `lib/city/site.ts`, `lib/city/tile.ts`, `lib/city/site-report.ts`,
   `scripts/pipeline.ts`, `scripts/site-report.ts`, `pipeline/bake/{fetch,
   spec,net,rasters,citygml,landcover_osm}.py`, `pipeline/bake/providers/`.
-- [Plan 023](../plans/023-many-sites-one-env-var.md), [plan 017](../plans/017-germany-wide-sites.md),
+- [Plan 024](../plans/024-many-sites-one-env-var.md), [plan 017](../plans/017-germany-wide-sites.md),
   [portability.md](../portability.md).

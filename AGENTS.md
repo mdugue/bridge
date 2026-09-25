@@ -106,7 +106,9 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts` and `stair-layer.ts` (only their
+    `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
+    green in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts`,
+    `kerb-layer.ts` and `stair-layer.ts` (only their
     materials: walls and stairs are baked into the fine terrain glTF),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `shader-chunks.ts` (data-frame positions from world space)
@@ -118,7 +120,14 @@ config change.
     stands and looks, walk/fly and the scenic glides; every input cancels a
     glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
     `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
-    `altitude-stick.tsx` (the fly-mode climb control opposite it)
+    `altitude-stick.tsx` (the fly-mode climb control opposite it),
+    `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS
+    fix + phone compass → `placeAt`), `live-mode.ts` (opt-in live mode:
+    view follows the compass, camera the GPS; offered only while a compass
+    reports), `hud-toolbar.tsx` (those tools + walk/fly as one foldable
+    labelled group) and
+    `device-orientation.ts` (the one orientation-event adapter both use);
+    the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
@@ -143,7 +152,8 @@ config change.
   converts LoD2 CityGML → CityJSON, `net.py` downloads incl. single members
   of remote ZIPs) and the bakes (`landcover.py` + `landcover_osm.py`,
   `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`,
-  `walls.py`, `stairs.py`, `rail.py`, `osm.py`); tests in `pipeline/tests/`. Run by
+  `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `edges.py`, `osm.py`);
+  tests in `pipeline/tests/`. Run by
   `bun run fetch` / `bun run bake` (`scripts/pipeline.ts`, which hands
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0030
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
@@ -266,7 +276,7 @@ call (ADR 0030). No Git-LFS. Derived per-tile artifacts
   (`relief`, when it stands clear of trees/facades), smoothed at runtime —
   never an invented figure.
 - All OSM layers (walls, cliffs, stairs, lamps, fountains, platforms,
-  bridge structure) come from the site's Geofabrik `.osm.pbf` via GDAL's
+  bridge structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's
   OSM driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.

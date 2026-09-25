@@ -1,4 +1,4 @@
-# Plan 023: Many sites, one env var — `SITE` in `.env.local`, fetch → bake → build
+# Plan 024: Many sites, one env var — `SITE` in `.env.local`, fetch → bake → build
 
 > Written and executed in one run (branch
 > `claude/multi-location-env-setup-w01c3g`). Continues

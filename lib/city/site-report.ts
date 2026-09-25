@@ -7,6 +7,7 @@ import { osmExtractUrl, type Site } from "./site";
 import {
   cityMeshSourceFiles,
   dgmSourceFiles,
+  kerbSourceFile,
   providerRawDir,
   sideFileSource,
   stairSourceFile,
@@ -90,6 +91,7 @@ export function tileReport(
     wallSourceFile(site, tile),
     stairSourceFile(site, tile),
     terraceSourceFile(site, tile),
+    kerbSourceFile(site, tile),
   ].filter((p) => !exists(p));
   const unfetched = [...sources, ...landCoverInputs(site)].some(
     (p) => !exists(p)

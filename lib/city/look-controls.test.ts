@@ -8,8 +8,8 @@ import {
 
 const GROUPS = new Set(["atmosphere", "buildings", "vegetation", "rendering"]);
 
-test("the table has 21 rows with unique keys, ids and snapshot keys", () => {
-  expect(LOOK_CONTROLS).toHaveLength(21);
+test("the table has 23 rows with unique keys, ids and snapshot keys", () => {
+  expect(LOOK_CONTROLS).toHaveLength(23);
   for (const field of ["key", "id", "snapshotKey"] as const) {
     const values = LOOK_CONTROLS.map((def) => def[field]);
     expect(new Set(values).size).toBe(values.length);

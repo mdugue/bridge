@@ -114,6 +114,12 @@ class Tile:
             return False
         return True
 
+    @property
+    def landcover_credit(self) -> str:
+        """The credit of what the class raster is drawn from: the provider's
+        Basis-DLM, or without one OpenStreetMap."""
+        return self.credit if self.products.dlm else OSM_ATTRIBUTION
+
     def osm_extract(self) -> Path | None:
         return self.osm if self.osm is not None and self.osm.exists() else None
 

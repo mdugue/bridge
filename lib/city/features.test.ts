@@ -13,6 +13,7 @@ import type {
   TerraceFeature,
   VegRowFeature,
   WallFeature,
+  KerbFeature,
 } from "./features";
 import { SITES } from "../../sites";
 import {
@@ -22,6 +23,7 @@ import {
   tileArtifacts,
   tileIds,
   wallSourceFile,
+  kerbSourceFile,
 } from "./tile";
 
 // The bakes under data/<site>/dlm, checked against the shapes the layers
@@ -92,6 +94,7 @@ const cases = Object.values(SITES)
           walls: input(wallSourceFile(site, tile)),
           stairs: input(stairSourceFile(site, tile)),
           terraces: input(terraceSourceFile(site, tile)),
+          kerbs: input(kerbSourceFile(site, tile)),
         },
       ] as const;
     })
@@ -121,6 +124,13 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   for (const f of load<LampFeature>(a.lamps)) {
     expect(f.geometry.type).toBe("Point");
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
+  }
+});
+
+test.each(cases)("%s: kerbs are LineStrings", (_, a) => {
+  for (const f of load<KerbFeature>(a.kerbs)) {
+    expect(f.geometry.type).toBe("LineString");
+    expect(isLine(f.geometry.coordinates)).toBe(true);
   }
 });
 

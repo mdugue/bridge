@@ -33,7 +33,7 @@ import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import { currentSite } from "@/sites";
-import { createCameraPose } from "./camera-pose";
+import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
@@ -54,7 +54,7 @@ import {
   shadowMapSizeFor,
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
-import type { TerrainLayer } from "./terrain-layer";
+import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   disposeObject3D,
   estimateGeometryBytes,
@@ -124,6 +124,8 @@ export interface CityWalkOptions {
    * (a flight streams new tiles in). Fires on changes only.
    */
   onBusy?: (busy: boolean) => void;
+  /** a manual look or move ended live mode (camera-pose.ts) */
+  onFollowEnd?: () => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -210,6 +212,13 @@ export interface CityWalkHandle {
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
+  /**
+   * The aim (grid heading + pitch, degrees) the view eases towards while it
+   * follows the phone; null stops following (camera-pose.ts).
+   */
+  setFollowAim: (aim: FollowAim | null) => void;
+  /** live mode's GPS ground point (EPSG), null stops (camera-pose.ts) */
+  setFollowPosition: (epsg: { x: number; y: number } | null) => void;
   setSun: (date: Date) => SunState;
   /**
    * Lets the heavy dressing start — vegetation, lamps, rails — and
@@ -218,6 +227,11 @@ export interface CityWalkHandle {
    * disposed.
    */
   startStreaming: () => void;
+  /**
+   * Puts the camera on a vantage at once, no glide (the spawn, "locate
+   * me"), landing in the vantage's movement mode.
+   */
+  placeAt: (viewpoint: ViewpointGeometry) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
@@ -394,8 +408,12 @@ async function bootApp(
     siteBounds[2] - offset.cx,
     -(siteBounds[1] - offset.cy)
   );
-  // Shared meadow-NDVI tint strength (by reference) for the HUD slider.
-  const meadowNdvi = { value: LOOK_DEFAULTS.meadowNdvi };
+  // Shared ground look strengths (by reference) for the HUD sliders.
+  const ground: GroundUniforms = {
+    groundDetail: { value: LOOK_DEFAULTS.groundDetail },
+    meadowNdvi: { value: LOOK_DEFAULTS.meadowNdvi },
+    urbanGreen: { value: LOOK_DEFAULTS.urbanGreen },
+  };
   // The lowest real terrain elevation so far (the Elbe surface): the floor
   // the player stands on off every tile and the valley height-fog's start,
   // lowered as each tile lands (a uniform write, no recompile).
@@ -502,7 +520,7 @@ async function bootApp(
       heightFog,
       look: opts.look,
       lowRasters: budget.lowRasters,
-      meadowNdvi,
+      ground,
       night: () => currentNight,
       offset,
       onChange: () => onChange(),
@@ -615,8 +633,14 @@ async function bootApp(
     heightFog: (strength) => {
       heightFog.uFogHeightStrength.value = strength;
     },
+    groundDetail: (strength) => {
+      ground.groundDetail.value = strength;
+    },
     meadowNdvi: (strength) => {
-      meadowNdvi.value = strength;
+      ground.meadowNdvi.value = strength;
+    },
+    urbanGreen: (strength) => {
+      ground.urbanGreen.value = strength;
     },
     waterMist: (strength) => {
       for (const t of stream.terrains) {
@@ -654,6 +678,7 @@ async function bootApp(
     heightAt,
     offset,
     resolveStep: collider.resolveStep,
+    onFollowEnd: opts.onFollowEnd,
     onModeChange: opts.onModeChange,
     onPose: opts.onPose,
   });
@@ -1079,6 +1104,7 @@ async function bootApp(
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,
     captureViewpoint: pose.captureViewpoint,
+    placeAt: pose.placeAt,
     teleportTo: pose.teleportTo,
     getPose: pose.getPose,
     getCameraState: pose.getCameraState,
@@ -1095,6 +1121,8 @@ async function bootApp(
       hitName: lastFocusHit?.name ?? null,
     }),
     setMovementMode: pose.setMovementMode,
+    setFollowAim: pose.setFollowAim,
+    setFollowPosition: pose.setFollowPosition,
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,
