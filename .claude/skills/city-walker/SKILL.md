@@ -182,6 +182,18 @@ the bytes interleaved, so the viewer's own decoder (`lib/city/png-raster.ts`)
 reads them exactly. *Bodendetail* and *Stadtgrün* (urban green painted as
 meadow) are the sliders. The contour ink guards `fwidth == 0`.
 
+**Sports grounds** (`sport-ground.ts`, same pass, after the ground
+detail): `pipeline/bake/sport.py` writes a table of grounds (frame,
+surface, line scheme, shape) and an RGBA index raster (row on top, a
+second row grown wider, the exact bit). The fragment evaluates up to eight
+candidate rows' *analytic* shapes (rotated rect, a track's capsule band,
+else the raster outline) and keeps the deepest — reading one row per texel
+sawed teeth into a track's inner edge where the capsule model strays past
+the mapped outline. Lines use `spLine`, an exact box filter over the pixel
+footprint; keep new lines on it (no `smoothstep` lines — they shimmer).
+Goals, posts and nets are dressing (`sport-fixtures.ts`), one merged mesh
+per tile, owned by the tile holding the ground's centre.
+
 ## Terrain seams
 
 Vertices sit at pixel centres, so a tile stops half a pixel short of its bounds;

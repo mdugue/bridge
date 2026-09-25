@@ -12,7 +12,7 @@
  *   bun run bake --step canopy        one step (landcover, islands, canopy,
  *                                     ndvi, roof-colour, lamps, monuments,
  *                                     furniture, walls, stairs, rail,
- *                                     surface, edges)
+ *                                     surface, edges, sport)
  *
  * The site config (sites/) becomes one JSON spec (pipeline/bake/spec.py), so
  * Python never re-derives tiles, extents or products. Then `bun dev` /

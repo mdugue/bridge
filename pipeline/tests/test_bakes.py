@@ -1,6 +1,8 @@
 """Units of the bakes that need no raw data (the end-to-end comparison
 against the committed artifacts is in docs/data-pipeline.md)."""
 
+import math
+
 import numpy as np
 import shapely
 
@@ -631,3 +633,60 @@ def test_osm_islands_carve_only_road_texels_lawn_over_walk(tmp_path, monkeypatch
     assert raster[64 - 32, 4] == 4  # was built-up, untouched
     assert changed == np.count_nonzero(raster[:, 8:] != 7)
     assert landcover.carve_islands(raster, tile) == 0  # idempotent
+
+
+def test_sports_grounds_take_their_surface_from_the_tag_else_the_sport():
+    from bake.sport import classify
+
+    assert classify("pitch", "soccer", None) == (1, 1)  # grass, football lines
+    assert classify("pitch", "soccer", "artificial_turf") == (2, 1)
+    assert classify("pitch", "tennis;padel", None) == (4, 2)  # clay by default
+    assert classify("pitch", "beachvolleyball", "sand") == (5, 4)
+    assert classify("pitch", "basketball", "tartan") == (3, 3)
+    assert classify("track", None, None) == (3, 6)  # a tartan track, lanes
+    assert classify("pitch", "table_tennis", None) == (6, 0)  # a hard pad, no lines
+    assert classify("pitch", "curling", None) is None  # nothing to show
+    assert classify("pitch", None, "sand") == (5, 0)  # an unknown sport: its surface
+    assert classify("pitch", None, None) is None
+
+
+def test_a_pitch_is_a_rotated_rectangle_along_its_long_side():
+    from bake.sport import frame
+
+    pitch = shapely.affinity.rotate(shapely.box(-50, -30, 50, 30), 30, origin=(0, 0))
+    shape, (cx, cy, angle, hl, hw, _) = frame(pitch, 1)
+    assert shape == 0
+    assert (round(cx, 6), round(cy, 6)) == (0, 0)
+    assert round(math.degrees(angle) % 180, 3) == 30
+    assert (round(hl, 3), round(hw, 3)) == (50, 30)
+
+
+def test_an_oval_track_is_a_capsule_band_of_its_measured_width():
+    from bake.sport import frame
+
+    straight, outer, band = 42.0, 46.0, 8.0
+    core = shapely.LineString([(-straight, 0), (straight, 0)])
+    ring = shapely.difference(core.buffer(outer), core.buffer(outer - band))
+    shape, (_, _, _, a, r, w) = frame(ring, 6)
+    assert shape == 1
+    assert abs(a - straight) < 0.1
+    assert abs(r - outer) < 0.1
+    assert abs(w - band) < 0.2
+    # A narrow bent strip is no oval: it keeps a rectangle or its outline.
+    strip = shapely.LineString([(0, 0), (40, 0), (60, 8)]).buffer(2.0)
+    assert frame(strip, 6)[0] != 1
+
+
+def test_the_index_raster_names_a_court_inside_a_larger_ground(tmp_path):
+    from bake.common import Tile
+    from bake.sport import index_raster
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    big = shapely.box(4, 4, 60, 60)
+    court = shapely.box(20, 20, 40, 40)
+    raster = index_raster([big, court], tile, 64)
+    assert raster.shape == (64, 64, 4)
+    assert raster[64 - 30, 30].tolist()[:3] == [2, 1, 255]  # the court, then the ground
+    assert raster[64 - 10, 10].tolist()[:3] == [1, 1, 255]
+    assert raster[33, 3, 0] == 1  # the grown edge, half a metre out
+    assert raster[33, 1].tolist()[:3] == [0, 1, 0]  # only the wider growth

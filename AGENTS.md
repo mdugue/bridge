@@ -107,7 +107,9 @@ config change.
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
-    green in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts`,
+    green in the terrain's fragment pass), `sport-ground.ts` (sports
+    grounds: surface and lines in the same pass), `sport-fixtures.ts`
+    (their goals, posts and nets), `rail-layer.ts`, `wall-layer.ts`,
     `kerb-layer.ts` and `stair-layer.ts` (only their
     materials: walls and stairs are baked into the fine terrain glTF),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
@@ -138,7 +140,8 @@ config change.
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
   policy, the look table + store, the Snapshot codec, `site.ts` (the site
   type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
-  extras), `landcover.ts` (the classes and the one palette), `city-mesh.ts`
+  extras), `landcover.ts` (the classes and the one palette), `sport.ts`
+  (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
   (the per-object table: packing, demolish, footprints), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
@@ -154,7 +157,8 @@ config change.
   converts LoD2 CityGML → CityJSON, `net.py` downloads incl. single members
   of remote ZIPs) and the bakes (`landcover.py` + `landcover_osm.py`,
   `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`,
-  `furniture.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `edges.py`, `osm.py`);
+  `furniture.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `edges.py`,
+  `sport.py`, `osm.py`);
   tests in `pipeline/tests/`. Run by
   `bun run fetch` / `bun run bake` (`scripts/pipeline.ts`, which hands
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0030
