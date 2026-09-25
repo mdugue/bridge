@@ -20,18 +20,30 @@ export interface FootprintPoly {
   pts: [number, number][];
 }
 
+/**
+ * Canvas pixels per metre for a map `widthPx` wide. The map keeps the site's
+ * aspect ratio (Dresden: 10 × 6 km, a landscape map), so one scale serves
+ * both axes: no padding around the site, no squashing.
+ */
+function pxPerMetre(bounds: TerrainBounds, widthPx: number): number {
+  return widthPx / Math.max(bounds[2] - bounds[0], 1);
+}
+
+/** The map's height for a given width: the site's own aspect ratio. */
+export function mapHeightPx(bounds: TerrainBounds, widthPx: number): number {
+  return Math.round((bounds[3] - bounds[1]) * pxPerMetre(bounds, widthPx));
+}
+
 /** Projected EPSG coordinates -> canvas pixels (north-up). */
 export function epsgToMapPx(
   x: number,
   y: number,
   bounds: TerrainBounds,
-  sizePx: number
+  widthPx: number
 ): { px: number; py: number } {
-  const [minX, minY, maxX, maxY] = bounds;
-  return {
-    px: ((x - minX) / (maxX - minX)) * sizePx,
-    py: ((maxY - y) / (maxY - minY)) * sizePx,
-  };
+  const [minX, , , maxY] = bounds;
+  const k = pxPerMetre(bounds, widthPx);
+  return { px: (x - minX) * k, py: (maxY - y) * k };
 }
 
 /** Canvas pixels -> projected EPSG coordinates. */
@@ -39,45 +51,11 @@ export function mapPxToEpsg(
   px: number,
   py: number,
   bounds: TerrainBounds,
-  sizePx: number
+  widthPx: number
 ): { x: number; y: number } {
-  const [minX, minY, maxX, maxY] = bounds;
-  return {
-    x: minX + (px / sizePx) * (maxX - minX),
-    y: maxY - (py / sizePx) * (maxY - minY),
-  };
-}
-
-/**
- * The square map frame around a site's extent: the shorter axis is padded
- * evenly on both sides. The minimap is a square canvas, and a site that is
- * wider than tall (Dresden: 10 × 6 km) mapped straight onto it came out
- * squashed — every drawing, the player marker and the teleport click then
- * share one undistorted metres-per-pixel scale.
- */
-export function squareBounds(bounds: TerrainBounds): TerrainBounds {
-  const [minX, minY, maxX, maxY] = bounds;
-  const half = Math.max(maxX - minX, maxY - minY) / 2;
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-  return [cx - half, cy - half, cx + half, cy + half];
-}
-
-/**
- * A point pulled into `bounds`: a click on the padding `squareBounds` adds
- * around the site lands on its nearest edge instead of outside every tile,
- * where there is no ground to stand on.
- */
-export function clampToBounds(
-  x: number,
-  y: number,
-  bounds: TerrainBounds
-): { x: number; y: number } {
-  const [minX, minY, maxX, maxY] = bounds;
-  return {
-    x: Math.min(Math.max(x, minX), maxX),
-    y: Math.min(Math.max(y, minY), maxY),
-  };
+  const [minX, , , maxY] = bounds;
+  const k = pxPerMetre(bounds, widthPx);
+  return { x: minX + px / k, y: maxY - py / k };
 }
 
 /**

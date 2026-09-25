@@ -2,10 +2,9 @@ import { expect, test } from "bun:test";
 import {
   buildingFootprintPolys,
   buildingFootprints,
-  clampToBounds,
   epsgToMapPx,
+  mapHeightPx,
   mapPxToEpsg,
-  squareBounds,
 } from "./minimap";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { CityJsonDocument } from "./types";
@@ -38,29 +37,16 @@ test("mapPxToEpsg is the inverse of epsgToMapPx", () => {
   expect(y).toBeCloseTo(5_657_654);
 });
 
-test("squareBounds pads the shorter axis evenly", () => {
-  expect(squareBounds([410_000, 5_654_000, 418_000, 5_660_000])).toEqual([
-    410_000, 5_653_000, 418_000, 5_661_000,
-  ]);
-  expect(squareBounds([0, 0, 2, 4])).toEqual([-1, 0, 3, 4]);
-  const square: TerrainBounds = [0, 0, 4, 4];
-  expect(squareBounds(square)).toEqual(square);
-});
-
-test("clampToBounds pulls a click on the padding onto the site's edge", () => {
+test("the map keeps the site's aspect ratio, one scale for both axes", () => {
   const site: TerrainBounds = [408_000, 5_654_000, 418_000, 5_660_000];
-  expect(clampToBounds(412_000, 5_653_000, site)).toEqual({
-    x: 412_000,
-    y: 5_654_000,
-  });
-  expect(clampToBounds(420_000, 5_661_000, site)).toEqual({
-    x: 418_000,
-    y: 5_660_000,
-  });
-  expect(clampToBounds(412_345, 5_656_789, site)).toEqual({
-    x: 412_345,
-    y: 5_656_789,
-  });
+  expect(mapHeightPx(site, 250)).toBe(150);
+  // The south-east corner is the canvas's bottom-right: no padding.
+  const se = epsgToMapPx(418_000, 5_654_000, site, 250);
+  expect(se.px).toBeCloseTo(250);
+  expect(se.py).toBeCloseTo(150);
+  const back = mapPxToEpsg(62.5, 37.5, site, 250);
+  expect(back.x).toBeCloseTo(410_500);
+  expect(back.y).toBeCloseTo(5_658_500);
 });
 
 test("buildingFootprints extracts Building extents and skips parts", () => {
