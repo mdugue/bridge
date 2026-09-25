@@ -21,13 +21,19 @@ The ingest adapter caches the WFS response as `<raw>/trees/<tile>.geojson`
      canopy trees around it — a park's measured canopy is denser than the
      municipal register (docs/transformations.md);
   5. adds the OSM trees (the site's extract, ODbL) that stand more than
-     OSM_CLEARANCE from every cadastre tree — courts, the Zwinger, Free-State
-     and private ground the municipal register skips. The cadastre wins: it is
-     measured. An OSM tree needs a taxon (`species`/`taxon`/`genus`, German
-     names mapped) or at least `leaf_type`; one with neither is dropped (the
-     DOM canopy covers unknown trees, and no species is invented). Its
-     `height`/`diameter_crown`/`circumference` tags are read when present,
-     the gaps filled from the cadastre's own statistics for the tile.
+     OSM_CLEARANCE from every cadastre tree of the cached answer (its margin
+     across the seams included) — courts, the Zwinger, Free-State and
+     private ground the municipal register skips. The cadastre wins: it is
+     measured. An OSM tree needs a taxon the bake reads (`species`/`taxon`/
+     `genus` naming a known genus; German names, lower-case genera and a few
+     unambiguous bare epithets mapped) or at least `leaf_type`; one with
+     neither is dropped (the DOM canopy covers unknown trees, and no species
+     is invented). A `leaf_type` that contradicts the taxon wins over it, and
+     `leaf_cycle` sets the leaf type. Its `height`/`diameter_crown`/
+     `circumference` tags are read when present, the gaps filled from the
+     cadastre's own statistics for the tile.
+  6. drops a trunk diameter that cannot be the tree's (over T_MAX, or over
+     T_PER_H cm per metre of its height) rather than clamping it.
 
 Output `data/dlm/trees_<tile>.geojson`, points with
   h tree height (m), d crown diameter (m), a archetype id (0 round, 1 oval,
@@ -35,7 +41,8 @@ Output `data/dlm/trees_<tile>.geojson`, points with
   c foliage colour (1 purple, 2 golden; absent = green), g 1 = globe
   cultivar, f 1 = in forest/copse, gn the genus (an index into the file's
   `genera` member, tree_archetypes.GENERA; absent = 0, other deciduous),
-  t trunk diameter at breast height (cm, when measured or tagged), s "osm"
+  t trunk diameter at breast height (cm, when measured or tagged and
+  plausible), s "osm"
   for an OSM tree (absent = the cadastre) (lib/city/features.ts `TreeFeature`).
 """
 
@@ -59,38 +66,76 @@ H_MIN, H_MAX, D_MIN, D_MAX = 1.5, 40.0, 0.8, 30.0
 WOODLAND = (2, 3)  # the class raster's forest and copse (landcover.py)
 DEFAULT_RATIO = 0.55  # crown / height where an archetype has no sample
 DEFAULT_H = 8.0  # the height of a tile whose trees carry none at all
-T_MAX = 400.0  # trunk diameter clamp (cm): the register has typos past it
+T_MAX = 400.0  # trunk diameter (cm) past which the register has a typo
+# A trunk this many cm across per metre of the tree's height is a typo too
+# (a 5 m tree 120 cm across): 99.8 % of the cadastre's measured pairs stay
+# under it, the rest are swapped or mistyped fields and pollarded stumps.
+T_PER_H = 15.0
 # An OSM tree this close to a cadastre tree is taken to be that tree (the
 # register is surveyed; OSM positions are often traced from imagery).
 OSM_CLEARANCE = 3.0
 OSM_WHERE = 'other_tags LIKE \'%"natural"=>"tree"%\''
-# German names OSM mappers put into `genus`/`species` (seen in the Dresden
-# extract), mapped to the botanical genus.
-GERMAN_GENERA = {
+# Common names OSM mappers put into `species`/`genus` (German, seen in the
+# Dresden extract) → the botanical name. A value matches by its last word's
+# ending ("Winter-Linde", "Gemeine Fichte", "Spitzahorn", a plural "Linden");
+# the longer name is tried first, so a "Rosskastanie" is not a "Kastanie"
+# and an "Eberesche" not an "Esche".
+COMMON_NAMES = {
     "Ahorn": "Acer",
-    "Feldahorn": "Acer",
-    "Spitzahorn": "Acer",
-    "Bergahorn": "Acer",
+    "Rotahorn": "Acer rubrum",
     "Linde": "Tilia",
     "Eiche": "Quercus",
+    "Roteiche": "Quercus rubra",
     "Platane": "Platanus",
-    "Rosskastanie": "Aesculus",
     "Kastanie": "Aesculus",
+    "Rosskastanie": "Aesculus",
+    "Esskastanie": "Castanea",
+    "Edelkastanie": "Castanea",
     "Birke": "Betula",
     "Buche": "Fagus",
     "Hainbuche": "Carpinus",
     "Esche": "Fraxinus",
+    "Eberesche": "Sorbus",
+    "Mehlbeere": "Sorbus",
     "Ulme": "Ulmus",
     "Pappel": "Populus",
     "Weide": "Salix",
     "Robinie": "Robinia",
     "Kiefer": "Pinus",
     "Fichte": "Picea",
+    "Tanne": "Abies",
     "Eibe": "Taxus",
     "Lärche": "Larix",
+    "Lebensbaum": "Thuja",
     "Walnuss": "Juglans",
     "Kirsche": "Prunus",
+    "Kornelkirsche": "Cornus",
+    "Pflaume": "Prunus",
     "Erle": "Alnus",
+    "Tulpenbaum": "Liriodendron",
+    "Magnolie": "Magnolia",
+    "Maulbeere": "Morus",
+}
+_COMMON_LONGEST_FIRST = sorted(COMMON_NAMES, key=len, reverse=True)
+# A bare species epithet (lower case, no genus) that names one tree; any
+# other ("domestica": an apple, a plum or a service tree?) says nothing.
+EPITHETS = {
+    "hippocastanum": "Aesculus hippocastanum",
+    "platanoides": "Acer platanoides",
+    "pseudoplatanus": "Acer pseudoplatanus",
+    "campestre": "Acer campestre",
+    "cordata": "Tilia cordata",
+    "platyphyllos": "Tilia platyphyllos",
+    "robur": "Quercus robur",
+    "petraea": "Quercus petraea",
+    "sylvatica": "Fagus sylvatica",
+    "betulus": "Carpinus betulus",
+    "excelsior": "Fraxinus excelsior",
+    "biloba": "Ginkgo biloba",
+    "pseudoacacia": "Robinia pseudoacacia",
+    "sativa": "Castanea sativa",
+    "regia": "Juglans regia",
+    "avium": "Prunus avium",
 }
 
 
@@ -98,8 +143,11 @@ def _num(v) -> float | None:
     return float(v) if isinstance(v, (int, float)) and v > 0 else None
 
 
-def _trunk(cm: float | None) -> float | None:
-    return min(cm, T_MAX) if cm else None
+def plausible_trunk(cm: float, height: float) -> bool:
+    """Whether a trunk diameter (cm) fits a tree `height` m tall. An
+    implausible one is dropped, not clamped: a clamp would still draw the
+    typo, only a little less of it."""
+    return cm <= T_MAX and cm <= T_PER_H * height
 
 
 def parse_trees(raw: dict, bounds: tuple[float, float, float, float]) -> list[dict]:
@@ -119,7 +167,7 @@ def parse_trees(raw: dict, bounds: tuple[float, float, float, float]) -> list[di
                 "y": y,
                 "h": _num(p.get("baumhoehe_akt")),
                 "d": _num(p.get("kronendurchmesser_akt")),
-                "t": _trunk(_num(p.get("stammdurchmesser_akt"))),
+                "t": _num(p.get("stammdurchmesser_akt")),
                 **c,
             }
         )
@@ -137,17 +185,47 @@ def _metres(v: str | None, unit_cm: bool = False) -> float | None:
     return x if x > 0 else None
 
 
+def _common_name(value: str) -> str:
+    """The botanical name for a common tree name (COMMON_NAMES), "" when it
+    is none."""
+    word = re.split(r"[\s-]+", value.strip())[-1].lower()
+    plural = word[:-1] if word.endswith("en") else ""  # "Linden", "Eichen"
+    for candidate in (word, plural):
+        for name in _COMMON_LONGEST_FIRST:
+            if candidate and candidate.endswith(name.lower()):
+                return COMMON_NAMES[name]
+    return ""
+
+
+def botanical(value: str | None) -> str:
+    """An OSM tag value as a botanical name the classifier reads, "" when it
+    is none: a known genus as it stands (capitalised where a mapper wrote it
+    lower case), a bare epithet that names one tree, or a common name. Any
+    other first word — a family, an English name, an ambiguous epithet — is
+    not taken for a genus."""
+    words = (value or "").split()
+    if not words:
+        return ""
+    genus = words[0][:1].upper() + words[0][1:]
+    if ta.is_genus(genus):
+        return " ".join([genus, *words[1:]])
+    if len(words) == 1 and words[0] in EPITHETS:
+        return EPITHETS[words[0]]
+    return _common_name(value or "")
+
+
 def osm_taxon(other_tags: str | None) -> str:
     """The botanical name an OSM tree is tagged with ("" when none): the most
-    specific of `species`, `taxon` and `genus`, a German name mapped to its
-    genus."""
-    for key in ("species", "taxon", "genus"):
-        v = (tag(other_tags, key) or "").strip()
-        if not v:
-            continue
-        first, _, rest = v.partition(" ")
-        return f"{GERMAN_GENERA.get(first, first)} {rest}".strip()
+    specific of `species`, `taxon` and `genus` that reads as one (`botanical`),
+    else the German `species:de`/`genus:de`."""
+    for key in ("species", "taxon", "genus", "species:de", "genus:de"):
+        name = botanical(tag(other_tags, key))
+        if name:
+            return name
     return ""
+
+
+LEAF_CYCLE = {"evergreen": "e", "deciduous": "d"}
 
 
 def _by_leaf_type(other_tags: str | None) -> dict | None:
@@ -171,14 +249,28 @@ def _by_leaf_type(other_tags: str | None) -> dict | None:
     }
 
 
+def _classify_osm(other_tags: str | None) -> dict | None:
+    """The taxon's classification, unless the tree's own `leaf_type`
+    contradicts it (a needle-leaved "lime": the taxon is the suspect, the
+    leaf type wins); a `leaf_cycle` tag sets the leaf type either way."""
+    by_leaf = _by_leaf_type(other_tags)
+    taxon = osm_taxon(other_tags)
+    if not taxon:
+        return by_leaf
+    german = " ".join(v for k in ("species:de", "genus:de") if (v := tag(other_tags, k)))
+    c = ta.classify(taxon, german)
+    if by_leaf is not None and (by_leaf["archetype"] == ta.CONIFER) != (
+        c["archetype"] == ta.CONIFER
+    ):
+        return by_leaf
+    cycle = LEAF_CYCLE.get(tag(other_tags, "leaf_cycle") or "")
+    return {**c, "leaf": cycle} if cycle else c
+
+
 def osm_tree(x: float, y: float, other_tags: str | None) -> dict | None:
     """One OSM `natural=tree` classified like a cadastre tree, or None when it
-    carries neither a taxon nor a leaf type."""
-    taxon = osm_taxon(other_tags)
-    german = " ".join(v for k in ("species:de", "genus:de") if (v := tag(other_tags, k)))
-    c = ta.classify(taxon, german) if taxon else _by_leaf_type(other_tags)
-    if c is None or (taxon and not c["known"]):
-        c = _by_leaf_type(other_tags)
+    carries neither a taxon the bake reads nor a leaf type."""
+    c = _classify_osm(other_tags)
     if c is None:
         return None
     circumference = _metres(tag(other_tags, "circumference"), unit_cm=True)
@@ -187,17 +279,32 @@ def osm_tree(x: float, y: float, other_tags: str | None) -> dict | None:
         "y": y,
         "h": _metres(tag(other_tags, "height")),
         "d": _metres(tag(other_tags, "diameter_crown")),
-        "t": _trunk(circumference / np.pi * 100) if circumference else None,
+        "t": circumference / np.pi * 100 if circumference else None,
         "src": "osm",
         **c,
     }
 
 
-def complement(osm: list[dict], cadastre: list[dict]) -> list[dict]:
-    """The OSM trees no cadastre tree stands within OSM_CLEARANCE of."""
-    if not osm or not cadastre:
+def cadastre_points(raw: dict) -> np.ndarray:
+    """Every tree position in the cached WFS answer, (n, 2): the tile's own
+    and those in the margin across its seams, stumps included (an OSM tree
+    on a stump is the tree the register lost)."""
+    points = [
+        (p["gis_x_utm"], p["gis_y_utm"])
+        for f in raw.get("features", [])
+        if (p := f.get("properties") or {}).get("gis_x_utm") is not None
+        and p.get("gis_y_utm") is not None
+    ]
+    return np.array(points, dtype=float).reshape(-1, 2)
+
+
+def complement(osm: list[dict], cadastre: np.ndarray) -> list[dict]:
+    """The OSM trees no cadastre tree (`cadastre_points`: the margin's too, so
+    a register tree just across a seam claims its OSM twin on this side)
+    stands within OSM_CLEARANCE of."""
+    if not osm or len(cadastre) == 0:
         return osm
-    index = cKDTree(np.array([(t["x"], t["y"]) for t in cadastre]))
+    index = cKDTree(cadastre)
     dist, _ = index.query(np.array([(t["x"], t["y"]) for t in osm]))
     return [t for t, d in zip(osm, dist, strict=True) if d > OSM_CLEARANCE]
 
@@ -282,7 +389,7 @@ def tree_props(t: dict, h: float, d: float) -> dict:
         props["g"] = 1
     if t.get("gn"):
         props["gn"] = t["gn"]
-    if t.get("t"):
+    if t.get("t") and plausible_trunk(t["t"], h):
         props["t"] = round(t["t"])
     if t.get("src") == "osm":
         props["s"] = "osm"
@@ -301,7 +408,7 @@ def tree_features(trees: list[dict], sizes, cls: np.ndarray | None, bounds) -> l
     return features
 
 
-def _osm_complement(tile: Tile, cadastre: list[dict]) -> list[dict]:
+def _osm_complement(tile: Tile, cadastre: np.ndarray) -> list[dict]:
     if not has_extract(tile, "the OSM trees"):
         return []
     osm = read_osm_trees(tile)
@@ -318,7 +425,8 @@ def run(tile: Tile) -> None:
     if not raw_path.exists():
         print(f"{tile.id}: no tree cadastre at {raw_path} — skipping the inventory trees")
         return
-    trees = parse_trees(json.loads(raw_path.read_text()), tile.bounds)
+    raw = json.loads(raw_path.read_text())
+    trees = parse_trees(raw, tile.bounds)
     # A tile the cadastre has no tree on (all forest) still gets its file,
     # empty: "baked, nothing here" is not "never baked" (lib/city/tile-data.test.ts
     # holds every tile to the same set of files). The OSM complement fills in
@@ -329,7 +437,7 @@ def run(tile: Tile) -> None:
     if trees:
         stats = size_stats(trees)
         sizes, imputed_h, imputed_d = impute(trees, stats)
-        osm = _osm_complement(tile, trees)
+        osm = _osm_complement(tile, cadastre_points(raw))
         osm_sizes, _, _ = impute(osm, stats)
         # Sorted by position, so a re-bake diffs by what changed, not by the
         # order the WFS happened to answer in.
