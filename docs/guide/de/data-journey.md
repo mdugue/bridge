@@ -76,6 +76,7 @@ früheren lesen:
 flowchart LR
   DLM["landcover<br/>Landnutzungsklassen + Heckenreihen"] --> CAN["canopy<br/>Baumpunkte"]
   DLM --> LAMP["lamps<br/>Lampenpunkte"]
+  DLM --> FURN["furniture<br/>Bänke · Papierkörbe · Bügel · Wartehäuschen"]
   NDVI["ndvi<br/>Grün-Raster"]
   ROOF["roof-colour<br/>Dachfarben-Tabelle"]
   WALL["walls<br/>Mauerlinien"]
@@ -106,6 +107,7 @@ enthält je Kachel:
 | | `vegrows_<Kachel>.geojson` | Hecken- und Baumreihenlinien | wenige kB |
 | | `canopy_<Kachel>.geojson` | ein Punkt je Baum mit Höhe (5 000–16 000 je Kachel) | 0,6–1,8 MB |
 | | `lamps_<Kachel>.geojson` | Lampenpositionen | bis 60 kB |
+| | `furniture_<Kachel>.geojson` | Bänke, Papierkörbe, Fahrradbügel, Poller, Briefkästen und Wartehäuschen, jeweils mit ihrer Blickrichtung | 50–180 kB |
 | | `monuments_<Kachel>.geojson` | Brunnenbecken und Denkmalpunkte mit Art und amtlichem Namen | 2–55 kB |
 | | `walls_<Kachel>.geojson` | Mauerlinien mit Art und Höhe | 50–120 kB |
 | | `stairs_<Kachel>.geojson` | Treppenläufe: Achse, Breite, Stufenzahl, Höhe an Fuß und Kopf | wenige kB |
@@ -193,6 +195,7 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,22–0,25 MB | mit dem detaillierten Gelände (nur Desktop) |
 | Grün (NDVI) | 0,39 MB | 0,32–0,45 MB | mit dem Gelände |
 | Baumpunkte | 36 kB | 54–106 kB | mit dem detaillierten Gelände |
+| Stadtmöbel | 16 kB | 5–17 kB | mit dem detaillierten Gelände |
 | Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
 | **Je Kachel, volle Detailstufe** | **≈ 4,2 MB** | **≈ 4,0–5,0 MB** | |
 | **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 2,0–2,6 MB | |
@@ -215,7 +218,7 @@ und Feature-Dateien.
 Was **im Browser berechnet** statt heruntergeladen wird: die Bodenfarben
 (einmal je Kachel auf der Grafikkarte gemalt, aus den
 Landnutzungsklassen und einer Pastellpalette), die Wasseroberfläche, jeder
-Baum aus seinem Punkt und seiner Höhe, Laternenmasten aus ihren Punkten,
+Baum aus seinem Punkt und seiner Höhe, Laternenmasten und Bänke aus ihren Punkten,
 Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
 und Schatten und der gesamte Nachbearbeitungs-Look.
 
@@ -225,9 +228,9 @@ und Schatten und der gesamte Nachbearbeitungs-Look.
 |---|---|---|
 | Neuer Geländestand | GeoTIFF in `data/<ort>/dgm/` ersetzen (oder löschen und `bun run fetch`); die Bakes `canopy` und `rail` neu ausführen (sie lesen es) | die Geländenetze samt Mauerkanten werden beim nächsten Build neu gebacken |
 | Neues Gebäudemodell | CityJSON in `data/<ort>/cityjson/` löschen und `bun run fetch` (wandelt das neue CityGML um); das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
-| Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps` und `rail` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
+| Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps`, `furniture` und `rail` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
 | Neue Luftbilder | die Bakes `ndvi` und `roof-colour` neu ausführen | die Dachfarben werden beim nächsten Build ins Netz eingearbeitet |
-| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `monuments`, `walls`, `stairs` und `rail` neu ausführen | — |
+| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `furniture`, `monuments`, `walls`, `stairs` und `rail` neu ausführen | — |
 | Andere Bodenfarben | die eine Palette im Code ändern | nichts neu zu backen: Der Browser malt die Farben |
 | Eine neue Kachel | die Kachel in die Standort-Konfiguration (`sites/dresden.ts`) eintragen; `bun run fetch` lädt alles für sie, das Gebäudemodell unterwegs nach CityJSON umgewandelt; `bun run bake` führt alle sieben Bakes aus | der Build nimmt sie ins Tileset auf und veröffentlicht sie |
 

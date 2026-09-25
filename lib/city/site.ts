@@ -206,8 +206,8 @@ export function siteTitle(site: Site): string {
 /** The OSM credit, naming what the site takes from OSM. */
 function osmCredit(site: Site): string {
   const layers = site.provider.products.dlm
-    ? "Lampen, Brunnen, Mauern, Treppen, Plätze, Beläge, Bahnsteige und Brücken"
-    : "Landbedeckung, Lampen, Brunnen, Mauern, Treppen, Plätze, Beläge, Bahnsteige und Brücken";
+    ? "Lampen, Bänke, Brunnen, Mauern, Treppen, Plätze, Beläge, Bahnsteige und Brücken"
+    : "Landbedeckung, Lampen, Bänke, Brunnen, Mauern, Treppen, Plätze, Beläge, Bahnsteige und Brücken";
   return `${layers} © OpenStreetMap-Mitwirkende (ODbL)`;
 }
 

@@ -50,6 +50,7 @@ flowchart LR
     DET["Building detailing<br/>tint · roof · eave · glow"]
     VEG["Trees &amp; hedges"]
     LAMP["Street lamps"]
+    FURN["Street furniture &amp; playgrounds<br/>benches · bins · stands · shelters · play equipment"]
     MON["Fountains &amp; monuments"]
     RAIL["Railway tracks"]
     BRG["Bridges"]
@@ -65,6 +66,7 @@ flowchart LR
   DGM -. ground-clamp .-> BLD
   DGM -. ground-clamp .-> VEG
   DGM -. ground-clamp .-> LAMP
+  DGM -. ground-clamp .-> FURN
   DGM -. ground-clamp .-> MON
 
   %% surfaces + water (multi-source)
@@ -92,6 +94,10 @@ flowchart LR
 
   %% lamps
   OSM ==>|"point positions"| LAMP
+
+  %% street furniture
+  OSM ==>|"bench · waste_basket · bicycle_parking · bollard · post_box · shelter<br/>playground outlines + mapped equipment"| FURN
+  OSM -. "nearest highway → which way it faces" .-> FURN
 
   %% fountains + monuments (official list, OSM basins)
   DLM ==>|"sie03_p monuments: position · name · kind"| MON
@@ -135,6 +141,7 @@ flowchart LR
 | **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py` |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `pipeline/bake/landcover.py` + `canopy.py` + `ndvi.py` |
 | **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) | DGM1 (ground-clamp); gated off water + railway | baked by `pipeline/bake/lamps.py`; `lamp-layer.ts` |
+| **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces) · DGM1 (ground-clamp); gated off water, railway and bridge decks | baked by `pipeline/bake/furniture.py`; `furniture-layer.ts`, `lib/city/furniture.ts` |
 | **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
@@ -184,6 +191,7 @@ flowchart LR
     bROOF["roof_colour.py"]
     bLAMP["lamps.py"]
     bMON["monuments.py"]
+    bFURN["furniture.py"]
     bWALL["walls.py"]
     bSTR["stairs.py"]
     bRAIL["rail.py"]
@@ -199,6 +207,7 @@ flowchart LR
     dROOF["roofcolor JSON"]
     dLAMP["lamps"]
     dMON["monuments"]
+    dFURN["furniture"]
     dWALL["walls"]
     dSTR["stairs"]
     dRAIL["rail · railarea<br/>bridge · platform"]
@@ -230,6 +239,9 @@ flowchart LR
   iOSM -. "fountain basins" .-> bMON
   iDOM -. "measured relief" .-> bMON
   bMON ==> dMON
+  iOSM ==> bFURN
+  dCLS ==>|gates| bFURN
+  bFURN ==> dFURN
   iOSM ==> bWALL ==> dWALL
   iOSM ==> bSTR ==> dSTR
   iDGM -. "landings" .-> bSTR
@@ -253,6 +265,7 @@ flowchart LR
   dNDVI -.-> tSIDE
   dLAMP -.-> tSIDE
   dMON -.-> tSIDE
+  dFURN -.-> tSIDE
   dRAIL -.-> tSIDE
   dSURF -.-> tSIDE
   dEDGE -.-> tSIDE

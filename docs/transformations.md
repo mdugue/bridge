@@ -259,6 +259,49 @@ visual-variable codebook is in
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
 
+- **Street furniture** — OSM benches (`amenity=bench`, points and the
+  ways a bench is sometimes drawn as), picnic tables, litter bins
+  (`waste_basket`), bicycle stands (`bicycle_parking`, not wall loops),
+  bollards, post boxes and stop shelters (`highway=bus_stop` /
+  `public_transport=platform` with `shelter=yes`, `amenity=shelter` of
+  `shelter_type=public_transport`; one per 8 m) → one point layer per tile
+  (ODbL), about 3 000 objects over the four tiles. OSM seldom says which way
+  a bench looks (`direction`, on ~3 %), so **the bake turns an untagged
+  object to the nearest highway within 25 m** (across it when it stands on
+  it); a bench way stands at its midpoint at its mapped length, facing the
+  path side. Only what the tags carry varies: `backrest=no` benches are
+  stools, a stand's `capacity` gives its hoops (two bikes each). Dropped:
+  indoors, underground, classes 5 and 8, bridge decks (the terrain under
+  them is the river). A bollard keeps its tagged `height` and a metal
+  `material` (the Stallhof's 1.46 m bronze columns of 1591 are mapped as
+  bollards). `pipeline/bake/furniture.py`; the viewer instances one small,
+  **abstracted** model per kind — softened blocks, capsules and single tube
+  strokes, a bench one extruded seat-and-back profile — in the scene's
+  palette at its own brightness (a warm sand-clay for seating, the roads'
+  lavender-grey for metal, the buildings' clay for stone; one matte
+  vertex-coloured material). **Low contrast on purpose:** a first,
+  deeper palette (honey 211/176/140, slate 157/156/176) stood out from the
+  pale ground and the clay buildings; the pieces now differ from them by
+  form and shadow, not by tone (`furniture-layer.ts`,
+  `lib/city/furniture.ts`). Not (yet): bicycle-parking *areas*, shelters
+  mapped as areas, planters, signs (OSM maps ~100 traffic signs and almost
+  no street-name signs here; the 321 traffic-signal nodes sit on the
+  carriageway, not at the mast — both too sparse or too placed-by-guess).
+- **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 88 over the
+  four tiles) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
+  ground under each ring vertex (densified to 2 m), and **only the
+  equipment OSM maps** (`playground=swing/basketswing/slide/sandpit/
+  climbingframe/structure/climbingwall/springy/spring_board/seesaw/
+  roundabout/playhouse`, ~100 pieces) standing on it; a sandpit drawn as an
+  area is its own sand slab, one drawn as a way stands at its midpoint
+  turned along it. **A playground mapped without equipment stays an empty
+  patch — nothing is invented** (the choice against filling them with
+  typical pieces). The pieces are not catalogue equipment but soft, single-coloured
+  sculptures (an arch, a wave, a faceted dome, an egg) in five pastels taken
+  from the scene and lifted to the buildings' brightness — a first, literal
+  rendering (A-frames, ladders, a rose safety floor) read as busy and out of
+  place, and saturated pastels stood out as much. Same bake and layer as the street furniture.
+
 - **Fountains, statues, memorial stones, columns** — the Basis-DLM's
   monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with
   their official names; GeoSN) conflated with OSM's `amenity=fountain`

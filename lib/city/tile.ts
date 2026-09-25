@@ -67,6 +67,7 @@ export interface TileArtifact {
 export type TileArtifactKind =
   | "bridge"
   | "canopy"
+  | "furniture"
   | "lamps"
   | "landcover"
   | "landcoverLow"
@@ -112,6 +113,7 @@ export function tileArtifacts(
     edges: dlm(`edges_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
+    furniture: dlm(`furniture_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),

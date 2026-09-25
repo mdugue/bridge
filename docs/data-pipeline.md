@@ -83,9 +83,10 @@ bun run bake                        # every tile of the site, every step
 bun run bake 33412_5656_2_sn        # one tile
 bun run bake --step canopy          # one step: landcover, canopy, ndvi,
                                     #   roof-colour, lamps, monuments,
-                                    #   walls, stairs, rail, surface, edges,
-                                    #   islands (OSM squares into the class
-                                    #   raster, no raw DLM needed)
+                                    #   furniture, walls, stairs, rail,
+                                    #   surface, edges, islands (OSM
+                                    #   squares into the class raster, no
+                                    #   raw DLM needed)
 bun run test:pipeline               # pytest + ruff check + ruff format --check
 ```
 
@@ -106,7 +107,7 @@ never from the tile name. The modules in `pipeline/bake/`:
 | `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre |
 | `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
 | `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS |
-| `landcover.py`, `landcover_osm.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `edges.py` | one step each (table below); `landcover_osm.py` stands in for the DLM where a provider has none |
+| `landcover.py`, `landcover_osm.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `edges.py` | one step each (table below); `landcover_osm.py` stands in for the DLM where a provider has none |
 
 `pipeline/tests/` covers the pure helpers (line merging, deck outlines,
 wall heights, coordinate rounding, the class ids the client's palette is
@@ -158,19 +159,20 @@ can be deleted.
 
 **Every OSM input comes from the local extract** (ADR 0025 tightening
 [ADR 0012](./adr/0012-openstreetmap-for-what-official-data-lacks.md)):
-walls, stairs, lamps, fountains, platforms, the bridge structure and,
-without a DLM, the land cover. There are no Overpass queries — a re-bake is reproducible from the
-recorded extract. If Geofabrik is unreachable the fetch says so and carries
-on; put the extract at the path it names. The *committed* Dresden lamp,
-platform and bridge-structure data still comes from the old Overpass bakes;
-the next re-bake moves it (see [Provenance](#provenance)).
+walls, stairs, lamps, fountains, street furniture, platforms, the bridge
+structure and, without a DLM, the land cover. There are no Overpass
+queries — a re-bake is reproducible from the recorded extract. If
+Geofabrik is unreachable the fetch says so and carries on; put the
+extract at the path it names. The *committed* Dresden lamp, platform and
+bridge-structure data still comes from the old Overpass bakes; the next
+re-bake moves it (see [Provenance](#provenance)).
 
 ### The steps
 
 Each step writes into `data/` in the site's CRS (2 decimals for lines and
 polygons, 1 for points) with a named-CRS member; the loaders never
 reproject. Order matters where noted: `landcover` writes the class raster
-that `canopy` and `lamps` gate on.
+that `canopy`, `lamps` and `furniture` gate on.
 
 | Step | Reads | Writes (`data/…`) | Notes |
 |---|---|---|---|
@@ -180,6 +182,7 @@ that `canopy` and `lamps` gate on.
 | `roof-colour` | DOP bands 1–3, the committed CityJSON | `dop/roofcolor_<t>.json` (`meta` + `roofs: {id: [r,g,b]}`, linear RGB) | Per building: rasterise the RoofSurface rings, erode 5 px inward (the orthophoto leans buildings), take the per-channel median of ≥ 12 texels. Keyed by CityObject id. **No DOP or CityJSON: skipped** |
 | `lamps` | OSM `highway=street_lamp`, the class raster | `dlm/lamps_<t>.geojson` (points, `h` = 5 m) | Only the lamps the tile owns (west and south edges in, east and north out), so a seam lamp stands once when both tiles are dressed; the viewer applies the same rule (`ownsPoint`) to older files. Lamps over railway (5) or water (8) are dropped. No `.osm.pbf`: skipped with a note, the file already there stays |
 | `monuments` | Basis-DLM `sie03_p` (`OBJART=51009`, `BWF` 1750 Denkmal · 1770 Säule/Stein · 1780 Brunnen, with `NAM`); OSM `amenity=fountain` (points + basin outlines); DOM1 + the committed DGM1 | `dlm/monuments_<t>.geojson` (`kind`: fountain / statue / stone / column; `name`, `source`; fountains `style`: basin / pool / splash, `figure`; `relief`: `west`, `north`, `cols`, `rows`, `dm` — the measured body, heights above ground in dm on the 1 m grid) | The DLM is the official list and names; it does not say which monument is a fountain nor how big a basin is. A DLM point within 6 m of (or inside) an OSM fountain *is* that fountain — it keeps the DLM name (Albertplatz: "Stilles Wasser", "Stürmische Wogen"); a DLM name with *…brunnen*/*Tränke* is a fountain without a partner; every other OSM fountain is added (`source: osm`). An outline becomes a Polygon ring: the rim, its hole the water (inset 0.35 m); outlines under 1 m² become points. `relief`: for each monument and each fountain a DLM monument stands in, the nDOM patch above 0.7 m — inside the basin's water, or grown from the tallest cell within 2.5 m of the point — kept only when it ends within 6 m, stays ≤ 60 cells and below 8.5 m and touches nothing taller (a tree crown or a facade); 27 of 174 pass. Only what the tile owns (representative point). **No Basis-DLM: skipped, the file already there stays. No `.osm.pbf`: DLM monuments only. No DOM1: no reliefs (markers)** |
+| `furniture` | OSM `leisure=playground` areas and `playground=*` equipment (points, ways, areas); OSM points `amenity=bench/waste_basket/bicycle_parking/post_box/shelter`, `leisure=picnic_table`, `barrier=bollard`, `highway=bus_stop` / `public_transport=platform` with `shelter=yes`; bench ways; every `highway` line; the class raster, the tile's `bridge` file | `dlm/furniture_<t>.geojson` (points with `k`: bench / picnic / bin / bike / bollard / postbox / shelter; `a` the bearing it faces, degrees from north; `l` a bench way's length; `back: false`; `n` a stand's hoops; `h`, `metal` a bollard's tagged height and material; Polygons `k: playground` and sandpit areas; equipment points `k`: swing / slide / sandpit / climb / springy / seesaw / roundabout / playhouse) | `a`: OSM `direction` on a bench (degrees or a compass point), else towards the nearest highway line within 25 m, across it when the object stands on it (< 0.5 m); a bench way stands at its midpoint facing the path side, length clamped 1–8 m. `n` = ⌈`capacity` ÷ 2⌉, 1–12. Dropped: `bicycle_parking=wall_loops`, `amenity=shelter` other than public transport, stops without `shelter=yes`, `indoor=yes`, `location=indoor/underground`, `level` < 0, classes 5 and 8, inside a bridge deck; a shelter within 8 m of another. Playgrounds under 20 m² and equipment kinds without a model (mounds, table football, …) are left out; nothing is added to a playground OSM maps empty. Only what the tile owns. No `.osm.pbf`: skipped with a note, the file already there stays |
 | `walls` | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` | `dlm/walls_<t>.geojson` (lines with `kind`, `h`; a terrain bake input, not served) | Both the `lines` and `multipolygons` layers — GDAL routes closed ways with an area key into the latter; polygons contribute their outer ring. Heights from `height`/`est_height`, clamped 0.5–30 m, else per kind (city_wall 6, retaining_wall 3, wall 1.5, embankment 2.5, cliff 3). Clipped to the tile. No `.osm.pbf`: skipped with a note, the file already there stays |
 | `stairs` | OSM `highway=steps` (+ `area:highway=steps` outlines, `barrier=wall/retaining_wall/city_wall`, areas on `layer` ≥ 1), the committed DGM1 | `dlm/stairs_<t>.geojson` (lines bottom → top with `w`, `n`, `z` = [bottom, top] landing heights), `dlm/terraces_<t>.geojson` (polygons with a level `z`) — both terrain bake inputs, not served | Landings: the DGM 1 m beyond each end, 3×3 m median. Width: `width`, else outline area ÷ axis length, else the gap between the walls either side (within 15 m, minus 0.3 m each side, the axis re-centred) when both edges of that gap climb ≥ half the axis's rise, else 2.5 m (0.8–30 m). A flight with less than half its tagged rise in the DGM (`step_count` × `step:height`, 15 cm untagged), an `incline` and its top ≤ 3 m from a raised area (no building, `man_made`, `landuse`, bridge, railway or public-transport area) takes the tagged rise from its lower landing; the area becomes a terrace at the highest such top (its outer rings, holes filled). Steps: `step_count` if its riser is 8–25 cm, else rise ÷ 16 cm. Left out: indoor, underground, `level` < 0, tunnel, bridge, rise < 30 cm. Unclipped (the viewer stands a flight on the tile that owns its middle). No `.osm.pbf`: skipped with a note, the file already there stays |
 | `rail` | `ver03_f`, `ver03_l`, `ver06_f`, `ver06_l`, `ver01_l`, `ver02_l`; DGM1 + DOM1; OSM `man_made=bridge`, `railway=platform` | `dlm/railarea_<t>.geojson` (ballast polygons), `dlm/rail_<t>.geojson` (lines with `tracks`, `electrified`), `dlm/bridge_<t>.geojson` (polygons with per-vertex `deck`, `kind`, `name`, `structure`), `dlm/platform_<t>.geojson` | Ballast: `OBJART=42010` made valid, unioned (shapely) and clipped. Rails: heavy rail only (`SPW=1000`, trams excluded), fragments merged at 1 m. Decks: every `ver06_l` centreline (`BWF=1800`), snapped to a `ver06_f` footprint ≤ 50 m away, else buffered by kind width; deck height = the DGM abutment ramp lifted to the DOM surface, plus camber; `kind` from the rail/road/path networks under it; `structure` (arches) from the nearest OSM bridge ≤ 60 m. **No Basis-DLM: the step is skipped, the files already there stay. No DOM1: decks use the DGM ramp. No `.osm.pbf`: bridges without structure, the platform file already there stays.** Every other output is written, even when empty |
@@ -188,7 +191,7 @@ that `canopy` and `lamps` gate on.
 | `edges` | the committed class raster; the NDVI and paving rasters when present | `dlm/edges_<t>.png` (8-bit greyscale 4096 × 2048 = two bytes per texel of a 2048² raster, interleaved: R, G = 128 + 20 · the signed distance (m) to the road edge / the meadow edge, positive inside, ±6.35 m), `dlm/edges_<t>.json` (legend, `scale`), `dlm/kerbs_<t>.geojson` (lines, the road on their left; a terrain bake input, not served) | Distance by growing the mask ring by ring (octagonal metric), three 3×3 box passes, averaged 4096 → 2048. The meadow mask counts urban green: NDVI (upsampled, blurred) > 0.3 on classes 0/4, not paved per the OSM raster. Kerb lines: marching squares on the road field's 0 level, segments beside water or railway dropped, merged, simplified 0.15 m, shorter than 3 m dropped. Runs after `surface`; needs no raw data |
 | `surface` | OSM `highway=*` lines (`surface`, `width`, `footway=sidewalk`, `sidewalk:*:surface`, `footway:surface`, `parking:{left,right,both}` + `:orientation`, `service=parking_aisle`) and `highway` / `area:highway` / `amenity=parking` / `amenity=parking_space` multipolygons | `dlm/surface_<t>.png` (8-bit greyscale 4096 × 2048 = two bytes per texel of a 2048² raster, interleaved: R = park · 64 + walk · 8 + road, G = the way direction, 1 + bearing mod 180° over 0–254, 0 = unknown; greyscale because the viewer decodes data PNGs itself, `lib/city/png-raster.ts`), `dlm/surface_<t>.json` (tile, CRS, bounds, size, encoding, the surface and parking ids, attribution) | Two materials per texel because an OSM road buffer (half-width per `highway` class, else `width`) reaches past the DLM's carriageway: the viewer reads `road` on class 7 and `walk` elsewhere. Roads burn least important first (a primary wins its junctions); walks burn parking and pedestrian areas, then the roads' sidewalk bands (kerb to +3 m on the tagged side), then the ways. Direction: the car parks' long axes first, then every way's segments — the road's reach with its pavement (an aisle's reach covers its bays, 5.5 m), then walkways, then the carriageways (a crossing does not turn the road). Parking: car parks on the ground (not underground, multi-storey, rooftop, garages) = 3 and asphalt when they carry no `surface`, the road half on each tagged side = 1 (parallel) or 2 (perpendicular/diagonal), then the aisles cleared. Surface values → ids in `SURFACE_OF`. No `.osm.pbf`: skipped with a note, the file already there stays |
 
-The OSM-derived files (`lamps`, `walls`, `stairs`, `bridge`, `platform`) carry
+The OSM-derived files (`lamps`, `furniture`, `walls`, `stairs`, `bridge`, `platform`) carry
 `"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign member;
 `monuments` carries both credits (`Quelle: GeoSN, dl-de/by-2-0; © OpenStreetMap
 contributors (ODbL)`), and the paving raster carries the OSM credit in its
@@ -401,6 +404,7 @@ Measured 2026-09-24 on the current build (Dresden, gzipped wire sizes):
 | paving raster 2048² (fine level only) | 0.60–0.86 MB |
 | edge raster 2048² (fine level only) | 0.34–0.46 MB |
 | canopy GeoJSON | 0.04–0.11 MB (0.6–1.8 MB raw) |
+| street furniture GeoJSON | 0.01–0.03 MB (0.05–0.18 MB raw) |
 | everything else (veg rows, lamps, monuments, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
 | **tile total** | **3.9–4.9 MB** (phones, without the 4096² raster: 3.6–4.7 MB), plus ≈ 1.2 MB since 2026-09-25 (the paving and edge rasters, the kerb stones in L0) |
 
