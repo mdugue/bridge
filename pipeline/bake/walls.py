@@ -6,9 +6,16 @@ ribbon on each.
 The same file carries the fences and railings (`barrier=fence/handrail`,
 `{kind: "fence", type, h}`) and, after them, the gates that stand on a wall
 or fence line (`{kind: "gate", w, on}`, points), so the fine terrain bake
-can cut each gate's gap. Fences never reshape the ground and never snap to
-a step: they stand on their OSM line (plan 029). The walls come first and
-in their old order — the terrain study addresses them by index."""
+can cut each gate's gap. A gate the neighbour owns whose gap reaches over
+the seam comes along as `{seam: true}`, so this tile's piece of the line
+is cut too. Fences never reshape the ground and never snap to a step: they
+stand on their OSM line (plan 029). The walls come first and in their old
+order — the terrain study addresses them by index.
+
+Every line is clipped to the tile as a line: an area's outer ring first,
+then the ring cut at the tile edge. Clipping the area as a polygon would
+close its ring along the tile edge — a ruler-straight wall or fence on the
+seam that stands nowhere."""
 
 from __future__ import annotations
 
@@ -106,6 +113,16 @@ def lines_of(geom: shapely.Geometry) -> list[shapely.Geometry]:
     return out
 
 
+def clipped_lines(geom: shapely.Geometry, box: shapely.Geometry) -> list[shapely.Geometry]:
+    """The lines of `geom` (its lines, its areas' outer rings) inside the tile.
+    Each is cut at the tile edge as a line, and the pieces of one ring that
+    meet at its closing vertex are merged back into one line."""
+    out = []
+    for line in lines_of(geom):
+        out.extend(lines_of(shapely.line_merge(shapely.intersection(line, box))))
+    return out
+
+
 def _walls(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list]:
     """The wall features and every wall line near the tile (for the gates)."""
     features, near = [], []
@@ -121,7 +138,7 @@ def _walls(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list]:
             kind = kind_of(barrier, man_made, other)
             h = height(other) or DEFAULT_H.get(kind, 2.0)
             near.extend(lines_of(g))
-            for line in lines_of(shapely.intersection(g, box)):
+            for line in clipped_lines(g, box):
                 features.append(
                     feature(
                         geometry_json(shapely.LineString(line.coords)),
@@ -148,22 +165,33 @@ def _fences(tile: Tile, box: shapely.Geometry) -> tuple[list[dict], list]:
                 "h": round(fence_height(barrier, other), 1),
             }
             near.extend(lines_of(g))
-            for line in lines_of(shapely.intersection(g, box)):
+            for line in clipped_lines(g, box):
                 features.append(feature(geometry_json(shapely.LineString(line.coords)), props))
     return features, near
 
 
+def reaches_in(bounds, p: shapely.Point, w: float) -> bool:
+    """Whether a gate outside the tile cuts a gap reaching into it: within
+    half its width of the tile (the gap runs along the line, never shorter
+    than the straight distance)."""
+    return shapely.distance(shapely.box(*bounds), p) <= w / 2
+
+
 def gates_on(points, fields, walls: list, fences: list, bounds) -> list[dict]:
-    """The gates the tile owns that stand on a wall or fence line (within
-    GATE_ON_M; a fence wins a tie), snapped onto it. Gates on no line are
-    dropped: without one there is no gap to cut."""
+    """The gates that stand on a wall or fence line (within GATE_ON_M; a
+    fence wins a tie), snapped onto it: those the tile owns, and those of a
+    neighbour whose gap reaches into the tile (`seam`: they cut this tile's
+    piece of the line too). Gates on no line are dropped: without one there
+    is no gap to cut."""
     fence_tree = shapely.STRtree(fences) if fences else None
     wall_tree = shapely.STRtree(walls) if walls else None
     out = []
     for p, barrier, other in zip(
         points, column(fields, "barrier", points), column(fields, "other_tags", points), strict=True
     ):
-        if not owns(bounds, p.x, p.y):
+        w = gate_width(barrier, other)
+        seam = not owns(bounds, p.x, p.y)
+        if seam and not reaches_in(bounds, p, w):
             continue
         on = None
         for name, tree, lines in (("fence", fence_tree, fences), ("wall", wall_tree, walls)):
@@ -175,9 +203,11 @@ def gates_on(points, fields, walls: list, fences: list, bounds) -> list[dict]:
             continue
         line = on[1]
         snapped = line.interpolate(line.project(p))
-        props = {"kind": "gate", "w": round(gate_width(barrier, other), 1), "on": on[0]}
+        props = {"kind": "gate", "w": round(w, 1), "on": on[0]}
         if barrier != "gate":
             props["type"] = barrier
+        if seam:
+            props["seam"] = True
         out.append(feature(geometry_json(snapped), props))
     return out
 
@@ -196,4 +226,8 @@ def run(tile: Tile) -> None:
         tile.epsg,
         OSM_ATTRIBUTION,
     )
-    print(f"{tile.id}: {len(walls)} walls, {len(fences)} fences, {len(gates)} gates")
+    seam = sum(1 for g in gates if g["properties"].get("seam"))
+    print(
+        f"{tile.id}: {len(walls)} walls, {len(fences)} fences, "
+        f"{len(gates) - seam} gates (+{seam} of a neighbour's over the seam)"
+    )

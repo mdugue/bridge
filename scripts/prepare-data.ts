@@ -388,7 +388,8 @@ function fenceLines(tile: string): FenceLine[] {
   });
 }
 
-/** The tile's gates on a wall or fence line. */
+/** The gates on the tile's wall and fence lines (a neighbour's too, where
+ *  its gap reaches over the seam). */
 function gatePoints(tile: string): GatePoint[] {
   const isGate = (f: WallFileFeature): f is GateFeature =>
     f.geometry?.type === "Point" && f.properties?.kind === "gate";
@@ -402,6 +403,7 @@ function gatePoints(tile: string): GatePoint[] {
               on: f.properties.on,
               w: f.properties.w,
               ...(f.properties.type ? { type: f.properties.type } : {}),
+              ...(f.properties.seam ? { seam: true } : {}),
             },
           ]
         : []

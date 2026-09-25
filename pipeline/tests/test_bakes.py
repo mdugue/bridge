@@ -331,6 +331,69 @@ def test_fences_follow_the_walls_and_gates_on_a_line_come_last(tmp_path, monkeyp
     }
 
 
+def _on_tile_edge(tile, coords) -> float:
+    """Metres of a line that run along the tile's edge."""
+    xmin, ymin, xmax, ymax = tile.bounds
+    on = 0.0
+    for (xa, ya), (xb, yb) in zip(coords, coords[1:], strict=False):
+        for axis, v in ((0, xmin), (0, xmax), (1, ymin), (1, ymax)):
+            if abs((xa, ya)[axis] - v) < 0.005 and abs((xb, yb)[axis] - v) < 0.005:
+                on += math.dist((xa, ya), (xb, yb))
+    return on
+
+
+def test_an_area_across_the_tile_edge_stands_no_fence_on_the_seam(tmp_path, monkeypatch):
+    from bake import walls
+
+    # A fenced yard and a walled garden, both 20 m wide, straddling the east
+    # edge (x = 200) of the 200 m tile; the ring starts outside the tile.
+    corners = [(210, 20), (190, 20), (190, 40), (210, 40), (210, 60), (190, 60), (190, 80)]
+    nodes = _osm_nodes(11, [(x, y, {}) for x, y in corners + [(210, 80)]])
+    ways = (
+        '<way id="1" version="1"><nd ref="11"/><nd ref="12"/><nd ref="13"/><nd ref="14"/>'
+        '<nd ref="11"/><tag k="barrier" v="fence"/><tag k="area" v="yes"/></way>'
+        '<way id="2" version="1"><nd ref="15"/><nd ref="16"/><nd ref="17"/><nd ref="18"/>'
+        '<nd ref="15"/><tag k="barrier" v="wall"/><tag k="area" v="yes"/></way>'
+    )
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
+    walls.run(tile)
+    lines = [f for f in _read(tile, "walls")["features"] if f["geometry"]["type"] == "LineString"]
+    assert sorted(f["properties"]["kind"] for f in lines) == ["fence", "wall"]
+    for f in lines:
+        coords = [tuple(c) for c in f["geometry"]["coordinates"]]
+        assert _on_tile_edge(tile, coords) == 0.0
+        # One open line inside the tile, 10 + 20 + 10 m: the ring's three
+        # sides in the tile, joined across its closing vertex.
+        assert coords[0] != coords[-1]
+        assert abs(shapely.LineString(coords).length - 40.0) < 0.05
+
+
+def test_a_neighbours_gate_whose_gap_reaches_over_the_seam_cuts_here_too(tmp_path, monkeypatch):
+    from bake import walls
+
+    # A fence across the east edge (x = 200), a 4 m gate on it 1 m past the
+    # edge (the neighbour's: its gap reaches 1 m into this tile) and a 1.2 m
+    # gate 1 m past the edge (its gap stays on the neighbour's side).
+    nodes = _osm_nodes(
+        11,
+        [
+            (180, 50, {}),
+            (220, 50, {}),
+            (201, 50, {"barrier": "gate", "width": "4"}),
+            (201, 50.1, {"barrier": "gate"}),
+        ],
+    )
+    ways = '<way id="1" version="1"><nd ref="11"/><nd ref="12"/><tag k="barrier" v="fence"/></way>'
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
+    walls.run(tile)
+    gates = [f for f in _read(tile, "walls")["features"] if f["properties"]["kind"] == "gate"]
+    assert [g["properties"] for g in gates] == [
+        {"kind": "gate", "w": 4.0, "on": "fence", "seam": True}
+    ]
+    assert walls.reaches_in((0, 0, 200, 200), shapely.Point(202, 50), 4.0)
+    assert not walls.reaches_in((0, 0, 200, 200), shapely.Point(202.1, 50), 4.0)
+
+
 def test_fence_types_and_heights_come_from_the_tags():
     from bake.walls import fence_height, fence_type, gate_width
 
