@@ -527,18 +527,27 @@ visual-variable codebook is in
   entries, the file's `genera` member; the red maples and red oaks are
   entries of their own because their autumn is) — 17 228 of the 18 444
   cadastre trees (93 %) have one, the rest follow the generic curve — and
-  the **trunk diameter** `t` (cm, 17 254 trees). The viewer fits a
-  measured trunk's girth to its diameter at 1.3 m (× 1.3 for the
-  seven-sided, barkless trunk; `tree-inventory.ts` `trunkGirth`), the
-  height rule stays where none is measured. **OSM trees**: the BBBike
-  extract (2026-09-19) has 6 018 `natural=tree` in the four tiles; 4 384
-  carry a taxon (`species`/`taxon`/`genus`, German names such as
-  "Platane" mapped) or at least `leaf_type`, the rest are dropped (the DOM
-  canopy covers unknown trees; no species is invented). **The cadastre
-  wins**: an OSM tree within 3 m of a cadastre tree is taken to be it
-  (2 564 dropped), leaving **1 820** (854 / 251 / 369 / 346 per tile,
-  `s: "osm"`, 207 with a genus) — courts, the Zwinger, Free-State and
-  private ground. Their height/crown/circumference tags are read (53 / 1 /
+  the **trunk diameter** `t` (cm, 17 233 trees; a diameter implausible
+  for the tree's height — over 15 cm per metre, or over 4 m, 0.1 % of
+  the register — is dropped, not clamped). The viewer fits a measured
+  trunk's girth to the radius the trunk geometry draws at 1.3 m, its
+  flared foot included (× 1.3 for the seven-sided, barkless trunk;
+  `tree-inventory.ts` `trunkGirth` / `trunkRadiusAt`; a taper-only fit
+  drew a 25 m tree's trunk half as thick again), the height rule stays
+  where none is measured. **OSM trees**: the BBBike extract (2026-09-19)
+  has 6 018 `natural=tree` in the four tiles; 4 385 carry a taxon that
+  names a genus the classifier knows (`species`/`taxon`/`genus`, then
+  `species:de`/`genus:de`; German names such as "Platane" or "Gemeine
+  Fichte" mapped by their last word, a lower-case genus capitalised, an
+  unambiguous bare epithet such as `hippocastanum` read — a family or an
+  English name is no taxon) or at least `leaf_type` (which wins over a
+  taxon it contradicts; `leaf_cycle` sets the leaf type), the rest are
+  dropped (the DOM canopy covers unknown trees; no species is invented).
+  **The cadastre wins**: an OSM tree within 3 m of a cadastre tree — any
+  of the cached WFS answer, its 10 m margin across the seams included —
+  is taken to be it (2 565 dropped), leaving **1 820** (854 / 252 / 368 /
+  346 per tile, `s: "osm"`, 211 with a genus) — courts, the Zwinger,
+  Free-State and private ground. Their height/crown/circumference tags are read (53 / 1 /
   2 in the extract), the gaps filled from the cadastre's own statistics
   for the tile. They join the cadastre's veto path (`keepTree`), so an OSM
   tree replaces the canopy or laser-scan crown it stands in. The re-bake
@@ -554,7 +563,8 @@ visual-variable codebook is in
   the ginkgo bare within days, larch and dawn redwood rust then bare);
   evergreens never change; canopy and row trees (species unknown) follow a
   generic deciduous curve. `crown-season.ts` writes, **on a change of
-  calendar day only** (never per frame; throttled to one run per 150 ms),
+  calendar day only** (the local calendar the HUD composes the date in;
+  never per frame; throttled to one run per 150 ms),
   each crown's colour (summer green → the genus hue, divided by the crown
   material's base so it lands as itself) into the per-instance colour
   three already carries, and `aBare` = 1 − leaf into a per-chunk
@@ -570,7 +580,10 @@ visual-variable codebook is in
   shattered into flat brown shards up close, so it was replaced before
   shipping. A chunk in full leaf keeps the plain material (no
   discard, early depth test intact). A season change redraws the shadow
-  map. *Cost* (`scripts/eval/season-cost.ts`, the whole site, 58 988
+  map. Both crown materials and both crown depth programs are compiled
+  once per scene before the first tree lands (`crownWarmup`, stand-ins
+  through `PostStack.compile`), so the first date change across the leaf
+  fall compiles nothing inside a frame. *Cost* (`scripts/eval/season-cost.ts`, the whole site, 58 988
   crowns, CPU): 4–7 ms median per date change (July → October 6.4 ms,
   October → January 3.6 ms), under the plan's 16 ms bar; the upload is 16 B
   per crown. *Not seasonal:* hedges and trunks. *Unverified:* the autumn
