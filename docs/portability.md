@@ -19,7 +19,7 @@ is an open direction in [plans/README.md](./plans/README.md).
 
 **Sites and providers**
 ([ADR 0026](./adr/0026-one-site-config-per-build.md),
-[ADR 0028](./adr/0028-sites-providers-and-per-site-data.md)). A place is
+[ADR 0030](./adr/0030-sites-providers-and-per-site-data.md)). A place is
 `sites/<id>.ts`, typed by `lib/city/site.ts`: its `name` and HUD `label`,
 the tiles (`{e, n}` 2 km cells, the first is the spawn), the curated
 viewpoints, the sun's fallback position and the **provider** it draws on.
@@ -149,7 +149,7 @@ new source in the guide's data-sources page (both languages) and in
   refused in the environment that wrote it), and so is its XYZ gridding on
   real files.
 - **Data outside git** for deployments beyond a handful of sites
-  (ADR 0028, alternatives).
+  (ADR 0030, alternatives).
 - **Outside Germany** — OSM buildings, a flat or public-DEM terrain, and a
   CRS other than ETRS89 / UTM 32/33 — is not planned beyond the Direction
   option in [plans/README.md](./plans/README.md).

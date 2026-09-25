@@ -37,7 +37,8 @@ pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
 camera, so casters outside the view stay loaded. A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
-heavy part (vegetation, lamps, rails, walls on the fine terrain level) waits
+heavy part (vegetation, lamps, rails on the fine terrain level; its walls
+and stairs are baked into the glTF) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
 chip. Every tile change re-renders the shadow map. The layers:
 
@@ -50,7 +51,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
   tile. No CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
-  resampled with the wall breaklines burned in at bake time,
+  resampled with the wall breaklines burned in, the ground shaped under
+  OSM stairs, and the steps and wall ribbons as `stairs`/`walls` nodes, all
+  at bake time,
   `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
   land-cover material; also hangs the water and mist sheets.
 - `landcover-splat.ts` — paints the class raster with the one palette
@@ -262,7 +265,7 @@ because boot is the largest fixed cost left once frames are cheap. The
 
 ## Data pipeline
 
-The site is `SITE` in `.env.local` (ADR 0028); its data is `data/<site>/`.
+The site is `SITE` in `.env.local` (ADR 0030); its data is `data/<site>/`.
 Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
 `data/_raw/<provider>/{dom1,dop,dlm,osm,downloads}`, shared by the
 provider's sites; no Git-LFS. The build sources are the CityJSON **and the
@@ -285,7 +288,7 @@ CRS, land cover first:
 bun run fetch                          # download what the site needs (its provider's adapter)
 bun run bake                           # every tile, every step
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|rail
+bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|stairs|rail
 bun run test:pipeline                  # pytest + ruff
 ```
 

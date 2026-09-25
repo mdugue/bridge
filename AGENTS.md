@@ -8,7 +8,7 @@ A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
 rendering of a German city built from open geodata and walk (or fly) through
 it. Dresden is the reference site; Leipzig, Meißen, Grimma, Hamburg, München,
 Berlin and Unna are configured too — **one site per build**, chosen by `SITE`
-in `.env.local` (ADR 0026, 0028).
+in `.env.local` (ADR 0026, 0030).
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
 rasters, surfaces (roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover
 class raster (painted with one palette at runtime), and trees from DLM
@@ -106,8 +106,10 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`, `shader-chunks.ts`
-    (data-frame positions from world space)
+    `rail-layer.ts`, `wall-layer.ts` and `stair-layer.ts` (only their
+    materials: walls and stairs are baked into the fine terrain glTF),
+    `lamp-layer.ts`,
+    `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
@@ -134,16 +136,16 @@ config change.
   label, tiles, viewpoints, the provider) registered in `index.ts`, and
   `providers.ts` — one entry per Land (CRS, licence + credit, open products,
   OSM extract). `SITE` (`.env.local`, default `dresden`) picks the site at
-  build time (ADR 0026, 0028)
+  build time (ADR 0026, 0030)
 - `pipeline/` — the offline pipeline, one Python package in a uv environment:
   the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
   per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
   converts LoD2 CityGML → CityJSON, `net.py` downloads incl. single members
   of remote ZIPs) and the bakes (`landcover.py` + `landcover_osm.py`,
   `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`,
-  `rail.py`, `osm.py`); tests in `pipeline/tests/`. Run by `bun run fetch` /
-  `bun run bake` (`scripts/pipeline.ts`, which hands Python the site as one
-  JSON spec, `bake/spec.py`) — see ADR 0025, 0028
+  `stairs.py`, `rail.py`, `osm.py`); tests in `pipeline/tests/`. Run by
+  `bun run fetch` / `bun run bake` (`scripts/pipeline.ts`, which hands
+  Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0030
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
   `tileset-spawn.json`) with glTF content under content-hashed names +
@@ -158,7 +160,7 @@ config change.
 - `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
   `dlm/`, `dop/` (derived), `provenance.json`. Only `data/dresden/` is
   committed; other sites' folders are gitignored until the maintainer
-  un-ignores one to deploy it (ADR 0028). `data/_raw/<provider>/` is
+  un-ignores one to deploy it (ADR 0030). `data/_raw/<provider>/` is
   **gitignored** bulk downloads, shared by the provider's sites.
   `public/data/` is generated, gitignored.
 - `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
@@ -238,7 +240,7 @@ under `data/<site>/{dgm,cityjson}`: `prepare-data.ts` bakes terrain and
 buildings from them and the canopy/rail bakes read the DGM. Dresden's are
 committed (13–15 MB DGM per tile, as downloaded); the fetch step writes new
 ones compact (~6 MB). Committing another site's folder is the maintainer's
-call (ADR 0028). No Git-LFS. Derived per-tile artifacts
+call (ADR 0030). No Git-LFS. Derived per-tile artifacts
 (`data/<site>/dlm/*.png|json|geojson`, `data/<site>/dop/*.json`) are small;
 `prepare-data.ts` publishes them to `public/data/` at build. Pipeline notes:
 
@@ -257,8 +259,9 @@ call (ADR 0028). No Git-LFS. Derived per-tile artifacts
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
-- All OSM layers (walls, lamps, platforms, bridge structure) come from the
-  site's Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass.
+- All OSM layers (walls, cliffs, stairs, lamps, platforms, bridge
+  structure) come from the site's Geofabrik `.osm.pbf` via GDAL's OSM
+  driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
@@ -348,7 +351,8 @@ scene: it re-renders everything into a buffer each frame (~2× cost).
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps, rails and walls are built tile by tile behind a HUD chip
+lamps and rails are built tile by tile behind a HUD chip (stairs and
+walls are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). `onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow
@@ -502,7 +506,7 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   plan 020 behind a spike on a real GPU; don't start the port before the
   maintainer has the spike's plates and numbers
 - Committing raw bulk geodata, or switching on Git-LFS; committing another
-  site's `data/<site>/` (a size decision, ADR 0028)
+  site's `data/<site>/` (a size decision, ADR 0030)
 
 <!-- BEGIN:nextjs-agent-rules -->
 

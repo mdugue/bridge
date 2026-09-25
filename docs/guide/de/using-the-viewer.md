@@ -141,9 +141,11 @@ zurück, sobald du stehst.
 - **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
-Die Fußzeile nennt die Datenquellen: die sächsische Landesvermessung für
-die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden für Lampen,
-Mauern, Bahnsteige und Brückentragwerke. Daneben führt *Unterstützen* zur
+Die Fußzeile nennt die Datenquellen: die Landesvermessung (in Dresden
+die sächsische) für die amtlichen Datensätze und die
+OpenStreetMap-Mitwirkenden für Lampen, Mauern, Treppen, Bahnsteige und
+Brückentragwerke (und die Landbedeckung, wo das Land kein Basis-DLM
+veröffentlicht). Daneben führt *Unterstützen* zur
 Ko-fi-Seite des Projekts; es ist ein einfacher Link, der erst beim Klick
 etwas von Ko-fi lädt.
 

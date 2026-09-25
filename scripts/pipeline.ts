@@ -10,7 +10,8 @@
  *   bun run bake [tile…]              bake the derived artifacts
  *                                     (→ data/<site>/dlm, dop)
  *   bun run bake --step canopy        one step (landcover, canopy, ndvi,
- *                                     roof-colour, lamps, walls, rail)
+ *                                     roof-colour, lamps, walls, stairs,
+ *                                     rail)
  *
  * The site config (sites/) becomes one JSON spec (pipeline/bake/spec.py), so
  * Python never re-derives tiles, extents or products. Then `bun dev` /

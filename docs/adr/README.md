@@ -37,7 +37,9 @@ each data → look transformation does and its status.
 | [0025](./0025-bakes-are-one-python-package.md) | The bakes are one Python package in a uv environment; OSM comes only from a local extract | accepted |
 | [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted |
 | [0027](./0027-webgpu-renderer-and-tsl.md) | Move to WebGPURenderer and TSL node materials | proposed (GPU spike, plan 020) |
-| [0028](./0028-sites-providers-and-per-site-data.md) | Sites pick a provider; data per site, downloads per provider; fetch → bake → build | accepted |
+| [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
+| [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
+| [0030](./0030-sites-providers-and-per-site-data.md) | Sites pick a provider; data per site, downloads per provider; fetch → bake → build | accepted |
 
 ## Format
 

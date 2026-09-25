@@ -52,7 +52,7 @@ next-env.d.ts
 
 # Site data: data/<site>/ is what `bun run fetch` and `bun run bake` write
 # for a site, data/_raw/<provider>/ the bulk downloads (never committed).
-# A site's folder is committed only by decision (ADR 0028): un-ignore it
+# A site's folder is committed only by decision (ADR 0030): un-ignore it
 # below to deploy it from git. `bun run site` prints its size.
 /data/*
 !/data/dresden/

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import argparse
 
-from . import canopy, fetch, lamps, landcover, ndvi, rail, roof_colour, walls
+from . import canopy, fetch, lamps, landcover, ndvi, rail, roof_colour, stairs, walls
 from .spec import parse
 
 STEPS = {
@@ -17,6 +17,7 @@ STEPS = {
     "roof-colour": roof_colour.run,
     "lamps": lamps.run,
     "walls": walls.run,
+    "stairs": stairs.run,
     "rail": rail.run,
 }
 

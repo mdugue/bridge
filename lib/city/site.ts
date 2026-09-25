@@ -8,7 +8,7 @@
  *
  * What belongs to the Land rather than the place — CRS, licence and credit,
  * which products are open, the OSM extract — is the `Provider`, shared by
- * every site of that Land (ADR 0028).
+ * every site of that Land (ADR 0030).
  */
 
 import type { FacadeMaterial } from "./building-tint";
@@ -206,8 +206,8 @@ export function siteTitle(site: Site): string {
 /** The OSM credit, naming what the site takes from OSM. */
 function osmCredit(site: Site): string {
   const layers = site.provider.products.dlm
-    ? "Lampen, Mauern, Bahnsteige und Brücken"
-    : "Landbedeckung, Lampen, Mauern, Bahnsteige und Brücken";
+    ? "Lampen, Mauern, Treppen, Bahnsteige und Brücken"
+    : "Landbedeckung, Lampen, Mauern, Treppen, Bahnsteige und Brücken";
   return `${layers} © OpenStreetMap-Mitwirkende (ODbL)`;
 }
 

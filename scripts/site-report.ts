@@ -1,7 +1,7 @@
 /**
  * `bun run site [--all]`: where the site `SITE` names stands — per tile,
  * what is on disk and the command that moves it forward — and how much its
- * data folder weighs (the number the commit decision needs, ADR 0028).
+ * data folder weighs (the number the commit decision needs, ADR 0030).
  * `--all` prints one line per registered site.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";

@@ -144,8 +144,8 @@ GeoSN, dl-de/by-2-0“.
 
 **OSM / Overpass** — *OpenStreetMap*, die Freiwilligen-Weltkarte, kartiert
 aus GPS-Spuren, Begehungen und abgezeichneten Luftbildern, laufend
-aktualisiert, ohne Genauigkeitsgarantie. Lampen, Mauern, Bahnsteige und
-Brücken-Tragwerkstypen des Viewers stammen daraus; die Bakes lesen sie aus
+aktualisiert, ohne Genauigkeitsgarantie. Lampen, Mauern, Treppen, Bahnsteige
+und Brücken-Tragwerkstypen des Viewers stammen daraus; die Bakes lesen sie aus
 dem Geofabrik-Auszug. Die *Overpass-API* ist ein Live-Abfragedienst dafür;
 die Bakes nutzen sie nicht mehr, aber die eingecheckten Lampen-,
 Bahnsteig- und Brückentragwerk-Dateien wurden noch über sie geholt.

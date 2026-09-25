@@ -74,8 +74,7 @@ export type TileArtifactKind =
   | "platform"
   | "rail"
   | "railarea"
-  | "vegrows"
-  | "walls";
+  | "vegrows";
 
 /**
  * Every side file of a tile — the ONE list scripts/prepare-data.ts publishes
@@ -106,13 +105,31 @@ export function tileArtifacts(
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
-    walls: dlm(`walls_${tile}.geojson`),
   };
 }
 
 /** Where a side file's source lives (`tileArtifacts` names the file). */
 export function sideFileSource(site: Site, file: string): string {
   return `${siteDataDir(site)}/dlm/${file}`;
+}
+
+/** The OSM walls (pipeline/bake/walls.py): a terrain bake input under
+ *  data/<site>/dlm/ — burned into the ground as breaklines, and stood as
+ *  ribbons in the fine terrain glTF — never served. */
+export function wallSourceFile(site: Site, tile: string): string {
+  return `${siteDataDir(site)}/dlm/walls_${tile}.geojson`;
+}
+
+/** The stairs (pipeline/bake/stairs.py): a terrain bake input under
+ *  data/<site>/dlm/ — the fine terrain glTF carries them — never served. */
+export function stairSourceFile(site: Site, tile: string): string {
+  return `${siteDataDir(site)}/dlm/stairs_${tile}.geojson`;
+}
+
+/** The terraces (raised OSM areas, pipeline/bake/stairs.py): a terrain
+ *  bake input under data/<site>/dlm/, never served. */
+export function terraceSourceFile(site: Site, tile: string): string {
+  return `${siteDataDir(site)}/dlm/terraces_${tile}.geojson`;
 }
 
 /** The DGM GeoTIFF (+ its .tfw sidecar) the heightfield bake reads. */

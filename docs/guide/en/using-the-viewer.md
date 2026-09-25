@@ -136,9 +136,10 @@ cannot resolve it in motion) and comes back when you stop.
 - **Statistik** — number of buildings and terrain points currently in
   view, estimated graphics memory and the frame rate.
 
-The footer credits the data sources: the Saxon survey office for the
-official datasets and OpenStreetMap contributors for lamps, walls,
-platforms and bridge structures. Next to it, *Unterstützen* (support)
+The footer credits the data sources: the Land's survey office (in
+Dresden the Saxon one) for the official datasets and OpenStreetMap
+contributors for lamps, walls, stairs, platforms and bridge structures
+(and the land cover where the Land publishes no Basis-DLM). Next to it, *Unterstützen* (support)
 leads to the project's Ko-fi page; it is a plain link that loads nothing
 from Ko-fi until it is clicked.
 

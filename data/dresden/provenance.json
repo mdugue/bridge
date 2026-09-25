@@ -11,7 +11,7 @@
   "geosn": {
     "DGM1": {
       "layer": 6,
-      "committed": "data/dgm/dgm1_<tile>_tiff/",
+      "committed": "data/dresden/dgm/dgm1_<tile>_tiff/",
       "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5656_2_sn_tiff.zip" },
@@ -23,7 +23,7 @@
     "DOM1": {
       "layer": 4,
       "committed": null,
-      "raw": "data/_raw/<site>/dom1/<tile>.tif (+ .tfw), via pipeline/bake/ingest_sn.py",
+      "raw": "data/_raw/sn/dom1/<tile>.tif (+ .tfw), via pipeline/bake/providers/sn.py",
       "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
@@ -46,7 +46,7 @@
     "LoD2": {
       "$comment": "`stand` is the model's production year with the currency of its inputs in parentheses (laser scan for the roofs, Basis-DLM for the footprints, DGM for the ground); `creationDate` inside the CityJSON is the export date of each object.",
       "layer": 3,
-      "committed": "data/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
+      "committed": "data/dresden/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
       "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/roof_colour.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-06-28 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5656_2_sn_citygml.zip" },
@@ -58,8 +58,8 @@
     "DOP_RGBI": {
       "$comment": "`stand` is the flight date. 19 March 2024 is a leaf-off spring flight: deciduous crowns are bare, which is why the NDVI raster is low and median-centred and the crown colour remap recentres on that median.",
       "layer": 17,
-      "committed": "derived only: data/dop/roofcolor_<tile>.json, data/dlm/ndvi_<tile>.png",
-      "raw": "data/_raw/<site>/dop/<tile>.tif, via pipeline/bake/ingest_sn.py",
+      "committed": "derived only: data/dresden/dop/roofcolor_<tile>.json, data/dresden/dlm/ndvi_<tile>.png",
+      "raw": "data/_raw/sn/dop/<tile>.tif, via pipeline/bake/providers/sn.py",
       "usedBy": ["pipeline/bake/roof_colour.py", "pipeline/bake/ndvi.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5656_2_sn_tiff.zip" },
@@ -70,8 +70,8 @@
     },
     "Basis-DLM": {
       "$comment": "One statewide package, replaced quarterly under the same URL, so the edition of a past download cannot be read from the portal afterwards. The derived files were baked from the package current in June 2026 (commits of 2026-06-12) and re-baked for rails and walls on 2026-09-18 and for rails, ballast and bridges again on 2026-09-24 (package downloaded that day); the package on the share was dated 2026-07-28 (Last-Modified, 1.23 GB) when this file was written. Record the package's Last-Modified and the metadata inside the ZIP at the next download.",
-      "committed": "derived only: data/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge_<tile>.geojson",
-      "raw": "data/_raw/<site>/dlm/*.shp, via pipeline/bake/ingest_sn.py",
+      "committed": "derived only: data/dresden/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge_<tile>.geojson",
+      "raw": "data/_raw/sn/dlm/*.shp, via pipeline/bake/providers/sn.py",
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
       "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
@@ -83,21 +83,31 @@
       "$comment": "How the lamp, platform and bridge-structure files were fetched until 2026-09-24 (the bash bakes). Every OSM layer is now read from the Geofabrik extract below; kept for the history.",
       "endpoint": "https://overpass-api.de/api/interpreter",
       "products": {
-        "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
-        "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dlm/platform_*.geojson)" },
+        "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dresden/dlm/lamps_*.geojson)" },
+        "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dresden/dlm/platform_*.geojson)" },
         "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" }
       }
     },
     "geofabrik": {
       "$comment": "Regional extract read by pipeline/bake/osm.py (walls, lamps, platforms, bridge structure). `osmium fileinfo -e <file>` prints the extract's replication timestamp.",
       "download": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
-      "raw": "data/_raw/<site>/osm/*.osm.pbf",
+      "raw": "data/_raw/sn/osm/*.osm.pbf",
       "extract": "sachsen-260615.osm.pbf (Geofabrik, 2026-06-15)",
       "products": {
         "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; identical geometry)" },
         "lamps": { "query": "highway=street_lamp", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; the same lamps as the Overpass bake)" },
         "platforms": { "query": "railway=platform, or public_transport=platform on a railway feature; each platform owned by the tile its centroid lies in", "dataAsOf": "2026-06-15 (re-baked 2026-09-24)" },
         "bridgeStructure": { "query": "man_made=bridge bridge:structure", "dataAsOf": "2026-06-15 (re-baked 2026-09-24)" }
+      }
+    },
+    "bbbike": {
+      "$comment": "City extract used where download.geofabrik.de is unreachable (it resets connections from the Claude Code cloud container). Same OSM data and licence, cut to a bounding box (13.43–14.18 E, 50.88–51.23 N) that covers every Dresden tile; osm.py reads whichever .osm.pbf under osm/ is newest.",
+      "download": "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf",
+      "raw": "data/_raw/sn/osm/Dresden.osm.pbf",
+      "extract": "Dresden.osm.pbf (BBBike, Last-Modified 2026-09-19)",
+      "products": {
+        "stairs": { "query": "highway=steps (+ area:highway=steps outlines and barrier=wall/retaining_wall/city_wall for the width)", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" },
+        "terraces": { "query": "multipolygons on layer >= 1 (no building, man_made, landuse, bridge, railway or public_transport) that a flight the DGM runs flat under climbs onto", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" }
       }
     }
   }
