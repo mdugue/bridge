@@ -190,6 +190,16 @@ reviews after phases 1–3 and at the end.
   read only OSM and the class raster, so no provider needs its own path.
   The one Saxon leftover was the `/wissen` hero caption crediting GeoSN
   for every site (now `landcoverCredit`).
+- **Main's TIN terrain, hedges, scan trees and tree cadastre:** the fine
+  TIN terrain builds for every fetched site (checked on Dresden, Unna,
+  Grimma, Hamburg, München); the OSM hedges were baked for all six. The
+  two inputs main fetched inside the old `ingest_sn.py` became part of the
+  model: the street-tree register is `Site.treeCadastre` (Dresden's WFS,
+  `bake/cadastre.py`), the laser scan `Provider.products.lsc` (Saxony,
+  `bun run fetch --lsc`, read from the batch page — the link service's
+  share answered 503). NRW, Bavaria, Hamburg and Berlin publish laser
+  scans too; their adapters do not read them yet, and no other city's
+  tree register is wired.
 - **Berlin is configured but not fetched:** `gdi.berlin.de` failed TLS
   from the container; the adapter follows the ATOM feeds' documented URLs.
   The block is 3×2 so that both the Brandenburger Tor and the Fernsehturm
