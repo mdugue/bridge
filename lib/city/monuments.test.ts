@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import {
   basinLevels,
-  fountainFigure,
   insideRing,
   jetHeight,
   jetPlaces,
+  onRelief,
   openRing,
+  reliefSurface,
   ringArea,
   ringCentre,
   yawOf,
@@ -23,8 +24,8 @@ const square = (s: number): Point2[] => [
 test("a basin on a slope is footed below the low side, rimmed above the high one", () => {
   const levels = basinLevels([110, 111, 110.4], "basin");
   expect(levels?.base).toBeCloseTo(109.7);
-  expect(levels?.rim).toBeCloseTo(111.5);
-  expect(levels?.water).toBeCloseTo(111.4);
+  expect(levels?.rim).toBeCloseTo(111.35);
+  expect(levels?.water).toBeCloseTo(111.27);
 });
 
 test("a splash pad has no rim: the water is the paving", () => {
@@ -76,9 +77,29 @@ test("a monument's yaw is stable and in range", () => {
   expect(a).toBeLessThan(Math.PI * 2);
 });
 
-test("a fountain's figure grows with its basin, within bounds", () => {
-  expect(fountainFigure(4).figure).toBe(1.6);
-  expect(fountainFigure(100).figure).toBeCloseTo(2.8);
-  expect(fountainFigure(10_000).figure).toBe(4.5);
-  expect(fountainFigure(100).height).toBeCloseTo(0.45 * 2.8);
+test("a relief is smoothed into one form that settles into the ground", () => {
+  // A 2 × 2 m block 4 m tall, padded by one empty cell (as the bake writes).
+  const dm = [0, 0, 0, 0, 0, 40, 40, 0, 0, 40, 40, 0, 0, 0, 0, 0];
+  const s = reliefSurface({ cols: 4, rows: 4, west: 100, north: 200, dm });
+  expect(s.cols).toBe(17);
+  expect(s.rows).toBe(17);
+  expect(s.step).toBe(0.25);
+  const at = (row: number, col: number) => s.heights[row * s.cols + col];
+  // Softened, not taller than measured, and highest in the middle.
+  expect(at(8, 8)).toBeLessThanOrEqual(4);
+  expect(at(8, 8)).toBeGreaterThan(3);
+  expect(at(8, 8)).toBeGreaterThan(at(8, 5));
+  // The fringe sinks under the paving rather than lying on it.
+  expect(at(0, 0)).toBeLessThan(0);
+  expect(at(16, 16)).toBeLessThan(0);
+  // Symmetric input, symmetric form.
+  expect(at(4, 8)).toBeCloseTo(at(12, 8));
+});
+
+test("a point on a measured relief cell is on it; its padding is not", () => {
+  const dm = [0, 0, 0, 0, 50, 0, 0, 0, 0];
+  const relief = { cols: 3, rows: 3, west: 100, north: 200, dm };
+  expect(onRelief([relief], 101.5, 198.5)).toBe(true);
+  expect(onRelief([relief], 100.5, 199.5)).toBe(false);
+  expect(onRelief([relief], 90, 190)).toBe(false);
 });

@@ -1,22 +1,23 @@
 /**
  * How the monument layer sizes and seats what pipeline/bake/monuments.py
  * writes: the basin levels over sloping ground, a jet's height, where the
- * jets around a figure stand, and the fixed proportions of statues, stones
- * and columns. Plain numbers in, plain numbers out. No THREE, no DOM.
+ * jets around a sculpture stand, the smoothed surface of a measured
+ * relief, and the markers of monuments nothing measured. Plain numbers in,
+ * plain numbers out. No THREE, no DOM.
  */
-import type { FountainStyle, MonumentKind } from "./features";
+import type { FountainStyle, MonumentKind, ReliefGrid } from "./features";
 import type { Point2 } from "./polyline";
 
 /** A fountain without an outline (a DLM point, an OSM node): its basin radius (m). */
 export const POINT_BASIN_R = 2.2;
 /** Rim height above the highest ground under the basin (m), per style. */
 const RIM_H: Record<FountainStyle, number> = {
-  basin: 0.5,
-  pool: 0.3,
+  basin: 0.35,
+  pool: 0.2,
   splash: 0,
 };
 /** The water stands this far below the rim's top (m). */
-const FREEBOARD = 0.1;
+const FREEBOARD = 0.08;
 /** The rim's footing reaches this far below the lowest ground (m): on a slope
  *  the uphill side must not float. */
 const FOOTING = 0.3;
@@ -134,45 +135,130 @@ export function jetPlaces(
   return water ? around.filter((p) => insideRing(p, water)) : around;
 }
 
-export interface MonumentShape {
-  /** pedestal / stone / shaft footprint (m) */
-  width: number;
-  depth: number;
-  /** pedestal / stone / shaft height (m) */
-  height: number;
-  /** the figure standing on it (m); 0 = none */
-  figure: number;
+/**
+ * A monument nothing measured (too small for the 1 m surface model, or under
+ * a tree): an abstract marker in the scene's clay — a rounded pillar for a
+ * statue, a low slab for a stone, a slender shaft for a column. No figure
+ * pretends to know what stands there (m).
+ */
+export const MARKER_SHAPE: Record<
+  Exclude<MonumentKind, "fountain">,
+  { depth: number; height: number; width: number }
+> = {
+  statue: { width: 0.7, depth: 0.7, height: 2.2 },
+  stone: { width: 0.9, depth: 0.32, height: 1 },
+  column: { width: 0.5, depth: 0.5, height: 4.5 },
+};
+
+/** Samples per metre of a smoothed relief (0.25 m). */
+export const RELIEF_SUB = 4;
+/** Below this the smoothed relief sinks under the ground (m), so its fringe
+ *  does not lie on the paving as a film. */
+const RELIEF_FLOOR = 0.08;
+const RELIEF_SINK = -0.25;
+
+export interface ReliefSurface {
+  /** heights above ground (m) at the samples, row-major from the north */
+  heights: Float32Array;
+  /** projected coordinates of sample (0, 0) — the north-west corner */
+  north: number;
+  west: number;
+  cols: number;
+  rows: number;
+  /** sample spacing (m) */
+  step: number;
+}
+
+/** The baked 1 m cell at (row, col), 0 outside the grid. */
+function cellAt(r: ReliefGrid, row: number, col: number): number {
+  if (row < 0 || col < 0 || row >= r.rows || col >= r.cols) {
+    return 0;
+  }
+  return (r.dm[row * r.cols + col] ?? 0) / 10;
+}
+
+/** Bilinear between the cell centres at a point `dx`, `dy` metres east and
+ *  south of the grid's north-west corner. */
+function bilinear(r: ReliefGrid, dx: number, dy: number): number {
+  const fx = dx - 0.5;
+  const fy = dy - 0.5;
+  const c0 = Math.floor(fx);
+  const r0 = Math.floor(fy);
+  const tx = fx - c0;
+  const ty = fy - r0;
+  const top = cellAt(r, r0, c0) * (1 - tx) + cellAt(r, r0, c0 + 1) * tx;
+  const bottom =
+    cellAt(r, r0 + 1, c0) * (1 - tx) + cellAt(r, r0 + 1, c0 + 1) * tx;
+  return top * (1 - ty) + bottom * ty;
+}
+
+/** One [1, 2, 1] / 4 pass along rows (`dx` 1) or columns (`dx` = cols). */
+function blurPass(
+  src: Float32Array<ArrayBuffer>,
+  cols: number,
+  rows: number,
+  alongRows: boolean
+): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(src.length);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      const [a, b] = alongRows
+        ? [c > 0 ? src[i - 1] : 0, c < cols - 1 ? src[i + 1] : 0]
+        : [r > 0 ? src[i - cols] : 0, r < rows - 1 ? src[i + cols] : 0];
+      out[i] = (a + 2 * src[i] + b) / 4;
+    }
+  }
+  return out;
 }
 
 /**
- * The DLM gives a monument's position and name, never its size: these are
- * the proportions of a typical one — a figure on a plinth, a memorial stone,
- * a (post-mile) column.
+ * The measured relief as a smooth surface: the 1 m cells interpolated to
+ * `RELIEF_SUB` samples per metre and softened once with a small binomial
+ * kernel, so the stair-stepped laser grid reads as one modelled form. The
+ * fringe below `RELIEF_FLOOR` drops under the ground.
  */
-export const MONUMENT_SHAPE: Record<
-  Exclude<MonumentKind, "fountain">,
-  MonumentShape
-> = {
-  statue: { width: 1.3, depth: 1.3, height: 1.7, figure: 2.1 },
-  stone: { width: 0.8, depth: 0.35, height: 1.1, figure: 0 },
-  column: { width: 0.7, depth: 0.7, height: 7, figure: 0 },
-};
+export function reliefSurface(r: ReliefGrid): ReliefSurface {
+  const step = 1 / RELIEF_SUB;
+  const cols = r.cols * RELIEF_SUB + 1;
+  const rows = r.rows * RELIEF_SUB + 1;
+  let heights = new Float32Array(cols * rows);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      heights[row * cols + col] = bilinear(r, col * step, row * step);
+    }
+  }
+  for (let pass = 0; pass < 1; pass++) {
+    heights = blurPass(heights, cols, rows, true);
+    heights = blurPass(heights, cols, rows, false);
+  }
+  for (let i = 0; i < heights.length; i++) {
+    if (heights[i] < RELIEF_FLOOR) {
+      heights[i] = RELIEF_SINK;
+    }
+  }
+  return { heights, north: r.north, west: r.west, cols, rows, step };
+}
 
 /**
- * The plinth a fountain's figure stands on (above the water) and the figure,
- * grown with the basin: a sculpture group in an 18 m basin (Albertplatz)
- * is not a putto in a trough (m).
+ * Whether a projected point stands on a measured relief (a cell the bake
+ * kept). The canopy bake reads the same DOM1 and plants a "tree" on any
+ * tall enough texel in a park — a statue there included; where the DLM
+ * names a monument and its body was measured, the monument wins.
  */
-export function fountainFigure(areaM2: number): {
-  figure: number;
-  height: number;
-  width: number;
-} {
-  const figure = Math.min(
-    Math.max(0.28 * Math.sqrt(Math.max(areaM2, 0)), 1.6),
-    4.5
-  );
-  return { figure, height: 0.45 * figure, width: 0.6 * figure };
+export function onRelief(
+  reliefs: readonly ReliefGrid[],
+  x: number,
+  y: number
+): boolean {
+  for (const r of reliefs) {
+    const col = Math.floor(x - r.west);
+    const row = Math.floor(r.north - y);
+    if (cellAt(r, row, col) > 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** A stable yaw (radians) from a position, so statues do not all face north

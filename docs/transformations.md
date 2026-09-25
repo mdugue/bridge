@@ -175,16 +175,25 @@ visual-variable codebook is in
   their official names; GeoSN) conflated with OSM's `amenity=fountain`
   points and basin outlines (ODbL; the DLM names none of its monuments a
   fountain and gives no basin size). A DLM monument on an OSM fountain names
-  it and stands in it as a figure; the other OSM fountains are added.
-  `pipeline/bake/monuments.py` → `monument-layer.ts`: basins are the OSM
-  outline extruded into a sandstone rim (the water its 0.35 m inset) seated
-  over the highest ground under it, with jets that grow with the basin
-  (splash pads flush, reflecting pools still); a point fountain is a 2.2 m
-  round basin; statues are one stylised bronze figure on a plinth, stones
-  a slab, columns a 7 m shaft — the DLM gives no shape, so these are fixed
-  proportions (`lib/city/monuments.ts`). Instanced/merged, six draw calls
-  per tile. Not walk-blocking (collision is buildings only); the jets are
-  static.
+  it; the other OSM fountains are added. **What a monument looks like is in
+  no register, but its bulk is measured:** DOM1 − DGM1 (the canopy's nDOM)
+  holds the sculpture groups of the Albertplatz fountains as ~4 × 5 m bodies
+  3.7 m tall, the Goldener Reiter as 7 m. Where that body stands clear — one
+  connected patch within 6 m (or inside the basin's water), ≤ 60 cells,
+  below 8.5 m and touching nothing taller (a leafless crown reads the same
+  on a 1 m grid) — the bake writes it as `relief` (27 of 174 monuments). 
+  `pipeline/bake/monuments.py` → `monument-layer.ts`: a relief is smoothed
+  (`reliefSurface`: ×4 bilinear, one binomial pass) into one soft form in
+  the buildings' clay, seated per sample on the terrain; a monument nothing
+  measured is an abstract clay marker (rounded pillar · slab · shaft,
+  `MARKER_SHAPE`) — no invented figure. Basins are the OSM outline as a low
+  clay rim (the water its 0.35 m inset) over the highest ground under it,
+  with translucent water bells that grow with the basin, round a measured
+  sculpture when there is one (splash pads flush, reflecting pools still);
+  a point fountain is a 2.2 m round basin. The canopy loses the "trees" its
+  own bake planted on a measured monument (`onRelief`). Merged/instanced,
+  six draw calls per tile. Not walk-blocking (collision is buildings only);
+  the jets are static.
 
 ### Railway & bridges
 All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in

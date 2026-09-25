@@ -68,13 +68,28 @@ export type MonumentKind = "column" | "fountain" | "statue" | "stone";
  *  paving (a splash pad), or a still pool without any. */
 export type FountainStyle = "basin" | "pool" | "splash";
 
+/**
+ * A monument's measured bulk: DOM1 − DGM1 on the 1 m grid, the patch that
+ * stands clear of trees and facades, padded by one empty cell. Heights in
+ * decimetres, row-major from the north-west corner (`west`, `north`).
+ */
+export interface ReliefGrid {
+  cols: number;
+  dm: number[];
+  north: number;
+  rows: number;
+  west: number;
+}
+
 export interface MonumentFeature {
   geometry: PointGeometry | PolygonGeometry;
   properties: {
-    /** a fountain with a DLM monument on it: a figure stands in the water */
+    /** a fountain with a DLM monument in it (its sculpture is measured) */
     figure?: boolean;
     kind: MonumentKind;
     name?: string;
+    /** the measured sculpture or monument (pipeline/bake/monuments.py) */
+    relief?: ReliefGrid;
     source?: "dlm" | "dlm+osm" | "osm";
     style?: FountainStyle;
   } | null;

@@ -17,15 +17,27 @@ ones. So OSM's `amenity=fountain` (points and basin outlines, ODbL) fills in:
 
 A basin outline is written as a Polygon ring — the rim, its hole the water
 (the outline inset by the rim width); a basin too small to inset is a solid
-bowl. Everything else is a Point. Each tile writes only what it owns
+bowl. Everything else is a Point.
+
+What a monument or a fountain's sculpture *looks* like is in no register,
+but its bulk is measured: the DOM1 surface model minus the DGM1 terrain
+(the same nDOM the canopy bake reads) shows the sculpture groups of the
+Albertplatz fountains as ~4 × 5 m bodies 3.7 m tall, the Goldener Reiter
+as 7 m. Where that body stands clear — one connected patch, not merging
+into a tree crown or a facade — it is written as `relief`: the patch's
+heights above ground on the 1 m grid, which the viewer smooths into a
+clay form. A monument too small for a 1 m grid, or lost under a tree, has
+none (the viewer draws a marker). Each tile writes only what it owns
 (its representative point; west/south edges in, lib/city/tileset.ts
 `ownsPoint`), so a fountain on a seam stands once."""
 
 from __future__ import annotations
 
 import re
+from collections import deque
 
 import numpy as np
+import rasterio
 import shapely
 
 from .common import (
@@ -51,6 +63,12 @@ MATCH_M = 6.0
 RIM_M = 0.35  # the basin rim's width (m)
 MIN_BASIN_M2 = 1.0  # smaller outlines are a spout, drawn as a point fountain
 SEAM_M = 50.0  # read margin around the tile (m)
+# The relief: nDOM cells taller than this belong to a sculpture (m).
+RELIEF_MIN_H = 0.7
+RELIEF_MAX_H = 8.5  # taller: a leafless crown reads the same; drop it
+RELIEF_MAX_M2 = 60  # cells; larger patches are canopy or buildings
+SEED_M = 2.5  # the tallest cell this close to a monument point seeds it
+REACH_M = 6  # a monument's patch must end within this radius
 
 
 def dlm_kind(bwf: str | None, name: str | None) -> str:
@@ -187,23 +205,168 @@ def properties(item: dict) -> dict:
     return props
 
 
+def _flood(ok: np.ndarray, seed: tuple[int, int]) -> np.ndarray:
+    """The 8-connected patch of `ok` cells around `seed`."""
+    patch = np.zeros_like(ok)
+    todo = deque([seed])
+    patch[seed] = True
+    rows, cols = ok.shape
+    while todo:
+        r, c = todo.popleft()
+        for dr in (-1, 0, 1):
+            for dc in (-1, 0, 1):
+                rr, cc = r + dr, c + dc
+                if 0 <= rr < rows and 0 <= cc < cols and ok[rr, cc] and not patch[rr, cc]:
+                    patch[rr, cc] = True
+                    todo.append((rr, cc))
+    return patch
+
+
+def _cell_centres(window: tuple[int, int, int, int], origin: tuple[float, float]):
+    r0, c0, r1, c1 = window
+    west, north = origin
+    xs = west + np.arange(c0, c1) + 0.5
+    ys = north - np.arange(r0, r1) - 0.5
+    return np.meshgrid(xs, ys)
+
+
+def _touches(patch: np.ndarray, other: np.ndarray) -> bool:
+    """Whether `patch` is 8-adjacent to (or overlaps) any `other` cell."""
+    grown = patch.copy()
+    grown[1:, :] |= patch[:-1, :]
+    grown[:-1, :] |= patch[1:, :]
+    grown[:, 1:] |= grown[:, :-1].copy()
+    grown[:, :-1] |= grown[:, 1:].copy()
+    return bool((grown & other).any())
+
+
+def _patch_to_relief(heights: np.ndarray, patch: np.ndarray, window, origin) -> dict | None:
+    """The patch's bounding box (+1 empty cell round it, so the smoothed
+    form settles into the ground) as heights above ground in decimetres."""
+    if patch.sum() < 2:
+        return None
+    rows = np.flatnonzero(patch.any(axis=1))
+    cols = np.flatnonzero(patch.any(axis=0))
+    ra, rb = rows[0] - 1, rows[-1] + 2
+    ca, cb = cols[0] - 1, cols[-1] + 2
+    grid = np.zeros((rb - ra, cb - ca))
+    inner = np.where(patch, heights, 0.0)
+    src = inner[max(ra, 0) : rb, max(ca, 0) : cb]
+    grid[max(-ra, 0) : max(-ra, 0) + src.shape[0], max(-ca, 0) : max(-ca, 0) + src.shape[1]] = src
+    west, north = origin
+    r0, c0 = window[0], window[1]
+    return {
+        "west": round(west + c0 + ca, 1),
+        "north": round(north - r0 - ra, 1),
+        "cols": int(grid.shape[1]),
+        "rows": int(grid.shape[0]),
+        "dm": [int(round(v * 10)) for v in grid.ravel()],
+    }
+
+
+def measure_relief(
+    ndom: np.ndarray, origin: tuple[float, float], geom: shapely.Geometry, kind: str
+) -> dict | None:
+    """The sculpture's measured bulk as a `relief` grid, or None.
+
+    `ndom` is DOM1 − DGM1 on the 1 m grid whose north-west corner is
+    `origin`. A basin is searched inside its water (the jets are off in the
+    November flight); a point is seeded by the tallest cell within
+    `SEED_M` and grown through every touching cell above `RELIEF_MIN_H`.
+    The patch is dropped when it runs out of the `REACH_M` radius, grows
+    past `RELIEF_MAX_M2` cells or `RELIEF_MAX_H` metres: then it is a tree
+    or a facade the monument stands under or beside."""
+    area = largest_part(geom)
+    west, north = origin
+    reach = REACH_M
+    if area.geom_type == "Polygon":
+        water = shapely.Polygon(area.interiors[0]) if area.interiors else area
+        xmin, ymin, xmax, ymax = water.bounds
+        # The window is centred on the water, not on a point of the rim.
+        ax, ay = (xmin + xmax) / 2, (ymin + ymax) / 2
+        reach = int(max(xmax - xmin, ymax - ymin) / 2) + 2
+    else:
+        anchor = area.representative_point() if area.geom_type != "Point" else area
+        ax, ay = shapely.get_x(anchor), shapely.get_y(anchor)
+    ac, ar = int(ax - west), int(north - ay)
+    window = (ar - reach, ac - reach, ar + reach + 1, ac + reach + 1)
+    if window[0] < 0 or window[1] < 0 or window[2] > ndom.shape[0] or window[3] > ndom.shape[1]:
+        return None  # on the tile's edge: the neighbour's DOM1 is not read
+    heights = ndom[window[0] : window[2], window[1] : window[3]]
+    xs, ys = _cell_centres(window, origin)
+    tall = heights >= RELIEF_MAX_H
+    ok = (heights > RELIEF_MIN_H) & ~tall
+    if area.geom_type == "Polygon":
+        inside = shapely.contains_xy(water.buffer(-0.3), xs, ys)
+        ok &= inside
+        if not ok.any():
+            return None
+        # The largest body in the basin: the sculpture group, not a stray cell.
+        best, patch = 0, None
+        seen = np.zeros_like(ok)
+        for seed in zip(*np.nonzero(ok), strict=True):
+            if seen[seed]:
+                continue
+            p = _flood(ok, seed)
+            seen |= p
+            if p.sum() > best:
+                best, patch = int(p.sum()), p
+        assert patch is not None
+        # Branches under a crown: the body leans on something too tall.
+        if best > max(RELIEF_MAX_M2, 0.6 * water.area) or _touches(patch, tall):
+            return None
+        return _patch_to_relief(heights, patch, window, origin)
+    near = np.hypot(xs - ax, ys - ay) <= SEED_M
+    candidates = np.where(ok & near, heights, -1.0)
+    if candidates.max() <= 0:
+        return None
+    seed = np.unravel_index(int(np.argmax(candidates)), candidates.shape)
+    patch = _flood(ok, seed)
+    edge = patch[0, :].any() or patch[-1, :].any() or patch[:, 0].any() or patch[:, -1].any()
+    if edge or patch.sum() > RELIEF_MAX_M2 or _touches(patch, tall):
+        return None
+    return _patch_to_relief(heights, patch, window, origin)
+
+
+def _ndom(tile: Tile) -> np.ndarray | None:
+    if not tile.raw_raster("dom1").exists():
+        return None
+    with rasterio.open(tile.raw_raster("dom1")) as dom, rasterio.open(tile.dgm) as dgm:
+        return dom.read(1).astype(np.float64) - dgm.read(1).astype(np.float64)
+
+
 def run(tile: Tile) -> None:
     if not tile.has_dlm("the monuments"):
         return
     dlm = _dlm_points(tile)
     osm = _osm_fountains(tile) if has_extract(tile, "the OSM fountains") else []
+    ndom = _ndom(tile)
+    if ndom is None:
+        print(f"{tile.id}: no DOM1 — monuments without their measured relief")
+    origin = (tile.bounds[0], tile.bounds[3])
     features = []
     for item in conflate(dlm, osm):
         anchor = item["geom"].representative_point()
         if not owns(tile.bounds, shapely.get_x(anchor), shapely.get_y(anchor)):
             continue
-        features.append(feature(geometry_json(item["geom"]), properties(item)))
+        props = properties(item)
+        # A fountain without a monument in it has no sculpture to measure.
+        if ndom is not None and (item["kind"] != "fountain" or item["figure"]):
+            relief = measure_relief(ndom, origin, item["geom"], item["kind"])
+            if relief:
+                props["relief"] = relief
+        features.append(feature(geometry_json(item["geom"]), props))
     # Stable order: the committed file diffs by feature, not by read order.
     features.sort(key=lambda f: (f["properties"]["kind"], _anchor_key(f["geometry"])))
     credit = GEOSN_ATTRIBUTION + (f"; {OSM_ATTRIBUTION}" if osm else "")
     write_geojson(tile.out("dlm", f"monuments_{tile.id}.geojson"), features, tile.epsg, credit)
     kinds = {k: sum(f["properties"]["kind"] == k for f in features) for k in KINDS}
-    print(f"{tile.id}: monuments " + ", ".join(f"{n} {k}" for k, n in kinds.items()))
+    reliefs = sum("relief" in f["properties"] for f in features)
+    print(
+        f"{tile.id}: monuments "
+        + ", ".join(f"{n} {k}" for k, n in kinds.items())
+        + f"; {reliefs} with a measured relief"
+    )
 
 
 KINDS = ("fountain", "statue", "stone", "column")

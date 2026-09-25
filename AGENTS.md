@@ -235,7 +235,9 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
 - `monuments.py` takes the monuments (statues, stones, columns, named
   fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
   basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
-  names that fountain.
+  names that fountain. A monument's form is its measured nDOM patch
+  (`relief`, when it stands clear of trees/facades), smoothed at runtime —
+  never an invented figure.
 - All OSM layers (walls, lamps, fountains, platforms, bridge structure) come from the
   site's Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a

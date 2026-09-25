@@ -1,36 +1,42 @@
 import {
-  BoxGeometry,
+  BufferAttribute,
   type BufferGeometry,
-  CylinderGeometry,
+  CanvasTexture,
+  CapsuleGeometry,
   DoubleSide,
   ExtrudeGeometry,
   Group,
   InstancedMesh,
+  LatheGeometry,
   type Material,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Path,
+  PlaneGeometry,
   Quaternion,
   Shape,
   ShapeGeometry,
-  SphereGeometry,
   Vector2,
   Vector3,
 } from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { FountainStyle, MonumentFeature } from "@/lib/city/features";
+import type {
+  FountainStyle,
+  MonumentFeature,
+  ReliefGrid,
+} from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import {
   basinLevels,
-  fountainFigure,
-  insideRing,
   jetHeight,
   jetPlaces,
-  MONUMENT_SHAPE,
+  MARKER_SHAPE,
   openRing,
   POINT_BASIN_R,
+  reliefSurface,
   ringArea,
   ringCentre,
   yawOf,
@@ -41,25 +47,31 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 /**
  * Fountains, statues, memorial stones and columns
  * (`pipeline/bake/monuments.py`: the Basis-DLM's monuments with their
- * official names, OSM's fountain basins). The DLM gives a monument's place,
- * never its shape, so every statue is the same stylised figure on a plinth
- * (lib/city/monuments.ts); a fountain is its basin outline raised into a
- * sandstone rim with water in it, jets, and — when a DLM monument stands
- * in it — a figure. Built per fine terrain tile by the dressing plugin
- * (tile-stream.ts), in the Y-up frame; boxes, cylinders, figures and jets
- * are instanced, rims and water merged, so a tile is six draw calls.
- * Non-fatal: missing/empty inputs yield an empty group.
+ * official names, OSM's fountain basins, and the sculptures' bulk measured
+ * in DOM1 − DGM1). Nothing here invents a shape the data does not carry:
+ *
+ * - a measured monument or fountain sculpture is its relief, smoothed into
+ *   one soft form in the same pale clay as the buildings (lib/city/
+ *   monuments.ts `reliefSurface`) — the right size and silhouette, no
+ *   detail the 1 m grid does not have;
+ * - a monument nothing measured is an abstract marker in that clay;
+ * - a basin is its OSM outline as a low clay rim around still water, and a
+ *   jet a translucent water bell rising from it.
+ *
+ * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
+ * the Y-up frame; rims, water and reliefs are merged, markers and jets
+ * instanced. Non-fatal: missing/empty inputs yield an empty group.
  */
 
 export interface MonumentContext extends GroundContext {
   heightFog?: HeightFogUniforms;
 }
 
-const STONE_COLOR = 0xd6_cb_b4; // pale sandstone, a shade lighter than the walls
-const BRONZE_COLOR = 0x6f_8c_84; // weathered, patinated bronze
-const WATER_COLOR = 0x86_a8_c4; // the river's dusty blue (water-layer.ts)
-const SPRAY_COLOR = 0xf2_f7_fa;
-const SPRAY_OPACITY = 0.55;
+/** The buildings' clay (visual-style.ts): one material language for all that is built. */
+const CLAY_COLOR = 0xec_e7_df;
+const WATER_COLOR = 0x9c_bc_d0; // a lighter cousin of the river's dusty blue
+const WATER_GLOW = 0x12_1c_22; // lifts the water out of the rim's shade
+const SPRAY_COLOR = 0xf4_f8_fb;
 const RIM_M = 0.35; // a point fountain's rim width (the bake insets outlines by the same)
 
 /** One instance: where, how big, which way. */
@@ -71,47 +83,63 @@ interface Placed {
 
 /** Everything one tile's monuments add up to, before it becomes meshes. */
 interface Parts {
-  boxes: Placed[];
-  columns: Placed[];
-  figures: Placed[];
   jets: Placed[];
+  pillars: Placed[];
+  reliefs: BufferGeometry[];
   rims: BufferGeometry[];
+  slabs: Placed[];
   waters: BufferGeometry[];
 }
 
-/** A unit box / cylinder standing on the origin (scaled per instance). */
-function unitBox(): BufferGeometry {
-  return new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+/** A pillar 1 m wide and 1 m tall, standing on the origin (scaled per instance). */
+function unitPillar(): BufferGeometry {
+  // radius 0.5 + length 0 → a sphere; stretched per instance into a pillar.
+  return new CapsuleGeometry(0.5, 1, 6, 16)
+    .scale(1, 0.5, 1)
+    .translate(0, 0.5, 0);
 }
 
-function unitColumn(): BufferGeometry {
-  const shaft = new CylinderGeometry(0.42, 0.5, 0.94, 10).translate(0, 0.47, 0);
-  const cap = new BoxGeometry(1.1, 0.06, 1.1).translate(0, 0.97, 0);
-  return mergeGeometries([shaft.toNonIndexed(), cap.toNonIndexed()]) ?? shaft;
+function unitSlab(): BufferGeometry {
+  return new RoundedBoxGeometry(1, 1, 1, 3, 0.2).translate(0, 0.5, 0);
 }
 
-/** A figure 1 m tall: a tapered body and a head — read as "someone" from any side. */
-function unitFigure(): BufferGeometry {
-  const body = new CylinderGeometry(0.11, 0.17, 0.78, 10).translate(0, 0.39, 0);
-  const head = new SphereGeometry(0.1, 12, 8).translate(0, 0.89, 0);
-  return mergeGeometries([body.toNonIndexed(), head.toNonIndexed()]) ?? body;
+/**
+ * A water bell 1 m tall: a thin jet that opens at the top and falls back
+ * in a widening curtain (a lathe of that profile). Its alpha fades along
+ * the profile, so the falling water dissolves before it lands.
+ */
+function unitBell(): BufferGeometry {
+  const profile = [
+    [0.03, 0],
+    [0.026, 0.55],
+    [0.02, 0.92],
+    [0.07, 1],
+    [0.17, 0.95],
+    [0.26, 0.8],
+    [0.32, 0.58],
+    [0.36, 0.33],
+    [0.38, 0.08],
+  ].map(([x, y]) => new Vector2(x, y));
+  return new LatheGeometry(profile, 24);
 }
 
-/** A jet 1 m tall: a slender open column spreading into a crown at the top. */
-function unitJet(): BufferGeometry {
-  const column = new CylinderGeometry(0.025, 0.06, 0.9, 8, 1, true).translate(
-    0,
-    0.45,
-    0
-  );
-  const crown = new CylinderGeometry(0.11, 0.03, 0.3, 12, 1, true).translate(
-    0,
-    0.85,
-    0
-  );
-  return (
-    mergeGeometries([column.toNonIndexed(), crown.toNonIndexed()]) ?? column
-  );
+/** The bell's alpha along its profile (lathe v: 0 at the nozzle, 1 at the
+ *  curtain's hem; a canvas is flipped, so its top is v = 1). */
+function bellAlpha(): CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const g = ctx.createLinearGradient(0, 64, 0, 0);
+    g.addColorStop(0, "rgb(90,90,90)");
+    g.addColorStop(0.4, "rgb(200,200,200)");
+    g.addColorStop(0.6, "rgb(90,90,90)");
+    g.addColorStop(1, "rgb(0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 4, 64);
+  }
+  return new CanvasTexture(canvas);
 }
 
 /** A ring in shape space: (world x, −world z), which the −90° X turn maps
@@ -177,24 +205,23 @@ function basinOf(f: MonumentFeature): Basin | null {
   return { area: ringArea(outer), centre, outer, water: water ?? null };
 }
 
-/** The rim and the water of one basin, as shapes on the ground plane. */
+/** The pad (the whole outline), the rim and the water of one basin, as
+ *  shapes on the ground plane. */
 function basinShapes(
   b: Basin,
   ctx: GroundContext
 ): { pad: Shape; rim: Shape; water: Shape } {
   if (!b.outer) {
     const w = epsgToWorld(b.centre[0], b.centre[1], ctx.offset);
-    const rim = new Shape().absarc(w.x, -w.z, POINT_BASIN_R, 0, Math.PI * 2);
+    const disc = (r: number) =>
+      new Shape().absarc(w.x, -w.z, r, 0, Math.PI * 2, false);
+    const rim = disc(POINT_BASIN_R);
     rim.holes.push(circle(POINT_BASIN_R - RIM_M, w.x, -w.z));
-    const water = new Shape().absarc(
-      w.x,
-      -w.z,
-      POINT_BASIN_R - RIM_M,
-      0,
-      Math.PI * 2
-    );
-    const pad = new Shape().absarc(w.x, -w.z, POINT_BASIN_R, 0, Math.PI * 2);
-    return { pad, rim, water };
+    return {
+      pad: disc(POINT_BASIN_R),
+      rim,
+      water: disc(POINT_BASIN_R - RIM_M),
+    };
   }
   const pad = new Shape(shapePoints(b.outer, ctx));
   const rim = new Shape(shapePoints(b.outer, ctx));
@@ -220,6 +247,50 @@ function groundUnder(b: Basin, ctx: GroundContext): number[] {
 function worldAt(p: Point2, y: number, ctx: GroundContext): Vector3 {
   const w = epsgToWorld(p[0], p[1], ctx.offset);
   return new Vector3(w.x, y, w.z);
+}
+
+/**
+ * The measured relief as a mesh on the ground: its smoothed heights
+ * (`reliefSurface`) over the terrain under each sample, so the form sits
+ * on a slope as the laser saw it. `floor` lifts the ground to a basin's
+ * water, out of which a fountain's sculpture rises.
+ */
+function reliefMesh(
+  grid: ReliefGrid,
+  ctx: GroundContext,
+  floor = Number.NEGATIVE_INFINITY
+): BufferGeometry | null {
+  const s = reliefSurface(grid);
+  const centreGround = ctx.heightAt(
+    s.west + (s.cols * s.step) / 2,
+    s.north - (s.rows * s.step) / 2
+  );
+  if (centreGround === null) {
+    return null;
+  }
+  const geo = new PlaneGeometry(
+    (s.cols - 1) * s.step,
+    (s.rows - 1) * s.step,
+    s.cols - 1,
+    s.rows - 1
+  );
+  geo.deleteAttribute("uv");
+  const pos = geo.getAttribute("position") as BufferAttribute;
+  // PlaneGeometry: vertices row by row from the top-left (+y) corner, which
+  // is the grid's north-west sample.
+  for (let row = 0; row < s.rows; row++) {
+    for (let col = 0; col < s.cols; col++) {
+      const i = row * s.cols + col;
+      const x = s.west + col * s.step;
+      const y = s.north - row * s.step;
+      const ground = Math.max(ctx.heightAt(x, y) ?? centreGround, floor);
+      const w = epsgToWorld(x, y, ctx.offset);
+      pos.setXYZ(i, w.x, ground + s.heights[i], w.z);
+    }
+  }
+  // The plane's +y (north) became −z: its winding now faces up.
+  geo.computeVertexNormals();
+  return geo.toNonIndexed();
 }
 
 function addFountain(
@@ -248,34 +319,29 @@ function addFountain(
       flat(shapes.water, solid ? levels.rim + 0.01 : levels.water)
     );
   }
-  const figure = f.properties?.figure === true;
-  const onWater = basin.water ?? basin.outer;
-  if (figure && (!onWater || insideRing(basin.centre, onWater))) {
-    const p = fountainFigure(basin.area);
-    const yaw = yawOf(basin.centre[0], basin.centre[1]);
-    parts.boxes.push({
-      at: worldAt(basin.centre, levels.base, ctx),
-      scale: new Vector3(
-        p.width,
-        levels.water - levels.base + p.height,
-        p.width
-      ),
-      yaw,
-    });
-    parts.figures.push({
-      at: worldAt(basin.centre, levels.water + p.height, ctx),
-      scale: new Vector3(p.figure, p.figure, p.figure),
-      yaw,
-    });
+  const relief = f.properties?.relief;
+  if (relief) {
+    const geo = reliefMesh(relief, ctx, levels.water - 0.3);
+    if (geo) {
+      parts.reliefs.push(geo);
+    }
   }
   const h = jetHeight(basin.area, style);
   if (h <= 0) {
     return;
   }
-  for (const place of jetPlaces(basin.centre, basin.area, figure, onWater)) {
+  const onWater = basin.water ?? basin.outer;
+  // A sculpture takes the middle: the jets stand round it.
+  for (const place of jetPlaces(
+    basin.centre,
+    basin.area,
+    relief !== undefined,
+    onWater
+  )) {
+    const spread = relief ? 0.6 : 0.85;
     parts.jets.push({
       at: worldAt(place, levels.water, ctx),
-      scale: new Vector3(h, h, h),
+      scale: new Vector3(h * spread, h * spread, h * spread),
       yaw: 0,
     });
   }
@@ -290,28 +356,26 @@ function addMonument(
   if (f.geometry?.type !== "Point" || !kind || kind === "fountain") {
     return;
   }
+  const relief = f.properties?.relief;
+  if (relief) {
+    const geo = reliefMesh(relief, ctx);
+    if (geo) {
+      parts.reliefs.push(geo);
+      return;
+    }
+  }
   const [x, y] = f.geometry.coordinates;
   const ground = ctx.heightAt(x, y);
   if (ground === null) {
     return;
   }
-  const s = MONUMENT_SHAPE[kind];
-  const yaw = yawOf(x, y);
-  // Sunk a little, so a plinth on a slope never shows its underside.
-  const base = worldAt([x, y], ground - 0.2, ctx);
-  const place = {
-    at: base,
-    scale: new Vector3(s.width, s.height + 0.2, s.depth),
-    yaw,
-  };
-  (kind === "column" ? parts.columns : parts.boxes).push(place);
-  if (s.figure > 0) {
-    parts.figures.push({
-      at: worldAt([x, y], ground + s.height, ctx),
-      scale: new Vector3(s.figure, s.figure, s.figure),
-      yaw,
-    });
-  }
+  const s = MARKER_SHAPE[kind];
+  // Sunk a little, so a marker on a slope never shows its underside.
+  (kind === "stone" ? parts.slabs : parts.pillars).push({
+    at: worldAt([x, y], ground - 0.15, ctx),
+    scale: new Vector3(s.width, s.height + 0.15, s.depth),
+    yaw: yawOf(x, y),
+  });
 }
 
 function instanced(
@@ -358,36 +422,43 @@ function merged(
   return mesh;
 }
 
-function materials(heightFog: HeightFogUniforms | undefined) {
-  const stone = new MeshStandardMaterial({
-    color: STONE_COLOR,
-    roughness: 0.92,
+function materials(
+  heightFog: HeightFogUniforms | undefined,
+  alpha: CanvasTexture
+) {
+  const clay = new MeshStandardMaterial({
+    color: CLAY_COLOR,
+    roughness: 0.95,
     metalness: 0,
-  });
-  const bronze = new MeshStandardMaterial({
-    color: BRONZE_COLOR,
-    roughness: 0.55,
-    metalness: 0.35,
   });
   const water = new MeshStandardMaterial({
     color: WATER_COLOR,
+    emissive: WATER_GLOW,
     roughness: 0.12,
-    metalness: 0.1,
+    metalness: 0,
   });
   const spray = new MeshBasicMaterial({
     color: SPRAY_COLOR,
+    alphaMap: alpha,
     transparent: true,
-    opacity: SPRAY_OPACITY,
+    opacity: 0.6,
     depthWrite: false,
     side: DoubleSide,
   });
-  const all = { stone, bronze, water, spray };
+  const all = { clay, water, spray };
   if (heightFog) {
     for (const m of Object.values(all)) {
       m.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
     }
   }
   return all;
+}
+
+/** One tile's monuments: the group, and the jets' alpha texture to free. */
+export interface MonumentLayer {
+  /** frees the shared alpha texture; the meshes are freed with the scene */
+  dispose: () => void;
+  group: Group;
 }
 
 /**
@@ -397,15 +468,15 @@ function materials(heightFog: HeightFogUniforms | undefined) {
 export function buildMonuments(
   features: MonumentFeature[],
   ctx: MonumentContext
-): Group {
+): MonumentLayer {
   const group = new Group();
   group.name = "monuments";
   const parts: Parts = {
-    boxes: [],
-    columns: [],
-    figures: [],
     jets: [],
+    pillars: [],
+    reliefs: [],
     rims: [],
+    slabs: [],
     waters: [],
   };
   for (const f of features) {
@@ -415,21 +486,20 @@ export function buildMonuments(
       addMonument(f, ctx, parts);
     }
   }
-  const mat = materials(ctx.heightFog);
+  const alpha = bellAlpha();
+  const mat = materials(ctx.heightFog, alpha);
   const meshes = [
-    merged(parts.rims, mat.stone, true),
+    merged(parts.rims, mat.clay, true),
+    merged(parts.reliefs, mat.clay, true),
     merged(parts.waters, mat.water, false),
-    parts.boxes.length > 0
-      ? instanced(unitBox(), mat.stone, parts.boxes, true)
+    parts.pillars.length > 0
+      ? instanced(unitPillar(), mat.clay, parts.pillars, true)
       : null,
-    parts.columns.length > 0
-      ? instanced(unitColumn(), mat.stone, parts.columns, true)
-      : null,
-    parts.figures.length > 0
-      ? instanced(unitFigure(), mat.bronze, parts.figures, true)
+    parts.slabs.length > 0
+      ? instanced(unitSlab(), mat.clay, parts.slabs, true)
       : null,
     parts.jets.length > 0
-      ? instanced(unitJet(), mat.spray, parts.jets, false)
+      ? instanced(unitBell(), mat.spray, parts.jets, false)
       : null,
   ];
   for (const mesh of meshes) {
@@ -446,5 +516,5 @@ export function buildMonuments(
       m.dispose();
     }
   }
-  return group;
+  return { group, dispose: () => alpha.dispose() };
 }

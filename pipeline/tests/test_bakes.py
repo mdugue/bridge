@@ -143,3 +143,34 @@ def test_osm_fountain_tags_pick_the_basin_style():
     assert classify_fountain("splash_pad", None) == "splash"
     assert classify_fountain(None, "reflecting_pool") == "pool"
     assert classify_fountain("decorative", "fountain") == "basin"
+
+
+def test_a_sculpture_in_a_basin_is_measured_into_a_relief():
+    import numpy as np
+
+    from bake.monuments import measure_relief
+
+    ndom = np.zeros((40, 40))
+    ndom[18:22, 18:22] = 3.7  # a 4 × 4 m body, 3.7 m tall
+    basin = shapely.Polygon(
+        [(8, 8), (32, 8), (32, 32), (8, 32)], holes=[[(9, 9), (31, 9), (31, 31), (9, 31)]]
+    )
+    # The grid's north-west corner is (0, 40): row 18 spans y 22..21.
+    relief = measure_relief(ndom, (0.0, 40.0), basin, "fountain")
+    assert relief is not None
+    assert (relief["cols"], relief["rows"]) == (6, 6)  # the body + one empty cell round it
+    assert max(relief["dm"]) == 37
+    assert (relief["west"], relief["north"]) == (17.0, 23.0)
+
+
+def test_a_monument_under_a_tree_crown_has_no_relief():
+    import numpy as np
+
+    from bake.monuments import measure_relief
+
+    ndom = np.zeros((40, 40))
+    ndom[19:21, 19:21] = 3.0  # the statue
+    point = shapely.Point(20.0, 20.0)
+    assert measure_relief(ndom, (0.0, 40.0), point, "statue") is not None
+    ndom[15:19, 17:24] = 12.0  # a crown right beside it
+    assert measure_relief(ndom, (0.0, 40.0), point, "statue") is None

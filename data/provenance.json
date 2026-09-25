@@ -24,7 +24,7 @@
       "layer": 4,
       "committed": null,
       "raw": "data/_raw/<site>/dom1/<tile>.tif (+ .tfw), via pipeline/bake/ingest_sn.py",
-      "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
+      "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py", "pipeline/bake/monuments.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5658_2_sn_tiff.zip" },

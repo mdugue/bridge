@@ -700,7 +700,7 @@ async function bootApp(
         ),
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
-        monuments: census(dressings.map((d) => d.monuments)),
+        monuments: census(dressings.map((d) => d.monuments?.group)),
         rail: census(dressings.map((d) => d.rail)),
         walls: census(dressings.map((d) => d.walls)),
       },

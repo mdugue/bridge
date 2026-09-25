@@ -35,7 +35,7 @@ flowchart TB
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
   DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
-  DRESS --> MON["monuments<br/>fountain rims + water, jets, statues, stones"]
+  DRESS --> MON["monuments<br/>fountain rims + water, water bells,<br/>measured sculptures, markers"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
   DRESS --> WALL["walls<br/>vertical ribbons draped on the ground"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
@@ -97,10 +97,11 @@ is the codebook.
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
 | Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
-| Fountain basin | OSM outline → rim (+0.5 m over the highest ground; 0.3 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
-| Fountain jets | `0.3·√area`, clamped 1.2–4.5 m; one centred, or four round a figure (only those on the water) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`) |
-| Fountain figure | a DLM monument in the basin (`figure`); size `0.28·√area`, 1.6–4.5 m | Basis-DLM | `fountainFigure` |
-| Statue / stone / column | DLM `BWF` + name → fixed proportions (figure on a 1.7 m plinth · 1.1 m slab · 7 m shaft), a stable yaw from the position | Basis-DLM | `MONUMENT_SHAPE` |
+| Fountain basin | OSM outline → clay rim (+0.35 m over the highest ground; 0.2 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
+| Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
+| Monument / fountain sculpture | `relief` (nDOM patch, 1 m) → ×4 bilinear, one [1 2 1] pass, fringe below 0.08 m sunk; heights over the terrain per sample; the buildings' clay | DOM1 − DGM1, Basis-DLM | `reliefSurface`, `reliefMesh` |
+| Unmeasured statue / stone / column | abstract clay marker: rounded pillar 2.2 m · slab 1 m · shaft 4.5 m, a stable yaw from the position | Basis-DLM | `MARKER_SHAPE` |
+| Canopy on a monument | a canopy point on a relief cell is dropped (the DOM1 "tree" was the monument) | DOM1, Basis-DLM | `onRelief` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
 | Rails | `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`), draped or lifted onto a deck | Basis-DLM | `buildRails` |
 | Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
