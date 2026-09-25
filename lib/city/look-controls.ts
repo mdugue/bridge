@@ -8,11 +8,13 @@
  */
 export type LookGroup = "atmosphere" | "buildings" | "rendering" | "vegetation";
 
-/** Rows the scene itself applies: fog, the valley haze, the meadow tint, the river mist. */
+/** Rows the scene itself applies: fog, the valley haze, the ground, the river mist. */
 export type SceneLookKey =
   | "fogAmount"
+  | "groundDetail"
   | "heightFog"
   | "meadowNdvi"
+  | "urbanGreen"
   | "waterMist";
 /** Rows the shared clay material applies (visual-style.ts). */
 export type ClayLookKey =
@@ -220,6 +222,26 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     snapshotKey: "roughnessPct",
   },
   // --- Vegetation ---
+  {
+    key: "groundDetail",
+    id: "ground-detail",
+    label: "Bodendetail",
+    description:
+      "Bordsteine, Rasenkanten und Beläge (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap) aus der Nähe",
+    group: "vegetation",
+    initial: 0.7,
+    snapshotKey: "groundDetailPct",
+  },
+  {
+    key: "urbanGreen",
+    id: "urban-green",
+    label: "Stadtgrün",
+    description:
+      "Färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet aus dem DOP-Infrarot (NDVI) wie Wiese",
+    group: "vegetation",
+    initial: 0.6,
+    snapshotKey: "urbanGreenPct",
+  },
   {
     key: "meadowNdvi",
     id: "meadow-ndvi",

@@ -54,6 +54,7 @@ bewusster Vereinfachung.
 |---|---|---|---|
 | **Gelände** | Die Form des Bodens: Flussufer, der Anstieg zur Neustadt, Dämme | Das amtliche Geländemodell mit 1 m Raster (**DGM1**) | Echte Höhen, auf einem Raster von etwa 2 m in deiner Nähe und 4 m weiter weg. Senkrechte Mauern und Treppen glättet die Quelle zu Rampen; wo OpenStreetMap eine Mauer, eine Felskante oder eine Treppe kennt, schärft das Projekt sie wieder |
 | **Bodenfarben** | Straßen grau, Wege sandfarben, Wiesen salbeigrün, Wald moosgrün, Siedlung tonfarben, Wasser blau | Das amtliche Landschaftsmodell (**Basis-DLM**) | Echte Klassifizierung; die Farben sind eine entworfene Pastellpalette, erst in deinem Browser aufgemalt, keine Fotos |
+| **Bordsteine und Beläge** | Eine Bordsteinkante, wo Straße auf Gehweg trifft; Asphalt, Gehwegplatten, Kopfsteinpflaster oder Kies unter den Füßen; begrünte Höfe | Straßenränder aus dem **Basis-DLM**, das Material aus **OpenStreetMap** (`surface`), das Grün aus dem Infrarot-Luftbild (**NDVI**) | Die Kante folgt der vermessenen Fahrbahnbreite; das Material ist, was Freiwillige erfasst haben (etwa zwei Drittel der Straßen), der Rest zeigt Asphalt oder Platten als Vorgabe; die Muster sind gezeichnet, nicht fotografiert, und eine echte Stufe gibt es nicht |
 | **Wasser** | Die Elbe und kleinere Gewässer mit leicht bewegter Oberfläche und treibendem Nebel | Wasserflächen aus dem Basis-DLM, auf das echte Gelände gelegt | Echter Umriss, erfundene Wellen |
 | **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 16 000 Gebäude und Gebäudeteile in den vier Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
 | **Gebäudefarben** | Dachfarben; eine leichte Tönung je Gebäude; abends ein warmes Leuchten in Läden und öffentlichen Bauten | Dachfarbe aus Luftbildern (**DOP**) gemessen; der Rest aus Gebäudeattributen abgeleitet | Dachfarben sind echt (etwa 83 % Abdeckung), Wandtöne sind synthetisch |
@@ -105,14 +106,16 @@ Brückenlagen und Deckhöhen, Baumpositionen und -höhen, Dachfarben,
 Wiesengrün.
 
 **Von Freiwilligen beigetragen (OpenStreetMap):** Straßenlampen,
-Bahnsteige, Stützmauern mit Höhen, der Tragwerkstyp von Brücken. Die
-Vollständigkeit schwankt von Straße zu Straße.
+Bahnsteige, Stützmauern mit Höhen, der Tragwerkstyp von Brücken, womit
+Straßen und Gehwege belegt sind. Die Vollständigkeit schwankt von Straße
+zu Straße.
 
 **Berechnet:** der Sonnenstand, alle Schatten, Nebel und Dunst, die
 Tiefenschärfe, die langsame Bewegung von Blättern und Wasser.
 
 **Für den Look erfunden:** die Pastellpalette, Papierkorn und Vignette, die
 Form der Baumkronen, der Wandton je Gebäude, die Wellen auf dem Wasser, die
+Steine und Platten der Belagsmuster, die
 warmen Fenster in der Dämmerung (dass es ein Laden oder öffentliches
 Gebäude *ist*, stimmt; seine leuchtenden Fenster sind erfunden).
 

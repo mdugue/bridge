@@ -273,3 +273,76 @@ def test_a_terrace_platform_fills_the_holes_of_its_area():
         [(0, 0), (40, 0), (40, 20), (0, 20)], holes=[[(10, 5), (20, 5), (20, 15), (10, 15)]]
     )
     assert platform(promenade).area == 800
+
+
+def test_surface_values_map_to_the_paving_ids():
+    from bake.surface import surface_id
+
+    assert surface_id("asphalt") == 1
+    assert surface_id("sett;asphalt") == 4
+    assert surface_id("Paving_Stones") == 3
+    assert surface_id("grass_paver") == 6
+    assert surface_id("metal") == 0
+    assert surface_id(None) == 0
+
+
+def test_widths_parse_metres_and_reject_nonsense():
+    from bake.surface import parse_width
+
+    assert parse_width("5") == 5.0
+    assert parse_width("5,5 m") == 5.5
+    assert parse_width("narrow") is None
+    assert parse_width("0") is None
+
+
+def test_a_sidewalk_band_lies_on_the_tagged_side_only():
+    from bake.surface import SIDEWALK_BAND, sidewalk_bands
+
+    east = shapely.LineString([(0, 0), (100, 0)])  # left = north
+    bands = sidewalk_bands(east, 4.0, '"sidewalk:left:surface"=>"paving_stones"')
+    assert [sid for _, sid in bands] == [3]
+    band = bands[0][0]
+    assert band.bounds[1] >= 4.0 - 1e-6
+    assert band.bounds[3] <= 4.0 + SIDEWALK_BAND + 1e-6
+    both = sidewalk_bands(east, 4.0, '"sidewalk:both:surface"=>"sett"')
+    assert sorted(sid for _, sid in both) == [4, 4]
+
+
+def test_the_major_road_wins_a_junction_and_walks_pack_above_roads(tmp_path):
+    from bake.common import Tile
+    from bake.surface import burn, classify_lines, pack
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    ns = shapely.LineString([(32, 0), (32, 64)])
+    ew = shapely.LineString([(0, 32), (64, 32)])
+    foot = shapely.LineString([(0, 10), (64, 10)])
+    roads, walks = classify_lines(
+        [ew, ns, foot],
+        ["primary", "residential", "footway"],
+        ['"surface"=>"asphalt"', '"surface"=>"sett"', '"surface"=>"paving_stones"'],
+    )
+    road = burn(roads, tile, 64)
+    assert road[31, 32] == 1  # the crossing: the primary's asphalt
+    assert road[5, 32] == 4  # the residential street's sett away from it
+    walk = burn(walks, tile, 64)
+    assert walk[64 - 10, 5] == 3
+    packed = pack(road, walk)
+    assert packed[64 - 10, 32] == 3 * 8 + 4
+
+
+def test_a_way_direction_is_its_bearing_mod_180(tmp_path):
+    from bake.common import Tile
+    from bake.surface import burn, direction_shapes, segments
+
+    _, codes = segments(shapely.LineString([(0, 0), (10, 0), (10, 10), (0, 0)]))
+    assert list(codes) == [1, 128, 1 + round(45 / 180 * 254)]
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    road = shapely.LineString([(0, 32), (64, 32)])
+    crossing = shapely.LineString([(20, 0), (20, 64)])
+    heading = burn(
+        direction_shapes([road, crossing], ["residential", "footway"], [None, None]), tile, 64
+    )
+    assert heading[31, 40] == 1  # on the carriageway: the road's direction
+    assert heading[31, 20] == 1  # a crossing footway does not turn it
+    assert heading[5, 20] == 128  # the footway away from the road
+    assert heading[5, 40] == 0  # nothing mapped

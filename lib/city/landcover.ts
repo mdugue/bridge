@@ -32,6 +32,48 @@ export const LANDCOVER_CLASSES: readonly LandcoverClass[] = [
 
 export const WATER_CLASS = 8;
 export const MEADOW_CLASS = 1;
+export const BUILTUP_CLASS = 4;
+export const PATH_CLASS = 6;
+export const ROAD_CLASS = 7;
+
+/**
+ * The paving materials of the OSM surface raster (pipeline/bake/surface.py
+ * `SURFACES`; the ids are its bytes): which pattern the terrain shader draws
+ * on a street or a walkway. 0 = unknown — the shader falls back to the land-
+ * cover class (asphalt on the carriageway, slabs on the pavement, a sanded
+ * path on class 6).
+ */
+export const SURFACE_KINDS = [
+  "unknown",
+  "asphalt",
+  "concrete",
+  "paving",
+  "sett",
+  "unpaved",
+  "grass",
+] as const;
+export type SurfaceKind = (typeof SURFACE_KINDS)[number];
+
+/** A surface kind's id (its index), for the shader's constants. */
+export function surfaceId(kind: SurfaceKind): number {
+  return SURFACE_KINDS.indexOf(kind);
+}
+
+/**
+ * The two surface ids one texel of the raster packs (`R = walk * 8 + road`):
+ * the carriageway's and the pavement's material, each 0..7.
+ */
+export function unpackSurface(byte: number): { road: number; walk: number } {
+  return { road: byte & 7, walk: byte >> 3 };
+}
+
+/**
+ * The street direction the raster's G channel stores (0 = unknown, else
+ * 1 + bearing mod 180° over 0..254) in radians from east, or null.
+ */
+export function surfaceHeading(byte: number): number | null {
+  return byte === 0 ? null : ((byte - 1) / 254) * Math.PI;
+}
 
 /** sRGB tint of a class id; unknown ids take the background tint. */
 export function landcoverSrgb(id: number): readonly [number, number, number] {

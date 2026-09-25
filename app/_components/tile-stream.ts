@@ -31,7 +31,11 @@ import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildRail } from "./rail-layer";
-import { dressTerrain, type TerrainLayer } from "./terrain-layer";
+import {
+  dressTerrain,
+  type GroundUniforms,
+  type TerrainLayer,
+} from "./terrain-layer";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import {
@@ -70,7 +74,8 @@ export interface TileStreamContext {
   heightFog: HeightFogUniforms;
   /** ground height over every loaded terrain (projected coordinates) */
   heightAt: (x: number, y: number) => number | null;
-  meadowNdvi: { value: number };
+  /** the ground's look strengths (by reference) */
+  ground: GroundUniforms;
   /** the current night factor, for lamps that land later */
   night: () => number;
   offset: { cx: number; cy: number };
@@ -346,7 +351,7 @@ class DressingPlugin {
       fileUrl: this.url,
       heightFog: this.ctx.heightFog,
       lowRasters: this.ctx.lowRasters,
-      meadowNdvi: this.ctx.meadowNdvi,
+      ground: this.ctx.ground,
       offset: this.ctx.offset,
       renderer: this.ctx.renderer,
       sunDirection: this.ctx.sunDirection,

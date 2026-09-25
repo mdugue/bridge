@@ -161,6 +161,19 @@ water reads the alpha and `smoothstep`s it for a crisp shoreline. Edge
 sharpness is bounded by the class raster's resolution, not the GPU filter.
 A colour change is a look change, never a re-bake (ADR 0023).
 
+**Ground detail** (`ground-detail.ts`, in the same fragment pass): kerbs and
+lawn edges are drawn at the road/meadow class edge as a *signed distance in
+metres* — the 4×4 class texels as 0/1, box-smoothed 3×3, then bilinear; the
+0.5 isoline divided by the gradient. The plain 2×2 bilinear follows the
+0.5 m raster's staircase visibly; the smoothed field runs straight along a
+diagonal. All reads are `texelFetch` (no implicit derivatives in the
+near-only branch). The OSM paving raster (`surface_<tile>.png`, fine level
+only, RG: packed road/walk surface ids + the way direction) picks the
+pattern and orients slabs and sett rows along the street. Joints fade by
+`fwidth` long before they alias. *Bodendetail* and *Stadtgrün* (NDVI on
+built-up ground) are the sliders. The contour ink guards `fwidth == 0`: a
+flat quad lying exactly on a contour used to stripe with NaN.
+
 ## Terrain seams
 
 Vertices sit at pixel centres, so a tile stops half a pixel short of its bounds;
@@ -282,7 +295,7 @@ CRS, land cover first:
 ```bash
 bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|stairs|rail
+bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|stairs|rail|surface
 bun run test:pipeline                  # pytest + ruff
 ```
 

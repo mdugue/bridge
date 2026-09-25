@@ -74,6 +74,10 @@ is the codebook.
 | Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`) | DOP | `terrain-layer.ts` |
 | Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `GRASS_MOTTLE` / `GRASS_NORMAL` |
+| Kerb line | signed distance (m) to the road class's edge, from the 4×4 class texels box-smoothed then bilinear; pale kerb stone 0.3 m on the pavement side, a darker gutter 0.35 m on the road side, a normal step at the face; only where the far side is ground (classes 0–4, 6); fades out past ~0.5 m/px (*Bodendetail*) | Basis-DLM | `ground-detail.ts` |
+| Lawn edge | the same distance for class 1: a darker lip 0.25 m and a normal kink | Basis-DLM | `ground-detail.ts` |
+| Paving pattern | OSM `surface` on the road (class 7) and on the pavement (the rest), the way direction orienting slabs and sett rows; unknown → asphalt on the road, slabs on class 4, sand on class 6; joints fade out past ~5 cm/px, the material's tint stays | OSM (+ Basis-DLM class) | `ground-detail.ts`, `surface_<t>.png` |
+| Urban green | NDVI (one mip coarser) on classes 0 and 4, not on road or OSM-sealed pavement → the meadow colour (*Stadtgrün*) | DOP | `ground-detail.ts` `urbanGreen` |
 | Water extent + shoreline | splat alpha (3×3 tent over class 8), `smoothstep`ed | Basis-DLM | `landcover-splat.ts`, `water-layer.ts` |
 | Water ripple, glitter, sky tint | time, sun direction, fog palette | — (synth) | `water-layer.ts` |
 | River mist | water mask + sun, drifting | Basis-DLM (mask) | `createWaterMist` |
@@ -196,6 +200,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | footprints (minimap) | 0.23–0.33 MB | — |
 | class raster 4096² / 2048² | 0.22–0.25 / ≈0.08 MB | — |
 | NDVI raster | 0.3–0.45 MB | — |
+| paving raster (fine level) | 0.4–0.56 MB | — |
 | canopy points (fine level) | 0.6–1.8 MB | — |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB

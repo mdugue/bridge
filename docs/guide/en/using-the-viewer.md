@@ -109,7 +109,9 @@ The button in the corner opens a panel with three tabs.
 | | *Traufkante* | a soft line where wall meets roof |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
-| Vegetation | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
+| Vegetation | *Bodendetail* | kerbs, lawn edges and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), visible up close |
+| | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas like meadow, from the infrared aerial photo |
+| | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
 | | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
 | | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |

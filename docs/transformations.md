@@ -49,6 +49,40 @@ visual-variable codebook is in
   (`uNdvi`/`uMeadowNdvi`, gated by the class raster `grMeadow`), HUD slider
   *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
+- **Kerbs and lawn edges** (*Bordsteine, Rasenkanten*) — the DLM road
+  class (7) is the surveyed carriageway, so its edge is the kerb line. The
+  terrain fragment pass reads the 4×4 class texels around the fragment as
+  0/1, box-smooths them 3×3, interpolates bilinearly and divides the 0.5
+  isoline by the gradient: a signed distance in metres that runs straight
+  along a diagonal instead of following the 0.5 m raster's staircase. A pale
+  kerb stone (0.3 m, pavement side), a darker gutter (0.35 m, road side) and
+  a normal step at the face — only where the far side is ground a kerb
+  borders (classes 0–4, 6; not water or railway). The same distance on class
+  1 draws a darker lawn lip with a normal kink. Near the camera only (fades
+  out past ~0.5 m/px); no geometry, so no real step, no contact shadow. HUD
+  *Bodendetail*. `ground-detail.ts`, plan
+  [023](./plans/023-ground-detail.md).
+- **Paving materials** (*Beläge*) — OSM `surface=*` on the highways (plus
+  `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
+  squares, parking lots) → a 2048² RGB raster per tile
+  (`pipeline/bake/surface.py` → `surface_<tile>.png`): R packs the
+  carriageway's and the pavement's material (asphalt, concrete, slabs, sett,
+  unpaved, grass pavers; `walk · 8 + road`), G the way's direction. The
+  shader reads `road` on class 7 and `walk` elsewhere; unknown falls back to
+  asphalt / slabs (class 4) / sand (class 6). Patterns in the street's own
+  frame — slabs in running bond, sett rows across the street with
+  pillow-shaded stones, concrete plates, gravel and asphalt mottles, grass
+  pavers — fade out by `fwidth` before they alias; the material's tint
+  stays at any distance. Coverage (Dresden, 2026-09-19 extract): ~87 % of the
+  highway ways carry `surface`, ~68 % of the DLM carriageway texels get a
+  material. Fine terrain level only; absent raster → the class defaults.
+  HUD *Bodendetail*. `ground-detail.ts`, `terrain-layer.ts`.
+- **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
+  courtyards, front gardens and parks inside the settlement alike; where
+  the DOP NDVI (sampled one mip coarser) says green (0.22 → 0.40) and the
+  ground is neither road nor OSM-sealed pavement, it takes the meadow
+  colour (plus the meadow mottle). About 10 % of the built-up texels. HUD
+  *Stadtgrün*. `ground-detail.ts` `urbanGreen`.
 - **Water** — the painted splat's alpha (water coverage, `smoothstep`ed
   shoreline) + the terrain geometry + animated normal wobble; the water and
   mist sheets hang next to their terrain mesh and leave with the tile.
@@ -316,6 +350,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Meadow mottle** — DLM class 1 (farmland/meadow) → a low-frequency
   colour + normal mottle so grass reads as ground, not paint. `terrain-layer.ts`
   `GRASS_MOTTLE`/`GRASS_NORMAL`.
+- **Contour ink guard** — a flat terrain quad lying exactly on a 2 m or 10 m
+  contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
+  lines on flat roads). No slope, no contour line. `terrain-layer.ts`.
 
 ---
 
@@ -373,6 +410,15 @@ research that produced them):
     trunk hidden) beyond ~500 m; today a tree 2 km away still draws ~400
     triangles in the main and every shadow pass. The swap mechanism exists
     (`updateLod`); the look needs the `--headed` harness.
+12. **Ground, the rest of plan [023](./plans/023-ground-detail.md)** — a
+    real kerb step (a baked 12 cm ribbon along the carriageway edge in the
+    fine terrain glTF, like the walls — ADR 0029); DGM1 micro-relief as a
+    1 m normal texture over the 2 m mesh; shell-textured grass near the
+    camera (4–8 shells, meadow only, no shadow casting — judge the fill-rate
+    on a real GPU); parks, cemeteries and sports grounds split out of the
+    DLM's built-up class by object type (`sie02_f` `OBJART`/`FKT`, needs the
+    raw DLM); the laser-scan intensity (LSC) as a measured surface-material
+    map where OSM is silent.
 
 ---
 

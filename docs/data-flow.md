@@ -44,6 +44,7 @@ flowchart LR
     direction TB
     TER["Terrain ground"]
     SURF["Surface colours<br/>roads · meadow · …"]
+    PAVE["Kerbs &amp; paving<br/>kerb · lawn edge · sett · slabs"]
     WAT["Water (Elbe)"]
     BLD["Buildings<br/>(geometry)"]
     DET["Building detailing<br/>tint · roof · eave · glow"]
@@ -66,7 +67,9 @@ flowchart LR
 
   %% surfaces + water (multi-source)
   DLM ==>|"class raster → palette painted at runtime"| SURF
-  DOP -. "NDVI meadow tint (class 1)" .-> SURF
+  DOP -. "NDVI meadow tint (class 1)<br/>+ urban green (classes 0, 4)" .-> SURF
+  DLM ==>|"road / meadow class edges → signed distance"| PAVE
+  OSM -. "surface · sidewalk:*:surface<br/>+ way direction" .-> PAVE
   DLM ==>|"class 8 → water coverage (3×3 tent)"| WAT
   DGM ==>|"shares terrain mesh"| WAT
 
@@ -116,7 +119,8 @@ flowchart LR
 | Feature | Primary source | Also needs / modifiers | Code |
 |---|---|---|---|
 | **Terrain ground** | DGM1 GeoTIFF → glTF terrain at two levels (1024² / 512², baked normals, 30 m skirt) | OSM walls (burned in as a step at build) · OSM stairs (ground lowered under the flight at build) | baked by `scripts/bake-tiles.ts` (`terrainMesh`, `lib/city/terrain-conflate.ts`, `lib/city/stairs.ts`) in `scripts/prepare-data.ts`; `terrain-layer.ts`, `tile-stream.ts` |
-| **Surface colours** | Basis-DLM class raster (ids 0–8), painted with the palette on the GPU at load | DOP NDVI (meadow tint, class 1) | `landcover-splat.ts`, `lib/city/landcover.ts` (the one palette), `terrain-layer.ts` (samples the splat + `uNdvi`); baked by `pipeline/bake/landcover.py` + `ndvi.py` |
+| **Surface colours** | Basis-DLM class raster (ids 0–8), painted with the palette on the GPU at load | DOP NDVI (meadow tint, class 1; urban green on classes 0 and 4) | `landcover-splat.ts`, `lib/city/landcover.ts` (the one palette), `terrain-layer.ts` (samples the splat + `uNdvi`), `ground-detail.ts` (urban green); baked by `pipeline/bake/landcover.py` + `ndvi.py` |
+| **Kerbs & paving** | Basis-DLM class raster: the road (7) and meadow (1) edges as a signed distance from a box-smoothed field of the class texels | OSM paving raster (`surface`, `sidewalk:*:surface`, the way direction; else the class default) | `ground-detail.ts` (in the terrain fragment pass), `terrain-layer.ts`; baked by `pipeline/bake/surface.py` |
 | **Water (Elbe)** | Basis-DLM class 8 (water coverage from the painted splat) **+** DGM1 (the terrain geometry it drapes on) | — | `water-layer.ts`, `landcover-splat.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts` |
 | **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py` |
@@ -172,6 +176,7 @@ flowchart LR
     bWALL["walls.py"]
     bSTR["stairs.py"]
     bRAIL["rail.py"]
+    bSURF["surface.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -184,6 +189,7 @@ flowchart LR
     dWALL["walls"]
     dSTR["stairs"]
     dRAIL["rail · railarea<br/>bridge · platform"]
+    dSURF["surface PNG + legend"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -213,6 +219,7 @@ flowchart LR
   iDOM -. "deck surface" .-> bRAIL
   iOSM -. "arches · platforms" .-> bRAIL
   bRAIL ==> dRAIL
+  iOSM ==> bSURF ==> dSURF
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
@@ -224,6 +231,7 @@ flowchart LR
   dNDVI -.-> tSIDE
   dLAMP -.-> tSIDE
   dRAIL -.-> tSIDE
+  dSURF -.-> tSIDE
 ```
 
 The ingest adapter that fills the inputs (`pipeline/bake/ingest_sn.py` for

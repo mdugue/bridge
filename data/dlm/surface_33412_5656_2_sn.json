@@ -1,0 +1,25 @@
+{
+  "tile": "33412_5656_2_sn",
+  "crs": "EPSG:25833",
+  "bounds": [
+    412000,
+    5656000,
+    414000,
+    5658000
+  ],
+  "size": 2048,
+  "encoding": {
+    "r": "walk * 8 + road (surface ids)",
+    "g": "way direction: 0 unknown, else 1 + bearing mod 180 deg over 0..254"
+  },
+  "surfaces": {
+    "0": "unknown",
+    "1": "asphalt",
+    "2": "concrete",
+    "3": "paving",
+    "4": "sett",
+    "5": "unpaved",
+    "6": "grass"
+  },
+  "attribution": "\u00a9 OpenStreetMap contributors (ODbL)"
+}

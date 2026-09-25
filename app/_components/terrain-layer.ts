@@ -7,6 +7,7 @@ import {
   NearestFilter,
   NoColorSpace,
   RedFormat,
+  RGFormat,
   Texture,
   TextureLoader,
   Vector3,
@@ -16,8 +17,20 @@ import {
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
+import {
+  LANDCOVER_CLASSES,
+  MEADOW_CLASS,
+  srgbToLinear,
+} from "@/lib/city/landcover";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { isAbortError } from "./fetch-optional";
+import {
+  GROUND_DETAIL,
+  GROUND_NORMAL,
+  groundDetailDecl,
+  groundFields,
+  urbanGreen,
+} from "./ground-detail";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
@@ -58,8 +71,8 @@ export interface TerrainOptions {
   heightFog?: HeightFogUniforms;
   /** phones sample the ≤ 2048² class raster */
   lowRasters: boolean;
-  /** shared meadow-NDVI tint strength (by reference) for the HUD slider */
-  meadowNdvi?: { value: number };
+  /** the ground's look strengths (by reference) for the HUD sliders */
+  ground?: GroundUniforms;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** paints the colour splat from the class raster (one GPU pass) */
@@ -68,6 +81,19 @@ export interface TerrainOptions {
   signal?: AbortSignal;
   /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
   sunDirection?: Vector3;
+}
+
+/**
+ * The terrain's look rows, shared by reference with every tile's material so
+ * a slider retunes them live (a uniform write, no recompile).
+ */
+export interface GroundUniforms {
+  /** kerbs, lawn edges and paving patterns (ground-detail.ts) */
+  groundDetail: { value: number };
+  /** the meadow's DOP greenness tint */
+  meadowNdvi: { value: number };
+  /** meadow colour on green built-up ground (courtyards, parks) */
+  urbanGreen: { value: number };
 }
 
 /**
@@ -174,17 +200,46 @@ async function loadNdviTexture(
   }
 }
 
+/**
+ * Loads the OSM paving raster (pipeline/bake/surface.py): R = the packed
+ * road/walk surface ids, G = the street direction. Data, NEAREST, two
+ * channels (the B channel of the RGB PNG is empty). Absent → null and the
+ * ground falls back to the land-cover class's pattern.
+ */
+async function loadSurfaceTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
+  try {
+    const { texture, width, height } = await loadBitmapTexture(url, signal);
+    texture.magFilter = NearestFilter;
+    texture.minFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    texture.format = RGFormat;
+    trackTexture(texture, textureBytes(width, height, 2, false));
+    return texture;
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
 export interface SplatLayer {
   bounds: TerrainBounds;
   /** the palette-painted colours (RGB) + water coverage (A); LINEAR +
    *  mipmapped for soft transitions (landcover-splat.ts) */
   colorTexture: Texture;
-  /** live meadow-NDVI tint strength (shared ref, mutated by the HUD slider) */
-  meadowNdvi?: { value: number };
-  /** DOP NDVI raster (LINEAR) for the meadow greenness tint */
+  /** the look strengths (shared refs, mutated by the HUD sliders) */
+  ground?: GroundUniforms;
+  /** DOP NDVI raster (LINEAR) for the meadow and urban-green tints */
   ndviTexture?: Texture;
   offset: { cx: number; cy: number };
+  /** OSM paving raster (NEAREST, RG) for the paving patterns */
+  surfaceTexture?: Texture;
   /** class-id raster (NEAREST); the meadow detail tests it */
   texture: Texture;
 }
@@ -261,12 +316,21 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   // The NEAREST class-id raster, so the meadow detail can test the exact
   // land-cover class (the colour splat's texels are blended).
   shader.uniforms.uSplatClass = { value: splat.texture };
+  // Bind the shared refs by identity so the HUD sliders retune them live.
+  shader.uniforms.uGroundDetail = splat.ground?.groundDetail ?? { value: 0 };
+  shader.uniforms.uMeadowColor = { value: MEADOW_LINEAR };
+  if (splat.surfaceTexture) {
+    shader.uniforms.uSurface = { value: splat.surfaceTexture };
+  }
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
-    // Bind the shared ref by identity so the HUD slider retunes it live.
-    shader.uniforms.uMeadowNdvi = splat.meadowNdvi ?? { value: 0 };
+    shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
+    shader.uniforms.uUrbanGreen = splat.ground?.urbanGreen ?? { value: 0 };
   }
 }
+
+/** The meadow's palette colour, linear — the urban green and grass pavers. */
+const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
 
 function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
   const decl = hasSplat
@@ -286,16 +350,28 @@ function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
     );
 }
 
+/** The splat-dependent fragment code: declarations and the colour body. */
+function splatFragment(splat: SplatLayer): { body: string; decl: string } {
+  const hasNdvi = splat.ndviTexture !== undefined;
+  const hasSurface = splat.surfaceTexture !== undefined;
+  const ndviDecl = hasNdvi
+    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\nuniform float uUrbanGreen;\n"
+    : "";
+  return {
+    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface)}`,
+    body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
+         ${GRASS_MOTTLE}
+         ${groundFields(hasSurface)}
+         ${urbanGreen(hasNdvi)}
+         ${GROUND_DETAIL}
+         ${hasNdvi ? MEADOW_NDVI : ""}`,
+  };
+}
+
 function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
   const hasSplat = splat !== undefined;
-  const hasNdvi = splat?.ndviTexture !== undefined;
-  const baseColExpr = "vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;";
-  const ndviDecl = hasNdvi
-    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
-    : "";
-  const decl = hasSplat
-    ? `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform sampler2D uSplatClass;\n${ndviDecl}`
-    : "";
+  const parts = splat ? splatFragment(splat) : undefined;
+  const decl = parts?.decl ?? "";
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
@@ -303,21 +379,24 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
     )
     .replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `${hasSplat ? baseColExpr : "vec3 baseCol = diffuse;"}
-         ${hasSplat ? GRASS_MOTTLE : ""}
-         ${hasNdvi ? MEADOW_NDVI : ""}
+      `${parts?.body ?? "vec3 baseCol = diffuse;"}
          float minorD = vElevation / 2.0;
-         float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
+         // A flat quad lying exactly on a contour has fwidth 0: 0/0 there
+         // striped it with NaN ink. No slope, no contour line.
+         float minorW = fwidth( minorD );
+         float minor = minorW > 1e-6 ? 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / minorW, 1.0 ) : 0.0;
          float majorD = vElevation / 10.0;
-         float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / fwidth( majorD ), 1.0 );
+         float majorW = fwidth( majorD );
+         float major = majorW > 1e-6 ? 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / majorW, 1.0 ) : 0.0;
          float ink = clamp( minor * 0.10 + major * 0.15, 0.0, 0.26 );
          vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
     );
   if (hasSplat) {
-    // Meadow-only shading-normal break-up (grDetail declared above, in scope).
+    // Meadow-only shading-normal break-up (grDetail declared above, in
+    // scope), then the kerbs', lawn edges' and stones' tilt.
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <normal_fragment_begin>",
-      GRASS_NORMAL
+      `${GRASS_NORMAL}\n${GROUND_NORMAL}`
     );
   }
 }
@@ -335,7 +414,7 @@ function createTerrainMaterial(
   // every tile's terrain material. Without an explicit key a tile that lost its
   // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -399,13 +478,20 @@ export async function dressTerrain(
     classRaster && extras.ndvi
       ? await loadNdviTexture(opts.fileUrl(extras.ndvi), opts.signal)
       : null;
+  // The paving patterns are close-range: the build names the raster on the
+  // fine level only.
+  const surfaceTexture =
+    classRaster && extras.surface
+      ? await loadSurfaceTexture(opts.fileUrl(extras.surface), opts.signal)
+      : null;
   const splat: SplatLayer | undefined =
     classRaster && painted
       ? {
           texture: classRaster.texture,
           colorTexture: painted.texture,
           ndviTexture: ndviTexture ?? undefined,
-          meadowNdvi: opts.meadowNdvi,
+          surfaceTexture: surfaceTexture ?? undefined,
+          ground: opts.ground,
           bounds,
           offset: opts.offset,
         }
@@ -446,7 +532,11 @@ export async function dressTerrain(
     water,
     heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
     dispose: () => {
-      for (const texture of [classRaster?.texture, ndviTexture]) {
+      for (const texture of [
+        classRaster?.texture,
+        ndviTexture,
+        surfaceTexture,
+      ]) {
         texture?.dispose();
       }
       painted?.dispose();

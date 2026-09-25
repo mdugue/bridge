@@ -459,6 +459,7 @@ async function bakeTerrain(
     landcover: (level === 0 ? names.landcover : names.landcoverLow) ?? "",
     landcoverLow: names.landcoverLow ?? "",
     ...(names.ndvi ? { ndvi: names.ndvi } : {}),
+    ...(level === 0 && names.surface ? { surface: names.surface } : {}),
     ...(level === 0 ? { dressing: dressingOf(names) } : {}),
   };
   const key = cacheKey(inputs, offset, described);

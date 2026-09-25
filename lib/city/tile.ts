@@ -55,6 +55,7 @@ export type TileArtifactKind =
   | "platform"
   | "rail"
   | "railarea"
+  | "surface"
   | "vegrows";
 
 /**
@@ -81,6 +82,9 @@ export function tileArtifacts(
     // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
     canopy: dlm(`canopy_${tile}.geojson`),
     ndvi: dlm(`ndvi_${tile}.png`),
+    // Optional: the OSM paving raster (pipeline/bake/surface.py); without
+    // it the ground draws the land-cover class's default pattern.
+    surface: dlm(`surface_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),
     bridge: dlm(`bridge_${tile}.geojson`),

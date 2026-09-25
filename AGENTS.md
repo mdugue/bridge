@@ -98,7 +98,9 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts` and `stair-layer.ts` (only their
+    `ground-detail.ts` (kerbs, lawn edges, paving patterns and urban green
+    in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts` and
+    `stair-layer.ts` (only their
     materials: walls and stairs are baked into the fine terrain glTF),
     `lamp-layer.ts`,
     `shader-chunks.ts` (data-frame positions from world space)
@@ -128,7 +130,7 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `walls.py`, `stairs.py`, `rail.py`, `osm.py`; `ingest_sn.py` is Saxony's
+  `lamps.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `osm.py`; `ingest_sn.py` is Saxony's
   download adapter; tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
@@ -234,7 +236,7 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
 - All OSM layers (walls, cliffs, stairs, lamps, platforms, bridge
-  structure) come from the site's Geofabrik `.osm.pbf` via GDAL's OSM
+  structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's OSM
   driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.

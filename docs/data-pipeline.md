@@ -71,7 +71,8 @@ bun run bake                        # every tile of the site, every step
 bun run bake 33412_5656_2_sn        # one tile
 bun run bake --ingest               # fetch the raw inputs first (ingest adapter)
 bun run bake --step canopy          # one step: landcover, canopy, ndvi,
-                                    #   roof-colour, lamps, walls, stairs, rail
+                                    #   roof-colour, lamps, walls, stairs, rail,
+                                    #   surface
 bun run test:pipeline               # pytest + ruff check + ruff format --check
 ```
 
@@ -87,7 +88,7 @@ adapter, `python -m bake.ingest_<site.ingest>`. The modules in
 | `__main__.py` | the step table and CLI; `all` runs the steps in dependency order |
 | `common.py` | `Tile` (id, extent, CRS, raw and data folders), reading vector layers without geopandas, the GeoJSON writer |
 | `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS |
-| `landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`, `stairs.py`, `rail.py` | one step each (table below) |
+| `landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py` | one step each (table below) |
 | `ingest_sn.py` | the Saxony ingest adapter |
 
 `pipeline/tests/test_bakes.py` covers the pure helpers (line merging, deck
@@ -166,8 +167,11 @@ that `canopy` and `lamps` gate on.
 | `stairs` | OSM `highway=steps` (+ `area:highway=steps` outlines, `barrier=wall/retaining_wall/city_wall`, areas on `layer` ≥ 1), the committed DGM1 | `dlm/stairs_<t>.geojson` (lines bottom → top with `w`, `n`, `z` = [bottom, top] landing heights), `dlm/terraces_<t>.geojson` (polygons with a level `z`) — both terrain bake inputs, not served | Landings: the DGM 1 m beyond each end, 3×3 m median. Width: `width`, else outline area ÷ axis length, else the gap between the walls either side (within 15 m, minus 0.3 m each side, the axis re-centred) when both edges of that gap climb ≥ half the axis's rise, else 2.5 m (0.8–30 m). A flight with less than half its tagged rise in the DGM (`step_count` × `step:height`, 15 cm untagged), an `incline` and its top ≤ 3 m from a raised area (no building, `man_made`, `landuse`, bridge, railway or public-transport area) takes the tagged rise from its lower landing; the area becomes a terrace at the highest such top (its outer rings, holes filled). Steps: `step_count` if its riser is 8–25 cm, else rise ÷ 16 cm. Left out: indoor, underground, `level` < 0, tunnel, bridge, rise < 30 cm. Unclipped (the viewer stands a flight on the tile that owns its middle). No `.osm.pbf`: skipped with a note, the file already there stays |
 | `rail` | `ver03_f`, `ver03_l`, `ver06_f`, `ver06_l`, `ver01_l`, `ver02_l`; DGM1 + DOM1; OSM `man_made=bridge`, `railway=platform` | `dlm/railarea_<t>.geojson` (ballast polygons), `dlm/rail_<t>.geojson` (lines with `tracks`, `electrified`), `dlm/bridge_<t>.geojson` (polygons with per-vertex `deck`, `kind`, `name`, `structure`), `dlm/platform_<t>.geojson` | Ballast: `OBJART=42010` made valid, unioned (shapely) and clipped. Rails: heavy rail only (`SPW=1000`, trams excluded), fragments merged at 1 m. Decks: every `ver06_l` centreline (`BWF=1800`), snapped to a `ver06_f` footprint ≤ 50 m away, else buffered by kind width; deck height = the DGM abutment ramp lifted to the DOM surface, plus camber; `kind` from the rail/road/path networks under it; `structure` (arches) from the nearest OSM bridge ≤ 60 m. **No Basis-DLM: the step is skipped, the files already there stay. No DOM1: decks use the DGM ramp. No `.osm.pbf`: bridges without structure, the platform file already there stays.** Every other output is written, even when empty |
 
+| `surface` | OSM `highway=*` lines (`surface`, `width`, `footway=sidewalk`, `sidewalk:*:surface`, `footway:surface`) and `highway` / `area:highway` / `amenity=parking` multipolygons with a `surface` | `dlm/surface_<t>.png` (RGB, 2048²: R = walk · 8 + road surface id, G = the way direction, 1 + bearing mod 180° over 0–254, 0 = unknown), `dlm/surface_<t>.json` (tile, CRS, bounds, size, encoding, the ids, attribution) | Two materials per texel because an OSM road buffer (half-width per `highway` class, else `width`) reaches past the DLM's carriageway: the viewer reads `road` on class 7 and `walk` elsewhere. Roads burn least important first (a primary wins its junctions); walks burn parking and pedestrian areas, then the roads' sidewalk bands (kerb to +3 m on the tagged side), then the ways. Direction: every way's segments, the road's reach with its pavement first, then walkways, then the carriageways (a crossing does not turn the road). Surface values → ids in `SURFACE_OF`. No `.osm.pbf`: skipped with a note, the file already there stays |
+
 The OSM-derived files (`lamps`, `walls`, `stairs`, `bridge`, `platform`) carry
-`"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign member.
+`"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign member;
+the paving raster carries it in its legend JSON.
 (The committed platform files predate that and carry none; the HUD footer
 has the credit either way.)
 
@@ -271,7 +275,7 @@ open in any glTF or 3D Tiles tool.
 
 | File | From | Via | Contents |
 |---|---|---|---|
-| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/dlm/walls_<t>.geojson`, `data/dlm/stairs_<t>.geojson`, `data/dlm/terraces_<t>.geojson` | `scripts/bake-tiles.ts` (`readDgm`, `terrainMesh`, `stairMesh`) | The DGM resampled bilinear to 1024² / 512² (NoData = NaN), the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), then the terraces lifted and the ground lowered under each flight of stairs ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md), `lib/city/stairs.ts`), the grid plus a 30 m skirt, baked normals. The first n·n vertices are the grid, row 0 = north: the runtime samples ground height from them. L0 also carries a `stairs` node — the flights the tile owns as treads, risers and cheeks with 8-bit `COLOR_0` shades (`bake-tiles.ts` `stairMesh`) — and a `walls` node, the tile's wall ribbons standing on every tile's shaped fine ground (`wallMesh`), so L0's cache key covers every tile's terrain inputs ([ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md)). `extras`: `kind`, `tileId`, `level`, `n`, `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 2048² for L1), `landcoverLow`, `ndvi`, and on L0 the `dressing` file names |
+| `terrain_<t>_l0.glb.gz`, `terrain_<t>_l1.glb.gz` | `data/dgm/…/dgm1_<t>.tif` (+ `.tfw` when there is no embedded georeferencing), `data/dlm/walls_<t>.geojson`, `data/dlm/stairs_<t>.geojson`, `data/dlm/terraces_<t>.geojson` | `scripts/bake-tiles.ts` (`readDgm`, `terrainMesh`, `stairMesh`) | The DGM resampled bilinear to 1024² / 512² (NoData = NaN), the OSM walls burned in as breaklines ([ADR 0014](./adr/0014-wall-to-terrain-breakline-conflation.md), `lib/city/terrain-conflate.ts`), then the terraces lifted and the ground lowered under each flight of stairs ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md), `lib/city/stairs.ts`), the grid plus a 30 m skirt, baked normals. The first n·n vertices are the grid, row 0 = north: the runtime samples ground height from them. L0 also carries a `stairs` node — the flights the tile owns as treads, risers and cheeks with 8-bit `COLOR_0` shades (`bake-tiles.ts` `stairMesh`) — and a `walls` node, the tile's wall ribbons standing on every tile's shaped fine ground (`wallMesh`), so L0's cache key covers every tile's terrain inputs ([ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md)). `extras`: `kind`, `tileId`, `level`, `n`, `bounds`, `minElevation`, the level's class raster (`landcover`: 4096² for L0, 2048² for L1), `landcoverLow`, `ndvi`, and on L0 the paving raster (`surface`) and the `dressing` file names |
 | `city_<t>.glb.gz` | `data/cityjson/lod2_<t>.city.json` + `data/dop/roofcolor_<t>.json` (optional) | `scripts/bake-city-mesh.ts` (runs `cityjson-threejs-loader` once) → `bake-tiles.ts` `cityMesh` → `tile-glb.ts` `writeMeshGlb` + `addPropertyTable` | One welded mesh per tile. `_FEATURE_ID_0` per vertex (`EXT_mesh_features`) into an `EXT_structural_metadata` property table, one row per object: `tint`, `roof` (DOP colour folded in), `baseZ`, `eaveH`, `storeyH`, `glow`, `rough`, `building`, `root` (the demolish tree); `_ROOF` flags roof vertices. `extras`: `kind`, `tileId`, `footprints` |
 | `footprints_<t>.json` | the same parse | `cityMesh` | per-object 2D footprints for the minimap, `[object][polygon][vertex] = [x, y]` |
 
@@ -373,9 +377,10 @@ Measured 2026-09-24 on the current build (Dresden, gzipped wire sizes):
 | minimap footprints | 0.05–0.08 MB (0.23–0.33 MB raw) |
 | class raster 4096² / 2048² | 0.22–0.25 MB / ≈ 0.08 MB |
 | NDVI 1024² | 0.32–0.45 MB |
+| paving raster 2048² (fine level only) | 0.40–0.56 MB |
 | canopy GeoJSON | 0.04–0.11 MB (0.6–1.8 MB raw) |
 | everything else (veg rows, lamps, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
-| **tile total** | **3.9–4.9 MB** (phones, without the 4096² raster: 3.6–4.7 MB) |
+| **tile total** | **3.9–4.9 MB** (phones, without the 4096² raster: 3.6–4.7 MB), plus 0.40–0.56 MB for the paving raster since 2026-09-25 |
 
 The whole Dresden site is ≈ 17.1 MB on the wire (≈ 16.2 MB for a phone),
 the spawn tile alone — the `lite` profile — ≈ 4.1 MB. A visit fetches

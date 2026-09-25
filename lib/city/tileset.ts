@@ -90,6 +90,8 @@ export interface TerrainExtras {
   /** grid edge; the first n·n vertices are the grid, row 0 = north */
   n: number;
   ndvi?: string;
+  /** OSM paving raster (fine level only: its patterns are close-range) */
+  surface?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
 }
