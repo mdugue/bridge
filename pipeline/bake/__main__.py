@@ -16,6 +16,7 @@ from . import (
     monuments,
     ndvi,
     rail,
+    riverside,
     roof_colour,
     sport,
     stairs,
@@ -45,6 +46,7 @@ STEPS = {
     # After land cover, NDVI and the furniture (the stop signs skip a stop
     # that already has a shelter).
     "tram": tram.run,
+    "riverside": riverside.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,

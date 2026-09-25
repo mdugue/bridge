@@ -59,6 +59,7 @@ export type TileArtifactKind =
   | "platform"
   | "rail"
   | "railarea"
+  | "riverside"
   | "surface"
   | "edges"
   | "sport"
@@ -113,6 +114,9 @@ export function tileArtifacts(
     // Optional: the OSM trams — tracks, catenary supports, stop signs
     // (pipeline/bake/tram.py); without it the tile has no trams.
     tram: dlm(`tram_${tile}.geojson`),
+    // Optional: the OSM landing stages, groynes and ferry lines
+    // (pipeline/bake/riverside.py); a tile without the river has none.
+    riverside: dlm(`riverside_${tile}.geojson`),
     // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
     // hedges and the laser-scan crowns outside the canopy mask
     // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).

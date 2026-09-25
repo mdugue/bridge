@@ -84,6 +84,8 @@ export interface DressingFiles {
   railarea: string;
   /** OSM trams: tracks, catenary supports, stop signs */
   tram?: string;
+  /** OSM landing stages, groynes, ferry lines */
+  riverside?: string;
   /** the street-tree cadastre */
   trees?: string;
   vegrows: string;

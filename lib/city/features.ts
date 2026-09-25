@@ -268,6 +268,29 @@ export interface TramFeature {
   } | null;
 }
 
+/** What the Elbe carries (pipeline/bake/riverside.py): a fixed landing
+ *  stage, a floating one, a groyne, a ferry route. */
+export type RiversideKind = "ferry" | "groyne" | "pier" | "pontoon";
+
+/**
+ * OSM on the river (pipeline/bake/riverside.py, ODbL). A `pier` is its
+ * deck outline with `deck`, the deck's height (m: the bank at its landward
+ * end + 0.4); a `pontoon` its outline cut to the water, with `len` (m) and
+ * `bank`, where its gangway meets the bank (absent when a fixed pier
+ * reaches it) — its height is the drawn water's, read at runtime. A
+ * `groyne` and a `ferry` (with the route's `name`) are lines.
+ */
+export interface RiversideFeature {
+  geometry: LineGeometry | PolygonGeometry;
+  properties: {
+    bank?: Point2;
+    deck?: number;
+    k: RiversideKind;
+    len?: number;
+    name?: string;
+  } | null;
+}
+
 /** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
 export interface RailFeature {
   geometry: LineGeometry;

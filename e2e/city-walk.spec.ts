@@ -266,6 +266,8 @@ test.describe("desktop viewer", () => {
     // 51 OSM tram tracks (13.4 km), 16 masts and their wires
     expect(stats.tram.triangles).toBeGreaterThan(0);
     expect(stats.tram.instances).toBeGreaterThan(0);
+    // 20 pontoons, a groyne and the ferry lines below the Terrasse
+    expect(stats.riverside.triangles).toBeGreaterThan(0);
     // 292 wall lines
     expect(stats.walls.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);

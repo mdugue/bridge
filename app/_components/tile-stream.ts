@@ -20,6 +20,7 @@ import type {
   LowVegFeature,
   MonumentFeature,
   RailFeature,
+  RiversideFeature,
   TramFeature,
   TreeFeature,
   VegRowFeature,
@@ -42,6 +43,7 @@ import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { buildRail } from "./rail-layer";
+import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
   dressTerrain,
@@ -83,6 +85,8 @@ export interface TileDressing {
   tile: string;
   /** OSM trams: tracks, masts, the overhead line (tram-layer.ts) */
   tram?: Group;
+  /** the Elbe's landing stages, groynes, ferry lines (riverside-layer.ts) */
+  riverside?: Group;
   vegetation?: VegetationControl;
 }
 
@@ -191,6 +195,7 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.furniture,
     d.rail,
     d.tram,
+    d.riverside,
     d.sport?.group,
   ].filter((part): part is Group => part !== undefined);
 }
@@ -367,6 +372,7 @@ async function buildDressing(
     scanTrees,
     hedges,
     trams,
+    river,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -387,6 +393,7 @@ async function buildDressing(
     get<CanopyExtraFeature>(d.canopyx ?? ""),
     get<LowVegFeature>(d.lowveg ?? ""),
     get<TramFeature>(d.tram ?? ""),
+    get<RiversideFeature>(d.riverside ?? ""),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -453,9 +460,16 @@ async function buildDressing(
     trams.length > 0
       ? buildTram(trams, bridges, { ...ground, heightFog: ctx.heightFog })
       : undefined;
+  // Piers and pontoons are the tile's own; a ferry line or groyne cut at
+  // the seam samples the neighbour's ground past it.
+  const riverside =
+    river.length > 0
+      ? buildRiverside(river, { ...ground, heightFog: ctx.heightFog })
+      : undefined;
   return {
     tile,
     tram,
+    riverside,
     vegetation,
     lowVegetation,
     lamps: lampControl,

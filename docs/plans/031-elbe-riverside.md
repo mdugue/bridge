@@ -14,7 +14,33 @@
 - **Effort**: M (bake S, landing stages M, ferry lines S)
 - **Risk**: LOW — separate dressing over the water class
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: DONE 2026-09-25 — both phases, built without a real GPU:
+  the plates are still to be taken; SwiftShader proves only that it
+  compiles and boots clean.
+
+## Implementation notes (2026-09-25)
+
+- Baked (BBBike 2026-09-19): 25 piers, 31 pontoons, 1 groyne, 4 ferry
+  stretches over the four tiles (33412_5656: 20 pontoons, the groyne,
+  2 ferry stretches; 33410_5656: 17 piers, 9 pontoons; 33410_5658: 8
+  piers, 2 pontoons; 33412_5658: none).
+- **STOP, pontoons (measured)**: the DGM's river surface is flat by
+  stretch (103.75 / ≈104.3 / 105.05 / 105.2 m), but OSM draws most
+  pontoons up the bank, so the uncut outlines stood on 2.7–5.2 m of DGM
+  relief — a hull at "water + 0.5" there would bury itself in the bank.
+  The bake cuts a pontoon to its part on the water class (median spread
+  under the cut hull 0.22 m, max 2.27 m at a shoreline cell), and the
+  runtime floats it on the **lowest ground under it** — the terrain the
+  water sheet is drawn on (`water-layer.ts` has no surface of its own),
+  so the hull and the drawn water agree by construction.
+- **STOP, ferry lines**: cannot be judged without a GPU; the conservative
+  fallback is taken — the wake shows only from the air (fades in with the
+  camera's height over the ground, 25 → 60 m, `map-overlay.ts`).
+- **Deviation**: the wake is its own ribbon mesh over the water sheet, not
+  a line table inside the water shader — the same look at one draw per
+  tile, without touching the water material other plans also edit.
+- Railings are a simple rail and posts: plan 029's fence panel is not on
+  this branch.
 
 ## Why this matters
 

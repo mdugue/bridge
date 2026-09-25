@@ -12,6 +12,7 @@ import type {
   LowVegFeature,
   MonumentFeature,
   RailFeature,
+  RiversideFeature,
   StairFeature,
   TerraceFeature,
   TramFeature,
@@ -330,6 +331,35 @@ test.each(cases)(
         for (const x of p?.x ?? []) {
           expect(x).toBeGreaterThanOrEqual(0);
           expect(x).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  }
+);
+
+test.each(cases)(
+  "%s: the river's piers, pontoons, groynes and ferry lines",
+  (_, a) => {
+    for (const f of load<RiversideFeature>(a.riverside)) {
+      const p = f.properties;
+      const g = f.geometry;
+      expect(["ferry", "groyne", "pier", "pontoon"]).toContain(p?.k ?? "");
+      if (p?.k === "pier" || p?.k === "pontoon") {
+        expect(g.type).toBe("Polygon");
+        if (g.type === "Polygon") {
+          expect(isRing(g.coordinates[0])).toBe(true);
+        }
+      } else {
+        expect(g.type).toBe("LineString");
+        expect(isLine(g.coordinates)).toBe(true);
+      }
+      if (p?.k === "pier") {
+        expect(Number.isFinite(p.deck)).toBe(true);
+      }
+      if (p?.k === "pontoon") {
+        expect(p.len).toBeGreaterThan(0);
+        if (p.bank) {
+          expect(isPoint2(p.bank)).toBe(true);
         }
       }
     }

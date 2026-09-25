@@ -57,6 +57,7 @@ flowchart LR
     MON["Fountains &amp; monuments"]
     RAIL["Railway tracks"]
     TRAM["Trams<br/>tracks · masts · contact wire"]
+    RIV["Elbe landing stages<br/>piers · pontoons · groynes · ferry lines"]
     BRG["Bridges"]
     PLT["Station platforms"]
     WAL["Retaining walls"]
@@ -131,6 +132,9 @@ flowchart LR
   DLM -. "road / meadow class → track bed" .-> TRAM
   DOP -. "NDVI → lawn track bed" .-> TRAM
   DGM -. "drape · lift onto a bridge deck" .-> TRAM
+  OSM ==>|"man_made=pier / groyne · route=ferry"| RIV
+  DLM -. "water class → pontoon · ferry cut to the water" .-> RIV
+  DGM -. "pier deck from the bank · pontoon on the drawn water" .-> RIV
   OSM ==>|"barrier=retaining_wall/city_wall · natural=cliff + height"| WAL
   DGM -. "snap to the measured step (fine TIN)" .-> WAL
   WAL -. "breakline burned into the coarse grid at build" .-> TER
@@ -169,6 +173,7 @@ flowchart LR
 | **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Trams** | OSM `railway=tram` (each track), `power=catenary_mast` (the masts within 15 m of a tram track), the OSM building outlines (facades for the rosette spans), `railway=tram_stop` + the platforms (the stop signs) | DLM class raster (street vs lawn vs ballast bed) · DOP NDVI (lawn bed) · DGM1 (drape) · the bridge decks (a track tagged `bridge` rides the deck) | `tram-layer.ts`, `lib/city/tram.ts` (wire stations and sag); baked by `pipeline/bake/tram.py` |
+| **Elbe landing stages** | OSM `man_made=pier` (fixed or `floating`), `man_made=groyne`, `route=ferry` | DLM water class (a pontoon and a ferry line cut to the water) · DGM1 (a pier's deck from the bank; a pontoon floats on the terrain the water sheet lies on) | `riverside-layer.ts`, `map-overlay.ts` (the ferry lines show from the air only); baked by `pipeline/bake/riverside.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (ribbon snapped to the measured step of the fine TIN; the coarse grid is conflated to a step instead) — *no DGM/DOM/LiDAR product has the wall as a vertical face* | `lib/city/walls.ts` + `lib/city/wall-snap.ts` (at build, into the fine terrain glTF), `lib/city/terrain-conflate.ts` (coarse grid), `wall-layer.ts` (material); baked by `pipeline/bake/walls.py` |
@@ -224,6 +229,7 @@ flowchart LR
     bEDGE["edges.py"]
     bSPT["sport.py"]
     bTRAM["tram.py"]
+    bRIV["riverside.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -242,6 +248,7 @@ flowchart LR
     dEDGE["edges PNG · kerbs"]
     dSPT["sport PNG + table"]
     dTRAM["tram"]
+    dRIV["riverside"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -289,6 +296,10 @@ flowchart LR
   dNDVI -.-> bTRAM
   dFURN -. "shelters, stop signs" .-> bTRAM
   bTRAM ==> dTRAM
+  iOSM ==> bRIV
+  dCLS ==>|water| bRIV
+  iDGM -. "pier decks" .-> bRIV
+  bRIV ==> dRIV
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
@@ -306,6 +317,7 @@ flowchart LR
   dEDGE -.-> tSIDE
   dSPT -.-> tSIDE
   dTRAM -.-> tSIDE
+  dRIV -.-> tSIDE
   dEDGE -. "kerb stones (L0)" .-> tTER
 ```
 

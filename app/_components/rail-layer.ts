@@ -151,9 +151,9 @@ function pushTri(
   acc.nrm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
 }
 
-type P3 = [number, number, number];
+export type P3 = [number, number, number];
 
-function quad(acc: Mesh3, p0: P3, p1: P3, p2: P3, p3: P3, n: P3): void {
+export function quad(acc: Mesh3, p0: P3, p1: P3, p2: P3, p3: P3, n: P3): void {
   pushTri(acc, ...p0, ...p1, ...p2, ...n);
   pushTri(acc, ...p0, ...p2, ...p3, ...n);
 }
@@ -194,14 +194,14 @@ function material(
   return m;
 }
 
-interface Ring2 {
+export interface Ring2 {
   cx: number;
   cz: number;
   pts: { x: number; z: number }[];
 }
 
 /** EPSG ring → world (x,z) ring (open: closing duplicate dropped) + centroid. */
-function ringToWorld(
+export function ringToWorld(
   coords: [number, number][],
   offset: { cx: number; cy: number }
 ): Ring2 {
@@ -230,7 +230,7 @@ function ringToWorld(
  * outward-facing fascia dropping `depth` — one solid slab volume, not stacked
  * planes. Used for ballast areas, bridge decks, and platforms.
  */
-function addFootprint(
+export function addFootprint(
   acc: Mesh3,
   ring: Ring2,
   topY: number[],

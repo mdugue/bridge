@@ -43,6 +43,7 @@ import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
+import { setMapAltitude } from "./map-overlay";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -82,6 +83,7 @@ export type LayerName =
   | "lowVegetation"
   | "monuments"
   | "rail"
+  | "riverside"
   | "stairs"
   | "terrain"
   | "tram"
@@ -746,6 +748,7 @@ async function bootApp(
         furniture: census(dressings.map((d) => d.furniture)),
         rail: census(dressings.map((d) => d.rail)),
         tram: census(dressings.map((d) => d.tram)),
+        riverside: census(dressings.map((d) => d.riverside)),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
       },
@@ -957,7 +960,10 @@ async function bootApp(
     }
     // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
     camera.getWorldDirection(shadowViewDir);
-    sunRig.follow(camera.position, shadowViewDir, groundUnderCamera());
+    const ground = groundUnderCamera();
+    sunRig.follow(camera.position, shadowViewDir, ground);
+    // The map's own marks (ferry lines, street lettering) show from the air.
+    setMapAltitude(camera.position.y - ground);
     // Drift the sky dome's clouds (one uniform write/frame).
     sunRig.setTime(elapsed);
     // Repoint the shared real lamp lights at the nearest heads.

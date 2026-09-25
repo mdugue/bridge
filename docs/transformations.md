@@ -243,6 +243,40 @@ visual-variable codebook is in
   mist sheets hang next to their terrain mesh and leave with the tile.
   `water-layer.ts`. Missing class raster → no splat, no water: the tile's
   ground falls back to the flat sage.
+- **Landing stages, groynes, ferries** (plan
+  [031](./plans/031-elbe-riverside.md)) — OSM `man_made=pier` (51 ways,
+  buffered by `width`, else 3 m, flat ends; 5 areas), `man_made=groyne`
+  (1) and `route=ferry` ways (3: the Johannstadt ferry, two paddle-steamer
+  routes) (ODbL) → `pipeline/bake/riverside.py` → `riverside_<tile>.geojson`
+  (25 piers, 31 pontoons, 1 groyne, 4 ferry stretches over the four
+  tiles). A pier's `deck` = the bank's DGM at its landward end (its
+  highest dry sample) + 0.4 m. A **pontoon** (`floating=yes`, or a pier
+  reaching > 25 m out on the water class) is cut to its part on the water
+  class — OSM draws many up the bank, and the DGM's river surface is flat
+  (103.75 m, 104.3 m, 105.05 m by stretch) while the bank rises 2–5 m, so
+  the uncut outlines spread 2.7–5.2 m of DGM under a hull; cut, the median
+  spread is 0.22 m (max 2.27 m, a shoreline cell) — the plan's STOP asked
+  for the water surface the way `water-layer.ts` draws it: the water sheet
+  *is* the terrain there, so the runtime floats the hull on the **lowest
+  ground under it** (`waterLevel`), never on a baked DGM value. `bank` is
+  the nearest dry point (≤ 30 m) for its gangway, unless a fixed pier
+  reaches it (28 of 31 have one). Ferry routes are cut to their stretches
+  over the water class. Runtime `riverside-layer.ts`: a pier is a timber
+  deck 0.3 m thick on instanced piles every 4 m round its edge where it
+  stands over the water, with a railing (top rail + posts every 2 m) along
+  the edges over the water (plan 029's fence panel is not merged here); a
+  pontoon a dark hull (−0.3 → +0.35 m) under a pale deck (+0.5 m), a
+  clay ticket hut with a slate roof on one longer than 15 m, a 1.4 m
+  gangway with hand rails to its bank point; a groyne a low stone ridge,
+  crest 0.5 m over the ground, flanks 2.5 m out and 1 m down (half under
+  the drawn water); a ferry a **faint dashed wake** (1.2 m, 14 m dashes,
+  alpha 0.55) on the water — drawn as its own ribbon over the water sheet
+  rather than inside the water shader (no line table; same look, one
+  draw), and, the STOP's conservative fallback taken without a GPU plate,
+  **only from the air**: it fades in with the camera's height over the
+  ground from 25 to 60 m (`map-overlay.ts`, shared with the street
+  lettering). The paddle steamers themselves are not drawn: no dataset
+  has them. Look unverified on a real GPU.
 - **Streaming site (3D Tiles)** — `scripts/prepare-data.ts` bakes the site
   into an OGC 3D Tiles 1.1 tileset (`lib/city/tileset.ts`): per site tile the
   buildings (refine ADD, loaded whenever the tile is in view) over the two
