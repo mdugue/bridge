@@ -48,10 +48,12 @@ export interface TileArtifact {
 export type TileArtifactKind =
   | "bridge"
   | "canopy"
+  | "canopyx"
   | "furniture"
   | "lamps"
   | "landcover"
   | "landcoverLow"
+  | "lowveg"
   | "monuments"
   | "ndvi"
   | "platform"
@@ -61,6 +63,7 @@ export type TileArtifactKind =
   | "edges"
   | "sport"
   | "sportTable"
+  | "trees"
   | "vegrows";
 
 /**
@@ -106,6 +109,12 @@ export function tileArtifacts(
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
+    // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
+    // hedges and the laser-scan crowns outside the canopy mask
+    // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
+    trees: dlm(`trees_${tile}.geojson`),
+    lowveg: dlm(`lowveg_${tile}.geojson`),
+    canopyx: dlm(`canopyx_${tile}.geojson`),
   };
 }
 

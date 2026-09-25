@@ -26,6 +26,8 @@ export interface TerrainGeometryData {
   minElevation: number;
   /** n*n*3 vertex positions in the recentered data frame (Z-up) */
   positions: Float32Array;
+  /** the surface's share of `indices`; the skirt's triangles follow it */
+  surfaceIndexCount: number;
 }
 
 /** Elevations below this are treated as NoData (a sentinel that slipped through). */
@@ -209,6 +211,7 @@ export function buildTerrainGeometryData(
 
   // Vertical skirt around the four borders fills any residual crack at tile
   // seams with terrain instead of bright background.
+  const surfaceIndexCount = indices.length;
   const skirtVerts: number[] = [];
   appendSkirts(grid, valid, n, skirtVerts, indices, n * n);
 
@@ -216,7 +219,7 @@ export function buildTerrainGeometryData(
   positions.set(grid, 0);
   positions.set(skirtVerts, grid.length);
 
-  return { positions, indices, minElevation };
+  return { positions, indices, minElevation, surfaceIndexCount };
 }
 
 /**

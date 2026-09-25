@@ -8,7 +8,7 @@
  *
  *   tile           content: buildings            refine ADD   (always, once visible)
  *     └ terrain L1 content: 512² terrain         refine REPLACE
- *         └ terrain L0 content: 1024² terrain + the tile's dressing
+ *         └ terrain L0 content: TIN terrain + the tile's dressing
  *
  * The buildings of a tile load whenever the tile is in view; the terrain
  * refines from the coarse level to the fine one by screen-space error, and
@@ -50,7 +50,9 @@ export interface TerrainLevel {
   raster: number;
 }
 
-/** Fine (0) and coarse (1) terrain. */
+/** Fine (0) and coarse (1) terrain. The fine level is a TIN over the native
+ *  DGM (`TerrainExtras.tin`); its `n` is the grid it falls back to when the
+ *  DGM has holes. */
 export const TERRAIN_LEVELS: Record<0 | 1, TerrainLevel> = {
   0: { n: 1024, raster: 4096 },
   1: { n: 512, raster: 2048 },
@@ -70,12 +72,18 @@ const TILE_ERROR = 100_000;
 export interface DressingFiles {
   bridge: string;
   canopy: string;
+  /** laser-scan crowns outside the canopy mask (tiles with a laser scan) */
+  canopyx?: string;
   furniture: string;
   lamps: string;
+  /** OSM hedges */
+  lowveg?: string;
   monuments: string;
   platform: string;
   rail: string;
   railarea: string;
+  /** the street-tree cadastre */
+  trees?: string;
   vegrows: string;
 }
 
@@ -91,8 +99,17 @@ export interface TerrainExtras {
   level: 0 | 1;
   /** lowest valid elevation (m) — the valley floor */
   minElevation: number;
-  /** grid edge; the first n·n vertices are the grid, row 0 = north */
+  /** grid edge; unless `tin` is set, the first n·n vertices are the grid,
+   *  row 0 = north */
   n: number;
+  /**
+   * Set when the mesh is an error-bounded TIN (the fine level, baked from
+   * the native DGM — scripts/bake-terrain-tin.ts): `triangles` surface
+   * triangles refined to `maxError` (m), in cache order with the vertical
+   * skirt mixed in. The runtime indexes them for ground height
+   * (lib/city/terrain-tin.ts TinIndex) instead of reading a grid.
+   */
+  tin?: { maxError: number; triangles: number };
   ndvi?: string;
   /** OSM paving raster (fine level only: its patterns are close-range) */
   surface?: string;

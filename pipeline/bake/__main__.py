@@ -12,6 +12,7 @@ from . import (
     furniture,
     lamps,
     landcover,
+    lowveg,
     monuments,
     ndvi,
     rail,
@@ -19,6 +20,7 @@ from . import (
     sport,
     stairs,
     surface,
+    trees,
     walls,
 )
 from .common import Tile
@@ -27,6 +29,7 @@ STEPS = {
     "landcover": landcover.run,
     "islands": landcover.run_islands,
     "canopy": canopy.run,
+    "trees": trees.run,
     "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,
     "lamps": lamps.run,
@@ -38,6 +41,9 @@ STEPS = {
     "surface": surface.run,
     "edges": edges.run,
     "sport": sport.run,
+    # Last: thinned against the canopy and the cadastre, masked by the walls
+    # and the bridges.
+    "lowveg": lowveg.run,
 }
 
 
@@ -49,11 +55,19 @@ def main() -> None:
     parser.add_argument("--epsg", type=int, required=True)
     parser.add_argument("--raw", type=Path, required=True, help="the site's canonical raw folder")
     parser.add_argument("--data", type=Path, default=Path("data"))
+    parser.add_argument(
+        "--research",
+        action="store_true",
+        help="lowveg: also write every candidate (scan-only hedges, shrubs) under the raw folder",
+    )
     args = parser.parse_args()
     tile = Tile(args.tile, tuple(args.bounds), args.epsg, args.raw, args.data)
     steps = list(STEPS) if args.step == "all" else [args.step]
     for step in steps:
-        STEPS[step](tile)
+        if step == "lowveg":
+            lowveg.run(tile, research=args.research)
+        else:
+            STEPS[step](tile)
 
 
 if __name__ == "__main__":
