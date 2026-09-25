@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Vector3 } from "three";
+import { type InstancedMesh, Vector3 } from "three";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { sceneCensus } from "./scene-census";
@@ -97,4 +97,34 @@ test("empty input builds nothing and vetoes nothing; the control still works", (
   expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(true);
   expect(built.control.updateLod(new Vector3(5, 100, 0))).toBe(false);
   built.control.setTime(1);
+});
+
+test("a deciduous silhouette bares in winter, a conifer never", () => {
+  // columnar (deciduous) + conifer (evergreen)
+  const inv = buildTreeInventory([tree(0, 2), tree(10, 3)], ctx);
+  expect(inv.control.setSeason(190)).toBe(false); // July: all in leaf
+  expect(inv.control.setSeason(9)).toBe(true); // January
+  const bare = (part: string) =>
+    inv.control.group.children
+      .filter((c) => c.userData.treePart === part)
+      .every((c) => (c as InstancedMesh).customDepthMaterial !== undefined);
+  expect(bare("spindle")).toBe(true);
+  expect(bare("cone")).toBe(false);
+});
+
+test("a broadleaf crown rides into the canopy with its genus and trunk", () => {
+  const lime: TreeFeature = {
+    geometry: { type: "Point", coordinates: [0, 0] },
+    properties: { a: 0, d: 8, h: 12, l: "d", gn: 3, t: 20 },
+  };
+  const inv = buildTreeInventory([lime], ctx);
+  expect(inv.instances[0].crown?.season?.genus).toBe(3);
+  const unmeasured = buildTreeInventory(
+    [{ ...lime, properties: { a: 0, d: 8, h: 12, l: "d" } }],
+    ctx
+  );
+  // a young lime's measured 20 cm trunk is slimmer than the height rule's
+  const girth = (t: typeof inv) =>
+    new Vector3().setFromMatrixColumn(t.instances[0].trunk, 0).length();
+  expect(girth(inv)).toBeLessThan(girth(unmeasured));
 });
