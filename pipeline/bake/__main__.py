@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import (
     canopy,
+    cultivated,
     edges,
     furniture,
     lamps,
@@ -45,6 +46,7 @@ STEPS = {
     # After surface and edges (reads the class raster only).
     "markings": markings.run,
     "sport": sport.run,
+    "cultivated": cultivated.run,
     # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
     "skyview": skyview.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
