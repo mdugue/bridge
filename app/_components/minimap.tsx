@@ -6,12 +6,13 @@ import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
   type FootprintPoly,
+  mapHeightPx,
   mapPxToEpsg,
 } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 
-/** Default CSS pixel size; canvases are scaled by devicePixelRatio. */
+/** Default CSS pixel width; canvases are scaled by devicePixelRatio. */
 const DEFAULT_SIZE = 192;
 
 // Canvas drawing colors — scene content like the 3D view, not themable chrome.
@@ -96,7 +97,7 @@ interface MinimapProps {
   /** per-tile land-cover class PNGs + their EPSG bounds, drawn as background */
   landcoverTiles?: { bounds: TerrainBounds; src: string }[];
   onTeleport: (epsgX: number, epsgY: number) => void;
-  /** CSS pixel edge length (square); smaller on phones */
+  /** CSS pixel width; the height follows the site's aspect ratio */
   size?: number;
   /** subscribe to throttled pose updates; returns an unsubscribe fn */
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
@@ -104,11 +105,12 @@ interface MinimapProps {
 
 function setupCanvas(
   canvas: HTMLCanvasElement,
-  size: number
+  width: number,
+  height: number
 ): CanvasRenderingContext2D {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new Error("2D canvas unsupported");
@@ -131,6 +133,8 @@ export function Minimap({
   size = DEFAULT_SIZE,
   subscribePose,
 }: MinimapProps) {
+  // The map has the site's shape (a landscape for Dresden), edge to edge.
+  const height = mapHeightPx(bounds, size);
   const staticRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   // Read by the pose callback so the ring tracks the slider without re-subscribing
@@ -192,9 +196,9 @@ export function Minimap({
     if (!canvas) {
       return;
     }
-    const ctx = setupCanvas(canvas, size);
+    const ctx = setupCanvas(canvas, size, height);
     ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, size, height);
     // Each tile drawn into its own sub-rect of the (union) bounds.
     for (const tile of landcoverTiles ?? []) {
       const cv = decoded.get(tile.src);
@@ -206,9 +210,9 @@ export function Minimap({
       ctx.drawImage(cv, a.px, a.py, b.px - a.px, b.py - a.py);
     }
     ctx.strokeStyle = FRAME;
-    ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+    ctx.strokeRect(0.5, 0.5, size - 1, height - 1);
     drawFootprints(ctx, footprints, bounds, size);
-  }, [footprints, bounds, size, landcoverTiles, decoded]);
+  }, [footprints, bounds, size, height, landcoverTiles, decoded]);
 
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {
@@ -216,9 +220,9 @@ export function Minimap({
     if (!canvas) {
       return;
     }
-    const ctx = setupCanvas(canvas, size);
+    const ctx = setupCanvas(canvas, size, height);
     return subscribePose((pose) => {
-      ctx.clearRect(0, 0, size, size);
+      ctx.clearRect(0, 0, size, height);
       const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, size);
       ctx.save();
       ctx.translate(px, py);
@@ -249,7 +253,7 @@ export function Minimap({
         ctx.setLineDash([]);
       }
     });
-  }, [subscribePose, bounds, size]);
+  }, [subscribePose, bounds, size, height]);
 
   return (
     <button
@@ -270,18 +274,18 @@ export function Minimap({
         );
         onTeleport(x, y);
       }}
-      style={{ width: size, height: size }}
+      style={{ width: size, height }}
       type="button"
     >
       <canvas
         className="absolute inset-0"
         ref={staticRef}
-        style={{ width: size, height: size }}
+        style={{ width: size, height }}
       />
       <canvas
         className="absolute inset-0"
         ref={overlayRef}
-        style={{ width: size, height: size }}
+        style={{ width: size, height }}
       />
     </button>
   );

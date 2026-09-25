@@ -285,6 +285,12 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   turns a bench without a tagged `direction` towards the nearest highway line.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
+- **Every tile carries the same baked files** — `lib/city/tile-data.test.ts`
+  fails when one tile has a kind of file another lacks. The runtime treats a
+  missing optional artifact as "layer off", so without that test a tile
+  added before a new bake step (or a step run on some tiles only) ships
+  quietly poorer. After merging a new step, or adding a tile, bake it on
+  every tile the test names; a step that finds nothing writes an empty file.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
   with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once

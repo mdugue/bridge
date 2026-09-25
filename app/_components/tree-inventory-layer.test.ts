@@ -41,7 +41,7 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
   expect(census.meshes).toBe(3 * 2);
   expect(census.instances).toBe(3 * 2);
   // Every trunk and the 3 broadleaf crowns ride in the canopy's meshes: one
-  // trunk mesh + the cheap and the rich crown, no extra draw call.
+  // trunk mesh + the mid, rich and far crown, no extra draw call.
   expect(inv.instances).toHaveLength(6);
   expect(inv.instances.filter((t) => t.crown)).toHaveLength(3);
   const veg = buildVegetation(
@@ -49,8 +49,8 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
     ctx
   );
   const merged = sceneCensus([veg.group]);
-  expect(merged.meshes).toBe(3);
-  expect(merged.instances).toBe(1 + 6 + (1 + 3) * 2);
+  expect(merged.meshes).toBe(4);
+  expect(merged.instances).toBe(1 + 6 + (1 + 3) * 3);
 });
 
 test("crowns stand on the ground, never NaN (a NaN matrix culls the chunk)", () => {
@@ -73,8 +73,8 @@ test("keepTree vetoes the canopy points inside an inventory crown", () => {
     { rows: [], canopy: [canopy(2), canopy(40)], keepTree: inv.keepTree },
     ctx
   );
-  // only the far canopy point survives: trunk + cheap + rich instances
-  expect(sceneCensus([veg.group]).instances).toBe(3);
+  // only the far canopy point survives: trunk + mid, rich and far crown
+  expect(sceneCensus([veg.group]).instances).toBe(4);
 });
 
 test("a tree in forest/copse (f = 1) vetoes no canopy tree", () => {

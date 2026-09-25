@@ -319,21 +319,27 @@ def run(tile: Tile) -> None:
         print(f"{tile.id}: no tree cadastre at {raw_path} — skipping the inventory trees")
         return
     trees = parse_trees(json.loads(raw_path.read_text()), tile.bounds)
-    if not trees:
-        print(f"{tile.id}: the tree cadastre has no tree here — nothing written")
-        return
-    stats = size_stats(trees)
-    sizes, imputed_h, imputed_d = impute(trees, stats)
-    osm = _osm_complement(tile, trees)
-    osm_sizes, _, _ = impute(osm, stats)
-    # Sorted by position, so a re-bake diffs by what changed, not by the
-    # order the WFS happened to answer in.
-    rows = sorted(
-        zip(trees + osm, sizes + osm_sizes, strict=True), key=lambda r: (r[0]["x"], r[0]["y"])
-    )
-    landcover = tile.out("dlm", f"landcover_{tile.id}.png")
-    cls = np.asarray(Image.open(landcover).convert("L")) if landcover.exists() else None
-    features = tree_features([r[0] for r in rows], [r[1] for r in rows], cls, tile.bounds)
+    # A tile the cadastre has no tree on (all forest) still gets its file,
+    # empty: "baked, nothing here" is not "never baked" (lib/city/tile-data.test.ts
+    # holds every tile to the same set of files). The OSM complement fills in
+    # sizes from the cadastre's own statistics, so it needs a cadastre tree.
+    features = []
+    osm: list[dict] = []
+    imputed_h = imputed_d = 0
+    if trees:
+        stats = size_stats(trees)
+        sizes, imputed_h, imputed_d = impute(trees, stats)
+        osm = _osm_complement(tile, trees)
+        osm_sizes, _, _ = impute(osm, stats)
+        # Sorted by position, so a re-bake diffs by what changed, not by the
+        # order the WFS happened to answer in.
+        rows = sorted(
+            zip(trees + osm, sizes + osm_sizes, strict=True),
+            key=lambda r: (r[0]["x"], r[0]["y"]),
+        )
+        landcover = tile.out("dlm", f"landcover_{tile.id}.png")
+        cls = np.asarray(Image.open(landcover).convert("L")) if landcover.exists() else None
+        features = tree_features([r[0] for r in rows], [r[1] for r in rows], cls, tile.bounds)
     doc = {
         "type": "FeatureCollection",
         "attribution": f"{ATTRIBUTION}; {OSM_ATTRIBUTION}" if osm else ATTRIBUTION,

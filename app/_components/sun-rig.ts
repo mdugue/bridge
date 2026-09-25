@@ -57,6 +57,18 @@ function createSkyDome(scene: Scene): Sky {
   const sky = new Sky();
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
+  // The dome is a box ±2250 m around its centre, so it has to travel with
+  // the camera: anchored at the origin (the spawn tile), a camera on the
+  // far tiles (the Blaues Wunder is ~3 km out) stood outside it and saw the
+  // bare clear colour where the sky should be. The shader only reads the
+  // direction from the camera, so re-centring changes nothing else. This
+  // runs after culling (hence no culling) and before the model-view
+  // matrix is taken from `matrixWorld`.
+  sky.frustumCulled = false;
+  sky.onBeforeRender = (_renderer, _scene, camera) => {
+    sky.position.setFromMatrixPosition(camera.matrixWorld);
+    sky.updateMatrixWorld();
+  };
   const u = sky.material.uniforms;
   // Moderate haze and a small Mie lobe: more of either blows the sky around
   // the sun (and with it half the horizon) out to flat white.

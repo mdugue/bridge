@@ -911,12 +911,20 @@ test.describe("mobile", () => {
  * leaves `ready` false forever, which is exactly what this waits on.
  */
 test.describe("whole site streamed", () => {
+  // A retry would start the same ten-minute boot again and run the job past
+  // its budget, which cancels it without a report; a failure here should
+  // report instead.
+  test.describe.configure({ retries: 0 });
+
   test("several tiles load, dress and settle without errors", async ({
     browser,
   }) => {
-    // Its own boot, and a longer one than the spawn-only specs: several
-    // tiles' terrain, buildings and dressings, all shaded on the CPU.
-    test.setTimeout(slow(240_000));
+    // Its own boot, and a longer one than the spawn-only specs: every tile
+    // the spawn view reaches (five of the fifteen) with its terrain,
+    // buildings and dressings — ~136 000 tree instances — all shaded on the
+    // CPU. Measured at ~200 s to `ready` on a four-core machine (about 50
+    // frames at 4 s each); a shared runner is about half as fast.
+    test.setTimeout(slow(260_000));
     const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
     const page = await context.newPage();
     const errors = watchErrors(page);
@@ -932,7 +940,7 @@ test.describe("whole site streamed", () => {
         () => window.__poc?.ready === true,
         undefined,
         {
-          timeout: slow(150_000),
+          timeout: slow(200_000),
         }
       );
       const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);

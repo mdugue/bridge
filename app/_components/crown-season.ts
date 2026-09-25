@@ -250,18 +250,24 @@ function writeInstance(
 
 /**
  * Hooks one chunk's crowns to the season. Call after the meshes are painted
- * with their summer colours (those are kept as the baseline). The two LOD
- * meshes then share one colour buffer and one `aBare`, so a date change
- * writes each instance once.
+ * with their summer colours (those are kept as the baseline). The mid and
+ * rich tiers share one colour buffer and one `aBare`, so a date change
+ * writes each instance once; the far tier holds a subset of the instances
+ * (`farSlots[j]` is the shared slot of its instance `j`) and gets a copy.
  */
 export function seasonCrowns(
-  meshes: { cheap: InstancedMesh; rich: InstancedMesh },
+  meshes: {
+    far?: InstancedMesh;
+    farSlots?: readonly number[];
+    mid: InstancedMesh;
+    rich: InstancedMesh;
+  },
   keys: CrownSeasonKey[],
   materials: CrownMaterials
 ): SeasonalCrowns {
-  const { cheap, rich } = meshes;
-  const colourAttr = cheap.instanceColor;
-  if (!colourAttr || keys.length !== cheap.count) {
+  const { mid, rich, far, farSlots } = meshes;
+  const colourAttr = mid.instanceColor;
+  if (!colourAttr || keys.length !== mid.count) {
     return { apply: () => false };
   }
   rich.instanceColor = colourAttr;
@@ -269,7 +275,7 @@ export function seasonCrowns(
     new Float32Array(keys.length),
     1
   );
-  cheap.geometry = withBare(cheap.geometry, bareAttr);
+  mid.geometry = withBare(mid.geometry, bareAttr);
   rich.geometry = withBare(rich.geometry, bareAttr);
   const arrays = {
     bare: bareAttr.array as Float32Array,
@@ -277,6 +283,11 @@ export function seasonCrowns(
     summer: Float32Array.from(colourAttr.array as Float32Array),
     target: autumnTargets(keys),
   };
+  const farSeason =
+    far?.instanceColor && farSlots && farSlots.length === far.count
+      ? farTier(far, farSlots)
+      : null;
+  const tiers = farSeason ? [mid, rich, farSeason.mesh] : [mid, rich];
   const deciduous = keys.some((k) => !k.evergreen);
   let wasBare = false;
   return {
@@ -293,16 +304,48 @@ export function seasonCrowns(
       if (moved) {
         bareAttr.needsUpdate = true;
         colourAttr.needsUpdate = true;
+        farSeason?.copy(arrays);
       }
       if (anyBare !== wasBare) {
         wasBare = anyBare;
         moved = true;
-        for (const mesh of [cheap, rich]) {
+        for (const mesh of tiers) {
           mesh.material = anyBare ? materials.bare : materials.leafy;
           mesh.customDepthMaterial = anyBare ? crownDepthMaterial() : undefined;
         }
       }
       return moved;
+    },
+  };
+}
+
+/** The far tier's own `aBare` and a copier from the shared arrays. */
+function farTier(
+  mesh: InstancedMesh,
+  slots: readonly number[]
+): {
+  copy: (from: { bare: Float32Array; colour: Float32Array }) => void;
+  mesh: InstancedMesh;
+} {
+  const colourAttr = mesh.instanceColor as InstancedBufferAttribute;
+  const bareAttr = new InstancedBufferAttribute(
+    new Float32Array(slots.length),
+    1
+  );
+  mesh.geometry = withBare(mesh.geometry, bareAttr);
+  const bare = bareAttr.array as Float32Array;
+  const colour = colourAttr.array as Float32Array;
+  return {
+    mesh,
+    copy: (from) => {
+      slots.forEach((slot, j) => {
+        bare[j] = from.bare[slot];
+        colour[j * 3] = from.colour[slot * 3];
+        colour[j * 3 + 1] = from.colour[slot * 3 + 1];
+        colour[j * 3 + 2] = from.colour[slot * 3 + 2];
+      });
+      bareAttr.needsUpdate = true;
+      colourAttr.needsUpdate = true;
     },
   };
 }

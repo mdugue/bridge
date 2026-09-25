@@ -116,8 +116,7 @@ enthält je Kachel:
 | | `osmbuild_<Kachel>.json` | je Gebäude: Laden oder Café im Erdgeschoss, Baudenkmal | 15–40 kB |
 | `data/dop/` | `roofcolor_<Kachel>.json` | eine Farbe je Gebäude, aus dem Luftbild abgetastet | 0,2 MB |
 
-Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
-(plus zwei Geländekacheln im Osten, die noch nichts lädt).
+Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 
 **Eine Wahrheit gegenüber Derivat, auf einen Blick:**
 
@@ -187,24 +186,25 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 
 | Was | Startkachel | Andere Kacheln | Geladen, wenn |
 |---|---|---|---|
-| Gebäude (mit Stiltabelle) | 1,34 MB | 1,09–1,46 MB | die Kachel im Blick ist |
-| Gebäudegrundrisse (Minikarte) | 48 kB | 59–76 kB | mit den Gebäuden |
-| Grobes Gelände (512²) | 0,41 MB | 0,44–0,54 MB | die Kachel im Blick ist |
-| Detailliertes Gelände (1024², mit seinen Mauern und Treppen) | 1,62 MB | 1,62–2,03 MB | die Kamera nahe kommt |
-| Landnutzungsklassen, 2048² | 0,08 MB | 0,07–0,08 MB | beim Start (Minikarte), dann fürs grobe Gelände |
-| Landnutzungsklassen, 4096² | 0,22 MB | 0,22–0,25 MB | mit dem detaillierten Gelände (nur Desktop) |
-| Grün (NDVI) | 0,39 MB | 0,32–0,45 MB | mit dem Gelände |
-| Baumpunkte | 36 kB | 54–106 kB | mit dem detaillierten Gelände |
-| Stadtmöbel | 16 kB | 5–17 kB | mit dem detaillierten Gelände |
+| Gebäude (mit Stiltabelle) | 1,34 MB | bis 1,91 MB | die Kachel im Blick ist |
+| Gebäudegrundrisse (Minikarte) | 48 kB | bis 75 kB | mit den Gebäuden |
+| Grobes Gelände (512²) | 0,41 MB | 0,44–0,65 MB | die Kachel im Blick ist |
+| Detailliertes Gelände (ein TIN, mit seinen Mauern, Treppen und Bordsteinen) | 1,61 MB | 1,31–3,56 MB | die Kamera nahe kommt |
+| Landnutzungsklassen, 2048² | 0,08 MB | 0,06–0,11 MB | beim Start (Minikarte), dann fürs grobe Gelände |
+| Landnutzungsklassen, 4096² | 0,22 MB | 0,15–0,29 MB | mit dem detaillierten Gelände (nur Desktop) |
+| Grün (NDVI) | 0,39 MB | 0,32–0,77 MB | mit dem Gelände |
+| Baumpunkte | 36 kB | 41–526 kB | mit dem detaillierten Gelände |
+| Stadtmöbel | 19 kB | 0,3–19 kB | mit dem detaillierten Gelände |
 | Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
-| **Je Kachel, volle Detailstufe** | **≈ 4,2 MB** | **≈ 4,0–5,0 MB** | |
-| **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 2,0–2,6 MB | |
+| Belag- und Straßenkanten-Raster | 2,18 MB | 0,28–2,76 MB | mit dem detaillierten Gelände |
+| **Je Kachel, volle Detailstufe** | **≈ 6,4 MB** | **≈ 4,0–9,7 MB** | |
+| **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 1,3–3,3 MB | |
 
 Wie viel ein Besuch lädt, hängt also davon ab, wohin du gehst. Mit jeder
-Kachel in voller Detailstufe hat ein Desktop-Browser etwa **17 MB** für die
-vier Kacheln geladen; ein Handy etwa 16 MB (es nimmt für jede Kachel das
+Kachel in voller Detailstufe hat ein Desktop-Browser etwa **97 MB** für die
+fünfzehn Kacheln geladen; ein Handy etwa 95 MB (es nimmt für jede Kachel das
 2048²-Landnutzungsraster); das nur für Tests gedachte „lite“-Profil, das
-allein die Startkachel streamt, etwa 4 MB. Das ist mehr als vor der
+allein die Startkachel streamt, etwa 6 MB. Das ist mehr als vor der
 Umstellung aufs Streamen (ein vollständiger Besuch lag bei etwa 10,6 MB),
 weil das Gelände jetzt als fertiges Netz statt als kompaktes Höhenraster
 ankommt; dafür ist jede Datei ein Standardformat, das gängige 3D-Werkzeuge

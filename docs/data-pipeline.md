@@ -39,23 +39,30 @@ that id; `tileExtentOf` gives its extent. Dresden:
 
 ```
         N
-  ┌─────────────────┬─────────────────┐
-  │ 33410_5658_2_sn │ 33412_5658_2_sn │
-  ├─────────────────┼─────────────────┤
-  │ 33410_5656_2_sn │ 33412_5656_2_sn │   ★ spawn tile (sites/dresden.ts,
-  │                 │       ★         │     first in the list)
-  └─────────────────┴─────────────────┘
-                                      E
+  ┌─────────────────┬─────────────────┬─────────────────┬─────────────────┬─────────────────┐
+  │ 33408_5658_2_sn │ 33410_5658_2_sn │ 33412_5658_2_sn │ 33414_5658_2_sn │ 33416_5658_2_sn │
+  │ Pieschen,       │ Innere Neustadt │ Äußere Neustadt │ Waldschlößchen- │ Dresdner Heide, │
+  │ Mickten         │                 │                 │ brücke          │ Loschwitz slope │
+  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
+  │ 33408_5656_2_sn │ 33410_5656_2_sn │ 33412_5656_2_sn │ 33414_5656_2_sn │ 33416_5656_2_sn │
+  │ Friedrichstadt, │ Altstadt        │ Johannstadt ★   │ Elbwiesen,      │ Blaues Wunder,  │
+  │ Ostragehege     │                 │                 │ Elbschlösser    │ Loschwitz       │
+  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┤
+  │ 33408_5654_2_sn │ 33410_5654_2_sn │ 33412_5654_2_sn │ 33414_5654_2_sn │ 33416_5654_2_sn │
+  │ Löbtau, Plauen  │ Hauptbahnhof    │ Großer Garten   │ Striesen        │ Blasewitz       │
+  └─────────────────┴─────────────────┴─────────────────┴─────────────────┴─────────────────┘
+                                                                                            E
+  ★ spawn tile (sites/dresden.ts, first in the list)
 ```
 
 The spawn tile spans 412 000–414 000 E / 5 656 000–5 658 000 N
-(EPSG:25833) — roughly 51.049–51.067° N, 13.745–13.773° E. No tile has a
-role beyond "where you start": which tile is detailed is decided by camera
-distance at runtime ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)),
-and collision, demolish and picking work on every loaded tile. Two further
-DGM tiles (`33414_5656`, `33414_5658`, ~28 MB) are committed under
-`data/dgm/` but belong to no site; keeping or dropping them is a
-maintainer decision (recorded in [plans/README.md](./plans/README.md)).
+(EPSG:25833) — roughly 51.049–51.067° N, 13.745–13.773° E; the site as a
+whole covers 408 000–418 000 E / 5 654 000–5 660 000 N, a 5×3 block of fifteen
+tiles. No
+tile has a role beyond "where you start": which tile is detailed is decided
+by camera distance at runtime
+([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)), and collision,
+demolish and picking work on every loaded tile.
 
 ## Stage 1 — the bakes (`pipeline/`, `bun run bake`)
 
@@ -157,9 +164,15 @@ downloads a file twice (the ZIPs stay in `downloads/`):
 - **The laser scan, only with `--lsc`** (≈380 MB a tile): layer 1 of the
   same link service, unpacked as `lsc/<tile>.laz`. A failed download is a
   note, not an error (the hedge step then goes OSM-only); the LAZ can also
-  be put there by hand. On 2026-09-25 the portal still named the share
-  `…/rqcqdt8QMcLFUvC/lsc_<tile>_laz.zip`, but the share answered 503
-  (`NotFound`).
+  be put there by hand.
+- **A rotated share is followed.** GeoSN rotates the share a product is
+  served from, and the link service has lagged behind: on 2026-09-25 it
+  still named `…/rqcqdt8QMcLFUvC/lsc_<tile>_laz.zip` (and the retired LoD2
+  share), which answered 503. When a product download fails, the adapter
+  reads the catalogue embedded in the portal's batch download page
+  (`batch-download-4719.html`: every product's current `share_id` and file
+  name pattern) and fetches the same file under the share named there
+  (`current_share_url`, unit-tested).
 
 Skipped inputs are skipped by *presence*: an existing `dom1/<tile>.tif` or
 any `dlm/*.shp` is not fetched again. Delete it to refresh.
@@ -195,7 +208,7 @@ last, thinned against the canopy and the cadastre.
 | `rail` | `ver03_f`, `ver03_l`, `ver06_f`, `ver06_l`, `ver01_l`, `ver02_l`; DGM1 + DOM1; OSM `man_made=bridge`, `railway=platform` | `dlm/railarea_<t>.geojson` (ballast polygons), `dlm/rail_<t>.geojson` (lines with `tracks`, `electrified`), `dlm/bridge_<t>.geojson` (polygons with per-vertex `deck`, `kind`, `name`, `structure`), `dlm/platform_<t>.geojson` | Ballast: `OBJART=42010` made valid, unioned (shapely) and clipped. Rails: heavy rail only (`SPW=1000`, trams excluded), fragments merged at 1 m. Decks: every `ver06_l` centreline (`BWF=1800`), snapped to a `ver06_f` footprint ≤ 50 m away, else buffered by kind width; deck height = the DGM abutment ramp lifted to the DOM surface, plus camber; `kind` from the rail/road/path networks under it; `structure` (arches) from the nearest OSM bridge ≤ 60 m. **No Basis-DLM: the step is skipped, the files already there stay. No DOM1: decks use the DGM ramp. No `.osm.pbf`: bridges without structure, the platform file already there stays.** Every other output is written, even when empty |
 
 | `trees` | `trees/<t>.geojson` (the cadastre), the OSM extract (`natural=tree`), the class raster | `dlm/trees_<t>.geojson` (points with `h`, `d`, archetype `a`, leaf type `l`, optional foliage `c`, globe `g`, forest/copse `f`, genus `gn`, trunk diameter `t` in cm, `s: "osm"` for an OSM tree; `genera` and `attribution` members) | Only the trees the tile owns (`gis_x_utm`/`gis_y_utm`, west and south edges in); trunk stumps dropped. Taxon → archetype, leaf type and foliage colour by `tree_archetypes.py`. A missing height or crown imputed from this tile's genus median height / archetype crown-to-height ratio, then clamped (1.5–40 m, 0.8–30 m, crown ≤ 1.6 · h). Then the OSM trees more than 3 m from every cadastre tree (the cadastre wins): classified from `species`/`taxon`/`genus` (German genus names mapped) or, failing that, `leaf_type`/`leaf_cycle` (round or conifer); neither → dropped. Their `height`/`diameter_crown`/`circumference` tags are read, the gaps filled from the cadastre's statistics. Features sorted by position. 2026-09-25 re-bake (WFS of that day, BBBike extract of 2026-09-19): the 18 444 cadastre trees unchanged but for the added `gn`/`t`; 1 820 OSM trees added (854 / 251 / 369 / 346). `f = 1` where the tree stands in DLM forest/copse (classes 2/3): such a tree vetoes no canopy tree. Analysis: `scripts/eval/kataster-eval.py`. Checked 2026-09-25 against a fresh WFS fetch (the same 3301 / 3755 / 6214 / 5567 records): all four tiles identical to the committed files but for the order. **No cadastre: skipped with a note, the file already there stays** |
-| `lowveg` | the laser scan (`lsc/<t>.laz` → 0.5 m rasters under `lsc/<t>/`, `lsc.py`: ground idw/min/count, surface max/count, non-ground count and multi-echo count, the mean intensity of the low returns 0.25–4 m above ground); OSM `barrier=hedge` lines, `natural=scrub/shrubbery` areas, `natural=shrub` nodes; the class raster, NDVI, walls, bridges, canopy and cadastre trees; the committed CityJSON and DGM1 | `dlm/lowveg_<t>.geojson` (the OSM hedge LineStrings `h`/`w`, `src` `osm`/`osm+lsc` — only what renders), `dlm/canopyx_<t>.geojson` (the scan's crown peaks `h`/`r` the canopy leaves out, minus those within max(4 m, crown radius) of a cadastre tree) | Needs scipy, scikit-image and laspy (lazrs), all in the uv environment. `lsc.py` streams the LAZ in chunks and bins it by PDAL's `writers.gdal` `binmode` rules, read from PDAL's `GDALGrid.cpp` (a point in the cell containing it; `idw` is the cell's first point in file order, because bin mode passes every point at distance 0; empty cells filled from the non-empty ones within the window, weighted by 1 / the Chebyshev distance in cells; the bands in PDAL's fixed order min, max, mean, idw, count, so the low returns' height above ground is over the DTM's band 2, `idw`), writing the band names PDAL wrote — a folder PDAL made reads as it is. Closed hedge ways (a garden ring) come through GDAL's `multipolygons` layer and are taken as their rings. Method and thresholds: the ledger's "Low vegetation". **No LAZ: OSM only** — mapped hedges at their `height` tag or 1.5 m, no `canopyx`; the committed neighbours are baked that way. Checked 2026-09-25: from the BBBike Dresden extract the three OSM-only neighbours come out identical to the committed files (54 / 94 / 45 hedges); `scripts/eval/compare-bakes.py` compares a re-bake with the committed files (and two raster folders). On 33412_5656 with the LAZ, `lsc.py`'s rasters match PDAL's cell for cell (the low-return intensity but for ~400 of 2 M cells, points on the 0.25 / 4 m bounds), and with the inputs of the first bake the scan trees and hedges come out identical; with the current bridges and land cover the scan trees are 5 788 (5 739 before). `--research` also writes every candidate (scan-only hedges, shrubs) to `lsc/lowveg_all_<t>.geojson`, never committed. No `.osm.pbf`: skipped with a note |
+| `lowveg` | the laser scan (`lsc/<t>.laz` → 0.5 m rasters under `lsc/<t>/`, `lsc.py`: ground idw/min/count, surface max/count, non-ground count and multi-echo count, the mean intensity of the low returns 0.25–4 m above ground); OSM `barrier=hedge` lines, `natural=scrub/shrubbery` areas, `natural=shrub` nodes; the class raster, NDVI, walls, bridges, canopy and cadastre trees; the committed CityJSON and DGM1 | `dlm/lowveg_<t>.geojson` (the OSM hedge LineStrings `h`/`w`, `src` `osm`/`osm+lsc` — only what renders), `dlm/canopyx_<t>.geojson` (the scan's crown peaks `h`/`r` the canopy leaves out, minus those within max(4 m, crown radius) of a cadastre tree) | Needs scipy, scikit-image and laspy (lazrs), all in the uv environment. `lsc.py` streams the LAZ in chunks and bins it by PDAL's `writers.gdal` `binmode` rules, read from PDAL's `GDALGrid.cpp` (a point in the cell containing it; `idw` is the cell's first point in file order, because bin mode passes every point at distance 0; empty cells filled from the non-empty ones within the window, weighted by 1 / the Chebyshev distance in cells; the bands in PDAL's fixed order min, max, mean, idw, count, so the low returns' height above ground is over the DTM's band 2, `idw`), writing the band names PDAL wrote — a folder PDAL made reads as it is. Closed hedge ways (a garden ring) come through GDAL's `multipolygons` layer and are taken as their rings. Method and thresholds: the ledger's "Low vegetation". **No LAZ: OSM only** — mapped hedges at their `height` tag or 1.5 m, no `canopyx`; every committed tile has its scan (2026-09-25), so `tile-data.test.ts` holds all of them to a `canopyx` file. Checked 2026-09-25, before the scans: from the BBBike Dresden extract the three OSM-only neighbours came out identical to the committed files (54 / 94 / 45 hedges); `scripts/eval/compare-bakes.py` compares a re-bake with the committed files (and two raster folders). On 33412_5656 with the LAZ, `lsc.py`'s rasters match PDAL's cell for cell (the low-return intensity but for ~400 of 2 M cells, points on the 0.25 / 4 m bounds), and with the inputs of the first bake the scan trees and hedges come out identical; with the current bridges and land cover the scan trees are 5 788 (5 739 before). `--research` also writes every candidate (scan-only hedges, shrubs) to `lsc/lowveg_all_<t>.geojson`, never committed. No `.osm.pbf`: skipped with a note |
 | `islands` | the committed class raster; OSM pedestrian / island / fountain areas, parks and lawns | the class raster in place (+ the legend's `attribution`) | The same `carve_islands` the `landcover` step runs when an extract is there: road texels (7) under OSM pedestrian areas, `area:highway` footway/pedestrian/traffic-island and fountain basins become 4, under parks and lawns 1 (lawn over walk). Idempotent; for sites whose raw DLM is not at hand |
 | `edges` | the committed class raster; the NDVI and paving rasters when present | `dlm/edges_<t>.png` (8-bit greyscale 4096 × 2048 = two bytes per texel of a 2048² raster, interleaved: R, G = 128 + 20 · the signed distance (m) to the road edge / the meadow edge, positive inside, ±6.35 m), `dlm/edges_<t>.json` (legend, `scale`), `dlm/kerbs_<t>.geojson` (lines, the road on their left; a terrain bake input, not served) | Distance by growing the mask ring by ring (octagonal metric), three 3×3 box passes, averaged 4096 → 2048. The meadow mask counts urban green: NDVI (upsampled, blurred) > 0.3 on classes 0/4, not paved per the OSM raster. Kerb lines: marching squares on the road field's 0 level, segments beside water or railway dropped, merged, simplified 0.15 m, shorter than 3 m dropped. Runs after `surface`; needs no raw data |
 | `sport` | OSM `leisure=pitch` / `track` multipolygons (`sport`, `surface`, `indoor`, `covered`, `location`) and `leisure=track` lines (`width`) | `dlm/sport_<t>.json` (tile, CRS, bounds, encoding, the surface / marking / shape ids, attribution, and `grounds`: one row per ground, `[cx, cy, angle, p1, p2, p3, surface, marking, shape]`, the centre in m from the tile's north-west corner), `dlm/sport_<t>.png` (8-bit greyscale 8192 × 2048 = four bytes per texel of a 2048² raster, interleaved: R = 1 + the row on top — every outline grown 1.5 m, then the exact outlines —, G = 1 + a second row, outlines grown 4 m with the first row winning, B = 255 inside an exact outline, A = 0) | Grounds touching the tile, outdoors only; playgrounds are the `furniture` step's. Surface: the tag (`SURFACE_OF`), else the first sport's usual one (`SPORTS`); lines by the first sport; a football pitch on a sealed surface shorter than 50 m draws as a court. Shape: the minimum rotated rectangle when the area fills ≥ 85 % of it; a track with a radius ≥ 15 m that fills less is a capsule (half straight, outer radius, the band's width solved from the area); else the mapped outline. Burn order tracks, then pitches largest first, so a court inside a larger ground wins; at most 255 rows. Tracks mapped as a line are buffered by their `width` (else six lanes, 7.32 m). No `.osm.pbf`: skipped with a note, the files already there stay |
@@ -408,36 +421,36 @@ for tile, (raw, wire) in sorted(tot.items()):
 PY
 ```
 
-Measured 2026-09-24 on the current build (Dresden, gzipped wire sizes):
+Measured 2026-09-25 on the current build (Dresden, gzipped wire sizes):
 
 | Per tile | Wire |
 |---|---|
-| buildings `city_<t>.glb.gz` | 1.1–1.5 MB |
-| fine terrain L0 (the TIN since 2026-09-25; the 1024² grid with kerbs was 2.15–2.45 MB) | 1.6–2.0 MB |
-| coarse terrain L1 | 0.41–0.54 MB |
-| minimap footprints | 0.05–0.08 MB (0.23–0.33 MB raw) |
-| class raster 4096² / 2048² | 0.22–0.25 MB / ≈ 0.08 MB |
-| NDVI 1024² | 0.32–0.45 MB |
-| paving raster 2048² (fine level only) | 0.60–0.86 MB |
-| edge raster 2048² (fine level only) | 0.34–0.46 MB |
-| canopy GeoJSON | 0.04–0.11 MB (0.6–1.8 MB raw) |
-| street furniture GeoJSON | 0.01–0.03 MB (0.05–0.18 MB raw) |
-| street-tree cadastre + OSM trees GeoJSON | 0.04–0.07 MB (0.56–0.91 MB raw) |
-| scan trees GeoJSON (spawn tile only) | 0.05 MB (0.65 MB raw) |
+| buildings `city_<t>.glb.gz` | up to 1.9 MB (33416_5658, all forest, holds one building) |
+| fine terrain L0 (the TIN, with walls, stairs and kerb stones) | 1.3–3.6 MB |
+| coarse terrain L1 | 0.41–0.65 MB |
+| minimap footprints | up to 0.08 MB (0.34 MB raw) |
+| class raster 4096² / 2048² | 0.15–0.29 MB / 0.06–0.11 MB |
+| NDVI 1024² | 0.32–0.77 MB |
+| paving raster 2048² (fine level only) | 0.25–0.97 MB |
+| edge raster 2048² (fine level only) | 0.03–1.97 MB (the forest tiles are the bottom, the southern row the top) |
+| canopy GeoJSON | 0.04–0.53 MB (0.6–9.5 MB raw; the forest tiles 33414_5658 and 33416_5658 are the top) |
+| street furniture GeoJSON | up to 0.02 MB (0.19 MB raw; the forest tile 33416_5658 has seven pieces) |
+| street-tree cadastre + OSM trees GeoJSON | 0.01–0.07 MB (0.1–0.9 MB raw; none on 33416_5658, all forest; the four first tiles with OSM trees 0.04–0.07 MB) |
+| scan trees GeoJSON | 0.03–0.09 MB (0.4–1.1 MB raw) |
 | OSM hedges GeoJSON | ≤ 0.005 MB |
 | everything else (veg rows, lamps, monuments, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
-| **tile total** | **3.9–4.9 MB** (phones, without the 4096² raster: 3.6–4.7 MB), plus ≈ 1.2 MB since 2026-09-25 (the paving and edge rasters, the kerb stones in L0) |
+| **tile total** | **4.0–9.7 MB** (phones, without the 4096² raster: 3.8–9.4 MB) |
 
-The whole Dresden site is ≈ 17.1 MB on the wire (≈ 16.2 MB for a phone),
-the spawn tile alone — the `lite` profile — ≈ 4.1 MB. A visit fetches
+The whole Dresden site is ≈ 98.9 MB on the wire (≈ 95.6 MB for a phone),
+the spawn tile alone — the `lite` profile — ≈ 6.4 MB. A visit fetches
 less: streaming loads a tile's content only when it is in view, and a far
-tile stops at its coarse terrain (≈ 2.0–2.6 MB per tile: buildings,
+tile stops at its coarse terrain (≈ 1.3–3.3 MB per tile: buildings,
 footprints, the coarse terrain with its 2048² raster and the NDVI).
-Before the tileset a desktop visit loaded the same site whole at boot,
-≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
+Before the tileset a desktop visit loaded the then four-tile site whole
+at boot, ≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
 (≈ 1.4 + 1.5 + 0.4 MB of buildings and terrain per tile now vs
 ≈ 1.0 + 1.1 MB). Sources on disk that are never served: the DGM
-GeoTIFF (13.6–15.3 MB/tile) and the CityJSON (7.8–10.5 MB/tile).
+GeoTIFF (12.9–15.6 MB/tile) and the CityJSON (2.7–13.6 MB/tile).
 
 ## Provenance
 
@@ -495,11 +508,28 @@ for the GeoSN products and ODbL for OSM; both credits are in the HUD footer
 ## Regenerating or adding a tile
 
 ```bash
-bun run bake 33412_5656_2_sn --ingest   # fetch DOM1, DOP, Basis-DLM, OSM; bake all steps
+bun run bake 33412_5656_2_sn --ingest --lsc   # fetch DOM1, DOP, Basis-DLM, OSM, the
+                                         # cadastre and the laser scan; bake all steps
 bun run bake 33412_5656_2_sn --step rail   # or one step again
 bun scripts/prepare-data.ts             # tileset + publish → public/data
-bun test                                # features.test.ts checks the new files
+bun test                                # features.test.ts checks the new files,
+                                        # tile-data.test.ts that none is missing
 ```
+
+**Every tile carries the same files.** Most artifacts are optional at
+runtime — a missing one is left out by `prepare-data` and its layer stays
+off — so a step that ran on some tiles only would ship as a quietly poorer
+part of the city, and did: tiles added before a new step landed on main
+lacked its sports grounds and street furniture until they were baked again.
+`lib/city/tile-data.test.ts` fails instead. It holds every tile of the site
+to every kind of file *any* tile has under `data/dlm/` and `data/dop/`
+(so a new step's output counts without being listed anywhere), to every
+entry of `tileArtifacts` and to the committed bake inputs, and it names
+files left over for a tile outside the site. A step that finds nothing on a
+tile still writes its file, empty (the cadastre on the Dresdner Heide), so
+"baked, nothing here" never reads as "not baked". After merging a branch
+that adds a step, `bun test` therefore lists the tiles to run
+`bun run bake <tile> --step <step>` on.
 
 For a new tile also:
 
@@ -512,7 +542,7 @@ For a new tile also:
 2. Add the cell to the site's `tiles` in `sites/<id>.ts` (the first stays
    the spawn tile).
 3. Bake and build as above; `bun test` runs `features.test.ts` over the
-   committed files.
+   committed files and `tile-data.test.ts` names anything still missing.
 
 A new place is a new site file and, outside Saxony, a new ingest adapter;
 what exists for that, and what is missing, is in
