@@ -108,7 +108,7 @@ config change.
     (their goals, posts and nets), `rail-layer.ts`, `wall-layer.ts`,
     `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
     materials: walls, kerbs, stairs and fences are baked into the fine
-    terrain glTF; the fences' pattern is drawn by their shader),
+    terrain glTF; a fence is one low band in a muted tone — no pattern),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `furniture-layer.ts` (benches, bins, bicycle stands, bollards, post
     boxes, stop shelters, playgrounds with their mapped equipment),

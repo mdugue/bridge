@@ -44,7 +44,7 @@ the smaller jetties — **1 groyne**, **3 `route=ferry` lines**
 ### Runtime — `app/_components/riverside-layer.ts`
 
 - **Pier**: a timber-tone deck slab 0.3 m thick on piles every 4 m
-  (instanced), railings with the fence panel of plan 029 if merged.
+  (instanced), railings as the fence band of plan 029 if merged.
 - **Pontoon**: a dark hull block with a light deck and a small ticket hut
   where the pontoon is > 15 m long; a hinged gangway to the bank. The
   paddle steamers themselves are **not** drawn — no dataset has them.

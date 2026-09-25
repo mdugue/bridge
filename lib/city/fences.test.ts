@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import {
+  bandHeight,
   cutGaps,
   cutWallGates,
   FENCE_CODE,
   FENCE_UV_CODES,
-  FENCE_UV_SPAN,
   type FenceGeometryData,
   fenceGeometry,
   fenceU,
@@ -29,27 +29,28 @@ const gate = (
   ...extra,
 });
 
-/** Pattern code of a vertex, decoded as the shader does. */
+/** Kind code of a vertex, decoded as the shader does. */
 function codeOf(data: FenceGeometryData, v: number): number {
-  const uu = data.uvs[v * 2] * FENCE_UV_CODES * FENCE_UV_SPAN;
-  return Math.floor(uu / FENCE_UV_SPAN);
+  return Math.floor(data.uvs[v * 2] * FENCE_UV_CODES);
 }
 
-test("fenceU packs the code and the distance, and decodes back", () => {
-  for (const [code, along] of [
-    [0, 0],
-    [3, 2.5],
-    [6, 4.9],
-  ]) {
-    const uu = fenceU(code, along) * FENCE_UV_CODES * FENCE_UV_SPAN;
-    expect(Math.floor(uu / FENCE_UV_SPAN)).toBe(code);
-    expect(uu - code * FENCE_UV_SPAN).toBeCloseTo(
-      Math.min(Math.max(along, 0.01), FENCE_UV_SPAN - 0.01),
-      6
+test("fenceU puts each code in the middle of its slot, and decodes back", () => {
+  for (const code of Object.values(FENCE_CODE)) {
+    const u = fenceU(code);
+    expect(Math.floor(u * FENCE_UV_CODES)).toBe(code);
+    // 16-bit quantisation moves it by far less than half a slot.
+    expect(Math.floor((Math.round(u * 65_535) / 65_535) * FENCE_UV_CODES)).toBe(
+      code
     );
+    expect(u).toBeGreaterThan(0);
+    expect(u).toBeLessThan(1);
   }
-  expect(fenceU(FENCE_UV_CODES - 1, 99)).toBeLessThan(1);
-  expect(fenceU(0, -1)).toBeGreaterThan(0);
+});
+
+test("a band stands at three quarters of the tagged height, 0.4–1 m", () => {
+  expect(bandHeight(1.2)).toBeCloseTo(0.9, 6);
+  expect(bandHeight(2)).toBe(1);
+  expect(bandHeight(0.3)).toBe(0.4);
 });
 
 test("a gate cuts its gap out of the line and leaves a leaf in it", () => {
@@ -69,7 +70,7 @@ test("a gate cuts its gap out of the line and leaves a leaf in it", () => {
   expect(cutGaps(line, [gate(9.9, 1.2)]).pieces).toHaveLength(1);
 });
 
-test("a fence stands a panel between each pair of posts, and a last post", () => {
+test("a fence stands as one band, a quad per ≤ 2.5 m and nothing else", () => {
   const data = fenceGeometry(
     [
       {
@@ -91,22 +92,19 @@ test("a fence stands a panel between each pair of posts, and a last post", () =>
     return;
   }
   const ys = data.positions.filter((_, i) => i % 3 === 1);
-  expect(Math.max(...ys)).toBeCloseTo(101.2, 6); // the rail, drawn at the top
+  expect(Math.max(...ys)).toBeCloseTo(100.9, 6); // the band's top: 0.75 × 1.2 m
   expect(Math.min(...ys)).toBeCloseTo(99.95, 6); // into the ground
-  // 10 m in four 2.5 m panels and one end post: five quads.
-  expect(data.indices.length / 3).toBe(5 * 2);
+  // 10 m in four 2.5 m quads: no posts, no rails.
+  expect(data.indices.length / 3).toBe(4 * 2);
   const codes = new Set(
     Array.from({ length: data.positions.length / 3 }, (_, v) => codeOf(data, v))
   );
-  expect([...codes].toSorted((x, y) => x - y)).toEqual([
-    FENCE_CODE.railing,
-    FENCE_CODE.iron,
-  ]);
+  expect([...codes]).toEqual([FENCE_CODE.railing]);
   for (const uv of data.uvs) {
     expect(uv).toBeGreaterThanOrEqual(0);
     expect(uv).toBeLessThanOrEqual(1);
   }
-  // A handrail draws its own code (posts and a rail, no infill).
+  // A handrail is only the top 15 cm of its band, in its own code.
   const rail = fenceGeometry(
     [{ coords: line, h: 1, type: "rail" }],
     [],
@@ -114,6 +112,9 @@ test("a fence stands a panel between each pair of posts, and a last post", () =>
     offset
   );
   expect(rail && codeOf(rail, 0)).toBe(FENCE_CODE.handrail);
+  const railYs = rail?.positions.filter((_, i) => i % 3 === 1) ?? [];
+  expect(Math.min(...railYs)).toBeCloseTo(100.6, 6);
+  expect(Math.max(...railYs)).toBeCloseTo(100.75, 6);
 });
 
 test("every triangle winds counter-clockwise about its vertex normals", () => {
@@ -155,7 +156,7 @@ test("every triangle winds counter-clockwise about its vertex normals", () => {
   }
 });
 
-test("gates: a closed leaf in the gap, a boom for a lift gate", () => {
+test("gates: a leaf in the gap, a boom for a lift gate", () => {
   const fence = { coords: line, h: 1.2, type: "mesh" as const };
   const leaf = fenceGeometry([fence], [gate(5)], flat, offset);
   const boom = fenceGeometry(
@@ -172,10 +173,10 @@ test("gates: a closed leaf in the gap, a boom for a lift gate", () => {
       Array.from({ length: d.positions.length / 3 }, (_, v) => codeOf(d, v))
     );
   expect(codes(leaf).has(FENCE_CODE.gate)).toBe(true);
-  expect(codes(leaf).has(FENCE_CODE.frame)).toBe(false); // the leaf draws its own frame
+  expect(codes(leaf).has(FENCE_CODE.frame)).toBe(false);
   expect(codes(boom).has(FENCE_CODE.gate)).toBe(false);
   expect(codes(boom).has(FENCE_CODE.frame)).toBe(true);
-  // No panel of the fence itself crosses the gap (4.4–5.6 m).
+  // No quad of the fence itself crosses the gap (4.4–5.6 m).
   for (let t = 0; t < leaf.indices.length; t += 3) {
     const vs = [0, 1, 2].map((k) => leaf.indices[t + k]);
     if (codeOf(leaf, vs[0]) !== FENCE_CODE.mesh) {
@@ -302,7 +303,7 @@ test("a neighbour's gate over the seam cuts this tile's piece and draws its shar
   expect(cutGaps(here, [{ ...seam, at: [11, 1.5] }]).pieces).toEqual([here]);
 });
 
-test("a swing gate is a boom, like a lift gate", () => {
+test("a swing gate is a boom at the band's top", () => {
   const fence = { coords: line, h: 1.2, type: "mesh" as const };
   const swing = fenceGeometry(
     [fence],
@@ -318,6 +319,13 @@ test("a swing gate is a boom, like a lift gate", () => {
       codeOf(swing, v)
     )
   );
-  expect(codes.has(FENCE_CODE.frame)).toBe(true);
-  expect(codes.has(FENCE_CODE.gate)).toBe(false);
+  expect([...codes].toSorted((x, y) => x - y)).toEqual([
+    FENCE_CODE.mesh,
+    FENCE_CODE.frame,
+  ]);
+  const boomYs = Array.from({ length: swing.positions.length / 3 }, (_, v) => v)
+    .filter((v) => codeOf(swing, v) === FENCE_CODE.frame)
+    .map((v) => swing.positions[v * 3 + 1]);
+  expect(Math.min(...boomYs)).toBeCloseTo(100.75, 6);
+  expect(Math.max(...boomYs)).toBeCloseTo(100.9, 6);
 });
