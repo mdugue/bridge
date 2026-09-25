@@ -9,6 +9,7 @@ from pathlib import Path
 from . import (
     canopy,
     edges,
+    furniture,
     lamps,
     landcover,
     monuments,
@@ -29,6 +30,7 @@ STEPS = {
     "roof-colour": roof_colour.run,
     "lamps": lamps.run,
     "monuments": monuments.run,
+    "furniture": furniture.run,
     "walls": walls.run,
     "stairs": stairs.run,
     "rail": rail.run,

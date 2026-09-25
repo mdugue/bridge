@@ -7,14 +7,14 @@
  *   bun run bake --ingest             fetch the raw inputs first (the site's
  *                                     ingest adapter, e.g. GeoSN for Saxony)
  *   bun run bake --step canopy        one step (landcover, canopy, ndvi,
- *                                     roof-colour, lamps, monuments, walls,
- *                                     stairs, rail, surface, edges,
- *                                     islands)
+ *                                     roof-colour, lamps, monuments,
+ *                                     furniture, walls, stairs, rail,
+ *                                     surface, edges, islands)
  *
  * The site (SITE, default dresden; sites/) supplies the tiles, their extent
  * and CRS; raw inputs live in data/_raw/<site>/ (gitignored). The steps run
- * in dependency order — land cover first, the canopy and lamps are gated on
- * it. Then `bun scripts/prepare-data.ts` turns data/ into the tileset.
+ * in dependency order — land cover first, the canopy, lamps and street
+ * furniture are gated on it. Then `bun scripts/prepare-data.ts` turns data/ into the tileset.
  */
 import { spawnSync } from "node:child_process";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";

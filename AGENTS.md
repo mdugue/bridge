@@ -103,6 +103,8 @@ config change.
     `kerb-layer.ts` and `stair-layer.ts` (only their
     materials: walls and stairs are baked into the fine terrain glTF),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
+    `furniture-layer.ts` (benches, bins, bicycle stands, bollards, post
+    boxes, stop shelters, playgrounds with their mapped equipment),
     `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
@@ -137,9 +139,9 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py`,
-  `surface.py`, `edges.py`, `osm.py`; `ingest_sn.py` is Saxony's download adapter; tests
-  in `pipeline/tests/`), run by `bun run bake`
+  `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
+  `rail.py`, `surface.py`, `edges.py`, `osm.py`; `ingest_sn.py` is Saxony's
+  download adapter; tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
@@ -236,7 +238,7 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   GDAL comes inside the wheels (with the OSM driver): fix the environment,
   don't bend the code around a missing tool. `bun run bake` passes each
   tile's extent and CRS from the site config; the steps run land cover
-  first (the canopy and lamps are gated on it). `bun run test:pipeline` and
+  first (the canopy, lamps and street furniture are gated on it). `bun run test:pipeline` and
   CI's `pipeline` job run pytest + ruff.
 - `landcover.py` bakes **only class ids** (4096² 8-bit PNG + legend); the
   colours are `lib/city/landcover.ts`, painted on the GPU at runtime
@@ -249,9 +251,10 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   names that fountain. A monument's form is its measured nDOM patch
   (`relief`, when it stands clear of trees/facades), smoothed at runtime —
   never an invented figure.
-- All OSM layers (walls, cliffs, stairs, lamps, fountains, platforms,
-  bridge structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's
-  OSM driver — no Overpass.
+- All OSM layers (walls, cliffs, stairs, lamps, street furniture,
+  fountains, platforms, bridge structure, paving) come from the site's
+  Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass. `furniture.py`
+  turns a bench without a tagged `direction` towards the nearest highway line.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
