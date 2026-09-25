@@ -79,11 +79,11 @@ const ROW_PX = 44;
 /** clear space either side of a name in its slot (px) */
 const PAD_PX = 8;
 const HALO_PX = 6;
-const INK = "rgb(72, 80, 94)"; // the contour ink, a shade darker
-const HALO = "rgba(246, 242, 234, 0.9)";
+const INK = "rgb(122, 130, 145)"; // the contour lines' ink, a shade deeper
+const HALO = "rgba(246, 242, 234, 0.75)";
 const SAMPLE_M = 4;
 const LIFT_M = 0.2; // over the TIN between samples
-const OPACITY = 0.85;
+const OPACITY = 0.8;
 /** minor roads' names leave above this (m over the ground) */
 const MINOR_OUT_M = { from: 200, to: 250 };
 

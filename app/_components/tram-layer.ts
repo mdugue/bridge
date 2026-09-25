@@ -54,9 +54,10 @@ import {
  * overhead line above them.
  *
  * - Tracks: two rails per track at Dresden's 1 450 mm gauge, reusing the
- *   rail layer's profile. In the street a grooved rail flush with the road
- *   (a dark groove inside each head, no sleepers); on a lawn (*Rasengleis*)
- *   the rails a hand higher over a meadow strip; on ballast a ballast strip.
+ *   rail layer's profile, in a soft lavender-grey a shade under the road's.
+ *   In the street the rail heads flush with the road (no sleepers, no
+ *   groove: fewer, calmer lines); on a lawn (*Rasengleis*) the rails a hand
+ *   higher over a meadow strip; on ballast a ballast strip.
  *   A track the OSM way puts on a bridge rides the deck (the rail layer's
  *   lift table, every deck kind).
  * - Overhead line: one contact wire per track 5.6 m over the rail top,
@@ -65,9 +66,11 @@ import {
  *   cantilever arms with a stay. All wires are camera-facing ribbons whose
  *   width never drops below a pixel floor, their alpha carrying the true
  *   coverage, faded out with distance — thin lines that would otherwise
- *   break into crawling dashes. Wires never cast (the shadow map stays as
- *   it was); only the masts do.
- * - Masts: a steel pole each, instanced.
+ *   break into crawling dashes. Light and faint on purpose: a soft slate at
+ *   under two-thirds opacity, like a pencil line on the watercolour, not
+ *   ink. Wires never cast (the shadow map stays as it was); only the masts
+ *   do.
+ * - Masts: a pale green-grey pole each, instanced.
  * - Stops: the bus stop's "H" sign (furniture-layer.ts, plan 030) on the
  *   platform of each tram stop the bake found one for.
  *
@@ -82,7 +85,6 @@ export interface TramContext extends GroundContext {
 const SAMPLE_M = 2; // rails follow the TIN closely
 const WIRE_SAMPLE_M = 4;
 const RAIL_HALF = 0.075; // rail-layer's drawn rail
-const GROOVE_HALF = 0.02;
 /** a street rail shows only the 2 cm it stands out of the road */
 const STREET_RAIL_WEB = 0.04;
 const BED_HALF: Record<TramBed, number> = {
@@ -101,11 +103,13 @@ const BED_BELOW_RAIL = 0.1;
 const WIRE_HALF = { contact: 0.006, span: 0.005, hanger: 0.004, arm: 0.03 };
 /** the pixel floor of a wire's drawn width, and its fade with distance (m) */
 const WIRE_MIN_PX = 0.8;
-const WIRE_FADE = { near: 300, far: 450 };
-const WIRE_COLOR = 0x2c_2c_31;
-const MAST_COLOR = 0x6d_72_6c; // weathered green-grey steel
-const STREET_RAIL = 0x8c_8c_92; // polished head, flush in the road
-const GROOVE = 0x2f_2f_34;
+const WIRE_FADE = { near: 150, far: 350 };
+/** the wires' ink and its opacity at full coverage: light and faint */
+const WIRE_COLOR = 0x80_85_90;
+const WIRE_OPACITY = 0.6;
+const MAST_COLOR = 0xb7_bc_b4; // pale green-grey
+/** rail heads: the road's lavender-grey (200, 200, 206), a shade deeper */
+const TRAM_RAIL = 0xa9_aa_b4;
 /** the lawn under a *Rasengleis*: the ground's own meadow colour */
 const MEADOW = (() => {
   const [r, g, b] = LANDCOVER_CLASSES.find((k) => k.id === MEADOW_CLASS)
@@ -164,7 +168,7 @@ const WIRE_VERTEX = `
 	float wireTruePx = 2.0 * wireHalf / wirePx;
 	float wireDrawnHalf = max( wireHalf, 0.5 * uWireMinPx * wirePx );
 	float wireFade = smoothstep( uWireFade.x, uWireFade.y, wireDepth );
-	vWireAlpha = clamp( wireTruePx / uWireMinPx, 0.25, 1.0 ) * ( 1.0 - wireFade );
+	vWireAlpha = ${WIRE_OPACITY.toFixed(2)} * clamp( wireTruePx / uWireMinPx, 0.2, 1.0 ) * ( 1.0 - wireFade );
 	wireCentre.xyz += wireAcross * wireDrawnHalf * wireSide;
 	vec4 mvPosition = wireCentre;
 	gl_Position = projectionMatrix * mvPosition;
@@ -290,7 +294,6 @@ function trackRuns(
 interface TrackMeshes {
   ballast: Mesh3;
   grass: Mesh3;
-  groove: Mesh3;
   rail: Mesh3;
   streetRail: Mesh3;
 }
@@ -305,15 +308,6 @@ function addTrack(acc: TrackMeshes, run: TrackRun, bed: TramBed): void {
         side * half,
         RAIL_HALF,
         STREET_RAIL_WEB
-      );
-      // the groove on the inner side of each head, a breath lower
-      const groove = run.pts.map((p) => ({ ...p, y: p.y - 0.004 }));
-      addRibbon(
-        acc.groove,
-        groove,
-        side * (half - RAIL_HALF - GROOVE_HALF),
-        GROOVE_HALF,
-        0
       );
     }
     return;
@@ -519,7 +513,6 @@ function buildTracks(
   const acc: TrackMeshes = {
     rail: mesh3(),
     streetRail: mesh3(),
-    groove: mesh3(),
     grass: mesh3(),
     ballast: mesh3(),
   };
@@ -554,9 +547,8 @@ function buildTracks(
   }
   const { heightFog } = ctx;
   const parts: [Mesh3, number, number][] = [
-    [acc.rail, COLORS.rail, -1],
-    [acc.streetRail, STREET_RAIL, -2],
-    [acc.groove, GROOVE, -3],
+    [acc.rail, TRAM_RAIL, -1],
+    [acc.streetRail, TRAM_RAIL, -2],
     [acc.grass, MEADOW, -1],
     [acc.ballast, COLORS.ballast, -1],
   ];
@@ -565,7 +557,7 @@ function buildTracks(
     const m = meshFrom(part, color, heightFog, {
       cast: false,
       offsetUnits,
-      roughness: part === acc.streetRail ? 0.45 : 0.95,
+      roughness: 0.9,
     });
     if (m) {
       m.name = "tram-track";

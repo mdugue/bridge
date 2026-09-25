@@ -46,6 +46,11 @@ comes out byte-identical; the new kinds are appended.
 - **Stop sign**: `highway=bus_stop` without `shelter=yes`, dropped within
   8 m of a shelter; plan 024 phase 3 stands the same model at the tram
   stops.
+- **Style** (maintainer feedback on the fences): no near-black and no fine
+  detail — the signal head a shade deeper than the metal with barely
+  darker glass, the hydrant sign one soft rose plate (no border), the stop
+  sign's "H" as colour fields (a green disc in a yellow one, no letter),
+  three poster fields on a column, clock hands a soft slate.
 
 ## Why this matters
 

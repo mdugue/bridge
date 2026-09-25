@@ -50,7 +50,13 @@
   in from the start); `castShadow = false` on every wire, only the masts
   cast (the shadow STOP can only be measured on a GPU).
 - Spawn tile (lite census): 7 meshes, 16 mast instances, ≈ 180 k
-  triangles (rails and grooves sampled every 2 m to follow the TIN).
+  triangles (rails and grooves sampled every 2 m to follow the TIN;
+  ≈ 146 k once the grooves were dropped, below).
+- **Style** (maintainer feedback on the fences, 2026-09-25): the scene's
+  soft clay idiom wins over the plan's detail — the darker groove is left
+  out, the rails are the road's lavender-grey a shade deeper, the wires a
+  light slate at ≤ 0.6 opacity fading from 150 to 350 m (not near-black),
+  the masts pale green-grey.
 - **Stops (phase 3)**: 144 of the 164 `railway=tram_stop` nodes lie on the
   track (stop positions), so the sign cannot stand at the node: it stands
   on the nearest mapped platform (≤ 25 m) facing the track, 107 signs over

@@ -37,7 +37,7 @@ import {
  * - Pier: a timber deck 0.3 m thick at the baked `deck` height, on piles
  *   every 4 m round its edge where it stands over the water, with a
  *   railing along the edges over the water.
- * - Pontoon: a dark hull and a pale deck floating 0.5 m over the drawn
+ * - Pontoon: a soft slate hull and a pale deck floating 0.5 m over the drawn
  *   water — the water sheet lies on the terrain (water-layer.ts), so its
  *   level is the lowest ground under the hull (the DGM's river surface is
  *   flat), never a baked height; a ticket hut on one longer than 15 m; a
@@ -60,7 +60,7 @@ const PIER_DEPTH = 0.3;
 const PILE_EVERY_M = 4;
 const PILE_INSET = 0.35;
 const RAIL_H = 1.0;
-const POST_EVERY_M = 2;
+const POST_EVERY_M = 3;
 const PONTOON_FREEBOARD = 0.5;
 const HULL_TOP = 0.35;
 const HULL_DRAFT = 0.3;
@@ -72,13 +72,13 @@ const FERRY_HALF = 0.6;
 const FERRY_DASH_M = 14;
 
 const TIMBER = 0xc9_b5_9a;
-const PILE = 0x8f_85_77;
-const HULL = 0x5e_65_70;
+const PILE = 0xb5_ac_9f;
+const HULL = 0x9c_a3_ae; // a soft slate, not a dark hull
 const PONTOON_DECK = 0xe4_de_d2;
 const HUT = 0xec_e7_df; // the buildings' clay
-const HUT_ROOF = 0x8d_96_a3;
+const HUT_ROOF = 0xa9_b0_bb;
 const GROYNE_STONE = 0xb7_b0_a4;
-const RAILING = 0x9a_9b_a6;
+const RAILING = 0xbd_be_c7;
 const WAKE = 0xf2_f6_f7;
 
 interface Parts {

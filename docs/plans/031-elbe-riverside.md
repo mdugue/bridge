@@ -39,8 +39,10 @@
 - **Deviation**: the wake is its own ribbon mesh over the water sheet, not
   a line table inside the water shader — the same look at one draw per
   tile, without touching the water material other plans also edit.
-- Railings are a simple rail and posts: plan 029's fence panel is not on
-  this branch.
+- Railings are a simple rail and posts every 3 m: plan 029's fence panel
+  is not on this branch.
+- **Style** (maintainer feedback on the fences): the pontoon hull a soft
+  slate rather than a dark one, piles and railing in pale tones.
 
 ## Why this matters
 

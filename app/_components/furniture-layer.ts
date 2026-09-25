@@ -58,7 +58,7 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * Plan 030 added the street's smaller signs of life in the same idiom: the
  * advertising column (*Litfaßsäule*: a paper-pale drum with a few poster
  * fields in the palette — colour, no text — the four `lit=yes` ones glowing
- * softly at dusk), the traffic signal (a grey pole, a dark three-lamp head,
+ * softly at dusk), the traffic signal (a grey pole, a three-lamp head a shade deeper,
  * its glass unlit: there is no traffic to time), the hydrant (a red-ochre
  * pillar; an underground one only its small sign plate on a post, drawn
  * 30 % under size so 450 of them do not read as a forest of signs), the
@@ -109,15 +109,14 @@ const LILAC = 0xd9_d2_df;
 /* The street's signs and fixtures (plan 030), in the same pastels. */
 const PAPER = 0xef_e9_dc; // the advertising column's drum, timetables
 const RING = 0xb3_b3_bf; // its cap ring and crown, a clock's rim
-const SIGNAL_HEAD = 0x6b_6d_78;
-const GLASS = 0x45_47_50; // unlit signal lamps
+const SIGNAL_HEAD = 0xa9_ab_b6; // the metal's lavender-grey, a shade deeper
+const GLASS = 0x93_96_a2; // unlit signal lamps, barely darker
 const OCHRE = 0xd2_9f_8c; // pillar hydrants: red ochre in the pastel range
-const SIGN_RED = 0xd8_95_8a;
-const SIGN_WHITE = 0xf2_ef_e8;
+const SIGN_PLATE = 0xe9_c9_c1; // the hydrant sign: one soft rose field
 const CLOCK_FACE = 0xf3_ef_e6;
-const STOP_DISC = 0xea_d9_98; // the "H" sign's yellow, softened
-const STOP_H = 0x9d_b3_8d; // its green letter
-const INK = 0x3a_3a_40; // clock hands
+const STOP_DISC = 0xea_dc_a8; // the stop sign's yellow, softened
+const STOP_RING = 0xb9_c9_a8; // its green, as a colour field (no letter)
+const INK = 0x86_8a_96; // clock hands: soft slate, not black
 /** The underground hydrant's sign plate is drawn at this scale. */
 const HYDRANT_SIGN_SCALE = 0.7;
 /** Clock centres over the ground (m): a pole clock's, a wall clock's. */
@@ -436,11 +435,9 @@ function column(): BufferGeometry[] {
   crown.translate(0, 2.67, 0);
   const posters: [number, number, number, number, number][] = [
     // theta start, theta length, height, centre y, colour
-    [0.15, 1.1, 1.4, 1.45, PEACH],
-    [1.55, 0.9, 1.1, 1.3, SAGE],
-    [2.75, 1.2, 1.5, 1.5, DUSK_BLUE],
-    [4.2, 0.8, 1.2, 1.35, BUTTER],
-    [5.15, 0.9, 0.9, 1.6, LILAC],
+    [0.2, 1.6, 1.5, 1.45, PEACH],
+    [2.3, 1.6, 1.4, 1.4, SAGE],
+    [4.3, 1.5, 1.5, 1.45, DUSK_BLUE],
   ];
   return [
     tinted(body, PAPER),
@@ -455,7 +452,7 @@ function column(): BufferGeometry[] {
   ];
 }
 
-/** A traffic signal: a grey pole, the dark three-lamp head facing +Z. */
+/** A traffic signal: a grey pole, the three-lamp head facing +Z. */
 function signal(): BufferGeometry[] {
   return [
     pillar(0.06, 3.2, [0, 0], SLATE),
@@ -484,13 +481,13 @@ function hydrant(): BufferGeometry[] {
   ];
 }
 
-/** An underground hydrant's sign: the red-bordered white plate on a post,
- *  drawn under size (HYDRANT_SIGN_SCALE). */
+/** An underground hydrant's sign: one soft rose plate on a post (the
+ *  red-bordered white plate, abstracted to a colour field), drawn under
+ *  size (HYDRANT_SIGN_SCALE). */
 function hydrantSign(): BufferGeometry[] {
   const parts = [
     pillar(0.025, 1.8, [0, 0], SLATE),
-    block([0.27, 0.22, 0.015], [0, 1.66, 0.03], SIGN_RED, 0.005),
-    block([0.21, 0.16, 0.02], [0, 1.66, 0.036], SIGN_WHITE, 0.005),
+    block([0.27, 0.22, 0.03], [0, 1.66, 0.03], SIGN_PLATE, 0.01),
   ];
   for (const p of parts) {
     p.scale(HYDRANT_SIGN_SCALE, HYDRANT_SIGN_SCALE, HYDRANT_SIGN_SCALE);
@@ -538,15 +535,14 @@ function drinkingWater(): BufferGeometry[] {
   ];
 }
 
-/** A bus stop's sign: the "H" disc on a pole, a timetable box below. */
+/** A stop's sign: the "H" disc on a pole — abstracted to colour fields,
+ *  a soft green disc in a yellow one, no letter — and a timetable box. */
 function stopSign(): BufferGeometry[] {
   const y = 2.42;
   return [
     pillar(0.035, 2.6, [0, 0], SLATE),
     disc(0.22, 0.03, [0, y, 0.05], STOP_DISC),
-    block([0.045, 0.24, 0.012], [-0.07, y, 0.069], STOP_H, 0.004),
-    block([0.045, 0.24, 0.012], [0.07, y, 0.069], STOP_H, 0.004),
-    block([0.14, 0.045, 0.012], [0, y, 0.069], STOP_H, 0.004),
+    disc(0.13, 0.012, [0, y, 0.068], STOP_RING),
     block([0.36, 0.5, 0.06], [0, 1.45, 0.06], PAPER, 0.02),
   ];
 }

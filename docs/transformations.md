@@ -265,7 +265,7 @@ visual-variable codebook is in
   deck 0.3 m thick on instanced piles every 4 m round its edge where it
   stands over the water, with a railing (top rail + posts every 2 m) along
   the edges over the water (plan 029's fence panel is not merged here); a
-  pontoon a dark hull (−0.3 → +0.35 m) under a pale deck (+0.5 m), a
+  pontoon a soft slate hull (−0.3 → +0.35 m) under a pale deck (+0.5 m), a
   clay ticket hut with a slate roof on one longer than 15 m, a 1.4 m
   gangway with hand rails to its bank point; a groyne a low stone ridge,
   crest 0.5 m over the ground, flanks 2.5 m out and 1 m down (half under
@@ -566,11 +566,12 @@ visual-variable codebook is in
 - **Signs and fixtures** (plan [030](./plans/030-street-furniture-2.md)) —
   the same bake and layer, eight more kinds (four tiles, BBBike
   2026-09-19): **advertising columns** (`advertising=column`, 85; a pale
-  paper drum on a plinth with a darker ring and dome, five poster fields
+  paper drum on a plinth with a darker ring and dome, three poster fields
   in the palette wrapped round it — colour, no text, turned by the scatter
   yaw so no two read alike; the 4 `lit=yes` ones glow softly with the
   night factor), **traffic signals** (`highway=traffic_signals`, 288: a
-  3.2 m grey pole, a dark three-lamp head, unlit glass — the viewer has no
+  3.2 m grey pole, a three-lamp head a shade deeper than the metal, the
+  glass barely darker and unlit — the viewer has no
   traffic to time. The node sits on the carriageway at the stop line, so
   with `traffic_signals:direction` the bake **walks it to the kerb on the
   right of the traffic it controls** — the kerb from the class raster, ≤ 15
@@ -578,7 +579,8 @@ visual-variable codebook is in
   to the nearest kerb, facing the nearest way; kept where it is off the
   road), **fire hydrants** (`emergency=fire_hydrant`: the 6 pillars a
   0.8 m red-ochre pillar; the **454 underground** ones only their
-  red-bordered sign plate on a post, moved out of the lane to the nearest
+  sign plate on a post (the red-bordered white plate abstracted to one soft
+  rose field), moved out of the lane to the nearest
   kerb — **drawn at 70 %**, the plan's STOP fallback taken without a GPU
   plate: the smaller plates were chosen over dropping them), **clocks**
   (`amenity=clock`: 8 on a pole as a double face on a 3.5 m post; 3 of the
@@ -588,12 +590,14 @@ visual-variable codebook is in
   sundials dropped), **drinking fountains** (`amenity=drinking_water`, 8: a
   slim bronze column with a small basin) and the bus stop's **"H" sign**
   (`highway=bus_stop` without `shelter=yes`, 79, dropped within 8 m of a
-  shelter: a yellow disc with a green H on a 2.6 m pole, a timetable box —
+  shelter: the "H" abstracted to colour fields — a soft green disc in a
+  yellow one, no letter — on a 2.6 m pole, a timetable box —
   shared with the tram stops of plan 024). The clocks' hands show the
   **scene time**: two hand quads per face, turned in the vertex shader from
   one shared uniform that `setSun` updates on the minute only
-  (`setClockTime`); the hands never cast, so the shadow map is not redrawn
-  for them. The re-bake leaves every earlier object byte-identical (checked
+  (`setClockTime`); the hands (a soft slate, not black) never cast, so
+  the shadow map is not redrawn for them. All in the furniture's soft
+  pastels: nothing near-black, no fine detail. The re-bake leaves every earlier object byte-identical (checked
   per tile); the new kinds are appended. Look unverified on a GPU.
 - **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 88 over the
   four tiles) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
@@ -724,9 +728,10 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   buildings being loaded, and the result must not depend on load order).
   Each track carries `s`, the distances at which a span or arm holds its
   wire. Runtime `app/_components/tram-layer.ts`: two rails per track at
-  ±0.725 m with the rail layer's profile (`addRibbon`) — **street**: a
-  polished head flush with the road (+2 cm) and a dark 4 cm groove inside
-  each, no sleepers; **grass**: rails +15 cm over a 2.6 m meadow strip;
+  ±0.725 m with the rail layer's profile (`addRibbon`), in the road's
+  lavender-grey a shade deeper — **street**: the heads flush with the road
+  (+2 cm), no sleepers, and no groove (the plan's darker groove strip was
+  left out: fewer, calmer lines); **grass**: rails +15 cm over a 2.6 m meadow strip;
   **ballast**: rails +25 cm over a 2.8 m ballast strip. A track the OSM
   way puts on a bridge rides the deck (the shared lift table, any deck kind
   — gated on the tag, so a tram under a railway bridge stays on the
@@ -738,9 +743,10 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   by 0.5 m, with a hanger down to each; arms 35 cm over the wire with a
   stay. All wires are one **camera-facing ribbon mesh** per tile whose
   width is `max(true width, 0.8 px)` in the vertex shader, its alpha the
-  true coverage (≥ 0.25) and a fade from 300 to 450 m — no `Line2`, no MSAA,
-  no new dependency; wires never cast (`castShadow = false`). **Masts**: a
-  7.5 m steel pole, instanced, casting. **Stop signs** (phase 3): OSM puts
+  true coverage (≥ 0.2) × 0.6 in a light slate, faded from 150 to 350 m —
+  light and faint, a pencil line rather than ink; no `Line2`, no MSAA, no
+  new dependency; wires never cast (`castShadow = false`). **Masts**: a
+  7.5 m pale green-grey pole, instanced, casting. **Stop signs** (phase 3): OSM puts
   `railway=tram_stop` on the track (144 of 164 within 0.5 m of it), so the
   sign stands on the nearest mapped platform (`public_transport=platform`
   / `railway=platform`, ≤ 25 m) at its point nearest the stop, facing the
@@ -749,6 +755,11 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   stops with no platform mapped get none. Look unverified on a real GPU
   (the plan's plates at Postplatz/Augustusbrücke, dusk and 150 m fly are
   open).
+  **Style (maintainer feedback on the fences, applied before any plate):**
+  everything in the scene's soft clay/watercolour idiom — no near-black,
+  no fine detail: rails in the road's lavender-grey a shade deeper, the
+  groove the plan asked for left out, wires a light slate at ≤ 0.6
+  opacity, masts pale green-grey.
 
   | tile | tracks | street km | grass km | ballast km | masts | spans | rosettes | arms | stop signs |
   |---|---|---|---|---|---|---|---|---|---|
@@ -776,8 +787,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   next/font's `--font-sans`, awaited with `document.fonts.load`), so
   umlauts, ß and shaping come from the browser; one atlas per tile, 2048
   wide and only as tall as its rows (32 px type, 44 px rows, shelf-packed;
-  WebGL 2 mips a non-power-of-two canvas), each name drawn once in a
-  contour-ink slate with a pale halo; the atlas texture is freed with the
+  WebGL 2 mips a non-power-of-two canvas), each name drawn once in the
+  contour lines' ink a shade deeper (rgb 122 130 145) with a soft pale
+  halo, at 0.8 opacity; the atlas texture is freed with the
   tile (`NameLayer.dispose`, tracked in the GPU-memory counter). Each label
   a ribbon lying on the ground along its line (4 m samples, 20 cm over the
   TIN, turned to read west → east), letters 4 m tall (main roads and

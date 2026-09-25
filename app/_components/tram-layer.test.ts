@@ -35,12 +35,12 @@ test("no features, an empty group", () => {
   expect(group.children).toHaveLength(0);
 });
 
-test("a street track is flush rails and grooves with its wire 5.6 m up", () => {
+test("a street track is flush rails with its wire 5.6 m up", () => {
   const group = buildTram([track("street")], [], ctx);
   const tracks = named(group, "tram-track");
-  expect(tracks.length).toBe(2); // heads + grooves, no bed strip
+  expect(tracks.length).toBe(1); // rail heads, no groove, no bed strip
   for (const m of tracks) {
-    expect(maxY(m.geometry)).toBeCloseTo(100 + RAIL_TOP_M.street, 2);
+    expect(maxY(m.geometry)).toBeCloseTo(100 + RAIL_TOP_M.street, 5);
     expect(m.castShadow).toBe(false);
   }
   const [wires] = named(group, "tram-wires");

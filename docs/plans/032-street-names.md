@@ -37,6 +37,9 @@
   altitude (the ribbons would have to grow along the street too).
 - The lettering's fade uses the shared map-overlay altitude uniform, also
   used by plan 031's ferry lines.
+- **Style** (maintainer feedback on the fences): the ink is the contour
+  lines' tone a shade deeper (rgb 122 130 145), the halo soft, 0.8
+  opacity — a drawn map's lettering, not a navigation app's.
 - The caption reads the named ways (`k: way`) baked into the same file,
   not the label windows (those cover only straight stretches).
 
