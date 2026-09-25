@@ -16,6 +16,7 @@ from . import (
     ndvi,
     rail,
     roof_colour,
+    sport,
     stairs,
     surface,
     walls,
@@ -36,6 +37,7 @@ STEPS = {
     "rail": rail.run,
     "surface": surface.run,
     "edges": edges.run,
+    "sport": sport.run,
 }
 
 

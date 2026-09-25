@@ -1,5 +1,6 @@
 import {
   DataTexture,
+  FloatType,
   LinearFilter,
   LinearMipmapLinearFilter,
   Matrix4,
@@ -26,8 +27,9 @@ import {
   srgbToLinear,
 } from "@/lib/city/landcover";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { packSportTable, type SportTable } from "@/lib/city/sport";
 import type { TerrainExtras } from "@/lib/city/tileset";
-import { isAbortError } from "./fetch-optional";
+import { fetchOptionalJson, isAbortError } from "./fetch-optional";
 import {
   GROUND_DETAIL,
   GROUND_NORMAL,
@@ -37,6 +39,7 @@ import {
 } from "./ground-detail";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
+import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
@@ -295,6 +298,53 @@ async function loadEdgesTexture(
   }
 }
 
+/**
+ * Loads the sports grounds (pipeline/bake/sport.py): the index raster (R =
+ * the row, G = the second row, B = the exact bit; NEAREST) and its table as a 2-texel-high float
+ * texture (lib/city/sport.ts). Either absent, empty or undecodable → null
+ * and the ground under a pitch stays its land-cover class.
+ */
+async function loadSportGrounds(
+  rasterUrl: string,
+  tableUrl: string,
+  signal?: AbortSignal
+): Promise<{ raster: Texture; table: DataTexture } | null> {
+  const doc = await fetchOptionalJson<SportTable>(tableUrl, signal);
+  if (!doc?.grounds?.length) {
+    return null;
+  }
+  try {
+    const { texture, width, height } = await loadRasterTexture(
+      rasterUrl,
+      signal,
+      4
+    );
+    texture.magFilter = NearestFilter;
+    texture.minFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    trackTexture(texture, textureBytes(width, height, 4, false));
+    const packed = packSportTable(doc);
+    const table = new DataTexture(
+      packed.data,
+      packed.width,
+      2,
+      RGBAFormat,
+      FloatType
+    );
+    table.magFilter = NearestFilter;
+    table.minFilter = NearestFilter;
+    table.generateMipmaps = false;
+    table.needsUpdate = true;
+    return { raster: texture, table };
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
 export interface SplatLayer {
   bounds: TerrainBounds;
@@ -310,6 +360,8 @@ export interface SplatLayer {
   surfaceTexture?: Texture;
   /** baked road/meadow edge distances (LINEAR, RG) for kerbs, lanes, lawns */
   edgesTexture?: Texture;
+  /** sports grounds: the index raster (NEAREST, RGBA) and its table */
+  sport?: { raster: Texture; table: Texture };
   /** shared world sun direction (surface → sun), for the kerb's shadow */
   sunDirection?: Vector3;
   /** class-id raster (NEAREST); the meadow detail tests it */
@@ -455,6 +507,11 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   if (splat.edgesTexture) {
     shader.uniforms.uEdges = { value: splat.edgesTexture };
   }
+  if (splat.sport) {
+    shader.uniforms.uSport = { value: splat.sport.raster };
+    shader.uniforms.uSportTable = { value: splat.sport.table };
+    shader.uniforms.uSportColors = { value: SPORT_LINEAR };
+  }
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
     shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
@@ -464,6 +521,9 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
 /** The meadow's palette colour, linear — the urban green and grass pavers. */
 const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
 const DEFAULT_SUN = new Vector3(0, 1, 0);
+
+/** The sports surfaces' colours, linear (sport-ground.ts). */
+const SPORT_LINEAR = sportPalette();
 
 /** The road's palette colour, linear — sealed ground off the carriageway. */
 const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
@@ -491,16 +551,18 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
   const hasNdvi = splat.ndviTexture !== undefined;
   const hasSurface = splat.surfaceTexture !== undefined;
   const hasEdges = splat.edgesTexture !== undefined;
+  const hasSport = splat.sport !== undefined;
   const ndviDecl = hasNdvi
     ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
     : "";
   return {
-    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}`,
+    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}`,
     body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
          ${GRASS_MOTTLE}
          ${groundFields(hasSurface, hasEdges)}
          ${urbanGreen(hasNdvi, hasEdges)}
          ${GROUND_DETAIL}
+         ${hasSport ? SPORT_GROUND : ""}
          ${hasNdvi ? MEADOW_NDVI : ""}`,
   };
 }
@@ -543,7 +605,7 @@ function createTerrainMaterial(
   // every tile's terrain material. Without an explicit key a tile that lost its
   // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -572,6 +634,48 @@ function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
     out[i] = v.fromBufferAttribute(position, i).applyMatrix4(toData).z;
   }
   return out;
+}
+
+interface DetailRasters {
+  edgesTexture: Texture | null;
+  ndviTexture: Texture | null;
+  sport: { raster: Texture; table: DataTexture } | null;
+  surfaceTexture: Texture | null;
+}
+
+const NO_DETAIL: DetailRasters = {
+  ndviTexture: null,
+  surfaceTexture: null,
+  edgesTexture: null,
+  sport: null,
+};
+
+/** The optional rasters over the class raster, one after another (see
+ *  dressTerrain); each absent one is null. */
+async function loadDetailRasters(
+  extras: TerrainExtras,
+  opts: TerrainOptions
+): Promise<DetailRasters> {
+  const url = (file?: string) => (file ? opts.fileUrl(file) : undefined);
+  const ndvi = url(extras.ndvi);
+  const ndviTexture = ndvi ? await loadNdviTexture(ndvi, opts.signal) : null;
+  // The paving patterns are close-range: the build names the raster on the
+  // fine level only.
+  const surface = url(extras.surface);
+  const surfaceTexture = surface
+    ? await loadSurfaceTexture(surface, opts.signal)
+    : null;
+  const edges = url(extras.edges);
+  const edgesTexture = edges
+    ? await loadEdgesTexture(edges, opts.signal)
+    : null;
+  const sportRaster = url(extras.sport);
+  const sportTable = url(extras.sportTable);
+  const sport =
+    sportRaster && sportTable
+      ? await loadSportGrounds(sportRaster, sportTable, opts.signal)
+      : null;
+  return { ndviTexture, surfaceTexture, edgesTexture, sport };
 }
 
 /**
@@ -603,20 +707,9 @@ export async function dressTerrain(
         classRaster.height
       )
     : null;
-  const ndviTexture =
-    classRaster && extras.ndvi
-      ? await loadNdviTexture(opts.fileUrl(extras.ndvi), opts.signal)
-      : null;
-  // The paving patterns are close-range: the build names the raster on the
-  // fine level only.
-  const surfaceTexture =
-    classRaster && extras.surface
-      ? await loadSurfaceTexture(opts.fileUrl(extras.surface), opts.signal)
-      : null;
-  const edgesTexture =
-    classRaster && extras.edges
-      ? await loadEdgesTexture(opts.fileUrl(extras.edges), opts.signal)
-      : null;
+  const { ndviTexture, surfaceTexture, edgesTexture, sport } = classRaster
+    ? await loadDetailRasters(extras, opts)
+    : NO_DETAIL;
   const splat: SplatLayer | undefined =
     classRaster && painted
       ? {
@@ -625,6 +718,7 @@ export async function dressTerrain(
           ndviTexture: ndviTexture ?? undefined,
           surfaceTexture: surfaceTexture ?? undefined,
           edgesTexture: edgesTexture ?? undefined,
+          sport: sport ?? undefined,
           sunDirection: opts.sunDirection,
           ground: opts.ground,
           bounds,
@@ -672,6 +766,8 @@ export async function dressTerrain(
         ndviTexture,
         surfaceTexture,
         edgesTexture,
+        sport?.raster,
+        sport?.table,
       ]) {
         texture?.dispose();
       }

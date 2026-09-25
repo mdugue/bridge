@@ -1,0 +1,45 @@
+{
+  "tile": "33416_5658_2_sn",
+  "crs": "EPSG:25833",
+  "bounds": [
+    416000,
+    5658000,
+    418000,
+    5660000
+  ],
+  "size": 2048,
+  "encoding": {
+    "layout": "8-bit greyscale, 4 * size wide: R0 G0 B0 A0 R1 ... per row",
+    "r": "1 + the row of `grounds` reaching the texel (0 none)",
+    "g": "1 + another row reaching it (grown wider, the first row wins)",
+    "b": "255 inside an exact outline",
+    "grounds": "[cx, cy, angle, p1, p2, p3, surface, marking, shape]: the centre in m from the tile's north-west corner (x east, y north), the long axis (rad from east, ccw); rect/free p1, p2 = half length, half width; stadium p1 = half straight, p2 = outer radius, p3 = band width"
+  },
+  "surfaces": {
+    "0": "ground",
+    "1": "grass",
+    "2": "turf",
+    "3": "tartan",
+    "4": "clay",
+    "5": "sand",
+    "6": "hard",
+    "7": "cinder"
+  },
+  "markings": {
+    "0": "none",
+    "1": "football",
+    "2": "tennis",
+    "3": "basketball",
+    "4": "volleyball",
+    "5": "court",
+    "6": "lanes",
+    "7": "board"
+  },
+  "shapes": {
+    "0": "rect",
+    "1": "stadium",
+    "2": "free"
+  },
+  "attribution": "\u00a9 OpenStreetMap contributors (ODbL)",
+  "grounds": []
+}
