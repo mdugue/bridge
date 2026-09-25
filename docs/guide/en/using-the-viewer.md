@@ -147,7 +147,7 @@ The button in the corner opens a panel with three tabs.
 | | *Windhelligkeit* | crowns brighten as they lean into a gust |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
-| | *Ferne Schatten* | the long shadows of distant buildings and slopes at a low sun, beyond the ordinary shadow range |
+| | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
 | | *Detaillierte Kronen* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |

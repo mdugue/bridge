@@ -318,8 +318,9 @@ safe at 0 because terrain doesn't cast and buildings/trees cast via back faces,
 so lit faces never self-acne); a small negative `bias`; and a tight,
 camera-following frustum on a right-sized map (finer texels = cleaner edges).
 **VSM rings** ("corduroy"/grid) on large ground planes at grazing angles — avoid
-it here. The remaining limit (very long shadows clipping beyond the frustum at
-low sun) is only solvable with Cascaded Shadow Maps.
+it here. Past the frustum the ground's shadows come from a baked horizon map (two
+bands, ADR 0031); their *shapes* there (and on facades) remain a job for
+Cascaded Shadow Maps.
 
 **The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 110 m
 half-size is right at eye level and wrong in fly mode: from 200 m up it covers

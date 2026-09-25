@@ -159,27 +159,36 @@ them anyway.
 
 What the frustum cannot reach is baked: `pipeline/bake/skyview.py` writes,
 from the committed DGM1 + LoD2 only, a **sky-view factor** (≈2 m) and a
-**far horizon** (≈8 m, 16 azimuths, occluders 80–1 500 m away). The
-terrain folds the horizon into three's directional-light loop
-(`sky-light.ts` `lightsWithFarShadow` rewrites `lights_fragment_begin`:
-`min(getShadow(…), hzLit)`, and `hzLit` alone where the light casts no
-shadow) — `min`, never a product, so an occluder both see never darkens
-twice. The sky view scales only `reflectedLight.indirectDiffuse` in
-`aomap_fragment` (after the lights), on the terrain and the clay facades
-(sampled 2.5 m outside the wall, doubled, faded out toward the eaves).
-Rows *Himmelslicht* and *Ferne Schatten*; 0 = the old picture. Unjudged on
-a GPU as of 2026-09-25 — watch for SVF + N8AO reading as dirt in
-courtyards (lower N8AO there first) and a seam where the shadow map hands
-over (fade the horizon in over the frustum's last 20 %).
+**horizon** (≈8 m, 16 azimuths, two bands: occluders 80–1 500 m and
+8–80 m away; eight layers of one array texture). The terrain folds it into
+three's directional-light loop (`sky-light.ts` `lightsWithFarShadow`
+rewrites `lights_fragment_begin`: `min(getShadow(…), hzLit)`, and `hzLit`
+alone where the light casts no shadow) — `min`, never a product, so an
+occluder both see never darkens twice. **The near band only counts outside
+the shadow frustum**: the sun rig keeps the frustum's ground centre and
+half-size in `shadowReach` (the terrain's `uShadowReach`, by reference);
+the near band fades in over the frustum's last 20 % and beyond it the
+horizon is max(near, far) — without it a street past the frustum lost the
+shadow of the block beside it. Change the frustum fit and this follows by
+itself; never feed the near band inside the frustum (its 8 m / 22.5° smear
+would fight the map's crisp edges). The sky view scales only
+`reflectedLight.indirectDiffuse` in `aomap_fragment` (after the lights), on
+the terrain and the clay facades (sampled 2.5 m outside the wall, doubled,
+faded out toward the eaves); cells under a roof carry the nearest open
+value in both rasters (no dark bleed through LINEAR/mipmaps). Rows
+*Himmelslicht* and *Ferne Schatten*; 0 = the old picture. Unjudged on a GPU
+as of 2026-09-25 — watch for SVF + N8AO reading as dirt in courtyards
+(lower N8AO there first) and the hand-over at the frustum's edge.
 [ADR 0031](../../../docs/adr/0031-baked-horizon-map-for-far-shadows.md).
 
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
 fraying — the fit is careful to keep the base radius while walking), 4096 map
-(cost without visible gain once radius softens). **Open limit:** very long
-low-sun shadows still clip beyond the frustum, and the far field at high
-altitude is unshadowed — only Cascaded Shadow Maps fix that properly (three has
-CSM in examples; sizeable integration, custom-material patching).
+(cost without visible gain once radius softens). **Open limit:** past the frustum
+the ground's shadows are the horizon's (an angle at 8 m and 22.5°, no shape,
+not on facades or trees) — only Cascaded Shadow Maps give the middle distance
+its shapes (three has CSM in examples; sizeable integration, custom-material
+patching).
 
 ## Surfaces (the land-cover splat)
 

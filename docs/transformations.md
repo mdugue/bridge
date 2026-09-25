@@ -938,10 +938,15 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   each on its surface's plane; `lowveg.py`'s one CityJSON walk,
   `lod2_rings`) → per ≈2 m cell the horizon angle `h` within 150 m in 16
   azimuths, seen from the bare ground → `svf = 1 − mean(sin² h)`
-  (`svf_<tile>.png`, 1024², 8-bit, ≈0.5 MB). Scales the **indirect diffuse
+  (`svf_<tile>.png`, 1024², 8-bit, ≈0.5 MB). The cells under a roof (16–19 %
+  of a tile) take the nearest open cell's value (scipy
+  `distance_transform_edt`): left at their ≈0, LINEAR filtering and the
+  mipmaps pulled a dark 1–2 m band onto the wall feet and dimmed distant
+  streets (a tile's mean at mip 4 fell 0.03–0.05 below its open mean; now
+  equal). Scales the **indirect diffuse
   only** (the hemisphere fill), in `aomap_fragment`, after the lights: the
   sun is untouched. Terrain: `mix(1, svf, row)`. Clay facades: the ground's
-  value 2.5 m outside the wall (under the roof the ground sees no sky),
+  value 2.5 m outside the wall (a margin past the footprint's filled texels),
   doubled (a vertical face sees at most half the sky; the ground at its foot
   the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
   dims, its eaves and every roof do not. The raster is shared by a tile's
@@ -954,25 +959,39 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   ground darkening) is kept as it was, not retuned against it yet.
   **Fallback:** no raster → the light as before. `pipeline/bake/skyview.py`,
   `app/_components/sky-light.ts`, `lib/city/skyview.ts`.
-- **Far horizon shade** (*Ferne Schatten*, plan 033,
+- **Horizon shade** (*Ferne Schatten*, plan 033,
   [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md)) — the same
   height field at ≈8 m (the roofs burned at 2 m and max-pooled, so a spire
   still occludes) → per cell and per 16 azimuths the elevation angle of the
-  skyline **80–1 500 m** away (nearer occluders are the shadow map's),
-  0–45° in 8 bits (`horizon_<tile>.png`: four RGBA layers stacked, 256² ×
-  16 azimuths, ≈0.6 MB; legend `horizon_<tile>.json`, not served). The
-  terrain interpolates the two azimuths around the sun and cuts the sun's
-  direct light by `smoothstep(h − 0.8°, h + 0.8°, elevation)`, combined
-  with the shadow map by **min** (never a product: where both see the same
-  occluder it must not darken twice). Committed neighbour tiles fill the
-  margin; beyond the site the ground is open at the tile edge's mean
-  height. Baked 2026-09-25 in ≈22 s per tile (sky view ≈19 s, horizon
-  ≈3 s). The plan's 4 m raster came to **1.86 MB** on the spawn tile, past
-  its 1.5 MB cap, so it ships at 8 m with all 16 azimuths (0.54–0.60 MB;
-  12 azimuths at 4 m would have been 1.36 MB but smears narrow occluders
-  over 30° of sun). Terrain only; facades wait on plates. Default 0.8 —
-  **not yet judged on a GPU** (the plan's 21 December plate from the
-  Brühlsche Terrasse is open). `sky-light.ts` `lightsWithFarShadow`.
+  skyline in **two bands**: occluders **80–1 500 m** away (the far band,
+  0–45° in 8 bits) and **8–80 m** away (the near band, 0–90°), eight RGBA
+  layers stacked in one PNG (`horizon_<tile>.png`, 256² × 16 azimuths × 2,
+  1.13–1.23 MB; legend `horizon_<tile>.json`, not served); cells under a
+  roof take the nearest open cell's angles. The terrain interpolates the
+  two azimuths around the sun and cuts the sun's direct light by
+  `smoothstep(h − 0.8°, h + 0.8°, elevation)`, combined with the shadow map
+  by **min** (never a product: where both see the same occluder it must
+  not darken twice). The bands split the work with the shadow map by the
+  fragment's distance from the frustum's centre (`uShadowReach`, kept by
+  the sun rig as the frustum follows and grows): inside, the map has the
+  near occluders with their shapes and only the far band counts; over the
+  frustum's last 20 % the near band fades in, and beyond it the horizon is
+  the higher of the two bands. *Why two bands (2026-09-25 review):* with
+  the far band alone, ground past the ~110 m frustum lost the shadows of
+  its own neighbours — a 20 m block's 55 m shadow at a 20° sun was missing
+  entirely, at 10° only the detached 80–113 m tail showed. Committed
+  neighbour tiles fill the margin; beyond the site the ground is open at
+  the tile edge's mean height, so a tile on the site's rim sees no skyline
+  past it (on the four original tiles the east edge's horizon toward 90°
+  read 3.3° against ≈8° elsewhere while the 33414 column had a DGM but no
+  LoD2; with the fifteen tiles it is the rim's). Baked in ≈25–40 s per tile
+  (sky view ≈20–35 s, horizon ≈5 s). The plan's 4 m raster came to
+  **1.86 MB** for the far band alone on the spawn tile, past its 1.5 MB
+  cap, so it ships at 8 m with all 16 azimuths (the far band alone was
+  0.54–0.60 MB; both bands fit the cap). Terrain only; facades wait on
+  plates. Default 0.8 — **not yet judged on a GPU** (the plan's 21
+  December plate from the Brühlsche Terrasse and the frustum seam are
+  open). `sky-light.ts` `lightsWithFarShadow`, `hzSunVisible`.
 
 ### Atmosphere & time of day
 - **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
@@ -1031,10 +1050,12 @@ research that produced them):
    alone.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
-   far horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))
-   now casts the far field's long shadows onto the ground for one texture
-   fetch; what CSM would still add is the middle distance's *shape* (a
-   tree's or a facade's shadow 80–300 m out, on facades too). Sizeable
+   horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))
+   now casts the long shadows past the frustum onto the ground — the far
+   field's and, beyond the frustum, the next building's — for a few texture
+   fetches; what CSM would still add is the middle distance's *shape* (a
+   tree's or a facade's shadow past the frustum, at 8 m and 22.5° the
+   horizon only has its angle, on facades too). Sizeable
    integration on WebGL;
    `CSMShadowNode` comes with the proposed move to WebGPURenderer + TSL
    ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),

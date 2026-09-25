@@ -126,6 +126,9 @@ export interface GroundUniforms {
   skyView: { value: number };
   /** the far horizon's cut of the sun (sky-light.ts) */
   horizonShade: { value: number };
+  /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
+   *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
+  shadowReach: { value: Vector3 };
 }
 
 /**
@@ -589,6 +592,23 @@ interface TerrainShader {
   vertexShader: string;
 }
 
+/** The baked large-scale light's uniforms (sky-light.ts). */
+function applySkyLightUniforms(shader: TerrainShader, splat: SplatLayer): void {
+  if (splat.svfTexture) {
+    shader.uniforms.uSvf = { value: splat.svfTexture };
+    shader.uniforms.uSkyView = splat.ground?.skyView ?? { value: 0 };
+  }
+  if (splat.horizonTexture) {
+    shader.uniforms.uHorizon = { value: splat.horizonTexture };
+    shader.uniforms.uHorizonShade = splat.ground?.horizonShade ?? { value: 0 };
+    // By reference: the sun rig keeps it on the frustum. Without one the
+    // near band counts everywhere (a frustum of no size).
+    shader.uniforms.uShadowReach = splat.ground?.shadowReach ?? {
+      value: NO_FRUSTUM,
+    };
+  }
+}
+
 function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   const [minX, minY, maxX, maxY] = splat.bounds;
   // Recentered tile origin (north-west corner) + size; v grows southward.
@@ -625,14 +645,7 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
     shader.uniforms.uMarkings = { value: splat.markings.raster };
     shader.uniforms.uMarkingTable = { value: splat.markings.table };
   }
-  if (splat.svfTexture) {
-    shader.uniforms.uSvf = { value: splat.svfTexture };
-    shader.uniforms.uSkyView = splat.ground?.skyView ?? { value: 0 };
-  }
-  if (splat.horizonTexture) {
-    shader.uniforms.uHorizon = { value: splat.horizonTexture };
-    shader.uniforms.uHorizonShade = splat.ground?.horizonShade ?? { value: 0 };
-  }
+  applySkyLightUniforms(shader, splat);
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
     shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
@@ -642,6 +655,7 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
 /** The meadow's palette colour, linear — the urban green and grass pavers. */
 const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
 const DEFAULT_SUN = new Vector3(0, 1, 0);
+const NO_FRUSTUM = new Vector3(0, 0, 0);
 
 /** The sports surfaces' colours, linear (sport-ground.ts). */
 const SPORT_LINEAR = sportPalette();
