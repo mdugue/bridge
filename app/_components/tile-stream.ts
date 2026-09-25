@@ -19,6 +19,7 @@ import type {
   LampFeature,
   LowVegFeature,
   MonumentFeature,
+  NameFeature,
   RailFeature,
   RiversideFeature,
   TramFeature,
@@ -42,6 +43,7 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
+import { buildNames, type NameLayer } from "./name-layer";
 import { buildRail } from "./rail-layer";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
@@ -87,6 +89,8 @@ export interface TileDressing {
   tram?: Group;
   /** the Elbe's landing stages, groynes, ferry lines (riverside-layer.ts) */
   riverside?: Group;
+  /** street lettering and the named ways (name-layer.ts) */
+  names?: NameLayer;
   vegetation?: VegetationControl;
 }
 
@@ -196,6 +200,7 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.rail,
     d.tram,
     d.riverside,
+    d.names?.group,
     d.sport?.group,
   ].filter((part): part is Group => part !== undefined);
 }
@@ -240,6 +245,7 @@ function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
   d.monuments?.dispose();
   d.sport?.dispose();
+  d.names?.dispose();
   for (const part of dressingParts(d)) {
     part.removeFromParent();
     disposeObject3D(part);
@@ -373,6 +379,7 @@ async function buildDressing(
     hedges,
     trams,
     river,
+    streetNames,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -394,6 +401,7 @@ async function buildDressing(
     get<LowVegFeature>(d.lowveg ?? ""),
     get<TramFeature>(d.tram ?? ""),
     get<RiversideFeature>(d.riverside ?? ""),
+    get<NameFeature>(d.names ?? ""),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -466,10 +474,17 @@ async function buildDressing(
     river.length > 0
       ? buildRiverside(river, { ...ground, heightFog: ctx.heightFog })
       : undefined;
+  // The lettering lies on every loaded terrain (a label may run past the
+  // seam); its atlas is drawn once the page's font is ready.
+  const names =
+    streetNames.length > 0
+      ? await buildNames(streetNames, { ...ground, heightFog: ctx.heightFog })
+      : undefined;
   return {
     tile,
     tram,
     riverside,
+    names,
     vegetation,
     lowVegetation,
     lamps: lampControl,

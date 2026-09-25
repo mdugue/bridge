@@ -757,6 +757,48 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   | 33412_5656 | 51 | 11.34 | 0.98 | 1.90 | 16 | 7 | 27 | 2 | 23 |
   | 33412_5658 | 9 | 5.66 | 0 | 1.19 | 0 | 0 | 17 | 0 | 11 |
 
+### Names
+- **Street lettering** (plan [032](./plans/032-street-names.md), phase
+  1) — OSM `highway=*` ways with a `name` (not `service`, not
+  `footway=sidewalk`; 2 920 named ways over the four tiles) + the DLM
+  bridge names (`bridge_<tile>` `name`) + named `place=square` /
+  pedestrian areas (≥ 400 m²) (ODbL) → `pipeline/bake/names.py` →
+  `names_<tile>.geojson`. Every way of a name around the tile (50 m
+  margin) is merged (`line_merge`); anchors along its straightest
+  stretches — a window of `len(name) × 4.2 m + 20 m` turning less than 20°,
+  one per 450 m, the straightest nearest the middle of its share, none
+  within 200 m of the same name's last (the other carriageway, a fragment)
+  — each written by the tile owning its middle; a square's own streets are
+  not lettered again; bridges and squares get a straight label across
+  their long axis. Labels per tile: 138 / 135 / 122 / 105 (33412_5656,
+  33410_5656, 33410_5658, 33412_5658). Runtime `name-layer.ts`: no new
+  dependency — **Canvas 2D in the page's own font** (Inter, via
+  next/font's `--font-sans`, awaited with `document.fonts.load`), so
+  umlauts, ß and shaping come from the browser; one atlas per tile, 2048
+  wide and only as tall as its rows (32 px type, 44 px rows, shelf-packed;
+  WebGL 2 mips a non-power-of-two canvas), each name drawn once in a
+  contour-ink slate with a pale halo; the atlas texture is freed with the
+  tile (`NameLayer.dispose`, tracked in the GPU-memory counter). Each label
+  a ribbon lying on the ground along its line (4 m samples, 20 cm over the
+  TIN, turned to read west → east), letters 4 m tall (main roads and
+  squares 6 m, bridges 5 m); unlit, `depthWrite: false`, `polygonOffset`,
+  height fog, never casting; **opacity by the camera's height over the
+  ground** — none below 25 m, full from 60 m (`map-overlay.ts`, the one
+  uniform the ferry lines share). The plan's aliasing STOP could not be
+  judged without a GPU: the conservative end is built in — the minor
+  roads' names fade out between 200 and 250 m, leaving the main roads,
+  bridges and squares; an atlas that would outgrow 2048 × 2048 drops the
+  minor roads first (none does: see the plan's notes). Look unverified on
+  a real GPU (plates at 80, 200 and 500 m are open).
+- **Street caption** (phase 2) — the same file's `k: way` lines (every
+  named street cut at the tile edge, simplified to 1 m): on foot, the HUD
+  names the nearest named way within 25 m of the pose stream (10 Hz,
+  `lib/city/names.ts` `nearestName` over the loaded tiles,
+  `CityWalkHandle.streetNameAt`), as a small pill under the top edge
+  (`street-caption.tsx`, `aria-live="polite"`, changed only when the name
+  changes); hidden in fly mode and while the pointer is locked (immersive
+  mode). The street-name *signs* stay out: OSM maps almost none.
+
 ### Retaining / city walls
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
   wall` + `man_made=embankment` + `natural=cliff` (kind `cliff`, default 3 m;
@@ -951,7 +993,9 @@ research that produced them):
     vineyards (028), fences and gates (029), more street furniture (030),
     Elbe landing stages, groynes and ferries (031), street names (032),
     sky-view factor and a baked horizon map (033), small structures from
-    DOM − LoD2 (034), a hidden soundscape (035).
+    DOM − LoD2 (034), a hidden soundscape (035). Built since (✅ above,
+    looks unverified on a GPU): 024 (Trams), 030 (Signs and fixtures),
+    031 (Landing stages, groynes, ferries), 032 (Names).
 
 ---
 

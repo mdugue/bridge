@@ -14,6 +14,7 @@ from . import (
     landcover,
     lowveg,
     monuments,
+    names,
     ndvi,
     rail,
     riverside,
@@ -47,6 +48,8 @@ STEPS = {
     # that already has a shelter).
     "tram": tram.run,
     "riverside": riverside.run,
+    # After rail (the bridge names).
+    "names": names.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,

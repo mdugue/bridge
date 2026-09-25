@@ -46,6 +46,7 @@ import {
   createCityWalkApp,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
+import { StreetCaption } from "./street-caption";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { useLiveMode } from "./live-mode";
@@ -552,6 +553,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             )}
 
             <LocateMessage message={hud.message} />
+
+            <StreetCaption
+              handleRef={handleRef}
+              mode={mode}
+              subscribePose={subscribePose}
+            />
 
             <SettingsToggle />
             <SceneOverlays

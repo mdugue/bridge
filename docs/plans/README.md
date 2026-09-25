@@ -63,7 +63,7 @@ history. Decisions that came out of plans are written up as
 | 029 | Fences, railings and gates, baked into the fine terrain | **TODO** | [029-fences-and-gates.md](./029-fences-and-gates.md) |
 | 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | **DONE** (2026-09-25) — every kind built; look unverified on a real GPU | [030-street-furniture-2.md](./030-street-furniture-2.md) |
 | 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | **DONE** (2026-09-25) — both phases built; look unverified on a real GPU | [031-elbe-riverside.md](./031-elbe-riverside.md) |
-| 032 | Street names: map lettering in fly mode, a caption on foot | **TODO** | [032-street-names.md](./032-street-names.md) |
+| 032 | Street names: map lettering in fly mode, a caption on foot | **DONE** (2026-09-25) — both phases built; look unverified on a real GPU | [032-street-names.md](./032-street-names.md) |
 | 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | **TODO** | [033-sky-view-and-horizon-shading.md](./033-sky-view-and-horizon-shading.md) |
 | 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | **TODO** — needs the raw laser scan (`--ingest --lsc`) | [034-dom-minus-lod2.md](./034-dom-minus-lod2.md) |
 | 035 | A hidden, opt-in soundscape synthesised from the scene's data | **TODO** | [035-soundscape.md](./035-soundscape.md) |

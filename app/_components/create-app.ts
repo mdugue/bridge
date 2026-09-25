@@ -44,6 +44,7 @@ import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
+import { nearestName } from "@/lib/city/names";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -82,6 +83,7 @@ export type LayerName =
   | "lamps"
   | "lowVegetation"
   | "monuments"
+  | "names"
   | "rail"
   | "riverside"
   | "stairs"
@@ -193,6 +195,9 @@ export interface CityWalkHandle {
   };
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
   getFootprints: () => FootprintPoly[];
+  /** the name of the named street nearest a projected point (≤ 25 m) over
+   *  the loaded tiles, or null — the on-foot caption */
+  streetNameAt: (x: number, y: number) => string | null;
   getPose: () => PlayerPose;
   /**
    * GPU counters for perf work. `programs` is the live shader-program count;
@@ -749,6 +754,7 @@ async function bootApp(
         rail: census(dressings.map((d) => d.rail)),
         tram: census(dressings.map((d) => d.tram)),
         riverside: census(dressings.map((d) => d.riverside)),
+        names: census(dressings.map((d) => d.names?.group)),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
       },
@@ -1141,6 +1147,12 @@ async function bootApp(
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,
+    streetNameAt: (x, y) =>
+      nearestName(
+        [...stream.dressings].flatMap((d) => d.names?.ways ?? []),
+        x,
+        y
+      ),
     getFootprints: (): FootprintPoly[] =>
       [...footprints].flatMap(([tile, polys]) => {
         const gone = stream.demolished.get(tile);

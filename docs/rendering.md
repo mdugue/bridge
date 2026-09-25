@@ -44,6 +44,7 @@ flowchart TB
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
   DRESS --> TRAM["tram layer<br/>rails in their bed, masts (instanced),<br/>one wire ribbon mesh (never casts)"]
   DRESS --> RIV["riverside layer<br/>piers on piles, pontoons, groynes,<br/>ferry wake (from the air only)"]
+  DRESS --> NAMES["street lettering<br/>one Canvas-2D atlas + ribbons per tile<br/>(from the air only)"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
 ```
@@ -136,6 +137,8 @@ is the codebook.
 | Pontoon | outline cut to the water → dark hull −0.3…+0.35 m and pale deck +0.5 m over the lowest ground under it (= the drawn water); clay hut + slate roof when `len` > 15 m; 1.4 m gangway to `bank` | OSM + the terrain the water lies on | `riverside-layer.ts` (`addPontoon`) |
 | Groyne | line → stone ridge, crest 0.5 m over the ground, flanks 2.5 m out, 1 m down | OSM | `riverside-layer.ts` (`addGroyne`) |
 | Ferry line | route over the water → 1.2 m dashed pale ribbon (14 m dashes) 6 cm over the water, alpha 0.55 × the map fade (camera 25 → 60 m over the ground), never casts | OSM | `riverside-layer.ts` (`ferryMesh`), `map-overlay.ts` |
+| Street lettering | label line + `name` + class → a ribbon on the ground along it (4 m samples, +0.2 m), letters 4 m (main roads, squares 6 m, bridges 5 m) from a per-tile Canvas-2D atlas in Inter, slate ink with a pale halo; alpha 0.85 × the map fade (camera 25 → 60 m over the ground) × (minor roads: out between 200 and 250 m); unlit, never casts | OSM (+ Basis-DLM bridge names) | `name-layer.ts`, `lib/city/names.ts`, `map-overlay.ts` |
+| Street caption | the nearest named way ≤ 25 m of the walker → a HUD pill; none in fly or immersive mode | OSM | `street-caption.tsx`, `lib/city/names.ts` `nearestName` |
 | Tram track | OSM track line, bed from the class raster (+ NDVI): `street` → polished rail head 2 cm over the road with a dark 4 cm groove inside, no sleepers; `grass` → rails 15 cm up over a 2.6 m strip in the meadow colour; `ballast` → rails 25 cm up over a 2.8 m ballast strip; gauge 1.45 m; `bridge: 1` → on the deck (interpolated along its ramp); none cast | OSM, Basis-DLM, DOP | `tram-layer.ts`, `pipeline/bake/tram.py` |
 | Contact wire | per track 5.6 m over the rail top, sagging 0.15 m (× span / 30 m) between the bake's support stations `s` and the line's ends; near-black, fogged; drawn `max(12 mm, 0.8 px)` wide with alpha = true coverage (≥ 0.25), faded 300 → 450 m; never casts | OSM | `tram-layer.ts` (`wireMesh`), `lib/city/tram.ts` |
 | Span wire / arm | a mast pair across the tracks (anchors 7 m up), facade rosettes (6.5 m), lifted to clear the wires by 0.5 m, a hanger to each wire; a cantilever arm 35 cm over the wire with a stay — the same wire ribbon | OSM (masts, building outlines) | `tram-layer.ts` (`addSpan`, `addArm`) |

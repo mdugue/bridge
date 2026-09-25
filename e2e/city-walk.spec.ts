@@ -268,6 +268,8 @@ test.describe("desktop viewer", () => {
     expect(stats.tram.instances).toBeGreaterThan(0);
     // 20 pontoons, a groyne and the ferry lines below the Terrasse
     expect(stats.riverside.triangles).toBeGreaterThan(0);
+    // ~140 street-name labels lettered into one atlas (seen from the air)
+    expect(stats.names.triangles).toBeGreaterThan(0);
     // 292 wall lines
     expect(stats.walls.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);
