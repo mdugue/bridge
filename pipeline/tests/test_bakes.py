@@ -801,20 +801,21 @@ def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
 
     from bake.lsc import rasterise
 
-    # A 4 m tile at 0.5 m = 8×8 cells. Ground at 100 m in the south-west cell
-    # (two points: the one on the centre wins the idw), a 1.5 m shrub return
-    # and a 12 m crown return (two echoes) in the cell north of it.
-    x = [0.25, 0.1, 0.25, 0.3]
-    y = [0.25, 0.1, 0.75, 0.7]
-    z = [100.0, 101.0, 101.5, 112.0]
+    # A 4 m tile at 0.5 m = 8×8 cells. Two ground points in the south-west
+    # cell (the first in file order is its idw, as PDAL's bin mode has it),
+    # one in the cell diagonally north-east of the empty cell north of it,
+    # a 1.5 m shrub return and a 12 m crown return (two echoes) in that cell.
+    x = [0.1, 0.25, 0.75, 0.25, 0.3]
+    y = [0.1, 0.25, 1.25, 0.75, 0.7]
+    z = [101.0, 100.0, 104.0, 103.5, 114.0]
     header = laspy.LasHeader(point_format=6, version="1.4")
     header.scales = [0.01, 0.01, 0.01]
     header.offsets = [0, 0, 0]
     las = laspy.LasData(header)
     las.x, las.y, las.z = np.array(x), np.array(y), np.array(z)
-    las.classification = np.array([2, 2, 20, 20], np.uint8)
-    las.number_of_returns = np.array([1, 1, 1, 2], np.uint8)
-    las.intensity = np.array([0, 0, 1000, 3000], np.uint16)
+    las.classification = np.array([2, 2, 2, 20, 20], np.uint8)
+    las.number_of_returns = np.array([1, 1, 1, 1, 2], np.uint8)
+    las.intensity = np.array([0, 0, 0, 1000, 3000], np.uint16)
     laz = tmp_path / "t.laz"
     las.write(laz)
     rasterise(laz, tmp_path, (0.0, 0.0, 4.0, 4.0), 25833)
@@ -824,12 +825,14 @@ def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
             return ds.read(list(ds.descriptions).index(desc) + 1)
 
     idw = band("dtm_050.tif", "idw")
-    assert idw[7, 0] == 100.0  # the point on the centre, not the mean
+    assert idw[7, 0] == 101.0  # the first point, not the one on the centre
     assert band("dtm_050.tif", "min")[7, 0] == 100.0
     assert band("dtm_050.tif", "count")[7, 0] == 2
-    # the empty cell north of it is filled from the window
-    assert idw[6, 0] == 100.0
-    assert band("dsm_050.tif", "max")[6, 0] == 112.0
+    # the empty cell north of it: its two donors are both 1 cell away by
+    # Chebyshev distance (the diagonal one would be √2 by Euclid's)
+    assert idw[6, 0] == 102.5
+    assert band("dtm_050.tif", "min")[6, 0] == 102.0
+    assert band("dsm_050.tif", "max")[6, 0] == 114.0
     assert band("nonground_count_050.tif", "count")[6, 0] == 2
     assert band("nonground_multiecho_count_050.tif", "count")[6, 0] == 1
     # only the shrub return is 0.25–4 m above the DTM

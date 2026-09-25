@@ -5,11 +5,16 @@ the uv environment, so no PDAL). The rules are PDAL's `writers.gdal` with
 
 - a point lands in the one cell that contains it (origin at the tile's
   south-west corner, row 0 = north in the written raster);
-- `min` / `max` / `mean` / `count` per cell; `idw` weights each point of a
-  cell by 1 / its distance to the cell centre (a point on the centre wins);
+- `min` / `max` / `mean` / `count` per cell. `idw` is **the first point of
+  the cell in file order**: in bin mode PDAL passes every point at distance
+  0, and a distance-0 point sets the value and switches the weighting off
+  for that cell (`GDALGrid::update`);
 - with a window, an empty cell is filled from the non-empty cells within
-  `window` cells, each weighted by 1 / its distance in cells (every band but
-  `count`).
+  `window` cells, each weighted by 1 / its **Chebyshev** distance in cells,
+  max(|di|, |dj|) (`GDALGrid::windowFill`; every band but `count`).
+
+Checked against PDAL 2.x rasters of 33412_5656 with
+scripts/eval/compare-bakes.py --rasters.
 
 Written as float32 GeoTIFFs with NoData −9999 and the band descriptions
 PDAL gives them (`idw`, `min`, `count`, …), so a folder PDAL made earlier
@@ -60,43 +65,29 @@ class Bins:
         row = self.n - 1 - row_s
         return row * self.n + col, ok
 
-    def centre(self, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        row, col = np.divmod(idx, self.n)
-        return (
-            self.xmin + (col + 0.5) * self.res,
-            self.ymin + (self.n - 1 - row + 0.5) * self.res,
-        )
-
 
 class Stats:
     """Running per-cell statistics of one value."""
 
-    def __init__(self, n: int, idw: bool = False):
+    def __init__(self, n: int):
         size = n * n
         self.n = n
         self.count = np.zeros(size, np.float64)
         self.sum = np.zeros(size, np.float64)
         self.min = np.full(size, np.inf)
         self.max = np.full(size, -np.inf)
-        self.idw = idw
-        if idw:
-            self.wsum = np.zeros(size, np.float64)
-            self.wzsum = np.zeros(size, np.float64)
-            # a point exactly on the centre: PDAL takes its value outright
-            self.exact = np.full(size, np.nan)
+        # the first value per cell, in the order the points were added
+        self.first = np.full(size, np.nan)
 
-    def add(self, idx: np.ndarray, value: np.ndarray, dist: np.ndarray | None = None) -> None:
+    def add(self, idx: np.ndarray, value: np.ndarray) -> None:
         size = self.n * self.n
         self.count += np.bincount(idx, minlength=size)
         self.sum += np.bincount(idx, weights=value, minlength=size)
         np.minimum.at(self.min, idx, value)
         np.maximum.at(self.max, idx, value)
-        if self.idw and dist is not None:
-            on = dist == 0
-            self.exact[idx[on]] = value[on]
-            w = 1.0 / np.where(on, 1.0, dist)
-            self.wsum += np.bincount(idx[~on], weights=w[~on], minlength=size)
-            self.wzsum += np.bincount(idx[~on], weights=(w * value)[~on], minlength=size)
+        cells, at = np.unique(idx, return_index=True)
+        unset = np.isnan(self.first[cells])
+        self.first[cells[unset]] = value[at[unset]]
 
     def band(self, kind: str) -> np.ndarray:
         """One output type as an n×n float array, NaN where no point fell."""
@@ -110,11 +101,7 @@ class Stats:
         elif kind == "mean":
             out = np.where(has, self.sum / np.maximum(self.count, 1), np.nan)
         elif kind == "idw":
-            idw = np.where(
-                self.wsum > 0, self.wzsum / np.where(self.wsum > 0, self.wsum, 1), np.nan
-            )
-            out = np.where(np.isnan(self.exact), idw, self.exact)
-            out = np.where(has, out, np.nan)
+            out = np.where(has, self.first, np.nan)
         else:
             raise ValueError(kind)
         return out.reshape(self.n, self.n)
@@ -122,11 +109,13 @@ class Stats:
 
 def window_fill(band: np.ndarray, window: int) -> np.ndarray:
     """Empty cells (NaN) from the non-empty ones within `window` cells, each
-    weighted by 1 / its distance in cells; cells with none stay empty."""
+    weighted by 1 / its Chebyshev distance in cells; cells with none stay
+    empty."""
     if window <= 0:
         return band
     r = np.arange(-window, window + 1)
-    dist = np.hypot(*np.meshgrid(r, r))
+    di, dj = np.meshgrid(r, r)
+    dist = np.maximum(np.abs(di), np.abs(dj)).astype(np.float64)
     kernel = np.where(dist > 0, 1.0 / np.where(dist > 0, dist, 1), 0.0)
     has = ~np.isnan(band)
     num = ndi.convolve(np.where(has, band, 0.0), kernel, mode="constant")
@@ -166,7 +155,7 @@ def rasterise(laz: Path, out: Path, bounds, epsg: int, res: float = 0.5) -> None
     """Every raster the low-vegetation bake reads, from one LAZ, into `out`."""
     xmin, ymin, xmax, _ = bounds
     bins = Bins(xmin, ymin, xmax - xmin, res)
-    ground = Stats(bins.n, idw=True)
+    ground = Stats(bins.n)
     surface = Stats(bins.n)
     nonground = np.zeros(bins.n * bins.n)
     multiecho = np.zeros(bins.n * bins.n)
@@ -176,8 +165,7 @@ def rasterise(laz: Path, out: Path, bounds, epsg: int, res: float = 0.5) -> None
         cls = np.asarray(pts.classification)
         idx, ok = bins.cells(x, y)
         g = ok & np.isin(cls, GROUND)
-        cx, cy = bins.centre(idx[g])
-        ground.add(idx[g], z[g], np.hypot(x[g] - cx, y[g] - cy))
+        ground.add(idx[g], z[g])
         s = ok & ((cls == 2) | (cls == NON_GROUND))
         surface.add(idx[s], z[s])
         ng = ok & (cls == NON_GROUND)
