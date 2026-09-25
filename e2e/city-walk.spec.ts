@@ -811,8 +811,13 @@ test.describe("mobile", () => {
     await expect(page.getByTestId("altitude-stick")).toBeVisible();
     const flyButton = page.getByRole("button", { name: "Fliegen" });
     await expect(flyButton).toHaveAttribute("aria-pressed", "true");
+    const toolbar = page.getByRole("toolbar", { name: "Werkzeuge" });
+    const flyingBox = await toolbar.boundingBox();
     await flyButton.tap();
     await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
+    // The stick sits above the toolbar, so the toolbar doesn't jump.
+    const walkingBox = await toolbar.boundingBox();
+    expect(walkingBox?.y).toBe(flyingBox?.y);
     await expect(flyButton).toHaveAttribute("aria-pressed", "false");
     expect(
       await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)

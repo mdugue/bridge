@@ -166,8 +166,8 @@ function sceneTools({
 
 /**
  * The overlays that belong to the scene, not to the panel: the key hints, the
- * joystick and — in fly mode — the altitude stick opposite it, under the
- * toolbar (sceneTools). All of it
+ * joystick and, opposite it, the toolbar (sceneTools) with — in fly mode —
+ * the altitude stick above it. All of it
  * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
@@ -201,11 +201,13 @@ function SceneOverlays({
       <div className="absolute bottom-24 left-5">
         <VirtualJoystick onChange={onMove} />
       </div>
+      {/* Bottom-anchored with the toolbar last, so it stays put when fly
+          mode brings the altitude stick in above it. */}
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
+        {flying && <AltitudeStick onChange={onClimb} />}
         <HudToolbar
           tools={sceneTools({ coarse, live, locate, mode, onToggleMode })}
         />
-        {flying && <AltitudeStick onChange={onClimb} />}
       </div>
     </>
   );

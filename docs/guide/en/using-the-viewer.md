@@ -45,7 +45,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
 | *Fliegen* (toolbar) | switch between walking and flying |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
-| Altitude slider (bottom right, flying only) | push up to climb, down to sink; let go to hold the height |
+| Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there |
 | Two-finger pinch | zoom |
 

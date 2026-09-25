@@ -47,7 +47,7 @@ lädt* oben im Bild (siehe
 | *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
 | *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
-| Höhenregler (unten rechts, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
+| Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | dorthin |
 | Zwei Finger zusammenziehen | zoomen |
 
