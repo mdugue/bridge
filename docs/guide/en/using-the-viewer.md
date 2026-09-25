@@ -33,6 +33,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide |
 | Click on the minimap | teleport there |
+| Location button (bottom right) | teleport to where you really are |
 | `R` | demolish the building under the crosshair |
 | `Esc` | leave immersive mode |
 
@@ -40,6 +41,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 |---|---|
 | Drag | look around |
 | Joystick (bottom left) | walk |
+| Location button (bottom right) | teleport to where you really are, facing the way the phone points |
 | Plane button (bottom right) | switch between walking and flying |
 | Altitude slider (bottom right, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there |
@@ -49,6 +51,16 @@ While walking you are held at eye height on the terrain and collide with
 buildings and walls. While flying there is no collision; only sinking
 stops at eye height above the ground. Any input cancels
 a glide that is in progress.
+
+The **location button** (the crosshair icon) asks the browser where you
+are and puts you down there at eye height, on foot. On a phone with a
+compass you then look the way the back of the phone points (its top edge
+when it lies flat); without one the view keeps its direction. A short line
+at the top reports the precision — GPS in a city is often 5–20 m off, a
+phone compass a few degrees. If you stand outside the area, the same line
+says how far, and you stay where you are. Browsers ask for permission first
+(iPhones for the compass too); the location never leaves the device — there
+is no server to send it to.
 
 A floating bar shows the four essential controls until you dismiss it with
 *Verstanden*; the full table stays available in the panel under

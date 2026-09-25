@@ -218,6 +218,11 @@ export interface CityWalkHandle {
    * disposed.
    */
   startStreaming: () => void;
+  /**
+   * Puts the camera on a vantage at once, no glide (the spawn, "locate
+   * me"), landing in the vantage's movement mode.
+   */
+  placeAt: (viewpoint: ViewpointGeometry) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
@@ -1079,6 +1084,7 @@ async function bootApp(
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,
     captureViewpoint: pose.captureViewpoint,
+    placeAt: pose.placeAt,
     teleportTo: pose.teleportTo,
     getPose: pose.getPose,
     getCameraState: pose.getCameraState,

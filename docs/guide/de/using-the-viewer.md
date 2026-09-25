@@ -35,6 +35,7 @@ lädt* oben im Bild (siehe
 | Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin |
 | Klick auf die Minikarte | dorthin teleportieren |
+| Standort-Knopf (unten rechts) | zu deinem echten Standort teleportieren |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `Esc` | immersiven Modus verlassen |
 
@@ -42,6 +43,7 @@ lädt* oben im Bild (siehe
 |---|---|
 | Ziehen | umsehen |
 | Joystick (unten links) | gehen |
+| Standort-Knopf (unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
 | Flugzeug-Knopf (unten rechts) | zwischen Gehen und Fliegen wechseln |
 | Höhenregler (unten rechts, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | dorthin |
@@ -51,6 +53,17 @@ Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
 und Mauern an. Beim Fliegen gibt es keine Kollision; nur sinken kannst du
 nicht tiefer als bis auf Augenhöhe über dem Boden. Jede Eingabe bricht
 einen laufenden Gleitflug ab.
+
+Der **Standort-Knopf** (das Fadenkreuz-Symbol) fragt den Browser nach
+deinem Standort und setzt dich dort auf Augenhöhe ab, zu Fuß. Auf einem
+Telefon mit Kompass schaust du danach in die Richtung, in die die Rückseite
+des Telefons zeigt (liegt es flach, die Oberkante); ohne Kompass bleibt die
+Blickrichtung, wie sie war. Die Genauigkeit meldet eine kurze Zeile oben —
+GPS liegt in der Stadt oft 5–20 m daneben, ein Handykompass einige Grad.
+Stehst du außerhalb des Gebiets, sagt dieselbe Zeile, wie weit, und du
+bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
+Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
+dem er geschickt würde.
 
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter

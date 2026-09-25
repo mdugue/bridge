@@ -43,6 +43,7 @@ import {
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
+import { LocateButton, LocateMessage, useLocateMe } from "./locate-button";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -106,19 +107,23 @@ function SettingsToggle() {
 /**
  * The overlays that belong to the scene, not to the panel: the key hints, the
  * joystick and — in fly mode — the altitude stick opposite it. On a touch
- * screen a walk/fly button sits above that, the F key's stand-in. All of it
+ * screen a walk/fly button sits above that, the F key's stand-in, and above
+ * it — wherever the browser can locate the player — "take me to where I
+ * am" (locate-button.tsx). All of it
  * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
 function SceneOverlays({
   coarse,
+  locate,
   mode,
   onClimb,
   onMove,
   onToggleMode,
 }: {
   coarse: boolean;
+  locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
   onClimb: (v: number) => void;
   onMove: (x: number, y: number) => void;
@@ -137,6 +142,9 @@ function SceneOverlays({
         <VirtualJoystick onChange={onMove} />
       </div>
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
+        {locate.available && (
+          <LocateButton locating={locate.locating} onClick={locate.locate} />
+        )}
         {coarse && (
           <button
             aria-label="Fliegen"
@@ -164,6 +172,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
+  const locate = useLocateMe(handleRef);
 
   // Probed once, before the renderer is created: three's raw "Error creating
   // WebGL context" (or a tile's bare ReferenceError) is replaced by a
@@ -483,9 +492,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
               </output>
             )}
 
+            <LocateMessage message={locate.message} />
+
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              locate={locate}
               mode={mode}
               onClimb={(v) => handleRef.current?.setClimbInput(v)}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}

@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import proj4 from "proj4";
 
 /**
  * Inner waits scale with the machine. Without a GPU every frame is rendered in
@@ -294,6 +295,60 @@ test.describe("desktop viewer", () => {
     // (north-up vs canvas-down) fails.
     expect(Math.abs((pose?.epsgX ?? 0) - expectedX)).toBeLessThan(50);
     expect(Math.abs((pose?.epsgY ?? 0) - expectedY)).toBeLessThan(50);
+    expectNoErrors(errors);
+  });
+
+  test("locate me puts the player at the GPS fix, facing the compass", async () => {
+    // A fix a little north-east of the site's centre, reprojected here so the
+    // assertion is about the wiring, not a hard-coded coordinate.
+    const bounds = await page.evaluate(
+      () => window.__poc?.handle?.terrainBounds
+    );
+    const [minX, minY, maxX, maxY] = bounds ?? [0, 0, 0, 0];
+    const target = {
+      x: (minX + maxX) / 2 + 150,
+      y: (minY + maxY) / 2 + 250,
+    };
+    const [longitude, latitude] = proj4(
+      "+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs",
+      "WGS84",
+      [target.x, target.y]
+    );
+    await page.context().grantPermissions(["geolocation"]);
+    await page.context().setGeolocation({ latitude, longitude, accuracy: 8 });
+    // The floating controls step aside while the sidebar is open.
+    const close = page.getByRole("button", { name: "Seitenleiste schließen" });
+    if (await close.isVisible()) {
+      await close.click();
+    }
+    await page.getByRole("button", { name: "Zu meinem Standort" }).waitFor();
+    // Click, then report a phone held upright with its camera to the east —
+    // the absolute stream Chromium's compass arrives on.
+    await page.evaluate(() => {
+      const button = document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Zu meinem Standort"]'
+      );
+      button?.click();
+      window.dispatchEvent(
+        new DeviceOrientationEvent("deviceorientationabsolute", {
+          alpha: 270,
+          beta: 90,
+          gamma: 0,
+          absolute: true,
+        })
+      );
+    });
+    await expect(page.getByText("Du bist hier")).toBeVisible({
+      timeout: slow(20_000),
+    });
+    const state = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(state?.mode).toBe("walk");
+    expect(Math.abs((state?.epsg.x ?? 0) - target.x)).toBeLessThan(1);
+    expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
+    // East by the compass, ≈ 1° more on the UTM grid (meridian convergence).
+    expect(Math.abs((state?.headingDeg ?? 0) - 91)).toBeLessThan(2);
     expectNoErrors(errors);
   });
 
