@@ -104,7 +104,7 @@ test("the canopy's crowns follow the season through the vegetation control", () 
   const crownsNow = veg.group.children.filter(
     (c) => (c as InstancedMesh).customDepthMaterial !== undefined
   );
-  expect(crownsNow).toHaveLength(2); // the cheap and the rich crown
+  expect(crownsNow).toHaveLength(3); // the mid, rich and far crowns
 });
 
 test("the clock re-seasons on a new calendar day only, throttled, the last day winning", async () => {
