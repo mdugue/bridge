@@ -171,6 +171,25 @@ visual-variable codebook is in
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
 
+- **Street furniture** — OSM benches (`amenity=bench`, points and the
+  ways a bench is sometimes drawn as), picnic tables, litter bins
+  (`waste_basket`), bicycle stands (`bicycle_parking`, not wall loops),
+  bollards, post boxes and stop shelters (`highway=bus_stop` /
+  `public_transport=platform` with `shelter=yes`, `amenity=shelter` of
+  `shelter_type=public_transport`; one per 8 m) → one point layer per tile
+  (ODbL), about 3 000 objects over the four tiles. OSM seldom says which way
+  a bench looks (`direction`, on ~3 %), so **the bake turns an untagged
+  object to the nearest highway within 25 m** (across it when it stands on
+  it); a bench way stands at its midpoint at its mapped length, facing the
+  path side. Only what the tags carry varies: `backrest=no` benches are
+  stools, a stand's `capacity` gives its hoops (two bikes each). Dropped:
+  indoors, underground, classes 5 and 8, bridge decks (the terrain under
+  them is the river). `pipeline/bake/furniture.py`; the viewer instances one
+  small vertex-coloured model per kind (`furniture-layer.ts`,
+  `lib/city/furniture.ts`), eight draw calls per tile at most. Not (yet):
+  bicycle-parking *areas*, shelters mapped as areas, planters, bus-stop
+  signs.
+
 - **Fountains, statues, memorial stones, columns** — the Basis-DLM's
   monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with
   their official names; GeoSN) conflated with OSM's `amenity=fountain`

@@ -6,6 +6,7 @@ import type {
   BridgeFeature,
   CanopyFeature,
   FeatureCollection,
+  FurnitureFeature,
   LampFeature,
   MonumentFeature,
   RailFeature,
@@ -84,6 +85,36 @@ test.each(cases)("%s: canopy points carry a finite height", (_, a) => {
     expect(Number.isFinite(f.properties?.h)).toBe(true);
   }
 });
+
+test.each(cases)(
+  "%s: street furniture is kinded points with a finite bearing",
+  (_, a) => {
+    const kinds = [
+      "bench",
+      "bike",
+      "bin",
+      "bollard",
+      "picnic",
+      "postbox",
+      "shelter",
+    ];
+    const features = load<FurnitureFeature>(a.furniture);
+    expect(features.length).toBeGreaterThan(0);
+    for (const f of features) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      expect(kinds).toContain(f.properties?.k ?? "");
+      const bearing = f.properties?.a;
+      if (bearing !== undefined) {
+        expect(bearing).toBeGreaterThanOrEqual(0);
+        expect(bearing).toBeLessThanOrEqual(360);
+      }
+      if (f.properties?.k === "bike") {
+        expect(f.properties.n).toBeGreaterThanOrEqual(1);
+      }
+    }
+  }
+);
 
 test.each(cases)("%s: lamps are points", (_, a) => {
   for (const f of load<LampFeature>(a.lamps)) {

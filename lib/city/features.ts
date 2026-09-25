@@ -55,6 +55,35 @@ export interface LampFeature {
   properties: Record<string, unknown> | null;
 }
 
+/** The street furniture the bake keeps (pipeline/bake/furniture.py). */
+export type FurnitureKind =
+  | "bench"
+  | "bike"
+  | "bin"
+  | "bollard"
+  | "picnic"
+  | "postbox"
+  | "shelter";
+
+/**
+ * OSM street furniture (pipeline/bake/furniture.py, ODbL): benches, picnic
+ * tables, litter bins, bicycle stands, bollards, post boxes and stop
+ * shelters, each a Point. `a` is the bearing the object faces (degrees
+ * clockwise from north: OSM's `direction`, else towards the nearest way),
+ * absent on round things; `l` a bench's mapped length (m), `n` a stand's
+ * hoops, `back: false` a bench without a backrest.
+ */
+export interface FurnitureFeature {
+  geometry: PointGeometry;
+  properties: {
+    a?: number;
+    back?: boolean;
+    k: FurnitureKind;
+    l?: number;
+    n?: number;
+  } | null;
+}
+
 /**
  * Fountains, statues, memorial stones and columns (pipeline/bake/monuments.py):
  * the Basis-DLM's monument points (GeoSN, the official names) conflated with

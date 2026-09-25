@@ -12,7 +12,8 @@
  *
  * The buildings of a tile load whenever the tile is in view; the terrain
  * refines from the coarse level to the fine one by screen-space error, and
- * only the fine level carries vegetation, lamps, monuments, rails, walls
+ * only the fine level carries vegetation, lamps, monuments, street
+ * furniture, rails, walls
  * and stairs. Which tile gets the fine level is a question of distance, not
  * of a "primary" role.
  *
@@ -69,6 +70,7 @@ const TILE_ERROR = 100_000;
 export interface DressingFiles {
   bridge: string;
   canopy: string;
+  furniture: string;
   lamps: string;
   monuments: string;
   platform: string;

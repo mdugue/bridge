@@ -14,6 +14,7 @@ import type {
   AreaFeature,
   BridgeFeature,
   CanopyFeature,
+  FurnitureFeature,
   LampFeature,
   MonumentFeature,
   RailFeature,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
 import { fetchFeatures } from "./fetch-optional";
+import { buildFurniture } from "./furniture-layer";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
@@ -50,10 +52,11 @@ import { dressWalls } from "./wall-layer";
  * 3DTilesRendererJS, which decides what to load and unload from the cameras,
  * the screen-space error and a memory budget. This module only dresses what
  * lands — the terrain material, water, buildings, vegetation, lamps,
- * monuments, rails, walls — and undresses what leaves, so every tile is one handle whose
+ * monuments, street furniture, rails, walls — and undresses what leaves, so every tile is one handle whose
  * content comes and goes with it.
  */
 export interface TileDressing {
+  furniture?: Group;
   lamps?: LampControl;
   monuments?: MonumentLayer;
   rail?: Group;
@@ -161,6 +164,7 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.vegetation?.group,
     d.lamps?.group,
     d.monuments?.group,
+    d.furniture,
     d.rail,
   ].filter((part): part is Group => part !== undefined);
 }
@@ -247,6 +251,7 @@ async function buildDressing(
     ndviAt,
     lamps,
     monuments,
+    furniture,
     rails,
     bridges,
     ballast,
@@ -259,6 +264,7 @@ async function buildDressing(
       : Promise.resolve(null),
     get<LampFeature>(d.lamps),
     get<MonumentFeature>(d.monuments),
+    get<FurnitureFeature>(d.furniture),
     get<RailFeature>(d.rail),
     get<BridgeFeature>(d.bridge),
     get<AreaFeature>(d.railarea),
@@ -305,11 +311,18 @@ async function buildDressing(
     ...ground,
     heightFog: ctx.heightFog,
   });
+  // Owned by the bake (west/south edges in): stood on this tile's ground.
+  const furnitureGroup = buildFurniture(furniture, {
+    ...ground,
+    heightAt: terrain.heightAt,
+    heightFog: ctx.heightFog,
+  });
   return {
     tile,
     vegetation,
     lamps: lampControl,
     monuments: monumentLayer,
+    furniture: furnitureGroup,
     rail,
   };
 }

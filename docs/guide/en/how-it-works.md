@@ -57,6 +57,7 @@ and each is a mix of measured fact and deliberate simplification.
 | **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
 | **Trees and hedges** | Individual trees with crowns of the measured height; hedges and tree rows | Tree positions and heights from the difference between the surface model (**DOM1**) and the terrain model; rows from Basis-DLM; greenness from the infrared aerial photo (**NDVI**) | Positions and heights are measured; the crown shape is generic, the species unknown |
 | **Street lamps** | Lamp posts along streets and squares | **OpenStreetMap** | Real positions, default height |
+| **Street furniture** | Benches, picnic tables, litter bins, bicycle stands, bollards, post boxes and stop shelters | **OpenStreetMap**; which way a bench faces from its tagged direction, else from the nearest path or street | Real positions; one simple model per kind. Few benches say which way they look, so most are turned towards the nearest way — a guess that is usually, not always, right |
 | **Fountains and monuments** | Fountain basins with still water and translucent water bells; statues, memorial stones and columns | Positions and official names from the Basis-DLM; basin outlines and the smaller fountains from OpenStreetMap; the sculpture's form from the surface model (**DOM1**) | Real positions and outlines. A sculpture is its measured bulk, softened into clay — the right size and silhouette, no detail; where nothing could be measured, an abstract marker. The water bells, their gentle motion and the night lighting are designed. Both surveys were flown while the fountains were drained and their sculptures boxed for winter, so the measured bulk at the Albertplatz is the winter housing |
 | **Railways and bridges** | Tracks, ballast beds, bridge decks with arches or piers, station platforms | Basis-DLM (tracks, bridges), terrain and surface models (deck heights), OpenStreetMap (platforms, whether a bridge is an arch bridge) | Real alignment and deck heights; the structural detail is simplified |
 | **Walls** | The Brühlsche Terrasse and other retaining walls and city walls, cliff edges | OpenStreetMap lines with their tagged heights | Real position, tagged or default height |
@@ -102,8 +103,8 @@ heights and roof shapes, land use, water outlines, railway alignments,
 bridge positions and deck heights, tree positions and heights, roof colours,
 meadow greenness.
 
-**Contributed by volunteers (OpenStreetMap):** street lamps, station
-platforms, retaining walls with their heights, the structural type of
+**Contributed by volunteers (OpenStreetMap):** street lamps, benches and
+other street furniture, station platforms, retaining walls with their heights, the structural type of
 bridges. Completeness varies from street to street.
 
 **Computed:** the sun position, all shadows, fog and haze, the depth of
@@ -114,8 +115,8 @@ the shape of tree crowns, the wall tint per building, the ripples on the
 water, the warm windows at dusk (the *presence* of a shop or public building
 is real; its lit windows are not).
 
-**Not in the data at all:** windows and doors, facade materials, street
-furniture other than lamps, vehicles, people, vegetation smaller than about
+**Not in the data at all:** windows and doors, facade materials, the
+smaller street furniture (signs, planters, bus-stop poles), vehicles, people, vegetation smaller than about
 3 m, and anything indoors.
 
 ## Things worth knowing before you draw conclusions from the picture

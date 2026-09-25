@@ -1,6 +1,7 @@
 """Units of the bakes that need no raw data (the end-to-end comparison
 against the committed artifacts is in docs/data-pipeline.md)."""
 
+import numpy as np
 import shapely
 
 from bake.common import owns, round_coords
@@ -362,3 +363,52 @@ def test_a_terrace_platform_fills_the_holes_of_its_area():
         [(0, 0), (40, 0), (40, 20), (0, 20)], holes=[[(10, 5), (20, 5), (20, 15), (10, 15)]]
     )
     assert platform(promenade).area == 800
+
+
+def test_furniture_kinds_come_from_the_tags():
+    from bake.furniture import kind_of
+
+    assert kind_of(None, None, '"amenity"=>"bench"') == "bench"
+    assert kind_of("bollard", None, None) == "bollard"
+    assert kind_of(None, None, '"leisure"=>"picnic_table"') == "picnic"
+    assert kind_of(None, "bus_stop", '"shelter"=>"yes"') == "shelter"
+    assert kind_of(None, "bus_stop", '"shelter"=>"no"') is None
+    stands = '"amenity"=>"bicycle_parking","bicycle_parking"=>"stands"'
+    assert kind_of(None, None, stands) == "bike"
+    assert kind_of(None, None, stands.replace("stands", "wall_loops")) is None
+    assert kind_of(None, None, '"amenity"=>"restaurant"') is None
+
+
+def test_furniture_indoors_or_underground_is_hidden():
+    from bake.furniture import hidden
+
+    assert hidden('"indoor"=>"yes"')
+    assert hidden('"level"=>"-1"')
+    assert not hidden('"level"=>"0"')
+    assert not hidden(None)
+
+
+def test_a_bench_direction_reads_degrees_or_a_compass_point():
+    from bake.furniture import direction, hoops
+
+    assert direction("SW") == 225.0
+    assert direction("370") == 10.0
+    assert direction("left") is None
+    assert hoops("10") == 5
+    assert hoops("1") == 1
+    assert hoops("lots") == 1
+
+
+def test_an_untagged_bench_faces_the_nearest_way_or_across_the_one_it_is_on():
+    from bake.furniture import bench_on_way, facing
+
+    lines = np.array([shapely.LineString([(0, 0), (100, 0)])], dtype=object)
+    ways = shapely.STRtree(lines)
+    # 5 m north of an east-west path: it looks south, onto it.
+    assert facing(shapely.Point(50, 5), ways, lines) == 180.0
+    # On the path: a quarter turn from its run (east → south).
+    assert facing(shapely.Point(50, 0), ways, lines) == 180.0
+    assert facing(shapely.Point(50, 500), ways, lines) is None
+    # A bench mapped as a way north of the path faces it, at its length.
+    mid, a, length = bench_on_way(shapely.LineString([(40, 3), (43, 3)]), ways, lines)
+    assert (mid.x, mid.y, a, length) == (41.5, 3.0, 180.0, 3.0)
