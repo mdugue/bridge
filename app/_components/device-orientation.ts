@@ -20,14 +20,13 @@ function ctor(): OrientationCtor | undefined {
 
 /**
  * Chrome's plain `deviceorientation` is relative to wherever the page
- * started; its compass is a separate, absolute stream. Safari has only the
- * plain one, which carries its own `webkitCompassHeading`.
+ * started; its compass is the separate `deviceorientationabsolute` stream.
+ * Safari has only the plain one, carrying its own `webkitCompassHeading`,
+ * and Firefox marks plain events `absolute`. Both are heard, never chosen
+ * between by feature detection (`ondeviceorientationabsolute in window`
+ * differs between Chromium builds): aimOf drops every relative reading.
  */
-function eventType(): string {
-  return "ondeviceorientationabsolute" in window
-    ? "deviceorientationabsolute"
-    : "deviceorientation";
-}
+const EVENT_TYPES = ["deviceorientationabsolute", "deviceorientation"];
 
 /** Where the phone looks (TRUE heading), or null if the event has no compass. */
 export function aimOf(e: CompassEvent): DeviceAim | null {
@@ -82,13 +81,18 @@ export function subscribeAim(cb: (aim: DeviceAim) => void): () => void {
   if (!ctor()) {
     return () => undefined;
   }
-  const type = eventType();
   const onEvent = (event: Event) => {
     const aim = aimOf(event as CompassEvent);
     if (aim) {
       cb(aim);
     }
   };
-  window.addEventListener(type, onEvent);
-  return () => window.removeEventListener(type, onEvent);
+  for (const type of EVENT_TYPES) {
+    window.addEventListener(type, onEvent);
+  }
+  return () => {
+    for (const type of EVENT_TYPES) {
+      window.removeEventListener(type, onEvent);
+    }
+  };
 }
