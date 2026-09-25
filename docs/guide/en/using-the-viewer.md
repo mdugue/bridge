@@ -35,6 +35,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Click on the minimap | teleport there |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
 | `R` | demolish the building under the crosshair |
+| `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City) |
 | `Esc` | leave immersive mode |
 
 | Input (touch) | Does |
@@ -119,8 +120,24 @@ The button in the corner opens a panel with three tabs.
   sun's position is computed for Dresden for the chosen instant; shadows,
   sky, fog colours and the dusk glow in buildings follow it. *Standardzeit*
   returns to 14:00, the time the default look is tuned for.
-- **Darstellung** ("look") — sliders in four collapsible groups. Every
-  slider is a percentage; the defaults are the tuned look.
+- **Darstellung** ("look") — the **Bildstil** (picture style) on top, then
+  sliders in four collapsible groups. Every slider is a percentage; the
+  defaults are the tuned look. *Zurücksetzen* ("reset") returns the
+  sliders and leaves the picture style as it is.
+
+A picture style draws the same city another way; switch it at any time,
+with a click or with `V`:
+
+| Style | What it looks like |
+|---|---|
+| *Pastell* | the default: a clay model on paper, soft light, no outlines |
+| *Comic* | fine, slightly wavering ink lines as if drawn by hand, flat colour areas in a few tones, a dot screen in the deepest shade |
+| *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge |
+| *Sin City* | pure black and white only; where it goes black, white contours cut the shapes out of the night; only red roofs keep their colour |
+
+In the graphic styles *Comic* and *Sin City* the depth of field rests (a
+blurred background under crisp lines reads as a mistake); the switch stays
+as you set it.
 
 | Group | Slider | What it does |
 |---|---|---|
@@ -146,7 +163,8 @@ The button in the corner opens a panel with three tabs.
 | | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |
 | | *Windhelligkeit* | crowns brighten as they lean into a gust |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
-| | *Papierkorn* | the paper grain over the whole image |
+| | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
+| | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir* and *Sin City* |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
 | | *Detaillierte Kronen* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 
@@ -159,8 +177,8 @@ cannot resolve it in motion) and comes back when you stop.
   building you are looking at (same as `R`), on any tile in view; it is
   not undoable. *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.
-- **Snapshot** — *Kopieren* copies your exact position, the date and time
-  and every slider as a small JSON text; paste such a text into the box and
+- **Snapshot** — *Kopieren* copies your exact position, the date and time,
+  the picture style and every slider as a small JSON text; paste such a text into the box and
   press *Anwenden* to restore it. This is how a specific view is shared or
   reproduced for a screenshot. A malformed snapshot is rejected with a
   message instead of breaking the scene.

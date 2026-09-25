@@ -143,7 +143,9 @@ is the codebook.
 | Depth tint | screen depth → warm near / cool far | — | `depth-grading-effect.ts` (*Tiefenfärbung*) |
 | Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
-| Paper grain, vignette | screen-space | — | `paper-grain-effect.ts` (*Papierkorn*) |
+| Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `paper-grain-effect.ts` (*Papierkorn*) |
+| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City — one post pass over the finished frame (below) | — | `lib/city/render-style.ts`, `stylize-effect.ts` |
+| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; a screen-fixed noise wobbles the stroke ≈ 1 px and swells its weight; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | Minimap | site tile bounds + 2048² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
 Every slider in the HUD is one row of `lib/city/look-controls.ts`; the
@@ -196,9 +198,35 @@ The full recipe with its rejected alternatives (VSM rings, large
 ## Post-processing
 
 `render → N8AO (half-res, depth-aware upsample) → depth of field (skipped
-while moving) → one EffectPass: SMAA + depth grading + vignette + paper
-grain`. The composer bypasses the renderer's MSAA (`antialias: false`);
-SMAA carries the anti-aliasing. `halfRes`, `aoSamples` and
+while moving) → picture style (off in the default) → one EffectPass: SMAA +
+depth grading + vignette + paper grain`. The composer bypasses the
+renderer's MSAA (`antialias: false`); SMAA carries the anti-aliasing — of
+the style's ink lines and colour bands too, which is why that pass sits
+before it.
+
+**Picture styles** ([ADR 0031](./adr/0031-picture-styles-as-one-post-pass.md))
+redraw the finished frame; no material knows about them, so a switch
+rebuilds nothing and compiles at most the one pass. The table is
+`lib/city/render-style.ts`; per style it sets the pass's shader mode, a
+weight on the *Tuschelinien*, *Tiefenfärbung* and *Papierkorn* sliders,
+the vignette, animated film grain and whether depth of field may run.
+
+- *Comic* — lightness cut into four flat tones (steps one pixel wide by the
+  input's own gradient), the colour rebuilt from a lifted **chroma** (HSL
+  saturation explodes towards white), highlights leaning into the paper, a
+  45° dot screen in the darkest band, the sky an unbanded wash.
+- *Film noir* — luminance through an S-curve, crushed blacks, the distance
+  lifted into grey smoke, a graduated sky; faint ink.
+- *Sin City* — one threshold, black sky, far things sinking into the night;
+  on black the contour is cut out in white (silhouettes only); saturated
+  reds survive as a cut-out red.
+
+The pass reads the depth buffer at **integer** texel radii around a texel
+centre, blending two radii for the stroke weight: the buffer is sampled
+NEAREST, and a fractional radius rounds its two taps unevenly, which on a
+grazing street is as large a second difference as a fold — whole patches
+inked over. The input is clamped to [0, 1] before any HSL maths (the sun's
+halo is HDR). `halfRes`, `aoSamples` and
 `denoiseSamples` rebuild N8AO's materials and are therefore
 construction-time settings. 3DTilesRendererJS's fade and overlay plugins
 patch materials with `onBeforeCompile` and are deliberately not used.

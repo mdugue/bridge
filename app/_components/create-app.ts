@@ -25,6 +25,7 @@ import {
   type SceneLookKey,
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
+import { nextRenderStyle } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
@@ -817,6 +818,8 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
+        cycleStyle: () =>
+          opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
         viewpoint: (index) => {
           const view = currentSite().viewpoints[index];
           if (view) {

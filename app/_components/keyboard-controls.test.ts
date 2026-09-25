@@ -8,6 +8,7 @@ import {
 interface FiredKey {
   code: string;
   ctrlKey?: boolean;
+  metaKey?: boolean;
   repeat?: boolean;
   target?: unknown;
 }
@@ -39,6 +40,7 @@ function harness() {
     press: (code) => calls.push(`press:${code}`),
     release: (code) => calls.push(`release:${code}`),
     releaseAll: () => calls.push("releaseAll"),
+    cycleStyle: () => calls.push("cycleStyle"),
     demolish: () => calls.push("demolish"),
     toggleMode: () => calls.push("toggleMode"),
     viewpoint: (index) => calls.push(`viewpoint:${index}`),
@@ -55,6 +57,7 @@ test("a movement key presses and releases; one-shots fire on their key", () => {
   fire("keyup", { code: "KeyW" });
   fire("keydown", { code: "KeyR" });
   fire("keydown", { code: "KeyF" });
+  fire("keydown", { code: "KeyV" });
   expect(calls).toEqual([
     "press:KeyW",
     "release:KeyW",
@@ -62,7 +65,18 @@ test("a movement key presses and releases; one-shots fire on their key", () => {
     "demolish",
     "press:KeyF",
     "toggleMode",
+    "press:KeyV",
+    "cycleStyle",
   ]);
+});
+
+test("a browser chord (Cmd/Ctrl+V, +F, +R) fires no one-shot", () => {
+  const { fire, calls } = harness();
+  fire("keydown", { code: "KeyV", metaKey: true });
+  fire("keydown", { code: "KeyV", ctrlKey: true });
+  fire("keydown", { code: "KeyF", metaKey: true });
+  fire("keydown", { code: "KeyR", ctrlKey: true });
+  expect(calls.filter((c) => !c.startsWith("press:"))).toEqual([]);
 });
 
 test("auto-repeat never re-fires a one-shot", () => {

@@ -68,6 +68,11 @@ import {
   type LookValues,
 } from "@/lib/city/look-controls";
 import type { FootprintPoly } from "@/lib/city/minimap";
+import {
+  RENDER_STYLE_BY_ID,
+  RENDER_STYLES,
+  type RenderStyle,
+} from "@/lib/city/render-style";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
@@ -290,6 +295,62 @@ function FocusControls({
         />
       )}
     </>
+  );
+}
+
+/**
+ * The picture style: four swatch cards, exactly one pressed — the same
+ * single-value ToggleGroup as walk/fly and the focus mode, so the keyboard
+ * moves through it the same way.
+ */
+function StylePicker({
+  onStyle,
+  style,
+}: {
+  onStyle: (style: RenderStyle) => void;
+  style: RenderStyle;
+}) {
+  return (
+    <div className="flex flex-col gap-2 pb-2">
+      <ToggleGroup
+        aria-label="Bildstil"
+        className="grid w-full grid-cols-4 gap-1.5"
+        id="render-style"
+        onValueChange={(value: string[]) => {
+          const next = value[0] as RenderStyle | undefined;
+          if (next) {
+            onStyle(next);
+          }
+        }}
+        size="sm"
+        spacing={1}
+        value={[style]}
+        variant="outline"
+      >
+        {RENDER_STYLES.map((def) => (
+          <ToggleGroupItem
+            className="h-auto flex-col gap-1.5 rounded-lg p-1.5 pb-2 text-[11px] text-muted-foreground leading-none data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring"
+            data-style={def.id}
+            key={def.id}
+            title={def.description}
+            value={def.id}
+          >
+            <span
+              aria-hidden
+              className="h-7 w-full rounded-md ring-1 ring-black/10 ring-inset"
+              style={{
+                background: `linear-gradient(135deg, ${def.swatch[0]} 0 55%, ${def.swatch[1]} 55% 100%)`,
+              }}
+            />
+            {def.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <span className="text-[11px] text-muted-foreground leading-snug">
+        {RENDER_STYLE_BY_ID[style].description}
+        <span className="hidden [@media(pointer:fine)]:inline"> · Taste V</span>
+      </span>
+    </div>
   );
 }
 
@@ -768,11 +829,16 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 <button
                   className="text-[11px] text-primary hover:underline"
                   onClick={props.resetLook}
+                  title="Alle Regler zurück auf ihren Startwert — der Bildstil bleibt"
                   type="button"
                 >
                   Zurücksetzen
                 </button>
               </div>
+              <StylePicker
+                onStyle={(next) => onLook({ style: next })}
+                style={look.style}
+              />
               {LOOK_GROUPS.map(({ group, icon, note, title }) => (
                 <LookGroupRow icon={icon} key={group} note={note} title={title}>
                   <LookSliders group={group} look={look} onLook={onLook} />

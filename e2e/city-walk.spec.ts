@@ -668,7 +668,7 @@ test.describe("desktop viewer", () => {
    * only move uniforms are batched together rather than spent one per frame.
    */
   test("post and shader controls survive real frames", async () => {
-    const CONTROL_STEPS = 6;
+    const CONTROL_STEPS = 9;
     for (let i = 0; i < CONTROL_STEPS; i++) {
       await page.evaluate((index) => {
         // Driven through the look store the sliders write to — one set() per
@@ -713,6 +713,13 @@ test.describe("desktop viewer", () => {
               leafBright: 1,
               multiTuft: true,
             }),
+          // The picture styles: the first non-default style compiles the
+          // stylize pass (one program for all three), the next only moves
+          // its uniforms and the grain's film switch; pastel switches the
+          // pass off again. DoF is on here, so the style's gate runs too.
+          () => look?.set({ style: "comic", ink: 1 }),
+          () => look?.set({ style: "sincity" }),
+          () => look?.set({ style: "pastel", ink: 0.7 }),
         ];
         steps[index]?.();
       }, i);

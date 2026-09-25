@@ -591,7 +591,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
           rememberedView={rememberedView}
-          resetLook={() => look.set(LOOK_DEFAULTS)}
+          // The sliders go back to their defaults; the picture style is a
+          // choice of its own, made above them, and stays.
+          resetLook={() =>
+            look.set({ ...LOOK_DEFAULTS, style: look.get().style })
+          }
           setRememberedView={setRememberedView}
           setSnapshotText={setSnapshotText}
           snapshotMsg={snapshotMsg}
