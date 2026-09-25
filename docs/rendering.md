@@ -69,14 +69,15 @@ is the codebook.
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
 | Ground height | DGM resampled at build time to the terrain grid (1024² fine, 512² coarse); heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
+| Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`TERRAIN_NORMAL`) |
 | Ground step at walls | wall line + `kind` ∈ retaining/city/embankment/cliff, height ≥ 1.5 m, burned in at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
-| Contour lines | data-frame elevation (`DATA_POSITION`), 2 m minor / 10 m major | DGM1 | `terrain-layer.ts` |
-| Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
-| Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`) | DOP | `terrain-layer.ts` |
+| Contour lines | data-frame elevation (`DATA_POSITION`), 2 m minor / 10 m major; each set fades once its lines crowd closer than a few pixels, and on near-flat ground (< ~3 % grade) and under water, where the DGM's noise only drew squiggles | DGM1 | `terrain-layer.ts` (`CONTOUR_INK`) |
+| Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat; the class PNG is decoded byte-exact by `lib/city/png-raster.ts`, never by the browser (WebKit colour-managed and dithered the ids into speckles) | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
+| Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`), read from a coarse mip (~10 m) so it drifts rather than flecks | DOP | `terrain-layer.ts` |
 | Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `GRASS_MOTTLE` / `GRASS_NORMAL` |
 | Water extent + shoreline | splat alpha (3×3 tent over class 8), `smoothstep`ed | Basis-DLM | `landcover-splat.ts`, `water-layer.ts` |
-| Water ripple, glitter, sky tint | time, sun direction, fog palette | — (synth) | `water-layer.ts` |
-| River mist | water mask + sun, drifting | Basis-DLM (mask) | `createWaterMist` |
+| Water ripple, glitter, sky tint | time, sun direction, fog palette; the sheet shades from a level normal, not the terrain grid's | — (synth) | `water-layer.ts` |
+| River mist | water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; thinned within ~90 m of the eye | Basis-DLM (mask) | `createWaterMist` (*Flussnebel*) |
 | Building silhouette | solid geometry | LoD2 | `city-layer.ts` |
 | Per-building attributes (the rows below) | `_FEATURE_ID_0` per vertex → `EXT_structural_metadata` property table → RGBA32F texture, three texels per object, `texelFetch`ed per vertex | LoD2 (+ DOP) | `city-layer.ts`, `lib/city/city-mesh.ts` `packObjectTexels`, `visual-style.ts` |
 | Wall tint | `hash(objectid)` + `function` family + `measuredHeight` nudge (column `tint`) | LoD2 (+ synth) | `lib/city/building-tint.ts` at bake time (*Farbvariation*) |
@@ -110,9 +111,11 @@ is the codebook.
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
 | Valley fog | world height below a floor derived from the lowest terrain landed so far | DGM1 | `height-fog.ts` (*Talnebel*) |
 | Distance fog | slider; far plane clamped to ~1.1 km until the site has first loaded | — | `create-app.ts` (*Nebel*) |
+| Site-edge haze | distance to the site's outer tile edge: everything fades into the fog colour over the last 450 m (never within ~60 m of the eye) | tile bounds | `height-fog.ts` (`SITE_EDGE_FADE_M`) |
+| Horizon haze | the sky dome blends into the fog colour below the horizon and feathers up to ~16°, so the data's edge, the fog and the sky meet in one band | — | `sun-rig.ts` (`uHazeColor`) |
 | Depth tint | screen depth → warm near / cool far | — | `depth-grading-effect.ts` (*Tiefenfärbung*) |
 | Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
-| Depth of field | crosshair raycast distance, focus range ∝ distance; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
+| Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
 | Paper grain, vignette | screen-space | — | `paper-grain-effect.ts` (*Papierkorn*) |
 | Minimap | site tile bounds + 2048² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
@@ -128,7 +131,12 @@ is spelled: changing one is a look change, not a re-bake
   chosen instant (2.x reports degrees with a north-based azimuth; the 1.x →
   2.x flip rotated the sun by 180° until the tests caught it). A physical
   `Sky` dome with drifting fbm clouds and a `HemisphereLight` take their
-  colours from the altitude palette.
+  colours from the altitude palette. The dome is tempered (a little less
+  radiance and chroma — untouched, its lower third tone-maps to paper white)
+  and dissolves into the fog colour at and below the horizon: past the
+  last tile there is no ground, only haze. Its clouds start a few degrees
+  up — lower, the cloud plane's projection crowded them into one sunlit
+  white sheet along the horizon.
 - **Shadow map:** `PCFShadowMap` with a raised `shadow.radius` (three r182
   made PCF the soft option and deprecated `PCFSoftShadowMap`), 3072² on
   desktop, 2048² on phones, 512² in the lite profile. Terrain **receives
