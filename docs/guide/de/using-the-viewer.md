@@ -44,6 +44,7 @@ lädt* oben im Bild (siehe
 | Ziehen | umsehen |
 | Joystick (unten links) | gehen |
 | Standort-Knopf (unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
+| Kompass-Knopf (unten rechts, nur mit Kompass) | der Blick folgt dem Telefon, bis du ihn wieder ausschaltest oder ziehst |
 | Flugzeug-Knopf (unten rechts) | zwischen Gehen und Fliegen wechseln |
 | Höhenregler (unten rechts, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | dorthin |
@@ -64,6 +65,14 @@ Stehst du außerhalb des Gebiets, sagt dieselbe Zeile, wie weit, und du
 bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
 Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
 dem er geschickt würde.
+
+Darunter erscheint der **Kompass-Knopf**, sobald dein Telefon Kompasswerte
+liefert (auf dem iPhone fragt er beim ersten Antippen um Erlaubnis; am
+Rechner ohne Kompass gibt es ihn nicht). Eingeschaltet folgt der Blick dem
+Telefon: Drehst du dich, dreht sich die Stadt mit; kippst du es nach oben
+oder unten, schaust du hoch oder runter — wie durch ein Fenster. Mit dem
+Joystick gehst du dabei in die Richtung, in die du zeigst. Ziehen zum
+Umsehen oder ein zweites Antippen schaltet den Modus aus.
 
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter

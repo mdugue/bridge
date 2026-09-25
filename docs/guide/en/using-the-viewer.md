@@ -42,6 +42,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Drag | look around |
 | Joystick (bottom left) | walk |
 | Location button (bottom right) | teleport to where you really are, facing the way the phone points |
+| Compass button (bottom right, only with a compass) | the view follows the phone until you switch it off or drag |
 | Plane button (bottom right) | switch between walking and flying |
 | Altitude slider (bottom right, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there |
@@ -61,6 +62,14 @@ phone compass a few degrees. If you stand outside the area, the same line
 says how far, and you stay where you are. Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — there
 is no server to send it to.
+
+Below it the **compass button** appears as soon as your phone reports
+compass readings (an iPhone asks for permission on the first tap; a
+computer without a compass never shows it). Switched on, the view follows
+the phone: turn around and the city turns with you; tilt it up or down and
+you look up or down — like looking through a window. The joystick then
+walks you the way you point. Dragging to look around, or a second tap,
+switches the mode off.
 
 A floating bar shows the four essential controls until you dismiss it with
 *Verstanden*; the full table stays available in the panel under

@@ -294,3 +294,31 @@ test("the climb input lifts the camera in fly mode and cancels a glide", () => {
   expect(camera.position.y).toBeLessThanOrEqual(before.y);
   expect(camera.position.x).toBeCloseTo(before.x, 6);
 });
+
+test("following the phone eases the view to its aim; the stick still walks, a drag ends it", () => {
+  let ended = 0;
+  const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+  pose.setFollowAim({ headingDeg: 350, pitchDeg: -20 });
+  pose.step(1 / 60);
+  // One frame in: part of the way, turned the short way (through north).
+  const early = pose.getCameraState();
+  expect(early.headingDeg).toBeLessThan(0);
+  expect(early.headingDeg).toBeGreaterThan(-10);
+  settle(pose);
+  const s = pose.getCameraState();
+  expect(((s.headingDeg % 360) + 360) % 360).toBeCloseTo(350, 3);
+  expect(s.pitchDeg).toBeCloseTo(-20, 3);
+  // Walking goes where the phone points, and doesn't end the mode.
+  const x0 = camera.position.x;
+  pose.setMoveInput(0, 1);
+  settle(pose);
+  pose.setMoveInput(0, 0);
+  expect(camera.position.x).toBeLessThan(x0);
+  expect(ended).toBe(0);
+  // A drag does: the aim no longer pulls the view back.
+  pose.turn(100, 0);
+  expect(ended).toBe(1);
+  const turned = pose.getCameraState().headingDeg;
+  settle(pose);
+  expect(pose.getCameraState().headingDeg).toBeCloseTo(turned, 6);
+});

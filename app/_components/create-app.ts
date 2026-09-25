@@ -33,7 +33,7 @@ import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import { currentSite } from "@/sites";
-import { createCameraPose } from "./camera-pose";
+import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
@@ -124,6 +124,8 @@ export interface CityWalkOptions {
    * (a flight streams new tiles in). Fires on changes only.
    */
   onBusy?: (busy: boolean) => void;
+  /** a drag or mouse-look ended "the view follows the phone" */
+  onFollowEnd?: () => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -210,6 +212,11 @@ export interface CityWalkHandle {
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
+  /**
+   * The aim (grid heading + pitch, degrees) the view eases towards while it
+   * follows the phone; null stops following (camera-pose.ts).
+   */
+  setFollowAim: (aim: FollowAim | null) => void;
   setSun: (date: Date) => SunState;
   /**
    * Lets the heavy dressing start — vegetation, lamps, rails — and
@@ -659,6 +666,7 @@ async function bootApp(
     heightAt,
     offset,
     resolveStep: collider.resolveStep,
+    onFollowEnd: opts.onFollowEnd,
     onModeChange: opts.onModeChange,
     onPose: opts.onPose,
   });
@@ -1101,6 +1109,7 @@ async function bootApp(
       hitName: lastFocusHit?.name ?? null,
     }),
     setMovementMode: pose.setMovementMode,
+    setFollowAim: pose.setFollowAim,
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,

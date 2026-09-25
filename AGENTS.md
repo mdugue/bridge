@@ -112,7 +112,10 @@ config change.
     `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
     `altitude-stick.tsx` (the fly-mode climb control opposite it),
     `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS
-    fix + phone compass → `placeAt`; the math is `lib/city/geolocation.ts`)
+    fix + phone compass → `placeAt`), `follow-phone.tsx` (opt-in "the view
+    follows the phone", shown only while a compass reports) and
+    `device-orientation.ts` (the one orientation-event adapter both use);
+    the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing

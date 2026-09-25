@@ -23,27 +23,40 @@ import {
 /** How long the result line stays up (ms). */
 const MESSAGE_MS = 5000;
 
+/** Shows a one-line HUD message; `sticky` keeps it until the next one. */
+export type Say = (text: string, sticky?: boolean) => void;
+
 /**
- * "Locate me": finds the player in the real world and drops them there,
- * standing on the ground and facing the way the phone points. The message
- * says how it went — how precise the fix is, or how far off the site the
- * player stands. Lives in CityWalk, not in the button, so the answer still
- * shows when the overlays step aside for the sidebar mid-fix.
+ * The one result line the location controls share. Lives in CityWalk, not
+ * in a button, so an answer still shows when the overlays step aside for the
+ * sidebar mid-fix.
  */
-export function useLocateMe(handleRef: RefObject<CityWalkHandle | null>) {
-  const [available] = useState(canLocate);
-  const [locating, setLocating] = useState(false);
+export function useHudMessage(): { message: string | null; say: Say } {
   const [message, setMessage] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
-
-  const say = useCallback((text: string, sticky = false) => {
+  const say = useCallback<Say>((text, sticky = false) => {
     clearTimeout(timer.current);
     setMessage(text);
     if (!sticky) {
       timer.current = setTimeout(() => setMessage(null), MESSAGE_MS);
     }
   }, []);
+  return { message, say };
+}
+
+/**
+ * "Locate me": finds the player in the real world and drops them there,
+ * standing on the ground and facing the way the phone points. `say` reports
+ * how it went — how precise the fix is, or how far off the site the player
+ * stands.
+ */
+export function useLocateMe(
+  handleRef: RefObject<CityWalkHandle | null>,
+  say: Say
+) {
+  const [available] = useState(canLocate);
+  const [locating, setLocating] = useState(false);
 
   const locate = useCallback(() => {
     if (locating) {
@@ -78,7 +91,7 @@ export function useLocateMe(handleRef: RefObject<CityWalkHandle | null>) {
       .finally(() => setLocating(false));
   }, [handleRef, locating, say]);
 
-  return { available, locate, locating, message };
+  return { available, locate, locating };
 }
 
 /** The round floating button, a sibling of the walk/fly toggle. */

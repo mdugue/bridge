@@ -43,7 +43,13 @@ import {
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
-import { LocateButton, LocateMessage, useLocateMe } from "./locate-button";
+import { FollowPhoneButton, useFollowPhone } from "./follow-phone";
+import {
+  LocateButton,
+  LocateMessage,
+  useHudMessage,
+  useLocateMe,
+} from "./locate-button";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -109,13 +115,15 @@ function SettingsToggle() {
  * joystick and — in fly mode — the altitude stick opposite it. On a touch
  * screen a walk/fly button sits above that, the F key's stand-in, and above
  * it — wherever the browser can locate the player — "take me to where I
- * am" (locate-button.tsx). All of it
+ * am" (locate-button.tsx), and, while a compass is reporting, "the view
+ * follows the phone" (follow-phone.tsx). All of it
  * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
 function SceneOverlays({
   coarse,
+  follow,
   locate,
   mode,
   onClimb,
@@ -123,6 +131,7 @@ function SceneOverlays({
   onToggleMode,
 }: {
   coarse: boolean;
+  follow: ReturnType<typeof useFollowPhone>;
   locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
   onClimb: (v: number) => void;
@@ -144,6 +153,12 @@ function SceneOverlays({
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
         {locate.available && (
           <LocateButton locating={locate.locating} onClick={locate.locate} />
+        )}
+        {follow.available && (
+          <FollowPhoneButton
+            following={follow.following}
+            onClick={follow.toggle}
+          />
         )}
         {coarse && (
           <button
@@ -172,7 +187,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
-  const locate = useLocateMe(handleRef);
+  const hud = useHudMessage();
+  const locate = useLocateMe(handleRef, hud.say);
 
   // Probed once, before the renderer is created: three's raw "Error creating
   // WebGL context" (or a tile's bare ReferenceError) is replaced by a
@@ -211,6 +227,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
     null
   );
+  const follow = useFollowPhone(handleRef, hud.say, coarse, latLng);
+  // The scene reports a drag that ended following; the boot effect below
+  // must not re-run for it, so it reads the hook through a ref.
+  const followEnded = useRef(follow.ended);
+  useEffect(() => {
+    followEnded.current = follow.ended;
+  }, [follow.ended]);
   const [landcoverTiles, setLandcoverTiles] = useState<
     { bounds: TerrainBounds; src: string }[]
   >([]);
@@ -305,6 +328,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         if (!cancelled) {
           // Twice a second, read only in the Erweitert tab's counters.
           startTransition(() => setFps(value));
+        }
+      },
+      onFollowEnd: () => {
+        if (!cancelled) {
+          followEnded.current();
         }
       },
       onModeChange: (m) => {
@@ -492,11 +520,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
               </output>
             )}
 
-            <LocateMessage message={locate.message} />
+            <LocateMessage message={hud.message} />
 
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              follow={follow}
               locate={locate}
               mode={mode}
               onClimb={(v) => handleRef.current?.setClimbInput(v)}

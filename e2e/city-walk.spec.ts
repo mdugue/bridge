@@ -322,6 +322,10 @@ test.describe("desktop viewer", () => {
       await close.click();
     }
     await page.getByRole("button", { name: "Zu meinem Standort" }).waitFor();
+    // No compass has reported yet, so "follow the phone" is not offered.
+    await expect(
+      page.getByRole("button", { name: "Blick folgt dem Telefon" })
+    ).toHaveCount(0);
     // Click, then report a phone held upright with its camera to the east —
     // the absolute stream Chromium's compass arrives on.
     await page.evaluate(() => {
@@ -349,6 +353,52 @@ test.describe("desktop viewer", () => {
     expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
     // East by the compass, ≈ 1° more on the UTM grid (meridian convergence).
     expect(Math.abs((state?.headingDeg ?? 0) - 91)).toBeLessThan(2);
+    expectNoErrors(errors);
+  });
+
+  test("the view follows the phone while the mode is on", async () => {
+    // A phone held facing south, tilted 10° up, reporting ten times a second.
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      w.__compass = window.setInterval(() => {
+        window.dispatchEvent(
+          new DeviceOrientationEvent("deviceorientationabsolute", {
+            alpha: 180,
+            beta: 100,
+            gamma: 0,
+            absolute: true,
+          })
+        );
+      }, 100);
+    });
+    const toggle = page.getByRole("button", {
+      name: "Blick folgt dem Telefon",
+    });
+    await expect(toggle).toBeVisible({ timeout: slow(10_000) });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    // South by the compass is ≈ 181° on the grid; pitch +10°. The view eases
+    // there a third of the way per frame, and SwiftShader draws about one
+    // frame a second — so "well on its way", not "arrived" (camera-pose.test
+    // pins the exact end point).
+    await page.waitForFunction(
+      () => {
+        const s = window.__poc?.handle?.getCameraState();
+        if (!s) {
+          return false;
+        }
+        const heading = ((s.headingDeg % 360) + 360) % 360;
+        return Math.abs(heading - 181) < 15 && s.pitchDeg > 3;
+      },
+      undefined,
+      { timeout: slow(60_000) }
+    );
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      window.clearInterval(w.__compass);
+    });
     expectNoErrors(errors);
   });
 

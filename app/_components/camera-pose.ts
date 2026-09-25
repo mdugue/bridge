@@ -16,6 +16,7 @@ import {
   RAD2DEG,
   type Xyz,
 } from "@/lib/city/pose";
+import { easeAngleDeg } from "@/lib/city/geolocation";
 import { createCameraFlight, type FlightTarget } from "./camera-flight";
 import {
   createFpsMovement,
@@ -24,6 +25,18 @@ import {
   type MovementMode,
 } from "./fps-movement";
 import type { ViewpointGeometry } from "@/lib/city/site";
+
+/**
+ * Time constant of the follow ease (s): long enough to swallow a phone
+ * compass's jitter, short enough that the view still feels attached.
+ */
+const FOLLOW_TAU = 0.12;
+
+/** A view direction in compass degrees on the scene's grid. */
+export interface FollowAim {
+  headingDeg: number;
+  pitchDeg: number;
+}
 
 /** rad per CSS px of grab-look drag — a full phone-width swipe ≈ 90° */
 const GRAB_RADIANS_PER_PX = 0.004;
@@ -40,6 +53,11 @@ export interface CameraPoseOptions {
   /** ground elevation (world Y) at EPSG (x, y); null = off every tile */
   heightAt: (epsgX: number, epsgY: number) => number | null;
   offset: RecenterOffset;
+  /**
+   * The view stopped following the phone because the player looked around
+   * by hand (setFollowAim) — the HUD un-presses its toggle.
+   */
+  onFollowEnd?: () => void;
   onModeChange?: (mode: MovementMode) => void;
   /**
    * A pose set from outside (spawn, teleport, snapshot): reported at once so
@@ -95,6 +113,13 @@ export interface CameraPose {
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
+  /**
+   * "The view follows the phone": the aim (grid heading + pitch, degrees)
+   * the view eases towards every step, or null to stop. Walking still
+   * works — it goes where you point. A glide suspends it; a drag or
+   * mouse-look ends it (onFollowEnd).
+   */
+  setFollowAim: (aim: FollowAim | null) => void;
   /** Advances the glide or the player's movement by `dt` seconds. */
   step: (dt: number) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
@@ -137,6 +162,7 @@ export function createCameraPose(
   /** The mode a scenic glide settles into on the frame it lands. */
   let pendingMode: MovementMode | null = null;
   let zoomStartFov = camera.fov;
+  let followAim: FollowAim | null = null;
   const dir = new Vector3();
   const euler = new Euler(0, 0, 0, "YXZ");
 
@@ -196,9 +222,30 @@ export function createCameraPose(
     };
   };
 
+  /** Eases the view towards the phone's aim by one step of `dt` seconds. */
+  const followStep = (aim: FollowAim, dt: number) => {
+    camera.getWorldDirection(dir);
+    const now = headingPitchOf(dir);
+    const t = 1 - Math.exp(-dt / FOLLOW_TAU);
+    const heading = easeAngleDeg(now.heading * RAD2DEG, aim.headingDeg, t);
+    const pitch = clampPitch(
+      (now.pitch * RAD2DEG + (aim.pitchDeg - now.pitch * RAD2DEG) * t) * DEG2RAD
+    );
+    const d = directionOf(heading * DEG2RAD, pitch);
+    camera.lookAt(
+      camera.position.x + d.x,
+      camera.position.y + d.y,
+      camera.position.z + d.z
+    );
+  };
+
   /** Yaw/pitch the view by radians; the player took the wheel. */
   const rotate = (yaw: number, pitch: number) => {
     cancelGlide();
+    if (followAim) {
+      followAim = null;
+      opts.onFollowEnd?.();
+    }
     euler.setFromQuaternion(camera.quaternion);
     euler.y += yaw;
     euler.x = clampPitch(euler.x + pitch);
@@ -315,9 +362,15 @@ export function createCameraPose(
         settle(pendingMode);
         pendingMode = null;
       }
+      if (followAim) {
+        followStep(followAim, dt);
+      }
       movement.update(dt);
     },
     setMovementMode,
+    setFollowAim: (aim) => {
+      followAim = aim;
+    },
     toggleMode: () =>
       setMovementMode(movement.getMode() === "walk" ? "fly" : "walk"),
     press: (code) => {

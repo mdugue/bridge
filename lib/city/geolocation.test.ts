@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { latLngToUtm, utmToLatLng } from "./crs";
 import {
+  deviceAim,
   deviceHeadingDeg,
+  devicePitchDeg,
   distanceOutside,
+  easeAngleDeg,
   normalizeDeg,
   placementOf,
 } from "./geolocation";
@@ -114,5 +117,30 @@ describe("placementOf", () => {
       expect(p.distanceM).toBeGreaterThan(150_000);
       expect(p.distanceM).toBeLessThan(170_000);
     }
+  });
+});
+
+describe("devicePitchDeg / deviceAim", () => {
+  test("upright is level, flat looks down, tilted back looks up", () => {
+    expect(devicePitchDeg(90, 0)).toBeCloseTo(0, 6);
+    expect(devicePitchDeg(0, 0)).toBeCloseTo(-90, 6);
+    expect(devicePitchDeg(110, 0)).toBeCloseTo(20, 6);
+    expect(devicePitchDeg(60, 0)).toBeCloseTo(-30, 6);
+    // Upright in landscape: rolled on its side, level.
+    expect(devicePitchDeg(0, -90)).toBeCloseTo(0, 6);
+  });
+
+  test("the aim pairs the heading with the pitch", () => {
+    const aim = deviceAim(270, 75, 0);
+    near(aim?.headingDeg ?? null, 90);
+    expect(aim?.pitchDeg).toBeCloseTo(-15, 6);
+  });
+});
+
+describe("easeAngleDeg", () => {
+  test("eases the short way round", () => {
+    expect(easeAngleDeg(0, 90, 0.5)).toBeCloseTo(45, 9);
+    near(normalizeDeg(easeAngleDeg(350, 10, 0.5)), 0, 1e-9);
+    near(normalizeDeg(easeAngleDeg(10, 350, 1)), 350, 1e-9);
   });
 });

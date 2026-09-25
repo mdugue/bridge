@@ -52,6 +52,50 @@ export function deviceHeadingDeg(
   return normalizeDeg(Math.atan2(e, n) / DEG);
 }
 
+/** Where a phone looks: compass heading (true) and pitch, degrees. */
+export interface DeviceAim {
+  headingDeg: number;
+  /** + = looking up, − = looking down (the back camera's elevation) */
+  pitchDeg: number;
+}
+
+/**
+ * How far above the horizon the back camera looks (degrees): 0 held upright,
+ * −90 lying face-up on a table, + tilted back past vertical. Only `beta` and
+ * `gamma` matter — the compass rotation `alpha` turns about the vertical.
+ */
+export function devicePitchDeg(beta: number, gamma: number): number {
+  const up = -Math.cos(beta * DEG) * Math.cos(gamma * DEG);
+  return Math.asin(Math.max(-1, Math.min(1, up))) / DEG;
+}
+
+/**
+ * The full aim of a phone from one earth-frame orientation reading, for the
+ * "view follows the phone" mode: the blended heading of deviceHeadingDeg and
+ * the back camera's pitch. Null when there is no usable heading.
+ */
+export function deviceAim(
+  alpha: number,
+  beta: number,
+  gamma: number,
+  screenAngle = 0
+): DeviceAim | null {
+  const headingDeg = deviceHeadingDeg(alpha, beta, gamma, screenAngle);
+  return headingDeg === null
+    ? null
+    : { headingDeg, pitchDeg: devicePitchDeg(beta, gamma) };
+}
+
+/**
+ * One step of an exponential ease from `from` towards `to` (degrees) by the
+ * fraction `t` in [0, 1], the short way round the circle — a bearing of 350°
+ * eases to 10° through north, not back through south.
+ */
+export function easeAngleDeg(from: number, to: number, t: number): number {
+  const delta = normalizeDeg(to - from + 180) - 180;
+  return from + delta * t;
+}
+
 /** How far (m) a projected point lies outside a bounds box; 0 = inside. */
 export function distanceOutside(
   bounds: TerrainBounds,

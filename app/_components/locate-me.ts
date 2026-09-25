@@ -1,8 +1,9 @@
+import type { DeviceAim, GeoFix, Placement } from "@/lib/city/geolocation";
 import {
-  deviceHeadingDeg,
-  type GeoFix,
-  type Placement,
-} from "@/lib/city/geolocation";
+  orientationNeedsPermission,
+  requestOrientationPermission,
+  subscribeAim,
+} from "./device-orientation";
 
 /** How long to wait for a first compass reading once the fix is in (ms). */
 const COMPASS_WAIT_MS = 1200;
@@ -25,32 +26,6 @@ export class LocateError extends Error {
   }
 }
 
-/** iOS Safari's compass: degrees from north, clockwise; −1 = uncalibrated. */
-type CompassEvent = DeviceOrientationEvent & { webkitCompassHeading?: number };
-
-/** iOS 13+ asks before it hands out orientation events. */
-type OrientationCtor = typeof DeviceOrientationEvent & {
-  requestPermission?: () => Promise<"denied" | "granted">;
-};
-
-/** A compass heading from one orientation event, or null if it has none. */
-function headingOf(e: CompassEvent): number | null {
-  if (typeof e.webkitCompassHeading === "number") {
-    return e.webkitCompassHeading >= 0 ? e.webkitCompassHeading : null;
-  }
-  // A relative alpha is measured from wherever the page happened to start —
-  // no use as a compass.
-  if (!e.absolute || e.alpha === null) {
-    return null;
-  }
-  return deviceHeadingDeg(
-    e.alpha,
-    e.beta ?? 0,
-    e.gamma ?? 0,
-    screen.orientation?.angle ?? 0
-  );
-}
-
 /** Circular mean of bearings in degrees (359° and 1° average to 0°). */
 function meanBearing(samples: number[]): number {
   let s = 0;
@@ -64,38 +39,32 @@ function meanBearing(samples: number[]): number {
 
 /**
  * Starts listening to the compass. Must run inside the click: iOS only
- * grants `requestPermission` from a user gesture, and the gesture is gone
- * once the first `await` yields.
+ * grants the orientation permission from a user gesture, and the gesture is
+ * gone once the first `await` yields.
  */
 function startCompass() {
   const samples: number[] = [];
   let wake: (() => void) | null = null;
-  const onEvent = (event: Event) => {
-    const heading = headingOf(event as CompassEvent);
-    if (heading === null) {
-      return;
-    }
-    samples.push(heading);
+  const onAim = (aim: DeviceAim) => {
+    samples.push(aim.headingDeg);
     if (samples.length > COMPASS_SAMPLES) {
       samples.shift();
     }
     wake?.();
   };
-  // Chrome's plain `deviceorientation` is relative; the absolute stream is a
-  // separate event. Safari has only the plain one, carrying its own compass.
-  const type =
-    "ondeviceorientationabsolute" in window
-      ? "deviceorientationabsolute"
-      : "deviceorientation";
-  const listen = () => window.addEventListener(type, onEvent);
-  const ctor = window.DeviceOrientationEvent as OrientationCtor | undefined;
-  if (typeof ctor?.requestPermission === "function") {
-    ctor.requestPermission().then(
-      (state) => state === "granted" && listen(),
-      () => undefined
-    );
-  } else if (ctor) {
-    listen();
+  let stop: () => void = () => undefined;
+  let stopped = false;
+  if (orientationNeedsPermission()) {
+    requestOrientationPermission()
+      .then((granted) => {
+        if (granted && !stopped) {
+          stop = subscribeAim(onAim);
+        }
+      })
+      .catch(() => undefined);
+  } else {
+    // No prompt to wait for: listen now, not a microtask later.
+    stop = subscribeAim(onAim);
   }
   return {
     /** The averaged heading, waiting up to `ms` for a first reading. */
@@ -111,7 +80,10 @@ function startCompass() {
       }
       return samples.length > 0 ? meanBearing(samples) : null;
     },
-    stop: () => window.removeEventListener(type, onEvent),
+    stop: () => {
+      stopped = true;
+      stop();
+    },
   };
 }
 
