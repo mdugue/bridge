@@ -314,6 +314,17 @@ visual-variable codebook is in
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special
   (`function`), gated by the sun rig's `nightFactor`.
+- **Night window lights** (*Fensterlicht*) — single lit windows, **at night
+  only** (× `nightFactor`; by day the term is zero, so the window-grid veto
+  below still holds). No UVs: a wall's horizontal axis is the world position
+  on its tangent in ~2.9 m window axes, the vertical one the building's own
+  storeys (`storeyH`); whole storeys under the eave (`eaveH`), none on
+  buildings whose eave is under ~3.8 m (garages, sheds). A hash of (axis,
+  storey, wall plane, building) lights a cell at a per-building density,
+  busier on `glow` buildings; far away the pattern fades to its mean so it
+  cannot shimmer. Invented, like the dusk glow: the data has no windows.
+  `visual-style.ts` (`CLAY_WINDOWS`). *Planned:* OSM `building:levels` for
+  the storey height (then the rows sit where the real floors are).
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
@@ -824,7 +835,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only daytime remnant; windows return only as light at night (*Fensterlicht*). |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
 | **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |

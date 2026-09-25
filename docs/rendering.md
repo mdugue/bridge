@@ -103,6 +103,7 @@ is the codebook.
 | Ground darkening on walls | height above the building's own base (column `baseZ`) | LoD2 geometry | (*Boden-Verlauf*) |
 | Rim light | view/normal/sun geometry | — | (*Streiflicht*) |
 | Dusk glow | `function` ∈ commerce/public/special (column `glow`) × `nightFactor` | LoD2, sun | (*Abendlicht*) |
+| Night window lights | hashed lit cells on a wall-tangent × storey grid (columns `storeyH`, `eaveH`, `glow`) × `nightFactor`; nothing by day | LoD2, sun | `CLAY_WINDOWS` (*Fensterlicht*) |
 | Roughness jitter | `hash(objectid)` (column `rough`) → [0.55, 1.0] | — | (*Materialstreuung*) |
 | Transparency | slider, hash-dithered (no transmission) | — | (*Transparenz*) |
 | Tree position and height | canopy point + `h` (3–45 m); rows every 9 m along `veg04_l` | DOM1−DGM1, Basis-DLM | `vegetation-layer.ts` |

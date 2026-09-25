@@ -27,7 +27,8 @@ export type ClayLookKey =
   | "roofVibrance"
   | "roughness"
   | "tint"
-  | "transparency";
+  | "transparency"
+  | "windowLights";
 /** Rows the post stack applies (post-stack.ts). */
 export type PostLookKey = "contact" | "grading" | "grain";
 /** Rows every vegetation tile applies (vegetation-layer.ts). */
@@ -211,6 +212,16 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     group: "buildings",
     initial: 0.5,
     snapshotKey: "duskGlowPct",
+  },
+  {
+    key: "windowLights",
+    id: "building-window-lights",
+    label: "Fensterlicht",
+    description:
+      "Einzelne erleuchtete Fenster in der Nacht — tagsüber bleibt die Fassade ruhig",
+    group: "buildings",
+    initial: 0.6,
+    snapshotKey: "windowLightsPct",
   },
   {
     key: "roughness",

@@ -37,6 +37,8 @@ export interface ClayDetailUniforms {
   /** per-building roughness jitter strength */
   uRough: { value: number };
   uTint: { value: number };
+  /** night window-light strength (Fensterlicht) */
+  uWindows: { value: number };
 }
 
 /**
@@ -54,6 +56,66 @@ export interface StyleResources {
   /** the current transparency, applied to materials created later too */
   transparency: number;
 }
+
+/**
+ * Fensterlicht: single lit windows at night. The facade has no windows in
+ * the data (LoD2) and a drawn window grid was rejected — it made historic
+ * houses read as office blocks (ADR 0010) — so windows exist only as light:
+ * by day this term is zero and the clay stays calm.
+ *
+ * The grid needs no UVs: along a wall the horizontal axis is the world
+ * position projected on the wall's tangent (its normal turned 90°), in
+ * ~2.9 m window axes; vertically it is the building's own storeys. A cell is
+ * lit by a hash of (axis, storey, wall plane, building), at a per-building
+ * density — some houses are dark, commerce/public ones (`glow`) are busier.
+ * Only whole storeys under the eave, and only on buildings whose eave clears
+ * ~3.8 m (no garages, no sheds). Edges are anti-aliased with fwidth; once a
+ * window is a few pixels across the pattern fades to its mean, so far
+ * facades do not shimmer.
+ */
+const CLAY_WINDOWS_PARS = /* glsl */ `
+uvec4 clayPcg4(uvec4 v) {
+  v = v * 1664525u + 1013904223u;
+  v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+  v ^= v >> 16u;
+  v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+  return v;
+}
+vec4 clayRand4(ivec4 key) {
+  return vec4(clayPcg4(uvec4(key))) / 4294967295.0;
+}
+`;
+
+const CLAY_WINDOWS = /* glsl */ `
+  // A uniform branch (derivatives stay defined): by day the term costs nothing.
+  if (uWindows * uNight > 0.0) {
+    float winStorey = max(vClayBuild.y, 2.5);
+    vec2 winN = vClayWN.xz;
+    float winNL = max(length(winN), 1e-3);
+    vec2 winT = vec2(-winN.y, winN.x) / winNL;
+    vec2 winCR = vec2(dot(vClayWP.xz, winT) / 2.9, clayH / winStorey);
+    vec2 winCell = floor(winCR);
+    vec2 winF = winCR - winCell;
+    int winId = int(vClayId + 0.5);
+    float winPlane = floor(dot(vClayWP.xz, winN / winNL) + 0.5);
+    vec4 winR = clayRand4(ivec4(int(winCell.x), int(winCell.y), int(winPlane), winId));
+    float winBld = clayRand4(ivec4(winId, 40503, 7, 1)).x;
+    float winDensity = mix(0.24, 0.5, vClayBuild.w) * (0.35 + 1.3 * winBld);
+    float winOn = step(winR.x, winDensity);
+    float winRows = step(0.0, winCell.y)
+      * step((winCell.y + 0.85) * winStorey, vClayBuild.z)
+      * step(3.8, vClayBuild.z);
+    vec2 winW = max(fwidth(winCR), vec2(1e-4));
+    vec2 winD = (abs(winF - vec2(0.5, 0.52)) - vec2(0.2, 0.26)) / winW;
+    float winMask = clamp(0.5 - max(winD.x, winD.y), 0.0, 1.0);
+    float winFar = smoothstep(0.12, 0.35, max(winW.x, winW.y));
+    float winLit = mix(winMask * winOn, winDensity * 0.21, winFar)
+      * winRows * clayWall * (1.0 - clayIsRoof);
+    vec3 winCol = mix(vec3(1.0, 0.7, 0.38), vec3(1.0, 0.88, 0.66), winR.y);
+    winCol = winR.z < 0.1 ? vec3(0.62, 0.74, 1.0) : winCol;
+    totalEmissiveRadiance += winLit * (0.7 + 0.6 * winR.w) * uWindows * uNight * winCol * 1.6;
+  }
+`;
 
 /**
  * Procedural facade detail injected into the opaque clay material, keyed to each
@@ -74,6 +136,7 @@ export interface StyleResources {
  *  - Streiflicht (uRim): a Fresnel rim that separates silhouettes from like-
  *    coloured neighbours. Strength is squared-Fresnel + a healthy multiplier
  *    because the rim competes with ACES tone-mapping and there is no bloom.
+ *  - Fensterlicht (uWindows): lit windows at night only, see CLAY_WINDOWS.
  * Heights come from world space (world Y is elevation), normals/positions
  * for the rim too, via `modelMatrix`. The uniforms are passed by reference
  * so a setter can retune them live.
@@ -100,10 +163,11 @@ function addClayDetail(
     shader.uniforms.uDuskGlow = uniforms.uDuskGlow;
     shader.uniforms.uNight = uniforms.uNight;
     shader.uniforms.uRough = uniforms.uRough;
+    shader.uniforms.uWindows = uniforms.uWindows;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float featureId;\nattribute float roof;\nuniform highp sampler2D uObjects;\nuniform int uObjectRows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+        "#include <common>\nattribute float featureId;\nattribute float roof;\nuniform highp sampler2D uObjects;\nuniform int uObjectRows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;"
       )
       .replace(
         "#include <beginnormal_vertex>",
@@ -131,12 +195,14 @@ function addClayDetail(
           "vClayTint = roof > 0.5 ? clayB.rgb : clayA.rgb;",
           "vClayBuild = vec4( roof, clayC.x, clayB.w, clayC.y );",
           "vClayRough = clayC.z;",
+          "vClayId = featureId;",
         ].join("\n")
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nuniform float uWindows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;\n" +
+          CLAY_WINDOWS_PARS
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -198,6 +264,7 @@ function addClayDetail(
           // dusk (build.w = 1), gated by nightFactor, walls only.
           "float clayGlow = vClayBuild.w * uDuskGlow * uNight;",
           "totalEmissiveRadiance += clayGlow * clayWall * vec3(1.0, 0.82, 0.5) * 0.5;",
+          CLAY_WINDOWS,
         ].join("\n")
       );
     if (heightFog) {
@@ -225,6 +292,7 @@ export function createStyleResources(
     uDuskGlow: { value: LOOK_DEFAULTS.duskGlow },
     uNight: night ?? { value: 0 },
     uRough: { value: LOOK_DEFAULTS.roughness },
+    uWindows: { value: LOOK_DEFAULTS.windowLights },
   };
   return {
     clayDetail,
@@ -306,10 +374,11 @@ const CLAY_UNIFORM_FOR: Record<
   roofVibrance: "uRoofVibrance",
   roughness: "uRough",
   tint: "uTint",
+  windowLights: "uWindows",
 };
 
 /**
- * Pushes the building rows of the look into the clay: the nine facade
+ * Pushes the building rows of the look into the clay: the ten facade
  * detail uniforms (live references, no recompile) and the transparency.
  */
 export function applyCityLook(
