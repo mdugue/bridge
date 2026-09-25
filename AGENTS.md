@@ -237,7 +237,11 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
   with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
-  painted the ground black).
+  painted the ground black). Nor through the browser's image decoder: the
+  class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
+  (WebKit colour-manages untagged greyscale even with
+  `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
+  with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
   ≈ 20 s); the glTF quantisation, meshopt and gzip settings live in
   `scripts/tile-glb.ts`.
