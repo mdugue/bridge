@@ -36,9 +36,20 @@ import type { PostStack } from "./post-stack";
 const AO_RADIUS_M = 6;
 /** Initial focus distance before the first crosshair raycast lands. */
 const HYPERFOCAL_M = 600;
-/** Same lens model as post-stack.ts: the sharp band scales with distance. */
+/**
+ * Same lens model as post-stack.ts: the sharp band scales with distance,
+ * generous on purpose (FOCUS_RANGE_* there), and a soft bokeh.
+ */
+const FOCUS_RANGE_FACTOR = 1.6;
+const FOCUS_RANGE_MIN = 45;
+const FOCUS_RANGE_MAX = 3000;
+/** post-stack.ts BOKEH_SCALE: a soft hint of lens, never a smear. */
+const BOKEH_SCALE = 0.5;
 function focusRangeFor(distance: number): number {
-  return Math.min(Math.max(distance * 0.7, 12), 2500);
+  return Math.min(
+    Math.max(distance * FOCUS_RANGE_FACTOR, FOCUS_RANGE_MIN),
+    FOCUS_RANGE_MAX
+  );
 }
 /** Depth grading reaches full strength at this view distance (m). */
 const GRADE_DISTANCE_M = 800;
@@ -100,7 +111,7 @@ export function createNodePostStack(
   const focusDistance = uniform(HYPERFOCAL_M);
   const focusRange = uniform(focusRangeFor(HYPERFOCAL_M));
   const focused = nodeObject(
-    dof(lit, viewZ, focusDistance, focusRange, uniform(1))
+    dof(lit, viewZ, focusDistance, focusRange, uniform(BOKEH_SCALE))
   ) as unknown as Node<"vec4">;
 
   const grading = uniform(LOOK_DEFAULTS.grading);
@@ -186,7 +197,7 @@ export function createNodePostStack(
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,
       focusRange: focusRange.value,
-      bokehScale: 1,
+      bokehScale: BOKEH_SCALE,
     }),
     setSize: () => undefined, // the pipeline follows the renderer's size
     applyLook: (look) => {

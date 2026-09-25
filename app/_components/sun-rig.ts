@@ -2,6 +2,22 @@ import type { Box3, Camera, Scene } from "three";
 import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
+import {
+  cameraPosition,
+  dot,
+  Fn,
+  float,
+  max,
+  min,
+  mix,
+  normalize,
+  positionWorld,
+  smoothstep,
+  uniform,
+  vec3,
+  vec4,
+} from "three/tsl";
+import type { Node } from "three/webgpu";
 import { nodeRenderer } from "./gpu-mode";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import {
@@ -62,20 +78,52 @@ interface SkyDome {
   setTime: (seconds: number) => void;
 }
 
-/** SPIKE (plan 020): the TSL twin of Sky.js, same knobs; its clouds read TSL `time`. */
+/**
+ * SPIKE (plan 020): the TSL twin of Sky.js, same knobs; its clouds read TSL
+ * `time`. The GLSL dome's horizon haze and tempering wrap SkyMesh's colour
+ * node here (the same terms as the fragment patch in createSkyDome). The one
+ * term not carried over is the clouds' raised horizon fade: it sits inside
+ * SkyMesh's colour Fn, out of reach without copying the whole node; the haze
+ * band covers most of the region it would clear.
+ */
 function createNodeSkyDome(scene: Scene): SkyDome {
   const sky = new SkyMesh();
   sky.scale.setScalar(4500);
-  sky.turbidity.value = 6;
+  sky.turbidity.value = 4.5;
   sky.rayleigh.value = 1.6;
-  sky.mieCoefficient.value = 0.004;
-  sky.mieDirectionalG.value = 0.75;
+  sky.mieCoefficient.value = 0.0025;
+  sky.mieDirectionalG.value = 0.82;
   sky.cloudCoverage.value = 0.3;
   sky.cloudDensity.value = 0.3;
   sky.cloudSpeed.value = 0.0001;
+  const hazeColor = uniform(new Color(0xdf_e7_ee));
+  // reason: SkyMesh builds its colour node in the constructor.
+  const inner = sky.material.colorNode as Node<"vec4">;
+  sky.material.colorNode = Fn(() => {
+    const raw = inner.rgb;
+    const luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
+    const tempered = mix(vec3(luma), raw, 0.8).mul(0.7);
+    const l = luma.mul(0.7);
+    const over = max(l.sub(0.45), 0);
+    const shouldered = tempered.mul(
+      min(l, 0.45)
+        .add(over.div(over.mul(1.5).add(1)))
+        .div(max(l, 1e-4))
+    );
+    const direction = normalize(positionWorld.sub(cameraPosition));
+    const band = float(1).sub(smoothstep(-0.03, 0.28, direction.y));
+    const hazed = mix(
+      shouldered,
+      hazeColor,
+      band.mul(band).mul(float(3).sub(band.mul(2)))
+    );
+    return vec4(hazed, 1);
+  })();
   scene.add(sky);
   return {
-    setHaze: () => undefined,
+    setHaze: (fog) => {
+      hazeColor.value.set(fog);
+    },
     setSun: (x, y, z) => sky.sunPosition.value.set(x, y, z),
     setTime: () => undefined,
   };

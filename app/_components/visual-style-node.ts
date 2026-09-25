@@ -22,6 +22,7 @@ import {
   smoothstep,
   step,
   textureLoad,
+  transformNormalToView,
   uniform,
   varying,
   vec3,
@@ -93,6 +94,18 @@ export function createNodeClayMaterial(
   const tint = varying(select(roofAttr.greaterThan(0.5), b.rgb, a.rgb));
   const build = varying(vec4(roofAttr, c.x, b.w, c.y));
   const rough = varying(c.z);
+
+  // A triangle degenerate when its flat normal was baked has a zero normal;
+  // quantisation can give it area again, and normalize(0) = NaN lighting
+  // (black pixels the DoF spreads). visual-style.ts swaps in "up" per vertex;
+  // so does this normal node (view space, as the lighting reads it).
+  const rawNormal = attribute("normal", "vec3");
+  const safeNormal = select(
+    dot(rawNormal, rawNormal).lessThan(1e-8),
+    vec3(0, 1, 0),
+    rawNormal
+  );
+  material.normalNode = normalize(varying(transformNormalToView(safeNormal)));
 
   // --- per fragment --------------------------------------------------------
   material.roughnessNode = clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1);
