@@ -52,6 +52,7 @@ import {
   type SceneBudget,
   type SceneProfile,
   shadowMapSizeFor,
+  tileCacheBytesFor,
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
@@ -525,6 +526,7 @@ async function bootApp(
       heightFog,
       look: opts.look,
       lowRasters: budget.lowRasters,
+      cacheBytes: tileCacheBytesFor(budget.tier),
       ground,
       night: () => currentNight,
       offset,

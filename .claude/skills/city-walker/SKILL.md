@@ -202,6 +202,14 @@ not sky.
   otherwise put ~9 000 rich crowns on screen and lost the WebGL context; the
   mid crown + trunk; and past 650 m (back at 550 m) a detail-1 crown (80
   tris), no trunk, dense chunks thinned to every other tree drawn wider.
+  Trunks, mid and rich crowns of a chunk share ONE `instanceMatrix` (and
+  the crowns one `instanceColor`) — ~9 MB instead of ~21 MB for a forest
+  tile; compute each mesh's bounding sphere after sharing.
+- Phones keep only 120–180 MB of out-of-view tile content cached
+  (`tileCacheBytesFor`, `lruCache.min/maxBytesSize`): with the library's
+  0.3–0.4 GB default, a minimap jump from the start into the Heide kept the
+  start area loaded while the forest tiles arrived and Safari killed the
+  tab.
 - **Chunking:** placements are bucketed into 250 m cells, one InstancedMesh per
   cell (shared geo/material), so off-screen cells frustum-cull from both the
   main and shadow pass. After `setMatrixAt` you **must**

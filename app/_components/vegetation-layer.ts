@@ -625,13 +625,20 @@ function buildTrees(
       c.castShadow = true;
       c.receiveShadow = true;
     }
-    writeInstances(trunks, cell);
-    writeInstances(mid, cell);
-    writeInstances(rich, cell);
-    writeInstances(far, farCell, thinned ? FAR_THIN_WIDEN : 1);
     paintCrowns(mid, cell);
-    paintCrowns(rich, cell);
     paintCrowns(far, farCell);
+    // The trunks and both near crowns stand on the same trees: they share
+    // ONE matrix buffer (and the crowns one colour buffer), on the CPU and,
+    // since WebGL buffers are keyed by the attribute, on the GPU. A forest
+    // tile's vegetation drops from ~21 MB of instance data to ~9 MB.
+    trunks.instanceMatrix = mid.instanceMatrix;
+    rich.instanceMatrix = mid.instanceMatrix;
+    rich.instanceColor = mid.instanceColor;
+    writeInstances(mid, cell);
+    writeInstances(far, farCell, thinned ? FAR_THIN_WIDEN : 1);
+    // Each mesh fits its own geometry into the shared matrices.
+    trunks.computeBoundingSphere();
+    rich.computeBoundingSphere();
     // updateVegetationLod() picks the tier each frame; start on mid.
     rich.visible = false;
     far.visible = false;

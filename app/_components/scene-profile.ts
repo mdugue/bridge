@@ -18,7 +18,8 @@
  * Orthogonal to the profile is the **device tier**: a phone (coarse pointer,
  * no hover) shares one memory pool between CPU and GPU and Safari kills the
  * tab well under 1.5 GB, so it gets a 2048² shadow map, a 1.5 pixel-ratio
- * cap and the 2048² land-cover rasters. Same world, same shaders — only fill,
+ * cap, the 2048² land-cover rasters and a smaller cache for tiles out of
+ * view (`tileCacheBytesFor`). Same world, same shaders — only fill,
  * shadow texels and texture memory shrink; AO quality follows the profile,
  * not the tier.
  *
@@ -130,6 +131,29 @@ export function pixelRatioFor(
     return 0.5;
   }
   return Math.min(devicePixelRatio, tier === "mobile" ? 1.5 : 2);
+}
+
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+/**
+ * How much tile content (decoded geometry and textures) the tile renderer
+ * keeps around, in bytes: it starts unloading tiles no longer in use past
+ * `max` and stops at `min`. Tiles in use are never unloaded, so this bounds
+ * only what lingers after the camera moves on. 3DTilesRendererJS's default,
+ * 0.3–0.4 GB, is kept on the desktop. On a phone that much lingering
+ * content, plus the dressing of the tiles still in view, took the tab past
+ * what Safari allows: jumping from the start straight into the Dresdner
+ * Heide by the minimap kept the whole start area loaded while two forest
+ * tiles arrived, and the page died.
+ */
+export function tileCacheBytesFor(tier: DeviceTier): {
+  max: number;
+  min: number;
+} {
+  return tier === "mobile"
+    ? { min: 120 * MB, max: 180 * MB }
+    : { min: 0.3 * GB, max: 0.4 * GB };
 }
 
 /**

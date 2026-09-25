@@ -210,14 +210,15 @@ much of the site is loaded (screen-space error target 16 px, an LRU cache):
 | Pixel ratio | ≤ 2 | ≤ 1.5 | 0.5 |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere | L0 4096², L1 2048² |
 | N8AO quality | Medium | Medium | Performance |
+| Tile cache (content no longer in use) | 0.3–0.4 GB (the library default) | 120–180 MB | 0.3–0.4 GB |
 
 What one site tile costs (Dresden, as published; the `.glb.gz` are
 pre-gzipped glTF with meshopt compression and quantised positions):
 
 | Content | Wire size per tile | Triangles |
 |---|---|---|
-| buildings `city_<tile>.glb.gz` | 1.1–1.5 MB | ≈143 k on the spawn tile |
-| fine terrain `terrain_<tile>_l0.glb.gz` | 1.5–2.0 MB | ≈2.1 M (1024² grid + skirt) |
+| buildings `city_<tile>.glb.gz` | up to 1.9 MB | ≈143 k on the spawn tile |
+| fine terrain `terrain_<tile>_l0.glb.gz` | 1.9–3.1 MB | ≈2.1 M (1024² grid + skirt) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
 | footprints (minimap) | 0.23–0.33 MB | — |
 | class raster 4096² / 2048² | 0.22–0.25 / ≈0.08 MB | — |
@@ -225,7 +226,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | paving raster (fine level) | 0.6–0.86 MB | — |
 | edge raster (fine level) | 0.34–0.46 MB | — |
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | ≈ 130–200 k |
-| canopy points (fine level) | 0.6–1.8 MB | — |
+| canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB
 heightfield; quantised meshes cost more on the wire than a height blob,

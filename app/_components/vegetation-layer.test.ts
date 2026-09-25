@@ -91,3 +91,14 @@ test("a dense chunk's far tier keeps every other tree", () => {
   expect(chunk.trees).toBe(800);
   expect(chunk.far.count).toBe(400);
 });
+
+test("trunks and the near crowns share one instance buffer", () => {
+  const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
+  const [chunk] = built.chunks;
+  expect(chunk.trunks.instanceMatrix).toBe(chunk.mid.instanceMatrix);
+  expect(chunk.rich.instanceMatrix).toBe(chunk.mid.instanceMatrix);
+  expect(chunk.rich.instanceColor).toBe(chunk.mid.instanceColor);
+  // Each still culls against a sphere of its own geometry.
+  expect(chunk.rich.boundingSphere).not.toBeNull();
+  expect(chunk.trunks.boundingSphere).not.toBeNull();
+});
