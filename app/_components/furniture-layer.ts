@@ -3,7 +3,6 @@ import {
   CapsuleGeometry,
   CatmullRomCurve3,
   Color,
-  ConeGeometry,
   ExtrudeGeometry,
   CylinderGeometry,
   Float32BufferAttribute,
@@ -15,6 +14,8 @@ import {
   Quaternion,
   Shape,
   ShapeUtils,
+  SphereGeometry,
+  TorusGeometry,
   TubeGeometry,
   Vector2,
   Vector3,
@@ -45,10 +46,11 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * +Z, turned to the bearing the bake gave (towards the nearest way); a
  * bench is stretched to its mapped length, a bollard to its tagged height.
  *
- * A playground is its OSM outline as a low, soft-surfaced slab on the
+ * A playground is its OSM outline as a pale sand floor flush on the
  * ground (a sandpit drawn as an area, a sand slab on it), merged into one
- * mesh per tile; only the equipment OSM maps stands on it, lifted onto the
- * slab. An empty playground stays empty.
+ * mesh per tile; only the equipment OSM maps stands on it, each piece a
+ * soft one-coloured sculpture — an arch for a swing, a wave for a slide, a
+ * faceted dome for a climbing frame. An empty playground stays empty.
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
  * the Y-up frame, stood on that tile's ground. Non-fatal: missing or empty
@@ -74,16 +76,27 @@ const BRONZE = 0x9a_86_66; // metal bollards (the Stallhof's bronze columns)
 const MUSTARD = 0xe0_c1_78; // post boxes
 const ROOF = 0xb1_b3_c2;
 const PANE = 0xdc_e6_ea;
-const SAND = 0xec_df_bd;
-const SOFT_FLOOR = 0xe2_c7_b8; // the rubber-mulch safety floor, a dusty rose
-const CORAL = 0xe3_a4_93;
-const SKY = 0xa6_c3_d8;
-const BUTTER = 0xec_d5_8f;
+/*
+ * The playground's pieces are soft, single-coloured sculptures — a play
+ * landscape in an architect's model rather than catalogue equipment — each
+ * in one of five pastels taken from the scene's own: the meadow's sage, the
+ * water's dusty blue, a peach and a butter from the sandstone and the
+ * lamps' warm light, a lilac from the roads. The floor is a pale sand a
+ * breath warmer than the paving, so the playground reads as a place, not
+ * as a slab.
+ */
+const PLAY_FLOOR = 0xec_df_c9;
+const SAND = 0xf1_e3_c1;
+const PEACH = 0xe9_bd_a4;
+const SAGE = 0xbf_cf_ab;
+const DUSK_BLUE = 0xab_c5_d6;
+const BUTTER = 0xee_da_a2;
+const LILAC = 0xcb_bd_d8;
 /** A playground slab's top over the ground (m), and a sandpit's over that. */
-const PATCH_LIFT = 0.08;
-const SAND_LIFT = 0.12;
+const PATCH_LIFT = 0.04;
+const SAND_LIFT = 0.06;
 /** The slab's edge reaches this far below its top, so no slope shows under it. */
-const PATCH_SKIRT = 0.4;
+const PATCH_SKIRT = 0.2;
 /** Ring vertices this far apart at most, each seated on the ground (m). */
 const PATCH_STEP = 2;
 
@@ -228,127 +241,125 @@ function shelter(): BufferGeometry[] {
   ];
 }
 
-/** Two A-frames and a top bar in one stroke each, two seats hanging along it. */
+/** A shape's section extruded `depth` along local X, softly bevelled and
+ *  centred (the section is drawn in the YZ plane, x = −z). */
+function extrudedX(section: Shape, depth: number, hex: number): BufferGeometry {
+  const geo = new ExtrudeGeometry(section, {
+    depth,
+    bevelEnabled: true,
+    bevelSize: 0.04,
+    bevelThickness: 0.04,
+    bevelSegments: 3,
+    curveSegments: 12,
+  });
+  geo.rotateY(Math.PI / 2);
+  geo.translate(-depth / 2, 0, 0);
+  return tinted(geo, hex);
+}
+
+/** One soft arch, and a pill-shaped seat hanging from it. */
 function swing(): BufferGeometry[] {
-  const parts: BufferGeometry[] = [
+  const seat = new CapsuleGeometry(0.08, 0.34, 3, 8);
+  seat.rotateZ(Math.PI / 2);
+  seat.translate(0, 0.5, 0);
+  return [
     tube(
       [
-        [-1.3, 0, -0.8],
-        [-1.3, 2.2, 0],
-        [1.3, 2.2, 0],
-        [1.3, 0, -0.8],
+        [-1.25, 0, 0],
+        [-1.15, 1.6, 0],
+        [-0.75, 2.15, 0],
+        [0, 2.3, 0],
+        [0.75, 2.15, 0],
+        [1.15, 1.6, 0],
+        [1.25, 0, 0],
       ],
-      0.07,
-      SLATE,
-      24
+      0.09,
+      DUSK_BLUE,
+      28
     ),
-    tube(
-      [
-        [-1.3, 0, 0.8],
-        [-1.3, 2.2, 0],
-      ],
-      0.07,
-      SLATE,
-      2
-    ),
-    tube(
-      [
-        [1.3, 0, 0.8],
-        [1.3, 2.2, 0],
-      ],
-      0.07,
-      SLATE,
-      2
-    ),
+    tinted(seat, DUSK_BLUE),
+    block([0.03, 1.7, 0.03], [-0.2, 1.4, 0], DUSK_BLUE, 0.012),
+    block([0.03, 1.7, 0.03], [0.2, 1.4, 0], DUSK_BLUE, 0.012),
   ];
-  for (const [x, hex] of [
-    [-0.6, CORAL],
-    [0.6, SKY],
-  ] as const) {
-    parts.push(
-      block([0.04, 1.7, 0.04], [x - 0.2, 1.33, 0], SLATE, 0.015),
-      block([0.04, 1.7, 0.04], [x + 0.2, 1.33, 0], SLATE, 0.015),
-      block([0.5, 0.09, 0.26], [x, 0.46, 0], hex)
-    );
-  }
-  return parts;
 }
 
-/** A tower block with a soft chute running out front. */
+/** A wave: a soft rise at the back falling in one curve to the front. */
 function slide(): BufferGeometry[] {
-  const chute = new RoundedBoxGeometry(0.55, 0.08, 2.6, 1, 0.03);
-  chute.rotateX(Math.atan2(1.2, 2.3));
-  chute.translate(0, 0.8, 1.2);
-  return [
-    block([0.9, 1.4, 0.9], [0, 0.7, -0.4], HONEY),
-    block([1, 0.08, 1], [0, 1.44, -0.4], HONEY_DEEP),
-    tinted(chute, SKY),
-  ];
+  const wave = new Shape();
+  wave.moveTo(1.1, 0);
+  wave.lineTo(1.1, 1.3);
+  wave.quadraticCurveTo(1.1, 1.55, 0.8, 1.55);
+  wave.quadraticCurveTo(0.2, 1.55, -0.4, 0.6);
+  wave.quadraticCurveTo(-0.8, 0.12, -1.5, 0.12);
+  wave.lineTo(-1.5, 0);
+  wave.closePath();
+  return [extrudedX(wave, 0.7, PEACH)];
 }
 
-/** A dome of arches (a climbing frame, abstracted). */
+/** A low faceted dome, the climbing hill. */
 function climb(): BufferGeometry[] {
-  const arch = (turn: number): BufferGeometry => {
-    const geo = tube(
-      [
-        [-1.1, 0, 0],
-        [-0.8, 1.3, 0],
-        [0, 1.8, 0],
-        [0.8, 1.3, 0],
-        [1.1, 0, 0],
-      ],
-      0.07,
-      SLATE,
-      16
-    );
-    geo.rotateY(turn);
-    return geo;
-  };
-  return [
-    arch(0),
-    arch(Math.PI / 3),
-    arch((2 * Math.PI) / 3),
-    block([1.2, 0.07, 1.2], [0, 0.9, 0], BUTTER),
-  ];
+  const dome = new SphereGeometry(1.2, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+  const faceted = dome.toNonIndexed();
+  dome.dispose();
+  faceted.scale(1, 0.85, 1);
+  faceted.computeVertexNormals();
+  return [tinted(faceted, SAGE)];
 }
 
+/** An egg on a short stem. */
 function springy(): BufferGeometry[] {
-  return [
-    pillar(0.07, 0.4, [0, 0], SLATE),
-    block([0.26, 0.32, 0.7], [0, 0.56, 0], BUTTER),
-  ];
+  const egg = new SphereGeometry(0.3, 12, 8);
+  egg.scale(0.75, 0.9, 1.2);
+  egg.translate(0, 0.62, 0);
+  return [pillar(0.06, 0.36, [0, 0], BUTTER), tinted(egg, BUTTER)];
 }
 
+/** A long soft plank on a half-round pivot. */
 function seesaw(): BufferGeometry[] {
+  const pivot = new CylinderGeometry(0.22, 0.22, 0.3, 14, 1, false, 0, Math.PI);
+  pivot.rotateZ(Math.PI / 2);
+  pivot.rotateY(Math.PI / 2);
   return [
-    block([0.24, 0.4, 0.3], [0, 0.2, 0], SLATE),
-    block([3, 0.08, 0.26], [0, 0.44, 0], HONEY),
-    block([0.26, 0.2, 0.26], [-1.3, 0.56, 0], CORAL),
-    block([0.26, 0.2, 0.26], [1.3, 0.56, 0], SKY),
+    tinted(pivot, LILAC),
+    block([3, 0.1, 0.3], [0, 0.28, 0], LILAC, 0.05),
   ];
 }
 
+/** A flat disc with a rounded rim. */
 function roundabout(): BufferGeometry[] {
-  const disc = new CylinderGeometry(1, 1, 0.1, 20);
-  disc.translate(0, 0.3, 0);
-  return [tinted(disc, SKY), pillar(0.04, 1, [0, 0], SLATE)];
-}
-
-function playhouse(): BufferGeometry[] {
-  const roof = new ConeGeometry(1.2, 0.8, 4);
-  roof.rotateY(Math.PI / 4);
-  roof.translate(0, 1.8, 0);
-  return [block([1.6, 1.4, 1.6], [0, 0.7, 0], HONEY), tinted(roof, CORAL)];
-}
-
-/** A soft frame of timber around the sand (a sandpit mapped as a point). */
-function sandbox(): BufferGeometry[] {
+  const disc = new CylinderGeometry(1, 1, 0.12, 24);
+  disc.translate(0, 0.28, 0);
+  const rim = new TorusGeometry(1, 0.06, 6, 24);
+  rim.rotateX(Math.PI / 2);
+  rim.translate(0, 0.34, 0);
   return [
-    block([3, 0.14, 3], [0, 0.07, 0], SAND, 0.03),
-    block([3.2, 0.24, 0.16], [0, 0.12, 1.5], HONEY),
-    block([3.2, 0.24, 0.16], [0, 0.12, -1.5], HONEY),
-    block([0.16, 0.24, 3], [1.5, 0.12, 0], HONEY),
-    block([0.16, 0.24, 3], [-1.5, 0.12, 0], HONEY),
+    tinted(disc, DUSK_BLUE),
+    tinted(rim, DUSK_BLUE),
+    pillar(0.12, 0.28, [0, 0], DUSK_BLUE),
+  ];
+}
+
+/** A house silhouette, extruded and softened. */
+function playhouse(): BufferGeometry[] {
+  const house = new Shape();
+  house.moveTo(-0.7, 0);
+  house.lineTo(0.7, 0);
+  house.lineTo(0.7, 1.1);
+  house.lineTo(0, 1.8);
+  house.lineTo(-0.7, 1.1);
+  house.closePath();
+  return [extrudedX(house, 1.4, PEACH)];
+}
+
+/** Sand in a soft rounded frame (a sandpit mapped as a point). */
+function sandbox(): BufferGeometry[] {
+  const frame = new TorusGeometry(1.35, 0.1, 6, 4);
+  frame.rotateX(Math.PI / 2);
+  frame.rotateY(Math.PI / 4);
+  frame.translate(0, 0.1, 0);
+  return [
+    block([2.6, 0.12, 2.6], [0, 0.06, 0], SAND, 0.04),
+    tinted(frame, SAGE),
   ];
 }
 
@@ -498,7 +509,7 @@ function buildPatches(
   const t: Tris = { positions: [], normals: [], colors: [] };
   for (const area of areas) {
     if (area.kind === "playground") {
-      addSlab(t, area, PATCH_LIFT, SOFT_FLOOR, ctx);
+      addSlab(t, area, PATCH_LIFT, PLAY_FLOOR, ctx);
     }
   }
   for (const area of areas) {

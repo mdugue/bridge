@@ -196,7 +196,7 @@ visual-variable codebook is in
   no street-name signs here; the 321 traffic-signal nodes sit on the
   carriageway, not at the mast — both too sparse or too placed-by-guess).
 - **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 88 over the
-  four tiles) → a low slab of soft safety floor (dusty rose) seated on the
+  four tiles) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
   ground under each ring vertex (densified to 2 m), and **only the
   equipment OSM maps** (`playground=swing/basketswing/slide/sandpit/
   climbingframe/structure/climbingwall/springy/spring_board/seesaw/
@@ -204,7 +204,10 @@ visual-variable codebook is in
   area is its own sand slab, one drawn as a way stands at its midpoint
   turned along it. **A playground mapped without equipment stays an empty
   patch — nothing is invented** (the choice against filling them with
-  typical pieces). Same bake and layer as the street furniture.
+  typical pieces). The pieces are not catalogue equipment but soft, single-coloured
+  sculptures (an arch, a wave, a faceted dome, an egg) in five pastels taken
+  from the scene — a first, literal rendering (A-frames, ladders, a rose
+  safety floor) read as busy and out of place. Same bake and layer as the street furniture.
 
 - **Fountains, statues, memorial stones, columns** — the Basis-DLM's
   monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with
