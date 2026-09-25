@@ -138,6 +138,8 @@ def test_the_spec_names_the_provider_folder_and_extract():
     assert tile.dgm == Path("data/x/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif")
     assert not tile.products.dlm and tile.products.dop is None
     assert tile.credit == "Quelle: GeoSN, dl-de/by-2-0"
+    # JSON integers would leak numpy integers into the GeoJSON the bakes write
+    assert all(isinstance(b, float) for b in tile.bounds)
 
 
 def test_citygml_2_reads_like_1_and_an_empty_tile_is_refused(tmp_path):

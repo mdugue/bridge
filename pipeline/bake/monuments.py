@@ -255,8 +255,8 @@ def _patch_to_relief(heights: np.ndarray, patch: np.ndarray, window, origin) -> 
     west, north = origin
     r0, c0 = window[0], window[1]
     return {
-        "west": round(west + c0 + ca, 1),
-        "north": round(north - r0 - ra, 1),
+        "west": round(float(west + c0 + ca), 1),
+        "north": round(float(north - r0 - ra), 1),
         "cols": int(grid.shape[1]),
         "rows": int(grid.shape[0]),
         "dm": [int(round(v * 10)) for v in grid.ravel()],
