@@ -1,6 +1,11 @@
 "use client";
 
-import { PlaneIcon, SlidersHorizontalIcon } from "lucide-react";
+import {
+  LocateFixedIcon,
+  NavigationIcon,
+  PlaneIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import {
   type CSSProperties,
   startTransition,
@@ -11,7 +16,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -43,13 +47,9 @@ import {
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
-import { FollowPhoneButton, useFollowPhone } from "./follow-phone";
-import {
-  LocateButton,
-  LocateMessage,
-  useHudMessage,
-  useLocateMe,
-} from "./locate-button";
+import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { useLiveMode } from "./live-mode";
+import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -111,19 +111,70 @@ function SettingsToggle() {
 }
 
 /**
+ * The tools the floating toolbar offers here: "take me to where I am"
+ * wherever the browser can locate the player (locate-button.tsx), live mode
+ * while a compass is reporting (live-mode.ts), and on a touch screen walk/
+ * fly, the F key's stand-in.
+ */
+function sceneTools({
+  coarse,
+  live,
+  locate,
+  mode,
+  onToggleMode,
+}: {
+  coarse: boolean;
+  live: ReturnType<typeof useLiveMode>;
+  locate: ReturnType<typeof useLocateMe>;
+  mode: MovementMode;
+  onToggleMode: () => void;
+}): HudTool[] {
+  const tools: HudTool[] = [];
+  if (locate.available) {
+    tools.push({
+      id: "locate",
+      label: "Standort",
+      icon: LocateFixedIcon,
+      busy: locate.locating,
+      onClick: locate.locate,
+      title: "Zu meinem Standort springen, Blick in Telefonrichtung",
+    });
+  }
+  if (live.available) {
+    tools.push({
+      id: "live",
+      label: "Live",
+      icon: NavigationIcon,
+      pressed: live.on,
+      onClick: live.toggle,
+      title:
+        "Live: Blick und Position folgen dir und deinem Telefon — ziehen oder gehen beendet es",
+    });
+  }
+  if (coarse) {
+    tools.push({
+      id: "fly",
+      label: "Fliegen",
+      icon: PlaneIcon,
+      pressed: mode === "fly",
+      onClick: onToggleMode,
+      title: "Zwischen Gehen und Fliegen wechseln",
+    });
+  }
+  return tools;
+}
+
+/**
  * The overlays that belong to the scene, not to the panel: the key hints, the
- * joystick and — in fly mode — the altitude stick opposite it. On a touch
- * screen a walk/fly button sits above that, the F key's stand-in, and above
- * it — wherever the browser can locate the player — "take me to where I
- * am" (locate-button.tsx), and, while a compass is reporting, "the view
- * follows the phone" (follow-phone.tsx). All of it
+ * joystick and — in fly mode — the altitude stick opposite it, under the
+ * toolbar (sceneTools). All of it
  * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
 function SceneOverlays({
   coarse,
-  follow,
+  live,
   locate,
   mode,
   onClimb,
@@ -131,7 +182,7 @@ function SceneOverlays({
   onToggleMode,
 }: {
   coarse: boolean;
-  follow: ReturnType<typeof useFollowPhone>;
+  live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
   onClimb: (v: number) => void;
@@ -151,31 +202,9 @@ function SceneOverlays({
         <VirtualJoystick onChange={onMove} />
       </div>
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
-        {locate.available && (
-          <LocateButton locating={locate.locating} onClick={locate.locate} />
-        )}
-        {follow.available && (
-          <FollowPhoneButton
-            following={follow.following}
-            onClick={follow.toggle}
-          />
-        )}
-        {coarse && (
-          <button
-            aria-label="Fliegen"
-            aria-pressed={flying}
-            className={cn(
-              "flex size-11 items-center justify-center rounded-full border shadow-lg backdrop-blur-lg",
-              flying
-                ? "border-white/60 bg-white/85 text-black"
-                : "border-white/30 bg-hud/85 text-hud-foreground"
-            )}
-            onClick={onToggleMode}
-            type="button"
-          >
-            <PlaneIcon className="size-5" />
-          </button>
-        )}
+        <HudToolbar
+          tools={sceneTools({ coarse, live, locate, mode, onToggleMode })}
+        />
         {flying && <AltitudeStick onChange={onClimb} />}
       </div>
     </>
@@ -227,13 +256,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
     null
   );
-  const follow = useFollowPhone(handleRef, hud.say, coarse, latLng);
-  // The scene reports a drag that ended following; the boot effect below
-  // must not re-run for it, so it reads the hook through a ref.
-  const followEnded = useRef(follow.ended);
+  const live = useLiveMode(handleRef, hud.say, coarse, latLng);
+  // The scene reports a manual look or move that ended live mode; the boot
+  // effect below must not re-run for it, so it reads the hook through a ref.
+  const liveEnded = useRef(live.ended);
   useEffect(() => {
-    followEnded.current = follow.ended;
-  }, [follow.ended]);
+    liveEnded.current = live.ended;
+  }, [live.ended]);
   const [landcoverTiles, setLandcoverTiles] = useState<
     { bounds: TerrainBounds; src: string }[]
   >([]);
@@ -332,7 +361,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       },
       onFollowEnd: () => {
         if (!cancelled) {
-          followEnded.current();
+          liveEnded.current();
         }
       },
       onModeChange: (m) => {
@@ -525,7 +554,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
-              follow={follow}
+              live={live}
               locate={locate}
               mode={mode}
               onClimb={(v) => handleRef.current?.setClimbInput(v)}

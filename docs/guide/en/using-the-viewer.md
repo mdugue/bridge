@@ -33,7 +33,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide |
 | Click on the minimap | teleport there |
-| Location button (bottom right) | teleport to where you really are |
+| *Standort* (toolbar, bottom right) | teleport to where you really are |
 | `R` | demolish the building under the crosshair |
 | `Esc` | leave immersive mode |
 
@@ -41,9 +41,10 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 |---|---|
 | Drag | look around |
 | Joystick (bottom left) | walk |
-| Location button (bottom right) | teleport to where you really are, facing the way the phone points |
-| Compass button (bottom right, only with a compass) | the view follows the phone until you switch it off or drag |
-| Plane button (bottom right) | switch between walking and flying |
+| *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
+| *Live* (toolbar, only with a compass) | view and position follow you and your phone until you switch it off, drag or use the joystick |
+| *Fliegen* (toolbar) | switch between walking and flying |
+| ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (bottom right, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there |
 | Two-finger pinch | zoom |
@@ -53,7 +54,11 @@ buildings and walls. While flying there is no collision; only sinking
 stops at eye height above the ground. Any input cancels
 a glide that is in progress.
 
-The **location button** (the crosshair icon) asks the browser where you
+Bottom right sits the **toolbar**; each button carries its name under the
+icon. The ⌄ below it folds it into one small button, which the browser
+remembers; a green dot on it says *Live* is still on.
+
+*Standort* ("location") asks the browser where you
 are and puts you down there at eye height, on foot. On a phone with a
 compass you then look the way the back of the phone points (its top edge
 when it lies flat); without one the view keeps its direction. A short line
@@ -63,13 +68,14 @@ says how far, and you stay where you are. Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — there
 is no server to send it to.
 
-Below it the **compass button** appears as soon as your phone reports
-compass readings (an iPhone asks for permission on the first tap; a
-computer without a compass never shows it). Switched on, the view follows
-the phone: turn around and the city turns with you; tilt it up or down and
-you look up or down — like looking through a window. The joystick then
-walks you the way you point. Dragging to look around, or a second tap,
-switches the mode off.
+*Live* appears as soon as your phone reports compass readings (an iPhone
+asks for permission on the first tap; a computer without a compass never
+shows it). Switched on, the city becomes a window you hold up: turn around
+and the view turns with you; tilt the phone and you look up or down. And
+when you start walking, the camera walks along — it follows your GPS
+position, smoothed so the fix's scatter doesn't jolt. Outside the area, or
+without a location, only the view follows. A second tap, dragging to look
+around or the joystick hand the controls back to you.
 
 A floating bar shows the four essential controls until you dismiss it with
 *Verstanden*; the full table stays available in the panel under

@@ -1,6 +1,5 @@
 "use client";
 
-import { LoaderCircleIcon, LocateFixedIcon } from "lucide-react";
 import {
   type RefObject,
   useCallback,
@@ -8,7 +7,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { cn } from "cn";
 import { placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import { currentSite } from "@/sites";
@@ -92,35 +90,6 @@ export function useLocateMe(
   }, [handleRef, locating, say]);
 
   return { available, locate, locating };
-}
-
-/** The round floating button, a sibling of the walk/fly toggle. */
-export function LocateButton({
-  locating,
-  onClick,
-}: {
-  locating: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      aria-busy={locating}
-      aria-label="Zu meinem Standort"
-      className={cn(
-        "flex size-11 items-center justify-center rounded-full border border-white/30 bg-hud/85 text-hud-foreground shadow-lg backdrop-blur-lg",
-        locating && "opacity-80"
-      )}
-      onClick={onClick}
-      title="Zu meinem Standort — Blick in die Richtung, in die das Telefon zeigt"
-      type="button"
-    >
-      {locating ? (
-        <LoaderCircleIcon className="size-5 animate-spin" />
-      ) : (
-        <LocateFixedIcon className="size-5" />
-      )}
-    </button>
-  );
 }
 
 /** The one-line result under the top edge. */

@@ -35,7 +35,7 @@ lädt* oben im Bild (siehe
 | Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin |
 | Klick auf die Minikarte | dorthin teleportieren |
-| Standort-Knopf (unten rechts) | zu deinem echten Standort teleportieren |
+| *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `Esc` | immersiven Modus verlassen |
 
@@ -43,9 +43,10 @@ lädt* oben im Bild (siehe
 |---|---|
 | Ziehen | umsehen |
 | Joystick (unten links) | gehen |
-| Standort-Knopf (unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
-| Kompass-Knopf (unten rechts, nur mit Kompass) | der Blick folgt dem Telefon, bis du ihn wieder ausschaltest oder ziehst |
-| Flugzeug-Knopf (unten rechts) | zwischen Gehen und Fliegen wechseln |
+| *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
+| *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon, bis du es ausschaltest, ziehst oder den Joystick nimmst |
+| *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln |
+| ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (unten rechts, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | dorthin |
 | Zwei Finger zusammenziehen | zoomen |
@@ -55,7 +56,12 @@ und Mauern an. Beim Fliegen gibt es keine Kollision; nur sinken kannst du
 nicht tiefer als bis auf Augenhöhe über dem Boden. Jede Eingabe bricht
 einen laufenden Gleitflug ab.
 
-Der **Standort-Knopf** (das Fadenkreuz-Symbol) fragt den Browser nach
+Unten rechts liegt die **Werkzeugleiste**; jeder Knopf trägt seinen Namen
+unter dem Symbol. Mit dem ⌄ darunter klappst du sie zu einem kleinen Knopf
+ein, der Browser merkt sich das; ein grüner Punkt darauf zeigt, dass *Live*
+noch läuft.
+
+*Standort* fragt den Browser nach
 deinem Standort und setzt dich dort auf Augenhöhe ab, zu Fuß. Auf einem
 Telefon mit Kompass schaust du danach in die Richtung, in die die Rückseite
 des Telefons zeigt (liegt es flach, die Oberkante); ohne Kompass bleibt die
@@ -66,13 +72,15 @@ bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
 Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
 dem er geschickt würde.
 
-Darunter erscheint der **Kompass-Knopf**, sobald dein Telefon Kompasswerte
-liefert (auf dem iPhone fragt er beim ersten Antippen um Erlaubnis; am
-Rechner ohne Kompass gibt es ihn nicht). Eingeschaltet folgt der Blick dem
-Telefon: Drehst du dich, dreht sich die Stadt mit; kippst du es nach oben
-oder unten, schaust du hoch oder runter — wie durch ein Fenster. Mit dem
-Joystick gehst du dabei in die Richtung, in die du zeigst. Ziehen zum
-Umsehen oder ein zweites Antippen schaltet den Modus aus.
+*Live* erscheint, sobald dein Telefon Kompasswerte liefert (auf dem iPhone
+fragt es beim ersten Antippen um Erlaubnis; am Rechner ohne Kompass gibt es
+den Knopf nicht). Eingeschaltet wird die Stadt zum Fenster, das du vor dich
+hältst: Drehst du dich, dreht sich der Blick mit; kippst du das Telefon,
+schaust du hoch oder runter. Und gehst du los, geht die Kamera mit — sie
+folgt deiner GPS-Position, sanft geglättet, damit die Streuung der Ortung
+nicht ruckelt. Stehst du außerhalb des Gebiets oder gibt es keinen
+Standort, folgt nur der Blick. Ein zweites Antippen, Ziehen zum Umsehen
+oder der Joystick geben dir die Steuerung zurück.
 
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter

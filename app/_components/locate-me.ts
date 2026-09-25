@@ -95,6 +95,44 @@ function currentPosition(): Promise<GeolocationPosition> {
   });
 }
 
+/**
+ * Follows the player's GPS position: `onFix` with every fix (lat/lng and
+ * accuracy; no heading — live mode reads the compass continuously), `onError`
+ * once it cannot. Returns the stop.
+ */
+export function watchFix(
+  onFix: (fix: GeoFix) => void,
+  onError: (err: LocateError) => void
+): () => void {
+  if (!canLocate()) {
+    onError(new LocateError("unsupported"));
+    return () => undefined;
+  }
+  const id = navigator.geolocation.watchPosition(
+    (pos) =>
+      onFix({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        headingDeg: null,
+      }),
+    (err) => {
+      // A slow fix is not the end of the watch: it keeps trying.
+      if (err.code !== err.TIMEOUT) {
+        onError(
+          new LocateError(
+            err.code === err.PERMISSION_DENIED
+              ? "denied"
+              : "position-unavailable"
+          )
+        );
+      }
+    },
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: GEO_TIMEOUT_MS }
+  );
+  return () => navigator.geolocation.clearWatch(id);
+}
+
 /** Whether this browser can locate the player at all. */
 export function canLocate(): boolean {
   return typeof navigator !== "undefined" && "geolocation" in navigator;

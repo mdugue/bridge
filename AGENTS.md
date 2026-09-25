@@ -112,8 +112,10 @@ config change.
     `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
     `altitude-stick.tsx` (the fly-mode climb control opposite it),
     `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS
-    fix + phone compass → `placeAt`), `follow-phone.tsx` (opt-in "the view
-    follows the phone", shown only while a compass reports) and
+    fix + phone compass → `placeAt`), `live-mode.ts` (opt-in live mode:
+    view follows the compass, camera the GPS; offered only while a compass
+    reports), `hud-toolbar.tsx` (those tools + walk/fly as one foldable
+    labelled group) and
     `device-orientation.ts` (the one orientation-event adapter both use);
     the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)

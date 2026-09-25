@@ -124,7 +124,7 @@ export interface CityWalkOptions {
    * (a flight streams new tiles in). Fires on changes only.
    */
   onBusy?: (busy: boolean) => void;
-  /** a drag or mouse-look ended "the view follows the phone" */
+  /** a manual look or move ended live mode (camera-pose.ts) */
   onFollowEnd?: () => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
@@ -217,6 +217,8 @@ export interface CityWalkHandle {
    * follows the phone; null stops following (camera-pose.ts).
    */
   setFollowAim: (aim: FollowAim | null) => void;
+  /** live mode's GPS ground point (EPSG), null stops (camera-pose.ts) */
+  setFollowPosition: (epsg: { x: number; y: number } | null) => void;
   setSun: (date: Date) => SunState;
   /**
    * Lets the heavy dressing start — vegetation, lamps, rails — and
@@ -1110,6 +1112,7 @@ async function bootApp(
     }),
     setMovementMode: pose.setMovementMode,
     setFollowAim: pose.setFollowAim,
+    setFollowPosition: pose.setFollowPosition,
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,

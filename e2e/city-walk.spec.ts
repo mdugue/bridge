@@ -321,20 +321,18 @@ test.describe("desktop viewer", () => {
     if (await close.isVisible()) {
       await close.click();
     }
-    await page.getByRole("button", { name: "Zu meinem Standort" }).waitFor();
-    // No compass has reported yet, so "follow the phone" is not offered.
+    await page.getByRole("button", { name: "Standort", exact: true }).waitFor();
+    // No compass has reported yet, so live mode is not offered.
     await expect(
-      page.getByRole("button", { name: "Blick folgt dem Telefon" })
+      page.getByRole("button", { name: "Live", exact: true })
     ).toHaveCount(0);
     // Click, then report a phone held upright with its camera to the east,
     // ten times a second like a real sensor — on the absolute stream
     // Chromium's compass arrives on.
     await page.evaluate(() => {
       const w = window as unknown as { __compass?: number };
-      document
-        .querySelector<HTMLButtonElement>(
-          'button[aria-label="Zu meinem Standort"]'
-        )
+      [...document.querySelectorAll<HTMLButtonElement>("button")]
+        .find((b) => b.textContent?.trim() === "Standort")
         ?.click();
       w.__compass = window.setInterval(() => {
         window.dispatchEvent(
@@ -365,7 +363,7 @@ test.describe("desktop viewer", () => {
     expectNoErrors(errors);
   });
 
-  test("the view follows the phone while the mode is on", async () => {
+  test("live mode: the view follows the compass, the camera the GPS", async () => {
     // A phone held facing south, tilted 10° up, reporting ten times a second.
     await page.evaluate(() => {
       const w = window as unknown as { __compass?: number };
@@ -380,9 +378,7 @@ test.describe("desktop viewer", () => {
         );
       }, 100);
     });
-    const toggle = page.getByRole("button", {
-      name: "Blick folgt dem Telefon",
-    });
+    const toggle = page.getByRole("button", { name: "Live", exact: true });
     await expect(toggle).toBeVisible({ timeout: slow(10_000) });
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
@@ -401,6 +397,33 @@ test.describe("desktop viewer", () => {
       },
       undefined,
       { timeout: slow(60_000) }
+    );
+    // The player walks 200 m south-west (a jump, so the camera lands there
+    // at once rather than easing — see camera-pose's FOLLOW_SNAP_M).
+    const before = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    const target = {
+      x: (before?.epsg.x ?? 0) - 120,
+      y: (before?.epsg.y ?? 0) - 160,
+    };
+    const [longitude, latitude] = proj4(
+      "+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs",
+      "WGS84",
+      [target.x, target.y]
+    );
+    await page.context().setGeolocation({ latitude, longitude, accuracy: 6 });
+    await page.waitForFunction(
+      ({ x, y }) => {
+        const s = window.__poc?.handle?.getCameraState();
+        return (
+          s !== undefined &&
+          Math.abs(s.epsg.x - x) < 1 &&
+          Math.abs(s.epsg.y - y) < 1
+        );
+      },
+      target,
+      { timeout: slow(20_000) }
     );
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
@@ -794,6 +817,12 @@ test.describe("mobile", () => {
     expect(
       await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)
     ).toBe("walk");
+
+    // The toolbar folds away into one button and back.
+    await page.getByRole("button", { name: "Werkzeuge einklappen" }).tap();
+    await expect(flyButton).toHaveCount(0);
+    await page.getByRole("button", { name: "Werkzeuge zeigen" }).tap();
+    await expect(flyButton).toBeVisible();
 
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).

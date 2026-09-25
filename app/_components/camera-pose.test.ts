@@ -295,9 +295,9 @@ test("the climb input lifts the camera in fly mode and cancels a glide", () => {
   expect(camera.position.x).toBeCloseTo(before.x, 6);
 });
 
-test("following the phone eases the view to its aim; the stick still walks, a drag ends it", () => {
+test("live mode eases the view to the phone's aim; a drag ends it", () => {
   let ended = 0;
-  const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+  const { pose } = rig({ onFollowEnd: () => (ended += 1) });
   pose.setFollowAim({ headingDeg: 350, pitchDeg: -20 });
   pose.step(1 / 60);
   // One frame in: part of the way, turned the short way (through north).
@@ -308,17 +308,40 @@ test("following the phone eases the view to its aim; the stick still walks, a dr
   const s = pose.getCameraState();
   expect(((s.headingDeg % 360) + 360) % 360).toBeCloseTo(350, 3);
   expect(s.pitchDeg).toBeCloseTo(-20, 3);
-  // Walking goes where the phone points, and doesn't end the mode.
-  const x0 = camera.position.x;
-  pose.setMoveInput(0, 1);
-  settle(pose);
-  pose.setMoveInput(0, 0);
-  expect(camera.position.x).toBeLessThan(x0);
-  expect(ended).toBe(0);
-  // A drag does: the aim no longer pulls the view back.
+  // A drag ends it: the aim no longer pulls the view back.
   pose.turn(100, 0);
   expect(ended).toBe(1);
   const turned = pose.getCameraState().headingDeg;
   settle(pose);
   expect(pose.getCameraState().headingDeg).toBeCloseTo(turned, 6);
+  // Ending twice reports once.
+  pose.turn(10, 0);
+  expect(ended).toBe(1);
+});
+
+test("live mode walks the camera to each GPS fix, gliding near ones and jumping far ones", () => {
+  let ended = 0;
+  const { camera, pose, poses } = rig({ onFollowEnd: () => (ended += 1) });
+  // 12 m east: a step — eased, not jumped.
+  pose.setFollowPosition({ x: OFFSET.cx + 12, y: OFFSET.cy });
+  expect(camera.position.x).toBeCloseTo(0, 10);
+  pose.step(1 / 60);
+  expect(camera.position.x).toBeGreaterThan(0);
+  expect(camera.position.x).toBeLessThan(1);
+  settle(pose);
+  // Five seconds of a 1 s ease: within a few centimetres.
+  expect(Math.abs(camera.position.x - 12)).toBeLessThan(0.1);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 3);
+  // 500 m north: a jump — there at once, and reported like any teleport.
+  const reported = poses.length;
+  pose.setFollowPosition({ x: OFFSET.cx + 12, y: OFFSET.cy + 500 });
+  expect(camera.position.z).toBeCloseTo(-500, 6);
+  expect(poses.length).toBe(reported + 1);
+  // The stick is the player's own walking: live mode ends.
+  pose.setMoveInput(0, 1);
+  expect(ended).toBe(1);
+  pose.setMoveInput(0, 0);
+  const z = camera.position.z;
+  settle(pose);
+  expect(camera.position.z).toBeCloseTo(z, 1);
 });
