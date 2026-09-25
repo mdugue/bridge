@@ -47,9 +47,14 @@ history. Decisions that came out of plans are written up as
 | 013 | One type-checker, suncalc 2 migration, dependency/pin hygiene, agent allowlist | DONE (overtaken by TS 7 + oxlint) | [completed.md](./completed.md#013--toolchain-and-dependency-hygiene--done-superseded-in-part) |
 | 014 | Bring AGENTS.md, the skill, `docs/`, comments and the OSM attribution in line with the code | DONE | [completed.md](./completed.md#014--knowledge-base-currency--done) |
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
-| 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | **TODO** — gated on the deploy container's Bun version; premise drift noted in the file | [016-bun-image-raster-downsample.md](./016-bun-image-raster-downsample.md) |
-| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **TODO** — five phases, each its own PR | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
-| 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | **TODO** — Phase 0 (area, data location, ADR 0022) awaits the maintainer | [018-tile-streaming.md](./018-tile-streaming.md) |
+| 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0023 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
+| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **PARTIAL** — phases 1–2 done for Saxony (site config in TS, Python bakes, `ingest_sn`); 3 half; 4 (OSM land cover), NRW, 5 (rest) open | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
+| 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
+| 019 | Verify and tune the 3D Tiles branch on a real GPU (palette, quantisation, LOD, seams, shadows, frame time, phones, deploy host) | **TODO** — needs a GPU | [019-gpu-verification.md](./019-gpu-verification.md) |
+| 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | **IN PROGRESS** — Phase 0 spike done (look matches; WebGPU 40–80 % faster than today, WebGL2 backend on par but stalls while compiling); gate awaits the maintainer | [020-webgpu-tsl.md](./020-webgpu-tsl.md) |
+| 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
+| 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
+| 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -57,23 +62,25 @@ history. Decisions that came out of plans are written up as
 Ordered by leverage. Everything here is vetted against the code; effort
 S/M/L.
 
-1. **Plan 008, steps 5–7 (S).** CI e2e gate for `scripts/`, `data/`,
-   `patches/`; coverage artifact; the remaining fixture-integrity checks;
-   shader-anchor tests that pin the `onBeforeCompile` chunk names (a
-   renamed chunk currently switches height fog, meadow NDVI or rim light
-   off with green CI). See the plan.
-2. **Plan 016 (S, gated).** `Bun.Image` instead of `sharp`; first confirm
-   from a deploy log that install *and* build run Bun 1.4.x.
-3. **Plan 018 (L, phased; gated on Phase 0).** More of the city: stream
-   tiles around the camera instead of the fixed 2×2 block. Phases 1–2
-   (extract the tile loader from `bootApp`, the pure schedule) are safe
-   refactors that can start now; they also cover item 12 for the tile path
-   and item 15 for per-tile resources. See the plan and
-   [ADR 0022](../adr/0022-stream-tiles-around-the-camera.md) (proposed).
-4. **Pixel-ratio drop while moving (S, GPU).** Plan 007 step 4:
+1. **Plan 019 (S–M, GPU) — first.** The 3D Tiles branch (ADRs 0023–0026)
+   was verified headless only; look at it on a real GPU, tune the LOD and
+   cache knobs, check phones and the deploy host. Take plan 023 phase 4
+   along (the ground detail's look and cost on the same GPU); its phases
+   5–8 follow on their own.
+2. **Plan 017, the rest (M).** OSM land cover as a DLM substitute (now a
+   class raster only), the NRW adapter and a second site, `site:check`.
+   Run the OSM bakes once against a Geofabrik extract (unreachable from
+   the environment that ported them).
+3. **Plan 020 (L, GPU-gated).** WebGPU + TSL; removes every
+   `onBeforeCompile` patch, two post libraries and plan 008 step 7.
+4. **Plan 008, steps 5–7 (S).** The coverage artifact; the remaining
+   fixture-integrity checks; shader-anchor tests (moot with plan 020).
+5. **Plan 021 (M, maintainer-gated).** `/wissen` on Starlight: about 2 000
+   lines of hand-built docs site out, search in.
+6. **Pixel-ratio drop while moving (S, GPU).** Plan 007 step 4:
    `setPixelRatio` reallocates every render target, so hold ~1 s before
    restoring; judge on a real GPU.
-5. **Atmospheric motes (S, GPU).** The one unbuilt item of the aesthetic
+7. **Atmospheric motes (S, GPU).** The one unbuilt item of the aesthetic
    roadmap. Design: camera-local `Points` (2–4 k) with a toroidal wrap on
    the camera-relative offset (R ≈ 30 m), additive, `depthWrite: false`,
    `depthTest: true`, `toneMapped: false`, `fog: false` (fog would brighten
@@ -81,50 +88,50 @@ S/M/L.
    driving opacity *and* `setDrawRange`, `material.map` disposed
    explicitly. +1 draw call, sub-0.1 ms of JS; vertex-shader-only beyond
    ~8 k points. Ledger: 📋 planned #10.
-6. **Water and mist sheets draw the whole terrain geometry (M, bake +
+8. **Water and mist sheets draw the whole terrain geometry (M, bake +
    GPU).** ≈7.3 M of the ≈10.9 M terrain-derived triangles per frame belong
-   to transparent sheets that `discard` on ~95 % of each tile. Fix: a
-   water-only index buffer over the shared positions from a baked coarse
-   water mask.
-7. **Far crown LOD tier (S–M, GPU).** A third InstancedMesh per cell
+   to transparent sheets that `discard` on ~95 % of each tile (counted
+   before ADR 0024; each fine terrain tile still hangs its sheets on the
+   whole 1024² grid). Fix, now in the bake: a water-only index buffer over
+   the shared positions, written into the terrain glTF as a second
+   primitive from the class raster.
+9. **Far crown LOD tier (S–M, GPU).** A third InstancedMesh per cell
    (detail 1 or 0, trunk hidden) beyond ~500 m; today a tree 2 km away
    draws ~400 triangles in the main and every shadow pass. Ledger 📋 #11.
-8. **Terrain BVH → heightfield ray-march (M).** The synchronous
-   `computeBoundsTree()` over ≈3.6 M triangles at boot (≈1–1.5 s) serves
-   two rays per second that a bilinear march answers in microseconds. Pure
-   `lib/city/heightfield-ray.ts` + tests.
-9. **Shadow centre biased ahead at eye level (S, GPU).** Plan 009's
+10. ~~**Terrain BVH → grid ray-march (M).**~~ Done 2026-09-24
+    (`lib/city/ground-ray.ts`): no terrain BVH any more; it was the longest
+    stall on flights (~1 s per fine tile).
+11. **Shadow centre biased ahead at eye level (S, GPU).** Plan 009's
    leftover: push the re-centre 20–30 m along the view direction so long
    low-sun shadows clip less (the altitude fit only pushes ahead above the
    base radius). Long shadows beyond the frustum are otherwise a CSM
    problem (ledger 📋 #7).
-10. **First-frame decode/compile (S, GPU).** Eight 4096² `<img>` decodes and
-   every program compile land in the first visible frame;
-   `ImageBitmapLoader` + `renderer.compileAsync` under the overlay.
-11. **Bundle: `GLTFLoader` and `proj4` for paths that never run (S).**
-    Dynamic-import the loader behind `modelUrl`; a 40-line UTM inverse for
-    zones 32/33 replaces proj4. Sizes unmeasured.
-12. **Split the 900-line `bootApp` (L).** `tile-loader.ts`,
-    `focus-controller.ts`, …; plans 010–012 and the camera-pose extraction
-    already shrank it.
-13. **`lib/city/math.ts` and one `densify` (S–M).** `clamp` re-implemented
+12. ~~**First-frame compile (S, GPU).**~~ Done 2026-09-24: every tile and
+    dressing is compiled with `compileAsync` before it shows
+    (`PostStack.compile`).
+13. **Bundle: `proj4` for one conversion (S).** A 40-line UTM inverse for
+    zones 32/33 replaces it (`lib/city/crs.ts`). Size unmeasured.
+    (`GLTFLoader` is load-bearing now: every tile is glTF.)
+14. **Split the 1 000-line `create-app.ts` (L).** The tile path left for
+    `tile-stream.ts`, but the ground, lamps, focus and loaded-state logic
+    still sit in one closure: `focus-controller.ts`, `ground.ts`, ….
+15. **`lib/city/math.ts` and one `densify` (S–M).** `clamp` re-implemented
     dozens of times; four polyline resamplers with divergent carry
     semantics; unifying changes geometry slightly and needs a shot
     comparison.
-14. **Pure-helper tests (S each, when a module is next touched).** Rail
+16. **Pure-helper tests (S each, when a module is next touched).** Rail
     geometry (`pushTri`, `deckLift`, `addArches`, `buildRails` — none run in
     CI because the lite tile has no rail lines and the only arch bridge is
     on a neighbour), vegetation (`sampleLine`, `bucketByCell`, `crownColor`,
-    `updateLod`), lamps, walls, `prepare-data`'s staleness helpers, the
-    NaN/`nodata: null` terrain path.
-15. **`dispose()` leaves textures, the shadow map and the GL context to the
+    `updateLod`), lamps, walls, `prepare-data`'s content-keyed cache.
+17. **`dispose()` leaves textures, the shadow map and the GL context to the
     GC (S).** Bounded today (only dev/CI unmount).
-16. **Materials whose GLSL depends on `heightFog` but whose cache key does
+18. **Materials whose GLSL depends on `heightFog` but whose cache key does
     not (S).** Latent while every caller passes it; one
     `customProgramCacheKey` each.
-17. **Low-confidence, investigate not fix:** NoData smearing in the
-    bilinear bake before the sentinel compare; `worldBounds.min.y` (with
-    the 30 m skirt) as the ground fallback; the minimap assumes square
+19. **Low-confidence, investigate not fix:** NoData next to valid samples
+    in the terrain bake's resample (`scripts/bake-tiles.ts`); the lowest
+    terrain bound (with the 30 m skirt) as the ground fallback; the minimap assumes square
     bounds; the joystick releases on any `pointerup`; the `crs.ts`
     trailing-slash regex.
 
@@ -139,7 +146,9 @@ S/M/L.
    bake-side extrusion vs. runtime fallbacks.
    *For Germany this is now [plan 017](./017-germany-wide-sites.md)*
    (LoD2 + DGM1 are near-nationwide, so no footprint extrusion is needed
-   there); the OSM-only case outside Germany stays open here.
+   there; the site config and a Land-neutral pipeline exist since
+   ADRs 0025/0026). The OSM-only case outside Germany stays open here; the
+   CRS check still accepts only 25832/25833.
 2. **Shareable view links (S–M).** The Snapshot codec is versioned and
    validated; the only URL read is `?scene=`. A `?snap=<base64>` read once
    after `ready` and written on Copy turns "this corner at 08:00 on
@@ -151,21 +160,26 @@ S/M/L.
    authored viewpoints, an arc tween and cancel-on-input exist; nothing
    chains them or animates the sun. A moving sun forces a shadow re-render
    per step — step it at a few Hz, not per frame.
-4. **Finish the editing pair (M).** `insertedModelUrl`/`insertAt` are
-   plumbed with no caller and the `B` key is disabled; place/move/delete
-   via the double-tap raycast; undo for demolish is a stack of removed
-   object ids plus a rebuild.
+4. **Editing (M).** The unused insert plumbing (`insertedModelUrl`,
+   `insertAt`, the disabled `B` key) was removed with ADR 0026; demolish
+   stays and now works on every visible tile. Place/move would return as a
+   glTF in the scene (or in the tileset); undo for demolish is a stack of
+   removed object ids plus the per-tile index rebuild.
 5. **A user-facing quality tier (S–M).** The device tier already halves
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
-6. **Productise the bake and write a provenance manifest (S–M).** A
-   `bun run bake <tile>` that runs the seven scripts in order, skips absent
-   inputs and writes `data/<tile>.provenance.json` (dataset, edition,
-   download date, licence) that the HUD footer could read. The guide's
-   dataset table is the hand-kept version of this today.
-   *Folded into [plan 017](./017-germany-wide-sites.md), phase 2.*
+6. **A provenance manifest per tile (S).** `bun run bake [tile]
+   [--ingest]` exists (plan 017 phase 2); what is left is writing
+   `data/<site>/<tile>.provenance.json` (dataset, edition, download date,
+   licence) from the ingest adapter, for the HUD footer to read. The guide's
+   dataset table and `data/provenance.json` are the hand-kept version.
 
 ### Maintainer actions
+
+- Run plan 019 on a GPU machine before merging the 3D Tiles branch.
+- Re-bake the remaining DLM/DOP products with the current editions:
+  [plan 022](./022-rebake-current-editions.md).
+- Plan 021's Phase 0 (a second framework for `/wissen`, the URL scheme).
 
 - Close the superseded Dependabot PRs (#3, #12, #13, #15, #26).
 - Decide on the two unused `33414_*` DGM tiles (~28 MB): delete, or move to
@@ -247,3 +261,10 @@ source); the production deploy environment.
 - **2026-09-23**: plan 018 (tile streaming) and ADR 0022 (proposed) written
   by hand after a Q&A on adding more tiles: Next.js/Bun is not the limit,
   GPU memory, the main thread and the committed source size are.
+- **2026-09-24**: after an architecture review aimed at fewer own concepts,
+  one branch built the runtime palette (ADR 0023), the site config and plan
+  017 phases 1–2 (ADRs 0025, 0026) and 3D Tiles via 3DTilesRendererJS with
+  glTF + `EXT_mesh_features` content (ADR 0024). That superseded plan 018
+  and ADR 0022 and removed plan 016's premise. Plans 019 (GPU
+  verification), 020 (WebGPU/TSL, ADR 0027 proposed) and 021 (`/wissen` on
+  Starlight) were written.

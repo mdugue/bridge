@@ -82,8 +82,10 @@ zurückwerfen: das *erste* von der Baumkrone oder dem Dach, das *letzte* vom
 Boden darunter. Das Oberflächenmodell nutzt die ersten Echos, das
 Geländemodell die als Boden klassifizierten Punkte.
 
-**GDAL / ogr2ogr** — das quelloffene Geodaten-Werkzeugpaket, mit dem die
-Bake-Skripte ausschneiden, umprojizieren, rastern und umwandeln.
+**GDAL** — das quelloffene Geodaten-Werkzeugpaket, mit dem die Bakes
+ausschneiden, umprojizieren, rastern und umwandeln. Es steckt in den
+Python-Bibliotheken des Bake-Pakets und muss nicht eigens installiert
+werden.
 
 **GeoJSON** — ein einfaches JSON-Format für Punkte, Linien und Polygone mit
 Attributen. Alle kleinen Vektordateien je Kachel sind GeoJSON.
@@ -104,7 +106,9 @@ sampling distance*): 20 cm beim DOP, 1 m bei den Höhenmodellen.
 
 **Landnutzungsklasse** — die Nutzungskategorie eines Pixels im gebackenen
 Klassenraster: Hintergrund, Landwirtschaft/Wiese, Wald, Gehölz, Siedlung,
-Bahn, Weg, Straße, Wasser (Kennungen 0–8).
+Bahn, Weg, Straße, Wasser (Kennungen 0–8). Die Datei enthält nur diese
+Nummern; der Browser malt jede Klasse in ihrer Pastellfarbe (siehe
+*Splatmap*).
 
 **LiDAR / Laserscanning** — *light detection and ranging*:
 Entfernungsmessung mit Laserimpulsen aus dem Flugzeug; die Messmethode
@@ -140,9 +144,12 @@ GeoSN, dl-de/by-2-0“.
 
 **OSM / Overpass** — *OpenStreetMap*, die Freiwilligen-Weltkarte, kartiert
 aus GPS-Spuren, Begehungen und abgezeichneten Luftbildern, laufend
-aktualisiert, ohne Genauigkeitsgarantie; und die *Overpass-API*, ein
-Abfragedienst dafür. Lampen, Mauern, Bahnsteige und Brücken-Tragwerkstypen
-des Viewers stammen daraus. [Steckbrief](./data-sources.md#osm--openstreetmap).
+aktualisiert, ohne Genauigkeitsgarantie. Lampen, Mauern, Bahnsteige und
+Brücken-Tragwerkstypen des Viewers stammen daraus; die Bakes lesen sie aus
+dem Geofabrik-Auszug. Die *Overpass-API* ist ein Live-Abfragedienst dafür;
+die Bakes nutzen sie nicht mehr, aber die eingecheckten Lampen-,
+Bahnsteig- und Brückentragwerk-Dateien wurden noch über sie geholt.
+[Steckbrief](./data-sources.md#osm--openstreetmap).
 
 **.osm.pbf** — das kompakte Binärformat von OpenStreetMap-Auszügen.
 
@@ -155,8 +162,9 @@ Basis-DLM kommt als ein Dateisatz je Objektart.
 
 **Kachel** — ein 2 km × 2 km großes Quadrat des Landes-Kachelschemas. Der
 Name `33412_5656_2_sn` bedeutet UTM-Zone 33, Rechtswert 412 km, Hochwert
-5656 km (die Südwestecke), 2 km Kantenlänge, Sachsen. Der Viewer lädt einen
-Block von vier; die, auf der du startest, ist die *Primärkachel*.
+5656 km (die Südwestecke), 2 km Kantenlänge, Sachsen. Die
+Standort-Konfiguration nennt für Dresden vier davon; die erste ist die
+*Startkachel*. Der Viewer streamt sie (siehe *Tileset*).
 
 ## Rendering
 
@@ -170,19 +178,41 @@ eine Menge Dreiecke mit einem Material. Die Gebäude einer Kachel sind ein
 Mesh; ein „Gebäude“ ist je Eckpunkt gekennzeichnet, damit sich eines
 abreißen lässt.
 
-**Höhenfeld** — ein regelmäßiges Gitter von Höhen; das Geländenetz wird
-daraus gebaut (ein Eckpunkt je Gitterzelle).
+**glTF** — das Standard-Dateiformat für 3D-Modelle, oft „das JPEG der
+3D-Welt“ genannt. Gebäude und Gelände kommen als glTF-Dateien im Browser
+an, komprimiert und gezippt (`.glb.gz`), sodass jeder glTF-Betrachter sie
+öffnen kann.
+
+**3D Tiles** — ein offener Standard (des OGC, des Gremiums hinter vielen
+Geodaten-Standards) zum Streamen großer 3D-Welten: Eine kleine Indexdatei
+beschreibt einen Baum von Kacheln und ihren Detailstufen, die Dateien
+selbst sind meist glTF. Der Viewer liest ihn mit der Bibliothek
+3DTilesRendererJS.
+
+**Tileset / Streamen** — die Indexdatei `tileset.json` listet für jede
+Kachel die Gebäude und das Gelände in zwei Detailstufen, einer groben
+(512²-Raster) und einer detaillierten (1024²-Raster), die sie ersetzt,
+sobald die Kamera nahe kommt. Daraus entscheidet der Viewer, was er lädt:
+nur, was die Kamera sehen kann, nah detailliert, fern grob; was du weit
+hinter dir lässt, kann wieder entfallen.
+
+**Höhenfeld** — ein regelmäßiges Gitter von Höhen, etwa das DGM1. Der
+Build-Schritt macht daraus ein fertiges Geländenetz; der Browser bekommt
+das Gitter selbst nicht mehr.
 
 **Splatmap** — eine Textur, die dem Boden-Shader sagt, welche Farbe wo
-hingehört. Hier: das pastellige Landnutzungsraster; sein Transparenzkanal
-kodiert den Wasseranteil.
+hingehört. Hier wird sie nicht heruntergeladen: Der Browser malt sie einmal
+je Kachel auf der Grafikkarte, aus dem Landnutzungs-Klassenraster und einer
+Pastellpalette; ihr Transparenzkanal kodiert den Wasseranteil, am Ufer
+weich auslaufend.
 
 **Instancing / InstancedMesh** — tausende Kopien einer Form (Bäume,
 Laternenmasten) in einem einzigen Zeichenaufruf, jede mit eigener Position
 und Größe.
 
 **LOD** — *Level of Detail*: eine günstigere Version einer Form, die in der
-Ferne gezeichnet wird (die Baumkrone hat zwei Versionen).
+Ferne gezeichnet wird (die Baumkrone hat zwei Versionen, das Gelände zwei
+Stufen; siehe *Tileset*).
 
 **Schattenkarte** — ein Tiefenbild aus Sicht der Sonne; jedes Pixel prüft
 dann, ob es das Nächste zur Sonne ist. Weiche Kanten entstehen durch
@@ -218,10 +248,18 @@ echten Look.
 ## Projekt
 
 **Bake** — jeder Offline- oder Build-Schritt, der eine schwere Eingabe in
-ein kleines, direkt nutzbares Artefakt verwandelt.
+ein kleines, direkt nutzbares Artefakt verwandelt. Die Offline-Bakes sind
+ein Python-Paket (`pipeline/`), gestartet mit `bun run bake`; der
+Build-Schritt ist `scripts/prepare-data.ts`.
 
 **Artefakt** — eine der vorbereiteten Dateien, die der Browser anfordern
-kann; die vollständige Liste steht in `lib/city/tile.ts`.
+kann. Das Tileset nennt sie alle; die Liste der Begleitdateien einer Kachel
+(Raster und Feature-Dateien) steht in `lib/city/tile.ts`.
+
+**Standort-Konfiguration** — `sites/dresden.ts`: alles über den Ort, was
+keine Daten sind — Name, Koordinatensystem, Kacheln, Startkachel,
+Aussichtspunkte und Quellenvermerke. Bakes und Viewer lesen sie beide; ein
+Build zeigt einen Standort.
 
 **Manifest** — `public/data/manifest.json`, das einfache Dateinamen auf die
 Namen mit Fingerabdruck abbildet, unter denen sie ausgeliefert werden.
@@ -230,18 +268,21 @@ Namen mit Fingerabdruck abbildet, unter denen sie ausgeliefert werden.
 Dateinamen; ändert sich, sobald sich der Inhalt ändert, sodass Caches nie
 veraltete Daten liefern.
 
-**Lite-Profil** — `?scene=lite`: eine Kachel, winzige Schattenkarte, halbe
-Auflösung; nur für automatische Tests.
+**Lite-Profil** — `?scene=lite`: nur die Startkachel, winzige
+Schattenkarte, halbe Auflösung; nur für automatische Tests.
 
 **Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit und jeden Regler
 festhält, um eine Ansicht zu reproduzieren.
 
-**Aussichtspunkt** — einer der fünf gestalteten Standpunkte, zu denen die
-Kamera gleiten kann.
+**Aussichtspunkt** — einer der gestalteten Standpunkte, zu denen die
+Kamera gleiten kann; einer davon ist der Startblick.
 
-**Primärkachel / Nachbarkacheln** — die Kachel, auf der du startest (volle
-Detailstufe, Kollision, Abriss) und die drei drumherum (Kulisse, geringere
-Auflösung).
+**Startkachel** — die Kachel, auf der du startest, die erste in der
+Standort-Konfiguration. Das erste Bild wartet nur auf sie; danach hat sie
+keine Sonderrolle mehr: Die Entfernung zur Kamera, nicht die Kachel,
+entscheidet, was detailliert gezeichnet wird, und Gehen, Kollision und
+Abriss funktionieren auf jeder Kachel im Blick. (Frühere Versionen luden
+einen festen Block von vier und nannten sie *Primärkachel*.)
 
 **ADR** — *Architecture Decision Record*: ein kurzes Dokument, das eine
 Entscheidung, ihren Kontext und ihre Folgen festhält; siehe

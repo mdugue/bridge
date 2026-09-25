@@ -1,6 +1,6 @@
 /**
  * Cost of the tree cadastre and the laser-scan vegetation, measured the way
- * the renderer would pay it — without a GPU. For the whole 2×2 block it
+ * the renderer would pay it — without a GPU. For every tile of the site it
  * builds the vegetation three ways — `canopy` (rows + canopy only, the look
  * before the cadastre), `kataster` (the same plus the cadastre with the
  * canopy/row veto, its trunks and broadleaf crowns merged into the canopy's
@@ -16,12 +16,12 @@
  *     (casters within the fitted shadow frustum's half-size of its focus —
  *     lib/city/shadow-fit.ts; the map only re-renders on a move/invalidate)
  *
- * Run: bun scripts/eval/kataster-cost.ts   (after prepare-data and
+ * Run: bun scripts/eval/kataster-cost.ts   (after prepare-data, for the
+ * tileset's offset, and
  * scripts/eval/kataster-shots.py; no GPU, no browser)
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { gunzipSync } from "node:zlib";
 import {
   Frustum,
   InstancedMesh,
@@ -46,14 +46,17 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "../../lib/city/features";
-import {
-  decodeHeightfield,
-  parseHeightfieldHeader,
-} from "../../lib/city/heightfield";
 import { directionOf } from "../../lib/city/pose";
 import { fitShadowRadius, shadowFocusAhead } from "../../lib/city/shadow-fit";
 import { sampleHeightfield } from "../../lib/city/terrain-geometry";
-import { TILE_BLOCK, type DataManifest } from "../../lib/city/tile";
+import {
+  type DataManifest,
+  dgmSourceFiles,
+  tileIds,
+} from "../../lib/city/tile";
+import { parseTilesetExtras, TILESET_FILE } from "../../lib/city/tileset";
+import { currentSite } from "../../sites";
+import { readDgm } from "../bake-tiles";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const PUB = join(ROOT, "public", "data");
@@ -75,25 +78,25 @@ const features = <F>(file: string): F[] => {
   }
 };
 
-const primary = TILE_BLOCK[0];
-const meta = JSON.parse(
-  readFileSync(served(`city_${primary.tile}.mesh.json`), "utf8")
-) as { offset: { cx: number; cy: number } };
-const offset = meta.offset;
+// The recenter offset the viewer uses, from the published tileset.
+const { offset } = parseTilesetExtras(
+  JSON.parse(readFileSync(served(TILESET_FILE), "utf8"))
+);
 
-function heightAtFor(tile: string, n: number) {
-  const header = parseHeightfieldHeader(
-    JSON.parse(
-      readFileSync(served(`dgm1_${tile}.heightfield-${n}.json`), "utf8")
-    )
-  );
-  const raw = gunzipSync(readFileSync(join(PUB, header.data)));
-  const elevations = decodeHeightfield(
-    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
-    header
+/** Ground height from the committed DGM, resampled to 1024² (vegetation
+ *  placement only — a few centimetres off the fine level's TIN). */
+async function heightAtFor(tile: string) {
+  const src = dgmSourceFiles(tile);
+  const tif = readFileSync(join(ROOT, src.tif));
+  const tfw = join(ROOT, src.tfw);
+  const n = 1024;
+  const { elevations, bounds } = await readDgm(
+    tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),
+    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    n
   );
   return (x: number, y: number) =>
-    sampleHeightfield({ elevations, n, bounds: header.bounds }, x, y);
+    sampleHeightfield({ elevations, n, bounds }, x, y);
 }
 
 const MODES = ["canopy", "kataster", "shipped"] as const;
@@ -110,15 +113,15 @@ const controls: Record<
 const buildMs: Record<Mode, number> = { canopy: 0, kataster: 0, shipped: 0 };
 const heights: ((x: number, y: number) => number | null)[] = [];
 
-for (const spec of TILE_BLOCK) {
-  const heightAt = heightAtFor(spec.tile, spec.n);
+for (const tile of tileIds(currentSite())) {
+  const heightAt = await heightAtFor(tile);
   heights.push(heightAt);
   const ctx = { offset, heightAt };
-  const rows = features<VegRowFeature>(`vegrows_${spec.tile}.geojson`);
-  const canopy = features<CanopyFeature>(`canopy_${spec.tile}.geojson`);
-  const trees = features<TreeFeature>(`trees_${spec.tile}.geojson`);
-  const scan = features<CanopyExtraFeature>(`canopyx_${spec.tile}.geojson`);
-  const hedges = features<LowVegFeature>(`lowveg_${spec.tile}.geojson`);
+  const rows = features<VegRowFeature>(`vegrows_${tile}.geojson`);
+  const canopy = features<CanopyFeature>(`canopy_${tile}.geojson`);
+  const trees = features<TreeFeature>(`trees_${tile}.geojson`);
+  const scan = features<CanopyExtraFeature>(`canopyx_${tile}.geojson`);
+  const hedges = features<LowVegFeature>(`lowveg_${tile}.geojson`);
   let t0 = performance.now();
   controls.canopy.push(buildVegetation({ rows, canopy }, ctx));
   buildMs.canopy += performance.now() - t0;

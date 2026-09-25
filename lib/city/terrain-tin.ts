@@ -1,60 +1,28 @@
 /**
- * Error-bounded terrain TIN: an irregular triangle mesh over the tile, baked
- * by scripts/bake-terrain-tin.ts (Delatin greedy refinement of a regular
- * height grid) and read by app/_components/terrain-layer.ts for every tile
- * whose spec names a tolerance (lib/city/tile.ts). Where the regular heightfield spends the same
- * vertex density on a flat river as on a retaining wall, the TIN puts its
- * vertices where the ground actually bends: every grid point of the source
- * lies within `maxError` of the mesh, so a 2 m drop that spans two 1 m cells
- * in the source stays two cells wide instead of being resampled into a ramp.
+ * Error-bounded terrain TIN: an irregular triangle mesh over the tile, refined
+ * by scripts/bake-terrain-tin.ts (Delatin greedy refinement of the native 1 m
+ * DGM1) and written by scripts/prepare-data.ts as the FINE terrain level's
+ * glTF (lib/city/tileset.ts, `TerrainExtras.tin`). Where a regular grid
+ * spends the same vertex density on a flat river as on a retaining wall, the
+ * TIN puts its vertices where the ground actually bends: every grid point of
+ * the source lies within `maxError` of the mesh, so a 2 m drop that spans two
+ * 1 m cells in the source stays two cells wide instead of being resampled
+ * into a ramp.
  *
- * Two files, like the heightfield:
- *  - <name>.json    — this header
- *  - <name>.bin.gz  — gzipped payload (see encodeTerrainTin). Vertices are
- *    sorted row-major (row 0 = north) and stored as three uint16 planes, each
- *    split into its low bytes then its high bytes (gzip finds far more runs
- *    in a byte plane than in interleaved uint16s):
- *      gy — delta from the previous vertex's row
- *      gx — delta from the previous vertex in the same row (raw on a new row)
- *      z  — quantised (elevation = zMin + value * zScale), stored as the
- *           wrapping uint16 delta from the previous vertex
- *    then a varint triangle stream, 3 per triangle: a − previous a, b − a,
- *    c − a (each triangle rotated so its smallest index `a` leads and the list
- *    sorted by `a`, which keeps every delta small).
- *
- * Vertices sit on the source grid's pixel centres, like the heightfield's; the
+ * Vertices sit on the source grid's pixel centres, like the grid mesh's; the
  * outermost ring is snapped to the true tile edge so neighbouring tiles meet.
- * Triangles are wound counter-clockwise seen from above (+Z in the data frame).
- * A TIN has no NoData: the bake refuses a grid with holes and fails the data
- * build — drop that tile's `tinMaxError` (tile.ts) to keep its heightfield.
+ * Triangles are wound counter-clockwise seen from above (+Z in the data
+ * frame). A TIN has no NoData: the bake refuses a grid with holes, and that
+ * tile's fine level falls back to the grid.
+ *
+ * `TinIndex` answers `heightAt` over the very triangles the GPU draws: at
+ * build time for the walls and kerbs standing on the ground, at runtime (from
+ * the streamed glTF's positions) for everything the viewer stands on it.
  * No THREE, no DOM.
  */
 import { SKIRT_DEPTH, type TerrainBounds } from "./terrain-geometry";
 
-export const TERRAIN_TIN_VERSION = 1;
-
-/** Default vertical quantisation step (m), as for the heightfield. */
-export const TERRAIN_TIN_Z_SCALE = 0.01;
-
-export interface TerrainTinHeader {
-  /** [minX, minY, maxX, maxY] in the projected CRS */
-  bounds: TerrainBounds;
-  /** file name of the gzipped payload, relative to the header's directory */
-  data: string;
-  /** the Delatin tolerance the mesh was refined to (m) */
-  maxError: number;
-  /** source grid size (n × n pixel centres span the tile) */
-  n: number;
-  triangleCount: number;
-  version: typeof TERRAIN_TIN_VERSION;
-  vertexCount: number;
-  /** elevation of quantised value 0 (m) */
-  zMin: number;
-  /** metres per quantisation step */
-  zScale: number;
-}
-
-/** A decoded TIN: grid-space vertices + elevations + CCW triangles. */
+/** A TIN: grid-space vertices + elevations + CCW triangles. */
 export interface TerrainTin {
   bounds: TerrainBounds;
   n: number;
@@ -68,100 +36,16 @@ export interface TerrainTin {
   z: Float32Array;
 }
 
-function invalid(reason: string): never {
-  throw new Error(`Invalid terrain TIN header: ${reason}`);
-}
-
-function positiveInt(value: unknown, name: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    return invalid(`${name} must be a positive integer, got ${String(value)}`);
-  }
-  return value;
-}
-
-function finite(value: unknown, name: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return invalid(`${name} must be a finite number, got ${String(value)}`);
-  }
-  return value;
-}
-
-function parseBounds(value: unknown): TerrainBounds {
-  if (!(Array.isArray(value) && value.length === 4)) {
-    return invalid("bounds must be an array of 4 numbers");
-  }
-  const [minX, minY, maxX, maxY] = (value as unknown[]).map((v, i) =>
-    finite(v, `bounds[${i}]`)
-  );
-  if (maxX <= minX || maxY <= minY) {
-    return invalid("degenerate bounds");
-  }
-  return [minX, minY, maxX, maxY];
-}
-
-function parseDataName(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) {
-    return invalid("data must be a non-empty file name");
-  }
-  if (value.includes("/") || value.includes("..")) {
-    return invalid(`data must be a bare file name, got "${value}"`);
-  }
-  return value;
-}
-
-export function parseTerrainTinHeader(json: unknown): TerrainTinHeader {
-  if (typeof json !== "object" || json === null) {
-    return invalid("not an object");
-  }
-  const raw = json as Record<string, unknown>;
-  if (raw.version !== TERRAIN_TIN_VERSION) {
-    return invalid(
-      `version ${String(raw.version)} (expected ${TERRAIN_TIN_VERSION})`
-    );
-  }
-  const n = positiveInt(raw.n, "n");
-  if (n > 0xff_ff) {
-    return invalid(`n ${n} does not fit the uint16 vertex grid`);
-  }
-  const zScale = finite(raw.zScale, "zScale");
-  if (zScale <= 0) {
-    return invalid(`zScale must be positive, got ${zScale}`);
-  }
-  return {
-    version: TERRAIN_TIN_VERSION,
-    bounds: parseBounds(raw.bounds),
-    data: parseDataName(raw.data),
-    maxError: finite(raw.maxError, "maxError"),
-    n,
-    vertexCount: positiveInt(raw.vertexCount, "vertexCount"),
-    triangleCount: positiveInt(raw.triangleCount, "triangleCount"),
-    zMin: finite(raw.zMin, "zMin"),
-    zScale,
-  };
-}
-
-// --- encode (bake side) ------------------------------------------------------
-
+/** A Delatin run over an n×n grid (scripts/bake-terrain-tin.ts). */
 export interface TinSource {
   bounds: TerrainBounds;
   /** Delatin output: flat [x, y] grid coordinates */
   coords: ArrayLike<number>;
   /** elevation of grid point (x, y) — the source raster */
   heightAt: (x: number, y: number) => number;
-  /** the refinement tolerance (m), recorded in the header */
-  maxError?: number;
   n: number;
   /** Delatin output: flat vertex indices, three per triangle, any winding */
   triangles: ArrayLike<number>;
-}
-
-function pushVarint(out: number[], value: number): void {
-  let v = value;
-  while (v >= 0x80) {
-    out.push((v & 0x7f) | 0x80);
-    v = Math.floor(v / 128);
-  }
-  out.push(v);
 }
 
 /** Vertex order: row-major by (gy, gx). Returns old index → new index. */
@@ -233,154 +117,38 @@ function canonicalTriangles(
 }
 
 /**
- * Serialises a Delatin mesh into the payload described in the file header,
- * ungzipped (the caller gzips). Throws on a NaN/NoData vertex.
+ * The TIN of a Delatin run: vertices sorted row-major (row 0 = north),
+ * triangles wound CCW from above. Throws on a NaN/NoData vertex.
  */
-export function encodeTerrainTin(
-  src: TinSource,
-  zScale: number = TERRAIN_TIN_Z_SCALE
-): { data: Buffer; header: Omit<TerrainTinHeader, "data"> } {
+export function tinFromMesher(src: TinSource): TerrainTin {
   const { coords, n } = src;
-  const count = coords.length / 2;
+  if (n > 0xff_ff) {
+    throw new Error(`terrain TIN: n ${n} does not fit the uint16 vertex grid`);
+  }
   const { order, remap } = sortVertices(coords);
-  const zs = new Float64Array(count);
-  let zMin = Number.POSITIVE_INFINITY;
-  let zMax = Number.NEGATIVE_INFINITY;
+  const count = order.length;
+  const gx = new Uint16Array(count);
+  const gy = new Uint16Array(count);
+  const z = new Float32Array(count);
   for (let i = 0; i < count; i++) {
-    const z = src.heightAt(coords[2 * i], coords[2 * i + 1]);
-    if (!Number.isFinite(z)) {
-      throw new Error(
-        "terrain TIN: NoData vertex — bake the heightfield instead"
-      );
+    const x = coords[2 * order[i]];
+    const y = coords[2 * order[i] + 1];
+    const h = src.heightAt(x, y);
+    if (!Number.isFinite(h)) {
+      throw new Error(`terrain TIN: NoData at grid (${x}, ${y})`);
     }
-    zs[i] = z;
-    zMin = Math.min(zMin, z);
-    zMax = Math.max(zMax, z);
-  }
-  const scale = Math.max(zScale, (zMax - zMin) / 0xff_fe);
-  const planes = new Uint16Array(3 * count);
-  let prevGy = -1;
-  let prevGx = 0;
-  let prevZ = 0;
-  for (let k = 0; k < count; k++) {
-    const i = order[k];
-    const gy = coords[2 * i + 1];
-    const gx = coords[2 * i];
-    const z = Math.round((zs[i] - zMin) / scale);
-    planes[k] = k === 0 ? gy : gy - prevGy;
-    planes[count + k] = gy === prevGy ? gx - prevGx : gx;
-    planes[2 * count + k] = (z - prevZ) & 0xff_ff;
-    prevGy = gy;
-    prevGx = gx;
-    prevZ = z;
-  }
-  const split = new Uint8Array(planes.length * 2);
-  for (let p = 0; p < 3; p++) {
-    const base = p * count;
-    for (let k = 0; k < count; k++) {
-      split[2 * base + k] = planes[base + k] & 0xff;
-      split[2 * base + count + k] = planes[base + k] >> 8;
-    }
-  }
-  const tris = canonicalTriangles(src.triangles, remap, coords);
-  const bytes: number[] = [];
-  let prevA = 0;
-  for (let t = 0; t < tris.length; t += 3) {
-    pushVarint(bytes, tris[t] - prevA);
-    pushVarint(bytes, tris[t + 1] - tris[t]);
-    pushVarint(bytes, tris[t + 2] - tris[t]);
-    prevA = tris[t];
+    gx[i] = x;
+    gy[i] = y;
+    z[i] = h;
   }
   return {
-    data: Buffer.concat([Buffer.from(split), Buffer.from(bytes)]),
-    header: {
-      version: TERRAIN_TIN_VERSION,
-      bounds: src.bounds,
-      n,
-      maxError: src.maxError ?? 0,
-      vertexCount: count,
-      triangleCount: tris.length / 3,
-      zMin,
-      zScale: scale,
-    },
+    bounds: src.bounds,
+    n,
+    gx,
+    gy,
+    z,
+    triangles: canonicalTriangles(src.triangles, remap, coords),
   };
-}
-
-// --- decode (client side) ----------------------------------------------------
-
-function readTriangles(
-  bytes: Uint8Array,
-  start: number,
-  triangleCount: number,
-  vertexCount: number
-): Uint32Array {
-  const tris = new Uint32Array(triangleCount * 3);
-  let p = start;
-  let prevA = 0;
-  const next = (): number => {
-    let v = 0;
-    let mul = 1;
-    for (;;) {
-      if (p >= bytes.length) {
-        throw new Error("terrain TIN: truncated triangle stream");
-      }
-      const b = bytes[p++];
-      v += (b & 0x7f) * mul;
-      if (b < 0x80) {
-        return v;
-      }
-      mul *= 128;
-    }
-  };
-  for (let t = 0; t < tris.length; t += 3) {
-    const a = prevA + next();
-    tris[t] = a;
-    tris[t + 1] = a + next();
-    tris[t + 2] = a + next();
-    prevA = a;
-    if (tris[t + 1] >= vertexCount || tris[t + 2] >= vertexCount) {
-      throw new Error("terrain TIN: triangle index out of range");
-    }
-  }
-  return tris;
-}
-
-/** Inflated payload → the decoded TIN. */
-export function decodeTerrainTin(
-  buffer: ArrayBuffer,
-  header: Pick<
-    TerrainTinHeader,
-    "bounds" | "n" | "triangleCount" | "vertexCount" | "zMin" | "zScale"
-  >
-): TerrainTin {
-  const { vertexCount: v, n, zMin, zScale } = header;
-  if (buffer.byteLength < v * 6) {
-    throw new Error("terrain TIN: payload shorter than its vertex planes");
-  }
-  const bytes = new Uint8Array(buffer);
-  /** uint16 k of byte-split plane p */
-  const plane = (p: number, k: number): number =>
-    bytes[2 * p * v + k] | (bytes[2 * p * v + v + k] << 8);
-  const gx = new Uint16Array(v);
-  const gy = new Uint16Array(v);
-  const z = new Float32Array(v);
-  let row = 0;
-  let col = 0;
-  let q = 0;
-  for (let i = 0; i < v; i++) {
-    const dRow = plane(0, i);
-    row += dRow;
-    col = i > 0 && dRow === 0 ? col + plane(1, i) : plane(1, i);
-    q = (q + plane(2, i)) & 0xff_ff;
-    if (row >= n || col >= n) {
-      throw new Error("terrain TIN: vertex outside the grid");
-    }
-    gy[i] = row;
-    gx[i] = col;
-    z[i] = zMin + q * zScale;
-  }
-  const triangles = readTriangles(bytes, 6 * v, header.triangleCount, v);
-  return { bounds: header.bounds, n, gx, gy, z, triangles };
 }
 
 // --- geometry ------------------------------------------------------------------
@@ -405,10 +173,10 @@ export function tinVertexXY(tin: TerrainTin): Float64Array {
 }
 
 export interface TinGeometryData {
-  indices: Uint32Array;
+  indices: Uint32Array<ArrayBuffer>;
   minElevation: number;
   /** vertex positions in the recentered Z-up data frame, skirt ring appended */
-  positions: Float32Array;
+  positions: Float32Array<ArrayBuffer>;
 }
 
 /** The border vertices of one side, sorted along it. */
@@ -499,12 +267,39 @@ export function buildTinGeometryData(
  *  buckets. */
 const INDEX_CELL_M = 8;
 
+/** Twice the plan area (m²) below which a triangle has none: a TIN's smallest
+ *  is half a 1 m grid cell (den = 1), a skirt triangle's is zero up to the
+ *  float noise of dequantising and turning the streamed positions. */
+const MIN_PLAN_AREA = 1e-6;
+
+/** What `TinIndex` needs: projected vertex positions, their elevations and
+ *  the surface triangles (no skirt). */
+export interface TinSurface {
+  bounds: TerrainBounds;
+  /** 3 vertex indices per triangle */
+  triangles: ArrayLike<number>;
+  /** projected (EPSG) x, y per vertex */
+  xy: ArrayLike<number>;
+  /** elevation (m) per vertex */
+  z: ArrayLike<number>;
+}
+
+/** A TIN as the surface `TinIndex` reads. */
+export function tinSurface(tin: TerrainTin): TinSurface {
+  return {
+    bounds: tin.bounds,
+    triangles: tin.triangles,
+    xy: tinVertexXY(tin),
+    z: tin.z,
+  };
+}
+
 /**
  * Point → triangle lookup for `heightAt`: a uniform bucket grid over the tile
  * (CSR layout: `start[b] … start[b+1]` in `items`), each triangle listed in
  * every bucket its bounding box touches. One bucket read + a handful of
  * barycentric tests per query — vegetation and lamps call this tens of
- * thousands of times at load.
+ * thousands of times per tile.
  */
 export class TinIndex {
   private readonly cols: number;
@@ -512,13 +307,11 @@ export class TinIndex {
   private readonly cell: number;
   private readonly items: Uint32Array;
   private readonly start: Uint32Array;
-  private readonly xy: Float64Array;
-  private readonly tin: TerrainTin;
+  private readonly surface: TinSurface;
 
-  constructor(tin: TerrainTin, cell = INDEX_CELL_M) {
-    this.tin = tin;
-    this.xy = tinVertexXY(tin);
-    const [minX, minY, maxX, maxY] = tin.bounds;
+  constructor(surface: TinSurface, cell = INDEX_CELL_M) {
+    this.surface = surface;
+    const [minX, minY, maxX, maxY] = surface.bounds;
     this.cell = cell;
     this.cols = Math.max(1, Math.ceil((maxX - minX) / cell));
     this.rows = Math.max(1, Math.ceil((maxY - minY) / cell));
@@ -544,9 +337,8 @@ export class TinIndex {
   }
 
   private forEachBucket(visit: (bucket: number, tri: number) => void): void {
-    const { triangles } = this.tin;
-    const [minX, minY] = this.tin.bounds;
-    const xy = this.xy;
+    const { triangles, xy } = this.surface;
+    const [minX, minY] = this.surface.bounds;
     for (let t = 0; t < triangles.length / 3; t++) {
       const a = triangles[3 * t];
       const b = triangles[3 * t + 1];
@@ -573,15 +365,14 @@ export class TinIndex {
 
   /** Elevation at projected (x, y); null outside the tile. */
   heightAt(x: number, y: number): number | null {
-    const [minX, minY, maxX, maxY] = this.tin.bounds;
+    const [minX, minY, maxX, maxY] = this.surface.bounds;
     if (x < minX || x > maxX || y < minY || y > maxY) {
       return null;
     }
     const col = Math.min(this.cols - 1, Math.floor((x - minX) / this.cell));
     const row = Math.min(this.rows - 1, Math.floor((y - minY) / this.cell));
     const b = row * this.cols + col;
-    const { triangles, z } = this.tin;
-    const xy = this.xy;
+    const { triangles, xy, z } = this.surface;
     for (let k = this.start[b]; k < this.start[b + 1]; k++) {
       const t = this.items[k];
       const a = triangles[3 * t];
@@ -596,6 +387,9 @@ export class TinIndex {
       const px = x - ax;
       const py = y - ay;
       const den = v0x * v1y - v1x * v0y;
+      if (Math.abs(den) < MIN_PLAN_AREA) {
+        continue; // a skirt triangle (vertical), or one quantisation collapsed
+      }
       const u = (px * v1y - v1x * py) / den;
       const w = (v0x * py - px * v0y) / den;
       const EPS = 1e-9;

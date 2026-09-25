@@ -2,12 +2,10 @@ import { expect, test } from "bun:test";
 import { SKIRT_DEPTH } from "./terrain-geometry";
 import {
   buildTinGeometryData,
-  decodeTerrainTin,
-  encodeTerrainTin,
-  parseTerrainTinHeader,
-  TERRAIN_TIN_VERSION,
   type TerrainTin,
   TinIndex,
+  tinFromMesher,
+  tinSurface,
   tinVertexXY,
 } from "./terrain-tin";
 
@@ -21,15 +19,13 @@ const COORDS = [0, 0, 2, 0, 2, 2, 0, 2, 1, 1];
 const TRIANGLES = [0, 1, 4, 4, 2, 1, 2, 3, 4, 0, 4, 3];
 
 function roundTrip(): TerrainTin {
-  const { data, header } = encodeTerrainTin({
+  return tinFromMesher({
     bounds: BOUNDS,
     n: 3,
     coords: COORDS,
     triangles: TRIANGLES,
     heightAt,
-    maxError: 0.1,
   });
-  return decodeTerrainTin(Uint8Array.from(data).buffer, header);
 }
 
 /** Signed area of triangle t in the north-up data frame (> 0 = CCW). */
@@ -42,7 +38,7 @@ function signedArea(tin: TerrainTin, t: number): number {
   );
 }
 
-test("the payload round-trips vertices, heights and triangles", () => {
+test("the TIN keeps the mesher's vertices, heights and triangles", () => {
   const tin = roundTrip();
   expect(tin.gx.length).toBe(5);
   const verts = [...tin.gx].map((x, i) => `${x},${tin.gy[i]}`).sort();
@@ -56,7 +52,7 @@ test("the payload round-trips vertices, heights and triangles", () => {
       .map((v) => `${tin.gx[v]},${tin.gy[v]}`)
       .sort()
       .join("|");
-  const decoded = [0, 1, 2, 3]
+  const kept = [0, 1, 2, 3]
     .map((t) => key(tin.triangles.slice(3 * t, 3 * t + 3)))
     .sort();
   const source = [0, 1, 2, 3]
@@ -70,7 +66,7 @@ test("the payload round-trips vertices, heights and triangles", () => {
         .join("|")
     )
     .sort();
-  expect(decoded).toEqual(source);
+  expect(kept).toEqual(source);
 });
 
 test("every triangle is wound counter-clockwise seen from above", () => {
@@ -82,7 +78,7 @@ test("every triangle is wound counter-clockwise seen from above", () => {
 
 test("heightAt interpolates the drawn triangles and is exact at vertices", () => {
   const tin = roundTrip();
-  const index = new TinIndex(tin, 4);
+  const index = new TinIndex(tinSurface(tin), 4);
   // The centre vertex (grid 1,1) sits at the pixel centre (15, 15).
   expect(index.heightAt(15, 15)).toBeCloseTo(110, 2);
   // Corners are snapped to the true tile edge.
@@ -139,45 +135,21 @@ test("the skirt walls face away from the tile", () => {
   }
 });
 
-test("the header parser rejects what the client cannot place", () => {
-  const good = {
-    version: TERRAIN_TIN_VERSION,
-    bounds: BOUNDS,
-    data: "x.bin.gz",
-    maxError: 0.15,
-    n: 3,
-    vertexCount: 5,
-    triangleCount: 4,
-    zMin: 100,
-    zScale: 0.01,
-  };
-  expect(parseTerrainTinHeader(good).n).toBe(3);
-  expect(() => parseTerrainTinHeader({ ...good, version: 99 })).toThrow();
-  expect(() => parseTerrainTinHeader({ ...good, data: "../x" })).toThrow();
-  expect(() => parseTerrainTinHeader({ ...good, n: 70_000 })).toThrow();
-  expect(() => parseTerrainTinHeader({ ...good, zScale: 0 })).toThrow();
-});
-
-test("a truncated or corrupt payload fails loudly", () => {
-  const { data, header } = encodeTerrainTin({
-    bounds: BOUNDS,
-    n: 3,
-    coords: COORDS,
-    triangles: TRIANGLES,
-    heightAt,
-  });
-  const cut = data.subarray(0, data.length - 3);
-  expect(() => decodeTerrainTin(Uint8Array.from(cut).buffer, header)).toThrow();
-  expect(() =>
-    decodeTerrainTin(new ArrayBuffer(4), { ...header, vertexCount: 5 })
-  ).toThrow();
-  expect(() =>
-    encodeTerrainTin({
-      bounds: BOUNDS,
-      n: 3,
-      coords: COORDS,
-      triangles: TRIANGLES,
-      heightAt: () => Number.NaN,
-    })
-  ).toThrow();
+test("heightAt skips the vertical skirt triangles it is handed", () => {
+  const tin = roundTrip();
+  const { positions, indices } = buildTinGeometryData(tin, { cx: 0, cy: 0 });
+  const count = positions.length / 3;
+  const xy = new Float64Array(count * 2);
+  const z = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    // a hair of float noise, as the streamed positions carry
+    xy[2 * i] = positions[3 * i] + positions[3 * i + 2] * 1e-15;
+    xy[2 * i + 1] = positions[3 * i + 1];
+    z[i] = positions[3 * i + 2];
+  }
+  const index = new TinIndex({ bounds: BOUNDS, xy, z, triangles: indices });
+  // On the north edge a skirt triangle shares the plan position of the
+  // surface one; the surface wins, never the skirt's lowered floor.
+  expect(index.heightAt(15, 30)).toBeCloseTo(101, 2);
+  expect(index.heightAt(30, 15)).toBeCloseTo(105, 2);
 });

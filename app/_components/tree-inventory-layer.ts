@@ -45,7 +45,7 @@ import {
 
 /**
  * Tree inventory layer: the Dresden street-tree cadastre
- * (scripts/extract-trees.sh) drawn at each tree's surveyed position, height
+ * (pipeline/bake/trees.py) drawn at each tree's surveyed position, height
  * and crown diameter, with an archetype silhouette per genus/cultivar
  * (lib/city/tree-inventory.ts).
  *

@@ -230,7 +230,7 @@ export function roofTint(
 
 /**
  * Per-building roof colour LUT baked from the DOP orthophoto
- * (`scripts/extract-roof-colour.sh`): CityJSON object id → LINEAR rgb sampled
+ * (`pipeline/bake/roof_colour.py`): CityJSON object id → LINEAR rgb sampled
  * under the roof footprint. Keys are the raw CityObject id strings, the same
  * ids `Object.keys(CityObjects)` yields, so they line up with the loader's
  * per-vertex `objectid` index.

@@ -1,19 +1,20 @@
 /**
  * The keyboard adapter: turns key events into camera-pose calls and the
- * three one-shot actions. The event targets are injected so the adapter
+ * one-shot actions (demolish, walk/fly, the numbered viewpoints). The event targets are injected so the adapter
  * runs against a fake document in unit tests.
  */
 
 export interface KeyboardActions {
   /** R — demolish the building under the crosshair */
   demolish: () => void;
-  /** B — insert the sample building */
   press: (code: string) => void;
   release: (code: string) => void;
   /** every held key is dropped: the window lost focus or was hidden */
   releaseAll: () => void;
   /** F — walk <-> fly */
   toggleMode: () => void;
+  /** 1–9 — glide to the site's n-th viewpoint (0-based index) */
+  viewpoint: (index: number) => void;
 }
 
 export interface KeyboardTargets {
@@ -24,12 +25,16 @@ export interface KeyboardTargets {
   window: Pick<Window, "addEventListener" | "removeEventListener">;
 }
 
-// KeyB (insert a building) is out while the tool itself is disabled — a key
-// that silently does nothing is worse than one that is not bound.
 const ONE_SHOTS = new Map<string, "demolish" | "toggleMode">([
   ["KeyR", "demolish"],
   ["KeyF", "toggleMode"],
 ]);
+
+/** Digit1…Digit9 → 0…8; anything else → null. */
+function viewpointIndexOf(code: string): number | null {
+  const match = /^Digit([1-9])$/.exec(code);
+  return match ? Number(match[1]) - 1 : null;
+}
 
 /** True for a key event aimed at a text field — the HUD owns those keys. */
 function isTextEntry(target: EventTarget | null): boolean {
@@ -58,6 +63,10 @@ export function attachKeyboardControls(
     const shot = ONE_SHOTS.get(e.code);
     if (shot) {
       actions[shot]();
+    }
+    const view = viewpointIndexOf(e.code);
+    if (view !== null && !(e.ctrlKey || e.metaKey || e.altKey)) {
+      actions.viewpoint(view);
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {

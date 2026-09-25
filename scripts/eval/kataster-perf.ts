@@ -1,4 +1,8 @@
 /**
+ * Historical: the cadastre is drawn by default now and `?trees=kataster` no
+ * longer switches anything, so both runs below measure the same scene. Kept
+ * as the recipe behind the numbers in docs/transformations.md.
+ *
  * Real-GPU timing for the 🧪 tree-cadastre layer: boots the viewer headed
  * (vsync and the frame-rate limit off, so the frame counter measures the GPU,
  * not the display) with and without `?trees=kataster`, and reports the time

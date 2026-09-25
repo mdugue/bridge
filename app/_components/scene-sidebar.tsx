@@ -77,7 +77,8 @@ import { Minimap } from "./minimap";
 import { CONTROL_HINTS, TOUCH_HINTS } from "./control-hints";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
-import { SCENIC_VIEWS, type ViewpointGeometry } from "./viewpoints";
+import type { ViewpointGeometry } from "@/lib/city/site";
+import { currentSite } from "@/sites";
 
 /**
  * The scene sidebar, structured by what you came to do rather than by which
@@ -395,18 +396,21 @@ function Viewpoints({
   onRestore,
   onTravel,
   remembered,
+  showKeys,
 }: {
   onForget: () => void;
   onRemember: () => void;
   onRestore: () => void;
   onTravel: (id: string) => void;
   remembered: boolean;
+  /** show each card's 1–9 shortcut (keyboard devices) */
+  showKeys: boolean;
 }) {
   return (
     <div className="flex flex-col gap-2 px-3 pt-1 pb-3.5">
       <span className={`${SECTION_LABEL} px-1`}>Aussichtspunkte</span>
       <div className="grid grid-cols-2 gap-2">
-        {SCENIC_VIEWS.map((view) => (
+        {currentSite().viewpoints.map((view, index) => (
           <button
             className="flex min-h-16.5 flex-col gap-2 rounded-lg border bg-background p-2.5 text-left hover:border-ring"
             key={view.id}
@@ -421,6 +425,11 @@ function Viewpoints({
                 <FootprintsIcon className="size-3" />
               )}
               {view.mode === "fly" ? "Aus der Luft" : "Auf Augenhöhe"}
+              {showKeys && index < 9 && (
+                <kbd className="ml-auto rounded-sm bg-muted px-1 font-sans text-[10px] leading-4">
+                  {index + 1}
+                </kbd>
+              )}
             </span>
             <span className="font-medium text-xs leading-tight">
               {view.label}
@@ -660,7 +669,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
       variant="floating"
     >
       <SidebarHeader className="flex-row items-center justify-between gap-2 py-3 pr-2 pl-4">
-        <span className="font-semibold text-sm">Dresden · Altstadt</span>
+        <span className="font-semibold text-sm">{currentSite().label}</span>
         <Button
           aria-label="Seitenleiste schließen"
           onClick={toggleSidebar}
@@ -702,12 +711,13 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 }
               }}
               onTravel={(id) => {
-                const view = SCENIC_VIEWS.find((v) => v.id === id);
+                const view = currentSite().viewpoints.find((v) => v.id === id);
                 if (view) {
                   handleRef.current?.flyToViewpoint(view);
                 }
               }}
               remembered={props.rememberedView !== null}
+              showKeys={!props.coarse}
             />
             {/* Below the vantages, and quiet: one-click travel is the reason
                 to open this tab, while walk/fly is a mode you set once. Same
@@ -902,11 +912,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t px-4 pt-2.5 pb-3 text-[10px] text-muted-foreground leading-snug">
-        <p>
-          Quelle: GeoSN, dl-de/by-2-0 · Lampen, Mauern, Hecken, Bahnsteige und
-          Brücken © OpenStreetMap-Mitwirkende (ODbL) · Stadtbäume:
-          Landeshauptstadt Dresden, dl-de/by-2-0
-        </p>
+        <p>{currentSite().attribution.join(" · ")}</p>
         <div className="mt-1.5 flex items-center gap-3">
           <Link
             className="underline underline-offset-2 hover:text-foreground"

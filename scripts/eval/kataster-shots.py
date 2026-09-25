@@ -52,8 +52,9 @@ def ground(x, y):
 
 def offset():
     manifest = json.load(open(ROOT / "public" / "data" / "manifest.json"))["files"]
-    meta = json.load(open(ROOT / "public" / "data" / manifest[f"city_{TILE}.mesh.json"]))
-    return meta["offset"]["cx"], meta["offset"]["cy"]
+    tileset = json.load(open(ROOT / "public" / "data" / manifest["tileset.json"]))
+    off = tileset["extras"]["offset"]
+    return off["cx"], off["cy"]
 
 
 def snapshot(ex, ey, z, heading, pitch, mode, cx, cy):

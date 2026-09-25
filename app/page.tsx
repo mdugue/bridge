@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { currentSite } from "@/sites";
 import { CityWalkClient } from "./_components/city-walk-client";
 
 export const metadata: Metadata = {
-  title: "City Walk — Dresden",
+  title: currentSite().title,
   description:
     "Walkable LoD1 city model on DGM terrain with sun/shadow simulation",
 };

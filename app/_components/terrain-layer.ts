@@ -1,134 +1,192 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  DataTexture,
+  FloatType,
   LinearFilter,
   LinearMipmapLinearFilter,
-  Mesh,
+  Matrix4,
+  type Mesh,
   MeshStandardMaterial,
   NearestFilter,
   NoColorSpace,
   RedFormat,
-  SRGBColorSpace,
+  RGBAFormat,
+  RGFormat,
   Texture,
-  TextureLoader,
-  type Vector3,
+  UnsignedByteType,
+  Vector3,
+  type WebGLRenderer,
 } from "three";
-import type { WallFeature } from "@/lib/city/features";
 import {
-  decodeHeightfield,
-  parseHeightfieldHeader,
-  resolveSiblingUrl,
-} from "@/lib/city/heightfield";
-import { conflateWalls, type WallLine } from "@/lib/city/terrain-conflate";
-import {
-  buildTerrainGeometryData,
   sampleHeightfield,
   type TerrainBounds,
 } from "@/lib/city/terrain-geometry";
 import {
-  buildTinGeometryData,
-  decodeTerrainTin,
-  parseTerrainTinHeader,
-  TinIndex,
-} from "@/lib/city/terrain-tin";
+  LANDCOVER_CLASSES,
+  MEADOW_CLASS,
+  ROAD_CLASS,
+  srgbToLinear,
+} from "@/lib/city/landcover";
+import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { packSportTable, type SportTable } from "@/lib/city/sport";
+import { TinIndex } from "@/lib/city/terrain-tin";
+import type { TerrainExtras } from "@/lib/city/tileset";
+import { fetchOptionalJson, isAbortError } from "./fetch-optional";
 import {
-  type BytesProgress,
-  fetchGzipped,
-  fetchRequiredJson,
-  isAbortError,
-} from "./fetch-optional";
+  GROUND_DETAIL,
+  GROUND_NORMAL,
+  groundDetailDecl,
+  groundFields,
+  urbanGreen,
+} from "./ground-detail";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { DATA_POSITION } from "./shader-chunks";
+import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
+import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
+/**
+ * One tile's terrain at one level: the baked glTF mesh (scripts/bake-tiles.ts,
+ * streamed by tile-stream.ts) dressed with the land-cover material, its
+ * water and mist sheets, and a ground-height sampler read from its grid —
+ * or, on the fine level, from its TIN's triangles.
+ */
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
   bounds: TerrainBounds;
-  /** Frees the rasters. Geometry and materials are freed with the scene
-   *  (disposeObject3D); the tracked textures are this layer's to free. */
+  /** Frees the rasters (the tile's geometry and materials go with it). */
   dispose: () => void;
   /** bilinear elevation lookup at projected (not recentered) coordinates */
   heightAt: (x: number, y: number) => number | null;
+  level: 0 | 1;
   mesh: Mesh;
+  /** the tile's baked stairs (fine level only; stair-layer.ts) */
+  stairs?: Mesh;
+  /** the tile's baked kerb stones (fine level only; kerb-layer.ts) */
+  kerbs?: Mesh;
+  /** the tile's baked walls (fine level only; wall-layer.ts) */
+  walls?: Mesh;
   /** lowest valid elevation (m) on this tile — the valley/river floor */
   minElevation: number;
+  tile: string;
   vertexCount: number;
-  /** animated water surface, present only when a splatmap was loaded */
+  /** animated water surface, present only when the class raster loaded */
   water?: WaterLayer;
 }
 
 export interface TerrainOptions {
+  /** resolves a file named in the tile's extras to its URL */
+  fileUrl: (file: string) => string;
   /** shared valley height-fog uniforms (by reference); patched into the
    * terrain + water materials so the river/floor pools haze without a seam */
   heightFog?: HeightFogUniforms;
-  /** optional pre-baked pastel RGB splat (needs `landcoverUrl`) */
-  landcoverRgbUrl?: string;
-  /** optional ATKIS land-cover class raster (PNG), tinted per surface class */
-  landcoverUrl?: string;
-  /** shared meadow-NDVI tint strength (by reference) for the HUD slider */
-  meadowNdvi?: { value: number };
-  /** download progress of the heightfield raster, 0..1 (the loading screen) */
-  onBytes?: BytesProgress;
-  /** optional DOP NDVI raster for the meadow tint (needs `landcoverUrl`) */
-  ndviUrl?: string;
+  /** phones sample the ≤ 2048² class raster */
+  lowRasters: boolean;
+  /** the ground's look strengths (by reference) for the HUD sliders */
+  ground?: GroundUniforms;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
-  /** aborts the raster download */
+  /** paints the colour splat from the class raster (one GPU pass) */
+  renderer: WebGLRenderer;
+  /** aborts the raster downloads */
   signal?: AbortSignal;
   /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
   sunDirection?: Vector3;
-  /** URL of a terrain TIN header (lib/city/terrain-tin.ts): when given, the
-   * tile is meshed from the TIN instead of the heightfield at `url`, and
-   * `wallLines` are not burned in (the default for every tile that has a
-   * TIN — lib/city/tile.ts `tinMaxError`) */
-  tinUrl?: string;
-  /** URL of the heightfield header JSON (see lib/city/heightfield.ts); the
-   * grid size and bounds come from it, baked by scripts/prepare-data.ts */
-  url: string;
-  /** OSM wall lines (EPSG:25833) for this tile, already fetched; retaining/city
-   * walls are burned into the heightfield as steps so they sit on a real edge,
-   * not the smooth bank the DGM blurs them into (lib/city/terrain-conflate.ts) */
-  wallLines?: WallLine[];
 }
 
 /**
- * Decodes a raster into a texture OFF the main thread. `TextureLoader` hands
- * three an <img>, which the browser decodes lazily — for a 4096² PNG that is
- * ~64 MB of pixels decoded (and flipped) synchronously at the first upload,
- * on the main thread, per tile and per raster. `createImageBitmap` decodes
- * in the browser's image workers, already in the orientation three needs
- * (`imageOrientation: "none"` = the flipY=false these rasters use), so the
- * first frame only pays the GPU upload. Rejects on a decode/network failure
- * and on abort, so a torn-down instance stops decoding rasters it will
- * throw away.
+ * The terrain's look rows, shared by reference with every tile's material so
+ * a slider retunes them live (a uniform write, no recompile).
  */
-async function loadBitmapTexture(
+export interface GroundUniforms {
+  /** kerbs, lawn edges and paving patterns (ground-detail.ts) */
+  groundDetail: { value: number };
+  /** the meadow's DOP greenness tint */
+  meadowNdvi: { value: number };
+  /** meadow colour on green built-up ground (courtyards, parks) */
+  urbanGreen: { value: number };
+}
+
+/**
+ * Loads a single-channel DATA raster (class ids, NDVI) as a RED texture
+ * holding exactly the baked bytes. The PNG is inflated and unfiltered here
+ * (lib/city/png-raster.ts), not by the browser's image decoder: WebKit
+ * colour-manages (and dithers) untagged greyscale even with
+ * `colorSpaceConversion: "none"`, which on iPhones rewrote class ids into
+ * speckles of the neighbouring classes' colours. The inflate is async and
+ * the unfiltering yields every few hundred rows, so a 4096² raster does not
+ * stall the frame it streams in with. A PNG the decoder does not handle
+ * falls back to the browser (`loadBitmapTexture`). Rejects on a network
+ * failure and on abort.
+ */
+async function loadRasterTexture(
   url: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  channels: 1 | 2 | 4 = 1
 ): Promise<{ height: number; texture: Texture; width: number }> {
-  if (typeof createImageBitmap === "undefined") {
-    const texture = await new TextureLoader().loadAsync(url);
-    texture.flipY = false;
-    const img = texture.image as { height: number; width: number };
-    return { texture, width: img.width, height: img.height };
-  }
   const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
   }
-  const bitmap = await createImageBitmap(await res.blob(), {
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let raster: GreyRaster;
+  try {
+    raster = await decodeGreyPng(bytes);
+  } catch (err) {
+    // The browser's decoder cannot de-interleave a multi-channel raster.
+    if (channels > 1) {
+      throw err;
+    }
+    return loadBitmapTexture(new Blob([bytes]));
+  }
+  signal?.throwIfAborted();
+  // A two- or four-channel raster is baked as a greyscale PNG two or four
+  // times as wide, its bytes interleaved (R0 G0 B0 A0 R1 …) — exactly the
+  // RG8 / RGBA8 layout.
+  const width = raster.width / channels;
+  const { height } = raster;
+  const texture = new DataTexture(
+    raster.data,
+    width,
+    height,
+    channels === 4 ? RGBAFormat : channels === 2 ? RGFormat : RedFormat,
+    UnsignedByteType
+  );
+  // Row 0 is the PNG's first (northern) row, as with the bitmap upload
+  // (flipY = false; v grows southward).
+  texture.flipY = false;
+  texture.unpackAlignment = 1;
+  texture.needsUpdate = true;
+  // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
+  // them (mipmaps are generated on the GPU). Twelve resident copies took
+  // mobile Safari past its per-tab memory limit when these were bitmaps.
+  texture.onUpdate = () => {
+    (texture.image as { data: Uint8Array | null }).data = null;
+    texture.onUpdate = null;
+  };
+  return { texture, width, height };
+}
+
+/**
+ * The browser-decoded fallback for a raster the PNG decoder rejects:
+ * `createImageBitmap` decodes in the browser's image workers, already in the
+ * orientation three needs (`imageOrientation: "none"` = flipY false).
+ */
+async function loadBitmapTexture(
+  blob: Blob
+): Promise<{ height: number; texture: Texture; width: number }> {
+  const bitmap = await createImageBitmap(blob, {
     imageOrientation: "none",
     premultiplyAlpha: "none",
     colorSpaceConversion: "none",
   });
   const texture = new Texture(bitmap);
   texture.flipY = false;
+  texture.format = RedFormat;
   texture.needsUpdate = true;
-  // The decoded bitmap is 64 MB for a 4096² raster and, unlike an <img>'s
-  // purgeable decode cache, stays resident as long as three holds it in
-  // `texture.image`. Twelve of them took mobile Safari past its per-tab
-  // memory limit. Once the GPU has the texels the CPU copy is dead weight:
-  // release it right after the upload (mipmaps are generated on the GPU).
+  // Release the decoded pixels right after the upload (see above).
   texture.onUpdate = () => {
     bitmap.close();
     texture.onUpdate = null;
@@ -144,45 +202,17 @@ async function loadBitmapTexture(
 async function loadSplatTexture(
   url: string,
   signal?: AbortSignal
-): Promise<Texture | null> {
+): Promise<{ height: number; texture: Texture; width: number } | null> {
   try {
-    const { texture, width, height } = await loadBitmapTexture(url, signal);
+    const loaded = await loadRasterTexture(url, signal);
+    const { texture, width, height } = loaded;
     texture.magFilter = NearestFilter;
     texture.minFilter = NearestFilter;
     texture.generateMipmaps = false;
     texture.colorSpace = NoColorSpace;
-    // The class id lives in the red channel; uploading the grey PNG as RGBA
-    // would spend four bytes per texel on one (64 MB instead of 16 MB at
-    // 4096²). WebGL2 accepts a RED upload straight from the bitmap.
-    texture.format = RedFormat;
+    // One byte per texel: the class id is the RED channel.
     trackTexture(texture, textureBytes(width, height, 1, false));
-    return texture;
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
-}
-
-/**
- * Loads the pre-baked pastel RGB splatmap (the colours the terrain shows).
- * LINEAR + mipmaps + anisotropy let the GPU filter it smoothly, so class
- * boundaries no longer stair-step at grazing angles. Colour data → sRGB.
- */
-async function loadColorSplat(
-  url: string,
-  signal?: AbortSignal
-): Promise<Texture | null> {
-  try {
-    const { texture, width, height } = await loadBitmapTexture(url, signal);
-    texture.magFilter = LinearFilter;
-    texture.minFilter = LinearMipmapLinearFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = 16;
-    texture.colorSpace = SRGBColorSpace;
-    trackTexture(texture, textureBytes(width, height, 4, true));
-    return texture;
+    return loaded;
   } catch (err) {
     if (isAbortError(err)) {
       throw err;
@@ -202,14 +232,13 @@ async function loadNdviTexture(
   signal?: AbortSignal
 ): Promise<Texture | null> {
   try {
-    const { texture, width, height } = await loadBitmapTexture(url, signal);
+    const { texture, width, height } = await loadRasterTexture(url, signal);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
     texture.colorSpace = NoColorSpace;
-    // Greenness is a single channel too.
-    texture.format = RedFormat;
+    // Greenness is a single channel too (RED, from loadRasterTexture).
     trackTexture(texture, textureBytes(width, height, 1, true));
     return texture;
   } catch (err) {
@@ -220,64 +249,128 @@ async function loadNdviTexture(
   }
 }
 
-/** Maps baked wall features to the LineStrings the conflation step burns in. */
-export function wallLinesFrom(features: WallFeature[]): WallLine[] {
-  const out: WallLine[] = [];
-  for (const f of features) {
-    if (f.geometry?.type === "LineString") {
-      out.push({
-        coords: f.geometry.coordinates,
-        kind: f.properties?.kind ?? "wall",
-      });
+/**
+ * Loads the OSM paving raster (pipeline/bake/surface.py): R = the packed
+ * road/walk surface ids and parking kind, G = the street bearing, BA = the
+ * along-street offset, NEAREST. Absent or
+ * undecodable → null and the ground falls back to the land-cover class's
+ * pattern.
+ */
+async function loadSurfaceTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
+  try {
+    const { texture, width, height } = await loadRasterTexture(url, signal, 4);
+    texture.magFilter = NearestFilter;
+    texture.minFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    trackTexture(texture, textureBytes(width, height, 4, false));
+    return texture;
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
     }
+    return null;
   }
-  return out;
 }
 
-/** Returns the DGM elevations with retaining/city walls burned in as steps, or
- *  the untouched raster when there are no wall lines for this tile. */
-function conflateTerrain(
-  base: ArrayLike<number>,
-  grid: { bounds: TerrainBounds; n: number },
-  walls: WallLine[] | undefined
-): ArrayLike<number> {
-  if (!walls || walls.length === 0) {
-    return base;
+/**
+ * Loads the edge-distance raster (pipeline/bake/edges.py): R, G = the
+ * signed distances to the road and the meadow edge, LINEAR so the isolines
+ * are smooth (no mipmaps: it is only read near the camera). Absent → null
+ * and the shader falls back to the class texels.
+ */
+async function loadEdgesTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
+  try {
+    const { texture, width, height } = await loadRasterTexture(url, signal, 2);
+    texture.magFilter = LinearFilter;
+    texture.minFilter = LinearFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    trackTexture(texture, textureBytes(width, height, 2, false));
+    return texture;
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
   }
-  return conflateWalls({ elevations: base, ...grid, walls });
+}
+
+/**
+ * Loads the sports grounds (pipeline/bake/sport.py): the index raster (R =
+ * the row, G = the second row, B = the exact bit; NEAREST) and its table as a 2-texel-high float
+ * texture (lib/city/sport.ts). Either absent, empty or undecodable → null
+ * and the ground under a pitch stays its land-cover class.
+ */
+async function loadSportGrounds(
+  rasterUrl: string,
+  tableUrl: string,
+  signal?: AbortSignal
+): Promise<{ raster: Texture; table: DataTexture } | null> {
+  const doc = await fetchOptionalJson<SportTable>(tableUrl, signal);
+  if (!doc?.grounds?.length) {
+    return null;
+  }
+  try {
+    const { texture, width, height } = await loadRasterTexture(
+      rasterUrl,
+      signal,
+      4
+    );
+    texture.magFilter = NearestFilter;
+    texture.minFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    trackTexture(texture, textureBytes(width, height, 4, false));
+    const packed = packSportTable(doc);
+    const table = new DataTexture(
+      packed.data,
+      packed.width,
+      2,
+      RGBAFormat,
+      FloatType
+    );
+    table.magFilter = NearestFilter;
+    table.minFilter = NearestFilter;
+    table.generateMipmaps = false;
+    table.needsUpdate = true;
+    return { raster: texture, table };
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
 }
 
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
 export interface SplatLayer {
   bounds: TerrainBounds;
-  /** pre-baked pastel RGB colours; sampled LINEAR for soft transitions */
-  colorTexture?: Texture;
-  /** live meadow-NDVI tint strength (shared ref, mutated by the HUD slider) */
-  meadowNdvi?: { value: number };
-  /** DOP NDVI raster (LINEAR) for the meadow greenness tint */
+  /** the palette-painted colours (RGB) + water coverage (A); LINEAR +
+   *  mipmapped for soft transitions (landcover-splat.ts) */
+  colorTexture: Texture;
+  /** the look strengths (shared refs, mutated by the HUD sliders) */
+  ground?: GroundUniforms;
+  /** DOP NDVI raster (LINEAR) for the meadow and urban-green tints */
   ndviTexture?: Texture;
   offset: { cx: number; cy: number };
-  /** class-id raster (NEAREST); used by the water mask */
+  /** OSM paving raster (NEAREST, RGBA) for the paving and parking patterns */
+  surfaceTexture?: Texture;
+  /** baked road/meadow edge distances (LINEAR, RG) for kerbs, lanes, lawns */
+  edgesTexture?: Texture;
+  /** sports grounds: the index raster (NEAREST, RGBA) and its table */
+  sport?: { raster: Texture; table: Texture };
+  /** shared world sun direction (surface → sun), for the kerb's shadow */
+  sunDirection?: Vector3;
+  /** class-id raster (NEAREST); the meadow detail tests it */
   texture: Texture;
 }
-
-/**
- * Stylized colour per land-cover class id (see scripts/extract-dlm.sh).
- * Kept muted to sit beside the paper-sage palette and the contour ink.
- */
-const TERRAIN_PALETTE = /* glsl */ `
-  vec3 terrainPalette( float cls ) {
-    if ( cls < 0.5 ) return vec3( 0.679, 0.698, 0.620 ); // 0 background (base sage)
-    if ( cls < 1.5 ) return vec3( 0.706, 0.761, 0.522 ); // 1 farmland / meadow
-    if ( cls < 2.5 ) return vec3( 0.286, 0.471, 0.310 ); // 2 forest
-    if ( cls < 3.5 ) return vec3( 0.451, 0.612, 0.408 ); // 3 copse
-    if ( cls < 4.5 ) return vec3( 0.800, 0.760, 0.690 ); // 4 built-up
-    if ( cls < 5.5 ) return vec3( 0.698, 0.663, 0.627 ); // 5 railway (ballast grey)
-    if ( cls < 6.5 ) return vec3( 0.804, 0.706, 0.518 ); // 6 path
-    if ( cls < 7.5 ) return vec3( 0.255, 0.263, 0.302 ); // 7 road
-    return vec3( 0.353, 0.588, 0.784 );                  // 8 water
-  }
-`;
 
 /**
  * Meadow (class 1) painterly depth, added in the already-running terrain
@@ -295,14 +388,30 @@ const GRASS_MOTTLE = /* glsl */ `
   float grDetail = grMeadow * ( 1.0 - smoothstep( 0.5, 2.5, grFw ) );
   float grMottle = sin( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.7
                  + sin( vWorldXY.x * 2.7 - 0.5 ) * sin( vWorldXY.y * 2.3 + 1.1 ) * 0.3;
-  baseCol *= 1.0 + grMottle * 0.06 * grDetail;
+  baseCol *= 1.0 + grMottle * 0.035 * grDetail;
+`;
+
+/**
+ * Calm the ground's shading. The DGM1 carries every kerb, rut and survey
+ * wobble, and the baked normals are quantised to 8 bits, so lit by a low
+ * sun a street, a meadow or a quay reads as coarse dark-and-light flecks —
+ * "dirty" rather than drawn. Near-flat normals (under ~12°) are pulled to
+ * straight up, keeping a trace of the relief; real slopes (embankments, the
+ * valley sides) keep their full shading, and the contour ink carries the
+ * rest of the terrain's form.
+ */
+const TERRAIN_NORMAL = /* glsl */ `
+  #include <normal_fragment_begin>
+  vec3 tnUp = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
+  float tnKeep = 1.0 - smoothstep( 0.93, 0.985, dot( normal, tnUp ) );
+  normal = normalize( mix( tnUp, normal, max( tnKeep, 0.12 ) ) );
 `;
 
 const GRASS_NORMAL = /* glsl */ `
-  #include <normal_fragment_begin>
+  ${TERRAIN_NORMAL}
   float grGx = cos( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.85;
   float grGy = sin( vWorldXY.x * 0.85 + 1.3 ) * cos( vWorldXY.y * 0.78 - 0.7 ) * 0.78;
-  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.12 * grDetail );
+  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.06 * grDetail );
 `;
 
 /**
@@ -314,24 +423,62 @@ const GRASS_NORMAL = /* glsl */ `
  * a tiny `step` gates out zero/nodata texels (keep the base sage, don't grey out).
  */
 const MEADOW_NDVI = /* glsl */ `
-  float grNdvi = texture2D( uNdvi, vSplatUv ).r;
-  float grNdviT = clamp( ( grNdvi - 0.1 ) / 0.5, 0.0, 1.0 );
-  vec3 grTint = mix( baseCol * vec3( 1.14, 1.02, 0.82 ),  // dry: paler warm hay
-                     baseCol * vec3( 0.70, 1.12, 0.52 ), grNdviT );  // lush: deep grass
+  // Read from a coarser mip: the 2 m raster carries every path, tree shadow
+  // and bare patch, which painted the meadows in dark flecks. Averaged over
+  // ~10 m it is what it should be — broad lush and dry drifts.
+  float grNdvi = texture2D( uNdvi, vSplatUv, 2.5 ).r;
+  float grNdviT = smoothstep( 0.1, 0.6, grNdvi );
+  vec3 grTint = mix( baseCol * vec3( 1.08, 1.02, 0.88 ),  // dry: paler warm hay
+                     baseCol * vec3( 0.84, 1.06, 0.74 ), grNdviT );  // lush: deeper grass
   baseCol = mix( baseCol, grTint, uMeadowNdvi * grMeadow * step( 0.012, grNdvi ) );
 `;
 
 /**
+ * Sketch contour lines (2 m minor / 10 m major) on the data-frame elevation,
+ * one pixel wide via fwidth. Each set fades out once its lines crowd closer
+ * than a few pixels: past that a 1 px line per contour is no longer a line
+ * but a grey stipple, and on the gently rolling DGM (streets, meadows, the
+ * river surface) it read as dirty blotches across the whole middle distance.
+ */
+const CONTOUR_INK = /* glsl */ `
+  float minorD = vElevation / 2.0;
+  float minorW = fwidth( minorD );
+  // A flat quad lying exactly on a contour has fwidth 0: 0/0 there striped
+  // it with NaN ink (and NaN survives the slope gate's multiply).
+  float minor = minorW > 1e-6 ? 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / minorW, 1.0 ) : 0.0;
+  minor *= 1.0 - smoothstep( 0.08, 0.2, minorW );
+  float majorD = vElevation / 10.0;
+  float majorW = fwidth( majorD );
+  float major = majorW > 1e-6 ? 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / majorW, 1.0 ) : 0.0;
+  major *= 1.0 - smoothstep( 0.06, 0.16, majorW );
+  float ink = clamp( minor * 0.08 + major * 0.14, 0.0, 0.22 );
+`;
+
+/**
+ * Where contours mean nothing, drop them: on near-flat ground (a street,
+ * a meadow, the river's DGM surface) every centimetre of measurement noise
+ * crosses the 2 m level in a squiggle — the lines only belong on real slopes.
+ * The slope is the elevation change per metre across the pixel footprint.
+ * Under water the ink is gone too (the sheet is translucent, it showed).
+ */
+const CONTOUR_SPLAT_GATE = /* glsl */ `
+  float ctRun = max( length( fwidth( vWorldXY ) ), 1e-4 );
+  float ctSlope = fwidth( vElevation ) / ctRun;
+  ink *= smoothstep( 0.025, 0.09, ctSlope );
+  ink *= 1.0 - smoothstep( 0.05, 0.4, texture2D( uSplat, vSplatUv ).a );
+`;
+
+/**
  * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
- * major) drawn in the fragment shader. The geometry lives in the Z-up data
- * frame, so `position.z` IS the absolute elevation.
+ * major) drawn in the fragment shader, on the data-frame elevation derived
+ * from world space (DATA_POSITION).
  *
  * When a `splat` is given, the base diffuse comes from the ATKIS land-cover
  * at each fragment (streets, water, meadow, …) instead of the flat sage; the
- * contour ink is composited on top. Prefers the pre-baked pastel RGB splat
- * (LINEAR, soft boundaries) and falls back to the in-shader class palette.
- * UVs are derived from the recentered world XY and the tile bounds — the
- * terrain geometry carries no uv attribute.
+ * contour ink is composited on top. The colours are the palette-painted
+ * splat (landcover-splat.ts; LINEAR, soft boundaries).
+ * UVs are derived from the recentered data-frame XY and the tile bounds —
+ * the terrain geometry carries no uv attribute.
  */
 /** The slice of an `onBeforeCompile` shader object the terrain patches touch. */
 interface TerrainShader {
@@ -343,27 +490,54 @@ interface TerrainShader {
 function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   const [minX, minY, maxX, maxY] = splat.bounds;
   // Recentered tile origin (north-west corner) + size; v grows southward.
-  shader.uniforms.uSplat = { value: splat.colorTexture ?? splat.texture };
+  shader.uniforms.uSplat = { value: splat.colorTexture };
   shader.uniforms.uSplatOrigin = {
     value: [minX - splat.offset.cx, maxY - splat.offset.cy],
   };
   shader.uniforms.uSplatSize = { value: [maxX - minX, maxY - minY] };
-  // Always the NEAREST class-id raster (even when uSplat is the RGB splat),
-  // so the meadow detail can test the exact land-cover class.
+  // The NEAREST class-id raster, so the meadow detail can test the exact
+  // land-cover class (the colour splat's texels are blended).
   shader.uniforms.uSplatClass = { value: splat.texture };
+  // Bind the shared refs by identity so the HUD sliders retune them live.
+  shader.uniforms.uGroundDetail = splat.ground?.groundDetail ?? { value: 0 };
+  shader.uniforms.uMeadowColor = { value: MEADOW_LINEAR };
+  shader.uniforms.uRoadColor = { value: ROAD_LINEAR };
+  // By reference: the sun rig keeps it current.
+  shader.uniforms.uSunDir = { value: splat.sunDirection ?? DEFAULT_SUN };
+  shader.uniforms.uUrbanGreen = splat.ground?.urbanGreen ?? { value: 0 };
+  if (splat.surfaceTexture) {
+    shader.uniforms.uSurface = { value: splat.surfaceTexture };
+  }
+  if (splat.edgesTexture) {
+    shader.uniforms.uEdges = { value: splat.edgesTexture };
+  }
+  if (splat.sport) {
+    shader.uniforms.uSport = { value: splat.sport.raster };
+    shader.uniforms.uSportTable = { value: splat.sport.table };
+    shader.uniforms.uSportColors = { value: SPORT_LINEAR };
+  }
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
-    // Bind the shared ref by identity so the HUD slider retunes it live.
-    shader.uniforms.uMeadowNdvi = splat.meadowNdvi ?? { value: 0 };
+    shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
   }
 }
+
+/** The meadow's palette colour, linear — the urban green and grass pavers. */
+const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
+const DEFAULT_SUN = new Vector3(0, 1, 0);
+
+/** The sports surfaces' colours, linear (sport-ground.ts). */
+const SPORT_LINEAR = sportPalette();
+
+/** The road's palette colour, linear — sealed ground off the carriageway. */
+const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
 
 function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
   const decl = hasSplat
     ? "varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform vec2 uSplatOrigin;\nuniform vec2 uSplatSize;"
     : "";
   const assign = hasSplat
-    ? "vSplatUv = vec2( ( position.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - position.y ) / uSplatSize.y );\n         vWorldXY = position.xy;"
+    ? "vSplatUv = vec2( ( dataPos.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - dataPos.y ) / uSplatSize.y );\n         vWorldXY = dataPos.xy;"
     : "";
   shader.vertexShader = shader.vertexShader
     .replace(
@@ -372,25 +546,35 @@ function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
     )
     .replace(
       "#include <begin_vertex>",
-      `#include <begin_vertex>\n         vElevation = position.z;\n         ${assign}`
+      `#include <begin_vertex>\n         ${DATA_POSITION}\n         vElevation = dataPos.z;\n         ${assign}`
     );
+}
+
+/** The splat-dependent fragment code: declarations and the colour body. */
+function splatFragment(splat: SplatLayer): { body: string; decl: string } {
+  const hasNdvi = splat.ndviTexture !== undefined;
+  const hasSurface = splat.surfaceTexture !== undefined;
+  const hasEdges = splat.edgesTexture !== undefined;
+  const hasSport = splat.sport !== undefined;
+  const ndviDecl = hasNdvi
+    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
+    : "";
+  return {
+    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}`,
+    body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
+         ${GRASS_MOTTLE}
+         ${groundFields(hasSurface, hasEdges)}
+         ${urbanGreen(hasNdvi, hasEdges)}
+         ${GROUND_DETAIL}
+         ${hasSport ? SPORT_GROUND : ""}
+         ${hasNdvi ? MEADOW_NDVI : ""}`,
+  };
 }
 
 function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
   const hasSplat = splat !== undefined;
-  const hasColor = splat?.colorTexture !== undefined;
-  const hasNdvi = splat?.ndviTexture !== undefined;
-  // Base colour: sample the RGB splat directly, or map the class id via the
-  // fallback palette.
-  const baseColExpr = hasColor
-    ? "vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;"
-    : "vec3 baseCol = terrainPalette( floor( texture2D( uSplat, vSplatUv ).r * 255.0 + 0.5 ) );";
-  const ndviDecl = hasNdvi
-    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
-    : "";
-  const decl = hasSplat
-    ? `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform sampler2D uSplatClass;\n${ndviDecl}${hasColor ? "" : TERRAIN_PALETTE}`
-    : "";
+  const parts = splat ? splatFragment(splat) : undefined;
+  const decl = parts?.decl ?? "";
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
@@ -398,23 +582,18 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
     )
     .replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `${hasSplat ? baseColExpr : "vec3 baseCol = diffuse;"}
-         ${hasSplat ? GRASS_MOTTLE : ""}
-         ${hasNdvi ? MEADOW_NDVI : ""}
-         float minorD = vElevation / 2.0;
-         float minor = 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / fwidth( minorD ), 1.0 );
-         float majorD = vElevation / 10.0;
-         float major = 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / fwidth( majorD ), 1.0 );
-         float ink = clamp( minor * 0.10 + major * 0.15, 0.0, 0.26 );
+      `${parts?.body ?? "vec3 baseCol = diffuse;"}
+         ${CONTOUR_INK}
+         ${hasSplat ? CONTOUR_SPLAT_GATE : ""}
          vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
     );
-  if (hasSplat) {
-    // Meadow-only shading-normal break-up (grDetail declared above, in scope).
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <normal_fragment_begin>",
-      GRASS_NORMAL
-    );
-  }
+  // Calmed ground normals; with the class raster also the meadow-only
+  // shading break-up (grDetail declared above, in scope), then the kerbs',
+  // lawn edges' and stones' tilt.
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <normal_fragment_begin>",
+    hasSplat ? `${GRASS_NORMAL}\n${GROUND_NORMAL}` : TERRAIN_NORMAL
+  );
 }
 
 function createTerrainMaterial(
@@ -428,9 +607,9 @@ function createTerrainMaterial(
   // The patched GLSL branches on which optional rasters actually loaded, but
   // three keys its program cache on `onBeforeCompile.toString()` — identical for
   // every tile's terrain material. Without an explicit key a tile that lost its
-  // RGB splat or NDVI would be handed a neighbour's compiled program (and its
+  // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.colorTexture !== undefined}-${splat?.ndviTexture !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -445,148 +624,179 @@ function createTerrainMaterial(
   return material;
 }
 
-/** The meshed ground of one tile, whichever way it was built. */
-interface GroundSurface {
-  bounds: TerrainBounds;
-  geometry: BufferGeometry;
-  heightAt: (x: number, y: number) => number | null;
-  minElevation: number;
-  vertexCount: number;
-}
-
-function surfaceGeometry(
-  positions: Float32Array,
-  indices: number[] | Uint32Array
-): BufferGeometry {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.setIndex(
-    Array.isArray(indices) ? indices : new BufferAttribute(indices, 1)
-  );
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  return geometry;
-}
-
-/** A geometry sharing `geometry`'s positions and index with every normal
- *  pointing up the data frame's +Z (for a flat water sheet on a TIN). */
-function upFacingTwin(geometry: BufferGeometry): BufferGeometry {
-  const position = geometry.getAttribute("position");
-  const normals = new Float32Array(position.count * 3);
-  for (let i = 2; i < normals.length; i += 3) {
-    normals[i] = 1;
+/**
+ * The grid's elevations in the data frame, read back from the mesh: the bake
+ * wrote the n·n grid first (row 0 = north), quantised, with the node carrying
+ * the dequantisation and the renderer the glTF→3D Tiles up-axis turn. `toData`
+ * is that chain up to (not including) the viewer's `world` group.
+ */
+function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
+  const position = mesh.geometry.getAttribute("position");
+  const out = new Float32Array(n * n);
+  const v = new Vector3();
+  for (let i = 0; i < out.length; i++) {
+    out[i] = v.fromBufferAttribute(position, i).applyMatrix4(toData).z;
   }
-  const twin = new BufferGeometry();
-  twin.setAttribute("position", position);
-  twin.setAttribute("normal", new BufferAttribute(normals, 3));
-  twin.setIndex(geometry.getIndex());
-  twin.boundingBox = geometry.boundingBox?.clone() ?? null;
-  return twin;
-}
-
-/** The default ground: the baked n×n heightfield, walls burned in. */
-async function loadGridSurface(opts: TerrainOptions): Promise<GroundSurface> {
-  // The raster arrives ready to use: scripts/prepare-data.ts resampled the DGM
-  // GeoTIFF to n x n at build time (quantised uint16, gzipped); decoding it
-  // is one dequantising pass and NoData comes out as NaN, so there is no
-  // nodata sentinel to carry around.
-  const header = parseHeightfieldHeader(
-    await fetchRequiredJson(opts.url, opts.signal)
-  );
-  const { n, bounds } = header;
-  const samples = decodeHeightfield(
-    await fetchGzipped(
-      resolveSiblingUrl(opts.url, header.data),
-      opts.signal,
-      opts.onBytes
-    ),
-    header
-  );
-  const elevations = conflateTerrain(samples, { n, bounds }, opts.wallLines);
-  const { positions, indices, minElevation } = buildTerrainGeometryData({
-    elevations,
-    n,
-    bounds,
-    offset: opts.offset,
-  });
-  return {
-    bounds,
-    geometry: surfaceGeometry(positions, indices),
-    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
-    minElevation,
-    vertexCount: positions.length / 3,
-  };
+  return out;
 }
 
 /**
- * The default ground: the error-bounded TIN baked from the native 1 m
- * DGM (lib/city/terrain-tin.ts). Nothing is burned in — the TIN already
- * carries the DGM's 1–2 m wall ramps, and the breakline burn measurably
- * damages terraced walls (see bake-terrain-tin.ts); the wall ribbons snap to
- * the measured steps instead. `heightAt` interpolates the very triangles the
- * GPU draws, through a bucket index (TinIndex).
+ * Ground height over a TIN (`extras.tin`, the fine level): its surface
+ * triangles indexed in the projected frame (lib/city/terrain-tin.ts
+ * TinIndex), vertices read back from the mesh like `gridElevations` — so
+ * the walker stands on exactly the triangles the GPU draws.
  */
-async function loadTinSurface(
-  url: string,
-  opts: TerrainOptions
-): Promise<GroundSurface> {
-  const header = parseTerrainTinHeader(
-    await fetchRequiredJson(url, opts.signal)
-  );
-  const tin = decodeTerrainTin(
-    await fetchGzipped(
-      resolveSiblingUrl(url, header.data),
-      opts.signal,
-      opts.onBytes
-    ),
-    header
-  );
-  const { positions, indices, minElevation } = buildTinGeometryData(
-    tin,
-    opts.offset
-  );
-  const index = new TinIndex(tin);
-  return {
-    bounds: header.bounds,
-    geometry: surfaceGeometry(positions, indices),
-    heightAt: (x, y) => index.heightAt(x, y),
-    minElevation,
-    vertexCount: positions.length / 3,
-  };
+function tinHeightAt(
+  mesh: Mesh,
+  bounds: TerrainBounds,
+  toData: Matrix4,
+  offset: { cx: number; cy: number }
+): (x: number, y: number) => number | null {
+  const position = mesh.geometry.getAttribute("position");
+  const index = mesh.geometry.getIndex();
+  if (!index) {
+    return () => null;
+  }
+  const xy = new Float64Array(position.count * 2);
+  const z = new Float32Array(position.count);
+  const v = new Vector3();
+  for (let i = 0; i < position.count; i++) {
+    v.fromBufferAttribute(position, i).applyMatrix4(toData);
+    xy[2 * i] = v.x + offset.cx;
+    xy[2 * i + 1] = v.y + offset.cy;
+    z[i] = v.z;
+  }
+  const tin = new TinIndex({
+    bounds,
+    xy,
+    z,
+    // Every triangle, skirt included: a skirt quad is vertical, so its
+    // triangles have no area in plan and the lookup never picks one.
+    triangles: index.array,
+  });
+  return (x, y) => tin.heightAt(x, y);
 }
 
-export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
-  const { bounds, geometry, heightAt, minElevation, vertexCount } = opts.tinUrl
-    ? await loadTinSurface(opts.tinUrl, opts)
-    : await loadGridSurface(opts);
+/**
+ * A geometry sharing `geometry`'s positions and index with every normal
+ * pointing straight up (for a flat water sheet on a TIN). A TIN spans the
+ * river with a few huge triangles whose vertex normals are averaged with the
+ * steep bank faces they share a vertex with, so the water's shading would
+ * fan out in faint streaks across them. Up is the glTF's local +Y (the
+ * content is Y-up; the renderer's turn and the `world` group only rotate it
+ * back, so local +Y is world up).
+ */
+function upFacingTwin(geometry: BufferGeometry): BufferGeometry {
+  const normals = new Float32Array(geometry.getAttribute("position").count * 3);
+  for (let i = 1; i < normals.length; i += 3) {
+    normals[i] = 1;
+  }
+  const twin = new BufferGeometry();
+  twin.setAttribute("position", geometry.getAttribute("position"));
+  twin.setAttribute("normal", new BufferAttribute(normals, 3));
+  twin.setIndex(geometry.getIndex());
+  twin.boundingBox = geometry.boundingBox?.clone() ?? null;
+  twin.boundingSphere = geometry.boundingSphere?.clone() ?? null;
+  return twin;
+}
 
-  // Decoded one after another on purpose: three 4096² rasters decoding at
-  // once (times four tiles loading concurrently) is a ~800 MB peak that
-  // mobile Safari kills the tab for. Sequential keeps it to one raster's
-  // worth per tile in flight.
-  const splatTexture = opts.landcoverUrl
-    ? await loadSplatTexture(opts.landcoverUrl, opts.signal)
+interface DetailRasters {
+  edgesTexture: Texture | null;
+  ndviTexture: Texture | null;
+  sport: { raster: Texture; table: DataTexture } | null;
+  surfaceTexture: Texture | null;
+}
+
+const NO_DETAIL: DetailRasters = {
+  ndviTexture: null,
+  surfaceTexture: null,
+  edgesTexture: null,
+  sport: null,
+};
+
+/** The optional rasters over the class raster, one after another (see
+ *  dressTerrain); each absent one is null. */
+async function loadDetailRasters(
+  extras: TerrainExtras,
+  opts: TerrainOptions
+): Promise<DetailRasters> {
+  const url = (file?: string) => (file ? opts.fileUrl(file) : undefined);
+  const ndvi = url(extras.ndvi);
+  const ndviTexture = ndvi ? await loadNdviTexture(ndvi, opts.signal) : null;
+  // The paving patterns are close-range: the build names the raster on the
+  // fine level only.
+  const surface = url(extras.surface);
+  const surfaceTexture = surface
+    ? await loadSurfaceTexture(surface, opts.signal)
     : null;
-  const colorTexture =
-    splatTexture && opts.landcoverRgbUrl
-      ? await loadColorSplat(opts.landcoverRgbUrl, opts.signal)
+  const edges = url(extras.edges);
+  const edgesTexture = edges
+    ? await loadEdgesTexture(edges, opts.signal)
+    : null;
+  const sportRaster = url(extras.sport);
+  const sportTable = url(extras.sportTable);
+  const sport =
+    sportRaster && sportTable
+      ? await loadSportGrounds(sportRaster, sportTable, opts.signal)
       : null;
-  const ndviTexture =
-    splatTexture && opts.ndviUrl
-      ? await loadNdviTexture(opts.ndviUrl, opts.signal)
-      : null;
-  const splat: SplatLayer | undefined = splatTexture
-    ? {
-        texture: splatTexture,
-        colorTexture: colorTexture ?? undefined,
-        ndviTexture: ndviTexture ?? undefined,
-        meadowNdvi: opts.meadowNdvi,
-        bounds,
-        offset: opts.offset,
-      }
-    : undefined;
+  return { ndviTexture, surfaceTexture, edgesTexture, sport };
+}
 
-  const mesh = new Mesh(geometry, createTerrainMaterial(splat, opts.heightFog));
+/**
+ * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
+ * the colour splat, swaps in the land-cover material and hangs the water and
+ * mist sheets under it. `toData` maps the mesh's local frame to the data
+ * frame (see gridElevations). The mesh stays owned by the tile.
+ */
+export async function dressTerrain(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  opts: TerrainOptions
+): Promise<TerrainLayer> {
+  const { bounds, n } = extras;
+  // The fine level is a TIN; the coarse one (and a fine level whose DGM had
+  // holes) the grid.
+  const elevations = extras.tin ? null : gridElevations(mesh, n, toData);
+  const heightAt = elevations
+    ? (x: number, y: number) =>
+        sampleHeightfield({ elevations, n, bounds }, x, y)
+    : tinHeightAt(mesh, bounds, toData, opts.offset);
+
+  // Decoded one after another on purpose: several 4096² rasters decoding at
+  // once is a peak mobile Safari kills the tab for.
+  const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
+  const classRaster = classFile
+    ? await loadSplatTexture(opts.fileUrl(classFile), opts.signal)
+    : null;
+  const painted: LandcoverSplat | null = classRaster
+    ? paintLandcoverSplat(
+        opts.renderer,
+        classRaster.texture,
+        classRaster.width,
+        classRaster.height
+      )
+    : null;
+  const { ndviTexture, surfaceTexture, edgesTexture, sport } = classRaster
+    ? await loadDetailRasters(extras, opts)
+    : NO_DETAIL;
+  const splat: SplatLayer | undefined =
+    classRaster && painted
+      ? {
+          texture: classRaster.texture,
+          colorTexture: painted.texture,
+          ndviTexture: ndviTexture ?? undefined,
+          surfaceTexture: surfaceTexture ?? undefined,
+          edgesTexture: edgesTexture ?? undefined,
+          sport: sport ?? undefined,
+          sunDirection: opts.sunDirection,
+          ground: opts.ground,
+          bounds,
+          offset: opts.offset,
+        }
+      : undefined;
+
+  mesh.material = createTerrainMaterial(splat, opts.heightFog);
   mesh.name = "terrain";
   // The terrain only RECEIVES shadows. If it also cast, the grazing sun makes
   // every triangle face self-shadow → the jagged "staircase"/triangle acne
@@ -596,31 +806,50 @@ export async function loadTerrain(opts: TerrainOptions): Promise<TerrainLayer> {
   mesh.castShadow = false;
   mesh.receiveShadow = true;
 
-  // Water re-uses the terrain geometry, masked to the water class. A TIN
-  // spans the river with a few huge triangles whose vertex normals are
-  // averaged with the steep bank faces they share a vertex with, so the
-  // water's shading fans out in faint streaks across them; its twin shares
-  // the positions and index but faces straight up.
+  // Water re-uses the terrain geometry, masked to the water class: siblings
+  // of the mesh with its (dequantising) transform, so they come and go with
+  // the tile.
+  const waterGeometry = extras.tin ? upFacingTwin(mesh.geometry) : null;
   const water = splat
     ? createWaterLayer(
-        opts.tinUrl ? upFacingTwin(geometry) : geometry,
+        waterGeometry ?? mesh.geometry,
         splat,
         opts.sunDirection,
         opts.heightFog
       )
     : undefined;
+  if (water) {
+    for (const sheet of [water.mesh, water.mistMesh]) {
+      sheet.position.copy(mesh.position);
+      sheet.quaternion.copy(mesh.quaternion);
+      sheet.scale.copy(mesh.scale);
+      mesh.parent?.add(sheet);
+    }
+  }
 
   return {
     mesh,
-    vertexCount,
+    tile: extras.tileId,
+    level: extras.level,
+    vertexCount: mesh.geometry.getAttribute("position").count,
     bounds,
-    minElevation,
+    minElevation: extras.minElevation,
     water,
     heightAt,
     dispose: () => {
-      for (const texture of [splatTexture, colorTexture, ndviTexture]) {
+      // The twin shares the tile's buffers; only its own normals go.
+      waterGeometry?.dispose();
+      for (const texture of [
+        classRaster?.texture,
+        ndviTexture,
+        surfaceTexture,
+        edgesTexture,
+        sport?.raster,
+        sport?.table,
+      ]) {
         texture?.dispose();
       }
+      painted?.dispose();
     },
   };
 }

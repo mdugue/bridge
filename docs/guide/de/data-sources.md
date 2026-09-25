@@ -17,11 +17,15 @@ Landesvermessung. Es stellt Gelände- und Oberflächenmodell, das
 Downloads auf seinem Portal für offene Geodaten bereit,
 [geodaten.sachsen.de](https://www.geodaten.sachsen.de/). Alle sind in
 dieselben **2 km × 2 km großen Kacheln** geschnitten, weshalb auch der
-Viewer in Kacheln denkt.
+Viewer in Kacheln denkt. Welche Kacheln er zeigt, steht an einer einzigen
+Stelle, der Standort-Konfiguration `sites/dresden.ts`: die vier Kacheln
+(die erste ist die, auf der du startest), die Aussichtspunkte und die
+Quellenvermerke.
 
 **OpenStreetMap (OSM)** — die von Freiwilligen gepflegte Weltkarte. Sie
 füllt Lücken, die die amtlichen Datensätze lassen: Straßenlampen,
-Bahnsteige, Stützmauern mit Höhen und den Tragwerkstyp von Brücken.
+Bänke und andere Stadtmöbel, Bahnsteige, Stützmauern mit Höhen, den Tragwerkstyp von Brücken und die
+Form von Brunnenbecken.
 
 **Landeshauptstadt Dresden** — die Stadt selbst. Ihr Stadtbaumkataster
 verzeichnet rund 124.000 städtische Bäume mit Art, Höhe und
@@ -36,10 +40,10 @@ folgt.
 | **DGM1** | Geländemodell, 1-m-Raster | GeoSN | Der Boden; jedes Objekt darauf absetzen; Brückenwiderlager-Höhen; Eingang für Baumhöhen |
 | **DOM1** | Oberflächenmodell, 1-m-Raster (Gelände *plus* alles, was darauf steht) | GeoSN | Baumhöhen (Oberfläche minus Gelände); Brückendeck-Höhen |
 | **LoD2** | 3D-Gebäudemodell mit Dachformen | GeoSN | Grundriss, Höhe, Dachform und Attribute jedes Gebäudes |
-| **Basis-DLM** | Digitales Landschaftsmodell (die Landnutzungskarte) | GeoSN | Bodenfarben, Gewässerumrisse, Hecken und Baumreihen, Bahnflächen und Gleise, Brückenumrisse |
+| **Basis-DLM** | Digitales Landschaftsmodell (die Landnutzungskarte) | GeoSN | Bodenfarben, Gewässerumrisse, Hecken und Baumreihen, Bahnflächen und Gleise, Brückenumrisse, Denkmäler und Brunnen (Lage und amtlicher Name) |
 | **DOP** | Digitales Orthophoto, 20 cm, mit Nahinfrarot-Kanal | GeoSN | Dachfarben; Vegetationsgrün für Baumkronen und Wiesen |
 | **LSC** | Laserscan-Punktwolke | GeoSN | Heckenhöhen; Bäume in Höfen und Gärten (mittlere Kachel) |
-| **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Bahnsteige, Mauern, Hecken, Brücken-Tragwerkstypen |
+| **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Hecken, Stadtmöbel (Bänke, Papierkörbe, Fahrradbügel, Poller, Briefkästen, Wartehäuschen), Spielplätze und ihre Geräte, Bahnsteige, Mauern, Felskanten, Treppen, Brücken-Tragwerkstypen, Brunnenbecken, womit Straßen, Gehwege und Parkplätze belegt sind, Sportplätze |
 | **Stadtbaumkataster** | Das Baumverzeichnis der Stadt | Landeshauptstadt Dresden | Straßen- und Parkbäume an ihrem vermessenen Standort, mit Höhe, Kronenbreite und einer Kronenform nach der Art |
 
 Im selben Portal verfügbar, aber **noch nicht genutzt**: die Flurstücke
@@ -110,7 +114,7 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 | **Aktualisierung** | Zusammen mit dem DGM1; für diese Kacheln identische Daten (27.–30. November 2024). |
 | **Auflösung und Genauigkeit** | 1-m-Zellen; dieselbe Höhengenauigkeit wie die Punktwolke (bis ±0,15 m), laut GeoSN. Eine Zelle am Rand einer Krone oder eines Dachs kann beide Höhen tragen. |
 | **Allgemein geeignet für** | Gebäude- und Baumhöhen (als DOM − DGM, das **nDOM**), Kronenkartierung, Unterscheidung von Laub- und Nadelbäumen (durch kahle Kronen scheint der Boden durch), Auffinden von Brücken und abgesenkten Einfahrten, Solardach-Studien. |
-| **Hier genutzt für** | `DOM1 − DGM1` ergibt die Höhe von allem, was auf dem Boden steht. Wo das Landschaftsmodell Wald, Gehölz oder Park sagt, setzt der Viewer je 7-m-Zelle einen Baum an den höchsten Punkt, mit dieser Höhe. Brückendecks bekommen ihre Höhe daraus. |
+| **Hier genutzt für** | `DOM1 − DGM1` ergibt die Höhe von allem, was auf dem Boden steht. Wo das Landschaftsmodell Wald, Gehölz oder Park sagt, setzt der Viewer je 7-m-Zelle einen Baum an den höchsten Punkt, mit dieser Höhe. Brückendecks bekommen ihre Höhe daraus. Es ist außerdem die einzige verlässliche Quelle dafür, wie ein Denkmal oder die Skulptur eines Brunnens *aussieht*: Sein gemessener Körper (die Figurengruppen am Albertplatz sind 3,7 m hoch und etwa 4 × 5 m groß) wird zu einer weichen Tonform in dieser Größe und diesem Umriss. |
 | **Stärken** | Gemessene Höhen für jeden Baum und jedes Dach der Stadt auf einmal, in echter Draufsicht ohne die seitliche Verkippung eines Fotos. |
 | **Schwächen** | Es kann einen Baum nicht von einem Gebäude oder Bus unterscheiden; die Baumplatzierung ist deshalb auf Vegetationsklassen beschränkt und von Straßen, Gleisen und Wasser ausgeschlossen. Bewuchs unter 3 m wird ignoriert; ein Meter ist zu grob für einzelne Sträucher. Ein November-Scan zeigt Laubbäume ohne Blätter, ihre Kronen sind in den Daten dünner als im Sommer. |
 | **Format und Download** | GeoTIFF wie das DGM1, dieselbe Portalseite. Nur offline genutzt; die Rohdatei ist nicht eingecheckt und erreicht den Browser nie. |
@@ -152,9 +156,9 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 | **Aktualisierung** | Zwei Rhythmen, laut GeoSN: eine *Grundaktualisierung*, bei der alle Objekte alle 3–5 Jahre überprüft werden, und eine *Spitzenaktualisierung*, bei der wichtige Objekte (Straßen, Bahnen und dergleichen) alle 3, 6 oder 12 Monate überprüft werden. Das Download-Paket wird quartalsweise erneuert. |
 | **Auflösung und Genauigkeit** | Lagegenauigkeit ±3 m für die wesentlichen Linienobjekte (Straßen, Gleise, Flüsse) und ±15 m für alles Übrige, laut GeoSN. Straßen sind Achsen mit Breitenattribut, keine Flächen. |
 | **Allgemein geeignet für** | Eine konsistente, attributierte Grundlage für GIS: Fachdaten daran anknüpfen, Routing und Navigation, Nutzungsstatistiken, Kartographie im Maßstab etwa 1:10 000 bis 1:25 000. |
-| **Hier genutzt für** | Die Bodenfarben (neun Landnutzungsklassen), den Gewässerumriss, Hecken und Baumreihen, die Vegetationsmaske für die Baumplatzierung, Bahnflächen und Gleislinien mit Gleiszahl, Brückenachsen und, wo vorhanden, Deck-Umrisse. |
+| **Hier genutzt für** | Die Bodenfarben (neun Landnutzungsklassen), den Gewässerumriss, Hecken und Baumreihen, die Vegetationsmaske für die Baumplatzierung, Bahnflächen und Gleislinien mit Gleiszahl, Brückenachsen und, wo vorhanden, Deck-Umrisse; die Denkmäler, Gedenksteine, Säulen und benannten Brunnen (die Albertplatz-Brunnen „Stilles Wasser“ und „Stürmische Wogen“, der Neptunbrunnen, …) mit ihren amtlichen Namen. |
 | **Stärken** | Amtliche Klassifizierung mit nützlichen Attributen: Straßenbreiten, Gleiszahl, Elektrifizierung, Brückennamen. |
-| **Schwächen** | Alles Kleine oder Exakte: Straßen müssen nach Regel verbreitert werden, Bahnlinien kommen in kurzen Fragmenten, Deck-Umrisse gibt es vor allem für große Brücken, es gibt keine Straßenmöbel und keine Bahnsteige. Bei ±3 m kann ein Straßenrand eine Spur daneben liegen. |
+| **Schwächen** | Alles Kleine oder Exakte: Straßen müssen nach Regel verbreitert werden, Bahnlinien kommen in kurzen Fragmenten, Deck-Umrisse gibt es vor allem für große Brücken, es gibt keine Straßenmöbel und keine Bahnsteige. Denkmäler sind nur Punkte mit Namen: keine Größe, keine Form, und nichts sagt, welches davon ein Brunnen ist — der Viewer nimmt die Form eines Denkmals aus dem Oberflächenmodell, wo sie messbar ist (sonst eine abstrakte Markierung), und das Becken eines Brunnens aus OpenStreetMap. Bei ±3 m kann ein Straßenrand eine Spur daneben liegen. |
 | **Format und Download** | Landesweites Paket als Shape (oder NAS oder GeoPackage), etwa 1,2 GB; das Projekt schneidet jede Kachel daraus aus. [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html). |
 
 ### DOP20 RGBI — die Luftbilder
@@ -186,13 +190,13 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 |---|---|
 | **Steht für** | *OpenStreetMap*, die freie Weltkarte, die seit 2004 von Freiwilligen gebaut wird. |
 | **Wie erhoben** | Mitwirkende kartieren aus GPS-Spuren, Begehungen vor Ort und durch Abzeichnen von Luftbildern (einschließlich amtlicher Orthophotos, wo deren Lizenz es erlaubt) und beschreiben jedes Objekt mit freien Schlüssel-Wert-*Tags* wie `highway=street_lamp` oder `barrier=retaining_wall` + `height=9`. |
-| **Aktualisierung** | Laufend: Änderungen sind binnen Minuten live. Download-Auszüge (Geofabrik) werden täglich neu gebaut; die Overpass-API fragt die Live-Datenbank ab. |
+| **Aktualisierung** | Laufend: Änderungen sind binnen Minuten live. Download-Auszüge (Geofabrik) werden täglich neu gebaut; das Projekt liest einen solchen Auszug, nicht die Live-Datenbank. |
 | **Auflösung und Genauigkeit** | Keine Garantie; in einer gut kartierten Stadt typischerweise meterngenaue Lagen. Vollständigkeit und Tag-Konsistenz schwanken von Straße zu Straße und Mapper zu Mapper. |
 | **Allgemein geeignet für** | Dinge, die kein amtlicher Datensatz hat: Straßenmöbel, Points of Interest, Namen, informelle Wege, Tragwerkstypen; nahezu weltweite Abdeckung; schnell abzurufen. |
-| **Hier genutzt für** | Lampenpositionen (`highway=street_lamp`), Bahnsteige (`railway=platform`), Stütz- und Stadtmauern sowie Böschungen (`barrier=*`, `man_made=embankment`) mit ihrem `height`-Tag, Hecken (`barrier=hedge`), und ob eine Brücke eine Bogenbrücke ist (`bridge:structure`). |
+| **Hier genutzt für** | Lampenpositionen (`highway=street_lamp`), Stadtmöbel — Sitzbänke (`amenity=bench`, mit `backrest` und `direction`, wo eingetragen), Picknicktische, Papierkörbe, Fahrradbügel (mit `capacity`), Poller, Briefkästen und Wartehäuschen (`shelter=yes`), Spielplatzumrisse (`leisure=playground`) mit den darauf eingetragenen Geräten (`playground=swing`, `slide`, `sandpit`, …) —, ohne eingetragene Richtung zur nächsten Straße oder zum nächsten Weg gedreht, Bahnsteige (`railway=platform`), Hecken (`barrier=hedge`), Stütz- und Stadtmauern, Böschungen und Felskanten (`barrier=*`, `man_made=embankment`, `natural=cliff`) mit ihrem `height`-Tag, Treppenläufe (`highway=steps` mit `width` und `step_count`, die Breite sonst aus einem `area:highway=steps`-Umriss), ob eine Brücke eine Bogenbrücke ist (`bridge:structure`), und Brunnen (`amenity=fountain`): der Umriss jedes Beckens, ob es ein Wasserspielplatz oder ein stilles Becken ist, und die vielen kleinen Brunnen, die das Landschaftsmodell nicht führt. Steht ein amtliches Denkmal in einem OSM-Becken, behält der Brunnen den amtlichen Namen. Außerdem, womit eine Straße, ein Weg oder ein Parkplatz belegt ist (`surface=asphalt`, `paving_stones`, `sett`, … an den Wegen, `sidewalk:*:surface` an den Straßen) und in welche Richtung sie verläuft, damit Platten und Pflastersteine längs der Straße liegen; und wo Autos parken (`parking:left/right/both` mit Ausrichtung an den Straßen, `amenity=parking`-Parkplätze mit ihren Fahrgassen, erfasste Stellplätze), gezeichnet als markierte Stellplätze; und die Fußgängerinseln, Rasenflächen und Brunnen in Plätzen, die das Landschaftsmodell als eine einzige Straßenfläche führt (der Albertplatz). Und die Sportplätze (`leisure=pitch`, `leisure=track`): ihr Umriss, die Sportart (`sport=soccer`, `tennis`, `basketball`, …) und der Belag (`surface=grass`, `clay`, `tartan`, `sand`, …), gezeichnet als Spielfeld mit seinen Linien, dazu die Tore, Basketballkörbe und Netze darauf. |
 | **Stärken** | Lesbare Tags für genau die Details, die die Landesvermessung nicht modelliert; die Brühlsche Terrasse existiert hier und sonst nirgends. |
-| **Schwächen** | Nicht jede Lampe ist erfasst, Höhen fehlen oft (der Viewer nutzt Standardwerte je Mauertyp), Tags variieren. Freiwilligendaten müssen genannt werden (ODbL). |
-| **Download und Lizenz** | Zwei Wege: kleine Punktabfragen über die **Overpass-API**, lokal zwischengespeichert, sodass der Dienst nur einmal angefragt wird; Mauern aus einem regionalen Auszug des ganzen Bundeslandes, einmal von [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) geladen (etwa 250 MB), was Ratenlimits vermeidet und das Ergebnis reproduzierbar macht. Lizenz: **ODbL**, Vermerk „© OpenStreetMap-Mitwirkende“. |
+| **Schwächen** | Nicht jede Lampe oder Bank ist erfasst, und nur wenige Bänke sagen, wohin sie blicken, Höhen fehlen oft (der Viewer nutzt Standardwerte je Mauertyp), Tags variieren. Freiwilligendaten müssen genannt werden (ODbL). |
+| **Download und Lizenz** | Ein regionaler Auszug des ganzen Bundeslandes, `sachsen-latest.osm.pbf`, von [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) geladen (etwa 250 MB) und lokal gelesen, was Ratenlimits vermeidet und das Ergebnis reproduzierbar macht. Die heute eingecheckten Lampen-, Bahnsteig- und Brückentragwerk-Dateien sind älter: Sie wurden über die **Overpass-API**, einen Live-Abfragedienst, geholt, bevor die Bakes auf den Auszug umgestellt wurden, und wechseln beim nächsten Neubacken auf den Auszug. Lizenz: **ODbL**, Vermerk „© OpenStreetMap-Mitwirkende“. |
 
 ## Verwendete Datenstände
 
@@ -212,8 +216,11 @@ Download fand an diesem Tag oder kurz davor statt.
 | LoD2 | alle vier | südwestliches Paar (33410_*): Modell **2023**, gebaut aus dem Laserscan 2016, den Basis-DLM-Grundrissen 2021 und dem DGM 2016; südöstliches Paar (33412_*): Modell **2024**, aus dem Laserscan 2016, dem Basis-DLM 2022 und dem DGM 2016. Exportiert wurden die Objekte 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN-Download-Dienst; einige ältere Objekte tragen noch `Stand_*`-Attribute mit denselben Werten | 2026-06-11 |
 | DOP (RGBI) | alle vier | beflogen am **2024-03-19** (ohne Laub) | GeoSN-Download-Dienst | abgeleitete Dachfarben und NDVI 2026-06-16/17 |
 | Basis-DLM | landesweites Paket | das im **Juni 2026** aktuelle Quartalspaket; das genaue Freigabedatum wurde nicht notiert und lässt sich nachträglich nicht vom Portal ablesen, weil das Paket unter demselben Dateinamen ersetzt wird (die Datei auf dem Share trug beim Prüfen das Datum 2026-07-28) | Download-Seite: „quartalsweise aktualisiert“; Git-History | abgeleitete Dateien 2026-06-12, Bahn- und Brückendateien neu gebacken 2026-09-18 |
-| OSM über Overpass | alle vier | die Live-Datenbank am Abfragetag: 2026-06-12 oder früher (Lampen), 2026-06-17 oder früher (Bahnsteige, Brückentragwerk) | Git-History; die zwischengespeicherten Rohantworten tragen den exakten `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
+| OSM über Overpass (von den Bakes nicht mehr genutzt; die eingecheckten Lampen-, Bahnsteig- und Brückentragwerk-Dateien stammen noch daher) | alle vier | die Live-Datenbank am Abfragetag: 2026-06-12 oder früher (Lampen), 2026-06-17 oder früher (Bahnsteige, Brückentragwerk) | Git-History; die zwischengespeicherten Rohantworten tragen den exakten `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
+| OSM über BBBike | Auszug Dresden | der Auszug vom 2026-09-19 (Brunnen, Treppen, Beläge, Sportplätze: Geofabrik war vom Build-Rechner aus nicht erreichbar) | `data/provenance.json` | 2026-09-24 |
 | OSM über Geofabrik | landesweiter Auszug | der Tagesauszug vom 2026-09-18 oder kurz davor | Git-History (Mauern an dem Tag neu gebacken); `osmium fileinfo -e` auf der Rohdatei zeigt den exakten Zeitstempel | 2026-09-18 |
+| OSM über BBBike (Treppen) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/provenance.json` | 2026-09-24 |
+| OSM über BBBike (Beläge) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/provenance.json` | 2026-09-25 |
 
 Beachte die **unterschiedlichen Stände in einem Bild**: Boden und Baumhöhen
 stammen von Ende 2024, die Gebäudeformen aus einem Laserscan von 2016 mit
@@ -245,9 +252,14 @@ Produkt und Format:
 Die Ordner-Tokens können wechseln; der dauerhafte Index ist der in
 [data-pipeline.md](../../data-pipeline.md#provenance) (englisch)
 beschriebene Download-Dienst, der zu jeder Kachel den aktuellen Link und
-„Stand“ nennt. OpenStreetMap-Daten kamen über die Overpass-API
-(Punktabfragen, einmal zwischengespeichert) und aus dem Geofabrik-Auszug für
-Sachsen (`sachsen-latest.osm.pbf`).
+„Stand“ nennt. `bun run bake --ingest` holt über diesen Dienst
+Oberflächenmodell und Luftbild jeder Kachel und lädt außerdem das
+landesweite Basis-DLM-Paket und den OpenStreetMap-Auszug; DGM1 und LoD2
+sind eingecheckt und werden von Hand geladen. OpenStreetMap-Daten kommen
+jetzt nur noch aus dem Geofabrik-Auszug für Sachsen
+(`sachsen-latest.osm.pbf`); die eingecheckten Lampen-, Bahnsteig- und
+Brückentragwerk-Dateien stammen noch aus früheren Abfragen über die
+Overpass-API.
 
 ## Lizenzen und Quellenvermerke
 
@@ -257,8 +269,7 @@ Sachsen (`sachsen-latest.osm.pbf`).
 | OpenStreetMap | *Open Database License* (ODbL) | „© OpenStreetMap-Mitwirkende“ |
 | Stadtbaumkataster | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
 
-Der Viewer zeigt beide Vermerke in der Fußzeile seines Einstellungsfelds
-(der Stadtbaum-Vermerk kommt hinzu, solange die experimentelle Option an
-ist).
+Der Viewer zeigt diese Vermerke in der Fußzeile seines Einstellungsfelds.
 Die abgeleiteten Lampen- und Mauerdateien tragen den OSM-Vermerk zusätzlich
-in der Datei selbst.
+in der Datei selbst; die Denkmaldatei trägt die Vermerke von GeoSN und OSM,
+weil sie beide Quellen verbindet, und die Stadtbaumdatei den der Stadt.

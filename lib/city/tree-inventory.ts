@@ -1,11 +1,11 @@
 /**
  * Pure placement math for individually surveyed trees — a tree inventory such
- * as the Dresden street-tree cadastre (scripts/extract-trees.sh): each tree's
+ * as the Dresden street-tree cadastre (pipeline/bake/trees.py): each tree's
  * crown and trunk extents from its height, crown diameter and archetype, and
  * the footprint index that lets the canopy/row trees step aside where an
  * inventory tree already stands. No THREE, no DOM.
  *
- * The archetype ids are the bake's (scripts/tree_archetypes.py). They are an
+ * The archetype ids are the bake's (pipeline/bake/tree_archetypes.py). They are an
  * illustrator's silhouettes, not botany: the cadastre's own height and crown
  * diameter already carry a tree's proportions (a 'Fastigiata' oak is recorded
  * 15 m tall and 4 m wide), so an archetype decides only what the scale cannot

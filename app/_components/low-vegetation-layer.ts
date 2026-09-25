@@ -16,7 +16,7 @@ import { bucketByCell, hash } from "./vegetation-layer";
 
 /**
  * Hedges — the OSM `barrier=hedge` lines, at the laser-scan height where the
- * scan sees one (scripts/extract-lowveg.sh). The bake's laser-scan-only
+ * scan sees one (pipeline/bake/lowveg.py). The bake's laser-scan-only
  * hedges and its shrubs are not shipped (docs/transformations.md: about 30 %
  * of them are crown rims, and a shrub dome reads as a faceted boulder up
  * close), so the artifact holds only what this layer draws.

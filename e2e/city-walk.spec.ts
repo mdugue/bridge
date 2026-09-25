@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import proj4 from "proj4";
 
 /**
  * Inner waits scale with the machine. Without a GPU every frame is rendered in
@@ -255,6 +256,11 @@ test.describe("desktop viewer", () => {
     expect(stats.lowVegetation.instances).toBeGreaterThan(100);
     // 339 OSM lamps: posts + heads + decals are instanced
     expect(stats.lamps.instances).toBeGreaterThan(100);
+    // 48 fountains, statues and stones (Albertplatz and around): plinths,
+    // figures and jets are instanced
+    expect(stats.monuments.instances).toBeGreaterThan(20);
+    // ~1 300 OSM benches, bins, stands, bollards, post boxes and shelters
+    expect(stats.furniture.instances).toBeGreaterThan(500);
     // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
     expect(stats.rail.triangles).toBeGreaterThan(0);
     // 292 wall lines
@@ -294,6 +300,142 @@ test.describe("desktop viewer", () => {
     // (north-up vs canvas-down) fails.
     expect(Math.abs((pose?.epsgX ?? 0) - expectedX)).toBeLessThan(50);
     expect(Math.abs((pose?.epsgY ?? 0) - expectedY)).toBeLessThan(50);
+    expectNoErrors(errors);
+  });
+
+  test("locate me puts the player at the GPS fix, facing the compass", async () => {
+    // A fix a little north-east of the site's centre, reprojected here so the
+    // assertion is about the wiring, not a hard-coded coordinate.
+    const bounds = await page.evaluate(
+      () => window.__poc?.handle?.terrainBounds
+    );
+    const [minX, minY, maxX, maxY] = bounds ?? [0, 0, 0, 0];
+    const target = {
+      x: (minX + maxX) / 2 + 150,
+      y: (minY + maxY) / 2 + 250,
+    };
+    const [longitude, latitude] = proj4(
+      "+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs",
+      "WGS84",
+      [target.x, target.y]
+    );
+    await page.context().grantPermissions(["geolocation"]);
+    await page.context().setGeolocation({ latitude, longitude, accuracy: 8 });
+    // The floating controls step aside while the sidebar is open.
+    const close = page.getByRole("button", { name: "Seitenleiste schließen" });
+    if (await close.isVisible()) {
+      await close.click();
+    }
+    await page.getByRole("button", { name: "Standort", exact: true }).waitFor();
+    // No compass has reported yet, so live mode is not offered.
+    await expect(
+      page.getByRole("button", { name: "Live", exact: true })
+    ).toHaveCount(0);
+    // Click, then report a phone held upright with its camera to the east,
+    // ten times a second like a real sensor — on the absolute stream
+    // Chromium's compass arrives on.
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      [...document.querySelectorAll<HTMLButtonElement>("button")]
+        .find((b) => b.textContent?.trim() === "Standort")
+        ?.click();
+      w.__compass = window.setInterval(() => {
+        window.dispatchEvent(
+          new DeviceOrientationEvent("deviceorientationabsolute", {
+            alpha: 270,
+            beta: 90,
+            gamma: 0,
+            absolute: true,
+          })
+        );
+      }, 100);
+    });
+    await expect(page.getByText("Du bist hier")).toBeVisible({
+      timeout: slow(20_000),
+    });
+    const state = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(state?.mode).toBe("walk");
+    expect(Math.abs((state?.epsg.x ?? 0) - target.x)).toBeLessThan(1);
+    expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
+    // East by the compass, ≈ 1° more on the UTM grid (meridian convergence).
+    expect(Math.abs((state?.headingDeg ?? 0) - 91)).toBeLessThan(2);
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      window.clearInterval(w.__compass);
+    });
+    expectNoErrors(errors);
+  });
+
+  test("live mode: the view follows the compass, the camera the GPS", async () => {
+    // A phone held facing south, tilted 10° up, reporting ten times a second.
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      w.__compass = window.setInterval(() => {
+        window.dispatchEvent(
+          new DeviceOrientationEvent("deviceorientationabsolute", {
+            alpha: 180,
+            beta: 100,
+            gamma: 0,
+            absolute: true,
+          })
+        );
+      }, 100);
+    });
+    const toggle = page.getByRole("button", { name: "Live", exact: true });
+    await expect(toggle).toBeVisible({ timeout: slow(10_000) });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    // South by the compass is ≈ 181° on the grid; pitch +10°. The view eases
+    // there a third of the way per frame, and SwiftShader draws about one
+    // frame a second — so "well on its way", not "arrived" (camera-pose.test
+    // pins the exact end point).
+    await page.waitForFunction(
+      () => {
+        const s = window.__poc?.handle?.getCameraState();
+        if (!s) {
+          return false;
+        }
+        const heading = ((s.headingDeg % 360) + 360) % 360;
+        return Math.abs(heading - 181) < 15 && s.pitchDeg > 3;
+      },
+      undefined,
+      { timeout: slow(60_000) }
+    );
+    // The player walks 200 m south-west (a jump, so the camera lands there
+    // at once rather than easing — see camera-pose's FOLLOW_SNAP_M).
+    const before = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    const target = {
+      x: (before?.epsg.x ?? 0) - 120,
+      y: (before?.epsg.y ?? 0) - 160,
+    };
+    const [longitude, latitude] = proj4(
+      "+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs",
+      "WGS84",
+      [target.x, target.y]
+    );
+    await page.context().setGeolocation({ latitude, longitude, accuracy: 6 });
+    await page.waitForFunction(
+      ({ x, y }) => {
+        const s = window.__poc?.handle?.getCameraState();
+        return (
+          s !== undefined &&
+          Math.abs(s.epsg.x - x) < 1 &&
+          Math.abs(s.epsg.y - y) < 1
+        );
+      },
+      target,
+      { timeout: slow(20_000) }
+    );
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      window.clearInterval(w.__compass);
+    });
     expectNoErrors(errors);
   });
 
@@ -401,7 +543,7 @@ test.describe("desktop viewer", () => {
       if (!api) {
         throw new Error("scene handle not published");
       }
-      // SCENIC_VIEWS[0] (viewpoints.ts) — inside the primary tile.
+      // The first viewpoint of sites/dresden.ts — inside the primary tile.
       // The glide takes the geometry only (ViewpointGeometry); the copy that
       // names a vantage is the HUD's business.
       api.flyToViewpoint({
@@ -428,19 +570,49 @@ test.describe("desktop viewer", () => {
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
-    // Runs after the read-only tests: re-parsing the tile also rebuilds the
-    // minimap's 2369 footprint polygons, and a main thread busy with that
+    // Runs after the read-only tests: a demolish rebuilds the tile's BVH and
+    // the minimap's 2369 footprint polygons, and a main thread busy with that
     // makes Playwright's actionability checks on the minimap crawl.
-    const cityMeta = (await (
+    // The spawn tile's minimap footprints (one list of polygons per object,
+    // published next to its glTF): aim at a mid-sized single-polygon
+    // building whose bounding-box centre lies inside it — a perimeter block's
+    // centre is its courtyard, and the ray would hit the ground.
+    const footprints = (await (
       await page.request.get(
-        await dataUrl(page, "city_33412_5656_2_sn.mesh.json")
+        await dataUrl(page, "footprints_33412_5656_2_sn.json")
       )
-    ).json()) as { objects: { type: string; extent?: number[] }[] };
-    const target = cityMeta.objects.find(
-      (o) => o.type === "Building" && o.extent
-    );
-    expect(target?.extent).toBeDefined();
-    const [minX, minY, minZ, maxX, maxY, maxZ] = target?.extent ?? [];
+    ).json()) as [number, number][][][];
+    const inside = ([x, y]: number[], ring: [number, number][]) => {
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+          hit = !hit;
+        }
+      }
+      return hit;
+    };
+    const target = footprints
+      .filter((polys) => polys.length === 1)
+      .map(([ring]) => {
+        const xs = ring.map((p) => p[0]);
+        const ys = ring.map((p) => p[1]);
+        const [x0, y0, x1, y1] = [
+          Math.min(...xs),
+          Math.min(...ys),
+          Math.max(...xs),
+          Math.max(...ys),
+        ];
+        return {
+          ring,
+          centre: [(x0 + x1) / 2, (y0 + y1) / 2],
+          area: (x1 - x0) * (y1 - y0),
+        };
+      })
+      .find((b) => b.area > 300 && b.area < 3000 && inside(b.centre, b.ring));
+    expect(target).toBeDefined();
+    const [centreX, centreY] = target?.centre ?? [0, 0];
     const buildingsBefore = await page.evaluate(
       () => window.__poc?.stats?.buildingCount ?? 0
     );
@@ -449,25 +621,24 @@ test.describe("desktop viewer", () => {
       () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );
     await page.evaluate(
-      ([easting, northing, midHeight, top]) => {
+      ([easting, northing]) => {
         const api = window.__poc?.handle;
         if (!api) {
           throw new Error("scene handle not published");
         }
+        // Stand on the ground there to learn its height, then hover above.
+        api.teleportTo(easting, northing);
+        const ground = api.getCameraState().pos.y - 1.7;
         // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
         const x = easting - api.offset.cx;
         const z = -(northing - api.offset.cy);
         // Approach at an angle (not straight down: a view direction parallel
         // to the camera's up vector makes lookAt degenerate) and aim the
-        // crosshair at the building's mid-height.
-        api.flyTo({ x, y: top + 120, z: z + 80 }, { x, y: midHeight, z });
+        // crosshair a few metres above the ground inside the footprint —
+        // through the roof.
+        api.flyTo({ x, y: ground + 150, z: z + 80 }, { x, y: ground + 4, z });
       },
-      [
-        ((minX ?? 0) + (maxX ?? 0)) / 2,
-        ((minY ?? 0) + (maxY ?? 0)) / 2,
-        ((minZ ?? 0) + (maxZ ?? 0)) / 2,
-        maxZ ?? 0,
-      ]
+      [centreX, centreY]
     );
     // Let the new pose reach a rendered frame before picking. flyTo refreshes
     // the camera's own matrixWorld, but the crosshair ray is cast against the
@@ -480,7 +651,7 @@ test.describe("desktop viewer", () => {
       buildingsBefore,
       { timeout: slow(30_000) }
     );
-    // The mesh itself shrank, not just the filtered document.
+    // The mesh itself shrank (its index was filtered), not just the count.
     const trianglesAfter = await page.evaluate(
       () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );
@@ -639,6 +810,30 @@ test.describe("mobile", () => {
     await dismiss.tap();
     await expect(dismiss).toHaveCount(0);
 
+    // The start view is aerial, so the altitude stick stands opposite the
+    // joystick; the plane button — the F key's stand-in — lands you on foot
+    // and takes the stick away with fly mode.
+    await expect(page.getByTestId("altitude-stick")).toBeVisible();
+    const flyButton = page.getByRole("button", { name: "Fliegen" });
+    await expect(flyButton).toHaveAttribute("aria-pressed", "true");
+    const toolbar = page.getByRole("toolbar", { name: "Werkzeuge" });
+    const flyingBox = await toolbar.boundingBox();
+    await flyButton.tap();
+    await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
+    // The stick sits above the toolbar, so the toolbar doesn't jump.
+    const walkingBox = await toolbar.boundingBox();
+    expect(walkingBox?.y).toBe(flyingBox?.y);
+    await expect(flyButton).toHaveAttribute("aria-pressed", "false");
+    expect(
+      await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)
+    ).toBe("walk");
+
+    // The toolbar folds away into one button and back.
+    await page.getByRole("button", { name: "Werkzeuge einklappen" }).tap();
+    await expect(flyButton).toHaveCount(0);
+    await page.getByRole("button", { name: "Werkzeuge zeigen" }).tap();
+    await expect(flyButton).toBeVisible();
+
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
     const headingBefore = await page.evaluate(
@@ -702,5 +897,65 @@ test.describe("mobile", () => {
     });
 
     expectNoErrors(errors);
+  });
+});
+
+/**
+ * The whole site streamed, still at the lite render cost: `&block=1` keeps
+ * every tile in the tileset (scene-profile.ts). The specs above stream the
+ * spawn tile alone, so this is the one that walks the multi-tile path — tile
+ * events arriving while the spawn tile boots, dressings queued for several
+ * tiles, the site-wide minimap footprints. A load event that throws there
+ * leaves `ready` false forever, which is exactly what this waits on.
+ */
+test.describe("whole site streamed", () => {
+  test("several tiles load, dress and settle without errors", async ({
+    browser,
+  }) => {
+    // Its own boot, and a longer one than the spawn-only specs: several
+    // tiles' terrain, buildings and dressings, all shaded on the CPU.
+    test.setTimeout(slow(240_000));
+    const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    try {
+      await page.goto(`${LITE}&block=1`);
+      const webgl = await hasWebGl(page);
+      if (process.env.CI) {
+        expect(webgl).toBe(true);
+      }
+      test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
+
+      await page.waitForFunction(
+        () => window.__poc?.ready === true,
+        undefined,
+        {
+          timeout: slow(150_000),
+        }
+      );
+      const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
+      // More than the spawn tile is in view from the spawn pose: terrain and
+      // buildings of at least one neighbour came through the stream.
+      expect(stats?.terrain.meshes ?? 0).toBeGreaterThan(1);
+      expect(stats?.city.meshes ?? 0).toBeGreaterThan(1);
+      expect(stats?.vegetation.instances ?? 0).toBeGreaterThan(1000);
+
+      // The minimap names every site tile's footprints up front, streamed
+      // or not: some lie west of the spawn tile (412 000 E).
+      const westmost = await page.evaluate(() => {
+        const polys = window.__poc?.handle?.getFootprints() ?? [];
+        let minX = Number.POSITIVE_INFINITY;
+        for (const poly of polys) {
+          for (const [x] of poly.pts) {
+            minX = Math.min(minX, x);
+          }
+        }
+        return minX;
+      });
+      expect(westmost).toBeLessThan(412_000);
+      expectNoErrors(errors);
+    } finally {
+      await context.close();
+    }
   });
 });

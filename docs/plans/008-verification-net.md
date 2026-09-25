@@ -1,7 +1,8 @@
 # Plan 008 — Make the verification net catch what it exists to catch
 
-- **Status:** PARTIAL — steps 1–4 and 8 done (2026-09-21); steps 5, 6 (rest)
-  and 7 open
+- **Status:** PARTIAL — steps 1–4 and 8 done (2026-09-21); step 5's CI
+  scope done (2026-09-24), its coverage artifact, step 6 (rest) and step 7
+  open. Step 7 becomes moot if [plan 020](./020-webgpu-tsl.md) (TSL) lands
 - **Priority / effort of the remainder:** P2 / S
 - **Written:** 2026-09-20 against `2079c3a`; condensed 2026-09-22 (the
   original step text is in git history at `761d609`)
@@ -41,13 +42,10 @@ and `patches/`.
 
 ## Open
 
-### Step 5 — CI gate and coverage artifact
+### Step 5 — coverage artifact
 
-In `.github/workflows/ci.yml`, the "Decide whether the e2e half has to run"
-diff list is `app components hooks lib e2e public types
-playwright.config.ts next.config.ts package.json bun.lock`; add `scripts
-data patches tsconfig.json postcss.config.mjs` (the data path is exactly
-what the viewer specs protect) and fix the comment above it. Add
+(The CI gate half is done: the e2e diff list now includes `scripts data
+sites patches tsconfig.json postcss.config.mjs`.) Add
 `bunfig.toml` with `[test] coverageSkipTestFiles = true`,
 `coverageReporter = ["text", "lcov"]`, `coverageDir = "coverage"`; in the
 `unit` job run `bun run test:coverage` (the script exists) and upload
@@ -58,8 +56,9 @@ exists.
 ### Step 6 — remaining fixture-integrity checks
 
 `features.test.ts` covers the GeoJSON contracts. Still unchecked: existence
-of `cityjson/lod2_<tile>.city.json`, `dlm/landcover[_rgb]_<tile>.png` and
-`dgm/dgm1_<tile>_tiff/dgm1_<tile>.tif|.tfw` per tile; non-empty `canopy_`
+of `cityjson/lod2_<tile>.city.json`, `dlm/landcover_<tile>.png` (+ its
+legend JSON, whose class keys `lib/city/landcover.test.ts` already pins)
+and `dgm/dgm1_<tile>_tiff/dgm1_<tile>.tif|.tfw` per tile of every site; non-empty `canopy_`
 and `vegrows_` per tile; an explicit pin that `rail_33412_5656_2_sn` has 0
 features (legitimately empty); `bridge.kind ∈ {rail, road, path, other}`;
 `rail.tracks` finite; `roofcolor_<tile>.json` = `{ roofs: Record<id,
@@ -67,6 +66,13 @@ features (legitimately empty); `bridge.kind ∈ {rail, road, path, other}`;
 test bites — point the test's data root at a scratch copy.
 
 ### Step 7 — shader-anchor tests
+
+> Moot if [plan 020](./020-webgpu-tsl.md) replaces the `onBeforeCompile`
+> patches with TSL node materials. Until then the anchors below still
+> apply. Since ADR 0024 the terrain and clay patches also derive data-frame
+> positions from world space (`DATA_POSITION`, `shader-chunks.ts`), and the
+> clay shader reads the per-object table (`uObjects`, `uObjectRows`):
+> pin those markers too.
 
 No `app/_components/shader-patches.test.ts` exists. Export
 `createTerrainMaterial` (terrain-layer.ts), `buildCrownMaterial` and

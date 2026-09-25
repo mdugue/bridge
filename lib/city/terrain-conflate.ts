@@ -20,7 +20,7 @@
  * bank. Nearest-wall-wins (max influence) keeps overlapping/parallel walls sane.
  *
  * Gating keeps it honest: only earth-retaining kinds (retaining_wall / city_wall
- * / embankment) reshape ground, and only where the two sides actually differ by
+ * / embankment) reshape ground , and only where the two sides actually differ by
  * `MIN_STEP_M` — so freestanding garden walls and flat fountain rims leave the
  * terrain alone. A `MAX_STEP_M` clamp stops a bad height tag gouging a canyon.
  */
@@ -32,7 +32,7 @@ import {
 } from "./terrain-geometry";
 
 export interface WallLine {
-  /** EPSG:25833 coordinates (NOT recentered), as baked by extract-walls.sh */
+  /** EPSG:25833 coordinates (NOT recentered), as baked by pipeline/bake/walls.py */
   coords: [number, number][];
   /** OSM barrier/man_made kind; only retaining kinds reshape the ground */
   kind: string;
@@ -50,7 +50,12 @@ export interface ConflateInput {
 }
 
 /** Kinds whose purpose is to hold back earth → they legitimately step the ground. */
-const CONFLATE_KINDS = new Set(["retaining_wall", "city_wall", "embankment"]);
+const CONFLATE_KINDS = new Set([
+  "retaining_wall",
+  "city_wall",
+  "embankment",
+  "cliff",
+]);
 
 const PROBE_M = 11; // perpendicular reach to read each side's shelf level (m)
 const MIN_STEP_M = 1.5; // skip walls whose two sides barely differ (kerbs, rims)

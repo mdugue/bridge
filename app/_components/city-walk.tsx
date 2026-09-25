@@ -1,6 +1,11 @@
 "use client";
 
-import { SlidersHorizontalIcon } from "lucide-react";
+import {
+  LocateFixedIcon,
+  NavigationIcon,
+  PlaneIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import {
   type CSSProperties,
   startTransition,
@@ -15,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import {
-  LOAD_STAGES,
   loadPercent,
   type LoadStageState,
   loadStageStates,
@@ -33,7 +37,7 @@ import {
   snapshotInstant,
 } from "@/lib/city/snapshot";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import type { TileUrls } from "@/lib/city/tile";
+import { AltitudeStick } from "./altitude-stick";
 import { ControlHintBar } from "./control-hints";
 import { VEIL_HOLD_MS } from "./handover";
 import {
@@ -43,25 +47,24 @@ import {
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
+import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { useLiveMode } from "./live-mode";
+import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
-import type { ViewpointGeometry } from "./viewpoints";
+import type { ViewpointGeometry } from "@/lib/city/site";
 import { SceneSidebar } from "./scene-sidebar";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import type { SunState } from "./sun-rig";
 import { VirtualJoystick } from "./virtual-joystick";
-import { hasWebGl2 } from "./webgl-support";
+import { missingPrerequisite } from "./webgl-support";
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
   budget: SceneBudget;
-  /** Neighbouring tiles rendered around the primary one for context */
-  extraTiles?: TileUrls[];
-  /** Optional glTF/GLB to insert; falls back to a marker box */
-  insertedModelUrl?: string;
-  /** The spawn tile's URLs (see lib/city/tile.ts) */
-  primary: TileUrls;
+  /** the tileset the scene streams (lib/city/tileset.ts) */
+  tilesetUrl: string;
 }
 
 /**
@@ -108,22 +111,89 @@ function SettingsToggle() {
 }
 
 /**
- * The overlays that belong to the scene, not to the panel: the key hints and
- * the joystick. Both step aside while the sidebar is open — on a phone the
- * sidebar is a sheet, so a joystick left mounted underneath would be a dead
- * control the player can still see.
+ * The tools the floating toolbar offers here: "take me to where I am"
+ * wherever the browser can locate the player (locate-button.tsx), live mode
+ * while a compass is reporting (live-mode.ts), and on a touch screen walk/
+ * fly, the F key's stand-in.
+ */
+function sceneTools({
+  coarse,
+  live,
+  locate,
+  mode,
+  onToggleMode,
+}: {
+  coarse: boolean;
+  live: ReturnType<typeof useLiveMode>;
+  locate: ReturnType<typeof useLocateMe>;
+  mode: MovementMode;
+  onToggleMode: () => void;
+}): HudTool[] {
+  const tools: HudTool[] = [];
+  if (locate.available) {
+    tools.push({
+      id: "locate",
+      label: "Standort",
+      icon: LocateFixedIcon,
+      busy: locate.locating,
+      onClick: locate.locate,
+      title: "Zu meinem Standort springen, Blick in Telefonrichtung",
+    });
+  }
+  if (live.available) {
+    tools.push({
+      id: "live",
+      label: "Live",
+      icon: NavigationIcon,
+      pressed: live.on,
+      onClick: live.toggle,
+      title:
+        "Live: Blick und Position folgen dir und deinem Telefon — ziehen oder gehen beendet es",
+    });
+  }
+  if (coarse) {
+    tools.push({
+      id: "fly",
+      label: "Fliegen",
+      icon: PlaneIcon,
+      pressed: mode === "fly",
+      onClick: onToggleMode,
+      title: "Zwischen Gehen und Fliegen wechseln",
+    });
+  }
+  return tools;
+}
+
+/**
+ * The overlays that belong to the scene, not to the panel: the key hints, the
+ * joystick and, opposite it, the toolbar (sceneTools) with — in fly mode —
+ * the altitude stick above it. All of it
+ * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
+ * so a joystick left mounted underneath would be a dead control the player
+ * can still see.
  */
 function SceneOverlays({
   coarse,
+  live,
+  locate,
+  mode,
+  onClimb,
   onMove,
+  onToggleMode,
 }: {
   coarse: boolean;
+  live: ReturnType<typeof useLiveMode>;
+  locate: ReturnType<typeof useLocateMe>;
+  mode: MovementMode;
+  onClimb: (v: number) => void;
   onMove: (x: number, y: number) => void;
+  onToggleMode: () => void;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
   if (isMobile ? openMobile : state === "expanded") {
     return null;
   }
+  const flying = mode === "fly";
   return (
     <>
       <ControlHintBar coarse={coarse} />
@@ -131,34 +201,35 @@ function SceneOverlays({
       <div className="absolute bottom-24 left-5">
         <VirtualJoystick onChange={onMove} />
       </div>
+      {/* Bottom-anchored with the toolbar last, so it stays put when fly
+          mode brings the altitude stick in above it. */}
+      <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
+        {flying && <AltitudeStick onChange={onClimb} />}
+        <HudToolbar
+          tools={sceneTools({ coarse, live, locate, mode, onToggleMode })}
+        />
+      </div>
     </>
   );
 }
 
-export default function CityWalk({
-  budget,
-  primary,
-  extraTiles,
-  insertedModelUrl,
-}: Props) {
+export default function CityWalk({ budget, tilesetUrl }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
+  const hud = useHudMessage();
+  const locate = useLocateMe(handleRef, hud.say);
 
   // Probed once, before the renderer is created: three's raw "Error creating
-  // WebGL context" is replaced by a sentence naming the one prerequisite.
-  const [webGl2] = useState(hasWebGl2);
+  // WebGL context" (or a tile's bare ReferenceError) is replaced by a
+  // sentence naming the missing prerequisite.
+  const [missing] = useState(missingPrerequisite);
+  const supported = missing === null;
   const [status, setStatus] = useState<Status>(() =>
-    webGl2
+    missing === null
       ? { phase: "loading" }
-      : {
-          phase: "error",
-          message:
-            "Dieser Viewer braucht WebGL2, das dieser Browser oder dieses Gerät " +
-            "nicht bereitstellt. Bitte einen aktuellen Desktop- oder Mobil-Browser " +
-            "mit aktivierter Hardwarebeschleunigung verwenden.",
-        }
+      : { phase: "error", message: missing }
   );
   // What the scene has reported per load stage (lib/city/load-stages.ts): the
   // loading screen, the handover and the pill all read this. One piece of
@@ -168,6 +239,8 @@ export default function CityWalk({
     skipped: SkippedStages;
   }>({ fractions: {}, skipped: {} });
   const [streamError, setStreamError] = useState<string | null>(null);
+  // After the first full load: tiles or their details streaming in (flights).
+  const [streamingMore, setStreamingMore] = useState(false);
   // Kept past the handover: the city arrives behind the frosted screen, which
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
@@ -185,6 +258,13 @@ export default function CityWalk({
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
     null
   );
+  const live = useLiveMode(handleRef, hud.say, coarse, latLng);
+  // The scene reports a manual look or move that ended live mode; the boot
+  // effect below must not re-run for it, so it reads the hook through a ref.
+  const liveEnded = useRef(live.ended);
+  useEffect(() => {
+    liveEnded.current = live.ended;
+  }, [live.ended]);
   const [landcoverTiles, setLandcoverTiles] = useState<
     { bounds: TerrainBounds; src: string }[]
   >([]);
@@ -209,7 +289,7 @@ export default function CityWalk({
     }
     // The WebGL2 preflight already failed (see the status initializer): no
     // renderer, no handle, nothing to clean up.
-    if (!webGl2) {
+    if (!supported) {
       return;
     }
     let cancelled = false;
@@ -223,9 +303,7 @@ export default function CityWalk({
       container,
       budget,
       look,
-      primary,
-      extraTiles,
-      insertedModelUrl,
+      tilesetUrl,
       initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
       signal: aborter.signal,
       onStage: ({ id, fraction, skipped: isSkipped }) => {
@@ -248,23 +326,21 @@ export default function CityWalk({
           updatePocDebug({ ready: true });
         }
       },
+      onBusy: (isBusy) => {
+        if (!cancelled) {
+          startTransition(() => setStreamingMore(isBusy));
+        }
+      },
       onError: (message) => {
         if (cancelled) {
           return;
         }
+        // One tile (or one tile's dressing) failed after the first frame: it
+        // leaves a hole, and the rest keeps streaming — the stages still
+        // finish on their own (a failed tile counts as done), so they are
+        // not settled here. A failure before the first frame rejects the
+        // boot instead.
         setStreamError(message);
-        // loadRest threw: whatever had not landed is not coming. Settle those
-        // stages, or the pill would claim forever that a layer is loading and
-        // never reach the state where it unmounts.
-        setProgress((prev) => {
-          const settled = { ...prev.skipped };
-          for (const stage of LOAD_STAGES) {
-            if ((prev.fractions[stage.id] ?? 0) < 1) {
-              settled[stage.id] = true;
-            }
-          }
-          return { ...prev, skipped: settled };
-        });
       },
       onStats: (s) => {
         if (cancelled) {
@@ -283,6 +359,11 @@ export default function CityWalk({
         if (!cancelled) {
           // Twice a second, read only in the Erweitert tab's counters.
           startTransition(() => setFps(value));
+        }
+      },
+      onFollowEnd: () => {
+        if (!cancelled) {
+          liveEnded.current();
         }
       },
       onModeChange: (m) => {
@@ -318,7 +399,7 @@ export default function CityWalk({
         setStatus({ phase: "running" });
         // Then the glass is removed, in one frame, with nothing in between.
         veilTimer = setTimeout(() => setVeilUp(false), VEIL_HOLD_MS);
-        // The neighbour tiles, the vegetation and the terrain BVH wait until
+        // The dressing (vegetation, lamps, rails, walls) and the terrain BVHs wait until
         // then: each is a long synchronous task, and the frames while the city
         // is arriving — and the first ones the player actually steers — are
         // the worst possible place for them (see create-app's startStreaming).
@@ -355,7 +436,7 @@ export default function CityWalk({
         look: undefined,
       });
     };
-  }, [budget, look, primary, extraTiles, insertedModelUrl, webGl2]);
+  }, [budget, look, tilesetUrl, supported]);
 
   const updateSun = (nextDay: Date, nextMinutes: number) => {
     setDay(nextDay);
@@ -459,7 +540,7 @@ export default function CityWalk({
 
             {/* The loading screen, at pill size. It retires itself once the
                 last layer has landed and it has been readable for a moment. */}
-            <StreamPill stages={stages} />
+            <StreamPill busy={streamingMore} stages={stages} />
 
             {streamError && (
               <output
@@ -470,10 +551,21 @@ export default function CityWalk({
               </output>
             )}
 
+            <LocateMessage message={hud.message} />
+
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              live={live}
+              locate={locate}
+              mode={mode}
+              onClimb={(v) => handleRef.current?.setClimbInput(v)}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+              onToggleMode={() =>
+                handleRef.current?.setMovementMode(
+                  mode === "fly" ? "walk" : "fly"
+                )
+              }
             />
           </>
         )}

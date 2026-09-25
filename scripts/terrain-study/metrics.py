@@ -5,7 +5,7 @@ Inputs (all in <study_dir>, see build_grids.py / tin-study.ts):
   <grid>.f32                raw float32 n*n grids (row 0 = north, pixel centres)
   <grid>_tin<cm>.{coords,tris}.u32   Delatin meshes of those grids
 Plus the committed data/dlm/walls_<tile>.geojson and the prepared 512²
-neighbour heightfields (.cache/prepare-data/) for the seam check.
+neighbour DGMs (resampled to the coarse level's 512²) for the seam check.
 
 Metrics:
   1. main-step width (10–90 % of the step between the plateaus 2–3.5 m either
@@ -275,11 +275,16 @@ def accuracy(surfaces, test_xy, test_z, subsets):
 
 
 def neighbour_grid(tile, n=512):
-    cache = ROOT / ".cache/prepare-data"
-    h = json.loads((cache / f"dgm1_{tile}.heightfield-{n}.json").read_text())
-    raw = np.frombuffer(gzip.decompress((cache / f"dgm1_{tile}.heightfield-{n}.u16.gz").read_bytes()), "<u2")
-    z = h["zMin"] + raw.astype(np.float64) * h["zScale"]
-    return h["bounds"], z.reshape(n, n)
+    """The neighbour's coarse terrain level: its committed DGM resampled
+    bilinear to n² (what prepare-data's coarse level does before shaping)."""
+    import rasterio
+    from rasterio.enums import Resampling
+
+    path = ROOT / f"data/dgm/dgm1_{tile}_tiff/dgm1_{tile}.tif"
+    with rasterio.open(path) as ds:
+        z = ds.read(1, out_shape=(n, n), resampling=Resampling.bilinear).astype(np.float64)
+        b = ds.bounds
+    return [b.left, b.bottom, b.right, b.top], z
 
 
 def seam_edges(surfaces):

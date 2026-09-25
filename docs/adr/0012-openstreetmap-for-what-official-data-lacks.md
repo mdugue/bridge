@@ -1,6 +1,6 @@
 # ADR 0012: OpenStreetMap for what the official data lacks, read from a local extract where possible
 
-- **Status:** accepted
+- **Status:** accepted; "where possible" tightened to "always" by [ADR 0025](./0025-bakes-are-one-python-package.md)
 - **Date:** 2026-06 (lamps, platforms), 2026-09 (walls from a local extract)
 
 ## Context

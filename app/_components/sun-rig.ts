@@ -1,4 +1,4 @@
-import type { Box3, Scene } from "three";
+import type { Box3, Camera, Scene } from "three";
 import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { atmosphereAt } from "@/lib/city/atmosphere";
@@ -36,10 +36,13 @@ export interface SunRig {
   follow: (position: Vector3, direction: Vector3, groundY: number) => void;
   /** Forces a one-off shadow-map re-render. The map is otherwise only redrawn
    * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
-   * (demolish / insert) must call this or stale shadows linger. */
+   * (demolish, a tile landing or leaving) must call this or stale shadows linger. */
   invalidateShadow: () => void;
   /** Advances the sky dome's drifting clouds (call per frame with elapsed s). */
   setTime: (seconds: number) => void;
+  /** The sun's shadow camera: the tile stream loads what it sees too, so a
+   *  building behind the player still casts into the view. */
+  shadowCamera: Camera;
   /** GPU bytes of the shadow map (RGBA8 depth-packed, no mipmaps). */
   shadowMapBytes: number;
   /** True when the next render will redraw the shadow map. */
@@ -55,10 +58,14 @@ function createSkyDome(scene: Scene): Sky {
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
   const u = sky.material.uniforms;
-  u.turbidity.value = 6;
+  // Moderate haze and a small Mie lobe: more of either blows the sky around
+  // the sun (and with it half the horizon) out to flat white.
+  u.turbidity.value = 4.5;
   u.rayleigh.value = 1.6;
-  u.mieCoefficient.value = 0.004;
-  u.mieDirectionalG.value = 0.75;
+  u.mieCoefficient.value = 0.0025;
+  // A tighter forward lobe: the glow stays around the sun instead of
+  // whitening a quarter of the sky.
+  u.mieDirectionalG.value = 0.82;
   // Sky.js (r184) already ships a procedural drifting-cloud system (multi-octave
   // fbm, sun-tinted) but nothing advances its `time`, so the clouds were frozen.
   // Soften the defaults toward pale watercolor washes (not cotton balls) and let
@@ -68,6 +75,40 @@ function createSkyDome(scene: Scene): Sky {
   u.cloudDensity.value = 0.3;
   // Slow drift — a barely-moving Dresden sky, not racing clouds.
   u.cloudSpeed.value = 0.0001;
+  // Horizon haze. The physical sky knows no ground: below the horizon it
+  // repeats its brightest horizon white, so past the site's last tile the
+  // view ended on a hard cut from fogged terrain to near-white. Blend the
+  // dome into the scene's fog colour instead — fully below the horizon (the
+  // "ground" beyond the data is haze), feathered a few degrees above it — so
+  // the fogged terrain, the edge haze (height-fog.ts) and the sky meet in one
+  // soft band. The colour is fed per update from the time-of-day palette.
+  u.uHazeColor = { value: new Color(0xdf_e7_ee) };
+  sky.material.fragmentShader = sky.material.fragmentShader
+    .replace("void main() {", "uniform vec3 uHazeColor;\n\t\tvoid main() {")
+    // Clouds only from a few degrees up. Near the horizon the cloud plane's
+    // projection crowds the fbm into one sunlit sheet, which read as a
+    // blown-out white band across the lower sky.
+    .replace(
+      "float horizonFade = smoothstep( 0.0, 0.03 + 0.06 * cloudElevation, direction.y );",
+      "float horizonFade = smoothstep( 0.03, 0.4, direction.y );"
+    )
+    .replace(
+      "gl_FragColor = vec4( texColor, 1.0 );",
+      `// Temper the dome first: untouched, its lower third tone-maps to
+			// flat paper white and its zenith to a synthetic cyan. A little less
+			// radiance and chroma keeps it a pale watercolour wash.
+			float skyLuma = dot( texColor, vec3( 0.2126, 0.7152, 0.0722 ) );
+			texColor = mix( vec3( skyLuma ), texColor, 0.8 ) * 0.7;
+			// Soft shoulder on the bright part (the glow around the sun), by
+			// luminance so the hue survives: past the knee it rolls off instead
+			// of clipping to white under the tone mapper.
+			float skyL = skyLuma * 0.7;
+			float skyOver = max( skyL - 0.45, 0.0 );
+			texColor *= ( min( skyL, 0.45 ) + skyOver / ( 1.0 + 1.5 * skyOver ) ) / max( skyL, 1e-4 );
+			float hazeBand = 1.0 - smoothstep( -0.03, 0.28, direction.y );
+			texColor = mix( texColor, uHazeColor, hazeBand * hazeBand * ( 3.0 - 2.0 * hazeBand ) );
+			gl_FragColor = vec4( texColor, 1.0 );`
+    );
   scene.add(sky);
   return sky;
 }
@@ -253,6 +294,7 @@ export function createSunRig(
     if (scene.fog instanceof Fog) {
       scene.fog.color.set(palette.fog);
     }
+    (sky.material.uniforms.uHazeColor.value as Color).set(palette.fog);
     if (scene.background instanceof Color) {
       scene.background.set(palette.fog);
     }
@@ -279,6 +321,7 @@ export function createSunRig(
     // flag stays raised (and is consumed at sunrise), so it is not "pending".
     shadowPending: () => sun.visible && sun.shadow.needsUpdate,
     shadowMapBytes: shadowMapSize * shadowMapSize * 4,
+    shadowCamera: sun.shadow.camera,
     dispose: () => sun.dispose(),
   };
 }
