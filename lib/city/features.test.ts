@@ -103,6 +103,14 @@ test.each(cases)(
       "picnic",
       "postbox",
       "shelter",
+      "column",
+      "signal",
+      "hydrant",
+      "hydrantsign",
+      "clock",
+      "wallclock",
+      "water",
+      "stop",
       "playground",
       "swing",
       "slide",
@@ -134,6 +142,13 @@ test.each(cases)(
       }
       if (kind === "bike") {
         expect(f.properties?.n).toBeGreaterThanOrEqual(1);
+      }
+      if (f.properties?.lit !== undefined) {
+        expect(kind).toBe("column");
+      }
+      // what has a front faces somewhere; round things do not
+      if (["column", "hydrant", "bin", "bollard"].includes(kind)) {
+        expect(bearing).toBeUndefined();
       }
       if (f.properties?.h !== undefined) {
         expect(kind).toBe("bollard");

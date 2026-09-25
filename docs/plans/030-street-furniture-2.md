@@ -14,7 +14,38 @@
 - **Effort**: S per kind, M in total
 - **Risk**: LOW — the furniture path exists and is type-enforced
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: DONE 2026-09-25 — every kind, built without a real GPU:
+  the plates are still to be taken; SwiftShader proves only that it
+  compiles and boots clean.
+
+## Implementation notes (2026-09-25)
+
+Counts after the bake (four tiles, BBBike 2026-09-19): columns 85
+(4 lit), signals 288, pillar hydrants 6, hydrant signs 454, pole clocks 8,
+wall clocks 3 (of 8; the rest have no facade within 3 m), drinking
+fountains 8, stop signs 79. Every earlier object of the committed files
+comes out byte-identical; the new kinds are appended.
+
+- **Signals at the kerb.** OSM puts `highway=traffic_signals` on the
+  carriageway at the stop line; standing the pole there would plant 288
+  poles in the road. The bake walks a signal on the road class to the
+  kerb on the right of the traffic its `traffic_signals:direction` names
+  (the kerb from the committed class raster, ≤ 15 m), facing that
+  traffic; without a direction to the nearest kerb, facing the nearest
+  way. The same kerb walk moves an underground hydrant's sign out of the
+  lane (166 are tagged `fire_hydrant:position=lane`).
+- **Hydrant signs**: the STOP needs a GPU plate; without one the
+  conservative fallback was taken — the plates are drawn at 70 %
+  (`HYDRANT_SIGN_SCALE`) rather than dropped.
+- **Wall clocks** hang on the nearest OSM building outline (≤ 3 m), not
+  on a runtime ray against the LoD2 BVH (a dressing cannot count on the
+  buildings being loaded; the result must not depend on load order).
+- **Clock hands**: one shared `uClockMinutes` uniform, set by
+  `setClockTime` from `setSun` and changed on the minute only; the hands
+  (`furniture-*-hands`) never cast, so the shadow map is not redrawn.
+- **Stop sign**: `highway=bus_stop` without `shelter=yes`, dropped within
+  8 m of a shelter; plan 024 phase 3 stands the same model at the tram
+  stops.
 
 ## Why this matters
 

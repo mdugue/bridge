@@ -42,6 +42,7 @@ import { createHeightFogUniforms } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
+import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -591,6 +592,8 @@ async function bootApp(
     }
     lampLights.setNightFactor(state.nightFactor);
     setFountainNight(state.nightFactor);
+    setFurnitureNight(state.nightFactor);
+    setClockTime(date);
     clayNight.value = state.nightFactor;
     invalidateShadows();
     return state;

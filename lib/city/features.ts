@@ -109,9 +109,17 @@ export type FurnitureKind =
   | "bike"
   | "bin"
   | "bollard"
+  | "clock"
+  | "column"
+  | "hydrant"
+  | "hydrantsign"
   | "picnic"
   | "postbox"
   | "shelter"
+  | "signal"
+  | "stop"
+  | "wallclock"
+  | "water"
   | PlaygroundKind;
 
 /** A playground outline and the equipment OSM maps on it (`playground=*`). */
@@ -135,7 +143,13 @@ export type PlaygroundKind =
  * north: OSM's `direction`, else towards the nearest way), absent on round
  * things; `l` a bench's mapped length (m), `n` a stand's hoops, `back:
  * false` a bench without a backrest; `h` a bollard's tagged height (m) and
- * `metal` its material.
+ * `metal` its material. Since plan 030 also advertising columns (`column`,
+ * `lit` when OSM says so), traffic signals (`signal`, at the kerb, facing
+ * the traffic they control), fire hydrants (`hydrant`: a pillar;
+ * `hydrantsign`: the sign plate of an underground one), clocks (`clock` on
+ * a pole, `wallclock` on a facade — the point on the wall, `a` out of it),
+ * drinking fountains (`water`) and the "H" sign of a bus stop without a
+ * shelter (`stop`).
  */
 export interface FurnitureFeature {
   geometry: PointGeometry | PolygonGeometry;
@@ -145,6 +159,7 @@ export interface FurnitureFeature {
     h?: number;
     k: FurnitureKind;
     l?: number;
+    lit?: boolean;
     metal?: boolean;
     n?: number;
   } | null;

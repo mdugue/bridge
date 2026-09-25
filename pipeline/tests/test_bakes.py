@@ -374,7 +374,7 @@ def test_furniture_kinds_come_from_the_tags():
     assert kind_of("bollard", None, None) == "bollard"
     assert kind_of(None, None, '"leisure"=>"picnic_table"') == "picnic"
     assert kind_of(None, "bus_stop", '"shelter"=>"yes"') == "shelter"
-    assert kind_of(None, "bus_stop", '"shelter"=>"no"') is None
+    assert kind_of(None, "bus_stop", '"shelter"=>"no"') == "stop"  # its sign (plan 030)
     stands = '"amenity"=>"bicycle_parking","bicycle_parking"=>"stands"'
     assert kind_of(None, None, stands) == "bike"
     assert kind_of(None, None, stands.replace("stands", "wall_loops")) is None

@@ -115,3 +115,36 @@ test("playgrounds are outlines; only their mapped equipment stands", () => {
     "sandbox",
   ]);
 });
+
+test("the street's signs and fixtures stand as their own models", () => {
+  const pieces = furniturePieces([
+    at({ k: "column" }),
+    at({ k: "column", lit: true }),
+    at({ k: "signal", a: 180 }),
+    at({ k: "hydrant" }),
+    at({ k: "hydrantsign", a: 90 }),
+    at({ k: "clock", a: 0 }),
+    at({ k: "wallclock", a: 270 }),
+    at({ k: "water", a: 45 }),
+    at({ k: "stop", a: 90 }),
+  ]);
+  expect(pieces.map((p) => p.model)).toEqual([
+    "column",
+    "columnLit",
+    "signal",
+    "hydrant",
+    "hydrantSign",
+    "clock",
+    "wallClock",
+    "water",
+    "stop",
+  ]);
+  // a signal's head faces the traffic it controls (the bake's bearing)
+  const [e, n] = front(pieces[2].yaw);
+  expect(e).toBeCloseTo(0);
+  expect(n).toBeCloseTo(-1);
+  for (const p of pieces) {
+    expect(p.scaleX).toBe(1);
+    expect(p.scaleY).toBe(1);
+  }
+});

@@ -527,9 +527,40 @@ visual-variable codebook is in
   pale ground and the clay buildings; the pieces now differ from them by
   form and shadow, not by tone (`furniture-layer.ts`,
   `lib/city/furniture.ts`). Not (yet): bicycle-parking *areas*, shelters
-  mapped as areas, planters, signs (OSM maps ~100 traffic signs and almost
-  no street-name signs here; the 321 traffic-signal nodes sit on the
-  carriageway, not at the mast — both too sparse or too placed-by-guess).
+  mapped as areas, planters, traffic signs (OSM maps ~100 here) and
+  street-name signs (almost none).
+- **Signs and fixtures** (plan [030](./plans/030-street-furniture-2.md)) —
+  the same bake and layer, eight more kinds (four tiles, BBBike
+  2026-09-19): **advertising columns** (`advertising=column`, 85; a pale
+  paper drum on a plinth with a darker ring and dome, five poster fields
+  in the palette wrapped round it — colour, no text, turned by the scatter
+  yaw so no two read alike; the 4 `lit=yes` ones glow softly with the
+  night factor), **traffic signals** (`highway=traffic_signals`, 288: a
+  3.2 m grey pole, a dark three-lamp head, unlit glass — the viewer has no
+  traffic to time. The node sits on the carriageway at the stop line, so
+  with `traffic_signals:direction` the bake **walks it to the kerb on the
+  right of the traffic it controls** — the kerb from the class raster, ≤ 15
+  m — and turns the head to face that traffic; without a direction it goes
+  to the nearest kerb, facing the nearest way; kept where it is off the
+  road), **fire hydrants** (`emergency=fire_hydrant`: the 6 pillars a
+  0.8 m red-ochre pillar; the **454 underground** ones only their
+  red-bordered sign plate on a post, moved out of the lane to the nearest
+  kerb — **drawn at 70 %**, the plan's STOP fallback taken without a GPU
+  plate: the smaller plates were chosen over dropping them), **clocks**
+  (`amenity=clock`: 8 on a pole as a double face on a 3.5 m post; 3 of the
+  8 wall clocks hung on the nearest OSM building outline ≤ 3 m, facing out
+  — the plan asked for a ray against the LoD2 BVH, the bake uses the
+  outlines for the same reason as the tram rosettes; tower clocks and
+  sundials dropped), **drinking fountains** (`amenity=drinking_water`, 8: a
+  slim bronze column with a small basin) and the bus stop's **"H" sign**
+  (`highway=bus_stop` without `shelter=yes`, 79, dropped within 8 m of a
+  shelter: a yellow disc with a green H on a 2.6 m pole, a timetable box —
+  shared with the tram stops of plan 024). The clocks' hands show the
+  **scene time**: two hand quads per face, turned in the vertex shader from
+  one shared uniform that `setSun` updates on the minute only
+  (`setClockTime`); the hands never cast, so the shadow map is not redrawn
+  for them. The re-bake leaves every earlier object byte-identical (checked
+  per tile); the new kinds are appended. Look unverified on a GPU.
 - **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 88 over the
   four tiles) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
   ground under each ring vertex (densified to 2 m), and **only the

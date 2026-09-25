@@ -61,7 +61,7 @@ history. Decisions that came out of plans are written up as
 | 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **TODO** | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |
 | 028 | Cultivated land: allotment colonies, orchards, vineyards | **TODO** | [028-cultivated-land.md](./028-cultivated-land.md) |
 | 029 | Fences, railings and gates, baked into the fine terrain | **TODO** | [029-fences-and-gates.md](./029-fences-and-gates.md) |
-| 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | **TODO** | [030-street-furniture-2.md](./030-street-furniture-2.md) |
+| 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | **DONE** (2026-09-25) — every kind built; look unverified on a real GPU | [030-street-furniture-2.md](./030-street-furniture-2.md) |
 | 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | **TODO** | [031-elbe-riverside.md](./031-elbe-riverside.md) |
 | 032 | Street names: map lettering in fly mode, a caption on foot | **TODO** | [032-street-names.md](./032-street-names.md) |
 | 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | **TODO** | [033-sky-view-and-horizon-shading.md](./033-sky-view-and-horizon-shading.md) |
