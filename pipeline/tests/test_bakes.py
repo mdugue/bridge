@@ -692,6 +692,109 @@ def test_the_index_raster_names_a_court_inside_a_larger_ground(tmp_path):
     assert raster[33, 1].tolist()[:3] == [0, 1, 0]  # only the wider growth
 
 
+def _osm_nodes(first_id: int, pts) -> str:
+    """OSM XML nodes at tile-local metres (the `_osm_tile` origin), with tags."""
+    from pyproj import Transformer
+
+    back = Transformer.from_crs(25833, 4326, always_xy=True)
+    out = []
+    for i, (px, py, tags) in enumerate(pts):
+        lon, lat = back.transform(411000.0 + px, 5656000.0 + py)
+        body = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in tags.items())
+        out.append(
+            f'<node id="{first_id + i}" lat="{lat:.9f}" lon="{lon:.9f}" version="1">{body}</node>'
+        )
+    return "".join(out)
+
+
+def _lod2_box(first: int) -> dict:
+    """A box solid over the eight vertices from `first`: ground, roof, walls."""
+    a, b, c, d, e, f, g, k = range(first, first + 8)
+    return {
+        "type": "Solid",
+        "lod": "2",
+        "boundaries": [
+            [[[a, d, c, b]], [[e, f, g, k]], [[a, b, f, e]], [[b, c, g, f]], [[c, d, k, g]]]
+        ],
+        "semantics": {
+            "surfaces": [
+                {"type": "GroundSurface"},
+                {"type": "RoofSurface"},
+                {"type": "WallSurface"},
+            ],
+            "values": [[0, 1, 2, 2, 2]],
+        },
+    }
+
+
+def _lod2_city(tile, boxes: dict) -> None:
+    """A CityJSON for the `_osm_tile` tile: `boxes` maps an id to its
+    (x0, y0, x1, y1) in tile-local metres; `shop` is a part of `shop-bldg`."""
+    import json
+
+    verts, objects = [], {}
+    for oid, (x0, y0, x1, y1) in boxes.items():
+        first = len(verts)
+        ring = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        verts += [[411000 + x, 5656000 + y, 100] for x, y in ring]
+        verts += [[411000 + x, 5656000 + y, 110] for x, y in ring]
+        objects[oid] = {"type": "BuildingPart", "geometry": [_lod2_box(first)]}
+    objects["shop"]["parents"] = ["shop-bldg"]
+    objects["shop-bldg"] = {"type": "Building", "children": ["shop"]}
+    path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"type": "CityJSON", "vertices": verts, "CityObjects": objects}))
+
+
+def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp_path, monkeypatch):
+    import json
+
+    from bake import osm_buildings
+
+    heritage = [(10, 10, {}), (40, 10, {}), (40, 40, {}), (10, 40, {})]
+    nodes = _osm_nodes(
+        11,
+        [
+            (150, 150, {"shop": "bakery"}),  # inside `shop`
+            (163, 150, {"amenity": "cafe"}),  # 1 m off `other`'s facade: snapped
+            (25, 25, {"shop": "clothes", "level": "1"}),  # upstairs: dropped
+            (100, 190, {"shop": "kiosk"}),  # on no building
+            *heritage,
+        ],
+    )
+    outline = "".join(f'<nd ref="{i}"/>' for i in (15, 16, 17, 18, 15))
+    tags = '<tag k="building" v="yes"/><tag k="heritage" v="4"/>'
+    way = f'<way id="9" version="1">{outline}{tags}</way>'
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + way)
+    _lod2_city(
+        tile,
+        {"shop": (140, 140, 160, 160), "other": (164, 140, 180, 160), "old": (15, 15, 35, 35)},
+    )
+    osm_buildings.run(tile)
+    doc = json.loads((tile.data / "dlm" / "osmbuild_t.json").read_text())
+    assert doc["attribution"].startswith("©")
+    assert doc["objects"] == {
+        "shop": {"shop": 1},
+        "shop-bldg": {"shop": 1},  # the part's root
+        "other": {"shop": 1},
+        "old": {"heritage": 1},  # the outline covers all of it
+    }
+    assert doc["meta"]["shop_points_placed"] == 2
+
+
+def test_only_ground_floor_levels_count_as_street_shops():
+    from bake.osm_buildings import is_shop, on_ground_floor
+
+    assert on_ground_floor(None)
+    assert on_ground_floor('"level"=>"0"')
+    assert on_ground_floor('"level"=>"-1;0"')
+    assert on_ground_floor('"level"=>"EG"')  # unreadable: kept
+    assert not on_ground_floor('"level"=>"1"')
+    assert not on_ground_floor('"level"=>"-1"')
+    assert is_shop("bakery", None) and is_shop(None, "pub")
+    assert not is_shop("no", None) and not is_shop(None, "bench")
+
+
 def _cadastre_tree(x, y, h=None, d=None, botanical="Tilia cordata", german="Winter-Linde"):
     return {
         "properties": {

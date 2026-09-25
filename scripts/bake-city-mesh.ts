@@ -17,7 +17,11 @@ import {
   roughJitter,
   storeyHeight,
 } from "../lib/city/building-tint";
-import type { CityObjectRow } from "../lib/city/city-mesh";
+import {
+  type CityObjectRow,
+  type OsmBuildingLut,
+  objectFlags,
+} from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import { buildingFootprintPolys } from "../lib/city/minimap";
 import { recenterOffset } from "../lib/city/recenter";
@@ -117,12 +121,14 @@ export interface BakedCityMesh {
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
+ * `osmLut` holds what OSM knows per object (shops, heritage), when baked.
  */
 export function bakeCityMesh(
   tile: string,
   doc: CityJsonDocument,
   roofLut: RoofColorLut | undefined,
-  sharedMatrix: Matrix4 | null
+  sharedMatrix: Matrix4 | null,
+  osmLut?: OsmBuildingLut
 ): BakedCityMesh {
   const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
   if (epsg === null) {
@@ -179,6 +185,7 @@ export function bakeCityMesh(
       root,
       baseZ: cm(baseZ),
       eaveH: cm(roofMin === undefined ? total : Math.max(roofMin - baseZ, 0)),
+      flags: objectFlags(osmLut?.[id]),
       storeyH: cm(storeyHeight(measured)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),

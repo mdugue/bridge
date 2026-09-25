@@ -49,7 +49,7 @@ flowchart LR
     PAVE["Kerbs, paving &amp; parking<br/>kerb stones · lawn edge · sett · slabs · bays"]
     WAT["Water (Elbe)"]
     BLD["Buildings<br/>(geometry)"]
-    DET["Building detailing<br/>tint · roof · eave · glow"]
+    DET["Building detailing<br/>tint · roof · eave · glow · shop fronts"]
     VEG["Trees &amp; hedges"]
     LOW["OSM hedges"]
     LAMP["Street lamps"]
@@ -88,6 +88,7 @@ flowchart LR
   CJ ==>|"function · roofType · height · surfacetype<br/>(property table)"| DET
   HASH -.->|"per-building variation<br/>(carries the look when attrs are sparse)"| DET
   DOP -. "real roof colour<br/>(83% coverage, else synth)" .-> DET
+  OSM -. "shop / café on the ground floor · heritage=*<br/>(joined to the LoD2 footprints)" .-> DET
 
   %% vegetation (multi-source + gated)
   DLM ==>|"hedge / tree rows"| VEG
@@ -154,7 +155,7 @@ flowchart LR
 | **Sports grounds** | OSM `leisure=pitch` / `track` (playgrounds are street furniture): per ground its frame, surface and line scheme (`sport_<t>.json`) and a 2048² index raster (`sport_<t>.png`) | the sport's usual surface when untagged · DGM1 (the goals, posts and nets stand on the ground) | `sport-ground.ts` (in the terrain fragment pass), `sport-fixtures.ts` (dressing), `lib/city/sport.ts`; baked by `pipeline/bake/sport.py` |
 | **Water (Elbe)** | Basis-DLM class 8 (water coverage from the painted splat) **+** DGM1 (the terrain geometry it drapes on) | — | `water-layer.ts`, `landcover-splat.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts` |
-| **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py` |
+| **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) · OSM shops on the ground floor and `heritage=*` (the `flags` column) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py`, the OSM flags by `osm_buildings.py` |
 | **Inventory trees** | Stadtbaumkataster Dresden (WFS `cls:L1261`): position, height, crown diameter, taxon | DGM1 (ground-clamp) · DOP NDVI (deciduous crown colour) · vetoes the rows/canopy trees inside each crown, except in DLM forest/copse · trunks + broadleaf crowns drawn in the canopy's meshes | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts`, `tile-stream.ts`; baked by `pipeline/bake/trees.py` (+ `tree_archetypes.py`) |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy **+** LSC crown peaks outside the mask (spawn tile, thinned against the cadastre) | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `pipeline/bake/landcover.py` + `canopy.py` + `ndvi.py` + `lowveg.py` |
 | **OSM hedges** | OSM `barrier=hedge` lines (Geofabrik extract) | LSC (measured height, spawn tile) · DGM1 (ground-clamp); tag / 1.5 m where no LAZ. The bake's laser-scan-only hedges and shrubs are not shipped (🗃️ in the ledger) | `low-vegetation-layer.ts`; baked by `pipeline/bake/lowveg.py` |
@@ -207,6 +208,7 @@ flowchart LR
     bCAN["canopy.py"]
     bNDVI["ndvi.py"]
     bROOF["roof_colour.py"]
+    bOSMB["osm_buildings.py"]
     bLAMP["lamps.py"]
     bMON["monuments.py"]
     bFURN["furniture.py"]
@@ -224,6 +226,7 @@ flowchart LR
     dCAN["canopy"]
     dNDVI["ndvi PNG"]
     dROOF["roofcolor JSON"]
+    dOSMB["osmbuild JSON"]
     dLAMP["lamps"]
     dMON["monuments"]
     dFURN["furniture"]
@@ -252,6 +255,8 @@ flowchart LR
   iDOP -.-> bNDVI ==> dNDVI
   iDOP -.-> bROOF
   iCJ ==> bROOF ==> dROOF
+  iOSM ==> bOSMB
+  iCJ ==> bOSMB ==> dOSMB
   iOSM ==> bLAMP
   dCLS ==>|gates| bLAMP
   bLAMP ==> dLAMP
@@ -281,6 +286,7 @@ flowchart LR
   dSTR -. "lowered ground · lifted terraces · the steps (L0)" .-> tTER
   iCJ ==> tCITY
   dROOF -. "roof colour" .-> tCITY
+  dOSMB -. "shop · heritage flags" .-> tCITY
   dCLS ==> tSIDE
   dCAN ==> tSIDE
   dNDVI -.-> tSIDE

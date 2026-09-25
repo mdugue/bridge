@@ -113,6 +113,7 @@ enthält je Kachel:
 | | `rail_<Kachel>.geojson`, `railarea_<Kachel>.geojson` | Gleislinien mit Gleiszahl; verschmolzene Schotterflächen | wenige kB |
 | | `bridge_<Kachel>.geojson` | Brückendeck-Umrisse mit Höhe je Ecke, Art und Tragwerk | wenige kB |
 | | `platform_<Kachel>.geojson` | Bahnsteige | wenige kB |
+| | `osmbuild_<Kachel>.json` | je Gebäude: Laden oder Café im Erdgeschoss, Baudenkmal | 15–40 kB |
 | `data/dop/` | `roofcolor_<Kachel>.json` | eine Farbe je Gebäude, aus dem Luftbild abgetastet | 0,2 MB |
 
 Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
@@ -128,6 +129,7 @@ Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
 | Bäume | Basis-DLM + DOM1 + DGM1 | Baumpunkte, Heckenreihen | — | wie eingecheckt |
 | Grün | DOP | das NDVI-PNG | — | wie eingecheckt |
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
+| Ladenfronten, Baudenkmale | OpenStreetMap + LoD2 | die Tabelle je Gebäude | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
 | Denkmäler und Brunnen | Basis-DLM (Namen, Lage) + OpenStreetMap (Becken) | die GeoJSON-Dateien | — | wie eingecheckt |
 | Lampen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
 | Mauern, Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden an und unter ihnen geformt, Mauern und Stufen Teil des Netzes | im Geländenetz |
@@ -228,7 +230,7 @@ und Schatten und der gesamte Nachbearbeitungs-Look.
 | Neues Gebäudemodell | nach CityJSON umwandeln, in `data/cityjson/` ersetzen; das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
 | Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps`, `furniture` und `rail` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
 | Neue Luftbilder | die Bakes `ndvi` und `roof-colour` neu ausführen | die Dachfarben werden beim nächsten Build ins Netz eingearbeitet |
-| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `furniture`, `monuments`, `walls`, `stairs` und `rail` neu ausführen | — |
+| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs` und `rail` neu ausführen | — |
 | Andere Bodenfarben | die eine Palette im Code ändern | nichts neu zu backen: Der Browser malt die Farben |
 | Eine neue Kachel | Gelände- und Gebäudemodell von Hand laden (das Gebäudemodell nach CityJSON umgewandelt) und beide einchecken; die Kachel in die Standort-Konfiguration `sites/dresden.ts` eintragen; `bun run bake --ingest` holt den Rest und führt alle sieben Bakes aus | der Build nimmt sie ins Tileset auf und veröffentlicht sie |
 

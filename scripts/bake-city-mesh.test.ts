@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { CityJsonDocument } from "../lib/city/types";
 import { bakeCityMesh } from "./bake-city-mesh";
+import { cityMesh } from "./bake-tiles";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
 function box(first: number) {
@@ -92,4 +93,18 @@ test("a BuildingPart inherits its Building's function: glow and tint", () => {
   // Heights stay the part's own: 9 m of box, not the building's.
   expect(part.eaveH).toBeCloseTo(9, 2);
   expect(house.eaveH).toBeCloseTo(12, 2);
+  // Without an OSM LUT nothing is flagged.
+  expect(baked.objects.map((o) => o.flags)).toEqual([0, 0, 0]);
+});
+
+test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
+  const baked = bakeCityMesh("t", fixture(), undefined, null, {
+    "shop-part": { shop: 1 },
+    house: { heritage: 1, shop: 1 },
+  });
+  expect(baked.objects.map((o) => o.flags)).toEqual([0, 1, 3]);
+  // ...and the glTF property table carries them as a UINT8 column.
+  const flags = cityMesh(baked).input.table?.properties.flags;
+  expect(flags?.componentType).toBe("UINT8");
+  expect([...(flags?.values ?? [])]).toEqual([0, 1, 3]);
 });

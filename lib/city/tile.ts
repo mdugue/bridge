@@ -24,13 +24,16 @@ export function cityJsonFile(tile: string): string {
   return `lod2_${tile}.city.json`;
 }
 
-/** The committed inputs of the building bake (CityJSON + DOP roof LUT). */
+/** The committed inputs of the building bake (CityJSON + DOP roof LUT +
+ *  the OSM facts per object). */
 export function cityMeshSourceFiles(tile: string): {
   city: string;
+  osmBuild: string;
   roofColor: string;
 } {
   return {
     city: `data/cityjson/${cityJsonFile(tile)}`,
+    osmBuild: `data/dlm/osmbuild_${tile}.json`,
     roofColor: `data/dop/roofcolor_${tile}.json`,
   };
 }

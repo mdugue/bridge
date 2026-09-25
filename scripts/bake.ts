@@ -7,7 +7,8 @@
  *   bun run bake --ingest             fetch the raw inputs first (the site's
  *                                     ingest adapter, e.g. GeoSN for Saxony)
  *   bun run bake --step canopy        one step (landcover, canopy, trees,
- *                                     ndvi, roof-colour, lamps, monuments,
+ *                                     ndvi, roof-colour, osm-buildings,
+ *                                     lamps, monuments,
  *                                     furniture, walls, stairs, rail,
  *                                     surface, edges, sport, lowveg,
  *                                     islands)

@@ -200,10 +200,73 @@ function addClayDetail(
           "totalEmissiveRadiance += clayGlow * clayWall * vec3(1.0, 0.82, 0.5) * 0.5;",
         ].join("\n")
       );
+    addOsmFacade(shader);
     if (heightFog) {
       injectHeightFog(shader, heightFog);
     }
   };
+}
+
+/**
+ * What OSM knows about a building (the `flags` float of its third texel,
+ * lib/city/city-mesh.ts: shop 1, heritage 2), layered onto the clay after
+ * `addClayDetail` has written its chunks — it reuses that block's locals
+ * (`clayWall`, `clayH`, `vClayBuild`) and uniforms, and adds no slider:
+ *  - Ladenlicht: a warm wash on a shop's ground floor at dusk, under the
+ *    first storey line with a soft top edge, walls only, on the dusk-glow
+ *    slider × nightFactor. A low-frequency hash along the facade (≈3.5 m
+ *    cells) keeps a long front from reading as one strip. No window
+ *    structure: the procedural window grid is a recorded veto.
+ *  - Denkmal: a barely-there warm lift of a listed facade (on the
+ *    Farbvariation slider) and a finer second cornice line under the eave
+ *    (on the Traufkante slider).
+ * Strengths are conservative defaults, not yet judged on a real GPU.
+ */
+function addOsmFacade(shader: {
+  fragmentShader: string;
+  vertexShader: string;
+}): void {
+  shader.vertexShader = shader.vertexShader
+    .replace(
+      "varying float vClayRough;",
+      "varying float vClayRough;\nvarying float vClayFlags;"
+    )
+    .replace(
+      "vClayRough = clayC.z;",
+      "vClayRough = clayC.z;\nvClayFlags = clayC.w;"
+    );
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      "varying float vClayRough;",
+      "varying float vClayRough;\nvarying float vClayFlags;"
+    )
+    .replace(
+      "#include <color_fragment>",
+      [
+        "#include <color_fragment>",
+        "float clayFlags = floor(vClayFlags + 0.5);",
+        "float clayShop = mod(clayFlags, 2.0);",
+        "float clayListed = mod(floor(clayFlags / 2.0), 2.0);",
+        "diffuseColor.rgb *= 1.0 + clayListed * uTint * clayWall * vec3(0.035, 0.012, -0.012);",
+        "float clayCornice = 1.0 - min(abs(clayH - (vClayBuild.z - 0.45)) / max(fwidth(clayH), 1e-4), 1.0);",
+        "diffuseColor.rgb *= 1.0 - clayCornice * clayListed * step(2.0, vClayBuild.z) * uEave * clayWall * 0.35;",
+      ].join("\n")
+    )
+    .replace(
+      "#include <emissivemap_fragment>",
+      [
+        "#include <emissivemap_fragment>",
+        "float clayFloor = 1.0 - smoothstep(0.7, 1.0, clayH / max(vClayBuild.y, 0.5));",
+        "vec2 clayAlong = normalize(vec2(-vClayWN.z, vClayWN.x) + 1e-5);",
+        "float claySeg = dot(vClayWP.xz, clayAlong) / 3.5;",
+        "float clayCell = floor(claySeg);",
+        "float clayN0 = fract(sin(clayCell * 12.9898) * 43758.5453);",
+        "float clayN1 = fract(sin((clayCell + 1.0) * 12.9898) * 43758.5453);",
+        "float clayLit = mix(0.45, 1.0, mix(clayN0, clayN1, smoothstep(0.0, 1.0, fract(claySeg))));",
+        "float clayShopGlow = clayShop * clayFloor * clayWall * clayLit * uDuskGlow * uNight;",
+        "totalEmissiveRadiance += clayShopGlow * vec3(1.0, 0.78, 0.45) * 0.4;",
+      ].join("\n")
+    );
 }
 
 /** The shared clay state, created once per app instance. `night` is a

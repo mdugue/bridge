@@ -207,7 +207,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-dusk-glow",
     label: "Abendlicht",
     description:
-      "Warmes Licht in öffentlichen und gewerblichen Bauten zur Dämmerung",
+      "Warmes Licht in öffentlichen Bauten und Ladenfronten zur Dämmerung",
     group: "buildings",
     initial: 0.5,
     snapshotKey: "duskGlowPct",

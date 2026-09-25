@@ -325,6 +325,33 @@ visual-variable codebook is in
   338 commerce/public/special buildings were dark at dusk (646 / 177 /
   412 / 447 on `33410_5656` / `33410_5658` / `33412_5656` /
   `33412_5658`). Plan 027 phase 0.
+- **Shop fronts at dusk** (*Abendlicht*) — OSM `shop=*` and the places to
+  eat and drink (`amenity=cafe/restaurant/bar/pub/fast_food/ice_cream/
+  biergarten`) on the ground floor (no `level`, or a list with 0), joined to
+  the LoD2 footprints by `pipeline/bake/osm_buildings.py`: the footprint a
+  point lies in, else the nearest within 3 m (entrances sit on the facade
+  line); an OSM building outline carrying one marks the objects it covers
+  ≥ 50 %. The bit rides in the property table's `flags` column (band 2's
+  free float); the clay shader lays a warm wash under the first storey line
+  (soft top edge, walls only, a ≈3.5 m hash along the facade so a long
+  front is not one strip) on the dusk-glow slider × `nightFactor`. No window
+  structure (the grid is a recorded veto, 🗃️ below). 1 555 of 1 855 ground-
+  floor points placed (per-tile sums); 264–323 objects with a shop per
+  tile, 1 188 in all. STOP check:
+  8.2 % of the placed points (2 of a seeded 20) land in a footprint more
+  than 20 m from any street centreline (a courtyard building) — under the
+  plan's 20 %, so the join stays containment-first. Strength 0.4, **not
+  yet judged on a real GPU** (plan 019). Plan 027 phase 1.
+- **Listed facades** (*Farbvariation*, *Traufkante*) — OSM building
+  outlines with `heritage=*` (167 touch the four tiles) mark the LoD2 objects
+  they cover ≥ 50 % (842 objects: 478 / 28 / 139 / 197 on `33410_5656` /
+  `33410_5658` / `33412_5656` / `33412_5658` — the Zwinger, the Schloss and
+  the Altstadt blocks are many parts each). A barely-there warm lift of the
+  wall tint (+3.5 % red at full *Farbvariation*) and a finer second cornice
+  line 0.45 m under the eave. The official list (LfD Sachsen,
+  *Kulturdenkmale_Flaeche*) is reachable only as a WMS here: a possible
+  second source. Not yet judged on a real GPU — off if it reads as
+  highlighting. Plan 027 phase 2.
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
@@ -831,8 +858,8 @@ research that produced them):
 
 13. **The 2026-09-25 batch** — each with its own plan in
     [plans/](./plans/README.md): trams with contact wire (024), trees by
-    species and season (025), road markings (026), shop glow / heritage /
-    era from OSM on the buildings (027), allotments, orchards and
+    species and season (025), road markings (026), shop glow and
+    heritage from OSM on the buildings (027: ✅ above; the era is 🗃️), allotments, orchards and
     vineyards (028), fences and gates (029), more street furniture (030),
     Elbe landing stages, groynes and ferries (031), street names (032),
     sky-view factor and a baked horizon map (033), small structures from
@@ -845,6 +872,7 @@ research that produced them):
 | Idea | Why rejected | Caveat |
 |---|---|---|
 | **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
+| **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four tiles (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
 | **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |

@@ -38,6 +38,7 @@ import { basename, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
+import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
   KerbFeature,
   StairFeature,
@@ -259,7 +260,10 @@ function parseCity(tile: string): BakedCityMesh {
   const roofLut = existsSync(at(src.roofColor))
     ? readJson<{ roofs?: RoofColorLut }>(at(src.roofColor)).roofs
     : undefined;
-  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix);
+  const osmLut = existsSync(at(src.osmBuild))
+    ? readJson<{ objects?: OsmBuildingLut }>(at(src.osmBuild)).objects
+    : undefined;
+  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix, osmLut);
   sharedMatrix ??= baked.matrix;
   return baked;
 }
@@ -284,7 +288,7 @@ async function bakeCity(
   tile: string
 ): Promise<{ file: string; footprints: string; maxZ: number }> {
   const src = cityMeshSourceFiles(tile);
-  const inputs = [at(src.city), at(src.roofColor)];
+  const inputs = [at(src.city), at(src.roofColor), at(src.osmBuild)];
   const key = cacheKey(inputs, offset);
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {

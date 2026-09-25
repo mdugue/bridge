@@ -66,6 +66,7 @@ export function readObjectTable(
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
+    flags: new Uint8Array(count),
     glow: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
@@ -78,6 +79,7 @@ export function readObjectTable(
     table.baseZ[i] = Number(row.baseZ);
     table.building[i] = Number(row.building);
     table.eaveH[i] = Number(row.eaveH);
+    table.flags[i] = Number(row.flags);
     table.glow[i] = Number(row.glow);
     table.roof.set(xyz(row.roof), i * 3);
     table.root[i] = Number(row.root);

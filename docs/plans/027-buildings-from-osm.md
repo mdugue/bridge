@@ -16,7 +16,34 @@
 - **Effort**: phase 0 S; 1 M; 2 S–M; 3 S (or rejected)
 - **Risk**: LOW — per-object data, one free float, no new geometry
 - **Planned at**: 2026-09-25
-- **Status**: IN PROGRESS — phase 0 done (attributes through `root`)
+- **Status**: PARTIAL — phases 0–2 built, phase 3 REJECTED; open: the
+  dusk plates on a real GPU (none was available to the executor)
+
+## Outcome (2026-09-25)
+
+- **Phase 0** — `inheritedAttributes` (`lib/city/building-tint.ts`): a
+  part's own value first, its root's as the fallback, for tint, roof palette
+  and glow; heights stay the part's own. 1 682 parts of 338
+  commerce/public/special buildings regain their glow (646 / 177 / 412 /
+  447 per tile). Tests: `building-tint.test.ts`, `bake-city-mesh.test.ts`.
+- **Phases 1–2** — `pipeline/bake/osm_buildings.py` → `data/dlm/
+  osmbuild_<tile>.json`; one `flags` UINT8 column (shop 1 + heritage 2) in
+  band 2's free float; `addOsmFacade` in `visual-style.ts` (no new slider:
+  the shop wash rides *Abendlicht*, the heritage lift *Farbvariation* and
+  *Traufkante*). Objects with a shop: 321 / 264 / 323 / 280; listed: 478 /
+  28 / 139 / 197 (`33410_5656` / `33410_5658` / `33412_5656` /
+  `33412_5658`). City glTF +0.5–0.6 kB per tile (gzipped).
+- **STOP checks** — courtyard: 8.2 % of all placed shop points (2 of a
+  seeded 20) sit in a footprint > 20 m from any street centreline, under the
+  20 % bar, so the join stays "inside, else the nearest footprint within
+  3 m". The window-band / plinth check needs a GPU: the conservative
+  default is a shop-only wash at 0.4 × the dusk glow, no window structure.
+- **Phase 3** — REJECTED: 64 of 8 310 OSM building outlines carry a date
+  (0.8 %); no official dating source is reachable (the LfD Sachsen heritage
+  WMS carries designation and name only, its WFS answers 403; Dresden has no
+  open Kulturdenkmal or Baualter dataset). 🗃️ row in the ledger.
+- Headless (SwiftShader, `?scene=lite`): boots with no shader or console
+  errors.
 
 ## Why this matters
 
