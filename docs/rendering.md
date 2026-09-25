@@ -18,7 +18,7 @@ CRS, [ADR 0026](./adr/0026-one-site-config-per-build.md)) and Z-up. A
 the tileset's frame *is* the recentered data frame, and the renderer turns
 each Y-up glTF into it. That turn cancels the `world` group's, so a tile's
 content root sits, in effect, in the scene's Y-up frame — which is why the
-Y-up dressing (vegetation, lamps, monuments, street furniture, rails) hangs directly under the
+Y-up dressing (vegetation, lamps, monuments, street furniture, rails, trams) hangs directly under the
 fine terrain's content root and leaves with its tile. Mixing the frames up
 applies the rotation twice (the classic "trees shoot skyward" bug).
 
@@ -42,6 +42,7 @@ flowchart TB
   DRESS --> FURN["street furniture<br/>one InstancedMesh per model:<br/>benches, bins, hoops, bollards, shelters"]
   DRESS --> MON["monuments<br/>fountain rims + water, water bells,<br/>measured sculptures, markers"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
+  DRESS --> TRAM["tram layer<br/>rails in their bed, masts (instanced),<br/>one wire ribbon mesh (never casts)"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
 ```
@@ -129,6 +130,10 @@ is the codebook.
 | Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
 | Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
+| Tram track | OSM track line, bed from the class raster (+ NDVI): `street` → polished rail head 2 cm over the road with a dark 4 cm groove inside, no sleepers; `grass` → rails 15 cm up over a 2.6 m strip in the meadow colour; `ballast` → rails 25 cm up over a 2.8 m ballast strip; gauge 1.45 m; `bridge: 1` → on the deck (interpolated along its ramp); none cast | OSM, Basis-DLM, DOP | `tram-layer.ts`, `pipeline/bake/tram.py` |
+| Contact wire | per track 5.6 m over the rail top, sagging 0.15 m (× span / 30 m) between the bake's support stations `s` and the line's ends; near-black, fogged; drawn `max(12 mm, 0.8 px)` wide with alpha = true coverage (≥ 0.25), faded 300 → 450 m; never casts | OSM | `tram-layer.ts` (`wireMesh`), `lib/city/tram.ts` |
+| Span wire / arm | a mast pair across the tracks (anchors 7 m up), facade rosettes (6.5 m), lifted to clear the wires by 0.5 m, a hanger to each wire; a cantilever arm 35 cm over the wire with a stay — the same wire ribbon | OSM (masts, building outlines) | `tram-layer.ts` (`addSpan`, `addArm`) |
+| Catenary mast | 7.5 m tapered steel pole (green-grey), instanced, casts | OSM `power=catenary_mast` | `tram-layer.ts` (`buildMasts`) |
 | Wall ribbon | line + `h`, base on every tile's shaped fine ground, top on the high shelf — baked into the fine terrain glTF | OSM | `lib/city/walls.ts` at build, `wall-layer.ts` (material) |
 | Raised terrace | a `layer` ≥ 1 OSM area a lifted flight lands on: the ground inside lifted to its level `z` at build | OSM (+ tagged steps) | `lib/city/stairs.ts` `raiseTerraces` |
 | Ground under stairs | flight axis + `w` + landings `z`: under the flight set to 12 cm below the ramp (lifted where the DGM runs below — the walkable ground); beside it, out to `w`/2 + 1.5 cells, only lowered, never across a wall | OSM + DGM1 | `lib/city/stairs.ts` `burnStairs` |

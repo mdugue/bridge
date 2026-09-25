@@ -220,6 +220,39 @@ export interface TerraceFeature {
   properties: { z: number } | null;
 }
 
+/** What a tram track runs in (pipeline/bake/tram.py): the road, a lawn
+ *  (*Rasengleis*), or ballast. */
+export type TramBed = "ballast" | "grass" | "street";
+
+/** The parts of the tram layer: a track, a catenary mast, the wires that
+ *  hold the contact wire (a span between two masts, an arm from one, a span
+ *  between two facades' rosettes) and a stop sign. */
+export type TramKind = "arm" | "mast" | "rosette" | "span" | "stop" | "track";
+
+/**
+ * OSM trams (pipeline/bake/tram.py, ODbL). A `track` is one track's
+ * centreline, cut at the tile edge, with its `bed`, `bridge: 1` on a bridge,
+ * the OSM `layer`, and `s`: the distances (m along the line) where a span or
+ * arm holds its contact wire. A `mast` is a Point; `span`, `rosette` and
+ * `arm` are two-point lines between their anchors (mast or facade; an arm
+ * ends over its track) with `x`, the fractions along a span where it
+ * crosses a track. A `stop` is a Point with the stop's `name` and the
+ * bearing `a` its sign faces.
+ */
+export interface TramFeature {
+  geometry: LineGeometry | PointGeometry;
+  properties: {
+    a?: number;
+    bed?: TramBed;
+    bridge?: number;
+    k: TramKind;
+    layer?: number;
+    name?: string;
+    s?: number[];
+    x?: number[];
+  } | null;
+}
+
 /** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
 export interface RailFeature {
   geometry: LineGeometry;

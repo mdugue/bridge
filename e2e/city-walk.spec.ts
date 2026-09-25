@@ -263,6 +263,9 @@ test.describe("desktop viewer", () => {
     expect(stats.furniture.instances).toBeGreaterThan(500);
     // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
     expect(stats.rail.triangles).toBeGreaterThan(0);
+    // 51 OSM tram tracks (13.4 km), 16 masts and their wires
+    expect(stats.tram.triangles).toBeGreaterThan(0);
+    expect(stats.tram.instances).toBeGreaterThan(0);
     // 292 wall lines
     expect(stats.walls.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);

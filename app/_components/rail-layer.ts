@@ -90,7 +90,11 @@ const PLATFORM_H = 0.55; // station platform height above ground (m)
 const ARCH_SPAN_M = 26; // target span between arch piers (m)
 const ARCH_MIN_RISE = 2.5; // min deck clearance to bother arching (else box piers)
 
-const COLORS = {
+/** The heavy rails ride only rail decks (a road bridge over a railway is
+ *  not what the train runs on). */
+const RAIL_DECKS = ["rail"] as const;
+
+export const COLORS = {
   ballast: 0x9a_8f_85, // warm grey-brown crushed stone
   rail: 0x4a_4a_50, // dark weathered steel
   deckStone: 0xc6_c0_b4, // pale warm concrete/stone
@@ -100,12 +104,12 @@ const COLORS = {
 };
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
-interface Mesh3 {
+export interface Mesh3 {
   nrm: number[];
   pos: number[];
 }
 
-function mesh3(): Mesh3 {
+export function mesh3(): Mesh3 {
   return { pos: [], nrm: [] };
 }
 
@@ -360,19 +364,31 @@ function addColumn(
   );
 }
 
-interface Pt {
+export interface Pt {
   x: number;
   y: number;
   z: number;
 }
 
-/** A rail-bridge deck for lifting rails onto it (ride the deck, no ballast). */
-interface DeckPoly {
-  deckZ: number;
+/**
+ * A bridge deck for lifting what rides on it: the heavy rails onto rail
+ * decks, the trams (tram-layer.ts) onto any deck their OSM way says is a
+ * bridge. `profile` is the deck height along the deck's long axis (the bake
+ * ramps it between the abutments, rail.py `deck_profile`), so a point is
+ * lifted onto the deck's height there, not onto its mean.
+ */
+export interface DeckPoly {
+  /** long-axis origin and direction (unnormalised) */
+  a: { x: number; z: number };
+  ax: number;
+  az: number;
+  kind: string;
   maxX: number;
   maxZ: number;
   minX: number;
   minZ: number;
+  /** (t along the long axis, deck top) per ring vertex, sorted by t */
+  profile: { t: number; y: number }[];
   ring: { x: number; z: number }[];
 }
 
@@ -394,17 +410,101 @@ function pointInRing(
   return inside;
 }
 
-/** Returns the deck Y to lift a rail point onto, or null if not on a rail deck. */
-function deckLift(decks: DeckPoly[], x: number, z: number): number | null {
+/** The deck top along its long axis at axis position t (0..1), linear
+ *  between the ring vertices' own heights. */
+function profileAt(profile: { t: number; y: number }[], t: number): number {
+  const first = profile[0];
+  const last = profile.at(-1) ?? first;
+  if (t <= first.t) {
+    return first.y;
+  }
+  if (t >= last.t) {
+    return last.y;
+  }
+  for (let i = 1; i < profile.length; i++) {
+    const b = profile[i];
+    if (t <= b.t) {
+      const a = profile[i - 1];
+      const f = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
+      return a.y + (b.y - a.y) * f;
+    }
+  }
+  return last.y;
+}
+
+/**
+ * The deck Y to lift a point onto, or null off every deck. `kinds` limits
+ * the decks considered (the heavy rails ride only rail decks).
+ */
+export function deckLift(
+  decks: DeckPoly[],
+  x: number,
+  z: number,
+  kinds?: readonly string[]
+): number | null {
   for (const d of decks) {
     if (x < d.minX || x > d.maxX || z < d.minZ || z > d.maxZ) {
       continue;
     }
+    if (kinds && !kinds.includes(d.kind)) {
+      continue;
+    }
     if (pointInRing(d.ring, x, z)) {
-      return d.deckZ;
+      const l2 = d.ax * d.ax + d.az * d.az;
+      const t = l2 > 0 ? ((x - d.a.x) * d.ax + (z - d.a.z) * d.az) / l2 : 0;
+      return profileAt(d.profile, t);
     }
   }
   return null;
+}
+
+/** One deck's lift entry from its world ring and per-vertex deck tops. */
+function deckPoly(
+  pts: { x: number; z: number }[],
+  topY: number[],
+  kind: string
+): DeckPoly {
+  const { a, b } = longAxis(pts);
+  const ax = b.x - a.x;
+  const az = b.z - a.z;
+  const l2 = ax * ax + az * az;
+  let minX = Number.POSITIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  const profile = pts.map((p, i) => {
+    minX = Math.min(minX, p.x);
+    minZ = Math.min(minZ, p.z);
+    maxX = Math.max(maxX, p.x);
+    maxZ = Math.max(maxZ, p.z);
+    const t = l2 > 0 ? ((p.x - a.x) * ax + (p.z - a.z) * az) / l2 : 0;
+    return { t, y: topY[i] };
+  });
+  profile.sort((p, q) => p.t - q.t);
+  return { a, ax, az, kind, minX, minZ, maxX, maxZ, profile, ring: pts };
+}
+
+/**
+ * The lift table of every bridge deck (all kinds), from the same baked
+ * features the decks are built from. Shared with the tram layer.
+ */
+export function buildDeckTable(
+  features: BridgeFeature[],
+  offset: { cx: number; cy: number }
+): DeckPoly[] {
+  const decks: DeckPoly[] = [];
+  for (const f of features) {
+    if (f.geometry?.type !== "Polygon" || !f.geometry.coordinates[0]) {
+      continue;
+    }
+    const ring = ringToWorld(f.geometry.coordinates[0], offset);
+    const { deck, kind } = bridgeProps(f);
+    if (ring.pts.length < 3 || deck.length < ring.pts.length) {
+      continue;
+    }
+    decks.push(deckPoly(ring.pts, deck.slice(0, ring.pts.length), kind));
+  }
+  return decks;
 }
 
 /** Per-vertex top elevations for a ring, clamped to terrain (+raise), with a
@@ -449,29 +549,38 @@ function tangentsXZ(pts: Pt[]): Vector2[] {
 }
 
 /** A single rail: a thin top ribbon + two vertical webs along a run of points. */
-function addRail(acc: Mesh3, pts: Pt[], lateral: number): void {
+export function addRail(acc: Mesh3, pts: Pt[], lateral: number): void {
+  addRibbon(acc, pts, lateral, RAIL_HALF, RAIL_WEB);
+}
+
+/**
+ * A ribbon of half-width `half` offset `lateral` from a run of points: a
+ * top face and a vertical web of depth `web` down each side (a rail, a
+ * groove, a track bed; no webs at 0). Shared with the tram layer.
+ */
+export function addRibbon(
+  acc: Mesh3,
+  pts: Pt[],
+  lateral: number,
+  half: number,
+  web: number
+): void {
   if (pts.length < 2) {
     return;
   }
   const tan = tangentsXZ(pts);
-  const left = pts.map((p, i) => {
-    const nx = -tan[i].y;
-    const nz = tan[i].x;
-    return {
-      x: p.x + nx * (lateral + RAIL_HALF),
-      y: p.y,
-      z: p.z + nz * (lateral + RAIL_HALF),
-    };
-  });
-  const right = pts.map((p, i) => {
-    const nx = -tan[i].y;
-    const nz = tan[i].x;
-    return {
-      x: p.x + nx * (lateral - RAIL_HALF),
-      y: p.y,
-      z: p.z + nz * (lateral - RAIL_HALF),
-    };
-  });
+  const side = (sign: number) =>
+    pts.map((p, i) => {
+      const nx = -tan[i].y;
+      const nz = tan[i].x;
+      return {
+        x: p.x + nx * (lateral + sign * half),
+        y: p.y,
+        z: p.z + nz * (lateral + sign * half),
+      };
+    });
+  const left = side(1);
+  const right = side(-1);
   for (let i = 0; i < pts.length - 1; i++) {
     // top
     quad(
@@ -482,6 +591,9 @@ function addRail(acc: Mesh3, pts: Pt[], lateral: number): void {
       [left[i + 1].x, left[i + 1].y, left[i + 1].z],
       [0, 1, 0]
     );
+    if (web <= 0) {
+      continue;
+    }
     // web on each side (outward normal via the tangent perpendicular)
     const nx = -tan[i].y;
     const nz = tan[i].x;
@@ -489,22 +601,22 @@ function addRail(acc: Mesh3, pts: Pt[], lateral: number): void {
       acc,
       [left[i].x, left[i].y, left[i].z],
       [left[i + 1].x, left[i + 1].y, left[i + 1].z],
-      [left[i + 1].x, left[i + 1].y - RAIL_WEB, left[i + 1].z],
-      [left[i].x, left[i].y - RAIL_WEB, left[i].z],
+      [left[i + 1].x, left[i + 1].y - web, left[i + 1].z],
+      [left[i].x, left[i].y - web, left[i].z],
       [nx, 0, nz]
     );
     quad(
       acc,
       [right[i].x, right[i].y, right[i].z],
       [right[i + 1].x, right[i + 1].y, right[i + 1].z],
-      [right[i + 1].x, right[i + 1].y - RAIL_WEB, right[i + 1].z],
-      [right[i].x, right[i].y - RAIL_WEB, right[i].z],
+      [right[i + 1].x, right[i + 1].y - web, right[i + 1].z],
+      [right[i].x, right[i].y - web, right[i].z],
       [-nx, 0, -nz]
     );
   }
 }
 
-function meshFrom(
+export function meshFrom(
   acc: Mesh3,
   color: number,
   heightFog: HeightFogUniforms | undefined,
@@ -539,11 +651,8 @@ function bridgeProps(f: BridgeFeature): {
   };
 }
 
-/** Builds the bridge decks and the rail-deck lift table. */
-function buildBridges(
-  features: BridgeFeature[],
-  ctx: RailContext
-): { decks: DeckPoly[]; meshes: Mesh[] } {
+/** Builds the bridge decks (slab, parapets, piers or arches). */
+function buildBridges(features: BridgeFeature[], ctx: RailContext): Mesh[] {
   const tops: Record<string, Mesh3> = {
     rail: mesh3(),
     road: mesh3(),
@@ -551,7 +660,6 @@ function buildBridges(
     other: mesh3(),
   };
   const stone = mesh3(); // fascia + parapets + piers
-  const decks: DeckPoly[] = [];
 
   for (const f of features) {
     if (f.geometry?.type !== "Polygon" || !f.geometry.coordinates[0]) {
@@ -571,28 +679,6 @@ function buildBridges(
       // arches placed their own piers
     } else {
       addPiers(stone, ring, topY, ctx);
-    }
-    if (kind === "rail") {
-      let minX = Number.POSITIVE_INFINITY;
-      let minZ = Number.POSITIVE_INFINITY;
-      let maxX = Number.NEGATIVE_INFINITY;
-      let maxZ = Number.NEGATIVE_INFINITY;
-      let sum = 0;
-      for (let i = 0; i < ring.pts.length; i++) {
-        minX = Math.min(minX, ring.pts[i].x);
-        minZ = Math.min(minZ, ring.pts[i].z);
-        maxX = Math.max(maxX, ring.pts[i].x);
-        maxZ = Math.max(maxZ, ring.pts[i].z);
-        sum += topY[i];
-      }
-      decks.push({
-        ring: ring.pts,
-        deckZ: sum / ring.pts.length,
-        minX,
-        minZ,
-        maxX,
-        maxZ,
-      });
     }
   }
 
@@ -617,7 +703,7 @@ function buildBridges(
   if (stoneMesh) {
     meshes.push(stoneMesh);
   }
-  return { meshes, decks };
+  return meshes;
 }
 
 /** The two farthest-apart ring vertices (the deck's abutment ends) + their span. */
@@ -830,7 +916,7 @@ function buildRails(
     for (const [ex, ey] of dense) {
       const ground = ctx.heightAt(ex, ey);
       const w = epsgToWorld(ex, ey, ctx.offset);
-      const lift = deckLift(decks, w.x, w.z);
+      const lift = deckLift(decks, w.x, w.z, RAIL_DECKS);
       if (lift !== null) {
         run.push({ x: w.x, y: lift + RAIL_DECK_RAISE, z: w.z });
       } else if (ground === null) {
@@ -889,7 +975,8 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   const group = new Group();
   group.name = "rail";
 
-  const { meshes: bridgeMeshes, decks } = buildBridges(features.bridges, ctx);
+  const bridgeMeshes = buildBridges(features.bridges, ctx);
+  const decks = buildDeckTable(features.bridges, ctx.offset);
   // add() with no arguments logs a three error, so guard the spread.
   if (bridgeMeshes.length > 0) {
     group.add(...bridgeMeshes);

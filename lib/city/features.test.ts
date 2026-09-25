@@ -14,6 +14,7 @@ import type {
   RailFeature,
   StairFeature,
   TerraceFeature,
+  TramFeature,
   TreeFeature,
   VegRowFeature,
   WallFeature,
@@ -282,6 +283,40 @@ test.each(cases)(
       expect(Number.isFinite(p?.d)).toBe(true);
       expect(Number.isInteger(p?.a)).toBe(true);
       expect(["d", "e"]).toContain(p?.l ?? "");
+    }
+  }
+);
+
+test.each(cases)(
+  "%s: trams are bedded tracks, masts, support wires and stop signs",
+  (_, a) => {
+    for (const f of load<TramFeature>(a.tram)) {
+      const p = f.properties;
+      const g = f.geometry;
+      expect(["arm", "mast", "rosette", "span", "stop", "track"]).toContain(
+        p?.k ?? ""
+      );
+      if (p?.k === "mast" || p?.k === "stop") {
+        expect(g.type).toBe("Point");
+        expect(isPoint2(g.coordinates)).toBe(true);
+        continue;
+      }
+      expect(g.type).toBe("LineString");
+      expect(isLine(g.coordinates)).toBe(true);
+      if (p?.k === "track") {
+        expect(["ballast", "grass", "street"]).toContain(p.bed ?? "");
+        const s = p.s ?? [];
+        expect(s.every((d, i) => d >= 0 && (i === 0 || d > s[i - 1]))).toBe(
+          true
+        );
+      } else {
+        // Supports run between two anchors.
+        expect(g.coordinates).toHaveLength(2);
+        for (const x of p?.x ?? []) {
+          expect(x).toBeGreaterThanOrEqual(0);
+          expect(x).toBeLessThanOrEqual(1);
+        }
+      }
     }
   }
 );

@@ -18,7 +18,38 @@
 - **Effort**: M (bake S, tracks M, overhead line M, stops S)
 - **Risk**: MED — thin wires alias; bridge decks need road-deck heights
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: IN PROGRESS — phases 1–2 built 2026-09-25 (bake, publish,
+  tracks, bridges, contact wire, masts, span/arm/rosette wires). Built
+  without a real GPU: every plate below is still to be taken; the look
+  and the wire aliasing are unverified (SwiftShader proves only that it
+  compiles and boots clean).
+
+## Implementation notes (2026-09-25)
+
+- **Bed** (measured, BBBike 2026-09-19): street 49.7 km, ballast 8.1 km,
+  grass 2.3 km over the four tiles. Albertplatz (150 m round) 87 % street,
+  8 % ballast, 5 % grass; Hauptstraße 100 % street — the > 10 % STOP was
+  not hit, thresholds as planned.
+- **Masts**: of the 321 `power=catenary_mast`, 167 stand within 15 m of a
+  tram track; the rest are the railway's (the whole 33412_5658 set) and
+  are dropped — the first bake stood 108 railway masts along the Görlitz
+  line with no wire to hold.
+- **Rosettes from OSM outlines, not the LoD2 BVH.** The plan asked for a
+  runtime ray against the city BVH; a dressing cannot count on its (or
+  its neighbour's) buildings being loaded, and a support must not depend
+  on load order. The bake reads the OSM building outlines (the same
+  buildings, ≤ 15 m out, both sides needed) — deterministic and tested.
+- **Deck lift**: the rail layer's lift table now holds every deck kind
+  and interpolates the deck's ramp along its long axis (it was the deck's
+  mean); the heavy rails still ride rail decks only. A tram rides a deck
+  only where its OSM way says `bridge` — a tram under a railway bridge
+  stays on the ground.
+- **Wires**: one ribbon mesh per tile, `max(12 mm, 0.8 px)` wide, alpha =
+  true coverage (≥ 0.25), faded 300 → 450 m (the STOP's fallback is built
+  in from the start); `castShadow = false` on every wire, only the masts
+  cast (the shadow STOP can only be measured on a GPU).
+- Spawn tile (lite census): 7 meshes, 16 mast instances, ≈ 180 k
+  triangles (rails and grooves sampled every 2 m to follow the TIN).
 
 ## Why this matters
 

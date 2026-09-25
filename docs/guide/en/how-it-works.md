@@ -63,6 +63,7 @@ and each is a mix of measured fact and deliberate simplification.
 | **Playgrounds** | The playground's area as a pale sand floor, with its swings, slides, climbing frames, sandpits and seesaws as soft, single-coloured pastel sculptures | **OpenStreetMap** (the outline and each piece of equipment mapped on it) | Real outline and positions; only the equipment that is mapped stands there — many playgrounds are mapped without it and stay empty rather than being filled with invented pieces |
 | **Fountains and monuments** | Fountain basins with still water and translucent water bells; statues, memorial stones and columns | Positions and official names from the Basis-DLM; basin outlines and the smaller fountains from OpenStreetMap; the sculpture's form from the surface model (**DOM1**) | Real positions and outlines. A sculpture is its measured bulk, softened into clay — the right size and silhouette, no detail; where nothing could be measured, an abstract marker. The water bells, their gentle motion and the night lighting are designed. Both surveys were flown while the fountains were drained and their sculptures boxed for winter, so the measured bulk at the Albertplatz is the winter housing |
 | **Railways and bridges** | Tracks, ballast beds, bridge decks with arches or piers, station platforms | Basis-DLM (tracks, bridges), terrain and surface models (deck heights), OpenStreetMap (platforms, whether a bridge is an arch bridge) | Real alignment and deck heights; the structural detail is simplified |
+| **Trams** | Tram tracks in their bed — rails flush in the street, on a lawn or on ballast — the overhead contact wire above each track, the masts and the wires strung across the street that hold it | **OpenStreetMap** (`railway=tram`, `power=catenary_mast`, the building outlines); the bed from the land-use map and the infrared aerial photo | Real track positions and masts. The bed is inferred, not mapped; which masts hold which wire, the wire's sag and the spans between facades in narrow streets (where no mast is mapped) are reconstructed from the geometry. No trams run: there is no vehicle data |
 | **Walls** | The Brühlsche Terrasse and other retaining walls and city walls, cliff edges | OpenStreetMap lines with their tagged heights | Real position, tagged or default height |
 | **Stairs** | Flights of steps such as the one beside the Italienisches Dörfchen or the one from the Schlossplatz up to the Brühlsche Terrasse, as individual steps | OpenStreetMap (`highway=steps`: position, width, step count; without a width a flight spans wall to wall when the slope between climbs); the heights at the foot and the head from the terrain model | Real position and height; step count as tagged or estimated from the height (16 cm a step). The Brühlsche Terrasse stands on casemates and is missing from the terrain model; there the tagged steps set the height, and the terrace area from OpenStreetMap is lifted to it |
 | **Sun, shadows and sky** | Sunlight for any date and time of day; blue hour, golden hour, night | Computed from the calendar, the clock and Dresden's latitude | Astronomically correct sun position; the colours are designed |
@@ -107,7 +108,8 @@ bridge positions and deck heights, tree positions and heights, roof colours,
 meadow greenness.
 
 **Contributed by volunteers (OpenStreetMap):** street lamps, benches and
-other street furniture, playgrounds, station platforms, retaining walls
+other street furniture, playgrounds, station platforms, tram tracks and
+overhead-line masts, retaining walls
 with their heights, the structural type of bridges, what streets and
 pavements are paved with. Completeness varies from street to street.
 
@@ -121,7 +123,8 @@ is real; its lit windows are not).
 
 **Not in the data at all:** windows and doors, facade materials, the
 smaller street furniture (planters, bus-stop poles; traffic and street-name
-signs are mapped too sparsely to show), vehicles, people, vegetation
+signs are mapped too sparsely to show), vehicles (the trams' tracks and
+wires are there, the trams are not), people, vegetation
 smaller than about 3 m, and anything indoors.
 
 ## Things worth knowing before you draw conclusions from the picture

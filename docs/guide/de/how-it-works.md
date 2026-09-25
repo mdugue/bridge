@@ -65,6 +65,7 @@ bewusster Vereinfachung.
 | **Spielplätze** | Die Spielplatzfläche als heller Sandboden, mit ihren Schaukeln, Rutschen, Klettergerüsten, Sandkästen und Wippen als weiche, einfarbige Pastell-Skulpturen | **OpenStreetMap** (der Umriss und jedes darauf eingetragene Gerät) | Echter Umriss und echte Positionen; es steht nur, was eingetragen ist — viele Spielplätze sind ohne Geräte erfasst und bleiben leer, statt mit erfundenen Geräten gefüllt zu werden |
 | **Brunnen und Denkmäler** | Brunnenbecken mit stillem Wasser und durchscheinenden Wasserglocken; Statuen, Gedenksteine und Säulen | Lage und amtliche Namen aus dem Basis-DLM; Beckenumrisse und die kleineren Brunnen aus OpenStreetMap; die Form der Skulptur aus dem Oberflächenmodell (**DOM1**) | Echte Lage und Umrisse. Eine Skulptur ist ihr gemessener Körper, zu Ton geglättet — richtige Größe und Silhouette, keine Details; wo nichts messbar war, eine abstrakte Markierung. Die Wasserglocken, ihre sanfte Bewegung und die Nachtbeleuchtung sind entworfen. Beide Befliegungen fanden statt, als die Brunnen leer und ihre Figuren winterlich eingehaust waren; der gemessene Körper am Albertplatz ist also die Einhausung |
 | **Bahn und Brücken** | Gleise, Schotterbetten, Brückendecks mit Bögen oder Pfeilern, Bahnsteige | Basis-DLM (Gleise, Brücken), Gelände- und Oberflächenmodell (Deckhöhen), OpenStreetMap (Bahnsteige, ob eine Brücke eine Bogenbrücke ist) | Echter Verlauf und echte Deckhöhen; das Tragwerk ist vereinfacht |
+| **Straßenbahn** | Straßenbahngleise in ihrem Bett — Schienen bündig in der Straße, auf Rasen oder auf Schotter —, darüber der Fahrdraht jedes Gleises, die Masten und die über die Straße gespannten Querseile, an denen er hängt | **OpenStreetMap** (`railway=tram`, `power=catenary_mast`, die Gebäudeumrisse); das Gleisbett aus der Landnutzungskarte und dem Infrarot-Luftbild | Echte Gleislage und Masten. Das Gleisbett ist abgeleitet, nicht eingetragen; welcher Mast welchen Draht hält, der Durchhang und die Querseile zwischen den Fassaden enger Straßen (wo kein Mast eingetragen ist) sind aus der Geometrie rekonstruiert. Es fahren keine Bahnen: dafür gibt es keine Daten |
 | **Mauern** | Die Brühlsche Terrasse und andere Stütz- und Stadtmauern, Felskanten | OpenStreetMap-Linien mit ihren eingetragenen Höhen | Echte Lage, eingetragene oder Standardhöhe |
 | **Treppen** | Freitreppen wie die neben dem Italienischen Dörfchen oder die vom Schlossplatz zur Brühlschen Terrasse, als einzelne Stufen | OpenStreetMap (`highway=steps`: Lage, Breite, Stufenzahl; ohne Breitenangabe reicht eine Treppe von Mauer zu Mauer, wenn der Hang dazwischen ansteigt); Höhe von Fuß und Kopf aus dem Geländemodell | Echte Lage und Höhe; Stufenzahl eingetragen oder aus der Höhe geschätzt (16 cm je Stufe). Die Brühlsche Terrasse steht auf Kasematten und fehlt im Geländemodell; dort geben die eingetragenen Stufen die Höhe vor, und die Terrassenfläche aus OpenStreetMap wird auf diese Höhe angehoben |
 | **Sonne, Schatten und Himmel** | Sonnenlicht für beliebiges Datum und Uhrzeit; blaue Stunde, goldene Stunde, Nacht | Aus Kalender, Uhr und Dresdens Breitengrad berechnet | Astronomisch korrekter Sonnenstand; die Farben sind entworfen |
@@ -110,7 +111,8 @@ Brückenlagen und Deckhöhen, Baumpositionen und -höhen, Dachfarben,
 Wiesengrün.
 
 **Von Freiwilligen beigetragen (OpenStreetMap):** Straßenlampen, Bänke
-und andere Stadtmöbel, Spielplätze, Bahnsteige, Stützmauern mit Höhen,
+und andere Stadtmöbel, Spielplätze, Bahnsteige, Straßenbahngleise und
+Oberleitungsmasten, Stützmauern mit Höhen,
 der Tragwerkstyp von Brücken, womit Straßen und Gehwege belegt sind. Die
 Vollständigkeit schwankt von Straße zu Straße.
 
@@ -126,7 +128,8 @@ Gebäude *ist*, stimmt; seine leuchtenden Fenster sind erfunden).
 **Gar nicht in den Daten:** Fenster und Türen, Fassadenmaterialien,
 die kleineren Stadtmöbel (Pflanzkübel, Haltestellenmasten; Verkehrs- und
 Straßennamensschilder sind zu lückenhaft erfasst, um sie zu zeigen),
-Fahrzeuge, Menschen, Bewuchs unter etwa 3 m und
+Fahrzeuge (Gleise und Oberleitung der Straßenbahn sind da, die Bahnen
+nicht), Menschen, Bewuchs unter etwa 3 m und
 alles im Inneren von Gebäuden.
 
 ## Bevor du aus dem Bild Schlüsse ziehst

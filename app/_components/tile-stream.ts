@@ -20,6 +20,7 @@ import type {
   LowVegFeature,
   MonumentFeature,
   RailFeature,
+  TramFeature,
   TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
@@ -50,6 +51,7 @@ import {
 import { dressKerbs } from "./kerb-layer";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
+import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
   buildVegetation,
@@ -79,6 +81,8 @@ export interface TileDressing {
   rail?: Group;
   sport?: SportFixtureLayer;
   tile: string;
+  /** OSM trams: tracks, masts, the overhead line (tram-layer.ts) */
+  tram?: Group;
   vegetation?: VegetationControl;
 }
 
@@ -186,6 +190,7 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.monuments?.group,
     d.furniture,
     d.rail,
+    d.tram,
     d.sport?.group,
   ].filter((part): part is Group => part !== undefined);
 }
@@ -361,6 +366,7 @@ async function buildDressing(
     inventory,
     scanTrees,
     hedges,
+    trams,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -380,6 +386,7 @@ async function buildDressing(
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
     get<CanopyExtraFeature>(d.canopyx ?? ""),
     get<LowVegFeature>(d.lowveg ?? ""),
+    get<TramFeature>(d.tram ?? ""),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -440,8 +447,15 @@ async function buildDressing(
     heightAt: terrain.heightAt,
     heightFog: ctx.heightFog,
   });
+  // Tracks are cut at the tile edge by the bake; they and the span wires
+  // sample the ground over every loaded terrain, like the rails.
+  const tram =
+    trams.length > 0
+      ? buildTram(trams, bridges, { ...ground, heightFog: ctx.heightFog })
+      : undefined;
   return {
     tile,
+    tram,
     vegetation,
     lowVegetation,
     lamps: lampControl,

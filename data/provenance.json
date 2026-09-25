@@ -146,7 +146,8 @@
         "terraces": { "query": "multipolygons on layer >= 1 (no building, man_made, landuse, bridge, railway or public_transport) that a flight the DGM runs flat under climbs onto", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" },
         "furniture": { "query": "amenity in (bench, waste_basket, bicycle_parking, post_box), leisure=picnic_table, barrier=bollard (+ height, material), leisure=playground areas, playground=* equipment (points, ways, areas), highway=bus_stop / public_transport=platform with shelter=yes, amenity=shelter of shelter_type=public_transport; bench ways; every highway line for the bearing", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "surface": { "query": "highway=* lines (surface, width, footway=sidewalk, sidewalk:*:surface, footway:surface) and highway/area:highway/amenity=parking multipolygons with a surface", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
-        "sport": { "query": "leisure in (pitch, track) multipolygons with sport=* and surface=* (nothing indoor, covered or on a roof), and leisure=track lines", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" }
+        "sport": { "query": "leisure in (pitch, track) multipolygons with sport=* and surface=* (nothing indoor, covered or on a roof), and leisure=track lines", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
+        "tram": { "query": "railway=tram lines (bridge, layer); power=catenary_mast points within 15 m of a tram track; building outlines (the facades of the rosette spans); all within 30 m of the tile", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" }
       }
     }
   }

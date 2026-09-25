@@ -20,6 +20,7 @@ from . import (
     sport,
     stairs,
     surface,
+    tram,
     trees,
     walls,
 )
@@ -41,6 +42,9 @@ STEPS = {
     "surface": surface.run,
     "edges": edges.run,
     "sport": sport.run,
+    # After land cover, NDVI and the furniture (the stop signs skip a stop
+    # that already has a shelter).
+    "tram": tram.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,

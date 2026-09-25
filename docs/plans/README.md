@@ -55,7 +55,7 @@ history. Decisions that came out of plans are written up as
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
 | 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
 | 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
-| 024 | Trams: OSM tracks (street, grass, ballast), contact wire, masts, span wires, stop signs | **TODO** | [024-tram-and-catenary.md](./024-tram-and-catenary.md) |
+| 024 | Trams: OSM tracks (street, grass, ballast), contact wire, masts, span wires, stop signs | **IN PROGRESS** — phases 1–2 built (2026-09-25), look unverified on a real GPU | [024-tram-and-catenary.md](./024-tram-and-catenary.md) |
 | 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | **TODO** | [025-trees-by-species-and-season.md](./025-trees-by-species-and-season.md) |
 | 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | **TODO** | [026-road-markings.md](./026-road-markings.md) |
 | 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **TODO** | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |

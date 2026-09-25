@@ -387,6 +387,7 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
     ...(names.trees ? { trees: names.trees } : {}),
     ...(names.lowveg ? { lowveg: names.lowveg } : {}),
     ...(names.canopyx ? { canopyx: names.canopyx } : {}),
+    ...(names.tram ? { tram: names.tram } : {}),
   };
 }
 

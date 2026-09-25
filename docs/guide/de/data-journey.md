@@ -226,9 +226,9 @@ und Schatten und der gesamte Nachbearbeitungs-Look.
 |---|---|---|
 | Neuer Geländestand | GeoTIFF in `data/dgm/` ersetzen; die Bakes `canopy` und `rail` neu ausführen (sie lesen es) | die Geländenetze samt Mauerkanten werden beim nächsten Build neu gebacken |
 | Neues Gebäudemodell | nach CityJSON umwandeln, in `data/cityjson/` ersetzen; das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
-| Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps`, `furniture` und `rail` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
+| Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps`, `furniture`, `rail` und `tram` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
 | Neue Luftbilder | die Bakes `ndvi` und `roof-colour` neu ausführen | die Dachfarben werden beim nächsten Build ins Netz eingearbeitet |
-| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `furniture`, `monuments`, `walls`, `stairs` und `rail` neu ausführen | — |
+| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `furniture`, `monuments`, `walls`, `stairs`, `rail` und `tram` neu ausführen | — |
 | Andere Bodenfarben | die eine Palette im Code ändern | nichts neu zu backen: Der Browser malt die Farben |
 | Eine neue Kachel | Gelände- und Gebäudemodell von Hand laden (das Gebäudemodell nach CityJSON umgewandelt) und beide einchecken; die Kachel in die Standort-Konfiguration `sites/dresden.ts` eintragen; `bun run bake --ingest` holt den Rest und führt alle sieben Bakes aus | der Build nimmt sie ins Tileset auf und veröffentlicht sie |
 

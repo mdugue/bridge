@@ -599,13 +599,17 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   yard tracks can't z-fight. Per-vertex ground-clamp + `BALLAST_RAISE`, short edge
   fascia, `polygonOffset`. The recoloured class-5 splat sits underneath so any gap
   reads as ballast, not seam.
-- **Steel rails** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`; trams
-  `SPW=3000`/`BKT=1201` run in the street, excluded). Short ATKIS fragments are
+- **Steel rails** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`; the
+  DLM carries trams poorly — `SPW=3000`/`BKT=1201` — so they come from OSM,
+  see **Trams** below). Short ATKIS fragments are
   **snap-merged by shared endpoints** (1 m) in the bake (≈91→9 lines/tile); at
   runtime a polyline is **split into runs of valid ground** (never bridged across a
   NoData gap) and each track gets a thin rail pair (`±GAUGE/2`, count from `GLS`)
   with a small web. Draped on terrain; **lifted onto a rail bridge's deck** (point-
-  in-deck test) so they ride the deck with no ballast stacked on top. Railway
+  in-deck test) so they ride the deck with no ballast stacked on top — at the
+  deck's height *there* (the per-vertex deck profile interpolated along the
+  deck's long axis; until plan 024 the deck's mean), from a lift table of
+  every deck kind that the tram layer shares. Railway
   class recoloured dusty-mauve → **ballast warm-grey** (class 5 in
   `lib/city/landcover.ts`).
 - **Bridge decks** — driven by the **complete `ver06_l` (`BWF=1800`) centreline
@@ -630,6 +634,56 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   (`ShapeUtils.triangulateShape`), per-vertex terrain-clamped. The OSM half of the
   blend (Basis-DLM has no platform geometry); absent/empty when the site has
   no `.osm.pbf` extract.
+
+- **Trams** (plan [024](./plans/024-tram-and-catenary.md), phases 1–2) —
+  OSM `railway=tram` (ODbL; 401 ways, 59.6 km in the four tiles, every one
+  `gauge=1450`, `electrified=contact_line`) + `power=catenary_mast`
+  (321 points, **167 of them within 15 m of a tram track** — the rest are
+  the railway's) + the OSM building outlines. `pipeline/bake/tram.py` →
+  `tram_<tile>.geojson`: each track (fragments chained at 1 m, cut at the
+  tile edge) with its **bed** — `street` when ≥ 70 % of its 2 m samples lie
+  on the road class of the committed class raster, `grass` (*Rasengleis*)
+  when most lie on the meadow class or NDVI > 0.3, else `ballast` — and the
+  OSM `bridge`/`layer` (per-tile numbers in the table below); at the Albertplatz
+  (150 m round) 87 % street / 5 % grass, the Hauptstraße 100 % street — the
+  plan's > 10 % STOP was not hit. The supports are decided on the tracks
+  and masts within 30 m around the tile (so a seam support is the same in
+  both tiles): a **span** from a mast across the tracks to the nearest mast
+  on the other side (≤ 28 m, each mast in one pair, shortest first), else
+  an **arm** from the mast over the nearest track (≤ 10 m; over a parallel
+  second track too); where a track is 45 m from any mapped mast, a
+  **rosette** span every 30 m between the **facades either side** (the OSM
+  building outlines, ≤ 15 m out; none when either side has none — the plan
+  asked for a ray against the LoD2 BVH at runtime; the bake reads the OSM
+  outlines instead, because a dressing cannot count on its neighbour's
+  buildings being loaded, and the result must not depend on load order).
+  Each track carries `s`, the distances at which a span or arm holds its
+  wire. Runtime `app/_components/tram-layer.ts`: two rails per track at
+  ±0.725 m with the rail layer's profile (`addRibbon`) — **street**: a
+  polished head flush with the road (+2 cm) and a dark 4 cm groove inside
+  each, no sleepers; **grass**: rails +15 cm over a 2.6 m meadow strip;
+  **ballast**: rails +25 cm over a 2.8 m ballast strip. A track the OSM
+  way puts on a bridge rides the deck (the shared lift table, any deck kind
+  — gated on the tag, so a tram under a railway bridge stays on the
+  ground). **Contact wire** 5.6 m over the rail top, sagging 0.15 m between
+  the supports (`lib/city/tram.ts` `wireStations`/`wireDrop`: both line
+  ends are stations, so the wire meets its neighbour tile at the same
+  height; gaps > 30 m get evenly spaced virtual stations); span wires 7 m
+  up the masts / 6.5 m at the rosettes, lifted to clear the wires they hold
+  by 0.5 m, with a hanger down to each; arms 35 cm over the wire with a
+  stay. All wires are one **camera-facing ribbon mesh** per tile whose
+  width is `max(true width, 0.8 px)` in the vertex shader, its alpha the
+  true coverage (≥ 0.25) and a fade from 300 to 450 m — no `Line2`, no MSAA,
+  no new dependency; wires never cast (`castShadow = false`). **Masts**: a
+  7.5 m steel pole, instanced, casting. Look unverified on a real GPU (the
+  plan's plates at Postplatz/Augustusbrücke, dusk and 150 m fly are open).
+
+  | tile | tracks | street km | grass km | ballast km | masts | spans | rosettes | arms |
+  |---|---|---|---|---|---|---|---|---|
+  | 33410_5656 | 95 | 20.53 | 0.76 | 4.73 | 118 | 51 | 28 | 13 |
+  | 33410_5658 | 20 | 12.17 | 0.54 | 0.25 | 33 | 13 | 36 | 6 |
+  | 33412_5656 | 51 | 11.34 | 0.98 | 1.90 | 16 | 7 | 27 | 2 |
+  | 33412_5658 | 9 | 5.66 | 0 | 1.19 | 0 | 0 | 17 | 0 |
 
 ### Retaining / city walls
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|

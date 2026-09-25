@@ -63,6 +63,7 @@ export type TileArtifactKind =
   | "edges"
   | "sport"
   | "sportTable"
+  | "tram"
   | "trees"
   | "vegrows";
 
@@ -109,6 +110,9 @@ export function tileArtifacts(
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
+    // Optional: the OSM trams — tracks, catenary supports, stop signs
+    // (pipeline/bake/tram.py); without it the tile has no trams.
+    tram: dlm(`tram_${tile}.geojson`),
     // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
     // hedges and the laser-scan crowns outside the canopy mask
     // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
