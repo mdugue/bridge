@@ -21,6 +21,7 @@ import type {
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
 import { onRelief } from "@/lib/city/monuments";
+import { type SportTable, sportFixtures } from "@/lib/city/sport";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -29,11 +30,12 @@ import {
   type TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
-import { fetchFeatures } from "./fetch-optional";
+import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { buildRail } from "./rail-layer";
+import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
   dressTerrain,
   type GroundUniforms,
@@ -62,6 +64,7 @@ export interface TileDressing {
   lamps?: LampControl;
   monuments?: MonumentLayer;
   rail?: Group;
+  sport?: SportFixtureLayer;
   tile: string;
   vegetation?: VegetationControl;
 }
@@ -168,6 +171,7 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.lamps?.group,
     d.monuments?.group,
     d.rail,
+    d.sport?.group,
   ].filter((part): part is Group => part !== undefined);
 }
 
@@ -210,6 +214,7 @@ function withinCompileWait(done: Promise<void>): Promise<void> {
 function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
   d.monuments?.dispose();
+  d.sport?.dispose();
   for (const part of dressingParts(d)) {
     part.removeFromParent();
     disposeObject3D(part);
@@ -231,6 +236,33 @@ function offMonuments(
   return canopy.filter((f) => {
     const [x, y] = f.geometry.coordinates;
     return !onRelief(reliefs, x, y);
+  });
+}
+
+/** The goals, posts and nets of the grounds this tile owns (a ground on a
+ *  seam is in both tiles' tables; its centre decides). */
+async function buildSport(
+  terrain: TerrainLayer,
+  file: string | undefined,
+  ctx: TileStreamContext,
+  url: (file: string) => string
+): Promise<SportFixtureLayer | undefined> {
+  const table = file ? await fetchOptionalJson<SportTable>(url(file)) : null;
+  if (!table?.grounds?.length) {
+    return undefined;
+  }
+  const [minX, , , maxY] = terrain.bounds;
+  const extent = ctx.tileBounds(terrain.tile);
+  const own = extent
+    ? table.grounds.filter(([cx, cy]) =>
+        ownsPoint(extent, minX + cx, maxY + cy)
+      )
+    : table.grounds;
+  return buildSportFixtures(sportFixtures({ grounds: own }), {
+    offset: ctx.offset,
+    heightAt: terrain.heightAt,
+    origin: { x: minX, y: maxY },
+    heightFog: ctx.heightFog,
   });
 }
 
@@ -257,6 +289,7 @@ async function buildDressing(
     bridges,
     ballast,
     platforms,
+    sport,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -269,6 +302,7 @@ async function buildDressing(
     get<BridgeFeature>(d.bridge),
     get<AreaFeature>(d.railarea),
     get<AreaFeature>(d.platform),
+    buildSport(terrain, extras.sportTable, ctx, url),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -317,6 +351,7 @@ async function buildDressing(
     lamps: lampControl,
     monuments: monumentLayer,
     rail,
+    sport,
   };
 }
 

@@ -483,6 +483,9 @@ async function bakeTerrain(
     ...(names.ndvi ? { ndvi: names.ndvi } : {}),
     ...(level === 0 && names.surface ? { surface: names.surface } : {}),
     ...(level === 0 && names.edges ? { edges: names.edges } : {}),
+    ...(names.sport && names.sportTable
+      ? { sport: names.sport, sportTable: names.sportTable }
+      : {}),
     ...(level === 0 ? { dressing: dressingOf(names) } : {}),
   };
   const key = cacheKey(inputs, offset, described);

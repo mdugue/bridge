@@ -116,6 +116,36 @@ visual-variable codebook is in
   Dresden: ~600 surface car parks, ~530 mapped bays, ~780 aisles, street
   parking on ~1 000 roads. No cars (not in any dataset). HUD *Bodendetail*.
   `ground-detail.ts`.
+- **Sports grounds** (*Sportplätze*) — OSM `leisure=pitch` / `track`
+  (areas, and tracks mapped as a line) and the sandpits of
+  `leisure=playground` (only with a `surface`), nothing `indoor`, `covered`
+  or on a roof → `pipeline/bake/sport.py`: a table of grounds
+  (`sport_<tile>.json`, one row each: centre, long axis, size, surface,
+  line scheme, shape) and a 2048² index raster (`sport_<tile>.png`, four
+  bytes per texel: the row on top, a second row reaching it, the exact
+  outline bit). The surface is the `surface` tag, else the sport's usual
+  one (football grass, tennis clay, basketball hard court, athletics
+  tartan, beach volleyball sand); the lines are the sport's (the first of a
+  `;` list): football, tennis, basketball, volleyball, a handball / multi-
+  sport court, running lanes, a chess board. The shape is the minimum
+  rotated rectangle (area ≥ 85 % of it), a capsule band for an oval track
+  (the band's width solved from the mapped area), else the mapped outline.
+  In the terrain fragment pass (`sport-ground.ts`) the four texels around
+  a fragment name up to eight candidate rows; each row's analytic shape
+  decides inside or out, so edges are exact rather than the raster's metre
+  staircase — the first cut read one row per texel and sawed teeth into a
+  track's inner edge where its capsule model strayed past the mapped
+  outline into the pitch's texels (fixed with the second row). Pastel
+  surfaces (`lib/city/sport.ts`), mown stripes on grass, fine grain, and
+  the standard line dimensions (FIFA, ITF, FIBA, FIVB) scaled down to fit
+  a smaller ground; lines box-filtered over the pixel footprint (a 12 cm
+  line is a steady hairline from afar); blue tape on sand. On the fine
+  level the dressing stands **goals**, **basketball posts** and **nets**
+  (`sport-fixtures.ts`, `sportFixtures`): pale-clay bars, the nets a
+  translucent grey, one merged mesh each per tile, in the tile that owns
+  the ground's centre. Both terrain levels; absent files → the land-cover
+  class. Dresden (2026-09-19 extract): ~180 grounds over the four tiles.
+  Textures scale with HUD *Bodendetail*; colours and lines stay.
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
   courtyards, front gardens and parks inside the settlement alike. Where
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM

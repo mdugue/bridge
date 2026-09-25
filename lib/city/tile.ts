@@ -58,6 +58,8 @@ export type TileArtifactKind =
   | "railarea"
   | "surface"
   | "edges"
+  | "sport"
+  | "sportTable"
   | "vegrows";
 
 /**
@@ -91,6 +93,11 @@ export function tileArtifacts(
     // (pipeline/bake/edges.py); without them the shader reads the class
     // texels (kerb band only, no parking lanes).
     edges: dlm(`edges_${tile}.png`),
+    // Optional: the OSM sports grounds (pipeline/bake/sport.py) — the index
+    // raster and the table of grounds it names; without them the ground
+    // under a pitch is its land-cover class.
+    sport: dlm(`sport_${tile}.png`),
+    sportTable: dlm(`sport_${tile}.json`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),

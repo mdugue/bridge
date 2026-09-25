@@ -96,6 +96,9 @@ export interface TerrainExtras {
   surface?: string;
   /** edge-distance raster (fine level only) */
   edges?: string;
+  /** sports-ground index raster and its table of grounds (both levels) */
+  sport?: string;
+  sportTable?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
 }
