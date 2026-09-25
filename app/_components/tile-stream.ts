@@ -92,6 +92,8 @@ export interface TileStreamContext {
   look: LookState;
   /** phones sample the ≤ 2048² class rasters */
   lowRasters: boolean;
+  /** bytes of out-of-view tile content kept cached (scene-profile.ts) */
+  cacheBytes: { max: number; min: number };
   heightFog: HeightFogUniforms;
   /** ground height over every loaded terrain (projected coordinates) */
   heightAt: (x: number, y: number) => number | null;
@@ -315,6 +317,8 @@ function buildTileVegetation(
   group.add(canopy.group, own.group);
   return {
     group,
+    chunks: canopy.chunks,
+    multiTuft: canopy.multiTuft,
     applyLook: (look) => {
       canopy.applyLook(look);
       own.applyLook(look);
@@ -662,6 +666,10 @@ export function createTileStream(
   // the spot); three's own frustum culling keeps them out of the main pass.
   tiles.displayActiveTiles = true;
   tiles.autoDisableRendererCulling = false;
+  // What lingers once the camera moves on (tileCacheBytesFor): tiles in use
+  // are never unloaded, only the ones left behind.
+  tiles.lruCache.minBytesSize = ctx.cacheBytes.min;
+  tiles.lruCache.maxBytesSize = ctx.cacheBytes.max;
   // What is shown changes only with these events, so the visible lists are
   // worked out once per change, not on every call (the collider asks for
   // the cities every frame).

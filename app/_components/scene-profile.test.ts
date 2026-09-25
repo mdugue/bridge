@@ -7,6 +7,7 @@ import {
   sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapSizeFor,
+  tileCacheBytesFor,
 } from "./scene-profile";
 
 test("sceneProfileFromSearch defaults to the full product scene", () => {
@@ -79,4 +80,14 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
 test("aoQualityFor drops to Performance only in the lite profile", () => {
   expect(aoQualityFor("full")).toBe("Medium");
   expect(aoQualityFor("lite")).toBe("Performance");
+});
+
+test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
+  const phone = tileCacheBytesFor("mobile");
+  const desktop = tileCacheBytesFor("desktop");
+  expect(phone.min).toBeLessThan(phone.max);
+  expect(desktop.min).toBeLessThan(desktop.max);
+  expect(phone.max).toBeLessThan(desktop.min);
+  // The desktop keeps 3DTilesRendererJS's own default.
+  expect(desktop).toEqual({ min: 0.3 * 1024 ** 3, max: 0.4 * 1024 ** 3 });
 });

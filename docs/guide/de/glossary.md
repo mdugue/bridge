@@ -163,7 +163,7 @@ Basis-DLM kommt als ein Dateisatz je Objektart.
 **Kachel** — ein 2 km × 2 km großes Quadrat des Landes-Kachelschemas. Der
 Name `33412_5656_2_sn` bedeutet UTM-Zone 33, Rechtswert 412 km, Hochwert
 5656 km (die Südwestecke), 2 km Kantenlänge, Sachsen. Die
-Standort-Konfiguration nennt für Dresden vier davon; die erste ist die
+Standort-Konfiguration nennt für Dresden fünfzehn davon; die erste ist die
 *Startkachel*. Der Viewer streamt sie (siehe *Tileset*).
 
 ## Rendering

@@ -3,6 +3,7 @@ import {
   buildingFootprintPolys,
   buildingFootprints,
   epsgToMapPx,
+  mapHeightPx,
   mapPxToEpsg,
 } from "./minimap";
 import type { TerrainBounds } from "./terrain-geometry";
@@ -34,6 +35,18 @@ test("mapPxToEpsg is the inverse of epsgToMapPx", () => {
   const { x, y } = mapPxToEpsg(px, py, bounds, SIZE);
   expect(x).toBeCloseTo(412_345);
   expect(y).toBeCloseTo(5_657_654);
+});
+
+test("the map keeps the site's aspect ratio, one scale for both axes", () => {
+  const site: TerrainBounds = [408_000, 5_654_000, 418_000, 5_660_000];
+  expect(mapHeightPx(site, 250)).toBe(150);
+  // The south-east corner is the canvas's bottom-right: no padding.
+  const se = epsgToMapPx(418_000, 5_654_000, site, 250);
+  expect(se.px).toBeCloseTo(250);
+  expect(se.py).toBeCloseTo(150);
+  const back = mapPxToEpsg(62.5, 37.5, site, 250);
+  expect(back.x).toBeCloseTo(410_500);
+  expect(back.y).toBeCloseTo(5_658_500);
 });
 
 test("buildingFootprints extracts Building extents and skips parts", () => {
