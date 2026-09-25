@@ -264,8 +264,12 @@ visual-variable codebook is in
   bollards). `pipeline/bake/furniture.py`; the viewer instances one small,
   **abstracted** model per kind — softened blocks, capsules and single tube
   strokes, a bench one extruded seat-and-back profile — in the scene's
-  pastels (honey-clay seating, slate-lavender metal, pale stone), one
-  matte vertex-coloured material (`furniture-layer.ts`,
+  palette at its own brightness (a warm sand-clay for seating, the roads'
+  lavender-grey for metal, the buildings' clay for stone; one matte
+  vertex-coloured material). **Low contrast on purpose:** a first,
+  deeper palette (honey 211/176/140, slate 157/156/176) stood out from the
+  pale ground and the clay buildings; the pieces now differ from them by
+  form and shadow, not by tone (`furniture-layer.ts`,
   `lib/city/furniture.ts`). Not (yet): bicycle-parking *areas*, shelters
   mapped as areas, planters, signs (OSM maps ~100 traffic signs and almost
   no street-name signs here; the 321 traffic-signal nodes sit on the
@@ -281,8 +285,9 @@ visual-variable codebook is in
   patch — nothing is invented** (the choice against filling them with
   typical pieces). The pieces are not catalogue equipment but soft, single-coloured
   sculptures (an arch, a wave, a faceted dome, an egg) in five pastels taken
-  from the scene — a first, literal rendering (A-frames, ladders, a rose
-  safety floor) read as busy and out of place. Same bake and layer as the street furniture.
+  from the scene and lifted to the buildings' brightness — a first, literal
+  rendering (A-frames, ladders, a rose safety floor) read as busy and out of
+  place, and saturated pastels stood out as much. Same bake and layer as the street furniture.
 
 - **Fountains, statues, memorial stones, columns** — the Basis-DLM's
   monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with

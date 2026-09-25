@@ -62,36 +62,37 @@ export interface FurnitureContext extends GroundContext {
 }
 
 /*
- * The palette: the pastel family of the ground (lib/city/landcover.ts) and
- * the buildings' clay, a shade deeper so the pieces read on the paving.
- * Seating is a warm honey clay, everything metal a soft slate-lavender (the
- * road's own hue), stone a pale warm grey; the playground's colours are the
- * same pastels, a little brighter.
+ * The palette: the scene's own — the pale clay of the buildings (0xece7df)
+ * and the ground's pastels (lib/city/landcover.ts: taupe, clay, sand, the
+ * roads' grey-lavender, the meadow's sage, the water's dusty blue) — kept
+ * at their brightness and only a breath more saturated, so the pieces sit
+ * in the scene like the buildings do, told apart by form and shadow rather
+ * than by contrast. Seating is a warm sand-clay, metal the roads'
+ * lavender-grey, stone the buildings' clay.
  */
-const HONEY = 0xd3_b0_8c; // seats, tables, playground timber
-const HONEY_DEEP = 0xb9_97_77; // what carries them
-const SLATE = 0x9d_9c_b0; // hoops, frames, bins, posts
-const STONE = 0xdc_d4_c7; // stone bollards
-const BRONZE = 0x9a_86_66; // metal bollards (the Stallhof's bronze columns)
-const MUSTARD = 0xe0_c1_78; // post boxes
-const ROOF = 0xb1_b3_c2;
-const PANE = 0xdc_e6_ea;
+const HONEY = 0xdc_c8_b2; // seats, tables, playground timber
+const HONEY_DEEP = 0xcf_bc_a7; // what carries them
+const SLATE = 0xc6_c5_d0; // hoops, frames, bins, posts
+const STONE = 0xe6_df_d3; // stone bollards
+const BRONZE = 0xc2_b3_9c; // metal bollards (the Stallhof's bronze columns)
+const MUSTARD = 0xe6_d7_ab; // post boxes
+const ROOF = 0xd2_d3_da;
+const PANE = 0xe6_eb_ed;
 /*
  * The playground's pieces are soft, single-coloured sculptures — a play
  * landscape in an architect's model rather than catalogue equipment — each
- * in one of five pastels taken from the scene's own: the meadow's sage, the
- * water's dusty blue, a peach and a butter from the sandstone and the
- * lamps' warm light, a lilac from the roads. The floor is a pale sand a
- * breath warmer than the paving, so the playground reads as a place, not
- * as a slab.
+ * in one of five of those pastels, lifted to the buildings' brightness:
+ * sage, dusty blue, a peach and a butter from the sandstone, a lilac from
+ * the roads. The floor is the ground's own sand, a touch warmer, so the
+ * playground reads as a place, not as a slab.
  */
-const PLAY_FLOOR = 0xec_df_c9;
-const SAND = 0xf1_e3_c1;
-const PEACH = 0xe9_bd_a4;
-const SAGE = 0xbf_cf_ab;
-const DUSK_BLUE = 0xab_c5_d6;
-const BUTTER = 0xee_da_a2;
-const LILAC = 0xcb_bd_d8;
+const PLAY_FLOOR = 0xe8_df_cf;
+const SAND = 0xec_e2_ca;
+const PEACH = 0xe9_d3_c5;
+const SAGE = 0xd3_db_c5;
+const DUSK_BLUE = 0xc9_d6_de;
+const BUTTER = 0xec_e1_c0;
+const LILAC = 0xd9_d2_df;
 /** A playground slab's top over the ground (m), and a sandpit's over that. */
 const PATCH_LIFT = 0.04;
 const SAND_LIFT = 0.06;
@@ -552,7 +553,8 @@ function furnitureMaterial(
 ): MeshStandardMaterial {
   const material = new MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.8,
+    // The buildings' matte clay, not a plastic sheen.
+    roughness: 0.92,
     metalness: 0,
   });
   if (flush) {
