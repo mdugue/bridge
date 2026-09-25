@@ -7,6 +7,7 @@ import numpy as np
 import shapely
 
 from bake.common import owns, round_coords
+from bake.ingest_sn import current_share_url, share_catalogue
 from bake.landcover import CLASSES
 from bake.osm import tag
 from bake.rail import buffer_line, is_platform, merge_lines
@@ -843,3 +844,20 @@ def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
     assert band("lowint_050.tif", "mean")[6, 0] == 1000.0
     assert band("lowint_050.tif", "count")[6, 0] == 1
     assert band("lowint_050.tif", "mean")[0, 7] == -9999.0
+
+
+def test_a_rotated_share_is_found_in_the_batch_catalogue():
+    page = (
+        '"LSC":{"fullname":"Laserscandaten","shortname":"LSC","share_id":"NewLsc123",'
+        '"packagesize":2000,"filename":"lsc_33$Rechtswert$_$Hochwert$_2_sn_laz.zip","category":"x"},'
+        '"LoD2_CityGML":{"shortname":"LoD2_CityGML","share_id":"NewLod2",'
+        '"packagesize":2000,"filename":"lod2_33$Rechtswert$_$Hochwert$_2_sn_citygml.zip"}'
+    )
+    catalogue = share_catalogue(page)
+    assert current_share_url("lsc_33414_5656_2_sn_laz.zip", catalogue) == (
+        "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/NewLsc123/lsc_33414_5656_2_sn_laz.zip"
+    )
+    assert current_share_url("lod2_33412_5656_2_sn_citygml.zip", catalogue).endswith(
+        "/NewLod2/lod2_33412_5656_2_sn_citygml.zip"
+    )
+    assert current_share_url("dop20rgb_33412_5656_2_sn_tiff.zip", catalogue) is None
