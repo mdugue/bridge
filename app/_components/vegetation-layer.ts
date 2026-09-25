@@ -23,7 +23,12 @@ import {
 } from "@/lib/city/look-controls";
 import { samplePolyline } from "@/lib/city/polyline";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { TRUNK_FOOT_R, TRUNK_TOP_R } from "@/lib/city/tree-inventory";
+import {
+  TRUNK_FOOT_R,
+  TRUNK_ROWS,
+  TRUNK_TOP_R,
+  trunkFlare,
+} from "@/lib/city/tree-inventory";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
@@ -678,7 +683,15 @@ export function buildCrownMaterial(
  * identically — they belong on a near-distance LOD crown.
  */
 export function buildTrunkGeo(): BufferGeometry {
-  const t = new CylinderGeometry(TRUNK_TOP_R, TRUNK_FOOT_R, TRUNK_H, 7, 5);
+  // The profile (rows, taper, flare) is lib/city/tree-inventory.ts's, so a
+  // measured trunk is fitted to the radius drawn (`trunkRadiusAt`).
+  const t = new CylinderGeometry(
+    TRUNK_TOP_R,
+    TRUNK_FOOT_R,
+    TRUNK_H,
+    7,
+    TRUNK_ROWS
+  );
   t.translate(0, TRUNK_H / 2, 0);
   const bend = 0.05 * TRUNK_H;
   const bx = 0.82;
@@ -691,7 +704,7 @@ export function buildTrunkGeo(): BufferGeometry {
     const r = Math.hypot(v.x, v.z);
     const ang = Math.atan2(v.z, v.x);
     if (r > 1e-4) {
-      const flare = tt < 0.16 ? 1 + ((0.16 - tt) / 0.16) * 0.9 : 1;
+      const flare = trunkFlare(tt);
       const bump = 1 + (hash(ang * 2.4 + v.y * 1.7) - 0.5) * 0.2;
       const nr = r * flare * bump;
       v.x = Math.cos(ang) * nr;

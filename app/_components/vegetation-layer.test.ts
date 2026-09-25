@@ -8,11 +8,14 @@ import {
 } from "three";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { TRUNK_ROWS, trunkRadiusAt } from "@/lib/city/tree-inventory";
 import { createHeightFogUniforms } from "./height-fog";
 import { sceneCensus } from "./scene-census";
 import {
   buildCrownWarmup,
+  buildTrunkGeo,
   buildVegetation,
+  TRUNK_H,
   updateVegetationLod,
   type VegetationContext,
 } from "./vegetation-layer";
@@ -157,4 +160,31 @@ test("the crown warm-up carries the program keys a tile's crowns switch between"
   ]);
   expect(warm.depth[0].geometry.getAttribute("normal")).toBeDefined();
   warm.dispose();
+});
+
+test("the trunk geometry's rings are the profile its girth is fitted to", () => {
+  const geo = buildTrunkGeo();
+  const pos = geo.getAttribute("position");
+  for (let k = 0; k <= TRUNK_ROWS; k++) {
+    const y = (k / TRUNK_ROWS) * TRUNK_H;
+    const ring: [number, number][] = [];
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - y) < 1e-4) {
+        ring.push([pos.getX(i), pos.getZ(i)]);
+      }
+    }
+    // The bend moves a ring sideways, not apart: measure from its centre,
+    // leaving out the end caps' centre vertices.
+    const centre = (ps: [number, number][]) =>
+      [0, 1].map((c) => ps.reduce((s, p) => s + p[c], 0) / ps.length);
+    const [ax, az] = centre(ring);
+    const rim = ring.filter(([x, z]) => Math.hypot(x - ax, z - az) > 0.02);
+    const [cx, cz] = centre(rim);
+    const mean =
+      rim.reduce((s, [x, z]) => s + Math.hypot(x - cx, z - cz), 0) / rim.length;
+    // ±10 % bark bumps per vertex average out to a few per cent.
+    expect(Math.abs(mean / trunkRadiusAt(k / TRUNK_ROWS) - 1)).toBeLessThan(
+      0.08
+    );
+  }
 });
