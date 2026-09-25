@@ -372,6 +372,7 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
   return {
     bridge: pick("bridge"),
     canopy: pick("canopy"),
+    furniture: pick("furniture"),
     lamps: pick("lamps"),
     monuments: pick("monuments"),
     platform: pick("platform"),
