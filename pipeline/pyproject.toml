@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "The offline geodata bakes: provider downloads -> the per-tile artifacts under data/"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+  "laspy[lazrs]==2.7.0",
   "numpy==2.3.3",
   "pillow==11.3.0",
   "pyogrio==0.11.1",

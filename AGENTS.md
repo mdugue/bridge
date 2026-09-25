@@ -149,7 +149,7 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `trees.py` (+ `tree_archetypes.py`),
-  `lowveg.py`, `ndvi.py`, `roof_colour.py`,
+  `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `ndvi.py`, `roof_colour.py`,
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
   `rail.py`, `surface.py`, `edges.py`, `sport.py`, `osm.py`; `ingest_sn.py` is Saxony's
   download adapter; tests in `pipeline/tests/`), run by `bun run bake`
@@ -262,7 +262,8 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   caches the city's WFS per tile); `lowveg.py` the OSM hedges at their
   laser-scan height and the scan's trees outside the canopy mask, thinned
   against the cadastre. The laser scan (`<raw>/lsc/<tile>.laz`) is placed
-  by hand and rasterised by PDAL on `PATH`; without it the step is OSM only.
+  there by `bun run bake --ingest --lsc` (or by hand) and rasterised in
+  Python (`lsc.py`, laspy — no PDAL); without it the step is OSM only.
 - `monuments.py` takes the monuments (statues, stones, columns, named
   fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
   basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin

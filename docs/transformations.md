@@ -414,7 +414,7 @@ visual-variable codebook is in
     forest/copse/sport-and-leisure areas, so courtyard and garden trees are
     dropped at any height; the Basis-DLM carries a hedge only when it is
     landscape-shaping (≥ 200 m) — `vegrows` on 33412_5656 has **0 hedges**.
-  - *Inputs:* GeoSN laser scan (LAZ, 2024-11-30, leaf-off) → PDAL 0.5 m
+  - *Inputs:* GeoSN laser scan (LAZ, 2024-11-30, leaf-off) → 0.5 m
     rasters: ground (classes 2/8/30), surface max (2/20), non-ground count, its
     multi-echo share, and the mean **intensity of the low returns** (0.25–4 m
     above ground). DOP NDVI (2024-03-19). OSM `barrier=hedge`,
@@ -480,7 +480,8 @@ visual-variable codebook is in
     in the main pass over the merged cadastre (fly-over 126 → 144,
     Albertstraße 401 → 459).
   - Bake: `pipeline/bake/lowveg.py` (scipy, scikit-image in the uv
-    environment; PDAL on `PATH` rasterises the LAZ). The committed files
+    environment; `lsc.py` rasterises the LAZ with laspy by PDAL's binning
+    rules — the committed rasters were PDAL's). The committed files
     were baked by its predecessor (`extract-lowveg.sh`, OSM via Overpass);
     the port reads the hedges from the local extract (ADR 0025).
 - **Street lamps** — OSM lamp points (the local Geofabrik extract, only those

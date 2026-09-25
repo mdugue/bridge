@@ -7,9 +7,9 @@ bakes read (bake/common.py `Tile`):
     <raw>/osm/*.osm.pbf              OpenStreetMap: the Geofabrik extract
     <raw>/trees/<tile>.geojson       Dresden's street-tree cadastre (the
                                      city's WFS; empty outside Dresden)
-    <raw>/lsc/<tile>.laz             the GeoSN laser scan — NOT fetched
-                                     (≈380 MB a tile): put it there by hand
-                                     for the hedge heights and scan trees
+    <raw>/lsc/<tile>.laz             the GeoSN laser scan, layer 1 — only
+                                     with --lsc (≈380 MB a tile), for the
+                                     hedge heights and the scan trees
 
 Downloads are cached under <raw>/downloads/ and never fetched twice. The
 DGM1 and the CityJSON are committed under data/ (ADR 0004) and not touched.
@@ -108,6 +108,23 @@ def ingest_tile(raw: Path, tile: str, bounds: list[float]) -> None:
         zip_path = download(url, raw / "downloads" / Path(urllib.parse.urlparse(url).path).name)
         extract(zip_path, (".tif", ".tfw"), raw / product, tile)
         print(f"{tile}: {product} → {target}")
+
+
+def ingest_lsc(raw: Path, tile: str, bounds: list[float]) -> None:
+    """The laser scan for one tile (opt-in: ≈380 MB). A failed download is a
+    note, not an error: the hedge step then falls back to OSM only."""
+    target = raw / "lsc" / f"{tile}.laz"
+    if target.exists():
+        return
+    east, north = tile.split("_")[:2]
+    try:
+        url = download_link(1, bounds, f"{east[2:]}{north}")
+        zip_path = download(url, raw / "downloads" / Path(urllib.parse.urlparse(url).path).name)
+    except (OSError, SystemExit) as err:
+        print(f"{tile}: laser scan not downloaded ({err}); put the LAZ at {target} by hand")
+        return
+    extract(zip_path, (".laz",), raw / "lsc", tile)
+    print(f"{tile}: lsc → {target}")
 
 
 def ingest_dlm(raw: Path) -> None:
@@ -220,11 +237,14 @@ def main() -> None:
     parser.add_argument("--raw", type=Path, required=True)
     parser.add_argument("--tile", required=True)
     parser.add_argument("--bounds", nargs=4, type=float, required=True)
+    parser.add_argument("--lsc", action="store_true", help="also the laser scan (≈380 MB a tile)")
     args = parser.parse_args()
     ingest_dlm(args.raw)
     ingest_osm(args.raw)
     ingest_tile(args.raw, args.tile, args.bounds)
     ingest_trees(args.raw, args.tile, args.bounds)
+    if args.lsc:
+        ingest_lsc(args.raw, args.tile, args.bounds)
 
 
 if __name__ == "__main__":

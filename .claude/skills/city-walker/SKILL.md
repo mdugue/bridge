@@ -334,7 +334,7 @@ build time and the canopy/rail bakes read it.
 **Stage 1, the offline bakes** (ADR 0025): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
 Pillow, scipy, scikit-image; GDAL inside the wheels, with the OSM driver;
-PDAL on `PATH` only to rasterise a laser scan for `lowveg`). If a tool is missing,
+laspy for the laser scan — no PDAL). If a tool is missing,
 fix the environment (`pipeline/pyproject.toml`), don't bend the code.
 `bun run bake` runs every step for every tile of the site with its extent and
 CRS, land cover first:

@@ -33,7 +33,7 @@
       }
     },
     "LSC": {
-      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the low-vegetation bake (pipeline/bake/lowveg.py; 0.5 m PDAL rasters under data/_raw/<site>/lsc/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask. Baked for the spawn tile only; the neighbours are baked OSM-only.",
+      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the low-vegetation bake (pipeline/bake/lowveg.py; 0.5 m PDAL rasters under data/_raw/<site>/lsc/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask. Baked for the spawn tile only; the neighbours are baked OSM-only. On 2026-09-25 the download service still named these ZIPs, but the share answered 503 (Sabre NotFound).",
       "layer": 1,
       "committed": "derived only: data/dlm/lowveg_33412_5656_2_sn.geojson, data/dlm/canopyx_33412_5656_2_sn.geojson",
       "raw": "data/_raw/<site>/lsc/<tile>.laz (placed by hand; the committed files were baked from data/_raw/lsc/lsc_<tile>_laz/)",

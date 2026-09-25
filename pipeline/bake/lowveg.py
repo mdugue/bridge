@@ -10,7 +10,7 @@ Inputs, beyond the committed bakes it depends on (landcover, ndvi, walls,
 bridge, canopy, trees under data/dlm/, the CityJSON and the DGM):
   <raw>/lsc/<tile>.laz   the laser scan (≈380 MB; the only raw input with
                          heights below 3 m that tells vegetation apart),
-                         rasterised once by PDAL (on PATH, ≥ 2.10) into
+                         rasterised once (lsc.py: laspy, PDAL's rules) into
                          <raw>/lsc/<tile>/*.tif at 0.5 m: ground (classes
                          2/8/30: idw, min, count), surface (2/20: max,
                          count), the non-ground count and its multi-echo
@@ -36,12 +36,11 @@ from __future__ import annotations
 
 import json
 import math
-import shutil
-import subprocess
 from pathlib import Path
 
 import numpy as np
 import rasterio
+import shapely
 from rasterio.enums import Resampling
 from rasterio.features import rasterize
 from rasterio.transform import from_origin
@@ -54,6 +53,7 @@ from skimage.feature import peak_local_max
 from skimage.morphology import skeletonize
 
 from .common import OSM_ATTRIBUTION, Tile, column, write_geojson
+from .lsc import rasterise
 from .osm import has_extract, read_osm, tag
 
 RES = 0.5  # the LSC raster grid (m)
@@ -526,100 +526,31 @@ LSC_RASTERS = (
 )
 
 
-def _pdal_raster(laz, out, grid, ranges, dim, output_type, window, extra=()):
-    """One PDAL run → one raster. writers.gdal needs binmode (else it bins
-    with a 0.71 m radius), and a pipeline with several writers runs only the
-    first — hence one run per raster."""
-    if out.exists():
-        return
-    print(f"PDAL → {out.name} …")
-    stages = [
-        str(laz),
-        {"type": "filters.range", "limits": ranges},
-        *extra,
-        {
-            "type": "writers.gdal",
-            "filename": str(out),
-            "dimension": dim,
-            "output_type": output_type,
-            "window_size": window,
-            "resolution": RES,
-            "origin_x": grid.xmin,
-            "origin_y": grid.ymin,
-            "width": grid.n,
-            "height": grid.n,
-            "data_type": "float32",
-            "nodata": -9999,
-            "binmode": True,
-            "gdalopts": "COMPRESS=DEFLATE,PREDICTOR=3,TILED=YES",
-        },
-    ]
-    subprocess.run(
-        ["pdal", "pipeline", "--stdin"],
-        input=json.dumps({"pipeline": stages}),
-        text=True,
-        check=True,
-    )
-
-
-def lsc_rasters(tile: Tile, grid: Grid) -> Path | None:
+def lsc_rasters(tile: Tile) -> Path | None:
     """The folder with the 0.5 m laser-scan rasters, rasterised from the LAZ
-    on first use; None without a scan (or without PDAL to rasterise it)."""
+    on first use (lsc.py); None without a scan. A folder PDAL made earlier
+    (the same files, the same band names) is read as it is."""
     der = tile.raw / "lsc" / tile.id
     if all((der / name).exists() for name in LSC_RASTERS):
         return der
     laz = tile.raw / "lsc" / f"{tile.id}.laz"
     if not laz.exists():
         return None
-    if shutil.which("pdal") is None:
-        print(f"{tile.id}: a laser scan but no PDAL on PATH — OSM-only hedges, no scan trees")
-        return None
+    print(f"{tile.id}: rasterising the laser scan (a few minutes) …")
     der.mkdir(parents=True, exist_ok=True)
-    dtm = der / "dtm_050.tif"
-    nonground = "Classification[20:20]"
-    _pdal_raster(
-        laz,
-        dtm,
-        grid,
-        "Classification[2:2],Classification[8:8],Classification[30:30]",
-        "Z",
-        "idw,min,count",
-        3,
-    )
-    _pdal_raster(
-        laz,
-        der / "dsm_050.tif",
-        grid,
-        "Classification[2:2],Classification[20:20]",
-        "Z",
-        "max,count",
-        0,
-    )
-    _pdal_raster(laz, der / "nonground_count_050.tif", grid, nonground, "Z", "count", 0)
-    _pdal_raster(
-        laz,
-        der / "nonground_multiecho_count_050.tif",
-        grid,
-        nonground,
-        "Z",
-        "count",
-        0,
-        ({"type": "filters.range", "limits": "NumberOfReturns[2:]"},),
-    )
-    _pdal_raster(
-        laz,
-        der / "lowint_050.tif",
-        grid,
-        nonground,
-        "Intensity",
-        "mean,count",
-        0,
-        (
-            {"type": "filters.hag_dem", "raster": str(dtm), "band": 2},
-            {"type": "filters.range", "limits": "HeightAboveGround[0.25:4.0]"},
-        ),
-    )
+    rasterise(laz, der, tile.bounds, tile.epsg, RES)
     return der
+
+
+def hedge_rings(geom) -> list:
+    """A hedge mapped as a closed way, as the lines it is: every ring of the
+    polygon GDAL built from it (a hedge around a garden has no inside)."""
+    out = []
+    for part in shapely.get_parts(geom):
+        if isinstance(part, Polygon) and not part.is_empty:
+            out += [LineString(part.exterior.coords)]
+            out += [LineString(r.coords) for r in part.interiors]
+    return out
 
 
 def load_osm(tile: Tile):
@@ -627,6 +558,13 @@ def load_osm(tile: Tile):
     each as (other_tags, geometry) in the tile's CRS."""
     lines, fields = read_osm(tile, "lines", "barrier = 'hedge'", ["other_tags"], margin=0.0005)
     hedges = list(zip(column(fields, "other_tags", lines), lines, strict=True))
+    # GDAL's OSM driver routes a CLOSED hedge way (a garden ring) into
+    # `multipolygons`; it is still a line of hedge, so take its rings.
+    rings, fields = read_osm(
+        tile, "multipolygons", "barrier = 'hedge'", ["other_tags"], margin=0.0005
+    )
+    for t, g in zip(column(fields, "other_tags", rings), rings, strict=True):
+        hedges += [(t, ring) for ring in hedge_rings(g)]
     areas, fields = read_osm(
         tile, "multipolygons", "natural IN ('scrub','shrubbery')", ["other_tags"], margin=0.0005
     )
@@ -660,7 +598,7 @@ def load_inputs(tile: Tile, grid: Grid) -> dict:
     inputs["walls"] = grid.burn([shape(f["geometry"]).buffer(WALL_BUF_M) for f in walls])
     bridges = _features(dlm("bridge").with_suffix(".geojson"))
     inputs["bridge"] = grid.burn([shape(f["geometry"]) for f in bridges])
-    der = lsc_rasters(tile, grid)
+    der = lsc_rasters(tile)
     inputs["has_lsc"] = der is not None
     if der is None:
         return inputs

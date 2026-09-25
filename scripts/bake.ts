@@ -11,6 +11,7 @@
  *                                     furniture, walls, stairs, rail,
  *                                     surface, edges, sport, lowveg,
  *                                     islands)
+ *   bun run bake --ingest --lsc       ... and the laser scan (≈380 MB a tile)
  *   bun run bake --step lowveg --research   also every hedge/shrub candidate
  *
  * The site (SITE, default dresden; sites/) supplies the tiles, their extent
@@ -60,6 +61,7 @@ for (const cell of SITE.tiles) {
       tile,
       "--bounds",
       ...bounds,
+      ...(flag("--lsc") ? ["--lsc"] : []),
     ]);
   }
   python("bake", [
