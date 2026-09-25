@@ -91,6 +91,25 @@ dark dashes with odd shadow flecks. Two changes:
 The pavement behind the stone stays at road level (the DGM has no step);
 a raised pavement would mean shaping the terrain along every kerb.
 
+## Phase 1c — Squares, kerb shadows, calmer sett ✅ (second review)
+
+- **Squares from OSM.** The DLM draws the Albertplatz — ring road,
+  pedestrian island, lawns, two fountains — as one road area, so it had no
+  kerb and no green. `carve_islands` (landcover.py; `--step islands` over
+  the committed raster) re-classes road texels under OSM pedestrian areas,
+  traffic islands and fountain basins as built-up and under parks and lawns
+  as meadow. 0.2–0.7 M texels per tile; the kerbs, edges and lawn edges
+  follow. The legend carries the OSM credit.
+- **The kerb's shadow.** 12 cm throws a few centimetres to a metre of
+  shadow, under what the shadow map resolves; the fragment pass shades the
+  road strip out to 0.12 m · cot(elevation) when the sun stands behind the
+  kerb (`uSunDir`, the rig's shared vector).
+- **Sett abstracted.** The drawn stone grid with pillow shading read as
+  busy and seamed where two streets' frames met; now a darker, warmer tone
+  and a fine, direction-free grain. Slab joints halved in contrast.
+- **Open from this:** trees inside the carved parks. The canopy bake gated
+  them off as road; re-running it needs the DOM1 raw data.
+
 ## Phase 2 — Paving from OSM ✅
 
 `pipeline/bake/surface.py` → `data/dlm/surface_<tile>.png` (+ legend JSON

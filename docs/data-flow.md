@@ -69,6 +69,7 @@ flowchart LR
 
   %% surfaces + water (multi-source)
   DLM ==>|"class raster → palette painted at runtime"| SURF
+  OSM -. "squares, islands, lawns carved out of the road class" .-> SURF
   DOP -. "NDVI meadow tint (class 1)<br/>+ urban green (classes 0, 4)" .-> SURF
   DLM ==>|"road / meadow edges → smoothed distance + kerb lines"| PAVE
   DOP -. "NDVI → urban green as meadow" .-> PAVE
@@ -213,6 +214,7 @@ flowchart LR
   end
 
   iDLM ==> bLC ==> dCLS
+  iOSM -. "islands" .-> bLC
   iDOM -.-> bCAN
   iDGM ==> bCAN
   iDLM ==> bCAN

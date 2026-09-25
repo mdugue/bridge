@@ -23,6 +23,7 @@ from .common import Tile
 
 STEPS = {
     "landcover": landcover.run,
+    "islands": landcover.run_islands,
     "canopy": canopy.run,
     "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,

@@ -539,3 +539,22 @@ def test_kerb_lines_follow_the_road_edge_with_the_road_on_their_left(tmp_path):
     # Water beside the road: no kerb on that side.
     cls[30:, :] = 8
     assert len(kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)) == 1
+
+
+def test_osm_islands_carve_only_road_texels_lawn_over_walk(tmp_path, monkeypatch):
+    from bake import landcover
+    from bake.common import Tile
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    raster = np.full((64, 64), 7, dtype=np.uint8)
+    raster[:, :8] = 4  # a pavement strip the square's areas overlap
+    square = shapely.box(0, 16, 48, 48)  # a pedestrian area
+    lawn = shapely.box(24, 24, 40, 40)  # a lawn inside it
+    monkeypatch.setattr(landcover, "osm_islands", lambda _: [(4, [square]), (1, [lawn])])
+    changed = landcover.carve_islands(raster, tile)
+    assert raster[64 - 32, 32] == 1  # the lawn wins inside the square
+    assert raster[64 - 20, 16] == 4  # the square, off the lawn
+    assert raster[64 - 5, 32] == 7  # outside both: still road
+    assert raster[64 - 32, 4] == 4  # was built-up, untouched
+    assert changed == np.count_nonzero(raster[:, 8:] != 7)
+    assert landcover.carve_islands(raster, tile) == 0  # idempotent

@@ -310,6 +310,8 @@ export interface SplatLayer {
   surfaceTexture?: Texture;
   /** baked road/meadow edge distances (LINEAR, RG) for kerbs, lanes, lawns */
   edgesTexture?: Texture;
+  /** shared world sun direction (surface → sun), for the kerb's shadow */
+  sunDirection?: Vector3;
   /** class-id raster (NEAREST); the meadow detail tests it */
   texture: Texture;
 }
@@ -444,6 +446,8 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   shader.uniforms.uGroundDetail = splat.ground?.groundDetail ?? { value: 0 };
   shader.uniforms.uMeadowColor = { value: MEADOW_LINEAR };
   shader.uniforms.uRoadColor = { value: ROAD_LINEAR };
+  // By reference: the sun rig keeps it current.
+  shader.uniforms.uSunDir = { value: splat.sunDirection ?? DEFAULT_SUN };
   shader.uniforms.uUrbanGreen = splat.ground?.urbanGreen ?? { value: 0 };
   if (splat.surfaceTexture) {
     shader.uniforms.uSurface = { value: splat.surfaceTexture };
@@ -459,6 +463,8 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
 
 /** The meadow's palette colour, linear — the urban green and grass pavers. */
 const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
+const DEFAULT_SUN = new Vector3(0, 1, 0);
+
 /** The road's palette colour, linear — sealed ground off the carriageway. */
 const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
 
@@ -619,6 +625,7 @@ export async function dressTerrain(
           ndviTexture: ndviTexture ?? undefined,
           surfaceTexture: surfaceTexture ?? undefined,
           edgesTexture: edgesTexture ?? undefined,
+          sunDirection: opts.sunDirection,
           ground: opts.ground,
           bounds,
           offset: opts.offset,

@@ -9,6 +9,7 @@ import {
   type SurfaceKind,
   surfaceId,
 } from "@/lib/city/landcover";
+import { KERB_HEIGHT } from "@/lib/city/kerbs";
 
 /**
  * Ground detail in the terrain's fragment pass, next to the meadow mottle
@@ -72,6 +73,7 @@ export function groundDetailDecl(
   uniform float uUrbanGreen;
   uniform vec3 uMeadowColor;
   uniform vec3 uRoadColor;
+  uniform vec3 uSunDir; // world, surface → sun
   ${hasSurface ? "uniform highp sampler2D uSurface;" : ""}
   int gdClassAt( ivec2 p ) {
     ivec2 s = textureSize( uSplatClass, 0 );
@@ -298,6 +300,16 @@ export const GROUND_DETAIL = /* glsl */ `
     float gdGutter = gdBand( gdDr, 0.0, 0.35, gdW );
     baseCol = mix( baseCol, max( baseCol * 1.08, vec3( 0.78, 0.76, 0.72 ) ), gdTop * gdKerb * 0.8 );
     baseCol *= 1.0 - gdGutter * gdKerb * 0.14 - gdBand( gdDr, 0.0, 0.08, gdW ) * gdKerb * 0.08;
+    // The kerb's own shadow on the road. A 12 cm step throws a shadow a few
+    // centimetres to a metre long — below what the shadow map resolves
+    // (7 cm texels spread by the soft PCF, less the depth bias). Drawn from
+    // the sun instead: when the sun stands behind the kerb, the road strip
+    // out to H · cot(elevation) across the kerb is in its shade.
+    vec2 gdSunH = vec2( uSunDir.x, -uSunDir.z ); // data frame (x east, y north)
+    float gdBehind = max( -dot( gdSunH, gdIntoRoad ), 0.0 );
+    float gdReach = min( ${KERB_HEIGHT.toFixed(2)} * gdBehind / max( uSunDir.y, 0.05 ), 1.5 );
+    float gdCast = gdBand( gdDr, -0.01, gdReach, max( gdW, 0.02 ) ) * step( 0.02, uSunDir.y );
+    baseCol *= 1.0 - gdCast * gdKerb * 0.28;
 
     // --- lawn edge: a darker lip and a kink where the grass stops ---
     float gdLip = gdBand( gdDl, 0.0, 0.25, gdW ) * gdNear * gdOn;
@@ -342,20 +354,15 @@ export const GROUND_DETAIL = /* glsl */ `
       vec2 q = gdQ + vec2( fract( row * 0.5 ) * size.x, 0.0 ); // running bond
       float j = gdJoint( q, size, 0.01, gdW );
       float h = gdHash( floor( q / size + 0.5 ) );
-      baseCol *= ( 1.0 + ( h - 0.5 ) * 0.07 * gdFine * gdPave ) * ( 1.0 - j * 0.16 * gdFine * gdPave );
+      baseCol *= ( 1.0 + ( h - 0.5 ) * 0.04 * gdFine * gdPave ) * ( 1.0 - j * 0.09 * gdFine * gdPave );
     } else if ( gdKind == ${id("sett")} ) {
-      // Rows across the street, stones in running bond within each row.
-      vec2 size = vec2( 0.15, 0.13 );
-      float row = floor( gdQ.x / size.x + 0.5 );
-      vec2 q = gdQ + vec2( 0.0, fract( row * 0.5 ) * size.y );
-      vec2 cell = floor( q / size + 0.5 );
-      vec2 uv = q / size - cell; // -0.5..0.5 inside a stone
-      float h = gdHash( cell );
-      float edge = smoothstep( 0.30, 0.5, max( abs( uv.x ), abs( uv.y ) ) );
-      baseCol *= ( 1.0 - 0.07 * gdPave ) * vec3( 1.0, 0.985, 0.975 )
-               * ( 1.0 + ( h - 0.5 ) * 0.14 * gdFine * gdPave ) * ( 1.0 - edge * 0.22 * gdFine * gdPave );
-      // Pillow-shaped stones: the normal leans out from each stone's centre.
-      gdTilt += gdToView( gdAlong * uv.x + gdAcross * uv.y ) * 0.7 * gdFine * gdPave;
+      // Abstracted: a warmer, darker tone and a fine, direction-free grain
+      // at stone size — cobbles as a texture of the ground, not as drawn
+      // stones. A drawn stone grid with pillow shading read as busy up
+      // close and seamed where two streets' frames met.
+      float n = gdNoise( vWorldXY / 0.16 ) * 0.65 + gdNoise( vWorldXY / 0.5 + 17.0 ) * 0.35;
+      baseCol *= mix( vec3( 1.0 ), vec3( 0.95, 0.94, 0.93 ), gdPave )
+               * ( 1.0 + ( n - 0.5 ) * 0.07 * gdFine * gdPave );
     } else if ( gdKind == ${id("unpaved")} ) {
       float n = gdNoise( vWorldXY * 3.1 ) * 0.5 + gdNoise( vWorldXY * 0.7 ) * 0.5;
       baseCol *= mix( vec3( 1.0 ), vec3( 1.03, 1.0, 0.92 ), gdPave )

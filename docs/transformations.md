@@ -32,6 +32,18 @@ visual-variable codebook is in
   ground height back from the grid vertices (`gridElevations`).
   `scripts/bake-tiles.ts`, `lib/city/terrain-geometry.ts`, `terrain-layer.ts`
   ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
+- **Squares and islands from OSM** (*Plätze, Inseln*) — the DLM draws many
+  squares as one road area: the Albertplatz's pedestrian island, its lawns
+  and fountains were grey carriageway with no kerb. The land-cover bake
+  carves them back out, over road texels only: OSM `highway=pedestrian` /
+  `area:highway` (footway, pedestrian, traffic island) areas and fountain
+  basins become built-up (4), `leisure=park|garden` and
+  `landuse=grass|village_green|meadow|flowerbed` meadow (1), the lawn
+  winning inside a pedestrian area. Idempotent, so `bun run bake --step
+  islands` applies it to the committed raster without the raw DLM
+  (2026-09-25: ≈ 0.2–0.7 M texels per tile, Prager Straße and the Altmarkt
+  among them). The legend then carries the OSM credit.
+  `pipeline/bake/landcover.py` `carve_islands`.
 - **Surface colours** — Basis-DLM land-cover → a 4096² **class-id raster**
   (8-bit, ids 0–8, burned lowest priority first so water wins;
   `pipeline/bake/landcover.py` → `landcover_<tile>.png` + legend). The colours
@@ -67,7 +79,11 @@ visual-variable codebook is in
   kerb), a lawn lip with a normal kink, the parking lanes and the paving
   rows along the kerb. The first cut drew the kerb as a shading-normal
   step from the class texels alone; on the raster's staircase it read as
-  dashes and odd shadow flecks (replaced 2026-09-25). HUD *Bodendetail*.
+  dashes and odd shadow flecks (replaced 2026-09-25). The stone's own
+  shadow on the road is drawn from the sun: when the sun stands behind the
+  kerb, the strip out to 12 cm · cot(elevation) is shaded — a shadow the
+  shadow map cannot hold (7 cm texels spread by the soft PCF, less the depth
+  bias). HUD *Bodendetail*.
   Plan [023](./plans/023-ground-detail.md).
 - **Paving materials** (*Beläge*) — OSM `surface=*` on the highways (plus
   `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
@@ -79,9 +95,11 @@ visual-variable codebook is in
   direction. The
   shader reads `road` on class 7 and `walk` elsewhere; unknown falls back to
   asphalt / slabs (class 4) / sand (class 6). Patterns in the street's own
-  frame — slabs in running bond, sett rows across the street with
-  pillow-shaded stones, concrete plates, gravel and asphalt mottles, grass
-  pavers — fade out by `fwidth` before they alias; the material's tint
+  frame — slabs in running bond (low-contrast joints), concrete plates,
+  gravel and asphalt mottles, grass pavers; sett as a darker, warmer tone
+  with a fine direction-free grain (the drawn stone grid with pillow
+  shading read as busy and seamed where two streets' frames met, and was
+  abstracted away on review) — fade out by `fwidth` before they alias; the material's tint
   stays at any distance. Coverage (Dresden, 2026-09-19 extract): ~87 % of the
   highway ways carry `surface`, ~68 % of the DLM carriageway texels get a
   material. Fine terrain level only; absent raster → the class defaults.
