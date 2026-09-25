@@ -78,6 +78,7 @@ export type LayerName =
   | "city"
   | "furniture"
   | "lamps"
+  | "lowVegetation"
   | "monuments"
   | "rail"
   | "stairs"
@@ -735,6 +736,7 @@ async function bootApp(
           terrains.flatMap((t) => [t.water?.mesh, t.water?.mistMesh])
         ),
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
+        lowVegetation: census(dressings.map((d) => d.lowVegetation)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
         monuments: census(dressings.map((d) => d.monuments?.group)),
         furniture: census(dressings.map((d) => d.furniture)),

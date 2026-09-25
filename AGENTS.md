@@ -7,9 +7,11 @@ Entrypoint for coding agents working on this repo.
 A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
 rendering of Dresden built from Saxon open geodata and walk (or fly) through it.
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
-rasters, surfaces (roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover
-class raster (painted with one palette at runtime), and trees from DLM
-hedge/tree-rows plus a **DOM1**-derived canopy. The build bakes it all into an
+rasters (the walked-on level an error-bounded TIN), surfaces
+(roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover class raster
+(painted with one palette at runtime), and trees from DLM hedge/tree-rows, a
+**DOM1**-derived canopy, the city's **street-tree cadastre** and laser-scan
+crowns, plus OSM hedges. The build bakes it all into an
 **OGC 3D Tiles** tileset of glTF content that the browser streams with
 **3DTilesRendererJS** and renders with **three.js**; there is no backend.
 
@@ -96,7 +98,9 @@ config change.
     `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
-    `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
+    `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
+    the street-tree cadastre's silhouettes, and `low-vegetation-layer.ts`,
+    the OSM hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
@@ -130,7 +134,10 @@ config change.
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `site.ts` (the site
+  policy, the look table + store, the Snapshot codec, `terrain-tin.ts`
+  (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
+  the measured step), `tree-inventory.ts` (the cadastre's archetypes and
+  veto), `site.ts` (the site
   type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
@@ -141,7 +148,8 @@ config change.
 - `sites/` — one config per place (`dresden.ts`: tiles, CRS, labels,
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
-  (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
+  (`bake/landcover.py`, `canopy.py`, `trees.py` (+ `tree_archetypes.py`),
+  `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `ndvi.py`, `roof_colour.py`,
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
   `rail.py`, `surface.py`, `edges.py`, `sport.py`, `osm.py`; `ingest_sn.py` is Saxony's
   download adapter; tests in `pipeline/tests/`), run by `bun run bake`
@@ -151,8 +159,10 @@ config change.
   `tileset-spawn.json`) with glTF content under content-hashed names +
   `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
   CityJSON loader, `bake-tiles.ts` turns it into glTF with a per-object
-  property table) and the terrain at two levels (the DGM resampled, the
-  wall breaklines burned in), written by `tile-glb.ts` (meshopt, quantised,
+  property table) and the terrain at two levels (fine: an error-bounded TIN
+  of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
+  measured steps; coarse: the DGM resampled to 512², the wall breaklines
+  burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `bake.ts` (the pipeline runner), `downsample-raster.ts` (the 2048² class
   raster), `bake-wissen-hero.ts`, `render-diagrams.ts`
@@ -248,6 +258,12 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
+- `trees.py` bakes Dresden's street-tree cadastre (the ingest adapter
+  caches the city's WFS per tile); `lowveg.py` the OSM hedges at their
+  laser-scan height and the scan's trees outside the canopy mask, thinned
+  against the cadastre. The laser scan (`<raw>/lsc/<tile>.laz`) is placed
+  there by `bun run bake --ingest --lsc` (or by hand) and rasterised in
+  Python (`lsc.py`, laspy — no PDAL); without it the step is OSM only.
 - `monuments.py` takes the monuments (statues, stones, columns, named
   fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
   basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
@@ -330,8 +346,9 @@ its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
 Before a tile or its dressing shows, its shaders are compiled with
 `compileAsync` against the scene pass's target (`PostStack.compile`) —
 add new per-tile objects inside that path, or they compile inside a frame.
-The terrain has no BVH: ground rays march the height grid
-(`lib/city/ground-ray.ts`). The glTF extras key is **`tileId`**: the
+The terrain has no BVH: ground rays march the height function
+(`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
+triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
 streaming camera, so tiles that cast into the view stay loaded;
 `displayActiveTiles` keeps loaded tiles drawn while turning.

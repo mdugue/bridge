@@ -30,12 +30,14 @@ flowchart TB
   SCENE --> WORLD
   WORLD --> TILES
   TILES --> CITY["buildings (refine ADD)<br/>one glTF mesh per tile, feature id per vertex<br/>per-tile clay material + object texture, BVH"]
-  TILES --> TER["terrain, L1 512² → L0 1024² (REPLACE)<br/>glTF grid + 30 m skirt, walls burned in, lowered under stairs<br/>palette-painted splat, receives shadows only"]
+  TILES --> TER["terrain, L1 512² grid → L0 TIN (REPLACE)<br/>glTF + 30 m skirt, lowered under stairs<br/>(walls burned into L1 only)<br/>palette-painted splat, receives shadows only"]
   TER --> WAT["water + mist sheets<br/>terrain geometry masked by splat alpha"]
   TER --> STAIR["L0: stairs node, baked with the ground<br/>treads, risers, cheeks per flight"]
-  TER --> WALL["L0: walls node, baked on every tile's ground<br/>vertical sandstone ribbons"]
+  TER --> WALL["L0: walls node, baked on every tile's TIN<br/>sandstone ribbons snapped to the measured step"]
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
-  DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges"]
+  DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges<br/>canopy + scan + cadastre trees share the meshes"]
+  DRESS --> INV["cadastre silhouettes<br/>flame / cone / dome per 250 m cell"]
+  DRESS --> LOW["OSM hedges<br/>clay block chains per 250 m cell"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
   DRESS --> FURN["street furniture<br/>one InstancedMesh per model:<br/>benches, bins, hoops, bollards, shelters"]
   DRESS --> MON["monuments<br/>fountain rims + water, water bells,<br/>measured sculptures, markers"]
@@ -70,9 +72,10 @@ is the codebook.
 
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
-| Ground height | DGM resampled at build time to the terrain grid (1024² fine, 512² coarse); heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
+| Ground height + mesh density | fine level: an error-bounded TIN of the native 1 m DGM1 — vertices where the ground bends, within ±0.15 m everywhere; heights read from its triangles through a bucket index. Coarse level: the DGM resampled to 512², heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `scripts/bake-terrain-tin.ts`, `lib/city/terrain-tin.ts` (`TinIndex`), `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
+| Wall ribbon placement | earth-retaining walls snap to the step the fine TIN measures (face at the ramp foot, a coping cap to the crest); other walls on the OSM line | DGM1 + OSM walls | `lib/city/walls.ts`, `lib/city/wall-snap.ts` (at build) |
 | Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`TERRAIN_NORMAL`) |
-| Ground step at walls | wall line + `kind` ∈ retaining/city/embankment/cliff, height ≥ 1.5 m, burned in at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
+| Ground step at walls (coarse level only) | wall line + `kind` ∈ retaining/city/embankment/cliff, height ≥ 1.5 m, burned into the 512² grid at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
 | Contour lines | data-frame elevation (`DATA_POSITION`), 2 m minor / 10 m major; each set fades once its lines crowd closer than a few pixels, and on near-flat ground (< ~3 % grade) and under water, where the DGM's noise only drew squiggles | DGM1 | `terrain-layer.ts` (`CONTOUR_INK`) |
 | Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat; the class PNG is decoded byte-exact by `lib/city/png-raster.ts`, never by the browser (WebKit colour-managed and dithered the ids into speckles) | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`), read from a coarse mip (~10 m) so it drifts rather than flecks | DOP | `terrain-layer.ts` |
@@ -107,7 +110,10 @@ is the codebook.
 | Crown colour | NDVI 5×5 footprint max, recentred on the median | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
 | Crown detail | distance (in 220 m / out 300 m per 250 m chunk) | — | `updateLod` (*Detaillierte Kronen*) |
+| Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
+| OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
+| Extra tree | LSC crown peak + `h` outside the canopy mask and away from any cadastre tree, appended to the canopy points | LSC | `tile-stream.ts` → `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
 | Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
 | Street furniture | OSM point → one small abstracted model per kind (bench, backless bench, picnic table, bin, bicycle hoop, bollard — stone or metal, at its tagged height —, post box, stop shelter): softened blocks, capsules, tube strokes in the scene's pastels, vertex-coloured under one matte material; front turned to the bake's bearing `a` (OSM `direction`, else the nearest highway), a bench stretched to its mapped length `l`, a stand as `n` hoops 0.9 m apart; none on classes 5 and 8 or bridge decks | OSM | `furniture-layer.ts`, `lib/city/furniture.ts`, `pipeline/bake/furniture.py` |
@@ -200,9 +206,12 @@ patch materials with `onBeforeCompile` and are deliberately not used.
 
 The bottleneck is **fill-rate** (post FX and the shadow depth pass), not
 draw calls: buildings are one mesh per tile, vegetation one instanced mesh
-per 250 m cell. Two orthogonal switches size the work
-(`app/_components/scene-profile.ts`), and the tiles renderer decides how
-much of the site is loaded (screen-space error target 16 px, an LRU cache):
+per 250 m cell (the cadastre's trunks and broadleaf crowns ride in the
+canopy's cell meshes; only its flame/cone/dome silhouettes add meshes —
+`scripts/eval/kataster-cost.ts` models the calls per view). Two orthogonal
+switches size the work (`app/_components/scene-profile.ts`), and the tiles
+renderer decides how much of the site is loaded (screen-space error target
+16 px, an LRU cache):
 
 | Knob | full · desktop | full · mobile | lite (tests) |
 |---|---|---|---|
@@ -219,7 +228,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | Content | Wire size per tile | Triangles |
 |---|---|---|
 | buildings `city_<tile>.glb.gz` | 1.1–1.5 MB | ≈143 k on the spawn tile |
-| fine terrain `terrain_<tile>_l0.glb.gz` | 1.5–2.0 MB | ≈2.1 M (1024² grid + skirt) |
+| fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.6–2.0 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
 | footprints (minimap) | 0.23–0.33 MB | — |
 | class raster 4096² / 2048² | 0.22–0.25 / ≈0.08 MB | — |
@@ -228,6 +237,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | edge raster (fine level) | 0.34–0.46 MB | — |
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | ≈ 130–200 k |
 | canopy points (fine level) | 0.6–1.8 MB | — |
+| cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB
 heightfield; quantised meshes cost more on the wire than a height blob,
@@ -255,7 +265,7 @@ sequenceDiagram
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
   Note over B: startStreaming() opens the dressing gate
   B->>S: the rest of the site, as the view and shadow cameras need it
-  B->>S: per fine terrain tile: canopy, rows, NDVI, lamps, monuments, furniture, rail, bridge, platform
+  B->>S: per fine terrain tile: canopy, rows, scan trees, cadastre, hedges, NDVI, lamps, monuments, furniture, rail, bridge, platform
   Note over B: each change: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```

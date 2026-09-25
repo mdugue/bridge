@@ -27,6 +27,14 @@ test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
  */
 
 const SHOTS_DIR = join(process.cwd(), "shots");
+/**
+ * Before/after pairs from one set of snapshots — the ONE mechanism:
+ * `SHOTS_QUERY` is appended to the page URL (with or without its leading
+ * `?`, e.g. `SHOTS_QUERY=scene=lite`), and `SHOTS_TAG=x` writes
+ * `shots/<name>.x.png` so the untagged plate is not overwritten.
+ */
+const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
+const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
 
 function snapshotFiles(): string[] {
   try {
@@ -48,7 +56,7 @@ for (const file of snapshotFiles()) {
     }
     const snap: Snapshot = parsed.snapshot;
 
-    await page.goto("/");
+    await page.goto(SHOTS_QUERY ? `/?${SHOTS_QUERY}` : "/");
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: 120_000,
     });
@@ -100,6 +108,7 @@ for (const file of snapshotFiles()) {
 
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();
-    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}.png`) });
+    const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
+    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}${tag}.png`) });
   });
 }
