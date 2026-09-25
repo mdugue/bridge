@@ -107,6 +107,35 @@ export function treeExtents(
   };
 }
 
+/**
+ * The shared trunk geometry (vegetation-layer.ts buildTrunkGeo) is a
+ * cylinder of these radii (m) at the unit scale, tapering from the foot to
+ * the top; its instance scale is (girth, trunkTop / TRUNK_H, girth).
+ */
+export const TRUNK_FOOT_R = 0.16;
+export const TRUNK_TOP_R = 0.09;
+/** Breast height (m), where a cadastre measures the trunk. */
+const BREAST_HEIGHT = 1.3;
+/** A flat-shaded seven-sided trunk without bark reads thinner than the real
+ *  one of the same width; this much wider it reads right. */
+const TRUNK_STYLE = 1.3;
+const GIRTH_RANGE: [number, number] = [0.3, 5];
+
+/**
+ * The trunk's horizontal instance scale. With a measured diameter at breast
+ * height (`dbhCm`, the cadastre's `stammdurchmesser_akt` or an OSM
+ * circumference) the geometry's radius at 1.3 m is fitted to it (× the style
+ * factor); without one, the girth follows the tree's height, as before.
+ */
+export function trunkGirth(ext: TreeExtents, dbhCm?: number): number {
+  if (dbhCm === undefined || !Number.isFinite(dbhCm) || dbhCm <= 0) {
+    return clamp((ext.crownTop / 5.8) * 0.8, [0.45, 5]);
+  }
+  const f = Math.min(BREAST_HEIGHT / Math.max(ext.trunkTop, 0.1), 1);
+  const unitR = TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * f;
+  return clamp((dbhCm / 200 / unitR) * TRUNK_STYLE, GIRTH_RANGE);
+}
+
 /** Radius (m) around an inventory tree inside which a canopy or row tree is
  *  taken to be the same tree: its crown radius, but never less than half the
  *  canopy bake's 7 m grid (the tallest-pixel pick wanders within its cell),

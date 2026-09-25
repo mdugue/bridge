@@ -114,7 +114,8 @@ is the codebook.
 | Crown colour | NDVI 5×5 footprint max, recentred on the median | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
 | Crown detail | distance (in 220 m / out 300 m per 250 m chunk) | — | `updateLod` (*Detaillierte Kronen*) |
-| Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
+| Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted at 1.3 m, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within 3 m | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
+| Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance) and thins the shadow through the same discard in a custom depth material; evergreens constant, canopy/row trees a generic curve; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
 | Allotment beds | OSM `landuse=allotments`: 1.2 m beds of soil / green / grass in ≈12 m jittered-Voronoi plots along the colony's long axis or across it, a dark line where plots meet, the plot's tone from afar; paths, roads, rail and water left out; faint (0.45 of *Bodendetail*) — no colony maps its parcels | OSM | `cultivated-layer.ts`, `cultivated_<t>.png` |
 | Orchard tree | OSM `landuse=orchard`: the mapped trees, else an 8 m grid along the long axis, as the cadastre's "small" archetype | OSM | `tile-stream.ts` → `tree-inventory-layer.ts` |
@@ -183,8 +184,8 @@ is spelled: changing one is a look change, not a re-bake
   altitude, centred on the ground and pushed ahead along the view
   (`lib/city/shadow-fit.ts`). It re-renders only when the centre leaves a
   dead zone (18 % of the half-size), the size re-fits, the sun moves or a
-  caster changes (`invalidateShadows()` — the crown LOD swap included, and
-  every tile that lands, leaves or changes visibility through the stream's
+  caster changes (`invalidateShadows()` — the crown LOD swap included, a
+  season change that thins or fills crowns, and every tile that lands, leaves or changes visibility through the stream's
   change hook). Animated geometry (sway, clouds) deliberately does **not**
   update it.
 - **The shadow camera streams.** The sun's shadow camera is registered

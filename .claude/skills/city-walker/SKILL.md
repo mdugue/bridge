@@ -274,6 +274,16 @@ not sky.
   research). Measured lesson: the LSC **multi-echo ratio is a tall-tree cue,
   not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5). Draw-call model:
   `scripts/eval/kataster-cost.ts`. Numbers in `docs/transformations.md`.
+- **Species and season (plan 025):** the tree data carries the genus (`gn`,
+  an index into the file's `genera` = `lib/city/tree-season.ts`
+  TREE_GENERA) and the trunk diameter; OSM `natural=tree` fills in where the
+  cadastre has no tree within 3 m. `crown-season.ts` turns the scene date
+  into per-instance colour and `aBare` (1 − leaf) **on a change of calendar
+  day only** (throttled, never per frame); a chunk with a bare crown wears
+  the seasonal crown material (a hashed alpha test in crown space, ~1.25 px
+  cells — fixed cells shattered big crowns into shards) plus the matching
+  `customDepthMaterial`, so the winter shadow thins. Cost:
+  `scripts/eval/season-cost.ts`.
 
 ### Sandbox crown — what is left to port
 

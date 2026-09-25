@@ -49,14 +49,18 @@ export interface CanopyFeature {
 }
 
 /**
- * Individually surveyed trees — the Dresden street-tree cadastre
- * (pipeline/bake/trees.py, dl-de/by-2-0 "Landeshauptstadt Dresden"). Heights
- * and crown diameters in metres (imputed in the bake where the cadastre has
+ * Individually known trees — the Dresden street-tree cadastre
+ * (pipeline/bake/trees.py, dl-de/by-2-0 "Landeshauptstadt Dresden") and the
+ * OSM `natural=tree` nodes it does not cover (`s: "osm"`, ODbL). Heights
+ * and crown diameters in metres (imputed in the bake where the source has
  * none); `a` is the archetype id (lib/city/tree-inventory.ts
  * TREE_ARCHETYPES), `l` the leaf type ("e" evergreen, "d" deciduous), `c` a
  * foliage colour (1 purple, 2 golden; absent = green), `g` = 1 marks a globe
  * cultivar, `f` = 1 a tree standing in DLM forest/copse (it vetoes no
- * canopy tree — lib/city/tree-inventory.ts).
+ * canopy tree — lib/city/tree-inventory.ts), `gn` the genus (an index into
+ * the file's `genera` member, lib/city/tree-season.ts TREE_GENERA; absent =
+ * 0, other deciduous) and `t` the trunk diameter at breast height (cm;
+ * absent = not measured).
  */
 export interface TreeFeature {
   geometry: PointGeometry;
@@ -66,8 +70,11 @@ export interface TreeFeature {
     d: number;
     f?: number;
     g?: number;
+    gn?: number;
     h: number;
     l: "d" | "e";
+    s?: "osm";
+    t?: number;
   } | null;
 }
 

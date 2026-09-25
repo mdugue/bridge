@@ -36,6 +36,7 @@ import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
+import { createSeasonClock } from "./crown-season";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
@@ -519,6 +520,19 @@ async function bootApp(
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
   let compileWith: ((object: Object3D) => Promise<void>) | null = null;
+  // The trees follow the scene's calendar day (crown-season.ts): colour and
+  // leaf cover are rewritten on a change of day, never per frame, and a
+  // crown that changed redraws the shadow map.
+  const seasonClock = createSeasonClock(opts.initialDate, (day) => {
+    let changed = false;
+    for (const d of stream.dressings) {
+      changed = (d.vegetation?.setSeason(day) ?? false) || changed;
+    }
+    if (changed) {
+      invalidateShadows();
+    }
+  });
+  cleanups.push(() => seasonClock.dispose());
   const stream = createTileStream(
     {
       compile: (object) =>
@@ -532,6 +546,7 @@ async function bootApp(
       lowRasters: budget.lowRasters,
       ground,
       night: () => currentNight,
+      season: () => seasonClock.day(),
       offset,
       onChange: () => onChange(),
       renderer,
@@ -599,6 +614,7 @@ async function bootApp(
     lampLights.setNightFactor(state.nightFactor);
     setFountainNight(state.nightFactor);
     clayNight.value = state.nightFactor;
+    seasonClock.set(date);
     invalidateShadows();
     return state;
   };

@@ -8,8 +8,28 @@ import {
   MIN_FOOTPRINT_R,
   overtops,
   TREE_ARCHETYPES,
+  TRUNK_FOOT_R,
+  TRUNK_TOP_R,
   treeExtents,
+  trunkGirth,
 } from "./tree-inventory";
+
+test("a measured trunk sets the girth; without one it follows the height", () => {
+  const ext = treeExtents(15, 9, "round");
+  // Unmeasured: the height rule.
+  expect(trunkGirth(ext)).toBeCloseTo((15 / 5.8) * 0.8);
+  expect(trunkGirth(ext, Number.NaN)).toBeCloseTo((15 / 5.8) * 0.8);
+  // Measured: the unit trunk's radius at 1.3 m, scaled to half the
+  // diameter (× the style factor) — and monotone in the diameter.
+  const f = 1.3 / ext.trunkTop;
+  const unitR = TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * f;
+  const g40 = trunkGirth(ext, 40);
+  expect(g40 * unitR).toBeCloseTo(0.2 * 1.3);
+  expect(trunkGirth(ext, 60)).toBeGreaterThan(g40);
+  // Clamped at both ends: a sapling and a register typo.
+  expect(trunkGirth(ext, 1)).toBe(0.3);
+  expect(trunkGirth(ext, 5000)).toBe(5);
+});
 
 test("archetype ids follow the bake's order and fall back to round", () => {
   expect(TREE_ARCHETYPES[2]).toBe("columnar");

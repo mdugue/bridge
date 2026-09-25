@@ -22,6 +22,8 @@ crown geometry the viewer draws (both in lib/city/tree-inventory.ts).
 Leaf type: "e" evergreen (in leaf on the 2024-03-19 leaf-off DOP) or "d"
 deciduous (bare then). Deciduous conifers are "d".
 Foliage colour: 0 green, 1 purple/copper ("Blut-" cultivars), 2 golden.
+Genus id: an index into GENERA, the viewer's phenology table
+(lib/city/tree-season.ts): when the crown leafs out, turns and falls.
 """
 
 import re
@@ -175,6 +177,83 @@ GOLD_DE = re.compile(r"gold-|goldulme|gelbblättrig", re.IGNORECASE)
 
 UNKNOWN = {"Baumart", "Stammstück", ""}
 
+# The phenology table's keys: a tree's `gn` in trees_<tile>.geojson is an
+# index into this list, and lib/city/tree-season.ts holds the leaf-out,
+# colouring, leaf-fall and autumn hue per entry in the SAME order (the bake
+# writes the list as the file's `genera` member; lib/city/features.test.ts
+# checks it against the viewer's). Append only: an index, once baked, means
+# that entry. 0 is "other deciduous", the generic curve. Two entries are a
+# species group rather than a genus because their autumn is: the red maples
+# (A. rubrum, A. × freemanii and their cultivars) and the red oaks.
+# Evergreens need no entry: their leaf type (`l`) keeps them unchanged.
+GENERA = [
+    "",
+    "Acer",
+    "Acer rubrum",
+    "Tilia",
+    "Quercus",
+    "Quercus rubra",
+    "Fraxinus",
+    "Aesculus",
+    "Prunus",
+    "Platanus",
+    "Robinia",
+    "Carpinus",
+    "Crataegus",
+    "Gleditsia",
+    "Sophora",
+    "Ulmus",
+    "Betula",
+    "Malus",
+    "Liquidambar",
+    "Populus",
+    "Ailanthus",
+    "Salix",
+    "Alnus",
+    "Koelreuteria",
+    "Sorbus",
+    "Liriodendron",
+    "Catalpa",
+    "Corylus",
+    "Pyrus",
+    "Ginkgo",
+    "Ostrya",
+    "Fagus",
+    "Castanea",
+    "Juglans",
+    "Celtis",
+    "Larix",
+    "Metasequoia",
+    "Taxodium",
+]
+_GENUS_INDEX = {g: i for i, g in enumerate(GENERA)}
+RED_MAPLES = {"Acer rubrum", "Acer freemanii", "Acer freemannii"}
+RED_MAPLE_CULTIVARS = {
+    "october glory",
+    "red sunset",
+    "autumn blaze",
+    "autum blaze",
+    "armstrong",
+    "scarlet sentinel",
+    "brandywine",
+}
+RED_OAKS = {"Quercus rubra", "Quercus palustris", "Quercus coccinea"}
+# Synonyms the cadastre and OSM use for a genus of the table.
+GENUS_SYNONYMS = {"Styphnolobium": "Sophora"}
+
+
+def genus_id(botanical: str) -> int:
+    """The phenology table index (GENERA) of a taxon; 0 when it has none."""
+    genus, binomial, cultivar = parse_taxon(botanical)
+    genus = GENUS_SYNONYMS.get(genus, genus)
+    if genus == "Acer" and (
+        _species_match(binomial, RED_MAPLES) or cultivar in RED_MAPLE_CULTIVARS
+    ):
+        return _GENUS_INDEX["Acer rubrum"]
+    if genus == "Quercus" and _species_match(binomial, RED_OAKS):
+        return _GENUS_INDEX["Quercus rubra"]
+    return _GENUS_INDEX.get(genus, 0)
+
 
 def parse_taxon(botanical: str) -> tuple[str, str, str]:
     """(genus, "Genus species", cultivar) from e.g. "Acer plat. 'Globosum'"."""
@@ -266,6 +345,7 @@ def classify(botanical: str, german: str = "") -> dict:
     globe = bool(GLOBE_RE.search(botanical) or GLOBE_DE.search(german))
     return {
         "genus": genus if known else "",
+        "gn": genus_id(botanical) if known else 0,
         "archetype": arch,
         "leaf": lt,
         "foliage": foliage(botanical, german),

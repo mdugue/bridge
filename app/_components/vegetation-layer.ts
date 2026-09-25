@@ -23,6 +23,16 @@ import {
 } from "@/lib/city/look-controls";
 import { samplePolyline } from "@/lib/city/polyline";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { TRUNK_FOOT_R, TRUNK_TOP_R } from "@/lib/city/tree-inventory";
+import { seasonJitter } from "@/lib/city/tree-season";
+import {
+  CROWN_BASE_COLOR,
+  type CrownMaterials,
+  type CrownSeasonKey,
+  injectCrownSeason,
+  type SeasonalCrowns,
+  seasonCrowns,
+} from "./crown-season";
 import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
@@ -44,7 +54,14 @@ export type TreeVeto = (x: number, y: number, h?: number) => boolean;
  * silhouettes are the inventory layer's own meshes).
  */
 export interface TreeInstance {
-  crown?: { cheap: Matrix4; colour: Color; rich: Matrix4 };
+  /** `season`: how the crown follows the year (absent = the generic
+   *  deciduous curve, like a canopy tree) */
+  crown?: {
+    cheap: Matrix4;
+    colour: Color;
+    rich: Matrix4;
+    season?: CrownSeasonKey;
+  };
   trunk: Matrix4;
   /** Y-up world position, for the chunk bucketing */
   x: number;
@@ -112,8 +129,33 @@ export interface VegetationControl {
   group: Group;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
   setTime: (seconds: number) => void;
+  /**
+   * Moves the crowns to `day` (days since 1 January; lib/city/tree-season.ts):
+   * autumn colour and bare crowns. Called on a date change, never per frame;
+   * returns true when any crown changed (the shadow map must then be redrawn).
+   */
+  setSeason: (day: number) => boolean;
   /** swaps crown LOD per chunk; returns true when any chunk changed (the shadow map must then be redrawn) */
   updateLod: (cameraPos: Vector3) => boolean;
+}
+
+/** A canopy or row tree's season: the generic deciduous curve, offset by
+ *  a stable hash of its position. */
+export function genericSeasonKey(x: number, z: number): CrownSeasonKey {
+  return {
+    genus: 0,
+    evergreen: false,
+    jitter: seasonJitter(hash(x * 0.53 + z * 0.29 + 7.1)),
+  };
+}
+
+/** Runs every chunk's season; true when any changed. */
+export function applySeasons(cells: SeasonalCrowns[], day: number): boolean {
+  let changed = false;
+  for (const cell of cells) {
+    changed = cell.apply(day) || changed;
+  }
+  return changed;
 }
 
 /** A chunk's two crown meshes; exactly one is visible (swapCrownLod). */
@@ -429,6 +471,9 @@ export function buildCrownGeoRich(): BufferGeometry {
  * behind the tree kills the glow while the crown's own self-shadow doesn't.
  * Shared by both LOD crown meshes. `sunDirection` (surface→sun) and `shimmer`
  * are live references; mutating `shimmer.value` retunes without a recompile.
+ * `bare` builds the seasonal variant: the per-instance leaf cover thins the
+ * crown to twigs (crown-season.ts); a chunk wears it only while any of its
+ * crowns is out of full leaf, so the summer crown keeps early depth testing.
  */
 export function buildCrownMaterial(
   sunDirection: Vector3,
@@ -437,13 +482,19 @@ export function buildCrownMaterial(
   translucency: { value: number },
   leafFlutter: { value: number },
   leafBright: { value: number },
-  heightFog?: HeightFogUniforms
+  heightFog?: HeightFogUniforms,
+  bare = false
 ): MeshStandardMaterial {
-  const m = new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 });
-  // The closure branches on `heightFog`; three keys programs on the closure's
-  // text, so the branch has to be named (see terrain-layer.ts).
-  m.customProgramCacheKey = () => `crown-${heightFog !== undefined}`;
+  const m = new MeshStandardMaterial({ color: CROWN_BASE_COLOR, roughness: 1 });
+  // The closure branches on `heightFog` and `bare`; three keys programs on
+  // the closure's text, so the branches have to be named (see
+  // terrain-layer.ts).
+  m.customProgramCacheKey = () =>
+    `crown-${heightFog !== undefined}-${bare ? "bare" : "leafy"}`;
   m.onBeforeCompile = (sh) => {
+    if (bare) {
+      injectCrownSeason(sh, true);
+    }
     sh.uniforms.uSunDir = { value: sunDirection };
     sh.uniforms.uShimmer = shimmer;
     sh.uniforms.uTime = uTime;
@@ -565,6 +616,8 @@ export function buildCrownMaterial(
           // that bends the geometry, so the whole crown brightens leaning in and
           // dims rocking back; centred so the average colour is unchanged.
           "diffuseColor.rgb *= 1.0 + uLeafBright * vSway * 0.18;",
+          // Twigs of a bare crown neither shimmer nor glow (crown-season.ts).
+          bare ? "totalEmissiveRadiance *= 1.0 - crownTwig;" : "",
         ].join("\n")
       );
     if (heightFog) {
@@ -582,7 +635,7 @@ export function buildCrownMaterial(
  * identically — they belong on a near-distance LOD crown.
  */
 export function buildTrunkGeo(): BufferGeometry {
-  const t = new CylinderGeometry(0.09, 0.16, TRUNK_H, 7, 5);
+  const t = new CylinderGeometry(TRUNK_TOP_R, TRUNK_FOOT_R, TRUNK_H, 7, 5);
   t.translate(0, TRUNK_H / 2, 0);
   const bend = 0.05 * TRUNK_H;
   const bx = 0.82;
@@ -693,8 +746,13 @@ function buildTreeCell(
   cell: TreeCell,
   geos: { cheap: BufferGeometry; rich: BufferGeometry; trunk: BufferGeometry },
   trunkMat: Material,
-  crownMat: Material
-): { lod: CellLod | null; meshes: InstancedMesh[] } {
+  crownMats: CrownMaterials
+): {
+  lod: CellLod | null;
+  meshes: InstancedMesh[];
+  season: SeasonalCrowns | null;
+} {
+  const crownMat = crownMats.leafy;
   const { trees } = cell;
   const trunks = new InstancedMesh(
     geos.trunk,
@@ -707,7 +765,7 @@ function buildTreeCell(
   finishInstances(trunks);
   const crowned = cell.extras.filter((e) => e.crown);
   if (trees.length + crowned.length === 0) {
-    return { lod: null, meshes: [trunks] };
+    return { lod: null, meshes: [trunks], season: null };
   }
   const cheap = new InstancedMesh(
     geos.cheap,
@@ -736,47 +794,85 @@ function buildTreeCell(
   }
   // updateLod() decides which crown is visible each frame; start on cheap.
   rich.visible = false;
-  return { lod: { cheap, rich }, meshes: [trunks, cheap, rich] };
+  // Same order as the slots: the placements, then the precomputed crowns.
+  const keys = [
+    ...trees.map((p) => genericSeasonKey(p.x, p.z)),
+    ...crowned.map((e) => e.crown?.season ?? genericSeasonKey(e.x, e.z)),
+  ];
+  return {
+    lod: { cheap, rich },
+    meshes: [trunks, cheap, rich],
+    season: seasonCrowns({ cheap, rich }, keys, crownMats),
+  };
+}
+
+/** The crown's live uniforms (by reference), shared by every crown material
+ *  of a tile. */
+export interface CrownUniforms {
+  leafBright: { value: number };
+  leafFlutter: { value: number };
+  shimmer: { value: number };
+  sunDirection: Vector3;
+  translucency: { value: number };
+  uTime: { value: number };
+}
+
+/** The plain crown material and its seasonal (bare-crown) variant. */
+export function buildCrownMaterials(
+  u: CrownUniforms,
+  heightFog?: HeightFogUniforms
+): CrownMaterials {
+  const make = (bare: boolean) =>
+    buildCrownMaterial(
+      u.sunDirection,
+      u.shimmer,
+      u.uTime,
+      u.translucency,
+      u.leafFlutter,
+      u.leafBright,
+      heightFog,
+      bare
+    );
+  return { leafy: make(false), bare: make(true) };
 }
 
 function buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
-  sunDirection: Vector3,
-  shimmer: { value: number },
-  uTime: { value: number },
-  translucency: { value: number },
-  leafFlutter: { value: number },
-  leafBright: { value: number },
+  uniforms: CrownUniforms,
   heightFog?: HeightFogUniforms
-): { cells: CellLod[]; meshes: InstancedMesh[] } {
+): { cells: CellLod[]; meshes: InstancedMesh[]; seasons: SeasonalCrowns[] } {
   // Geometry + materials are shared across all chunks; only the per-chunk
   // instance buffers differ, so this stays cheap to allocate.
   const trunkGeo = buildTrunkGeo();
   const cheapGeo = buildCrownGeo();
   const richGeo = buildCrownGeoRich();
   const trunkMat = buildTrunkMaterial(heightFog);
-  const crownMat = buildCrownMaterial(
-    sunDirection,
-    shimmer,
-    uTime,
-    translucency,
-    leafFlutter,
-    leafBright,
-    heightFog
-  );
+  const crownMats = buildCrownMaterials(uniforms, heightFog);
 
   const geos = { cheap: cheapGeo, rich: richGeo, trunk: trunkGeo };
   const meshes: InstancedMesh[] = [];
   const cells: CellLod[] = [];
+  const seasons: SeasonalCrowns[] = [];
   for (const cell of bucketTrees(trees, extras)) {
-    const built = buildTreeCell(cell, geos, trunkMat, crownMat);
+    const built = buildTreeCell(cell, geos, trunkMat, crownMats);
     meshes.push(...built.meshes);
     if (built.lod) {
       cells.push(built.lod);
     }
+    if (built.season) {
+      seasons.push(built.season);
+    }
   }
-  return { cells, meshes };
+  // A crown material may be on no mesh at all (the seasonal one in summer,
+  // the plain one in winter), so the tile's disposal (disposeObject3D,
+  // which frees what its meshes wear) would miss it: free both when the
+  // tile's first mesh goes. A second dispose of the same material is a no-op.
+  meshes[0]?.addEventListener("dispose", () => {
+    crownMats.leafy.dispose();
+    crownMats.bare.dispose();
+  });
+  return { cells, meshes, seasons };
 }
 
 function buildHedges(
@@ -943,6 +1039,7 @@ export function buildVegetation(
   const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let cells: CellLod[] = [];
+  let seasons: SeasonalCrowns[] = [];
 
   const { ndviAt, keepTree } = features;
   const { trees, hedges } = collectPlacements(
@@ -957,16 +1054,19 @@ export function buildVegetation(
     const built = buildTrees(
       trees,
       extras,
-      sunDirection,
-      shimmer,
-      uTime,
-      translucency,
-      leafFlutter,
-      leafBright,
+      {
+        sunDirection,
+        shimmer,
+        uTime,
+        translucency,
+        leafFlutter,
+        leafBright,
+      },
       ctx.heightFog
     );
     group.add(...built.meshes);
     cells = built.cells;
+    seasons = built.seasons;
   }
   if (hedges.length > 0) {
     group.add(...buildHedges(hedges, ctx.heightFog));
@@ -983,6 +1083,7 @@ export function buildVegetation(
     setTime: (seconds) => {
       uTime.value = seconds;
     },
+    setSeason: (day) => applySeasons(seasons, day),
     // Rich crown only near the camera (and only when multi-tuft is enabled);
     // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in
     // the chunk (sphere centre minus radius) with enter/exit hysteresis.

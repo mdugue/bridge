@@ -99,8 +99,9 @@ config change.
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
-    the street-tree cadastre's silhouettes, and `low-vegetation-layer.ts`,
-    the OSM hedges), `city-layer.ts` (dresses a
+    the street-tree cadastre's silhouettes, `crown-season.ts`, the
+    crowns' autumn colour and bare winter stipple, and
+    `low-vegetation-layer.ts`, the OSM hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
@@ -143,7 +144,8 @@ config change.
   policy, the look table + store, the Snapshot codec, `terrain-tin.ts`
   (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
   the measured step), `fences.ts` (fence panels and gate gaps),
-  `tree-inventory.ts` (the cadastre's archetypes and veto), `site.ts` (the
+  `tree-inventory.ts` (the cadastre's archetypes and veto), `tree-season.ts`
+  (per-genus leaf-out, autumn and leaf fall), `site.ts` (the
   site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`

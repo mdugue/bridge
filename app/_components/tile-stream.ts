@@ -109,6 +109,9 @@ export interface TileStreamContext {
   ground: GroundUniforms;
   /** the current night factor, for lamps that land later */
   night: () => number;
+  /** the current day of the year, for trees that land later
+   *  (lib/city/tree-season.ts) */
+  season: () => number;
   offset: { cx: number; cy: number };
   /** content landed, left, or changed visibility */
   onChange: () => void;
@@ -336,6 +339,11 @@ function buildTileVegetation(
       canopy.setTime(seconds);
       own.setTime(seconds);
     },
+    setSeason: (day) => {
+      const a = canopy.setSeason(day);
+      const b = own.setSeason(day);
+      return a || b;
+    },
     // Both run: `||` would skip the cadastre's swap whenever the canopy's
     // changed.
     updateLod: (cameraPos) => {
@@ -418,8 +426,9 @@ async function buildDressing(
       heightFog: ctx.heightFog,
     }
   );
-  // Born with the current look, not the default.
+  // Born with the current look and season, not the defaults.
   vegetation.applyLook(ctx.look.get());
+  vegetation.setSeason(ctx.season());
   const lowVegetation =
     hedges.length > 0
       ? buildLowVegetation(hedges, {

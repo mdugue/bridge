@@ -45,24 +45,32 @@ export function disposeObject3D(root: Object3D): void {
 }
 
 /**
- * GPU bytes of every geometry reachable from `root` (each geometry counted
- * once: attributes, index and instanced attributes). An estimate for the
- * memory HUD — three keeps no byte counters, and a phone's single memory
- * pool is where this scene runs out of room first.
+ * GPU bytes of every geometry reachable from `root` (each buffer counted
+ * once: attributes, index and instanced attributes — several geometries may
+ * view the same buffers, as the seasonal crowns do, crown-season.ts). An
+ * estimate for the memory HUD — three keeps no byte counters, and a phone's
+ * single memory pool is where this scene runs out of room first.
  */
 export function estimateGeometryBytes(root: Object3D): number {
-  const seen = new Set<BufferGeometry>();
+  const seen = new Set<object>();
   let bytes = 0;
+  const count = (array: ArrayLike<number> & { byteLength: number }) => {
+    if (!seen.has(array)) {
+      seen.add(array);
+      bytes += array.byteLength;
+    }
+  };
   root.traverse((obj) => {
     const geometry = (obj as Object3D & { geometry?: BufferGeometry }).geometry;
-    if (!geometry || seen.has(geometry)) {
+    if (!geometry) {
       return;
     }
-    seen.add(geometry);
     for (const attribute of Object.values(geometry.attributes)) {
-      bytes += attribute.array.byteLength;
+      count(attribute.array);
     }
-    bytes += geometry.index?.array.byteLength ?? 0;
+    if (geometry.index) {
+      count(geometry.index.array);
+    }
   });
   return bytes;
 }

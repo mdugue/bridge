@@ -40,7 +40,7 @@ export const DRESDEN: Site = {
   attribution: [
     "Quelle: GeoSN, dl-de/by-2-0",
     "Lampen, Bänke, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige, Brücken, Läden und Baudenkmale © OpenStreetMap-Mitwirkende (ODbL)",
-    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
+    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
   ],
   spawn: "altstadt",
   viewpoints: [

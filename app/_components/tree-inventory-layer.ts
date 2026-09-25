@@ -4,7 +4,6 @@ import {
   Group,
   InstancedMesh,
   LatheGeometry,
-  type Material,
   Matrix4,
   Quaternion,
   Vector2,
@@ -25,11 +24,20 @@ import {
   footprintRadius,
   type TreeExtents,
   treeExtents,
+  trunkGirth,
 } from "@/lib/city/tree-inventory";
+import { seasonJitter } from "@/lib/city/tree-season";
 import {
+  type CrownMaterials,
+  type CrownSeasonKey,
+  type SeasonalCrowns,
+  seasonCrowns,
+} from "./crown-season";
+import {
+  applySeasons,
   buildCrownGeo,
   buildCrownGeoRich,
-  buildCrownMaterial,
+  buildCrownMaterials,
   bucketByCell,
   type CellLod,
   crownColor,
@@ -276,11 +284,15 @@ function buildShapeGeos(): ShapeGeos {
 /** One inventory tree in the Y-up scene frame. */
 interface InventoryTree {
   colour: number;
+  /** measured trunk diameter at breast height (cm) */
+  dbh?: number;
   ext: TreeExtents;
   ground: number;
   leaf: "d" | "e";
   ndvi?: number;
   rot: number;
+  /** genus, leaf type and jitter: how the crown follows the year */
+  season: CrownSeasonKey;
   shape: CrownShape;
   x: number;
   z: number;
@@ -312,7 +324,13 @@ function collectTrees(
       ext: treeExtents(p.h, p.d, archetype, p.g === 1),
       shape: ARCHETYPE_SHAPE[archetype],
       leaf: p.l === "e" ? "e" : "d",
+      season: {
+        genus: p.gn ?? 0,
+        evergreen: p.l === "e",
+        jitter: seasonJitter(hash(ex * 0.29 + ey * 0.53 + 3.7)),
+      },
       colour: p.c ?? 0,
+      dbh: p.t,
       ndvi: ndviAt?.(ex, ey),
     });
   }
@@ -334,13 +352,10 @@ function writeCrowns(
   mesh.computeBoundingSphere();
 }
 
-/** Trunk girth follows the height (slimmer than the canopy's uniform scale). */
-function trunkGirth(t: InventoryTree): number {
-  return Math.min(Math.max((t.ext.crownTop / 5.8) * 0.8, 0.45), 5);
-}
-
+/** Trunk girth: the measured diameter where there is one, else the height
+ *  (tree-inventory.ts trunkGirth). */
 function trunkMatrix(t: InventoryTree): Matrix4 {
-  const girth = trunkGirth(t);
+  const girth = trunkGirth(t.ext, t.dbh);
   return new Matrix4().compose(
     new Vector3(t.x, t.ground, t.z),
     new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
@@ -377,6 +392,7 @@ function canopyInstances(
         cheap: crownMatrix(t, broad.cheap),
         rich: crownMatrix(t, broad.rich),
         colour,
+        season: t.season,
       };
     }
     return out;
@@ -419,10 +435,14 @@ function paint(mesh: InstancedMesh, items: InventoryTree[]): void {
 function crownPair(
   items: InventoryTree[],
   geos: ShapeGeos[CrownShape],
-  material: Material
-): CellLod {
-  const cheap = new InstancedMesh(geos.cheap.geo, material, items.length);
-  const rich = new InstancedMesh(geos.rich.geo, material, items.length);
+  materials: CrownMaterials
+): { lod: CellLod; season: SeasonalCrowns } {
+  const cheap = new InstancedMesh(
+    geos.cheap.geo,
+    materials.leafy,
+    items.length
+  );
+  const rich = new InstancedMesh(geos.rich.geo, materials.leafy, items.length);
   for (const [mesh, fit] of [
     [cheap, geos.cheap],
     [rich, geos.rich],
@@ -433,7 +453,12 @@ function crownPair(
     paint(mesh, items);
   }
   rich.visible = false;
-  return { cheap, rich };
+  const season = seasonCrowns(
+    { cheap, rich },
+    items.map((t) => t.season),
+    materials
+  );
+  return { lod: { cheap, rich }, season };
 }
 
 export interface TreeInventory {
@@ -495,34 +520,48 @@ export function buildTreeInventory(
   );
   const trees = collectTrees(features, ctx, ndviAt);
   const cells: CellLod[] = [];
+  const seasons: SeasonalCrowns[] = [];
   let instances: TreeInstance[] = [];
   if (trees.length > 0) {
     const geos = buildShapeGeos();
     instances = canopyInstances(trees, geos.broad);
     counts.broad = trees.filter((t) => t.shape === "broad").length;
-    const crownMat = buildCrownMaterial(
-      ctx.sunDirection ?? new Vector3(0, 1, 0),
-      shimmer,
-      uTime,
-      translucency,
-      leafFlutter,
-      leafBright,
-      ctx.heightFog
-    );
-    for (const cell of bucketByCell(trees.filter((t) => t.shape !== "broad"))) {
+    const reshaped = trees.filter((t) => t.shape !== "broad");
+    const crownMats =
+      reshaped.length > 0
+        ? buildCrownMaterials(
+            {
+              sunDirection: ctx.sunDirection ?? new Vector3(0, 1, 0),
+              shimmer,
+              uTime,
+              translucency,
+              leafFlutter,
+              leafBright,
+            },
+            ctx.heightFog
+          )
+        : null;
+    for (const cell of crownMats ? bucketByCell(reshaped) : []) {
       for (const shape of CROWN_SHAPES) {
         const items = cell.filter((t) => t.shape === shape);
-        if (items.length === 0) {
+        if (items.length === 0 || !crownMats) {
           continue;
         }
         counts[shape] += items.length;
-        const pair = crownPair(items, geos[shape], crownMat);
-        pair.cheap.userData.treePart = shape;
-        pair.rich.userData.treePart = shape;
-        group.add(pair.cheap, pair.rich);
-        cells.push(pair);
+        const { lod, season } = crownPair(items, geos[shape], crownMats);
+        lod.cheap.userData.treePart = shape;
+        lod.rich.userData.treePart = shape;
+        group.add(lod.cheap, lod.rich);
+        cells.push(lod);
+        seasons.push(season);
       }
     }
+    // As in the canopy (vegetation-layer.ts buildTrees): a crown material
+    // may be on no mesh, so both go with the layer's first mesh.
+    cells[0]?.cheap.addEventListener("dispose", () => {
+      crownMats?.leafy.dispose();
+      crownMats?.bare.dispose();
+    });
   }
 
   return {
@@ -540,6 +579,7 @@ export function buildTreeInventory(
       setTime: (seconds) => {
         uTime.value = seconds;
       },
+      setSeason: (day) => applySeasons(seasons, day),
       // Same rule as the canopy (vegetation-layer.ts swapCrownLod).
       updateLod: (cameraPos) => swapCrownLod(cells, cameraPos, multiTuft),
     },

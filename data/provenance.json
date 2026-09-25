@@ -88,8 +88,8 @@
       "metadata": "https://www.geoportal.sachsen.de/md/4a9020f2-d9da-4731-a203-594eb10f0e3e",
       "licence": "dl-de/by-2-0; credit: Landeshauptstadt Dresden",
       "coverage": "street trees, parks, schools and other municipal land; not the Großer Garten, not private ground",
-      "retrieved": "2026-09-23",
-      "raw": "data/_raw/<site>/trees/<tile>.geojson (+ .meta.json); the committed files were baked from data/_raw/baumkataster/stadtbaum_<tile>.geojson",
+      "retrieved": "2026-09-25",
+      "raw": "data/_raw/<site>/trees/<tile>.geojson (+ .meta.json); re-baked 2026-09-25 from the ingest adapter's cache of that day (same 18 444 trees as the first bake of 2026-09-23 from data/_raw/baumkataster/stadtbaum_<tile>.geojson; genus and trunk diameter `stammdurchmesser_akt` added)",
       "committed": "data/dlm/trees_<tile>.geojson",
       "usedBy": ["pipeline/bake/trees.py", "pipeline/bake/lowveg.py", "scripts/eval/kataster-eval.py"],
       "numberMatched": {
@@ -150,7 +150,8 @@
         "fences": { "query": "barrier in (fence, handrail) lines and area outer rings (fence_type, height); barrier in (gate, lift_gate, swing_gate, cycle_barrier) points within 0.5 m of a wall or fence line (width). Appended to data/dlm/walls_<tile>.geojson after its walls, which were kept verbatim from the Geofabrik bake of 2026-06-15", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "osmBuildings": { "query": "shop=* or amenity in (cafe, restaurant, bar, pub, fast_food, ice_cream, biergarten) points on the ground floor (no level, or a level list with 0) and building multipolygons carrying them; building multipolygons with heritage=*; joined to the LoD2 footprints (data/dlm/osmbuild_<tile>.json)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "cultivated": { "query": "landuse in (allotments, orchard, vineyard) and leisure=garden multipolygons, natural=tree points, highway lines (a colony's paths)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
-        "markings": { "query": "highway=crossing nodes (crossing, crossing:markings, crossing_ref), highway=traffic_signals nodes with traffic_signals:direction or direction, highway=* lines (lanes, oneway, lane_markings, cycleway, cycleway:right/left/both)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" }
+        "markings": { "query": "highway=crossing nodes (crossing, crossing:markings, crossing_ref), highway=traffic_signals nodes with traffic_signals:direction or direction, highway=* lines (lanes, oneway, lane_markings, cycleway, cycleway:right/left/both)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
+        "trees": { "query": "natural=tree nodes (species/taxon/genus, genus:de/species:de, leaf_type/leaf_cycle, height, diameter_crown, circumference) more than 3 m from every cadastre tree; one with neither a taxon nor a leaf type is dropped", "dataAsOf": "2026-09-19 (first baked 2026-09-25: 1 820 trees, 854 / 251 / 369 / 346)" }
       }
     }
   }
