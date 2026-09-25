@@ -90,7 +90,10 @@ export interface VegetationContext extends GroundContext {
  * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
  * a few metres away could stay cheap because its 250 m chunk's centre is far. A
  * cheap chunk switches to rich within NEAR_IN; a rich chunk only drops past
- * NEAR_OUT, so chunks straddling the line don't flicker.
+ * NEAR_OUT, so chunks straddling the line don't flicker. These drive
+ * swapCrownLod (the cadastre's own silhouettes); the canopy chunks take the
+ * same distances through updateVegetationLod, which adds the far tier and
+ * the site-wide rich budget.
  */
 export const LOD_NEAR_IN_M = RICH_IN_M;
 export const LOD_NEAR_OUT_M = RICH_OUT_M;

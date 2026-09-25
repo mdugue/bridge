@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   buildingFootprintPolys,
   buildingFootprints,
+  clampToBounds,
   epsgToMapPx,
   mapPxToEpsg,
   squareBounds,
@@ -44,6 +45,22 @@ test("squareBounds pads the shorter axis evenly", () => {
   expect(squareBounds([0, 0, 2, 4])).toEqual([-1, 0, 3, 4]);
   const square: TerrainBounds = [0, 0, 4, 4];
   expect(squareBounds(square)).toEqual(square);
+});
+
+test("clampToBounds pulls a click on the padding onto the site's edge", () => {
+  const site: TerrainBounds = [408_000, 5_654_000, 418_000, 5_660_000];
+  expect(clampToBounds(412_000, 5_653_000, site)).toEqual({
+    x: 412_000,
+    y: 5_654_000,
+  });
+  expect(clampToBounds(420_000, 5_661_000, site)).toEqual({
+    x: 418_000,
+    y: 5_660_000,
+  });
+  expect(clampToBounds(412_345, 5_656_789, site)).toEqual({
+    x: 412_345,
+    y: 5_656_789,
+  });
 });
 
 test("buildingFootprints extracts Building extents and skips parts", () => {

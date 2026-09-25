@@ -64,6 +64,23 @@ export function squareBounds(bounds: TerrainBounds): TerrainBounds {
 }
 
 /**
+ * A point pulled into `bounds`: a click on the padding `squareBounds` adds
+ * around the site lands on its nearest edge instead of outside every tile,
+ * where there is no ground to stand on.
+ */
+export function clampToBounds(
+  x: number,
+  y: number,
+  bounds: TerrainBounds
+): { x: number; y: number } {
+  const [minX, minY, maxX, maxY] = bounds;
+  return {
+    x: Math.min(Math.max(x, minX), maxX),
+    y: Math.min(Math.max(y, minY), maxY),
+  };
+}
+
+/**
  * Extracts one rectangle per Building from `geographicalExtent`
  * ([minx, miny, minz, maxx, maxy, maxz]). BuildingParts are skipped — their
  * parent Building's extent already covers them.

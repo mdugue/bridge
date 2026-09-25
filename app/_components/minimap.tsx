@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { landcoverSrgb } from "@/lib/city/landcover";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import {
+  clampToBounds,
   epsgToMapPx,
   type FootprintPoly,
   mapPxToEpsg,
@@ -265,12 +266,13 @@ export function Minimap({
           return;
         }
         const rect = e.currentTarget.getBoundingClientRect();
-        const { x, y } = mapPxToEpsg(
+        const px = mapPxToEpsg(
           e.clientX - rect.left,
           e.clientY - rect.top,
           bounds,
           size
         );
+        const { x, y } = clampToBounds(px.x, px.y, siteBounds);
         onTeleport(x, y);
       }}
       style={{ width: size, height: size }}
