@@ -63,16 +63,16 @@ export function HudToolbar({ tools }: { tools: HudTool[] }) {
     return (
       <button
         aria-label="Werkzeuge zeigen"
-        className="relative flex size-11 items-center justify-center rounded-full border border-white/30 bg-hud/85 text-hud-foreground shadow-lg backdrop-blur-lg"
+        className="relative flex size-12 items-center justify-center rounded-full border border-white/30 bg-black/25 text-white/80 backdrop-blur-sm"
         onClick={() => fold(false)}
         title="Werkzeuge zeigen"
         type="button"
       >
-        <EllipsisVerticalIcon className="size-5" />
+        <EllipsisVerticalIcon className="size-4" />
         {active && (
           <span
             aria-hidden
-            className="absolute top-1 right-1 size-2.5 rounded-full bg-emerald-400 ring-2 ring-hud"
+            className="absolute top-1.5 right-1.5 size-2 rounded-full bg-emerald-300"
           />
         )}
       </button>
@@ -82,7 +82,7 @@ export function HudToolbar({ tools }: { tools: HudTool[] }) {
     <div
       aria-label="Werkzeuge"
       aria-orientation="vertical"
-      className="flex flex-col items-stretch gap-0.5 rounded-2xl border border-white/30 bg-hud/85 p-1 text-hud-foreground shadow-lg backdrop-blur-lg"
+      className="flex w-12 flex-col items-center gap-0.5 rounded-full border border-white/30 bg-black/25 py-1 text-white/80 backdrop-blur-sm"
       role="toolbar"
     >
       {tools.map((tool) => {
@@ -92,27 +92,27 @@ export function HudToolbar({ tools }: { tools: HudTool[] }) {
             aria-busy={tool.busy}
             aria-pressed={tool.pressed}
             className={cn(
-              "flex w-15 flex-col items-center gap-1 rounded-xl px-1 py-2 font-medium text-[10px] leading-none",
-              tool.pressed ? "bg-white/85 text-black" : "hover:bg-white/10"
+              "flex w-10 flex-col items-center gap-0.5 rounded-full py-2 text-[9px] leading-none",
+              tool.pressed ? "bg-white/70 text-black" : "hover:bg-white/10"
             )}
             key={tool.id}
             onClick={tool.onClick}
             title={tool.title}
             type="button"
           >
-            <Icon className={cn("size-5", tool.busy && "animate-spin")} />
+            <Icon className={cn("size-4", tool.busy && "animate-spin")} />
             {tool.label}
           </button>
         );
       })}
       <button
         aria-label="Werkzeuge einklappen"
-        className="flex h-6 items-center justify-center rounded-xl text-hud-foreground/70 hover:bg-white/10"
+        className="flex h-5 w-10 items-center justify-center rounded-full text-white/60 hover:bg-white/10"
         onClick={() => fold(true)}
         title="Werkzeuge einklappen"
         type="button"
       >
-        <ChevronDownIcon className="size-4" />
+        <ChevronDownIcon className="size-3.5" />
       </button>
     </div>
   );

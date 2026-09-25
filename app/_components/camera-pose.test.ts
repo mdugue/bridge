@@ -345,3 +345,28 @@ test("live mode walks the camera to each GPS fix, gliding near ones and jumping 
   settle(pose);
   expect(camera.position.z).toBeCloseTo(z, 1);
 });
+
+test("live mode and flying combine: the GPS moves the camera at its altitude, climbing keeps it live", () => {
+  let ended = 0;
+  const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+  pose.setMovementMode("fly");
+  pose.setClimbInput(1);
+  settle(pose);
+  pose.setClimbInput(0);
+  const altitude = camera.position.y;
+  expect(altitude).toBeGreaterThan(GROUND + 20);
+  pose.setFollowAim({ headingDeg: 90, pitchDeg: -30 });
+  pose.setFollowPosition({ x: OFFSET.cx + 500, y: OFFSET.cy });
+  // A jump: there at once, and still up in the air.
+  expect(camera.position.x).toBeCloseTo(500, 6);
+  expect(camera.position.y).toBeCloseTo(altitude, 6);
+  // Climbing is the altitude live mode leaves to the player.
+  pose.setClimbInput(1);
+  pose.step(1 / 60);
+  pose.setClimbInput(0);
+  expect(ended).toBe(0);
+  expect(camera.position.y).toBeGreaterThan(altitude);
+  settle(pose);
+  expect(pose.getMode()).toBe("fly");
+  expect(pose.getCameraState().pitchDeg).toBeCloseTo(-30, 3);
+});

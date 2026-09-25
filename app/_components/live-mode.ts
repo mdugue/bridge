@@ -25,10 +25,12 @@ const FIRST_READING_MS = 2500;
 
 /**
  * Live mode: the city as a window you hold up to it. The view turns and
- * tilts with the phone (the compass), and the camera walks along with the
- * player's GPS position — both eased in camera-pose.ts, so a fix's scatter
+ * tilts with the phone (the compass), and the camera moves along with the
+ * player's GPS position — on foot or, in fly mode, at its altitude, so live
+ * and flying combine into a drone that follows you — both eased in camera-pose.ts, so a fix's scatter
  * or a compass's jitter glides instead of jumping. Any manual look or move
- * hands the camera back (the scene reports it through `ended`).
+ * hands the camera back (the scene reports it through `ended`) — except
+ * climbing and sinking, which only change the altitude live mode keeps.
  *
  * Offered only while it can work: once a compass reading has actually
  * arrived (Chrome sends them unasked — a laptop sends none, so the toggle
@@ -133,11 +135,9 @@ export function useLiveMode(
   const start = useCallback(() => {
     onRef.current = true;
     setOn(true);
-    // On foot: live mode is walking around with the phone.
-    handleRef.current?.setMovementMode("walk");
     say("Live: Blick folgt dem Telefon, Position wird gesucht …", true);
     followPosition();
-  }, [followPosition, handleRef, say]);
+  }, [followPosition, say]);
 
   const toggle = useCallback(() => {
     if (onRef.current) {

@@ -124,13 +124,16 @@ export interface CameraPose {
   /**
    * Live mode, the view half: the aim (grid heading + pitch, degrees) the
    * view eases towards every step, or null to stop. A glide suspends it;
-   * any manual look or move ends live mode (onFollowEnd).
+   * a manual look or move ends live mode (onFollowEnd) — climbing, sinking
+   * and switching to fly mode do not.
    */
   setFollowAim: (aim: FollowAim | null) => void;
   /**
    * Live mode, the position half: the EPSG ground point (a GPS fix) the
    * camera eases towards, or null to stop. A jump further than
    * FOLLOW_SNAP_M (the first fix, a fix after a tunnel) lands at once.
+   * Only x/z follow: on foot the ground clamp sets the height, in the air
+   * the camera keeps its altitude.
    */
   setFollowPosition: (epsg: { x: number; y: number } | null) => void;
   /** Advances the glide or the player's movement by `dt` seconds. */
@@ -433,9 +436,10 @@ export function createCameraPose(
     release: movement.release,
     releaseAll: movement.releaseAll,
     setClimbInput: (v) => {
+      // Altitude is the one thing live mode leaves to the player: climbing
+      // or sinking keeps it following (a drone over your GPS position).
       if (v !== 0) {
         cancelGlide();
-        endFollow();
       }
       movement.setVertical(v);
     },

@@ -42,7 +42,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Drag | look around |
 | Joystick (bottom left) | walk |
 | *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
-| *Live* (toolbar, only with a compass) | view and position follow you and your phone until you switch it off, drag or use the joystick |
+| *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
 | *Fliegen* (toolbar) | switch between walking and flying |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (bottom right, flying only) | push up to climb, down to sink; let go to hold the height |
@@ -75,7 +75,9 @@ and the view turns with you; tilt the phone and you look up or down. And
 when you start walking, the camera walks along — it follows your GPS
 position, smoothed so the fix's scatter doesn't jolt. Outside the area, or
 without a location, only the view follows. A second tap, dragging to look
-around or the joystick hand the controls back to you.
+around or the joystick hand the controls back to you. *Live* and
+*Fliegen* combine: you then hover over your position like a drone, and the
+altitude slider climbs or sinks without ending *Live*.
 
 A floating bar shows the four essential controls until you dismiss it with
 *Verstanden*; the full table stays available in the panel under

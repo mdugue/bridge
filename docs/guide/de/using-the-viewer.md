@@ -44,7 +44,7 @@ lädt* oben im Bild (siehe
 | Ziehen | umsehen |
 | Joystick (unten links) | gehen |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
-| *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon, bis du es ausschaltest, ziehst oder den Joystick nimmst |
+| *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
 | *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (unten rechts, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
@@ -80,7 +80,9 @@ schaust du hoch oder runter. Und gehst du los, geht die Kamera mit — sie
 folgt deiner GPS-Position, sanft geglättet, damit die Streuung der Ortung
 nicht ruckelt. Stehst du außerhalb des Gebiets oder gibt es keinen
 Standort, folgt nur der Blick. Ein zweites Antippen, Ziehen zum Umsehen
-oder der Joystick geben dir die Steuerung zurück.
+oder der Joystick geben dir die Steuerung zurück. *Live* und *Fliegen* gehen
+zusammen: Dann schwebst du wie eine Drohne über deiner Position, und mit
+dem Höhenregler steigst oder sinkst du, ohne dass *Live* endet.
 
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
