@@ -11,16 +11,24 @@ const ALAUNPARK = { x: 412_980, y: 5_658_390 };
 const ZWINGER = { x: 411_330, y: 5_656_560 };
 /** Kunsthofpassage / Louisenstraße */
 const AEUSSERE_NEUSTADT = { x: 412_720, y: 5_658_000 };
+/** the Palais in the Großer Garten, the park's centre (its LoD2 extent) */
+const PALAIS_GROSSER_GARTEN = { x: 413_262, y: 5_654_761 };
+/** the Blaues Wunder's midspan (the LoD2 "Loschwitzer Brücke") */
+const BLAUES_WUNDER = { x: 416_625, y: 5_656_449 };
+/** the Waldschlößchenbrücke's midspan (the baked DLM bridge deck) */
+const WALDSCHLOESSCHENBRUECKE = { x: 414_292, y: 5_657_618 };
+/** the station's arched train shed (its LoD2 extent) */
+const HAUPTBAHNHOF = { x: 411_066, y: 5_655_082 };
 
 /**
- * Dresden, Altstadt and Neustadt either side of the Elbe: a 2×2 block of
- * Saxony's 2 km tiles (GeoSN open data, EPSG:25833), spawning on the south-
- * east one. The vantages are anchored to the baked bridge centrelines and
- * the DGM profile (the Elbe channel sits at ~104 m between banks at
- * ~114 m). The aerials over a landmark are framed with `overlook`: the
- * landmark sits under the crosshair. The Großer Garten lies south of the
- * block (its north edge is ~500 m past 5 656 000 N), so it has no vantage
- * until the tile 33412_5654 is baked.
+ * Dresden either side of the Elbe, ten of Saxony's 2 km tiles (GeoSN open
+ * data, EPSG:25833): a 3×3 block from the Hauptbahnhof and the Großer
+ * Garten in the south to the Neustadt in the north, plus the tile upriver
+ * with Blasewitz, Loschwitz and the Blaues Wunder. The spawn tile (the Elbe
+ * from the Carolabrücke to the Johannstadt) sits in the middle. The vantages are anchored to the baked
+ * bridge centrelines and the DGM profile (the Elbe channel sits at ~104 m
+ * between banks at ~114 m). The aerials over a landmark are framed with
+ * `overlook`: the landmark sits under the crosshair.
  */
 export const DRESDEN: Site = {
   id: "dresden",
@@ -35,6 +43,15 @@ export const DRESDEN: Site = {
     { e: 410, n: 5656 },
     { e: 410, n: 5658 },
     { e: 412, n: 5658 },
+    // South: Hauptbahnhof, Großer Garten, Striesen
+    { e: 410, n: 5654 },
+    { e: 412, n: 5654 },
+    { e: 414, n: 5654 },
+    // East: Johannstadt, the Waldschlößchenbrücke, Blasewitz and the
+    // Blaues Wunder (Loschwitz)
+    { e: 414, n: 5656 },
+    { e: 414, n: 5658 },
+    { e: 416, n: 5656 },
   ],
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
   attribution: [
@@ -192,5 +209,55 @@ export const DRESDEN: Site = {
       pitchDeg: 10,
       fov: 66,
     },
+    overlook(PALAIS_GROSSER_GARTEN, {
+      id: "grosser-garten",
+      label: "Großer Garten",
+      description:
+        "Über dem Palais im Großen Garten, dahinter der Palaisteich und die Baumkronen des Parks.",
+      altitude: 250,
+      headingDeg: 115,
+      pitchDeg: -30,
+    }),
+    {
+      id: "palais-grosser-garten",
+      label: "Palais im Großen Garten",
+      description:
+        "Zu Fuß am Südende des Palaisteichs, jenseits des Wassers das barocke Palais in der Mitte des Parks.",
+      mode: "walk",
+      epsg: { x: 413_462, y: 5_654_605 },
+      aboveGround: EYE_HEIGHT,
+      headingDeg: 308,
+      pitchDeg: 3,
+      fov: 62,
+    },
+    overlook(BLAUES_WUNDER, {
+      id: "blaues-wunder",
+      label: "Blaues Wunder",
+      description:
+        "Über der Elbe flussabwärts der Brücke: das Blaue Wunder spannt sich von Blasewitz hinüber nach Loschwitz.",
+      altitude: 60,
+      headingDeg: 148,
+      pitchDeg: -11,
+      fov: 62,
+    }),
+    overlook(WALDSCHLOESSCHENBRUECKE, {
+      id: "waldschloesschenbruecke",
+      label: "Waldschlößchenbrücke",
+      description:
+        "Über den Elbwiesen oberhalb der Brücke, flussabwärts die Türme der Altstadt.",
+      altitude: 60,
+      headingDeg: 255,
+      pitchDeg: -8,
+      fov: 62,
+    }),
+    overlook(HAUPTBAHNHOF, {
+      id: "hauptbahnhof",
+      label: "Hauptbahnhof",
+      description:
+        "Von oben auf die Bahnsteighallen, die Prager Straße führt nach Norden zur Altstadt.",
+      altitude: 180,
+      headingDeg: 20,
+      pitchDeg: -45,
+    }),
   ],
 };

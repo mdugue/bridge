@@ -9,12 +9,13 @@ the [glossary](./glossary.md).
 
 ## What you see
 
-A stylised, walkable 3D model of the centre of Dresden: a square of
-4 km × 4 km on both banks of the Elbe, with the historic Altstadt in the
-south-west, the Inner and Outer Neustadt in the north and the Johannstadt
-in the south-east. You start low over the Elbe near the Carolabrücke,
-looking at the Altstadt skyline, and can walk at street level or fly above
-the roofs.
+A stylised, walkable 3D model of the centre of Dresden: ten tiles of
+2 km × 2 km on both banks of the Elbe, up to 8 km across, with the historic
+Altstadt, the Inner and Outer Neustadt, the Johannstadt, the Hauptbahnhof
+and the Großer Garten to the south, and upriver past the
+Waldschlößchenbrücke to Blasewitz, Loschwitz and the Blaues Wunder. You
+start low over the Elbe near the Carolabrücke, looking at the Altstadt
+skyline, and can walk at street level or fly above the roofs.
 
 Nothing is installed, nothing is stored about you, and no server computes
 the picture. Your browser downloads prepared files as you move — about
@@ -53,7 +54,7 @@ and each is a mix of measured fact and deliberate simplification.
 | **Ground** | The shape of the terrain: river banks, the slope up to the Neustadt, embankments | The official 1 m terrain model (**DGM1**) | Real heights, on a grid of about 2 m near you and 4 m further away. Vertical walls and stairs are smoothed into ramps by the source, so the project sharpens them again where OpenStreetMap knows a wall, a cliff edge or a flight of steps |
 | **Ground colours** | Roads grey, paths sand, meadows sage, forest moss, built-up areas pale clay, water blue | The official land-use map (**Basis-DLM**) | Real classification; the colours are a designed pastel palette, painted in your browser, not photographs |
 | **Water** | The Elbe and smaller water bodies, with a gently moving surface and drifting mist | Basis-DLM water areas, laid on the real terrain | Real outline, invented ripples |
-| **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 16,000 buildings and building parts in the four tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
+| **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 41,000 buildings and building parts in the ten tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
 | **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
 | **Trees and hedges** | Individual trees with crowns of the measured height; hedges and tree rows | Tree positions and heights from the difference between the surface model (**DOM1**) and the terrain model; rows from Basis-DLM; greenness from the infrared aerial photo (**NDVI**) | Positions and heights are measured; the crown shape is generic, the species unknown |
 | **Street lamps** | Lamp posts along streets and squares | **OpenStreetMap** | Real positions, default height |

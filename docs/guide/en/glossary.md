@@ -152,7 +152,7 @@ comes as one file set per object type.
 
 **Tile / Kachel** — a 2 km × 2 km square of the state's tiling scheme. The
 name `33412_5656_2_sn` means UTM zone 33, easting 412 km, northing 5656 km
-(the south-west corner), 2 km edge, Saxony. The site config lists four of
+(the south-west corner), 2 km edge, Saxony. The site config lists ten of
 them for Dresden; the first is the *spawn tile*. The viewer streams them
 (see *Tileset*).
 

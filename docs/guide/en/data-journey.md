@@ -107,8 +107,7 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `platform_<tile>.geojson` | station platforms | a few kB |
 | `data/dop/` | `roofcolor_<tile>.json` | one colour per building, sampled from the aerial photo | 0.2 MB |
 
-In total the repository carries about 125 MB of data for the four tiles
-(plus two terrain tiles to the east that nothing loads yet).
+In total the repository carries about 250 MB of data for the ten tiles.
 
 **Single source of truth versus derivative, at a glance:**
 
@@ -172,21 +171,21 @@ as sent over the network):
 
 | What | Start tile | Other tiles | Fetched when |
 |---|---|---|---|
-| Buildings (with the style table) | 1.34 MB | 1.09–1.46 MB | the tile is in view |
-| Building footprints (minimap) | 48 kB | 59–76 kB | with the buildings |
-| Coarse terrain (512²) | 0.41 MB | 0.44–0.54 MB | the tile is in view |
-| Detailed terrain (1024², with its walls and stairs) | 1.62 MB | 1.62–2.03 MB | the camera comes close |
-| Land-use classes, 2048² | 0.08 MB | 0.07–0.08 MB | at the start (minimap), then for the coarse terrain |
-| Land-use classes, 4096² | 0.22 MB | 0.22–0.25 MB | with the detailed terrain (desktop only) |
-| Greenness (NDVI) | 0.39 MB | 0.32–0.45 MB | with the terrain |
-| Tree points | 36 kB | 54–106 kB | with the detailed terrain |
+| Buildings (with the style table) | 1.34 MB | 0.39–1.91 MB | the tile is in view |
+| Building footprints (minimap) | 48 kB | 11–75 kB | with the buildings |
+| Coarse terrain (512²) | 0.41 MB | 0.44–0.65 MB | the tile is in view |
+| Detailed terrain (1024², with its walls and stairs) | 1.62 MB | 1.62–2.50 MB | the camera comes close |
+| Land-use classes, 2048² | 0.08 MB | 0.06–0.11 MB | at the start (minimap), then for the coarse terrain |
+| Land-use classes, 4096² | 0.22 MB | 0.15–0.29 MB | with the detailed terrain (desktop only) |
+| Greenness (NDVI) | 0.39 MB | 0.32–0.67 MB | with the terrain |
+| Tree points | 36 kB | 41–399 kB | with the detailed terrain |
 | Lamps, rails, ballast, bridges, platforms, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
-| **Per tile, in full detail** | **≈ 4.2 MB** | **≈ 4.0–5.0 MB** | |
-| **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 2.0–2.6 MB | |
+| **Per tile, in full detail** | **≈ 4.2 MB** | **≈ 3.8–6.1 MB** | |
+| **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 1.7–3.3 MB | |
 
 How much a visit downloads therefore depends on where you go. With every
-tile in full detail, a desktop has fetched about **17 MB** for the four
-tiles; a phone about 16 MB (it takes the 2048² land-use raster for every
+tile in full detail, a desktop has fetched about **45 MB** for the ten
+tiles; a phone about 43 MB (it takes the 2048² land-use raster for every
 tile); the test-only "lite" profile, which streams the start tile alone,
 about 4 MB. That is more than before the switch to streaming (a full visit
 used to be about 10.6 MB), because the terrain now arrives as a ready-made

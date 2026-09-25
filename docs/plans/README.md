@@ -179,8 +179,6 @@ S/M/L.
 - Plan 021's Phase 0 (a second framework for `/wissen`, the URL scheme).
 
 - Close the superseded Dependabot PRs (#3, #12, #13, #15, #26).
-- Decide on the two unused `33414_*` DGM tiles (~28 MB): delete, or move to
-  `data/_raw/`.
 - Decide where `aesthetic-sandbox.html` (the historical crown playground at
   the repo root) should live, or delete it — the layer files are the source
   of truth.

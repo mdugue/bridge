@@ -39,23 +39,29 @@ that id; `tileExtentOf` gives its extent. Dresden:
 
 ```
         N
-  ┌─────────────────┬─────────────────┐
-  │ 33410_5658_2_sn │ 33412_5658_2_sn │
-  ├─────────────────┼─────────────────┤
-  │ 33410_5656_2_sn │ 33412_5656_2_sn │   ★ spawn tile (sites/dresden.ts,
-  │                 │       ★         │     first in the list)
-  └─────────────────┴─────────────────┘
-                                      E
+  ┌─────────────────┬─────────────────┬─────────────────┐
+  │ 33410_5658_2_sn │ 33412_5658_2_sn │ 33414_5658_2_sn │
+  │  Innere Neustadt│ Äußere Neustadt │ Waldschlößchen- │
+  │                 │                 │ brücke          │
+  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┐
+  │ 33410_5656_2_sn │ 33412_5656_2_sn │ 33414_5656_2_sn │ 33416_5656_2_sn │
+  │  Altstadt       │ Johannstadt ★   │ Elbwiesen,      │ Blaues Wunder,  │
+  │                 │                 │ Elbschlösser    │ Loschwitz       │
+  ├─────────────────┼─────────────────┼─────────────────┼─────────────────┘
+  │ 33410_5654_2_sn │ 33412_5654_2_sn │ 33414_5654_2_sn │
+  │  Hauptbahnhof   │ Großer Garten   │ Striesen        │
+  └─────────────────┴─────────────────┴─────────────────┘
+                                                        E
+  ★ spawn tile (sites/dresden.ts, first in the list)
 ```
 
 The spawn tile spans 412 000–414 000 E / 5 656 000–5 658 000 N
-(EPSG:25833) — roughly 51.049–51.067° N, 13.745–13.773° E. No tile has a
-role beyond "where you start": which tile is detailed is decided by camera
-distance at runtime ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)),
-and collision, demolish and picking work on every loaded tile. Two further
-DGM tiles (`33414_5656`, `33414_5658`, ~28 MB) are committed under
-`data/dgm/` but belong to no site; keeping or dropping them is a
-maintainer decision (recorded in [plans/README.md](./plans/README.md)).
+(EPSG:25833) — roughly 51.049–51.067° N, 13.745–13.773° E; the site as a
+whole covers 410 000–418 000 E / 5 654 000–5 660 000 N, ten tiles. No
+tile has a role beyond "where you start": which tile is detailed is decided
+by camera distance at runtime
+([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)), and collision,
+demolish and picking work on every loaded tile.
 
 ## Stage 1 — the bakes (`pipeline/`, `bun run bake`)
 
@@ -368,30 +374,30 @@ for tile, (raw, wire) in sorted(tot.items()):
 PY
 ```
 
-Measured 2026-09-24 on the current build (Dresden, gzipped wire sizes):
+Measured 2026-09-25 on the current build (Dresden, gzipped wire sizes):
 
 | Per tile | Wire |
 |---|---|
-| buildings `city_<t>.glb.gz` | 1.1–1.5 MB |
-| fine terrain L0 | 1.5–2.0 MB |
-| coarse terrain L1 | 0.41–0.54 MB |
-| minimap footprints | 0.05–0.08 MB (0.23–0.33 MB raw) |
-| class raster 4096² / 2048² | 0.22–0.25 MB / ≈ 0.08 MB |
-| NDVI 1024² | 0.32–0.45 MB |
-| canopy GeoJSON | 0.04–0.11 MB (0.6–1.8 MB raw) |
+| buildings `city_<t>.glb.gz` | 0.4–1.9 MB |
+| fine terrain L0 | 1.6–2.5 MB |
+| coarse terrain L1 | 0.41–0.65 MB |
+| minimap footprints | 0.01–0.08 MB (0.05–0.33 MB raw) |
+| class raster 4096² / 2048² | 0.15–0.29 MB / 0.06–0.11 MB |
+| NDVI 1024² | 0.32–0.67 MB |
+| canopy GeoJSON | 0.04–0.40 MB (0.6–7.1 MB raw; the forest on 33414_5658 is the top) |
 | everything else (veg rows, lamps, monuments, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
-| **tile total** | **3.9–4.9 MB** (phones, without the 4096² raster: 3.6–4.7 MB) |
+| **tile total** | **3.8–6.1 MB** (phones, without the 4096² raster: 3.7–5.9 MB) |
 
-The whole Dresden site is ≈ 17.1 MB on the wire (≈ 16.2 MB for a phone),
+The whole Dresden site is ≈ 44.7 MB on the wire (≈ 43.2 MB for a phone),
 the spawn tile alone — the `lite` profile — ≈ 4.1 MB. A visit fetches
 less: streaming loads a tile's content only when it is in view, and a far
-tile stops at its coarse terrain (≈ 2.0–2.6 MB per tile: buildings,
+tile stops at its coarse terrain (≈ 1.7–3.3 MB per tile: buildings,
 footprints, the coarse terrain with its 2048² raster and the NDVI).
-Before the tileset a desktop visit loaded the same site whole at boot,
-≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
+Before the tileset a desktop visit loaded the then four-tile site whole
+at boot, ≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
 (≈ 1.4 + 1.5 + 0.4 MB of buildings and terrain per tile now vs
 ≈ 1.0 + 1.1 MB). Sources on disk that are never served: the DGM
-GeoTIFF (13.6–15.3 MB/tile) and the CityJSON (7.8–10.5 MB/tile).
+GeoTIFF (12.9–15.6 MB/tile) and the CityJSON (2.7–13.6 MB/tile).
 
 ## Provenance
 

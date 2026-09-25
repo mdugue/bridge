@@ -17,7 +17,7 @@ model, the land-use map and the aerial photos as free downloads on its
 open-geodata portal, [geodaten.sachsen.de](https://www.geodaten.sachsen.de/).
 All of them are cut into the same **2 km × 2 km tiles**, which is why the
 viewer thinks in tiles too. Which tiles it shows is written down in one
-place, the site config `sites/dresden.ts`: the four tiles (the first is the
+place, the site config `sites/dresden.ts`: the ten tiles (the first is the
 one you start on), the viewpoints and the credits.
 
 **OpenStreetMap (OSM)** — the world map maintained by volunteers. It fills
@@ -199,15 +199,15 @@ before it.
 
 | Dataset | Tiles | Edition / survey date (provider's "Stand") | How we know | Committed |
 |---|---|---|---|---|
-| DGM1 | all four (plus two unused tiles to the east) | **2024-11-30** (southern row), **2024-11-27 and 2024-11-30** (northern row) | the `_akt.csv` in each tile ZIP; GeoSN download service | 2026-06-11 |
-| DOM1 | all four | the **same laser flight** as the DGM1: 2024-11-30 / 2024-11-27 and 2024-11-30 | GeoSN download service (DOM1, DGM1 and the point cloud carry identical dates) | derived canopy files 2026-06-12 |
-| LoD2 | all four | south-western pair (33410_*): model **2023**, built from the 2016 laser scan, the 2021 Basis-DLM footprints and the 2016 DGM; south-eastern pair (33412_*): model **2024**, from the 2016 laser scan, the 2022 Basis-DLM and the 2016 DGM. The objects were exported 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN download service; a few older objects still carry `Stand_*` attributes with the same values | 2026-06-11 |
-| DOP (RGBI) | all four | flown **2024-03-19** (leaf-off) | GeoSN download service | derived roof colours and NDVI 2026-06-16/17 |
-| Basis-DLM | statewide package | the quarterly package current in **June 2026**; the exact release date was not noted and cannot be read from the portal afterwards because the package is replaced under the same file name (the share's file was dated 2026-07-28 when checked) | download page: "updated quarterly"; git history | derived files 2026-06-12, rail and bridge files re-baked 2026-09-18 |
-| OSM via Overpass (no longer used by the bakes; the committed lamp, platform and bridge-structure files still come from it) | all four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
-| OSM via BBBike | Dresden extract | the extract of 2026-09-19 (fountains only: Geofabrik could not be reached from the build machine that day) | `data/provenance.json` | 2026-09-24 |
+| DGM1 | all ten | **2024-11-30**; the northern row (5658) **2024-11-27 and 2024-11-30** | the `_akt.csv` in each tile ZIP; GeoSN download service | 2026-06-11; the six tiles south and east 2026-09-25 |
+| DOM1 | all ten | the **same laser flight** as the DGM1: 2024-11-30 / 2024-11-27 and 2024-11-30 | GeoSN download service (DOM1, DGM1 and the point cloud carry identical dates) | derived canopy files 2026-06-12; the six new tiles 2026-09-25 |
+| LoD2 | all ten | 33410_5656/5658: model **2023**, built from the 2016 laser scan, the 2021 Basis-DLM footprints and the 2016 DGM; 33412_5656/5658 and 33414_5656/5658: model **2024**, from the 2016 laser scan, the 2022 Basis-DLM and the 2016 DGM; the southern row (5654) and 33416_5656: model **2023**, footprints from the 2020–2023 Basis-DLM. The objects were exported 2025-04-26 … 2025-07-07 (`creationDate`) | GeoSN download service; a few older objects still carry `Stand_*` attributes with the same values | 2026-06-11; the six new tiles 2026-09-25 |
+| DOP (RGBI) | all ten | flown **2024-03-19** (leaf-off) | GeoSN download service | derived roof colours and NDVI 2026-06-16/17; the six new tiles 2026-09-25 |
+| Basis-DLM | statewide package | the quarterly package current in **June 2026**; the exact release date was not noted and cannot be read from the portal afterwards because the package is replaced under the same file name (the share's file was dated 2026-07-28 when checked) | download page: "updated quarterly"; git history | derived files 2026-06-12, rail and bridge files re-baked 2026-09-18; the six new tiles baked 2026-09-25 from the package dated 2026-07-28 |
+| OSM via Overpass (no longer used by the bakes; the committed lamp, platform and bridge-structure files still come from it) | the original four | the live database on the fetch day: 2026-06-12 or earlier (lamps), 2026-06-17 or earlier (platforms, bridge structure) | git history; the cached raw responses carry the exact `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
+| OSM via BBBike | Dresden extract | the extract of 2026-09-19 (fountains, and every OSM layer of the six tiles added 2026-09-25: Geofabrik could not be reached from the build machine) | `data/provenance.json` | 2026-09-24 |
 | OSM via Geofabrik | statewide extract | the daily extract of 2026-09-18 or shortly before | git history (walls re-baked that day); `osmium fileinfo -e` on the raw file prints the exact timestamp | 2026-09-18 |
-| OSM via BBBike (stairs) | the Dresden city extract | the extract of 2026-09-19 | the file's `Last-Modified`; `data/provenance.json` | 2026-09-24 |
+| OSM via BBBike (stairs; every OSM layer of the six tiles added 2026-09-25) | the Dresden city extract | the extract of 2026-09-19 | the file's `Last-Modified`; `data/provenance.json` | 2026-09-24 |
 
 Note the **mismatch of dates inside one picture**: the ground and the tree
 heights are from late 2024, the building shapes from a 2016 laser scan with
