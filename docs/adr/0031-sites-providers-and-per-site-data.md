@@ -1,4 +1,4 @@
-# ADR 0030: Sites pick a provider; data per site, downloads per provider; fetch → bake → build
+# ADR 0031: Sites pick a provider; data per site, downloads per provider; fetch → bake → build
 
 - **Status:** accepted (extends [ADR 0026](./0026-one-site-config-per-build.md);
   amends [ADR 0025](./0025-bakes-are-one-python-package.md): `scripts/bake.ts`,
@@ -27,10 +27,12 @@ prefixing every command with `SITE=`.
    `lib/city/site.ts`): EPSG, licence and credit line, portal, Geofabrik
    extract, and which optional products are open — a surface model, the
    orthophoto's bands (`"rgbi"` / `"rgb"` / none), the Basis-DLM in the
-   AdV Shape profile. A site is a name, a label, tiles, viewpoints and
-   optionally a smaller OSM extract. The HUD credit is derived from the
-   provider (plus the OSM line, which names land cover when OSM supplies
-   it). Every tile is 2 km (`TILE_KM`); adapters cut other grids to it.
+   AdV Shape profile, a laser scan the adapter reads (`lsc`, opt-in). A
+   site is a name, a label, tiles, viewpoints and optionally a smaller OSM
+   extract and the city's street-tree register (`treeCadastre`: its
+   entry in `bake/cadastre.py` and its credit). The HUD credit is derived
+   from the provider (plus the OSM line, which names land cover when OSM
+   supplies it, and the register's line). Every tile is 2 km (`TILE_KM`); adapters cut other grids to it.
 3. **Data per site, downloads per provider.** `data/<site>/{dgm,cityjson,
    dlm,dop}` + `provenance.json` is what the build reads;
    `data/_raw/<provider>/` holds the downloads every site of that provider

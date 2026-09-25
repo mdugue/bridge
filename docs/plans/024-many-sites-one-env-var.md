@@ -150,7 +150,7 @@ git-based host (phase 1, step 3).
 
 ### 7 — Docs and review
 
-ADR 0030 (provider table, per-site data, fetch/bake/build stages, commit
+ADR 0031 (provider table, per-site data, fetch/bake/build stages, commit
 policy); `docs/portability.md`, `docs/data-pipeline.md`, AGENTS.md,
 README, the guide's data-sources page (EN + DE), plan 017's row. Code
 reviews after phases 1–3 and at the end.

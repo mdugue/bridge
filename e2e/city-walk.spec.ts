@@ -249,8 +249,11 @@ test.describe("desktop viewer", () => {
     expect(stats.city.triangles).toBeGreaterThan(0);
     expect(stats.terrain.meshes).toBe(1); // lite = primary tile only
     expect(stats.water.meshes).toBeGreaterThanOrEqual(1);
-    // 5 118 canopy points + 25 tree rows on 33412_5656 (trunk + two crowns each)
+    // 5 118 canopy points + 25 tree rows + 5 788 laser-scan trees + 6 121
+    // cadastre trees on 33412_5656 (trunk + two crowns each)
     expect(stats.vegetation.instances).toBeGreaterThan(1000);
+    // 116 OSM hedges, cut into ≤2.5 m pieces
+    expect(stats.lowVegetation.instances).toBeGreaterThan(100);
     // 339 OSM lamps: posts + heads + decals are instanced
     expect(stats.lamps.instances).toBeGreaterThan(100);
     // 48 fountains, statues and stones (Albertplatz and around): plinths,

@@ -11,6 +11,8 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/dop/<tile>.tif                  orthophoto, 20 cm
     data/_raw/<provider>/dlm/*.shp                       Basis-DLM (AdV Shape)
     data/_raw/<provider>/osm/<extract>.osm.pbf           the OSM extract
+    data/_raw/<provider>/trees/<tile>.geojson            the site's tree cadastre
+    data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
 
 Statewide packages are cached under data/_raw/<provider>/downloads/; a
 tile's own downloads live in a scratch folder only until its products are
@@ -29,6 +31,7 @@ from typing import Protocol
 
 from rasterio.enums import Resampling
 
+from . import cadastre
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .net import download
@@ -59,6 +62,10 @@ class Adapter(Protocol):
     def dom(self, ctx: Ctx, tile: Tile) -> list[Path]: ...
     def dop(self, ctx: Ctx, tile: Tile) -> list[Path]: ...
     def lod2(self, ctx: Ctx, tile: Tile) -> list[Path]: ...
+    def lsc(self, ctx: Ctx, tile: Tile) -> list[Path]:
+        """The laser scan's LAZ covering the tile (Provider.products.lsc)."""
+        ...
+
     def dlm(self, ctx: Ctx) -> None:
         """Fill `ctx.raw / "dlm"` with the AdV Shape layers."""
 
@@ -101,7 +108,18 @@ def _scratch(raw: Path, name: str) -> Iterator[Path]:
         shutil.rmtree(path, ignore_errors=True)
 
 
-def fetch_tile(spec: Spec, tile: Tile, source: Adapter) -> None:
+def _place_laz(files: list[Path], dest: Path) -> None:
+    """A laser scan is not mosaicked: the adapter hands back the one LAZ on
+    our grid, which is moved into place through a `.part` file."""
+    if len(files) != 1:
+        raise ValueError(f"expected one LAZ for the tile, got {len(files)}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_suffix(".laz.part")
+    shutil.move(files[0], part)
+    part.replace(dest)
+
+
+def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> None:
     with _scratch(spec.raw, tile.id) as scratch:
         ctx = Ctx(spec.raw, scratch, spec.epsg)
         _step(
@@ -138,6 +156,10 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter) -> None:
                     source.dop(ctx, tile), tile, dop, 0.2, Resampling.average, method="max"
                 ),
             )
+        if lsc and spec.products.lsc:
+            laz = tile.raw / "lsc" / f"{tile.id}.laz"
+            _step("laser scan", tile, laz, lambda: _place_laz(source.lsc(ctx, tile), laz))
+    cadastre.fetch(tile)
 
 
 def fetch_osm(spec: Spec) -> None:
@@ -149,7 +171,7 @@ def fetch_osm(spec: Spec) -> None:
         print(f"OSM extract not downloaded ({err}); put {spec.osm_url} at {spec.osm}")
 
 
-def run(spec: Spec, tiles: list[Tile]) -> None:
+def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
     spec.raw.mkdir(parents=True, exist_ok=True)
     source = adapter(spec.provider)
     if spec.products.dlm and not dlm_complete(spec.raw / "dlm"):
@@ -159,5 +181,7 @@ def run(spec: Spec, tiles: list[Tile]) -> None:
         except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
             print(f"Basis-DLM not fetched ({type(err).__name__}: {err})")
     fetch_osm(spec)
+    if lsc and not spec.products.lsc:
+        print(f"--lsc: the {spec.provider} adapter reads no laser scan — skipped")
     for tile in tiles:
-        fetch_tile(spec, tile, source)
+        fetch_tile(spec, tile, source, lsc)

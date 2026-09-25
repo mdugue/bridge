@@ -4,14 +4,17 @@ import { join } from "node:path";
 import type {
   AreaFeature,
   BridgeFeature,
+  CanopyExtraFeature,
   CanopyFeature,
   FeatureCollection,
   FurnitureFeature,
   LampFeature,
+  LowVegFeature,
   MonumentFeature,
   RailFeature,
   StairFeature,
   TerraceFeature,
+  TreeFeature,
   VegRowFeature,
   WallFeature,
   KerbFeature,
@@ -278,3 +281,40 @@ test.each(cases)("%s: terraces are polygons with a level", (_, a) => {
     expect(Number.isFinite(f.properties?.z)).toBe(true);
   }
 });
+
+test.each(cases)(
+  "%s: hedges are OSM lines (h, w); extra trees are points (h, r)",
+  (_, a) => {
+    for (const f of load<LowVegFeature>(a.lowveg)) {
+      const p = f.properties;
+      // Only what renders is shipped: no laser-scan-only hedges, no shrubs.
+      expect(["osm", "osm+lsc"]).toContain(p?.src ?? "");
+      expect(p?.kind).toBe("hedge");
+      expect(f.geometry.type).toBe("LineString");
+      expect(isLine(f.geometry.coordinates)).toBe(true);
+      expect(Number.isFinite(p?.h)).toBe(true);
+      expect(Number.isFinite(p?.w)).toBe(true);
+    }
+    for (const f of load<CanopyExtraFeature>(a.canopyx)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      expect(Number.isFinite(f.properties?.h)).toBe(true);
+      expect(Number.isFinite(f.properties?.r)).toBe(true);
+    }
+  }
+);
+
+test.each(cases)(
+  "%s: inventory trees carry height, crown, archetype and leaf type",
+  (_, a) => {
+    for (const f of load<TreeFeature>(a.trees)) {
+      expect(f.geometry.type).toBe("Point");
+      expect(isPoint2(f.geometry.coordinates)).toBe(true);
+      const p = f.properties;
+      expect(Number.isFinite(p?.h)).toBe(true);
+      expect(Number.isFinite(p?.d)).toBe(true);
+      expect(Number.isInteger(p?.a)).toBe(true);
+      expect(["d", "e"]).toContain(p?.l ?? "");
+    }
+  }
+);

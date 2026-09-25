@@ -39,6 +39,12 @@ furniture, station platforms,
 retaining walls with their heights, what kind of structure a bridge is, and
 the shape of fountain basins.
 
+**Landeshauptstadt Dresden** — the city itself. Its street-tree register
+(*Stadtbaumkataster*) lists about 124,000 municipal trees with species,
+height and crown width. The viewer plants those trees where they really
+stand, with their measured height and crown and a crown shape that follows
+the species.
+
 ## The datasets at a glance
 
 | Dataset | Plain-English name | Provider | What the viewer uses it for |
@@ -48,10 +54,11 @@ the shape of fountain basins.
 | **LoD2** | 3D building model with roof shapes | GeoSN | Every building's footprint, height, roof shape and attributes |
 | **Basis-DLM** | Digital landscape model (the land-use map) | GeoSN | Ground colours, water outlines, hedges and tree rows, railway areas and tracks, bridge outlines, monuments and fountains (position and official name) |
 | **DOP** | Digital orthophoto, 20 cm, with a near-infrared channel | GeoSN | Roof colours; vegetation greenness for tree crowns and meadows |
-| **OSM** | OpenStreetMap | Volunteers | Street lamps, street furniture (benches, bins, bicycle stands, bollards, post boxes, stop shelters), playgrounds and their equipment, station platforms, walls, cliff edges, stairs, bridge structure types, fountain basins, what streets, pavements and car parks are paved with, sports grounds |
+| **LSC** | Laser-scan point cloud | GeoSN | Hedge heights; trees in courtyards and gardens (central tile) |
+| **OSM** | OpenStreetMap | Volunteers | Street lamps, hedges, street furniture (benches, bins, bicycle stands, bollards, post boxes, stop shelters), playgrounds and their equipment, station platforms, walls, cliff edges, stairs, bridge structure types, fountain basins, what streets, pavements and car parks are paved with, sports grounds |
+| **Stadtbaumkataster** | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width and a crown shape from the species |
 
-Available from the same portal but **not used yet**: the laser-scan point
-cloud (individual tree crowns would come from it), the cadastral parcels
+Available from the same portal but **not used yet**: the cadastral parcels
 (**ALKIS**), and the topographic base map (**DTK**). The planned section of
 the [transformation ledger](../../transformations.md) records what they
 could add.
@@ -100,9 +107,9 @@ documentation.
 | **Update cycle** | Region by region, after each new laser flight. For Dresden the previous scan dated from 2016, the current one from 27–30 November 2024. |
 | **Resolution and accuracy** | 1 m cells, height stored in the cell centre. Height accuracy up to ±0.15 m and position ±0.30 m at 95 % confidence, per GeoSN. |
 | **Generally suited for** | Any "how high is the ground here" question: terrain analysis, flood and drainage modelling, visibility studies, slope maps, rectifying aerial photos. |
-| **Used here for** | The ground itself; seating buildings, trees, lamps and the player on it; the abutment heights of bridges; the base term of the tree heights. |
+| **Used here for** | The ground itself — a triangle mesh that keeps every point of the 1 m grid within 15 cm (25 cm on the outer tiles), dense where the ground bends and sparse where it is flat, so walls and embankments keep their edges; seating buildings, trees, lamps and the player on it; the abutment heights of bridges; the base term of the tree heights. |
 | **Strengths** | The true shape of the ground, including river banks, embankments and the terraces of the old town, to a few centimetres. |
-| **Weaknesses** | Anything vertical: a laser-scanned wall is smoothed into a ramp about a metre wide, so monumental walls such as the Brühlsche Terrasse "disappear" into a gentle bank. Bridges are removed by definition, so a deck taken from this model would sink to the river bed. The viewer fixes both with other sources. |
+| **Weaknesses** | Anything vertical: a laser-scanned wall becomes a steep ramp one to two metres wide, never a vertical face — and once the viewer resamples the 1 m grid to its 2 m mesh, monumental walls such as the Brühlsche Terrasse "disappear" into a gentle bank about 3 m wide. Bridges are removed by definition, so a deck taken from this model would sink to the river bed. The viewer fixes both with other sources. |
 | **Format and download** | GeoTIFF, 2000 × 2000 pixels of 32-bit floats, 13.6 MB per 2 km tile, with a `.tfw` world file and an `_akt.csv` stating the survey date. Heights in metres above sea level (**DHHN2016**). [Digitale Höhenmodelle](https://www.geodaten.sachsen.de/downloadbereich-digitale-hoehenmodelle-4851.html). |
 
 Special role: this is the only bulk raw dataset committed to the
@@ -132,8 +139,10 @@ repository, because the build step reads it directly. See
 | **Update cycle** | The same as the height models (27–30 November 2024 for these tiles). |
 | **Resolution and accuracy** | Irregular points, several per square metre; ±0.15 m in height, ±0.30 m in position, per GeoSN. |
 | **Generally suited for** | Everything the grids simplify away: individual tree crowns, roof edges, wall faces, power lines. |
-| **Used here for** | Not used yet. Segmenting individual trees from it is on the ideas list. |
-| **Format and download** | LAZ per 2 km tile, large; same portal page as the DGM1. |
+| **Used here for** | The height of the hedges mapped in OpenStreetMap, and trees in courtyards and gardens that the land-use map does not mark as green (unless the city's tree register already has a tree there). Only for the central tile so far. Hedges and shrubs found in the scan alone are not shown: about a third of them turned out to be the rims of tree crowns. |
+| **Strengths** | Sees below 3 m and between buildings, where the height grids and the land-use map see nothing. Each point knows how bright its echo was and whether the pulse split — tall trees split it almost always, roofs almost never. |
+| **Weaknesses** | Its classes do not separate vegetation from buildings, cars or fences. A clipped hedge rarely splits a pulse, so for low plants the viewer leans on the greenness of the (spring) aerial photo instead; a hedge under a tree crown stays invisible. |
+| **Format and download** | LAZ per 2 km tile, large (≈380 MB for 60 million points); same portal page as the DGM1. |
 
 ### LoD2 — the 3D building model
 
@@ -195,7 +204,7 @@ repository, because the build step reads it directly. See
 | **Update cycle** | Continuous: edits are live within minutes. Extracts for download (Geofabrik) are rebuilt daily; the project reads such an extract, not the live database. |
 | **Resolution and accuracy** | No guarantee; in a well-mapped city typically metre-level positions. Completeness and tag consistency vary from street to street and mapper to mapper. |
 | **Generally suited for** | Things no official dataset has: street furniture, points of interest, names, informal paths, structure types; near-worldwide coverage; quick to fetch. |
-| **Used here for** | Lamp positions (`highway=street_lamp`), street furniture — benches (`amenity=bench`, with `backrest` and `direction` where tagged), picnic tables, litter bins, bicycle stands (with `capacity`), bollards, post boxes and stop shelters (`shelter=yes`), playground outlines (`leisure=playground`) with the equipment mapped on them (`playground=swing`, `slide`, `sandpit`, …) — turned towards the nearest street or path where no direction is tagged, station platforms (`railway=platform`), retaining walls, city walls, embankments and cliff edges (`barrier=*`, `man_made=embankment`, `natural=cliff`) with their `height` tag, flights of steps (`highway=steps` with `width` and `step_count`, the width else from an `area:highway=steps` outline), whether a bridge is an arch bridge (`bridge:structure`), and fountains (`amenity=fountain`): the outline of each basin, whether it is a splash pad or a still pool, and the many small fountains the landscape model does not list. Where an official monument stands in an OSM basin, the fountain keeps the official name. Also what a street, walkway or car park is paved with (`surface=asphalt`, `paving_stones`, `sett`, … on the ways, `sidewalk:*:surface` on the roads) and which way it runs, so slabs and cobbles lie along the street; and where cars park (`parking:left/right/both` with its orientation on the roads, `amenity=parking` car parks with their aisles, mapped bays), drawn as painted bays; and the pedestrian islands, lawns and fountains inside squares the landscape model draws as one road area (the Albertplatz). And the sports grounds (`leisure=pitch`, `leisure=track`): their outline, the sport (`sport=soccer`, `tennis`, `basketball`, …) and the playing surface (`surface=grass`, `clay`, `tartan`, `sand`, …), drawn as the field with its lines, and the goals, basketball posts and nets on it. |
+| **Used here for** | Lamp positions (`highway=street_lamp`), street furniture — benches (`amenity=bench`, with `backrest` and `direction` where tagged), picnic tables, litter bins, bicycle stands (with `capacity`), bollards, post boxes and stop shelters (`shelter=yes`), playground outlines (`leisure=playground`) with the equipment mapped on them (`playground=swing`, `slide`, `sandpit`, …) — turned towards the nearest street or path where no direction is tagged, station platforms (`railway=platform`), hedges (`barrier=hedge`), retaining walls, city walls, embankments and cliff edges (`barrier=*`, `man_made=embankment`, `natural=cliff`) with their `height` tag, flights of steps (`highway=steps` with `width` and `step_count`, the width else from an `area:highway=steps` outline), whether a bridge is an arch bridge (`bridge:structure`), and fountains (`amenity=fountain`): the outline of each basin, whether it is a splash pad or a still pool, and the many small fountains the landscape model does not list. Where an official monument stands in an OSM basin, the fountain keeps the official name. Also what a street, walkway or car park is paved with (`surface=asphalt`, `paving_stones`, `sett`, … on the ways, `sidewalk:*:surface` on the roads) and which way it runs, so slabs and cobbles lie along the street; and where cars park (`parking:left/right/both` with its orientation on the roads, `amenity=parking` car parks with their aisles, mapped bays), drawn as painted bays; and the pedestrian islands, lawns and fountains inside squares the landscape model draws as one road area (the Albertplatz). And the sports grounds (`leisure=pitch`, `leisure=track`): their outline, the sport (`sport=soccer`, `tennis`, `basketball`, …) and the playing surface (`surface=grass`, `clay`, `tartan`, `sand`, …), drawn as the field with its lines, and the goals, basketball posts and nets on it. |
 | **Strengths** | Human-readable tags for exactly the details the survey office does not model; the Brühlsche Terrasse exists here and nowhere else. |
 | **Weaknesses** | Not every lamp or bench is mapped, and few benches say which way they face, heights are often missing (the viewer uses defaults per wall type), tags vary. Volunteer data must be credited (ODbL). |
 | **Download and licence** | One regional extract of the whole state, `sachsen-latest.osm.pbf`, downloaded from [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) (about 250 MB) and read locally, which avoids rate limits and makes the result reproducible. The lamp, platform and bridge-structure files committed today are older: they were fetched through the **Overpass API**, a live query service, before the bakes switched to the extract, and move to the extract at their next re-bake. Licence: **ODbL**, credit "© OpenStreetMap contributors". |
@@ -274,8 +283,10 @@ bridge-structure files still date from earlier Overpass API queries.
 | LGV Hamburg | `dl-de/by-2-0` | "Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung (LGV), dl-de/by-2-0" |
 | Geoportal Berlin | `dl-de/zero-2-0`: no credit required | given anyway: "Geoportal Berlin, dl-de/zero-2-0" |
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
+| Stadtbaumkataster | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
 
-The viewer shows the credit of the site's provider and the OSM credit in
-the footer of its settings panel. The derived lamp and wall files carry
-the OSM credit inside the file as well; the monument file carries both
-credits, because it combines the two.
+The viewer shows the credit of the site's provider, the OSM credit and,
+where there is one, the city's tree cadastre in the footer of its
+settings panel. The derived lamp and wall files carry the OSM credit
+inside the file as well; the monument file carries both credits, because
+it combines the two, and the street-tree file carries the city's.

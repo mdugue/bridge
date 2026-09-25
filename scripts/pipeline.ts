@@ -9,10 +9,15 @@
  *                                     is already there
  *   bun run bake [tile…]              bake the derived artifacts
  *                                     (→ data/<site>/dlm, dop)
+ *   bun run fetch --lsc               ... and the laser scan, where the
+ *                                     provider's adapter reads one (≈380 MB
+ *                                     a tile)
  *   bun run bake --step canopy        one step (landcover, islands, canopy,
- *                                     ndvi, roof-colour, lamps, monuments,
- *                                     furniture, walls, stairs, rail,
- *                                     surface, edges, sport)
+ *                                     trees, ndvi, roof-colour, lamps,
+ *                                     monuments, furniture, walls, stairs,
+ *                                     rail, surface, edges, sport, lowveg)
+ *   bun run bake --step lowveg --research   also every hedge/shrub
+ *                                     candidate, under the raw folder
  *
  * The site config (sites/) becomes one JSON spec (pipeline/bake/spec.py), so
  * Python never re-derives tiles, extents or products. Then `bun dev` /
@@ -36,6 +41,7 @@ export function siteSpec(site: Site) {
     epsg: site.provider.epsg,
     products: site.provider.products,
     credit: site.provider.credit,
+    treeCadastre: site.treeCadastre ?? null,
     raw: providerRawDir(site),
     data: siteDataDir(site),
     osm: osmExtractUrl(site),
@@ -46,6 +52,21 @@ export function siteSpec(site: Site) {
   };
 }
 
+/** The options each command takes (`--step` needs a value). */
+const OPTIONS = {
+  fetch: ["--lsc"],
+  bake: ["--step", "--research"],
+} as const;
+
+/** The options `args` gives that `command` does not take. */
+export function unknownOptions(
+  command: keyof typeof OPTIONS,
+  args: string[]
+): string[] {
+  const known: readonly string[] = OPTIONS[command];
+  return args.filter((a) => a.startsWith("--") && !known.includes(a));
+}
+
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
   if (command !== "fetch" && command !== "bake") {
@@ -54,13 +75,9 @@ if (import.meta.main) {
   }
   const site = currentSite();
   const step = args.indexOf("--step");
-  const unknown = args.filter((a) => a.startsWith("--") && a !== "--step");
-  if (unknown.length > 0) {
-    process.stderr.write(`${command}: unknown option ${unknown.join(" ")}\n`);
-    process.exit(2);
-  }
-  if (step >= 0 && command === "fetch") {
-    process.stderr.write("fetch: --step is a bake option\n");
+  const bad = unknownOptions(command, args);
+  if (bad.length > 0) {
+    process.stderr.write(`${command}: unknown option ${bad.join(" ")}\n`);
     process.exit(2);
   }
   const tiles = args.filter(
@@ -81,6 +98,7 @@ if (import.meta.main) {
       JSON.stringify(siteSpec(site)),
       ...(step >= 0 ? ["--step", args[step + 1] ?? ""] : []),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
+      ...args.filter((a) => a === "--lsc" || a === "--research"),
     ],
     { stdio: "inherit", env: { ...process.env, PYTHONPATH: "pipeline" } }
   );

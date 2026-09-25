@@ -31,13 +31,15 @@ retargeted/lowered as tiles land.
 
 **Streaming** (`tile-stream.ts`, ADR 0024): the build bakes the site into an
 OGC 3D Tiles tileset (`lib/city/tileset.ts`): per site tile the buildings
-(refine ADD) over the terrain at two levels (512², geometric error 40 m,
-replaced by 1024² near the camera). Content is glTF (meshopt, quantised,
+(refine ADD) over the terrain at two levels (a 512² grid, geometric error
+40 m, replaced near the camera by an error-bounded TIN of the native DGM,
+ADR 0030). Content is glTF (meshopt, quantised,
 pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
 camera, so casters outside the view stay loaded. A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
-heavy part (vegetation, lamps, rails on the fine terrain level; its walls
+heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
+lamps, rails on the fine terrain level; its walls
 and stairs are baked into the glTF) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
 chip. Every tile change re-renders the shadow map. The layers:
@@ -50,19 +52,31 @@ chip. Every tile change re-renders the shadow map. The layers:
   the index buffer and rebuild the tile's BVH (you can't hide one building
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
   tile. No CityJSON reaches the browser.
-- `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
-  resampled with the wall breaklines burned in, the ground shaped under
-  OSM stairs, and the steps and wall ribbons as `stairs`/`walls` nodes, all
-  at bake time,
-  `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
-  land-cover material; also hangs the water and mist sheets.
+- `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF mesh
+  gets the land-cover material and hangs the water and mist sheets. The
+  fine level is a TIN of the native 1 m DGM1 (±0.15 m,
+  `scripts/bake-terrain-tin.ts`; `extras.tin`): `heightAt` reads its
+  triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`),
+  and the water gets an up-facing normal twin. Nothing is burned into it;
+  the wall ribbons in its `walls` node snap to the measured step at bake
+  time (`lib/city/wall-snap.ts`, ADR 0030). The coarse level is the 512²
+  grid with the wall breaklines burned in (ADR 0014), heights read back
+  from its first n·n vertices. Both are shaped under OSM stairs and
+  terraces at bake time (`scripts/bake-tiles.ts`, ADR 0028); study and
+  numbers in the ledger's "Terrain TIN" entry.
 - `landcover-splat.ts` — paints the class raster with the one palette
   (`lib/city/landcover.ts`) into the colour splat on the GPU (ADR 0023).
 - `water-layer.ts` — sheets over the terrain geometry, masked by the splat's
   alpha (water coverage), animated normal wobble.
-- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy) and hedges,
-  chunked for culling. Lives in the **Y-up frame** (a tile's content root),
-  never inside the rotated `world` group itself.
+- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy + the
+  laser-scan extra trees + the cadastre's trunks and broadleaf crowns, passed
+  in as precomputed `TreeInstance`s) and DLM hedges, chunked for culling.
+  Lives in the **Y-up frame** (a tile's content root), never inside the
+  rotated `world` group itself. `tree-inventory-layer.ts` draws only the
+  cadastre's reshaped silhouettes (flame / cone / dome) and vetoes canopy
+  trees inside its crowns (not in forest/copse); `tile-stream.ts`
+  (`buildTileVegetation`) joins both into the tile's one vegetation
+  control. `low-vegetation-layer.ts` draws the OSM hedges.
 - `shader-chunks.ts` — `DATA_POSITION`: glTF positions are quantised, so
   shaders derive data-frame coordinates from world space.
 - `sun-rig.ts` — directional light + shadow camera, sky dome, hemisphere fill,
@@ -220,6 +234,16 @@ not sky.
 - **Tree LOD (shipped):** per-chunk distance swaps the rich crown in near the
   camera and the cheap one far away; a swap invalidates the shadow map
   (plan 009).
+- **Cadastre + laser scan + hedges (all default-on):** the street-tree
+  cadastre (`pipeline/bake/trees.py`), the laser-scan trees outside the canopy
+  mask (`canopyx`, thinned in the bake against the cadastre within max(4 m,
+  crown radius)) and the OSM hedges with their laser-scan height
+  (`low-vegetation-layer.ts`, superellipsoid chains, static, chunked) from
+  `pipeline/bake/lowveg.py`. The bake's laser-scan-only hedges and shrubs are NOT
+  shipped (~30 % crown-rim false positives; `--step lowveg --research` writes them for
+  research). Measured lesson: the LSC **multi-echo ratio is a tall-tree cue,
+  not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5). Draw-call model:
+  `scripts/eval/kataster-cost.ts`. Numbers in `docs/transformations.md`.
 
 ### Sandbox crown — what is left to port
 
@@ -257,6 +281,8 @@ change yourself:
 # drop the snapshot JSON into shots/, then:
 bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
+# Before/after pairs: SHOTS_QUERY=scene=lite SHOTS_TAG=x bun run shots
+# appends the query to the page URL and writes shots/<name>.x.png.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
@@ -298,9 +324,9 @@ because boot is the largest fixed cost left once frames are cheap. The
 
 ## Data pipeline
 
-The site is `SITE` in `.env.local` (ADR 0030); its data is `data/<site>/`.
+The site is `SITE` in `.env.local` (ADR 0031); its data is `data/<site>/`.
 Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
-`data/_raw/<provider>/{dom1,dop,dlm,osm,downloads}`, shared by the
+`data/_raw/<provider>/{dom1,dop,dlm,osm,trees,lsc,downloads}`, shared by the
 provider's sites; no Git-LFS. The build sources are the CityJSON **and the
 DGM1 GeoTIFF per tile in `data/<site>/{cityjson,dgm}/`** — `prepare-data.ts`
 bakes the terrain from it at build time and the canopy/rail bakes read it —
@@ -312,7 +338,8 @@ itself (`citygml.py`); `bun run site` says what is missing.
 
 **Stage 1, the offline bakes** (ADR 0025): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
-Pillow; GDAL inside the wheels, with the OSM driver). If a tool is missing,
+Pillow, scipy, scikit-image; GDAL inside the wheels, with the OSM driver;
+laspy for the laser scan — no PDAL). If a tool is missing,
 fix the environment (`pipeline/pyproject.toml`), don't bend the code.
 `bun run bake` runs every step for every tile of the site with its extent and
 CRS, land cover first:
@@ -321,7 +348,7 @@ CRS, land cover first:
 bun run fetch                          # download what the site needs (its provider's adapter)
 bun run bake                           # every tile, every step
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|stairs|rail|surface
+bun run bake --step canopy             # one step: landcover|canopy|trees|ndvi|roof-colour|lamps|walls|stairs|rail|surface|lowveg
 bun run test:pipeline                  # pytest + ruff
 ```
 

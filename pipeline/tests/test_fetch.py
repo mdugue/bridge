@@ -124,8 +124,9 @@ def test_the_spec_names_the_provider_folder_and_extract():
                 "site": "x",
                 "provider": "sn",
                 "epsg": 25833,
-                "products": {"dom": True, "dop": None, "dlm": False},
+                "products": {"dom": True, "dop": None, "dlm": False, "lsc": True},
                 "credit": "Quelle: GeoSN, dl-de/by-2-0",
+                "treeCadastre": {"id": "dresden", "credit": "Stadtbäume: LH Dresden"},
                 "raw": "data/_raw/sn",
                 "data": "data/x",
                 "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
@@ -138,6 +139,8 @@ def test_the_spec_names_the_provider_folder_and_extract():
     assert tile.dgm == Path("data/x/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif")
     assert not tile.products.dlm and tile.products.dop is None
     assert tile.credit == "Quelle: GeoSN, dl-de/by-2-0"
+    assert tile.products.lsc
+    assert tile.tree_cadastre is not None and tile.tree_cadastre.id == "dresden"
     # JSON integers would leak numpy integers into the GeoJSON the bakes write
     assert all(isinstance(b, float) for b in tile.bounds)
 
@@ -158,3 +161,21 @@ def test_citygml_2_reads_like_1_and_an_empty_tile_is_refused(tmp_path):
     else:
         raise AssertionError("a tile without buildings must not be written")
     assert not (tmp_path / "x.json").exists()
+
+
+def test_a_site_without_a_tree_cadastre_skips_the_trees(tmp_path):
+    from bake import trees
+    from bake.common import Tile
+
+    tile = Tile("t", (0.0, 0.0, 2000.0, 2000.0), 25833, tmp_path / "raw", tmp_path / "data")
+    (tmp_path / "raw" / "trees").mkdir(parents=True)
+    (tmp_path / "raw" / "trees" / "t.geojson").write_text('{"features": []}')
+    trees.run(tile)
+    assert not (tmp_path / "data" / "dlm").exists()
+
+
+def test_the_cadastre_query_carries_the_sites_crs():
+    from bake.cadastre import REGISTERS
+
+    q = REGISTERS["dresden"].query((0.0, 0.0, 2000.0, 2000.0), 25832, resultType="hits")
+    assert "EPSG%3A%3A25832" in q and "cls%3AL1261" in q and "resultType=hits" in q

@@ -9,7 +9,8 @@
  *     one (downsample-raster.ts).
  *  2. **Content** — per tile, the buildings (CityJSON → glTF with a
  *     per-object table, bake-city-mesh.ts) and the terrain at two levels
- *     (DGM → glTF, bake-tiles.ts), each glTF naming its side files in
+ *     (DGM → glTF, bake-tiles.ts: the fine level an error-bounded TIN over
+ *     the native DGM, bake-terrain-tin.ts), each glTF naming its side files in
  *     `extras`. Pre-gzipped (`.glb.gz`): static hosts do not compress binary
  *     types, and the viewer inflates natively (DecompressionStream).
  *  3. **Tilesets** — the tree over all tiles, and one over the spawn tile
@@ -52,10 +53,7 @@ import {
   terraceOf,
 } from "../lib/city/stairs";
 import type { WallLine } from "../lib/city/terrain-conflate";
-import {
-  sampleHeightfield,
-  type TerrainBounds,
-} from "../lib/city/terrain-geometry";
+import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import type { WallRibbon } from "../lib/city/walls";
 import {
   cityMeshSourceFiles,
@@ -92,8 +90,10 @@ import {
   stairMesh,
   type TerrainMesh,
   terrainMesh,
+  tinTerrainMesh,
   wallMesh,
 } from "./bake-tiles";
+import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { bakeWissenHero } from "./bake-wissen-hero";
 import { downsampleClassRaster } from "./downsample-raster";
 import { writeMeshGlb } from "./tile-glb";
@@ -156,6 +156,9 @@ function publish(logical: string, content: Uint8Array): string {
 const BAKE_SOURCES = [
   "scripts/prepare-data.ts",
   "scripts/bake-tiles.ts",
+  "scripts/bake-terrain-tin.ts",
+  "lib/city/terrain-tin.ts",
+  "lib/city/wall-snap.ts",
   "scripts/bake-city-mesh.ts",
   "scripts/tile-glb.ts",
   "scripts/downsample-raster.ts",
@@ -388,6 +391,11 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
     rail: pick("rail"),
     railarea: pick("railarea"),
     vegrows: pick("vegrows"),
+    // Only the tiles that have them name them: an absent file is a feature
+    // off, never a request that can only 404.
+    ...(names.trees ? { trees: names.trees } : {}),
+    ...(names.lowveg ? { lowveg: names.lowveg } : {}),
+    ...(names.canopyx ? { canopyx: names.canopyx } : {}),
   };
 }
 
@@ -405,7 +413,9 @@ function terrainInputs(tile: string): string[] {
 }
 
 /** A tile's shaped terrain at one level (memoised: the fine levels of every
- *  tile are also the ground the walls stand on). */
+ *  tile are also the ground the walls stand on). The fine level is a TIN
+ *  over the native DGM (bake-terrain-tin.ts), unless the DGM has holes; the
+ *  coarse one the resampled grid. */
 const terrains = new Map<
   string,
   Promise<TerrainMesh & { bounds: TerrainBounds }>
@@ -422,15 +432,29 @@ function shapedTerrain(
       const tif = at(source.tif);
       const tfw = at(source.tfw);
       const buf = readFileSync(tif);
-      const dgm = await readDgm(
-        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-        existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
-        TERRAIN_LEVELS[level].n
-      );
-      const mesh = terrainMesh(dgm, wallLines(tile), offset, {
-        stairs: stairLines(tile),
-        terraces: terraces(tile),
-      });
+      const read = (size: number | "native") =>
+        readDgm(
+          buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+          existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+          size
+        );
+      const features = { stairs: stairLines(tile), terraces: terraces(tile) };
+      if (level === 0) {
+        const dgm = await read("native");
+        const tin = tinTerrainMesh(
+          dgm,
+          wallLines(tile),
+          offset,
+          features,
+          FINE_TIN_MAX_ERROR
+        );
+        if (tin) {
+          return { ...tin, bounds: dgm.bounds };
+        }
+        log(`${tile}: the DGM has NoData, the fine level stays a grid`);
+      }
+      const dgm = await read(TERRAIN_LEVELS[level].n);
+      const mesh = terrainMesh(dgm, wallLines(tile), offset, features);
       return { ...mesh, bounds: dgm.bounds };
     })();
     terrains.set(memo, built);
@@ -438,20 +462,19 @@ function shapedTerrain(
   return built;
 }
 
-/** Ground height over the whole site: the fine, shaped grid of the tile
- *  holding the point — what the walker stands on at runtime. */
-async function siteGround(): Promise<(x: number, y: number) => number | null> {
-  const grids = await Promise.all(TILES.map((t) => shapedTerrain(t, 0)));
-  const n = TERRAIN_LEVELS[0].n;
-  return (x, y) => {
-    const grid = grids.find((g) => ownsPoint(g.bounds, x, y));
-    return grid
-      ? sampleHeightfield(
-          { elevations: grid.elevations, n, bounds: grid.bounds },
-          x,
-          y
-        )
-      : null;
+/** Ground height over the whole site: the fine, shaped ground of the tile
+ *  holding the point — what the walker stands on at runtime. `tin` is true
+ *  when every tile's fine level is a TIN (nothing burned to the wall line,
+ *  so the walls snap to the measured step). */
+async function siteGround(): Promise<{
+  heightAt: (x: number, y: number) => number | null;
+  tin: boolean;
+}> {
+  const fine = await Promise.all(TILES.map((t) => shapedTerrain(t, 0)));
+  return {
+    heightAt: (x, y) =>
+      fine.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null,
+    tin: fine.every((g) => g.tin !== undefined),
   };
 }
 
@@ -463,8 +486,10 @@ async function fineChildren(
 ): Promise<NonNullable<Parameters<typeof writeMeshGlb>[0]["children"]>> {
   const stairs = stairMesh(stairLines(tile), offset, bounds);
   const ground = await siteGround();
-  const walls = wallMesh(wallLines(tile), ground, offset);
-  const kerbs = kerbMesh(kerbLines(tile), ground, offset);
+  const walls = wallMesh(wallLines(tile), ground.heightAt, offset, {
+    snapToStep: ground.tin,
+  });
+  const kerbs = kerbMesh(kerbLines(tile), ground.heightAt, offset);
   return [stairs, walls, kerbs].filter((m) => m !== null);
 }
 
@@ -503,6 +528,7 @@ async function bakeTerrain(
     bounds: TerrainExtras["bounds"];
     maxZ: number;
     minZ: number;
+    tin?: TerrainExtras["tin"];
   }>(
     await cached(`${stem}.json`, key, async () => {
       const m = await shapedTerrain(tile, level);
@@ -510,6 +536,7 @@ async function bakeTerrain(
         bounds: m.bounds,
         minZ: m.minElevation,
         maxZ: m.maxElevation,
+        ...(m.tin ? { tin: m.tin } : {}),
       });
     })
   );
@@ -517,6 +544,7 @@ async function bakeTerrain(
     ...described,
     bounds: meta.bounds,
     minElevation: meta.minZ,
+    ...(meta.tin ? { tin: meta.tin } : {}),
   };
   const name = `${stem}.glb.gz`;
   const glb = await cached(name, key, async () =>

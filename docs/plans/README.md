@@ -71,7 +71,7 @@ S/M/L.
 2. **Plan 017, the rest (S–M).** OSM rails and bridge decks for providers
    without a DLM (Hamburg, Berlin), a NAS reader for Hamburg's open
    Basis-DLM, and a first run of Berlin's adapter. Decide which sites to
-   commit and deploy (plan 024, ADR 0030).
+   commit and deploy (plan 024, ADR 0031).
 3. **Plan 020 (L, GPU-gated).** WebGPU + TSL; removes every
    `onBeforeCompile` patch, two post libraries and plan 008 step 7.
 4. **Plan 008, steps 5–7 (S).** The coverage artifact; the remaining

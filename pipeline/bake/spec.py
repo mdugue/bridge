@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .common import Products, Tile
+from .common import Products, Tile, TreeCadastre
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,7 @@ class Spec:
     data: Path  # data/<site>
     osm_url: str
     tiles: list[Tile]
+    tree_cadastre: TreeCadastre | None = None
 
     @property
     def osm(self) -> Path:
@@ -38,6 +39,7 @@ def parse(text: str) -> Spec:
     products = Products(**doc["products"])
     osm_url = doc["osm"]
     osm = osm_path(raw, osm_url)
+    cadastre = TreeCadastre(**doc["treeCadastre"]) if doc.get("treeCadastre") else None
     tiles = [
         Tile(
             t["id"],
@@ -48,7 +50,10 @@ def parse(text: str) -> Spec:
             osm,
             products,
             doc["credit"],
+            cadastre,
         )
         for t in doc["tiles"]
     ]
-    return Spec(doc["site"], doc["provider"], doc["epsg"], products, raw, data, osm_url, tiles)
+    return Spec(
+        doc["site"], doc["provider"], doc["epsg"], products, raw, data, osm_url, tiles, cadastre
+    )

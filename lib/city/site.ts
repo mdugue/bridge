@@ -8,7 +8,7 @@
  *
  * What belongs to the Land rather than the place — CRS, licence and credit,
  * which products are open, the OSM extract — is the `Provider`, shared by
- * every site of that Land (ADR 0030).
+ * every site of that Land (ADR 0031).
  */
 
 import type { FacadeMaterial } from "./building-tint";
@@ -133,9 +133,23 @@ export interface Provider {
     /** ATKIS Basis-DLM in the AdV Shape profile (land cover, tree rows,
      *  rails, bridge decks); without it land cover comes from OSM */
     dlm: boolean;
+    /** a classified laser scan (LAZ) per tile, the adapter's `lsc` —
+     *  hedge heights and the trees outside the canopy mask; opt-in
+     *  (`bun run fetch --lsc`, ≈380 MB a tile) */
+    lsc: boolean;
   };
   /** suffix of tile ids (`33412_5656_2_sn`), after the provider */
   tileSuffix: string;
+}
+
+/**
+ * A municipal street-tree register the site can use (surveyed trees with
+ * height, crown and taxon). `id` names its entry in pipeline/bake/cadastre.py
+ * — the WFS and its field mapping; `credit` is its licence's credit line.
+ */
+export interface TreeCadastre {
+  credit: string;
+  id: "dresden";
 }
 
 export interface Site {
@@ -155,6 +169,8 @@ export interface Site {
    *  site (same form as `Provider.osm`) */
   osm?: string;
   provider: Provider;
+  /** the city's street-tree register, where it publishes one openly */
+  treeCadastre?: TreeCadastre;
   /**
    * The id of the viewpoint the player starts at. It must lie on the first
    * tile: that one is always streamed (the lite profile streams it alone)
@@ -206,8 +222,8 @@ export function siteTitle(site: Site): string {
 /** The OSM credit, naming what the site takes from OSM. */
 function osmCredit(site: Site): string {
   const layers = site.provider.products.dlm
-    ? "Lampen, Bänke, Brunnen, Mauern, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken"
-    : "Landbedeckung, Lampen, Bänke, Brunnen, Mauern, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken";
+    ? "Lampen, Bänke, Brunnen, Mauern, Hecken, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken"
+    : "Landbedeckung, Lampen, Bänke, Brunnen, Mauern, Hecken, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken";
   return `${layers} © OpenStreetMap-Mitwirkende (ODbL)`;
 }
 
@@ -221,7 +237,11 @@ export function landcoverCredit(site: Site): string {
 
 /** The credit lines the HUD footer shows (the sources' licence terms). */
 export function siteAttribution(site: Site): string[] {
-  return [site.provider.credit, osmCredit(site)];
+  return [
+    site.provider.credit,
+    osmCredit(site),
+    ...(site.treeCadastre ? [site.treeCadastre.credit] : []),
+  ];
 }
 
 /** The Geofabrik URL of the site's OSM extract. */

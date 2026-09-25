@@ -8,11 +8,13 @@ A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
 rendering of a German city built from open geodata and walk (or fly) through
 it. Dresden is the reference site; Leipzig, Meißen, Grimma, Hamburg, München,
 Berlin and Unna are configured too — **one site per build**, chosen by `SITE`
-in `.env.local` (ADR 0026, 0030).
+in `.env.local` (ADR 0026, 0031).
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
-rasters, surfaces (roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover
-class raster (painted with one palette at runtime), and trees from DLM
-hedge/tree-rows plus a **DOM1**-derived canopy. The build bakes it all into an
+rasters (the walked-on level an error-bounded TIN), surfaces
+(roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover class raster
+(painted with one palette at runtime), and trees from DLM hedge/tree-rows, a
+**DOM1**-derived canopy, the city's **street-tree cadastre** and laser-scan
+crowns, plus OSM hedges. The build bakes it all into an
 **OGC 3D Tiles** tileset of glTF content that the browser streams with
 **3DTilesRendererJS** and renders with **three.js**; there is no backend.
 
@@ -104,7 +106,9 @@ config change.
     `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
-    `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
+    `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
+    the street-tree cadastre's silhouettes, and `low-vegetation-layer.ts`,
+    the OSM hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
@@ -138,7 +142,10 @@ config change.
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `site.ts` (the site
+  policy, the look table + store, the Snapshot codec, `terrain-tin.ts`
+  (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
+  the measured step), `tree-inventory.ts` (the cadastre's archetypes and
+  veto), `site.ts` (the site
   type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
@@ -150,25 +157,29 @@ config change.
   label, tiles, viewpoints, the provider) registered in `index.ts`, and
   `providers.ts` — one entry per Land (CRS, licence + credit, open products,
   OSM extract). `SITE` (`.env.local`, default `dresden`) picks the site at
-  build time (ADR 0026, 0030)
+  build time (ADR 0026, 0031)
 - `pipeline/` — the offline pipeline, one Python package in a uv environment:
   the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
   per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
   converts LoD2 CityGML → CityJSON, `net.py` downloads incl. single members
   of remote ZIPs) and the bakes (`landcover.py` + `landcover_osm.py`,
-  `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`,
+  `canopy.py`, `trees.py` (+ `tree_archetypes.py`, `cadastre.py` for the
+  street-tree register), `lowveg.py` (+ `lsc.py`, the laser scan's rasters),
+  `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`,
   `furniture.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `edges.py`,
   `sport.py`, `osm.py`);
   tests in `pipeline/tests/`. Run by
   `bun run fetch` / `bun run bake` (`scripts/pipeline.ts`, which hands
-  Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0030
+  Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0031
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
   `tileset-spawn.json`) with glTF content under content-hashed names +
   `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
   CityJSON loader, `bake-tiles.ts` turns it into glTF with a per-object
-  property table) and the terrain at two levels (the DGM resampled, the
-  wall breaklines burned in), written by `tile-glb.ts` (meshopt, quantised,
+  property table) and the terrain at two levels (fine: an error-bounded TIN
+  of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
+  measured steps; coarse: the DGM resampled to 512², the wall breaklines
+  burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
   `downsample-raster.ts` (the 2048² class raster), `bake-wissen-hero.ts`,
@@ -176,7 +187,7 @@ config change.
 - `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
   `dlm/`, `dop/` (derived), `provenance.json`. Only `data/dresden/` is
   committed; other sites' folders are gitignored until the maintainer
-  un-ignores one to deploy it (ADR 0030). `data/_raw/<provider>/` is
+  un-ignores one to deploy it (ADR 0031). `data/_raw/<provider>/` is
   **gitignored** bulk downloads, shared by the provider's sites.
   `public/data/` is generated, gitignored.
 - `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
@@ -256,7 +267,7 @@ under `data/<site>/{dgm,cityjson}`: `prepare-data.ts` bakes terrain and
 buildings from them and the canopy/rail bakes read the DGM. Dresden's are
 committed (13–15 MB DGM per tile, as downloaded); the fetch step writes new
 ones compact (~6 MB). Committing another site's folder is the maintainer's
-call (ADR 0030). No Git-LFS. Derived per-tile artifacts
+call (ADR 0031). No Git-LFS. Derived per-tile artifacts
 (`data/<site>/dlm/*.png|json|geojson`, `data/<site>/dop/*.json`) are small;
 `prepare-data.ts` publishes them to `public/data/` at build. Pipeline notes:
 
@@ -275,6 +286,14 @@ call (ADR 0030). No Git-LFS. Derived per-tile artifacts
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
+- `trees.py` bakes the site's street-tree cadastre (`Site.treeCadastre`,
+  Dresden's so far; `bun run fetch` caches the city's WFS per tile through
+  `cadastre.py`); `lowveg.py` the OSM hedges at their laser-scan height and
+  the scan's trees outside the canopy mask, thinned against the cadastre.
+  The laser scan (`data/_raw/<provider>/lsc/<tile>.laz`) is fetched by
+  `bun run fetch --lsc` where the provider's adapter reads one
+  (`products.lsc`, Saxony so far) or put there by hand, and rasterised in
+  Python (`lsc.py`, laspy — no PDAL); without it the step is OSM only.
 - `monuments.py` takes the monuments (statues, stones, columns, named
   fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
   basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
@@ -357,8 +376,9 @@ its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
 Before a tile or its dressing shows, its shaders are compiled with
 `compileAsync` against the scene pass's target (`PostStack.compile`) —
 add new per-tile objects inside that path, or they compile inside a frame.
-The terrain has no BVH: ground rays march the height grid
-(`lib/city/ground-ray.ts`). The glTF extras key is **`tileId`**: the
+The terrain has no BVH: ground rays march the height function
+(`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
+triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
 streaming camera, so tiles that cast into the view stay loaded;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
@@ -533,7 +553,7 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   plan 020 behind a spike on a real GPU; don't start the port before the
   maintainer has the spike's plates and numbers
 - Committing raw bulk geodata, or switching on Git-LFS; committing another
-  site's `data/<site>/` (a size decision, ADR 0030)
+  site's `data/<site>/` (a size decision, ADR 0031)
 
 <!-- BEGIN:nextjs-agent-rules -->
 

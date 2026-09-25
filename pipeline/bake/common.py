@@ -53,6 +53,16 @@ class Products:
     dom: bool
     dop: str | None  # "rgbi", "rgb" or None
     dlm: bool
+    lsc: bool = False  # the adapter fetches a laser scan (opt-in: `--lsc`)
+
+
+@dataclass(frozen=True)
+class TreeCadastre:
+    """The site's street-tree register (sites/<id>.ts `treeCadastre`): its
+    entry in cadastre.py and its licence's credit line."""
+
+    id: str
+    credit: str
 
 
 @dataclass(frozen=True)
@@ -73,6 +83,7 @@ class Tile:
     osm: Path | None = None
     products: Products = Products(dom=True, dop="rgbi", dlm=True)
     credit: str = ""
+    tree_cadastre: TreeCadastre | None = None
 
     @property
     def size(self) -> tuple[float, float]:

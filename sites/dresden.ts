@@ -28,6 +28,10 @@ export const DRESDEN: Site = {
   label: "Dresden · Altstadt",
   name: "Dresden",
   provider: SAXONY,
+  treeCadastre: {
+    id: "dresden",
+    credit: "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
+  },
   tiles: [
     { e: 412, n: 5656 },
     { e: 410, n: 5656 },

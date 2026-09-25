@@ -67,7 +67,7 @@ each, all from this repo) with `SITE=<id>` and `SITE_URL=https://<id>.walkedby.m
 in its environment and that domain attached. The host builds from git, so the
 site's `data/<id>/` must be committed: only Dresden's is by default
 (`.gitignore`); un-ignore a site's folder once you decide to ship it — it is
-roughly 20–40 MB per 2×2 site ([ADR 0030](docs/adr/0030-sites-providers-and-per-site-data.md)).
+roughly 20–40 MB per 2×2 site ([ADR 0031](docs/adr/0031-sites-providers-and-per-site-data.md)).
 
 ## Data
 

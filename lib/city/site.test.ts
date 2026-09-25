@@ -78,8 +78,11 @@ test("Dresden keeps its tile ids, credits and extract", () => {
   ]);
   expect(siteAttribution(DRESDEN)).toEqual([
     "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Bänke, Brunnen, Mauern, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
+    "Lampen, Bänke, Brunnen, Mauern, Hecken, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
+    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
   ]);
+  // Only Dresden names a tree cadastre; the others credit two sources.
+  expect(siteAttribution(SITES.leipzig)).toHaveLength(2);
   expect(siteTitle(DRESDEN)).toBe("City Walk — Dresden");
   expect(osmExtractUrl(DRESDEN)).toBe(
     "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf"

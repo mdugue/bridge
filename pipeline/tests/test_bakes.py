@@ -690,3 +690,156 @@ def test_the_index_raster_names_a_court_inside_a_larger_ground(tmp_path):
     assert raster[64 - 10, 10].tolist()[:3] == [1, 1, 255]
     assert raster[33, 3, 0] == 1  # the grown edge, half a metre out
     assert raster[33, 1].tolist()[:3] == [0, 1, 0]  # only the wider growth
+
+
+def _cadastre_tree(x, y, h=None, d=None, botanical="Tilia cordata", german="Winter-Linde"):
+    return {
+        "properties": {
+            "gis_x_utm": x,
+            "gis_y_utm": y,
+            "baumhoehe_akt": h,
+            "kronendurchmesser_akt": d,
+            "art_botanisch": botanical,
+            "art_deutsch": german,
+        }
+    }
+
+
+def test_the_tile_owns_its_cadastre_trees_and_skips_stumps():
+    from bake.trees import parse_trees
+
+    raw = {
+        "features": [
+            _cadastre_tree(100.0, 100.0, 12, 8),
+            _cadastre_tree(200.0, 100.0, 12, 8),  # the east seam: the neighbour's
+            _cadastre_tree(150.0, 150.0, 2, 1, botanical="Stammstück"),
+        ]
+    }
+    trees = parse_trees(raw, (0.0, 0.0, 200.0, 200.0))
+    assert [(t["x"], t["y"]) for t in trees] == [(100.0, 100.0)]
+    assert trees[0]["leaf"] == "d"
+
+
+def test_missing_sizes_come_from_the_tiles_own_trees_clamped():
+    from bake.trees import H_MAX, impute, parse_trees
+
+    raw = {
+        "features": [
+            *(_cadastre_tree(float(i), 1.0, 10, 5) for i in range(3)),
+            _cadastre_tree(9.0, 1.0, None, None),  # both imputed: genus median, ratio
+            _cadastre_tree(8.0, 1.0, 99, None),  # clamped
+        ]
+    }
+    sizes, imputed_h, imputed_d = impute(parse_trees(raw, (0.0, 0.0, 10.0, 10.0)))
+    assert (imputed_h, imputed_d) == (1, 2)
+    assert sizes[3] == (10, 5)
+    assert sizes[4][0] == H_MAX
+
+
+def test_a_cadastre_tree_in_forest_is_flagged():
+    from bake.trees import tree_features
+
+    cls = np.zeros((4, 4), dtype=np.uint8)
+    cls[0, 0] = 2  # forest in the north-west corner
+    tree = {"x": 1.0, "y": 9.0, "archetype": 0, "leaf": "d", "foliage": 1, "globe": True}
+    f = tree_features([tree], [(10.0, 6.0)], cls, (0.0, 0.0, 10.0, 10.0))[0]
+    assert f["properties"] == {"h": 10.0, "d": 6.0, "a": 0, "l": "d", "c": 1, "g": 1, "f": 1}
+
+
+def test_only_the_osm_hedges_ship():
+    from bake.lowveg import hedge_feature, shipped, shrub_feature
+
+    line = shapely.LineString([(0, 0), (5, 0)])
+    feats = [
+        hedge_feature(line, 1.43, 1.0, "osm"),
+        hedge_feature(line, 1.2, 0.8, "osm+lsc"),
+        hedge_feature(line, 1.2, 0.8, "lsc"),
+        shrub_feature(shapely.Point(1, 1), 1.5, 1.0, "lsc"),
+    ]
+    kept = shipped(feats)
+    assert [f["properties"]["src"] for f in kept] == ["osm", "osm+lsc"]
+    assert kept[0]["properties"]["h"] == 1.4
+
+
+def test_a_hedge_height_tag_is_read_when_plausible():
+    from bake.lowveg import osm_height
+
+    assert osm_height('"height"=>"1.8 m"') == 1.8
+    assert osm_height('"height"=>"12"') is None
+    assert osm_height(None) is None
+
+
+def test_scan_trees_a_cadastre_tree_claims_are_dropped(tmp_path):
+    from bake.lowveg import cadastre_filter
+
+    trees = tmp_path / "trees.geojson"
+    trees.write_text(
+        '{"features":[{"geometry":{"type":"Point","coordinates":[0,0]},"properties":{"d":12}}]}'
+    )
+
+    def point(x):
+        return {"geometry": {"type": "Point", "coordinates": [x, 0.0]}, "properties": {}}
+
+    # 3 m: within the 4 m floor; 5.5 m: inside the 6 m crown; 7 m: its own tree
+    kept, dropped = cadastre_filter([point(3.0), point(5.5), point(7.0)], trees)
+    assert dropped == 2
+    assert [f["geometry"]["coordinates"][0] for f in kept] == [7.0]
+
+
+def test_a_closed_hedge_way_stays_a_line_of_hedge():
+    from bake.lowveg import hedge_rings
+
+    square = shapely.Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
+    rings = hedge_rings(square)
+    assert len(rings) == 1
+    assert rings[0].is_ring and rings[0].length == 16.0
+
+
+def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
+    import laspy
+    import rasterio
+
+    from bake.lsc import rasterise
+
+    # A 4 m tile at 0.5 m = 8×8 cells. Two ground points in the south-west
+    # cell (the first in file order is its idw, as PDAL's bin mode has it),
+    # one in the cell diagonally north-east of the empty cell north of it,
+    # a 1.5 m shrub return and a 12 m crown return (two echoes) in that cell.
+    # A last non-ground return 0.1 m over the DTM's idw but 0.6 m over its
+    # min: PDAL's hag_dem reads band 2, which is `idw` in PDAL's band order.
+    x = [0.1, 0.25, 0.75, 0.25, 0.3, 0.2]
+    y = [0.1, 0.25, 1.25, 0.75, 0.7, 0.8]
+    z = [101.0, 100.0, 104.0, 103.5, 114.0, 102.6]
+    header = laspy.LasHeader(point_format=6, version="1.4")
+    header.scales = [0.01, 0.01, 0.01]
+    header.offsets = [0, 0, 0]
+    las = laspy.LasData(header)
+    las.x, las.y, las.z = np.array(x), np.array(y), np.array(z)
+    las.classification = np.array([2, 2, 2, 20, 20, 20], np.uint8)
+    las.number_of_returns = np.array([1, 1, 1, 1, 2, 1], np.uint8)
+    las.intensity = np.array([0, 0, 0, 1000, 3000, 5000], np.uint16)
+    laz = tmp_path / "t.laz"
+    las.write(laz)
+    rasterise(laz, tmp_path, (0.0, 0.0, 4.0, 4.0), 25833)
+
+    def band(name, desc):
+        with rasterio.open(tmp_path / name) as ds:
+            return ds.read(list(ds.descriptions).index(desc) + 1)
+
+    idw = band("dtm_050.tif", "idw")
+    assert idw[7, 0] == 101.0  # the first point, not the one on the centre
+    assert band("dtm_050.tif", "min")[7, 0] == 100.0
+    assert band("dtm_050.tif", "count")[7, 0] == 2
+    # the empty cell north of it: its two donors are both 1 cell away by
+    # Chebyshev distance (the diagonal one would be √2 by Euclid's)
+    assert idw[6, 0] == 102.5
+    assert band("dtm_050.tif", "min")[6, 0] == 102.0
+    assert band("dsm_050.tif", "max")[6, 0] == 114.0
+    assert band("nonground_count_050.tif", "count")[6, 0] == 3
+    with rasterio.open(tmp_path / "dtm_050.tif") as ds:
+        assert ds.descriptions == ("min", "idw", "count")  # PDAL's band order
+    assert band("nonground_multiecho_count_050.tif", "count")[6, 0] == 1
+    # only the shrub return is 0.25–4 m above the DTM
+    assert band("lowint_050.tif", "mean")[6, 0] == 1000.0
+    assert band("lowint_050.tif", "count")[6, 0] == 1
+    assert band("lowint_050.tif", "mean")[0, 7] == -9999.0

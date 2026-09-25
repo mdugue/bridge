@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { writeArrayBuffer } from "geotiff";
 import { dgmSourceFiles } from "../lib/city/tile";
 import { DRESDEN } from "../sites/dresden";
-import { readDgm, terrainMesh } from "./bake-tiles";
+import { readDgm, terrainMesh, tinTerrainMesh } from "./bake-tiles";
 
 const PRIMARY_TILE = "33412_5656_2_sn";
 
@@ -57,4 +57,25 @@ test("a raster without georeferencing is placed by its .tfw, or refused", async 
   // are the pixel edges.
   const dgm = await readDgm(bare, "1\n0\n0\n-1\n412000.5\n5657999.5\n", 4);
   expect(dgm.bounds).toEqual([412_000, 5_657_996, 412_004, 5_658_000]);
+});
+
+test("the skirt does not tilt the border normals (no bright band at a seam)", () => {
+  // A flat 9×9 tile: every surface normal, the border ring's included, must
+  // face straight up — the 30 m skirt walls once dragged the border's
+  // area-weighted normals nearly horizontal.
+  const n = 9;
+  const dgm = {
+    bounds: [0, 0, 9, 9] as [number, number, number, number],
+    elevations: new Float32Array(n * n).fill(100),
+    n,
+  };
+  const grid = terrainMesh(dgm, [], { cx: 0, cy: 0 });
+  const tin = tinTerrainMesh(dgm, [], { cx: 0, cy: 0 }, {}, 0.1);
+  for (const mesh of [grid, tin]) {
+    const normals = mesh?.input.normals ?? new Float32Array();
+    expect(normals.length).toBeGreaterThan(0);
+    for (let i = 0; i < normals.length; i += 3) {
+      expect(normals[i + 2]).toBeCloseTo(1, 5);
+    }
+  }
 });

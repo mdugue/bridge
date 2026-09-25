@@ -19,7 +19,7 @@ is an open direction in [plans/README.md](./plans/README.md).
 
 **Sites and providers**
 ([ADR 0026](./adr/0026-one-site-config-per-build.md),
-[ADR 0030](./adr/0030-sites-providers-and-per-site-data.md)). A place is
+[ADR 0031](./adr/0031-sites-providers-and-per-site-data.md)). A place is
 `sites/<id>.ts`, typed by `lib/city/site.ts`: its `name` and HUD `label`,
 the tiles (`{e, n}` 2 km cells, the first is the spawn), the curated
 viewpoints, the sun's fallback position and the **provider** it draws on.
@@ -92,6 +92,8 @@ the planned fallback. ✅ built · ❌ not built.
 | **Basis-DLM** (AdV Shape profile) | class raster (surface colours, water, the tree and lamp gates), hedge / tree rows, rail tracks + ballast, bridge decks, the official monuments (statues, memorial stones, columns, named fountains) | ✅ a provider without it (`products.dlm: false`) gets the class raster, legend and veg rows **from OSM**, the canopy's forest/park gate from the class raster plus OSM parks, and its fountains from OSM alone. ❌ rails, ballast, bridge decks and the statues and stones are off (optional at runtime). A DLM provider whose package is missing on disk stops the land-cover step (`bun run fetch` first) | OSM tracks (`railway=rail`) and decks (`man_made=bridge`); a NAS reader for Hamburg's open NAS package |
 | **DOP** (RGB + NIR) | roof colour per building; NDVI (crown colour, meadow tint) | ✅ both steps skip; an RGB-only DOP (Bavaria) skips the NDVI only; the runtime uses the synthesized roof palette and hash-only sage crowns (`ndvi` and the roof LUT are optional) | — |
 | **OSM extract** (`.osm.pbf`) | retaining walls (+ terrain breaklines), stairs and terraces (shaped into the fine terrain), fountains, street lamps, street furniture and playgrounds, sports grounds, paving and parking, the road islands carved out of the DLM's roads, platforms, bridge structure (arches); the land cover where there is no DLM | ✅ the lamps, walls, stairs, furniture, paving, sport and islands steps skip with a note, and the rail step writes bridges without structure; none of them empties a file already there (platforms stay as committed). Lamps, walls, stairs, furniture, paving, sports grounds and platforms are optional at runtime. ❌ Where the land cover comes from OSM (Hamburg, Berlin) the land-cover step stops ("run bun run fetch first") — the extract is then required | — |
+| **Laser scan (LAZ)** (`Provider.products.lsc`: GeoSN's LSC so far; `data/_raw/<provider>/lsc/<tile>.laz`, `bun run fetch --lsc` or by hand) | hedge heights along the OSM hedges; trees outside the canopy mask (`canopyx`) | ✅ the hedge step falls back to OSM only: mapped hedges at their `height` tag (or 1.5 m), no extra trees; `canopyx` is optional at runtime. Also without PDAL on PATH | sparser points (< 4 /m²) leave holes in the 0.5 m rasters — bin at 1 m and raise `MIN_AREA_M2`; classified low vegetation (ASPRS 3/4) would replace the NDVI + intensity cue outright |
+| **Street-tree cadastre** (`Site.treeCadastre`: Dresden's WFS `cls:L1261` so far; `data/_raw/<provider>/trees/<tile>.geojson`, fetched by `bun run fetch`) | surveyed trees with height, crown and taxon | ✅ the trees step skips; `trees` is optional at runtime, and the canopy and rows plant alone. Another city's cadastre needs its own entry in `pipeline/bake/cadastre.py` (the WFS and the field mapping) (and its taxonomy in `tree_archetypes.py`) | — |
 
 **Lower quality or different shape** is mostly untested:
 
@@ -149,7 +151,7 @@ new source in the guide's data-sources page (both languages) and in
   refused in the environment that wrote it), and so is its XYZ gridding on
   real files.
 - **Data outside git** for deployments beyond a handful of sites
-  (ADR 0030, alternatives).
+  (ADR 0031, alternatives).
 - **Outside Germany** — OSM buildings, a flat or public-DEM terrain, and a
   CRS other than ETRS89 / UTM 32/33 — is not planned beyond the Direction
   option in [plans/README.md](./plans/README.md).

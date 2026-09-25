@@ -66,6 +66,13 @@ def lod2(ctx: Ctx, tile: Tile) -> list[Path]:
     return _files(ctx, tile, "LoD2_CityGML", r"\.gml$")
 
 
+def lsc(ctx: Ctx, tile: Tile) -> list[Path]:
+    """The classified laser scan, one LAZ per 2 km tile (≈380 MB). The
+    link service's share for it answered 503 in 2026-09; the batch page's
+    is live."""
+    return _files(ctx, tile, "LSC", r"\.laz$")
+
+
 def dlm(ctx: Ctx) -> None:
     """The statewide Shape package: a ZIP of ZIPs, of which the layers the
     bakes read are flattened into dlm/."""
