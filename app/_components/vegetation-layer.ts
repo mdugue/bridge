@@ -22,6 +22,12 @@ import {
 } from "@/lib/city/look-controls";
 import { samplePolyline } from "@/lib/city/polyline";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import {
+  type ChunkLodState,
+  type CrownTier,
+  keepInFarTier,
+  planCrownTiers,
+} from "@/lib/city/vegetation-lod";
 import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
@@ -50,15 +56,8 @@ export interface VegetationContext extends GroundContext {
   sunDirection?: Vector3;
 }
 
-/**
- * Crown LOD hysteresis, measured to the NEAREST tree in a chunk (camera distance
- * minus the chunk's instance-sphere radius), not the centroid — otherwise a tree
- * a few metres away could stay cheap because its 250 m chunk's centre is far. A
- * cheap chunk switches to rich within NEAR_IN; a rich chunk only drops past
- * NEAR_OUT, so chunks straddling the line don't flicker.
- */
-const LOD_NEAR_IN_M = 220;
-const LOD_NEAR_OUT_M = 300;
+/** Far-tier crowns of a thinned (dense) chunk are drawn this much wider. */
+const FAR_THIN_WIDEN = 1.35;
 
 /**
  * Runtime handle for a loaded vegetation group: a per-frame LOD swap plus live
@@ -82,16 +81,23 @@ export interface VegetationControl {
    * so they add no shadow-pass cost and no extra attribute/buffer upload.
    */
   applyLook: (look: LookValues) => void;
+  /** the tile's 250 m chunks; `updateVegetationLod` sets their crown tier */
+  chunks: VegetationChunk[];
   group: Group;
+  /** whether the look allows the rich crown (the multi-tuft toggle) */
+  multiTuft: () => boolean;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
   setTime: (seconds: number) => void;
-  /** swaps crown LOD per chunk; returns true when any chunk changed (the shadow map must then be redrawn) */
-  updateLod: (cameraPos: Vector3) => boolean;
 }
 
-interface CellLod {
-  cheap: InstancedMesh;
+/** One 250 m chunk of trees: its three crown tiers and the trunks. */
+export interface VegetationChunk {
+  far: InstancedMesh;
+  mid: InstancedMesh;
   rich: InstancedMesh;
+  tier: CrownTier;
+  trees: number;
+  trunks: InstancedMesh;
 }
 
 const TREE_SPACING = 9; // metres between trees along a row
@@ -182,13 +188,17 @@ function bucketByCell(items: Placement[]): Placement[][] {
   return [...cells.values()];
 }
 
-function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
+function writeInstances(
+  mesh: InstancedMesh,
+  items: Placement[],
+  widen = 1
+): void {
   const dummy = new Object3D();
   for (let i = 0; i < items.length; i++) {
     const p = items[i];
     dummy.position.set(p.x, p.y, p.z);
     dummy.rotation.set(0, p.rot, 0);
-    dummy.scale.setScalar(p.s);
+    dummy.scale.set(p.s * widen, p.s, p.s * widen);
     dummy.updateMatrix();
     mesh.setMatrixAt(i, dummy.matrix);
   }
@@ -205,12 +215,13 @@ function writeInstances(mesh: InstancedMesh, items: Placement[]): void {
  * vertex normal points out from the crown centre). The lobes break the "green
  * ball" silhouette; the radial normals make light glide over the whole mass as
  * one soft form instead of faceting per triangle. This stays ONE shared
- * geometry (~320 tris) — a cheap ~4× over the old icosphere, not the 18× of the
+ * geometry (180 tris) — a cheap ~2× over the old icosphere, not the 18× of the
  * sandbox's merged multi-tuft crown (that needs per-distance LOD before it can
- * be afforded across tens of thousands of trees).
+ * be afforded across tens of thousands of trees). At `detail` 1 (80 tris) it
+ * is the far tier's crown.
  */
-function buildCrownGeo(): BufferGeometry {
-  const g = new IcosahedronGeometry(CROWN_R, 2);
+function buildCrownGeo(detail = 2): BufferGeometry {
+  const g = new IcosahedronGeometry(CROWN_R, detail);
   const cy = TRUNK_H + CROWN_R * 0.5;
   // Lobe directions: a fuller top, irregular sides, flatter underside.
   const lobes = [
@@ -580,11 +591,12 @@ function buildTrees(
   leafFlutter: { value: number },
   leafBright: { value: number },
   heightFog?: HeightFogUniforms
-): { cells: CellLod[]; meshes: InstancedMesh[] } {
+): { chunks: VegetationChunk[]; meshes: InstancedMesh[] } {
   // Geometry + materials are shared across all chunks; only the per-chunk
   // instance buffers differ, so this stays cheap to allocate.
   const trunkGeo = buildTrunkGeo();
-  const cheapGeo = buildCrownGeo();
+  const midGeo = buildCrownGeo();
+  const farGeo = buildCrownGeo(1);
   const richGeo = buildCrownGeoRich();
   const trunkMat = buildTrunkMaterial(heightFog);
   const crownMat = buildCrownMaterial(
@@ -598,27 +610,35 @@ function buildTrees(
   );
 
   const meshes: InstancedMesh[] = [];
-  const cells: CellLod[] = [];
+  const chunks: VegetationChunk[] = [];
   for (const cell of bucketByCell(trees)) {
+    // The far tier: every other tree of a dense chunk, drawn wider (see
+    // keepInFarTier), so a forest stays a closed canopy far away.
+    const farCell = cell.filter((_, i) => keepInFarTier(i, cell.length));
+    const thinned = farCell.length < cell.length;
     const trunks = new InstancedMesh(trunkGeo, trunkMat, cell.length);
-    const cheap = new InstancedMesh(cheapGeo, crownMat, cell.length);
+    const mid = new InstancedMesh(midGeo, crownMat, cell.length);
     const rich = new InstancedMesh(richGeo, crownMat, cell.length);
+    const far = new InstancedMesh(farGeo, crownMat, farCell.length);
     trunks.castShadow = true;
-    for (const c of [cheap, rich]) {
+    for (const c of [mid, rich, far]) {
       c.castShadow = true;
       c.receiveShadow = true;
     }
     writeInstances(trunks, cell);
-    writeInstances(cheap, cell);
+    writeInstances(mid, cell);
     writeInstances(rich, cell);
-    paintCrowns(cheap, cell);
+    writeInstances(far, farCell, thinned ? FAR_THIN_WIDEN : 1);
+    paintCrowns(mid, cell);
     paintCrowns(rich, cell);
-    // updateLod() decides which crown is visible each frame; start on cheap.
+    paintCrowns(far, farCell);
+    // updateVegetationLod() picks the tier each frame; start on mid.
     rich.visible = false;
-    meshes.push(trunks, cheap, rich);
-    cells.push({ cheap, rich });
+    far.visible = false;
+    meshes.push(trunks, mid, rich, far);
+    chunks.push({ far, mid, rich, tier: "mid", trees: cell.length, trunks });
   }
-  return { cells, meshes };
+  return { chunks, meshes };
 }
 
 function buildHedges(
@@ -780,7 +800,7 @@ export function buildVegetation(
   const uTime = { value: 0 };
   const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
   let multiTuft = LOOK_DEFAULTS.multiTuft;
-  let cells: CellLod[] = [];
+  let chunks: VegetationChunk[] = [];
 
   const { ndviAt } = features;
   const { trees, hedges } = collectPlacements(features.rows, ctx, ndviAt);
@@ -797,7 +817,7 @@ export function buildVegetation(
       ctx.heightFog
     );
     group.add(...built.meshes);
-    cells = built.cells;
+    chunks = built.chunks;
   }
   if (hedges.length > 0) {
     group.add(...buildHedges(hedges, ctx.heightFog));
@@ -805,34 +825,68 @@ export function buildVegetation(
 
   return {
     group,
+    chunks,
     applyLook: (look) => {
       for (const key of Object.keys(rowUniform) as VegetationLookKey[]) {
         rowUniform[key].value = look[key];
       }
       multiTuft = look.multiTuft;
     },
+    multiTuft: () => multiTuft,
     setTime: (seconds) => {
       uTime.value = seconds;
     },
-    // Rich crown only near the camera (and only when multi-tuft is enabled);
-    // far chunks fall back to the cheap crown. Distance is to the NEAREST tree in
-    // the chunk (sphere centre minus radius) with enter/exit hysteresis.
-    updateLod: (cameraPos) => {
-      let changed = false;
-      for (const c of cells) {
-        const sphere = c.cheap.boundingSphere;
-        const near = sphere
-          ? cameraPos.distanceTo(sphere.center) - sphere.radius
-          : Number.POSITIVE_INFINITY;
-        const wantRich =
-          multiTuft && near < (c.rich.visible ? LOD_NEAR_OUT_M : LOD_NEAR_IN_M);
-        if (wantRich !== c.rich.visible) {
-          changed = true;
-        }
-        c.rich.visible = wantRich;
-        c.cheap.visible = !wantRich;
-      }
-      return changed;
-    },
   };
+}
+
+/** Metres from `cameraPos` to the chunk's nearest tree (sphere centre minus radius). */
+function nearestTree(chunk: VegetationChunk, cameraPos: Vector3): number {
+  const sphere = chunk.mid.boundingSphere;
+  return sphere
+    ? Math.max(cameraPos.distanceTo(sphere.center) - sphere.radius, 0)
+    : Number.POSITIVE_INFINITY;
+}
+
+function showTier(chunk: VegetationChunk, tier: CrownTier): void {
+  chunk.tier = tier;
+  chunk.rich.visible = tier === "rich";
+  chunk.mid.visible = tier === "mid";
+  chunk.far.visible = tier === "far";
+  // A trunk 550 m out is below a pixel; the far tier drops it.
+  chunk.trunks.visible = tier !== "far";
+}
+
+/**
+ * Picks every loaded chunk's crown tier at once (lib/city/vegetation-lod.ts):
+ * the rich-crown budget is shared by the whole site, not granted per tile.
+ * Returns true when any chunk changed — what casts shadows changed, so the
+ * shadow map must be redrawn.
+ */
+export function updateVegetationLod(
+  controls: readonly VegetationControl[],
+  cameraPos: Vector3
+): boolean {
+  const all: VegetationChunk[] = [];
+  const states: ChunkLodState[] = [];
+  for (const control of controls) {
+    const allowRich = control.multiTuft();
+    for (const chunk of control.chunks) {
+      all.push(chunk);
+      states.push({
+        allowRich,
+        current: chunk.tier,
+        near: nearestTree(chunk, cameraPos),
+        trees: chunk.trees,
+      });
+    }
+  }
+  const tiers = planCrownTiers(states);
+  let changed = false;
+  for (let i = 0; i < all.length; i++) {
+    if (tiers[i] !== all[i].tier) {
+      showTier(all[i], tiers[i]);
+      changed = true;
+    }
+  }
+  return changed;
 }

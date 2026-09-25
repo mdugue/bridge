@@ -62,6 +62,10 @@ import {
 } from "./three-utils";
 import { createTileStream } from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
+import {
+  updateVegetationLod,
+  type VegetationControl,
+} from "./vegetation-layer";
 import { applyCityLook, createStyleResources } from "./visual-style";
 
 /**
@@ -909,18 +913,20 @@ async function bootApp(
   };
 
   const timer = new Timer();
-  // Swap each vegetation chunk between the rich and cheap crown by distance,
-  // and advance the wind sway (same clock as the water ripple). A swap changes
-  // what casts shadows, so it invalidates the map.
+  // Pick every vegetation chunk's crown tier (rich / mid / far) over all
+  // loaded tiles at once — the rich crowns share one site-wide budget — and
+  // advance the wind sway (same clock as the water ripple). A tier change
+  // changes what casts shadows, so it invalidates the map.
+  const vegetationControls: VegetationControl[] = [];
   const stepVegetation = (elapsed: number) => {
-    let lodChanged = false;
+    vegetationControls.length = 0;
     for (const d of stream.dressings) {
-      if (d.vegetation?.updateLod(camera.position)) {
-        lodChanged = true;
+      if (d.vegetation) {
+        vegetationControls.push(d.vegetation);
+        d.vegetation.setTime(elapsed);
       }
-      d.vegetation?.setTime(elapsed);
     }
-    if (lodChanged) {
+    if (updateVegetationLod(vegetationControls, camera.position)) {
       invalidateShadows();
     }
   };
