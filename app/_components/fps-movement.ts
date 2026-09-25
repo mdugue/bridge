@@ -20,6 +20,8 @@ export const MOVEMENT_KEYS: ReadonlySet<string> = new Set([
   "KeyS",
   "KeyD",
   "Space",
+  "KeyE",
+  "KeyQ",
   "ShiftLeft",
   "ShiftRight",
 ]);
@@ -46,6 +48,11 @@ export interface FpsMovement {
    * y = forward, both in [-1, 1]. Adds to whatever keys contribute.
    */
   setAnalog: (x: number, y: number) => void;
+  /**
+   * Analog climb input from the altitude stick (fly mode): +1 climbs at full
+   * speed, −1 sinks. Adds to Space/E and Shift/Q.
+   */
+  setVertical: (v: number) => void;
   setMode: (mode: MovementMode) => void;
   /** Snaps the eye onto the ground at the current spot (used by teleports). */
   snapToGround: () => void;
@@ -55,7 +62,8 @@ export interface FpsMovement {
 /**
  * WASD movement with two modes:
  *  - walk: eye glued to terrain + eyeHeight (smoothed); Shift sprints.
- *  - fly: free movement, Space/Shift move up/down.
+ *  - fly: free movement, Space/E climb and Shift/Q sink (or the altitude
+ *    stick); sinking stops at eye height above the ground.
  * Horizontal motion always follows the camera heading projected onto the
  * ground plane.
  */
@@ -70,6 +78,7 @@ export function createFpsMovement(
   let mode: MovementMode = "walk";
   let analogX = 0;
   let analogY = 0;
+  let analogV = 0;
 
   const shiftHeld = () => keys.has("ShiftLeft") || keys.has("ShiftRight");
 
@@ -121,6 +130,30 @@ export function createFpsMovement(
     );
   };
 
+  /** Climb input in [-1, 1]: keys + stick combined. */
+  const verticalInput = (): number => {
+    let v = analogV;
+    if (keys.has("Space") || keys.has("KeyE")) {
+      v += 1;
+    }
+    if (shiftHeld() || keys.has("KeyQ")) {
+      v -= 1;
+    }
+    return Math.min(Math.max(v, -1), 1);
+  };
+
+  /** Sinks by `dy` (< 0), but never through the ground. */
+  const sink = (dy: number) => {
+    const ground = options.groundHeight(camera.position.x, camera.position.z);
+    const floor =
+      ground === null ? Number.NEGATIVE_INFINITY : ground + options.eyeHeight;
+    // Already below the floor (a pose set from outside): hold, never yank.
+    camera.position.y = Math.max(
+      camera.position.y + dy,
+      Math.min(floor, camera.position.y)
+    );
+  };
+
   const update = (dt: number) => {
     if (mode === "walk") {
       const step = WALK_SPEED * (shiftHeld() ? SPRINT_FACTOR : 1) * dt;
@@ -135,11 +168,11 @@ export function createFpsMovement(
     // Fly mode is deliberately collision-free (QA, aerial shots).
     const step = FLY_SPEED * dt;
     camera.position.add(horizontalStep(step));
-    if (keys.has("Space")) {
-      camera.position.y += step;
-    }
-    if (shiftHeld()) {
-      camera.position.y -= step;
+    const climb = verticalInput() * step;
+    if (climb > 0) {
+      camera.position.y += climb;
+    } else if (climb < 0) {
+      sink(climb);
     }
   };
 
@@ -155,10 +188,14 @@ export function createFpsMovement(
       keys.clear();
       analogX = 0;
       analogY = 0;
+      analogV = 0;
     },
     setAnalog: (x, y) => {
       analogX = Math.min(Math.max(x, -1), 1);
       analogY = Math.min(Math.max(y, -1), 1);
+    },
+    setVertical: (v) => {
+      analogV = Math.min(Math.max(v, -1), 1);
     },
     getMode: () => mode,
     setMode: (next) => {

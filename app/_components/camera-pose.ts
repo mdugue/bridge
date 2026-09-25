@@ -16,7 +16,7 @@ import {
   RAD2DEG,
   type Xyz,
 } from "@/lib/city/pose";
-import { createCameraFlight } from "./camera-flight";
+import { createCameraFlight, type FlightTarget } from "./camera-flight";
 import {
   createFpsMovement,
   type FpsMovementOptions,
@@ -78,6 +78,11 @@ export interface CameraPose {
   getCameraState: () => CameraState;
   getMode: () => MovementMode;
   getPose: () => PlayerPose;
+  /**
+   * Puts the camera on a viewpoint at once, no glide — the spawn. Lands in
+   * the viewpoint's movement mode.
+   */
+  placeAt: (viewpoint: ViewpointGeometry) => void;
   /** Mouse-look (pointer lock): motion in CSS px, the view follows it. */
   look: (dxPx: number, dyPx: number) => void;
   /** A movement key went down (other codes are ignored). */
@@ -85,6 +90,8 @@ export interface CameraPose {
   release: (code: string) => void;
   /** Drops every held key and the stick — the window lost focus. */
   releaseAll: () => void;
+  /** analog altitude-stick input (fly mode): +1 climbs, −1 sinks */
+  setClimbInput: (v: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
@@ -177,6 +184,18 @@ export function createCameraPose(
     camera.updateProjectionMatrix();
   };
 
+  /** Where a viewpoint puts the camera, on the ground as it stands now. */
+  const targetOf = (viewpoint: ViewpointGeometry): FlightTarget => {
+    const { x, y } = viewpoint.epsg;
+    const w = epsgToWorld(x, y, offset);
+    return {
+      pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
+      headingDeg: viewpoint.headingDeg,
+      pitchDeg: clampPitch(viewpoint.pitchDeg * DEG2RAD) * RAD2DEG,
+      fov: viewpoint.fov,
+    };
+  };
+
   /** Yaw/pitch the view by radians; the player took the wheel. */
   const rotate = (yaw: number, pitch: number) => {
     cancelGlide();
@@ -261,18 +280,29 @@ export function createCameraPose(
       };
     },
     flyToViewpoint: (viewpoint) => {
-      const { x, y } = viewpoint.epsg;
-      const w = epsgToWorld(x, y, offset);
       // Fly during the glide so the ground clamp can't fight the vertical arc;
       // pendingMode restores walk (and snaps to the ground) once it settles.
       settle("fly");
-      flight.start({
-        pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
-        headingDeg: viewpoint.headingDeg,
-        pitchDeg: clampPitch(viewpoint.pitchDeg * DEG2RAD) * RAD2DEG,
-        fov: viewpoint.fov,
-      });
+      flight.start(targetOf(viewpoint));
       pendingMode = viewpoint.mode;
+    },
+    placeAt: (viewpoint) => {
+      cancelGlide();
+      const target = targetOf(viewpoint);
+      camera.position.set(target.pos.x, target.pos.y, target.pos.z);
+      const d = directionOf(
+        target.headingDeg * DEG2RAD,
+        target.pitchDeg * DEG2RAD
+      );
+      camera.lookAt(
+        camera.position.x + d.x,
+        camera.position.y + d.y,
+        camera.position.z + d.z
+      );
+      camera.fov = target.fov;
+      camera.updateProjectionMatrix();
+      settle(viewpoint.mode);
+      poseJumped();
     },
     cancelGlide,
     step: (dt) => {
@@ -298,6 +328,12 @@ export function createCameraPose(
     },
     release: movement.release,
     releaseAll: movement.releaseAll,
+    setClimbInput: (v) => {
+      if (v !== 0) {
+        cancelGlide();
+      }
+      movement.setVertical(v);
+    },
     setMoveInput: (x, y) => {
       if (x !== 0 || y !== 0) {
         cancelGlide();

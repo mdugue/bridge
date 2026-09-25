@@ -12,8 +12,9 @@ davon „echt“ ist. Begriffe in **Fettschrift** stehen im
 Ein stilisiertes, begehbares 3D-Modell der Dresdner Innenstadt: ein Quadrat
 von 4 km × 4 km auf beiden Elbseiten, mit der historischen Altstadt im
 Südwesten, Innerer und Äußerer Neustadt im Norden und der Johannstadt im
-Südosten. Du startest im südöstlichen Viertel nahe der Carolabrücke und
-kannst auf Straßenniveau gehen oder über die Dächer fliegen.
+Südosten. Du startest tief über der Elbe nahe der Carolabrücke, mit Blick
+auf die Altstadt-Silhouette, und kannst auf Straßenniveau gehen oder über
+die Dächer fliegen.
 
 Nichts wird installiert, nichts über dich gespeichert, und kein Server
 berechnet das Bild. Dein Browser lädt vorbereitete Dateien, während du dich
