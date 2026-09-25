@@ -122,12 +122,15 @@ export interface TerrainExtras {
   sportTable?: string;
   /** allotment-colony raster (fine level only) */
   cultivated?: string;
-  /** road-marking raster and its table (fine level only) */
+  /** road-marking raster, its 1024² twin for phones, and the table they
+   *  share (fine level only) */
   markings?: string;
+  markingsLow?: string;
   markingsTable?: string;
   /** sky-view factor raster (both levels; the clay reads it too) */
   svf?: string;
-  /** far-horizon raster, four RGBA layers stacked (both levels) */
+  /** horizon raster, eight RGBA layers stacked: the far band, then the
+   *  near band (both levels) */
   horizon?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;

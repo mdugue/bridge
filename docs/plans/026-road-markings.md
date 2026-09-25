@@ -35,7 +35,11 @@
   bake (the paving raster's bearing is modulo 180°); crossings are
   measured also 5/10 m along the road (junction crossings). Centre-line
   STOP: restricted to main roads (primary…unclassified) with a
-  carriageway ≥ 5.5 m; residential `lanes=2` streets left unmarked. Open:
+  carriageway ≥ 5.5 m; residential `lanes=2` streets left unmarked.
+  Review fix (2026-09-25): overlapping rows merged (duplicate OSM crossing
+  nodes clipped each other's paint: 62 of 578 rows), a core pass gives
+  each texel to the nearest rectangle — none loses paint now (516 rows) —
+  and a 1024² twin for phones (4 MiB instead of 16 per fine tile). Open:
   every plate (Albertplatz, Postplatz, Königsbrücker Straße) and the moiré
   check on a GPU.
 

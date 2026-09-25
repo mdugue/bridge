@@ -566,7 +566,11 @@ function paintAndLight(
       ? { cultivated: names.cultivatedRaster }
       : {}),
     ...(level === 0 && names.markings && names.markingsTable
-      ? { markings: names.markings, markingsTable: names.markingsTable }
+      ? {
+          markings: names.markings,
+          markingsTable: names.markingsTable,
+          ...(names.markingsLow ? { markingsLow: names.markingsLow } : {}),
+        }
       : {}),
     ...(names.svf ? { svf: names.svf } : {}),
     ...(names.horizon ? { horizon: names.horizon } : {}),

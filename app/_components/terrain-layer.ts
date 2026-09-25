@@ -961,8 +961,11 @@ async function loadDetailRasters(
     sportRaster && sportTable
       ? await loadSportGrounds(sportRaster, sportTable, opts.signal)
       : null;
-  // Road markings: close-range paint, the fine level only.
-  const markingsRaster = url(extras.markings);
+  // Road markings: close-range paint, the fine level only; phones read the
+  // 1024² twin (the same table).
+  const markingsRaster = url(
+    (opts.lowRasters ? extras.markingsLow : undefined) ?? extras.markings
+  );
   const markingsTable = url(extras.markingsTable);
   const markings =
     markingsRaster && markingsTable

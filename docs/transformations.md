@@ -267,7 +267,22 @@ visual-variable codebook is in
   crossing footway through each node: the painted axis is within 20° of
   it for 278 of 301 (median 2°), and 18 of 364 rectangles lie less than
   70 % on the DLM carriageway — under the plan's 1-in-10 stop. ≈12 s per
-  tile, 77–107 KB raster + 5–11 KB table. **Not yet judged on a GPU.**
+  tile, 77–107 KB raster + 5–11 KB table. **Overlapping rows** (review,
+  2026-09-25): the raster names one row per texel, last wins, so a
+  crossing OSM maps twice (a node per way, a zebra node beside a signal
+  node) clipped its twin — 62 of the 578 rows lost paint, 6 of them all of
+  it (e.g. a *Furt* under a zebra on 33410_5658). The bake now merges rows
+  of one family on one axis (within 30°) whose outlines come within 1.5 m
+  — a zebra wins over a *Furt*, the union across the road, along it only
+  when parallel — and gives each texel within 0.75 m of a rectangle to the
+  nearest one before any margin: 516 rows (52 zebra, 251 *Furt*, 213 stop
+  lines), none losing paint; 9 lose a sliver only where another row paints
+  over it (`paint_lost`, logged and tested). Phones read a **1024² twin**
+  (`markings_low_<tile>.png`, 25–36 KB; a 1.45 m core so the rows still
+  resolve — none loses paint): 4 MiB of GPU memory per fine tile instead
+  of 16; its lane bits are coarser (≈90 % of the cycle-lane and
+  centre-line texels agree with the 2048² raster). **Not yet judged on a
+  GPU.**
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
   courtyards, front gardens and parks inside the settlement alike. Where
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM
