@@ -13,6 +13,7 @@ from . import (
     lamps,
     landcover,
     lowveg,
+    markings,
     monuments,
     ndvi,
     rail,
@@ -41,6 +42,8 @@ STEPS = {
     "rail": rail.run,
     "surface": surface.run,
     "edges": edges.run,
+    # After surface and edges (reads the class raster only).
+    "markings": markings.run,
     "sport": sport.run,
     # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
     "skyview": skyview.run,
