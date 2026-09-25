@@ -14,6 +14,7 @@ import {
 import type { HeroImage } from "../_lib/docs";
 import { docIcon } from "./doc-icon";
 import { SECTION_LABEL } from "./doc-nav";
+import { landcoverCredit } from "@/lib/city/site";
 import { currentSite } from "@/sites";
 
 export interface LandingEntry {
@@ -93,7 +94,7 @@ export function Landing({
         {hero ? (
           <p className="absolute right-4 bottom-2.5 max-w-[60%] text-right text-[10px] text-foreground/55 leading-snug">
             Im Hintergrund: die Landnutzung, mit der der Viewer den Boden
-            einfärbt · Basis-DLM, Quelle: GeoSN, dl-de/by-2-0
+            einfärbt · {landcoverCredit(currentSite())}
           </p>
         ) : null}
       </section>

@@ -6,7 +6,7 @@
  *
  * GeoJSON allows `"properties": null`, so properties are nullable and every
  * read goes through `?.`: one odd feature must never throw out of a layer's
- * documented non-fatal load. Coordinates are EPSG:25833, never recentered.
+ * documented non-fatal load. Coordinates are in the site's CRS (EPSG:25832/25833), never recentered.
  * No THREE, no DOM.
  */
 import type { Point2 } from "./polyline";

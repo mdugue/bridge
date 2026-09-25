@@ -28,7 +28,7 @@ import {
 } from "./terrain-geometry";
 
 export interface WallLine {
-  /** EPSG:25833 coordinates (NOT recentered), as baked by pipeline/bake/walls.py */
+  /** Site-CRS coordinates (NOT recentered), as baked by pipeline/bake/walls.py */
   coords: [number, number][];
   /** OSM barrier/man_made kind; only retaining kinds reshape the ground */
   kind: string;
@@ -41,7 +41,7 @@ export interface ConflateInput {
   elevations: ArrayLike<number>;
   /** grid size (n x n) */
   n: number;
-  /** wall centrelines (EPSG:25833) with their kind */
+  /** wall centrelines (site CRS) with their kind */
   walls: WallLine[];
 }
 

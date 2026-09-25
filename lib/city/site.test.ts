@@ -3,6 +3,7 @@ import { DEFAULT_SITE, SITES } from "../../sites";
 import { DRESDEN } from "../../sites/dresden";
 import { directionOf } from "./pose";
 import {
+  landcoverCredit,
   osmExtractUrl,
   siteAttribution,
   overlook,
@@ -14,6 +15,13 @@ import {
 } from "./site";
 
 const sites = Object.entries(SITES);
+
+test("the land-cover credit names the DLM's provider, or OSM without one", () => {
+  expect(landcoverCredit(SITES.dresden)).toBe(
+    "Basis-DLM, Quelle: GeoSN, dl-de/by-2-0"
+  );
+  expect(landcoverCredit(SITES.hamburg)).toContain("OpenStreetMap");
+});
 
 test("the registry key is the site's id, and the default exists", () => {
   for (const [key, site] of sites) {

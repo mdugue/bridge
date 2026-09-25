@@ -211,6 +211,14 @@ function osmCredit(site: Site): string {
   return `${layers} © OpenStreetMap-Mitwirkende (ODbL)`;
 }
 
+/** The credit of the land cover (what the ground is painted from): the
+ *  provider's Basis-DLM, or without one OpenStreetMap. */
+export function landcoverCredit(site: Site): string {
+  return site.provider.products.dlm
+    ? `Basis-DLM, ${site.provider.credit}`
+    : "OpenStreetMap, © OpenStreetMap-Mitwirkende (ODbL)";
+}
+
 /** The credit lines the HUD footer shows (the sources' licence terms). */
 export function siteAttribution(site: Site): string[] {
   return [site.provider.credit, osmCredit(site)];
