@@ -746,6 +746,65 @@ def test_a_cadastre_tree_in_forest_is_flagged():
     assert f["properties"] == {"h": 10.0, "d": 6.0, "a": 0, "l": "d", "c": 1, "g": 1, "f": 1}
 
 
+def test_a_cadastre_tree_carries_its_genus_and_trunk():
+    from bake.tree_archetypes import GENERA
+    from bake.trees import parse_trees, tree_props
+
+    raw = {"features": [_cadastre_tree(1.0, 1.0, 12, 8, botanical="Acer rub. 'October Glory'")]}
+    raw["features"][0]["properties"]["stammdurchmesser_akt"] = 41.0
+    t = parse_trees(raw, (0.0, 0.0, 10.0, 10.0))[0]
+    props = tree_props(t, 12.0, 8.0)
+    assert GENERA[props["gn"]] == "Acer rubrum"
+    assert props["t"] == 41
+    assert "s" not in props
+
+
+def test_the_genus_table_keys_the_autumn_not_just_the_genus():
+    from bake.tree_archetypes import GENERA, genus_id
+
+    assert GENERA[0] == ""
+    assert GENERA[genus_id("Tilia cordata 'Greenspire'")] == "Tilia"
+    assert GENERA[genus_id("Acer x freemanii 'Autumn Blaze'")] == "Acer rubrum"
+    assert GENERA[genus_id("Acer platanoides")] == "Acer"
+    assert GENERA[genus_id("Quercus rubra")] == "Quercus rubra"
+    assert GENERA[genus_id("Styphnolobium japonicum")] == "Sophora"
+    assert genus_id("Pinus nigra") == 0  # evergreen: the leaf type keeps it
+    assert len(set(GENERA)) == len(GENERA)
+
+
+def test_an_osm_tree_needs_a_taxon_or_a_leaf_type():
+    from bake.tree_archetypes import CONIFER, GENERA
+    from bake.trees import osm_tree
+
+    lime = osm_tree(0, 0, '"natural"=>"tree","species"=>"Tilia platyphyllos","height"=>"14 m"')
+    assert lime is not None
+    assert (GENERA[lime["gn"]], lime["h"], lime["src"]) == ("Tilia", 14.0, "osm")
+    plane = osm_tree(0, 0, '"natural"=>"tree","species"=>"Platane","circumference"=>"2,2"')
+    assert plane is not None
+    assert GENERA[plane["gn"]] == "Platanus"
+    assert round(plane["t"]) == 70  # 2.2 m around = 70 cm across
+    pine = osm_tree(0, 0, '"natural"=>"tree","leaf_type"=>"needleleaved"')
+    assert pine is not None
+    assert (pine["archetype"], pine["leaf"], pine["gn"]) == (CONIFER, "e", 0)
+    assert osm_tree(0, 0, '"natural"=>"tree","denotation"=>"urban"') is None
+
+
+def test_the_cadastre_wins_within_three_metres_and_fills_osm_sizes():
+    from bake.trees import complement, impute, osm_tree, parse_trees, size_stats
+
+    cadastre = parse_trees(
+        {"features": [_cadastre_tree(float(i) * 20, 0.0, 10, 5) for i in range(3)]},
+        (0.0, -1.0, 100.0, 100.0),
+    )
+    tags = '"natural"=>"tree","genus"=>"Tilia"'
+    osm = [osm_tree(2.5, 0.0, tags), osm_tree(23.5, 0.0, tags), osm_tree(50.0, 0.0, tags)]
+    kept = complement([t for t in osm if t], cadastre)
+    assert [t["x"] for t in kept] == [23.5, 50.0]
+    sizes, imputed_h, _ = impute(kept, size_stats(cadastre))
+    assert imputed_h == 2
+    assert sizes[0] == (10, 5)  # the cadastre's lime median and crown ratio
+
+
 def test_only_the_osm_hedges_ship():
     from bake.lowveg import hedge_feature, shipped, shrub_feature
 

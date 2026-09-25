@@ -20,6 +20,7 @@ import type {
   KerbFeature,
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
+import { TREE_GENERA } from "./tree-season";
 import {
   stairSourceFile,
   type TileArtifact,
@@ -282,6 +283,29 @@ test.each(cases)(
       expect(Number.isFinite(p?.d)).toBe(true);
       expect(Number.isInteger(p?.a)).toBe(true);
       expect(["d", "e"]).toContain(p?.l ?? "");
+      // genus: an index into the season table; trunk: cm; source: OSM or
+      // (absent) the cadastre
+      const gn = p?.gn ?? 0;
+      expect(Number.isInteger(gn) && gn >= 0).toBe(true);
+      expect(gn).toBeLessThan(TREE_GENERA.length);
+      if (p?.t !== undefined) {
+        expect(p.t > 0 && p.t <= 400).toBe(true);
+      }
+      expect([undefined, "osm"]).toContain(p?.s);
     }
+  }
+);
+
+test.each(cases)(
+  "%s: the trees' genus table is the season model's, in order",
+  (_, a) => {
+    const path = join(DATA, a.trees.file);
+    if (!existsSync(path)) {
+      return;
+    }
+    const doc = JSON.parse(readFileSync(path, "utf8")) as {
+      genera?: string[];
+    };
+    expect(doc.genera).toEqual([...TREE_GENERA]);
   }
 );

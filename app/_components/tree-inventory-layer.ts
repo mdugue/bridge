@@ -25,6 +25,7 @@ import {
   footprintRadius,
   type TreeExtents,
   treeExtents,
+  trunkGirth,
 } from "@/lib/city/tree-inventory";
 import {
   buildCrownGeo,
@@ -276,6 +277,8 @@ function buildShapeGeos(): ShapeGeos {
 /** One inventory tree in the Y-up scene frame. */
 interface InventoryTree {
   colour: number;
+  /** measured trunk diameter at breast height (cm) */
+  dbh?: number;
   ext: TreeExtents;
   ground: number;
   leaf: "d" | "e";
@@ -313,6 +316,7 @@ function collectTrees(
       shape: ARCHETYPE_SHAPE[archetype],
       leaf: p.l === "e" ? "e" : "d",
       colour: p.c ?? 0,
+      dbh: p.t,
       ndvi: ndviAt?.(ex, ey),
     });
   }
@@ -334,13 +338,10 @@ function writeCrowns(
   mesh.computeBoundingSphere();
 }
 
-/** Trunk girth follows the height (slimmer than the canopy's uniform scale). */
-function trunkGirth(t: InventoryTree): number {
-  return Math.min(Math.max((t.ext.crownTop / 5.8) * 0.8, 0.45), 5);
-}
-
+/** Trunk girth: the measured diameter where there is one, else the height
+ *  (tree-inventory.ts trunkGirth). */
 function trunkMatrix(t: InventoryTree): Matrix4 {
-  const girth = trunkGirth(t);
+  const girth = trunkGirth(t.ext, t.dbh);
   return new Matrix4().compose(
     new Vector3(t.x, t.ground, t.z),
     new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),

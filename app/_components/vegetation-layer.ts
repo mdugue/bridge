@@ -23,6 +23,7 @@ import {
 } from "@/lib/city/look-controls";
 import { samplePolyline } from "@/lib/city/polyline";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { TRUNK_FOOT_R, TRUNK_TOP_R } from "@/lib/city/tree-inventory";
 import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
@@ -582,7 +583,7 @@ export function buildCrownMaterial(
  * identically — they belong on a near-distance LOD crown.
  */
 export function buildTrunkGeo(): BufferGeometry {
-  const t = new CylinderGeometry(0.09, 0.16, TRUNK_H, 7, 5);
+  const t = new CylinderGeometry(TRUNK_TOP_R, TRUNK_FOOT_R, TRUNK_H, 7, 5);
   t.translate(0, TRUNK_H / 2, 0);
   const bend = 0.05 * TRUNK_H;
   const bx = 0.82;
