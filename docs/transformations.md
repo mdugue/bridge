@@ -729,6 +729,46 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   camera also drives the tile streaming (casters behind the player stay
   loaded). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
+- **Sky-view factor** (*Himmelslicht*, plan 033) — the committed DGM1 with
+  every non-vertical LoD2 surface burned on top (max over its triangles,
+  each on its surface's plane; `lowveg.py`'s one CityJSON walk,
+  `lod2_rings`) → per ≈2 m cell the horizon angle `h` within 150 m in 16
+  azimuths, seen from the bare ground → `svf = 1 − mean(sin² h)`
+  (`svf_<tile>.png`, 1024², 8-bit, ≈0.5 MB). Scales the **indirect diffuse
+  only** (the hemisphere fill), in `aomap_fragment`, after the lights: the
+  sun is untouched. Terrain: `mix(1, svf, row)`. Clay facades: the ground's
+  value 2.5 m outside the wall (under the roof the ground sees no sky),
+  doubled (a vertical face sees at most half the sky; the ground at its foot
+  the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
+  dims, its eaves and every roof do not. The raster is shared by a tile's
+  terrain (both levels) and its buildings, refcounted
+  (`shared-rasters.ts`); the clay binds a white texel until it lands.
+  Trees are left out on purpose (they cast their own shadows). Default
+  0.5 — **not yet judged on a GPU**: the plan's plates (a Neustadt
+  courtyard, the Prager Straße, the Elbwiesen) and the N8AO
+  double-darkening check are open; *Boden-Verlauf* (the clay's 5 m
+  ground darkening) is kept as it was, not retuned against it yet.
+  **Fallback:** no raster → the light as before. `pipeline/bake/skyview.py`,
+  `app/_components/sky-light.ts`, `lib/city/skyview.ts`.
+- **Far horizon shade** (*Ferne Schatten*, plan 033,
+  [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md)) — the same
+  height field at ≈8 m (the roofs burned at 2 m and max-pooled, so a spire
+  still occludes) → per cell and per 16 azimuths the elevation angle of the
+  skyline **80–1 500 m** away (nearer occluders are the shadow map's),
+  0–45° in 8 bits (`horizon_<tile>.png`: four RGBA layers stacked, 256² ×
+  16 azimuths, ≈0.6 MB; legend `horizon_<tile>.json`, not served). The
+  terrain interpolates the two azimuths around the sun and cuts the sun's
+  direct light by `smoothstep(h − 0.8°, h + 0.8°, elevation)`, combined
+  with the shadow map by **min** (never a product: where both see the same
+  occluder it must not darken twice). Committed neighbour tiles fill the
+  margin; beyond the site the ground is open at the tile edge's mean
+  height. Baked 2026-09-25 in ≈22 s per tile (sky view ≈19 s, horizon
+  ≈3 s). The plan's 4 m raster came to **1.86 MB** on the spawn tile, past
+  its 1.5 MB cap, so it ships at 8 m with all 16 azimuths (0.54–0.60 MB;
+  12 azimuths at 4 m would have been 1.36 MB but smears narrow occluders
+  over 30° of sun). Terrain only; facades wait on plates. Default 0.8 —
+  **not yet judged on a GPU** (the plan's 21 December plate from the
+  Brühlsche Terrasse is open). `sky-light.ts` `lightsWithFarShadow`.
 
 ### Atmosphere & time of day
 - **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
@@ -786,7 +826,12 @@ research that produced them):
    thinned against the cadastre; the renderer still sizes a crown from `h`
    alone.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
-   low-sun shadows clip the 110 m frustum). Sizeable integration on WebGL;
+   low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
+   far horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))
+   now casts the far field's long shadows onto the ground for one texture
+   fetch; what CSM would still add is the middle distance's *shape* (a
+   tree's or a facade's shadow 80–300 m out, on facades too). Sizeable
+   integration on WebGL;
    `CSMShadowNode` comes with the proposed move to WebGPURenderer + TSL
    ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
    [plan 020](./plans/020-webgpu-tsl.md)), as its own decision.

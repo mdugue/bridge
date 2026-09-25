@@ -415,6 +415,8 @@ async function bootApp(
     groundDetail: { value: LOOK_DEFAULTS.groundDetail },
     meadowNdvi: { value: LOOK_DEFAULTS.meadowNdvi },
     urbanGreen: { value: LOOK_DEFAULTS.urbanGreen },
+    skyView: { value: LOOK_DEFAULTS.skyView },
+    horizonShade: { value: LOOK_DEFAULTS.horizonShade },
   };
   // The lowest real terrain elevation so far (the Elbe surface): the floor
   // the player stands on off every tile and the valley height-fog's start,
@@ -471,7 +473,12 @@ async function bootApp(
   }
   cleanups.push(() => lampLights.dispose());
 
-  const styleResources = createStyleResources(heightFog, clayNight);
+  // The facades share the ground's Himmelslicht strength (by reference).
+  const styleResources = createStyleResources(
+    heightFog,
+    clayNight,
+    ground.skyView
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -643,6 +650,12 @@ async function bootApp(
     },
     urbanGreen: (strength) => {
       ground.urbanGreen.value = strength;
+    },
+    skyView: (strength) => {
+      ground.skyView.value = strength;
+    },
+    horizonShade: (strength) => {
+      ground.horizonShade.value = strength;
     },
     waterMist: (strength) => {
       for (const t of stream.terrains) {

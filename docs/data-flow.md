@@ -141,6 +141,8 @@ flowchart LR
   DLM -. "class raster + palette as map background" .-> MM
   CJ -. "building footprints" .-> MM
   SUN ==> LIGHT
+  DGM ==>|"sky-view factor · far horizon (with the LoD2 roofs)"| LIGHT
+  CJ -. "roofs in the sky view and horizon" .-> LIGHT
   SUN -. "fog · sky · dusk gate" .-> DET
 ```
 
@@ -167,7 +169,7 @@ flowchart LR
 | **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (ribbon snapped to the measured step of the fine TIN; the coarse grid is conflated to a step instead) — *no DGM/DOM/LiDAR product has the wall as a vertical face* | `lib/city/walls.ts` + `lib/city/wall-snap.ts` (at build, into the fine terrain glTF), `lib/city/terrain-conflate.ts` (coarse grid), `wall-layer.ts` (material); baked by `pipeline/bake/walls.py` |
 | **Stairs** | OSM `highway=steps` + `width` · `step_count` (else an `area:highway=steps` outline; else the gap between the OSM walls either side; else defaults) | DGM1 (landing heights; the terrain lowered under the flight) — *the DGM smooths steps into a bank*; OSM `layer` ≥ 1 areas the DGM lacks (the Brühlsche Terrasse), lifted to the flight's tagged top | `lib/city/stairs.ts` (burn + step geometry, both at build, into the fine terrain glTF), `stair-layer.ts` (material); baked by `pipeline/bake/stairs.py` |
 | **Minimap** | tile bounds (tileset `extras`) + the 2048² class raster in the palette + CityJSON footprints (`footprints_<tile>.json`) | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*`, `lib/city/landcover.ts` |
-| **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
+| **Light & shadow** | sun rig (time, not data) | DGM1 + LoD2: the sky-view factor (ambient) and the far horizon (long shadows past the shadow map), baked per tile | `sun-rig.ts`, `post-stack.ts`, `sky-light.ts`; baked by `pipeline/bake/skyview.py` |
 
 Every row that reads OSM reads the site's local Geofabrik extract through
 GDAL's OSM driver (`pipeline/bake/osm.py`); no bake queries a live API
@@ -216,6 +218,7 @@ flowchart LR
     bSURF["surface.py"]
     bEDGE["edges.py"]
     bSPT["sport.py"]
+    bSKY["skyview.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -233,6 +236,7 @@ flowchart LR
     dSURF["surface PNG + legend"]
     dEDGE["edges PNG · kerbs"]
     dSPT["sport PNG + table"]
+    dSKY["svf PNG · horizon PNG"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -275,6 +279,8 @@ flowchart LR
   dNDVI -.-> bEDGE
   dSURF -.-> bEDGE
   iOSM ==> bSPT ==> dSPT
+  iDGM ==> bSKY
+  iCJ ==> bSKY ==> dSKY
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
@@ -288,6 +294,7 @@ flowchart LR
   dMON -.-> tSIDE
   dFURN -.-> tSIDE
   dRAIL -.-> tSIDE
+  dSKY -.-> tSIDE
   dSURF -.-> tSIDE
   dEDGE -.-> tSIDE
   dSPT -.-> tSIDE

@@ -301,7 +301,13 @@ async function bakeCity(
       utf8({ maxZ: built().maxElevation })
     )
   );
-  const extras: CityExtras = { kind: "city", tileId: tile };
+  const svf = sideFiles.get(tile)?.svf;
+  const extras: CityExtras = {
+    kind: "city",
+    tileId: tile,
+    // The facades' ambient light reads the terrain's sky-view raster.
+    ...(svf ? { svf } : {}),
+  };
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
     gz(
@@ -512,6 +518,8 @@ async function bakeTerrain(
     ...(names.sport && names.sportTable
       ? { sport: names.sport, sportTable: names.sportTable }
       : {}),
+    ...(names.svf ? { svf: names.svf } : {}),
+    ...(names.horizon ? { horizon: names.horizon } : {}),
     ...(level === 0 ? { dressing: dressingOf(names) } : {}),
   };
   const key = cacheKey(inputs, offset, described);

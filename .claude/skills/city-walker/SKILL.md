@@ -155,6 +155,24 @@ map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
 the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
 them anyway.
 
+### The far field: baked horizon + sky view (plan 033)
+
+What the frustum cannot reach is baked: `pipeline/bake/skyview.py` writes,
+from the committed DGM1 + LoD2 only, a **sky-view factor** (≈2 m) and a
+**far horizon** (≈8 m, 16 azimuths, occluders 80–1 500 m away). The
+terrain folds the horizon into three's directional-light loop
+(`sky-light.ts` `lightsWithFarShadow` rewrites `lights_fragment_begin`:
+`min(getShadow(…), hzLit)`, and `hzLit` alone where the light casts no
+shadow) — `min`, never a product, so an occluder both see never darkens
+twice. The sky view scales only `reflectedLight.indirectDiffuse` in
+`aomap_fragment` (after the lights), on the terrain and the clay facades
+(sampled 2.5 m outside the wall, doubled, faded out toward the eaves).
+Rows *Himmelslicht* and *Ferne Schatten*; 0 = the old picture. Unjudged on
+a GPU as of 2026-09-25 — watch for SVF + N8AO reading as dirt in
+courtyards (lower N8AO there first) and a seam where the shadow map hands
+over (fade the horizon in over the frustum's last 20 %).
+[ADR 0031](../../../docs/adr/0031-baked-horizon-map-for-far-shadows.md).
+
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
 fraying — the fit is careful to keep the base radius while walking), 4096 map

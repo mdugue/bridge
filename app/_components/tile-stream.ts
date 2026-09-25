@@ -5,7 +5,9 @@ import {
   Group,
   Matrix4,
   type Mesh,
+  type MeshStandardMaterial,
   type Object3D,
+  type Texture,
   type Vector3,
   type WebGLRenderer,
 } from "three";
@@ -48,6 +50,8 @@ import {
   type TerrainLayer,
 } from "./terrain-layer";
 import { dressKerbs } from "./kerb-layer";
+import { createSharedRasters, type SharedRasters } from "./shared-rasters";
+import { loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import { buildTreeInventory } from "./tree-inventory-layer";
@@ -58,7 +62,7 @@ import {
   type VegetationControl,
   type VegetationFeatures,
 } from "./vegetation-layer";
-import type { StyleResources } from "./visual-style";
+import { setClaySkyView, type StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
 
 /**
@@ -133,6 +137,8 @@ export interface TileStream {
 interface Dressed {
   city?: CityLayer;
   dressing?: TileDressing;
+  /** the shared sky-view raster the city holds (its URL) */
+  svf?: string;
   terrain?: TerrainLayer;
 }
 
@@ -469,6 +475,11 @@ class DressingPlugin {
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
+  /** the sky-view rasters a tile's terrain and buildings share */
+  readonly skyView: SharedRasters<Texture> = createSharedRasters(
+    (url) => loadSkyViewTexture(url),
+    (texture) => texture.dispose()
+  );
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -514,7 +525,37 @@ class DressingPlugin {
       demolished
     );
     this.stream.cities.add(city);
-    this.dressed.set(scene, { city });
+    const entry: Dressed = { city };
+    this.dressed.set(scene, entry);
+    if (extras.svf) {
+      entry.svf = this.url(extras.svf);
+      this.shareSkyView(scene, entry, extras.tileId, entry.svf);
+    }
+  }
+
+  /** The facades' sky view lands after the buildings show (the clay binds
+   *  an open sky until then); held until the city tile leaves. */
+  private shareSkyView(
+    scene: Object3D,
+    entry: Dressed,
+    tileId: string,
+    url: string
+  ): void {
+    const bounds = this.ctx.tileBounds(tileId);
+    void this.skyView.acquire(url).then((texture) => {
+      const city = entry.city;
+      if (!(texture && bounds && city) || this.dressed.get(scene) !== entry) {
+        return;
+      }
+      const [minX, minY, maxX, maxY] = bounds;
+      const { cx, cy } = this.ctx.offset;
+      setClaySkyView(
+        city.mesh.material as MeshStandardMaterial,
+        texture,
+        [minX - cx, maxY - cy],
+        [maxX - minX, maxY - minY]
+      );
+    });
   }
 
   private async dressTerrain(
@@ -535,6 +576,7 @@ class DressingPlugin {
       offset: this.ctx.offset,
       renderer: this.ctx.renderer,
       sunDirection: this.ctx.sunDirection,
+      skyView: this.skyView,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls and kerbs: only their materials
@@ -630,6 +672,9 @@ class DressingPlugin {
     if (dressed.city) {
       this.stream.cities.delete(dressed.city);
       dressed.city.dispose();
+    }
+    if (dressed.svf) {
+      this.skyView.release(dressed.svf);
     }
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);

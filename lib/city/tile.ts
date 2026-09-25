@@ -63,6 +63,8 @@ export type TileArtifactKind =
   | "edges"
   | "sport"
   | "sportTable"
+  | "svf"
+  | "horizon"
   | "trees"
   | "vegrows";
 
@@ -102,6 +104,12 @@ export function tileArtifacts(
     // under a pitch is its land-cover class.
     sport: dlm(`sport_${tile}.png`),
     sportTable: dlm(`sport_${tile}.json`),
+    // Optional: the sky-view factor and the far horizon
+    // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
+    // ambient light the city lets through and the long shadows past the
+    // shadow map. Without them the light is as before.
+    svf: dlm(`svf_${tile}.png`),
+    horizon: dlm(`horizon_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
     furniture: dlm(`furniture_${tile}.geojson`),

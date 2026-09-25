@@ -152,6 +152,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Blattflimmern* | Böen drehen Blätter auf sonnigen Kronen auf die helle Unterseite |
 | | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
+| | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
+| | *Ferne Schatten* | lange Schatten ferner Häuser und Hänge bei tiefer Sonne, auch jenseits der gewöhnlichen Schattenreichweite |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
 | | *Detaillierte Kronen* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |

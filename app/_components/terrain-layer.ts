@@ -44,6 +44,14 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
 import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
+import type { SharedRasters } from "./shared-rasters";
+import {
+  lightsWithFarShadow,
+  loadHorizonTexture,
+  SKY_VIEW_AO,
+  skyLightBody,
+  skyLightDecl,
+} from "./sky-light";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
@@ -94,6 +102,8 @@ export interface TerrainOptions {
   signal?: AbortSignal;
   /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
   sunDirection?: Vector3;
+  /** the sky-view rasters, shared with the tile's buildings (tile-stream.ts) */
+  skyView?: SharedRasters<Texture>;
 }
 
 /**
@@ -107,6 +117,10 @@ export interface GroundUniforms {
   meadowNdvi: { value: number };
   /** meadow colour on green built-up ground (courtyards, parks) */
   urbanGreen: { value: number };
+  /** the sky-view factor's hold on the ambient light (sky-light.ts) */
+  skyView: { value: number };
+  /** the far horizon's cut of the sun (sky-light.ts) */
+  horizonShade: { value: number };
 }
 
 /**
@@ -366,6 +380,10 @@ export interface SplatLayer {
   edgesTexture?: Texture;
   /** sports grounds: the index raster (NEAREST, RGBA) and its table */
   sport?: { raster: Texture; table: Texture };
+  /** sky-view factor (LINEAR, R) for the ambient light */
+  svfTexture?: Texture;
+  /** far horizon, 4 RGBA layers (LINEAR) for the far sun shadow */
+  horizonTexture?: Texture;
   /** shared world sun direction (surface → sun), for the kerb's shadow */
   sunDirection?: Vector3;
   /** class-id raster (NEAREST); the meadow detail tests it */
@@ -516,6 +534,14 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
     shader.uniforms.uSportTable = { value: splat.sport.table };
     shader.uniforms.uSportColors = { value: SPORT_LINEAR };
   }
+  if (splat.svfTexture) {
+    shader.uniforms.uSvf = { value: splat.svfTexture };
+    shader.uniforms.uSkyView = splat.ground?.skyView ?? { value: 0 };
+  }
+  if (splat.horizonTexture) {
+    shader.uniforms.uHorizon = { value: splat.horizonTexture };
+    shader.uniforms.uHorizonShade = splat.ground?.horizonShade ?? { value: 0 };
+  }
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
     shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
@@ -556,18 +582,21 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
   const hasSurface = splat.surfaceTexture !== undefined;
   const hasEdges = splat.edgesTexture !== undefined;
   const hasSport = splat.sport !== undefined;
+  const hasSvf = splat.svfTexture !== undefined;
+  const hasHorizon = splat.horizonTexture !== undefined;
   const ndviDecl = hasNdvi
     ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
     : "";
   return {
-    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}`,
+    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}${skyLightDecl(hasSvf, hasHorizon)}`,
     body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
          ${GRASS_MOTTLE}
          ${groundFields(hasSurface, hasEdges)}
          ${urbanGreen(hasNdvi, hasEdges)}
          ${GROUND_DETAIL}
          ${hasSport ? SPORT_GROUND : ""}
-         ${hasNdvi ? MEADOW_NDVI : ""}`,
+         ${hasNdvi ? MEADOW_NDVI : ""}
+         ${skyLightBody(hasSvf, hasHorizon)}`,
   };
 }
 
@@ -594,6 +623,20 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
     "#include <normal_fragment_begin>",
     hasSplat ? `${GRASS_NORMAL}\n${GROUND_NORMAL}` : TERRAIN_NORMAL
   );
+  // The city's large-scale light (sky-light.ts): the sky view on the
+  // ambient term, the far horizon on the sun.
+  if (splat?.svfTexture) {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <aomap_fragment>",
+      SKY_VIEW_AO
+    );
+  }
+  if (splat?.horizonTexture) {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <lights_fragment_begin>",
+      lightsWithFarShadow()
+    );
+  }
 }
 
 function createTerrainMaterial(
@@ -609,7 +652,7 @@ function createTerrainMaterial(
   // every tile's terrain material. Without an explicit key a tile that lost its
   // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -726,6 +769,9 @@ function waterGeometryOf(
 
 interface DetailRasters {
   edgesTexture: Texture | null;
+  horizonTexture: Texture | null;
+  /** the shared sky view's URL while this tile holds it */
+  svf: { texture: Texture | null; url: string } | null;
   ndviTexture: Texture | null;
   sport: { raster: Texture; table: DataTexture } | null;
   surfaceTexture: Texture | null;
@@ -736,6 +782,8 @@ const NO_DETAIL: DetailRasters = {
   surfaceTexture: null,
   edgesTexture: null,
   sport: null,
+  horizonTexture: null,
+  svf: null,
 };
 
 /** The optional rasters over the class raster, one after another (see
@@ -763,7 +811,24 @@ async function loadDetailRasters(
     sportRaster && sportTable
       ? await loadSportGrounds(sportRaster, sportTable, opts.signal)
       : null;
-  return { ndviTexture, surfaceTexture, edgesTexture, sport };
+  const horizon = url(extras.horizon);
+  const horizonTexture = horizon
+    ? await loadHorizonTexture(horizon, opts.signal)
+    : null;
+  // Last: nothing after it can throw, so the reference is always released.
+  const svfUrl = url(extras.svf);
+  const svf =
+    svfUrl && opts.skyView
+      ? { url: svfUrl, texture: await opts.skyView.acquire(svfUrl) }
+      : null;
+  return {
+    ndviTexture,
+    surfaceTexture,
+    edgesTexture,
+    sport,
+    horizonTexture,
+    svf,
+  };
 }
 
 /**
@@ -801,9 +866,14 @@ export async function dressTerrain(
         classRaster.height
       )
     : null;
-  const { ndviTexture, surfaceTexture, edgesTexture, sport } = classRaster
-    ? await loadDetailRasters(extras, opts)
-    : NO_DETAIL;
+  const {
+    ndviTexture,
+    surfaceTexture,
+    edgesTexture,
+    sport,
+    horizonTexture,
+    svf,
+  } = classRaster ? await loadDetailRasters(extras, opts) : NO_DETAIL;
   const splat: SplatLayer | undefined =
     classRaster && painted
       ? {
@@ -813,6 +883,8 @@ export async function dressTerrain(
           surfaceTexture: surfaceTexture ?? undefined,
           edgesTexture: edgesTexture ?? undefined,
           sport: sport ?? undefined,
+          svfTexture: svf?.texture ?? undefined,
+          horizonTexture: horizonTexture ?? undefined,
           sunDirection: opts.sunDirection,
           ground: opts.ground,
           bounds,
@@ -868,8 +940,12 @@ export async function dressTerrain(
         edgesTexture,
         sport?.raster,
         sport?.table,
+        horizonTexture,
       ]) {
         texture?.dispose();
+      }
+      if (svf) {
+        opts.skyView?.release(svf.url);
       }
       painted?.dispose();
     },

@@ -1,4 +1,4 @@
-import { type DataTexture, MeshStandardMaterial } from "three";
+import { type DataTexture, MeshStandardMaterial, type Texture } from "three";
 import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import {
   type ClayLookKey,
@@ -7,6 +7,7 @@ import {
 } from "@/lib/city/look-controls";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
+import { CLAY_SKY_AO, CLAY_SKY_DECL, openSkyTexture } from "./sky-light";
 
 /**
  * The city is rendered in one style: archviz clay — opaque, cheap, and the
@@ -36,7 +37,20 @@ export interface ClayDetailUniforms {
   uRoofVibrance: { value: number };
   /** per-building roughness jitter strength */
   uRough: { value: number };
+  /** the sky view's hold on the facades' ambient light (Himmelslicht; the
+   *  terrain's ref, a scene row) */
+  uSkyView: { value: number };
   uTint: { value: number };
+}
+
+/** One tile's sky-view raster as its clay reads it (sky-light.ts): a white
+ *  texel until the tile's raster lands (setClaySkyView). */
+interface ClaySkyUniforms {
+  uSvf: { value: Texture };
+  /** the raster's north-west corner, recentered data frame */
+  uSvfOrigin: { value: [number, number] };
+  /** its extent (m) */
+  uSvfSize: { value: [number, number] };
 }
 
 /**
@@ -82,6 +96,7 @@ function addClayDetail(
   material: MeshStandardMaterial,
   uniforms: ClayDetailUniforms,
   objects: { rows: number; texture: DataTexture },
+  sky: ClaySkyUniforms,
   heightFog?: HeightFogUniforms
 ): void {
   // The closure branches on `heightFog`, but three keys its program cache on
@@ -100,6 +115,10 @@ function addClayDetail(
     shader.uniforms.uDuskGlow = uniforms.uDuskGlow;
     shader.uniforms.uNight = uniforms.uNight;
     shader.uniforms.uRough = uniforms.uRough;
+    shader.uniforms.uSkyView = uniforms.uSkyView;
+    shader.uniforms.uSvf = sky.uSvf;
+    shader.uniforms.uSvfOrigin = sky.uSvfOrigin;
+    shader.uniforms.uSvfSize = sky.uSvfSize;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
@@ -136,7 +155,7 @@ function addClayDetail(
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+        `#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\n${CLAY_SKY_DECL}`
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -185,6 +204,8 @@ function addClayDetail(
           "diffuseColor.rgb *= 1.0 - clayEave * uEave * clayWall * 0.6;",
         ].join("\n")
       )
+      // Himmelslicht: the courtyard's ground floor gets less of the sky.
+      .replace("#include <aomap_fragment>", CLAY_SKY_AO)
       .replace(
         "#include <emissivemap_fragment>",
         [
@@ -211,7 +232,8 @@ function addClayDetail(
  *  glow live. */
 export function createStyleResources(
   heightFog?: HeightFogUniforms,
-  night?: { value: number }
+  night?: { value: number },
+  skyView?: { value: number }
 ): StyleResources {
   // Booted at the table defaults; applyCityLook retunes them live.
   const clayDetail: ClayDetailUniforms = {
@@ -225,6 +247,7 @@ export function createStyleResources(
     uDuskGlow: { value: LOOK_DEFAULTS.duskGlow },
     uNight: night ?? { value: 0 },
     uRough: { value: LOOK_DEFAULTS.roughness },
+    uSkyView: skyView ?? { value: LOOK_DEFAULTS.skyView },
   };
   return {
     clayDetail,
@@ -247,11 +270,38 @@ export function createClayMaterial(
     roughness: 1,
     metalness: 0,
   });
-  addClayDetail(clay, resources.clayDetail, objects, resources.heightFog);
+  const sky: ClaySkyUniforms = {
+    uSvf: { value: openSkyTexture() },
+    uSvfOrigin: { value: [0, 0] },
+    uSvfSize: { value: [1, 1] },
+  };
+  clay.userData.sky = sky;
+  addClayDetail(clay, resources.clayDetail, objects, sky, resources.heightFog);
   applyTransparency(clay, resources.transparency);
   resources.materials.add(clay);
   clay.addEventListener("dispose", () => resources.materials.delete(clay));
   return clay;
+}
+
+/**
+ * Hands a tile's clay its sky-view raster (loaded after the tile shows, so
+ * the buildings never wait on it): a uniform write, no recompile.
+ * `origin` is the raster's north-west corner in the recentered data frame,
+ * `size` its extent (m).
+ */
+export function setClaySkyView(
+  clay: MeshStandardMaterial,
+  texture: Texture,
+  origin: [number, number],
+  size: [number, number]
+): void {
+  const sky = clay.userData.sky as ClaySkyUniforms | undefined;
+  if (!sky) {
+    return;
+  }
+  sky.uSvf.value = texture;
+  sky.uSvfOrigin.value = origin;
+  sky.uSvfSize.value = size;
 }
 
 /**

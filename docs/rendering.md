@@ -141,6 +141,8 @@ is the codebook.
 | Horizon haze | the sky dome blends into the fog colour below the horizon and feathers up to ~16°, so the data's edge, the fog and the sky meet in one band | — | `sun-rig.ts` (`uHazeColor`) |
 | Depth tint | screen depth → warm near / cool far | — | `depth-grading-effect.ts` (*Tiefenfärbung*) |
 | Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
+| Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, from the bare ground; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
+| Far shadow | the far horizon (the skyline's angle 80–1 500 m out, 16 azimuths, `horizon_<t>.png`, ≈8 m): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min` | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts` (*Ferne Schatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
 | Paper grain, vignette | screen-space | — | `paper-grain-effect.ts` (*Papierkorn*) |
 | Minimap | site tile bounds + 2048² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
@@ -187,6 +189,18 @@ is spelled: changing one is a look change, not a re-bake
   retargeted to the nearest heads of the visible tiles' dressings (re-fed on
   every stream change), because three.js bakes the light count into every
   compiled program.
+
+- **Baked large-scale light** (plan 033): two rasters from the committed
+  DGM1 + LoD2 (`pipeline/bake/skyview.py`). The *sky-view factor* dims the
+  hemisphere fill where the city hides the sky (courtyards, street
+  canyons), on the terrain and the clay facades, and never touches the
+  sun. The *far horizon* answers "is the sun above the skyline here?" for
+  occluders 80–1 500 m away — the long low-sun shadows the frustum above
+  cuts off — on the terrain, folded into three's directional-light loop as
+  `min(shadow map, horizon)` so one occluder never darkens twice
+  ([ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md)). Both
+  rows at 0 are the picture without them; the defaults (0.5, 0.8) are
+  unjudged on a GPU.
 
 The full recipe with its rejected alternatives (VSM rings, large
 `normalBias`, 4096 maps, a bigger eye-level frustum) is in the skill and in
