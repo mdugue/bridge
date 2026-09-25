@@ -29,6 +29,8 @@ import {
   CROWN_BASE_COLOR,
   type CrownMaterials,
   type CrownSeasonKey,
+  type CrownWarmup,
+  crownWarmup,
   injectCrownSeason,
   type SeasonalCrowns,
   seasonCrowns,
@@ -926,6 +928,27 @@ export function buildCrownMaterials(
       bare
     );
   return { leafy: make(false), bare: make(true) };
+}
+
+/**
+ * The crown programs a date change may switch to, for the scene to compile
+ * once ahead of time (crown-season.ts `crownWarmup`): a crown geometry and
+ * the two crown materials, built as a tile builds them (the uniforms'
+ * values do not reach the program key).
+ */
+export function buildCrownWarmup(heightFog?: HeightFogUniforms): CrownWarmup {
+  const materials = buildCrownMaterials(
+    {
+      sunDirection: new Vector3(0, 1, 0),
+      shimmer: { value: LOOK_DEFAULTS.shimmer },
+      uTime: { value: 0 },
+      translucency: { value: LOOK_DEFAULTS.translucency },
+      leafFlutter: { value: LOOK_DEFAULTS.leafFlutter },
+      leafBright: { value: LOOK_DEFAULTS.leafBright },
+    },
+    heightFog
+  );
+  return crownWarmup(buildCrownGeo(), materials);
 }
 
 function buildTrees(

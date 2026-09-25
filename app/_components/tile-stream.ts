@@ -38,6 +38,7 @@ import {
   type TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
+import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
 import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
@@ -45,6 +46,7 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
+import type { CompilePass } from "./post-stack";
 import { buildRail } from "./rail-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
@@ -60,6 +62,7 @@ import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
+  buildCrownWarmup,
   buildVegetation,
   loadNdviSampler,
   type VegetationContext,
@@ -94,7 +97,7 @@ export interface TileDressing {
 
 export interface TileStreamContext {
   /** compiles an object's shaders before it shows (PostStack.compile) */
-  compile: (object: Object3D) => Promise<void>;
+  compile: (object: Object3D, pass?: CompilePass) => Promise<void>;
   /** resolves when the HUD lets the heavy dressing start (create-app's
    *  startStreaming): the first frames only wait on terrain + buildings */
   dressingGate: Promise<void>;
@@ -521,7 +524,14 @@ class DressingPlugin {
       TileStream,
       "cities" | "demolished" | "dressings" | "terrains"
     >
-  ) {}
+  ) {
+    this.chain = ctx.dressingGate
+      .then(() => this.warmCrowns())
+      .catch(() => {
+        // Without the warm-up a date change compiles in a frame; the
+        // stream goes on.
+      });
+  }
 
   private url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
@@ -642,9 +652,40 @@ class DressingPlugin {
     }
   }
 
-  /** Dressings build one at a time, after the gate: each is a long task. */
-  private chain: Promise<void> = Promise.resolve();
+  /** Dressings build one at a time, after the gate: each is a long task.
+   *  The first link warms the crowns' seasonal programs (warmCrowns). */
+  private chain: Promise<void>;
   pending = 0;
+  private warmup: CrownWarmup | null = null;
+  private disposed = false;
+
+  /**
+   * Compiles, once per scene and before the first tree lands, the crown
+   * programs a date change may switch to: the seasonal and the plain crown
+   * and their depth programs (crown-season.ts `crownWarmup`) — no
+   * tile's compile reaches the ones its crowns do not wear yet. The
+   * stand-ins stay (holding their programs) until the stream goes.
+   */
+  private async warmCrowns(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    const warmup = buildCrownWarmup(this.ctx.heightFog);
+    this.warmup = warmup;
+    await withinCompileWait(
+      Promise.all([
+        ...warmup.main.map((mesh) => this.ctx.compile(mesh)),
+        ...warmup.depth.map((mesh) => this.ctx.compile(mesh, "shadow")),
+      ]).then(() => undefined)
+    );
+  }
+
+  /** Called by the renderer when the stream is disposed. */
+  dispose(): void {
+    this.disposed = true;
+    this.warmup?.dispose();
+    this.warmup = null;
+  }
 
   private queueDressing(
     scene: Object3D,

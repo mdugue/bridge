@@ -1,10 +1,14 @@
 import {
+  BackSide,
   BufferGeometry,
   Color,
+  DoubleSide,
+  FrontSide,
   InstancedBufferAttribute,
-  type InstancedMesh,
+  InstancedMesh,
   type Material,
   MeshDepthMaterial,
+  type Side,
   type WebGLProgramParametersWithUniforms,
 } from "three";
 import {
@@ -204,6 +208,77 @@ export interface CrownMaterials {
   bare: Material;
   /** the plain crown (all instances in full leaf) */
   leafy: Material;
+}
+
+/** The side three's shadow pass gives a depth material for a caster of each
+ *  side (WebGLShadowMap `getDepthMaterial`, non-VSM). */
+const SHADOW_SIDE: Record<Side, Side> = {
+  [FrontSide]: BackSide,
+  [BackSide]: FrontSide,
+  [DoubleSide]: DoubleSide,
+};
+
+/**
+ * Stand-ins that take the crown programs a date change switches to through
+ * the scene's compile path ahead of time. A tile compiles what its meshes
+ * wear (tile-stream.ts `compileRepresentatives`): in summer the plain crown
+ * only, in winter the seasonal one only, and no depth program at all —
+ * three's compile never looks at the shadow pass's materials (a crown's
+ * `customDepthMaterial`, or three's own depth material a leafy crown casts
+ * with). Without these, the first drag across the leaf fall would compile
+ * the other crown and its depth program inside a frame. Programs are
+ * shared by their cache key, not by material, so one set per scene covers
+ * every tile's crowns.
+ */
+export interface CrownWarmup {
+  /** the seasonal crown's depth material (crownDepthMaterial()) and a plain
+   *  depth material like the one three's shadow pass gives a leafy crown,
+   *  each on the side that pass sets: compile them the way it draws (no
+   *  fog) */
+  depth: InstancedMesh[];
+  /** frees the stand-ins' own materials and geometry (never the shared
+   *  crown depth material) */
+  dispose: () => void;
+  /** wear the seasonal and the plain crown: compile against the scene */
+  main: InstancedMesh[];
+}
+
+/**
+ * Builds the stand-ins over a crown geometry and a pair of crown materials
+ * of the scene's kind (the same program keys as a tile's), each an
+ * instanced mesh with instance colours and `aBare`, as a crown is. They
+ * are never added to the scene; keep them (and so their programs) until
+ * the scene goes, then `dispose`.
+ */
+export function crownWarmup(
+  geometry: BufferGeometry,
+  materials: CrownMaterials
+): CrownWarmup {
+  const view = withBare(
+    geometry,
+    new InstancedBufferAttribute(new Float32Array(1), 1)
+  );
+  const stand = (material: Material): InstancedMesh => {
+    const mesh = new InstancedMesh(view, material, 1);
+    mesh.setColorAt(0, new Color(1, 1, 1));
+    return mesh;
+  };
+  const crown = materials.bare;
+  const shadowSide = crown.shadowSide ?? SHADOW_SIDE[crown.side];
+  const seasonal = crownDepthMaterial();
+  seasonal.side = shadowSide;
+  const plain = new MeshDepthMaterial({ side: shadowSide });
+  return {
+    main: [stand(materials.bare), stand(materials.leafy)],
+    depth: [stand(seasonal), stand(plain)],
+    dispose: () => {
+      materials.bare.dispose();
+      materials.leafy.dispose();
+      plain.dispose();
+      view.dispose();
+      geometry.dispose();
+    },
+  };
 }
 
 const scratch = new Color();

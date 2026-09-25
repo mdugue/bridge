@@ -54,14 +54,21 @@ export interface FocusInfo {
   focusRange: number;
 }
 
+/** Which pass a compile prepares a material for (PostStack.compile). */
+export type CompilePass = "main" | "shadow";
+
 export interface PostStack {
   /**
    * Compiles `object`'s shaders off the frame, for the target the scene pass
    * renders into (a program depends on it: colour space, tone mapping; on
    * WebGPU also the attachment formats). Tiles await it before they show,
    * so a landing tile never stalls a frame on a synchronous compile.
+   * `pass: "shadow"` compiles the object's material the way the shadow
+   * pass draws with it — no scene, so no fog, which is part of every
+   * program's key: for a depth material worn as a stand-in
+   * (crown-season.ts `crownWarmup`).
    */
-  compile: (object: Object3D) => Promise<void>;
+  compile: (object: Object3D, pass?: CompilePass) => Promise<void>;
   /**
    * Pushes the rendering rows of the look — depth grading, contact shadows,
    * paper grain, depth of field and its focus mode/distance — into the passes.
@@ -206,14 +213,23 @@ export function createPostStack(
   };
 
   return {
-    compile: (object) => {
-      // The synchronous half of compileAsync reads the current target;
-      // restore it at once, the render loop sets its own.
+    compile: (object, pass = "main") => {
+      // The synchronous half of compileAsync reads the current target (and
+      // the scene's fog); restore both at once, the render loop sets its own.
       const previous = renderer.getRenderTarget();
+      const fog = scene.fog;
       renderer.setRenderTarget(composer.inputBuffer);
-      const done = renderer.compileAsync(object, camera, scene);
-      renderer.setRenderTarget(previous);
-      return done.then(() => undefined);
+      if (pass === "shadow") {
+        scene.fog = null;
+      }
+      try {
+        return renderer
+          .compileAsync(object, camera, scene)
+          .then(() => undefined);
+      } finally {
+        scene.fog = fog;
+        renderer.setRenderTarget(previous);
+      }
     },
     render: (deltaSeconds) => composer.render(deltaSeconds),
     getFocusInfo: () => ({

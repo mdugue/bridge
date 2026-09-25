@@ -44,7 +44,7 @@ import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
-import { createPostStack } from "./post-stack";
+import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import {
   aoQualityFor,
@@ -524,7 +524,7 @@ async function bootApp(
   // Shader compiles go through the post stack (it knows the target the
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
-  let compileWith: ((object: Object3D) => Promise<void>) | null = null;
+  let compileWith: PostStack["compile"] | null = null;
   // The trees follow the scene's calendar day (crown-season.ts): colour and
   // leaf cover are rewritten on a change of day, never per frame, and a
   // crown that changed redraws the shadow map.
@@ -540,9 +540,9 @@ async function bootApp(
   cleanups.push(() => seasonClock.dispose());
   const stream = createTileStream(
     {
-      compile: (object) =>
+      compile: (object, pass) =>
         compileWith
-          ? compileWith(object).catch(() => undefined)
+          ? compileWith(object, pass).catch(() => undefined)
           : Promise.resolve(),
       dressingGate,
       heightAt,

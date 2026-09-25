@@ -1,9 +1,17 @@
 import { expect, test } from "bun:test";
-import { Color, Matrix4, Vector3 } from "three";
+import {
+  Color,
+  type InstancedMesh,
+  type Material,
+  Matrix4,
+  Vector3,
+} from "three";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { createHeightFogUniforms } from "./height-fog";
 import { sceneCensus } from "./scene-census";
 import {
+  buildCrownWarmup,
   buildVegetation,
   updateVegetationLod,
   type VegetationContext,
@@ -124,4 +132,29 @@ test("a chunk with precomputed trees keeps its own matrices per mesh", () => {
   expect(chunk.trunks.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
   expect(chunk.rich.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
   expect(chunk.far.count).toBe(2);
+});
+
+test("the crown warm-up carries the program keys a tile's crowns switch between", () => {
+  const heightFog = createHeightFogUniforms();
+  const veg = buildVegetation(
+    { rows: [], canopy: [canopy(0, 12), canopy(20, 14)] },
+    { ...ctx, heightFog }
+  );
+  const keyOf = (m: Material | Material[]) =>
+    (m as Material).customProgramCacheKey();
+  const worn = new Set<string>();
+  veg.group.traverse((o) => {
+    const mesh = o as InstancedMesh;
+    if (mesh.isInstancedMesh && keyOf(mesh.material).startsWith("crown-")) {
+      worn.add(keyOf(mesh.material));
+    }
+  });
+  expect([...worn]).toEqual(["crown-true-leafy"]); // before any season: the plain crown
+  const warm = buildCrownWarmup(heightFog);
+  expect(warm.main.map((m) => keyOf(m.material))).toEqual([
+    "crown-true-bare",
+    "crown-true-leafy",
+  ]);
+  expect(warm.depth[0].geometry.getAttribute("normal")).toBeDefined();
+  warm.dispose();
 });

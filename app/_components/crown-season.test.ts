@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import {
+  BackSide,
   Color,
   IcosahedronGeometry,
   InstancedMesh,
   type Material,
   MeshBasicMaterial,
+  MeshDepthMaterial,
   ShaderLib,
   type WebGLProgramParametersWithUniforms,
 } from "three";
@@ -13,6 +15,7 @@ import {
   createSeasonClock,
   crownDepthMaterial,
   type CrownSeasonKey,
+  crownWarmup,
   injectCrownSeason,
   seasonCrowns,
 } from "./crown-season";
@@ -128,6 +131,37 @@ test("the clock re-seasons on a new calendar day only, throttled, the last day w
   await new Promise((resolve) => setTimeout(resolve, 80));
   expect(days).toEqual([JAN_10, OCT_20]);
   clock.dispose();
+});
+
+test("the warm-up stands in for both crown variants and the crowns' shadow pass", () => {
+  const geo = new IcosahedronGeometry(1, 1);
+  const leafy = new MeshBasicMaterial();
+  const bare = new MeshBasicMaterial();
+  const warm = crownWarmup(geo, { leafy, bare });
+  expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);
+  const [seasonal, plain] = warm.depth.map((m) => m.material as Material);
+  expect(seasonal).toBe(crownDepthMaterial());
+  expect(plain).toBeInstanceOf(MeshDepthMaterial); // as three's own
+  // As a crown: instanced, with instance colours and its leaf cover.
+  for (const mesh of [...warm.main, ...warm.depth]) {
+    expect(mesh.instanceColor).not.toBeNull();
+    expect(mesh.geometry.getAttribute("aBare")).toBeDefined();
+  }
+  // The side three's shadow pass gives a front-sided caster's depth
+  // material: part of the program's key.
+  expect(seasonal.side).toBe(BackSide);
+  expect(plain.side).toBe(BackSide);
+  let freed = 0;
+  for (const m of [leafy, bare, plain]) {
+    m.addEventListener("dispose", () => freed++);
+  }
+  let depthFreed = false;
+  crownDepthMaterial().addEventListener("dispose", () => {
+    depthFreed = true;
+  });
+  warm.dispose();
+  expect(freed).toBe(3);
+  expect(depthFreed).toBe(false); // the scene's one depth material stays
 });
 
 test("the dither's per-crown seed joins the integer cell, not the position", () => {
