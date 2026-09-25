@@ -18,6 +18,7 @@ import {
 import { DepthGradingEffect } from "./depth-grading-effect";
 import { PaperGrainEffect } from "./paper-grain-effect";
 import type { AoQuality } from "./scene-profile";
+import { depthMaterialStandIns } from "./three-utils";
 
 /** Initial focus distance before the first crosshair raycast lands. */
 const HYPERFOCAL_M = 600;
@@ -59,7 +60,9 @@ export interface PostStack {
    * Compiles `object`'s shaders off the frame, for the target the scene pass
    * renders into (a program depends on it: colour space, tone mapping; on
    * WebGPU also the attachment formats). Tiles await it before they show,
-   * so a landing tile never stalls a frame on a synchronous compile.
+   * so a landing tile never stalls a frame on a synchronous compile. Custom
+   * depth materials (the sun's shadow pass) are compiled too, through
+   * stand-ins (`depthMaterialStandIns`).
    */
   compile: (object: Object3D) => Promise<void>;
   /**
@@ -209,11 +212,17 @@ export function createPostStack(
     compile: (object) => {
       // The synchronous half of compileAsync reads the current target;
       // restore it at once, the render loop sets its own.
+      // A mesh's custom depth material (the fences') is compiled through a
+      // stand-in: compileAsync never reaches it on its own.
       const previous = renderer.getRenderTarget();
       renderer.setRenderTarget(composer.inputBuffer);
       const done = renderer.compileAsync(object, camera, scene);
+      const standIns = depthMaterialStandIns(object);
+      const depthDone = standIns
+        ? renderer.compileAsync(standIns, camera, scene)
+        : Promise.resolve();
       renderer.setRenderTarget(previous);
-      return done.then(() => undefined);
+      return Promise.all([done, depthDone]).then(() => undefined);
     },
     render: (deltaSeconds) => composer.render(deltaSeconds),
     getFocusInfo: () => ({

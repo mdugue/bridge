@@ -1,14 +1,18 @@
 import { expect, test } from "bun:test";
 import {
+  BackSide,
   BoxGeometry,
   type BufferGeometry,
+  DoubleSide,
   InstancedMesh,
   type Material,
   Mesh,
   MeshBasicMaterial,
+  MeshDepthMaterial,
   Object3D,
 } from "three";
 import {
+  depthMaterialStandIns,
   disposeObject3D,
   estimateGeometryBytes,
   textureBytes,
@@ -111,4 +115,30 @@ test("estimateGeometryBytes counts each geometry once, index included", () => {
 test("textureBytes adds a third for a mip chain", () => {
   expect(textureBytes(4, 4, 4, false)).toBe(64);
   expect(textureBytes(4, 4, 1, true)).toBe(21);
+});
+
+test("depthMaterialStandIns wears each custom depth material as the shadow pass will", () => {
+  const root = new Object3D();
+  const geometry = new BoxGeometry();
+  const fence = new Mesh(geometry, new MeshBasicMaterial({ side: DoubleSide }));
+  const depth = new MeshDepthMaterial();
+  fence.customDepthMaterial = depth;
+  fence.receiveShadow = true;
+  const post = new Mesh(geometry, new MeshBasicMaterial());
+  const postDepth = new MeshDepthMaterial();
+  post.customDepthMaterial = postDepth;
+  root.add(fence, post, new Mesh(geometry, new MeshBasicMaterial()));
+  const standIns = depthMaterialStandIns(root);
+  expect(standIns?.children).toHaveLength(2);
+  const [a, b] = (standIns?.children ?? []) as Mesh[];
+  expect(a.material).toBe(depth);
+  expect(a.geometry).toBe(geometry);
+  expect(a.receiveShadow).toBe(true);
+  expect(depth.side).toBe(DoubleSide);
+  // A front-sided caster casts with its back faces.
+  expect(b.material).toBe(postDepth);
+  expect(postDepth.side).toBe(BackSide);
+  // The meshes themselves are untouched.
+  expect(fence.material).not.toBe(depth);
+  expect(depthMaterialStandIns(new Mesh(geometry))).toBeNull();
 });

@@ -1,10 +1,61 @@
-import type {
-  BufferGeometry,
-  InstancedMesh,
-  Material,
-  Object3D,
-  Texture,
+import {
+  BackSide,
+  type BufferGeometry,
+  DoubleSide,
+  FrontSide,
+  Group,
+  type InstancedMesh,
+  type Material,
+  type Mesh,
+  type MeshDepthMaterial,
+  type Object3D,
+  type Side,
+  type Texture,
 } from "three";
+
+/** The side a shadow pass renders a material's caster with (WebGLShadowMap's
+ *  `shadowSide`, PCF: back faces of a front-sided material). */
+const SHADOW_SIDE: Record<Side, Side> = {
+  [FrontSide]: BackSide,
+  [BackSide]: FrontSide,
+  [DoubleSide]: DoubleSide,
+};
+
+/**
+ * Stand-ins that wear each mesh's `customDepthMaterial` as their material,
+ * so that `compileAsync` compiles the sun's shadow-pass program too: three
+ * (r186) compiles only `object.material`, and a custom depth material would
+ * otherwise compile inside the first shadow render after its tile lands.
+ * Each stand-in is a shallow clone of its mesh (same geometry, same kind),
+ * and the depth material is set up as WebGLShadowMap sets it before it draws
+ * (side, map, alpha map and test from the colour material) — so the
+ * program's parameters, and with them its cache key, are the ones the
+ * shadow pass will ask for: the shadow pass then reuses the program. Both
+ * passes render into a target (the scene pass's, the shadow map), so tone
+ * mapping and colour space agree too. Null when no mesh has one.
+ */
+export function depthMaterialStandIns(root: Object3D): Group | null {
+  const group = new Group();
+  root.traverse((obj) => {
+    const mesh = obj as Mesh;
+    const depth = mesh.customDepthMaterial as MeshDepthMaterial | undefined;
+    if (!(mesh.isMesh && depth) || Array.isArray(mesh.material)) {
+      return;
+    }
+    const colour = mesh.material as Material & {
+      alphaMap?: MeshDepthMaterial["alphaMap"];
+      map?: MeshDepthMaterial["map"];
+    };
+    depth.side = colour.shadowSide ?? SHADOW_SIDE[colour.side];
+    depth.alphaMap = colour.alphaMap ?? null;
+    depth.alphaTest = colour.alphaToCoverage ? 0.5 : colour.alphaTest;
+    depth.map = colour.map ?? null;
+    const standIn = mesh.clone(false);
+    standIn.material = depth;
+    group.add(standIn);
+  });
+  return group.children.length > 0 ? group : null;
+}
 
 function disposeMaterial(material: Material | Material[] | undefined): void {
   if (Array.isArray(material)) {
