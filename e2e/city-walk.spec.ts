@@ -326,21 +326,26 @@ test.describe("desktop viewer", () => {
     await expect(
       page.getByRole("button", { name: "Blick folgt dem Telefon" })
     ).toHaveCount(0);
-    // Click, then report a phone held upright with its camera to the east —
-    // the absolute stream Chromium's compass arrives on.
+    // Click, then report a phone held upright with its camera to the east,
+    // ten times a second like a real sensor — on the absolute stream
+    // Chromium's compass arrives on.
     await page.evaluate(() => {
-      const button = document.querySelector<HTMLButtonElement>(
-        'button[aria-label="Zu meinem Standort"]'
-      );
-      button?.click();
-      window.dispatchEvent(
-        new DeviceOrientationEvent("deviceorientationabsolute", {
-          alpha: 270,
-          beta: 90,
-          gamma: 0,
-          absolute: true,
-        })
-      );
+      const w = window as unknown as { __compass?: number };
+      document
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Zu meinem Standort"]'
+        )
+        ?.click();
+      w.__compass = window.setInterval(() => {
+        window.dispatchEvent(
+          new DeviceOrientationEvent("deviceorientationabsolute", {
+            alpha: 270,
+            beta: 90,
+            gamma: 0,
+            absolute: true,
+          })
+        );
+      }, 100);
     });
     await expect(page.getByText("Du bist hier")).toBeVisible({
       timeout: slow(20_000),
@@ -353,6 +358,10 @@ test.describe("desktop viewer", () => {
     expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
     // East by the compass, ≈ 1° more on the UTM grid (meridian convergence).
     expect(Math.abs((state?.headingDeg ?? 0) - 91)).toBeLessThan(2);
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      window.clearInterval(w.__compass);
+    });
     expectNoErrors(errors);
   });
 

@@ -52,19 +52,13 @@ function startCompass() {
     }
     wake?.();
   };
-  let stop: () => void = () => undefined;
-  let stopped = false;
+  // Listen at once, and ask in parallel where the platform wants that:
+  // before the grant nothing arrives (iOS), and a reading that comes in
+  // while a permission promise settles is not lost (Chromium has
+  // `requestPermission` too, and grants it without a prompt).
+  const stop = subscribeAim(onAim);
   if (orientationNeedsPermission()) {
-    requestOrientationPermission()
-      .then((granted) => {
-        if (granted && !stopped) {
-          stop = subscribeAim(onAim);
-        }
-      })
-      .catch(() => undefined);
-  } else {
-    // No prompt to wait for: listen now, not a microtask later.
-    stop = subscribeAim(onAim);
+    requestOrientationPermission().catch(() => undefined);
   }
   return {
     /** The averaged heading, waiting up to `ms` for a first reading. */
@@ -80,10 +74,7 @@ function startCompass() {
       }
       return samples.length > 0 ? meanBearing(samples) : null;
     },
-    stop: () => {
-      stopped = true;
-      stop();
-    },
+    stop,
   };
 }
 
