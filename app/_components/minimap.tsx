@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { landcoverSrgb } from "@/lib/city/landcover";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
   type FootprintPoly,
   mapPxToEpsg,
+  squareBounds,
 } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -123,7 +124,7 @@ function setupCanvas(
  * overlay canvas (redrawn at pose rate, ~10 Hz). Clicking teleports.
  */
 export function Minimap({
-  bounds,
+  bounds: siteBounds,
   focusRingM,
   footprints,
   landcoverTiles,
@@ -131,6 +132,8 @@ export function Minimap({
   size = DEFAULT_SIZE,
   subscribePose,
 }: MinimapProps) {
+  // The canvas is square, the site need not be: frame it undistorted.
+  const bounds = useMemo(() => squareBounds(siteBounds), [siteBounds]);
   const staticRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   // Read by the pose callback so the ring tracks the slider without re-subscribing

@@ -49,6 +49,21 @@ export function mapPxToEpsg(
 }
 
 /**
+ * The square map frame around a site's extent: the shorter axis is padded
+ * evenly on both sides. The minimap is a square canvas, and a site that is
+ * wider than tall (Dresden: 8 × 6 km) mapped straight onto it came out
+ * squashed — every drawing, the player marker and the teleport click then
+ * share one undistorted metres-per-pixel scale.
+ */
+export function squareBounds(bounds: TerrainBounds): TerrainBounds {
+  const [minX, minY, maxX, maxY] = bounds;
+  const half = Math.max(maxX - minX, maxY - minY) / 2;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  return [cx - half, cy - half, cx + half, cy + half];
+}
+
+/**
  * Extracts one rectangle per Building from `geographicalExtent`
  * ([minx, miny, minz, maxx, maxy, maxz]). BuildingParts are skipped — their
  * parent Building's extent already covers them.

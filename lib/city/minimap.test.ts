@@ -4,6 +4,7 @@ import {
   buildingFootprints,
   epsgToMapPx,
   mapPxToEpsg,
+  squareBounds,
 } from "./minimap";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { CityJsonDocument } from "./types";
@@ -34,6 +35,15 @@ test("mapPxToEpsg is the inverse of epsgToMapPx", () => {
   const { x, y } = mapPxToEpsg(px, py, bounds, SIZE);
   expect(x).toBeCloseTo(412_345);
   expect(y).toBeCloseTo(5_657_654);
+});
+
+test("squareBounds pads the shorter axis evenly", () => {
+  expect(squareBounds([410_000, 5_654_000, 418_000, 5_660_000])).toEqual([
+    410_000, 5_653_000, 418_000, 5_661_000,
+  ]);
+  expect(squareBounds([0, 0, 2, 4])).toEqual([-1, 0, 3, 4]);
+  const square: TerrainBounds = [0, 0, 4, 4];
+  expect(squareBounds(square)).toEqual(square);
 });
 
 test("buildingFootprints extracts Building extents and skips parts", () => {
