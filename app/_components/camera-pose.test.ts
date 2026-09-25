@@ -294,3 +294,79 @@ test("the climb input lifts the camera in fly mode and cancels a glide", () => {
   expect(camera.position.y).toBeLessThanOrEqual(before.y);
   expect(camera.position.x).toBeCloseTo(before.x, 6);
 });
+
+test("live mode eases the view to the phone's aim; a drag ends it", () => {
+  let ended = 0;
+  const { pose } = rig({ onFollowEnd: () => (ended += 1) });
+  pose.setFollowAim({ headingDeg: 350, pitchDeg: -20 });
+  pose.step(1 / 60);
+  // One frame in: part of the way, turned the short way (through north).
+  const early = pose.getCameraState();
+  expect(early.headingDeg).toBeLessThan(0);
+  expect(early.headingDeg).toBeGreaterThan(-10);
+  settle(pose);
+  const s = pose.getCameraState();
+  expect(((s.headingDeg % 360) + 360) % 360).toBeCloseTo(350, 3);
+  expect(s.pitchDeg).toBeCloseTo(-20, 3);
+  // A drag ends it: the aim no longer pulls the view back.
+  pose.turn(100, 0);
+  expect(ended).toBe(1);
+  const turned = pose.getCameraState().headingDeg;
+  settle(pose);
+  expect(pose.getCameraState().headingDeg).toBeCloseTo(turned, 6);
+  // Ending twice reports once.
+  pose.turn(10, 0);
+  expect(ended).toBe(1);
+});
+
+test("live mode walks the camera to each GPS fix, gliding near ones and jumping far ones", () => {
+  let ended = 0;
+  const { camera, pose, poses } = rig({ onFollowEnd: () => (ended += 1) });
+  // 12 m east: a step — eased, not jumped.
+  pose.setFollowPosition({ x: OFFSET.cx + 12, y: OFFSET.cy });
+  expect(camera.position.x).toBeCloseTo(0, 10);
+  pose.step(1 / 60);
+  expect(camera.position.x).toBeGreaterThan(0);
+  expect(camera.position.x).toBeLessThan(1);
+  settle(pose);
+  // Five seconds of a 1 s ease: within a few centimetres.
+  expect(Math.abs(camera.position.x - 12)).toBeLessThan(0.1);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 3);
+  // 500 m north: a jump — there at once, and reported like any teleport.
+  const reported = poses.length;
+  pose.setFollowPosition({ x: OFFSET.cx + 12, y: OFFSET.cy + 500 });
+  expect(camera.position.z).toBeCloseTo(-500, 6);
+  expect(poses.length).toBe(reported + 1);
+  // The stick is the player's own walking: live mode ends.
+  pose.setMoveInput(0, 1);
+  expect(ended).toBe(1);
+  pose.setMoveInput(0, 0);
+  const z = camera.position.z;
+  settle(pose);
+  expect(camera.position.z).toBeCloseTo(z, 1);
+});
+
+test("live mode and flying combine: the GPS moves the camera at its altitude, climbing keeps it live", () => {
+  let ended = 0;
+  const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+  pose.setMovementMode("fly");
+  pose.setClimbInput(1);
+  settle(pose);
+  pose.setClimbInput(0);
+  const altitude = camera.position.y;
+  expect(altitude).toBeGreaterThan(GROUND + 20);
+  pose.setFollowAim({ headingDeg: 90, pitchDeg: -30 });
+  pose.setFollowPosition({ x: OFFSET.cx + 500, y: OFFSET.cy });
+  // A jump: there at once, and still up in the air.
+  expect(camera.position.x).toBeCloseTo(500, 6);
+  expect(camera.position.y).toBeCloseTo(altitude, 6);
+  // Climbing is the altitude live mode leaves to the player.
+  pose.setClimbInput(1);
+  pose.step(1 / 60);
+  pose.setClimbInput(0);
+  expect(ended).toBe(0);
+  expect(camera.position.y).toBeGreaterThan(altitude);
+  settle(pose);
+  expect(pose.getMode()).toBe("fly");
+  expect(pose.getCameraState().pitchDeg).toBeCloseTo(-30, 3);
+});

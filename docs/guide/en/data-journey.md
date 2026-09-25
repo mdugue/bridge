@@ -174,20 +174,21 @@ as sent over the network):
 | Buildings (with the style table) | 1.34 MB | up to 1.91 MB | the tile is in view |
 | Building footprints (minimap) | 48 kB | up to 75 kB | with the buildings |
 | Coarse terrain (512²) | 0.41 MB | 0.44–0.65 MB | the tile is in view |
-| Detailed terrain (1024², with its walls and stairs) | 1.62 MB | 1.62–2.50 MB | the camera comes close |
+| Detailed terrain (1024², with its walls, stairs and kerb stones) | 2.19 MB | 1.91–3.07 MB | the camera comes close |
 | Land-use classes, 2048² | 0.08 MB | 0.06–0.11 MB | at the start (minimap), then for the coarse terrain |
 | Land-use classes, 4096² | 0.22 MB | 0.15–0.29 MB | with the detailed terrain (desktop only) |
 | Greenness (NDVI) | 0.39 MB | 0.32–0.77 MB | with the terrain |
 | Tree points | 36 kB | 41–526 kB | with the detailed terrain |
 | Lamps, rails, ballast, bridges, platforms, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
-| **Per tile, in full detail** | **≈ 4.2 MB** | **≈ 3.8–6.1 MB** | |
+| Paving and road-edge rasters | 2.18 MB | 0.28–2.76 MB | with the detailed terrain |
+| **Per tile, in full detail** | **≈ 6.8 MB** | **≈ 4.2–9.0 MB** | |
 | **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 1.3–3.3 MB | |
 
 How much a visit downloads therefore depends on where you go. With every
-tile in full detail, a desktop has fetched about **53 MB** for the twelve
-tiles; a phone about 52 MB (it takes the 2048² land-use raster for every
+tile in full detail, a desktop has fetched about **83 MB** for the twelve
+tiles; a phone about 82 MB (it takes the 2048² land-use raster for every
 tile); the test-only "lite" profile, which streams the start tile alone,
-about 4 MB. That is more than before the switch to streaming (a full visit
+about 7 MB. That is more than before the switch to streaming (a full visit
 used to be about 10.6 MB), because the terrain now arrives as a ready-made
 mesh instead of a compact grid of heights; in exchange every file is in a
 standard format that common 3D tools can open.

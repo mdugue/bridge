@@ -128,4 +128,28 @@ describe("decodeGreyPng", () => {
     expect(out.data.length).toBe(out.width * out.height);
     expect(out.data.every((v) => v <= 8)).toBe(true);
   });
+
+  test("decodes the committed paving rasters as four bytes per texel", async () => {
+    const dir = join(import.meta.dir, "../../data/dlm");
+    const file = readdirSync(dir).find((f) => /^surface_.*\.png$/.test(f));
+    if (!file) {
+      return;
+    }
+    const { size } = JSON.parse(
+      readFileSync(join(dir, file.replace(/\.png$/, ".json")), "utf8")
+    ) as { size: number };
+    const out = await decodeGreyPng(
+      new Uint8Array(readFileSync(join(dir, file)))
+    );
+    // Interleaved R0 G0 B0 A0 R1 …: four times as wide as the raster.
+    expect(out.width).toBe(4 * size);
+    expect(out.height).toBe(size);
+    // R: road and walk ids stay within the paving kinds (0..6).
+    for (let i = 0; i < out.data.length; i += 4) {
+      const r = out.data[i];
+      if ((r & 7) > 6 || ((r >> 3) & 7) > 6) {
+        throw new Error(`bad paving byte ${r} at ${i}`);
+      }
+    }
+  });
 });
