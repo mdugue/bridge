@@ -94,9 +94,16 @@ visual-variable codebook is in
   Terrassenufer across the 33410/33412 seam, the Altstadt around the
   Frauenkirche from the air and the northern seam (33412_5658) show no
   ground step, crack or wall break at the tile edges; the terrace wall reads
-  as one continuous face across the seam. The one seam artifact left is on
-  the Elbe: a faint light line / band where two tiles' water sheets meet — it
-  was there with the grid too (grid-grid, grid-TIN), so it is not the TIN's.
+  as one continuous face across the seam. **Seam bands (fixed
+  2026-09-25, grids and TIN alike):** a bright band ran along every seam,
+  one border triangle wide — metres on a TIN's flat road — because the 30 m
+  skirt shared the border vertices and dominated their area-weighted
+  normals; the terrain's normals now come from its surface triangles alone
+  (`scripts/bake-tiles.ts` `terrainNormals`). Across the Elbe the water and
+  mist sheets drew the skirt as a wall of water; their geometry now leaves
+  out every triangle without area in plan (`terrain-layer.ts`
+  `waterGeometryOf`). Checked on a real GPU at the 33410/33412_5656 seam
+  (heights there agree to 5 cm on average).
 - **Terrain (glTF, two levels)** — DGM1 → a triangulated mesh + a 30 m edge
   skirt to hide inter-tile seams, at two levels per tile: **L1 512²**
   (coarse, geometric error 40 m) replaced near the camera by **L0**, the TIN
