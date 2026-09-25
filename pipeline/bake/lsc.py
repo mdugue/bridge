@@ -24,7 +24,7 @@ reads the same:
   dsm_050.tif                        ground + non-ground (2, 20): max, count
   nonground_count_050.tif            non-ground (20): count
   nonground_multiecho_count_050.tif  non-ground with ≥ 2 returns: count
-  lowint_050.tif                     non-ground 0.25–4 m above the DTM's `min`: the
+  lowint_050.tif                     non-ground 0.25–4 m above the DTM's `idw`: the
                                      mean intensity, count
 
 The scan is streamed in chunks; the per-cell sums are the only full-size
@@ -172,7 +172,9 @@ def rasterise(laz: Path, out: Path, bounds, epsg: int, res: float = 0.5) -> None
         nonground += np.bincount(idx[ng], minlength=size)
         me = ng & (np.asarray(pts.number_of_returns) >= 2)
         multiecho += np.bincount(idx[me], minlength=size)
-    dtm = {k: window_fill(ground.band(k), 3) for k in ("idw", "min")}
+    # PDAL writes its bands in a fixed order — min, max, mean, idw, count —
+    # whatever order `output_type` lists them in (GDALWriter.cpp).
+    dtm = {k: window_fill(ground.band(k), 3) for k in ("min", "idw")}
     dtm["count"] = ground.band("count")
     write_raster(out / "dtm_050.tif", bins, dtm, epsg)
     write_raster(
@@ -193,9 +195,10 @@ def rasterise(laz: Path, out: Path, bounds, epsg: int, res: float = 0.5) -> None
         {"count": multiecho.reshape(bins.n, bins.n)},
         epsg,
     )
-    # The low returns: height above the DTM's `min` band (PDAL's hag_dem on
-    # band 2), read at the cell each point falls in.
-    dem = dtm["min"].ravel()
+    # The low returns: height above the DTM's band 2 — `idw`, by PDAL's band
+    # order, not `min` — as hag_dem reads it from the float32 file, at the
+    # cell each point falls in.
+    dem = dtm["idw"].astype(np.float32).astype(np.float64).ravel()
     low = Stats(bins.n)
     for pts in _chunks(laz):
         x, y, z = np.asarray(pts.x), np.asarray(pts.y), np.asarray(pts.z)

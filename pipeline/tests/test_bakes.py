@@ -805,17 +805,19 @@ def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
     # cell (the first in file order is its idw, as PDAL's bin mode has it),
     # one in the cell diagonally north-east of the empty cell north of it,
     # a 1.5 m shrub return and a 12 m crown return (two echoes) in that cell.
-    x = [0.1, 0.25, 0.75, 0.25, 0.3]
-    y = [0.1, 0.25, 1.25, 0.75, 0.7]
-    z = [101.0, 100.0, 104.0, 103.5, 114.0]
+    # A last non-ground return 0.1 m over the DTM's idw but 0.6 m over its
+    # min: PDAL's hag_dem reads band 2, which is `idw` in PDAL's band order.
+    x = [0.1, 0.25, 0.75, 0.25, 0.3, 0.2]
+    y = [0.1, 0.25, 1.25, 0.75, 0.7, 0.8]
+    z = [101.0, 100.0, 104.0, 103.5, 114.0, 102.6]
     header = laspy.LasHeader(point_format=6, version="1.4")
     header.scales = [0.01, 0.01, 0.01]
     header.offsets = [0, 0, 0]
     las = laspy.LasData(header)
     las.x, las.y, las.z = np.array(x), np.array(y), np.array(z)
-    las.classification = np.array([2, 2, 2, 20, 20], np.uint8)
-    las.number_of_returns = np.array([1, 1, 1, 1, 2], np.uint8)
-    las.intensity = np.array([0, 0, 0, 1000, 3000], np.uint16)
+    las.classification = np.array([2, 2, 2, 20, 20, 20], np.uint8)
+    las.number_of_returns = np.array([1, 1, 1, 1, 2, 1], np.uint8)
+    las.intensity = np.array([0, 0, 0, 1000, 3000, 5000], np.uint16)
     laz = tmp_path / "t.laz"
     las.write(laz)
     rasterise(laz, tmp_path, (0.0, 0.0, 4.0, 4.0), 25833)
@@ -833,7 +835,9 @@ def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
     assert idw[6, 0] == 102.5
     assert band("dtm_050.tif", "min")[6, 0] == 102.0
     assert band("dsm_050.tif", "max")[6, 0] == 114.0
-    assert band("nonground_count_050.tif", "count")[6, 0] == 2
+    assert band("nonground_count_050.tif", "count")[6, 0] == 3
+    with rasterio.open(tmp_path / "dtm_050.tif") as ds:
+        assert ds.descriptions == ("min", "idw", "count")  # PDAL's band order
     assert band("nonground_multiecho_count_050.tif", "count")[6, 0] == 1
     # only the shrub return is 0.25–4 m above the DTM
     assert band("lowint_050.tif", "mean")[6, 0] == 1000.0
