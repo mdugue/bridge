@@ -46,6 +46,8 @@ test("the site's tiles, the spawn tile first", () => {
     "33414_5656_2_sn",
     "33414_5658_2_sn",
     "33416_5656_2_sn",
+    "33416_5654_2_sn",
+    "33416_5658_2_sn",
   ]);
   expect(dgmSourceFiles(PRIMARY_TILE).tif).toBe(
     "data/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif"

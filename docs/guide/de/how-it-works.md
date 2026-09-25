@@ -9,8 +9,8 @@ davon „echt“ ist. Begriffe in **Fettschrift** stehen im
 
 ## Was du siehst
 
-Ein stilisiertes, begehbares 3D-Modell der Dresdner Innenstadt: zehn
-Kacheln zu 2 km × 2 km auf beiden Elbseiten, bis zu 8 km breit, mit der
+Ein stilisiertes, begehbares 3D-Modell der Dresdner Innenstadt: zwölf
+Kacheln zu 2 km × 2 km auf beiden Elbseiten, 8 km × 6 km, mit der
 historischen Altstadt, Innerer und Äußerer Neustadt, der Johannstadt, dem
 Hauptbahnhof und dem Großen Garten im Süden und elbaufwärts vorbei an der
 Waldschlößchenbrücke bis Blasewitz, Loschwitz und zum Blauen Wunder. Du
@@ -57,7 +57,7 @@ bewusster Vereinfachung.
 | **Gelände** | Die Form des Bodens: Flussufer, der Anstieg zur Neustadt, Dämme | Das amtliche Geländemodell mit 1 m Raster (**DGM1**) | Echte Höhen, auf einem Raster von etwa 2 m in deiner Nähe und 4 m weiter weg. Senkrechte Mauern und Treppen glättet die Quelle zu Rampen; wo OpenStreetMap eine Mauer, eine Felskante oder eine Treppe kennt, schärft das Projekt sie wieder |
 | **Bodenfarben** | Straßen grau, Wege sandfarben, Wiesen salbeigrün, Wald moosgrün, Siedlung tonfarben, Wasser blau | Das amtliche Landschaftsmodell (**Basis-DLM**) | Echte Klassifizierung; die Farben sind eine entworfene Pastellpalette, erst in deinem Browser aufgemalt, keine Fotos |
 | **Wasser** | Die Elbe und kleinere Gewässer mit leicht bewegter Oberfläche und treibendem Nebel | Wasserflächen aus dem Basis-DLM, auf das echte Gelände gelegt | Echter Umriss, erfundene Wellen |
-| **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 41 000 Gebäude und Gebäudeteile in den zehn Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
+| **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 46 000 Gebäude und Gebäudeteile in den zwölf Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
 | **Gebäudefarben** | Dachfarben; eine leichte Tönung je Gebäude; abends ein warmes Leuchten in Läden und öffentlichen Bauten | Dachfarbe aus Luftbildern (**DOP**) gemessen; der Rest aus Gebäudeattributen abgeleitet | Dachfarben sind echt (etwa 83 % Abdeckung), Wandtöne sind synthetisch |
 | **Bäume und Hecken** | Einzelbäume mit Kronen in gemessener Höhe; Hecken und Baumreihen | Baumpositionen und -höhen aus der Differenz von Oberflächenmodell (**DOM1**) und Geländemodell; Reihen aus dem Basis-DLM; Grünfärbung aus dem Infrarot-Luftbild (**NDVI**) | Positionen und Höhen sind gemessen; die Kronenform ist generisch, die Baumart unbekannt |
 | **Straßenlampen** | Laternen an Straßen und Plätzen | **OpenStreetMap** | Echte Positionen, Standardhöhe |

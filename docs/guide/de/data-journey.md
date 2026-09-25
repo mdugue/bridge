@@ -113,7 +113,7 @@ enthält je Kachel:
 | | `platform_<Kachel>.geojson` | Bahnsteige | wenige kB |
 | `data/dop/` | `roofcolor_<Kachel>.json` | eine Farbe je Gebäude, aus dem Luftbild abgetastet | 0,2 MB |
 
-Insgesamt trägt das Repository etwa 250 MB Daten für die zehn Kacheln.
+Insgesamt trägt das Repository etwa 300 MB Daten für die zwölf Kacheln.
 
 **Eine Wahrheit gegenüber Derivat, auf einen Blick:**
 
@@ -182,21 +182,21 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 
 | Was | Startkachel | Andere Kacheln | Geladen, wenn |
 |---|---|---|---|
-| Gebäude (mit Stiltabelle) | 1,34 MB | 0,39–1,91 MB | die Kachel im Blick ist |
-| Gebäudegrundrisse (Minikarte) | 48 kB | 11–75 kB | mit den Gebäuden |
+| Gebäude (mit Stiltabelle) | 1,34 MB | bis 1,91 MB | die Kachel im Blick ist |
+| Gebäudegrundrisse (Minikarte) | 48 kB | bis 75 kB | mit den Gebäuden |
 | Grobes Gelände (512²) | 0,41 MB | 0,44–0,65 MB | die Kachel im Blick ist |
 | Detailliertes Gelände (1024², mit seinen Mauern und Treppen) | 1,62 MB | 1,62–2,50 MB | die Kamera nahe kommt |
 | Landnutzungsklassen, 2048² | 0,08 MB | 0,06–0,11 MB | beim Start (Minikarte), dann fürs grobe Gelände |
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,15–0,29 MB | mit dem detaillierten Gelände (nur Desktop) |
-| Grün (NDVI) | 0,39 MB | 0,32–0,67 MB | mit dem Gelände |
-| Baumpunkte | 36 kB | 41–399 kB | mit dem detaillierten Gelände |
+| Grün (NDVI) | 0,39 MB | 0,32–0,77 MB | mit dem Gelände |
+| Baumpunkte | 36 kB | 41–526 kB | mit dem detaillierten Gelände |
 | Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
 | **Je Kachel, volle Detailstufe** | **≈ 4,2 MB** | **≈ 3,8–6,1 MB** | |
-| **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 1,7–3,3 MB | |
+| **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 1,3–3,3 MB | |
 
 Wie viel ein Besuch lädt, hängt also davon ab, wohin du gehst. Mit jeder
-Kachel in voller Detailstufe hat ein Desktop-Browser etwa **45 MB** für die
-zehn Kacheln geladen; ein Handy etwa 43 MB (es nimmt für jede Kachel das
+Kachel in voller Detailstufe hat ein Desktop-Browser etwa **53 MB** für die
+zwölf Kacheln geladen; ein Handy etwa 52 MB (es nimmt für jede Kachel das
 2048²-Landnutzungsraster); das nur für Tests gedachte „lite“-Profil, das
 allein die Startkachel streamt, etwa 4 MB. Das ist mehr als vor der
 Umstellung aufs Streamen (ein vollständiger Besuch lag bei etwa 10,6 MB),
