@@ -247,6 +247,23 @@ function withinCompileWait(done: Promise<void>): Promise<void> {
   ]);
 }
 
+/**
+ * Brings a dressing that has just joined the stream up to the scene's
+ * present. It was born with the season, night and look of the moment it
+ * was built, but its compile may then wait up to COMPILE_WAIT_MS, and the
+ * clocks that follow a change (create-app.ts) reach only the dressings in
+ * `stream.dressings` — a date drag, dusk or a slider moved meanwhile would
+ * pass it by. Each setter is idempotent: nothing moves when nothing did.
+ */
+export function catchUp(
+  d: Pick<TileDressing, "lamps" | "vegetation">,
+  ctx: Pick<TileStreamContext, "look" | "night" | "season">
+): void {
+  d.vegetation?.applyLook(ctx.look.get());
+  d.vegetation?.setSeason(ctx.season());
+  d.lamps?.setNightFactor(ctx.night());
+}
+
 function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
   d.monuments?.dispose();
@@ -722,6 +739,7 @@ class DressingPlugin {
         scene.add(...parts);
         entry.dressing = dressing;
         this.stream.dressings.add(dressing);
+        catchUp(dressing, this.ctx);
       })
       .catch(() => {
         // A dressing that fails leaves its tile bare, never the stream stuck.
