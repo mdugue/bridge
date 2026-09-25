@@ -44,6 +44,7 @@ import {
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
 import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
+import { COLONY_BEDS_GLSL, COLONY_DECL } from "./cultivated-layer";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { MARKINGS_DECL, ROAD_MARKINGS } from "./road-markings";
 import type { SharedRasters } from "./shared-rasters";
@@ -366,6 +367,32 @@ async function loadSportGrounds(
 }
 
 /**
+ * Loads the allotment-colony raster (pipeline/bake/cultivated.py): R = the
+ * colony or parcel and its axis, G = the distance to a parcel's border;
+ * NEAREST (codes, not values). Absent → null and the colonies keep their
+ * class colour.
+ */
+async function loadColonyTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
+  try {
+    const { texture, width, height } = await loadRasterTexture(url, signal, 2);
+    texture.magFilter = NearestFilter;
+    texture.minFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    trackTexture(texture, textureBytes(width, height, 2, false));
+    return texture;
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
+/**
  * Loads the road markings (pipeline/bake/markings.py): the index raster
  * (RA = the row, G = lane bits, B = the centre offset; NEAREST) and its
  * table as a 2-texel-high float texture (lib/city/markings.ts). Either
@@ -431,6 +458,8 @@ export interface SplatLayer {
   edgesTexture?: Texture;
   /** sports grounds: the index raster (NEAREST, RGBA) and its table */
   sport?: { raster: Texture; table: Texture };
+  /** allotment colonies (NEAREST, RG): the beds' plots and axes */
+  colonyTexture?: Texture;
   /** road markings: the index raster (NEAREST, RGBA) and its table */
   markings?: { raster: Texture; table: Texture };
   /** sky-view factor (LINEAR, R) for the ambient light */
@@ -587,6 +616,9 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
     shader.uniforms.uSportTable = { value: splat.sport.table };
     shader.uniforms.uSportColors = { value: SPORT_LINEAR };
   }
+  if (splat.colonyTexture) {
+    shader.uniforms.uCultivated = { value: splat.colonyTexture };
+  }
   if (splat.markings) {
     shader.uniforms.uMarkings = { value: splat.markings.raster };
     shader.uniforms.uMarkingTable = { value: splat.markings.table };
@@ -640,18 +672,20 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
   const hasEdges = splat.edgesTexture !== undefined;
   const hasSport = splat.sport !== undefined;
   const hasMarkings = splat.markings !== undefined;
+  const hasColonies = splat.colonyTexture !== undefined;
   const hasSvf = splat.svfTexture !== undefined;
   const hasHorizon = splat.horizonTexture !== undefined;
   const ndviDecl = hasNdvi
     ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
     : "";
   return {
-    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}${hasMarkings ? MARKINGS_DECL : ""}${skyLightDecl(hasSvf, hasHorizon)}`,
+    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}${hasMarkings ? MARKINGS_DECL : ""}${hasColonies ? COLONY_DECL : ""}${skyLightDecl(hasSvf, hasHorizon)}`,
     body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
          ${GRASS_MOTTLE}
          ${groundFields(hasSurface, hasEdges)}
          ${urbanGreen(hasNdvi, hasEdges)}
          ${GROUND_DETAIL}
+         ${hasColonies ? COLONY_BEDS_GLSL : ""}
          ${hasSport ? SPORT_GROUND : ""}
          ${hasMarkings ? ROAD_MARKINGS : ""}
          ${hasNdvi ? MEADOW_NDVI : ""}
@@ -711,7 +745,7 @@ function createTerrainMaterial(
   // every tile's terrain material. Without an explicit key a tile that lost its
   // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.markings !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.markings !== undefined}-${splat?.colonyTexture !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -829,6 +863,7 @@ function waterGeometryOf(
 interface DetailRasters {
   edgesTexture: Texture | null;
   markings: { raster: Texture; table: DataTexture } | null;
+  colonyTexture: Texture | null;
   horizonTexture: Texture | null;
   /** the shared sky view's URL while this tile holds it */
   svf: { texture: Texture | null; url: string } | null;
@@ -843,6 +878,7 @@ const NO_DETAIL: DetailRasters = {
   edgesTexture: null,
   sport: null,
   markings: null,
+  colonyTexture: null,
   horizonTexture: null,
   svf: null,
 };
@@ -855,6 +891,7 @@ function splatDetail(d: DetailRasters): Partial<SplatLayer> {
     edgesTexture: d.edgesTexture ?? undefined,
     sport: d.sport ?? undefined,
     markings: d.markings ?? undefined,
+    colonyTexture: d.colonyTexture ?? undefined,
     svfTexture: d.svf?.texture ?? undefined,
     horizonTexture: d.horizonTexture ?? undefined,
   };
@@ -873,6 +910,7 @@ function disposeDetail(
     d.sport?.table,
     d.markings?.raster,
     d.markings?.table,
+    d.colonyTexture,
     d.horizonTexture,
   ]) {
     texture?.dispose();
@@ -914,6 +952,10 @@ async function loadDetailRasters(
     markingsRaster && markingsTable
       ? await loadMarkings(markingsRaster, markingsTable, opts.signal)
       : null;
+  const colonies = url(extras.cultivated);
+  const colonyTexture = colonies
+    ? await loadColonyTexture(colonies, opts.signal)
+    : null;
   const horizon = url(extras.horizon);
   const horizonTexture = horizon
     ? await loadHorizonTexture(horizon, opts.signal)
@@ -930,6 +972,7 @@ async function loadDetailRasters(
     edgesTexture,
     sport,
     markings,
+    colonyTexture,
     horizonTexture,
     svf,
   };

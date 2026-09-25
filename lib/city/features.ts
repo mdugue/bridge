@@ -239,6 +239,26 @@ export interface BridgeFeature {
   } | null;
 }
 
+/**
+ * Cultivated land (pipeline/bake/cultivated.py, ODbL): allotment colonies
+ * and their mapped parcels, orchards with their trees (`h`, `d`; mapped or
+ * on an 8 m grid), vineyards with their rows along the contour.
+ */
+export interface CultivatedFeature {
+  geometry:
+    | LineGeometry
+    | MultiPolygonGeometry
+    | PointGeometry
+    | PolygonGeometry
+    | null;
+  properties: {
+    d?: number;
+    h?: number;
+    k: "colony" | "orchard" | "parcel" | "row" | "tree" | "vineyard";
+    src?: "grid" | "osm";
+  } | null;
+}
+
 /** Dissolved ballast yards (Basis-DLM ver03_f) and OSM platforms (ODbL). */
 export interface AreaFeature {
   geometry: LineGeometry | MultiPolygonGeometry | PolygonGeometry | null;

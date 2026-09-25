@@ -59,7 +59,7 @@ history. Decisions that came out of plans are written up as
 | 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | **TODO** | [025-trees-by-species-and-season.md](./025-trees-by-species-and-season.md) |
 | 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | DONE — all phases (bake + shader, four tiles); centre lines on main roads only; look unjudged on a GPU | [026-road-markings.md](./026-road-markings.md) |
 | 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **TODO** | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |
-| 028 | Cultivated land: allotment colonies, orchards, vineyards | **TODO** | [028-cultivated-land.md](./028-cultivated-land.md) |
+| 028 | Cultivated land: allotment colonies, orchards, vineyards | DONE — all phases (bake, allotment beds at low strength: 0 of 66 colonies map parcels, orchard trees, vineyard code + tests); look unjudged on a GPU | [028-cultivated-land.md](./028-cultivated-land.md) |
 | 029 | Fences, railings and gates, baked into the fine terrain | **TODO** | [029-fences-and-gates.md](./029-fences-and-gates.md) |
 | 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | **TODO** | [030-street-furniture-2.md](./030-street-furniture-2.md) |
 | 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | **TODO** | [031-elbe-riverside.md](./031-elbe-riverside.md) |

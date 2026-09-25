@@ -229,7 +229,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "ground-detail",
     label: "Bodendetail",
     description:
-      "Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen und Beläge (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap) aus der Nähe",
+      "Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen, Kleingartenbeete und Beläge (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap) aus der Nähe",
     group: "vegetation",
     initial: 0.7,
     snapshotKey: "groundDetailPct",

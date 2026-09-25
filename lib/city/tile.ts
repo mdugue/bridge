@@ -67,6 +67,8 @@ export type TileArtifactKind =
   | "horizon"
   | "markings"
   | "markingsTable"
+  | "cultivated"
+  | "cultivatedRaster"
   | "trees"
   | "vegrows";
 
@@ -117,6 +119,11 @@ export function tileArtifacts(
     // and stop lines; without them the roads stay unpainted.
     markings: dlm(`markings_${tile}.png`),
     markingsTable: dlm(`markings_${tile}.json`),
+    // Optional: allotment colonies, orchards and vineyards
+    // (pipeline/bake/cultivated.py) — the features (orchard trees, vine
+    // rows) and the colony raster the ground paints beds on.
+    cultivated: dlm(`cultivated_${tile}.geojson`),
+    cultivatedRaster: dlm(`cultivated_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
     furniture: dlm(`furniture_${tile}.geojson`),

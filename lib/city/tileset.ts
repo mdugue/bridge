@@ -74,6 +74,8 @@ export interface DressingFiles {
   canopy: string;
   /** laser-scan crowns outside the canopy mask (tiles with a laser scan) */
   canopyx?: string;
+  /** allotments, orchards, vineyards (orchard trees, vine rows) */
+  cultivated?: string;
   furniture: string;
   lamps: string;
   /** OSM hedges */
@@ -118,6 +120,8 @@ export interface TerrainExtras {
   /** sports-ground index raster and its table of grounds (both levels) */
   sport?: string;
   sportTable?: string;
+  /** allotment-colony raster (fine level only) */
+  cultivated?: string;
   /** road-marking raster and its table (fine level only) */
   markings?: string;
   markingsTable?: string;

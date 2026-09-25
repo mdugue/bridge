@@ -62,6 +62,7 @@ flowchart LR
     STR["Stairs"]
     SPT["Sports grounds<br/>pitches · courts · tracks · goals"]
     MRK["Road markings<br/>zebras · Furten · stop lines · cycle and centre lines"]
+    CULT["Cultivated land<br/>allotment beds · orchard trees · vine rows"]
     MM["Minimap"]
     LIGHT["Light &amp; shadow"]
   end
@@ -137,6 +138,8 @@ flowchart LR
   OSM ==>|"leisure=pitch/track<br/>sport · surface → table + index raster"| SPT
   OSM ==>|"crossings · signals · cycleway · lanes → table + lane raster"| MRK
   DLM -. "carriageway width + kerb distance" .-> MRK
+  OSM ==>|"landuse=allotments/orchard/vineyard → colonies, trees, rows"| CULT
+  DGM -. "rows along the contour · ground-clamp" .-> CULT
   DGM -. "goals · posts · nets ground-clamped" .-> SPT
 
   %% minimap + lighting (derived, not raw data)
@@ -163,6 +166,7 @@ flowchart LR
 | **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py` |
 | **Inventory trees** | Stadtbaumkataster Dresden (WFS `cls:L1261`): position, height, crown diameter, taxon | DGM1 (ground-clamp) · DOP NDVI (deciduous crown colour) · vetoes the rows/canopy trees inside each crown, except in DLM forest/copse · trunks + broadleaf crowns drawn in the canopy's meshes | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts`, `tile-stream.ts`; baked by `pipeline/bake/trees.py` (+ `tree_archetypes.py`) |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy **+** LSC crown peaks outside the mask (spawn tile, thinned against the cadastre) | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `pipeline/bake/landcover.py` + `canopy.py` + `ndvi.py` + `lowveg.py` |
+| **Cultivated land** | OSM `landuse=allotments` (+ `leisure=garden` plots), `orchard`, `vineyard` | the colony raster (beds in the terrain pass) · OSM `natural=tree` in an orchard, else an 8 m grid · DGM1 (a vineyard's rows along the contour; ground-clamp) | `cultivated-layer.ts`, `lib/city/cultivated.ts`, `tile-stream.ts`; baked by `pipeline/bake/cultivated.py` |
 | **OSM hedges** | OSM `barrier=hedge` lines (Geofabrik extract) | LSC (measured height, spawn tile) · DGM1 (ground-clamp); tag / 1.5 m where no LAZ. The bake's laser-scan-only hedges and shrubs are not shipped (🗃️ in the ledger) | `low-vegetation-layer.ts`; baked by `pipeline/bake/lowveg.py` |
 | **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) | DGM1 (ground-clamp); gated off water + railway | baked by `pipeline/bake/lamps.py`; `lamp-layer.ts` |
 | **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces) · DGM1 (ground-clamp); gated off water, railway and bridge decks | baked by `pipeline/bake/furniture.py`; `furniture-layer.ts`, `lib/city/furniture.ts` |
@@ -224,6 +228,7 @@ flowchart LR
     bSPT["sport.py"]
     bSKY["skyview.py"]
     bMRK["markings.py"]
+    bCULT["cultivated.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -243,6 +248,7 @@ flowchart LR
     dSPT["sport PNG + table"]
     dSKY["svf PNG · horizon PNG"]
     dMRK["markings PNG + table"]
+    dCULT["cultivated GeoJSON + colony PNG"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -288,6 +294,9 @@ flowchart LR
   iOSM ==> bMRK ==> dMRK
   dCLS ==> bMRK
   dMRK -.-> tSIDE
+  iOSM ==> bCULT ==> dCULT
+  iDGM -. "contour" .-> bCULT
+  dCULT -.-> tSIDE
   iDGM ==> bSKY
   iCJ ==> bSKY ==> dSKY
 

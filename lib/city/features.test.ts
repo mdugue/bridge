@@ -6,6 +6,7 @@ import type {
   BridgeFeature,
   CanopyExtraFeature,
   CanopyFeature,
+  CultivatedFeature,
   FeatureCollection,
   FurnitureFeature,
   LampFeature,
@@ -267,6 +268,34 @@ test.each(cases)(
       expect(isPoint2(f.geometry.coordinates)).toBe(true);
       expect(Number.isFinite(f.properties?.h)).toBe(true);
       expect(Number.isFinite(f.properties?.r)).toBe(true);
+    }
+  }
+);
+
+test.each(cases)(
+  "%s: cultivated land: colonies, parcels, orchards and their trees, vine rows",
+  (_, a) => {
+    for (const f of load<CultivatedFeature>(a.cultivated)) {
+      const k = f.properties?.k ?? "";
+      expect([
+        "colony",
+        "parcel",
+        "orchard",
+        "tree",
+        "vineyard",
+        "row",
+      ]).toContain(k);
+      const type = f.geometry?.type ?? "";
+      if (k === "tree") {
+        expect(type).toBe("Point");
+        expect(Number.isFinite(f.properties?.h)).toBe(true);
+        expect(Number.isFinite(f.properties?.d)).toBe(true);
+        expect(["grid", "osm"]).toContain(f.properties?.src ?? "");
+      } else if (k === "row") {
+        expect(type).toBe("LineString");
+      } else {
+        expect(["Polygon", "MultiPolygon"]).toContain(type);
+      }
     }
   }
 );

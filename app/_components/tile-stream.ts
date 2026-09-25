@@ -17,6 +17,7 @@ import type {
   BridgeFeature,
   CanopyExtraFeature,
   CanopyFeature,
+  CultivatedFeature,
   FurnitureFeature,
   LampFeature,
   LowVegFeature,
@@ -25,6 +26,7 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
+import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookState } from "@/lib/city/look-state";
 import { onRelief } from "@/lib/city/monuments";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
@@ -36,6 +38,7 @@ import {
   type TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
+import { buildVineyards } from "./cultivated-layer";
 import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import type { HeightFogUniforms } from "./height-fog";
@@ -84,6 +87,8 @@ export interface TileDressing {
   sport?: SportFixtureLayer;
   tile: string;
   vegetation?: VegetationControl;
+  /** vine rows (cultivated-layer.ts): static */
+  vineyards?: Group;
 }
 
 export interface TileStreamContext {
@@ -193,6 +198,7 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.furniture,
     d.rail,
     d.sport?.group,
+    d.vineyards,
   ].filter((part): part is Group => part !== undefined);
 }
 
@@ -367,6 +373,7 @@ async function buildDressing(
     inventory,
     scanTrees,
     hedges,
+    cultivated,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -386,6 +393,8 @@ async function buildDressing(
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
     get<CanopyExtraFeature>(d.canopyx ?? ""),
     get<LowVegFeature>(d.lowveg ?? ""),
+    // allotments, orchards, vineyards (cultivated-layer.ts)
+    get<CultivatedFeature>(d.cultivated ?? ""),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -399,7 +408,8 @@ async function buildDressing(
       canopy: offMonuments([...canopy, ...scanTrees], monuments),
       ndviAt: ndviAt ?? undefined,
     },
-    inventory,
+    // Orchard trees join the cadastre as its "small" archetype.
+    [...inventory, ...orchardTrees(cultivated)],
     {
       offset: ctx.offset,
       heightAt: terrain.heightAt,
@@ -446,10 +456,20 @@ async function buildDressing(
     heightAt: terrain.heightAt,
     heightFog: ctx.heightFog,
   });
+  const vines = vineRows(cultivated);
+  const vineyards =
+    vines.length > 0
+      ? buildVineyards(vines, {
+          offset: ctx.offset,
+          heightAt: terrain.heightAt,
+          heightFog: ctx.heightFog,
+        })
+      : undefined;
   return {
     tile,
     vegetation,
     lowVegetation,
+    vineyards,
     lamps: lampControl,
     monuments: monumentLayer,
     furniture: furnitureGroup,

@@ -18,7 +18,21 @@
 - **Effort**: M (bake S, allotment texture M, orchard S, vineyard S–M)
 - **Risk**: LOW — a ground texture plus instanced dressing, no new class
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: DONE (2026-09-25; the look unjudged on a GPU) — all four
+  phases built: `pipeline/bake/cultivated.py` (GeoJSON + 2048² colony
+  raster for the four tiles, pytest), allotment beds in the terrain pass,
+  orchard trees through the tree layer's "small" archetype, vine rows
+  (code + unit tests; no vineyard in the tiles). **STOP measured:** 0 of 66
+  colonies carry mapped parcels (< ⅓), so the colony texture ships at a
+  low strength (0.45 of *Bodendetail*) and no parcel is invented; against
+  the chessboard risk the ≈12 m plots are jittered-Voronoi cells, not a
+  grid. Deviations: the colony raster has a second byte (the distance to
+  a parcel's border, for the lawn edge) — the plan said one byte; orchard
+  trees ride in the cadastre's instances instead of a layer of their own;
+  vine rows are not seasonal yet (plan 025's plumbing does not exist).
+  Colony paths (OSM footways, paths, service roads) are carved out of the
+  raster. Open: the plates (the Johannstadt / Großer Garten colonies) and
+  the vineyard plate once the site grows east.
 
 ## Why this matters
 

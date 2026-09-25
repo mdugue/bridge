@@ -356,6 +356,35 @@ visual-variable codebook is in
   clamped to [0.55, 1.0] (stays matte).
 
 ### Vegetation
+- **Cultivated land** (plan 028) — OSM `landuse=allotments|orchard|vineyard`
+  (and `leisure=garden` plots inside a colony) → `pipeline/bake/cultivated.py`:
+  `cultivated_<tile>.geojson` (colonies, parcels, orchards with their trees,
+  vineyards with their rows) and a 2048² colony raster
+  (`cultivated_<tile>.png`, two bytes per texel: the colony or parcel with
+  its long axis, the distance to a parcel's border). No new land-cover
+  class (ADR 0023): dressing only. **Allotments** get a garden texture in
+  the terrain's fragment pass (`cultivated-layer.ts` `COLONY_BEDS_GLSL`):
+  1.2 m beds of soil and green in ≈12 m plots — the cells of a jittered
+  Voronoi, each along the colony's long axis or across it, a dark green
+  line where two meet — faded with distance to the plot's tone; the
+  colony's paths (OSM footways, paths, service roads), roads, rail and
+  water are left out in the bake. A mapped parcel would take its own axis
+  and a lawn edge along its border. **STOP measured:** of the 66 colonies
+  (77.9 ha) in the four tiles, **0** carry mapped parcels (the 351
+  `leisure=garden` areas lie elsewhere; inside the colonies OSM maps
+  sheds, 196 footways and 123 fences) — under the plan's one-third, so the
+  texture ships at a low strength (`COLONY_BEDS.strength` 0.45 of
+  *Bodendetail*) and invents no parcel outline. **Orchards**: the mapped
+  `natural=tree` inside, else a grid 8 m apart along the long axis,
+  centred (4 orchards, 0.1 ha, 7 trees), drawn by the tree layer as the
+  cadastre's "small" archetype (a round crown on a ≈1.3 m stem).
+  **Vineyards**: rows 1.8 m apart along the contour (perpendicular to the
+  DGM's mean gradient over the polygon; a flat one along its long axis),
+  drawn as chains of low boxes 1.3 m tall and 0.5 m wide, chunked into
+  250 m cells — built and unit-tested; no vineyard lies in the four tiles
+  (the Elbe slopes' are east of them, plan 017), and the seasonal bare
+  canes wait for plan 025's season plumbing. ≈18 s per tile. **Not yet
+  judged on a GPU** (the chessboard check is the plan's other STOP).
 - **Tree/hedge rows** — Basis-DLM hedge & tree-row lines → InstancedMesh, chunked
   into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
   (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.

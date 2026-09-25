@@ -393,6 +393,7 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
     ...(names.trees ? { trees: names.trees } : {}),
     ...(names.lowveg ? { lowveg: names.lowveg } : {}),
     ...(names.canopyx ? { canopyx: names.canopyx } : {}),
+    ...(names.cultivated ? { cultivated: names.cultivated } : {}),
   };
 }
 
@@ -490,13 +491,17 @@ async function fineChildren(
   return [stairs, walls, kerbs].filter((m) => m !== null);
 }
 
-/** The fine level's road markings (plan 026) and both levels' baked light
- *  (plan 033): only the rasters the tile has. */
+/** The fine level's allotment colonies (plan 028) and road markings (plan
+ *  026) and both levels' baked light (plan 033): only the rasters the tile
+ *  has. */
 function paintAndLight(
   names: Partial<Record<string, string>>,
   level: 0 | 1
 ): Partial<TerrainExtras> {
   return {
+    ...(level === 0 && names.cultivatedRaster
+      ? { cultivated: names.cultivatedRaster }
+      : {}),
     ...(level === 0 && names.markings && names.markingsTable
       ? { markings: names.markings, markingsTable: names.markingsTable }
       : {}),
