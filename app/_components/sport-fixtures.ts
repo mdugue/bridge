@@ -23,7 +23,7 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * bars in a pale clay, no brand colours, no mesh detail — so a pitch reads
  * as a pitch from the ground without a single texture. Everything of a tile
  * is two merged meshes: the frames (casting shadows) and the nets (a
- * translucent, shadowless dark grey). Lives in the Y-up frame (world
+ * translucent, shadowless lavender-grey veil). Lives in the Y-up frame (world
  * coordinates), like the lamps.
  */
 export interface SportFixtureLayer {
@@ -37,9 +37,16 @@ export interface SportFixtureContext extends GroundContext {
   heightFog?: HeightFogUniforms;
 }
 
-/** Pale clay, a shade lighter than the monuments: painted steel, washed out. */
-const FRAME_COLOR = 0xf1_ee_e6;
-const NET_COLOR = 0x4a_4f_56;
+/*
+ * The street furniture's palette (furniture-layer.ts): the scene's own
+ * tones at its brightness, under the same matte material, so goals and
+ * nets read by form and shadow rather than by contrast. The frames are
+ * the buildings' pale clay (a goal's white, washed out); the nets the
+ * roads' lavender-grey, as a veil.
+ */
+const FRAME_COLOR = 0xec_e7_df;
+const NET_COLOR = 0xc6_c5_d0;
+const MATTE = 0.92;
 const POST = 0.12; // m, a goal post's and a hoop pole's section
 const STAY = 0.05; // m, a goal's back stays and a net's posts' tape
 
@@ -158,15 +165,15 @@ export function buildSportFixtures(
     }
   }
   const frameMat = fogged(
-    new MeshStandardMaterial({ color: FRAME_COLOR, roughness: 0.8 }),
+    new MeshStandardMaterial({ color: FRAME_COLOR, roughness: MATTE }),
     ctx.heightFog
   );
   const netMat = fogged(
     new MeshStandardMaterial({
       color: NET_COLOR,
-      roughness: 1,
+      roughness: MATTE,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.7,
       depthWrite: false,
       side: DoubleSide,
     }),

@@ -1,7 +1,7 @@
 /**
  * The sports grounds (pipeline/bake/sport.py): football pitches, tennis and
- * basketball courts, running tracks, beach-volleyball sand, the sandpits of
- * playgrounds. The bake writes a table — one row per ground, its frame, its
+ * basketball courts, running tracks, beach-volleyball sand (playgrounds are
+ * street furniture: lib/city/furniture.ts). The bake writes a table — one row per ground, its frame, its
  * playing surface and the lines painted on it — and an index raster naming
  * the row that reaches each texel; the terrain shader draws the ground in
  * its own fragment pass (app/_components/sport-ground.ts). The surface
@@ -25,8 +25,8 @@ export const SPORT_SURFACES: readonly SportSurface[] = [
   { key: "ground", srgb: null },
   { key: "grass", srgb: [168, 198, 146] }, // pitch green
   { key: "turf", srgb: [150, 190, 152] }, // cooler artificial turf
-  { key: "tartan", srgb: [212, 152, 132] }, // soft terracotta
-  { key: "clay", srgb: [221, 168, 134] }, // warm apricot clay
+  { key: "tartan", srgb: [218, 164, 146] }, // soft terracotta
+  { key: "clay", srgb: [226, 178, 146] }, // warm apricot clay
   { key: "sand", srgb: [238, 214, 168] }, // warm golden sand
   { key: "hard", srgb: [188, 194, 199] }, // light blue-grey court
   { key: "cinder", srgb: [207, 176, 152] }, // dusty red cinder (Tenne)

@@ -1,8 +1,9 @@
 """OSM sports grounds → a pitch table and an index raster: football pitches,
-tennis and basketball courts, running tracks, beach-volleyball sand, the
-sandpits of playgrounds — each with its playing surface, the lines painted
-on it and its own frame, so the terrain shader draws the field in the
-ground's own fragment pass (app/_components/sport-ground.ts).
+tennis and basketball courts, running tracks, beach-volleyball sand — each
+with its playing surface, the lines painted on it and its own frame, so the
+terrain shader draws the field in the ground's own fragment pass
+(app/_components/sport-ground.ts). Playgrounds are not sports grounds here:
+the furniture bake owns them, floor and equipment (furniture.py).
 
 The table (`sport_<tile>.json`) is one row per ground, in burn order:
 
@@ -165,11 +166,8 @@ def first_sport(value: str | None) -> str | None:
 
 def classify(leisure: str, sport: str | None, surface: str | None) -> tuple[int, int] | None:
     """(surface id, marking id) of a ground, or None when nothing would show:
-    a playground only with a tagged surface (its sandpit), a pitch of an
-    unknown sport only with one."""
+    a pitch of an unknown sport only with a tagged surface."""
     tagged = surface_id(surface)
-    if leisure == "playground":
-        return (tagged, 0) if tagged else None
     first = first_sport(sport)
     if leisure == "track":
         return (tagged or 3, LANES)
@@ -241,11 +239,11 @@ def grounds(
     tile: Tile, areas, leisures, sports, area_tags, lines, line_tags
 ) -> list[tuple[shapely.Geometry, int, int, int, list[float]]]:
     """(outline, surface, marking, shape, frame) for every ground touching
-    the tile, in burn order: playgrounds, tracks, then the pitches largest
-    first, so a court inside a larger ground wins."""
+    the tile, in burn order: tracks, then the pitches largest first, so a
+    court inside a larger ground wins."""
     box = shapely.box(*tile.bounds)
     found: list[tuple[int, float, shapely.Geometry, int, int]] = []
-    rank = {"playground": 0, "track": 1, "pitch": 2}
+    rank = {"track": 0, "pitch": 1}
 
     def add(g, leisure, sport, tags):
         if g is None or g.is_empty or not g.intersects(box) or not outdoors(tags):
@@ -321,7 +319,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     areas, afields = read_osm(
         tile,
         "multipolygons",
-        "leisure IN ('pitch', 'track', 'playground')",
+        "leisure IN ('pitch', 'track')",
         ["leisure", "sport", "other_tags"],
     )
     lines, lfields = read_osm(

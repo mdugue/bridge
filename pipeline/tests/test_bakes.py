@@ -367,6 +367,79 @@ def test_a_terrace_platform_fills_the_holes_of_its_area():
     assert platform(promenade).area == 800
 
 
+def test_furniture_kinds_come_from_the_tags():
+    from bake.furniture import kind_of
+
+    assert kind_of(None, None, '"amenity"=>"bench"') == "bench"
+    assert kind_of("bollard", None, None) == "bollard"
+    assert kind_of(None, None, '"leisure"=>"picnic_table"') == "picnic"
+    assert kind_of(None, "bus_stop", '"shelter"=>"yes"') == "shelter"
+    assert kind_of(None, "bus_stop", '"shelter"=>"no"') is None
+    stands = '"amenity"=>"bicycle_parking","bicycle_parking"=>"stands"'
+    assert kind_of(None, None, stands) == "bike"
+    assert kind_of(None, None, stands.replace("stands", "wall_loops")) is None
+    assert kind_of(None, None, '"amenity"=>"restaurant"') is None
+
+
+def test_furniture_indoors_or_underground_is_hidden():
+    from bake.furniture import hidden
+
+    assert hidden('"indoor"=>"yes"')
+    assert hidden('"level"=>"-1"')
+    assert not hidden('"level"=>"0"')
+    assert not hidden(None)
+
+
+def test_a_bench_direction_reads_degrees_or_a_compass_point():
+    from bake.furniture import direction, hoops
+
+    assert direction("SW") == 225.0
+    assert direction("370") == 10.0
+    assert direction("left") is None
+    assert hoops("10") == 5
+    assert hoops("1") == 1
+    assert hoops("lots") == 1
+
+
+def test_an_untagged_bench_faces_the_nearest_way_or_across_the_one_it_is_on():
+    from bake.furniture import bench_on_way, facing
+
+    lines = np.array([shapely.LineString([(0, 0), (100, 0)])], dtype=object)
+    ways = shapely.STRtree(lines)
+    # 5 m north of an east-west path: it looks south, onto it.
+    assert facing(shapely.Point(50, 5), ways, lines) == 180.0
+    # On the path: a quarter turn from its run (east → south).
+    assert facing(shapely.Point(50, 0), ways, lines) == 180.0
+    assert facing(shapely.Point(50, 500), ways, lines) is None
+    # A bench mapped as a way north of the path faces it, at its length.
+    mid, a, length = bench_on_way(shapely.LineString([(40, 3), (43, 3)]), ways, lines)
+    assert (mid.x, mid.y, a, length) == (41.5, 3.0, 180.0, 3.0)
+
+
+def test_a_bollard_keeps_its_tagged_height_and_metal():
+    from bake.furniture import bollard
+
+    # The Stallhof's bronze columns are mapped as bollards.
+    assert bollard('"height"=>"1.46","material"=>"bronze"') == {"h": 1.46, "metal": True}
+    assert bollard('"height"=>"40 m"') == {"h": 3.0}
+    assert bollard(None) == {}
+
+
+def test_playground_equipment_is_only_what_is_mapped():
+    from bake.furniture import _equipment_piece, equipment_kind
+
+    assert equipment_kind('"playground"=>"basketswing"') == "swing"
+    assert equipment_kind('"playground"=>"structure"') == "climb"
+    assert equipment_kind('"playground"=>"mound"') is None
+    # A slide drawn as a way stands at its midpoint, turned along it.
+    geom, props = _equipment_piece(shapely.LineString([(0, 0), (0, 4)]), "slide")
+    assert (geom.x, geom.y, props) == (0.0, 2.0, {"k": "slide", "a": 0})
+    # A sandpit drawn as an area keeps its outline; a point stays a point.
+    square = shapely.Polygon([(0, 0), (3, 0), (3, 3), (0, 3)])
+    assert _equipment_piece(square, "sandpit")[0].geom_type == "Polygon"
+    assert _equipment_piece(shapely.Point(1, 1), "swing")[0].geom_type == "Point"
+
+
 def test_surface_values_map_to_the_paving_ids():
     from bake.surface import surface_id
 
@@ -573,8 +646,8 @@ def test_sports_grounds_take_their_surface_from_the_tag_else_the_sport():
     assert classify("track", None, None) == (3, 6)  # a tartan track, lanes
     assert classify("pitch", "table_tennis", None) == (6, 0)  # a hard pad, no lines
     assert classify("pitch", "curling", None) is None  # nothing to show
-    assert classify("playground", None, None) is None
-    assert classify("playground", None, "woodchips") == (5, 0)  # its sandpit
+    assert classify("pitch", None, "sand") == (5, 0)  # an unknown sport: its surface
+    assert classify("pitch", None, None) is None
 
 
 def test_a_pitch_is_a_rotated_rectangle_along_its_long_side():

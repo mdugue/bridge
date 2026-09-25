@@ -256,6 +256,8 @@ test.describe("desktop viewer", () => {
     // 48 fountains, statues and stones (Albertplatz and around): plinths,
     // figures and jets are instanced
     expect(stats.monuments.instances).toBeGreaterThan(20);
+    // ~1 300 OSM benches, bins, stands, bollards, post boxes and shelters
+    expect(stats.furniture.instances).toBeGreaterThan(500);
     // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
     expect(stats.rail.triangles).toBeGreaterThan(0);
     // 292 wall lines
