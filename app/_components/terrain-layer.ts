@@ -678,26 +678,50 @@ function tinHeightAt(
 }
 
 /**
- * A geometry sharing `geometry`'s positions and index with every normal
- * pointing straight up (for a flat water sheet on a TIN). A TIN spans the
+ * The water's geometry: the terrain's positions without its skirt. The water
+ * and mist sheets drape the terrain mesh, and its skirt — the 30 m vertical
+ * wall that hides cracks between tiles — would otherwise be drawn as a wall
+ * of water at every seam across the river, a bright band where the two
+ * sheets meet. A skirt triangle is vertical: two of its corners share a plan
+ * position (the same quantised x and z, glTF being Y-up), so it has no area
+ * in plan. A TIN's water also faces straight up (`upFacing`): it spans the
  * river with a few huge triangles whose vertex normals are averaged with the
  * steep bank faces they share a vertex with, so the water's shading would
- * fan out in faint streaks across them. Up is the glTF's local +Y (the
- * content is Y-up; the renderer's turn and the `world` group only rotate it
- * back, so local +Y is world up).
+ * fan out in streaks across them.
  */
-function upFacingTwin(geometry: BufferGeometry): BufferGeometry {
-  const normals = new Float32Array(geometry.getAttribute("position").count * 3);
-  for (let i = 1; i < normals.length; i += 3) {
-    normals[i] = 1;
+function waterGeometryOf(
+  geometry: BufferGeometry,
+  upFacing: boolean
+): BufferGeometry {
+  const position = geometry.getAttribute("position");
+  const index = geometry.getIndex();
+  const water = new BufferGeometry();
+  water.setAttribute("position", position);
+  if (upFacing) {
+    const normals = new Float32Array(position.count * 3);
+    for (let i = 1; i < normals.length; i += 3) {
+      normals[i] = 1;
+    }
+    water.setAttribute("normal", new BufferAttribute(normals, 3));
+  } else {
+    water.setAttribute("normal", geometry.getAttribute("normal"));
   }
-  const twin = new BufferGeometry();
-  twin.setAttribute("position", geometry.getAttribute("position"));
-  twin.setAttribute("normal", new BufferAttribute(normals, 3));
-  twin.setIndex(geometry.getIndex());
-  twin.boundingBox = geometry.boundingBox?.clone() ?? null;
-  twin.boundingSphere = geometry.boundingSphere?.clone() ?? null;
-  return twin;
+  if (index) {
+    const kept: number[] = [];
+    const plan = (i: number) => [position.getX(i), position.getZ(i)] as const;
+    for (let t = 0; t < index.count; t += 3) {
+      const [ax, az] = plan(index.getX(t));
+      const [bx, bz] = plan(index.getX(t + 1));
+      const [cx, cz] = plan(index.getX(t + 2));
+      if ((bx - ax) * (cz - az) - (bz - az) * (cx - ax) !== 0) {
+        kept.push(index.getX(t), index.getX(t + 1), index.getX(t + 2));
+      }
+    }
+    water.setIndex(kept);
+  }
+  water.boundingBox = geometry.boundingBox?.clone() ?? null;
+  water.boundingSphere = geometry.boundingSphere?.clone() ?? null;
+  return water;
 }
 
 interface DetailRasters {
@@ -809,14 +833,12 @@ export async function dressTerrain(
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
   // the tile.
-  const waterGeometry = extras.tin ? upFacingTwin(mesh.geometry) : null;
+  const waterGeometry = waterGeometryOf(
+    mesh.geometry,
+    extras.tin !== undefined
+  );
   const water = splat
-    ? createWaterLayer(
-        waterGeometry ?? mesh.geometry,
-        splat,
-        opts.sunDirection,
-        opts.heightFog
-      )
+    ? createWaterLayer(waterGeometry, splat, opts.sunDirection, opts.heightFog)
     : undefined;
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {
@@ -837,8 +859,8 @@ export async function dressTerrain(
     water,
     heightAt,
     dispose: () => {
-      // The twin shares the tile's buffers; only its own normals go.
-      waterGeometry?.dispose();
+      // Shares the tile's positions; only its own index (and normals) go.
+      waterGeometry.dispose();
       for (const texture of [
         classRaster?.texture,
         ndviTexture,
