@@ -299,6 +299,21 @@ export interface TramFeature {
   } | null;
 }
 
+/**
+ * A church's bell tower (pipeline/bake/soundmarks.py; OSM ODbL, heights
+ * from the GeoSN LoD2): the tower's tip, its height above the ground (m),
+ * the bell's size class (by the height) and the church's name.
+ */
+export interface SoundmarkFeature {
+  geometry: PointGeometry;
+  properties: {
+    h: number;
+    k: "bell";
+    name?: string;
+    size: "large" | "medium" | "small";
+  } | null;
+}
+
 /** What the Elbe carries (pipeline/bake/riverside.py): a fixed landing
  *  stage, a floating one, a groyne, a ferry route. */
 export type RiversideKind = "ferry" | "groyne" | "pier" | "pontoon";

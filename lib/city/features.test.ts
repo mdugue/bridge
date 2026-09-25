@@ -15,6 +15,7 @@ import type {
   NameFeature,
   RailFeature,
   RiversideFeature,
+  SoundmarkFeature,
   StairFeature,
   TerraceFeature,
   TramFeature,
@@ -412,6 +413,17 @@ test.each(cases)(
     }
   }
 );
+
+test.each(cases)("%s: bell towers are sized points", (_, a) => {
+  for (const f of load<SoundmarkFeature>(a.soundmarks)) {
+    const p = f.properties;
+    expect(f.geometry.type).toBe("Point");
+    expect(isPoint2(f.geometry.coordinates)).toBe(true);
+    expect(p?.k).toBe("bell");
+    expect(["large", "medium", "small"]).toContain(p?.size ?? "");
+    expect(p?.h).toBeGreaterThan(0);
+  }
+});
 
 test.each(cases)(
   "%s: the river's piers, pontoons, groynes and ferry lines",

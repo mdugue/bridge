@@ -85,6 +85,7 @@ import {
   type TerrainExtras,
   TILESET_FILE,
   TILESET_SPAWN_FILE,
+  type TileSoundFiles,
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
@@ -453,6 +454,15 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
   };
 }
 
+/** What the hidden soundscape fetches of a tile while it plays (plan 035):
+ *  only the files the tile has. */
+function soundFilesOf(names: Partial<Record<string, string>>): TileSoundFiles {
+  const kinds = ["monuments", "soundmarks", "surface", "svf", "tram"] as const;
+  return Object.fromEntries(
+    kinds.flatMap((k) => (names[k] ? [[k, names[k]]] : []))
+  );
+}
+
 /** The files a tile's shaped ground is baked from. */
 function terrainInputs(tile: string): string[] {
   const source = dgmSourceFiles(tile);
@@ -679,6 +689,7 @@ const extras: TilesetExtras = {
     bounds: t.bounds,
     footprints: footprintFiles.get(t.id) ?? "",
     minimap: sideFiles.get(t.id)?.landcoverLow ?? "",
+    sound: soundFilesOf(sideFiles.get(t.id) ?? {}),
   })),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
