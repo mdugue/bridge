@@ -108,7 +108,7 @@ config change.
     building tile: clay material, object table, BVH, demolish),
     `rail-layer.ts`, `wall-layer.ts` and `stair-layer.ts` (only their
     materials: walls and stairs are baked into the fine terrain glTF),
-    `lamp-layer.ts`,
+    `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
@@ -142,8 +142,8 @@ config change.
   per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
   converts LoD2 CityGML → CityJSON, `net.py` downloads incl. single members
   of remote ZIPs) and the bakes (`landcover.py` + `landcover_osm.py`,
-  `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`,
-  `stairs.py`, `rail.py`, `osm.py`); tests in `pipeline/tests/`. Run by
+  `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`,
+  `walls.py`, `stairs.py`, `rail.py`, `osm.py`); tests in `pipeline/tests/`. Run by
   `bun run fetch` / `bun run bake` (`scripts/pipeline.ts`, which hands
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0030
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
@@ -259,15 +259,25 @@ call (ADR 0030). No Git-LFS. Derived per-tile artifacts
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
-- All OSM layers (walls, cliffs, stairs, lamps, platforms, bridge
-  structure) come from the site's Geofabrik `.osm.pbf` via GDAL's OSM
-  driver — no Overpass.
+- `monuments.py` takes the monuments (statues, stones, columns, named
+  fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
+  basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
+  names that fountain. A monument's form is its measured nDOM patch
+  (`relief`, when it stands clear of trees/facades), smoothed at runtime —
+  never an invented figure.
+- All OSM layers (walls, cliffs, stairs, lamps, fountains, platforms,
+  bridge structure) come from the site's Geofabrik `.osm.pbf` via GDAL's
+  OSM driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
   with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
-  painted the ground black).
+  painted the ground black). Nor through the browser's image decoder: the
+  class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
+  (WebKit colour-manages untagged greyscale even with
+  `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
+  with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
   ≈ 20 s); the glTF quantisation, meshopt and gzip settings live in
   `scripts/tile-glb.ts`.

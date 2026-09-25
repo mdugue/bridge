@@ -70,7 +70,7 @@ test("Dresden keeps its tile ids, credits and extract", () => {
   ]);
   expect(siteAttribution(DRESDEN)).toEqual([
     "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Mauern, Treppen, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
+    "Lampen, Brunnen, Mauern, Treppen, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
   ]);
   expect(siteTitle(DRESDEN)).toBe("City Walk — Dresden");
   expect(osmExtractUrl(DRESDEN)).toBe(

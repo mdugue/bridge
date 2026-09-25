@@ -49,6 +49,7 @@ export const DLM_LAYERS = [
   "ver03_l",
   "ver06_f",
   "ver06_l",
+  "sie03_p",
 ] as const;
 
 /** What the required land cover is baked from: the complete Basis-DLM, or

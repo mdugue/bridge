@@ -125,6 +125,7 @@ def test_the_spec_names_the_provider_folder_and_extract():
                 "provider": "sn",
                 "epsg": 25833,
                 "products": {"dom": True, "dop": None, "dlm": False},
+                "credit": "Quelle: GeoSN, dl-de/by-2-0",
                 "raw": "data/_raw/sn",
                 "data": "data/x",
                 "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
@@ -136,6 +137,7 @@ def test_the_spec_names_the_provider_folder_and_extract():
     assert tile.osm == Path("data/_raw/sn/osm/sachsen-latest.osm.pbf")
     assert tile.dgm == Path("data/x/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif")
     assert not tile.products.dlm and tile.products.dop is None
+    assert tile.credit == "Quelle: GeoSN, dl-de/by-2-0"
 
 
 def test_citygml_2_reads_like_1_and_an_empty_tile_is_refused(tmp_path):

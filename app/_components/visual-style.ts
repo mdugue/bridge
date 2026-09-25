@@ -107,7 +107,12 @@ function addClayDetail(
       )
       .replace(
         "#include <beginnormal_vertex>",
-        "#include <beginnormal_vertex>\n vClayWN = normalize(mat3(modelMatrix) * objectNormal);"
+        // A triangle that was degenerate when its flat normal was baked has a
+        // zero normal, and position quantisation can give it area again: it
+        // then rasterises with normalize(0) = NaN lighting — single black
+        // pixels on roofs that the DoF blur spread into black squares. Any
+        // unit vector will do for a sliver that thin.
+        "#include <beginnormal_vertex>\n if (dot(objectNormal, objectNormal) < 1e-8) objectNormal = vec3(0.0, 1.0, 0.0);\n vClayWN = normalize(mat3(modelMatrix) * objectNormal);"
       )
       .replace(
         "#include <begin_vertex>",

@@ -138,10 +138,10 @@ cannot resolve it in motion) and comes back when you stop.
 
 The footer credits the data sources: the Land's survey office (in
 Dresden the Saxon one) for the official datasets and OpenStreetMap
-contributors for lamps, walls, stairs, platforms and bridge structures
-(and the land cover where the Land publishes no Basis-DLM). Next to it, *Unterstützen* (support)
-leads to the project's Ko-fi page; it is a plain link that loads nothing
-from Ko-fi until it is clicked.
+contributors for lamps, fountains, walls, stairs, platforms and bridge
+structures (and the land cover where the Land publishes no Basis-DLM).
+Next to it, *Unterstützen* (support) leads to the project's Ko-fi page; it
+is a plain link that loads nothing from Ko-fi until it is clicked.
 
 ## Tips
 

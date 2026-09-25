@@ -82,7 +82,8 @@ bun run fetch 33316_5690_2_sn       # one tile
 bun run bake                        # every tile of the site, every step
 bun run bake 33412_5656_2_sn        # one tile
 bun run bake --step canopy          # one step: landcover, canopy, ndvi,
-                                    #   roof-colour, lamps, walls, stairs, rail
+                                    #   roof-colour, lamps, monuments,
+                                    #   walls, stairs, rail
 bun run test:pipeline               # pytest + ruff check + ruff format --check
 ```
 
@@ -103,12 +104,13 @@ never from the tile name. The modules in `pipeline/bake/`:
 | `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre |
 | `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
 | `osm.py` | reads the site's `.osm.pbf` through GDAL's OSM driver, with a margin in degrees around the tile, reprojected to the tile's CRS |
-| `landcover.py`, `landcover_osm.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `walls.py`, `stairs.py`, `rail.py` | one step each (table below); `landcover_osm.py` stands in for the DLM where a provider has none |
+| `landcover.py`, `landcover_osm.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`, `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py` | one step each (table below); `landcover_osm.py` stands in for the DLM where a provider has none |
 
 `pipeline/tests/` covers the pure helpers (line merging, deck outlines,
 wall heights, coordinate rounding, the class ids the client's palette is
 keyed by, the CityGML converter on a fixture, the provider grid, XYZ
-gridding, the OSM class mapping, the spec), and runs the `walls` and `stairs`
+gridding, the OSM class mapping, the spec, the monument kinds, the DLM ↔ OSM
+fountain conflation and the relief measurement), and runs the `walls` and `stairs`
 steps end to end against a synthetic DGM and a small OSM XML file (GDAL's
 OSM driver reads `.osm` as well as `.osm.pbf`). CI's `pipeline` job runs it
 with ruff after `uv sync --locked`. Fetch and bakes need the network and
@@ -123,7 +125,7 @@ never committed — no Git-LFS):
 data/_raw/<provider>/        shared by every site of the provider
   dom1/<tile>.tif            surface model, 1 m (Bavaria: DOM20 averaged)
   dop/<tile>.tif             orthophoto, 20 cm, R G B (+ NIR)
-  dlm/*.shp                  Basis-DLM, AdV Shape profile — the 15 layers read
+  dlm/*.shp                  Basis-DLM, AdV Shape profile — the 16 layers read
   osm/<extract>.osm.pbf      the site's Geofabrik extract
   downloads/                 statewide packages, fetched once
 data/<site>/
@@ -139,7 +141,7 @@ product to fetch it again.
 
 **Moving from the old layout** (`data/_raw/dresden/`, before ADR 0030):
 `mv data/_raw/dresden data/_raw/sn` keeps the downloads. The fetch now
-keeps only the 15 Basis-DLM layers the bakes read; the others in `dlm/`
+keeps only the 16 Basis-DLM layers the bakes read; the others in `dlm/`
 can be deleted.
 
 ### The adapters
@@ -147,15 +149,15 @@ can be deleted.
 | Provider | How `bun run fetch` finds the files |
 |---|---|
 | Saxony (`sn`) | the batch-download page embeds each product's live share id and file-name template (`batchConfig.products`); one ZIP per 2 km tile. The Basis-DLM is a statewide ZIP of ZIPs (~1.2 GB, kept in `downloads/`). GeoSN's link service (see [Provenance](#provenance)) still names a retired LoD2 share, so it is not used |
-| NRW (`nw`) | 1 km files named with their acquisition year; each folder's `index.json` is read and the newest year taken. The Basis-DLM (4.7 GB) is never downloaded whole: its 15 layers are read out of the remote ZIP by range |
+| NRW (`nw`) | 1 km files named with their acquisition year; each folder's `index.json` is read and the newest year taken. The Basis-DLM (4.7 GB) is never downloaded whole: its 16 layers are read out of the remote ZIP by range |
 | Bavaria (`by`) | predictable `download1.bayernwolke.de` URLs: DGM1, DOM20, DOP20 per km, LoD2 per 2 km; the Basis-DLM layers by range (the package uses Deflate64) |
 | Hamburg (`hh`) | one ZIP per product for the whole city, 1 km tiles inside, read by range; DOP per district, the district found by its directory. Dated URLs in `providers/hh.py` |
 | Berlin (`be`) | INSPIRE ATOM: 2 km XYZ heights gridded to GeoTIFF, 1 km LoD2 ZIPs, TrueDOP JPEG 2000 per district by range. Untested so far |
 
 **Every OSM input comes from the local extract** (ADR 0025 tightening
 [ADR 0012](./adr/0012-openstreetmap-for-what-official-data-lacks.md)):
-walls, lamps, platforms, the bridge structure and, without a DLM, the land
-cover. There are no Overpass queries — a re-bake is reproducible from the
+walls, stairs, lamps, fountains, platforms, the bridge structure and,
+without a DLM, the land cover. There are no Overpass queries — a re-bake is reproducible from the
 recorded extract. If Geofabrik is unreachable the fetch says so and carries
 on; put the extract at the path it names. The *committed* Dresden lamp,
 platform and bridge-structure data still comes from the old Overpass bakes;
@@ -175,12 +177,15 @@ that `canopy` and `lamps` gate on.
 | `ndvi` | DOP bands 1 (red) and 4 (NIR) | `dlm/ndvi_<t>.png` (one byte, 1024², `max(NDVI, 0)·255`) | Reads the whole DOP resampled to 1024², so it assumes the DOP covers the tile exactly. **No DOP: skipped** |
 | `roof-colour` | DOP bands 1–3, the committed CityJSON | `dop/roofcolor_<t>.json` (`meta` + `roofs: {id: [r,g,b]}`, linear RGB) | Per building: rasterise the RoofSurface rings, erode 5 px inward (the orthophoto leans buildings), take the per-channel median of ≥ 12 texels. Keyed by CityObject id. **No DOP or CityJSON: skipped** |
 | `lamps` | OSM `highway=street_lamp`, the class raster | `dlm/lamps_<t>.geojson` (points, `h` = 5 m) | Only the lamps the tile owns (west and south edges in, east and north out), so a seam lamp stands once when both tiles are dressed; the viewer applies the same rule (`ownsPoint`) to older files. Lamps over railway (5) or water (8) are dropped. No `.osm.pbf`: skipped with a note, the file already there stays |
+| `monuments` | Basis-DLM `sie03_p` (`OBJART=51009`, `BWF` 1750 Denkmal · 1770 Säule/Stein · 1780 Brunnen, with `NAM`); OSM `amenity=fountain` (points + basin outlines); DOM1 + the committed DGM1 | `dlm/monuments_<t>.geojson` (`kind`: fountain / statue / stone / column; `name`, `source`; fountains `style`: basin / pool / splash, `figure`; `relief`: `west`, `north`, `cols`, `rows`, `dm` — the measured body, heights above ground in dm on the 1 m grid) | The DLM is the official list and names; it does not say which monument is a fountain nor how big a basin is. A DLM point within 6 m of (or inside) an OSM fountain *is* that fountain — it keeps the DLM name (Albertplatz: "Stilles Wasser", "Stürmische Wogen"); a DLM name with *…brunnen*/*Tränke* is a fountain without a partner; every other OSM fountain is added (`source: osm`). An outline becomes a Polygon ring: the rim, its hole the water (inset 0.35 m); outlines under 1 m² become points. `relief`: for each monument and each fountain a DLM monument stands in, the nDOM patch above 0.7 m — inside the basin's water, or grown from the tallest cell within 2.5 m of the point — kept only when it ends within 6 m, stays ≤ 60 cells and below 8.5 m and touches nothing taller (a tree crown or a facade); 27 of 174 pass. Only what the tile owns (representative point). **No Basis-DLM: skipped, the file already there stays. No `.osm.pbf`: DLM monuments only. No DOM1: no reliefs (markers)** |
 | `walls` | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` | `dlm/walls_<t>.geojson` (lines with `kind`, `h`; a terrain bake input, not served) | Both the `lines` and `multipolygons` layers — GDAL routes closed ways with an area key into the latter; polygons contribute their outer ring. Heights from `height`/`est_height`, clamped 0.5–30 m, else per kind (city_wall 6, retaining_wall 3, wall 1.5, embankment 2.5, cliff 3). Clipped to the tile. No `.osm.pbf`: skipped with a note, the file already there stays |
 | `stairs` | OSM `highway=steps` (+ `area:highway=steps` outlines, `barrier=wall/retaining_wall/city_wall`, areas on `layer` ≥ 1), the committed DGM1 | `dlm/stairs_<t>.geojson` (lines bottom → top with `w`, `n`, `z` = [bottom, top] landing heights), `dlm/terraces_<t>.geojson` (polygons with a level `z`) — both terrain bake inputs, not served | Landings: the DGM 1 m beyond each end, 3×3 m median. Width: `width`, else outline area ÷ axis length, else the gap between the walls either side (within 15 m, minus 0.3 m each side, the axis re-centred) when both edges of that gap climb ≥ half the axis's rise, else 2.5 m (0.8–30 m). A flight with less than half its tagged rise in the DGM (`step_count` × `step:height`, 15 cm untagged), an `incline` and its top ≤ 3 m from a raised area (no building, `man_made`, `landuse`, bridge, railway or public-transport area) takes the tagged rise from its lower landing; the area becomes a terrace at the highest such top (its outer rings, holes filled). Steps: `step_count` if its riser is 8–25 cm, else rise ÷ 16 cm. Left out: indoor, underground, `level` < 0, tunnel, bridge, rise < 30 cm. Unclipped (the viewer stands a flight on the tile that owns its middle). No `.osm.pbf`: skipped with a note, the file already there stays |
 | `rail` | `ver03_f`, `ver03_l`, `ver06_f`, `ver06_l`, `ver01_l`, `ver02_l`; DGM1 + DOM1; OSM `man_made=bridge`, `railway=platform` | `dlm/railarea_<t>.geojson` (ballast polygons), `dlm/rail_<t>.geojson` (lines with `tracks`, `electrified`), `dlm/bridge_<t>.geojson` (polygons with per-vertex `deck`, `kind`, `name`, `structure`), `dlm/platform_<t>.geojson` | Ballast: `OBJART=42010` made valid, unioned (shapely) and clipped. Rails: heavy rail only (`SPW=1000`, trams excluded), fragments merged at 1 m. Decks: every `ver06_l` centreline (`BWF=1800`), snapped to a `ver06_f` footprint ≤ 50 m away, else buffered by kind width; deck height = the DGM abutment ramp lifted to the DOM surface, plus camber; `kind` from the rail/road/path networks under it; `structure` (arches) from the nearest OSM bridge ≤ 60 m. **No Basis-DLM: the step is skipped, the files already there stay. No DOM1: decks use the DGM ramp. No `.osm.pbf`: bridges without structure, the platform file already there stays.** Every other output is written, even when empty |
 
 The OSM-derived files (`lamps`, `walls`, `stairs`, `bridge`, `platform`) carry
-`"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign member.
+`"attribution": "© OpenStreetMap contributors (ODbL)"` as a foreign member;
+`monuments` carries both credits (`Quelle: GeoSN, dl-de/by-2-0; © OpenStreetMap
+contributors (ODbL)`).
 (The committed platform files predate that and carry none; the HUD footer
 has the credit either way.)
 
@@ -265,7 +270,7 @@ root                                   refine ADD
 The buildings load whenever the tile is in view. The terrain refines from
 512² to 1024² by screen-space error — at the renderer's 16 px target, 40 m
 switches at ≈ 1.2 km from the tile on a 1080p screen. Only L0 is
-*dressed*: vegetation, lamps, rails and the water and mist sheets
+*dressed*: vegetation, lamps, monuments, rails and the water and mist sheets
 are built when a fine terrain tile arrives and leave with it. The root's
 `extras` carry what the viewer needs before any content: the site id, the
 EPSG code, the recenter offset `(cx, cy)` and per tile its id, extent and
@@ -387,7 +392,7 @@ Measured 2026-09-24 on the current build (Dresden, gzipped wire sizes):
 | class raster 4096² / 2048² | 0.22–0.25 MB / ≈ 0.08 MB |
 | NDVI 1024² | 0.32–0.45 MB |
 | canopy GeoJSON | 0.04–0.11 MB (0.6–1.8 MB raw) |
-| everything else (veg rows, lamps, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
+| everything else (veg rows, lamps, monuments, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
 | **tile total** | **3.9–4.9 MB** (phones, without the 4096² raster: 3.6–4.7 MB) |
 
 The whole Dresden site is ≈ 17.1 MB on the wire (≈ 16.2 MB for a phone),

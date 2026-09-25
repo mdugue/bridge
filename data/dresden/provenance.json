@@ -24,7 +24,7 @@
       "layer": 4,
       "committed": null,
       "raw": "data/_raw/sn/dom1/<tile>.tif (+ .tfw), via pipeline/bake/providers/sn.py",
-      "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
+      "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py", "pipeline/bake/monuments.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5658_2_sn_tiff.zip" },
@@ -70,12 +70,12 @@
     },
     "Basis-DLM": {
       "$comment": "One statewide package, replaced quarterly under the same URL, so the edition of a past download cannot be read from the portal afterwards. The derived files were baked from the package current in June 2026 (commits of 2026-06-12) and re-baked for rails and walls on 2026-09-18 and for rails, ballast and bridges again on 2026-09-24 (package downloaded that day); the package on the share was dated 2026-07-28 (Last-Modified, 1.23 GB) when this file was written. Record the package's Last-Modified and the metadata inside the ZIP at the next download.",
-      "committed": "derived only: data/dresden/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge_<tile>.geojson",
+      "committed": "derived only: data/dresden/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge/monuments_<tile>.geojson",
       "raw": "data/_raw/sn/dlm/*.shp, via pipeline/bake/providers/sn.py",
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
       "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
-      "editionInUse": "land cover and veg rows: the quarterly package current in June 2026; rail, ballast, bridges: the package downloaded 2026-09-24 (exact release dates unrecorded)"
+      "editionInUse": "land cover and veg rows: the quarterly package current in June 2026; rail, ballast, bridges: the package downloaded 2026-09-24 (exact release dates unrecorded); monuments: the package downloaded 2026-09-24 (the ZIP's inner package dated 2026-07-27, basisdlm_akt.csv 2026-07-28)"
     }
   },
   "openstreetmap": {
@@ -86,6 +86,18 @@
         "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dresden/dlm/lamps_*.geojson)" },
         "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dresden/dlm/platform_*.geojson)" },
         "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" }
+      }
+    },
+    "bbbike": {
+      "$comment": "Geofabrik was unreachable from the build container on 2026-09-24, so the fountains in data/dresden/dlm/monuments_<tile>.geojson were read from BBBike's Dresden extract instead: the same OpenStreetMap data, cut to the city, in the same .osm.pbf format that pipeline/bake/osm.py reads.",
+      "download": "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf",
+      "raw": "data/_raw/sn/osm/Dresden.osm.pbf",
+      "extract": "Dresden.osm.pbf (BBBike, Last-Modified 2026-09-19)",
+      "products": {
+        "fountains": {
+          "query": "amenity=fountain (points and areas), with fountain=* and water=* for the basin style",
+          "dataAsOf": "2026-09-19 or shortly before (baked 2026-09-24)"
+        }
       }
     },
     "geofabrik": {

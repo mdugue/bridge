@@ -39,7 +39,7 @@ def parse(text: str) -> Spec:
     osm_url = doc["osm"]
     osm = osm_path(raw, osm_url)
     tiles = [
-        Tile(t["id"], tuple(t["bounds"]), doc["epsg"], raw, data, osm, products)
+        Tile(t["id"], tuple(t["bounds"]), doc["epsg"], raw, data, osm, products, doc["credit"])
         for t in doc["tiles"]
     ]
     return Spec(doc["site"], doc["provider"], doc["epsg"], products, raw, data, osm_url, tiles)

@@ -70,6 +70,7 @@ export type TileArtifactKind =
   | "lamps"
   | "landcover"
   | "landcoverLow"
+  | "monuments"
   | "ndvi"
   | "platform"
   | "rail"
@@ -101,6 +102,7 @@ export function tileArtifacts(
     canopy: dlm(`canopy_${tile}.geojson`),
     ndvi: dlm(`ndvi_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
+    monuments: dlm(`monuments_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),

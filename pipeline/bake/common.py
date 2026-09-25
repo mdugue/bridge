@@ -33,6 +33,7 @@ DLM_LAYERS = (
     "ver03_l",
     "ver06_f",
     "ver06_l",
+    "sie03_p",
 )
 
 
@@ -61,7 +62,8 @@ class Tile:
     by every site of that provider (tile ids are coordinates, so they never
     collide): `<raw>/{dom1,dop}/<tile>.tif`, `<raw>/dlm/*.shp` (AdV Shape
     profile). `data` is the site's folder, `data/<site>/`. `osm` is the
-    site's OpenStreetMap extract."""
+    site's OpenStreetMap extract, `credit` the provider's credit line (the
+    licence terms of its products, sites/providers.ts)."""
 
     id: str
     bounds: tuple[float, float, float, float]
@@ -70,6 +72,7 @@ class Tile:
     data: Path
     osm: Path | None = None
     products: Products = Products(dom=True, dop="rgbi", dlm=True)
+    credit: str = ""
 
     @property
     def size(self) -> tuple[float, float]:

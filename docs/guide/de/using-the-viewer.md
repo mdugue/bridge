@@ -143,11 +143,11 @@ zurück, sobald du stehst.
 
 Die Fußzeile nennt die Datenquellen: die Landesvermessung (in Dresden
 die sächsische) für die amtlichen Datensätze und die
-OpenStreetMap-Mitwirkenden für Lampen, Mauern, Treppen, Bahnsteige und
-Brückentragwerke (und die Landbedeckung, wo das Land kein Basis-DLM
-veröffentlicht). Daneben führt *Unterstützen* zur
-Ko-fi-Seite des Projekts; es ist ein einfacher Link, der erst beim Klick
-etwas von Ko-fi lädt.
+OpenStreetMap-Mitwirkenden für Lampen, Brunnen, Mauern, Treppen,
+Bahnsteige und Brückentragwerke (und die Landbedeckung, wo das Land kein
+Basis-DLM veröffentlicht). Daneben führt *Unterstützen* zur Ko-fi-Seite des
+Projekts; es ist ein einfacher Link, der erst beim Klick etwas von Ko-fi
+lädt.
 
 ## Tipps
 
