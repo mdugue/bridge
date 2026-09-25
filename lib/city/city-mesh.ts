@@ -38,6 +38,23 @@ export function objectFlags(entry?: {
   );
 }
 
+/**
+ * The `flags` of an object with its root Building's: the object's own facts
+ * or the root's. osm_buildings.py marks the root of every part it finds a
+ * shop or a listing on, and a Saxon LoD2 Building with parts has no
+ * geometry of its own — so its flags show only through its parts (like its
+ * attributes, `inheritedAttributes`).
+ */
+export function inheritedFlags(
+  own?: { heritage?: number; shop?: number },
+  root?: { heritage?: number; shop?: number }
+): number {
+  return objectFlags({
+    shop: (own?.shop ?? 0) + (root?.shop ?? 0),
+    heritage: (own?.heritage ?? 0) + (root?.heritage ?? 0),
+  });
+}
+
 /** Whether `flags` carries `bit` (one of the OBJECT_FLAG_* powers of two). */
 export function hasObjectFlag(flags: number, bit: number): boolean {
   return Math.floor(flags / bit) % 2 === 1;
