@@ -34,8 +34,16 @@
     the eaves), shared with the terrain through a refcounted registry
     (`shared-rasters.ts`). *Boden-Verlauf* kept as is (not retuned —
     needs plates). Horizon on facades: not done (plates first).
+  - Review fixes (2026-09-25): a second, **near band** (occluders 8–80 m,
+    0–90°) in the same PNG (eight layers, 1.13–1.23 MB for both bands),
+    read only outside the shadow frustum — faded in over its last 20 %
+    (the STOP's remedy, built pre-emptively), max(near, far) beyond — so a
+    street past the frustum keeps its neighbours' shadows; footprint cells
+    of the SVF and both bands carry the nearest open value (no dark bleed
+    through LINEAR/mipmaps); the horizon's azimuth guarded for a sun
+    straight overhead. ADR 0031 amended.
   - Open: every plate the phases name, the N8AO double-darkening check and
-    the frustum-seam check (both STOPs need a GPU; the conservative
+    the frustum hand-over check (both STOPs need a GPU; the conservative
     defaults stand in).
 
 ## Why this matters

@@ -433,6 +433,8 @@ async function bootApp(
     urbanGreen: { value: LOOK_DEFAULTS.urbanGreen },
     skyView: { value: LOOK_DEFAULTS.skyView },
     horizonShade: { value: LOOK_DEFAULTS.horizonShade },
+    // replaced by the sun rig's own vector once it exists (below)
+    shadowReach: { value: new Vector3() },
   };
   // The lowest real terrain elevation so far (the Elbe surface): the floor
   // the player stands on off every tile and the valley height-fog's start,
@@ -463,6 +465,8 @@ async function bootApp(
     sunDirection
   );
   cleanups.push(sunRig.dispose);
+  // The horizon's near band hands over to the shadow map inside the frustum.
+  ground.shadowReach.value = sunRig.shadowReach;
 
   /**
    * Forces one shadow-map re-render. The map is otherwise only redrawn when the

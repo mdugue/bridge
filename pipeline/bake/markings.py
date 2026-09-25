@@ -26,13 +26,29 @@ indexes `KINDS` (keep them in step with lib/city/markings.ts).
   `traffic_signals:direction` (or `direction`) is forward or backward, on
   the right half of the approach (right-hand traffic; the whole carriageway
   on a oneway), 0.5 m wide.
+- Overlapping rows are merged: OSM often maps one crossing twice (a node on
+  each way, a zebra and a signal node side by side), and the raster holds
+  one row per texel, so the second would clip the first's paint. Rows of
+  the same family (crossings, stop lines) whose axes agree within
+  `MERGE_ANGLE_DEG` and whose outlines come within 2 · `CORE_M` of each
+  other become one row covering both across the road, in the frame and
+  kind of the preferred one (a zebra over a furt, else the larger); along
+  the road the union too when they are parallel, else the preferred one's
+  width. Rows that still overlap (two arms of a junction, a stop line on a
+  crossing) keep their order in the raster's core pass: the smaller on
+  top, so it loses nothing and the larger only the overlap, which the
+  smaller paints.
 
-The raster (`markings_<tile>.png`, 2048² over a 2 km tile, ≈1 m) is four
+The raster (`markings_<tile>.png`, 2048² over a 2 km tile, ≈1 m; phones read
+`markings_low_<tile>.png`, the same at 1024² with a 1.45 m core) is four
 bytes per texel, interleaved in an 8-bit greyscale PNG four times as wide
 (R0 G0 B0 A0 R1 …, read by lib/city/png-raster.ts):
 
     R, A  = 1 + the row whose outline, grown by 1 m, reaches the texel
-            (low, high byte; 0 none)
+            (low, high byte; 0 none). Texels within `CORE_M` of a row's
+            rectangle are that row's before any other row's margin, so
+            every point of its paint has a texel of its own among the four
+            the shader reads (`paint_lost` checks it, the run logs it)
     G     = lane bits on road texels: 1 = a cycle lane runs along the kerb on
             THIS side of the way, 4 = a centre line road
     B     = 128 + 20 · the signed distance (m) to the carriageway's middle
@@ -90,6 +106,14 @@ CROSSING_SAMPLES = (0.0, -5.0, 5.0, -10.0, 10.0)  # m along the road
 STOP_SAMPLES = (0.0, 4.0, 8.0)  # m back along the approach
 LOCAL_SLACK_M = 1.5
 GROW_M = 1.0
+# Half a texel's diagonal (0.69 m at 2048² over 2 km) and a little: the four
+# texels around any point include one this close to it.
+CORE_M = 0.75
+# Crossings closer than this in axis are one crossing (a node on a curve,
+# a node on each way of a junction's arm); farther apart they are two arms.
+MERGE_ANGLE_DEG = 30.0
+PARALLEL_DEG = 10.0
+CROSSINGS = (ZEBRA, FURT)
 EDGE_SCALE = 20.0  # bytes per metre, as edges.py
 SIDE_REACH_M = 20.0  # texels farther from every way get no side
 
@@ -277,6 +301,77 @@ def stop_row(raster, ways, tree, oneway, p, direction):
     return [c[0], c[1], math.atan2(right[1], right[0]), (t1 - t0) / 2, HALF_WIDTH[STOP], STOP]
 
 
+def _family(kind: int) -> int:
+    return 0 if kind in CROSSINGS else kind
+
+
+def _preferred(a, b):
+    """The row whose frame and kind a merge keeps: a zebra over a furt,
+    else the larger."""
+    if a[5] != b[5] and {a[5], b[5]} == {ZEBRA, FURT}:
+        return a if a[5] == ZEBRA else b
+    return a if a[3] * a[4] >= b[3] * b[4] else b
+
+
+def _axis_gap_deg(a, b) -> float:
+    d = abs(a[2] - b[2]) % math.pi
+    return math.degrees(min(d, math.pi - d))
+
+
+def merge_pair(a, b) -> list[float]:
+    """One row covering both rectangles, in the preferred row's frame. Rows
+    on one axis (within `PARALLEL_DEG`) take the union both ways — two
+    nodes of one crossing a little apart along the road; rows at an angle
+    are one crossing whose nodes found different tangents, so the merge
+    keeps the preferred row's extent along the road and only widens it
+    across (a union along would draw an 11 m zebra)."""
+    keep = _preferred(a, b)
+    cx, cy, angle, _, _, kind = keep
+    u = np.array([math.cos(angle), math.sin(angle)])
+    v = np.array([-u[1], u[0]])
+    corners = [shapely.get_coordinates(rotated_rect(r))[:4] for r in (a, b)]
+    pts = np.concatenate(corners) - np.array([cx, cy])
+    s = pts @ u
+    along = pts if _axis_gap_deg(a, b) <= PARALLEL_DEG else corners[a is not keep] - [cx, cy]
+    t = along @ v
+    c = np.array([cx, cy]) + u * (s.min() + s.max()) / 2 + v * (t.min() + t.max()) / 2
+    return [
+        float(c[0]),
+        float(c[1]),
+        angle,
+        float(s.max() - s.min()) / 2,
+        float(t.max() - t.min()) / 2,
+        kind,
+    ]
+
+
+def _mergeable(a, b) -> bool:
+    if _family(a[5]) != _family(b[5]):
+        return False
+    if _axis_gap_deg(a, b) > MERGE_ANGLE_DEG:
+        return False
+    return rotated_rect(a).distance(rotated_rect(b)) < 2 * CORE_M
+
+
+def merge_rows(rows: list[list[float]]) -> list[list[float]]:
+    """Merges overlapping rows of one family on one axis until none are
+    left (see the module docstring); the rest keep their order."""
+    rows = [list(r) for r in rows]
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(rows)):
+            for j in range(i + 1, len(rows)):
+                if _mergeable(rows[i], rows[j]):
+                    rows[i] = merge_pair(rows[i], rows[j])
+                    del rows[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    return rows
+
+
 def rotated_rect(row) -> shapely.Geometry:
     cx, cy, angle, hl, hw, _ = row
     u = np.array([math.cos(angle), math.sin(angle)])
@@ -388,12 +483,109 @@ def road_mask(tile: Tile, px: int) -> ClassRaster | None:
     return ClassRaster(cls, tile.bounds)
 
 
-def index_raster(rows: list[list[float]], tile: Tile, px: int) -> np.ndarray:
-    """1 + the row reaching each texel (outlines grown by GROW_M), uint16."""
+def _frame(row, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Points in the row's frame: across (s) and along (t) the road."""
+    cx, cy, angle, _, _, _ = row
+    dx, dy = x - cx, y - cy
+    c, s = math.cos(angle), math.sin(angle)
+    return dx * c + dy * s, -dx * s + dy * c
+
+
+def _rect_distance(row, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    s, t = _frame(row, x, y)
+    return np.hypot(np.maximum(np.abs(s) - row[3], 0.0), np.maximum(np.abs(t) - row[4], 0.0))
+
+
+def reach(tile: Tile, px: int) -> tuple[float, float]:
+    """(grow, core) for a px² raster: `GROW_M` and `CORE_M` at ≈1 m texels;
+    coarser texels need a core past half their diagonal (1.38 m at 1024²)."""
+    res = (tile.bounds[2] - tile.bounds[0]) / px
+    core = max(CORE_M, math.ceil((res * math.sqrt(0.5) + 0.02) * 20) / 20)
+    return max(GROW_M, core + 0.1), core
+
+
+def index_raster(
+    rows: list[list[float]],
+    tile: Tile,
+    px: int,
+    grow: float | None = None,
+    core: float | None = None,
+) -> np.ndarray:
+    """1 + the row reaching each texel, uint16: every outline grown by
+    `grow` (the box filter's fringe), then, on top, each texel within `core`
+    of a rectangle goes to the nearest one (inside two, the smaller) — so
+    every point of a row's paint keeps a texel of its own among the four
+    the shader reads, unless another row paints it too."""
     out = np.zeros((px, px), np.uint16)
-    if rows:
-        shapes = [(rotated_rect(r).buffer(GROW_M), i + 1) for i, r in enumerate(rows)]
-        rasterize(shapes, out=out, transform=tile.transform(px), dtype=np.uint16)
+    if not rows:
+        return out
+    auto_grow, auto_core = reach(tile, px)
+    grow = auto_grow if grow is None else grow
+    core = auto_core if core is None else core
+    transform = tile.transform(px)
+    shapes = [(rotated_rect(r).buffer(grow), i + 1) for i, r in enumerate(rows)]
+    rasterize(shapes, out=out, transform=transform, dtype=np.uint16)
+    xmin, _, xmax, ymax = tile.bounds
+    res = (xmax - xmin) / px
+    best = np.full((px, px), np.inf)
+    for i in sorted(range(len(rows)), key=lambda i: -rows[i][3] * rows[i][4]):
+        x0, y0, x1, y1 = rotated_rect(rows[i]).buffer(core).bounds
+        c0, c1 = max(int((x0 - xmin) / res), 0), min(int((x1 - xmin) / res) + 1, px)
+        r0, r1 = max(int((ymax - y1) / res), 0), min(int((ymax - y0) / res) + 1, px)
+        if c0 >= c1 or r0 >= r1:
+            continue
+        cc, rr = np.meshgrid(np.arange(c0, c1), np.arange(r0, r1))
+        d = _rect_distance(rows[i], xmin + (cc + 0.5) * res, ymax - (rr + 0.5) * res)
+        win = (slice(r0, r1), slice(c0, c1))
+        take = (d <= core) & (d <= best[win])
+        out[win][take] = i + 1
+        best[win][take] = d[take]
+    return out
+
+
+def _inside(row, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    s, t = _frame(row, x, y)
+    return (np.abs(s) <= row[3] + 1e-6) & (np.abs(t) <= row[4] + 1e-6)
+
+
+def paint_lost(
+    rows: list[list[float]], index: np.ndarray, tile: Tile, step: float = 0.2
+) -> list[tuple[float, float]]:
+    """Per row, over its rectangle sampled every `step` m, the fraction where
+    none of the four texels the shader reads names it, and of that the part
+    no other row read there paints over either — (clipped, dropped). A
+    clipped sample lies in an overlap another row paints; a dropped one is
+    paint gone. Paint past the tile's edge is the neighbour's: not sampled."""
+    px = index.shape[0]
+    xmin, ymin, xmax, ymax = tile.bounds
+    res = (xmax - xmin) / px
+    out = []
+    for i, (cx, cy, angle, hl, hw, _) in enumerate(rows):
+        s = np.arange(-hl + step / 2, hl, step) if hl > step / 2 else np.zeros(1)
+        t = np.arange(-hw + step / 2, hw, step) if hw > step / 2 else np.zeros(1)
+        ss, tt = (a.ravel() for a in np.meshgrid(s, t))
+        x = cx + ss * math.cos(angle) - tt * math.sin(angle)
+        y = cy + ss * math.sin(angle) + tt * math.cos(angle)
+        on = (x >= xmin) & (x < xmax) & (y > ymin) & (y <= ymax)
+        if not on.any():
+            out.append((0.0, 0.0))
+            continue
+        x, y = x[on], y[on]
+        c0 = np.floor((x - xmin) / res - 0.5).astype(np.int64)
+        r0 = np.floor((ymax - y) / res - 0.5).astype(np.int64)
+        ids = np.stack(
+            [
+                index[np.clip(r0 + dr, 0, px - 1), np.clip(c0 + dc, 0, px - 1)]
+                for dc, dr in ((0, 0), (1, 0), (0, 1), (1, 1))
+            ]
+        ).astype(np.int64)
+        seen = (ids == i + 1).any(axis=0)
+        covered = seen.copy()
+        for other in np.unique(ids[:, ~seen]):
+            if other > 0:
+                read = (ids == other).any(axis=0) & ~covered
+                covered[read] = _inside(rows[other - 1], x[read], y[read])
+        out.append((float(1.0 - seen.mean()), float(1.0 - covered.mean())))
     return out
 
 
@@ -411,7 +603,11 @@ def table_json(table: dict, rows: list[list]) -> str:
     return f'{head},\n  "markings": {listed}\n}}\n'
 
 
-def build(tile: Tile, raster: ClassRaster, px: int, points, pt_fields, lines, ln_fields):
+def build(
+    tile: Tile, raster: ClassRaster, sizes: tuple[int, ...], points, pt_fields, lines, ln_fields
+):
+    """The rows, the lane fields (bits, offset) at each raster size, and the
+    counts."""
     highways = column(ln_fields, "highway", lines)
     line_tags = column(ln_fields, "other_tags", lines)
     motor = [i for i, h in enumerate(highways) if _base(h) in MOTOR]
@@ -442,14 +638,24 @@ def build(tile: Tile, raster: ClassRaster, px: int, points, pt_fields, lines, ln
             else:
                 counts[key] += 1
                 rows.append(row)
-    # a texel is road where most of the class raster's texels under it are
-    k = raster.n // px
-    road = (raster.cls == ROAD).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
     motor_hw = [highways[i] for i in motor]
     centre = [has_centre_line(h, t) for h, t in zip(motor_hw, tags, strict=True)]
     cycle = [cycle_sides(t) for t in tags]
-    bits, offset = lane_fields(tile, px, road, ways, motor_hw, centre, cycle)
-    return rows, bits, offset, counts
+    fields = {}
+    for px in sizes:
+        # a texel is road where most of the class raster's texels under it are
+        k = raster.n // px
+        road = (raster.cls == ROAD).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
+        fields[px] = lane_fields(tile, px, road, ways, motor_hw, centre, cycle)
+    return rows, fields, counts
+
+
+def write_raster(tile: Tile, name: str, rows, index, bits, offset) -> None:
+    px = index.shape[0]
+    grey = np.stack(
+        [(index & 0xFF).astype(np.uint8), bits, offset, (index >> 8).astype(np.uint8)], axis=-1
+    ).reshape(px, 4 * px)
+    Image.fromarray(grey, mode="L").save(tile.out("dlm", name), optimize=True)
 
 
 def run(tile: Tile, px: int = 2048) -> None:
@@ -463,19 +669,29 @@ def run(tile: Tile, px: int = 2048) -> None:
         tile, "points", "highway IN ('crossing', 'traffic_signals')", ["highway", "other_tags"]
     )
     lines, lf = read_osm(tile, "lines", "highway IS NOT NULL", ["highway", "other_tags"], 0.003)
-    rows, bits, offset, counts = build(tile, raster, px, points, pf, lines, lf)
-    index = index_raster(rows, tile, px)
-    grey = np.stack(
-        [(index & 0xFF).astype(np.uint8), bits, offset, (index >> 8).astype(np.uint8)], axis=-1
-    ).reshape(px, 4 * px)
-    Image.fromarray(grey, mode="L").save(tile.out("dlm", f"markings_{tile.id}.png"), optimize=True)
+    low = px // 2
+    rows, fields, counts = build(tile, raster, (px, low), points, pf, lines, lf)
+    placed = len(rows)
+    rows = merge_rows(rows)
+    report = []
+    for size, name in ((px, f"markings_{tile.id}.png"), (low, f"markings_low_{tile.id}.png")):
+        index = index_raster(rows, tile, size)
+        write_raster(tile, name, rows, index, *fields[size])
+        lost = paint_lost(rows, index, tile)
+        report.append(
+            f"{size}²: clipped by an overlapping row {sum(1 for c, _ in lost if c > 0)}, "
+            f"losing paint {sum(1 for _, d in lost if d > 0)}"
+        )
+    bits = fields[px][0]
     table = {
         "tile": tile.id,
         "crs": f"EPSG:{tile.epsg}",
         "bounds": [round(b) for b in tile.bounds],
         "size": px,
+        "lowSize": low,
         "encoding": {
-            "layout": "8-bit greyscale, 4 * size wide: R0 G0 B0 A0 R1 ... per row",
+            "layout": "8-bit greyscale, 4 * size wide: R0 G0 B0 A0 R1 ... per row; "
+            "markings_low_<tile>.png the same at lowSize (phones)",
             "ra": "1 + the row of `markings` reaching the texel (R low, A high byte; 0 none)",
             "g": "lane bits: 1 cycle lane along this side's kerb, 4 centre-line road",
             "b": f"128 + {EDGE_SCALE:g} * the signed distance (m) to the carriageway's middle",
@@ -490,7 +706,8 @@ def run(tile: Tile, px: int = 2048) -> None:
     tile.out("dlm", f"markings_{tile.id}.json").write_text(table_json(table, listed))
     kinds = {KINDS[k]: sum(1 for r in rows if r[5] == k) for k in (ZEBRA, FURT, STOP)}
     print(
-        f"{tile.id}: {len(rows)} markings {kinds}, {counts}; "
+        f"{tile.id}: {len(rows)} markings {kinds} ({placed - len(rows)} merged), {counts}; "
+        f"{'; '.join(report)}; "
         f"cycle-lane texels {int((bits & 1).sum())}, "
         f"centre-line texels {int((bits & 4).sum() // 4)}"
     )

@@ -2,8 +2,10 @@
 
 import json
 import math
+from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from bake.common import Tile
@@ -14,7 +16,10 @@ from bake.markings import (
     crossing_kind,
     cycle_sides,
     has_centre_line,
+    index_raster,
     junctions,
+    merge_rows,
+    paint_lost,
     run,
     signal_direction,
 )
@@ -143,3 +148,80 @@ def test_no_extract_leaves_the_files_alone(tmp_path, monkeypatch):
     monkeypatch.setattr(Tile, "osm_extract", lambda self: None)
     run(tile, px=200)
     assert not (tmp_path / "data" / "dlm" / "markings_t.json").exists()
+
+
+# --- overlapping rows ------------------------------------------------------------
+
+KM2 = Tile("k", (0.0, 0.0, 2000.0, 2000.0), 25833, Path("."), Path("."))
+UP = math.pi / 2  # the axis across an east-west road
+
+
+def test_a_crossing_mapped_twice_becomes_one_zebra():
+    # a furt node and a zebra node 0.6 m apart on one east-west road
+    zebra = [1000.0, 1000.0, UP, 5.0, 2.0, ZEBRA]
+    furt = [1000.6, 1000.2, UP + 0.05, 5.2, 1.5, FURT]
+    (merged,) = merge_rows([furt, zebra])
+    assert merged[5] == ZEBRA and merged[2] == UP
+    # across the road it covers both; along it both rectangles too (parallel)
+    assert merged[3] >= 5.2 and 2.0 <= merged[4] < 2.7
+
+
+def test_two_nodes_of_one_crossing_at_an_angle_keep_the_zebra_width():
+    zebra = [1000.0, 1000.0, UP, 8.0, 2.0, ZEBRA]
+    furt = [1000.0, 1000.0, UP + math.radians(25), 8.0, 1.5, FURT]
+    (merged,) = merge_rows([zebra, furt])
+    assert merged[5] == ZEBRA and merged[4] == pytest.approx(2.0)
+    assert merged[3] == pytest.approx(8.0)
+
+
+def test_two_arms_of_a_junction_and_a_stop_line_stay_apart():
+    # (an axis UP runs north: hl along y, hw along x)
+    arm_a = [1000.0, 1000.0, UP, 6.0, 2.0, ZEBRA]
+    arm_b = [1007.0, 1004.0, 0.0, 6.0, 2.0, ZEBRA]  # across the north arm
+    stop = [1001.5, 1000.0, UP, 3.0, 0.25, STOP]  # on arm a's zebra
+    rows = merge_rows([arm_a, arm_b, stop])
+    assert len(rows) == 3
+
+
+@pytest.mark.parametrize("px", [2048, 1024])
+def test_no_row_loses_paint_to_an_overlapping_one(px):
+    # (an axis UP runs north: hl along y, hw along x)
+    rows = [
+        [1000.0, 1000.0, UP, 6.0, 2.0, ZEBRA],  # x 998–1002, y 994–1006
+        [1007.0, 1004.0, 0.0, 6.0, 1.5, FURT],  # a north arm's, over its corner
+        [1003.3, 1000.0, UP, 5.0, 0.25, STOP],  # a stop line 1 m beyond it
+        [1020.0, 1000.0, UP, 4.0, 1.5, FURT],
+        [1022.0, 1000.0, UP, 4.0, 0.25, STOP],  # within the furt's margin
+    ]
+    index = index_raster(rows, KM2, px)
+    lost = paint_lost(rows, index, KM2)
+    # paint is only ever replaced where another row paints over it
+    assert all(dropped == 0 for _, dropped in lost)
+    # and a row nothing overlaps names every texel its paint needs
+    assert lost[3][0] == 0 and lost[4][0] == 0
+
+
+def test_the_last_row_used_to_clip_the_first():
+    # the old one-pass raster (grown outlines, last wins) lost a stop line
+    # under a crossing's margin; the core pass keeps it
+    rows = [[1021.6, 1000.0, UP, 4.0, 0.25, STOP], [1020.0, 1000.0, UP, 4.0, 1.5, FURT]]
+    old = index_raster(rows, KM2, 2048, grow=1.0, core=0.0)
+    assert paint_lost(rows, old, KM2)[0] == (1.0, 1.0)
+    assert paint_lost(rows, index_raster(rows, KM2, 2048), KM2)[0] == (0.0, 0.0)
+
+
+DLM = Path(__file__).resolve().parents[2] / "data" / "dlm"
+
+
+@pytest.mark.parametrize("table", sorted(DLM.glob("markings_*.json")), ids=lambda p: p.stem)
+def test_the_committed_rasters_lose_no_paint(table):
+    doc = json.loads(table.read_text())
+    xmin, ymin, xmax, ymax = doc["bounds"]
+    tile = Tile(doc["tile"], (xmin, ymin, xmax, ymax), 25833, Path("."), Path("."))
+    rows = [[xmin + r[0], ymax + r[1], *r[2:]] for r in doc["markings"]]
+    for name in (f"markings_{doc['tile']}.png", f"markings_low_{doc['tile']}.png"):
+        grey = np.asarray(Image.open(DLM / name))
+        px = grey.shape[0]
+        q = grey.reshape(px, px, 4).astype(np.uint16)
+        lost = paint_lost(rows, q[..., 0] + 256 * q[..., 3], tile)
+        assert [i for i, (_, d) in enumerate(lost) if d > 0] == [], name

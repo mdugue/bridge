@@ -120,7 +120,7 @@ is the codebook.
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within 3 m | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance) and thins the shadow through the same discard in a custom depth material; evergreens constant, canopy/row trees a generic curve; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
-| Allotment beds | OSM `landuse=allotments`: 1.2 m beds of soil / green / grass in ≈12 m jittered-Voronoi plots along the colony's long axis or across it, a dark line where plots meet, the plot's tone from afar; paths, roads, rail and water left out; faint (0.45 of *Bodendetail*) — no colony maps its parcels | OSM | `cultivated-layer.ts`, `cultivated_<t>.png` |
+| Allotment gardens | OSM `landuse=allotments`: a soft, slightly wandering edge (the baked distance to the garden land, LINEAR — paths, roads, rail and water cut out); inside, analytic plots ≈12 × 17 m (a jittered Voronoi in the colony's axis frame, meandering borders drawn as thin soft paths), each a lawn in one of a few soft greens — a third with warm vegetable beds, some with sparse pastel flower dots, the rest with darker shrub mottles — and a faint hedge green inside the rim; box-filtered, fading to the plots' tones and then to one calm tone with distance (0.85 of *Bodendetail*; no colony maps its parcels, so the plots are invented) | OSM | `cultivated-layer.ts`, `cultivated_<t>.png` |
 | Orchard tree | OSM `landuse=orchard`: the mapped trees, else an 8 m grid along the long axis, as the cadastre's "small" archetype | OSM | `tile-stream.ts` → `tree-inventory-layer.ts` |
 | Vine row | OSM `landuse=vineyard`: rows 1.8 m apart along the contour, 1.3 × 0.5 m boxes (none in the four tiles) | OSM + DGM1 | `cultivated-layer.ts` |
 | OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
@@ -169,7 +169,7 @@ is the codebook.
 | Depth tint | screen depth → warm near / cool far | — | `depth-grading-effect.ts` (*Tiefenfärbung*) |
 | Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, from the bare ground; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
-| Far shadow | the far horizon (the skyline's angle 80–1 500 m out, 16 azimuths, `horizon_<t>.png`, ≈8 m): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min` | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts` (*Ferne Schatten*) |
+| Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80–1 500 m and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
 | Paper grain, vignette | screen-space | — | `paper-grain-effect.ts` (*Papierkorn*) |
 | Minimap | site tile bounds + 2048² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
@@ -221,10 +221,13 @@ is spelled: changing one is a look change, not a re-bake
   DGM1 + LoD2 (`pipeline/bake/skyview.py`). The *sky-view factor* dims the
   hemisphere fill where the city hides the sky (courtyards, street
   canyons), on the terrain and the clay facades, and never touches the
-  sun. The *far horizon* answers "is the sun above the skyline here?" for
-  occluders 80–1 500 m away — the long low-sun shadows the frustum above
-  cuts off — on the terrain, folded into three's directional-light loop as
-  `min(shadow map, horizon)` so one occluder never darkens twice
+  sun. The *horizon* answers "is the sun above the skyline here?" on the
+  terrain, folded into three's directional-light loop as
+  `min(shadow map, horizon)` so one occluder never darkens twice. Its far
+  band (occluders 80–1 500 m away) holds the long low-sun shadows the
+  frustum above cuts off; its near band (8–80 m) the neighbours' shadows on
+  ground past the frustum, faded in over the frustum's last 20 % and whole
+  beyond it (inside, the shadow map has them with their shapes)
   ([ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md)). Both
   rows at 0 are the picture without them; the defaults (0.5, 0.8) are
   unjudged on a GPU.

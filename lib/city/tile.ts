@@ -71,6 +71,7 @@ export type TileArtifactKind =
   | "svf"
   | "horizon"
   | "markings"
+  | "markingsLow"
   | "markingsTable"
   | "cultivated"
   | "cultivatedRaster"
@@ -124,6 +125,9 @@ export function tileArtifacts(
     // raster (rows, lane bits, centre offset) and the table of crossings
     // and stop lines; without them the roads stay unpainted.
     markings: dlm(`markings_${tile}.png`),
+    // The same at 1024² for phones (`lowRasters`): 4 MiB of GPU memory
+    // instead of 16, the table's rows still resolved (a wider core).
+    markingsLow: dlm(`markings_low_${tile}.png`),
     markingsTable: dlm(`markings_${tile}.json`),
     // Optional: allotment colonies, orchards and vineyards
     // (pipeline/bake/cultivated.py) — the features (orchard trees, vine

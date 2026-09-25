@@ -14,24 +14,42 @@ open, at the mean height of the tile's edge.
 Outputs:
   data/dlm/svf_<tile>.png      1024² (≈2 m), 8-bit: 255 · svf, where
                                svf = 1 − mean over 16 azimuths of sin² h and
-                               h is the horizon within 150 m (isotropic sky)
-  data/dlm/horizon_<tile>.png  256² (≈8 m) × 16 azimuths: the horizon angle
-                               of occluders 80–1 500 m away, 0–45° in 8 bits.
-                               Four RGBA planes stacked north-to-south in one
+                               h is the horizon within 150 m (isotropic sky).
+                               Texels under a roof (their ground sees almost
+                               no sky) take the nearest open texel's value, so
+                               LINEAR filtering and the mipmaps never pull a
+                               dark band out of the footprints onto the
+                               street
+  data/dlm/horizon_<tile>.png  256² (≈8 m) × 16 azimuths × two bands: the
+                               horizon angle of occluders 80–1 500 m away
+                               (the far band, 0–45° in 8 bits) and 8–80 m
+                               away (the near band, 0–90° in 8 bits). Eight
+                               RGBA planes stacked north-to-south in one
                                greyscale PNG four times as wide (R0 G0 B0 A0
-                               R1 …; plane p, channel c = azimuth 4p + c), so
-                               the viewer reads it as a 4-layer array texture
-                               with its own decoder (lib/city/png-raster.ts)
-  data/dlm/horizon_<tile>.json the legend (azimuths, angle scale, reach) —
+                               R1 …; planes 0–3 the far band, 4–7 the near
+                               band; plane p, channel c = azimuth 4 (p mod 4)
+                               + c), so the viewer reads it as an 8-layer
+                               array texture with its own decoder
+                               (lib/city/png-raster.ts). Footprint texels
+                               take the nearest open texel's angles, as the
+                               sky view's do
+  data/dlm/horizon_<tile>.json the legend (azimuths, bands, angle scales) —
                                lib/city/skyview.ts keeps the same constants
 The observer is the bare ground (DGM): the rasters shade the terrain and,
 sampled just outside a wall, its facade.
 
+The two bands split the work with the shadow map (docs/adr/0031): inside
+the shadow frustum the map has the near occluders' shapes and the viewer
+reads the far band alone; beyond it nothing else knows the building across
+the street, so the viewer takes the higher of the two bands there (a 20 m
+block's 55 m shadow at a 20° sun lies wholly in the near band).
+
 The plan asked for the horizon at 4 m (512²); on the spawn tile that PNG
-came to 1.86 MB, past the plan's 1.5 MB cap, so it is baked at 8 m (the
-plan's second fallback: 0.58 MB) and keeps its 16 azimuths — a far skyline
-changes slowly across the ground, but a 30° azimuth step would smear every
-narrow occluder over a wide arc of sun positions.
+came to 1.86 MB for the far band alone, past the plan's 1.5 MB cap, so it
+is baked at 8 m (the plan's second fallback) and keeps its 16 azimuths — a
+far skyline changes slowly across the ground, but a 30° azimuth step would
+smear every narrow occluder over a wide arc of sun positions. Both bands
+together stay under the cap (the run logs the size).
 """
 
 from __future__ import annotations
@@ -48,6 +66,7 @@ from PIL import Image
 from rasterio.enums import Resampling
 from rasterio.transform import from_origin
 from rasterio.warp import reproject
+from scipy.ndimage import distance_transform_edt
 
 from .common import Tile
 from .lowveg import lod2_rings
@@ -55,9 +74,12 @@ from .lowveg import lod2_rings
 SVF_PX = 1024
 SVF_REACH_M = 150.0
 HORIZON_PX = 256
-HORIZON_NEAR_M = 80.0  # nearer occluders are the shadow map's
-HORIZON_FAR_M = 1500.0
+HORIZON_NEAR_M = 80.0  # the far band starts here; inside the frustum the
+HORIZON_FAR_M = 1500.0  # nearer occluders are the shadow map's
 HORIZON_MAX_DEG = 45.0
+NEAR_BAND_M = 8.0  # the near band: 8–80 m, one 8 m cell out to the far band
+NEAR_MAX_DEG = 90.0  # beside a wall the near horizon is steep
+FOOTPRINT_MIN_M = 2.0  # a roof this far above the ground: under a building
 AZIMUTHS = 16  # clockwise from north, 22.5° apart
 WALL_NZ = 0.05  # |n_z| below this: a vertical wall, nothing to burn
 
@@ -319,35 +341,89 @@ def sky_view(ground, surface, margin, res, reach_m=SVF_REACH_M, count=AZIMUTHS) 
     return 1.0 - acc / count
 
 
-def far_horizon(
-    ground, surface, margin, res, near_m=HORIZON_NEAR_M, far_m=HORIZON_FAR_M, count=AZIMUTHS
+def band_horizon(
+    ground, surface, margin, res, near_m, far_m, max_deg, count=AZIMUTHS
 ) -> np.ndarray:
-    """The horizon angle (degrees, 0–45) per azimuth: (count, rows, cols)."""
+    """The horizon angle (degrees, 0–max_deg) per azimuth of the occluders
+    near_m–far_m away: (count, rows, cols)."""
     return np.stack(
         [
             np.degrees(np.arctan(horizon_tan(ground, surface, margin, res, az, near_m, far_m)))
             for az in azimuths(count)
         ]
-    ).clip(0.0, HORIZON_MAX_DEG)
+    ).clip(0.0, max_deg)
 
 
-def pack_horizon(angles: np.ndarray) -> np.ndarray:
+def far_horizon(
+    ground, surface, margin, res, near_m=HORIZON_NEAR_M, far_m=HORIZON_FAR_M, count=AZIMUTHS
+) -> np.ndarray:
+    """The far band: occluders 80–1 500 m away, 0–45°."""
+    return band_horizon(ground, surface, margin, res, near_m, far_m, HORIZON_MAX_DEG, count)
+
+
+def near_horizon(
+    ground, surface, margin, res, near_m=NEAR_BAND_M, far_m=HORIZON_NEAR_M, count=AZIMUTHS
+) -> np.ndarray:
+    """The near band: occluders 8–80 m away, 0–90° — what the shadow map
+    holds inside its frustum and nothing holds beyond it."""
+    return band_horizon(ground, surface, margin, res, near_m, far_m, NEAR_MAX_DEG, count)
+
+
+def footprint(ground, surface, margin, min_height=FOOTPRINT_MIN_M) -> np.ndarray:
+    """The inner cells under a roof (the occluder stands above the ground)."""
+    inner = (slice(margin, ground.shape[0] - margin), slice(margin, ground.shape[1] - margin))
+    return (surface[inner] - ground[inner]) > min_height
+
+
+def fill_footprints(values: np.ndarray, under: np.ndarray) -> np.ndarray:
+    """Each footprint cell takes the nearest open cell's value (over the last
+    two axes, every leading plane alike): the ground under a roof is never
+    seen, but LINEAR filtering and mipmaps would pull its dark value out
+    onto the street beside it."""
+    if not under.any() or under.all():
+        return values
+    _, (rows, cols) = distance_transform_edt(under, return_indices=True)
+    return values[..., rows, cols]
+
+
+def pack_horizon(angles: np.ndarray, max_deg: float = HORIZON_MAX_DEG) -> np.ndarray:
     """(16, n, n) degrees → the greyscale PNG layout: four RGBA planes
     stacked north-to-south, channels interleaved (4n rows × 4n columns)."""
     count, n, _ = angles.shape
-    q = np.round(angles / HORIZON_MAX_DEG * 255.0).clip(0, 255).astype(np.uint8)
+    q = np.round(angles / max_deg * 255.0).clip(0, 255).astype(np.uint8)
     planes = q.reshape(count // 4, 4, n, n).transpose(0, 2, 3, 1)  # plane, row, col, channel
     return planes.reshape(count // 4 * n, n * 4)
+
+
+def pack_bands(far: np.ndarray, near: np.ndarray) -> np.ndarray:
+    """Both bands in one PNG: the far band's four planes, then the near
+    band's (8n rows × 4n columns)."""
+    return np.concatenate([pack_horizon(far, HORIZON_MAX_DEG), pack_horizon(near, NEAR_MAX_DEG)])
 
 
 def legend(count: int = AZIMUTHS) -> dict:
     return {
         "azimuthsDeg": [float(a) for a in azimuths(count)],
-        "layout": "plane p (stacked north-to-south), channel c = azimuth 4p + c",
-        "degPerUnit": HORIZON_MAX_DEG / 255.0,
+        "layout": "plane p (stacked north-to-south), channel c = azimuth 4 (p mod 4) + c; "
+        "planes 0-3 the far band, 4-7 the near band",
         "px": HORIZON_PX,
-        "nearM": HORIZON_NEAR_M,
-        "farM": HORIZON_FAR_M,
+        "bands": [
+            {
+                "name": "far",
+                "planes": [0, 4],
+                "nearM": HORIZON_NEAR_M,
+                "farM": HORIZON_FAR_M,
+                "degPerUnit": HORIZON_MAX_DEG / 255.0,
+            },
+            {
+                "name": "near",
+                "planes": [4, 8],
+                "nearM": NEAR_BAND_M,
+                "farM": HORIZON_NEAR_M,
+                "degPerUnit": NEAR_MAX_DEG / 255.0,
+            },
+        ],
+        "footprints": "cells under a roof carry the nearest open cell's angles",
         "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)",
     }
 
@@ -366,22 +442,26 @@ def run(tile: Tile) -> None:
 
     res = (xmax - xmin) / SVF_PX
     ground, surface, margin = fields(tile, SVF_PX, SVF_REACH_M, roofs)
-    svf = sky_view(ground, surface, margin, res)
-    save_png(
-        tile.out("dlm", f"svf_{tile.id}.png"),
-        np.round(svf * 255.0).clip(0, 255).astype(np.uint8),
-    )
+    under = footprint(ground, surface, margin)
+    svf = fill_footprints(sky_view(ground, surface, margin, res), under)
+    svf_png = tile.out("dlm", f"svf_{tile.id}.png")
+    save_png(svf_png, np.round(svf * 255.0).clip(0, 255).astype(np.uint8))
     t1 = time.perf_counter()
 
     res = (xmax - xmin) / HORIZON_PX
     ground, surface, margin = fields(tile, HORIZON_PX, HORIZON_FAR_M, roofs, pool=4)
-    angles = far_horizon(ground, surface, margin, res)
+    covered = footprint(ground, surface, margin)
+    far = fill_footprints(far_horizon(ground, surface, margin, res), covered)
+    near = fill_footprints(near_horizon(ground, surface, margin, res), covered)
     png = tile.out("dlm", f"horizon_{tile.id}.png")
-    save_png(png, pack_horizon(angles))
+    save_png(png, pack_bands(far, near))
     tile.out("dlm", f"horizon_{tile.id}.json").write_text(json.dumps(legend(), indent=2) + "\n")
     t2 = time.perf_counter()
     print(
-        f"{tile.id}: sky view mean {svf.mean():.3f} (min {svf.min():.2f}) in {t1 - t0:.1f} s; "
-        f"far horizon mean {angles.mean():.2f}° (max {angles.max():.1f}°), "
+        f"{tile.id}: sky view mean {svf.mean():.3f} (min {svf.min():.2f}; "
+        f"{under.mean() * 100:.1f} % under roofs, filled), "
+        f"{svf_png.stat().st_size / 1e6:.2f} MB in {t1 - t0:.1f} s; "
+        f"horizon far mean {far.mean():.2f}° (max {far.max():.1f}°), "
+        f"near mean {near.mean():.2f}° (max {near.max():.1f}°), "
         f"{png.stat().st_size / 1e6:.2f} MB in {t2 - t1:.1f} s"
     )

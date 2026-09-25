@@ -18,6 +18,9 @@ import {
   HORIZON_LAYERS,
   HORIZON_MAX_DEG,
   HORIZON_SOFT_DEG,
+  HORIZON_TEXTURE_LAYERS,
+  NEAR_BAND_FADE_FROM,
+  NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
 import { isAbortError } from "./fetch-optional";
 import { textureBytes, trackTexture } from "./three-utils";
@@ -31,12 +34,16 @@ import { textureBytes, trackTexture } from "./three-utils";
  *   hemisphere fill that lit a narrow courtyard as brightly as the open
  *   Elbwiesen. It runs in `aomap_fragment` (after `lights_fragment_end`),
  *   so the sun's direct light is untouched. Terrain and clay facades.
- * - **Ferne Schatten** (far horizon): per texel the skyline's elevation
- *   angle, 80–1 500 m out, in 16 azimuths. Where the sun stands below it,
- *   the sun's direct light is cut — the long low-sun shadows the shadow
- *   map's frustum ends. Combined with the shadow map by `min`, never a
- *   product: where both see the same occluder it must not darken twice.
- *   Terrain only (the plan's facade step waits on plates).
+ * - **Ferne Schatten** (horizon): per texel the skyline's elevation angle
+ *   in 16 azimuths, in two bands — occluders 80–1 500 m out, and 8–80 m
+ *   out. Where the sun stands below it, the sun's direct light is cut: the
+ *   long low-sun shadows the shadow map's frustum ends, and beyond the
+ *   frustum the shadows of the buildings next door. Inside the frustum the
+ *   shadow map has the near occluders (with their shapes), so the near band
+ *   only fades in over the frustum's last 20 % (`uShadowReach`, kept by the
+ *   sun rig) and counts whole beyond it. Combined with the shadow map by
+ *   `min`, never a product: where both see the same occluder it must not
+ *   darken twice. Terrain only (the plan's facade step waits on plates).
  *
  * Both rows at 0 are the picture without them.
  */
@@ -53,23 +60,41 @@ export function skyLightDecl(hasSvf: boolean, hasHorizon: boolean): string {
     ? /* glsl */ `
   uniform mediump sampler2DArray uHorizon;
   uniform float uHorizonShade;
-  // Azimuth k's horizon angle (°) at uv: layer k / 4, channel k % 4.
-  float hzAngle( vec2 uv, float k ) {
-    vec4 v = texture( uHorizon, vec3( uv, floor( k / 4.0 ) ) );
+  // the shadow frustum: its centre (data frame, m) and half-size
+  uniform vec3 uShadowReach;
+  // Azimuth k's horizon angle (°) at uv in the band whose planes start at
+  // layer base: layer base + k / 4, channel k % 4.
+  float hzAngle( vec2 uv, float k, float base, float maxDeg ) {
+    vec4 v = texture( uHorizon, vec3( uv, base + floor( k / 4.0 ) ) );
     float c = mod( k, 4.0 );
     float s = c < 0.5 ? v.r : c < 1.5 ? v.g : c < 2.5 ? v.b : v.a;
-    return s * ${HORIZON_MAX_DEG.toFixed(1)};
+    return s * maxDeg;
   }
-  // How much of the sun clears the far skyline (1 = all), before the row.
+  float hzClears( float h, float el ) {
+    return smoothstep( h - ${HORIZON_SOFT_DEG.toFixed(2)}, h + ${HORIZON_SOFT_DEG.toFixed(2)}, el );
+  }
+  // The near band's weight: 0 inside the shadow frustum, 1 beyond it
+  // (lib/city/skyview.ts nearBandWeight).
+  float hzNearWeight() {
+    float r = max( uShadowReach.z, 1.0 );
+    return smoothstep( r * ${NEAR_BAND_FADE_FROM.toFixed(2)}, r, distance( vWorldXY, uShadowReach.xy ) );
+  }
+  // How much of the sun clears the skyline (1 = all), before the row
+  // (lib/city/skyview.ts horizonSunVisibility).
   float hzSunVisible( vec2 uv ) {
+    // straight overhead the azimuth is undefined, and the sun clears all
+    if ( length( uSunDir.xz ) < 1e-4 ) return 1.0;
     // world (x, y, z) = data (x, -z, y): azimuth clockwise from north
     float el = degrees( asin( clamp( uSunDir.y, -1.0, 1.0 ) ) );
     float az = mod( degrees( atan( uSunDir.x, -uSunDir.z ) ) + 360.0, 360.0 );
     float f = az / ${(360 / HORIZON_AZIMUTHS).toFixed(1)};
     float k0 = mod( floor( f ), ${HORIZON_AZIMUTHS.toFixed(1)} );
     float k1 = mod( k0 + 1.0, ${HORIZON_AZIMUTHS.toFixed(1)} );
-    float h = mix( hzAngle( uv, k0 ), hzAngle( uv, k1 ), fract( f ) );
-    return smoothstep( h - ${HORIZON_SOFT_DEG.toFixed(2)}, h + ${HORIZON_SOFT_DEG.toFixed(2)}, el );
+    float far = hzClears( mix( hzAngle( uv, k0, 0.0, ${HORIZON_MAX_DEG.toFixed(1)} ), hzAngle( uv, k1, 0.0, ${HORIZON_MAX_DEG.toFixed(1)} ), fract( f ) ), el );
+    float w = hzNearWeight();
+    if ( w <= 0.0 ) return far;
+    float hn = mix( hzAngle( uv, k0, ${HORIZON_LAYERS.toFixed(1)}, ${NEAR_MAX_DEG.toFixed(1)} ), hzAngle( uv, k1, ${HORIZON_LAYERS.toFixed(1)}, ${NEAR_MAX_DEG.toFixed(1)} ), fract( f ) );
+    return min( far, mix( 1.0, hzClears( hn, el ), w ) );
   }`
     : "";
   return `${svf}${horizon}`;
@@ -95,7 +120,7 @@ const DIR_SHADOW =
 const DIR_INFO = "getDirectionalLightInfo( directionalLight, directLight );";
 
 /**
- * three's `lights_fragment_begin` with the far horizon folded into the
+ * three's `lights_fragment_begin` with the horizon folded into the
  * directional light: `min( shadow map, hzLit )` where the light casts, and
  * `hzLit` alone where it does not. Throws when three's chunk no longer has
  * the lines it patches (caught by the unit test on an upgrade).
@@ -221,10 +246,11 @@ export async function loadSkyViewTexture(
 }
 
 /**
- * The far-horizon raster as a 4-layer RGBA array texture: the PNG is four
- * planes stacked north-to-south, each n rows of n RGBA texels with the
- * bytes interleaved — exactly a DataArrayTexture's layer-major layout.
- * LINEAR (the angles interpolate), no mipmaps. Absent → null.
+ * The horizon raster as an 8-layer RGBA array texture (the far band's four
+ * planes, then the near band's): the PNG is the planes stacked
+ * north-to-south, each n rows of n RGBA texels with the bytes interleaved —
+ * exactly a DataArrayTexture's layer-major layout. LINEAR (the angles
+ * interpolate), no mipmaps. Absent, or an older one-band raster → null.
  */
 export async function loadHorizonTexture(
   url: string,
@@ -233,10 +259,15 @@ export async function loadHorizonTexture(
   try {
     const raster = await fetchGrey(url, signal);
     const n = raster.width / 4;
-    if (raster.height !== n * HORIZON_LAYERS) {
+    if (raster.height !== n * HORIZON_TEXTURE_LAYERS) {
       return null;
     }
-    const texture = new DataArrayTexture(raster.data, n, n, HORIZON_LAYERS);
+    const texture = new DataArrayTexture(
+      raster.data,
+      n,
+      n,
+      HORIZON_TEXTURE_LAYERS
+    );
     texture.format = RGBAFormat;
     texture.type = UnsignedByteType;
     texture.flipY = false;
@@ -247,7 +278,10 @@ export async function loadHorizonTexture(
     texture.colorSpace = NoColorSpace;
     texture.needsUpdate = true;
     releaseAfterUpload(texture);
-    trackTexture(texture, textureBytes(n, n * HORIZON_LAYERS, 4, false));
+    trackTexture(
+      texture,
+      textureBytes(n, n * HORIZON_TEXTURE_LAYERS, 4, false)
+    );
     return texture;
   } catch (err) {
     if (isAbortError(err)) {

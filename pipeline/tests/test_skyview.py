@@ -4,17 +4,25 @@ import json
 import math
 
 import numpy as np
+import pytest
 import rasterio
 
 from bake.common import Tile
 from bake.skyview import (
     AZIMUTHS,
+    HORIZON_MAX_DEG,
+    NEAR_MAX_DEG,
     Field,
     Roofs,
     burn_triangles,
     far_horizon,
     fields,
+    fill_footprints,
+    footprint,
     horizon_tan,
+    legend,
+    near_horizon,
+    pack_bands,
     pack_horizon,
     site_sources,
     sky_view,
@@ -30,6 +38,49 @@ def test_a_flat_field_sees_the_whole_sky_and_no_horizon():
     angles = far_horizon(ground, ground, 20, 2.0, near_m=4, far_m=40)
     assert angles.shape == (AZIMUTHS, 20, 20)
     assert np.all(angles == 0)
+    assert np.all(near_horizon(ground, ground, 20, 2.0, near_m=2, far_m=10) == 0)
+
+
+def test_the_near_band_holds_the_block_across_the_street_the_far_band_the_one_beyond():
+    res = 8.0
+    ground = np.full((401, 401), 100.0, np.float32)
+    surface = ground.copy()
+    c = 200
+    # a 20 m block 40 m east of the centre cell, another 30 m block 240 m west
+    surface[c - 2 : c + 3, c + 5] = 120.0
+    surface[c - 2 : c + 3, c - 30] = 130.0
+    margin = 190
+    near = near_horizon(ground, surface, margin, res)
+    far = far_horizon(ground, surface, margin, res)
+    i = c - margin
+    east, west = 4, 12
+    assert near[east, i, i] == pytest.approx(math.degrees(math.atan(20 / 40)), abs=1e-4)
+    assert far[east, i, i] == 0  # 40 m: not the far band's
+    assert far[west, i, i] == pytest.approx(math.degrees(math.atan(30 / 240)), abs=1e-4)
+    assert near[west, i, i] == 0  # 240 m: not the near band's
+    # beside the block's wall the near band stands steeper than the far
+    # band's 45° could hold
+    assert near[east, i, i + 4] > HORIZON_MAX_DEG
+    # the combined horizon is the higher of the two, azimuth by azimuth
+    both = np.maximum(near, far)
+    assert both[east, i, i] == near[east, i, i] and both[west, i, i] == far[west, i, i]
+
+
+def test_the_ground_under_a_roof_takes_the_nearest_open_value():
+    ground = np.zeros((12, 12), np.float32)
+    surface = ground.copy()
+    surface[4:8, 5:7] = 15.0  # a 4 × 2 roof, inner cells
+    under = footprint(ground, surface, 2)
+    assert under.sum() == 8 and under[2:6, 3:5].all()
+    values = np.tile(np.arange(8, dtype=np.float32), (8, 1))  # the column index
+    values[under] = 0.0  # the sky under the roof: none
+    filled = fill_footprints(values, under)
+    # columns 3 and 4 are nearest to the open columns 2 and 5
+    assert list(filled[3, 2:6]) == [2, 2, 5, 5]
+    assert np.all(filled[~under] == values[~under])
+    # planes (azimuths) are filled alike
+    stacked = fill_footprints(np.stack([values, values * 2]), under)
+    assert np.all(stacked[1] == filled * 2)
 
 
 def test_a_block_raises_the_horizon_by_its_angle_in_its_direction_only():
@@ -87,6 +138,19 @@ def test_the_horizon_packs_four_azimuths_per_texel_in_four_planes():
     # plane p (rows p·n …), texel (r, c), channel k → azimuth 4p + k
     assert list(grey[n + 1, 4 * 2 : 4 * 2 + 4]) == [4, 5, 6, 7]
     assert list(grey[3 * n, 0:4]) == [12, 13, 14, 15]
+
+
+def test_both_bands_pack_into_eight_planes_with_their_own_scales():
+    n = 2
+    far = np.full((16, n, n), HORIZON_MAX_DEG)
+    near = np.full((16, n, n), NEAR_MAX_DEG / 2)
+    grey = pack_bands(far, near)
+    assert grey.shape == (8 * n, 4 * n)
+    assert np.all(grey[: 4 * n] == 255)
+    assert np.all(grey[4 * n :] == 128)
+    bands = legend()["bands"]
+    assert [b["planes"] for b in bands] == [[0, 4], [4, 8]]
+    assert bands[1]["farM"] == bands[0]["nearM"]  # the bands meet
 
 
 def _dgm(tile: Tile, tid: str, x0: float, y0: float, size: int, z: float) -> None:

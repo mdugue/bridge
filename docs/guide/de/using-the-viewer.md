@@ -149,7 +149,7 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
-| Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Beete der Kleingärten und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
+| Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
@@ -158,7 +158,7 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
-| | *Ferne Schatten* | lange Schatten ferner Häuser und Hänge bei tiefer Sonne, auch jenseits der gewöhnlichen Schattenreichweite |
+| | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
 | | *Detaillierte Kronen* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |

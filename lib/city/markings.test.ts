@@ -33,7 +33,9 @@ test("the committed tables name the kinds in the viewer's order", () => {
       expect(cy).toBeLessThan(50);
       expect(cy).toBeGreaterThan(-2050);
       expect(hl).toBeGreaterThan(0);
-      expect(hl).toBeLessThanOrEqual(15);
+      // half the widest carriageway (30 m), and a little more where the
+      // bake merged two nodes of one crossing at an angle
+      expect(hl).toBeLessThanOrEqual(16);
       expect(hw).toBeGreaterThan(0);
       expect(kind).toBeGreaterThan(0);
       expect(kind).toBeLessThan(MARKING_KINDS.length);

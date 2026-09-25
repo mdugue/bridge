@@ -267,7 +267,22 @@ visual-variable codebook is in
   crossing footway through each node: the painted axis is within 20° of
   it for 278 of 301 (median 2°), and 18 of 364 rectangles lie less than
   70 % on the DLM carriageway — under the plan's 1-in-10 stop. ≈12 s per
-  tile, 77–107 KB raster + 5–11 KB table. **Not yet judged on a GPU.**
+  tile, 77–107 KB raster + 5–11 KB table. **Overlapping rows** (review,
+  2026-09-25): the raster names one row per texel, last wins, so a
+  crossing OSM maps twice (a node per way, a zebra node beside a signal
+  node) clipped its twin — 62 of the 578 rows lost paint, 6 of them all of
+  it (e.g. a *Furt* under a zebra on 33410_5658). The bake now merges rows
+  of one family on one axis (within 30°) whose outlines come within 1.5 m
+  — a zebra wins over a *Furt*, the union across the road, along it only
+  when parallel — and gives each texel within 0.75 m of a rectangle to the
+  nearest one before any margin: 516 rows (52 zebra, 251 *Furt*, 213 stop
+  lines), none losing paint; 9 lose a sliver only where another row paints
+  over it (`paint_lost`, logged and tested). Phones read a **1024² twin**
+  (`markings_low_<tile>.png`, 25–36 KB; a 1.45 m core so the rows still
+  resolve — none loses paint): 4 MiB of GPU memory per fine tile instead
+  of 16; its lane bits are coarser (≈90 % of the cycle-lane and
+  centre-line texels agree with the 2048² raster). **Not yet judged on a
+  GPU.**
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
   courtyards, front gardens and parks inside the settlement alike. Where
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM
@@ -436,21 +451,32 @@ visual-variable codebook is in
   (and `leisure=garden` plots inside a colony) → `pipeline/bake/cultivated.py`:
   `cultivated_<tile>.geojson` (colonies, parcels, orchards with their trees,
   vineyards with their rows) and a 2048² colony raster
-  (`cultivated_<tile>.png`, two bytes per texel: the colony or parcel with
-  its long axis, the distance to a parcel's border). No new land-cover
-  class (ADR 0023): dressing only. **Allotments** get a garden texture in
-  the terrain's fragment pass (`cultivated-layer.ts` `COLONY_BEDS_GLSL`):
-  1.2 m beds of soil and green in ≈12 m plots — the cells of a jittered
-  Voronoi, each along the colony's long axis or across it, a dark green
-  line where two meet — faded with distance to the plot's tone; the
-  colony's paths (OSM footways, paths, service roads), roads, rail and
-  water are left out in the bake. A mapped parcel would take its own axis
-  and a lawn edge along its border. **STOP measured:** of the 66 colonies
+  (`cultivated_<tile>.png`, two bytes per texel: the signed distance to
+  the edge of the garden land and the colony's long axis; the viewer gets
+  it cropped to the colonies, phones at half resolution). No new
+  land-cover class (ADR 0023): dressing only. **Allotments** get little
+  gardens in the terrain's fragment pass (`cultivated-layer.ts`
+  `COLONY_GARDEN_GLSL`): the colony's edge is the baked distance field
+  (the colony less its paths — OSM footways, paths, service roads, tracks —
+  roads, rail and water), sampled LINEAR and faded over a metre with a
+  slow wobble, so it is soft and organic from walking height to 200 m up;
+  inside, everything is analytic in the data frame — plots ≈12 × 17 m
+  (a jittered Voronoi in the colony's axis frame, borders meandering by a
+  domain warp and drawn as thin soft paths), each a lawn in one of a few
+  soft greens, a third with warm vegetable beds, some with sparse pastel
+  flower dots, the rest with darker shrub mottles, and a faint hedge green
+  inside the rim. Every line and band is box-filtered over the pixel
+  footprint; with distance the detail gives way to the plots' tones and
+  then to one calm colony tone (no moiré). *Redesigned 2026-09-25 after
+  the maintainer looked at it on a phone* — see 🗃️ *Allotment bed bands*.
+  A mapped parcel takes its own axis and a 0.5 m seam along its border.
+  **STOP measured:** of the 66 colonies
   (77.9 ha) in the four tiles, **0** carry mapped parcels (the 351
   `leisure=garden` areas lie elsewhere; inside the colonies OSM maps
-  sheds, 196 footways and 123 fences) — under the plan's one-third, so the
-  texture ships at a low strength (`COLONY_BEDS.strength` 0.45 of
-  *Bodendetail*) and invents no parcel outline. **Orchards**: the mapped
+  sheds, 196 footways and 123 fences) — under the plan's one-third, so
+  the plots are invented texture, kept low in contrast
+  (`COLONY_GARDEN.strength` 0.85 of *Bodendetail*), and no parcel outline
+  is claimed as data. **Orchards**: the mapped
   `natural=tree` inside, else a grid 8 m apart along the long axis,
   centred (4 orchards, 0.1 ha, 7 trees), drawn by the tree layer as the
   cadastre's "small" archetype (a round crown on a ≈1.3 m stem).
@@ -1148,10 +1174,15 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   each on its surface's plane; `lowveg.py`'s one CityJSON walk,
   `lod2_rings`) → per ≈2 m cell the horizon angle `h` within 150 m in 16
   azimuths, seen from the bare ground → `svf = 1 − mean(sin² h)`
-  (`svf_<tile>.png`, 1024², 8-bit, ≈0.5 MB). Scales the **indirect diffuse
+  (`svf_<tile>.png`, 1024², 8-bit, ≈0.5 MB). The cells under a roof (16–19 %
+  of a tile) take the nearest open cell's value (scipy
+  `distance_transform_edt`): left at their ≈0, LINEAR filtering and the
+  mipmaps pulled a dark 1–2 m band onto the wall feet and dimmed distant
+  streets (a tile's mean at mip 4 fell 0.03–0.05 below its open mean; now
+  equal). Scales the **indirect diffuse
   only** (the hemisphere fill), in `aomap_fragment`, after the lights: the
   sun is untouched. Terrain: `mix(1, svf, row)`. Clay facades: the ground's
-  value 2.5 m outside the wall (under the roof the ground sees no sky),
+  value 2.5 m outside the wall (a margin past the footprint's filled texels),
   doubled (a vertical face sees at most half the sky; the ground at its foot
   the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
   dims, its eaves and every roof do not. The raster is shared by a tile's
@@ -1164,25 +1195,39 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   ground darkening) is kept as it was, not retuned against it yet.
   **Fallback:** no raster → the light as before. `pipeline/bake/skyview.py`,
   `app/_components/sky-light.ts`, `lib/city/skyview.ts`.
-- **Far horizon shade** (*Ferne Schatten*, plan 033,
+- **Horizon shade** (*Ferne Schatten*, plan 033,
   [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md)) — the same
   height field at ≈8 m (the roofs burned at 2 m and max-pooled, so a spire
   still occludes) → per cell and per 16 azimuths the elevation angle of the
-  skyline **80–1 500 m** away (nearer occluders are the shadow map's),
-  0–45° in 8 bits (`horizon_<tile>.png`: four RGBA layers stacked, 256² ×
-  16 azimuths, ≈0.6 MB; legend `horizon_<tile>.json`, not served). The
-  terrain interpolates the two azimuths around the sun and cuts the sun's
-  direct light by `smoothstep(h − 0.8°, h + 0.8°, elevation)`, combined
-  with the shadow map by **min** (never a product: where both see the same
-  occluder it must not darken twice). Committed neighbour tiles fill the
-  margin; beyond the site the ground is open at the tile edge's mean
-  height. Baked 2026-09-25 in ≈22 s per tile (sky view ≈19 s, horizon
-  ≈3 s). The plan's 4 m raster came to **1.86 MB** on the spawn tile, past
-  its 1.5 MB cap, so it ships at 8 m with all 16 azimuths (0.54–0.60 MB;
-  12 azimuths at 4 m would have been 1.36 MB but smears narrow occluders
-  over 30° of sun). Terrain only; facades wait on plates. Default 0.8 —
-  **not yet judged on a GPU** (the plan's 21 December plate from the
-  Brühlsche Terrasse is open). `sky-light.ts` `lightsWithFarShadow`.
+  skyline in **two bands**: occluders **80–1 500 m** away (the far band,
+  0–45° in 8 bits) and **8–80 m** away (the near band, 0–90°), eight RGBA
+  layers stacked in one PNG (`horizon_<tile>.png`, 256² × 16 azimuths × 2,
+  1.13–1.23 MB; legend `horizon_<tile>.json`, not served); cells under a
+  roof take the nearest open cell's angles. The terrain interpolates the
+  two azimuths around the sun and cuts the sun's direct light by
+  `smoothstep(h − 0.8°, h + 0.8°, elevation)`, combined with the shadow map
+  by **min** (never a product: where both see the same occluder it must
+  not darken twice). The bands split the work with the shadow map by the
+  fragment's distance from the frustum's centre (`uShadowReach`, kept by
+  the sun rig as the frustum follows and grows): inside, the map has the
+  near occluders with their shapes and only the far band counts; over the
+  frustum's last 20 % the near band fades in, and beyond it the horizon is
+  the higher of the two bands. *Why two bands (2026-09-25 review):* with
+  the far band alone, ground past the ~110 m frustum lost the shadows of
+  its own neighbours — a 20 m block's 55 m shadow at a 20° sun was missing
+  entirely, at 10° only the detached 80–113 m tail showed. Committed
+  neighbour tiles fill the margin; beyond the site the ground is open at
+  the tile edge's mean height, so a tile on the site's rim sees no skyline
+  past it (on the four original tiles the east edge's horizon toward 90°
+  read 3.3° against ≈8° elsewhere while the 33414 column had a DGM but no
+  LoD2; with the fifteen tiles it is the rim's). Baked in ≈25–40 s per tile
+  (sky view ≈20–35 s, horizon ≈5 s). The plan's 4 m raster came to
+  **1.86 MB** for the far band alone on the spawn tile, past its 1.5 MB
+  cap, so it ships at 8 m with all 16 azimuths (the far band alone was
+  0.54–0.60 MB; both bands fit the cap). Terrain only; facades wait on
+  plates. Default 0.8 — **not yet judged on a GPU** (the plan's 21
+  December plate from the Brühlsche Terrasse and the frustum seam are
+  open). `sky-light.ts` `lightsWithFarShadow`, `hzSunVisible`.
 
 ### Atmosphere & time of day
 - **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
@@ -1241,10 +1286,12 @@ research that produced them):
    alone.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
    low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
-   far horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))
-   now casts the far field's long shadows onto the ground for one texture
-   fetch; what CSM would still add is the middle distance's *shape* (a
-   tree's or a facade's shadow 80–300 m out, on facades too). Sizeable
+   horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))
+   now casts the long shadows past the frustum onto the ground — the far
+   field's and, beyond the frustum, the next building's — for a few texture
+   fetches; what CSM would still add is the middle distance's *shape* (a
+   tree's or a facade's shadow past the frustum, at 8 m and 22.5° the
+   horizon only has its angle, on facades too). Sizeable
    integration on WebGL;
    `CSMShadowNode` comes with the proposed move to WebGPURenderer + TSL
    ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
@@ -1297,6 +1344,7 @@ research that produced them):
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four tiles (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
+| **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
 | **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |

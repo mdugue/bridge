@@ -103,6 +103,7 @@ import {
 } from "./bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { bakeWissenHero } from "./bake-wissen-hero";
+import { type ColonyCrop, cropColonyRaster } from "./crop-raster";
 import { downsampleClassRaster } from "./downsample-raster";
 import { writeMeshGlb } from "./tile-glb";
 
@@ -167,6 +168,7 @@ const BAKE_SOURCES = [
   "scripts/bake-city-mesh.ts",
   "scripts/tile-glb.ts",
   "scripts/downsample-raster.ts",
+  "scripts/crop-raster.ts",
   "lib/city/city-mesh.ts",
   "lib/city/building-tint.ts",
   "lib/city/minimap.ts",
@@ -220,10 +222,59 @@ async function cached(
 
 /** tile → artifact kind → published name (absent optional files: missing) */
 const sideFiles = new Map<string, Partial<Record<string, string>>>();
+/** tile → where its published colony raster lies in the tile */
+const colonyCrops = new Map<string, ColonyCrop>();
+
+/**
+ * The colony raster cropped to its colonies, and the half-resolution twin
+ * phones read (`cultivatedLow`); a tile without a colony publishes neither.
+ */
+async function publishColonies(
+  tile: string,
+  file: string,
+  names: Partial<Record<string, string>>
+): Promise<void> {
+  const src = at(`data/dlm/${file}`);
+  const key = cacheKey([src]);
+  const lowFile = file.replace(/\.png$/u, ".r1024.png");
+  const cropFile = file.replace(/\.png$/u, ".crop.json");
+  let cropping: ReturnType<typeof cropColonyRaster> | null = null;
+  const cut = () => {
+    cropping ??= cropColonyRaster(src);
+    return cropping;
+  };
+  const crop = parse<ColonyCrop | null>(
+    await cached(cropFile, key, async () => utf8((await cut())?.crop ?? null))
+  );
+  if (!crop) {
+    log(`no colony on ${tile}, skipping ${file}`);
+    return;
+  }
+  colonyCrops.set(tile, crop);
+  const full = await cached(
+    file,
+    key,
+    async () => (await cut())?.full ?? new Uint8Array()
+  );
+  const low = await cached(
+    lowFile,
+    key,
+    async () => (await cut())?.low ?? new Uint8Array()
+  );
+  names.cultivatedRaster = publish(file, full);
+  names.cultivatedLow = publish(lowFile, low);
+}
 
 for (const tile of TILES) {
   const names: Partial<Record<string, string>> = {};
   for (const [kind, artifact] of Object.entries(tileArtifacts(tile))) {
+    if (
+      kind === "cultivatedRaster" &&
+      existsSync(at(`data/dlm/${artifact.file}`))
+    ) {
+      await publishColonies(tile, artifact.file, names);
+      continue;
+    }
     if (artifact.bakedFrom) {
       const src = at(`data/dlm/${artifact.bakedFrom.file}`);
       if (!existsSync(src)) {
@@ -564,14 +615,25 @@ async function fineChildren(
  *  has. */
 function paintAndLight(
   names: Partial<Record<string, string>>,
-  level: 0 | 1
+  level: 0 | 1,
+  crop: ColonyCrop | undefined
 ): Partial<TerrainExtras> {
   return {
-    ...(level === 0 && names.cultivatedRaster
-      ? { cultivated: names.cultivatedRaster }
+    ...(level === 0 && names.cultivatedRaster && crop
+      ? {
+          cultivated: names.cultivatedRaster,
+          cultivatedCrop: crop,
+          ...(names.cultivatedLow
+            ? { cultivatedLow: names.cultivatedLow }
+            : {}),
+        }
       : {}),
     ...(level === 0 && names.markings && names.markingsTable
-      ? { markings: names.markings, markingsTable: names.markingsTable }
+      ? {
+          markings: names.markings,
+          markingsTable: names.markingsTable,
+          ...(names.markingsLow ? { markingsLow: names.markingsLow } : {}),
+        }
       : {}),
     ...(names.svf ? { svf: names.svf } : {}),
     ...(names.horizon ? { horizon: names.horizon } : {}),
@@ -606,7 +668,7 @@ async function bakeTerrain(
     ...(names.sport && names.sportTable
       ? { sport: names.sport, sportTable: names.sportTable }
       : {}),
-    ...paintAndLight(names, level),
+    ...paintAndLight(names, level, colonyCrops.get(tile)),
     ...(level === 0 ? { dressing: dressingOf(names) } : {}),
   };
   const key = cacheKey(inputs, offset, described);

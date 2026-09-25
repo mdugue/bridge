@@ -317,7 +317,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "horizon-shade",
     label: "Ferne Schatten",
     description:
-      "Lange Schatten ferner Gebäude und Hänge bei tiefer Sonne, jenseits der Schattenkarte (gebackener Horizont)",
+      "Schatten jenseits der Schattenkarte: ferne Gebäude und Hänge bei tiefer Sonne, in der Ferne auch die Nachbarhäuser (gebackener Horizont)",
     group: "rendering",
     // Below full strength until judged on GPU plates (plan 033).
     initial: 0.8,

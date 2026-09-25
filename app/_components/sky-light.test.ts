@@ -37,3 +37,16 @@ test("an absent raster leaves its term at one", () => {
   expect(skyLightBody(true, true)).toContain("hzSunVisible( vSplatUv )");
   expect(skyLightDecl(true, true)).toContain("sampler2DArray uHorizon");
 });
+
+test("the near band reads the upper four layers and yields to the frustum", () => {
+  const decl = skyLightDecl(false, true);
+  expect(decl).toContain("uniform vec3 uShadowReach;");
+  // far band: layers 0–3 at 45°, near band: layers 4–7 at 90°
+  expect(decl).toContain("hzAngle( uv, k0, 0.0, 45.0 )");
+  expect(decl).toContain("hzAngle( uv, k0, 4.0, 90.0 )");
+  expect(decl).toContain("smoothstep( r * 0.80, r,");
+  // a sun straight overhead has no azimuth: atan(0, 0) is never taken
+  const guard = decl.indexOf("length( uSunDir.xz ) < 1e-4");
+  expect(guard).toBeGreaterThan(0);
+  expect(guard).toBeLessThan(decl.indexOf("atan( uSunDir.x, -uSunDir.z )"));
+});

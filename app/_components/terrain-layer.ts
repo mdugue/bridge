@@ -29,6 +29,7 @@ import {
   srgbToLinear,
 } from "@/lib/city/landcover";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { colonyCropUv } from "@/lib/city/cultivated";
 import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
 import { TinIndex } from "@/lib/city/terrain-tin";
@@ -44,7 +45,7 @@ import {
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
 import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
-import { COLONY_BEDS_GLSL, COLONY_DECL } from "./cultivated-layer";
+import { COLONY_DECL, COLONY_GARDEN_GLSL } from "./cultivated-layer";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { MARKINGS_DECL, ROAD_MARKINGS } from "./road-markings";
 import type { SharedRasters } from "./shared-rasters";
@@ -126,6 +127,9 @@ export interface GroundUniforms {
   skyView: { value: number };
   /** the far horizon's cut of the sun (sky-light.ts) */
   horizonShade: { value: number };
+  /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
+   *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
+  shadowReach: { value: Vector3 };
 }
 
 /**
@@ -369,10 +373,11 @@ async function loadSportGrounds(
 }
 
 /**
- * Loads the allotment-colony raster (pipeline/bake/cultivated.py): R = the
- * colony or parcel and its axis, G = the distance to a parcel's border;
- * NEAREST (codes, not values). Absent → null and the colonies keep their
- * class colour.
+ * Loads the allotment-colony raster (pipeline/bake/cultivated.py, cropped
+ * by prepare-data): R = the signed distance to the garden land's edge,
+ * G = the colony's axis. LINEAR, so the edge is smooth (the shader fetches
+ * the axis texel by texel); no mipmaps (the texture fades out before it
+ * would need them). Absent → null and the colonies keep their class colour.
  */
 async function loadColonyTexture(
   url: string,
@@ -380,8 +385,8 @@ async function loadColonyTexture(
 ): Promise<Texture | null> {
   try {
     const { texture, width, height } = await loadRasterTexture(url, signal, 2);
-    texture.magFilter = NearestFilter;
-    texture.minFilter = NearestFilter;
+    texture.magFilter = LinearFilter;
+    texture.minFilter = LinearFilter;
     texture.generateMipmaps = false;
     texture.colorSpace = NoColorSpace;
     trackTexture(texture, textureBytes(width, height, 2, false));
@@ -460,8 +465,9 @@ export interface SplatLayer {
   edgesTexture?: Texture;
   /** sports grounds: the index raster (NEAREST, RGBA) and its table */
   sport?: { raster: Texture; table: Texture };
-  /** allotment colonies (NEAREST, RG): the beds' plots and axes */
-  colonyTexture?: Texture;
+  /** allotment colonies (LINEAR, RG): the garden edge and the axis, and
+   *  where the (cropped) raster lies in the tile's uv */
+  colonies?: { rect: [number, number, number, number]; texture: Texture };
   /** road markings: the index raster (NEAREST, RGBA) and its table */
   markings?: { raster: Texture; table: Texture };
   /** sky-view factor (LINEAR, R) for the ambient light */
@@ -589,6 +595,23 @@ interface TerrainShader {
   vertexShader: string;
 }
 
+/** The baked large-scale light's uniforms (sky-light.ts). */
+function applySkyLightUniforms(shader: TerrainShader, splat: SplatLayer): void {
+  if (splat.svfTexture) {
+    shader.uniforms.uSvf = { value: splat.svfTexture };
+    shader.uniforms.uSkyView = splat.ground?.skyView ?? { value: 0 };
+  }
+  if (splat.horizonTexture) {
+    shader.uniforms.uHorizon = { value: splat.horizonTexture };
+    shader.uniforms.uHorizonShade = splat.ground?.horizonShade ?? { value: 0 };
+    // By reference: the sun rig keeps it on the frustum. Without one the
+    // near band counts everywhere (a frustum of no size).
+    shader.uniforms.uShadowReach = splat.ground?.shadowReach ?? {
+      value: NO_FRUSTUM,
+    };
+  }
+}
+
 function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   const [minX, minY, maxX, maxY] = splat.bounds;
   // Recentered tile origin (north-west corner) + size; v grows southward.
@@ -618,21 +641,15 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
     shader.uniforms.uSportTable = { value: splat.sport.table };
     shader.uniforms.uSportColors = { value: SPORT_LINEAR };
   }
-  if (splat.colonyTexture) {
-    shader.uniforms.uCultivated = { value: splat.colonyTexture };
+  if (splat.colonies) {
+    shader.uniforms.uCultivated = { value: splat.colonies.texture };
+    shader.uniforms.uCultivatedRect = { value: splat.colonies.rect };
   }
   if (splat.markings) {
     shader.uniforms.uMarkings = { value: splat.markings.raster };
     shader.uniforms.uMarkingTable = { value: splat.markings.table };
   }
-  if (splat.svfTexture) {
-    shader.uniforms.uSvf = { value: splat.svfTexture };
-    shader.uniforms.uSkyView = splat.ground?.skyView ?? { value: 0 };
-  }
-  if (splat.horizonTexture) {
-    shader.uniforms.uHorizon = { value: splat.horizonTexture };
-    shader.uniforms.uHorizonShade = splat.ground?.horizonShade ?? { value: 0 };
-  }
+  applySkyLightUniforms(shader, splat);
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
     shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
@@ -642,6 +659,7 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
 /** The meadow's palette colour, linear — the urban green and grass pavers. */
 const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
 const DEFAULT_SUN = new Vector3(0, 1, 0);
+const NO_FRUSTUM = new Vector3(0, 0, 0);
 
 /** The sports surfaces' colours, linear (sport-ground.ts). */
 const SPORT_LINEAR = sportPalette();
@@ -674,7 +692,7 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
   const hasEdges = splat.edgesTexture !== undefined;
   const hasSport = splat.sport !== undefined;
   const hasMarkings = splat.markings !== undefined;
-  const hasColonies = splat.colonyTexture !== undefined;
+  const hasColonies = splat.colonies !== undefined;
   const hasSvf = splat.svfTexture !== undefined;
   const hasHorizon = splat.horizonTexture !== undefined;
   const ndviDecl = hasNdvi
@@ -687,7 +705,7 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
          ${groundFields(hasSurface, hasEdges)}
          ${urbanGreen(hasNdvi, hasEdges)}
          ${GROUND_DETAIL}
-         ${hasColonies ? COLONY_BEDS_GLSL : ""}
+         ${hasColonies ? COLONY_GARDEN_GLSL : ""}
          ${hasSport ? SPORT_GROUND : ""}
          ${hasMarkings ? ROAD_MARKINGS : ""}
          ${hasNdvi ? MEADOW_NDVI : ""}
@@ -747,7 +765,7 @@ function createTerrainMaterial(
   // every tile's terrain material. Without an explicit key a tile that lost its
   // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.markings !== undefined}-${splat?.colonyTexture !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.markings !== undefined}-${splat?.colonies !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -865,7 +883,7 @@ function waterGeometryOf(
 interface DetailRasters {
   edgesTexture: Texture | null;
   markings: { raster: Texture; table: DataTexture } | null;
-  colonyTexture: Texture | null;
+  colonies: { rect: [number, number, number, number]; texture: Texture } | null;
   horizonTexture: Texture | null;
   /** the shared sky view's URL while this tile holds it */
   svf: { texture: Texture | null; url: string } | null;
@@ -880,7 +898,7 @@ const NO_DETAIL: DetailRasters = {
   edgesTexture: null,
   sport: null,
   markings: null,
-  colonyTexture: null,
+  colonies: null,
   horizonTexture: null,
   svf: null,
 };
@@ -893,7 +911,7 @@ function splatDetail(d: DetailRasters): Partial<SplatLayer> {
     edgesTexture: d.edgesTexture ?? undefined,
     sport: d.sport ?? undefined,
     markings: d.markings ?? undefined,
-    colonyTexture: d.colonyTexture ?? undefined,
+    colonies: d.colonies ?? undefined,
     svfTexture: d.svf?.texture ?? undefined,
     horizonTexture: d.horizonTexture ?? undefined,
   };
@@ -912,7 +930,7 @@ function disposeDetail(
     d.sport?.table,
     d.markings?.raster,
     d.markings?.table,
-    d.colonyTexture,
+    d.colonies?.texture,
     d.horizonTexture,
   ]) {
     texture?.dispose();
@@ -947,14 +965,21 @@ async function loadDetailRasters(
     sportRaster && sportTable
       ? await loadSportGrounds(sportRaster, sportTable, opts.signal)
       : null;
-  // Road markings: close-range paint, the fine level only.
-  const markingsRaster = url(extras.markings);
+  // Road markings: close-range paint, the fine level only; phones read the
+  // 1024² twin (the same table).
+  const markingsRaster = url(
+    (opts.lowRasters ? extras.markingsLow : undefined) ?? extras.markings
+  );
   const markingsTable = url(extras.markingsTable);
   const markings =
     markingsRaster && markingsTable
       ? await loadMarkings(markingsRaster, markingsTable, opts.signal)
       : null;
-  const colonies = url(extras.cultivated);
+  // Allotment colonies: the fine level only, phones the half-resolution
+  // twin of the same crop.
+  const colonies = url(
+    (opts.lowRasters ? extras.cultivatedLow : undefined) ?? extras.cultivated
+  );
   const colonyTexture = colonies
     ? await loadColonyTexture(colonies, opts.signal)
     : null;
@@ -974,7 +999,9 @@ async function loadDetailRasters(
     edgesTexture,
     sport,
     markings,
-    colonyTexture,
+    colonies: colonyTexture
+      ? { texture: colonyTexture, rect: colonyCropUv(extras.cultivatedCrop) }
+      : null,
     horizonTexture,
     svf,
   };
