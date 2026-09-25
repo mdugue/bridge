@@ -58,7 +58,7 @@ bewusster Vereinfachung.
 | **Bordsteine und Beläge** | Eine Bordsteinkante, wo Straße auf Gehweg trifft; Asphalt, Gehwegplatten, Kopfsteinpflaster oder Kies unter den Füßen; markierte Stellplätze am Straßenrand und auf Parkplätzen; begrünte Höfe | Straßenränder aus dem **Basis-DLM**, Material und Parkplätze aus **OpenStreetMap** (`surface`, `parking`), das Grün aus dem Infrarot-Luftbild (**NDVI**) | Der Bordstein (eine flache 12-cm-Stufe mit Schatten) folgt der vermessenen Fahrbahnbreite; das Material ist, was Freiwillige erfasst haben (etwa zwei Drittel der Straßen), der Rest zeigt Asphalt oder Platten als Vorgabe; die Muster sind gezeichnet, nicht fotografiert, und der Gehweg hinter dem Bordstein liegt auf Straßenniveau |
 | **Wasser** | Die Elbe und kleinere Gewässer mit leicht bewegter Oberfläche und treibendem Nebel | Wasserflächen aus dem Basis-DLM, auf das echte Gelände gelegt | Echter Umriss, erfundene Wellen |
 | **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 16 000 Gebäude und Gebäudeteile in den vier Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
-| **Gebäudefarben** | Dachfarben; eine leichte Tönung je Gebäude; abends ein warmes Leuchten in Läden und öffentlichen Bauten; nachts einzelne erleuchtete Fenster | Dachfarbe aus Luftbildern (**DOP**) gemessen; der Rest aus Gebäudeattributen abgeleitet | Dachfarben sind echt (etwa 83 % Abdeckung), Wandtöne sind synthetisch |
+| **Gebäudefarben** | Dachfarben; eine leichte Tönung je Gebäude; abends ein warmes Leuchten in Läden und öffentlichen Bauten; nachts erleuchtete Fenster und angestrahlte Kirchen | Dachfarbe aus Luftbildern (**DOP**) gemessen; der Rest aus Gebäudeattributen abgeleitet | Dachfarben sind echt (etwa 83 % Abdeckung), Wandtöne sind synthetisch |
 | **Bäume und Hecken** | Einzelbäume mit Kronen in gemessener Höhe; Hecken und Baumreihen | Baumpositionen und -höhen aus der Differenz von Oberflächenmodell (**DOM1**) und Geländemodell; Reihen aus dem Basis-DLM; Grünfärbung aus dem Infrarot-Luftbild (**NDVI**) | Positionen und Höhen sind gemessen; die Kronenform ist generisch, die Baumart unbekannt |
 | **Straßenlampen** | Laternen an Straßen und Plätzen | **OpenStreetMap** | Echte Positionen, Standardhöhe |
 | **Stadtmöbel** | Sitzbänke, Picknicktische, Papierkörbe, Fahrradbügel, Poller, Briefkästen und Wartehäuschen | **OpenStreetMap**; wohin eine Bank blickt, aus ihrer eingetragenen Richtung, sonst zum nächsten Weg oder zur nächsten Straße | Echte Positionen (ein Poller in seiner eingetragenen Höhe); ein weiches, abstrahiertes Modell je Art in den Pastelltönen der Szene — wie Figuren eines Architekturmodells. Nur wenige Bänke sagen, wohin sie blicken, die meisten sind zum nächsten Weg gedreht — meist, nicht immer richtig |
@@ -121,9 +121,11 @@ Tiefenschärfe, die langsame Bewegung von Blättern und Wasser.
 Form der Baumkronen, der Wandton je Gebäude, die Wellen auf dem Wasser, die
 Steine und Platten der Belagsmuster, die
 warmen Fenster in der Dämmerung (dass es ein Laden oder öffentliches
-Gebäude *ist*, stimmt; seine leuchtenden Fenster sind erfunden) und die
-erleuchteten Fenster bei Nacht (die Geschosse sind aus der Gebäudehöhe
-abgeleitet, die Fenster zufällig gesetzt).
+Gebäude *ist*, stimmt; seine leuchtenden Fenster sind erfunden) die
+erleuchteten Fenster bei Nacht und die Sonne, die sich in ihnen spiegelt
+(die Geschosse sind aus der Gebäudehöhe abgeleitet, die Fenster zufällig
+gesetzt), und das Anstrahlen von Kirchen und anderen Wahrzeichen (welche
+Gebäude Wahrzeichen sind, stimmt: aus ihrer eingetragenen Nutzung).
 
 **Gar nicht in den Daten:** Fenster und Türen, Fassadenmaterialien,
 die kleineren Stadtmöbel (Pflanzkübel, Haltestellenmasten; Verkehrs- und

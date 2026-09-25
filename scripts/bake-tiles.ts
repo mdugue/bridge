@@ -418,6 +418,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       building: { type: "SCALAR", componentType: "UINT8", values: t.building },
       eaveH: { type: "SCALAR", componentType: "FLOAT32", values: t.eaveH },
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
+      night: { type: "SCALAR", componentType: "UINT8", values: t.night },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },

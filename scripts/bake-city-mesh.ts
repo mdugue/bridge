@@ -14,6 +14,7 @@ import {
   type RoofColorLut,
   roofColor,
   roughJitter,
+  nightLight,
   storeyHeight,
 } from "../lib/city/building-tint";
 import type { CityObjectRow } from "../lib/city/city-mesh";
@@ -157,6 +158,13 @@ export function bakeCityMesh(
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const attrs = o.attributes ?? {};
+    const root = rootOf(doc, keys, index);
+    // A BuildingPart carries no function of its own (7 k of them here, the
+    // Frauenkirche among them): its use is its building's.
+    const use = {
+      function:
+        attrs.function ?? doc.CityObjects[keys[root]]?.attributes?.function,
+    };
     const baseZ = minZ.get(index) ?? 0;
     const total = (maxZ.get(index) ?? baseZ) - baseZ;
     const measured =
@@ -168,11 +176,12 @@ export function bakeCityMesh(
     }).map((p) => p.pts.map(([x, y]): [number, number] => [cm(x), cm(y)]));
     return {
       building: o.type === "Building",
-      root: rootOf(doc, keys, index),
+      root,
       baseZ: cm(baseZ),
       eaveH: cm(roofMin === undefined ? total : Math.max(roofMin - baseZ, 0)),
       storeyH: cm(storeyHeight(measured)),
-      glow: buildingGlows(attrs) ? 1 : 0,
+      glow: buildingGlows(use) ? 1 : 0,
+      night: nightLight(use),
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs)),
       roof: rgb(roofColor(id, attrs, roofLut)),

@@ -56,7 +56,7 @@ and each is a mix of measured fact and deliberate simplification.
 | **Sports grounds** | Football pitches in mown stripes, clay tennis courts, tartan running tracks with their lanes, basketball courts, beach-volleyball sand — each with its lines, goals, basketball posts and nets | **OpenStreetMap** (`leisure=pitch`, `leisure=track`, with `sport` and `surface`) | The outline, sport and surface are what volunteers mapped; without a surface the sport's usual one is shown (football on grass, tennis on clay). The lines are the standard ones, scaled to the mapped size, not surveyed; goals and nets are simple stand-ins, not the real ones |
 | **Water** | The Elbe and smaller water bodies, with a gently moving surface and drifting mist | Basis-DLM water areas, laid on the real terrain | Real outline, invented ripples |
 | **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 16,000 buildings and building parts in the four tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
-| **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk; single lit windows at night | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
+| **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk; lit windows and floodlit churches at night | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
 | **Trees and hedges** | Individual trees with crowns of the measured height; hedges and tree rows | Tree positions and heights from the difference between the surface model (**DOM1**) and the terrain model; rows from Basis-DLM; greenness from the infrared aerial photo (**NDVI**) | Positions and heights are measured; the crown shape is generic, the species unknown |
 | **Street lamps** | Lamp posts along streets and squares | **OpenStreetMap** | Real positions, default height |
 | **Street furniture** | Benches, picnic tables, litter bins, bicycle stands, bollards, post boxes and stop shelters | **OpenStreetMap**; which way a bench faces from its tagged direction, else from the nearest path or street | Real positions (a bollard at its tagged height); one soft, abstracted model per kind in the scene's pastels — like the pieces of an architect's model. Few benches say which way they look, so most are turned towards the nearest way — a guess that is usually, not always, right |
@@ -117,8 +117,10 @@ field, the slow motion of leaves and water.
 **Invented for the look:** the pastel palette, the paper grain and vignette,
 the shape of tree crowns, the wall tint per building, the ripples on the
 water, the stones and slabs of the paving patterns, the warm windows at dusk (the *presence* of a shop or public building
-is real; its lit windows are not), and the lit windows at night (the storeys
-are derived from the building's height, the windows are placed by chance).
+is real; its lit windows are not), the lit windows at night and the sun
+glinting in them (the storeys are derived from the building's height, the
+windows are placed by chance), and the floodlighting of churches and other
+landmarks (which buildings are landmarks is real, from their recorded use).
 
 **Not in the data at all:** windows and doors, facade materials, the
 smaller street furniture (planters, bus-stop poles; traffic and street-name

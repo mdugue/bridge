@@ -313,18 +313,39 @@ visual-variable codebook is in
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special
-  (`function`), gated by the sun rig's `nightFactor`.
-- **Night window lights** (*Fensterlicht*) — single lit windows, **at night
-  only** (× `nightFactor`; by day the term is zero, so the window-grid veto
-  below still holds). No UVs: a wall's horizontal axis is the world position
-  on its tangent in ~2.9 m window axes, the vertical one the building's own
-  storeys (`storeyH`); whole storeys under the eave (`eaveH`), none on
-  buildings whose eave is under ~3.8 m (garages, sheds). A hash of (axis,
-  storey, wall plane, building) lights a cell at a per-building density,
-  busier on `glow` buildings; far away the pattern fades to its mean so it
-  cannot shimmer. Invented, like the dusk glow: the data has no windows.
-  `visual-style.ts` (`CLAY_WINDOWS`). *Planned:* OSM `building:levels` for
-  the storey height (then the rows sit where the real floors are).
+  (`function`, a BuildingPart's from its building; garages and car parks
+  stay dark), gated by the sun rig's `nightFactor`.
+- **Night light** (*Nachtlicht*) — how a building shows after dusk
+  (× `nightFactor`), by its use: the bake's `night` column
+  (`lib/city/building-tint.ts` `nightLight`, from `function`; a
+  BuildingPart takes its building's, 7 k parts carry none of their own).
+  - *Houses, commerce:* soft panes, no UVs — along a wall the world
+    position on its tangent in window axes of the building's own rhythm
+    (2.5–3.5 m, pane proportions per building), upwards its storeys
+    (`storeyH`). A pane is a tall rounded rectangle with a soft edge and a
+    pool of lamp light inside (honey under the lintel, amber at the sill,
+    dimmer at the jambs), a faint round glow on the wall in the wall's own
+    colour. A hash of (axis, storey, wall plane, building) lights panes at
+    a density per building, draws some curtains (dimmer), makes the odd
+    one a cool screen; commerce is busier and lights its shop fronts.
+    Whole storeys under the eave only (`eaveH`), none on buildings whose
+    eave is under ~3.8 m. Far away the pattern fades to its mean.
+  - *Landmarks* (churches, synagogues, castles, theatres, museums,
+    libraries — ALKIS `303x`/`304x`): no panes — floodlit from the foot as
+    Dresden lights them: overlapping cones every ~6.5 m that merge into an
+    even wash higher up, fading towards the top, in the wall's own colour;
+    towers and domes catch it, flat roofs stay dark. The flat dusk glow is
+    off for them. *(First cut, discontinued: one hashed window grid for
+    every building — hard-edged blocks, and a church read as a block of
+    flats.)*
+  - *Dark:* garages, car parks, non-building structures.
+  Invented, like the dusk glow: the data has no windows. `visual-style.ts`
+  (`CLAY_NIGHT`). *Planned:* OSM `building:levels` for the storey height.
+- **Low-sun glint** (*Scheibenglanz*) — at sun altitudes up to ~15° the
+  panes (same grid) of facades turned to the sun catch a warm glint along
+  the mirror direction, each pane at its own strength, and only where the
+  sun really reaches: the lit fraction of the sun's direct light after the
+  light loop (`CLAY_GLINT_SHADOW`). Zero by full day and at night.
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
@@ -835,7 +856,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only daytime remnant; windows return only as light at night (*Fensterlicht*). |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only daytime remnant; windows return only as light — lit panes at night (*Nachtlicht*), the low sun in the glass (*Scheibenglanz*). |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
 | **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |

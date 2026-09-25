@@ -102,8 +102,10 @@ is the codebook.
 | Eave line | min RoofSurface Z per building (column `eaveH`) | LoD2 geometry | (*Traufkante*) |
 | Ground darkening on walls | height above the building's own base (column `baseZ`) | LoD2 geometry | (*Boden-Verlauf*) |
 | Rim light | view/normal/sun geometry | — | (*Streiflicht*) |
-| Dusk glow | `function` ∈ commerce/public/special (column `glow`) × `nightFactor` | LoD2, sun | (*Abendlicht*) |
-| Night window lights | hashed lit cells on a wall-tangent × storey grid (columns `storeyH`, `eaveH`, `glow`) × `nightFactor`; nothing by day | LoD2, sun | `CLAY_WINDOWS` (*Fensterlicht*) |
+| Dusk glow | `function` ∈ commerce/public/special, not parking (column `glow`) × `nightFactor`; off on landmarks | LoD2, sun | (*Abendlicht*) |
+| Night light: panes | houses/commerce (column `night` 1/2): soft lamp-lit panes on a wall-tangent × storey grid (`storeyH`, `eaveH`), hashed per pane, busier on commerce with lit shop fronts; × `nightFactor` | LoD2, sun | `CLAY_NIGHT` (*Nachtlicht*) |
+| Night light: floodlit landmarks | churches, castles, theatres, museums (column `night` 3): cones from the foot merging into a wash, in the wall's colour, on steep faces; × `nightFactor` | LoD2, sun | `CLAY_NIGHT` (*Nachtlicht*) |
+| Low-sun glint | the same panes along the mirror direction to the sun, altitude ≲ 15°, sunlit faces only | sun, shadow | `CLAY_NIGHT`, `CLAY_GLINT_SHADOW` (*Scheibenglanz*) |
 | Roughness jitter | `hash(objectid)` (column `rough`) → [0.55, 1.0] | — | (*Materialstreuung*) |
 | Transparency | slider, hash-dithered (no transmission) | — | (*Transparenz*) |
 | Tree position and height | canopy point + `h` (3–45 m); rows every 9 m along `veg04_l` | DOM1−DGM1, Basis-DLM | `vegetation-layer.ts` |

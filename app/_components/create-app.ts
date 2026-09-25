@@ -471,7 +471,11 @@ async function bootApp(
   }
   cleanups.push(() => lampLights.dispose());
 
-  const styleResources = createStyleResources(heightFog, clayNight);
+  const styleResources = createStyleResources(
+    heightFog,
+    clayNight,
+    sunDirection
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;

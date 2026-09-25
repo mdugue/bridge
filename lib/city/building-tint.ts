@@ -256,10 +256,16 @@ export function roofColor(
   return roofTint(objectId, attrs);
 }
 
+/** ALKIS parking functions (`246x`: car park, parking deck, garage, …). */
+function isParking(minor: string): boolean {
+  return minor.startsWith("246");
+}
+
 /**
  * Whether a building earns a warm interior glow at dusk: commerce
  * (`31001_2xxx`), public (`31001_3xxx`) and special structures (non-`31001`).
- * Housing (`31001_9998`/`1xxx`) stays dark, so the lit centre reads as civic.
+ * Housing (`31001_9998`/`1xxx`) stays dark, so the lit centre reads as civic;
+ * so do garages and car parks, which nobody lights from inside.
  */
 export function buildingGlows(attrs: Record<string, unknown> = {}): boolean {
   const fn = readString(attrs.function);
@@ -270,7 +276,49 @@ export function buildingGlows(attrs: Record<string, unknown> = {}): boolean {
   if (major !== "31001") {
     return true;
   }
-  return minor.startsWith("2") || minor.startsWith("3");
+  return (minor.startsWith("2") && !isParking(minor)) || minor.startsWith("3");
+}
+
+/**
+ * How a building is lit at night — the clay's `night` column, read by the
+ * night-light term in `visual-style.ts`:
+ *  - `dark`: garages, car parks, and structures that are not buildings
+ *    (non-`31001` functions: towers, masts, bridge parts).
+ *  - `home`: housing and anything unspecified — sparse lit windows.
+ *  - `busy`: commerce and public buildings — more windows, lit shop fronts.
+ *  - `landmark`: churches, castles, theatres, museums, libraries — floodlit
+ *    from their foot, as Dresden lights them, never a window grid (with
+ *    one, a church read as a block of flats).
+ */
+export const NightLight = { dark: 0, home: 1, busy: 2, landmark: 3 } as const;
+export type NightLight = (typeof NightLight)[keyof typeof NightLight];
+
+/** Culture (`303x`, minus broadcasting `3035` and venues `3036`) and worship (`304x`). */
+const LANDMARK_MINORS = new Set([
+  "3031",
+  "3032",
+  "3033",
+  "3034",
+  "3037",
+  "3038",
+]);
+
+export function nightLight(attrs: Record<string, unknown> = {}): NightLight {
+  const fn = readString(attrs.function);
+  if (!fn) {
+    return NightLight.home;
+  }
+  const [major, minor = ""] = fn.split("_");
+  if (major !== "31001" || isParking(minor)) {
+    return NightLight.dark;
+  }
+  if (LANDMARK_MINORS.has(minor) || minor.startsWith("304")) {
+    return NightLight.landmark;
+  }
+  if (minor.startsWith("2") || minor.startsWith("3")) {
+    return NightLight.busy;
+  }
+  return NightLight.home;
 }
 
 /**
