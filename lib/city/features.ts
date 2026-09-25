@@ -116,9 +116,17 @@ export type FurnitureKind =
   | "bike"
   | "bin"
   | "bollard"
+  | "clock"
+  | "column"
+  | "hydrant"
+  | "hydrantsign"
   | "picnic"
   | "postbox"
   | "shelter"
+  | "signal"
+  | "stop"
+  | "wallclock"
+  | "water"
   | PlaygroundKind;
 
 /** A playground outline and the equipment OSM maps on it (`playground=*`). */
@@ -142,7 +150,13 @@ export type PlaygroundKind =
  * north: OSM's `direction`, else towards the nearest way), absent on round
  * things; `l` a bench's mapped length (m), `n` a stand's hoops, `back:
  * false` a bench without a backrest; `h` a bollard's tagged height (m) and
- * `metal` its material.
+ * `metal` its material. Since plan 030 also advertising columns (`column`,
+ * `lit` when OSM says so), traffic signals (`signal`, at the kerb, facing
+ * the traffic they control), fire hydrants (`hydrant`: a pillar;
+ * `hydrantsign`: the sign plate of an underground one), clocks (`clock` on
+ * a pole, `wallclock` on a facade — the point on the wall, `a` out of it),
+ * drinking fountains (`water`) and the "H" sign of a bus stop without a
+ * shelter (`stop`).
  */
 export interface FurnitureFeature {
   geometry: PointGeometry | PolygonGeometry;
@@ -152,6 +166,7 @@ export interface FurnitureFeature {
     h?: number;
     k: FurnitureKind;
     l?: number;
+    lit?: boolean;
     metal?: boolean;
     n?: number;
   } | null;
@@ -249,6 +264,82 @@ export interface StairFeature {
 export interface TerraceFeature {
   geometry: MultiPolygonGeometry | PolygonGeometry | null;
   properties: { z: number } | null;
+}
+
+/** What a tram track runs in (pipeline/bake/tram.py): the road, a lawn
+ *  (*Rasengleis*), or ballast. */
+export type TramBed = "ballast" | "grass" | "street";
+
+/** The parts of the tram layer: a track, a catenary mast, the wires that
+ *  hold the contact wire (a span between two masts, an arm from one, a span
+ *  between two facades' rosettes) and a stop sign. */
+export type TramKind = "arm" | "mast" | "rosette" | "span" | "stop" | "track";
+
+/**
+ * OSM trams (pipeline/bake/tram.py, ODbL). A `track` is one track's
+ * centreline, cut at the tile edge, with its `bed`, `bridge: 1` on a bridge,
+ * the OSM `layer`, and `s`: the distances (m along the line) where a span or
+ * arm holds its contact wire. A `mast` is a Point; `span`, `rosette` and
+ * `arm` are two-point lines between their anchors (mast or facade; an arm
+ * ends over its track) with `x`, the fractions along a span where it
+ * crosses a track. A `stop` is a Point with the stop's `name` and the
+ * bearing `a` its sign faces.
+ */
+export interface TramFeature {
+  geometry: LineGeometry | PointGeometry;
+  properties: {
+    a?: number;
+    bed?: TramBed;
+    bridge?: number;
+    k: TramKind;
+    layer?: number;
+    name?: string;
+    s?: number[];
+    x?: number[];
+  } | null;
+}
+
+/** What the Elbe carries (pipeline/bake/riverside.py): a fixed landing
+ *  stage, a floating one, a groyne, a ferry route. */
+export type RiversideKind = "ferry" | "groyne" | "pier" | "pontoon";
+
+/**
+ * OSM on the river (pipeline/bake/riverside.py, ODbL). A `pier` is its
+ * deck outline with `deck`, the deck's height (m: the bank at its landward
+ * end + 0.4); a `pontoon` its outline cut to the water, with `len` (m) and
+ * `bank`, where its gangway meets the bank (absent when a fixed pier
+ * reaches it) — its height is the drawn water's, read at runtime. A
+ * `groyne` and a `ferry` (with the route's `name`) are lines.
+ */
+export interface RiversideFeature {
+  geometry: LineGeometry | PolygonGeometry;
+  properties: {
+    bank?: Point2;
+    deck?: number;
+    k: RiversideKind;
+    len?: number;
+    name?: string;
+  } | null;
+}
+
+/** A label's class: a main road (trunk to tertiary), any other named way,
+ *  a bridge (the DLM deck's name), a square. */
+export type NameClass = "bridge" | "main" | "minor" | "square";
+
+/**
+ * Street names (pipeline/bake/names.py, OSM ODbL; bridge names Basis-DLM).
+ * A `label` is the stretch of line one name is lettered along (straight
+ * within 20°, as long as the name needs), with `name` and its class `c`;
+ * a `way` is a named street's line cut at the tile edge — what the on-foot
+ * caption looks up.
+ */
+export interface NameFeature {
+  geometry: LineGeometry;
+  properties: {
+    c?: NameClass;
+    k: "label" | "way";
+    name: string;
+  } | null;
 }
 
 /** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */

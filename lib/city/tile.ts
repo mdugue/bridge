@@ -58,10 +58,12 @@ export type TileArtifactKind =
   | "landcoverLow"
   | "lowveg"
   | "monuments"
+  | "names"
   | "ndvi"
   | "platform"
   | "rail"
   | "railarea"
+  | "riverside"
   | "surface"
   | "edges"
   | "sport"
@@ -72,6 +74,7 @@ export type TileArtifactKind =
   | "markingsTable"
   | "cultivated"
   | "cultivatedRaster"
+  | "tram"
   | "trees"
   | "vegrows";
 
@@ -134,6 +137,15 @@ export function tileArtifacts(
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
+    // Optional: the OSM trams — tracks, catenary supports, stop signs
+    // (pipeline/bake/tram.py); without it the tile has no trams.
+    tram: dlm(`tram_${tile}.geojson`),
+    // Optional: the OSM landing stages, groynes and ferry lines
+    // (pipeline/bake/riverside.py); a tile without the river has none.
+    riverside: dlm(`riverside_${tile}.geojson`),
+    // Optional: the street names (pipeline/bake/names.py) — the lettering
+    // seen from the air and the ways the on-foot caption names.
+    names: dlm(`names_${tile}.geojson`),
     // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
     // hedges and the laser-scan crowns outside the canopy mask
     // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).

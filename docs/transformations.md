@@ -281,6 +281,40 @@ visual-variable codebook is in
   mist sheets hang next to their terrain mesh and leave with the tile.
   `water-layer.ts`. Missing class raster → no splat, no water: the tile's
   ground falls back to the flat sage.
+- **Landing stages, groynes, ferries** (plan
+  [031](./plans/031-elbe-riverside.md)) — OSM `man_made=pier` (51 ways,
+  buffered by `width`, else 3 m, flat ends; 5 areas), `man_made=groyne`
+  (1) and `route=ferry` ways (3: the Johannstadt ferry, two paddle-steamer
+  routes) (ODbL) → `pipeline/bake/riverside.py` → `riverside_<tile>.geojson`
+  (25 piers, 31 pontoons, 1 groyne, 4 ferry stretches over the four
+  tiles). A pier's `deck` = the bank's DGM at its landward end (its
+  highest dry sample) + 0.4 m. A **pontoon** (`floating=yes`, or a pier
+  reaching > 25 m out on the water class) is cut to its part on the water
+  class — OSM draws many up the bank, and the DGM's river surface is flat
+  (103.75 m, 104.3 m, 105.05 m by stretch) while the bank rises 2–5 m, so
+  the uncut outlines spread 2.7–5.2 m of DGM under a hull; cut, the median
+  spread is 0.22 m (max 2.27 m, a shoreline cell) — the plan's STOP asked
+  for the water surface the way `water-layer.ts` draws it: the water sheet
+  *is* the terrain there, so the runtime floats the hull on the **lowest
+  ground under it** (`waterLevel`), never on a baked DGM value. `bank` is
+  the nearest dry point (≤ 30 m) for its gangway, unless a fixed pier
+  reaches it (28 of 31 have one). Ferry routes are cut to their stretches
+  over the water class. Runtime `riverside-layer.ts`: a pier is a timber
+  deck 0.3 m thick on instanced piles every 4 m round its edge where it
+  stands over the water, with a railing (top rail + posts every 2 m) along
+  the edges over the water (plan 029's fence panel is not merged here); a
+  pontoon a soft slate hull (−0.3 → +0.35 m) under a pale deck (+0.5 m), a
+  clay ticket hut with a slate roof on one longer than 15 m, a 1.4 m
+  gangway with hand rails to its bank point; a groyne a low stone ridge,
+  crest 0.5 m over the ground, flanks 2.5 m out and 1 m down (half under
+  the drawn water); a ferry a **faint dashed wake** (1.2 m, 14 m dashes,
+  alpha 0.55) on the water — drawn as its own ribbon over the water sheet
+  rather than inside the water shader (no line table; same look, one
+  draw), and, the STOP's conservative fallback taken without a GPU plate,
+  **only from the air**: it fades in with the camera's height over the
+  ground from 25 to 60 m (`map-overlay.ts`, shared with the street
+  lettering). The paddle steamers themselves are not drawn: no dataset
+  has them. Look unverified on a real GPU.
 - **Streaming site (3D Tiles)** — `scripts/prepare-data.ts` bakes the site
   into an OGC 3D Tiles 1.1 tileset (`lib/city/tileset.ts`): per site tile the
   buildings (refine ADD, loaded whenever the tile is in view) over the two
@@ -696,9 +730,44 @@ visual-variable codebook is in
   pale ground and the clay buildings; the pieces now differ from them by
   form and shadow, not by tone (`furniture-layer.ts`,
   `lib/city/furniture.ts`). Not (yet): bicycle-parking *areas*, shelters
-  mapped as areas, planters, signs (OSM maps ~100 traffic signs and almost
-  no street-name signs here; the 321 traffic-signal nodes sit on the
-  carriageway, not at the mast — both too sparse or too placed-by-guess).
+  mapped as areas, planters, traffic signs (OSM maps ~100 here) and
+  street-name signs (almost none).
+- **Signs and fixtures** (plan [030](./plans/030-street-furniture-2.md)) —
+  the same bake and layer, eight more kinds (four tiles, BBBike
+  2026-09-19): **advertising columns** (`advertising=column`, 85; a pale
+  paper drum on a plinth with a darker ring and dome, three poster fields
+  in the palette wrapped round it — colour, no text, turned by the scatter
+  yaw so no two read alike; the 4 `lit=yes` ones glow softly with the
+  night factor), **traffic signals** (`highway=traffic_signals`, 288: a
+  3.2 m grey pole, a three-lamp head a shade deeper than the metal, the
+  glass barely darker and unlit — the viewer has no
+  traffic to time. The node sits on the carriageway at the stop line, so
+  with `traffic_signals:direction` the bake **walks it to the kerb on the
+  right of the traffic it controls** — the kerb from the class raster, ≤ 15
+  m — and turns the head to face that traffic; without a direction it goes
+  to the nearest kerb, facing the nearest way; kept where it is off the
+  road), **fire hydrants** (`emergency=fire_hydrant`: the 6 pillars a
+  0.8 m red-ochre pillar; the **454 underground** ones only their
+  sign plate on a post (the red-bordered white plate abstracted to one soft
+  rose field), moved out of the lane to the nearest
+  kerb — **drawn at 70 %**, the plan's STOP fallback taken without a GPU
+  plate: the smaller plates were chosen over dropping them), **clocks**
+  (`amenity=clock`: 8 on a pole as a double face on a 3.5 m post; 3 of the
+  8 wall clocks hung on the nearest OSM building outline ≤ 3 m, facing out
+  — the plan asked for a ray against the LoD2 BVH, the bake uses the
+  outlines for the same reason as the tram rosettes; tower clocks and
+  sundials dropped), **drinking fountains** (`amenity=drinking_water`, 8: a
+  slim bronze column with a small basin) and the bus stop's **"H" sign**
+  (`highway=bus_stop` without `shelter=yes`, 79, dropped within 8 m of a
+  shelter: the "H" abstracted to colour fields — a soft green disc in a
+  yellow one, no letter — on a 2.6 m pole, a timetable box —
+  shared with the tram stops of plan 024). The clocks' hands show the
+  **scene time**: two hand quads per face, turned in the vertex shader from
+  one shared uniform that `setSun` updates on the minute only
+  (`setClockTime`); the hands (a soft slate, not black) never cast, so
+  the shadow map is not redrawn for them. All in the furniture's soft
+  pastels: nothing near-black, no fine detail. The re-bake leaves every earlier object byte-identical (checked
+  per tile); the new kinds are appended. Look unverified on a GPU.
 - **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 88 over the
   four tiles) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
   ground under each ring vertex (densified to 2 m), and **only the
@@ -768,13 +837,17 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   yard tracks can't z-fight. Per-vertex ground-clamp + `BALLAST_RAISE`, short edge
   fascia, `polygonOffset`. The recoloured class-5 splat sits underneath so any gap
   reads as ballast, not seam.
-- **Steel rails** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`; trams
-  `SPW=3000`/`BKT=1201` run in the street, excluded). Short ATKIS fragments are
+- **Steel rails** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`; the
+  DLM carries trams poorly — `SPW=3000`/`BKT=1201` — so they come from OSM,
+  see **Trams** below). Short ATKIS fragments are
   **snap-merged by shared endpoints** (1 m) in the bake (≈91→9 lines/tile); at
   runtime a polyline is **split into runs of valid ground** (never bridged across a
   NoData gap) and each track gets a thin rail pair (`±GAUGE/2`, count from `GLS`)
   with a small web. Draped on terrain; **lifted onto a rail bridge's deck** (point-
-  in-deck test) so they ride the deck with no ballast stacked on top. Railway
+  in-deck test) so they ride the deck with no ballast stacked on top — at the
+  deck's height *there* (the per-vertex deck profile interpolated along the
+  deck's long axis; until plan 024 the deck's mean), from a lift table of
+  every deck kind that the tram layer shares. Railway
   class recoloured dusty-mauve → **ballast warm-grey** (class 5 in
   `lib/city/landcover.ts`).
 - **Bridge decks** — driven by the **complete `ver06_l` (`BWF=1800`) centreline
@@ -799,6 +872,113 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   (`ShapeUtils.triangulateShape`), per-vertex terrain-clamped. The OSM half of the
   blend (Basis-DLM has no platform geometry); absent/empty when the site has
   no `.osm.pbf` extract.
+
+- **Trams** (plan [024](./plans/024-tram-and-catenary.md)) —
+  OSM `railway=tram` (ODbL; 401 ways, 59.6 km in the four tiles, every one
+  `gauge=1450`, `electrified=contact_line`) + `power=catenary_mast`
+  (321 points, **167 of them within 15 m of a tram track** — the rest are
+  the railway's) + the OSM building outlines. `pipeline/bake/tram.py` →
+  `tram_<tile>.geojson`: each track (fragments chained at 1 m, cut at the
+  tile edge) with its **bed** — `street` when ≥ 70 % of its 2 m samples lie
+  on the road class of the committed class raster, `grass` (*Rasengleis*)
+  when most lie on the meadow class or NDVI > 0.3, else `ballast` — and the
+  OSM `bridge`/`layer` (per-tile numbers in the table below); at the Albertplatz
+  (150 m round) 87 % street / 5 % grass, the Hauptstraße 100 % street — the
+  plan's > 10 % STOP was not hit. The supports are decided on the tracks
+  and masts within 30 m around the tile (so a seam support is the same in
+  both tiles): a **span** from a mast across the tracks to the nearest mast
+  on the other side (≤ 28 m, each mast in one pair, shortest first), else
+  an **arm** from the mast over the nearest track (≤ 10 m; over a parallel
+  second track too); where a track is 45 m from any mapped mast, a
+  **rosette** span every 30 m between the **facades either side** (the OSM
+  building outlines, ≤ 15 m out; none when either side has none — the plan
+  asked for a ray against the LoD2 BVH at runtime; the bake reads the OSM
+  outlines instead, because a dressing cannot count on its neighbour's
+  buildings being loaded, and the result must not depend on load order).
+  Each track carries `s`, the distances at which a span or arm holds its
+  wire. Runtime `app/_components/tram-layer.ts`: two rails per track at
+  ±0.725 m with the rail layer's profile (`addRibbon`), in the road's
+  lavender-grey a shade deeper — **street**: the heads flush with the road
+  (+2 cm), no sleepers, and no groove (the plan's darker groove strip was
+  left out: fewer, calmer lines); **grass**: rails +15 cm over a 2.6 m meadow strip;
+  **ballast**: rails +25 cm over a 2.8 m ballast strip. A track the OSM
+  way puts on a bridge rides the deck (the shared lift table, any deck kind
+  — gated on the tag, so a tram under a railway bridge stays on the
+  ground). **Contact wire** 5.6 m over the rail top, sagging 0.15 m between
+  the supports (`lib/city/tram.ts` `wireStations`/`wireDrop`: both line
+  ends are stations, so the wire meets its neighbour tile at the same
+  height; gaps > 30 m get evenly spaced virtual stations); span wires 7 m
+  up the masts / 6.5 m at the rosettes, lifted to clear the wires they hold
+  by 0.5 m, with a hanger down to each; arms 35 cm over the wire with a
+  stay. All wires are one **camera-facing ribbon mesh** per tile whose
+  width is `max(true width, 0.8 px)` in the vertex shader, its alpha the
+  true coverage (≥ 0.2) × 0.6 in a light slate, faded from 150 to 350 m —
+  light and faint, a pencil line rather than ink; no `Line2`, no MSAA, no
+  new dependency; wires never cast (`castShadow = false`). **Masts**: a
+  7.5 m pale green-grey pole, instanced, casting. **Stop signs** (phase 3): OSM puts
+  `railway=tram_stop` on the track (144 of 164 within 0.5 m of it), so the
+  sign stands on the nearest mapped platform (`public_transport=platform`
+  / `railway=platform`, ≤ 25 m) at its point nearest the stop, facing the
+  track — the "H" sign of plan 030 (`buildFurniture`), 107 of them; none
+  within 8 m of a shelter, a bus stop's sign or another tram sign; the 4
+  stops with no platform mapped get none. Look unverified on a real GPU
+  (the plan's plates at Postplatz/Augustusbrücke, dusk and 150 m fly are
+  open).
+  **Style (maintainer feedback on the fences, applied before any plate):**
+  everything in the scene's soft clay/watercolour idiom — no near-black,
+  no fine detail: rails in the road's lavender-grey a shade deeper, the
+  groove the plan asked for left out, wires a light slate at ≤ 0.6
+  opacity, masts pale green-grey.
+
+  | tile | tracks | street km | grass km | ballast km | masts | spans | rosettes | arms | stop signs |
+  |---|---|---|---|---|---|---|---|---|---|
+  | 33410_5656 | 95 | 20.53 | 0.76 | 4.73 | 118 | 51 | 28 | 13 | 57 |
+  | 33410_5658 | 20 | 12.17 | 0.54 | 0.25 | 33 | 13 | 36 | 6 | 16 |
+  | 33412_5656 | 51 | 11.34 | 0.98 | 1.90 | 16 | 7 | 27 | 2 | 23 |
+  | 33412_5658 | 9 | 5.66 | 0 | 1.19 | 0 | 0 | 17 | 0 | 11 |
+
+### Names
+- **Street lettering** (plan [032](./plans/032-street-names.md), phase
+  1) — OSM `highway=*` ways with a `name` (not `service`, not
+  `footway=sidewalk`; 2 920 named ways over the four tiles) + the DLM
+  bridge names (`bridge_<tile>` `name`) + named `place=square` /
+  pedestrian areas (≥ 400 m²) (ODbL) → `pipeline/bake/names.py` →
+  `names_<tile>.geojson`. Every way of a name around the tile (50 m
+  margin) is merged (`line_merge`); anchors along its straightest
+  stretches — a window of `len(name) × 4.2 m + 20 m` turning less than 20°,
+  one per 450 m, the straightest nearest the middle of its share, none
+  within 200 m of the same name's last (the other carriageway, a fragment)
+  — each written by the tile owning its middle; a square's own streets are
+  not lettered again; bridges and squares get a straight label across
+  their long axis. Labels per tile: 138 / 135 / 122 / 105 (33412_5656,
+  33410_5656, 33410_5658, 33412_5658). Runtime `name-layer.ts`: no new
+  dependency — **Canvas 2D in the page's own font** (Inter, via
+  next/font's `--font-sans`, awaited with `document.fonts.load`), so
+  umlauts, ß and shaping come from the browser; one atlas per tile, 2048
+  wide and only as tall as its rows (32 px type, 44 px rows, shelf-packed;
+  WebGL 2 mips a non-power-of-two canvas), each name drawn once in the
+  contour lines' ink a shade deeper (rgb 122 130 145) with a soft pale
+  halo, at 0.8 opacity; the atlas texture is freed with the
+  tile (`NameLayer.dispose`, tracked in the GPU-memory counter). Each label
+  a ribbon lying on the ground along its line (4 m samples, 20 cm over the
+  TIN, turned to read west → east), letters 4 m tall (main roads and
+  squares 6 m, bridges 5 m); unlit, `depthWrite: false`, `polygonOffset`,
+  height fog, never casting; **opacity by the camera's height over the
+  ground** — none below 25 m, full from 60 m (`map-overlay.ts`, the one
+  uniform the ferry lines share). The plan's aliasing STOP could not be
+  judged without a GPU: the conservative end is built in — the minor
+  roads' names fade out between 200 and 250 m, leaving the main roads,
+  bridges and squares; an atlas that would outgrow 2048 × 2048 drops the
+  minor roads first (none does: see the plan's notes). Look unverified on
+  a real GPU (plates at 80, 200 and 500 m are open).
+- **Street caption** (phase 2) — the same file's `k: way` lines (every
+  named street cut at the tile edge, simplified to 1 m): on foot, the HUD
+  names the nearest named way within 25 m of the pose stream (10 Hz,
+  `lib/city/names.ts` `nearestName` over the loaded tiles,
+  `CityWalkHandle.streetNameAt`), as a small pill under the top edge
+  (`street-caption.tsx`, `aria-live="polite"`, changed only when the name
+  changes); hidden in fly mode and while the pointer is locked (immersive
+  mode). The street-name *signs* stay out: OSM maps almost none.
 
 ### Walls and fences
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
@@ -1074,7 +1254,9 @@ research that produced them):
     vineyards (028), fences and gates (029: ✅ above), more street furniture (030),
     Elbe landing stages, groynes and ferries (031), street names (032),
     sky-view factor and a baked horizon map (033), small structures from
-    DOM − LoD2 (034), a hidden soundscape (035).
+    DOM − LoD2 (034), a hidden soundscape (035). Built since (✅ above,
+    looks unverified on a GPU): 024 (Trams), 030 (Signs and fixtures),
+    031 (Landing stages, groynes, ferries), 032 (Names).
 
 ---
 

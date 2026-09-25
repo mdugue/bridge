@@ -16,14 +16,17 @@ from . import (
     lowveg,
     markings,
     monuments,
+    names,
     ndvi,
     osm_buildings,
     rail,
+    riverside,
     roof_colour,
     skyview,
     sport,
     stairs,
     surface,
+    tram,
     trees,
     walls,
 )
@@ -48,6 +51,12 @@ STEPS = {
     # After surface and edges (reads the class raster only).
     "markings": markings.run,
     "sport": sport.run,
+    # After land cover, NDVI and the furniture (the stop signs skip a stop
+    # that already has a shelter).
+    "tram": tram.run,
+    "riverside": riverside.run,
+    # After rail (the bridge names).
+    "names": names.run,
     "cultivated": cultivated.run,
     # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
     "skyview": skyview.run,

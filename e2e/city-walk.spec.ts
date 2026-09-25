@@ -263,6 +263,13 @@ test.describe("desktop viewer", () => {
     expect(stats.furniture.instances).toBeGreaterThan(500);
     // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
     expect(stats.rail.triangles).toBeGreaterThan(0);
+    // 51 OSM tram tracks (13.4 km), 16 masts and their wires
+    expect(stats.tram.triangles).toBeGreaterThan(0);
+    expect(stats.tram.instances).toBeGreaterThan(0);
+    // 20 pontoons, a groyne and the ferry lines below the Terrasse
+    expect(stats.riverside.triangles).toBeGreaterThan(0);
+    // ~140 street-name labels lettered into one atlas (seen from the air)
+    expect(stats.names.triangles).toBeGreaterThan(0);
     // 292 wall lines
     expect(stats.walls.triangles).toBeGreaterThan(0);
     // 277 fence lines and 114 gates on them, baked with the fine terrain

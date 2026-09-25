@@ -22,7 +22,10 @@ import type {
   LampFeature,
   LowVegFeature,
   MonumentFeature,
+  NameFeature,
   RailFeature,
+  RiversideFeature,
+  TramFeature,
   TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
@@ -45,7 +48,9 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
+import { buildNames, type NameLayer } from "./name-layer";
 import { buildRail } from "./rail-layer";
+import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
   dressTerrain,
@@ -58,6 +63,7 @@ import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
+import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
   buildVegetation,
@@ -87,6 +93,12 @@ export interface TileDressing {
   rail?: Group;
   sport?: SportFixtureLayer;
   tile: string;
+  /** OSM trams: tracks, masts, the overhead line (tram-layer.ts) */
+  tram?: Group;
+  /** the Elbe's landing stages, groynes, ferry lines (riverside-layer.ts) */
+  riverside?: Group;
+  /** street lettering and the named ways (name-layer.ts) */
+  names?: NameLayer;
   vegetation?: VegetationControl;
   /** vine rows (cultivated-layer.ts): static */
   vineyards?: Group;
@@ -203,6 +215,9 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.monuments?.group,
     d.furniture,
     d.rail,
+    d.tram,
+    d.riverside,
+    d.names?.group,
     d.sport?.group,
     d.vineyards,
   ].filter((part): part is Group => part !== undefined);
@@ -248,6 +263,7 @@ function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
   d.monuments?.dispose();
   d.sport?.dispose();
+  d.names?.dispose();
   for (const part of dressingParts(d)) {
     part.removeFromParent();
     disposeObject3D(part);
@@ -387,6 +403,9 @@ async function buildDressing(
     scanTrees,
     hedges,
     cultivated,
+    trams,
+    river,
+    streetNames,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -408,6 +427,9 @@ async function buildDressing(
     get<LowVegFeature>(d.lowveg ?? ""),
     // allotments, orchards, vineyards (cultivated-layer.ts)
     get<CultivatedFeature>(d.cultivated ?? ""),
+    get<TramFeature>(d.tram ?? ""),
+    get<RiversideFeature>(d.riverside ?? ""),
+    get<NameFeature>(d.names ?? ""),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -479,8 +501,29 @@ async function buildDressing(
           heightFog: ctx.heightFog,
         })
       : undefined;
+  // Tracks are cut at the tile edge by the bake; they and the span wires
+  // sample the ground over every loaded terrain, like the rails.
+  const tram =
+    trams.length > 0
+      ? buildTram(trams, bridges, { ...ground, heightFog: ctx.heightFog })
+      : undefined;
+  // Piers and pontoons are the tile's own; a ferry line or groyne cut at
+  // the seam samples the neighbour's ground past it.
+  const riverside =
+    river.length > 0
+      ? buildRiverside(river, { ...ground, heightFog: ctx.heightFog })
+      : undefined;
+  // The lettering lies on every loaded terrain (a label may run past the
+  // seam); its atlas is drawn once the page's font is ready.
+  const names =
+    streetNames.length > 0
+      ? await buildNames(streetNames, { ...ground, heightFog: ctx.heightFog })
+      : undefined;
   return {
     tile,
+    tram,
+    riverside,
+    names,
     vegetation,
     lowVegetation,
     vineyards,

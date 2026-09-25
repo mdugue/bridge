@@ -18,7 +18,51 @@
 - **Effort**: M (bake S, tracks M, overhead line M, stops S)
 - **Risk**: MED — thin wires alias; bridge decks need road-deck heights
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: DONE — phases 1–2 built 2026-09-25 (bake, publish,
+  tracks, bridges, contact wire, masts, span/arm/rosette wires), phase 3
+  (stop signs) the same day after plan 030. Built
+  without a real GPU: every plate below is still to be taken; the look
+  and the wire aliasing are unverified (SwiftShader proves only that it
+  compiles and boots clean).
+
+## Implementation notes (2026-09-25)
+
+- **Bed** (measured, BBBike 2026-09-19): street 49.7 km, ballast 8.1 km,
+  grass 2.3 km over the four tiles. Albertplatz (150 m round) 87 % street,
+  8 % ballast, 5 % grass; Hauptstraße 100 % street — the > 10 % STOP was
+  not hit, thresholds as planned.
+- **Masts**: of the 321 `power=catenary_mast`, 167 stand within 15 m of a
+  tram track; the rest are the railway's (the whole 33412_5658 set) and
+  are dropped — the first bake stood 108 railway masts along the Görlitz
+  line with no wire to hold.
+- **Rosettes from OSM outlines, not the LoD2 BVH.** The plan asked for a
+  runtime ray against the city BVH; a dressing cannot count on its (or
+  its neighbour's) buildings being loaded, and a support must not depend
+  on load order. The bake reads the OSM building outlines (the same
+  buildings, ≤ 15 m out, both sides needed) — deterministic and tested.
+- **Deck lift**: the rail layer's lift table now holds every deck kind
+  and interpolates the deck's ramp along its long axis (it was the deck's
+  mean); the heavy rails still ride rail decks only. A tram rides a deck
+  only where its OSM way says `bridge` — a tram under a railway bridge
+  stays on the ground.
+- **Wires**: one ribbon mesh per tile, `max(12 mm, 0.8 px)` wide, alpha =
+  true coverage (≥ 0.25), faded 300 → 450 m (the STOP's fallback is built
+  in from the start); `castShadow = false` on every wire, only the masts
+  cast (the shadow STOP can only be measured on a GPU).
+- Spawn tile (lite census): 7 meshes, 16 mast instances, ≈ 180 k
+  triangles (rails and grooves sampled every 2 m to follow the TIN;
+  ≈ 146 k once the grooves were dropped, below).
+- **Style** (maintainer feedback on the fences, 2026-09-25): the scene's
+  soft clay idiom wins over the plan's detail — the darker groove is left
+  out, the rails are the road's lavender-grey a shade deeper, the wires a
+  light slate at ≤ 0.6 opacity fading from 150 to 350 m (not near-black),
+  the masts pale green-grey.
+- **Stops (phase 3)**: 144 of the 164 `railway=tram_stop` nodes lie on the
+  track (stop positions), so the sign cannot stand at the node: it stands
+  on the nearest mapped platform (≤ 25 m) facing the track, 107 signs over
+  the four tiles; stops within 8 m of a shelter or a bus stop's sign (plan
+  030's furniture file, which the step reads) or of another tram sign get
+  none, and the 4 stops without a mapped platform get none.
 
 ## Why this matters
 

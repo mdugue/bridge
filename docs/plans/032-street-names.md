@@ -14,7 +14,34 @@
 - **Effort**: M (bake S, lettering M, caption S)
 - **Risk**: MED — text is the easiest thing to make look cheap
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: DONE 2026-09-25 — both phases, built without a real GPU:
+  the plates at 80, 200 and 500 m are still to be taken; SwiftShader
+  proves only that it compiles and boots clean.
+
+## Implementation notes (2026-09-25)
+
+- Labels per tile (BBBike 2026-09-19): 138 / 135 / 122 / 105
+  (33412_5656, 33410_5656, 33410_5658, 33412_5658); a first cut lettered
+  Bautzner Straße nine times on one tile (each carriageway and fragment of
+  a merged street got its own anchors) — a name is now not lettered again
+  within 200 m of itself.
+- **Atlas (measured in the browser, Inter 600 at 32 px, 44 px rows)**:
+  2048 × 836 / 792 / 704 / 660 px — far under the 2048 × 2048 STOP (the
+  minor-roads-first drop is built in but never fires); ≈ 9 MB of GPU
+  memory per tile with mips. The canvas is only as tall as its rows
+  (no power-of-two padding).
+- **Aliasing STOP**: cannot be judged without a GPU; the atlas has mips
+  and anisotropy, and the plan's last resort is built in from the start —
+  the minor roads' names fade out between 200 and 250 m, the main roads,
+  bridges and squares stay. The minimum letter height is not raised with
+  altitude (the ribbons would have to grow along the street too).
+- The lettering's fade uses the shared map-overlay altitude uniform, also
+  used by plan 031's ferry lines.
+- **Style** (maintainer feedback on the fences): the ink is the contour
+  lines' tone a shade deeper (rgb 122 130 145), the halo soft, 0.8
+  opacity — a drawn map's lettering, not a navigation app's.
+- The caption reads the named ways (`k: way`) baked into the same file,
+  not the label windows (those cover only straight stretches).
 
 ## Why this matters
 

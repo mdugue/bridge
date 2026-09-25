@@ -18,7 +18,7 @@ CRS, [ADR 0026](./adr/0026-one-site-config-per-build.md)) and Z-up. A
 the tileset's frame *is* the recentered data frame, and the renderer turns
 each Y-up glTF into it. That turn cancels the `world` group's, so a tile's
 content root sits, in effect, in the scene's Y-up frame — which is why the
-Y-up dressing (vegetation, lamps, monuments, street furniture, rails) hangs directly under the
+Y-up dressing (vegetation, lamps, monuments, street furniture, rails, trams) hangs directly under the
 fine terrain's content root and leaves with its tile. Mixing the frames up
 applies the rotation twice (the classic "trees shoot skyward" bug).
 
@@ -43,6 +43,9 @@ flowchart TB
   DRESS --> FURN["street furniture<br/>one InstancedMesh per model:<br/>benches, bins, hoops, bollards, shelters"]
   DRESS --> MON["monuments<br/>fountain rims + water, water bells,<br/>measured sculptures, markers"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
+  DRESS --> TRAM["tram layer<br/>rails in their bed, masts (instanced),<br/>one wire ribbon mesh (never casts)"]
+  DRESS --> RIV["riverside layer<br/>piers on piles, pontoons, groynes,<br/>ferry wake (from the air only)"]
+  DRESS --> NAMES["street lettering<br/>one Canvas-2D atlas + ribbons per tile<br/>(from the air only)"]
   SCENE --> LIGHTS["lamp light pool<br/>3 real point lights, fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
 ```
@@ -125,6 +128,7 @@ is the codebook.
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
 | Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
 | Street furniture | OSM point → one small abstracted model per kind (bench, backless bench, picnic table, bin, bicycle hoop, bollard — stone or metal, at its tagged height —, post box, stop shelter): softened blocks, capsules, tube strokes in the scene's pastels, vertex-coloured under one matte material; front turned to the bake's bearing `a` (OSM `direction`, else the nearest highway), a bench stretched to its mapped length `l`, a stand as `n` hoops 0.9 m apart; none on classes 5 and 8 or bridge decks | OSM | `furniture-layer.ts`, `lib/city/furniture.ts`, `pipeline/bake/furniture.py` |
+| Signs and fixtures | OSM point → advertising column (paper drum Ø 1.2 m, 2.7 m, a darker ring and dome, three pastel poster fields; `lit` ones emissive × `nightFactor`), traffic signal (3.2 m pole, a three-lamp head a shade deeper than the metal, facing `a`, unlit), pillar hydrant (0.8 m, red ochre), underground-hydrant sign plate on a post (one soft rose field, at 70 %), clock on a 3.5 m post (double face) or on a facade (one face, bracket to the wall), drinking fountain (1 m bronze column + basin), bus-stop "H" sign (2.6 m pole, a soft green disc in a yellow one — no letter —, timetable box); clock hands (soft slate) turned by the scene's time (`uClockMinutes`, on the minute), never casting | OSM | `furniture-layer.ts` (`column`, `signal`, `hydrant`, `hydrantSign`, `poleClock`, `wallClock`, `drinkingWater`, `stopSign`, `clockHands`), `pipeline/bake/furniture.py` |
 | Playground | OSM outline → a pale sand floor 4 cm over the ground, skirted 0.2 m; the mapped equipment only stands on it, each piece one soft single-coloured sculpture in a pastel from the scene at the buildings' brightness (swing = an arch with a pill seat, dusk blue; slide = an extruded wave, peach; climbing frame = a faceted dome, sage; springy = an egg on a stem, butter; seesaw = a plank on a half-round, lilac; roundabout = a rimmed disc; playhouse = an extruded house silhouette; sandpit = sand in a rounded sage frame); a sandpit area a sand slab 6 cm above | OSM | `furniture-layer.ts` (`addSlab`), `lib/city/furniture.ts` |
 | Fountain basin | OSM outline → clay rim (+0.35 m over the highest ground; 0.2 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
 | Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain; breathes ±7 % on a per-jet phase, streaks run down the curtain; warm glow × `nightFactor`), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
@@ -137,6 +141,17 @@ is the codebook.
 | Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
 | Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
+| Landing stage | OSM pier outline + `deck` → timber slab 0.3 m, instanced piles every 4 m round its edge over the water, railing (rail + posts 2 m) along the edges over the water | OSM + DGM1 | `riverside-layer.ts` (`addPier`) |
+| Pontoon | outline cut to the water → soft slate hull −0.3…+0.35 m and pale deck +0.5 m over the lowest ground under it (= the drawn water); clay hut + slate roof when `len` > 15 m; 1.4 m gangway to `bank` | OSM + the terrain the water lies on | `riverside-layer.ts` (`addPontoon`) |
+| Groyne | line → stone ridge, crest 0.5 m over the ground, flanks 2.5 m out, 1 m down | OSM | `riverside-layer.ts` (`addGroyne`) |
+| Ferry line | route over the water → 1.2 m dashed pale ribbon (14 m dashes) 6 cm over the water, alpha 0.55 × the map fade (camera 25 → 60 m over the ground), never casts | OSM | `riverside-layer.ts` (`ferryMesh`), `map-overlay.ts` |
+| Street lettering | label line + `name` + class → a ribbon on the ground along it (4 m samples, +0.2 m), letters 4 m (main roads, squares 6 m, bridges 5 m) from a per-tile Canvas-2D atlas in Inter, the contour ink a shade deeper with a soft halo; alpha 0.8 × the map fade (camera 25 → 60 m over the ground) × (minor roads: out between 200 and 250 m); unlit, never casts | OSM (+ Basis-DLM bridge names) | `name-layer.ts`, `lib/city/names.ts`, `map-overlay.ts` |
+| Street caption | the nearest named way ≤ 25 m of the walker → a HUD pill; none in fly or immersive mode | OSM | `street-caption.tsx`, `lib/city/names.ts` `nearestName` |
+| Tram track | OSM track line, bed from the class raster (+ NDVI): rails in the road's lavender-grey a shade deeper; `street` → rail heads 2 cm over the road, no sleepers, no groove; `grass` → rails 15 cm up over a 2.6 m strip in the meadow colour; `ballast` → rails 25 cm up over a 2.8 m ballast strip; gauge 1.45 m; `bridge: 1` → on the deck (interpolated along its ramp); none cast | OSM, Basis-DLM, DOP | `tram-layer.ts`, `pipeline/bake/tram.py` |
+| Contact wire | per track 5.6 m over the rail top, sagging 0.15 m (× span / 30 m) between the bake's support stations `s` and the line's ends; a light slate, fogged; drawn `max(12 mm, 0.8 px)` wide with alpha = 0.6 × true coverage (≥ 0.2), faded 150 → 350 m; never casts | OSM | `tram-layer.ts` (`wireMesh`), `lib/city/tram.ts` |
+| Span wire / arm | a mast pair across the tracks (anchors 7 m up), facade rosettes (6.5 m), lifted to clear the wires by 0.5 m, a hanger to each wire; a cantilever arm 35 cm over the wire with a stay — the same wire ribbon | OSM (masts, building outlines) | `tram-layer.ts` (`addSpan`, `addArm`) |
+| Catenary mast | 7.5 m tapered pole (pale green-grey), instanced, casts | OSM `power=catenary_mast` | `tram-layer.ts` (`buildMasts`) |
+| Tram stop sign | the bus stop's "H" sign model on the stop's platform, facing the track | OSM `railway=tram_stop` + platforms | `tram-layer.ts` (`buildStops` → `buildFurniture`) |
 | Wall ribbon | line + `h`, base on every tile's shaped fine ground, top on the high shelf — baked into the fine terrain glTF; a freestanding wall is cut at its gates | OSM | `lib/city/walls.ts` at build, `wall-layer.ts` (material) |
 | Fence panel | line + `h` on the fine ground: one flat double-sided quad per ≤ 2.5 m, its post and top rail drawn by the pattern; `type` picks the infill (bars every 12.5 cm, a wire diamond mesh, pickets, none for a handrail) and the tone (the furniture's slate a step darker, its honey for wood), box-filtered; the infill fades to a lighter dithered veil where its bars fall under a pixel or beyond 40–60 m | OSM | `lib/city/fences.ts` at build, `fence-layer.ts` |
 | Gate | a `w`-wide gap in its fence (or freestanding wall), a closed leaf of denser bars in a darker frame — a boom at 1 m for a lift gate or cycle barrier | OSM | `lib/city/fences.ts` `cutGaps` |

@@ -12,9 +12,12 @@ import type {
   LampFeature,
   LowVegFeature,
   MonumentFeature,
+  NameFeature,
   RailFeature,
+  RiversideFeature,
   StairFeature,
   TerraceFeature,
+  TramFeature,
   TreeFeature,
   VegRowFeature,
   WallFileFeature,
@@ -104,6 +107,14 @@ test.each(cases)(
       "picnic",
       "postbox",
       "shelter",
+      "column",
+      "signal",
+      "hydrant",
+      "hydrantsign",
+      "clock",
+      "wallclock",
+      "water",
+      "stop",
       "playground",
       "swing",
       "slide",
@@ -135,6 +146,13 @@ test.each(cases)(
       }
       if (kind === "bike") {
         expect(f.properties?.n).toBeGreaterThanOrEqual(1);
+      }
+      if (f.properties?.lit !== undefined) {
+        expect(kind).toBe("column");
+      }
+      // what has a front faces somewhere; round things do not
+      if (["column", "hydrant", "bin", "bollard"].includes(kind)) {
+        expect(bearing).toBeUndefined();
       }
       if (f.properties?.h !== undefined) {
         expect(kind).toBe("bollard");
@@ -358,5 +376,85 @@ test.each(cases)(
       genera?: string[];
     };
     expect(doc.genera).toEqual([...TREE_GENERA]);
+  }
+);
+
+test.each(cases)(
+  "%s: trams are bedded tracks, masts, support wires and stop signs",
+  (_, a) => {
+    for (const f of load<TramFeature>(a.tram)) {
+      const p = f.properties;
+      const g = f.geometry;
+      expect(["arm", "mast", "rosette", "span", "stop", "track"]).toContain(
+        p?.k ?? ""
+      );
+      if (p?.k === "mast" || p?.k === "stop") {
+        expect(g.type).toBe("Point");
+        expect(isPoint2(g.coordinates)).toBe(true);
+        continue;
+      }
+      expect(g.type).toBe("LineString");
+      expect(isLine(g.coordinates)).toBe(true);
+      if (p?.k === "track") {
+        expect(["ballast", "grass", "street"]).toContain(p.bed ?? "");
+        const s = p.s ?? [];
+        expect(s.every((d, i) => d >= 0 && (i === 0 || d > s[i - 1]))).toBe(
+          true
+        );
+      } else {
+        // Supports run between two anchors.
+        expect(g.coordinates).toHaveLength(2);
+        for (const x of p?.x ?? []) {
+          expect(x).toBeGreaterThanOrEqual(0);
+          expect(x).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  }
+);
+
+test.each(cases)(
+  "%s: the river's piers, pontoons, groynes and ferry lines",
+  (_, a) => {
+    for (const f of load<RiversideFeature>(a.riverside)) {
+      const p = f.properties;
+      const g = f.geometry;
+      expect(["ferry", "groyne", "pier", "pontoon"]).toContain(p?.k ?? "");
+      if (p?.k === "pier" || p?.k === "pontoon") {
+        expect(g.type).toBe("Polygon");
+        if (g.type === "Polygon") {
+          expect(isRing(g.coordinates[0])).toBe(true);
+        }
+      } else {
+        expect(g.type).toBe("LineString");
+        expect(isLine(g.coordinates)).toBe(true);
+      }
+      if (p?.k === "pier") {
+        expect(Number.isFinite(p.deck)).toBe(true);
+      }
+      if (p?.k === "pontoon") {
+        expect(p.len).toBeGreaterThan(0);
+        if (p.bank) {
+          expect(isPoint2(p.bank)).toBe(true);
+        }
+      }
+    }
+  }
+);
+
+test.each(cases)(
+  "%s: street names are lettered labels and named ways",
+  (_, a) => {
+    for (const f of load<NameFeature>(a.names)) {
+      const p = f.properties;
+      expect(f.geometry.type).toBe("LineString");
+      expect(isLine(f.geometry.coordinates)).toBe(true);
+      expect(typeof p?.name).toBe("string");
+      expect((p?.name ?? "").length).toBeGreaterThan(0);
+      expect(["label", "way"]).toContain(p?.k ?? "");
+      if (p?.k === "label") {
+        expect(["bridge", "main", "minor", "square"]).toContain(p.c ?? "");
+      }
+    }
   }
 );

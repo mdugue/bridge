@@ -216,9 +216,9 @@ post-processing look.
 |---|---|---|
 | New terrain edition | replace the GeoTIFF in `data/dgm/`; re-run the `canopy` and `rail` bakes (they read it) | the terrain meshes, walls included, are re-baked on the next build |
 | New building model | convert to CityJSON, replace in `data/cityjson/`; re-run the `roof-colour` bake | the building mesh is re-baked on the next build |
-| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture` and `rail` (they read the class raster) | the 2048² copies are re-baked |
+| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture`, `rail` and `tram` (they read the class raster) | the 2048² copies are re-baked |
 | New aerial photos | re-run the `ndvi` and `roof-colour` bakes | the roof colours are folded into the mesh on the next build |
-| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs` and `rail` bakes | — |
+| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs`, `rail` and `tram` bakes | — |
 | Different ground colours | edit the one palette in the code | nothing to re-bake: the browser paints the colours |
 | A new tile | download its terrain and building model by hand (the building model converted to CityJSON) and commit both; add the tile to the site config `sites/dresden.ts`; `bun run bake --ingest` fetches the rest and runs all seven bakes | the build adds it to the tileset and publishes it |
 
