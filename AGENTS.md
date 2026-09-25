@@ -112,7 +112,14 @@ config change.
     stands and looks, walk/fly and the scenic glides; every input cancels a
     glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
     `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
-    `altitude-stick.tsx` (the fly-mode climb control opposite it)
+    `altitude-stick.tsx` (the fly-mode climb control opposite it),
+    `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS
+    fix + phone compass → `placeAt`), `live-mode.ts` (opt-in live mode:
+    view follows the compass, camera the GPS; offered only while a compass
+    reports), `hud-toolbar.tsx` (those tools + walk/fly as one foldable
+    labelled group) and
+    `device-orientation.ts` (the one orientation-event adapter both use);
+    the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing

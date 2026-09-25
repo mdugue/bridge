@@ -1,6 +1,11 @@
 "use client";
 
-import { PlaneIcon, SlidersHorizontalIcon } from "lucide-react";
+import {
+  LocateFixedIcon,
+  NavigationIcon,
+  PlaneIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import {
   type CSSProperties,
   startTransition,
@@ -11,7 +16,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
@@ -43,6 +47,9 @@ import {
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
+import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { useLiveMode } from "./live-mode";
+import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -104,21 +111,79 @@ function SettingsToggle() {
 }
 
 /**
+ * The tools the floating toolbar offers here: "take me to where I am"
+ * wherever the browser can locate the player (locate-button.tsx), live mode
+ * while a compass is reporting (live-mode.ts), and on a touch screen walk/
+ * fly, the F key's stand-in.
+ */
+function sceneTools({
+  coarse,
+  live,
+  locate,
+  mode,
+  onToggleMode,
+}: {
+  coarse: boolean;
+  live: ReturnType<typeof useLiveMode>;
+  locate: ReturnType<typeof useLocateMe>;
+  mode: MovementMode;
+  onToggleMode: () => void;
+}): HudTool[] {
+  const tools: HudTool[] = [];
+  if (locate.available) {
+    tools.push({
+      id: "locate",
+      label: "Standort",
+      icon: LocateFixedIcon,
+      busy: locate.locating,
+      onClick: locate.locate,
+      title: "Zu meinem Standort springen, Blick in Telefonrichtung",
+    });
+  }
+  if (live.available) {
+    tools.push({
+      id: "live",
+      label: "Live",
+      icon: NavigationIcon,
+      pressed: live.on,
+      onClick: live.toggle,
+      title:
+        "Live: Blick und Position folgen dir und deinem Telefon — ziehen oder gehen beendet es",
+    });
+  }
+  if (coarse) {
+    tools.push({
+      id: "fly",
+      label: "Fliegen",
+      icon: PlaneIcon,
+      pressed: mode === "fly",
+      onClick: onToggleMode,
+      title: "Zwischen Gehen und Fliegen wechseln",
+    });
+  }
+  return tools;
+}
+
+/**
  * The overlays that belong to the scene, not to the panel: the key hints, the
- * joystick and — in fly mode — the altitude stick opposite it. On a touch
- * screen a walk/fly button sits above that, the F key's stand-in. All of it
+ * joystick and, opposite it, the toolbar (sceneTools) with — in fly mode —
+ * the altitude stick above it. All of it
  * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
 function SceneOverlays({
   coarse,
+  live,
+  locate,
   mode,
   onClimb,
   onMove,
   onToggleMode,
 }: {
   coarse: boolean;
+  live: ReturnType<typeof useLiveMode>;
+  locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
   onClimb: (v: number) => void;
   onMove: (x: number, y: number) => void;
@@ -136,24 +201,13 @@ function SceneOverlays({
       <div className="absolute bottom-24 left-5">
         <VirtualJoystick onChange={onMove} />
       </div>
+      {/* Bottom-anchored with the toolbar last, so it stays put when fly
+          mode brings the altitude stick in above it. */}
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
-        {coarse && (
-          <button
-            aria-label="Fliegen"
-            aria-pressed={flying}
-            className={cn(
-              "flex size-11 items-center justify-center rounded-full border shadow-lg backdrop-blur-lg",
-              flying
-                ? "border-white/60 bg-white/85 text-black"
-                : "border-white/30 bg-hud/85 text-hud-foreground"
-            )}
-            onClick={onToggleMode}
-            type="button"
-          >
-            <PlaneIcon className="size-5" />
-          </button>
-        )}
         {flying && <AltitudeStick onChange={onClimb} />}
+        <HudToolbar
+          tools={sceneTools({ coarse, live, locate, mode, onToggleMode })}
+        />
       </div>
     </>
   );
@@ -164,6 +218,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const handleRef = useRef<CityWalkHandle | null>(null);
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
+  const hud = useHudMessage();
+  const locate = useLocateMe(handleRef, hud.say);
 
   // Probed once, before the renderer is created: three's raw "Error creating
   // WebGL context" (or a tile's bare ReferenceError) is replaced by a
@@ -202,6 +258,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
     null
   );
+  const live = useLiveMode(handleRef, hud.say, coarse, latLng);
+  // The scene reports a manual look or move that ended live mode; the boot
+  // effect below must not re-run for it, so it reads the hook through a ref.
+  const liveEnded = useRef(live.ended);
+  useEffect(() => {
+    liveEnded.current = live.ended;
+  }, [live.ended]);
   const [landcoverTiles, setLandcoverTiles] = useState<
     { bounds: TerrainBounds; src: string }[]
   >([]);
@@ -296,6 +359,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         if (!cancelled) {
           // Twice a second, read only in the Erweitert tab's counters.
           startTransition(() => setFps(value));
+        }
+      },
+      onFollowEnd: () => {
+        if (!cancelled) {
+          liveEnded.current();
         }
       },
       onModeChange: (m) => {
@@ -483,9 +551,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
               </output>
             )}
 
+            <LocateMessage message={hud.message} />
+
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              live={live}
+              locate={locate}
               mode={mode}
               onClimb={(v) => handleRef.current?.setClimbInput(v)}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}

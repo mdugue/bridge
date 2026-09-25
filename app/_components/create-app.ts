@@ -33,7 +33,7 @@ import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import { currentSite } from "@/sites";
-import { createCameraPose } from "./camera-pose";
+import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
@@ -124,6 +124,8 @@ export interface CityWalkOptions {
    * (a flight streams new tiles in). Fires on changes only.
    */
   onBusy?: (busy: boolean) => void;
+  /** a manual look or move ended live mode (camera-pose.ts) */
+  onFollowEnd?: () => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -210,6 +212,13 @@ export interface CityWalkHandle {
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
+  /**
+   * The aim (grid heading + pitch, degrees) the view eases towards while it
+   * follows the phone; null stops following (camera-pose.ts).
+   */
+  setFollowAim: (aim: FollowAim | null) => void;
+  /** live mode's GPS ground point (EPSG), null stops (camera-pose.ts) */
+  setFollowPosition: (epsg: { x: number; y: number } | null) => void;
   setSun: (date: Date) => SunState;
   /**
    * Lets the heavy dressing start — vegetation, lamps, rails — and
@@ -218,6 +227,11 @@ export interface CityWalkHandle {
    * disposed.
    */
   startStreaming: () => void;
+  /**
+   * Puts the camera on a vantage at once, no glide (the spawn, "locate
+   * me"), landing in the vantage's movement mode.
+   */
+  placeAt: (viewpoint: ViewpointGeometry) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
@@ -664,6 +678,7 @@ async function bootApp(
     heightAt,
     offset,
     resolveStep: collider.resolveStep,
+    onFollowEnd: opts.onFollowEnd,
     onModeChange: opts.onModeChange,
     onPose: opts.onPose,
   });
@@ -1089,6 +1104,7 @@ async function bootApp(
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,
     captureViewpoint: pose.captureViewpoint,
+    placeAt: pose.placeAt,
     teleportTo: pose.teleportTo,
     getPose: pose.getPose,
     getCameraState: pose.getCameraState,
@@ -1105,6 +1121,8 @@ async function bootApp(
       hitName: lastFocusHit?.name ?? null,
     }),
     setMovementMode: pose.setMovementMode,
+    setFollowAim: pose.setFollowAim,
+    setFollowPosition: pose.setFollowPosition,
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,
