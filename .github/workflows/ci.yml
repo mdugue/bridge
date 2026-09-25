@@ -83,8 +83,10 @@ jobs:
     # one worker at a time (see playwright.config.ts). The `lite` scene profile
     # keeps that to a few minutes, but a shared runner is about half the speed
     # of a developer machine, so leave headroom: a tight budget cancels the job
-    # mid-run and reports nothing at all, which is worse than a slow job.
-    timeout-minutes: 20
+    # mid-run and reports nothing at all, which is worse than a slow job. The
+    # whole-site spec alone takes up to ten minutes on a runner since the site
+    # grew to fifteen tiles (city-walk.spec.ts).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       # One extra commit, not the whole history: the repo carries ~130 MB of

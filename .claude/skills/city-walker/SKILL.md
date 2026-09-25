@@ -221,10 +221,23 @@ not sky.
 ## Vegetation
 
 - Trees = InstancedMesh (trunk + crown), hedges = InstancedMesh boxes. Crown =
-  `IcosahedronGeometry(r, 2)` (≈320 tris) with lobes and radial normals; the
-  near-camera **rich multi-tuft crown** (~1 440 tris) is swapped in per 250 m
-  chunk by `updateLod` (in at 220 m, out at 300 m). Detail 1 (≈80 tris) is the
-  fallback if the far field ever needs a third tier.
+  `IcosahedronGeometry(r, 2)` (180 tris) with lobes and radial normals. Three
+  tiers per 250 m chunk, planned over the whole site each frame
+  (`lib/city/vegetation-lod.ts`, applied by `updateVegetationLod`): the
+  **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
+  300 m) but only within a **site-wide budget of 2 500 trees**, nearest
+  chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)
+  otherwise put ~9 000 rich crowns on screen and lost the WebGL context; the
+  mid crown + trunk; and past 650 m (back at 550 m) a detail-1 crown (80
+  tris), no trunk, dense chunks thinned to every other tree drawn wider.
+  Trunks, mid and rich crowns of a chunk share ONE `instanceMatrix` (and
+  the crowns one `instanceColor`) — ~9 MB instead of ~21 MB for a forest
+  tile; compute each mesh's bounding sphere after sharing.
+- Phones keep only 120–180 MB of out-of-view tile content cached
+  (`tileCacheBytesFor`, `lruCache.min/maxBytesSize`): with the library's
+  0.3–0.4 GB default, a minimap jump from the start into the Heide kept the
+  start area loaded while the forest tiles arrived and Safari killed the
+  tab.
 - **Chunking:** placements are bucketed into 250 m cells, one InstancedMesh per
   cell (shared geo/material), so off-screen cells frustum-cull from both the
   main and shadow pass. After `setMatrixAt` you **must**
@@ -233,9 +246,8 @@ not sky.
 - Canopy from `pipeline/bake/canopy.py`: `nDOM = DOM1 − DGM1`, one tree per ~7 m cell
   at the tallest pixel, scaled to measured height, gated off road/bridge/water
   via the class raster.
-- **Tree LOD (shipped):** per-chunk distance swaps the rich crown in near the
-  camera and the cheap one far away; a swap invalidates the shadow map
-  (plan 009).
+- **Tree LOD (shipped):** the three tiers above; a tier change invalidates
+  the shadow map (plan 009).
 - **Cadastre + laser scan + hedges (all default-on):** the street-tree
   cadastre (`pipeline/bake/trees.py`), the laser-scan trees outside the canopy
   mask (`canopyx`, thinned in the bake against the cadastre within max(4 m,

@@ -9,12 +9,14 @@ the [glossary](./glossary.md).
 
 ## What you see
 
-A stylised, walkable 3D model of the centre of Dresden: a square of
-4 km × 4 km on both banks of the Elbe, with the historic Altstadt in the
-south-west, the Inner and Outer Neustadt in the north and the Johannstadt
-in the south-east. You start low over the Elbe near the Carolabrücke,
-looking at the Altstadt skyline, and can walk at street level or fly above
-the roofs.
+A stylised, walkable 3D model of the centre of Dresden: fifteen tiles of
+2 km × 2 km on both banks of the Elbe, 10 km × 6 km, with the historic
+Altstadt, the Inner and Outer Neustadt, the Johannstadt, the Friedrichstadt,
+Löbtau and Pieschen to the west, the Hauptbahnhof and the Großer Garten to
+the south, and upriver past the
+Waldschlößchenbrücke to Blasewitz, Loschwitz and the Blaues Wunder. You
+start low over the Elbe near the Carolabrücke, looking at the Altstadt
+skyline, and can walk at street level or fly above the roofs.
 
 Nothing is installed, nothing is stored about you, and no server computes
 the picture. Your browser downloads prepared files as you move — about
@@ -55,7 +57,7 @@ and each is a mix of measured fact and deliberate simplification.
 | **Kerbs and paving** | A kerb line where the road meets the pavement; asphalt, paving slabs, cobbles or gravel underfoot; painted parking bays along streets and in car parks; green courtyards | Road edges from the **Basis-DLM**, the material and the parking from **OpenStreetMap** (`surface`, `parking`), the green from the infrared aerial photo (**NDVI**) | The kerb stone (a low 12 cm step, casting its shadow) follows the surveyed road width; the material is what volunteers mapped (about two thirds of the streets), the rest shows asphalt or slabs by default; the patterns themselves are drawn, not photographed, and the pavement behind the kerb stays at road level |
 | **Sports grounds** | Football pitches in mown stripes, clay tennis courts, tartan running tracks with their lanes, basketball courts, beach-volleyball sand — each with its lines, goals, basketball posts and nets | **OpenStreetMap** (`leisure=pitch`, `leisure=track`, with `sport` and `surface`) | The outline, sport and surface are what volunteers mapped; without a surface the sport's usual one is shown (football on grass, tennis on clay). The lines are the standard ones, scaled to the mapped size, not surveyed; goals and nets are simple stand-ins, not the real ones |
 | **Water** | The Elbe and smaller water bodies, with a gently moving surface and drifting mist | Basis-DLM water areas, laid on the real terrain | Real outline, invented ripples |
-| **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 16,000 buildings and building parts in the four tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
+| **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 58,000 buildings and building parts in the fifteen tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
 | **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk; lit windows and floodlit churches at night | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
 | **Trees and hedges** | Individual trees with crowns of the measured height; hedges and tree rows | Tree positions and heights from the difference between the surface model (**DOM1**) and the terrain model; rows from Basis-DLM; greenness from the infrared aerial photo (**NDVI**) | Positions and heights are measured; the crown shape is generic, the species unknown |
 | **Street lamps** | Lamp posts along streets and squares | **OpenStreetMap** | Real positions, default height |

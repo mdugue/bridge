@@ -52,6 +52,7 @@ import {
   type SceneBudget,
   type SceneProfile,
   shadowMapSizeFor,
+  tileCacheBytesFor,
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
@@ -62,6 +63,10 @@ import {
 } from "./three-utils";
 import { createTileStream } from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
+import {
+  updateVegetationLod,
+  type VegetationControl,
+} from "./vegetation-layer";
 import { applyCityLook, createStyleResources } from "./visual-style";
 
 /**
@@ -526,6 +531,7 @@ async function bootApp(
       heightFog,
       look: opts.look,
       lowRasters: budget.lowRasters,
+      cacheBytes: tileCacheBytesFor(budget.tier),
       ground,
       night: () => currentNight,
       offset,
@@ -917,16 +923,26 @@ async function bootApp(
   };
 
   const timer = new Timer();
-  // Swap each vegetation chunk between the rich and cheap crown by distance,
-  // and advance the wind sway (same clock as the water ripple). A swap changes
-  // what casts shadows, so it invalidates the map.
+  // Pick every vegetation chunk's crown tier (rich / mid / far) over all
+  // loaded tiles at once — the rich crowns share one site-wide budget —,
+  // swap the cadastre's own silhouettes by distance, and advance the wind
+  // sway (same clock as the water ripple). A tier change changes what casts
+  // shadows, so it invalidates the map.
+  const vegetationControls: VegetationControl[] = [];
   const stepVegetation = (elapsed: number) => {
+    vegetationControls.length = 0;
     let lodChanged = false;
     for (const d of stream.dressings) {
-      if (d.vegetation?.updateLod(camera.position)) {
-        lodChanged = true;
+      if (d.vegetation) {
+        vegetationControls.push(d.vegetation);
+        d.vegetation.setTime(elapsed);
+        if (d.vegetation.updateLod(camera.position)) {
+          lodChanged = true;
+        }
       }
-      d.vegetation?.setTime(elapsed);
+    }
+    if (updateVegetationLod(vegetationControls, camera.position)) {
+      lodChanged = true;
     }
     if (lodChanged) {
       invalidateShadows();

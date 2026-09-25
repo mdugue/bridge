@@ -112,7 +112,7 @@ is the codebook.
 | Tree gate | none on classes 5–8 | Basis-DLM | `pipeline/bake/canopy.py` |
 | Crown colour | NDVI 5×5 footprint max, recentred on the median | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
-| Crown detail | distance (in 220 m / out 300 m per 250 m chunk) | — | `updateLod` (*Detaillierte Kronen*) |
+| Crown detail | three tiers per 250 m chunk, decided over the whole site each frame: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `updateVegetationLod` (*Detaillierte Kronen*) |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
 | OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
@@ -142,6 +142,7 @@ is the codebook.
 | Distance fog | slider; far plane clamped to ~1.1 km until the site has first loaded | — | `create-app.ts` (*Nebel*) |
 | Site-edge haze | distance to the site's outer tile edge: everything fades into the fog colour over the last 450 m (never within ~60 m of the eye) | tile bounds | `height-fog.ts` (`SITE_EDGE_FADE_M`) |
 | Horizon haze | the sky dome blends into the fog colour below the horizon and feathers up to ~16°, so the data's edge, the fog and the sky meet in one band | — | `sun-rig.ts` (`uHazeColor`) |
+| Sky dome position | the dome (a ±2250 m box) is re-centred on the rendering camera every frame; fixed at the origin, the outer tiles (the Blaues Wunder is ~3 km out) stood outside it and saw the bare clear colour | — | `sun-rig.ts` (`onBeforeRender`) |
 | Depth tint | screen depth → warm near / cool far | — | `depth-grading-effect.ts` (*Tiefenfärbung*) |
 | Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
@@ -224,14 +225,15 @@ renderer decides how much of the site is loaded (screen-space error target
 | Pixel ratio | ≤ 2 | ≤ 1.5 | 0.5 |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere | L0 4096², L1 2048² |
 | N8AO quality | Medium | Medium | Performance |
+| Tile cache (content no longer in use) | 0.3–0.4 GB (the library default) | 120–180 MB | 0.3–0.4 GB |
 
 What one site tile costs (Dresden, as published; the `.glb.gz` are
 pre-gzipped glTF with meshopt compression and quantised positions):
 
 | Content | Wire size per tile | Triangles |
 |---|---|---|
-| buildings `city_<tile>.glb.gz` | 1.1–1.5 MB | ≈143 k on the spawn tile |
-| fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.6–2.0 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
+| buildings `city_<tile>.glb.gz` | up to 1.9 MB | ≈143 k on the spawn tile |
+| fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.3–3.6 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
 | footprints (minimap) | 0.23–0.33 MB | — |
 | class raster 4096² / 2048² | 0.22–0.25 / ≈0.08 MB | — |
@@ -239,7 +241,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | paving raster (fine level) | 0.6–0.86 MB | — |
 | edge raster (fine level) | 0.34–0.46 MB | — |
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | ≈ 130–200 k |
-| canopy points (fine level) | 0.6–1.8 MB | — |
+| canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
 | cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB

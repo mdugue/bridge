@@ -131,8 +131,8 @@ S/M/L.
     `customProgramCacheKey` each.
 19. **Low-confidence, investigate not fix:** NoData next to valid samples
     in the terrain bake's resample (`scripts/bake-tiles.ts`); the lowest
-    terrain bound (with the 30 m skirt) as the ground fallback; the minimap assumes square
-    bounds; the joystick releases on any `pointerup`; the `crs.ts`
+    terrain bound (with the 30 m skirt) as the ground fallback; the
+    joystick releases on any `pointerup`; the `crs.ts`
     trailing-slash regex.
 
 ### Direction — options for the maintainer (choices, not defects)
@@ -182,8 +182,6 @@ S/M/L.
 - Plan 021's Phase 0 (a second framework for `/wissen`, the URL scheme).
 
 - Close the superseded Dependabot PRs (#3, #12, #13, #15, #26).
-- Decide on the two unused `33414_*` DGM tiles (~28 MB): delete, or move to
-  `data/_raw/`.
 - Decide where `aesthetic-sandbox.html` (the historical crown playground at
   the repo root) should live, or delete it — the layer files are the source
   of truth.

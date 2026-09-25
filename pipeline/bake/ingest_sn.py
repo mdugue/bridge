@@ -26,6 +26,7 @@ import datetime
 import json
 import re
 import shutil
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -43,6 +44,13 @@ BASIS_DLM = (
     "DtPWngtLEJP8K3k/basisdlm_sn_shape.zip"
 )
 OSM = "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf"
+# The portal's batch download page carries the catalogue of every product's
+# current share (id + file name pattern). The link service above has lagged
+# behind a rotated share before (LoD2 and the laser scan answered 503 under
+# the id it still named), so a failed download is retried under the share
+# the catalogue names today.
+BATCH_PAGE = "https://www.geodaten.sachsen.de/batch-download-4719.html"
+GEOCLOUD = "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files"
 
 
 def download(url: str, dest: Path) -> Path:
@@ -55,6 +63,43 @@ def download(url: str, dest: Path) -> Path:
         shutil.copyfileobj(res, out, length=1 << 20)
     tmp.rename(dest)
     return dest
+
+
+def share_catalogue(page: str) -> list[tuple[str, str]]:
+    """(share id, file name pattern) per product, from the batch page's
+    embedded configuration. Patterns name the tile as `$Rechtswert$` and
+    `$Hochwert$`."""
+    return re.findall(r'"share_id":"(\w+)","packagesize":\d+,"filename":"([^"]+)"', page)
+
+
+def current_share_url(name: str, catalogue: list[tuple[str, str]]) -> str | None:
+    """The URL of the product file `name` under the share the catalogue
+    names today, or None when no product's pattern matches."""
+    for share, pattern in catalogue:
+        rx = (
+            re.escape(pattern)
+            .replace(re.escape("$Rechtswert$"), r"\d+")
+            .replace(re.escape("$Hochwert$"), r"\d+")
+        )
+        if re.fullmatch(rx, name):
+            return f"{GEOCLOUD}/{share}/{name}"
+    return None
+
+
+def download_product(url: str, downloads: Path) -> Path:
+    """A product ZIP into `downloads`; when its share answers with an error,
+    again under the share the batch page names today."""
+    name = Path(urllib.parse.urlparse(url).path).name
+    try:
+        return download(url, downloads / name)
+    except urllib.error.HTTPError as err:
+        with urllib.request.urlopen(BATCH_PAGE) as res:
+            page = res.read().decode("utf-8", "replace")
+        fresh = current_share_url(name, share_catalogue(page))
+        if fresh is None or fresh == url:
+            raise
+        print(f"{name}: {err} under the linked share; retrying under the current one")
+        return download(fresh, downloads / name)
 
 
 def download_link(layer: int, bounds: list[float], tile_key: str) -> str:
@@ -105,7 +150,7 @@ def ingest_tile(raw: Path, tile: str, bounds: list[float]) -> None:
         if target.exists():
             continue
         url = download_link(layer, bounds, key)
-        zip_path = download(url, raw / "downloads" / Path(urllib.parse.urlparse(url).path).name)
+        zip_path = download_product(url, raw / "downloads")
         extract(zip_path, (".tif", ".tfw"), raw / product, tile)
         print(f"{tile}: {product} → {target}")
 
@@ -119,7 +164,7 @@ def ingest_lsc(raw: Path, tile: str, bounds: list[float]) -> None:
     east, north = tile.split("_")[:2]
     try:
         url = download_link(1, bounds, f"{east[2:]}{north}")
-        zip_path = download(url, raw / "downloads" / Path(urllib.parse.urlparse(url).path).name)
+        zip_path = download_product(url, raw / "downloads")
     except (OSError, SystemExit) as err:
         print(f"{tile}: laser scan not downloaded ({err}); put the LAZ at {target} by hand")
         return
