@@ -78,7 +78,7 @@ export async function readDgm(
   } else {
     throw new Error(
       "DGM GeoTIFF has no embedded georeferencing and no readable .tfw sidecar. " +
-        "Embed it with: gdal_translate -a_srs EPSG:25833 in.tif out.tif"
+        "Re-run `bun run fetch` (it writes the georeferencing), or embed it: gdal_translate -a_srs EPSG:<the provider's CRS> in.tif out.tif"
     );
   }
   const raster = await image.readRasters({

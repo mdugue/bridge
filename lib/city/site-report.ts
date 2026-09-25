@@ -9,8 +9,11 @@ import {
   dgmSourceFiles,
   providerRawDir,
   sideFileSource,
+  stairSourceFile,
+  terraceSourceFile,
   tileArtifacts,
   tileIds,
+  wallSourceFile,
 } from "./tile";
 
 export type Stage = "fetch" | "bake" | "ready";
@@ -78,10 +81,15 @@ export function tileReport(
     .filter((a) => a.required)
     .map((a) => sideFileSource(site, a.file));
   const missing = [...sources, ...required].filter((p) => !exists(p));
-  const absent = artifacts
-    .filter((a) => !a.required)
-    .map((a) => sideFileSource(site, a.file))
-    .filter((p) => !exists(p));
+  const absent = [
+    ...artifacts
+      .filter((a) => !a.required)
+      .map((a) => sideFileSource(site, a.file)),
+    // The terrain bake's optional inputs (never served).
+    wallSourceFile(site, tile),
+    stairSourceFile(site, tile),
+    terraceSourceFile(site, tile),
+  ].filter((p) => !exists(p));
   const unfetched = [...sources, ...landCoverInputs(site)].some(
     (p) => !exists(p)
   );
