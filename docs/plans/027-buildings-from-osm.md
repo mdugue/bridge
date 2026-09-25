@@ -16,7 +16,7 @@
 - **Effort**: phase 0 S; 1 M; 2 S–M; 3 S (or rejected)
 - **Risk**: LOW — per-object data, one free float, no new geometry
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: IN PROGRESS — phase 0 done (attributes through `root`)
 
 ## Why this matters
 

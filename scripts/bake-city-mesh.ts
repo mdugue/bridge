@@ -11,6 +11,7 @@ import type { BufferGeometry, Matrix4, Mesh } from "three";
 import {
   buildingGlows,
   buildingTint,
+  inheritedAttributes,
   type RoofColorLut,
   roofColor,
   roughJitter,
@@ -156,11 +157,18 @@ export function bakeCityMesh(
 
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
-    const attrs = o.attributes ?? {};
+    const root = rootOf(doc, keys, index);
+    const own = o.attributes ?? {};
+    // A BuildingPart takes its use (`function`) from its Building: tint,
+    // roof and glow read the resolved bag; heights stay the part's own.
+    const attrs = inheritedAttributes(
+      own,
+      doc.CityObjects[keys[root]].attributes
+    );
     const baseZ = minZ.get(index) ?? 0;
     const total = (maxZ.get(index) ?? baseZ) - baseZ;
     const measured =
-      typeof attrs.measuredHeight === "number" ? attrs.measuredHeight : total;
+      typeof own.measuredHeight === "number" ? own.measuredHeight : total;
     const roofMin = roofMinZ.get(index);
     const footprints = buildingFootprintPolys({
       ...doc,
@@ -168,7 +176,7 @@ export function bakeCityMesh(
     }).map((p) => p.pts.map(([x, y]): [number, number] => [cm(x), cm(y)]));
     return {
       building: o.type === "Building",
-      root: rootOf(doc, keys, index),
+      root,
       baseZ: cm(baseZ),
       eaveH: cm(roofMin === undefined ? total : Math.max(roofMin - baseZ, 0)),
       storeyH: cm(storeyHeight(measured)),

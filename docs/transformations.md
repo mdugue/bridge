@@ -314,6 +314,17 @@ visual-variable codebook is in
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special
   (`function`), gated by the sun rig's `nightFactor`.
+- **Attributes through the building tree** — the Saxon LoD2 puts the
+  geometry of 2 391 Buildings (four tiles; 2 327 have none of their own) on
+  7 239 `BuildingPart`s, and the parts carry no `function`: only the
+  parent does. The bake resolves each object's attributes through its
+  `root` (the part's own value first, `inheritedAttributes` in
+  `lib/city/building-tint.ts`), so
+  tint, roof palette and glow see the building's use; heights stay the
+  part's own. Before the fix every part read as housing: 1 682 parts of
+  338 commerce/public/special buildings were dark at dusk (646 / 177 /
+  412 / 447 on `33410_5656` / `33410_5658` / `33412_5656` /
+  `33412_5658`). Plan 027 phase 0.
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
