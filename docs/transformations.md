@@ -191,9 +191,22 @@ visual-variable codebook is in
   with translucent water bells that grow with the basin, round a measured
   sculpture when there is one (splash pads flush, reflecting pools still);
   a point fountain is a 2.2 m round basin. The canopy loses the "trees" its
-  own bake planted on a measured monument (`onRelief`). Merged/instanced,
-  six draw calls per tile. Not walk-blocking (collision is buildings only);
-  the jets are static.
+  own bake planted on a measured monument (`onRelief`). The fountains move
+  gently — each bell breathes on its own phase, droplets run down its
+  curtain, light shimmers across the water — and by night the water glows
+  and a fountain's sculpture is lit warm from its basin (`setFountainTime`,
+  `setFountainNight`, one shared clock and night factor). Merged/instanced,
+  seven draw calls per tile at most. Not walk-blocking (collision is
+  buildings only).
+  **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
+  (March 2024) were both taken while Dresden's fountains are drained and
+  their sculptures boxed for winter — the Albertplatz "bodies" are those
+  housings (flat-topped, ~3.7 m), right in size and place, not the figures.
+  The DOP shows the gilded Goldener Reiter only as glare (its shadow holds
+  the horse's silhouette), so no colour is sampled. The laser point cloud
+  (LSC, the only official source with more form) was unreachable from
+  GeoSN's share when this was built; no openly licensed 3D scan of the
+  landmarks was found.
 
 ### Railway & bridges
 All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in

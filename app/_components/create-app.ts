@@ -41,6 +41,7 @@ import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
+import { setFountainNight, setFountainTime } from "./monument-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -560,6 +561,7 @@ async function bootApp(
       d.lamps?.setNightFactor(state.nightFactor);
     }
     lampLights.setNightFactor(state.nightFactor);
+    setFountainNight(state.nightFactor);
     clayNight.value = state.nightFactor;
     invalidateShadows();
     return state;
@@ -918,6 +920,8 @@ async function bootApp(
     // Repoint the shared real lamp lights at the nearest heads.
     lampLights.updateNearest(camera.position);
     stepVegetation(elapsed);
+    // The fountains' jets and water shimmer (one shared uniform).
+    setFountainTime(elapsed);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(pose.getPose());

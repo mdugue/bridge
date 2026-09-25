@@ -42,7 +42,11 @@ import {
   yawOf,
 } from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import {
+  type HeightFogUniforms,
+  injectHeightFog,
+  type OnBeforeCompileShader,
+} from "./height-fog";
 
 /**
  * Fountains, statues, memorial stones and columns
@@ -55,12 +59,17 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  *   monuments.ts `reliefSurface`) — the right size and silhouette, no
  *   detail the 1 m grid does not have;
  * - a monument nothing measured is an abstract marker in that clay;
- * - a basin is its OSM outline as a low clay rim around still water, and a
- *   jet a translucent water bell rising from it.
+ * - a basin is its OSM outline as a low clay rim around water, and a jet
+ *   a translucent water bell rising from it.
+ *
+ * The fountains move, gently: every bell breathes on its own phase and
+ * droplets run down its curtain, light shimmers across the water; by
+ * night the water glows and a fountain's sculpture is lit from its basin
+ * (one shared clock and night factor, `setFountainTime`/`setFountainNight`).
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
  * the Y-up frame; rims, water and reliefs are merged, markers and jets
- * instanced. Non-fatal: missing/empty inputs yield an empty group.
+ * instanced: seven draw calls per tile at most. Non-fatal: missing/empty inputs yield an empty group.
  */
 
 export interface MonumentContext extends GroundContext {
@@ -86,6 +95,8 @@ interface Parts {
   jets: Placed[];
   pillars: Placed[];
   reliefs: BufferGeometry[];
+  /** a fountain's sculptures: lit from the basin by night */
+  sculptures: BufferGeometry[];
   rims: BufferGeometry[];
   slabs: Placed[];
   waters: BufferGeometry[];
@@ -293,6 +304,17 @@ function reliefMesh(
   return geo.toNonIndexed();
 }
 
+/** Each vertex's height above the basin's water (the uplight's falloff). */
+function withLift(geo: BufferGeometry, water: number): BufferGeometry {
+  const pos = geo.getAttribute("position");
+  const lift = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
+    lift[i] = Math.max(pos.getY(i) - water, 0);
+  }
+  geo.setAttribute("aLift", new BufferAttribute(lift, 1));
+  return geo;
+}
+
 function addFountain(
   f: MonumentFeature,
   ctx: GroundContext,
@@ -323,7 +345,7 @@ function addFountain(
   if (relief) {
     const geo = reliefMesh(relief, ctx, levels.water - 0.3);
     if (geo) {
-      parts.reliefs.push(geo);
+      parts.sculptures.push(withLift(geo, levels.water));
     }
   }
   const h = jetHeight(basin.area, style);
@@ -422,6 +444,108 @@ function merged(
   return mesh;
 }
 
+/**
+ * The one clock and night factor every tile's fountains share (uniforms
+ * by reference, like the height fog): `create-app.ts` advances them each
+ * frame and at dusk, tiles that stream in later pick them up as they are.
+ */
+const FOUNTAIN_UNIFORMS = {
+  uFountainTime: { value: 0 },
+  uFountainNight: { value: 0 },
+};
+
+/** The frame clock (s) the jets and the water shimmer run on. */
+export function setFountainTime(elapsed: number): void {
+  FOUNTAIN_UNIFORMS.uFountainTime.value = elapsed;
+}
+
+/** 0 by day → 1 at night: the basins light up softly with the lamps. */
+export function setFountainNight(t: number): void {
+  FOUNTAIN_UNIFORMS.uFountainNight.value = Math.min(Math.max(t, 0), 1);
+}
+
+const FOUNTAIN_HEAD = `uniform float uFountainTime;
+uniform float uFountainNight;
+`;
+
+/**
+ * The jets: each bell breathes (its height swells and settles on its own
+ * phase, from its position) and droplets run down the curtain as soft
+ * streaks. By night the water catches the light.
+ */
+function animateSpray(shader: OnBeforeCompileShader): void {
+  Object.assign(shader.uniforms, FOUNTAIN_UNIFORMS);
+  shader.vertexShader = `${FOUNTAIN_HEAD}varying float vJetPhase;
+${shader.vertexShader.replace(
+  "#include <begin_vertex>",
+  `#include <begin_vertex>
+#ifdef USE_INSTANCING
+  float jetPhase = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831;
+#else
+  float jetPhase = 0.0;
+#endif
+  transformed.y *= 1.0 + 0.07 * sin(uFountainTime * 1.1 + jetPhase) + 0.03 * sin(uFountainTime * 2.7 + jetPhase * 1.7);
+  vJetPhase = jetPhase;`
+)}`;
+  shader.fragmentShader = `${FOUNTAIN_HEAD}varying float vJetPhase;
+${shader.fragmentShader.replace(
+  "#include <alphamap_fragment>",
+  `#include <alphamap_fragment>
+  float swirl = sin(vAlphaMapUv.x * 43.98 + vJetPhase) * 1.5;
+  diffuseColor.a *= 0.72 + 0.28 * sin(vAlphaMapUv.y * 38.0 - uFountainTime * 5.0 + swirl);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.93, 0.8) * 1.5, uFountainNight * 0.5);`
+)}`;
+}
+
+/** The water: a slow shimmer of light across the surface, and a soft glow
+ *  from below once the lamps are on. */
+function animateWater(shader: OnBeforeCompileShader): void {
+  Object.assign(shader.uniforms, FOUNTAIN_UNIFORMS);
+  shader.vertexShader = `${FOUNTAIN_HEAD}varying vec3 vWaterPos;
+${shader.vertexShader.replace(
+  "#include <begin_vertex>",
+  `#include <begin_vertex>
+  vWaterPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+)}`;
+  shader.fragmentShader = `${FOUNTAIN_HEAD}varying vec3 vWaterPos;
+${shader.fragmentShader
+  .replace(
+    "#include <normal_fragment_maps>",
+    `#include <normal_fragment_maps>
+  // Three crossing swells, none aligned with another, so no stripes read.
+  float ripA = (sin(vWaterPos.x * 2.3 + vWaterPos.z * 0.7 + uFountainTime * 1.6)
+    + sin(vWaterPos.z * 2.9 - vWaterPos.x * 1.1 - uFountainTime * 1.3)
+    + sin((vWaterPos.x + vWaterPos.z) * 4.1 + uFountainTime * 2.3)) / 3.0;
+  float ripB = sin(vWaterPos.x * 3.7 - vWaterPos.z * 1.9 + uFountainTime * 2.1);
+  normal = normalize(normal + vec3(0.06 * ripA, 0.06 * ripB, 0.0));`
+  )
+  .replace(
+    "#include <emissivemap_fragment>",
+    `#include <emissivemap_fragment>
+  totalEmissiveRadiance += vec3(0.03, 0.04, 0.045) * (0.5 + 0.5 * ripA);
+  totalEmissiveRadiance += vec3(0.12, 0.17, 0.2) * uFountainNight * (0.8 + 0.2 * ripA);`
+  )}`;
+}
+
+/** The sculpture's night light: strongest where it rises from the water
+ *  (the lowest 1.5 m of its world height above the basin), gone by its top. */
+function uplight(shader: OnBeforeCompileShader): void {
+  Object.assign(shader.uniforms, FOUNTAIN_UNIFORMS);
+  shader.vertexShader = `${FOUNTAIN_HEAD}attribute float aLift;
+varying float vLift;
+${shader.vertexShader.replace(
+  "#include <begin_vertex>",
+  `#include <begin_vertex>
+  vLift = aLift;`
+)}`;
+  shader.fragmentShader = `${FOUNTAIN_HEAD}varying float vLift;
+${shader.fragmentShader.replace(
+  "#include <emissivemap_fragment>",
+  `#include <emissivemap_fragment>
+  totalEmissiveRadiance += vec3(1.0, 0.82, 0.6) * 0.55 * uFountainNight * (1.0 - smoothstep(0.0, 2.5, vLift));`
+)}`;
+}
+
 function materials(
   heightFog: HeightFogUniforms | undefined,
   alpha: CanvasTexture
@@ -445,13 +569,28 @@ function materials(
     depthWrite: false,
     side: DoubleSide,
   });
-  const all = { clay, water, spray };
-  if (heightFog) {
-    for (const m of Object.values(all)) {
-      m.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
+  // A fountain's sculpture, lit from its basin by night: warm at the
+  // water, fading up the form (a real fountain's floodlights, abstracted).
+  const litClay = clay.clone();
+  const fog = (sh: OnBeforeCompileShader) => {
+    if (heightFog) {
+      injectHeightFog(sh, heightFog);
     }
-  }
-  return all;
+  };
+  clay.onBeforeCompile = fog;
+  litClay.onBeforeCompile = (sh) => {
+    uplight(sh);
+    fog(sh);
+  };
+  water.onBeforeCompile = (sh) => {
+    animateWater(sh);
+    fog(sh);
+  };
+  spray.onBeforeCompile = (sh) => {
+    animateSpray(sh);
+    fog(sh);
+  };
+  return { clay, litClay, water, spray };
 }
 
 /** One tile's monuments: the group, and the jets' alpha texture to free. */
@@ -475,6 +614,7 @@ export function buildMonuments(
     jets: [],
     pillars: [],
     reliefs: [],
+    sculptures: [],
     rims: [],
     slabs: [],
     waters: [],
@@ -491,6 +631,7 @@ export function buildMonuments(
   const meshes = [
     merged(parts.rims, mat.clay, true),
     merged(parts.reliefs, mat.clay, true),
+    merged(parts.sculptures, mat.litClay, true),
     merged(parts.waters, mat.water, false),
     parts.pillars.length > 0
       ? instanced(unitPillar(), mat.clay, parts.pillars, true)
