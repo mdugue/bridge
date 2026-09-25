@@ -23,7 +23,7 @@
 - **Status**: PARTIAL (2026-09-25) — built without a GPU:
   - Phase 1: `pipeline/bake/skyview.py` (committed DGM + LoD2 only,
     `lowveg.py`'s CityJSON walk extracted as `lod2_rings`), `svf_<tile>.png`
-    for all four tiles (1024², 0.49–0.6 MB), terrain ambient
+    for all four tiles (1024², 0.47–0.56 MB), terrain ambient
     (`sky-light.ts`, *Himmelslicht*, default 0.5).
   - Phase 2: the far horizon — **STOP measured**: at 4 m the spawn tile's
     PNG was 1.86 MB (> 1.5 MB), so it ships at **8 m, 16 azimuths**
