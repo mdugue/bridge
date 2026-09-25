@@ -465,7 +465,9 @@ visual-variable codebook is in
     cadastre wins position and species, and a peak within max(4 m, the
     cadastre crown radius) of a cadastre tree is dropped (radius match, not
     1:1 — one big crown often yields two peaks) → **5 739 shipped, 2 267
-    dropped**. (Taking the scan height where the cadastre has none is not
+    dropped** in the first bake; **5 788 shipped, 2 528 dropped** (8 316
+    peaks) since the re-bake of 2026-09-25 with the current bridges and the
+    land cover with the OSM squares carved in, where more trees may stand. (Taking the scan height where the cadastre has none is not
     done: the cadastre bake imputes missing heights and does not mark them.)
     Rendered as ordinary canopy trees.
   - *Rendering* (`low-vegetation-layer.ts`, separate from the tree layer):
