@@ -177,7 +177,11 @@ reviews after phases 1–3 and at the end.
   openstreetmap.fr's Arnsberg region for Unna; local only, nothing
   committed). After main's stairs landed (ADR 0028/0029) every fetched
   site got its stairs and terraces too: Leipzig 203 flights, Meißen 101,
-  Grimma 15, Unna 79, Hamburg 25, München 375.
+  Grimma 15, Unna 79, Hamburg 25, München 375. Main's monuments followed
+  the same way: München 234 (mostly OSM fountains), Leipzig 138, Grimma 19,
+  Meißen 16, Unna 11, and Hamburg 33 fountains from OSM alone (no open
+  DLM, so no statues). Baking them showed the spec's integer tile bounds
+  leaking numpy integers into the GeoJSON — fixed in `bake/spec.py`.
 - **Berlin is configured but not fetched:** `gdi.berlin.de` failed TLS
   from the container; the adapter follows the ATOM feeds' documented URLs.
   The block is 3×2 so that both the Brandenburger Tor and the Fernsehturm
