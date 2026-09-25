@@ -60,7 +60,8 @@ visual-variable codebook is in
   terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
   screen-space error (16 px) from the view camera **and the sun's shadow
   camera**, so a tile casting into the view stays loaded. Only the fine level
-  is dressed (vegetation, lamps, rails, walls); distance, not a "primary"
+  is dressed (vegetation, lamps, rails; its stairs and walls are baked into
+  it); distance, not a "primary"
   role, decides which tile is detailed, and collision, demolish, focus and
   double-tap work on every visible tile. Everything a tile adds leaves with
   it (`tile-stream.ts`, `processTileModel` / `disposeTile`)
@@ -220,12 +221,18 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 
 ### Retaining / city walls
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
-  wall` + `man_made=embankment` (ODbL), with the tagged `height` (e.g. the
-  8.5–9 m city walls). `pipeline/bake/walls.py` → `wall-layer.ts`: vertical
-  sandstone ribbons, built per fine terrain tile, base draped on the DGM via
-  the cross-tile `heightAt` over every loaded terrain, top = base + height,
-  nudged slightly onto the low side so the face skins the (now stepped)
-  terrain. **Why OSM:** the monumental wall is NOT in the elevation data —
+  wall` + `man_made=embankment` + `natural=cliff` (kind `cliff`, default 3 m;
+  read from `other_tags`, since GDAL has no `natural` column on `lines`)
+  (ODbL), with the tagged `height` (e.g. the
+  8.5–9 m city walls). `pipeline/bake/walls.py` → vertical sandstone
+  ribbons (`lib/city/walls.ts`), **baked into the fine terrain glTF** as a
+  `walls` node (`scripts/bake-tiles.ts` `wallMesh`,
+  [ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md)):
+  base on the shaped ground of every tile's fine grid (so a wall near a seam
+  reads its neighbour's), top on the high shelf, nudged slightly onto the
+  low side so the face skins the (stepped) terrain; `wall-layer.ts` only
+  gives it its material. Until then the browser built the ribbons from the
+  GeoJSON over whichever terrains were loaded. **Why OSM:** the monumental wall is NOT in the elevation data —
   DGM1/DOM1/**LiDAR-ground all smooth it into a gentle bank** (verified by
   sampling: ground ≈ DGM across the wall), and it's not a CityJSON building, so it
   "went missing". OSM has it as explicit vector lines with heights.
@@ -250,10 +257,42 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   untouched DGM within a ~11 m band (nearest-wall-wins). The wall ribbon then
   skins a real step. **Deterministic + source-portable** (any DEM + any OSM wall
   lines). **Gated** to earth-retaining kinds
-  (`retaining_wall`/`city_wall`/`embankment`) and only where the two sides
+  (`retaining_wall`/`city_wall`/`embankment`/`cliff`) and only where the two sides
   actually differ by ≥1.5 m, so freestanding garden walls and flat fountain rims
   leave the ground alone; a ≤18 m clamp stops a bad height tag gouging a canyon.
   Pure + unit-tested (`terrain-conflate.test.ts`).
+
+### Stairs (OSM steps over a lowered terrain)
+- **Flights of steps** (*Freitreppe am Italienischen Dörfchen &c.*) — OSM
+  `highway=steps` (ODbL). `pipeline/bake/stairs.py` → `stairs_<tile>.geojson`:
+  the axis oriented bottom → top, `w` from `width` (else an
+  `area:highway=steps` outline: area ÷ axis length; else the gap between the
+  OSM walls either side when the slope fills it, the axis re-centred; else
+  2.5 m), `z` = the two
+  landing heights from the DGM 1 m beyond each end (3×3 m median), `n` from
+  `step_count` when its riser is 8–25 cm, else rise ÷ 16 cm. Indoor,
+  underground, tunnel and bridge flights and anything flatter than 30 cm are
+  left out. Where the DGM lacks the structure a flight climbs (less than
+  half its tagged rise) and its top lands on a raised OSM area (`layer` ≥ 1),
+  the tagged rise wins and the area goes to `terraces_<tile>.geojson` at the
+  flight's top level — the Brühlsche Terrasse, 118.3 m over the
+  Schlossplatz's 112.2 m. At build, `lib/city/stairs.ts` lifts the ground
+  inside each terrace (`raiseTerraces`, after the wall conflation; holes in
+  the OSM area filled), then `burnStairs` sets the terrain under each
+  flight to 12 cm below the ramp through the steps' inner corners — lifting
+  it where the DGM runs below, since the player walks on the grid — and
+  lowers every vertex beside it whose triangles reach under it, never
+  across a wall. The same build step writes each flight as sandstone blocks
+  — treads, darker risers, side cheeks down past the bottom landing — into
+  the fine terrain glTF of the tile owning its middle (a `stairs` node,
+  vertex colours); `stair-layer.ts` only gives it its material.
+  **Why:** the DGM1 smooths a staircase into a bank (the flight beside the
+  Italienisches Dörfchen read as a grassy slope) and its ~2 m grid cannot
+  hold a 16 cm riser ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md)).
+  **Fallback:** no `.osm.pbf` → the step is skipped, the committed file stays;
+  no file → no stairs, the terrain as before. Pure + unit-tested
+  (`stairs.test.ts`, the bake end-to-end against a synthetic OSM extract in
+  `pipeline/tests`).
 
 ### Lighting
 - **Soft shadows** — `PCFShadowMap` + raised `shadow.radius`; terrain
@@ -301,6 +340,10 @@ research that produced them):
    behind a slider, judge on GPU before committing.
 3. **ALKIS parcels** — plot boundaries → per-parcel ground tint, garden/courtyard
    vs street, fences along lot lines; richer `Gebäudefunktion` than CityGML.
+   The same download would carry the surveyed stairs and walls
+   (`AX_SonstigesBauwerkOderSonstigeEinrichtung`: *Treppe*, *Mauer*,
+   *Stützmauer*) — a second, official source for `stairs.py` and `walls.py`
+   where OSM is thin (ADR 0028).
 4. **Cartographic minimap** — DTK / basemap.de P10 raster tile + Ortsteile labels
    replacing the math-drawn minimap.
 5. **Dappled canopy shadow** — alpha-tested colour-less proxy caster per chunk

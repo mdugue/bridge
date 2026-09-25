@@ -1,5 +1,5 @@
 """OSM walls → wall lines with a kind and a height (retaining walls, city
-walls, walls, embankments), clipped to the tile. The terrain bake burns the
+walls, walls, embankments, cliffs), clipped to the tile. The terrain bake burns the
 tall ones into the heightfield as breaklines; the viewer stands a ribbon on
 each."""
 
@@ -12,8 +12,21 @@ import shapely
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, write_geojson
 from .osm import has_extract, read_osm, tag
 
-WHERE = "barrier IN ('retaining_wall','city_wall','wall') OR man_made = 'embankment'"
-DEFAULT_H = {"city_wall": 6.0, "retaining_wall": 3.0, "wall": 1.5, "embankment": 2.5}
+CLIFF = 'other_tags LIKE \'%"natural"=>"cliff"%\''
+WHERE = f"barrier IN ('retaining_wall','city_wall','wall') OR man_made = 'embankment' OR {CLIFF}"
+DEFAULT_H = {
+    "city_wall": 6.0,
+    "retaining_wall": 3.0,
+    "wall": 1.5,
+    "embankment": 2.5,
+    "cliff": 3.0,
+}
+
+
+def kind_of(barrier: str | None, man_made: str | None, other_tags: str | None) -> str:
+    if barrier or man_made:
+        return barrier or man_made
+    return "cliff" if tag(other_tags, "natural") == "cliff" else "wall"
 
 
 def height(other_tags: str | None) -> float | None:
@@ -52,7 +65,7 @@ def run(tile: Tile) -> None:
             column(fields, "other_tags", geoms),
             strict=True,
         ):
-            kind = barrier or man_made or "wall"
+            kind = kind_of(barrier, man_made, other)
             h = height(other) or DEFAULT_H.get(kind, 2.0)
             clipped = shapely.intersection(g, box)
             for line in lines_of(clipped):

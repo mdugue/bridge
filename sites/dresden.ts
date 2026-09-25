@@ -39,7 +39,7 @@ export const DRESDEN: Site = {
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
   attribution: [
     "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Mauern, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
+    "Lampen, Mauern, Treppen, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
   ],
   spawn: "altstadt",
   viewpoints: [

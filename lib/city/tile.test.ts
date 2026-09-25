@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { DRESDEN } from "../../sites/dresden";
 import {
+  wallSourceFile,
   cityMeshSourceFiles,
   type DataManifest,
   dgmSourceFiles,
@@ -13,7 +14,9 @@ const PRIMARY_TILE = "33412_5656_2_sn";
 
 test("the artifact map reproduces the served file names", () => {
   const a = tileArtifacts(PRIMARY_TILE);
-  expect(a.walls.file).toBe("walls_33412_5656_2_sn.geojson");
+  expect(wallSourceFile(PRIMARY_TILE)).toBe(
+    "data/dlm/walls_33412_5656_2_sn.geojson"
+  );
   expect(a.ndvi.file).toBe("ndvi_33412_5656_2_sn.png");
   expect(a.landcover.file).toBe("landcover_33412_5656_2_sn.png");
   expect(a.landcoverLow).toEqual({

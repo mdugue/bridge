@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from . import canopy, lamps, landcover, ndvi, rail, roof_colour, walls
+from . import canopy, lamps, landcover, ndvi, rail, roof_colour, stairs, walls
 from .common import Tile
 
 STEPS = {
@@ -16,6 +16,7 @@ STEPS = {
     "roof-colour": roof_colour.run,
     "lamps": lamps.run,
     "walls": walls.run,
+    "stairs": stairs.run,
     "rail": rail.run,
 }
 

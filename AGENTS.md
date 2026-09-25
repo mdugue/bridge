@@ -98,8 +98,10 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`, `shader-chunks.ts`
-    (data-frame positions from world space)
+    `rail-layer.ts`, `wall-layer.ts` and `stair-layer.ts` (only their
+    materials: walls and stairs are baked into the fine terrain glTF),
+    `lamp-layer.ts`,
+    `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
@@ -126,7 +128,7 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `walls.py`, `rail.py`, `osm.py`; `ingest_sn.py` is Saxony's
+  `lamps.py`, `walls.py`, `stairs.py`, `rail.py`, `osm.py`; `ingest_sn.py` is Saxony's
   download adapter; tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
@@ -231,8 +233,9 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
-- All OSM layers (walls, lamps, platforms, bridge structure) come from the
-  site's Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass.
+- All OSM layers (walls, cliffs, stairs, lamps, platforms, bridge
+  structure) come from the site's Geofabrik `.osm.pbf` via GDAL's OSM
+  driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
@@ -322,7 +325,8 @@ scene: it re-renders everything into a buffer each frame (~2× cost).
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps, rails and walls are built tile by tile behind a HUD chip
+lamps and rails are built tile by tile behind a HUD chip (stairs and
+walls are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). `onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow

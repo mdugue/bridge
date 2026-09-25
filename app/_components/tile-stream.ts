@@ -17,7 +17,6 @@ import type {
   LampFeature,
   RailFeature,
   VegRowFeature,
-  WallFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -33,6 +32,7 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildRail } from "./rail-layer";
 import { dressTerrain, type TerrainLayer } from "./terrain-layer";
+import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import {
   buildVegetation,
@@ -40,7 +40,7 @@ import {
   type VegetationControl,
 } from "./vegetation-layer";
 import type { StyleResources } from "./visual-style";
-import { buildWalls } from "./wall-layer";
+import { dressWalls } from "./wall-layer";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
@@ -55,7 +55,6 @@ export interface TileDressing {
   rail?: Group;
   tile: string;
   vegetation?: VegetationControl;
-  walls?: Group;
 }
 
 export interface TileStreamContext {
@@ -137,8 +136,24 @@ class GzipContentPlugin {
 
 type Features<T> = Promise<T[]>;
 
+function firstMesh(root: Object3D): Mesh | undefined {
+  return root.getObjectByProperty("isMesh", true) as Mesh | undefined;
+}
+
+/** The mesh on a glTF node of that name (the loader names the node's mesh
+ *  after it). */
+function meshNamed(root: Object3D, name: string): Mesh | undefined {
+  let found: Mesh | undefined;
+  root.traverse((o) => {
+    if (!found && (o as Mesh).isMesh && o.name === name) {
+      found = o as Mesh;
+    }
+  });
+  return found;
+}
+
 function dressingParts(d: TileDressing): Object3D[] {
-  return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
+  return [d.vegetation?.group, d.lamps?.group, d.rail].filter(
     (part): part is Group => part !== undefined
   );
 }
@@ -200,30 +215,20 @@ async function buildDressing(
   }
   const get = <T>(file: string): Features<T> =>
     file ? fetchFeatures<T>(url(file)) : Promise.resolve([]);
-  const [
-    rows,
-    canopy,
-    ndviAt,
-    lamps,
-    rails,
-    bridges,
-    ballast,
-    platforms,
-    walls,
-  ] = await Promise.all([
-    get<VegRowFeature>(d.vegrows),
-    get<CanopyFeature>(d.canopy),
-    extras.ndvi
-      ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
-      : Promise.resolve(null),
-    get<LampFeature>(d.lamps),
-    get<RailFeature>(d.rail),
-    get<BridgeFeature>(d.bridge),
-    get<AreaFeature>(d.railarea),
-    get<AreaFeature>(d.platform),
-    get<WallFeature>(d.walls),
-  ]);
-  // Rails and walls may run past the tile edge: they sample the ground over
+  const [rows, canopy, ndviAt, lamps, rails, bridges, ballast, platforms] =
+    await Promise.all([
+      get<VegRowFeature>(d.vegrows),
+      get<CanopyFeature>(d.canopy),
+      extras.ndvi
+        ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
+        : Promise.resolve(null),
+      get<LampFeature>(d.lamps),
+      get<RailFeature>(d.rail),
+      get<BridgeFeature>(d.bridge),
+      get<AreaFeature>(d.railarea),
+      get<AreaFeature>(d.platform),
+    ]);
+  // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
   const vegetation = buildVegetation(
@@ -254,8 +259,12 @@ async function buildDressing(
     { rails, bridges, ballast, platforms },
     { ...ground, heightFog: ctx.heightFog }
   );
-  const wallGroup = buildWalls(walls, { ...ground, heightFog: ctx.heightFog });
-  return { tile, vegetation, lamps: lampControl, rail, walls: wallGroup };
+  return {
+    tile,
+    vegetation,
+    lamps: lampControl,
+    rail,
+  };
 }
 
 /**
@@ -289,7 +298,9 @@ class DressingPlugin {
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
     const extras = scene.userData as ContentExtras;
-    const mesh = scene.getObjectByProperty("isMesh", true) as Mesh | undefined;
+    // The content's own mesh by its node name ("terrain", "city"); the fine
+    // terrain also carries a "stairs" node.
+    const mesh = meshNamed(scene, extras.kind) ?? firstMesh(scene);
     if (!mesh) {
       return;
     }
@@ -341,6 +352,17 @@ class DressingPlugin {
       sunDirection: this.ctx.sunDirection,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
+    // The fine level's baked stairs and walls: only their materials here.
+    const stairs = meshNamed(scene, "stairs");
+    if (stairs) {
+      dressStairs(stairs, this.ctx.heightFog);
+      terrain.stairs = stairs;
+    }
+    const walls = meshNamed(scene, "walls");
+    if (walls) {
+      dressWalls(walls, this.ctx.heightFog);
+      terrain.walls = walls;
+    }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });
     if (extras.dressing) {
