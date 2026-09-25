@@ -62,6 +62,8 @@ flowchart LR
     FEN["Fences, railings &amp; gates"]
     STR["Stairs"]
     SPT["Sports grounds<br/>pitches · courts · tracks · goals"]
+    MRK["Road markings<br/>zebras · Furten · stop lines · cycle and centre lines"]
+    CULT["Cultivated land<br/>allotment beds · orchard trees · vine rows"]
     MM["Minimap"]
     LIGHT["Light &amp; shadow"]
   end
@@ -139,6 +141,10 @@ flowchart LR
   OSM -. "layer ≥ 1 areas a flight climbs onto → terraces lifted at build" .-> TER
   DGM -. ground-clamp .-> PLT
   OSM ==>|"leisure=pitch/track<br/>sport · surface → table + index raster"| SPT
+  OSM ==>|"crossings · signals · cycleway · lanes → table + lane raster"| MRK
+  DLM -. "carriageway width + kerb distance" .-> MRK
+  OSM ==>|"landuse=allotments/orchard/vineyard → colonies, trees, rows"| CULT
+  DGM -. "rows along the contour · ground-clamp" .-> CULT
   DGM -. "goals · posts · nets ground-clamped" .-> SPT
 
   %% minimap + lighting (derived, not raw data)
@@ -146,6 +152,8 @@ flowchart LR
   DLM -. "class raster + palette as map background" .-> MM
   CJ -. "building footprints" .-> MM
   SUN ==> LIGHT
+  DGM ==>|"sky-view factor · far horizon (with the LoD2 roofs)"| LIGHT
+  CJ -. "roofs in the sky view and horizon" .-> LIGHT
   SUN -. "fog · sky · dusk gate" .-> DET
 ```
 
@@ -157,11 +165,13 @@ flowchart LR
 | **Surface colours** | Basis-DLM class raster (ids 0–8), painted with the palette on the GPU at load | DOP NDVI (meadow tint, class 1; urban green on classes 0 and 4) | `landcover-splat.ts`, `lib/city/landcover.ts` (the one palette), `terrain-layer.ts` (samples the splat + `uNdvi`), `ground-detail.ts` (urban green); baked by `pipeline/bake/landcover.py` + `ndvi.py` |
 | **Kerbs, paving & parking** | Basis-DLM class raster: the road (7) and meadow (1, + urban green) edges as smoothed signed distances, and the kerb lines the fine terrain stands kerb stones on (`edges.py`) | OSM paving raster (`surface`, `sidewalk:*:surface`, `parking:*` lanes, `amenity=parking`/`parking_space` with their aisles, the way direction; else the class default) | `ground-detail.ts` (in the terrain fragment pass), `terrain-layer.ts`; baked by `pipeline/bake/surface.py` |
 | **Sports grounds** | OSM `leisure=pitch` / `track` (playgrounds are street furniture): per ground its frame, surface and line scheme (`sport_<t>.json`) and a 2048² index raster (`sport_<t>.png`) | the sport's usual surface when untagged · DGM1 (the goals, posts and nets stand on the ground) | `sport-ground.ts` (in the terrain fragment pass), `sport-fixtures.ts` (dressing), `lib/city/sport.ts`; baked by `pipeline/bake/sport.py` |
+| **Road markings** | OSM `highway=crossing` (marked kinds), directed `highway=traffic_signals`, `cycleway*=lane`, `lanes` + `oneway`: a table of crossings and stop lines (`markings_<t>.json`) and a 2048² raster of rows, lane bits and the centre offset (`markings_<t>.png`) | Basis-DLM class raster (the carriageway's width across each crossing; the kerb distance the cycle lane keeps) | `road-markings.ts` (in the terrain fragment pass), `lib/city/markings.ts`; baked by `pipeline/bake/markings.py` |
 | **Water (Elbe)** | Basis-DLM class 8 (water coverage from the painted splat) **+** DGM1 (the terrain geometry it drapes on) | — | `water-layer.ts`, `landcover-splat.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts` |
 | **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) · OSM shops on the ground floor and `heritage=*` (the `flags` column) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py`, the OSM flags by `osm_buildings.py` |
 | **Inventory trees** | Stadtbaumkataster Dresden (WFS `cls:L1261`): position, height, crown diameter, taxon | DGM1 (ground-clamp) · DOP NDVI (deciduous crown colour) · vetoes the rows/canopy trees inside each crown, except in DLM forest/copse · trunks + broadleaf crowns drawn in the canopy's meshes | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts`, `tile-stream.ts`; baked by `pipeline/bake/trees.py` (+ `tree_archetypes.py`) |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy **+** LSC crown peaks outside the mask (spawn tile, thinned against the cadastre) | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `pipeline/bake/landcover.py` + `canopy.py` + `ndvi.py` + `lowveg.py` |
+| **Cultivated land** | OSM `landuse=allotments` (+ `leisure=garden` plots), `orchard`, `vineyard` | the colony raster (beds in the terrain pass) · OSM `natural=tree` in an orchard, else an 8 m grid · DGM1 (a vineyard's rows along the contour; ground-clamp) | `cultivated-layer.ts`, `lib/city/cultivated.ts`, `tile-stream.ts`; baked by `pipeline/bake/cultivated.py` |
 | **OSM hedges** | OSM `barrier=hedge` lines (Geofabrik extract) | LSC (measured height, spawn tile) · DGM1 (ground-clamp); tag / 1.5 m where no LAZ. The bake's laser-scan-only hedges and shrubs are not shipped (🗃️ in the ledger) | `low-vegetation-layer.ts`; baked by `pipeline/bake/lowveg.py` |
 | **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) | DGM1 (ground-clamp); gated off water + railway | baked by `pipeline/bake/lamps.py`; `lamp-layer.ts` |
 | **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces) · DGM1 (ground-clamp); gated off water, railway and bridge decks | baked by `pipeline/bake/furniture.py`; `furniture-layer.ts`, `lib/city/furniture.ts` |
@@ -173,7 +183,7 @@ flowchart LR
 | **Fences, railings & gates** | OSM `barrier=fence/handrail` + `fence_type` + `height`; `barrier=gate/lift_gate/swing_gate/cycle_barrier` points on a wall or fence line (BBBike extract) | DGM1 (stands on the fine TIN, never reshapes it) · gates cut their fence or freestanding wall | `lib/city/fences.ts` (at build, into the fine terrain glTF), `fence-layer.ts` (the pattern, the veil, the partial shadow); baked by `pipeline/bake/walls.py` |
 | **Stairs** | OSM `highway=steps` + `width` · `step_count` (else an `area:highway=steps` outline; else the gap between the OSM walls either side; else defaults) | DGM1 (landing heights; the terrain lowered under the flight) — *the DGM smooths steps into a bank*; OSM `layer` ≥ 1 areas the DGM lacks (the Brühlsche Terrasse), lifted to the flight's tagged top | `lib/city/stairs.ts` (burn + step geometry, both at build, into the fine terrain glTF), `stair-layer.ts` (material); baked by `pipeline/bake/stairs.py` |
 | **Minimap** | tile bounds (tileset `extras`) + the 2048² class raster in the palette + CityJSON footprints (`footprints_<tile>.json`) | DTK / basemap.de *(planned, richer)* | `minimap.tsx`, `lib/city/minimap*`, `lib/city/landcover.ts` |
-| **Light & shadow** | sun rig (time, not data) | — | `sun-rig.ts`, `post-stack.ts` |
+| **Light & shadow** | sun rig (time, not data) | DGM1 + LoD2: the sky-view factor (ambient) and the far horizon (long shadows past the shadow map), baked per tile | `sun-rig.ts`, `post-stack.ts`, `sky-light.ts`; baked by `pipeline/bake/skyview.py` |
 
 Every row that reads OSM reads the site's local Geofabrik extract through
 GDAL's OSM driver (`pipeline/bake/osm.py`); no bake queries a live API
@@ -223,6 +233,9 @@ flowchart LR
     bSURF["surface.py"]
     bEDGE["edges.py"]
     bSPT["sport.py"]
+    bSKY["skyview.py"]
+    bMRK["markings.py"]
+    bCULT["cultivated.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -241,6 +254,9 @@ flowchart LR
     dSURF["surface PNG + legend"]
     dEDGE["edges PNG · kerbs"]
     dSPT["sport PNG + table"]
+    dSKY["svf PNG · horizon PNG"]
+    dMRK["markings PNG + table"]
+    dCULT["cultivated GeoJSON + colony PNG"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -285,6 +301,14 @@ flowchart LR
   dNDVI -.-> bEDGE
   dSURF -.-> bEDGE
   iOSM ==> bSPT ==> dSPT
+  iOSM ==> bMRK ==> dMRK
+  dCLS ==> bMRK
+  dMRK -.-> tSIDE
+  iOSM ==> bCULT ==> dCULT
+  iDGM -. "contour" .-> bCULT
+  dCULT -.-> tSIDE
+  iDGM ==> bSKY
+  iCJ ==> bSKY ==> dSKY
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
@@ -299,6 +323,7 @@ flowchart LR
   dMON -.-> tSIDE
   dFURN -.-> tSIDE
   dRAIL -.-> tSIDE
+  dSKY -.-> tSIDE
   dSURF -.-> tSIDE
   dEDGE -.-> tSIDE
   dSPT -.-> tSIDE

@@ -66,6 +66,12 @@ export type TileArtifactKind =
   | "edges"
   | "sport"
   | "sportTable"
+  | "svf"
+  | "horizon"
+  | "markings"
+  | "markingsTable"
+  | "cultivated"
+  | "cultivatedRaster"
   | "trees"
   | "vegrows";
 
@@ -105,6 +111,22 @@ export function tileArtifacts(
     // under a pitch is its land-cover class.
     sport: dlm(`sport_${tile}.png`),
     sportTable: dlm(`sport_${tile}.json`),
+    // Optional: the sky-view factor and the far horizon
+    // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
+    // ambient light the city lets through and the long shadows past the
+    // shadow map. Without them the light is as before.
+    svf: dlm(`svf_${tile}.png`),
+    horizon: dlm(`horizon_${tile}.png`),
+    // Optional: the road markings (pipeline/bake/markings.py) — the index
+    // raster (rows, lane bits, centre offset) and the table of crossings
+    // and stop lines; without them the roads stay unpainted.
+    markings: dlm(`markings_${tile}.png`),
+    markingsTable: dlm(`markings_${tile}.json`),
+    // Optional: allotment colonies, orchards and vineyards
+    // (pipeline/bake/cultivated.py) — the features (orchard trees, vine
+    // rows) and the colony raster the ground paints beds on.
+    cultivated: dlm(`cultivated_${tile}.geojson`),
+    cultivatedRaster: dlm(`cultivated_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
     furniture: dlm(`furniture_${tile}.geojson`),

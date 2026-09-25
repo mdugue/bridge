@@ -74,6 +74,8 @@ export interface DressingFiles {
   canopy: string;
   /** laser-scan crowns outside the canopy mask (tiles with a laser scan) */
   canopyx?: string;
+  /** allotments, orchards, vineyards (orchard trees, vine rows) */
+  cultivated?: string;
   furniture: string;
   lamps: string;
   /** OSM hedges */
@@ -118,12 +120,24 @@ export interface TerrainExtras {
   /** sports-ground index raster and its table of grounds (both levels) */
   sport?: string;
   sportTable?: string;
+  /** allotment-colony raster (fine level only) */
+  cultivated?: string;
+  /** road-marking raster and its table (fine level only) */
+  markings?: string;
+  markingsTable?: string;
+  /** sky-view factor raster (both levels; the clay reads it too) */
+  svf?: string;
+  /** far-horizon raster, four RGBA layers stacked (both levels) */
+  horizon?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
 }
 
 export interface CityExtras {
   kind: "city";
+  /** the tile's sky-view raster, shared with its terrain (the facades'
+   *  ambient light) */
+  svf?: string;
   tileId: string;
 }
 

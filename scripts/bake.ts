@@ -10,8 +10,8 @@
  *                                     ndvi, roof-colour, osm-buildings,
  *                                     lamps, monuments,
  *                                     furniture, walls, stairs, rail,
- *                                     surface, edges, sport, lowveg,
- *                                     islands)
+ *                                     surface, edges, markings, sport,
+ *                                     cultivated, skyview, lowveg, islands)
  *   bun run bake --ingest --lsc       ... and the laser scan (≈380 MB a tile)
  *   bun run bake --step lowveg --research   also every hedge/shrub candidate
  *

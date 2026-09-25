@@ -314,7 +314,13 @@ async function bakeCity(
       utf8({ maxZ: built().maxElevation })
     )
   );
-  const extras: CityExtras = { kind: "city", tileId: tile };
+  const svf = sideFiles.get(tile)?.svf;
+  const extras: CityExtras = {
+    kind: "city",
+    tileId: tile,
+    // The facades' ambient light reads the terrain's sky-view raster.
+    ...(svf ? { svf } : {}),
+  };
   const name = `city_${tile}.glb.gz`;
   const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
     gz(
@@ -440,6 +446,7 @@ function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
     ...(names.trees ? { trees: names.trees } : {}),
     ...(names.lowveg ? { lowveg: names.lowveg } : {}),
     ...(names.canopyx ? { canopyx: names.canopyx } : {}),
+    ...(names.cultivated ? { cultivated: names.cultivated } : {}),
   };
 }
 
@@ -547,6 +554,25 @@ async function fineChildren(
   return [stairs, walls, kerbs, fences].filter((m) => m !== null);
 }
 
+/** The fine level's allotment colonies (plan 028) and road markings (plan
+ *  026) and both levels' baked light (plan 033): only the rasters the tile
+ *  has. */
+function paintAndLight(
+  names: Partial<Record<string, string>>,
+  level: 0 | 1
+): Partial<TerrainExtras> {
+  return {
+    ...(level === 0 && names.cultivatedRaster
+      ? { cultivated: names.cultivatedRaster }
+      : {}),
+    ...(level === 0 && names.markings && names.markingsTable
+      ? { markings: names.markings, markingsTable: names.markingsTable }
+      : {}),
+    ...(names.svf ? { svf: names.svf } : {}),
+    ...(names.horizon ? { horizon: names.horizon } : {}),
+  };
+}
+
 /** A tile's terrain at one level: glTF + its extent and elevation range. */
 async function bakeTerrain(
   tile: string,
@@ -575,6 +601,7 @@ async function bakeTerrain(
     ...(names.sport && names.sportTable
       ? { sport: names.sport, sportTable: names.sportTable }
       : {}),
+    ...paintAndLight(names, level),
     ...(level === 0 ? { dressing: dressingOf(names) } : {}),
   };
   const key = cacheKey(inputs, offset, described);

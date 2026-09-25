@@ -5,7 +5,9 @@ import {
   Group,
   Matrix4,
   type Mesh,
+  type MeshStandardMaterial,
   type Object3D,
+  type Texture,
   type Vector3,
   type WebGLRenderer,
 } from "three";
@@ -15,6 +17,7 @@ import type {
   BridgeFeature,
   CanopyExtraFeature,
   CanopyFeature,
+  CultivatedFeature,
   FurnitureFeature,
   LampFeature,
   LowVegFeature,
@@ -23,6 +26,7 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
+import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookState } from "@/lib/city/look-state";
 import { onRelief } from "@/lib/city/monuments";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
@@ -34,6 +38,7 @@ import {
   type TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
+import { buildVineyards } from "./cultivated-layer";
 import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import type { HeightFogUniforms } from "./height-fog";
@@ -49,6 +54,8 @@ import {
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
+import { createSharedRasters, type SharedRasters } from "./shared-rasters";
+import { loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import { buildTreeInventory } from "./tree-inventory-layer";
@@ -59,7 +66,7 @@ import {
   type VegetationControl,
   type VegetationFeatures,
 } from "./vegetation-layer";
-import type { StyleResources } from "./visual-style";
+import { setClaySkyView, type StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
 
 /**
@@ -81,6 +88,8 @@ export interface TileDressing {
   sport?: SportFixtureLayer;
   tile: string;
   vegetation?: VegetationControl;
+  /** vine rows (cultivated-layer.ts): static */
+  vineyards?: Group;
 }
 
 export interface TileStreamContext {
@@ -134,6 +143,8 @@ export interface TileStream {
 interface Dressed {
   city?: CityLayer;
   dressing?: TileDressing;
+  /** the shared sky-view raster the city holds (its URL) */
+  svf?: string;
   terrain?: TerrainLayer;
 }
 
@@ -188,6 +199,7 @@ function dressingParts(d: TileDressing): Object3D[] {
     d.furniture,
     d.rail,
     d.sport?.group,
+    d.vineyards,
   ].filter((part): part is Group => part !== undefined);
 }
 
@@ -362,6 +374,7 @@ async function buildDressing(
     inventory,
     scanTrees,
     hedges,
+    cultivated,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -381,6 +394,8 @@ async function buildDressing(
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
     get<CanopyExtraFeature>(d.canopyx ?? ""),
     get<LowVegFeature>(d.lowveg ?? ""),
+    // allotments, orchards, vineyards (cultivated-layer.ts)
+    get<CultivatedFeature>(d.cultivated ?? ""),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
@@ -394,7 +409,8 @@ async function buildDressing(
       canopy: offMonuments([...canopy, ...scanTrees], monuments),
       ndviAt: ndviAt ?? undefined,
     },
-    inventory,
+    // Orchard trees join the cadastre as its "small" archetype.
+    [...inventory, ...orchardTrees(cultivated)],
     {
       offset: ctx.offset,
       heightAt: terrain.heightAt,
@@ -441,10 +457,20 @@ async function buildDressing(
     heightAt: terrain.heightAt,
     heightFog: ctx.heightFog,
   });
+  const vines = vineRows(cultivated);
+  const vineyards =
+    vines.length > 0
+      ? buildVineyards(vines, {
+          offset: ctx.offset,
+          heightAt: terrain.heightAt,
+          heightFog: ctx.heightFog,
+        })
+      : undefined;
   return {
     tile,
     vegetation,
     lowVegetation,
+    vineyards,
     lamps: lampControl,
     monuments: monumentLayer,
     furniture: furnitureGroup,
@@ -470,6 +496,11 @@ class DressingPlugin {
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
+  /** the sky-view rasters a tile's terrain and buildings share */
+  readonly skyView: SharedRasters<Texture> = createSharedRasters(
+    (url) => loadSkyViewTexture(url),
+    (texture) => texture.dispose()
+  );
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -515,7 +546,37 @@ class DressingPlugin {
       demolished
     );
     this.stream.cities.add(city);
-    this.dressed.set(scene, { city });
+    const entry: Dressed = { city };
+    this.dressed.set(scene, entry);
+    if (extras.svf) {
+      entry.svf = this.url(extras.svf);
+      this.shareSkyView(scene, entry, extras.tileId, entry.svf);
+    }
+  }
+
+  /** The facades' sky view lands after the buildings show (the clay binds
+   *  an open sky until then); held until the city tile leaves. */
+  private shareSkyView(
+    scene: Object3D,
+    entry: Dressed,
+    tileId: string,
+    url: string
+  ): void {
+    const bounds = this.ctx.tileBounds(tileId);
+    void this.skyView.acquire(url).then((texture) => {
+      const city = entry.city;
+      if (!(texture && bounds && city) || this.dressed.get(scene) !== entry) {
+        return;
+      }
+      const [minX, minY, maxX, maxY] = bounds;
+      const { cx, cy } = this.ctx.offset;
+      setClaySkyView(
+        city.mesh.material as MeshStandardMaterial,
+        texture,
+        [minX - cx, maxY - cy],
+        [maxX - minX, maxY - minY]
+      );
+    });
   }
 
   private async dressTerrain(
@@ -536,6 +597,7 @@ class DressingPlugin {
       offset: this.ctx.offset,
       renderer: this.ctx.renderer,
       sunDirection: this.ctx.sunDirection,
+      skyView: this.skyView,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls and kerbs: only their materials
@@ -636,6 +698,9 @@ class DressingPlugin {
     if (dressed.city) {
       this.stream.cities.delete(dressed.city);
       dressed.city.dispose();
+    }
+    if (dressed.svf) {
+      this.skyView.release(dressed.svf);
     }
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);

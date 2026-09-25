@@ -12,7 +12,7 @@
     "DGM1": {
       "layer": 6,
       "committed": "data/dgm/dgm1_<tile>_tiff/",
-      "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/canopy.py", "pipeline/bake/rail.py"],
+      "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/canopy.py", "pipeline/bake/rail.py", "pipeline/bake/skyview.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5656_2_sn_tiff.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/JCcXyifaNdLDnxZ/dgm1_33410_5658_2_sn_tiff.zip" },
@@ -49,7 +49,7 @@
       "$comment": "`stand` is the model's production year with the currency of its inputs in parentheses (laser scan for the roofs, Basis-DLM for the footprints, DGM for the ground); `creationDate` inside the CityJSON is the export date of each object.",
       "layer": 3,
       "committed": "data/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
-      "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/roof_colour.py"],
+      "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/roof_colour.py", "pipeline/bake/skyview.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-06-28 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5656_2_sn_citygml.zip" },
         "33410_5658_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-04-26 (most objects; some 2021-01, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/GVzwbSyp7Yl7mBD/lod2_33410_5658_2_sn_citygml.zip" },
@@ -148,7 +148,9 @@
         "surface": { "query": "highway=* lines (surface, width, footway=sidewalk, sidewalk:*:surface, footway:surface) and highway/area:highway/amenity=parking multipolygons with a surface", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "sport": { "query": "leisure in (pitch, track) multipolygons with sport=* and surface=* (nothing indoor, covered or on a roof), and leisure=track lines", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "fences": { "query": "barrier in (fence, handrail) lines and area outer rings (fence_type, height); barrier in (gate, lift_gate, swing_gate, cycle_barrier) points within 0.5 m of a wall or fence line (width). Appended to data/dlm/walls_<tile>.geojson after its walls, which were kept verbatim from the Geofabrik bake of 2026-06-15", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
-        "osmBuildings": { "query": "shop=* or amenity in (cafe, restaurant, bar, pub, fast_food, ice_cream, biergarten) points on the ground floor (no level, or a level list with 0) and building multipolygons carrying them; building multipolygons with heritage=*; joined to the LoD2 footprints (data/dlm/osmbuild_<tile>.json)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" }
+        "osmBuildings": { "query": "shop=* or amenity in (cafe, restaurant, bar, pub, fast_food, ice_cream, biergarten) points on the ground floor (no level, or a level list with 0) and building multipolygons carrying them; building multipolygons with heritage=*; joined to the LoD2 footprints (data/dlm/osmbuild_<tile>.json)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
+        "cultivated": { "query": "landuse in (allotments, orchard, vineyard) and leisure=garden multipolygons, natural=tree points, highway lines (a colony's paths)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
+        "markings": { "query": "highway=crossing nodes (crossing, crossing:markings, crossing_ref), highway=traffic_signals nodes with traffic_signals:direction or direction, highway=* lines (lanes, oneway, lane_markings, cycleway, cycleway:right/left/both)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" }
       }
     }
   }

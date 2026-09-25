@@ -20,7 +20,23 @@
 - **Effort**: M (bake M, terrain S, clay S–M, horizon shadow M)
 - **Risk**: MED — double-darkening with SSAO and the shadow map
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: PARTIAL (2026-09-25) — built without a GPU:
+  - Phase 1: `pipeline/bake/skyview.py` (committed DGM + LoD2 only,
+    `lowveg.py`'s CityJSON walk extracted as `lod2_rings`), `svf_<tile>.png`
+    for all four tiles (1024², 0.47–0.56 MB), terrain ambient
+    (`sky-light.ts`, *Himmelslicht*, default 0.5).
+  - Phase 2: the far horizon — **STOP measured**: at 4 m the spawn tile's
+    PNG was 1.86 MB (> 1.5 MB), so it ships at **8 m, 16 azimuths**
+    (256², 0.54–0.60 MB; 12 azimuths at 4 m would have been 1.36 MB).
+    Terrain far shadow by `min` with the shadow map (*Ferne Schatten*,
+    default 0.8), ADR 0031. Bake ≈22 s per tile (SVF ≈19 s, horizon ≈3 s).
+  - Phase 3: clay facades read the SVF (2.5 m outside the wall, ×2, faded to
+    the eaves), shared with the terrain through a refcounted registry
+    (`shared-rasters.ts`). *Boden-Verlauf* kept as is (not retuned —
+    needs plates). Horizon on facades: not done (plates first).
+  - Open: every plate the phases name, the N8AO double-darkening check and
+    the frustum-seam check (both STOPs need a GPU; the conservative
+    defaults stand in).
 
 ## Why this matters
 

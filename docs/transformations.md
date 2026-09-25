@@ -230,6 +230,44 @@ visual-variable codebook is in
   the ground's centre. Both terrain levels; absent files → the land-cover
   class. Dresden (2026-09-19 extract): ~175 grounds over the four tiles.
   Textures scale with HUD *Bodendetail*; colours and lines stay.
+- **Road markings** (plan 026) — OSM `highway=crossing` nodes,
+  `highway=traffic_signals` nodes with a `traffic_signals:direction` (or
+  `direction`), and the roads' `lanes`, `oneway`, `lane_markings` and
+  `cycleway[:right|:left|:both]=lane` → `pipeline/bake/markings.py`: a
+  table of rotated rectangles (`markings_<tile>.json`: centre, the axis
+  across the road, half extents, kind) and a 2048² raster
+  (`markings_<tile>.png`, four bytes per texel: the row reaching it,
+  16-bit; lane bits; the signed distance to the carriageway's middle).
+  A crossing is painted when OSM says it is marked — `crossing:markings`
+  first (zebra; dashes/dots → *Furt*; no → nothing), then
+  `crossing_ref=zebra`, then `crossing=traffic_signals` → *Furt* (German
+  signalled crossings are two broken lines, not a zebra),
+  `marked`/`uncontrolled`/`zebra` → zebra; `unmarked` and `markings=no`
+  (≈1 100 nodes) paint nothing. Its axis is the normal of the nearest
+  carriageway way at the node, its length the contiguous DLM road texels
+  along that normal — measured also 5 and 10 m along the road, the
+  narrowest valid run winning, because at a junction the normal through
+  the node runs down the crossing street. A stop line lies 3 m before a
+  directed signal, across the right half of the approach (the whole road
+  on a oneway). Cycle lanes: a broken 25 cm line 1.85 m from the kerb, on
+  the side the raster says (resolved in the bake per texel — the paving
+  raster's bearing is only known modulo 180°). Centre lines: 12 cm dashes
+  (3 m in 8.25 m) where the signed distance to the middle crosses zero, on
+  two-way primary/secondary/tertiary/trunk/unclassified roads with
+  `lanes` ≥ 2 and a carriageway ≥ 5.5 m, clear of junctions by 12 m —
+  residential streets tagged `lanes=2` (≈300 ways) are left unmarked, as
+  they mostly are in Dresden. Painted in the terrain's fragment pass
+  (`road-markings.ts`), box-filtered (a zebra far off averages to a pale
+  band), clipped to the carriageway, worn, fine level only; scales with
+  *Bodendetail*. Baked 2026-09-25 from the BBBike extract of 2026-09-19:
+  **364 crossings** (59 zebra, 305 *Furt*) and **214 stop lines** over the
+  four tiles; 60 crossings and 32 signals left unpainted (no DLM road
+  within 3 m of the node — mostly service roads the DLM does not carry —
+  or no carriageway narrower than 30 m nearby). Checked against the
+  crossing footway through each node: the painted axis is within 20° of
+  it for 278 of 301 (median 2°), and 18 of 364 rectangles lie less than
+  70 % on the DLM carriageway — under the plan's 1-in-10 stop. ≈12 s per
+  tile, 77–107 KB raster + 5–11 KB table. **Not yet judged on a GPU.**
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
   courtyards, front gardens and parks inside the settlement alike. Where
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM
@@ -356,6 +394,35 @@ visual-variable codebook is in
   clamped to [0.55, 1.0] (stays matte).
 
 ### Vegetation
+- **Cultivated land** (plan 028) — OSM `landuse=allotments|orchard|vineyard`
+  (and `leisure=garden` plots inside a colony) → `pipeline/bake/cultivated.py`:
+  `cultivated_<tile>.geojson` (colonies, parcels, orchards with their trees,
+  vineyards with their rows) and a 2048² colony raster
+  (`cultivated_<tile>.png`, two bytes per texel: the colony or parcel with
+  its long axis, the distance to a parcel's border). No new land-cover
+  class (ADR 0023): dressing only. **Allotments** get a garden texture in
+  the terrain's fragment pass (`cultivated-layer.ts` `COLONY_BEDS_GLSL`):
+  1.2 m beds of soil and green in ≈12 m plots — the cells of a jittered
+  Voronoi, each along the colony's long axis or across it, a dark green
+  line where two meet — faded with distance to the plot's tone; the
+  colony's paths (OSM footways, paths, service roads), roads, rail and
+  water are left out in the bake. A mapped parcel would take its own axis
+  and a lawn edge along its border. **STOP measured:** of the 66 colonies
+  (77.9 ha) in the four tiles, **0** carry mapped parcels (the 351
+  `leisure=garden` areas lie elsewhere; inside the colonies OSM maps
+  sheds, 196 footways and 123 fences) — under the plan's one-third, so the
+  texture ships at a low strength (`COLONY_BEDS.strength` 0.45 of
+  *Bodendetail*) and invents no parcel outline. **Orchards**: the mapped
+  `natural=tree` inside, else a grid 8 m apart along the long axis,
+  centred (4 orchards, 0.1 ha, 7 trees), drawn by the tree layer as the
+  cadastre's "small" archetype (a round crown on a ≈1.3 m stem).
+  **Vineyards**: rows 1.8 m apart along the contour (perpendicular to the
+  DGM's mean gradient over the polygon; a flat one along its long axis),
+  drawn as chains of low boxes 1.3 m tall and 0.5 m wide, chunked into
+  250 m cells — built and unit-tested; no vineyard lies in the four tiles
+  (the Elbe slopes' are east of them, plan 017), and the seasonal bare
+  canes wait for plan 025's season plumbing. ≈18 s per tile. **Not yet
+  judged on a GPU** (the chessboard check is the plan's other STOP).
 - **Tree/hedge rows** — Basis-DLM hedge & tree-row lines → InstancedMesh, chunked
   into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
   (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
@@ -802,6 +869,46 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   camera also drives the tile streaming (casters behind the player stay
   loaded). Full recipe and dead-ends in the
   [city-walker skill](../.claude/skills/city-walker/SKILL.md).
+- **Sky-view factor** (*Himmelslicht*, plan 033) — the committed DGM1 with
+  every non-vertical LoD2 surface burned on top (max over its triangles,
+  each on its surface's plane; `lowveg.py`'s one CityJSON walk,
+  `lod2_rings`) → per ≈2 m cell the horizon angle `h` within 150 m in 16
+  azimuths, seen from the bare ground → `svf = 1 − mean(sin² h)`
+  (`svf_<tile>.png`, 1024², 8-bit, ≈0.5 MB). Scales the **indirect diffuse
+  only** (the hemisphere fill), in `aomap_fragment`, after the lights: the
+  sun is untouched. Terrain: `mix(1, svf, row)`. Clay facades: the ground's
+  value 2.5 m outside the wall (under the roof the ground sees no sky),
+  doubled (a vertical face sees at most half the sky; the ground at its foot
+  the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
+  dims, its eaves and every roof do not. The raster is shared by a tile's
+  terrain (both levels) and its buildings, refcounted
+  (`shared-rasters.ts`); the clay binds a white texel until it lands.
+  Trees are left out on purpose (they cast their own shadows). Default
+  0.5 — **not yet judged on a GPU**: the plan's plates (a Neustadt
+  courtyard, the Prager Straße, the Elbwiesen) and the N8AO
+  double-darkening check are open; *Boden-Verlauf* (the clay's 5 m
+  ground darkening) is kept as it was, not retuned against it yet.
+  **Fallback:** no raster → the light as before. `pipeline/bake/skyview.py`,
+  `app/_components/sky-light.ts`, `lib/city/skyview.ts`.
+- **Far horizon shade** (*Ferne Schatten*, plan 033,
+  [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md)) — the same
+  height field at ≈8 m (the roofs burned at 2 m and max-pooled, so a spire
+  still occludes) → per cell and per 16 azimuths the elevation angle of the
+  skyline **80–1 500 m** away (nearer occluders are the shadow map's),
+  0–45° in 8 bits (`horizon_<tile>.png`: four RGBA layers stacked, 256² ×
+  16 azimuths, ≈0.6 MB; legend `horizon_<tile>.json`, not served). The
+  terrain interpolates the two azimuths around the sun and cuts the sun's
+  direct light by `smoothstep(h − 0.8°, h + 0.8°, elevation)`, combined
+  with the shadow map by **min** (never a product: where both see the same
+  occluder it must not darken twice). Committed neighbour tiles fill the
+  margin; beyond the site the ground is open at the tile edge's mean
+  height. Baked 2026-09-25 in ≈22 s per tile (sky view ≈19 s, horizon
+  ≈3 s). The plan's 4 m raster came to **1.86 MB** on the spawn tile, past
+  its 1.5 MB cap, so it ships at 8 m with all 16 azimuths (0.54–0.60 MB;
+  12 azimuths at 4 m would have been 1.36 MB but smears narrow occluders
+  over 30° of sun). Terrain only; facades wait on plates. Default 0.8 —
+  **not yet judged on a GPU** (the plan's 21 December plate from the
+  Brühlsche Terrasse is open). `sky-light.ts` `lightsWithFarShadow`.
 
 ### Atmosphere & time of day
 - **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
@@ -859,7 +966,12 @@ research that produced them):
    thinned against the cadastre; the renderer still sizes a crown from `h`
    alone.)*
 7. **Cascaded Shadow Maps** — the one shadow limit the skill calls unsolved (long
-   low-sun shadows clip the 110 m frustum). Sizeable integration on WebGL;
+   low-sun shadows clip the 110 m frustum). *Amended 2026-09-25:* the baked
+   far horizon (✅ above, [ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md))
+   now casts the far field's long shadows onto the ground for one texture
+   fetch; what CSM would still add is the middle distance's *shape* (a
+   tree's or a facade's shadow 80–300 m out, on facades too). Sizeable
+   integration on WebGL;
    `CSMShadowNode` comes with the proposed move to WebGPURenderer + TSL
    ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
    [plan 020](./plans/020-webgpu-tsl.md)), as its own decision.

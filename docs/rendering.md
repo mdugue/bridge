@@ -88,6 +88,7 @@ is the codebook.
 | Paving pattern | OSM `surface` on the road (class 7) and on the pavement (the rest), the way direction orienting slabs and sett rows; unknown → asphalt on the road, slabs on class 4, sand on class 6; joints fade out past ~5 cm/px, the material's tint stays | OSM (+ Basis-DLM class) | `ground-detail.ts`, `surface_<t>.png` |
 | Parking bays | the paving raster's parking bits: on the carriageway a lane 2 m (parallel, bays every 5.5 m) or 5 m (perpendicular, every 2.5 m) from the kerb with its edge line; in a car park bay lines every 2.5 m across the aisle direction, aisles left clear; pale paint, faded out past ~15 cm/px | OSM | `ground-detail.ts` |
 | Sports ground surface | OSM `leisure=pitch` / `track`: its `surface`, else the sport's usual one, in pastels (`lib/city/sport.ts`) over an exact analytic outline (rotated rectangle, a track's capsule band, else the mapped outline) chosen from up to eight candidate rows of the index raster; mown stripes (~5.5 m) on grass, fine grain on the rest (*Bodendetail*) | OSM | `sport-ground.ts`, `sport_<t>.png` + `.json` |
+| Road markings | OSM crossings (zebra: 0.5 m bars across the carriageway, 4 m wide; *Furt*: two broken 12 cm lines, 3 m apart), stop lines (0.5 m, 3 m before a directed signal, the right half), cycle lanes (a broken 25 cm line 1.85 m from the kerb on the tagged side), centre lines (12 cm, 3 m dashes in 8.25 m, two-way main roads with `lanes` ≥ 2); a warm off-white, worn, box-filtered, clipped to the carriageway; fine level only (*Bodendetail*) | OSM + Basis-DLM (the carriageway) | `road-markings.ts`, `markings_<t>.png` + `.json` |
 | Sports ground lines | the sport's lines at their standard dimensions (football, tennis, basketball, volleyball, handball / multi-sport court, running lanes 1.22 m, a chess board), scaled to fit a smaller ground; 12 cm, box-filtered over the pixel footprint (a steady hairline from afar), chalk white, blue tape on sand | OSM | `sport-ground.ts` |
 | Goals, posts, nets | football / handball goals on the goal lines, basketball posts behind the baselines, nets across tennis and volleyball courts; pale-clay bars (casting), the nets a translucent lavender-grey — the street furniture's palette and matte material; fine level only | OSM (+ DGM1 ground) | `sport-fixtures.ts`, `lib/city/sport.ts` `sportFixtures` |
 | Urban green | the edge raster's meadow side on classes 0 and 4 (NDVI > 0.3, not OSM-paved) → painted exactly as meadow: colour, mottle, NDVI tint, lawn edge (*Stadtgrün*) | DOP | `ground-detail.ts` `urbanGreen`, `edges.py` |
@@ -115,6 +116,9 @@ is the codebook.
 | Crown detail | distance (in 220 m / out 300 m per 250 m chunk) | — | `updateLod` (*Detaillierte Kronen*) |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes | Stadtbaumkataster Dresden | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
+| Allotment beds | OSM `landuse=allotments`: 1.2 m beds of soil / green / grass in ≈12 m jittered-Voronoi plots along the colony's long axis or across it, a dark line where plots meet, the plot's tone from afar; paths, roads, rail and water left out; faint (0.45 of *Bodendetail*) — no colony maps its parcels | OSM | `cultivated-layer.ts`, `cultivated_<t>.png` |
+| Orchard tree | OSM `landuse=orchard`: the mapped trees, else an 8 m grid along the long axis, as the cadastre's "small" archetype | OSM | `tile-stream.ts` → `tree-inventory-layer.ts` |
+| Vine row | OSM `landuse=vineyard`: rows 1.8 m apart along the contour, 1.3 × 0.5 m boxes (none in the four tiles) | OSM + DGM1 | `cultivated-layer.ts` |
 | OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
 | Extra tree | LSC crown peak + `h` outside the canopy mask and away from any cadastre tree, appended to the canopy points | LSC | `tile-stream.ts` → `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
@@ -147,6 +151,8 @@ is the codebook.
 | Horizon haze | the sky dome blends into the fog colour below the horizon and feathers up to ~16°, so the data's edge, the fog and the sky meet in one band | — | `sun-rig.ts` (`uHazeColor`) |
 | Depth tint | screen depth → warm near / cool far | — | `depth-grading-effect.ts` (*Tiefenfärbung*) |
 | Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
+| Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, from the bare ground; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
+| Far shadow | the far horizon (the skyline's angle 80–1 500 m out, 16 azimuths, `horizon_<t>.png`, ≈8 m): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min` | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts` (*Ferne Schatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
 | Paper grain, vignette | screen-space | — | `paper-grain-effect.ts` (*Papierkorn*) |
 | Minimap | site tile bounds + 2048² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
@@ -193,6 +199,18 @@ is spelled: changing one is a look change, not a re-bake
   retargeted to the nearest heads of the visible tiles' dressings (re-fed on
   every stream change), because three.js bakes the light count into every
   compiled program.
+
+- **Baked large-scale light** (plan 033): two rasters from the committed
+  DGM1 + LoD2 (`pipeline/bake/skyview.py`). The *sky-view factor* dims the
+  hemisphere fill where the city hides the sky (courtyards, street
+  canyons), on the terrain and the clay facades, and never touches the
+  sun. The *far horizon* answers "is the sun above the skyline here?" for
+  occluders 80–1 500 m away — the long low-sun shadows the frustum above
+  cuts off — on the terrain, folded into three's directional-light loop as
+  `min(shadow map, horizon)` so one occluder never darkens twice
+  ([ADR 0031](./adr/0031-baked-horizon-map-for-far-shadows.md)). Both
+  rows at 0 are the picture without them; the defaults (0.5, 0.8) are
+  unjudged on a GPU.
 
 The full recipe with its rejected alternatives (VSM rings, large
 `normalBias`, 4096 maps, a bigger eye-level frustum) is in the skill and in

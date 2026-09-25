@@ -1,0 +1,26 @@
+{
+  "azimuthsDeg": [
+    0.0,
+    22.5,
+    45.0,
+    67.5,
+    90.0,
+    112.5,
+    135.0,
+    157.5,
+    180.0,
+    202.5,
+    225.0,
+    247.5,
+    270.0,
+    292.5,
+    315.0,
+    337.5
+  ],
+  "layout": "plane p (stacked north-to-south), channel c = azimuth 4p + c",
+  "degPerUnit": 0.17647058823529413,
+  "px": 256,
+  "nearM": 80.0,
+  "farM": 1500.0,
+  "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)"
+}

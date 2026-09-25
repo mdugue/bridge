@@ -155,6 +155,24 @@ map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
 the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
 them anyway.
 
+### The far field: baked horizon + sky view (plan 033)
+
+What the frustum cannot reach is baked: `pipeline/bake/skyview.py` writes,
+from the committed DGM1 + LoD2 only, a **sky-view factor** (≈2 m) and a
+**far horizon** (≈8 m, 16 azimuths, occluders 80–1 500 m away). The
+terrain folds the horizon into three's directional-light loop
+(`sky-light.ts` `lightsWithFarShadow` rewrites `lights_fragment_begin`:
+`min(getShadow(…), hzLit)`, and `hzLit` alone where the light casts no
+shadow) — `min`, never a product, so an occluder both see never darkens
+twice. The sky view scales only `reflectedLight.indirectDiffuse` in
+`aomap_fragment` (after the lights), on the terrain and the clay facades
+(sampled 2.5 m outside the wall, doubled, faded out toward the eaves).
+Rows *Himmelslicht* and *Ferne Schatten*; 0 = the old picture. Unjudged on
+a GPU as of 2026-09-25 — watch for SVF + N8AO reading as dirt in
+courtyards (lower N8AO there first) and a seam where the shadow map hands
+over (fade the horizon in over the frustum's last 20 %).
+[ADR 0031](../../../docs/adr/0031-baked-horizon-map-for-far-shadows.md).
+
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
 fraying — the fit is careful to keep the base radius while walking), 4096 map
@@ -207,6 +225,18 @@ the mapped outline. Lines use `spLine`, an exact box filter over the pixel
 footprint; keep new lines on it (no `smoothstep` lines — they shimmer).
 Goals, posts and nets are dressing (`sport-fixtures.ts`), one merged mesh
 per tile, owned by the tile holding the ground's centre.
+
+**Road markings and allotment beds** (plans 026, 028) are two more
+chunks in the same pass, fine level only. `road-markings.ts` reads a
+table of rotated rectangles (crossings, stop lines; axis across the road)
+and an RGBA raster (`markings.py`: 16-bit row in R + 256·A, per-side
+cycle-lane bit and centre-line bit in G, the signed offset to the
+carriageway's middle in B — the side is resolved in the bake because the
+paving raster's bearing is modulo 180°). Every stripe is box-filtered
+exactly (`rmStripes`), and along-street periods divide 165 m.
+`cultivated-layer.ts` paints faint beds on the colony raster
+(`cultivated.py`) in jittered-Voronoi plots — no colony in the four tiles
+maps its parcels, so keep it faint.
 
 ## Terrain seams
 
