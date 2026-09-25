@@ -12,8 +12,9 @@
  *
  * The buildings of a tile load whenever the tile is in view; the terrain
  * refines from the coarse level to the fine one by screen-space error, and
- * only the fine level carries vegetation, lamps, rails and walls. Which tile
- * gets the fine level is a question of distance, not of a "primary" role.
+ * only the fine level carries vegetation, lamps, monuments, rails, walls
+ * and stairs. Which tile gets the fine level is a question of distance, not
+ * of a "primary" role.
  *
  * The tileset's frame is the site's recentered data frame (Z-up, like every
  * 3D Tiles frame); the glTF content is Y-up as glTF requires, and the
@@ -21,6 +22,20 @@
  * `world` group like every other data-frame layer.
  */
 import type { TerrainBounds } from "./terrain-geometry";
+
+/**
+ * Whether a tile owns the point: west and south edges in, east and north
+ * edges out, so a point on a seam belongs to exactly one tile. Features a bake
+ * reads with a margin (lamps near the edge) are dressed by their owner only.
+ */
+export function ownsPoint(
+  bounds: TerrainBounds,
+  x: number,
+  y: number
+): boolean {
+  const [minX, minY, maxX, maxY] = bounds;
+  return x >= minX && x < maxX && y >= minY && y < maxY;
+}
 
 /** Logical names; published under content-hashed names via the manifest. */
 export const TILESET_FILE = "tileset.json";
@@ -55,11 +70,11 @@ export interface DressingFiles {
   bridge: string;
   canopy: string;
   lamps: string;
+  monuments: string;
   platform: string;
   rail: string;
   railarea: string;
   vegrows: string;
-  walls: string;
 }
 
 export interface TerrainExtras {
@@ -77,6 +92,10 @@ export interface TerrainExtras {
   /** grid edge; the first n·n vertices are the grid, row 0 = north */
   n: number;
   ndvi?: string;
+  /** OSM paving raster (fine level only: its patterns are close-range) */
+  surface?: string;
+  /** edge-distance raster (fine level only) */
+  edges?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
 }

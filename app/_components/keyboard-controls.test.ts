@@ -7,6 +7,7 @@ import {
 
 interface FiredKey {
   code: string;
+  ctrlKey?: boolean;
   repeat?: boolean;
   target?: unknown;
 }
@@ -40,6 +41,7 @@ function harness() {
     releaseAll: () => calls.push("releaseAll"),
     demolish: () => calls.push("demolish"),
     toggleMode: () => calls.push("toggleMode"),
+    viewpoint: (index) => calls.push(`viewpoint:${index}`),
   };
   const detach = attachKeyboardControls(targets, actions);
   const fire = (type: string, e: FiredKey | Record<string, never> = {}) =>
@@ -98,4 +100,17 @@ test("detach removes every listener", () => {
   fire("visibilitychange");
   fire("blur");
   expect(calls).toEqual([]);
+});
+
+test("the digit keys glide to the numbered viewpoints, not with a modifier", () => {
+  const { fire, calls } = harness();
+  fire("keydown", { code: "Digit1" });
+  fire("keydown", { code: "Digit9" });
+  fire("keydown", { code: "Digit0" });
+  fire("keydown", { code: "Digit2", ctrlKey: true });
+  fire("keydown", { code: "Digit3", repeat: true });
+  expect(calls.filter((c) => c.startsWith("viewpoint"))).toEqual([
+    "viewpoint:0",
+    "viewpoint:8",
+  ]);
 });

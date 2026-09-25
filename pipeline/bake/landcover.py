@@ -1,5 +1,7 @@
 """Basis-DLM → the land-cover class raster (one byte per texel, 4096² over a
-2 km tile), its legend, and the hedge / tree-row lines.
+2 km tile), its legend, and the hedge / tree-row lines. Where the DLM's road
+area swallows a square's pedestrian island or lawn, OSM carves it back out
+(`carve_islands`).
 
 The client paints the classes with the palette in lib/city/landcover.ts; this
 bake writes ids only. Classes burn lowest priority first, so water (8) wins
@@ -17,6 +19,7 @@ from PIL import Image
 from rasterio.features import rasterize
 
 from .common import Tile, column, feature, geometry_json, read_layer, write_geojson
+from .osm import has_extract, read_osm, tag
 
 # id → key: the legend the client's palette is keyed by (lib/city/landcover.ts).
 CLASSES = {
@@ -88,6 +91,77 @@ def class_raster(tile: Tile, px: int) -> np.ndarray:
     return raster
 
 
+# OSM areas that the DLM's road class swallows: a square's pedestrian island,
+# its lawns, a traffic island. Burned only over road texels, walk first so a
+# lawn inside a pedestrian area wins. The DLM draws the Albertplatz (and many
+# squares) as one road area; OSM knows the island in the middle.
+ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0; islands: © OpenStreetMap contributors (ODbL)"
+WALK_AREAS = {"footway", "pedestrian", "traffic_island", "path", "cycleway"}
+GREEN_LANDUSE = {"grass", "village_green", "meadow", "flowerbed"}
+GREEN_LEISURE = {"park", "garden"}
+
+
+def osm_islands(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
+    """(class id, areas) of the non-carriageway ground OSM maps inside the
+    road class: pedestrian areas, islands and fountain basins as built-up
+    (4), lawns and parks as meadow (1)."""
+    geoms, fields = read_osm(
+        tile,
+        "multipolygons",
+        "landuse IS NOT NULL OR leisure IS NOT NULL OR amenity = 'fountain' "
+        "OR other_tags LIKE '%highway%'",
+        ["landuse", "leisure", "amenity", "other_tags"],
+    )
+    walk, green = [], []
+    for g, landuse, leisure, amenity, tags in zip(
+        geoms,
+        column(fields, "landuse", geoms),
+        column(fields, "leisure", geoms),
+        column(fields, "amenity", geoms),
+        column(fields, "other_tags", geoms),
+        strict=True,
+    ):
+        if landuse in GREEN_LANDUSE or leisure in GREEN_LEISURE:
+            green.append(g)
+        elif (
+            tag(tags, "highway") == "pedestrian"
+            or tag(tags, "area:highway") in WALK_AREAS
+            or amenity == "fountain"  # the basin is drawn by the monuments
+        ):
+            walk.append(g)
+    return [(4, walk), (1, green)]
+
+
+def carve_islands(raster: np.ndarray, tile: Tile) -> int:
+    """Re-classes the road texels OSM calls pedestrian ground or lawn, in
+    place; the number of texels changed. Idempotent (only road texels
+    change), so it can run over a committed raster (`--step islands`)."""
+    px = raster.shape[0]
+    islands = np.zeros_like(raster)
+    for cls, geoms in osm_islands(tile):
+        valid = [g for g in geoms if g is not None and not g.is_empty]
+        if valid:
+            rasterize(((g, cls) for g in valid), out=islands, transform=tile.transform(px))
+    carve = (raster == 7) & (islands > 0)
+    raster[carve] = islands[carve]
+    return int(np.count_nonzero(carve))
+
+
+def run_islands(tile: Tile) -> None:
+    """The OSM islands over the committed class raster, without the DLM."""
+    if not has_extract(tile, "the road islands"):
+        return
+    path = tile.out("dlm", f"landcover_{tile.id}.png")
+    raster = np.array(Image.open(path).convert("L"))
+    changed = carve_islands(raster, tile)
+    Image.fromarray(raster, mode="L").save(path, optimize=True)
+    legend_path = tile.out("dlm", f"landcover_{tile.id}.json")
+    legend = json.loads(legend_path.read_text())
+    legend["attribution"] = ATTRIBUTION
+    legend_path.write_text(json.dumps(legend, indent=2) + "\n")
+    print(f"{tile.id}: {changed} road texels re-classed from OSM islands")
+
+
 def veg_rows(tile: Tile) -> list[dict]:
     """ATKIS veg04 lines: hedges (BWS = 1100) and tree rows."""
     geoms, fields = read_layer(tile.dlm / "veg04_l.shp", tile.bounds, columns=["BWS"])
@@ -108,6 +182,9 @@ def run(tile: Tile, px: int = 4096) -> None:
     raster = class_raster(tile, px)
     if not raster.any():
         raise SystemExit(f"{tile.id}: nothing rasterized (no DLM features in the tile?)")
+    islands = has_extract(tile, "the road islands")
+    if islands:
+        carve_islands(raster, tile)
     Image.fromarray(raster, mode="L").save(
         tile.out("dlm", f"landcover_{tile.id}.png"), optimize=True
     )
@@ -117,6 +194,7 @@ def run(tile: Tile, px: int = 4096) -> None:
         "bounds": [round(b) for b in tile.bounds],
         "size": px,
         "classes": {str(k): v for k, v in CLASSES.items()},
+        **({"attribution": ATTRIBUTION} if islands else {}),
     }
     tile.out("dlm", f"landcover_{tile.id}.json").write_text(json.dumps(legend, indent=2) + "\n")
     write_geojson(tile.out("dlm", f"vegrows_{tile.id}.geojson"), veg_rows(tile), tile.epsg)

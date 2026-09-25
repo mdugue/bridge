@@ -16,23 +16,33 @@ import type {
   BridgeFeature,
   CanopyFeature,
   LampFeature,
+  MonumentFeature,
   RailFeature,
   VegRowFeature,
-  WallFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
-import type {
-  CityExtras,
-  ContentExtras,
-  TerrainExtras,
+import { onRelief } from "@/lib/city/monuments";
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import {
+  type CityExtras,
+  type ContentExtras,
+  ownsPoint,
+  type TerrainExtras,
 } from "@/lib/city/tileset";
 import { type CityLayer, dressCity } from "./city-layer";
 import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
+import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { timed } from "./perf-mark";
 import { buildRail } from "./rail-layer";
-import { dressTerrain, type TerrainLayer } from "./terrain-layer";
+import {
+  dressTerrain,
+  type GroundUniforms,
+  type TerrainLayer,
+} from "./terrain-layer";
+import { dressKerbs } from "./kerb-layer";
+import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import {
   buildVegetation,
@@ -40,22 +50,22 @@ import {
   type VegetationControl,
 } from "./vegetation-layer";
 import type { StyleResources } from "./visual-style";
-import { buildWalls } from "./wall-layer";
+import { dressWalls } from "./wall-layer";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
  * 3DTilesRendererJS, which decides what to load and unload from the cameras,
  * the screen-space error and a memory budget. This module only dresses what
- * lands — the terrain material, water, buildings, vegetation, lamps, rails,
- * walls — and undresses what leaves, so every tile is one handle whose
+ * lands — the terrain material, water, buildings, vegetation, lamps,
+ * monuments, rails, walls — and undresses what leaves, so every tile is one handle whose
  * content comes and goes with it.
  */
 export interface TileDressing {
   lamps?: LampControl;
+  monuments?: MonumentLayer;
   rail?: Group;
   tile: string;
   vegetation?: VegetationControl;
-  walls?: Group;
 }
 
 export interface TileStreamContext {
@@ -71,7 +81,8 @@ export interface TileStreamContext {
   heightFog: HeightFogUniforms;
   /** ground height over every loaded terrain (projected coordinates) */
   heightAt: (x: number, y: number) => number | null;
-  meadowNdvi: { value: number };
+  /** the ground's look strengths (by reference) */
+  ground: GroundUniforms;
   /** the current night factor, for lamps that land later */
   night: () => number;
   offset: { cx: number; cy: number };
@@ -80,6 +91,8 @@ export interface TileStreamContext {
   renderer: WebGLRenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
+  /** a site tile's exact extent (the tileset's root extras) */
+  tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
 }
 
@@ -87,6 +100,8 @@ export interface TileStream {
   cities: Set<CityLayer>;
   /** dressings queued or being built */
   pendingDressings: () => number;
+  /** whether a tile's dressing was tried: built, failed, or its tile left */
+  dressingSettled: (tileId: string) => boolean;
   /** demolished object indices per tile, kept across unload/reload */
   demolished: Map<string, Set<number>>;
   dispose: () => void;
@@ -133,10 +148,29 @@ class GzipContentPlugin {
 
 type Features<T> = Promise<T[]>;
 
+function firstMesh(root: Object3D): Mesh | undefined {
+  return root.getObjectByProperty("isMesh", true) as Mesh | undefined;
+}
+
+/** The mesh on a glTF node of that name (the loader names the node's mesh
+ *  after it). */
+function meshNamed(root: Object3D, name: string): Mesh | undefined {
+  let found: Mesh | undefined;
+  root.traverse((o) => {
+    if (!found && (o as Mesh).isMesh && o.name === name) {
+      found = o as Mesh;
+    }
+  });
+  return found;
+}
+
 function dressingParts(d: TileDressing): Object3D[] {
-  return [d.vegetation?.group, d.lamps?.group, d.rail, d.walls].filter(
-    (part): part is Group => part !== undefined
-  );
+  return [
+    d.vegetation?.group,
+    d.lamps?.group,
+    d.monuments?.group,
+    d.rail,
+  ].filter((part): part is Group => part !== undefined);
 }
 
 /**
@@ -177,10 +211,29 @@ function withinCompileWait(done: Promise<void>): Promise<void> {
 
 function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
+  d.monuments?.dispose();
   for (const part of dressingParts(d)) {
     part.removeFromParent();
     disposeObject3D(part);
   }
+}
+
+/** The canopy without the "trees" the DOM1 bake planted on a measured
+ *  monument (lib/city/monuments.ts `onRelief`). */
+function offMonuments(
+  canopy: CanopyFeature[],
+  monuments: MonumentFeature[]
+): CanopyFeature[] {
+  const reliefs = monuments.flatMap((m) =>
+    m.properties?.relief ? [m.properties.relief] : []
+  );
+  if (reliefs.length === 0) {
+    return canopy;
+  }
+  return canopy.filter((f) => {
+    const [x, y] = f.geometry.coordinates;
+    return !onRelief(reliefs, x, y);
+  });
 }
 
 async function buildDressing(
@@ -201,11 +254,11 @@ async function buildDressing(
     canopy,
     ndviAt,
     lamps,
+    monuments,
     rails,
     bridges,
     ballast,
     platforms,
-    walls,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -213,18 +266,22 @@ async function buildDressing(
       ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
       : Promise.resolve(null),
     get<LampFeature>(d.lamps),
+    get<MonumentFeature>(d.monuments),
     get<RailFeature>(d.rail),
     get<BridgeFeature>(d.bridge),
     get<AreaFeature>(d.railarea),
     get<AreaFeature>(d.platform),
-    get<WallFeature>(d.walls),
   ]);
-  // Rails and walls may run past the tile edge: they sample the ground over
+  // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
   const vegetation = timed("vegetation", () =>
     buildVegetation(
-      { rows, canopy, ndviAt: ndviAt ?? undefined },
+      {
+        rows,
+        canopy: offMonuments(canopy, monuments),
+        ndviAt: ndviAt ?? undefined,
+      },
       {
         offset: ctx.offset,
         heightAt: terrain.heightAt,
@@ -235,8 +292,16 @@ async function buildDressing(
   );
   // Born with the current look, not the default.
   vegetation.applyLook(ctx.look.get());
+  // The bake reads lamps with a margin around the tile; a lamp on or past a
+  // seam is its owner's, or two tiles would stand it twice.
+  const extent = ctx.tileBounds(tile);
+  const ownLamps = extent
+    ? lamps.filter((f) =>
+        ownsPoint(extent, f.geometry.coordinates[0], f.geometry.coordinates[1])
+      )
+    : lamps;
   const lampControl = timed("lamps", () =>
-    buildLamps(lamps, { ...ground, heightAt: terrain.heightAt })
+    buildLamps(ownLamps, { ...ground, heightAt: terrain.heightAt })
   );
   lampControl.setNightFactor(ctx.night());
   const rail = timed("rail", () =>
@@ -245,10 +310,18 @@ async function buildDressing(
       { ...ground, heightFog: ctx.heightFog }
     )
   );
-  const wallGroup = timed("walls", () =>
-    buildWalls(walls, { ...ground, heightFog: ctx.heightFog })
+  // The bake writes only the monuments a tile owns; a basin that reaches
+  // past the seam samples the neighbour's ground.
+  const monumentLayer = timed("monuments", () =>
+    buildMonuments(monuments, { ...ground, heightFog: ctx.heightFog })
   );
-  return { tile, vegetation, lamps: lampControl, rail, walls: wallGroup };
+  return {
+    tile,
+    vegetation,
+    lamps: lampControl,
+    monuments: monumentLayer,
+    rail,
+  };
 }
 
 /**
@@ -259,6 +332,14 @@ async function buildDressing(
 class DressingPlugin {
   name = "BRIDGE_DRESSING";
   readonly dressed = new WeakMap<Object3D, Dressed>();
+  /** the content root a tile is being dressed for (before the renderer
+   *  records it in engineData, which it skips when the load is aborted) */
+  private readonly sceneOf = new WeakMap<object, Object3D>();
+  /** content roots whose tile was disposed; whatever lands for them later
+   *  is released on the spot */
+  private readonly released = new WeakSet<Object3D>();
+  /** tiles whose dressing was tried (see TileStream.dressingSettled) */
+  readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
 
   constructor(
@@ -272,12 +353,15 @@ class DressingPlugin {
   private url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
-  async processTileModel(scene: Object3D): Promise<void> {
+  async processTileModel(scene: Object3D, tile: object): Promise<void> {
     const extras = scene.userData as ContentExtras;
-    const mesh = scene.getObjectByProperty("isMesh", true) as Mesh | undefined;
+    // The content's own mesh by its node name ("terrain", "city"); the fine
+    // terrain also carries a "stairs" node.
+    const mesh = meshNamed(scene, extras.kind) ?? firstMesh(scene);
     if (!mesh) {
       return;
     }
+    this.sceneOf.set(tile, scene);
     if (extras.kind === "city") {
       this.dressCity(scene, mesh, extras);
     } else if (extras.kind === "terrain") {
@@ -286,6 +370,11 @@ class DressingPlugin {
     // The renderer shows the tile once this resolves: its programs are
     // ready by then instead of compiling inside a frame.
     await withinCompileWait(this.ctx.compile(scene));
+    // Disposed while it was being dressed: the renderer drops an aborted
+    // load without ever recording the scene, so nothing else frees it.
+    if (this.released.has(scene)) {
+      this.release(scene);
+    }
   }
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
@@ -311,12 +400,29 @@ class DressingPlugin {
       fileUrl: this.url,
       heightFog: this.ctx.heightFog,
       lowRasters: this.ctx.lowRasters,
-      meadowNdvi: this.ctx.meadowNdvi,
+      ground: this.ctx.ground,
       offset: this.ctx.offset,
       renderer: this.ctx.renderer,
       sunDirection: this.ctx.sunDirection,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
+    // The fine level's baked stairs, walls and kerbs: only their materials
+    // here.
+    const stairs = meshNamed(scene, "stairs");
+    if (stairs) {
+      dressStairs(stairs, this.ctx.heightFog);
+      terrain.stairs = stairs;
+    }
+    const walls = meshNamed(scene, "walls");
+    if (walls) {
+      dressWalls(walls, this.ctx.heightFog);
+      terrain.walls = walls;
+    }
+    const kerbs = meshNamed(scene, "kerbs");
+    if (kerbs) {
+      dressKerbs(kerbs, this.ctx.heightFog);
+      terrain.kerbs = kerbs;
+    }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });
     if (extras.dressing) {
@@ -369,6 +475,7 @@ class DressingPlugin {
       })
       .finally(() => {
         this.pending--;
+        this.settled.add(extras.tileId);
         this.ctx.onChange();
       });
   }
@@ -382,9 +489,18 @@ class DressingPlugin {
     if (data?.materials) {
       data.materials = data.materials.filter((m) => !m.userData.shared);
     }
-    const scene = tile.engineData?.scene;
-    const dressed = scene ? this.dressed.get(scene) : undefined;
-    if (!(scene && dressed)) {
+    const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
+    this.sceneOf.delete(tile);
+    if (scene) {
+      this.released.add(scene);
+      this.release(scene);
+    }
+  }
+
+  /** Frees everything dressed onto one content root. */
+  private release(scene: Object3D): void {
+    const dressed = this.dressed.get(scene);
+    if (!dressed) {
       return;
     }
     this.dressed.delete(scene);
@@ -423,6 +539,36 @@ export function createTileStream(
   // the spot); three's own frustum culling keeps them out of the main pass.
   tiles.displayActiveTiles = true;
   tiles.autoDisableRendererCulling = false;
+  // What is shown changes only with these events, so the visible lists are
+  // worked out once per change, not on every call (the collider asks for
+  // the cities every frame).
+  let version = 0;
+  const changed = () => {
+    version++;
+    ctx.onChange();
+  };
+  const memo = <T>(list: () => T[]): (() => T[]) => {
+    let at = -1;
+    let cached: T[] = [];
+    return () => {
+      if (at !== version) {
+        at = version;
+        cached = list();
+      }
+      return cached;
+    };
+  };
+  // A content root is shown while it is a child of the renderer's group.
+  // Walk up from any object inside it; the membership test is not redundant:
+  // an active but hidden tile keeps the group as its parent without being
+  // one of its children (for raycasting).
+  const isShown = (object: Object3D | null): boolean => {
+    let root: Object3D | null = object;
+    while (root && root.parent !== tiles.group) {
+      root = root.parent;
+    }
+    return root !== null && tiles.group.children.includes(root);
+  };
   const stream: TileStream = {
     tiles,
     group: tiles.group,
@@ -431,35 +577,34 @@ export function createTileStream(
     dressings: new Set(),
     demolished: new Map(),
     pendingDressings: () => 0,
-    visibleTerrains: () =>
+    dressingSettled: () => false,
+    visibleTerrains: memo(() =>
       [...stream.terrains]
         .filter((t) => isShown(t.mesh))
-        .sort((a, b) => a.level - b.level),
-    visibleCities: () => [...stream.cities].filter((c) => isShown(c.mesh)),
-    visibleDressings: () =>
+        .sort((a, b) => a.level - b.level)
+    ),
+    visibleCities: memo(() =>
+      [...stream.cities].filter((c) => isShown(c.mesh))
+    ),
+    visibleDressings: memo(() =>
       [...stream.dressings].filter((d) =>
         isShown(d.vegetation?.group ?? d.lamps?.group ?? d.rail ?? null)
-      ),
+      )
+    ),
     dispose: () => {
       tiles.dispose();
     },
   };
-  const isShown = (object: Object3D | null): boolean => {
-    let root: Object3D | null = object;
-    while (root && root.parent !== tiles.group) {
-      root = root.parent;
-    }
-    return root !== null && tiles.group.children.includes(root);
-  };
-  const dressing = new DressingPlugin(ctx, stream);
+  const dressing = new DressingPlugin({ ...ctx, onChange: changed }, stream);
   stream.pendingDressings = () => dressing.pending;
+  stream.dressingSettled = (tileId) => dressing.settled.has(tileId);
   tiles.registerPlugin(dressing);
   for (const { camera, width, height } of cameras) {
     tiles.setCamera(camera);
     tiles.setResolution(camera, width, height);
   }
-  tiles.addEventListener("load-model", ctx.onChange);
-  tiles.addEventListener("tile-visibility-change", ctx.onChange);
+  tiles.addEventListener("load-model", changed);
+  tiles.addEventListener("tile-visibility-change", changed);
   world.add(tiles.group);
   return stream;
 }

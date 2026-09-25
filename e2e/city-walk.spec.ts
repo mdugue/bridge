@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import proj4 from "proj4";
 
 /**
  * Inner waits scale with the machine. Without a GPU every frame is rendered in
@@ -252,6 +253,9 @@ test.describe("desktop viewer", () => {
     expect(stats.vegetation.instances).toBeGreaterThan(1000);
     // 339 OSM lamps: posts + heads + decals are instanced
     expect(stats.lamps.instances).toBeGreaterThan(100);
+    // 48 fountains, statues and stones (Albertplatz and around): plinths,
+    // figures and jets are instanced
+    expect(stats.monuments.instances).toBeGreaterThan(20);
     // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
     expect(stats.rail.triangles).toBeGreaterThan(0);
     // 292 wall lines
@@ -291,6 +295,142 @@ test.describe("desktop viewer", () => {
     // (north-up vs canvas-down) fails.
     expect(Math.abs((pose?.epsgX ?? 0) - expectedX)).toBeLessThan(50);
     expect(Math.abs((pose?.epsgY ?? 0) - expectedY)).toBeLessThan(50);
+    expectNoErrors(errors);
+  });
+
+  test("locate me puts the player at the GPS fix, facing the compass", async () => {
+    // A fix a little north-east of the site's centre, reprojected here so the
+    // assertion is about the wiring, not a hard-coded coordinate.
+    const bounds = await page.evaluate(
+      () => window.__poc?.handle?.terrainBounds
+    );
+    const [minX, minY, maxX, maxY] = bounds ?? [0, 0, 0, 0];
+    const target = {
+      x: (minX + maxX) / 2 + 150,
+      y: (minY + maxY) / 2 + 250,
+    };
+    const [longitude, latitude] = proj4(
+      "+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs",
+      "WGS84",
+      [target.x, target.y]
+    );
+    await page.context().grantPermissions(["geolocation"]);
+    await page.context().setGeolocation({ latitude, longitude, accuracy: 8 });
+    // The floating controls step aside while the sidebar is open.
+    const close = page.getByRole("button", { name: "Seitenleiste schließen" });
+    if (await close.isVisible()) {
+      await close.click();
+    }
+    await page.getByRole("button", { name: "Standort", exact: true }).waitFor();
+    // No compass has reported yet, so live mode is not offered.
+    await expect(
+      page.getByRole("button", { name: "Live", exact: true })
+    ).toHaveCount(0);
+    // Click, then report a phone held upright with its camera to the east,
+    // ten times a second like a real sensor — on the absolute stream
+    // Chromium's compass arrives on.
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      [...document.querySelectorAll<HTMLButtonElement>("button")]
+        .find((b) => b.textContent?.trim() === "Standort")
+        ?.click();
+      w.__compass = window.setInterval(() => {
+        window.dispatchEvent(
+          new DeviceOrientationEvent("deviceorientationabsolute", {
+            alpha: 270,
+            beta: 90,
+            gamma: 0,
+            absolute: true,
+          })
+        );
+      }, 100);
+    });
+    await expect(page.getByText("Du bist hier")).toBeVisible({
+      timeout: slow(20_000),
+    });
+    const state = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(state?.mode).toBe("walk");
+    expect(Math.abs((state?.epsg.x ?? 0) - target.x)).toBeLessThan(1);
+    expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
+    // East by the compass, ≈ 1° more on the UTM grid (meridian convergence).
+    expect(Math.abs((state?.headingDeg ?? 0) - 91)).toBeLessThan(2);
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      window.clearInterval(w.__compass);
+    });
+    expectNoErrors(errors);
+  });
+
+  test("live mode: the view follows the compass, the camera the GPS", async () => {
+    // A phone held facing south, tilted 10° up, reporting ten times a second.
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      w.__compass = window.setInterval(() => {
+        window.dispatchEvent(
+          new DeviceOrientationEvent("deviceorientationabsolute", {
+            alpha: 180,
+            beta: 100,
+            gamma: 0,
+            absolute: true,
+          })
+        );
+      }, 100);
+    });
+    const toggle = page.getByRole("button", { name: "Live", exact: true });
+    await expect(toggle).toBeVisible({ timeout: slow(10_000) });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    // South by the compass is ≈ 181° on the grid; pitch +10°. The view eases
+    // there a third of the way per frame, and SwiftShader draws about one
+    // frame a second — so "well on its way", not "arrived" (camera-pose.test
+    // pins the exact end point).
+    await page.waitForFunction(
+      () => {
+        const s = window.__poc?.handle?.getCameraState();
+        if (!s) {
+          return false;
+        }
+        const heading = ((s.headingDeg % 360) + 360) % 360;
+        return Math.abs(heading - 181) < 15 && s.pitchDeg > 3;
+      },
+      undefined,
+      { timeout: slow(60_000) }
+    );
+    // The player walks 200 m south-west (a jump, so the camera lands there
+    // at once rather than easing — see camera-pose's FOLLOW_SNAP_M).
+    const before = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    const target = {
+      x: (before?.epsg.x ?? 0) - 120,
+      y: (before?.epsg.y ?? 0) - 160,
+    };
+    const [longitude, latitude] = proj4(
+      "+proj=utm +zone=33 +ellps=GRS80 +units=m +no_defs",
+      "WGS84",
+      [target.x, target.y]
+    );
+    await page.context().setGeolocation({ latitude, longitude, accuracy: 6 });
+    await page.waitForFunction(
+      ({ x, y }) => {
+        const s = window.__poc?.handle?.getCameraState();
+        return (
+          s !== undefined &&
+          Math.abs(s.epsg.x - x) < 1 &&
+          Math.abs(s.epsg.y - y) < 1
+        );
+      },
+      target,
+      { timeout: slow(20_000) }
+    );
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await page.evaluate(() => {
+      const w = window as unknown as { __compass?: number };
+      window.clearInterval(w.__compass);
+    });
     expectNoErrors(errors);
   });
 
@@ -665,6 +805,30 @@ test.describe("mobile", () => {
     await dismiss.tap();
     await expect(dismiss).toHaveCount(0);
 
+    // The start view is aerial, so the altitude stick stands opposite the
+    // joystick; the plane button — the F key's stand-in — lands you on foot
+    // and takes the stick away with fly mode.
+    await expect(page.getByTestId("altitude-stick")).toBeVisible();
+    const flyButton = page.getByRole("button", { name: "Fliegen" });
+    await expect(flyButton).toHaveAttribute("aria-pressed", "true");
+    const toolbar = page.getByRole("toolbar", { name: "Werkzeuge" });
+    const flyingBox = await toolbar.boundingBox();
+    await flyButton.tap();
+    await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
+    // The stick sits above the toolbar, so the toolbar doesn't jump.
+    const walkingBox = await toolbar.boundingBox();
+    expect(walkingBox?.y).toBe(flyingBox?.y);
+    await expect(flyButton).toHaveAttribute("aria-pressed", "false");
+    expect(
+      await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)
+    ).toBe("walk");
+
+    // The toolbar folds away into one button and back.
+    await page.getByRole("button", { name: "Werkzeuge einklappen" }).tap();
+    await expect(flyButton).toHaveCount(0);
+    await page.getByRole("button", { name: "Werkzeuge zeigen" }).tap();
+    await expect(flyButton).toBeVisible();
+
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
     const headingBefore = await page.evaluate(
@@ -728,5 +892,65 @@ test.describe("mobile", () => {
     });
 
     expectNoErrors(errors);
+  });
+});
+
+/**
+ * The whole site streamed, still at the lite render cost: `&block=1` keeps
+ * every tile in the tileset (scene-profile.ts). The specs above stream the
+ * spawn tile alone, so this is the one that walks the multi-tile path — tile
+ * events arriving while the spawn tile boots, dressings queued for several
+ * tiles, the site-wide minimap footprints. A load event that throws there
+ * leaves `ready` false forever, which is exactly what this waits on.
+ */
+test.describe("whole site streamed", () => {
+  test("several tiles load, dress and settle without errors", async ({
+    browser,
+  }) => {
+    // Its own boot, and a longer one than the spawn-only specs: several
+    // tiles' terrain, buildings and dressings, all shaded on the CPU.
+    test.setTimeout(slow(240_000));
+    const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    try {
+      await page.goto(`${LITE}&block=1`);
+      const webgl = await hasWebGl(page);
+      if (process.env.CI) {
+        expect(webgl).toBe(true);
+      }
+      test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
+
+      await page.waitForFunction(
+        () => window.__poc?.ready === true,
+        undefined,
+        {
+          timeout: slow(150_000),
+        }
+      );
+      const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
+      // More than the spawn tile is in view from the spawn pose: terrain and
+      // buildings of at least one neighbour came through the stream.
+      expect(stats?.terrain.meshes ?? 0).toBeGreaterThan(1);
+      expect(stats?.city.meshes ?? 0).toBeGreaterThan(1);
+      expect(stats?.vegetation.instances ?? 0).toBeGreaterThan(1000);
+
+      // The minimap names every site tile's footprints up front, streamed
+      // or not: some lie west of the spawn tile (412 000 E).
+      const westmost = await page.evaluate(() => {
+        const polys = window.__poc?.handle?.getFootprints() ?? [];
+        let minX = Number.POSITIVE_INFINITY;
+        for (const poly of polys) {
+          for (const [x] of poly.pts) {
+            minX = Math.min(minX, x);
+          }
+        }
+        return minX;
+      });
+      expect(westmost).toBeLessThan(412_000);
+      expectNoErrors(errors);
+    } finally {
+      await context.close();
+    }
   });
 });

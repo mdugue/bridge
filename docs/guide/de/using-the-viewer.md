@@ -30,10 +30,12 @@ lädt* oben im Bild (siehe
 | `W` `A` `S` `D` | gehen (oder fliegen) |
 | `Shift` | sprinten |
 | `F` | zwischen Gehen und Fliegen wechseln |
-| `Leertaste` / `Shift` | hoch / runter im Flug |
+| `Leertaste` / `Shift` (oder `E` / `Q`) | hoch / runter im Flug |
+| `1` – `9` | zum ersten bis neunten Aussichtspunkt gleiten |
 | Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin |
 | Klick auf die Minikarte | dorthin teleportieren |
+| *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `Esc` | immersiven Modus verlassen |
 
@@ -41,12 +43,46 @@ lädt* oben im Bild (siehe
 |---|---|
 | Ziehen | umsehen |
 | Joystick (unten links) | gehen |
+| *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
+| *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
+| *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln |
+| ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
+| Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | dorthin |
 | Zwei Finger zusammenziehen | zoomen |
 
 Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
-und Mauern an. Beim Fliegen gibt es keine Kollision. Jede Eingabe bricht
+und Mauern an. Beim Fliegen gibt es keine Kollision; nur sinken kannst du
+nicht tiefer als bis auf Augenhöhe über dem Boden. Jede Eingabe bricht
 einen laufenden Gleitflug ab.
+
+Unten rechts liegt die **Werkzeugleiste**; jeder Knopf trägt seinen Namen
+unter dem Symbol. Mit dem ⌄ darunter klappst du sie zu einem kleinen Knopf
+ein, der Browser merkt sich das; ein grüner Punkt darauf zeigt, dass *Live*
+noch läuft.
+
+*Standort* fragt den Browser nach
+deinem Standort und setzt dich dort auf Augenhöhe ab, zu Fuß. Auf einem
+Telefon mit Kompass schaust du danach in die Richtung, in die die Rückseite
+des Telefons zeigt (liegt es flach, die Oberkante); ohne Kompass bleibt die
+Blickrichtung, wie sie war. Die Genauigkeit meldet eine kurze Zeile oben —
+GPS liegt in der Stadt oft 5–20 m daneben, ein Handykompass einige Grad.
+Stehst du außerhalb des Gebiets, sagt dieselbe Zeile, wie weit, und du
+bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
+Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
+dem er geschickt würde.
+
+*Live* erscheint, sobald dein Telefon Kompasswerte liefert (auf dem iPhone
+fragt es beim ersten Antippen um Erlaubnis; am Rechner ohne Kompass gibt es
+den Knopf nicht). Eingeschaltet wird die Stadt zum Fenster, das du vor dich
+hältst: Drehst du dich, dreht sich der Blick mit; kippst du das Telefon,
+schaust du hoch oder runter. Und gehst du los, geht die Kamera mit — sie
+folgt deiner GPS-Position, sanft geglättet, damit die Streuung der Ortung
+nicht ruckelt. Stehst du außerhalb des Gebiets oder gibt es keinen
+Standort, folgt nur der Blick. Ein zweites Antippen, Ziehen zum Umsehen
+oder der Joystick geben dir die Steuerung zurück. *Live* und *Fliegen* gehen
+zusammen: Dann schwebst du wie eine Drohne über deiner Position, und mit
+dem Höhenregler steigst oder sinkst du, ohne dass *Live* endet.
 
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
@@ -62,14 +98,23 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   und den Grundrissen der gerade geladenen Gebäude. Deine Position und
   Blickrichtung sind eingezeichnet; ein Klick teleportiert.
 - **Gehen / Fliegen** — der Bewegungsmodus.
-- **Aussichtspunkte** — fünf handverlesene Standpunkte, zu denen die Kamera
-  gleitet: *Carolabrücke* (über dem Fluss), *Elbe-Panorama* (hoch über der
-  Flussbiegung), *Über den Dächern* (ein tiefer Gleitflug über die
-  Altstadtdächer), *Canaletto-Blick* (zu Fuß auf der Elbwiese, die Altstadt
-  jenseits des Grases) und *Elbufer* (ein Spaziergang am baumbestandenen
-  Neustädter Ufer). Die sechste Karte, *Aktuelle Sicht merken*, merkt sich,
-  wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin zurückspringt,
-  mit einem ✕ zum Vergessen.
+- **Aussichtspunkte** — handverlesene Standpunkte, zu denen die Kamera
+  gleitet (am Rechner auch mit den Tasten `1` – `9`):
+  - *aus der Luft*: *Altstadt-Silhouette* (der Startblick, tief über der
+    Elbe), Draufsichten auf *Frauenkirche*, *Brühlsche Terrasse*,
+    *Albertplatz*, *Alaunpark* und *Zwinger & Semperoper*, ein tiefer Flug
+    über die *Äußere Neustadt*, dazu *Carolabrücke* (über dem Fluss),
+    *Elbe-Panorama* (hoch über der Flussbiegung) und *Über den Dächern*
+    (ein tiefer Gleitflug über die Altstadtdächer);
+  - *auf Augenhöhe*: *Canaletto-Blick* (auf der Elbwiese, die Altstadt
+    jenseits des Grases), *Elbufer* (am baumbestandenen Neustädter Ufer),
+    *Am Japanischen Palais* (auf der Neustädter Elbwiese, wo Canaletto
+    malte) und *Neumarkt* (vor der Frauenkirche).
+
+  Der Große Garten liegt knapp südlich des Gebiets und hat deshalb noch
+  keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
+  sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
+  zurückspringt, mit einem ✕ zum Vergessen.
 - **Steuerung** — die vollständige Tastentabelle.
 
 ### Szene
@@ -99,7 +144,9 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
-| Vegetation | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
+| Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), aus der Nähe sichtbar |
+| | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet wie Wiese, aus dem Infrarot-Luftbild |
+| | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
 | | *Blattflimmern* | Böen drehen Blätter auf sonnigen Kronen auf die helle Unterseite |

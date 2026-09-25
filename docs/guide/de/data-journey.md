@@ -77,6 +77,8 @@ flowchart LR
   NDVI["ndvi<br/>Grün-Raster"]
   ROOF["roof-colour<br/>Dachfarben-Tabelle"]
   WALL["walls<br/>Mauerlinien"]
+  MON["monuments<br/>Brunnen · Denkmäler · Steine"]
+  STAIR["stairs<br/>Treppenläufe"]
   RAIL["rail<br/>Gleise · Schotter · Brücken · Bahnsteige"]
 ```
 
@@ -102,7 +104,10 @@ enthält je Kachel:
 | | `vegrows_<Kachel>.geojson` | Hecken- und Baumreihenlinien | wenige kB |
 | | `canopy_<Kachel>.geojson` | ein Punkt je Baum mit Höhe (5 000–16 000 je Kachel) | 0,6–1,8 MB |
 | | `lamps_<Kachel>.geojson` | Lampenpositionen | bis 60 kB |
+| | `monuments_<Kachel>.geojson` | Brunnenbecken und Denkmalpunkte mit Art und amtlichem Namen | 2–55 kB |
 | | `walls_<Kachel>.geojson` | Mauerlinien mit Art und Höhe | 50–120 kB |
+| | `stairs_<Kachel>.geojson` | Treppenläufe: Achse, Breite, Stufenzahl, Höhe an Fuß und Kopf | wenige kB |
+| | `terraces_<Kachel>.geojson` | erhöhte Flächen, die dem Geländemodell fehlen (die Brühlsche Terrasse), mit ihrer Höhe | wenige kB |
 | | `rail_<Kachel>.geojson`, `railarea_<Kachel>.geojson` | Gleislinien mit Gleiszahl; verschmolzene Schotterflächen | wenige kB |
 | | `bridge_<Kachel>.geojson` | Brückendeck-Umrisse mit Höhe je Ecke, Art und Tragwerk | wenige kB |
 | | `platform_<Kachel>.geojson` | Bahnsteige | wenige kB |
@@ -121,7 +126,9 @@ Insgesamt trägt das Repository etwa 125 MB Daten für die vier Kacheln
 | Bäume | Basis-DLM + DOM1 + DGM1 | Baumpunkte, Heckenreihen | — | wie eingecheckt |
 | Grün | DOP | das NDVI-PNG | — | wie eingecheckt |
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
-| Lampen, Mauern, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
+| Denkmäler und Brunnen | Basis-DLM (Namen, Lage) + OpenStreetMap (Becken) | die GeoJSON-Dateien | — | wie eingecheckt |
+| Lampen, Bahnsteige, Brückentragwerk | OpenStreetMap | die GeoJSON-Dateien | — | wie eingecheckt |
+| Mauern, Treppen, Terrassen | OpenStreetMap + DGM1 | die GeoJSON-Dateien | ins detaillierte Geländenetz eingebaut: der Boden an und unter ihnen geformt, Mauern und Stufen Teil des Netzes | im Geländenetz |
 | Gleise, Schotter, Brücken | Basis-DLM (+ DOM1/DGM1 für Höhen) | die GeoJSON-Dateien | — | wie eingecheckt |
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
@@ -132,8 +139,9 @@ Es tut drei Dinge:
 1. **Backt die schweren Eingaben zu einem Tileset.** Für jede Kachel wird
    das Gelände-GeoTIFF zu zwei fertigen Geländenetzen: einem detaillierten
    auf einem Raster von 1024 × 1024 Punkten und einem groben auf
-   512 × 512, mit den hohen Mauern aus OpenStreetMap als scharfe Kanten
-   eingearbeitet und einer kurzen Schürze am Rand, damit an den Nahtstellen
+   512 × 512 – mit den hohen Mauern aus OpenStreetMap als scharfen Kanten,
+   mit den Treppen samt passend geformtem Boden darunter und mit einer
+   kurzen Schürze am Rand, damit an den Nahtstellen
    zwischen Kacheln keine Lücke sichtbar wird. Das CityJSON wird zu einem
    Gebäudenetz je Kachel mit einer Tabelle von Stilwerten je Gebäude, dazu
    einer Liste der Gebäudegrundrisse für die Minikarte. Jedes Netz wird als
@@ -165,8 +173,9 @@ Der Browser holt das Manifest und das Tileset und **streamt** dann: Eine
 Bibliothek namens 3DTilesRendererJS entscheidet danach, wo die Kamera
 steht und wohin sie schaut, welche Dateien geladen werden. Das erste Bild
 wartet nur auf Gebäude und Gelände der Kachel, auf der du startest.
-Kacheln nahe der Kamera bekommen das detaillierte Gelände und werden dann
-mit Bäumen, Lampen, Gleisen und Mauern *ausgestattet*; weiter entfernte
+Kacheln nahe der Kamera bekommen das detaillierte Gelände – Mauern und
+Treppen sind darin schon eingebaut – und werden dann mit Bäumen, Lampen und
+Gleisen *ausgestattet*; weiter entfernte
 Kacheln zeigen ihre Gebäude auf dem groben Gelände; Kacheln außer Sicht
 werden gar nicht geladen, und Kacheln, die du hinter dir gelassen hast,
 können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
@@ -177,14 +186,13 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | Gebäude (mit Stiltabelle) | 1,34 MB | 1,09–1,46 MB | die Kachel im Blick ist |
 | Gebäudegrundrisse (Minikarte) | 48 kB | 59–76 kB | mit den Gebäuden |
 | Grobes Gelände (512²) | 0,41 MB | 0,44–0,54 MB | die Kachel im Blick ist |
-| Detailliertes Gelände (1024²) | 1,53 MB | 1,57–1,95 MB | die Kamera nahe kommt |
+| Detailliertes Gelände (1024², mit seinen Mauern und Treppen) | 1,62 MB | 1,62–2,03 MB | die Kamera nahe kommt |
 | Landnutzungsklassen, 2048² | 0,08 MB | 0,07–0,08 MB | beim Start (Minikarte), dann fürs grobe Gelände |
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,22–0,25 MB | mit dem detaillierten Gelände (nur Desktop) |
 | Grün (NDVI) | 0,39 MB | 0,32–0,45 MB | mit dem Gelände |
 | Baumpunkte | 36 kB | 54–106 kB | mit dem detaillierten Gelände |
-| Mauern | 12 kB | 8–22 kB | mit dem detaillierten Gelände |
 | Lampen, Gleise, Schotter, Brücken, Bahnsteige, Heckenreihen | je unter 5 kB | je unter 5 kB | mit dem detaillierten Gelände |
-| **Je Kachel, volle Detailstufe** | **≈ 4,1 MB** | **≈ 3,9–4,9 MB** | |
+| **Je Kachel, volle Detailstufe** | **≈ 4,2 MB** | **≈ 4,0–5,0 MB** | |
 | **Je Kachel, nur als ferne Kulisse** | ≈ 2,3 MB | ≈ 2,0–2,6 MB | |
 
 Wie viel ein Besuch lädt, hängt also davon ab, wohin du gehst. Mit jeder
@@ -206,7 +214,7 @@ Was **im Browser berechnet** statt heruntergeladen wird: die Bodenfarben
 (einmal je Kachel auf der Grafikkarte gemalt, aus den
 Landnutzungsklassen und einer Pastellpalette), die Wasseroberfläche, jeder
 Baum aus seinem Punkt und seiner Höhe, Laternenmasten aus ihren Punkten,
-Mauern und Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
+Brücken aus ihren Umrissen, der Sonnenstand, alle Beleuchtung
 und Schatten und der gesamte Nachbearbeitungs-Look.
 
 ## Was neu gemacht werden muss, wenn sich etwas ändert
@@ -217,7 +225,7 @@ und Schatten und der gesamte Nachbearbeitungs-Look.
 | Neues Gebäudemodell | nach CityJSON umwandeln, in `data/cityjson/` ersetzen; das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
 | Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps` und `rail` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
 | Neue Luftbilder | die Bakes `ndvi` und `roof-colour` neu ausführen | die Dachfarben werden beim nächsten Build ins Netz eingearbeitet |
-| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `walls` und `rail` neu ausführen | — |
+| Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `monuments`, `walls`, `stairs` und `rail` neu ausführen | — |
 | Andere Bodenfarben | die eine Palette im Code ändern | nichts neu zu backen: Der Browser malt die Farben |
 | Eine neue Kachel | Gelände- und Gebäudemodell von Hand laden (das Gebäudemodell nach CityJSON umgewandelt) und beide einchecken; die Kachel in die Standort-Konfiguration `sites/dresden.ts` eintragen; `bun run bake --ingest` holt den Rest und führt alle sieben Bakes aus | der Build nimmt sie ins Tileset auf und veröffentlicht sie |
 

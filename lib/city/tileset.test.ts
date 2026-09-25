@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  ownsPoint,
   type BakedTile,
   buildTileset,
   COARSE_TERRAIN_ERROR,
@@ -83,4 +84,18 @@ test("parseTilesetExtras accepts what the bake writes and rejects the rest", () 
   expect(() =>
     parseTilesetExtras({ extras: { ...extras, tiles: [] } })
   ).toThrow();
+});
+
+test("a point on a seam belongs to exactly one tile", () => {
+  const west: [number, number, number, number] = [
+    410_000, 5_656_000, 412_000, 5_658_000,
+  ];
+  const east: [number, number, number, number] = [
+    412_000, 5_656_000, 414_000, 5_658_000,
+  ];
+  const onSeam: [number, number] = [412_000, 5_657_000];
+  expect(ownsPoint(west, ...onSeam)).toBe(false);
+  expect(ownsPoint(east, ...onSeam)).toBe(true);
+  expect(ownsPoint(east, 411_950, 5_657_000)).toBe(false);
+  expect(ownsPoint(east, 413_999.9, 5_657_999.9)).toBe(true);
 });

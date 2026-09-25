@@ -118,7 +118,7 @@ export function createNodeTerrainMaterial(
       base.mul(vec3(0.7, 1.12, 0.52)),
       lush
     );
-    const strength = live(splat.meadowNdvi ?? { value: 0 });
+    const strength = live(splat.ground?.meadowNdvi ?? { value: 0 });
     base = mix(base, tint, strength.mul(meadow).mul(step(0.012, ndvi)));
   }
   material.colorNode = mix(base, vec3(0.3, 0.33, 0.38), ink);

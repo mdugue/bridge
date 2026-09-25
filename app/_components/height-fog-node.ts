@@ -1,15 +1,18 @@
-import { Color, Fog, type Scene } from "three";
+import { Color, Fog, type Scene, Vector4 } from "three";
 import {
   clamp,
   float,
   fog,
+  max,
+  min,
+  positionView,
   positionWorld,
   rangeFogFactor,
   smoothstep,
   uniform,
 } from "three/tsl";
 import type { Node } from "three/webgpu";
-import type { HeightFogUniforms } from "./height-fog";
+import { type HeightFogUniforms, SITE_EDGE_FADE_M } from "./height-fog";
 
 /**
  * SPIKE (plan 020): height-fog.ts as ONE scene fog node. The GLSL version is
@@ -17,7 +20,7 @@ import type { HeightFogUniforms } from "./height-fog";
  * it floats out of the haze); on the node renderer a `scene.fogNode` applies
  * to every lit material — terrain, water, clay, trees, rails, walls, lamps —
  * with the same terms: three's distance fog plus a world-Y pool above the
- * valley floor. Colour, range and the height knobs follow the live values
+ * valley floor, and the site-edge haze that dissolves the data's end. Colour, range and the height knobs follow the live values
  * the sun rig and the look already write.
  */
 export function installNodeFog(scene: Scene, height: HeightFogUniforms): void {
@@ -34,15 +37,25 @@ export function installNodeFog(scene: Scene, height: HeightFogUniforms): void {
   const strength = uniform(0).onRenderUpdate(
     () => height.uFogHeightStrength.value
   );
+  const rect = uniform(new Vector4()).onRenderUpdate(
+    () => height.uFogSiteRect.value
+  );
   const distance = rangeFogFactor(near, far);
   const pool = float(1).sub(
     smoothstep(start, start.add(falloff), positionWorld.y)
   );
-  const factor = clamp(
+  const pooled = clamp(
     distance.add(strength.mul(pool).mul(float(1).sub(distance))),
     0,
     1
   );
+  // Site-edge haze, never on what is right in front of the camera.
+  const xz = positionWorld.xz;
+  const edgeD = min(xz.sub(rect.xy), rect.zw.sub(xz));
+  const edge = float(1)
+    .sub(smoothstep(0, SITE_EDGE_FADE_M, min(edgeD.x, edgeD.y)))
+    .mul(smoothstep(60, 600, positionView.z.negate()));
+  const factor = max(pooled, edge.mul(edge).mul(float(3).sub(edge.mul(2))));
   // reason: `fogNode` is read by the node renderer but not declared on
   // three's Scene type.
   (scene as Scene & { fogNode: Node }).fogNode = fog(colour, factor);

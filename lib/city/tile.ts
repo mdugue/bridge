@@ -51,12 +51,14 @@ export type TileArtifactKind =
   | "lamps"
   | "landcover"
   | "landcoverLow"
+  | "monuments"
   | "ndvi"
   | "platform"
   | "rail"
   | "railarea"
-  | "vegrows"
-  | "walls";
+  | "surface"
+  | "edges"
+  | "vegrows";
 
 /**
  * Every side file of a tile — the ONE list scripts/prepare-data.ts publishes
@@ -82,13 +84,46 @@ export function tileArtifacts(
     // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
     canopy: dlm(`canopy_${tile}.geojson`),
     ndvi: dlm(`ndvi_${tile}.png`),
+    // Optional: the OSM paving raster (pipeline/bake/surface.py); without
+    // it the ground draws the land-cover class's default pattern.
+    surface: dlm(`surface_${tile}.png`),
+    // Optional: the smoothed road/meadow edge distances
+    // (pipeline/bake/edges.py); without them the shader reads the class
+    // texels (kerb band only, no parking lanes).
+    edges: dlm(`edges_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
+    monuments: dlm(`monuments_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
-    walls: dlm(`walls_${tile}.geojson`),
   };
+}
+
+/** The committed OSM walls (pipeline/bake/walls.py): a terrain bake input
+ *  under data/dlm/ — burned into the ground as breaklines, and stood as
+ *  ribbons in the fine terrain glTF — never served. */
+export function wallSourceFile(tile: string): string {
+  return `data/dlm/walls_${tile}.geojson`;
+}
+
+/** The committed kerb lines (pipeline/bake/edges.py): a terrain bake input
+ *  under data/dlm/ — the fine terrain glTF stands a kerb stone on them —
+ *  never served. */
+export function kerbSourceFile(tile: string): string {
+  return `data/dlm/kerbs_${tile}.geojson`;
+}
+
+/** The committed stairs (pipeline/bake/stairs.py): a terrain bake input
+ *  under data/dlm/ — the fine terrain glTF carries them — never served. */
+export function stairSourceFile(tile: string): string {
+  return `data/dlm/stairs_${tile}.geojson`;
+}
+
+/** The committed terraces (raised OSM areas, pipeline/bake/stairs.py): a
+ *  terrain bake input under data/dlm/, never served. */
+export function terraceSourceFile(tile: string): string {
+  return `data/dlm/terraces_${tile}.geojson`;
 }
 
 /** The committed DGM GeoTIFF (+ its .tfw sidecar) the heightfield bake reads. */

@@ -55,11 +55,74 @@ export interface LampFeature {
   properties: Record<string, unknown> | null;
 }
 
-/** OSM retaining/city walls (pipeline/bake/walls.py, ODbL): the barrier/man_made
- *  kind (only retaining kinds reshape the terrain) and the height in metres. */
+/**
+ * Fountains, statues, memorial stones and columns (pipeline/bake/monuments.py):
+ * the Basis-DLM's monument points (GeoSN, the official names) conflated with
+ * OSM's `amenity=fountain` (ODbL, the basin outlines). A fountain with an
+ * outline is a Polygon — the rim, its hole (when there is one) the water;
+ * everything else is a Point.
+ */
+export type MonumentKind = "column" | "fountain" | "statue" | "stone";
+
+/** How a fountain's basin is dressed: a raised rim with jets, jets on flush
+ *  paving (a splash pad), or a still pool without any. */
+export type FountainStyle = "basin" | "pool" | "splash";
+
+/**
+ * A monument's measured bulk: DOM1 − DGM1 on the 1 m grid, the patch that
+ * stands clear of trees and facades, padded by one empty cell. Heights in
+ * decimetres, row-major from the north-west corner (`west`, `north`).
+ */
+export interface ReliefGrid {
+  cols: number;
+  dm: number[];
+  north: number;
+  rows: number;
+  west: number;
+}
+
+export interface MonumentFeature {
+  geometry: PointGeometry | PolygonGeometry;
+  properties: {
+    /** a fountain with a DLM monument in it (its sculpture is measured) */
+    figure?: boolean;
+    kind: MonumentKind;
+    name?: string;
+    /** the measured sculpture or monument (pipeline/bake/monuments.py) */
+    relief?: ReliefGrid;
+    source?: "dlm" | "dlm+osm" | "osm";
+    style?: FountainStyle;
+  } | null;
+}
+
+/** OSM retaining/city walls and cliffs (pipeline/bake/walls.py, ODbL): the
+ *  barrier/man_made kind or "cliff" (only retaining kinds and cliffs reshape
+ *  the terrain) and the height in metres. */
 export interface WallFeature {
   geometry: LineGeometry;
   properties: { h: number; kind: string } | null;
+}
+
+/** The kerb lines (pipeline/bake/edges.py, from the Basis-DLM road class):
+ *  the smoothed carriageway edge, the road on each line's left. */
+export interface KerbFeature {
+  geometry: LineGeometry;
+  properties: Record<string, never> | null;
+}
+
+/** OSM `highway=steps` flights (pipeline/bake/stairs.py, ODbL): the axis runs
+ *  bottom → top; width (m), step count and the two landing heights (m). */
+export interface StairFeature {
+  geometry: LineGeometry;
+  properties: { n: number; w: number; z: [number, number] } | null;
+}
+
+/** Raised OSM areas a flight climbs onto that the DGM lacks (the Brühlsche
+ *  Terrasse; pipeline/bake/stairs.py, ODbL): the level (m) the build lifts
+ *  the ground inside them to. */
+export interface TerraceFeature {
+  geometry: MultiPolygonGeometry | PolygonGeometry | null;
+  properties: { z: number } | null;
 }
 
 /** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */

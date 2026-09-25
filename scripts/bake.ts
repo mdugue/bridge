@@ -7,7 +7,9 @@
  *   bun run bake --ingest             fetch the raw inputs first (the site's
  *                                     ingest adapter, e.g. GeoSN for Saxony)
  *   bun run bake --step canopy        one step (landcover, canopy, ndvi,
- *                                     roof-colour, lamps, walls, rail)
+ *                                     roof-colour, lamps, monuments, walls,
+ *                                     stairs, rail, surface, edges,
+ *                                     islands)
  *
  * The site (SITE, default dresden; sites/) supplies the tiles, their extent
  * and CRS; raw inputs live in data/_raw/<site>/ (gitignored). The steps run

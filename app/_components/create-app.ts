@@ -29,11 +29,11 @@ import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
-import type { ViewpointGeometry } from "@/lib/city/site";
+import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import { currentSite } from "@/sites";
-import { createCameraPose } from "./camera-pose";
+import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
@@ -42,6 +42,7 @@ import { createHeightFogUniforms } from "./height-fog";
 import { installNodeFog } from "./height-fog-node";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
+import { setFountainNight, setFountainTime } from "./monument-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { gpuMode, nodeRenderer } from "./gpu-mode";
 import { createPostStack } from "./post-stack";
@@ -57,7 +58,7 @@ import {
   shadowMapSizeFor,
 } from "./scene-profile";
 import { createSunRig, type SunState } from "./sun-rig";
-import type { TerrainLayer } from "./terrain-layer";
+import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   disposeObject3D,
   estimateGeometryBytes,
@@ -80,7 +81,9 @@ const SKY_COLOR = 0x9f_b6_cc;
 export type LayerName =
   | "city"
   | "lamps"
+  | "monuments"
   | "rail"
+  | "stairs"
   | "terrain"
   | "vegetation"
   | "walls"
@@ -125,6 +128,8 @@ export interface CityWalkOptions {
    * (a flight streams new tiles in). Fires on changes only.
    */
   onBusy?: (busy: boolean) => void;
+  /** a manual look or move ended live mode (camera-pose.ts) */
+  onFollowEnd?: () => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -206,17 +211,31 @@ export interface CityWalkHandle {
   latLng: { lat: number; lng: number };
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
+  /** analog altitude-stick input (fly mode): +1 climbs, −1 sinks */
+  setClimbInput: (v: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
+  /**
+   * The aim (grid heading + pitch, degrees) the view eases towards while it
+   * follows the phone; null stops following (camera-pose.ts).
+   */
+  setFollowAim: (aim: FollowAim | null) => void;
+  /** live mode's GPS ground point (EPSG), null stops (camera-pose.ts) */
+  setFollowPosition: (epsg: { x: number; y: number } | null) => void;
   setSun: (date: Date) => SunState;
   /**
-   * Lets the heavy dressing start — vegetation, lamps, rails, walls — and
+   * Lets the heavy dressing start — vegetation, lamps, rails — and
    * the terrain BVHs. Held back so its synchronous chunks cannot stutter the
    * frames the city arrives in; idempotent, and a no-op once the scene is
    * disposed.
    */
   startStreaming: () => void;
+  /**
+   * Puts the camera on a vantage at once, no glide (the spawn, "locate
+   * me"), landing in the vantage's movement mode.
+   */
+  placeAt: (viewpoint: ViewpointGeometry) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
@@ -430,8 +449,19 @@ async function bootApp(
   if (nodeRenderer()) {
     installNodeFog(scene, heightFog);
   }
-  // Shared meadow-NDVI tint strength (by reference) for the HUD slider.
-  const meadowNdvi = { value: LOOK_DEFAULTS.meadowNdvi };
+  // The site's world XZ rectangle: EPSG north is world −Z.
+  heightFog.uFogSiteRect.value.set(
+    siteBounds[0] - offset.cx,
+    -(siteBounds[3] - offset.cy),
+    siteBounds[2] - offset.cx,
+    -(siteBounds[1] - offset.cy)
+  );
+  // Shared ground look strengths (by reference) for the HUD sliders.
+  const ground: GroundUniforms = {
+    groundDetail: { value: LOOK_DEFAULTS.groundDetail },
+    meadowNdvi: { value: LOOK_DEFAULTS.meadowNdvi },
+    urbanGreen: { value: LOOK_DEFAULTS.urbanGreen },
+  };
   // The lowest real terrain elevation so far (the Elbe surface): the floor
   // the player stands on off every tile and the valley height-fog's start,
   // lowered as each tile lands (a uniform write, no recompile).
@@ -524,8 +554,8 @@ async function bootApp(
   // The stream: what lands and leaves, and everything that follows from it.
   let onChange: () => void = () => undefined;
   // Shader compiles go through the post stack (it knows the target the
-  // scene renders into); it exists from the "light" stage on, and anything
-  // landing before that is compiled with the handover below.
+  // scene renders into). It is created a few lines below, before the render
+  // loop runs the stream's first update, so no tile lands without it.
   let compileWith: ((object: Object3D) => Promise<void>) | null = null;
   const stream = createTileStream(
     {
@@ -538,13 +568,14 @@ async function bootApp(
       heightFog,
       look: opts.look,
       lowRasters: budget.lowRasters,
-      meadowNdvi,
+      ground,
       night: () => currentNight,
       offset,
       onChange: () => onChange(),
       renderer,
       styleResources,
       sunDirection,
+      tileBounds: (id) => extras.tiles.find((t) => t.id === id)?.bounds,
       tilesetUrl,
     },
     world,
@@ -574,13 +605,26 @@ async function bootApp(
     onChange();
   });
   // A tile that fails to load (or to dress) leaves a hole, not a dead scene:
-  // the HUD says so once, the rest keeps streaming.
+  // the HUD says so once, the rest keeps streaming. Before the first frame
+  // the spawn tile (or the tileset itself) failing is fatal instead: the
+  // boot below rejects rather than waiting for content that never comes.
   let reportedError = false;
+  let firstFrameShown = false;
+  let bootFailure: Error | null = null;
   stream.tiles.addEventListener("load-error", (event) => {
+    const { error, tile, url } = event as {
+      error?: unknown;
+      tile?: unknown;
+      url?: unknown;
+    };
+    const failure = error instanceof Error ? error : new Error(String(error));
+    if (!firstFrameShown && (tile === null || String(url).includes(spawn.id))) {
+      bootFailure ??= failure;
+      return;
+    }
     if (!(disposed || reportedError)) {
       reportedError = true;
-      const { error } = event as { error?: unknown };
-      opts.onError?.(error instanceof Error ? error.message : String(error));
+      opts.onError?.(failure.message);
     }
   });
 
@@ -591,6 +635,7 @@ async function bootApp(
       d.lamps?.setNightFactor(state.nightFactor);
     }
     lampLights.setNightFactor(state.nightFactor);
+    setFountainNight(state.nightFactor);
     clayNight.value = state.nightFactor;
     invalidateShadows();
     return state;
@@ -638,8 +683,14 @@ async function bootApp(
     heightFog: (strength) => {
       heightFog.uFogHeightStrength.value = strength;
     },
+    groundDetail: (strength) => {
+      ground.groundDetail.value = strength;
+    },
     meadowNdvi: (strength) => {
-      meadowNdvi.value = strength;
+      ground.meadowNdvi.value = strength;
+    },
+    urbanGreen: (strength) => {
+      ground.urbanGreen.value = strength;
     },
     waterMist: (strength) => {
       for (const t of stream.terrains) {
@@ -677,12 +728,15 @@ async function bootApp(
     heightAt,
     offset,
     resolveStep: collider.resolveStep,
+    onFollowEnd: opts.onFollowEnd,
     onModeChange: opts.onModeChange,
     onPose: opts.onPose,
   });
-  // Spawn at the recenter point (= world origin); placed again on the
-  // terrain once the spawn tile has landed (below).
-  pose.teleportTo(offset.cx, offset.cy);
+  // Spawn at the site's start vantage (on the spawn tile, so the boot's
+  // wait for that tile holds); placed again once its terrain has landed
+  // (below) — the height is above the ground, which is not there yet.
+  const spawnView = spawnViewpoint(currentSite());
+  pose.placeAt(spawnView);
 
   // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
   const tapRaycaster = new Raycaster();
@@ -731,8 +785,10 @@ async function bootApp(
         ),
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
+        monuments: census(dressings.map((d) => d.monuments?.group)),
         rail: census(dressings.map((d) => d.rail)),
-        walls: census(dressings.map((d) => d.walls)),
+        walls: census(terrains.map((t) => t.walls)),
+        stairs: census(terrains.map((t) => t.stairs)),
       },
     });
   };
@@ -801,6 +857,12 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
+        viewpoint: (index) => {
+          const view = currentSite().viewpoints[index];
+          if (view) {
+            pose.flyToViewpoint(view);
+          }
+        },
       }
     )
   );
@@ -942,6 +1004,8 @@ async function bootApp(
     // Repoint the shared real lamp lights at the nearest heads.
     lampLights.updateNearest(camera.position);
     stepVegetation(elapsed);
+    // The fountains' jets and water shimmer (one shared uniform).
+    setFountainTime(elapsed);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(pose.getPose());
@@ -969,14 +1033,21 @@ async function bootApp(
   let details = 0;
   let busy = false;
   // --- the first frame: the spawn tile's buildings and terrain ------------
+  // Landed = shown by the renderer, not merely dressed: a dressed tile can
+  // still be waiting on its compile, and the spawn teleport below needs
+  // ground that is really there.
   const spawnLanded = () => ({
-    city: [...stream.cities].some((c) => c.tile === spawn.id),
-    terrain: [...stream.terrains].some((t) => t.tile === spawn.id),
+    city: stream.visibleCities().some((c) => c.tile === spawn.id),
+    terrain: stream.visibleTerrains().some((t) => t.tile === spawn.id),
   });
   await new Promise<void>((resolve, reject) => {
     const poll = () => {
       if (disposed || opts.signal?.aborted) {
         reject(new DOMException("CityWalk startup aborted", "AbortError"));
+        return;
+      }
+      if (bootFailure) {
+        reject(bootFailure);
         return;
       }
       const landed = spawnLanded();
@@ -990,13 +1061,15 @@ async function bootApp(
     };
     poll();
   });
+  firstFrameShown = true;
   onChange();
-  // Whatever landed before the post stack existed: compile it now, under the
-  // overlay, instead of in the first visible frame.
+  // Tiles compile themselves before they show; this covers the rest of the
+  // scene (sky, sun rig, lamp light pool), under the overlay instead of in
+  // the first visible frame.
   await postStack.compile(scene).catch(() => undefined);
-  // Stand on the spawn tile now that its ground exists (the pose was placed
-  // before any terrain had landed, on the fallback floor).
-  pose.teleportTo(offset.cx, offset.cy);
+  // On the spawn vantage now that its ground exists (the pose was placed
+  // before any terrain had landed, over the fallback floor).
+  pose.placeAt(spawnView);
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
@@ -1008,7 +1081,7 @@ async function bootApp(
   // be dressed.
   // The two stages after the first frame measure what the cameras see:
   // the tile renderer's own load progress, and the details (vegetation,
-  // lamps, rails, walls) built per fine tile against those still queued.
+  // lamps, rails) built per fine tile against those still queued.
   // Both only ever move forward, and both end when everything in view is in.
   function reportProgress(spawnDressed: boolean): void {
     if (extras.tiles.length === 1) {
@@ -1033,7 +1106,9 @@ async function bootApp(
   }
 
   function checkLoaded(): void {
-    const spawnDressed = [...stream.dressings].some((d) => d.tile === spawn.id);
+    // Tried, not necessarily built: a dressing that failed, or whose tile
+    // left before its turn, must not hold the scene short of "loaded".
+    const spawnDressed = stream.dressingSettled(spawn.id);
     const idleNow = tilesIdle && stream.pendingDressings() === 0;
     if (!loaded) {
       reportProgress(spawnDressed);
@@ -1079,6 +1154,7 @@ async function bootApp(
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,
     captureViewpoint: pose.captureViewpoint,
+    placeAt: pose.placeAt,
     teleportTo: pose.teleportTo,
     getPose: pose.getPose,
     getCameraState: pose.getCameraState,
@@ -1095,6 +1171,9 @@ async function bootApp(
       hitName: lastFocusHit?.name ?? null,
     }),
     setMovementMode: pose.setMovementMode,
+    setFollowAim: pose.setFollowAim,
+    setFollowPosition: pose.setFollowPosition,
+    setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,
     getFootprints: (): FootprintPoly[] =>

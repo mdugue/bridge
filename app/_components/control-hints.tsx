@@ -20,8 +20,10 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "W A S D", action: "gehen", primary: true },
   { key: "F", action: "fliegen", primary: true },
   { key: "2× Klick", action: "hingehen", primary: true },
-  { key: "Shift", action: "sprinten" },
-  { key: "Space", action: "hoch (Flug)" },
+  { key: "Shift", action: "sprinten · runter (Flug)" },
+  { key: "Space / E", action: "hoch (Flug)" },
+  { key: "Q", action: "runter (Flug)" },
+  { key: "1 – 9", action: "Aussichtspunkt" },
   { key: "Scroll", action: "zoomen" },
   { key: "R", action: "abreißen" },
   { key: "Esc", action: "immersiv beenden" },
@@ -33,6 +35,8 @@ export const TOUCH_HINTS: readonly ControlHint[] = [
   { key: "Joystick", action: "gehen", primary: true },
   { key: "2× Tippen", action: "hingehen", primary: true },
   { key: "2 Finger", action: "zoomen" },
+  { key: "✈ Knopf", action: "fliegen / gehen" },
+  { key: "Höhenregler", action: "steigen / sinken (Flug)" },
 ];
 
 const DISMISSED_KEY = "city-walk:hints-dismissed";

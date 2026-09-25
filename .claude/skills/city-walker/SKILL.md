@@ -37,7 +37,8 @@ pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
 camera, so casters outside the view stay loaded. A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
-heavy part (vegetation, lamps, rails, walls on the fine terrain level) waits
+heavy part (vegetation, lamps, rails on the fine terrain level; its walls
+and stairs are baked into the glTF) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
 chip. Every tile change re-renders the shadow map. The layers:
 
@@ -50,7 +51,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
   tile. No CityJSON reaches the browser.
 - `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
-  resampled with the wall breaklines burned in at bake time,
+  resampled with the wall breaklines burned in, the ground shaped under
+  OSM stairs, and the steps and wall ribbons as `stairs`/`walls` nodes, all
+  at bake time,
   `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
   land-cover material; also hangs the water and mist sheets.
 - `landcover-splat.ts` — paints the class raster with the one palette
@@ -157,6 +160,27 @@ shoreline). The terrain shader samples it `LinearFilter` + mipmaps +
 water reads the alpha and `smoothstep`s it for a crisp shoreline. Edge
 sharpness is bounded by the class raster's resolution, not the GPU filter.
 A colour change is a look change, never a re-bake (ADR 0023).
+
+**Ground detail** (`ground-detail.ts`, in the same fragment pass): the
+kerb band, lawn edges, parking lanes and the paving rows along a kerb are
+drawn at *signed distances in metres* from the baked, smoothed edge raster
+(`pipeline/bake/edges.py` → `edges_<tile>.png`, RG, valid to ±6 m). The
+class texels alone give that distance only within a texel of the edge and
+follow the 0.5 m staircase — a shading-normal "kerb face" from them read as
+dashes, and 2–5 m parking lanes from them as arcs. They remain the fallback
+(4×4, box-smoothed) where the edge raster is absent. The same bake writes
+the kerb lines; the fine terrain glTF stands a real 12 cm **kerb stone** on
+them (`lib/city/kerbs.ts`, `kerb-layer.ts`; triangles wound CCW about their
+normals — the first cut was clockwise and rendered black). The OSM paving
+raster (`surface_<tile>.png`, RGBA: surface ids + parking bits, the bearing,
+a per-segment along-street offset — along = offset + (position from the
+tile's NW corner)·d, exact per straight piece) picks the pattern; every
+pattern length along a street divides `SURFACE_ALONG_PERIOD` (165 m).
+Rotating patterns by the bearing about the far data origin made every bend
+a shower of arcs — don't. Both rasters are greyscale PNGs 2×/4× wide with
+the bytes interleaved, so the viewer's own decoder (`lib/city/png-raster.ts`)
+reads them exactly. *Bodendetail* and *Stadtgrün* (urban green painted as
+meadow) are the sliders. The contour ink guards `fwidth == 0`.
 
 ## Terrain seams
 
@@ -279,7 +303,7 @@ CRS, land cover first:
 ```bash
 bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|rail
+bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|stairs|rail|surface
 bun run test:pipeline                  # pytest + ruff
 ```
 

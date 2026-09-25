@@ -98,8 +98,12 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `rail-layer.ts`, `wall-layer.ts`, `lamp-layer.ts`, `shader-chunks.ts`
-    (data-frame positions from world space)
+    `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
+    green in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts`,
+    `kerb-layer.ts` and `stair-layer.ts` (only their
+    materials: walls and stairs are baked into the fine terrain glTF),
+    `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
+    `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
@@ -107,7 +111,15 @@ config change.
   - input/camera: `camera-pose.ts` (the one owner of where the player
     stands and looks, walk/fly and the scenic glides; every input cancels a
     glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
-    `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`
+    `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
+    `altitude-stick.tsx` (the fly-mode climb control opposite it),
+    `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS
+    fix + phone compass → `placeAt`), `live-mode.ts` (opt-in live mode:
+    view follows the compass, camera the GPS; offered only while a compass
+    reports), `hud-toolbar.tsx` (those tools + walk/fly as one foldable
+    labelled group) and
+    `device-orientation.ts` (the one orientation-event adapter both use);
+    the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
@@ -125,8 +137,9 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `walls.py`, `rail.py`, `osm.py`; `ingest_sn.py` is Saxony's
-  download adapter; tests in `pipeline/tests/`), run by `bun run bake`
+  `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py`,
+  `surface.py`, `edges.py`, `osm.py`; `ingest_sn.py` is Saxony's download adapter; tests
+  in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
@@ -230,14 +243,25 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
-- All OSM layers (walls, lamps, platforms, bridge structure) come from the
-  site's Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass.
+- `monuments.py` takes the monuments (statues, stones, columns, named
+  fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
+  basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
+  names that fountain. A monument's form is its measured nDOM patch
+  (`relief`, when it stands clear of trees/facades), smoothed at runtime —
+  never an invented figure.
+- All OSM layers (walls, cliffs, stairs, lamps, fountains, platforms,
+  bridge structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's
+  OSM driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
   with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
-  painted the ground black).
+  painted the ground black). Nor through the browser's image decoder: the
+  class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
+  (WebKit colour-manages untagged greyscale even with
+  `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
+  with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
   ≈ 20 s); the glTF quantisation, meshopt and gzip settings live in
   `scripts/tile-glb.ts`.
@@ -321,7 +345,8 @@ scene: it re-renders everything into a buffer each frame (~2× cost).
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps, rails and walls are built tile by tile behind a HUD chip
+lamps and rails are built tile by tile behind a HUD chip (stairs and
+walls are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). `onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow

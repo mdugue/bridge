@@ -1,0 +1,34 @@
+{
+  "tile": "33412_5656_2_sn",
+  "crs": "EPSG:25833",
+  "bounds": [
+    412000,
+    5656000,
+    414000,
+    5658000
+  ],
+  "size": 2048,
+  "encoding": {
+    "layout": "8-bit greyscale, 4 * size wide: R0 G0 B0 A0 R1 ... per row",
+    "r": "park * 64 + walk * 8 + road (surface ids, parking kinds)",
+    "g": "way bearing: 0 unknown, else 1 + bearing (from east, ccw) over 0..360 deg",
+    "ba": "along-street offset mod 165.0 m, 16 bits, low byte first: along = offset + (x - west, y - north) . (cos, sin)(bearing)"
+  },
+  "surfaces": {
+    "0": "unknown",
+    "1": "asphalt",
+    "2": "concrete",
+    "3": "paving",
+    "4": "sett",
+    "5": "unpaved",
+    "6": "grass"
+  },
+  "parking": {
+    "0": "none",
+    "1": "street-parallel",
+    "2": "street-perpendicular",
+    "3": "lot"
+  },
+  "alongPeriod": 165.0,
+  "attribution": "\u00a9 OpenStreetMap contributors (ODbL)"
+}

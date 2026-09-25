@@ -53,6 +53,8 @@ history. Decisions that came out of plans are written up as
 | 019 | Verify and tune the 3D Tiles branch on a real GPU (palette, quantisation, LOD, seams, shadows, frame time, phones, deploy host) | **TODO** — needs a GPU | [019-gpu-verification.md](./019-gpu-verification.md) |
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | **IN PROGRESS** — Phase 0 spike done (look matches; WebGPU 40–80 % faster than today, WebGL2 backend on par but stalls while compiling); gate awaits the maintainer | [020-webgpu-tsl.md](./020-webgpu-tsl.md) |
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
+| 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
+| 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -62,7 +64,9 @@ S/M/L.
 
 1. **Plan 019 (S–M, GPU) — first.** The 3D Tiles branch (ADRs 0023–0026)
    was verified headless only; look at it on a real GPU, tune the LOD and
-   cache knobs, check phones and the deploy host.
+   cache knobs, check phones and the deploy host. Take plan 023 phase 4
+   along (the ground detail's look and cost on the same GPU); its phases
+   5–8 follow on their own.
 2. **Plan 017, the rest (M).** OSM land cover as a DLM substitute (now a
    class raster only), the NRW adapter and a second site, `site:check`.
    Run the OSM bakes once against a Geofabrik extract (unreachable from
@@ -173,10 +177,8 @@ S/M/L.
 ### Maintainer actions
 
 - Run plan 019 on a GPU machine before merging the 3D Tiles branch.
-- Decide whether to re-bake the committed derived data with the current
-  Basis-DLM edition (`bun run bake --ingest`; the spawn-tile comparison is
-  in plan 017's progress notes), and put the Geofabrik extract under
-  `data/_raw/dresden/osm/` to run the OSM bakes once.
+- Re-bake the remaining DLM/DOP products with the current editions:
+  [plan 022](./022-rebake-current-editions.md).
 - Plan 021's Phase 0 (a second framework for `/wissen`, the URL scheme).
 
 - Close the superseded Dependabot PRs (#3, #12, #13, #15, #26).

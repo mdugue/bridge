@@ -66,6 +66,14 @@ class Tile:
         return found[-1] if found else None
 
 
+def owns(bounds: tuple[float, float, float, float], x: float, y: float) -> bool:
+    """Whether a tile owns the point: west and south edges in, east and north
+    out, so a point on a seam belongs to exactly one tile (the viewer's
+    `ownsPoint`, lib/city/tileset.ts)."""
+    xmin, ymin, xmax, ymax = bounds
+    return xmin <= x < xmax and ymin <= y < ymax
+
+
 def read_layer(
     path: Path,
     bbox: tuple[float, float, float, float],

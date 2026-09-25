@@ -57,6 +57,7 @@ const SUN_INTENSITY = 2.4;
 
 /** The two sky domes' shared surface: the GLSL `Sky` or (spike) the TSL `SkyMesh`. */
 interface SkyDome {
+  setHaze: (fog: Color | string | number) => void;
   setSun: (x: number, y: number, z: number) => void;
   setTime: (seconds: number) => void;
 }
@@ -74,6 +75,7 @@ function createNodeSkyDome(scene: Scene): SkyDome {
   sky.cloudSpeed.value = 0.0001;
   scene.add(sky);
   return {
+    setHaze: () => undefined,
     setSun: (x, y, z) => sky.sunPosition.value.set(x, y, z),
     setTime: () => undefined,
   };
@@ -87,10 +89,14 @@ function createSkyDome(scene: Scene): SkyDome {
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
   const u = sky.material.uniforms;
-  u.turbidity.value = 6;
+  // Moderate haze and a small Mie lobe: more of either blows the sky around
+  // the sun (and with it half the horizon) out to flat white.
+  u.turbidity.value = 4.5;
   u.rayleigh.value = 1.6;
-  u.mieCoefficient.value = 0.004;
-  u.mieDirectionalG.value = 0.75;
+  u.mieCoefficient.value = 0.0025;
+  // A tighter forward lobe: the glow stays around the sun instead of
+  // whitening a quarter of the sky.
+  u.mieDirectionalG.value = 0.82;
   // Sky.js (r184) already ships a procedural drifting-cloud system (multi-octave
   // fbm, sun-tinted) but nothing advances its `time`, so the clouds were frozen.
   // Soften the defaults toward pale watercolor washes (not cotton balls) and let
@@ -100,8 +106,45 @@ function createSkyDome(scene: Scene): SkyDome {
   u.cloudDensity.value = 0.3;
   // Slow drift — a barely-moving Dresden sky, not racing clouds.
   u.cloudSpeed.value = 0.0001;
+  // Horizon haze. The physical sky knows no ground: below the horizon it
+  // repeats its brightest horizon white, so past the site's last tile the
+  // view ended on a hard cut from fogged terrain to near-white. Blend the
+  // dome into the scene's fog colour instead — fully below the horizon (the
+  // "ground" beyond the data is haze), feathered a few degrees above it — so
+  // the fogged terrain, the edge haze (height-fog.ts) and the sky meet in one
+  // soft band. The colour is fed per update from the time-of-day palette.
+  u.uHazeColor = { value: new Color(0xdf_e7_ee) };
+  sky.material.fragmentShader = sky.material.fragmentShader
+    .replace("void main() {", "uniform vec3 uHazeColor;\n\t\tvoid main() {")
+    // Clouds only from a few degrees up. Near the horizon the cloud plane's
+    // projection crowds the fbm into one sunlit sheet, which read as a
+    // blown-out white band across the lower sky.
+    .replace(
+      "float horizonFade = smoothstep( 0.0, 0.03 + 0.06 * cloudElevation, direction.y );",
+      "float horizonFade = smoothstep( 0.03, 0.4, direction.y );"
+    )
+    .replace(
+      "gl_FragColor = vec4( texColor, 1.0 );",
+      `// Temper the dome first: untouched, its lower third tone-maps to
+			// flat paper white and its zenith to a synthetic cyan. A little less
+			// radiance and chroma keeps it a pale watercolour wash.
+			float skyLuma = dot( texColor, vec3( 0.2126, 0.7152, 0.0722 ) );
+			texColor = mix( vec3( skyLuma ), texColor, 0.8 ) * 0.7;
+			// Soft shoulder on the bright part (the glow around the sun), by
+			// luminance so the hue survives: past the knee it rolls off instead
+			// of clipping to white under the tone mapper.
+			float skyL = skyLuma * 0.7;
+			float skyOver = max( skyL - 0.45, 0.0 );
+			texColor *= ( min( skyL, 0.45 ) + skyOver / ( 1.0 + 1.5 * skyOver ) ) / max( skyL, 1e-4 );
+			float hazeBand = 1.0 - smoothstep( -0.03, 0.28, direction.y );
+			texColor = mix( texColor, uHazeColor, hazeBand * hazeBand * ( 3.0 - 2.0 * hazeBand ) );
+			gl_FragColor = vec4( texColor, 1.0 );`
+    );
   scene.add(sky);
   return {
+    setHaze: (fog) => {
+      (u.uHazeColor.value as Color).set(fog);
+    },
     setSun: (x, y, z) =>
       (sky.material.uniforms.sunPosition.value as Vector3).set(x, y, z),
     setTime: (seconds) => {
@@ -287,6 +330,7 @@ export function createSunRig(
     if (scene.fog instanceof Fog) {
       scene.fog.color.set(palette.fog);
     }
+    sky.setHaze(palette.fog);
     if (scene.background instanceof Color) {
       scene.background.set(palette.fog);
     }
