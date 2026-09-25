@@ -43,6 +43,7 @@ const WATER_COVERAGE =
 const MIST_VERT = /* glsl */ `
   varying vec2 vSplatUv;
   varying vec2 vMistXY;
+  varying vec3 vMistWP;
   uniform vec2 uOrigin;
   uniform vec2 uSize;
   void main() {
@@ -53,17 +54,20 @@ const MIST_VERT = /* glsl */ `
     // Float the sheet a few metres above the water (world Y is up) so it has
     // vertical presence — a sheet lying ON the water is edge-on (and so
     // invisible) from street level.
-    gl_Position = projectionMatrix * viewMatrix * ( dataWP + vec4( 0.0, 4.0, 0.0, 0.0 ) );
+    vec4 wp = dataWP + vec4( 0.0, 4.0, 0.0, 0.0 );
+    vMistWP = wp.xyz;
+    gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `;
 const MIST_FRAG = /* glsl */ `
   varying vec2 vSplatUv;
   varying vec2 vMistXY;
+  varying vec3 vMistWP;
   uniform sampler2D uSplat;
+  uniform vec2 uSize;
   uniform float uTime;
   uniform vec3 uSkyTint;
   uniform float uStrength;
-  ${WATER_COVERAGE}
   float mistHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
   float mistNoise( vec2 p ) {
     vec2 i = floor( p );
@@ -78,22 +82,42 @@ const MIST_FRAG = /* glsl */ `
     for ( int i = 0; i < 3; i++ ) { v += a * mistNoise( p ); p *= 2.0; a *= 0.5; }
     return v;
   }
+  // Water coverage blurred over tens of metres: the colour splat's alpha read
+  // from a coarse mip (bias) at five spread taps. The shoreline in the splat
+  // is ~1 m wide, which is what made the mist end on a crisp outline of the
+  // river; the haze has to thin out over the banks instead.
+  float mistCoverage( vec2 uv ) {
+    vec2 o = 18.0 / uSize;
+    float c = texture2D( uSplat, uv, 5.0 ).a * 0.4;
+    c += texture2D( uSplat, uv + vec2( o.x, 0.0 ), 5.0 ).a * 0.15;
+    c += texture2D( uSplat, uv - vec2( o.x, 0.0 ), 5.0 ).a * 0.15;
+    c += texture2D( uSplat, uv + vec2( 0.0, o.y ), 5.0 ).a * 0.15;
+    c += texture2D( uSplat, uv - vec2( 0.0, o.y ), 5.0 ).a * 0.15;
+    return c;
+  }
   void main() {
-    float cov = waterCoverage( vSplatUv );
-    if ( cov <= 0.02 ) discard;
-    // Feather the shoreline with a WIDE band and square it so the bank dissolves
-    // gradually instead of ending on a hard edge.
-    float wcov = smoothstep( 0.1, 0.95, cov );
-    wcov *= wcov;
-    // Continuous density (no hard threshold): a soft floor + gentle fbm swell, so
-    // the mist has soft internal variation and no crisp blob/cutout edges.
-    vec2 q = vMistXY * 0.025 + vec2( uTime * 0.018, uTime * 0.012 );
-    float steam = mix( 0.35, 1.0, smoothstep( 0.1, 0.9, mistFbm( q ) ) );
-    float alpha = wcov * steam * uStrength * 0.8;
-    if ( alpha <= 0.001 ) discard;
+    float cov = mistCoverage( vSplatUv );
+    if ( cov <= 0.01 ) discard;
+    // Broad feather, then a smooth cubic so the haze has no visible rim.
+    float wcov = smoothstep( 0.02, 0.85, cov );
+    wcov = wcov * wcov * ( 3.0 - 2.0 * wcov );
+    // Two slowly drifting fbm layers at different scales and directions:
+    // large soft banks and thinner wisps, no threshold anywhere, so the density
+    // varies continuously instead of forming blobs with edges.
+    vec2 q = vMistXY * 0.012 + vec2( uTime * 0.010, uTime * 0.006 );
+    vec2 r = vMistXY * 0.031 - vec2( uTime * 0.004, uTime * 0.013 );
+    float banks = smoothstep( 0.15, 0.85, mistFbm( q ) );
+    float wisps = mistFbm( r + banks * 1.7 );
+    float steam = mix( 0.25, 1.0, banks ) * mix( 0.7, 1.15, wisps );
+    // A sheet has an outline where it meets the eye up close: thin it out in
+    // the first tens of metres so it reads as air, not as a plane.
+    float dist = length( cameraPosition - vMistWP );
+    float nearFade = smoothstep( 8.0, 90.0, dist );
+    float alpha = wcov * steam * nearFade * uStrength * 0.62;
+    if ( alpha <= 0.002 ) discard;
     // Near-white warm haze (brighter than the sky tint) so it clearly reads as
     // mist over the pale water rather than blending into it.
-    vec3 mistCol = mix( uSkyTint, vec3( 1.0 ), 0.65 );
+    vec3 mistCol = mix( uSkyTint, vec3( 1.0 ), 0.6 );
     gl_FragColor = vec4( mistCol, alpha );
   }
 `;
@@ -167,18 +191,18 @@ export function createWaterLayer(
   const uSunDir = { value: sunDirection ?? new Vector3(0, 1, 0) };
   const uSkyTint = { value: new Color(0x9f_b6_cc) };
   const uSunColor = { value: new Color(0xff_f4_e0) };
-  const uFresnel = { value: 0.55 };
+  const uFresnel = { value: 0.4 };
   const uGlitter = { value: 0.7 };
   const [minX, minY, maxX, maxY] = splat.bounds;
   const origin = [minX - splat.offset.cx, maxY - splat.offset.cy];
   const size = [maxX - minX, maxY - minY];
 
   const material = new MeshStandardMaterial({
-    color: 0x86_a8_c4,
+    color: 0x7a_9e_bc,
     roughness: 0.3,
     metalness: 0,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.9,
     // Pull slightly towards camera so it never z-fights the shared terrain.
     polygonOffset: true,
     polygonOffsetFactor: -1,
@@ -244,6 +268,11 @@ export function createWaterLayer(
          float wcov = smoothstep( 0.28, 0.72, waterCoverage( vSplatUv ) );
          if ( wcov <= 0.001 ) discard;
          diffuseColor.a *= wcov;
+         // Depth by distance from the bank, as on a drawn map: the coverage
+         // read from a coarse mip (~30 m) is 1 mid-stream and falls toward
+         // the shore, so the channel deepens in tone and the shallows lighten.
+         float wDeep = smoothstep( 0.55, 1.0, texture2D( uSplat, vSplatUv, 6.0 ).a );
+         diffuseColor.rgb *= mix( vec3( 1.1, 1.08, 1.04 ), vec3( 0.86, 0.92, 0.98 ), wDeep );
          vec3 wtrV = normalize( cameraPosition - vWaterWP );
          float wtrFres = pow( 1.0 - clamp( wtrV.y, 0.0, 1.0 ), 4.0 );
          diffuseColor.rgb = mix( diffuseColor.rgb, uSkyTint, wtrFres * uFresnel );`
@@ -253,6 +282,10 @@ export function createWaterLayer(
       .replace(
         "#include <normal_fragment_begin>",
         `#include <normal_fragment_begin>
+         // The sheet shares the terrain's grid, whose normals carry the
+         // DGM's noisy river surface (and 8-bit quantisation): lit, that
+         // painted the Elbe in dark blotches. Water is level — start from up.
+         normal = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
          float wv = sin( vWorldXY.x * 0.35 + uTime * 0.8 )
                   + sin( vWorldXY.y * 0.27 - uTime * 0.6 );
          float wu = sin( ( vWorldXY.x + vWorldXY.y ) * 0.20 + uTime * 0.5 );

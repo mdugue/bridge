@@ -60,11 +60,49 @@ export function surfaceId(kind: SurfaceKind): number {
 }
 
 /**
- * The two surface ids one texel of the raster packs (`R = walk * 8 + road`):
- * the carriageway's and the pavement's material, each 0..7.
+ * Bytes per metre of the edge-distance raster (pipeline/bake/edges.py
+ * `EDGE_SCALE`, its legend's `scale`): a byte is 128 + scale · the signed
+ * distance to the road or the meadow edge.
  */
-export function unpackSurface(byte: number): { road: number; walk: number } {
-  return { road: byte & 7, walk: byte >> 3 };
+export const EDGE_SCALE = 20;
+
+/**
+ * The period (m) the paving raster stores the along-street coordinate
+ * modulo (pipeline/bake/surface.py `ALONG_PERIOD`, and its legend's
+ * `alongPeriod`); every pattern length along a street must divide it.
+ */
+export const SURFACE_ALONG_PERIOD = 165;
+
+/**
+ * Where cars park, the raster's top two bits (pipeline/bake/surface.py
+ * `PARKING`): a parking lane beside the carriageway with parallel or
+ * perpendicular/diagonal bays (laid out from the kerb), or a car park (bay
+ * lines across its direction, its aisles left clear).
+ */
+export const PARKING_KINDS = [
+  "none",
+  "street-parallel",
+  "street-perpendicular",
+  "lot",
+] as const;
+export type ParkingKind = (typeof PARKING_KINDS)[number];
+
+/** A parking kind's id (its index), for the shader's constants. */
+export function parkingId(kind: ParkingKind): number {
+  return PARKING_KINDS.indexOf(kind);
+}
+
+/**
+ * What one texel of the raster packs (`R = park * 64 + walk * 8 + road`):
+ * the carriageway's and the pavement's material (each 0..7) and the parking
+ * kind (0..3).
+ */
+export function unpackSurface(byte: number): {
+  park: number;
+  road: number;
+  walk: number;
+} {
+  return { road: byte & 7, walk: (byte >> 3) & 7, park: byte >> 6 };
 }
 
 /**

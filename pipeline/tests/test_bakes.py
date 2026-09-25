@@ -1,6 +1,7 @@
 """Units of the bakes that need no raw data (the end-to-end comparison
 against the committed artifacts is in docs/data-pipeline.md)."""
 
+import numpy as np
 import shapely
 
 from bake.common import owns, round_coords
@@ -85,6 +86,95 @@ def test_a_point_on_a_seam_belongs_to_one_tile():
     assert not owns(west, 412_000.0, 5_657_000.0)
     assert owns(east, 412_000.0, 5_657_000.0)
     assert not owns(east, 411_950.0, 5_657_000.0)
+
+
+def test_a_dlm_monument_is_a_fountain_by_its_code_or_its_name():
+    from bake.monuments import dlm_kind
+
+    assert dlm_kind("1780", None) == "fountain"
+    assert dlm_kind("1750", "Cholerabrunnen") == "fountain"
+    assert dlm_kind("1750", "Pferdetränke") == "fountain"
+    assert dlm_kind("1770", "Postmeilensäule") == "column"
+    assert dlm_kind("1770", "Weichbildstein") == "stone"
+    assert dlm_kind("1750", "Böttgerstele") == "stone"
+    assert dlm_kind("1750", "Goldener Reiter") == "statue"
+    assert dlm_kind("1750", None) == "statue"
+
+
+def test_a_basin_outline_becomes_a_rim_with_the_water_as_its_hole():
+    from bake.monuments import RIM_M, basin_geometry
+
+    rim = basin_geometry(shapely.MultiPolygon([shapely.box(0, 0, 10, 10)]))
+    assert rim.geom_type == "Polygon"
+    assert len(rim.interiors) == 1
+    assert shapely.Polygon(rim.interiors[0]).area == (10 - 2 * RIM_M) ** 2
+    # Too small to inset: a solid bowl; smaller still: a spout (a point).
+    assert len(basin_geometry(shapely.box(0, 0, 0.6, 2)).interiors) == 0
+    assert basin_geometry(shapely.box(0, 0, 0.5, 0.5)).geom_type == "Point"
+
+
+def test_a_dlm_monument_on_an_osm_fountain_names_it_and_stands_in_it():
+    from bake.monuments import conflate
+
+    basin = shapely.box(0, 0, 16, 16)
+    dlm = [
+        {"geom": shapely.Point(8, 8), "kind": "statue", "name": "Stilles Wasser"},
+        {"geom": shapely.Point(100, 100), "kind": "statue", "name": "Goldener Reiter"},
+        {"geom": shapely.Point(300, 300), "kind": "fountain", "name": "Queckbrunnen"},
+    ]
+    osm = [
+        {"geom": basin, "name": None, "style": "basin"},
+        {"geom": shapely.Point(200, 200), "name": "Kugelbrunnen", "style": "basin"},
+    ]
+    out = {o["name"]: o for o in conflate(dlm, osm)}
+    assert out["Stilles Wasser"]["kind"] == "fountain"
+    assert out["Stilles Wasser"]["figure"] is True
+    assert out["Stilles Wasser"]["source"] == "dlm+osm"
+    assert out["Stilles Wasser"]["geom"].geom_type == "Polygon"
+    assert out["Goldener Reiter"]["kind"] == "statue"
+    assert out["Queckbrunnen"]["source"] == "dlm"
+    assert out["Kugelbrunnen"]["source"] == "osm"
+    assert out["Kugelbrunnen"]["figure"] is False
+    assert len(out) == 4
+
+
+def test_osm_fountain_tags_pick_the_basin_style():
+    from bake.monuments import classify_fountain
+
+    assert classify_fountain("splash_pad", None) == "splash"
+    assert classify_fountain(None, "reflecting_pool") == "pool"
+    assert classify_fountain("decorative", "fountain") == "basin"
+
+
+def test_a_sculpture_in_a_basin_is_measured_into_a_relief():
+    import numpy as np
+
+    from bake.monuments import measure_relief
+
+    ndom = np.zeros((40, 40))
+    ndom[18:22, 18:22] = 3.7  # a 4 × 4 m body, 3.7 m tall
+    basin = shapely.Polygon(
+        [(8, 8), (32, 8), (32, 32), (8, 32)], holes=[[(9, 9), (31, 9), (31, 31), (9, 31)]]
+    )
+    # The grid's north-west corner is (0, 40): row 18 spans y 22..21.
+    relief = measure_relief(ndom, (0.0, 40.0), basin, "fountain")
+    assert relief is not None
+    assert (relief["cols"], relief["rows"]) == (6, 6)  # the body + one empty cell round it
+    assert max(relief["dm"]) == 37
+    assert (relief["west"], relief["north"]) == (17.0, 23.0)
+
+
+def test_a_monument_under_a_tree_crown_has_no_relief():
+    import numpy as np
+
+    from bake.monuments import measure_relief
+
+    ndom = np.zeros((40, 40))
+    ndom[19:21, 19:21] = 3.0  # the statue
+    point = shapely.Point(20.0, 20.0)
+    assert measure_relief(ndom, (0.0, 40.0), point, "statue") is not None
+    ndom[15:19, 17:24] = 12.0  # a crown right beside it
+    assert measure_relief(ndom, (0.0, 40.0), point, "statue") is None
 
 
 def _osm_tile(tmp_path, monkeypatch, ways: str):
@@ -330,19 +420,122 @@ def test_the_major_road_wins_a_junction_and_walks_pack_above_roads(tmp_path):
     assert packed[64 - 10, 32] == 3 * 8 + 4
 
 
-def test_a_way_direction_is_its_bearing_mod_180(tmp_path):
+def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
     from bake.common import Tile
-    from bake.surface import burn, direction_shapes, segments
+    from bake.surface import ALONG_PERIOD, direction_frames, heading_code
 
-    _, codes = segments(shapely.LineString([(0, 0), (10, 0), (10, 10), (0, 0)]))
-    assert list(codes) == [1, 128, 1 + round(45 / 180 * 254)]
+    assert list(heading_code(np.radians([0.0, 90.0, 180.0, 359.9]))) == [1, 65, 128, 1]
     tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
-    road = shapely.LineString([(0, 32), (64, 32)])
+    # An L-shaped street: 40 m east, then north; a footway crossing it.
+    road = shapely.LineString([(0, 32), (40, 32), (40, 64)])
     crossing = shapely.LineString([(20, 0), (20, 64)])
-    heading = burn(
-        direction_shapes([road, crossing], ["residential", "footway"], [None, None]), tile, 64
-    )
-    assert heading[31, 40] == 1  # on the carriageway: the road's direction
+    heading, along = direction_frames(
+        [road, crossing], ["residential", "footway"], [None, None]
+    ).rasterise(tile, 64)
+
+    def metres(row, col):
+        # What the shader does: the offset plus the texel centre (from the
+        # tile's north-west corner) projected on the decoded bearing.
+        b = (heading[row, col] - 1) / 254.0 * 2.0 * np.pi
+        x, y = col + 0.5, -(row + 0.5)
+        offset = along[row, col] / 65536.0 * ALONG_PERIOD
+        return (offset + x * np.cos(b) + y * np.sin(b)) % ALONG_PERIOD
+
+    assert heading[31, 10] == 1  # east
     assert heading[31, 20] == 1  # a crossing footway does not turn it
-    assert heading[5, 20] == 128  # the footway away from the road
-    assert heading[5, 40] == 0  # nothing mapped
+    assert heading[5, 20] == 65  # the footway, north
+    assert abs(metres(31, 10) - 10.5) < 0.01  # the texel centre, 10.5 m along
+    # Round the bend: the northbound leg starts 40 m along the street.
+    assert abs(metres(64 - 51, 40) - (40 + 18.5)) < 1.0
+    assert heading[5, 50] == 0  # nothing mapped
+
+
+def test_street_parking_marks_the_tagged_side_and_its_orientation():
+    from bake.surface import street_parking
+
+    east = shapely.LineString([(0, 0), (100, 0)])  # left = north
+    tags = (
+        '"parking:left"=>"lane","parking:right:orientation"=>"perpendicular",'
+        '"parking:right"=>"street_side"'
+    )
+    lanes = street_parking(east, 4.0, tags)
+    assert sorted(code for _, code in lanes) == [1, 2]
+    left = next(g for g, code in lanes if code == 1)
+    assert left.bounds[1] >= -1e-6  # north of the axis
+    assert street_parking(east, 4.0, '"parking:both"=>"no"') == []
+
+
+def test_car_parks_are_lots_on_the_ground_with_their_aisles_cleared(tmp_path):
+    from bake.common import Tile
+    from bake.surface import burn, is_car_park, pack, parking_shapes
+
+    assert is_car_park("parking", '"parking"=>"surface"')
+    assert is_car_park("parking_space", None)
+    assert not is_car_park("parking", '"parking"=>"underground"')
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    lot = shapely.box(10, 10, 50, 50)
+    aisle = shapely.LineString([(10, 30), (50, 30)])
+    park = burn(
+        parking_shapes(
+            [aisle], ["service"], ['"service"=>"parking_aisle"'], [lot], ["parking"], [None]
+        ),
+        tile,
+        64,
+    )
+    packed = pack(np.zeros_like(park), np.zeros_like(park), park)
+    assert packed[64 - 20, 30] >> 6 == 3  # a bay row
+    assert packed[64 - 30, 30] >> 6 == 0  # the aisle
+    assert packed[5, 5] == 0
+
+
+def test_the_raster_interleaves_its_two_bytes_per_texel():
+    from bake.surface import interleave
+
+    r = np.array([[1, 2], [3, 4]], dtype=np.uint8)
+    g = np.array([[9, 8], [7, 6]], dtype=np.uint8)
+    assert interleave(r, g).tolist() == [[1, 9, 2, 8], [3, 7, 4, 6]]
+
+
+def test_a_lot_without_an_aisle_runs_along_its_long_side():
+    from bake.surface import heading_code, lot_frames
+
+    frames = lot_frames([shapely.box(0, 0, 10, 40)], ["parking"], [None])
+    assert heading_code(np.asarray(frames.bearing)).tolist() in ([65], [192])  # north-south
+    assert frames.anchor == [(5.0, 20.0)]
+
+
+def test_edge_distances_are_signed_and_smooth_across_a_diagonal():
+    from bake.edges import distance_px, edge_field, signed_distance_px
+
+    mask = np.zeros((9, 9), dtype=bool)
+    mask[4, 4] = True
+    d = distance_px(mask, 6)
+    assert d[4, 4] == 0 and d[4, 5] == 1 and d[4, 8] == 4
+    sd = signed_distance_px(np.arange(8)[None, :].repeat(8, 0) < 4, 6)
+    assert sd[0, 3] == 0.5 and sd[0, 4] == -0.5  # the edge between cols 3 and 4
+    # A diagonal road edge: the smoothed field's 0-isoline runs straight.
+    n = 64
+    rows, cols = np.mgrid[0:n, 0:n]
+    cls = np.where(cols > rows, 7, 4).astype(np.uint8)
+    field = edge_field(cls, 7, 1.0, n)
+    diag = field[np.arange(8, 56), np.arange(8, 56)]
+    assert np.all(np.abs(diag) < 0.6)
+
+
+def test_kerb_lines_follow_the_road_edge_with_the_road_on_their_left(tmp_path):
+    from bake.common import Tile
+    from bake.edges import edge_field, kerb_lines
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    cls = np.full((64, 64), 4, dtype=np.uint8)
+    cls[20:30, :] = 7  # an east-west road, rows 20–29 (y 34–44 m)
+    lines = kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)
+    assert len(lines) == 2
+    for line in lines:
+        xy = np.asarray(line.coords)
+        d = xy[-1] - xy[0]
+        left = xy[len(xy) // 2] + np.array([-d[1], d[0]]) / np.hypot(*d)
+        assert 34.0 < left[1] < 44.0  # the road is on the left
+    # Water beside the road: no kerb on that side.
+    cls[30:, :] = 8
+    assert len(kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)) == 1

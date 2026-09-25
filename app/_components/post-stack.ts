@@ -30,9 +30,14 @@ const AO_OFF_EPSILON = 0.01;
 // blurred (CoC = smoothstep(0, focusRange, |dist − focusDistance|)). A fixed
 // value can't serve a 2 km-deep scene, so — like a real lens — it scales with
 // the focus distance: tight DoF up close, very deep DoF far away.
-const FOCUS_RANGE_FACTOR = 0.7;
-const FOCUS_RANGE_MIN = 12;
-const FOCUS_RANGE_MAX = 2500;
+// The band is generous on purpose: the lens should only hint at depth. At the
+// old 0.7 × distance (min 12 m) a crosshair on the pavement ten metres ahead
+// blurred the whole street beyond 22 m — it read as smeared, not as a lens.
+const FOCUS_RANGE_FACTOR = 1.6;
+const FOCUS_RANGE_MIN = 45;
+const FOCUS_RANGE_MAX = 3000;
+/** Bokeh radius scale: a soft hint of lens, never a smear. */
+const BOKEH_SCALE = 0.5;
 function focusRangeFor(distance: number): number {
   return Math.min(
     Math.max(distance * FOCUS_RANGE_FACTOR, FOCUS_RANGE_MIN),
@@ -127,7 +132,7 @@ export function createPostStack(
   const focusPoint = new Vector3(0, 0, -HYPERFOCAL_M);
   const dof = new DepthOfFieldEffect(camera, {
     focusRange: focusRangeFor(HYPERFOCAL_M),
-    bokehScale: 0.9,
+    bokehScale: BOKEH_SCALE,
     resolutionScale: 0.5,
   });
   dof.target = focusPoint;

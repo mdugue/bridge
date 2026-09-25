@@ -1,4 +1,5 @@
 import {
+  DataTexture,
   LinearFilter,
   LinearMipmapLinearFilter,
   Matrix4,
@@ -7,9 +8,10 @@ import {
   NearestFilter,
   NoColorSpace,
   RedFormat,
+  RGBAFormat,
   RGFormat,
   Texture,
-  TextureLoader,
+  UnsignedByteType,
   Vector3,
   type WebGLRenderer,
 } from "three";
@@ -20,8 +22,10 @@ import {
 import {
   LANDCOVER_CLASSES,
   MEADOW_CLASS,
+  ROAD_CLASS,
   srgbToLinear,
 } from "@/lib/city/landcover";
+import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { isAbortError } from "./fetch-optional";
 import {
@@ -53,6 +57,8 @@ export interface TerrainLayer {
   mesh: Mesh;
   /** the tile's baked stairs (fine level only; stair-layer.ts) */
   stairs?: Mesh;
+  /** the tile's baked kerb stones (fine level only; kerb-layer.ts) */
+  kerbs?: Mesh;
   /** the tile's baked walls (fine level only; wall-layer.ts) */
   walls?: Mesh;
   /** lowest valid elevation (m) on this tile — the valley/river floor */
@@ -97,43 +103,83 @@ export interface GroundUniforms {
 }
 
 /**
- * Decodes a raster into a texture OFF the main thread. `TextureLoader` hands
- * three an <img>, which the browser decodes lazily — for a 4096² PNG that is
- * ~64 MB of pixels decoded (and flipped) synchronously at the first upload,
- * on the main thread, per tile and per raster. `createImageBitmap` decodes
- * in the browser's image workers, already in the orientation three needs
- * (`imageOrientation: "none"` = the flipY=false these rasters use), so the
- * first frame only pays the GPU upload. Rejects on a decode/network failure
- * and on abort, so a torn-down instance stops decoding rasters it will
- * throw away.
+ * Loads a single-channel DATA raster (class ids, NDVI) as a RED texture
+ * holding exactly the baked bytes. The PNG is inflated and unfiltered here
+ * (lib/city/png-raster.ts), not by the browser's image decoder: WebKit
+ * colour-manages (and dithers) untagged greyscale even with
+ * `colorSpaceConversion: "none"`, which on iPhones rewrote class ids into
+ * speckles of the neighbouring classes' colours. The inflate is async and
+ * the unfiltering yields every few hundred rows, so a 4096² raster does not
+ * stall the frame it streams in with. A PNG the decoder does not handle
+ * falls back to the browser (`loadBitmapTexture`). Rejects on a network
+ * failure and on abort.
  */
-async function loadBitmapTexture(
+async function loadRasterTexture(
   url: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  channels: 1 | 2 | 4 = 1
 ): Promise<{ height: number; texture: Texture; width: number }> {
-  if (typeof createImageBitmap === "undefined") {
-    const texture = await new TextureLoader().loadAsync(url);
-    texture.flipY = false;
-    const img = texture.image as { height: number; width: number };
-    return { texture, width: img.width, height: img.height };
-  }
   const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
   }
-  const bitmap = await createImageBitmap(await res.blob(), {
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let raster: GreyRaster;
+  try {
+    raster = await decodeGreyPng(bytes);
+  } catch (err) {
+    // The browser's decoder cannot de-interleave a multi-channel raster.
+    if (channels > 1) {
+      throw err;
+    }
+    return loadBitmapTexture(new Blob([bytes]));
+  }
+  signal?.throwIfAborted();
+  // A two- or four-channel raster is baked as a greyscale PNG two or four
+  // times as wide, its bytes interleaved (R0 G0 B0 A0 R1 …) — exactly the
+  // RG8 / RGBA8 layout.
+  const width = raster.width / channels;
+  const { height } = raster;
+  const texture = new DataTexture(
+    raster.data,
+    width,
+    height,
+    channels === 4 ? RGBAFormat : channels === 2 ? RGFormat : RedFormat,
+    UnsignedByteType
+  );
+  // Row 0 is the PNG's first (northern) row, as with the bitmap upload
+  // (flipY = false; v grows southward).
+  texture.flipY = false;
+  texture.unpackAlignment = 1;
+  texture.needsUpdate = true;
+  // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
+  // them (mipmaps are generated on the GPU). Twelve resident copies took
+  // mobile Safari past its per-tab memory limit when these were bitmaps.
+  texture.onUpdate = () => {
+    (texture.image as { data: Uint8Array | null }).data = null;
+    texture.onUpdate = null;
+  };
+  return { texture, width, height };
+}
+
+/**
+ * The browser-decoded fallback for a raster the PNG decoder rejects:
+ * `createImageBitmap` decodes in the browser's image workers, already in the
+ * orientation three needs (`imageOrientation: "none"` = flipY false).
+ */
+async function loadBitmapTexture(
+  blob: Blob
+): Promise<{ height: number; texture: Texture; width: number }> {
+  const bitmap = await createImageBitmap(blob, {
     imageOrientation: "none",
     premultiplyAlpha: "none",
     colorSpaceConversion: "none",
   });
   const texture = new Texture(bitmap);
   texture.flipY = false;
+  texture.format = RedFormat;
   texture.needsUpdate = true;
-  // The decoded bitmap is 64 MB for a 4096² raster and, unlike an <img>'s
-  // purgeable decode cache, stays resident as long as three holds it in
-  // `texture.image`. Twelve of them took mobile Safari past its per-tab
-  // memory limit. Once the GPU has the texels the CPU copy is dead weight:
-  // release it right after the upload (mipmaps are generated on the GPU).
+  // Release the decoded pixels right after the upload (see above).
   texture.onUpdate = () => {
     bitmap.close();
     texture.onUpdate = null;
@@ -151,16 +197,13 @@ async function loadSplatTexture(
   signal?: AbortSignal
 ): Promise<{ height: number; texture: Texture; width: number } | null> {
   try {
-    const loaded = await loadBitmapTexture(url, signal);
+    const loaded = await loadRasterTexture(url, signal);
     const { texture, width, height } = loaded;
     texture.magFilter = NearestFilter;
     texture.minFilter = NearestFilter;
     texture.generateMipmaps = false;
     texture.colorSpace = NoColorSpace;
-    // The class id lives in the red channel; uploading the grey PNG as RGBA
-    // would spend four bytes per texel on one (64 MB instead of 16 MB at
-    // 4096²). WebGL2 accepts a RED upload straight from the bitmap.
-    texture.format = RedFormat;
+    // One byte per texel: the class id is the RED channel.
     trackTexture(texture, textureBytes(width, height, 1, false));
     return loaded;
   } catch (err) {
@@ -182,14 +225,13 @@ async function loadNdviTexture(
   signal?: AbortSignal
 ): Promise<Texture | null> {
   try {
-    const { texture, width, height } = await loadBitmapTexture(url, signal);
+    const { texture, width, height } = await loadRasterTexture(url, signal);
     texture.magFilter = LinearFilter;
     texture.minFilter = LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
     texture.anisotropy = 16;
     texture.colorSpace = NoColorSpace;
-    // Greenness is a single channel too.
-    texture.format = RedFormat;
+    // Greenness is a single channel too (RED, from loadRasterTexture).
     trackTexture(texture, textureBytes(width, height, 1, true));
     return texture;
   } catch (err) {
@@ -202,21 +244,47 @@ async function loadNdviTexture(
 
 /**
  * Loads the OSM paving raster (pipeline/bake/surface.py): R = the packed
- * road/walk surface ids, G = the street direction. Data, NEAREST, two
- * channels (the B channel of the RGB PNG is empty). Absent → null and the
- * ground falls back to the land-cover class's pattern.
+ * road/walk surface ids and parking kind, G = the street bearing, BA = the
+ * along-street offset, NEAREST. Absent or
+ * undecodable → null and the ground falls back to the land-cover class's
+ * pattern.
  */
 async function loadSurfaceTexture(
   url: string,
   signal?: AbortSignal
 ): Promise<Texture | null> {
   try {
-    const { texture, width, height } = await loadBitmapTexture(url, signal);
+    const { texture, width, height } = await loadRasterTexture(url, signal, 4);
     texture.magFilter = NearestFilter;
     texture.minFilter = NearestFilter;
     texture.generateMipmaps = false;
     texture.colorSpace = NoColorSpace;
-    texture.format = RGFormat;
+    trackTexture(texture, textureBytes(width, height, 4, false));
+    return texture;
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
+/**
+ * Loads the edge-distance raster (pipeline/bake/edges.py): R, G = the
+ * signed distances to the road and the meadow edge, LINEAR so the isolines
+ * are smooth (no mipmaps: it is only read near the camera). Absent → null
+ * and the shader falls back to the class texels.
+ */
+async function loadEdgesTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
+  try {
+    const { texture, width, height } = await loadRasterTexture(url, signal, 2);
+    texture.magFilter = LinearFilter;
+    texture.minFilter = LinearFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
     trackTexture(texture, textureBytes(width, height, 2, false));
     return texture;
   } catch (err) {
@@ -238,8 +306,10 @@ export interface SplatLayer {
   /** DOP NDVI raster (LINEAR) for the meadow and urban-green tints */
   ndviTexture?: Texture;
   offset: { cx: number; cy: number };
-  /** OSM paving raster (NEAREST, RG) for the paving patterns */
+  /** OSM paving raster (NEAREST, RGBA) for the paving and parking patterns */
   surfaceTexture?: Texture;
+  /** baked road/meadow edge distances (LINEAR, RG) for kerbs, lanes, lawns */
+  edgesTexture?: Texture;
   /** class-id raster (NEAREST); the meadow detail tests it */
   texture: Texture;
 }
@@ -260,14 +330,30 @@ const GRASS_MOTTLE = /* glsl */ `
   float grDetail = grMeadow * ( 1.0 - smoothstep( 0.5, 2.5, grFw ) );
   float grMottle = sin( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.7
                  + sin( vWorldXY.x * 2.7 - 0.5 ) * sin( vWorldXY.y * 2.3 + 1.1 ) * 0.3;
-  baseCol *= 1.0 + grMottle * 0.06 * grDetail;
+  baseCol *= 1.0 + grMottle * 0.035 * grDetail;
+`;
+
+/**
+ * Calm the ground's shading. The DGM1 carries every kerb, rut and survey
+ * wobble, and the baked normals are quantised to 8 bits, so lit by a low
+ * sun a street, a meadow or a quay reads as coarse dark-and-light flecks —
+ * "dirty" rather than drawn. Near-flat normals (under ~12°) are pulled to
+ * straight up, keeping a trace of the relief; real slopes (embankments, the
+ * valley sides) keep their full shading, and the contour ink carries the
+ * rest of the terrain's form.
+ */
+const TERRAIN_NORMAL = /* glsl */ `
+  #include <normal_fragment_begin>
+  vec3 tnUp = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
+  float tnKeep = 1.0 - smoothstep( 0.93, 0.985, dot( normal, tnUp ) );
+  normal = normalize( mix( tnUp, normal, max( tnKeep, 0.12 ) ) );
 `;
 
 const GRASS_NORMAL = /* glsl */ `
-  #include <normal_fragment_begin>
+  ${TERRAIN_NORMAL}
   float grGx = cos( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.85;
   float grGy = sin( vWorldXY.x * 0.85 + 1.3 ) * cos( vWorldXY.y * 0.78 - 0.7 ) * 0.78;
-  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.12 * grDetail );
+  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.06 * grDetail );
 `;
 
 /**
@@ -279,11 +365,49 @@ const GRASS_NORMAL = /* glsl */ `
  * a tiny `step` gates out zero/nodata texels (keep the base sage, don't grey out).
  */
 const MEADOW_NDVI = /* glsl */ `
-  float grNdvi = texture2D( uNdvi, vSplatUv ).r;
-  float grNdviT = clamp( ( grNdvi - 0.1 ) / 0.5, 0.0, 1.0 );
-  vec3 grTint = mix( baseCol * vec3( 1.14, 1.02, 0.82 ),  // dry: paler warm hay
-                     baseCol * vec3( 0.70, 1.12, 0.52 ), grNdviT );  // lush: deep grass
+  // Read from a coarser mip: the 2 m raster carries every path, tree shadow
+  // and bare patch, which painted the meadows in dark flecks. Averaged over
+  // ~10 m it is what it should be — broad lush and dry drifts.
+  float grNdvi = texture2D( uNdvi, vSplatUv, 2.5 ).r;
+  float grNdviT = smoothstep( 0.1, 0.6, grNdvi );
+  vec3 grTint = mix( baseCol * vec3( 1.08, 1.02, 0.88 ),  // dry: paler warm hay
+                     baseCol * vec3( 0.84, 1.06, 0.74 ), grNdviT );  // lush: deeper grass
   baseCol = mix( baseCol, grTint, uMeadowNdvi * grMeadow * step( 0.012, grNdvi ) );
+`;
+
+/**
+ * Sketch contour lines (2 m minor / 10 m major) on the data-frame elevation,
+ * one pixel wide via fwidth. Each set fades out once its lines crowd closer
+ * than a few pixels: past that a 1 px line per contour is no longer a line
+ * but a grey stipple, and on the gently rolling DGM (streets, meadows, the
+ * river surface) it read as dirty blotches across the whole middle distance.
+ */
+const CONTOUR_INK = /* glsl */ `
+  float minorD = vElevation / 2.0;
+  float minorW = fwidth( minorD );
+  // A flat quad lying exactly on a contour has fwidth 0: 0/0 there striped
+  // it with NaN ink (and NaN survives the slope gate's multiply).
+  float minor = minorW > 1e-6 ? 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / minorW, 1.0 ) : 0.0;
+  minor *= 1.0 - smoothstep( 0.08, 0.2, minorW );
+  float majorD = vElevation / 10.0;
+  float majorW = fwidth( majorD );
+  float major = majorW > 1e-6 ? 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / majorW, 1.0 ) : 0.0;
+  major *= 1.0 - smoothstep( 0.06, 0.16, majorW );
+  float ink = clamp( minor * 0.08 + major * 0.14, 0.0, 0.22 );
+`;
+
+/**
+ * Where contours mean nothing, drop them: on near-flat ground (a street,
+ * a meadow, the river's DGM surface) every centimetre of measurement noise
+ * crosses the 2 m level in a squiggle — the lines only belong on real slopes.
+ * The slope is the elevation change per metre across the pixel footprint.
+ * Under water the ink is gone too (the sheet is translucent, it showed).
+ */
+const CONTOUR_SPLAT_GATE = /* glsl */ `
+  float ctRun = max( length( fwidth( vWorldXY ) ), 1e-4 );
+  float ctSlope = fwidth( vElevation ) / ctRun;
+  ink *= smoothstep( 0.025, 0.09, ctSlope );
+  ink *= 1.0 - smoothstep( 0.05, 0.4, texture2D( uSplat, vSplatUv ).a );
 `;
 
 /**
@@ -319,18 +443,24 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   // Bind the shared refs by identity so the HUD sliders retune them live.
   shader.uniforms.uGroundDetail = splat.ground?.groundDetail ?? { value: 0 };
   shader.uniforms.uMeadowColor = { value: MEADOW_LINEAR };
+  shader.uniforms.uRoadColor = { value: ROAD_LINEAR };
+  shader.uniforms.uUrbanGreen = splat.ground?.urbanGreen ?? { value: 0 };
   if (splat.surfaceTexture) {
     shader.uniforms.uSurface = { value: splat.surfaceTexture };
+  }
+  if (splat.edgesTexture) {
+    shader.uniforms.uEdges = { value: splat.edgesTexture };
   }
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
     shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
-    shader.uniforms.uUrbanGreen = splat.ground?.urbanGreen ?? { value: 0 };
   }
 }
 
 /** The meadow's palette colour, linear — the urban green and grass pavers. */
 const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
+/** The road's palette colour, linear — sealed ground off the carriageway. */
+const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
 
 function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
   const decl = hasSplat
@@ -354,15 +484,16 @@ function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
 function splatFragment(splat: SplatLayer): { body: string; decl: string } {
   const hasNdvi = splat.ndviTexture !== undefined;
   const hasSurface = splat.surfaceTexture !== undefined;
+  const hasEdges = splat.edgesTexture !== undefined;
   const ndviDecl = hasNdvi
-    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\nuniform float uUrbanGreen;\n"
+    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
     : "";
   return {
-    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface)}`,
+    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}`,
     body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
          ${GRASS_MOTTLE}
-         ${groundFields(hasSurface)}
-         ${urbanGreen(hasNdvi)}
+         ${groundFields(hasSurface, hasEdges)}
+         ${urbanGreen(hasNdvi, hasEdges)}
          ${GROUND_DETAIL}
          ${hasNdvi ? MEADOW_NDVI : ""}`,
   };
@@ -380,25 +511,17 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
     .replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
       `${parts?.body ?? "vec3 baseCol = diffuse;"}
-         float minorD = vElevation / 2.0;
-         // A flat quad lying exactly on a contour has fwidth 0: 0/0 there
-         // striped it with NaN ink. No slope, no contour line.
-         float minorW = fwidth( minorD );
-         float minor = minorW > 1e-6 ? 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / minorW, 1.0 ) : 0.0;
-         float majorD = vElevation / 10.0;
-         float majorW = fwidth( majorD );
-         float major = majorW > 1e-6 ? 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / majorW, 1.0 ) : 0.0;
-         float ink = clamp( minor * 0.10 + major * 0.15, 0.0, 0.26 );
+         ${CONTOUR_INK}
+         ${hasSplat ? CONTOUR_SPLAT_GATE : ""}
          vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
     );
-  if (hasSplat) {
-    // Meadow-only shading-normal break-up (grDetail declared above, in
-    // scope), then the kerbs', lawn edges' and stones' tilt.
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <normal_fragment_begin>",
-      `${GRASS_NORMAL}\n${GROUND_NORMAL}`
-    );
-  }
+  // Calmed ground normals; with the class raster also the meadow-only
+  // shading break-up (grDetail declared above, in scope), then the kerbs',
+  // lawn edges' and stones' tilt.
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <normal_fragment_begin>",
+    hasSplat ? `${GRASS_NORMAL}\n${GROUND_NORMAL}` : TERRAIN_NORMAL
+  );
 }
 
 function createTerrainMaterial(
@@ -414,7 +537,7 @@ function createTerrainMaterial(
   // every tile's terrain material. Without an explicit key a tile that lost its
   // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -484,6 +607,10 @@ export async function dressTerrain(
     classRaster && extras.surface
       ? await loadSurfaceTexture(opts.fileUrl(extras.surface), opts.signal)
       : null;
+  const edgesTexture =
+    classRaster && extras.edges
+      ? await loadEdgesTexture(opts.fileUrl(extras.edges), opts.signal)
+      : null;
   const splat: SplatLayer | undefined =
     classRaster && painted
       ? {
@@ -491,6 +618,7 @@ export async function dressTerrain(
           colorTexture: painted.texture,
           ndviTexture: ndviTexture ?? undefined,
           surfaceTexture: surfaceTexture ?? undefined,
+          edgesTexture: edgesTexture ?? undefined,
           ground: opts.ground,
           bounds,
           offset: opts.offset,
@@ -536,6 +664,7 @@ export async function dressTerrain(
         classRaster?.texture,
         ndviTexture,
         surfaceTexture,
+        edgesTexture,
       ]) {
         texture?.dispose();
       }

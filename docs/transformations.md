@@ -50,24 +50,33 @@ visual-variable codebook is in
   *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
 - **Kerbs and lawn edges** (*Bordsteine, Rasenkanten*) — the DLM road
-  class (7) is the surveyed carriageway, so its edge is the kerb line. The
-  terrain fragment pass reads the 4×4 class texels around the fragment as
-  0/1, box-smooths them 3×3, interpolates bilinearly and divides the 0.5
-  isoline by the gradient: a signed distance in metres that runs straight
-  along a diagonal instead of following the 0.5 m raster's staircase. A pale
-  kerb stone (0.3 m, pavement side), a darker gutter (0.35 m, road side) and
-  a normal step at the face — only where the far side is ground a kerb
-  borders (classes 0–4, 6; not water or railway). The same distance on class
-  1 draws a darker lawn lip with a normal kink. Near the camera only (fades
-  out past ~0.5 m/px); no geometry, so no real step, no contact shadow. HUD
-  *Bodendetail*. `ground-detail.ts`, plan
-  [023](./plans/023-ground-detail.md).
+  class (7) is the surveyed carriageway, so its edge is the kerb line.
+  `pipeline/bake/edges.py` measures, from the committed class raster, the
+  signed distance to the road edge and to the meadow edge (urban green
+  included) out to ±6 m, box-smoothed so the isolines run straight along a
+  diagonal instead of following the 0.5 m staircase → `edges_<tile>.png`
+  (2048², two bytes per texel). From the road's 0-isoline it also writes
+  the **kerb lines** (`kerbs_<tile>.geojson`, road on the left) where the
+  far side is ground (not water or railway). The terrain bake stands a
+  **kerb stone** on them in the fine terrain glTF (`lib/city/kerbs.ts`,
+  12 cm above the road, 24 cm wide, its top level at the higher side, face
+  toward the road; `kerb-layer.ts`, casts shadow) — the DGM1 smooths the
+  step away and the 2 m grid cannot hold it. In the fragment pass
+  (`ground-detail.ts`) the distance draws a pale stone band on the
+  pavement side and a darker gutter on the road side (the coarse level's
+  kerb), a lawn lip with a normal kink, the parking lanes and the paving
+  rows along the kerb. The first cut drew the kerb as a shading-normal
+  step from the class texels alone; on the raster's staircase it read as
+  dashes and odd shadow flecks (replaced 2026-09-25). HUD *Bodendetail*.
+  Plan [023](./plans/023-ground-detail.md).
 - **Paving materials** (*Beläge*) — OSM `surface=*` on the highways (plus
   `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
-  squares, parking lots) → a 2048² RGB raster per tile
-  (`pipeline/bake/surface.py` → `surface_<tile>.png`): R packs the
+  squares, parking lots) → a 2048² two-byte raster per tile
+  (`pipeline/bake/surface.py` → `surface_<tile>.png`, greyscale, the bytes
+  interleaved so the viewer's own PNG decoder reads it exactly): R packs the
   carriageway's and the pavement's material (asphalt, concrete, slabs, sett,
-  unpaved, grass pavers; `walk · 8 + road`), G the way's direction. The
+  unpaved, grass pavers; `park · 64 + walk · 8 + road`), G the way's
+  direction. The
   shader reads `road` on class 7 and `walk` elsewhere; unknown falls back to
   asphalt / slabs (class 4) / sand (class 6). Patterns in the street's own
   frame — slabs in running bond, sett rows across the street with
@@ -77,12 +86,26 @@ visual-variable codebook is in
   highway ways carry `surface`, ~68 % of the DLM carriageway texels get a
   material. Fine terrain level only; absent raster → the class defaults.
   HUD *Bodendetail*. `ground-detail.ts`, `terrain-layer.ts`.
+- **Parking** (*Parkplätze*) — OSM street parking (`parking:{left,right,both}`
+  = lane / yes / street_side / on_kerb …, with `:orientation`) and car parks
+  on the ground (`amenity=parking`, `amenity=parking_space`; the
+  `service=parking_aisle` driveways cleared) → the paving raster's top two
+  bits. On the carriageway a parking lane from the kerb distance — 2 m with
+  bays every 5.5 m (parallel) or 5 m with bays every 2.5 m (perpendicular /
+  diagonal) — with its edge line; in a car park bay lines every 2.5 m across
+  the aisle (or, without a mapped aisle, the lot's long axis). Pale painted
+  lines, faded out past ~15 cm/px; a car park without `surface` is asphalt.
+  Dresden: ~600 surface car parks, ~530 mapped bays, ~780 aisles, street
+  parking on ~1 000 roads. No cars (not in any dataset). HUD *Bodendetail*.
+  `ground-detail.ts`.
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
-  courtyards, front gardens and parks inside the settlement alike; where
-  the DOP NDVI (sampled one mip coarser) says green (0.22 → 0.40) and the
-  ground is neither road nor OSM-sealed pavement, it takes the meadow
-  colour (plus the meadow mottle). About 10 % of the built-up texels. HUD
-  *Stadtgrün*. `ground-detail.ts` `urbanGreen`.
+  courtyards, front gardens and parks inside the settlement alike. Where
+  the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM
+  does not call the ground paved, `edges.py` counts it as meadow; the
+  shader paints it exactly as meadow — its colour, mottle, NDVI tint and
+  lawn edge. The first cut blended toward the meadow colour at 0.85 ×
+  slider and read as barely there. HUD *Stadtgrün* (default 1).
+  `ground-detail.ts` `urbanGreen`.
 - **Water** — the painted splat's alpha (water coverage, `smoothstep`ed
   shoreline) + the terrain geometry + animated normal wobble; the water and
   mist sheets hang next to their terrain mesh and leave with the tile.
@@ -94,8 +117,8 @@ visual-variable codebook is in
   terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
   screen-space error (16 px) from the view camera **and the sun's shadow
   camera**, so a tile casting into the view stays loaded. Only the fine level
-  is dressed (vegetation, lamps, rails; its stairs and walls are baked into
-  it); distance, not a "primary"
+  is dressed (vegetation, lamps, monuments, rails; its stairs and walls are
+  baked into it); distance, not a "primary"
   role, decides which tile is detailed, and collision, demolish, focus and
   double-tap work on every visible tile. Everything a tile adds leaves with
   it (`tile-stream.ts`, `processTileModel` / `disposeTile`)
@@ -130,7 +153,7 @@ visual-variable codebook is in
   buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
   roof LUT is folded in at bake time.
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
-  seat trees, lamps, rails, walls and the player on terrain.
+  seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
 
 ### Building detailing (all keyed off CityJSON attrs + the loader's `surfacetype`)
@@ -204,6 +227,44 @@ visual-variable codebook is in
   Elbe or the track bed (the rail corridor is now its own layer). Built per
   fine terrain tile; the three real lights go to the nearest heads of the
   visible tiles.
+
+- **Fountains, statues, memorial stones, columns** — the Basis-DLM's
+  monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with
+  their official names; GeoSN) conflated with OSM's `amenity=fountain`
+  points and basin outlines (ODbL; the DLM names none of its monuments a
+  fountain and gives no basin size). A DLM monument on an OSM fountain names
+  it; the other OSM fountains are added. **What a monument looks like is in
+  no register, but its bulk is measured:** DOM1 − DGM1 (the canopy's nDOM)
+  holds the sculpture groups of the Albertplatz fountains as ~4 × 5 m bodies
+  3.7 m tall, the Goldener Reiter as 7 m. Where that body stands clear — one
+  connected patch within 6 m (or inside the basin's water), ≤ 60 cells,
+  below 8.5 m and touching nothing taller (a leafless crown reads the same
+  on a 1 m grid) — the bake writes it as `relief` (27 of 174 monuments). 
+  `pipeline/bake/monuments.py` → `monument-layer.ts`: a relief is smoothed
+  (`reliefSurface`: ×4 bilinear, one binomial pass) into one soft form in
+  the buildings' clay, seated per sample on the terrain; a monument nothing
+  measured is an abstract clay marker (rounded pillar · slab · shaft,
+  `MARKER_SHAPE`) — no invented figure. Basins are the OSM outline as a low
+  clay rim (the water its 0.35 m inset) over the highest ground under it,
+  with translucent water bells that grow with the basin, round a measured
+  sculpture when there is one (splash pads flush, reflecting pools still);
+  a point fountain is a 2.2 m round basin. The canopy loses the "trees" its
+  own bake planted on a measured monument (`onRelief`). The fountains move
+  gently — each bell breathes on its own phase, droplets run down its
+  curtain, light shimmers across the water — and by night the water glows
+  and a fountain's sculpture is lit warm from its basin (`setFountainTime`,
+  `setFountainNight`, one shared clock and night factor). Merged/instanced,
+  seven draw calls per tile at most. Not walk-blocking (collision is
+  buildings only).
+  **Caveats, checked against the sources:** DOM1 (November 2024) and DOP
+  (March 2024) were both taken while Dresden's fountains are drained and
+  their sculptures boxed for winter — the Albertplatz "bodies" are those
+  housings (flat-topped, ~3.7 m), right in size and place, not the figures.
+  The DOP shows the gilded Goldener Reiter only as glare (its shadow holds
+  the horse's silhouette), so no colour is sampled. The laser point cloud
+  (LSC, the only official source with more form) was unreachable from
+  GeoSN's share when this was built; no openly licensed 3D scan of the
+  landmarks was found.
 
 ### Railway & bridges
 All baked by `pipeline/bake/rail.py`, built **per fine terrain tile** in
@@ -411,8 +472,8 @@ research that produced them):
     triangles in the main and every shadow pass. The swap mechanism exists
     (`updateLod`); the look needs the `--headed` harness.
 12. **Ground, the rest of plan [023](./plans/023-ground-detail.md)** — a
-    real kerb step (a baked 12 cm ribbon along the carriageway edge in the
-    fine terrain glTF, like the walls — ADR 0029); DGM1 micro-relief as a
+    raised pavement (today the kerb stone stands on a pavement at road
+    level); DGM1 micro-relief as a
     1 m normal texture over the 2 m mesh; shell-textured grass near the
     camera (4–8 shells, meadow only, no shadow casting — judge the fill-rate
     on a real GPU); parks, cemeteries and sports grounds split out of the

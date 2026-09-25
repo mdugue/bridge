@@ -54,7 +54,7 @@ history. Decisions that came out of plans are written up as
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | **IN PROGRESS** — Phase 0 spike done (look matches; WebGPU 40–80 % faster than today, WebGL2 backend on par but stalls while compiling); gate awaits the maintainer | [020-webgpu-tsl.md](./020-webgpu-tsl.md) |
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
 | 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
-| 023 | The ground up close: kerbs, lawn edges, OSM paving, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 done (shader kerbs + lawn edges, OSM paving raster, urban green); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
+| 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work

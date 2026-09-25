@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { landcoverSrgb } from "@/lib/city/landcover";
+import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
   type FootprintPoly,
@@ -22,11 +23,12 @@ const PLAYER = "#2563eb";
 
 /**
  * Recolors the class-id raster into a small canvas in the viewer's palette
- * (lib/city/landcover.ts). NEAREST sampling (smoothing off) keeps class
- * boundaries crisp under downscaling.
+ * (lib/city/landcover.ts), sampling NEAREST so class boundaries stay crisp.
+ * The raster comes from the PNG decoder (lib/city/png-raster.ts), not an
+ * <img>: a browser colour-manages the grey bytes, which rewrote class ids.
  */
 function colorizeLandcover(
-  img: HTMLImageElement,
+  raster: GreyRaster,
   size: number
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
@@ -36,16 +38,19 @@ function colorizeLandcover(
   if (!ctx) {
     return canvas;
   }
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, 0, 0, size, size);
-  const image = ctx.getImageData(0, 0, size, size);
+  const image = ctx.createImageData(size, size);
   const { data } = image;
-  for (let i = 0; i < data.length; i += 4) {
-    const tint = landcoverSrgb(data[i]);
-    data[i] = tint[0];
-    data[i + 1] = tint[1];
-    data[i + 2] = tint[2];
-    data[i + 3] = 255;
+  for (let y = 0; y < size; y++) {
+    const row = Math.floor(((y + 0.5) * raster.height) / size) * raster.width;
+    for (let x = 0; x < size; x++) {
+      const col = Math.floor(((x + 0.5) * raster.width) / size);
+      const tint = landcoverSrgb(raster.data[row + col]);
+      const i = (y * size + x) * 4;
+      data[i] = tint[0];
+      data[i + 1] = tint[1];
+      data[i + 2] = tint[2];
+      data[i + 3] = 255;
+    }
   }
   ctx.putImageData(image, 0, 0);
   return canvas;
@@ -157,15 +162,20 @@ export function Minimap({
       }
       requested.add(tile.src);
       pending.add(tile.src);
-      const img = new Image();
-      img.onload = () => {
-        pending.delete(tile.src);
-        if (!cancelled) {
-          const cv = colorizeLandcover(img, 256);
-          setDecoded((prev) => new Map(prev).set(tile.src, cv));
-        }
-      };
-      img.src = tile.src;
+      fetch(tile.src)
+        .then((res) => res.arrayBuffer())
+        .then((buf) => decodeGreyPng(new Uint8Array(buf)))
+        .then((raster) => {
+          pending.delete(tile.src);
+          if (!cancelled) {
+            const cv = colorizeLandcover(raster, 256);
+            setDecoded((prev) => new Map(prev).set(tile.src, cv));
+          }
+        })
+        .catch(() => {
+          // The minimap just stays without this tile's land cover.
+          pending.delete(tile.src);
+        });
     }
     return () => {
       cancelled = true;

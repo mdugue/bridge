@@ -7,11 +7,13 @@ import type {
   CanopyFeature,
   FeatureCollection,
   LampFeature,
+  MonumentFeature,
   RailFeature,
   StairFeature,
   TerraceFeature,
   VegRowFeature,
   WallFeature,
+  KerbFeature,
 } from "./features";
 import { DRESDEN } from "../../sites/dresden";
 import {
@@ -21,6 +23,7 @@ import {
   tileArtifacts,
   tileIds,
   wallSourceFile,
+  kerbSourceFile,
 } from "./tile";
 
 // The committed bakes under data/dlm, checked against the shapes the layers
@@ -91,6 +94,13 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   }
 });
 
+test.each(tileIds(DRESDEN))("%s: kerbs are LineStrings", (tile) => {
+  for (const f of loadSource<KerbFeature>(kerbSourceFile(tile))) {
+    expect(f.geometry.type).toBe("LineString");
+    expect(isLine(f.geometry.coordinates)).toBe(true);
+  }
+});
+
 test.each(tileIds(DRESDEN))(
   "%s: walls are LineStrings with a kind and a height",
   (tile) => {
@@ -134,6 +144,31 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
     }
   }
 });
+
+test.each(cases)(
+  "%s: monuments are kinded points, fountains may be basin rings",
+  (_, a) => {
+    for (const f of load<MonumentFeature>(a.monuments)) {
+      const kind = f.properties?.kind;
+      expect(["column", "fountain", "statue", "stone"]).toContain(kind ?? "");
+      const g = f.geometry;
+      if (g.type === "Polygon") {
+        // Only a fountain has an outline: the rim, its hole the water.
+        expect(kind).toBe("fountain");
+        expect(g.coordinates.length).toBeLessThanOrEqual(2);
+        expect(g.coordinates.every(isRing)).toBe(true);
+      } else {
+        expect(g.type).toBe("Point");
+        expect(isPoint2(g.coordinates)).toBe(true);
+      }
+      if (kind === "fountain") {
+        expect(["basin", "pool", "splash"]).toContain(
+          f.properties?.style ?? ""
+        );
+      }
+    }
+  }
+);
 
 test.each(tileIds(DRESDEN))(
   "%s: stairs run bottom → top with a width, steps and landings",

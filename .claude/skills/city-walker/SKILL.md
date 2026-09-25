@@ -161,18 +161,26 @@ water reads the alpha and `smoothstep`s it for a crisp shoreline. Edge
 sharpness is bounded by the class raster's resolution, not the GPU filter.
 A colour change is a look change, never a re-bake (ADR 0023).
 
-**Ground detail** (`ground-detail.ts`, in the same fragment pass): kerbs and
-lawn edges are drawn at the road/meadow class edge as a *signed distance in
-metres* — the 4×4 class texels as 0/1, box-smoothed 3×3, then bilinear; the
-0.5 isoline divided by the gradient. The plain 2×2 bilinear follows the
-0.5 m raster's staircase visibly; the smoothed field runs straight along a
-diagonal. All reads are `texelFetch` (no implicit derivatives in the
-near-only branch). The OSM paving raster (`surface_<tile>.png`, fine level
-only, RG: packed road/walk surface ids + the way direction) picks the
-pattern and orients slabs and sett rows along the street. Joints fade by
-`fwidth` long before they alias. *Bodendetail* and *Stadtgrün* (NDVI on
-built-up ground) are the sliders. The contour ink guards `fwidth == 0`: a
-flat quad lying exactly on a contour used to stripe with NaN.
+**Ground detail** (`ground-detail.ts`, in the same fragment pass): the
+kerb band, lawn edges, parking lanes and the paving rows along a kerb are
+drawn at *signed distances in metres* from the baked, smoothed edge raster
+(`pipeline/bake/edges.py` → `edges_<tile>.png`, RG, valid to ±6 m). The
+class texels alone give that distance only within a texel of the edge and
+follow the 0.5 m staircase — a shading-normal "kerb face" from them read as
+dashes, and 2–5 m parking lanes from them as arcs. They remain the fallback
+(4×4, box-smoothed) where the edge raster is absent. The same bake writes
+the kerb lines; the fine terrain glTF stands a real 12 cm **kerb stone** on
+them (`lib/city/kerbs.ts`, `kerb-layer.ts`; triangles wound CCW about their
+normals — the first cut was clockwise and rendered black). The OSM paving
+raster (`surface_<tile>.png`, RGBA: surface ids + parking bits, the bearing,
+a per-segment along-street offset — along = offset + (position from the
+tile's NW corner)·d, exact per straight piece) picks the pattern; every
+pattern length along a street divides `SURFACE_ALONG_PERIOD` (165 m).
+Rotating patterns by the bearing about the far data origin made every bend
+a shower of arcs — don't. Both rasters are greyscale PNGs 2×/4× wide with
+the bytes interleaved, so the viewer's own decoder (`lib/city/png-raster.ts`)
+reads them exactly. *Bodendetail* and *Stadtgrün* (urban green painted as
+meadow) are the sliders. The contour ink guards `fwidth == 0`.
 
 ## Terrain seams
 

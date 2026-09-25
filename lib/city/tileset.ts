@@ -12,8 +12,9 @@
  *
  * The buildings of a tile load whenever the tile is in view; the terrain
  * refines from the coarse level to the fine one by screen-space error, and
- * only the fine level carries vegetation, lamps, rails, walls and stairs. Which tile
- * gets the fine level is a question of distance, not of a "primary" role.
+ * only the fine level carries vegetation, lamps, monuments, rails, walls
+ * and stairs. Which tile gets the fine level is a question of distance, not
+ * of a "primary" role.
  *
  * The tileset's frame is the site's recentered data frame (Z-up, like every
  * 3D Tiles frame); the glTF content is Y-up as glTF requires, and the
@@ -69,6 +70,7 @@ export interface DressingFiles {
   bridge: string;
   canopy: string;
   lamps: string;
+  monuments: string;
   platform: string;
   rail: string;
   railarea: string;
@@ -92,6 +94,8 @@ export interface TerrainExtras {
   ndvi?: string;
   /** OSM paving raster (fine level only: its patterns are close-range) */
   surface?: string;
+  /** edge-distance raster (fine level only) */
+  edges?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
 }

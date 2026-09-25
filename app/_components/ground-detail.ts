@@ -3,49 +3,75 @@ import {
   MEADOW_CLASS,
   PATH_CLASS,
   ROAD_CLASS,
+  parkingId,
+  EDGE_SCALE,
+  SURFACE_ALONG_PERIOD,
   type SurfaceKind,
   surfaceId,
 } from "@/lib/city/landcover";
 
 /**
- * Ground detail in the terrain's fragment pass — zero geometry, like the
- * meadow mottle it sits next to (terrain-layer.ts). Four things:
+ * Ground detail in the terrain's fragment pass, next to the meadow mottle
+ * (terrain-layer.ts). Five things:
  *
- * - **Kerbs.** The carriageway (class 7) is a buffer of the DLM road axis by
- *   its surveyed width, so its edge IS the kerb line. The four class texels
- *   around the fragment, read as 0/1 road indicators and interpolated
- *   bilinearly, give a smooth field whose 0.5 isoline runs along that edge;
- *   dividing by the field's gradient turns it into a signed distance in
- *   metres. A pale kerb stone on the pavement side, a darker gutter on the
- *   road side and a shading-normal step at the face make it read as a raised
- *   edge — only where the other side is ground a kerb borders (not water,
- *   not the railway).
- * - **Lawn edges.** The same distance for the meadow class: a slightly
- *   darker lip and a normal kink where the grass meets a path.
+ * - **Kerb band.** The carriageway (class 7) is the DLM road axis buffered
+ *   by its surveyed width, so its edge IS the kerb line. The distance to it
+ *   comes from the baked edge raster (pipeline/bake/edges.py: smoothed,
+ *   signed, valid out to ±6 m); without it, from the class texels around
+ *   the fragment, box-smoothed (valid within a texel of the edge). A pale
+ *   stone band on the pavement side and a darker gutter on the road side —
+ *   where the other side is ground a kerb borders. On the fine level a real
+ *   kerb stone stands on the band (lib/city/kerbs.ts, kerb-layer.ts); the
+ *   band carries the line into the coarse level.
+ * - **Lawn edges.** The same distance for the meadow (urban green
+ *   included): a darker lip and a normal kink where the grass stops.
  * - **Paving.** The OSM paving raster (pipeline/bake/surface.py; optional)
- *   says which material a street or walkway is made of and which way it
- *   runs, so sett rows and slabs lie along the street. Without it the class
- *   picks: asphalt on the road, slabs on the pavement, a sanded path.
- *   Joints and stones fade out by `fwidth` long before they could alias; the
- *   material's colour cue stays at any distance.
- * - **Urban green** (with the NDVI raster). The DLM's built-up class covers
- *   courtyards, front gardens and parks alike; where the DOP says it is
- *   green (and it is neither road nor a surface OSM calls sealed) the ground
- *   takes the meadow colour.
+ *   says which material a street or walkway is made of and gives the
+ *   street's frame — the distance along the way and, near a road, the kerb
+ *   distance across it — so slabs and sett rows follow the street through
+ *   its bends. Without it the class picks: asphalt on the road, slabs on the
+ *   pavement, a sanded path. Joints and stones fade out by `fwidth` long
+ *   before they could alias; the material's colour cue stays at any
+ *   distance, and sealed ground off the road takes the road's grey.
+ * - **Parking.** The same raster marks parking lanes beside the carriageway
+ *   (parallel or perpendicular bays, laid out from the kerb along the
+ *   street) and car parks (bay lines across their aisle, the aisles left
+ *   clear). Painted lines, faded out by distance.
+ * - **Urban green.** Green courtyards, front gardens and parks inside the
+ *   DLM's built-up class are painted exactly as meadow.
  *
  * All strengths scale with the look rows `groundDetail` and `urbanGreen`.
- * Everything here reads NEAREST rasters through `texelFetch`, so no implicit
- * derivative is taken in non-uniform control flow.
+ * The class and paving rasters are read with `texelFetch`, the edge raster
+ * with `textureLod`, so no implicit derivative is taken in non-uniform
+ * control flow.
  */
 
 const id = (kind: SurfaceKind) => String(surfaceId(kind));
 
+// Every pattern length along a street below divides SURFACE_ALONG_PERIOD —
+// bays 2.5 and 5.5 m, slabs 0.5, sett 0.15, concrete plates 5.5, grass
+// pavers 0.55 — so the wrap of the baked coordinate never shows.
+const ALONG_PERIOD = SURFACE_ALONG_PERIOD;
+
 /** Declarations after `#include <common>` (needs `uSplatClass` declared). */
-export function groundDetailDecl(hasSurface: boolean): string {
-  return /* glsl */ `
+export function groundDetailDecl(
+  hasSurface: boolean,
+  hasEdges: boolean
+): string {
+  const edges = hasEdges
+    ? /* glsl */ `
+  uniform sampler2D uEdges;
+  // Signed distances (m) to the road and the meadow edge (edges.py).
+  vec2 gdEdgeAt( vec2 uv ) {
+    return ( textureLod( uEdges, uv, 0.0 ).rg * 255.0 - 128.0 ) / ${EDGE_SCALE.toFixed(1)};
+  }`
+    : "";
+  return /* glsl */ `${edges}
   uniform vec2 uSplatSize;
   uniform float uGroundDetail;
+  uniform float uUrbanGreen;
   uniform vec3 uMeadowColor;
+  uniform vec3 uRoadColor;
   ${hasSurface ? "uniform highp sampler2D uSurface;" : ""}
   int gdClassAt( ivec2 p ) {
     ivec2 s = textureSize( uSplatClass, 0 );
@@ -132,16 +158,54 @@ export function groundDetailDecl(hasSurface: boolean): string {
  * The fields every later chunk reads: the road and lawn distances, the
  * paving kind and the street direction. After GRASS_MOTTLE (`grCls`, `grFw`).
  */
-export function groundFields(hasSurface: boolean): string {
+export function groundFields(hasSurface: boolean, hasEdges: boolean): string {
+  const distances = hasEdges
+    ? /* glsl */ `
+  // The baked, smoothed distance fields: valid out to ±6 m, straight along
+  // a diagonal kerb. Their gradient (central differences, uv grows south).
+  vec2 gdEt = 1.0 / vec2( textureSize( uEdges, 0 ) );
+  vec2 gdE = gdEdgeAt( vSplatUv );
+  vec2 gdEx = gdEdgeAt( vSplatUv + vec2( gdEt.x, 0.0 ) ) - gdEdgeAt( vSplatUv - vec2( gdEt.x, 0.0 ) );
+  vec2 gdEy = gdEdgeAt( vSplatUv - vec2( 0.0, gdEt.y ) ) - gdEdgeAt( vSplatUv + vec2( 0.0, gdEt.y ) );
+  gdDr = gdE.x;
+  gdDl = gdE.y;
+  gdIntoRoad = normalize( vec2( gdEx.x, gdEy.x ) + vec2( 1e-6 ) );
+  gdOutOfLawn = -normalize( vec2( gdEx.y, gdEy.y ) + vec2( 1e-6 ) );
+  gdHasEdge = true;`
+    : /* glsl */ `
+  // No baked distances (the coarse level, a site without the bake): the
+  // class texels, box-smoothed near the camera. Valid within about a texel
+  // of the edge only — enough for the kerb band, not for parking lanes.
+  if ( grFw < 0.5 && uGroundDetail > 0.0 ) {
+    vec3 gdRe;
+    vec3 gdLe;
+    gdSmooth( gdI, gdF, gdMpt, gdRe, gdLe );
+    gdDr = gdSd( gdRe );
+    gdDl = gdSd( gdLe );
+    gdIntoRoad = normalize( gdRe.yz + vec2( 1e-6 ) );
+    gdOutOfLawn = -normalize( gdLe.yz + vec2( 1e-6 ) );
+  } else {
+    gdDr = gdSd( gdRoad );
+    gdDl = gdSd( gdLawn );
+  }`;
   const surface = hasSurface
     ? /* glsl */ `
     ivec2 gdSs = textureSize( uSurface, 0 );
-    vec2 gdS = texelFetch( uSurface, clamp( ivec2( vSplatUv * vec2( gdSs ) ), ivec2( 0 ), gdSs - 1 ), 0 ).rg;
+    vec4 gdS = texelFetch( uSurface, clamp( ivec2( vSplatUv * vec2( gdSs ) ), ivec2( 0 ), gdSs - 1 ), 0 );
     int gdByte = int( gdS.r * 255.0 + 0.5 );
     gdRoadKind = gdByte & 7;
-    gdWalkKind = gdByte >> 3;
+    gdWalkKind = ( gdByte >> 3 ) & 7;
+    gdPark = gdByte >> 6;
     float gdG = floor( gdS.g * 255.0 + 0.5 );
-    gdHead = gdG > 0.5 ? ( gdG - 1.0 ) / 254.0 * PI : 0.0;`
+    if ( gdG > 0.5 ) {
+      gdHasFrame = true;
+      gdHead = ( gdG - 1.0 ) / 254.0 * 2.0 * PI;
+      // along = offset + (position from the tile's north-west corner) · d,
+      // exactly as the bake defines it (pipeline/bake/surface.py).
+      float gdOffset = ( floor( gdS.b * 255.0 + 0.5 ) + floor( gdS.a * 255.0 + 0.5 ) * 256.0 ) / 65536.0 * ${ALONG_PERIOD.toFixed(1)};
+      vec2 gdLocal = vec2( vSplatUv.x * uSplatSize.x, -vSplatUv.y * uSplatSize.y );
+      gdAlongM = mod( gdOffset + dot( gdLocal, vec2( cos( gdHead ), sin( gdHead ) ) ), ${ALONG_PERIOD.toFixed(1)} );
+    }`
     : "";
   return /* glsl */ `
   vec2 gdTexels = vec2( textureSize( uSplatClass, 0 ) );
@@ -155,21 +219,25 @@ export function groundFields(hasSurface: boolean): string {
   int gdC11 = gdClassAt( gdI + ivec2( 1, 1 ) );
   vec3 gdRoad = gdField( vec4( gdC00 == ${ROAD_CLASS}, gdC10 == ${ROAD_CLASS}, gdC01 == ${ROAD_CLASS}, gdC11 == ${ROAD_CLASS} ), gdF, gdMpt );
   vec3 gdLawn = gdField( vec4( gdC00 == ${MEADOW_CLASS}, gdC10 == ${MEADOW_CLASS}, gdC01 == ${MEADOW_CLASS}, gdC11 == ${MEADOW_CLASS} ), gdF, gdMpt );
-  // Near the camera, the smoothed edges for the kerb and the lawn lip (the
-  // cheap fields above still decide road or not, so the paving boundary and
-  // the kerb agree to within a fraction of a texel).
-  vec3 gdRoadEdge = gdRoad;
-  vec3 gdLawnEdge = gdLawn;
-  if ( grFw < 0.5 && uGroundDetail > 0.0 ) {
-    gdSmooth( gdI, gdF, gdMpt, gdRoadEdge, gdLawnEdge );
-  }
+  // Signed distance (m) to the road edge (+ on the road) and to the lawn
+  // edge (+ on the lawn), with the directions into the road and out of the
+  // lawn; gdHasEdge when they hold metres out, not just at the edge.
+  float gdDr = -1e3;
+  float gdDl = -1e3;
+  vec2 gdIntoRoad = vec2( 1.0, 0.0 );
+  vec2 gdOutOfLawn = vec2( 1.0, 0.0 );
+  bool gdHasEdge = false;
+  ${distances}
   float gdKerbOk = gdField( vec4( gdKerbable( gdC00 ), gdKerbable( gdC10 ), gdKerbable( gdC01 ), gdKerbable( gdC11 ) ), gdF, gdMpt ).x;
   int gdRoadKind = 0;
   int gdWalkKind = 0;
+  int gdPark = 0;
   float gdHead = 0.0;
+  bool gdHasFrame = false;
+  float gdAlongM = 0.0;
   ${surface}
   int gdCls = int( grCls );
-  bool gdOnRoad = gdRoadEdge.x > 0.5;
+  bool gdOnRoad = gdDr > 0.0;
   int gdKind = 0;
   if ( gdOnRoad ) {
     gdKind = gdRoadKind > 0 ? gdRoadKind : ${id("asphalt")};
@@ -190,22 +258,30 @@ export function groundFields(hasSurface: boolean): string {
 }
 
 /**
- * Urban green: NDVI on built-up/background ground that is neither road nor
- * sealed by OSM's account. Defines `ugW` (the green weight) either way.
+ * Urban green: built-up or unclassified ground that is green — courtyards,
+ * front gardens, parks inside the settlement — painted exactly as meadow
+ * (its colour, mottle, NDVI tint and lawn edge). With the baked edges the
+ * mask is theirs (edges.py counts NDVI-green, unsealed built-up ground as
+ * meadow); without, the NDVI decides here. Defines `ugW` either way.
  */
-export function urbanGreen(hasNdvi: boolean): string {
-  if (!hasNdvi) {
-    return "float ugW = 0.0;";
+export function urbanGreen(hasNdvi: boolean, hasEdges: boolean): string {
+  const built = `( gdCls == ${BUILTUP_CLASS} || gdCls == 0 ? 1.0 : 0.0 )`;
+  let mask = "0.0";
+  if (hasEdges) {
+    mask = `smoothstep( -0.15, 0.15, gdDl ) * ${built}`;
+  } else if (hasNdvi) {
+    mask = `smoothstep( 0.22, 0.34, texture2D( uNdvi, vSplatUv, 1.0 ).r ) * ${built}
+            * ( ( gdWalkKind > 0 && gdWalkKind <= ${id("sett")} ) ? 0.0 : 1.0 )
+            * ( gdOnRoad ? 0.0 : 1.0 )`;
   }
+  const strength = hasNdvi || hasEdges ? "uUrbanGreen" : "0.0";
   return /* glsl */ `
-  // One mip coarser: the ~2 m NDVI read as a soft field, not a speckle.
-  float ugN = texture2D( uNdvi, vSplatUv, 1.0 ).r;
-  float ugBuilt = ( gdCls == ${BUILTUP_CLASS} || gdCls == 0 ) ? 1.0 : 0.0;
-  float ugSealed = ( gdWalkKind > 0 && gdWalkKind <= ${id("sett")} ) ? 1.0 : 0.0;
-  float ugW = smoothstep( 0.22, 0.40, ugN ) * ugBuilt * ( 1.0 - ugSealed )
-            * ( 1.0 - smoothstep( 0.3, 0.5, gdRoad.x ) ) * uUrbanGreen * 0.85;
-  vec3 ugCol = mix( uMeadowColor, uMeadowColor * vec3( 0.84, 1.06, 0.74 ), smoothstep( 0.4, 0.7, ugN ) );
-  baseCol = mix( baseCol, ugCol * ( 1.0 + grMottle * 0.06 ), ugW );
+  float ugW = ${mask} * ${strength};
+  // Meadow from here on: the colour, the mottle, and (MEADOW_NDVI, after)
+  // the lush-to-dry tint and the normal break-up.
+  baseCol = mix( baseCol, uMeadowColor * ( 1.0 + grMottle * 0.035 ), ugW );
+  grMeadow = max( grMeadow, ugW );
+  grDetail = max( grDetail, ugW * ( 1.0 - smoothstep( 0.5, 2.5, grFw ) ) );
 `;
 }
 
@@ -214,33 +290,48 @@ export const GROUND_DETAIL = /* glsl */ `
   {
     float gdOn = uGroundDetail;
     // --- kerb: stone on the pavement side, gutter on the road side ---
-    float gdDr = gdSd( gdRoadEdge );
+    // On the fine level a real kerb stone stands on the band (kerbs.ts);
+    // the band carries it into the coarse level and the far field. No
+    // shading-normal step: on the raster's staircase it read as dashes.
     float gdKerb = smoothstep( 0.15, 0.35, gdKerbOk ) * gdNear * gdOn;
-    float gdTop = gdBand( gdDr, -0.30, 0.0, gdW );
+    float gdTop = gdBand( gdDr, -0.25, 0.0, gdW );
     float gdGutter = gdBand( gdDr, 0.0, 0.35, gdW );
-    float gdFace = gdBand( gdDr, -0.03, 0.05, max( gdW, 0.025 ) );
     baseCol = mix( baseCol, max( baseCol * 1.08, vec3( 0.78, 0.76, 0.72 ) ), gdTop * gdKerb * 0.8 );
     baseCol *= 1.0 - gdGutter * gdKerb * 0.14 - gdBand( gdDr, 0.0, 0.08, gdW ) * gdKerb * 0.08;
-    vec2 gdIntoRoad = normalize( gdRoadEdge.yz + vec2( 1e-6 ) );
-    gdTilt += gdToView( gdIntoRoad ) * gdFace * gdKerb * 0.9;
 
     // --- lawn edge: a darker lip and a kink where the grass stops ---
-    float gdDl = gdSd( gdLawnEdge );
     float gdLip = gdBand( gdDl, 0.0, 0.25, gdW ) * gdNear * gdOn;
     baseCol *= 1.0 - gdLip * 0.12;
-    vec2 gdOutOfLawn = -normalize( gdLawnEdge.yz + vec2( 1e-6 ) );
     gdTilt += gdToView( gdOutOfLawn ) * gdBand( gdDl, -0.02, 0.1, max( gdW, 0.025 ) ) * gdNear * gdOn * 0.5;
 
     // --- paving: along the street (q.x) and across it (q.y) ---
+    // The street's own frame: q.x along it (the bake's distance along the
+    // way, so bays and stone rows bend with the street), q.y across it (the
+    // kerb distance near a road, which follows the kerb round a bend; else
+    // across the bearing in 5° steps about the data origin, which keeps a
+    // straight path seamless).
     vec2 gdAlong = vec2( cos( gdHead ), sin( gdHead ) );
     vec2 gdAcross = vec2( -gdAlong.y, gdAlong.x );
-    vec2 gdQ = vec2( dot( vWorldXY, gdAlong ), dot( vWorldXY, gdAcross ) );
+    float gdHq = floor( gdHead / ( PI / 36.0 ) + 0.5 ) * ( PI / 36.0 );
+    vec2 gdAlongQ = vec2( cos( gdHq ), sin( gdHq ) );
+    vec2 gdQ = vec2( dot( vWorldXY, gdAlongQ ), dot( vWorldXY, vec2( -gdAlongQ.y, gdAlongQ.x ) ) );
+    if ( gdHasFrame ) {
+      gdQ.x = gdAlongM;
+    }
+    if ( gdHasEdge && abs( gdDr ) < 6.0 ) {
+      gdQ.y = gdDr;
+    }
     float gdPave = gdOn * ( 1.0 - ugW );
+    // Sealed ground off the carriageway (a car park, an asphalt path, a
+    // concreted yard) takes on the road's grey, so it reads from afar too.
+    if ( !gdOnRoad && gdWalkKind > 0 && ( gdKind == ${id("asphalt")} || gdKind == ${id("concrete")} ) ) {
+      baseCol = mix( baseCol, uRoadColor * ( gdKind == ${id("concrete")} ? 1.08 : 1.0 ), 0.6 * gdPave );
+    }
     if ( gdKind == ${id("asphalt")} ) {
       float n = gdNoise( vWorldXY * 1.7 ) * 0.6 + gdNoise( vWorldXY * 0.31 ) * 0.4;
       baseCol *= ( 1.0 - 0.03 * gdPave ) * ( 1.0 + ( n - 0.5 ) * 0.08 * gdMid * gdPave );
     } else if ( gdKind == ${id("concrete")} ) {
-      vec2 size = vec2( 4.0, 3.0 );
+      vec2 size = vec2( 5.5, 3.0 );
       float j = gdJoint( gdQ, size, 0.015, gdW );
       float h = gdHash( floor( gdQ / size + 0.5 ) );
       baseCol *= ( 1.0 + 0.03 * gdPave ) * ( 1.0 + ( h - 0.5 ) * 0.05 * gdMid * gdPave )
@@ -270,12 +361,34 @@ export const GROUND_DETAIL = /* glsl */ `
       baseCol *= mix( vec3( 1.0 ), vec3( 1.03, 1.0, 0.92 ), gdPave )
                * ( 1.0 + ( n - 0.5 ) * 0.10 * gdMid * gdPave );
     } else if ( gdKind == ${id("grass")} ) {
-      vec2 size = vec2( 0.4 );
+      vec2 size = vec2( 0.55, 0.4 );
       vec2 uv = abs( gdQ / size - floor( gdQ / size + 0.5 ) );
       float hole = 1.0 - smoothstep( 0.28, 0.32, max( uv.x, uv.y ) );
       float green = mix( 0.3, hole * 0.8, gdFine );
       baseCol = mix( baseCol, uMeadowColor, green * gdPave );
     }
+
+    // --- parking: bay lines laid out from the kerb, or across a car park ---
+    float gdLine = 0.07; // half-width (m) of a painted line
+    float gdPaint = 0.0;
+    if ( gdOnRoad && gdHasEdge && ( gdPark == ${parkingId("street-parallel")} || gdPark == ${parkingId("street-perpendicular")} ) ) {
+      bool parallel = gdPark == ${parkingId("street-parallel")};
+      float depth = parallel ? 2.0 : 5.0; // m from the kerb
+      float bay = parallel ? 5.5 : 2.5;   // m along the street
+      float lane = gdBand( gdDr, 0.0, depth, gdW );
+      float edge = gdBand( gdDr, depth - gdLine, depth + gdLine, gdW );
+      float e = abs( fract( gdQ.x / bay + 0.5 ) - 0.5 ) * bay;
+      float sep = 1.0 - smoothstep( gdLine - gdW, gdLine + gdW, e );
+      gdPaint = max( edge, sep * lane );
+      baseCol *= 1.0 - lane * 0.03 * gdMid * gdOn;
+    } else if ( gdPark == ${parkingId("lot")} ) {
+      // Bays side by side along the aisle (the direction), 2.5 m wide; the
+      // bake clears the aisles themselves.
+      float e = abs( fract( gdQ.x / 2.5 + 0.5 ) - 0.5 ) * 2.5;
+      gdPaint = 1.0 - smoothstep( gdLine - gdW, gdLine + gdW, e );
+    }
+    float gdPaintFade = 1.0 - smoothstep( 0.06, 0.25, grFw );
+    baseCol = mix( baseCol, max( baseCol, vec3( 0.86, 0.85, 0.82 ) ), gdPaint * gdPaintFade * gdOn * 0.8 );
   }
 `;
 

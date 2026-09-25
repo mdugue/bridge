@@ -41,6 +41,7 @@ import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
+import { setFountainNight, setFountainTime } from "./monument-layer";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -76,6 +77,7 @@ const SKY_COLOR = 0x9f_b6_cc;
 export type LayerName =
   | "city"
   | "lamps"
+  | "monuments"
   | "rail"
   | "stairs"
   | "terrain"
@@ -385,6 +387,13 @@ async function bootApp(
   // Shared valley height-fog uniforms (by reference): folded into every
   // fog-receiving material; the start follows the lowest terrain landed.
   const heightFog = createHeightFogUniforms();
+  // The site's world XZ rectangle: EPSG north is world −Z.
+  heightFog.uFogSiteRect.value.set(
+    siteBounds[0] - offset.cx,
+    -(siteBounds[3] - offset.cy),
+    siteBounds[2] - offset.cx,
+    -(siteBounds[1] - offset.cy)
+  );
   // Shared ground look strengths (by reference) for the HUD sliders.
   const ground: GroundUniforms = {
     groundDetail: { value: LOOK_DEFAULTS.groundDetail },
@@ -564,6 +573,7 @@ async function bootApp(
       d.lamps?.setNightFactor(state.nightFactor);
     }
     lampLights.setNightFactor(state.nightFactor);
+    setFountainNight(state.nightFactor);
     clayNight.value = state.nightFactor;
     invalidateShadows();
     return state;
@@ -710,6 +720,7 @@ async function bootApp(
         ),
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
+        monuments: census(dressings.map((d) => d.monuments?.group)),
         rail: census(dressings.map((d) => d.rail)),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
@@ -928,6 +939,8 @@ async function bootApp(
     // Repoint the shared real lamp lights at the nearest heads.
     lampLights.updateNearest(camera.position);
     stepVegetation(elapsed);
+    // The fountains' jets and water shimmer (one shared uniform).
+    setFountainTime(elapsed);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(pose.getPose());

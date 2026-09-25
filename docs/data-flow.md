@@ -44,12 +44,13 @@ flowchart LR
     direction TB
     TER["Terrain ground"]
     SURF["Surface colours<br/>roads · meadow · …"]
-    PAVE["Kerbs &amp; paving<br/>kerb · lawn edge · sett · slabs"]
+    PAVE["Kerbs, paving &amp; parking<br/>kerb stones · lawn edge · sett · slabs · bays"]
     WAT["Water (Elbe)"]
     BLD["Buildings<br/>(geometry)"]
     DET["Building detailing<br/>tint · roof · eave · glow"]
     VEG["Trees &amp; hedges"]
     LAMP["Street lamps"]
+    MON["Fountains &amp; monuments"]
     RAIL["Railway tracks"]
     BRG["Bridges"]
     PLT["Station platforms"]
@@ -64,12 +65,14 @@ flowchart LR
   DGM -. ground-clamp .-> BLD
   DGM -. ground-clamp .-> VEG
   DGM -. ground-clamp .-> LAMP
+  DGM -. ground-clamp .-> MON
 
   %% surfaces + water (multi-source)
   DLM ==>|"class raster → palette painted at runtime"| SURF
   DOP -. "NDVI meadow tint (class 1)<br/>+ urban green (classes 0, 4)" .-> SURF
-  DLM ==>|"road / meadow class edges → signed distance"| PAVE
-  OSM -. "surface · sidewalk:*:surface<br/>+ way direction" .-> PAVE
+  DLM ==>|"road / meadow edges → smoothed distance + kerb lines"| PAVE
+  DOP -. "NDVI → urban green as meadow" .-> PAVE
+  OSM -. "surface · sidewalk:*:surface · parking<br/>+ way direction" .-> PAVE
   DLM ==>|"class 8 → water coverage (3×3 tent)"| WAT
   DGM ==>|"shares terrain mesh"| WAT
 
@@ -88,6 +91,11 @@ flowchart LR
 
   %% lamps
   OSM ==>|"point positions"| LAMP
+
+  %% fountains + monuments (official list, OSM basins)
+  DLM ==>|"sie03_p monuments: position · name · kind"| MON
+  OSM -. "amenity=fountain: basin outlines + fountains the DLM lacks" .-> MON
+  DOM ==>|"nDOM = DOM1 − DGM1 → the sculpture's measured bulk"| MON
 
   %% railway + bridges + platforms
   DLM ==>|"ver03_f area (dissolved) = ballast<br/>+ ver03_l tracks (heavy rail)"| RAIL
@@ -120,12 +128,13 @@ flowchart LR
 |---|---|---|---|
 | **Terrain ground** | DGM1 GeoTIFF → glTF terrain at two levels (1024² / 512², baked normals, 30 m skirt) | OSM walls (burned in as a step at build) · OSM stairs (ground lowered under the flight at build) | baked by `scripts/bake-tiles.ts` (`terrainMesh`, `lib/city/terrain-conflate.ts`, `lib/city/stairs.ts`) in `scripts/prepare-data.ts`; `terrain-layer.ts`, `tile-stream.ts` |
 | **Surface colours** | Basis-DLM class raster (ids 0–8), painted with the palette on the GPU at load | DOP NDVI (meadow tint, class 1; urban green on classes 0 and 4) | `landcover-splat.ts`, `lib/city/landcover.ts` (the one palette), `terrain-layer.ts` (samples the splat + `uNdvi`), `ground-detail.ts` (urban green); baked by `pipeline/bake/landcover.py` + `ndvi.py` |
-| **Kerbs & paving** | Basis-DLM class raster: the road (7) and meadow (1) edges as a signed distance from a box-smoothed field of the class texels | OSM paving raster (`surface`, `sidewalk:*:surface`, the way direction; else the class default) | `ground-detail.ts` (in the terrain fragment pass), `terrain-layer.ts`; baked by `pipeline/bake/surface.py` |
+| **Kerbs, paving & parking** | Basis-DLM class raster: the road (7) and meadow (1, + urban green) edges as smoothed signed distances, and the kerb lines the fine terrain stands kerb stones on (`edges.py`) | OSM paving raster (`surface`, `sidewalk:*:surface`, `parking:*` lanes, `amenity=parking`/`parking_space` with their aisles, the way direction; else the class default) | `ground-detail.ts` (in the terrain fragment pass), `terrain-layer.ts`; baked by `pipeline/bake/surface.py` |
 | **Water (Elbe)** | Basis-DLM class 8 (water coverage from the painted splat) **+** DGM1 (the terrain geometry it drapes on) | — | `water-layer.ts`, `landcover-splat.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts` |
 | **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py` |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy | DLM class raster *(gates)* · DOP NDVI (crown colour) | `vegetation-layer.ts`; baked by `pipeline/bake/landcover.py` + `canopy.py` + `ndvi.py` |
 | **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) | DGM1 (ground-clamp); gated off water + railway | baked by `pipeline/bake/lamps.py`; `lamp-layer.ts` |
+| **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
@@ -173,10 +182,12 @@ flowchart LR
     bNDVI["ndvi.py"]
     bROOF["roof_colour.py"]
     bLAMP["lamps.py"]
+    bMON["monuments.py"]
     bWALL["walls.py"]
     bSTR["stairs.py"]
     bRAIL["rail.py"]
     bSURF["surface.py"]
+    bEDGE["edges.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -186,10 +197,12 @@ flowchart LR
     dNDVI["ndvi PNG"]
     dROOF["roofcolor JSON"]
     dLAMP["lamps"]
+    dMON["monuments"]
     dWALL["walls"]
     dSTR["stairs"]
     dRAIL["rail · railarea<br/>bridge · platform"]
     dSURF["surface PNG + legend"]
+    dEDGE["edges PNG · kerbs"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -211,6 +224,10 @@ flowchart LR
   iOSM ==> bLAMP
   dCLS ==>|gates| bLAMP
   bLAMP ==> dLAMP
+  iDLM ==> bMON
+  iOSM -. "fountain basins" .-> bMON
+  iDOM -. "measured relief" .-> bMON
+  bMON ==> dMON
   iOSM ==> bWALL ==> dWALL
   iOSM ==> bSTR ==> dSTR
   iDGM -. "landings" .-> bSTR
@@ -220,6 +237,9 @@ flowchart LR
   iOSM -. "arches · platforms" .-> bRAIL
   bRAIL ==> dRAIL
   iOSM ==> bSURF ==> dSURF
+  dCLS ==> bEDGE ==> dEDGE
+  dNDVI -.-> bEDGE
+  dSURF -.-> bEDGE
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
@@ -230,8 +250,11 @@ flowchart LR
   dCAN ==> tSIDE
   dNDVI -.-> tSIDE
   dLAMP -.-> tSIDE
+  dMON -.-> tSIDE
   dRAIL -.-> tSIDE
   dSURF -.-> tSIDE
+  dEDGE -.-> tSIDE
+  dEDGE -. "kerb stones (L0)" .-> tTER
 ```
 
 The ingest adapter that fills the inputs (`pipeline/bake/ingest_sn.py` for

@@ -98,11 +98,11 @@ config change.
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
-    `ground-detail.ts` (kerbs, lawn edges, paving patterns and urban green
-    in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts` and
-    `stair-layer.ts` (only their
+    `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
+    green in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts`,
+    `kerb-layer.ts` and `stair-layer.ts` (only their
     materials: walls and stairs are baked into the fine terrain glTF),
-    `lamp-layer.ts`,
+    `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
@@ -130,8 +130,9 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `walls.py`, `stairs.py`, `rail.py`, `surface.py`, `osm.py`; `ingest_sn.py` is Saxony's
-  download adapter; tests in `pipeline/tests/`), run by `bun run bake`
+  `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py`,
+  `surface.py`, `edges.py`, `osm.py`; `ingest_sn.py` is Saxony's download adapter; tests
+  in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
@@ -235,15 +236,25 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
-- All OSM layers (walls, cliffs, stairs, lamps, platforms, bridge
-  structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's OSM
-  driver — no Overpass.
+- `monuments.py` takes the monuments (statues, stones, columns, named
+  fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
+  basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
+  names that fountain. A monument's form is its measured nDOM patch
+  (`relief`, when it stands clear of trees/facades), smoothed at runtime —
+  never an invented figure.
+- All OSM layers (walls, cliffs, stairs, lamps, fountains, platforms,
+  bridge structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's
+  OSM driver — no Overpass.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
   with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
-  painted the ground black).
+  painted the ground black). Nor through the browser's image decoder: the
+  class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
+  (WebKit colour-manages untagged greyscale even with
+  `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
+  with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
   ≈ 20 s); the glTF quantisation, meshopt and gzip settings live in
   `scripts/tile-glb.ts`.

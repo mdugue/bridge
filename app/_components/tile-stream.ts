@@ -15,10 +15,12 @@ import type {
   BridgeFeature,
   CanopyFeature,
   LampFeature,
+  MonumentFeature,
   RailFeature,
   VegRowFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
+import { onRelief } from "@/lib/city/monuments";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   type CityExtras,
@@ -30,12 +32,14 @@ import { type CityLayer, dressCity } from "./city-layer";
 import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
+import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { buildRail } from "./rail-layer";
 import {
   dressTerrain,
   type GroundUniforms,
   type TerrainLayer,
 } from "./terrain-layer";
+import { dressKerbs } from "./kerb-layer";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import {
@@ -50,12 +54,13 @@ import { dressWalls } from "./wall-layer";
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
  * 3DTilesRendererJS, which decides what to load and unload from the cameras,
  * the screen-space error and a memory budget. This module only dresses what
- * lands — the terrain material, water, buildings, vegetation, lamps, rails,
- * walls — and undresses what leaves, so every tile is one handle whose
+ * lands — the terrain material, water, buildings, vegetation, lamps,
+ * monuments, rails, walls — and undresses what leaves, so every tile is one handle whose
  * content comes and goes with it.
  */
 export interface TileDressing {
   lamps?: LampControl;
+  monuments?: MonumentLayer;
   rail?: Group;
   tile: string;
   vegetation?: VegetationControl;
@@ -158,9 +163,12 @@ function meshNamed(root: Object3D, name: string): Mesh | undefined {
 }
 
 function dressingParts(d: TileDressing): Object3D[] {
-  return [d.vegetation?.group, d.lamps?.group, d.rail].filter(
-    (part): part is Group => part !== undefined
-  );
+  return [
+    d.vegetation?.group,
+    d.lamps?.group,
+    d.monuments?.group,
+    d.rail,
+  ].filter((part): part is Group => part !== undefined);
 }
 
 /**
@@ -201,10 +209,29 @@ function withinCompileWait(done: Promise<void>): Promise<void> {
 
 function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
+  d.monuments?.dispose();
   for (const part of dressingParts(d)) {
     part.removeFromParent();
     disposeObject3D(part);
   }
+}
+
+/** The canopy without the "trees" the DOM1 bake planted on a measured
+ *  monument (lib/city/monuments.ts `onRelief`). */
+function offMonuments(
+  canopy: CanopyFeature[],
+  monuments: MonumentFeature[]
+): CanopyFeature[] {
+  const reliefs = monuments.flatMap((m) =>
+    m.properties?.relief ? [m.properties.relief] : []
+  );
+  if (reliefs.length === 0) {
+    return canopy;
+  }
+  return canopy.filter((f) => {
+    const [x, y] = f.geometry.coordinates;
+    return !onRelief(reliefs, x, y);
+  });
 }
 
 async function buildDressing(
@@ -220,24 +247,38 @@ async function buildDressing(
   }
   const get = <T>(file: string): Features<T> =>
     file ? fetchFeatures<T>(url(file)) : Promise.resolve([]);
-  const [rows, canopy, ndviAt, lamps, rails, bridges, ballast, platforms] =
-    await Promise.all([
-      get<VegRowFeature>(d.vegrows),
-      get<CanopyFeature>(d.canopy),
-      extras.ndvi
-        ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
-        : Promise.resolve(null),
-      get<LampFeature>(d.lamps),
-      get<RailFeature>(d.rail),
-      get<BridgeFeature>(d.bridge),
-      get<AreaFeature>(d.railarea),
-      get<AreaFeature>(d.platform),
-    ]);
+  const [
+    rows,
+    canopy,
+    ndviAt,
+    lamps,
+    monuments,
+    rails,
+    bridges,
+    ballast,
+    platforms,
+  ] = await Promise.all([
+    get<VegRowFeature>(d.vegrows),
+    get<CanopyFeature>(d.canopy),
+    extras.ndvi
+      ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
+      : Promise.resolve(null),
+    get<LampFeature>(d.lamps),
+    get<MonumentFeature>(d.monuments),
+    get<RailFeature>(d.rail),
+    get<BridgeFeature>(d.bridge),
+    get<AreaFeature>(d.railarea),
+    get<AreaFeature>(d.platform),
+  ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
   const vegetation = buildVegetation(
-    { rows, canopy, ndviAt: ndviAt ?? undefined },
+    {
+      rows,
+      canopy: offMonuments(canopy, monuments),
+      ndviAt: ndviAt ?? undefined,
+    },
     {
       offset: ctx.offset,
       heightAt: terrain.heightAt,
@@ -264,10 +305,17 @@ async function buildDressing(
     { rails, bridges, ballast, platforms },
     { ...ground, heightFog: ctx.heightFog }
   );
+  // The bake writes only the monuments a tile owns; a basin that reaches
+  // past the seam samples the neighbour's ground.
+  const monumentLayer = buildMonuments(monuments, {
+    ...ground,
+    heightFog: ctx.heightFog,
+  });
   return {
     tile,
     vegetation,
     lamps: lampControl,
+    monuments: monumentLayer,
     rail,
   };
 }
@@ -357,7 +405,8 @@ class DressingPlugin {
       sunDirection: this.ctx.sunDirection,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
-    // The fine level's baked stairs and walls: only their materials here.
+    // The fine level's baked stairs, walls and kerbs: only their materials
+    // here.
     const stairs = meshNamed(scene, "stairs");
     if (stairs) {
       dressStairs(stairs, this.ctx.heightFog);
@@ -367,6 +416,11 @@ class DressingPlugin {
     if (walls) {
       dressWalls(walls, this.ctx.heightFog);
       terrain.walls = walls;
+    }
+    const kerbs = meshNamed(scene, "kerbs");
+    if (kerbs) {
+      dressKerbs(kerbs, this.ctx.heightFog);
+      terrain.kerbs = kerbs;
     }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });

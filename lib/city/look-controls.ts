@@ -227,7 +227,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "ground-detail",
     label: "Bodendetail",
     description:
-      "Bordsteine, Rasenkanten und Beläge (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap) aus der Nähe",
+      "Bordsteine, Rasenkanten, Stellplätze und Beläge (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap) aus der Nähe",
     group: "vegetation",
     initial: 0.7,
     snapshotKey: "groundDetailPct",
@@ -237,9 +237,9 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "urban-green",
     label: "Stadtgrün",
     description:
-      "Färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet aus dem DOP-Infrarot (NDVI) wie Wiese",
+      "Zeigt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet (aus dem DOP-Infrarot, NDVI) als Wiese",
     group: "vegetation",
-    initial: 0.6,
+    initial: 1,
     snapshotKey: "urbanGreenPct",
   },
   {

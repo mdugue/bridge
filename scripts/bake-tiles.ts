@@ -21,6 +21,8 @@ import {
 import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
 import { type WallRibbon, wallGeometry } from "../lib/city/walls";
+import { kerbGeometry } from "../lib/city/kerbs";
+import type { Point2 } from "../lib/city/polyline";
 import {
   buildTerrainGeometryData,
   type TerrainBounds,
@@ -235,6 +237,25 @@ export function wallMesh(
   return data
     ? {
         name: "walls",
+        positions: worldToData(data.positions),
+        normals: worldToData(data.normals),
+      }
+    : null;
+}
+
+/**
+ * The tile's kerb stones as one mesh, standing on `heightAt` — the final
+ * shaped ground (lib/city/kerbs.ts).
+ */
+export function kerbMesh(
+  lines: Point2[][],
+  heightAt: (x: number, y: number) => number | null,
+  offset: { cx: number; cy: number }
+): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
+  const data = kerbGeometry(lines, heightAt, offset);
+  return data
+    ? {
+        name: "kerbs",
         positions: worldToData(data.positions),
         normals: worldToData(data.normals),
       }
