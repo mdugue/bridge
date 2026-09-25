@@ -12,6 +12,12 @@ import {
   Quaternion,
   Vector3,
 } from "three";
+import { nodeRenderer } from "./gpu-mode";
+import {
+  createNodeCrownMaterial,
+  createNodeTrunkMaterial,
+  nodeHedgeMaterial,
+} from "./vegetation-node";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
@@ -336,6 +342,15 @@ function buildCrownMaterial(
   leafBright: { value: number },
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
+  if (nodeRenderer()) {
+    return createNodeCrownMaterial(
+      sunDirection,
+      shimmer,
+      translucency,
+      leafFlutter,
+      leafBright
+    );
+  }
   const m = new MeshStandardMaterial({ color: 0xa6_bf_92, roughness: 1 });
   // The closure branches on `heightFog`; three keys programs on the closure's
   // text, so the branch has to be named (see terrain-layer.ts).
@@ -511,6 +526,9 @@ function buildTrunkGeo(): BufferGeometry {
 function buildTrunkMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
+  if (nodeRenderer()) {
+    return createNodeTrunkMaterial(TRUNK_H);
+  }
   const m = new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 });
   m.customProgramCacheKey = () => `trunk-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
@@ -627,8 +645,10 @@ function buildHedges(
 ): InstancedMesh[] {
   const geo = new BoxGeometry(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
   geo.translate(0, HEDGE_H / 2, 0);
-  const mat = new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
-  if (heightFog) {
+  const mat = nodeRenderer()
+    ? nodeHedgeMaterial()
+    : new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
+  if (heightFog && !nodeRenderer()) {
     mat.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
   }
   const meshes: InstancedMesh[] = [];

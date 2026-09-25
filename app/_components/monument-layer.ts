@@ -47,6 +47,12 @@ import {
   injectHeightFog,
   type OnBeforeCompileShader,
 } from "./height-fog";
+import { nodeRenderer } from "./gpu-mode";
+import {
+  addJetAttribute,
+  type MonumentMaterials,
+  nodeMonumentMaterials,
+} from "./monument-node";
 
 /**
  * Fountains, statues, memorial stones and columns
@@ -77,10 +83,10 @@ export interface MonumentContext extends GroundContext {
 }
 
 /** The buildings' clay (visual-style.ts): one material language for all that is built. */
-const CLAY_COLOR = 0xec_e7_df;
-const WATER_COLOR = 0x9c_bc_d0; // a lighter cousin of the river's dusty blue
-const WATER_GLOW = 0x12_1c_22; // lifts the water out of the rim's shade
-const SPRAY_COLOR = 0xf4_f8_fb;
+export const CLAY_COLOR = 0xec_e7_df;
+export const WATER_COLOR = 0x9c_bc_d0; // a lighter cousin of the river's dusty blue
+export const WATER_GLOW = 0x12_1c_22; // lifts the water out of the rim's shade
+export const SPRAY_COLOR = 0xf4_f8_fb;
 const RIM_M = 0.35; // a point fountain's rim width (the bake insets outlines by the same)
 
 /** One instance: where, how big, which way. */
@@ -136,7 +142,7 @@ function unitBell(): BufferGeometry {
 
 /** The bell's alpha along its profile (lathe v: 0 at the nozzle, 1 at the
  *  curtain's hem; a canvas is flipped, so its top is v = 1). */
-function bellAlpha(): CanvasTexture {
+export function bellAlpha(): CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 4;
   canvas.height = 64;
@@ -449,7 +455,7 @@ function merged(
  * by reference, like the height fog): `create-app.ts` advances them each
  * frame and at dusk, tiles that stream in later pick them up as they are.
  */
-const FOUNTAIN_UNIFORMS = {
+export const FOUNTAIN_UNIFORMS = {
   uFountainTime: { value: 0 },
   uFountainNight: { value: 0 },
 };
@@ -593,6 +599,15 @@ function materials(
   return { clay, litClay, water, spray };
 }
 
+/** The jets' bells; on node pages each carries its phase and base height. */
+function jetMesh(jets: Placed[], spray: Material): InstancedMesh {
+  const mesh = instanced(unitBell(), spray, jets, false);
+  if (nodeRenderer()) {
+    addJetAttribute(mesh.geometry, jets);
+  }
+  return mesh;
+}
+
 /** One tile's monuments: the group, and the jets' alpha texture to free. */
 export interface MonumentLayer {
   /** frees the shared alpha texture; the meshes are freed with the scene */
@@ -626,8 +641,12 @@ export function buildMonuments(
       addMonument(f, ctx, parts);
     }
   }
-  const alpha = bellAlpha();
-  const mat = materials(ctx.heightFog, alpha);
+  // SPIKE (plan 020): node pages share one set of TSL materials (and the
+  // bell's alpha) across tiles, so no tile translates its own node graphs.
+  const alpha = nodeRenderer() ? null : bellAlpha();
+  const mat: MonumentMaterials = alpha
+    ? materials(ctx.heightFog, alpha)
+    : nodeMonumentMaterials(bellAlpha);
   const meshes = [
     merged(parts.rims, mat.clay, true),
     merged(parts.reliefs, mat.clay, true),
@@ -639,9 +658,7 @@ export function buildMonuments(
     parts.slabs.length > 0
       ? instanced(unitSlab(), mat.clay, parts.slabs, true)
       : null,
-    parts.jets.length > 0
-      ? instanced(unitBell(), mat.spray, parts.jets, false)
-      : null,
+    parts.jets.length > 0 ? jetMesh(parts.jets, mat.spray) : null,
   ];
   for (const mesh of meshes) {
     if (mesh) {
@@ -652,10 +669,10 @@ export function buildMonuments(
   const used = new Set(
     group.children.map((c) => (c as Mesh).material as Material)
   );
-  for (const m of Object.values(mat)) {
-    if (!used.has(m)) {
+  for (const m of [mat.clay, mat.litClay, mat.water, mat.spray]) {
+    if (!(used.has(m) || m.userData.shared)) {
       m.dispose();
     }
   }
-  return { group, dispose: () => alpha.dispose() };
+  return { group, dispose: () => alpha?.dispose() };
 }

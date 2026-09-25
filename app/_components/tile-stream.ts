@@ -3,6 +3,7 @@ import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
   type Camera,
   type Group,
+  type Material,
   Matrix4,
   type Mesh,
   type Object3D,
@@ -33,6 +34,7 @@ import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
+import { timed } from "./perf-mark";
 import { buildRail } from "./rail-layer";
 import {
   dressTerrain,
@@ -273,18 +275,20 @@ async function buildDressing(
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
-  const vegetation = buildVegetation(
-    {
-      rows,
-      canopy: offMonuments(canopy, monuments),
-      ndviAt: ndviAt ?? undefined,
-    },
-    {
-      offset: ctx.offset,
-      heightAt: terrain.heightAt,
-      sunDirection: ctx.sunDirection,
-      heightFog: ctx.heightFog,
-    }
+  const vegetation = timed("vegetation", () =>
+    buildVegetation(
+      {
+        rows,
+        canopy: offMonuments(canopy, monuments),
+        ndviAt: ndviAt ?? undefined,
+      },
+      {
+        offset: ctx.offset,
+        heightAt: terrain.heightAt,
+        sunDirection: ctx.sunDirection,
+        heightFog: ctx.heightFog,
+      }
+    )
   );
   // Born with the current look, not the default.
   vegetation.applyLook(ctx.look.get());
@@ -296,21 +300,21 @@ async function buildDressing(
         ownsPoint(extent, f.geometry.coordinates[0], f.geometry.coordinates[1])
       )
     : lamps;
-  const lampControl = buildLamps(ownLamps, {
-    ...ground,
-    heightAt: terrain.heightAt,
-  });
+  const lampControl = timed("lamps", () =>
+    buildLamps(ownLamps, { ...ground, heightAt: terrain.heightAt })
+  );
   lampControl.setNightFactor(ctx.night());
-  const rail = buildRail(
-    { rails, bridges, ballast, platforms },
-    { ...ground, heightFog: ctx.heightFog }
+  const rail = timed("rail", () =>
+    buildRail(
+      { rails, bridges, ballast, platforms },
+      { ...ground, heightFog: ctx.heightFog }
+    )
   );
   // The bake writes only the monuments a tile owns; a basin that reaches
   // past the seam samples the neighbour's ground.
-  const monumentLayer = buildMonuments(monuments, {
-    ...ground,
-    heightFog: ctx.heightFog,
-  });
+  const monumentLayer = timed("monuments", () =>
+    buildMonuments(monuments, { ...ground, heightFog: ctx.heightFog })
+  );
   return {
     tile,
     vegetation,
@@ -375,11 +379,8 @@ class DressingPlugin {
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
     const demolished = this.stream.demolished.get(extras.tileId) ?? new Set();
-    const city = dressCity(
-      mesh,
-      extras.tileId,
-      this.ctx.styleResources,
-      demolished
+    const city = timed("city", () =>
+      dressCity(mesh, extras.tileId, this.ctx.styleResources, demolished)
     );
     this.stream.cities.add(city);
     this.dressed.set(scene, { city });
@@ -479,7 +480,15 @@ class DressingPlugin {
       });
   }
 
-  disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
+  disposeTile(tile: {
+    engineData?: { materials?: Material[] | null; scene?: Object3D | null };
+  }): void {
+    // Runs before the renderer frees the tile's materials: keep the shared
+    // ones (userData.shared) out of that list, they serve every tile.
+    const data = tile.engineData;
+    if (data?.materials) {
+      data.materials = data.materials.filter((m) => !m.userData.shared);
+    }
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);
     if (scene) {

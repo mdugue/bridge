@@ -39,6 +39,12 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { textureBytes, trackTexture } from "./three-utils";
+import { nodeRenderer } from "./gpu-mode";
+import { timed } from "./perf-mark";
+import {
+  createNodeTerrainMaterial,
+  createNodeWaterLayer,
+} from "./terrain-node";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /**
@@ -155,10 +161,15 @@ async function loadRasterTexture(
   // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
   // them (mipmaps are generated on the GPU). Twelve resident copies took
   // mobile Safari past its per-tab memory limit when these were bitmaps.
-  texture.onUpdate = () => {
-    (texture.image as { data: Uint8Array | null }).data = null;
-    texture.onUpdate = null;
-  };
+  // SPIKE (plan 020): WebGPURenderer may upload again after onUpdate (the
+  // node paint pass reads the class raster before the terrain does); keep
+  // the bytes on node pages.
+  if (!nodeRenderer()) {
+    texture.onUpdate = () => {
+      (texture.image as { data: Uint8Array | null }).data = null;
+      texture.onUpdate = null;
+    };
+  }
   return { texture, width, height };
 }
 
@@ -180,10 +191,15 @@ async function loadBitmapTexture(
   texture.format = RedFormat;
   texture.needsUpdate = true;
   // Release the decoded pixels right after the upload (see above).
-  texture.onUpdate = () => {
-    bitmap.close();
-    texture.onUpdate = null;
-  };
+  // SPIKE (plan 020): WebGPURenderer may upload again after onUpdate (the
+  // node paint pass reads the class raster before the terrain does); keep
+  // the bitmap on node pages.
+  if (!nodeRenderer()) {
+    texture.onUpdate = () => {
+      bitmap.close();
+      texture.onUpdate = null;
+    };
+  }
   return { texture, width: bitmap.width, height: bitmap.height };
 }
 
@@ -574,6 +590,57 @@ function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
   return out;
 }
 
+/** One terrain tile's rasters and its painted colour splat. */
+interface TerrainRasters {
+  classRaster: { height: number; texture: Texture; width: number } | null;
+  edges: Texture | null;
+  ndvi: Texture | null;
+  painted: LandcoverSplat | null;
+  surface: Texture | null;
+}
+
+/**
+ * Loads the class raster (and paints the colour splat from it), then the
+ * NDVI, paving and edge rasters — decoded one after another on purpose:
+ * several 4096² rasters decoding at once is a peak mobile Safari kills the
+ * tab for. The paving and edge rasters are close-range: the build names
+ * them on the fine level only.
+ */
+async function loadTerrainRasters(
+  extras: TerrainExtras,
+  opts: TerrainOptions
+): Promise<TerrainRasters> {
+  const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
+  const classRaster = classFile
+    ? await loadSplatTexture(opts.fileUrl(classFile), opts.signal)
+    : null;
+  if (!classRaster) {
+    return {
+      classRaster,
+      edges: null,
+      ndvi: null,
+      painted: null,
+      surface: null,
+    };
+  }
+  const painted = timed("splat-paint", () =>
+    paintLandcoverSplat(
+      opts.renderer,
+      classRaster.texture,
+      classRaster.width,
+      classRaster.height
+    )
+  );
+  const load = <T>(
+    file: string | undefined,
+    loader: (url: string, signal?: AbortSignal) => Promise<T | null>
+  ) => (file ? loader(opts.fileUrl(file), opts.signal) : null);
+  const ndvi = await load(extras.ndvi, loadNdviTexture);
+  const surface = await load(extras.surface, loadSurfaceTexture);
+  const edges = await load(extras.edges, loadEdgesTexture);
+  return { classRaster, edges, ndvi, painted, surface };
+}
+
 /**
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
@@ -589,42 +656,16 @@ export async function dressTerrain(
   const { bounds, n } = extras;
   const elevations = gridElevations(mesh, n, toData);
 
-  // Decoded one after another on purpose: several 4096² rasters decoding at
-  // once is a peak mobile Safari kills the tab for.
-  const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
-  const classRaster = classFile
-    ? await loadSplatTexture(opts.fileUrl(classFile), opts.signal)
-    : null;
-  const painted: LandcoverSplat | null = classRaster
-    ? paintLandcoverSplat(
-        opts.renderer,
-        classRaster.texture,
-        classRaster.width,
-        classRaster.height
-      )
-    : null;
-  const ndviTexture =
-    classRaster && extras.ndvi
-      ? await loadNdviTexture(opts.fileUrl(extras.ndvi), opts.signal)
-      : null;
-  // The paving patterns are close-range: the build names the raster on the
-  // fine level only.
-  const surfaceTexture =
-    classRaster && extras.surface
-      ? await loadSurfaceTexture(opts.fileUrl(extras.surface), opts.signal)
-      : null;
-  const edgesTexture =
-    classRaster && extras.edges
-      ? await loadEdgesTexture(opts.fileUrl(extras.edges), opts.signal)
-      : null;
+  const rasters = await loadTerrainRasters(extras, opts);
+  const { classRaster, painted } = rasters;
   const splat: SplatLayer | undefined =
     classRaster && painted
       ? {
           texture: classRaster.texture,
           colorTexture: painted.texture,
-          ndviTexture: ndviTexture ?? undefined,
-          surfaceTexture: surfaceTexture ?? undefined,
-          edgesTexture: edgesTexture ?? undefined,
+          ndviTexture: rasters.ndvi ?? undefined,
+          surfaceTexture: rasters.surface ?? undefined,
+          edgesTexture: rasters.edges ?? undefined,
           sunDirection: opts.sunDirection,
           ground: opts.ground,
           bounds,
@@ -632,7 +673,9 @@ export async function dressTerrain(
         }
       : undefined;
 
-  mesh.material = createTerrainMaterial(splat, opts.heightFog);
+  mesh.material = nodeRenderer()
+    ? createNodeTerrainMaterial(splat)
+    : createTerrainMaterial(splat, opts.heightFog);
   mesh.name = "terrain";
   // The terrain only RECEIVES shadows. If it also cast, the grazing sun makes
   // every triangle face self-shadow → the jagged "staircase"/triangle acne
@@ -645,9 +688,16 @@ export async function dressTerrain(
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
   // the tile.
-  const water = splat
-    ? createWaterLayer(mesh.geometry, splat, opts.sunDirection, opts.heightFog)
-    : undefined;
+  const water = !splat
+    ? undefined
+    : nodeRenderer()
+      ? createNodeWaterLayer(mesh.geometry, splat, opts.sunDirection)
+      : createWaterLayer(
+          mesh.geometry,
+          splat,
+          opts.sunDirection,
+          opts.heightFog
+        );
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {
       sheet.position.copy(mesh.position);
@@ -669,9 +719,9 @@ export async function dressTerrain(
     dispose: () => {
       for (const texture of [
         classRaster?.texture,
-        ndviTexture,
-        surfaceTexture,
-        edgesTexture,
+        rasters.ndvi,
+        rasters.surface,
+        rasters.edges,
       ]) {
         texture?.dispose();
       }
