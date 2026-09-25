@@ -202,3 +202,122 @@ test("gates on a wall cut only freestanding walls, with a leaf as tall as the wa
   const leaf = fenceGeometry([], [], flat, offset, cut.leaves);
   expect(leaf?.indices.length ?? 0).toBeGreaterThan(0);
 });
+
+/** Metres along a closed ring (from its first vertex) of a point on it. */
+function alongRing(ring: Point2[], p: Point2): number {
+  let acc = 0;
+  for (let i = 1; i < ring.length; i++) {
+    const [x0, y0] = ring[i - 1];
+    const [x1, y1] = ring[i];
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const t = ((p[0] - x0) * (x1 - x0) + (p[1] - y0) * (y1 - y0)) / len ** 2;
+    const off = Math.hypot(
+      x0 + (x1 - x0) * t - p[0],
+      y0 + (y1 - y0) * t - p[1]
+    );
+    if (t >= -1e-9 && t <= 1 + 1e-9 && off < 1e-6) {
+      return acc + t * len;
+    }
+    acc += len;
+  }
+  throw new Error("not on the ring");
+}
+
+const lengthOf = (piece: Point2[]) =>
+  piece.reduce(
+    (sum, [x, y], i) =>
+      i === 0 ? 0 : sum + Math.hypot(x - piece[i - 1][0], y - piece[i - 1][1]),
+    0
+  );
+
+test("a gate at a closed ring's closing vertex cuts its whole gap", () => {
+  // A 10 m square yard, closing at its corner (0, 0), a 4 m gate there.
+  const square: Point2[] = [
+    [0, 0],
+    [10, 0],
+    [10, 10],
+    [0, 10],
+    [0, 0],
+  ];
+  const cut = cutGaps(square, [{ at: [0, 0], on: "fence", w: 4 }]);
+  expect(cut.leaves).toHaveLength(1);
+  const { a, b } = cut.leaves[0];
+  // 2 m along each side of the corner.
+  const ends = [a, b]
+    .map((p) => alongRing(square, p))
+    .toSorted((x, y) => x - y);
+  expect(ends[0]).toBeCloseTo(2, 6);
+  expect(ends[1]).toBeCloseTo(38, 6);
+  // One piece, the rest of the ring (no second end at the closure).
+  expect(cut.pieces).toHaveLength(1);
+  expect(lengthOf(cut.pieces[0])).toBeCloseTo(36, 6);
+  // The same yard closing mid-side: a straight 4 m leaf.
+  const midSide: Point2[] = [
+    [5, 0],
+    [10, 0],
+    [10, 10],
+    [0, 10],
+    [0, 0],
+    [5, 0],
+  ];
+  const mid = cutGaps(midSide, [{ at: [5, 0], on: "fence", w: 4 }]);
+  expect(mid.leaves).toHaveLength(1);
+  const [m] = mid.leaves;
+  expect(Math.hypot(m.b[0] - m.a[0], m.b[1] - m.a[1])).toBeCloseTo(4, 6);
+  expect(mid.pieces).toHaveLength(1);
+  expect(lengthOf(mid.pieces[0])).toBeCloseTo(36, 6);
+  // A ring with a gate elsewhere opens there: one piece, no end at (0, 0).
+  const side = cutGaps(square, [{ at: [10, 5], on: "fence", w: 2 }]);
+  expect(side.pieces).toHaveLength(1);
+  expect(lengthOf(side.pieces[0])).toBeCloseTo(38, 6);
+});
+
+test("a neighbour's gate over the seam cuts this tile's piece and draws its share", () => {
+  // The fence runs across a seam at x = 10; the 4 m gate stands 1 m past it,
+  // on the neighbour's side.
+  const here: Point2[] = [
+    [0, 0],
+    [10, 0],
+  ];
+  const there: Point2[] = [
+    [10, 0],
+    [20, 0],
+  ];
+  const owned: GatePoint = { at: [11, 0], on: "fence", w: 4 };
+  const seam: GatePoint = { ...owned, seam: true };
+  const mine = cutGaps(here, [seam]);
+  expect(mine.pieces).toHaveLength(1);
+  expect(mine.pieces[0].at(-1)?.[0]).toBeCloseTo(9, 6);
+  expect(mine.leaves).toHaveLength(1);
+  expect(mine.leaves[0].a[0]).toBeCloseTo(9, 6);
+  expect(mine.leaves[0].b[0]).toBeCloseTo(10, 6);
+  // The owner cuts the rest: 9 → 13 m across both tiles, the gate's 4 m.
+  const theirs = cutGaps(there, [owned]);
+  expect(theirs.leaves[0].a[0]).toBeCloseTo(10, 6);
+  expect(theirs.leaves[0].b[0]).toBeCloseTo(13, 6);
+  // Without the flag, or beyond w/2, the neighbour's gate cuts nothing here.
+  expect(cutGaps(here, [owned]).pieces).toEqual([here]);
+  expect(cutGaps(here, [{ ...seam, at: [12.5, 0] }]).pieces).toEqual([here]);
+  // Nor one off the line's continuation.
+  expect(cutGaps(here, [{ ...seam, at: [11, 1.5] }]).pieces).toEqual([here]);
+});
+
+test("a swing gate is a boom, like a lift gate", () => {
+  const fence = { coords: line, h: 1.2, type: "mesh" as const };
+  const swing = fenceGeometry(
+    [fence],
+    [gate(5, 3, { type: "swing_gate" })],
+    flat,
+    offset
+  );
+  if (!swing) {
+    throw new Error("no fence");
+  }
+  const codes = new Set(
+    Array.from({ length: swing.positions.length / 3 }, (_, v) =>
+      codeOf(swing, v)
+    )
+  );
+  expect(codes.has(FENCE_CODE.frame)).toBe(true);
+  expect(codes.has(FENCE_CODE.gate)).toBe(false);
+});

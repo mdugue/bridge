@@ -10,9 +10,12 @@
  * A fence stands on its OSM line, on the final fine ground (`heightAt`, the
  * TIN): it never reshapes the terrain and never snaps to a step. At each gate
  * the line is cut `w` wide; a closed leaf (the panel with a darker frame)
- * stands in the gap, a boom where the gate is a lift gate or cycle barrier.
- * Gates on a freestanding wall cut the wall the same way (`cutGaps`, used by
- * the wall bake too).
+ * stands in the gap, a boom where the gate is a lift gate, swing gate or
+ * cycle barrier. A closed ring is cut across its closing vertex like
+ * anywhere else. A gate the neighbouring tile owns whose gap reaches over
+ * the seam (`seam`) cuts this tile's piece too, and draws its leaf's share
+ * here, so the gate is whole across the seam. Gates on a freestanding wall
+ * cut the wall the same way (`cutGaps`, used by the wall bake too).
  *
  * The panel's pattern is procedural in the fragment shader, not a texture:
  * the UV packs a pattern code and the distance along the panel,
@@ -46,7 +49,10 @@ export interface GatePoint {
   at: Point2;
   /** the line it stands on */
   on: "fence" | "wall";
-  /** lift_gate / cycle_barrier: a boom instead of a leaf */
+  /** the neighbouring tile's gate, its gap reaching over the seam: it may
+   *  stand past the end of this tile's piece of the line */
+  seam?: boolean;
+  /** lift_gate / swing_gate / cycle_barrier: a boom instead of a leaf */
   type?: string;
   /** gap width (m) */
   w: number;
@@ -77,6 +83,8 @@ const POST_M = 0.04; // a run's last post (m; fence-layer.ts draws the others)
 const GATE_ON_M = 0.6; // a gate this close to a line cuts it (m)
 const BOOM_M = 1.0; // a lift gate's boom (m)
 const MIN_PIECE_M = 0.3; // shorter pieces between gaps are dropped (m)
+const CLOSED_M = 0.01; // a line whose ends are this close is a closed ring (m)
+const EPS_M = 1e-6; // a gap overhanging a ring's closure by less is not wrapped (m)
 
 export interface FenceGeometryData {
   indices: number[];
@@ -107,18 +115,34 @@ function cumulative(line: Point2[]): number[] {
   return out;
 }
 
-/** Distance along the line of its point nearest to `p`, and how far off. */
-function project(line: Point2[], acc: number[], p: Point2): [number, number] {
+/**
+ * Distance along the line of its point nearest to `p`, and how far off.
+ * `extend` continues the first and last segments past the line's ends (a
+ * neighbour's gate beyond the seam stands on the line's continuation): the
+ * distance along is then negative, or beyond the line's length.
+ */
+function project(
+  line: Point2[],
+  acc: number[],
+  p: Point2,
+  extend = false
+): [number, number] {
   let best: [number, number] = [0, Number.POSITIVE_INFINITY];
-  for (let i = 0; i < line.length - 1; i++) {
+  const last = line.length - 2;
+  for (let i = 0; i <= last; i++) {
     const [x0, y0] = line[i];
     const [x1, y1] = line[i + 1];
     const dx = x1 - x0;
     const dy = y1 - y0;
     const len2 = dx * dx + dy * dy;
+    const lo = extend && i === 0 ? Number.NEGATIVE_INFINITY : 0;
+    const hi = extend && i === last ? Number.POSITIVE_INFINITY : 1;
     const t =
       len2 > 0
-        ? Math.min(Math.max(((p[0] - x0) * dx + (p[1] - y0) * dy) / len2, 0), 1)
+        ? Math.min(
+            Math.max(((p[0] - x0) * dx + (p[1] - y0) * dy) / len2, lo),
+            hi
+          )
         : 0;
     const d = Math.hypot(x0 + dx * t - p[0], y0 + dy * t - p[1]);
     if (d < best[1]) {
@@ -160,26 +184,60 @@ function slice(
   return out;
 }
 
+/** Whether a line closes on itself (an area's ring, a closed way). */
+function isClosed(line: Point2[]): boolean {
+  const [x0, y0] = line[0];
+  const [x1, y1] = line.at(-1) ?? line[0];
+  return line.length > 3 && Math.hypot(x1 - x0, y1 - y0) <= CLOSED_M;
+}
+
+interface Gap {
+  gate: GatePoint;
+  s0: number;
+  s1: number;
+}
+
+/** A gate's gap, `w` wide around `s`: clipped to the line's ends, or on a
+ *  closed ring wrapped across its closing vertex (two intervals there). */
+function gapIntervals(
+  gate: GatePoint,
+  s: number,
+  total: number,
+  closed: boolean
+): Gap[] {
+  const s0 = s - gate.w / 2;
+  const s1 = s + gate.w / 2;
+  const out: Gap[] = [];
+  if (closed && s0 < -EPS_M) {
+    out.push({ gate, s0: total + s0, s1: total });
+  }
+  if (closed && s1 > total + EPS_M) {
+    out.push({ gate, s0: 0, s1: s1 - total });
+  }
+  const clipped = { gate, s0: Math.max(0, s0), s1: Math.min(total, s1) };
+  if (clipped.s1 > clipped.s0) {
+    out.push(clipped);
+  }
+  return out;
+}
+
 /** The gap intervals the gates cut into one line, merged where they overlap. */
 function gapsOn(
   line: Point2[],
   acc: number[],
-  gates: readonly GatePoint[]
-): { gate: GatePoint; s0: number; s1: number }[] {
+  gates: readonly GatePoint[],
+  closed: boolean
+): Gap[] {
   const total = acc.at(-1) ?? 0;
-  const gaps: { gate: GatePoint; s0: number; s1: number }[] = [];
+  const gaps: Gap[] = [];
   for (const gate of gates) {
-    const [s, d] = project(line, acc, gate.at);
+    const [s, d] = project(line, acc, gate.at, gate.seam === true && !closed);
     if (d <= GATE_ON_M) {
-      gaps.push({
-        gate,
-        s0: Math.max(0, s - gate.w / 2),
-        s1: Math.min(total, s + gate.w / 2),
-      });
+      gaps.push(...gapIntervals(gate, s, total, closed));
     }
   }
   gaps.sort((a, b) => a.s0 - b.s0);
-  const merged: typeof gaps = [];
+  const merged: Gap[] = [];
   for (const g of gaps) {
     const last = merged.at(-1);
     if (last && g.s0 <= last.s1) {
@@ -191,6 +249,35 @@ function gapsOn(
   return merged;
 }
 
+/** The same closed ring, starting (and closing) `s` metres along it. */
+function rotateRing(line: Point2[], acc: number[], s: number): Point2[] {
+  const start = pointAlong(line, acc, s);
+  const out: Point2[] = [start];
+  const n = line.length - 1; // line[n] repeats line[0]
+  for (let i = 1; i <= n; i++) {
+    if (acc[i] > s) {
+      out.push(line[i]);
+    }
+  }
+  for (let i = 1; i < n; i++) {
+    if (acc[i] < s) {
+      out.push(line[i]);
+    }
+  }
+  out.push(start);
+  return out;
+}
+
+/** Where to open a closed ring: where the gap across its closing vertex
+ *  starts, if one wraps it, else where the first gap starts. */
+function ringStart(gaps: Gap[], total: number): number {
+  const first = gaps[0];
+  const last = gaps.at(-1) ?? first;
+  return gaps.length > 1 && first.s0 <= EPS_M && last.s1 >= total - EPS_M
+    ? last.s0
+    : first.s0;
+}
+
 export interface CutLine {
   /** the gate leaves: a straight chord across each gap */
   leaves: { a: Point2; b: Point2; gate: GatePoint }[];
@@ -200,16 +287,35 @@ export interface CutLine {
 
 /**
  * Cuts a line at every gate that stands on it (within GATE_ON_M), each gap
- * `w` wide around the gate, and returns the pieces and the leaves.
+ * `w` wide around the gate, and returns the pieces and the leaves. A closed
+ * ring with a gate on it is opened at a gap's start first, so no gap is cut
+ * in two at the ring's closing vertex and no piece ends there.
  */
 export function cutGaps(line: Point2[], gates: readonly GatePoint[]): CutLine {
+  return cutLine(line, gates, false);
+}
+
+function cutLine(
+  line: Point2[],
+  gates: readonly GatePoint[],
+  opened: boolean
+): CutLine {
   if (line.length < 2) {
     return { pieces: [], leaves: [] };
   }
   const acc = cumulative(line);
   const total = acc.at(-1) ?? 0;
-  const near = gates.filter((g) => nearBox(line, g.at));
-  const gaps = gapsOn(line, acc, near);
+  const near = gates.filter((g) =>
+    nearBox(line, g.at, g.seam ? Math.max(GATE_ON_M, g.w / 2) : GATE_ON_M)
+  );
+  const closed = isClosed(line);
+  const gaps = gapsOn(line, acc, near, closed);
+  if (closed && !opened && gaps.length > 0) {
+    const start = ringStart(gaps, total);
+    if (start > EPS_M) {
+      return cutLine(rotateRing(line, acc, start), near, true);
+    }
+  }
   const pieces: Point2[][] = [];
   const leaves: CutLine["leaves"] = [];
   let from = 0;
@@ -230,7 +336,7 @@ export function cutGaps(line: Point2[], gates: readonly GatePoint[]): CutLine {
   return { pieces, leaves };
 }
 
-function nearBox(line: Point2[], p: Point2): boolean {
+function nearBox(line: Point2[], p: Point2, margin: number): boolean {
   let x0 = Number.POSITIVE_INFINITY;
   let y0 = Number.POSITIVE_INFINITY;
   let x1 = Number.NEGATIVE_INFINITY;
@@ -242,10 +348,10 @@ function nearBox(line: Point2[], p: Point2): boolean {
     y1 = Math.max(y1, y);
   }
   return (
-    p[0] >= x0 - GATE_ON_M &&
-    p[0] <= x1 + GATE_ON_M &&
-    p[1] >= y0 - GATE_ON_M &&
-    p[1] <= y1 + GATE_ON_M
+    p[0] >= x0 - margin &&
+    p[0] <= x1 + margin &&
+    p[1] >= y0 - margin &&
+    p[1] <= y1 + margin
   );
 }
 
@@ -427,6 +533,8 @@ const panelCode = (type: FenceType): number =>
   type === "rail" ? FENCE_CODE.handrail : FENCE_CODE[type];
 const solidCode = (type: FenceType): number =>
   type === "picket" ? FENCE_CODE.wood : FENCE_CODE.iron;
+/** Gates drawn as a boom at 1 m rather than a leaf. */
+const BOOM_TYPES = new Set(["lift_gate", "swing_gate", "cycle_barrier"]);
 
 /** One run of a fence: a panel per station pair (its post at the start, its
  *  rail along the top, both drawn by the pattern), and a post at the end. */
@@ -446,7 +554,7 @@ function buildRun(
   }
 }
 
-/** A gate across its gap: a closed leaf, or a boom for a lift gate. */
+/** A gate across its gap: a closed leaf, or a boom (BOOM_TYPES). */
 function buildLeaf(
   b: Builder,
   leaf: CutLine["leaves"][number],
@@ -458,8 +566,7 @@ function buildLeaf(
   if (!run) {
     return;
   }
-  const boom =
-    leaf.gate.type === "lift_gate" || leaf.gate.type === "cycle_barrier";
+  const boom = BOOM_TYPES.has(leaf.gate.type ?? "");
   for (let i = 1; i < run.length; i++) {
     if (boom) {
       b.quad(run[i - 1], run[i], FENCE_CODE.frame, BOOM_M - 0.05, BOOM_M);
