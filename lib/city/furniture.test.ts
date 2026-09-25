@@ -2,8 +2,11 @@ import { expect, test } from "bun:test";
 import type { FurnitureFeature } from "./features";
 import {
   BENCH_LENGTH,
+  BOLLARD_HEIGHT,
+  furnitureAreas,
   furniturePieces,
   HOOP_SPACING,
+  inRing,
   yawOfBearing,
 } from "./furniture";
 
@@ -72,4 +75,43 @@ test("unknown kinds, missing properties and non-points are dropped", () => {
   ]);
   expect(pieces.map((p) => p.model)).toEqual(["bin"]);
   expect(Number.isFinite(pieces[0].yaw)).toBe(true);
+});
+
+test("a bollard stands at its tagged height; a metal one as a post", () => {
+  const [stone, bronze] = furniturePieces([
+    at({ k: "bollard" }),
+    at({ k: "bollard", h: 1.46, metal: true }),
+  ]);
+  expect(stone.model).toBe("bollard");
+  expect(stone.scaleY).toBe(1);
+  expect(bronze.model).toBe("post");
+  expect(bronze.scaleY).toBeCloseTo(1.46 / BOLLARD_HEIGHT);
+});
+
+test("playgrounds are outlines; only their mapped equipment stands", () => {
+  const square: [number, number][] = [
+    [0, 0],
+    [10, 0],
+    [10, 10],
+    [0, 10],
+    [0, 0],
+  ];
+  const features: FurnitureFeature[] = [
+    {
+      geometry: { type: "Polygon", coordinates: [square] },
+      properties: { k: "playground" },
+    },
+    at({ k: "swing" }, 5, 5),
+    at({ k: "sandpit" }, 2, 2),
+  ];
+  const areas = furnitureAreas(features);
+  expect(areas).toHaveLength(1);
+  expect(areas[0].kind).toBe("playground");
+  expect(areas[0].ring).toHaveLength(4); // the closing vertex dropped
+  expect(inRing(areas[0].ring, 5, 5)).toBe(true);
+  expect(inRing(areas[0].ring, 15, 5)).toBe(false);
+  expect(furniturePieces(features).map((p) => p.model)).toEqual([
+    "swing",
+    "sandbox",
+  ]);
 });

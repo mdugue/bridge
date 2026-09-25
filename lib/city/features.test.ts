@@ -87,7 +87,7 @@ test.each(cases)("%s: canopy points carry a finite height", (_, a) => {
 });
 
 test.each(cases)(
-  "%s: street furniture is kinded points with a finite bearing",
+  "%s: street furniture is kinded points, playgrounds and sandpits outlines",
   (_, a) => {
     const kinds = [
       "bench",
@@ -97,20 +97,41 @@ test.each(cases)(
       "picnic",
       "postbox",
       "shelter",
+      "playground",
+      "swing",
+      "slide",
+      "sandpit",
+      "climb",
+      "springy",
+      "seesaw",
+      "roundabout",
+      "playhouse",
     ];
     const features = load<FurnitureFeature>(a.furniture);
     expect(features.length).toBeGreaterThan(0);
     for (const f of features) {
-      expect(f.geometry.type).toBe("Point");
-      expect(isPoint2(f.geometry.coordinates)).toBe(true);
-      expect(kinds).toContain(f.properties?.k ?? "");
+      const kind = f.properties?.k ?? "";
+      expect(kinds).toContain(kind);
+      const g = f.geometry;
+      if (g.type === "Polygon") {
+        expect(["playground", "sandpit"]).toContain(kind);
+        expect(g.coordinates.every(isRing)).toBe(true);
+      } else {
+        expect(g.type).toBe("Point");
+        expect(isPoint2(g.coordinates)).toBe(true);
+        expect(kind).not.toBe("playground");
+      }
       const bearing = f.properties?.a;
       if (bearing !== undefined) {
         expect(bearing).toBeGreaterThanOrEqual(0);
         expect(bearing).toBeLessThanOrEqual(360);
       }
-      if (f.properties?.k === "bike") {
-        expect(f.properties.n).toBeGreaterThanOrEqual(1);
+      if (kind === "bike") {
+        expect(f.properties?.n).toBeGreaterThanOrEqual(1);
+      }
+      if (f.properties?.h !== undefined) {
+        expect(kind).toBe("bollard");
+        expect(f.properties.h).toBeGreaterThan(0);
       }
     }
   }

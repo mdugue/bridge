@@ -59,7 +59,8 @@ bewusster Vereinfachung.
 | **Gebäudefarben** | Dachfarben; eine leichte Tönung je Gebäude; abends ein warmes Leuchten in Läden und öffentlichen Bauten | Dachfarbe aus Luftbildern (**DOP**) gemessen; der Rest aus Gebäudeattributen abgeleitet | Dachfarben sind echt (etwa 83 % Abdeckung), Wandtöne sind synthetisch |
 | **Bäume und Hecken** | Einzelbäume mit Kronen in gemessener Höhe; Hecken und Baumreihen | Baumpositionen und -höhen aus der Differenz von Oberflächenmodell (**DOM1**) und Geländemodell; Reihen aus dem Basis-DLM; Grünfärbung aus dem Infrarot-Luftbild (**NDVI**) | Positionen und Höhen sind gemessen; die Kronenform ist generisch, die Baumart unbekannt |
 | **Straßenlampen** | Laternen an Straßen und Plätzen | **OpenStreetMap** | Echte Positionen, Standardhöhe |
-| **Stadtmöbel** | Sitzbänke, Picknicktische, Papierkörbe, Fahrradbügel, Poller, Briefkästen und Wartehäuschen | **OpenStreetMap**; wohin eine Bank blickt, aus ihrer eingetragenen Richtung, sonst zum nächsten Weg oder zur nächsten Straße | Echte Positionen; ein einfaches Modell je Art. Nur wenige Bänke sagen, wohin sie blicken, die meisten sind zum nächsten Weg gedreht — meist, nicht immer richtig |
+| **Stadtmöbel** | Sitzbänke, Picknicktische, Papierkörbe, Fahrradbügel, Poller, Briefkästen und Wartehäuschen | **OpenStreetMap**; wohin eine Bank blickt, aus ihrer eingetragenen Richtung, sonst zum nächsten Weg oder zur nächsten Straße | Echte Positionen (ein Poller in seiner eingetragenen Höhe); ein weiches, abstrahiertes Modell je Art in den Pastelltönen der Szene — wie Figuren eines Architekturmodells. Nur wenige Bänke sagen, wohin sie blicken, die meisten sind zum nächsten Weg gedreht — meist, nicht immer richtig |
+| **Spielplätze** | Die Spielplatzfläche als weicher Boden, mit ihren Schaukeln, Rutschen, Klettergerüsten, Sandkästen und Wippen | **OpenStreetMap** (der Umriss und jedes darauf eingetragene Gerät) | Echter Umriss und echte Positionen; es steht nur, was eingetragen ist — viele Spielplätze sind ohne Geräte erfasst und bleiben leer, statt mit erfundenen Geräten gefüllt zu werden |
 | **Brunnen und Denkmäler** | Brunnenbecken mit stillem Wasser und durchscheinenden Wasserglocken; Statuen, Gedenksteine und Säulen | Lage und amtliche Namen aus dem Basis-DLM; Beckenumrisse und die kleineren Brunnen aus OpenStreetMap; die Form der Skulptur aus dem Oberflächenmodell (**DOM1**) | Echte Lage und Umrisse. Eine Skulptur ist ihr gemessener Körper, zu Ton geglättet — richtige Größe und Silhouette, keine Details; wo nichts messbar war, eine abstrakte Markierung. Die Wasserglocken, ihre sanfte Bewegung und die Nachtbeleuchtung sind entworfen. Beide Befliegungen fanden statt, als die Brunnen leer und ihre Figuren winterlich eingehaust waren; der gemessene Körper am Albertplatz ist also die Einhausung |
 | **Bahn und Brücken** | Gleise, Schotterbetten, Brückendecks mit Bögen oder Pfeilern, Bahnsteige | Basis-DLM (Gleise, Brücken), Gelände- und Oberflächenmodell (Deckhöhen), OpenStreetMap (Bahnsteige, ob eine Brücke eine Bogenbrücke ist) | Echter Verlauf und echte Deckhöhen; das Tragwerk ist vereinfacht |
 | **Mauern** | Die Brühlsche Terrasse und andere Stütz- und Stadtmauern, Felskanten | OpenStreetMap-Linien mit ihren eingetragenen Höhen | Echte Lage, eingetragene oder Standardhöhe |
@@ -119,7 +120,8 @@ warmen Fenster in der Dämmerung (dass es ein Laden oder öffentliches
 Gebäude *ist*, stimmt; seine leuchtenden Fenster sind erfunden).
 
 **Gar nicht in den Daten:** Fenster und Türen, Fassadenmaterialien,
-die kleineren Stadtmöbel (Schilder, Pflanzkübel, Haltestellenmasten),
+die kleineren Stadtmöbel (Pflanzkübel, Haltestellenmasten; Verkehrs- und
+Straßennamensschilder sind zu lückenhaft erfasst, um sie zu zeigen),
 Fahrzeuge, Menschen, Bewuchs unter etwa 3 m und
 alles im Inneren von Gebäuden.
 

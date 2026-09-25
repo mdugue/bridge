@@ -63,23 +63,41 @@ export type FurnitureKind =
   | "bollard"
   | "picnic"
   | "postbox"
-  | "shelter";
+  | "shelter"
+  | PlaygroundKind;
+
+/** A playground outline and the equipment OSM maps on it (`playground=*`). */
+export type PlaygroundKind =
+  | "climb"
+  | "playground"
+  | "playhouse"
+  | "roundabout"
+  | "sandpit"
+  | "seesaw"
+  | "slide"
+  | "springy"
+  | "swing";
 
 /**
  * OSM street furniture (pipeline/bake/furniture.py, ODbL): benches, picnic
  * tables, litter bins, bicycle stands, bollards, post boxes and stop
- * shelters, each a Point. `a` is the bearing the object faces (degrees
- * clockwise from north: OSM's `direction`, else towards the nearest way),
- * absent on round things; `l` a bench's mapped length (m), `n` a stand's
- * hoops, `back: false` a bench without a backrest.
+ * shelters, each a Point, and playgrounds: the outline (a Polygon, `k:
+ * playground`) and each mapped piece of equipment (a Point; a sandpit may be
+ * its Polygon). `a` is the bearing the object faces (degrees clockwise from
+ * north: OSM's `direction`, else towards the nearest way), absent on round
+ * things; `l` a bench's mapped length (m), `n` a stand's hoops, `back:
+ * false` a bench without a backrest; `h` a bollard's tagged height (m) and
+ * `metal` its material.
  */
 export interface FurnitureFeature {
-  geometry: PointGeometry;
+  geometry: PointGeometry | PolygonGeometry;
   properties: {
     a?: number;
     back?: boolean;
+    h?: number;
     k: FurnitureKind;
     l?: number;
+    metal?: boolean;
     n?: number;
   } | null;
 }

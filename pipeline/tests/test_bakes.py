@@ -412,3 +412,27 @@ def test_an_untagged_bench_faces_the_nearest_way_or_across_the_one_it_is_on():
     # A bench mapped as a way north of the path faces it, at its length.
     mid, a, length = bench_on_way(shapely.LineString([(40, 3), (43, 3)]), ways, lines)
     assert (mid.x, mid.y, a, length) == (41.5, 3.0, 180.0, 3.0)
+
+
+def test_a_bollard_keeps_its_tagged_height_and_metal():
+    from bake.furniture import bollard
+
+    # The Stallhof's bronze columns are mapped as bollards.
+    assert bollard('"height"=>"1.46","material"=>"bronze"') == {"h": 1.46, "metal": True}
+    assert bollard('"height"=>"40 m"') == {"h": 3.0}
+    assert bollard(None) == {}
+
+
+def test_playground_equipment_is_only_what_is_mapped():
+    from bake.furniture import _equipment_piece, equipment_kind
+
+    assert equipment_kind('"playground"=>"basketswing"') == "swing"
+    assert equipment_kind('"playground"=>"structure"') == "climb"
+    assert equipment_kind('"playground"=>"mound"') is None
+    # A slide drawn as a way stands at its midpoint, turned along it.
+    geom, props = _equipment_piece(shapely.LineString([(0, 0), (0, 4)]), "slide")
+    assert (geom.x, geom.y, props) == (0.0, 2.0, {"k": "slide", "a": 0})
+    # A sandpit drawn as an area keeps its outline; a point stays a point.
+    square = shapely.Polygon([(0, 0), (3, 0), (3, 3), (0, 3)])
+    assert _equipment_piece(square, "sandpit")[0].geom_type == "Polygon"
+    assert _equipment_piece(shapely.Point(1, 1), "swing")[0].geom_type == "Point"

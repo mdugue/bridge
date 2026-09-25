@@ -1,20 +1,31 @@
 /**
  * Street furniture placement (pipeline/bake/furniture.py → the layer in
  * app/_components/furniture-layer.ts): which model a feature stands as,
- * where, turned which way and how long. No THREE, no DOM.
+ * where, turned which way and how long, and which playground patches lie
+ * under them. No THREE, no DOM.
  */
 import type { FurnitureFeature } from "./features";
+import type { Point2 } from "./polyline";
 
 /** The models the layer builds, one instanced draw each. */
 export type FurnitureModel =
   | "bench"
   | "bin"
   | "bollard"
+  | "climb"
   | "hoop"
   | "picnic"
+  | "playhouse"
+  | "post"
   | "postbox"
+  | "roundabout"
+  | "sandbox"
+  | "seesaw"
   | "shelter"
-  | "stool";
+  | "slide"
+  | "springy"
+  | "stool"
+  | "swing";
 
 export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "bench",
@@ -23,9 +34,21 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "bin",
   "hoop",
   "bollard",
+  "post",
   "postbox",
   "shelter",
+  "swing",
+  "slide",
+  "climb",
+  "springy",
+  "seesaw",
+  "roundabout",
+  "playhouse",
+  "sandbox",
 ];
+
+/** A bollard's height (m) when the map says nothing: the models are built at it. */
+export const BOLLARD_HEIGHT = 0.9;
 
 /** A park bench's length (m) when the map says nothing: the models are built at it. */
 export const BENCH_LENGTH = 1.8;
@@ -37,6 +60,8 @@ export interface FurniturePiece {
   model: FurnitureModel;
   /** stretch along the model's local X (a bench's mapped length) */
   scaleX: number;
+  /** stretch along Y (a bollard's tagged height) */
+  scaleY: number;
   x: number;
   y: number;
   /** radians about world +Y; the model's front is its local +Z */
@@ -78,6 +103,7 @@ function hoops(x: number, y: number, deg: number, n: number): FurniturePiece[] {
       y: y + ay * t,
       yaw,
       scaleX: 1,
+      scaleY: 1,
     });
   }
   return pieces;
@@ -88,10 +114,18 @@ const MODEL_OF: Record<string, (f: FurnitureFeature) => FurnitureModel> = {
   bench: benchModel,
   bike: () => "hoop",
   bin: () => "bin",
-  bollard: () => "bollard",
+  bollard: (f) => (f.properties?.metal ? "post" : "bollard"),
   picnic: () => "picnic",
   postbox: () => "postbox",
   shelter: () => "shelter",
+  swing: () => "swing",
+  slide: () => "slide",
+  climb: () => "climb",
+  springy: () => "springy",
+  seesaw: () => "seesaw",
+  roundabout: () => "roundabout",
+  playhouse: () => "playhouse",
+  sandpit: () => "sandbox",
 };
 
 function modelOf(f: FurnitureFeature): FurnitureModel | null {
@@ -118,6 +152,7 @@ export function furniturePieces(
       continue;
     }
     const length = f.properties?.l;
+    const height = f.properties?.h;
     pieces.push({
       model,
       x,
@@ -127,7 +162,55 @@ export function furniturePieces(
         model === "bench" || model === "stool"
           ? (length ?? BENCH_LENGTH) / BENCH_LENGTH
           : 1,
+      scaleY:
+        (model === "bollard" || model === "post") && height
+          ? height / BOLLARD_HEIGHT
+          : 1,
     });
   }
   return pieces;
+}
+
+/** A playground or a sandpit drawn as an area: its outline, open. */
+export interface FurnitureArea {
+  kind: "playground" | "sandpit";
+  ring: Point2[];
+}
+
+/** The outlines among the features (the outer ring; holes are dropped). */
+export function furnitureAreas(features: FurnitureFeature[]): FurnitureArea[] {
+  const areas: FurnitureArea[] = [];
+  for (const f of features) {
+    const kind = f.properties?.k;
+    if (f.geometry?.type !== "Polygon") {
+      continue;
+    }
+    if (kind !== "playground" && kind !== "sandpit") {
+      continue;
+    }
+    const ring = f.geometry.coordinates[0] ?? [];
+    const open =
+      ring.length > 1 &&
+      ring[0][0] === ring.at(-1)?.[0] &&
+      ring[0][1] === ring.at(-1)?.[1]
+        ? ring.slice(0, -1)
+        : ring;
+    if (open.length >= 3) {
+      areas.push({ kind, ring: open });
+    }
+  }
+  return areas;
+}
+
+/** Whether (x, y) lies inside the ring (even-odd). */
+export function inRing(ring: readonly Point2[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }

@@ -184,11 +184,27 @@ visual-variable codebook is in
   path side. Only what the tags carry varies: `backrest=no` benches are
   stools, a stand's `capacity` gives its hoops (two bikes each). Dropped:
   indoors, underground, classes 5 and 8, bridge decks (the terrain under
-  them is the river). `pipeline/bake/furniture.py`; the viewer instances one
-  small vertex-coloured model per kind (`furniture-layer.ts`,
-  `lib/city/furniture.ts`), eight draw calls per tile at most. Not (yet):
-  bicycle-parking *areas*, shelters mapped as areas, planters, bus-stop
-  signs.
+  them is the river). A bollard keeps its tagged `height` and a metal
+  `material` (the Stallhof's 1.46 m bronze columns of 1591 are mapped as
+  bollards). `pipeline/bake/furniture.py`; the viewer instances one small,
+  **abstracted** model per kind — softened blocks, capsules and single tube
+  strokes, a bench one extruded seat-and-back profile — in the scene's
+  pastels (honey-clay seating, slate-lavender metal, pale stone), one
+  matte vertex-coloured material (`furniture-layer.ts`,
+  `lib/city/furniture.ts`). Not (yet): bicycle-parking *areas*, shelters
+  mapped as areas, planters, signs (OSM maps ~100 traffic signs and almost
+  no street-name signs here; the 321 traffic-signal nodes sit on the
+  carriageway, not at the mast — both too sparse or too placed-by-guess).
+- **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 88 over the
+  four tiles) → a low slab of soft safety floor (dusty rose) seated on the
+  ground under each ring vertex (densified to 2 m), and **only the
+  equipment OSM maps** (`playground=swing/basketswing/slide/sandpit/
+  climbingframe/structure/climbingwall/springy/spring_board/seesaw/
+  roundabout/playhouse`, ~100 pieces) standing on it; a sandpit drawn as an
+  area is its own sand slab, one drawn as a way stands at its midpoint
+  turned along it. **A playground mapped without equipment stays an empty
+  patch — nothing is invented** (the choice against filling them with
+  typical pieces). Same bake and layer as the street furniture.
 
 - **Fountains, statues, memorial stones, columns** — the Basis-DLM's
   monument points (`sie03_p`, `OBJART=51009`, `BWF` 1750/1770/1780, with

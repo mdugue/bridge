@@ -102,7 +102,7 @@ config change.
     materials: walls and stairs are baked into the fine terrain glTF),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
     `furniture-layer.ts` (benches, bins, bicycle stands, bollards, post
-    boxes, stop shelters),
+    boxes, stop shelters, playgrounds with their mapped equipment),
     `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`

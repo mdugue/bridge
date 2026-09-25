@@ -14,7 +14,14 @@ hoop, `n` hoops in a row). Wall loops are left out (they hang on a facade),
 and so is anything indoors, underground, on the railway or water (the class
 raster) or on a bridge deck (the terrain under it is the river). Each tile
 writes only what it owns (west/south edges in, lib/city/tileset.ts
-`ownsPoint`), so an object on a seam stands once."""
+`ownsPoint`), so an object on a seam stands once.
+
+Playgrounds come the same way and only as mapped: the `leisure=playground`
+outline as a Polygon (`k: playground`), and each piece of equipment OSM
+lists (`playground=swing/slide/sandpit/climbingframe/…`) as a Point of its
+kind — or, a sandpit drawn as an area, as its Polygon; a piece drawn as a
+way stands at its midpoint, turned along it. A playground mapped without
+its equipment stays an empty patch: none is invented."""
 
 from __future__ import annotations
 
@@ -26,7 +33,7 @@ import numpy as np
 import shapely
 from PIL import Image
 
-from .common import OSM_ATTRIBUTION, Tile, feature, owns, write_geojson
+from .common import OSM_ATTRIBUTION, Tile, feature, geometry_json, owns, write_geojson
 from .osm import has_extract, read_osm, tag
 
 BLOCKED = (5, 8)  # railway, water
@@ -36,6 +43,8 @@ FACE_M = 25.0
 ON_WAY_M = 0.5
 BENCH_M = (1.0, 8.0)  # a mapped bench way's length, clamped
 MAX_HOOPS = 12
+BOLLARD_M = (0.3, 3.0)  # a tagged bollard height, clamped
+METAL = {"metal", "steel", "iron", "bronze", "cast_iron", "stainless_steel", "aluminium"}
 SHELTER_DEDUP_M = 8.0  # a stop's bus_stop and platform nodes share one shelter
 CARDINAL = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
             "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]  # fmt: skip
@@ -51,6 +60,23 @@ POINT_WHERE = (
     'OR other_tags LIKE \'%"leisure"=>"picnic_table"%\' '
     'OR other_tags LIKE \'%"public_transport"=>"platform"%\''
 )
+# OSM `playground=*` → the equipment model the viewer stands (others dropped).
+EQUIPMENT = {
+    "swing": "swing",
+    "basketswing": "swing",
+    "slide": "slide",
+    "sandpit": "sandpit",
+    "climbingframe": "climb",
+    "structure": "climb",
+    "climbingwall": "climb",
+    "springy": "springy",
+    "spring_board": "springy",
+    "seesaw": "seesaw",
+    "roundabout": "roundabout",
+    "playhouse": "playhouse",
+}
+EQUIPMENT_WHERE = 'other_tags LIKE \'%"playground"=>"%\''
+MIN_PLAYGROUND_M2 = 20.0
 BENCH_WAY_WHERE = 'other_tags LIKE \'%"amenity"=>"bench"%\''
 
 
@@ -92,6 +118,20 @@ def hidden(other: str | None) -> bool:
         return True
     level = tag(other, "level") or ""
     return level.startswith("-")
+
+
+def bollard(other: str | None) -> dict:
+    """A bollard's tagged height (m, clamped) and whether it is metal — the
+    Stallhof's 1.46 m bronze columns are mapped as bollards."""
+    props: dict = {}
+    try:
+        h = float((tag(other, "height") or "").split()[0])
+        props["h"] = round(min(max(h, BOLLARD_M[0]), BOLLARD_M[1]), 2)
+    except (ValueError, IndexError):
+        pass
+    if (tag(other, "material") or "") in METAL:
+        props["metal"] = True
+    return props
 
 
 def hoops(capacity: str | None) -> int:
@@ -192,6 +232,8 @@ def _points(tile: Tile, gate: Gate, ways, lines) -> list[dict]:
             props["back"] = False
         if k == "bike":
             props["n"] = hoops(tag(other, "capacity"))
+        if k == "bollard":
+            props.update(bollard(other))
         out.append(_point_feature(g, props))
     return out
 
@@ -212,6 +254,79 @@ def _bench_ways(tile: Tile, gate: Gate, ways, lines) -> list[dict]:
     return out
 
 
+def equipment_kind(other: str | None) -> str | None:
+    """OSM `playground=*` → the equipment kind, or None."""
+    return EQUIPMENT.get(tag(other, "playground") or "")
+
+
+def _outline(geom: shapely.Geometry) -> shapely.Polygon | None:
+    """An area's largest part, holes dropped and simplified to 0.2 m."""
+    if geom.geom_type == "MultiPolygon":
+        geom = max(geom.geoms, key=lambda g: g.area)
+    if geom.geom_type == "LineString" and geom.is_ring:
+        geom = shapely.Polygon(geom.coords)
+    if geom.geom_type != "Polygon":
+        return None
+    return shapely.Polygon(geom.exterior).simplify(0.2)
+
+
+def _playgrounds(tile: Tile, gate: Gate) -> list[dict]:
+    geoms, fields = read_osm(
+        tile, "multipolygons", "leisure = 'playground'", ["leisure", "other_tags"], margin=0.0005
+    )
+    out = []
+    for g, other in zip(geoms, fields["other_tags"], strict=True):
+        area = _outline(g)
+        if area is None or area.area < MIN_PLAYGROUND_M2 or hidden(other):
+            continue
+        if not gate.open(area.representative_point()):
+            continue
+        out.append(feature(geometry_json(area), {"k": "playground"}))
+    return out
+
+
+def _equipment_piece(g: shapely.Geometry, kind: str) -> tuple[shapely.Geometry, dict] | None:
+    """Where a piece stands and how: a sandpit area as its outline, a way at
+    its midpoint turned along it, anything else at its (representative) point."""
+    closed = g.geom_type in ("Polygon", "MultiPolygon") or (
+        g.geom_type == "LineString" and g.is_ring
+    )
+    if kind == "sandpit" and closed:
+        area = _outline(g)
+        return (area, {"k": kind}) if area is not None and area.area >= 1.0 else None
+    if g.geom_type == "LineString" and not g.is_ring:
+        a = g.interpolate(0.45, normalized=True)
+        b = g.interpolate(0.55, normalized=True)
+        mid = g.interpolate(0.5, normalized=True)
+        return mid, {"k": kind, "a": round(bearing(b.x - a.x, b.y - a.y))}
+    return (g if g.geom_type == "Point" else g.representative_point()), {"k": kind}
+
+
+def _equipment(tile: Tile, gate: Gate) -> list[dict]:
+    out = []
+    for layer in ("points", "lines", "multipolygons"):
+        geoms, fields = read_osm(tile, layer, EQUIPMENT_WHERE, ["other_tags"], margin=0.0005)
+        for g, other in zip(geoms, fields["other_tags"], strict=True):
+            kind = equipment_kind(other)
+            if kind is None or hidden(other):
+                continue
+            piece = _equipment_piece(g, kind)
+            if piece is None:
+                continue
+            geom, props = piece
+            anchor = geom if geom.geom_type == "Point" else geom.representative_point()
+            if not gate.open(anchor):
+                continue
+            a = direction(tag(other, "direction"))
+            if a is not None:
+                props["a"] = round(a)
+            if geom.geom_type == "Point":
+                out.append(_point_feature(geom, props))
+            else:
+                out.append(feature(geometry_json(geom), props))
+    return out
+
+
 def run(tile: Tile) -> None:
     if not has_extract(tile, "the street furniture"):
         return
@@ -219,11 +334,16 @@ def run(tile: Tile) -> None:
     lines = np.array([g for g in lines if g.geom_type == "LineString"], dtype=object)
     ways = shapely.STRtree(lines)
     gate = Gate(tile)
-    features = _points(tile, gate, ways, lines) + _bench_ways(tile, gate, ways, lines)
+    features = (
+        _points(tile, gate, ways, lines)
+        + _bench_ways(tile, gate, ways, lines)
+        + _playgrounds(tile, gate)
+        + _equipment(tile, gate)
+    )
     write_geojson(
         tile.out("dlm", f"furniture_{tile.id}.geojson"), features, tile.epsg, OSM_ATTRIBUTION
     )
     counts: dict[str, int] = {}
     for f in features:
         counts[f["properties"]["k"]] = counts.get(f["properties"]["k"], 0) + 1
-    print(f"{tile.id}: street furniture {dict(sorted(counts.items()))}")
+    print(f"{tile.id}: street furniture and playgrounds {dict(sorted(counts.items()))}")
