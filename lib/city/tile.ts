@@ -65,6 +65,8 @@ export type TileArtifactKind =
   | "sportTable"
   | "svf"
   | "horizon"
+  | "markings"
+  | "markingsTable"
   | "trees"
   | "vegrows";
 
@@ -110,6 +112,11 @@ export function tileArtifacts(
     // shadow map. Without them the light is as before.
     svf: dlm(`svf_${tile}.png`),
     horizon: dlm(`horizon_${tile}.png`),
+    // Optional: the road markings (pipeline/bake/markings.py) — the index
+    // raster (rows, lane bits, centre offset) and the table of crossings
+    // and stop lines; without them the roads stay unpainted.
+    markings: dlm(`markings_${tile}.png`),
+    markingsTable: dlm(`markings_${tile}.json`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
     furniture: dlm(`furniture_${tile}.geojson`),

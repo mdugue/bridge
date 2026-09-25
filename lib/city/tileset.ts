@@ -118,6 +118,9 @@ export interface TerrainExtras {
   /** sports-ground index raster and its table of grounds (both levels) */
   sport?: string;
   sportTable?: string;
+  /** road-marking raster and its table (fine level only) */
+  markings?: string;
+  markingsTable?: string;
   /** sky-view factor raster (both levels; the clay reads it too) */
   svf?: string;
   /** far-horizon raster, four RGBA layers stacked (both levels) */

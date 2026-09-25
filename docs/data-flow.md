@@ -61,6 +61,7 @@ flowchart LR
     WAL["Retaining walls"]
     STR["Stairs"]
     SPT["Sports grounds<br/>pitches · courts · tracks · goals"]
+    MRK["Road markings<br/>zebras · Furten · stop lines · cycle and centre lines"]
     MM["Minimap"]
     LIGHT["Light &amp; shadow"]
   end
@@ -134,6 +135,8 @@ flowchart LR
   OSM -. "layer ≥ 1 areas a flight climbs onto → terraces lifted at build" .-> TER
   DGM -. ground-clamp .-> PLT
   OSM ==>|"leisure=pitch/track<br/>sport · surface → table + index raster"| SPT
+  OSM ==>|"crossings · signals · cycleway · lanes → table + lane raster"| MRK
+  DLM -. "carriageway width + kerb distance" .-> MRK
   DGM -. "goals · posts · nets ground-clamped" .-> SPT
 
   %% minimap + lighting (derived, not raw data)
@@ -154,6 +157,7 @@ flowchart LR
 | **Surface colours** | Basis-DLM class raster (ids 0–8), painted with the palette on the GPU at load | DOP NDVI (meadow tint, class 1; urban green on classes 0 and 4) | `landcover-splat.ts`, `lib/city/landcover.ts` (the one palette), `terrain-layer.ts` (samples the splat + `uNdvi`), `ground-detail.ts` (urban green); baked by `pipeline/bake/landcover.py` + `ndvi.py` |
 | **Kerbs, paving & parking** | Basis-DLM class raster: the road (7) and meadow (1, + urban green) edges as smoothed signed distances, and the kerb lines the fine terrain stands kerb stones on (`edges.py`) | OSM paving raster (`surface`, `sidewalk:*:surface`, `parking:*` lanes, `amenity=parking`/`parking_space` with their aisles, the way direction; else the class default) | `ground-detail.ts` (in the terrain fragment pass), `terrain-layer.ts`; baked by `pipeline/bake/surface.py` |
 | **Sports grounds** | OSM `leisure=pitch` / `track` (playgrounds are street furniture): per ground its frame, surface and line scheme (`sport_<t>.json`) and a 2048² index raster (`sport_<t>.png`) | the sport's usual surface when untagged · DGM1 (the goals, posts and nets stand on the ground) | `sport-ground.ts` (in the terrain fragment pass), `sport-fixtures.ts` (dressing), `lib/city/sport.ts`; baked by `pipeline/bake/sport.py` |
+| **Road markings** | OSM `highway=crossing` (marked kinds), directed `highway=traffic_signals`, `cycleway*=lane`, `lanes` + `oneway`: a table of crossings and stop lines (`markings_<t>.json`) and a 2048² raster of rows, lane bits and the centre offset (`markings_<t>.png`) | Basis-DLM class raster (the carriageway's width across each crossing; the kerb distance the cycle lane keeps) | `road-markings.ts` (in the terrain fragment pass), `lib/city/markings.ts`; baked by `pipeline/bake/markings.py` |
 | **Water (Elbe)** | Basis-DLM class 8 (water coverage from the painted splat) **+** DGM1 (the terrain geometry it drapes on) | — | `water-layer.ts`, `landcover-splat.ts` |
 | **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`) | DGM1 (ground-clamp) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts` |
 | **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py` |
@@ -219,6 +223,7 @@ flowchart LR
     bEDGE["edges.py"]
     bSPT["sport.py"]
     bSKY["skyview.py"]
+    bMRK["markings.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -237,6 +242,7 @@ flowchart LR
     dEDGE["edges PNG · kerbs"]
     dSPT["sport PNG + table"]
     dSKY["svf PNG · horizon PNG"]
+    dMRK["markings PNG + table"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -279,6 +285,9 @@ flowchart LR
   dNDVI -.-> bEDGE
   dSURF -.-> bEDGE
   iOSM ==> bSPT ==> dSPT
+  iOSM ==> bMRK ==> dMRK
+  dCLS ==> bMRK
+  dMRK -.-> tSIDE
   iDGM ==> bSKY
   iCJ ==> bSKY ==> dSKY
 

@@ -20,7 +20,24 @@
 - **Effort**: M (bake M, shader M)
 - **Risk**: LOW–MED — one more optional raster and table on the fine level
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: DONE (2026-09-25; the look unjudged on a GPU) — all three
+  phases built: `pipeline/bake/markings.py` (table + 2048² RGBA raster,
+  committed for the four tiles), `app/_components/road-markings.ts`
+  (zebra, *Furt*, stop lines, cycle lanes, centre lines; scales with
+  *Bodendetail*). Measured: 364 crossings (59 zebra, 305 *Furt*), 214 stop
+  lines; axis within 20° of the crossing footway for 278 of 301, 18 of
+  364 rectangles < 70 % on the DLM carriageway (STOP is 1 in 10: not
+  triggered). Deviations: the raster is four channels, not two — the row
+  is 16-bit (R + 256·A: the densest tile has 214 rows, and nothing caps a
+  tile at 255) and B carries the signed offset to the carriageway's middle
+  (the single-sided kerb distance, clamped at ±6.35 m, cannot place a
+  centre line on a wide road); the lane bits are resolved per side in the
+  bake (the paving raster's bearing is modulo 180°); crossings are
+  measured also 5/10 m along the road (junction crossings). Centre-line
+  STOP: restricted to main roads (primary…unclassified) with a
+  carriageway ≥ 5.5 m; residential `lanes=2` streets left unmarked. Open:
+  every plate (Albertplatz, Postplatz, Königsbrücker Straße) and the moiré
+  check on a GPU.
 
 ## Why this matters
 

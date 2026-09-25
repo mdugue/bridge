@@ -144,7 +144,7 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
-| Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
+| Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien) und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |

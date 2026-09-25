@@ -230,6 +230,44 @@ visual-variable codebook is in
   the ground's centre. Both terrain levels; absent files → the land-cover
   class. Dresden (2026-09-19 extract): ~175 grounds over the four tiles.
   Textures scale with HUD *Bodendetail*; colours and lines stay.
+- **Road markings** (plan 026) — OSM `highway=crossing` nodes,
+  `highway=traffic_signals` nodes with a `traffic_signals:direction` (or
+  `direction`), and the roads' `lanes`, `oneway`, `lane_markings` and
+  `cycleway[:right|:left|:both]=lane` → `pipeline/bake/markings.py`: a
+  table of rotated rectangles (`markings_<tile>.json`: centre, the axis
+  across the road, half extents, kind) and a 2048² raster
+  (`markings_<tile>.png`, four bytes per texel: the row reaching it,
+  16-bit; lane bits; the signed distance to the carriageway's middle).
+  A crossing is painted when OSM says it is marked — `crossing:markings`
+  first (zebra; dashes/dots → *Furt*; no → nothing), then
+  `crossing_ref=zebra`, then `crossing=traffic_signals` → *Furt* (German
+  signalled crossings are two broken lines, not a zebra),
+  `marked`/`uncontrolled`/`zebra` → zebra; `unmarked` and `markings=no`
+  (≈1 100 nodes) paint nothing. Its axis is the normal of the nearest
+  carriageway way at the node, its length the contiguous DLM road texels
+  along that normal — measured also 5 and 10 m along the road, the
+  narrowest valid run winning, because at a junction the normal through
+  the node runs down the crossing street. A stop line lies 3 m before a
+  directed signal, across the right half of the approach (the whole road
+  on a oneway). Cycle lanes: a broken 25 cm line 1.85 m from the kerb, on
+  the side the raster says (resolved in the bake per texel — the paving
+  raster's bearing is only known modulo 180°). Centre lines: 12 cm dashes
+  (3 m in 8.25 m) where the signed distance to the middle crosses zero, on
+  two-way primary/secondary/tertiary/trunk/unclassified roads with
+  `lanes` ≥ 2 and a carriageway ≥ 5.5 m, clear of junctions by 12 m —
+  residential streets tagged `lanes=2` (≈300 ways) are left unmarked, as
+  they mostly are in Dresden. Painted in the terrain's fragment pass
+  (`road-markings.ts`), box-filtered (a zebra far off averages to a pale
+  band), clipped to the carriageway, worn, fine level only; scales with
+  *Bodendetail*. Baked 2026-09-25 from the BBBike extract of 2026-09-19:
+  **364 crossings** (59 zebra, 305 *Furt*) and **214 stop lines** over the
+  four tiles; 60 crossings and 32 signals left unpainted (no DLM road
+  within 3 m of the node — mostly service roads the DLM does not carry —
+  or no carriageway narrower than 30 m nearby). Checked against the
+  crossing footway through each node: the painted axis is within 20° of
+  it for 278 of 301 (median 2°), and 18 of 364 rectangles lie less than
+  70 % on the DLM carriageway — under the plan's 1-in-10 stop. ≈12 s per
+  tile, 77–107 KB raster + 5–11 KB table. **Not yet judged on a GPU.**
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
   courtyards, front gardens and parks inside the settlement alike. Where
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM

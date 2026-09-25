@@ -57,7 +57,7 @@ history. Decisions that came out of plans are written up as
 | 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
 | 024 | Trams: OSM tracks (street, grass, ballast), contact wire, masts, span wires, stop signs | **TODO** | [024-tram-and-catenary.md](./024-tram-and-catenary.md) |
 | 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | **TODO** | [025-trees-by-species-and-season.md](./025-trees-by-species-and-season.md) |
-| 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | **TODO** | [026-road-markings.md](./026-road-markings.md) |
+| 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | DONE — all phases (bake + shader, four tiles); centre lines on main roads only; look unjudged on a GPU | [026-road-markings.md](./026-road-markings.md) |
 | 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **TODO** | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |
 | 028 | Cultivated land: allotment colonies, orchards, vineyards | **TODO** | [028-cultivated-land.md](./028-cultivated-land.md) |
 | 029 | Fences, railings and gates, baked into the fine terrain | **TODO** | [029-fences-and-gates.md](./029-fences-and-gates.md) |
