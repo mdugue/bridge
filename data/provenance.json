@@ -55,9 +55,11 @@
       }
     },
     "LSC": {
-      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1, not used by the viewer yet.",
+      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used only by the low-vegetation bake (pipeline/bake/lowveg.py; 0.5 m PDAL rasters under data/_raw/<site>/lsc/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask. Baked for the spawn tile only; the neighbours are baked OSM-only. On 2026-09-25 the download service still named these ZIPs, but the share answered 503 (Sabre NotFound).",
       "layer": 1,
-      "committed": null,
+      "committed": "derived only: data/dlm/lowveg_33412_5656_2_sn.geojson, data/dlm/canopyx_33412_5656_2_sn.geojson",
+      "raw": "data/_raw/<site>/lsc/<tile>.laz (placed by hand; the committed files were baked from data/_raw/lsc/lsc_<tile>_laz/)",
+      "usedBy": ["pipeline/bake/lowveg.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5656_2_sn_laz.zip" },
         "33410_5658_2_sn": { "stand": "2024-11-27, 2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/rqcqdt8QMcLFUvC/lsc_33410_5658_2_sn_laz.zip" },
@@ -133,6 +135,38 @@
       "editionInUse": "land cover and veg rows: the quarterly package current in June 2026; rail, ballast, bridges: the package downloaded 2026-09-24 (exact release dates unrecorded); monuments: the package downloaded 2026-09-24 (the ZIP's inner package dated 2026-07-27, basisdlm_akt.csv 2026-07-28)"
     }
   },
+  "dresden": {
+    "$comment": "Landeshauptstadt Dresden open data, drawn by default (tree-inventory-layer.ts); also thins the laser-scan extra trees (pipeline/bake/lowveg.py). The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; the ingest adapter (pipeline/bake/ingest_sn.py ingest_trees; extract-trees.sh when the committed files were baked) checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
+    "Stadtbaumkataster": {
+      "service": "https://kommisdd.dresden.de/net3/public/ogcsl.ashx?NODEID=1633&Service=WFS",
+      "typeName": "cls:L1261",
+      "metadata": "https://www.geoportal.sachsen.de/md/4a9020f2-d9da-4731-a203-594eb10f0e3e",
+      "licence": "dl-de/by-2-0; credit: Landeshauptstadt Dresden",
+      "coverage": "street trees, parks, schools and other municipal land; not the Großer Garten, not private ground",
+      "retrieved": "2026-09-23 (the eleven tiles this branch adds: 2026-09-25)",
+      "raw": "data/_raw/<site>/trees/<tile>.geojson (+ .meta.json); the committed files were baked from data/_raw/baumkataster/stadtbaum_<tile>.geojson",
+      "committed": "data/dlm/trees_<tile>.geojson",
+      "usedBy": ["pipeline/bake/trees.py", "pipeline/bake/lowveg.py", "scripts/eval/kataster-eval.py"],
+      "numberMatched": {
+        "$comment": "per tile bbox incl. the 10 m margin; after the half-open tile clip: 3195, 3663, 6121, 5465 trees",
+        "33410_5656_2_sn": 3301,
+        "33410_5658_2_sn": 3755,
+        "33412_5656_2_sn": 6214,
+        "33412_5658_2_sn": 5567,
+        "33408_5654_2_sn": 3905,
+        "33408_5656_2_sn": 2376,
+        "33408_5658_2_sn": 2318,
+        "33410_5654_2_sn": 6963,
+        "33412_5654_2_sn": 5292,
+        "33414_5654_2_sn": 5979,
+        "33414_5656_2_sn": 6754,
+        "33414_5658_2_sn": 1481,
+        "33416_5654_2_sn": 2542,
+        "33416_5656_2_sn": 943,
+        "33416_5658_2_sn": 0
+      }
+    }
+  },
   "openstreetmap": {
     "overpass": {
       "$comment": "How the lamp, platform and bridge-structure files were fetched until 2026-09-24 (the bash bakes). Every OSM layer is now read from the Geofabrik extract below; kept for the history.",
@@ -140,7 +174,8 @@
       "products": {
         "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
         "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dlm/platform_*.geojson)" },
-        "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" }
+        "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" },
+        "lowveg": { "query": "way[barrier=hedge], way/relation[natural~scrub|shrubbery], node[natural=shrub]", "dataAsOf": "2026-09-23 (timestamp_osm_base 16:16–16:20Z, data/_raw/osm/lowveg_<tile>.json; fetched from the maps.mail.ru Overpass mirror, overpass-api.de was overloaded)", "usedBy": ["scripts/extract-lowveg.sh (the committed lowveg files; pipeline/bake/lowveg.py reads the local extract)"] }
       }
     },
     "bbbike": {

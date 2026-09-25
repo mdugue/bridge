@@ -1,7 +1,9 @@
 /**
  * Builds a tile's streamed content (lib/city/tileset.ts): the terrain mesh
- * per level from the DGM GeoTIFF (with the OSM retaining walls burned in as
- * breaklines and the ground lowered under the OSM stairs) and the building mesh from the CityJSON, both as glTF
+ * per level from the DGM GeoTIFF — the fine level an error-bounded TIN over
+ * the native DGM, the coarse one a grid with the OSM retaining walls burned
+ * in as breaklines; both with the ground lowered under the OSM stairs — and
+ * the building mesh from the CityJSON, both as glTF
  * (scripts/tile-glb.ts). Everything the browser used to compute at load —
  * resampling, conflation, the grid, normals — happens here once. Called by
  * scripts/prepare-data.ts, which owns paths, caching and publishing; no DOM.
@@ -20,15 +22,27 @@ import {
 } from "../lib/city/stairs";
 import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
-import { type WallRibbon, wallGeometry } from "../lib/city/walls";
+import {
+  type WallOptions,
+  type WallRibbon,
+  wallGeometry,
+} from "../lib/city/walls";
 import { kerbGeometry } from "../lib/city/kerbs";
 import type { Point2 } from "../lib/city/polyline";
 import {
   buildTerrainGeometryData,
+  sampleHeightfield,
   type TerrainBounds,
 } from "../lib/city/terrain-geometry";
+import {
+  buildTinGeometryData,
+  type TerrainTin,
+  TinIndex,
+  tinSurface,
+} from "../lib/city/terrain-tin";
 import { tfwToBounds } from "../lib/city/tfw";
 import type { BakedCityMesh } from "./bake-city-mesh";
+import { tinFromGrid } from "./bake-terrain-tin";
 import type { MeshInput, PropertyTable } from "./tile-glb";
 
 /** True when getBoundingBox() returned pixel indices instead of map units. */
@@ -54,18 +68,25 @@ export interface Dgm {
 }
 
 /**
- * The DGM resampled (bilinear) to n×n. geotiff.js cannot read .tfw
+ * The DGM resampled (bilinear) to n×n, or read as it is (`"native"`: DGM1's
+ * 1 m grid, for the fine level's TIN). geotiff.js cannot read .tfw
  * sidecars, so a GeoTIFF without embedded georeferencing is placed by its
  * sidecar's text instead — and one with neither fails loudly.
  */
 export async function readDgm(
   tif: ArrayBuffer,
   tfw: string | null,
-  n: number
+  size: number | "native"
 ): Promise<Dgm> {
   const image = await (await fromArrayBuffer(tif)).getImage();
   const width = image.getWidth();
   const height = image.getHeight();
+  if (size === "native" && width !== height) {
+    throw new Error(
+      `DGM: a native read needs a square raster, got ${width}×${height}`
+    );
+  }
+  const n = size === "native" ? width : size;
   let embedded: number[] | null = null;
   try {
     embedded = image.getBoundingBox();
@@ -83,13 +104,17 @@ export async function readDgm(
         "Embed it with: gdal_translate -a_srs EPSG:25833 in.tif out.tif"
     );
   }
-  const raster = await image.readRasters({
-    width: n,
-    height: n,
-    samples: [0],
-    interleave: true,
-    resampleMethod: "bilinear",
-  });
+  const raster = await image.readRasters(
+    size === "native"
+      ? { samples: [0], interleave: true }
+      : {
+          width: n,
+          height: n,
+          samples: [0],
+          interleave: true,
+          resampleMethod: "bilinear",
+        }
+  );
   if (!ArrayBuffer.isView(raster)) {
     throw new Error("unexpected raster shape (expected one interleaved band)");
   }
@@ -116,12 +141,38 @@ function normalsOf(
   return geometry.getAttribute("normal").array as Float32Array;
 }
 
+/**
+ * A terrain mesh's normals from its SURFACE triangles alone. The skirt shares
+ * the border vertices with the surface, and a 30 m vertical wall outweighs the
+ * ground's triangles in three's area-weighted average: the border normals came
+ * out nearly horizontal and lit a bright band along every tile seam, one
+ * triangle wide (on a TIN's flat road, metres). The skirt's bottom ring faces
+ * straight up, so a glimpse of it reads as ground.
+ */
+function terrainNormals(
+  positions: Float32Array,
+  indices: Uint32Array,
+  surfaceIndexCount: number,
+  surfaceVertexCount: number
+): Float32Array {
+  const normals = normalsOf(positions, indices.subarray(0, surfaceIndexCount));
+  for (let i = surfaceVertexCount; i < positions.length / 3; i++) {
+    normals[3 * i] = 0;
+    normals[3 * i + 1] = 0;
+    normals[3 * i + 2] = 1;
+  }
+  return normals;
+}
+
 export interface TerrainMesh {
-  /** the shaped grid (n·n, row 0 = north): what the runtime walks on */
-  elevations: Float32Array;
+  /** ground height at projected (EPSG) x, y over the very triangles the
+   *  mesh draws — what the walls and kerbs stand on; null off the tile */
+  heightAt: (x: number, y: number) => number | null;
   input: Omit<MeshInput, "extras" | "name">;
   minElevation: number;
   maxElevation: number;
+  /** set when the mesh is a TIN (TerrainExtras.tin), absent for the grid */
+  tin?: { maxError: number; triangles: number };
 }
 
 /** What the terrain bake shapes the DGM with besides the walls. */
@@ -131,13 +182,56 @@ export interface TerrainFeatures {
 }
 
 /**
+ * The DGM shaped in three passes: the walls burned in as steps
+ * (lib/city/terrain-conflate.ts; the grid only — a TIN keeps the measured
+ * ramps and the wall ribbons snap to them), the raised areas the DGM lacks
+ * lifted to their level, then the ground under each flight of stairs lowered
+ * below its treads (lib/city/stairs.ts), `stairMargin` deeper for a mesh
+ * that only approximates the grid.
+ */
+function shapeDgm(
+  dgm: Dgm,
+  walls: WallLine[],
+  features: TerrainFeatures,
+  opts: { burnWalls: boolean; stairMargin: number }
+): Float32Array {
+  const { n, bounds } = dgm;
+  const { stairs = [], terraces = [] } = features;
+  let elevations: Float32Array = dgm.elevations;
+  if (opts.burnWalls && walls.length > 0) {
+    elevations = conflateWalls({ elevations, n, bounds, walls });
+  }
+  if (terraces.length > 0) {
+    elevations = raiseTerraces({ elevations, n, bounds, terraces });
+  }
+  if (stairs.length > 0) {
+    const lines = walls.map((w) => w.coords);
+    elevations = burnStairs({
+      elevations,
+      n,
+      bounds,
+      stairs,
+      walls: lines,
+      margin: opts.stairMargin,
+    });
+  }
+  return elevations;
+}
+
+/** The highest surface vertex of the first `count`. */
+function maxZ(positions: Float32Array, count: number): number {
+  let max = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < count; i++) {
+    max = Math.max(max, positions[i * 3 + 2]);
+  }
+  return max;
+}
+
+/**
  * The terrain grid (+ its 30 m skirt) in the recentered frame, the DGM
- * shaped in three passes: the walls burned in as steps
- * (lib/city/terrain-conflate.ts), the raised areas the DGM lacks lifted to
- * their level, then the ground under each flight of stairs lowered below its
- * treads (lib/city/stairs.ts). The first n·n
- * vertices are the grid, row 0 = north: the runtime samples ground height
- * straight from them.
+ * shaped by `shapeDgm` with the walls burned in. The first n·n vertices are
+ * the grid, row 0 = north: the runtime samples ground height straight from
+ * them.
  */
 export function terrainMesh(
   dgm: Dgm,
@@ -146,34 +240,71 @@ export function terrainMesh(
   features: TerrainFeatures = {}
 ): TerrainMesh {
   const { n, bounds } = dgm;
-  const { stairs = [], terraces = [] } = features;
-  let elevations: Float32Array = dgm.elevations;
-  if (walls.length > 0) {
-    elevations = conflateWalls({ elevations, n, bounds, walls });
-  }
-  if (terraces.length > 0) {
-    elevations = raiseTerraces({ elevations, n, bounds, terraces });
-  }
-  if (stairs.length > 0) {
-    const lines = walls.map((w) => w.coords);
-    elevations = burnStairs({ elevations, n, bounds, stairs, walls: lines });
-  }
-  const { positions, indices, minElevation } = buildTerrainGeometryData({
-    elevations,
-    n,
-    bounds,
-    offset,
+  const elevations = shapeDgm(dgm, walls, features, {
+    burnWalls: true,
+    stairMargin: 0,
   });
+  const { positions, indices, minElevation, surfaceIndexCount } =
+    buildTerrainGeometryData({ elevations, n, bounds, offset });
   const index = Uint32Array.from(indices);
-  let maxElevation = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < n * n; i++) {
-    maxElevation = Math.max(maxElevation, positions[i * 3 + 2]);
-  }
   return {
-    elevations,
-    input: { positions, normals: normalsOf(positions, index), indices: index },
+    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
+    input: {
+      positions,
+      normals: terrainNormals(positions, index, surfaceIndexCount, n * n),
+      indices: index,
+    },
     minElevation,
-    maxElevation,
+    maxElevation: maxZ(positions, n * n),
+  };
+}
+
+/**
+ * The fine level as an error-bounded TIN (+ skirt) over the NATIVE DGM
+ * (scripts/bake-terrain-tin.ts): terraces and stairs shaped in, the walls
+ * not — their ribbons snap to the measured step (lib/city/walls.ts). The
+ * stairs are burned `maxError` deeper, so no tread is pierced by a triangle
+ * that only approximates the burned grid. The glTF writer reorders it for
+ * meshopt (nothing reads a TIN's order: its skirt triangles are vertical,
+ * so a ground-height lookup skips them). Null when the DGM has NoData (a TIN
+ * has no holes): the caller falls back to the grid.
+ */
+export function tinTerrainMesh(
+  dgm: Dgm,
+  walls: WallLine[],
+  offset: { cx: number; cy: number },
+  features: TerrainFeatures,
+  maxError: number
+): TerrainMesh | null {
+  const elevations = shapeDgm(dgm, walls, features, {
+    burnWalls: false,
+    stairMargin: maxError,
+  });
+  let tin: TerrainTin;
+  try {
+    tin = tinFromGrid(elevations, dgm.n, dgm.bounds, maxError);
+  } catch {
+    return null;
+  }
+  const { positions, indices, minElevation, surfaceIndexCount } =
+    buildTinGeometryData(tin, offset);
+  const index = new TinIndex(tinSurface(tin));
+  return {
+    heightAt: (x, y) => index.heightAt(x, y),
+    input: {
+      positions,
+      normals: terrainNormals(
+        positions,
+        indices,
+        surfaceIndexCount,
+        tin.z.length
+      ),
+      indices,
+      reorder: true,
+    },
+    minElevation,
+    maxElevation: maxZ(positions, tin.z.length),
+    tin: { maxError, triangles: tin.triangles.length / 3 },
   };
 }
 
@@ -226,14 +357,16 @@ export function stairMesh(
 /**
  * The tile's walls as one ribbon mesh, standing on `heightAt` — the final
  * fine ground of every tile of the site, so a wall near a seam reads its
- * neighbour's. Null when no wall stands.
+ * neighbour's; on TIN ground (`snapToStep`) an earth-retaining wall snaps to
+ * the measured step. Null when no wall stands.
  */
 export function wallMesh(
   walls: WallRibbon[],
   heightAt: (x: number, y: number) => number | null,
-  offset: { cx: number; cy: number }
+  offset: { cx: number; cy: number },
+  opts: WallOptions = {}
 ): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
-  const data = wallGeometry(walls, heightAt, offset);
+  const data = wallGeometry(walls, heightAt, offset, opts);
   return data
     ? {
         name: "walls",

@@ -1,4 +1,6 @@
 import {
+  BufferAttribute,
+  BufferGeometry,
   DataTexture,
   FloatType,
   LinearFilter,
@@ -28,6 +30,7 @@ import {
 } from "@/lib/city/landcover";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
+import { TinIndex } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
 import {
@@ -47,7 +50,8 @@ import { createWaterLayer, type WaterLayer } from "./water-layer";
 /**
  * One tile's terrain at one level: the baked glTF mesh (scripts/bake-tiles.ts,
  * streamed by tile-stream.ts) dressed with the land-cover material, its
- * water and mist sheets, and a ground-height sampler read from its grid.
+ * water and mist sheets, and a ground-height sampler read from its grid —
+ * or, on the fine level, from its TIN's triangles.
  */
 export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
@@ -636,6 +640,90 @@ function gridElevations(mesh: Mesh, n: number, toData: Matrix4): Float32Array {
   return out;
 }
 
+/**
+ * Ground height over a TIN (`extras.tin`, the fine level): its surface
+ * triangles indexed in the projected frame (lib/city/terrain-tin.ts
+ * TinIndex), vertices read back from the mesh like `gridElevations` — so
+ * the walker stands on exactly the triangles the GPU draws.
+ */
+function tinHeightAt(
+  mesh: Mesh,
+  bounds: TerrainBounds,
+  toData: Matrix4,
+  offset: { cx: number; cy: number }
+): (x: number, y: number) => number | null {
+  const position = mesh.geometry.getAttribute("position");
+  const index = mesh.geometry.getIndex();
+  if (!index) {
+    return () => null;
+  }
+  const xy = new Float64Array(position.count * 2);
+  const z = new Float32Array(position.count);
+  const v = new Vector3();
+  for (let i = 0; i < position.count; i++) {
+    v.fromBufferAttribute(position, i).applyMatrix4(toData);
+    xy[2 * i] = v.x + offset.cx;
+    xy[2 * i + 1] = v.y + offset.cy;
+    z[i] = v.z;
+  }
+  const tin = new TinIndex({
+    bounds,
+    xy,
+    z,
+    // Every triangle, skirt included: a skirt quad is vertical, so its
+    // triangles have no area in plan and the lookup never picks one.
+    triangles: index.array,
+  });
+  return (x, y) => tin.heightAt(x, y);
+}
+
+/**
+ * The water's geometry: the terrain's positions without its skirt. The water
+ * and mist sheets drape the terrain mesh, and its skirt — the 30 m vertical
+ * wall that hides cracks between tiles — would otherwise be drawn as a wall
+ * of water at every seam across the river, a bright band where the two
+ * sheets meet. A skirt triangle is vertical: two of its corners share a plan
+ * position (the same quantised x and z, glTF being Y-up), so it has no area
+ * in plan. A TIN's water also faces straight up (`upFacing`): it spans the
+ * river with a few huge triangles whose vertex normals are averaged with the
+ * steep bank faces they share a vertex with, so the water's shading would
+ * fan out in streaks across them.
+ */
+function waterGeometryOf(
+  geometry: BufferGeometry,
+  upFacing: boolean
+): BufferGeometry {
+  const position = geometry.getAttribute("position");
+  const index = geometry.getIndex();
+  const water = new BufferGeometry();
+  water.setAttribute("position", position);
+  if (upFacing) {
+    const normals = new Float32Array(position.count * 3);
+    for (let i = 1; i < normals.length; i += 3) {
+      normals[i] = 1;
+    }
+    water.setAttribute("normal", new BufferAttribute(normals, 3));
+  } else {
+    water.setAttribute("normal", geometry.getAttribute("normal"));
+  }
+  if (index) {
+    const kept: number[] = [];
+    const plan = (i: number) => [position.getX(i), position.getZ(i)] as const;
+    for (let t = 0; t < index.count; t += 3) {
+      const [ax, az] = plan(index.getX(t));
+      const [bx, bz] = plan(index.getX(t + 1));
+      const [cx, cz] = plan(index.getX(t + 2));
+      if ((bx - ax) * (cz - az) - (bz - az) * (cx - ax) !== 0) {
+        kept.push(index.getX(t), index.getX(t + 1), index.getX(t + 2));
+      }
+    }
+    water.setIndex(kept);
+  }
+  water.boundingBox = geometry.boundingBox?.clone() ?? null;
+  water.boundingSphere = geometry.boundingSphere?.clone() ?? null;
+  return water;
+}
+
 interface DetailRasters {
   edgesTexture: Texture | null;
   ndviTexture: Texture | null;
@@ -691,7 +779,13 @@ export async function dressTerrain(
   opts: TerrainOptions
 ): Promise<TerrainLayer> {
   const { bounds, n } = extras;
-  const elevations = gridElevations(mesh, n, toData);
+  // The fine level is a TIN; the coarse one (and a fine level whose DGM had
+  // holes) the grid.
+  const elevations = extras.tin ? null : gridElevations(mesh, n, toData);
+  const heightAt = elevations
+    ? (x: number, y: number) =>
+        sampleHeightfield({ elevations, n, bounds }, x, y)
+    : tinHeightAt(mesh, bounds, toData, opts.offset);
 
   // Decoded one after another on purpose: several 4096² rasters decoding at
   // once is a peak mobile Safari kills the tab for.
@@ -739,8 +833,12 @@ export async function dressTerrain(
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
   // the tile.
+  const waterGeometry = waterGeometryOf(
+    mesh.geometry,
+    extras.tin !== undefined
+  );
   const water = splat
-    ? createWaterLayer(mesh.geometry, splat, opts.sunDirection, opts.heightFog)
+    ? createWaterLayer(waterGeometry, splat, opts.sunDirection, opts.heightFog)
     : undefined;
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {
@@ -759,8 +857,10 @@ export async function dressTerrain(
     bounds,
     minElevation: extras.minElevation,
     water,
-    heightAt: (x, y) => sampleHeightfield({ elevations, n, bounds }, x, y),
+    heightAt,
     dispose: () => {
+      // Shares the tile's positions; only its own index (and normals) go.
+      waterGeometry.dispose();
       for (const texture of [
         classRaster?.texture,
         ndviTexture,

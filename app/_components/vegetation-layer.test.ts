@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Vector3 } from "three";
+import { Color, Matrix4, Vector3 } from "three";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { sceneCensus } from "./scene-census";
@@ -101,4 +101,27 @@ test("trunks and the near crowns share one instance buffer", () => {
   // Each still culls against a sphere of its own geometry.
   expect(chunk.rich.boundingSphere).not.toBeNull();
   expect(chunk.trunks.boundingSphere).not.toBeNull();
+});
+
+test("a chunk with precomputed trees keeps its own matrices per mesh", () => {
+  const trunk = new Matrix4().makeTranslation(3, 100, 3);
+  const crown = {
+    cheap: new Matrix4().makeTranslation(3, 104, 3),
+    rich: new Matrix4().makeTranslation(3, 105, 3),
+    colour: new Color(0x88_99_66),
+  };
+  const built = buildVegetation(
+    {
+      rows: [],
+      canopy: [canopy(5, 12)],
+      extraTrees: [{ x: 3, z: 3, trunk, crown }],
+    },
+    ctx
+  );
+  const [chunk] = built.chunks;
+  expect(chunk.trees).toBe(2);
+  // The cadastre tree's trunk and crowns differ, so nothing is shared.
+  expect(chunk.trunks.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
+  expect(chunk.rich.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
+  expect(chunk.far.count).toBe(2);
 });

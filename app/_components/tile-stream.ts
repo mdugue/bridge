@@ -2,7 +2,7 @@ import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
   type Camera,
-  type Group,
+  Group,
   Matrix4,
   type Mesh,
   type Object3D,
@@ -13,11 +13,14 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import type {
   AreaFeature,
   BridgeFeature,
+  CanopyExtraFeature,
   CanopyFeature,
   FurnitureFeature,
   LampFeature,
+  LowVegFeature,
   MonumentFeature,
   RailFeature,
+  TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
 import type { LookState } from "@/lib/city/look-state";
@@ -35,6 +38,7 @@ import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
+import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { buildRail } from "./rail-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
@@ -46,10 +50,13 @@ import {
 import { dressKerbs } from "./kerb-layer";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
+import { buildTreeInventory } from "./tree-inventory-layer";
 import {
   buildVegetation,
   loadNdviSampler,
+  type VegetationContext,
   type VegetationControl,
+  type VegetationFeatures,
 } from "./vegetation-layer";
 import type { StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
@@ -58,13 +65,16 @@ import { dressWalls } from "./wall-layer";
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
  * 3DTilesRendererJS, which decides what to load and unload from the cameras,
  * the screen-space error and a memory budget. This module only dresses what
- * lands — the terrain material, water, buildings, vegetation, lamps,
- * monuments, street furniture, rails, walls — and undresses what leaves, so every tile is one handle whose
- * content comes and goes with it.
+ * lands — the terrain material, water, buildings, vegetation (canopy,
+ * street-tree cadastre, laser-scan trees, hedges), lamps, monuments, street
+ * furniture, rails, walls — and undresses what leaves, so every tile is one
+ * handle whose content comes and goes with it.
  */
 export interface TileDressing {
   furniture?: Group;
   lamps?: LampControl;
+  /** OSM hedges (low-vegetation-layer.ts): static, no per-frame work */
+  lowVegetation?: Group;
   monuments?: MonumentLayer;
   rail?: Group;
   sport?: SportFixtureLayer;
@@ -173,6 +183,7 @@ function meshNamed(root: Object3D, name: string): Mesh | undefined {
 function dressingParts(d: TileDressing): Object3D[] {
   return [
     d.vegetation?.group,
+    d.lowVegetation,
     d.lamps?.group,
     d.monuments?.group,
     d.furniture,
@@ -272,6 +283,60 @@ async function buildSport(
   });
 }
 
+/**
+ * The tile's trees as one control: the canopy (DLM rows, DOM1 crowns, scan
+ * crowns) and, where the tile has them, the street-tree cadastre
+ * (tree-inventory-layer.ts). A cadastre tree vetoes the canopy point it
+ * stands on (`keepTree`), and its trunk and broadleaf crown ride in the
+ * canopy's chunk meshes (instances, not draw calls); only its reshaped
+ * silhouettes (flame, cone, weeping) are meshes of its own.
+ */
+function buildTileVegetation(
+  features: Omit<VegetationFeatures, "extraTrees" | "keepTree">,
+  inventoryTrees: TreeFeature[],
+  vegCtx: VegetationContext
+): VegetationControl {
+  const inventory =
+    inventoryTrees.length > 0
+      ? buildTreeInventory(inventoryTrees, vegCtx, features.ndviAt)
+      : null;
+  const canopy = buildVegetation(
+    {
+      ...features,
+      keepTree: inventory?.keepTree,
+      extraTrees: inventory?.instances,
+    },
+    vegCtx
+  );
+  if (!inventory) {
+    return canopy;
+  }
+  const own = inventory.control;
+  const group = new Group();
+  group.name = "vegetation";
+  group.add(canopy.group, own.group);
+  return {
+    group,
+    chunks: canopy.chunks,
+    multiTuft: canopy.multiTuft,
+    applyLook: (look) => {
+      canopy.applyLook(look);
+      own.applyLook(look);
+    },
+    setTime: (seconds) => {
+      canopy.setTime(seconds);
+      own.setTime(seconds);
+    },
+    // Both run: `||` would skip the cadastre's swap whenever the canopy's
+    // changed.
+    updateLod: (cameraPos) => {
+      const a = canopy.updateLod(cameraPos);
+      const b = own.updateLod(cameraPos);
+      return a || b;
+    },
+  };
+}
+
 async function buildDressing(
   terrain: TerrainLayer,
   extras: TerrainExtras,
@@ -297,6 +362,9 @@ async function buildDressing(
     ballast,
     platforms,
     sport,
+    inventory,
+    scanTrees,
+    hedges,
   ] = await Promise.all([
     get<VegRowFeature>(d.vegrows),
     get<CanopyFeature>(d.canopy),
@@ -311,16 +379,25 @@ async function buildDressing(
     get<AreaFeature>(d.railarea),
     get<AreaFeature>(d.platform),
     buildSport(terrain, extras.sportTable, ctx, url),
+    // the street-tree cadastre (tree-inventory-layer.ts)
+    get<TreeFeature>(d.trees ?? ""),
+    // laser-scan crowns outside the canopy mask (tiles with a laser scan)
+    get<CanopyExtraFeature>(d.canopyx ?? ""),
+    get<LowVegFeature>(d.lowveg ?? ""),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
-  const vegetation = buildVegetation(
+  const vegetation = buildTileVegetation(
     {
       rows,
-      canopy: offMonuments(canopy, monuments),
+      // The laser-scan crowns outside the canopy mask join the canopy as
+      // ordinary trees (they carry the same measured `h`); the bake already
+      // dropped the ones a cadastre tree claims.
+      canopy: offMonuments([...canopy, ...scanTrees], monuments),
       ndviAt: ndviAt ?? undefined,
     },
+    inventory,
     {
       offset: ctx.offset,
       heightAt: terrain.heightAt,
@@ -330,6 +407,14 @@ async function buildDressing(
   );
   // Born with the current look, not the default.
   vegetation.applyLook(ctx.look.get());
+  const lowVegetation =
+    hedges.length > 0
+      ? buildLowVegetation(hedges, {
+          offset: ctx.offset,
+          heightAt: terrain.heightAt,
+          heightFog: ctx.heightFog,
+        })
+      : undefined;
   // The bake reads lamps with a margin around the tile; a lamp on or past a
   // seam is its owner's, or two tiles would stand it twice.
   const extent = ctx.tileBounds(tile);
@@ -362,6 +447,7 @@ async function buildDressing(
   return {
     tile,
     vegetation,
+    lowVegetation,
     lamps: lampControl,
     monuments: monumentLayer,
     furniture: furnitureGroup,

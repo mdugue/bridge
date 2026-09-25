@@ -26,6 +26,18 @@ test("the artifact map reproduces the served file names", () => {
   });
 });
 
+test("the cadastre, hedges and scan crowns are optional side files", () => {
+  const a = tileArtifacts(PRIMARY_TILE);
+  expect(a.trees).toEqual({
+    file: "trees_33412_5656_2_sn.geojson",
+    required: false,
+  });
+  expect(a.lowveg.file).toBe("lowveg_33412_5656_2_sn.geojson");
+  // Only tiles with a laser scan have them; prepare-data names the file in
+  // the dressing only when it is committed.
+  expect(a.canopyx.required).toBe(false);
+});
+
 test("exactly four artifacts are required", () => {
   const required = Object.entries(tileArtifacts(PRIMARY_TILE))
     .filter(([, a]) => a.required)

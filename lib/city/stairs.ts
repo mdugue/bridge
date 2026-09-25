@@ -223,6 +223,10 @@ export interface StairBurnInput {
   elevations: ArrayLike<number>;
   /** grid size (n x n) */
   n: number;
+  /** extra depth (m) below `STAIR_BURN_M`: a mesh that only approximates
+   *  the grid (the fine level's TIN, within its tolerance) could otherwise
+   *  poke through a tread */
+  margin?: number;
   stairs: StairLine[];
   /** wall lines (EPSG): the burn never reaches across one */
   walls?: Point2[][];
@@ -239,7 +243,7 @@ export interface StairBurnInput {
  * stays NoData.
  */
 export function burnStairs(input: StairBurnInput): Float32Array {
-  const { elevations, n, bounds, stairs } = input;
+  const { elevations, n, bounds, stairs, margin = 0 } = input;
   const out = Float32Array.from(elevations);
   const [minX, minY, maxX, maxY] = bounds;
   const dx = (maxX - minX) / n;
@@ -280,7 +284,7 @@ export function burnStairs(input: StairBurnInput): Float32Array {
         if (hit.d > half && behindWall(walls, [x, y], [hit.px, hit.py])) {
           continue;
         }
-        const target = rampAt(stair, hit.s, length) - STAIR_BURN_M;
+        const target = rampAt(stair, hit.s, length) - STAIR_BURN_M - margin;
         // Under the flight the ground IS the ramp, lifted where the DGM runs
         // below it (a flight onto a structure the DGM lacks): the player
         // walks on this grid, not on the steps. Beside it, only lowered.

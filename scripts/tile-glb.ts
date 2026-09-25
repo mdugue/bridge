@@ -56,7 +56,11 @@ export interface MeshInput {
   positions: Float32Array;
   /** per-feature table; requires a `_FEATURE_ID_0` attribute */
   table?: PropertyTable;
-  /** merge vertices whose every attribute is equal (flat-shaded buildings) */
+  /** reorder vertices and triangles for the vertex cache and meshopt (the
+   *  fine terrain's TIN: nothing reads its order; the grid keeps its own) */
+  reorder?: boolean;
+  /** merge vertices whose every attribute is equal (flat-shaded buildings);
+   *  implies `reorder` */
   weld?: boolean;
 }
 
@@ -140,11 +144,15 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
       quantizeColor: 8,
     }),
   ];
+  if (input.weld || input.reorder) {
+    // Reordered for the vertex cache — and for meshopt, which compresses a
+    // cache-ordered stream far better (a TIN's gzipped glTF shrinks by about
+    // a third). A grid keeps its order: the runtime reads ground height
+    // from it.
+    transforms.unshift(reorder({ encoder: MeshoptEncoder }));
+  }
   if (input.weld) {
-    // Merged and reordered for the vertex cache — and for meshopt, which
-    // compresses a cache-ordered stream far better. (Terrain keeps its grid
-    // order: the runtime reads ground height from it.)
-    transforms.unshift(weld(), reorder({ encoder: MeshoptEncoder }));
+    transforms.unshift(weld());
   }
   await doc.transform(...transforms);
   const glb = await (await io()).writeBinary(doc);

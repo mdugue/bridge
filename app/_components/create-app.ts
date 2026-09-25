@@ -83,6 +83,7 @@ export type LayerName =
   | "city"
   | "furniture"
   | "lamps"
+  | "lowVegetation"
   | "monuments"
   | "rail"
   | "stairs"
@@ -741,6 +742,7 @@ async function bootApp(
           terrains.flatMap((t) => [t.water?.mesh, t.water?.mistMesh])
         ),
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
+        lowVegetation: census(dressings.map((d) => d.lowVegetation)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
         monuments: census(dressings.map((d) => d.monuments?.group)),
         furniture: census(dressings.map((d) => d.furniture)),
@@ -918,19 +920,27 @@ async function bootApp(
 
   const timer = new Timer();
   // Pick every vegetation chunk's crown tier (rich / mid / far) over all
-  // loaded tiles at once — the rich crowns share one site-wide budget — and
-  // advance the wind sway (same clock as the water ripple). A tier change
-  // changes what casts shadows, so it invalidates the map.
+  // loaded tiles at once — the rich crowns share one site-wide budget —,
+  // swap the cadastre's own silhouettes by distance, and advance the wind
+  // sway (same clock as the water ripple). A tier change changes what casts
+  // shadows, so it invalidates the map.
   const vegetationControls: VegetationControl[] = [];
   const stepVegetation = (elapsed: number) => {
     vegetationControls.length = 0;
+    let lodChanged = false;
     for (const d of stream.dressings) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
         d.vegetation.setTime(elapsed);
+        if (d.vegetation.updateLod(camera.position)) {
+          lodChanged = true;
+        }
       }
     }
     if (updateVegetationLod(vegetationControls, camera.position)) {
+      lodChanged = true;
+    }
+    if (lodChanged) {
       invalidateShadows();
     }
   };
