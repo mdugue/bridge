@@ -172,9 +172,12 @@ reviews after phases 1–3 and at the end.
   shots from every viewpoint): Leipzig (4 tiles), Meißen (1), Grimma (2)
   from GeoSN; Unna (2) from Geobasis NRW; München (4) from LDBV; Hamburg
   (4) from LGV with OSM land cover. Sizes of `data/<site>/`: 18–76 MB.
-  Geofabrik was unreachable there, so Leipzig's, Hamburg's and München's
-  OSM layers were baked from BBBike city extracts (local only, nothing
-  committed); Meißen, Grimma and Unna have no lamps/walls yet.
+  Geofabrik was unreachable there, so the OSM layers were baked from
+  stand-in extracts (BBBike's Leipzig and Dresden city extracts,
+  openstreetmap.fr's Arnsberg region for Unna; local only, nothing
+  committed). After main's stairs landed (ADR 0028/0029) every fetched
+  site got its stairs and terraces too: Leipzig 203 flights, Meißen 101,
+  Grimma 15, Unna 79, Hamburg 25, München 375.
 - **Berlin is configured but not fetched:** `gdi.berlin.de` failed TLS
   from the container; the adapter follows the ATOM feeds' documented URLs.
   The block is 3×2 so that both the Brandenburger Tor and the Fernsehturm
