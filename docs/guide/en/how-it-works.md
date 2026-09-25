@@ -51,7 +51,8 @@ and each is a mix of measured fact and deliberate simplification.
 | Layer | What it shows | Where it comes from | Real or stylised? |
 |---|---|---|---|
 | **Ground** | The shape of the terrain: river banks, the slope up to the Neustadt, embankments | The official 1 m terrain model (**DGM1**) | Real heights, on a grid of about 2 m near you and 4 m further away. Vertical walls and stairs are smoothed into ramps by the source, so the project sharpens them again where OpenStreetMap knows a wall, a cliff edge or a flight of steps |
-| **Ground colours** | Roads grey, paths sand, meadows sage, forest moss, built-up areas pale clay, water blue | The official land-use map (**Basis-DLM**) | Real classification; the colours are a designed pastel palette, painted in your browser, not photographs |
+| **Ground colours** | Roads grey, paths sand, meadows sage, forest moss, built-up areas pale clay, water blue | The official land-use map (**Basis-DLM**), squares refined from **OpenStreetMap** | Real classification; the colours are a designed pastel palette, painted in your browser, not photographs |
+| **Kerbs and paving** | A kerb line where the road meets the pavement; asphalt, paving slabs, cobbles or gravel underfoot; painted parking bays along streets and in car parks; green courtyards | Road edges from the **Basis-DLM**, the material and the parking from **OpenStreetMap** (`surface`, `parking`), the green from the infrared aerial photo (**NDVI**) | The kerb stone (a low 12 cm step, casting its shadow) follows the surveyed road width; the material is what volunteers mapped (about two thirds of the streets), the rest shows asphalt or slabs by default; the patterns themselves are drawn, not photographed, and the pavement behind the kerb stays at road level |
 | **Water** | The Elbe and smaller water bodies, with a gently moving surface and drifting mist | Basis-DLM water areas, laid on the real terrain | Real outline, invented ripples |
 | **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 16,000 buildings and building parts in the four tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
 | **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
@@ -105,15 +106,16 @@ bridge positions and deck heights, tree positions and heights, roof colours,
 meadow greenness.
 
 **Contributed by volunteers (OpenStreetMap):** street lamps, benches and
-other street furniture, station platforms, retaining walls with their heights, the structural type of
-bridges. Completeness varies from street to street.
+other street furniture, playgrounds, station platforms, retaining walls
+with their heights, the structural type of bridges, what streets and
+pavements are paved with. Completeness varies from street to street.
 
 **Computed:** the sun position, all shadows, fog and haze, the depth of
 field, the slow motion of leaves and water.
 
 **Invented for the look:** the pastel palette, the paper grain and vignette,
 the shape of tree crowns, the wall tint per building, the ripples on the
-water, the warm windows at dusk (the *presence* of a shop or public building
+water, the stones and slabs of the paving patterns, the warm windows at dusk (the *presence* of a shop or public building
 is real; its lit windows are not).
 
 **Not in the data at all:** windows and doors, facade materials, the

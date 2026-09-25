@@ -436,3 +436,198 @@ def test_playground_equipment_is_only_what_is_mapped():
     square = shapely.Polygon([(0, 0), (3, 0), (3, 3), (0, 3)])
     assert _equipment_piece(square, "sandpit")[0].geom_type == "Polygon"
     assert _equipment_piece(shapely.Point(1, 1), "swing")[0].geom_type == "Point"
+
+
+def test_surface_values_map_to_the_paving_ids():
+    from bake.surface import surface_id
+
+    assert surface_id("asphalt") == 1
+    assert surface_id("sett;asphalt") == 4
+    assert surface_id("Paving_Stones") == 3
+    assert surface_id("grass_paver") == 6
+    assert surface_id("metal") == 0
+    assert surface_id(None) == 0
+
+
+def test_widths_parse_metres_and_reject_nonsense():
+    from bake.surface import parse_width
+
+    assert parse_width("5") == 5.0
+    assert parse_width("5,5 m") == 5.5
+    assert parse_width("narrow") is None
+    assert parse_width("0") is None
+
+
+def test_a_sidewalk_band_lies_on_the_tagged_side_only():
+    from bake.surface import SIDEWALK_BAND, sidewalk_bands
+
+    east = shapely.LineString([(0, 0), (100, 0)])  # left = north
+    bands = sidewalk_bands(east, 4.0, '"sidewalk:left:surface"=>"paving_stones"')
+    assert [sid for _, sid in bands] == [3]
+    band = bands[0][0]
+    assert band.bounds[1] >= 4.0 - 1e-6
+    assert band.bounds[3] <= 4.0 + SIDEWALK_BAND + 1e-6
+    both = sidewalk_bands(east, 4.0, '"sidewalk:both:surface"=>"sett"')
+    assert sorted(sid for _, sid in both) == [4, 4]
+
+
+def test_the_major_road_wins_a_junction_and_walks_pack_above_roads(tmp_path):
+    from bake.common import Tile
+    from bake.surface import burn, classify_lines, pack
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    ns = shapely.LineString([(32, 0), (32, 64)])
+    ew = shapely.LineString([(0, 32), (64, 32)])
+    foot = shapely.LineString([(0, 10), (64, 10)])
+    roads, walks = classify_lines(
+        [ew, ns, foot],
+        ["primary", "residential", "footway"],
+        ['"surface"=>"asphalt"', '"surface"=>"sett"', '"surface"=>"paving_stones"'],
+    )
+    road = burn(roads, tile, 64)
+    assert road[31, 32] == 1  # the crossing: the primary's asphalt
+    assert road[5, 32] == 4  # the residential street's sett away from it
+    walk = burn(walks, tile, 64)
+    assert walk[64 - 10, 5] == 3
+    packed = pack(road, walk)
+    assert packed[64 - 10, 32] == 3 * 8 + 4
+
+
+def test_a_street_frame_carries_its_bearing_and_the_distance_along_it(tmp_path):
+    from bake.common import Tile
+    from bake.surface import ALONG_PERIOD, direction_frames, heading_code
+
+    assert list(heading_code(np.radians([0.0, 90.0, 180.0, 359.9]))) == [1, 65, 128, 1]
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    # An L-shaped street: 40 m east, then north; a footway crossing it.
+    road = shapely.LineString([(0, 32), (40, 32), (40, 64)])
+    crossing = shapely.LineString([(20, 0), (20, 64)])
+    heading, along = direction_frames(
+        [road, crossing], ["residential", "footway"], [None, None]
+    ).rasterise(tile, 64)
+
+    def metres(row, col):
+        # What the shader does: the offset plus the texel centre (from the
+        # tile's north-west corner) projected on the decoded bearing.
+        b = (heading[row, col] - 1) / 254.0 * 2.0 * np.pi
+        x, y = col + 0.5, -(row + 0.5)
+        offset = along[row, col] / 65536.0 * ALONG_PERIOD
+        return (offset + x * np.cos(b) + y * np.sin(b)) % ALONG_PERIOD
+
+    assert heading[31, 10] == 1  # east
+    assert heading[31, 20] == 1  # a crossing footway does not turn it
+    assert heading[5, 20] == 65  # the footway, north
+    assert abs(metres(31, 10) - 10.5) < 0.01  # the texel centre, 10.5 m along
+    # Round the bend: the northbound leg starts 40 m along the street.
+    assert abs(metres(64 - 51, 40) - (40 + 18.5)) < 1.0
+    assert heading[5, 50] == 0  # nothing mapped
+
+
+def test_street_parking_marks_the_tagged_side_and_its_orientation():
+    from bake.surface import street_parking
+
+    east = shapely.LineString([(0, 0), (100, 0)])  # left = north
+    tags = (
+        '"parking:left"=>"lane","parking:right:orientation"=>"perpendicular",'
+        '"parking:right"=>"street_side"'
+    )
+    lanes = street_parking(east, 4.0, tags)
+    assert sorted(code for _, code in lanes) == [1, 2]
+    left = next(g for g, code in lanes if code == 1)
+    assert left.bounds[1] >= -1e-6  # north of the axis
+    assert street_parking(east, 4.0, '"parking:both"=>"no"') == []
+
+
+def test_car_parks_are_lots_on_the_ground_with_their_aisles_cleared(tmp_path):
+    from bake.common import Tile
+    from bake.surface import burn, is_car_park, pack, parking_shapes
+
+    assert is_car_park("parking", '"parking"=>"surface"')
+    assert is_car_park("parking_space", None)
+    assert not is_car_park("parking", '"parking"=>"underground"')
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    lot = shapely.box(10, 10, 50, 50)
+    aisle = shapely.LineString([(10, 30), (50, 30)])
+    park = burn(
+        parking_shapes(
+            [aisle], ["service"], ['"service"=>"parking_aisle"'], [lot], ["parking"], [None]
+        ),
+        tile,
+        64,
+    )
+    packed = pack(np.zeros_like(park), np.zeros_like(park), park)
+    assert packed[64 - 20, 30] >> 6 == 3  # a bay row
+    assert packed[64 - 30, 30] >> 6 == 0  # the aisle
+    assert packed[5, 5] == 0
+
+
+def test_the_raster_interleaves_its_two_bytes_per_texel():
+    from bake.surface import interleave
+
+    r = np.array([[1, 2], [3, 4]], dtype=np.uint8)
+    g = np.array([[9, 8], [7, 6]], dtype=np.uint8)
+    assert interleave(r, g).tolist() == [[1, 9, 2, 8], [3, 7, 4, 6]]
+
+
+def test_a_lot_without_an_aisle_runs_along_its_long_side():
+    from bake.surface import heading_code, lot_frames
+
+    frames = lot_frames([shapely.box(0, 0, 10, 40)], ["parking"], [None])
+    assert heading_code(np.asarray(frames.bearing)).tolist() in ([65], [192])  # north-south
+    assert frames.anchor == [(5.0, 20.0)]
+
+
+def test_edge_distances_are_signed_and_smooth_across_a_diagonal():
+    from bake.edges import distance_px, edge_field, signed_distance_px
+
+    mask = np.zeros((9, 9), dtype=bool)
+    mask[4, 4] = True
+    d = distance_px(mask, 6)
+    assert d[4, 4] == 0 and d[4, 5] == 1 and d[4, 8] == 4
+    sd = signed_distance_px(np.arange(8)[None, :].repeat(8, 0) < 4, 6)
+    assert sd[0, 3] == 0.5 and sd[0, 4] == -0.5  # the edge between cols 3 and 4
+    # A diagonal road edge: the smoothed field's 0-isoline runs straight.
+    n = 64
+    rows, cols = np.mgrid[0:n, 0:n]
+    cls = np.where(cols > rows, 7, 4).astype(np.uint8)
+    field = edge_field(cls, 7, 1.0, n)
+    diag = field[np.arange(8, 56), np.arange(8, 56)]
+    assert np.all(np.abs(diag) < 0.6)
+
+
+def test_kerb_lines_follow_the_road_edge_with_the_road_on_their_left(tmp_path):
+    from bake.common import Tile
+    from bake.edges import edge_field, kerb_lines
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    cls = np.full((64, 64), 4, dtype=np.uint8)
+    cls[20:30, :] = 7  # an east-west road, rows 20–29 (y 34–44 m)
+    lines = kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)
+    assert len(lines) == 2
+    for line in lines:
+        xy = np.asarray(line.coords)
+        d = xy[-1] - xy[0]
+        left = xy[len(xy) // 2] + np.array([-d[1], d[0]]) / np.hypot(*d)
+        assert 34.0 < left[1] < 44.0  # the road is on the left
+    # Water beside the road: no kerb on that side.
+    cls[30:, :] = 8
+    assert len(kerb_lines(tile, edge_field(cls, 7, 1.0, 64), cls)) == 1
+
+
+def test_osm_islands_carve_only_road_texels_lawn_over_walk(tmp_path, monkeypatch):
+    from bake import landcover
+    from bake.common import Tile
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    raster = np.full((64, 64), 7, dtype=np.uint8)
+    raster[:, :8] = 4  # a pavement strip the square's areas overlap
+    square = shapely.box(0, 16, 48, 48)  # a pedestrian area
+    lawn = shapely.box(24, 24, 40, 40)  # a lawn inside it
+    monkeypatch.setattr(landcover, "osm_islands", lambda _: [(4, [square]), (1, [lawn])])
+    changed = landcover.carve_islands(raster, tile)
+    assert raster[64 - 32, 32] == 1  # the lawn wins inside the square
+    assert raster[64 - 20, 16] == 4  # the square, off the lawn
+    assert raster[64 - 5, 32] == 7  # outside both: still road
+    assert raster[64 - 32, 4] == 4  # was built-up, untouched
+    assert changed == np.count_nonzero(raster[:, 8:] != 7)
+    assert landcover.carve_islands(raster, tile) == 0  # idempotent

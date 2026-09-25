@@ -150,6 +150,13 @@ export interface WallFeature {
   properties: { h: number; kind: string } | null;
 }
 
+/** The kerb lines (pipeline/bake/edges.py, from the Basis-DLM road class):
+ *  the smoothed carriageway edge, the road on each line's left. */
+export interface KerbFeature {
+  geometry: LineGeometry;
+  properties: Record<string, never> | null;
+}
+
 /** OSM `highway=steps` flights (pipeline/bake/stairs.py, ODbL): the axis runs
  *  bottom → top; width (m), step count and the two landing heights (m). */
 export interface StairFeature {

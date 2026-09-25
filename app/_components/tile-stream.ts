@@ -36,7 +36,12 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { buildRail } from "./rail-layer";
-import { dressTerrain, type TerrainLayer } from "./terrain-layer";
+import {
+  dressTerrain,
+  type GroundUniforms,
+  type TerrainLayer,
+} from "./terrain-layer";
+import { dressKerbs } from "./kerb-layer";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import {
@@ -77,7 +82,8 @@ export interface TileStreamContext {
   heightFog: HeightFogUniforms;
   /** ground height over every loaded terrain (projected coordinates) */
   heightAt: (x: number, y: number) => number | null;
-  meadowNdvi: { value: number };
+  /** the ground's look strengths (by reference) */
+  ground: GroundUniforms;
   /** the current night factor, for lamps that land later */
   night: () => number;
   offset: { cx: number; cy: number };
@@ -406,13 +412,14 @@ class DressingPlugin {
       fileUrl: this.url,
       heightFog: this.ctx.heightFog,
       lowRasters: this.ctx.lowRasters,
-      meadowNdvi: this.ctx.meadowNdvi,
+      ground: this.ctx.ground,
       offset: this.ctx.offset,
       renderer: this.ctx.renderer,
       sunDirection: this.ctx.sunDirection,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
-    // The fine level's baked stairs and walls: only their materials here.
+    // The fine level's baked stairs, walls and kerbs: only their materials
+    // here.
     const stairs = meshNamed(scene, "stairs");
     if (stairs) {
       dressStairs(stairs, this.ctx.heightFog);
@@ -422,6 +429,11 @@ class DressingPlugin {
     if (walls) {
       dressWalls(walls, this.ctx.heightFog);
       terrain.walls = walls;
+    }
+    const kerbs = meshNamed(scene, "kerbs");
+    if (kerbs) {
+      dressKerbs(kerbs, this.ctx.heightFog);
+      terrain.kerbs = kerbs;
     }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });

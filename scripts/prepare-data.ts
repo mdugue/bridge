@@ -38,10 +38,12 @@ import { gzipSync } from "node:zlib";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
 import type {
+  KerbFeature,
   StairFeature,
   TerraceFeature,
   WallFeature,
 } from "../lib/city/features";
+import type { Point2 } from "../lib/city/polyline";
 import { tileExtentOf } from "../lib/city/site";
 import {
   type StairLine,
@@ -59,6 +61,7 @@ import {
   cityMeshSourceFiles,
   type DataManifest,
   dgmSourceFiles,
+  kerbSourceFile,
   MANIFEST_FILE,
   stairSourceFile,
   terraceSourceFile,
@@ -83,6 +86,7 @@ import { currentSite } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
 import {
   cityMesh,
+  kerbMesh,
   readDgm,
   stairMesh,
   type TerrainMesh,
@@ -158,6 +162,7 @@ const BAKE_SOURCES = [
   "lib/city/terrain-conflate.ts",
   "lib/city/stairs.ts",
   "lib/city/walls.ts",
+  "lib/city/kerbs.ts",
   "lib/city/polyline.ts",
   "lib/city/ground-clamp.ts",
   "lib/city/tileset.ts",
@@ -307,6 +312,19 @@ async function bakeCity(
   return { file: publish(name, glb), footprints, maxZ };
 }
 
+/** The tile's kerb lines (the smoothed DLM road edge), for the kerb stones
+ *  the fine level carries. */
+function kerbLines(tile: string): Point2[][] {
+  const path = at(kerbSourceFile(tile));
+  if (!existsSync(path)) {
+    return [];
+  }
+  const { features } = readJson<{ features: KerbFeature[] }>(path);
+  return features.flatMap((f) =>
+    f.geometry?.type === "LineString" ? [f.geometry.coordinates] : []
+  );
+}
+
 /** The tile's OSM walls: the lines the terrain conflation burns in, and the
  *  ribbons the fine level carries. */
 function wallLines(tile: string): (WallLine & WallRibbon)[] {
@@ -373,6 +391,7 @@ function terrainInputs(tile: string): string[] {
     at(wallSourceFile(tile)),
     at(stairSourceFile(tile)),
     at(terraceSourceFile(tile)),
+    at(kerbSourceFile(tile)),
   ];
 }
 
@@ -427,15 +446,17 @@ async function siteGround(): Promise<(x: number, y: number) => number | null> {
   };
 }
 
-/** The fine level's own nodes beside the grid: the stairs it owns and its
- *  walls, standing on every tile's shaped ground. */
+/** The fine level's own nodes beside the grid: the stairs it owns, its
+ *  walls and its kerb stones, standing on every tile's shaped ground. */
 async function fineChildren(
   tile: string,
   bounds: TerrainExtras["bounds"]
 ): Promise<NonNullable<Parameters<typeof writeMeshGlb>[0]["children"]>> {
   const stairs = stairMesh(stairLines(tile), offset, bounds);
-  const walls = wallMesh(wallLines(tile), await siteGround(), offset);
-  return [stairs, walls].filter((m) => m !== null);
+  const ground = await siteGround();
+  const walls = wallMesh(wallLines(tile), ground, offset);
+  const kerbs = kerbMesh(kerbLines(tile), ground, offset);
+  return [stairs, walls, kerbs].filter((m) => m !== null);
 }
 
 /** A tile's terrain at one level: glTF + its extent and elevation range. */
@@ -461,6 +482,8 @@ async function bakeTerrain(
     landcover: (level === 0 ? names.landcover : names.landcoverLow) ?? "",
     landcoverLow: names.landcoverLow ?? "",
     ...(names.ndvi ? { ndvi: names.ndvi } : {}),
+    ...(level === 0 && names.surface ? { surface: names.surface } : {}),
+    ...(level === 0 && names.edges ? { edges: names.edges } : {}),
     ...(level === 0 ? { dressing: dressingOf(names) } : {}),
   };
   const key = cacheKey(inputs, offset, described);
