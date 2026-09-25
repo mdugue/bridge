@@ -21,6 +21,13 @@ and (plan 024 phase 3) the stop signs.
   (m, along the drawn line) where a span or arm holds its contact wire, so
   the runtime sags the wire between them.
 
+- **Stops** (phase 3): a `railway=tram_stop` node sits on the track (the
+  stop position), so its "H" sign stands on the nearest OSM platform
+  (`public_transport=platform` or `railway=platform`, ≤ 25 m) at the point
+  nearest the stop, facing the track — not where a shelter or a bus stop's
+  sign already stands (the tile's committed furniture, ≤ 8 m), one per
+  8 m. A stop without a mapped platform gets no sign: nothing is invented.
+
 Everything is decided on the tracks and masts within 30 m around the tile,
 so a support on a seam is the same in both tiles; a span or arm is written
 by the tile that owns its midpoint (a mast: its point).
@@ -28,6 +35,7 @@ by the tile that owns its midpoint (a mast: its point).
 
 from __future__ import annotations
 
+import json
 import math
 from collections import defaultdict
 
@@ -55,6 +63,13 @@ ROSETTE_EVERY_M = 30.0
 FACADE_MAX_M = 15.0
 ROSETTE_DEDUP_M = 12.0
 MAST_WHERE = 'other_tags LIKE \'%"power"=>"catenary_mast"%\''
+STOP_WHERE = 'other_tags LIKE \'%"railway"=>"tram_stop"%\''
+PLATFORM_WHERE = (
+    'other_tags LIKE \'%"public_transport"=>"platform"%\' '
+    'OR other_tags LIKE \'%"railway"=>"platform"%\''
+)
+PLATFORM_M = 25.0  # a stop's sign stands on a platform at most this far away
+SIGN_DEDUP_M = 8.0  # one sign per stop: none near a shelter or another sign
 
 
 class Beds:
@@ -354,6 +369,80 @@ def supports(
     return out, spans + walls + arms
 
 
+def platforms(tile: Tile) -> list[shapely.Geometry]:
+    """The OSM platforms around the tile (points, lines, areas)."""
+    out = []
+    for layer in ("points", "lines", "multipolygons"):
+        cols = ["other_tags"] if layer == "multipolygons" else ["railway", "other_tags"]
+        where = PLATFORM_WHERE
+        if layer == "lines":
+            where = f"railway = 'platform' OR {PLATFORM_WHERE}"
+        geoms, _ = read_osm(tile, layer, where, cols)
+        out += [g for g in geoms if not g.is_empty]
+    return out
+
+
+def nearest_on(p: shapely.Point, platform: shapely.Geometry) -> shapely.Point:
+    """The point of a platform nearest p — on an area's edge, where the
+    track runs."""
+    if platform.geom_type in ("Polygon", "MultiPolygon"):
+        platform = platform.boundary
+    return shapely.get_point(shapely.shortest_line(p, platform), 1)
+
+
+def taken(tile: Tile) -> list[shapely.Point]:
+    """Where the tile's committed furniture already stands a shelter or a
+    stop sign."""
+    path = tile.data / "dlm" / f"furniture_{tile.id}.geojson"
+    if not path.exists():
+        return []
+    return [
+        shapely.Point(f["geometry"]["coordinates"])
+        for f in json.loads(path.read_text())["features"]
+        if f["properties"].get("k") in ("shelter", "stop")
+    ]
+
+
+def stop_signs(tile: Tile, lines: list[tuple[shapely.LineString, dict]]) -> tuple[list[dict], int]:
+    """The "H" signs of the tram stops the tile owns, and how many stops
+    had no platform to stand one on."""
+    geoms, fields = read_osm(tile, "points", STOP_WHERE, ["name", "other_tags"])
+    plats = platforms(tile)
+    plat_tree = shapely.STRtree(plats) if plats else None
+    track_tree = shapely.STRtree([line for line, _ in lines])
+    track_lines = [line for line, _ in lines]
+    busy = taken(tile)
+    out, bare = [], 0
+    names = column(fields, "name", geoms)
+    for g, name, other in zip(geoms, names, column(fields, "other_tags", geoms), strict=True):
+        if g.geom_type != "Point" or tag(other, "railway") != "tram_stop":
+            continue
+        hit = plat_tree.query_nearest(g, max_distance=PLATFORM_M) if plat_tree is not None else []
+        if len(hit) == 0:
+            if owns(tile.bounds, g.x, g.y):
+                bare += 1
+            continue
+        at = nearest_on(g, plats[hit[0]])
+        if not owns(tile.bounds, at.x, at.y):
+            continue
+        if any(at.distance(p) < SIGN_DEDUP_M for p in busy):
+            continue
+        track = track_tree.query_nearest(at)
+        props: dict = {"k": "stop"}
+        if len(track):
+            q = shapely.get_point(shapely.shortest_line(at, track_lines[track[0]]), 1)
+            if at.distance(q) > 0.1:
+                props["a"] = round(math.degrees(math.atan2(q.x - at.x, q.y - at.y))) % 360
+
+        if name:
+            props["name"] = name
+        busy.append(at)
+        out.append(
+            feature({"type": "Point", "coordinates": [round(at.x, 2), round(at.y, 2)]}, props)
+        )
+    return out, bare
+
+
 def run(tile: Tile) -> None:
     if not has_extract(tile, "the trams"):
         return
@@ -371,7 +460,8 @@ def run(tile: Tile) -> None:
         return
     mast_points = masts(tile, area, shapely.STRtree([line for line, _ in lines]))
     support_features, support_lines = supports(tile, lines, mast_points, Facades(tile))
-    features = track_features(tile, lines, support_lines) + support_features
+    signs, bare = stop_signs(tile, lines)
+    features = track_features(tile, lines, support_lines) + support_features + signs
     write_geojson(tile.out("dlm", f"tram_{tile.id}.geojson"), features, tile.epsg, OSM_ATTRIBUTION)
     counts: dict[str, int] = defaultdict(int)
     km: dict[str, float] = defaultdict(float)
@@ -381,4 +471,7 @@ def run(tile: Tile) -> None:
         if p["k"] == "track":
             km[p["bed"]] += shapely.LineString(f["geometry"]["coordinates"]).length / 1000
     beds_km = {k: round(v, 2) for k, v in sorted(km.items())}
-    print(f"{tile.id}: trams {dict(sorted(counts.items()))}, track km by bed {beds_km}")
+    print(
+        f"{tile.id}: trams {dict(sorted(counts.items()))}, track km by bed {beds_km}, "
+        f"{bare} stops without a platform"
+    )

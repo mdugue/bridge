@@ -1,5 +1,5 @@
 import numpy as np
-from synthetic import local, osm_tile, read, tags, way
+from synthetic import X0, Y0, local, osm_tile, read, tags, way
 
 TRAM = {"railway": "tram", "gauge": "1450", "electrified": "contact_line"}
 MAST = tags(power="catenary_mast")
@@ -125,3 +125,41 @@ def test_bridge_and_layer_tags_are_read():
     assert bridge_of(None) == 0
     assert layer_of('"layer"=>"-1"') == -1
     assert layer_of('"layer"=>"x"') == 0
+
+
+def test_a_tram_stop_signs_its_platform_unless_a_shelter_stands_there(tmp_path, monkeypatch):
+    import json
+
+    from bake import tram
+
+    cls = np.zeros((200, 200), np.uint8)
+    cls[90:111, :] = 7
+    stop = tags(railway="tram_stop", name="Albertplatz")
+    nodes = {
+        1: (0, 100, ""),
+        2: (200, 100, ""),
+        3: (40, 100, stop),  # on the track, a platform 4 m south
+        4: (30, 96, ""),
+        5: (50, 96, ""),
+        6: (120, 100, stop),  # a shelter stands on its platform
+        7: (110, 96, ""),
+        8: (130, 96, ""),
+        9: (170, 100, stop),  # no platform
+    }
+    ways = [
+        way(1, [1, 3, 6, 9, 2], TRAM),
+        way(2, [4, 5], {"public_transport": "platform", "tram": "yes"}),
+        way(3, [7, 8], {"public_transport": "platform", "tram": "yes"}),
+    ]
+    tile = osm_tile(tmp_path, monkeypatch, nodes, "".join(ways), classes=cls)
+    shelter = {
+        "type": "Feature",
+        "properties": {"k": "shelter", "a": 0},
+        "geometry": {"type": "Point", "coordinates": [X0 + 121, Y0 + 95]},
+    }
+    furniture = {"type": "FeatureCollection", "features": [shelter]}
+    (tile.data / "dlm" / "furniture_t.geojson").write_text(json.dumps(furniture))
+    tram.run(tile)
+    [sign] = _by_kind(read(tile, "tram"), "stop")
+    assert local(sign["geometry"]["coordinates"]) == (40.0, 96.0)
+    assert sign["properties"] == {"k": "stop", "a": 0, "name": "Albertplatz"}

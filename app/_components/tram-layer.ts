@@ -12,7 +12,12 @@ import {
   Vector4,
   type WebGLRenderer,
 } from "three";
-import type { BridgeFeature, TramBed, TramFeature } from "@/lib/city/features";
+import type {
+  BridgeFeature,
+  FurnitureFeature,
+  TramBed,
+  TramFeature,
+} from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { LANDCOVER_CLASSES, MEADOW_CLASS } from "@/lib/city/landcover";
 import type { Point2 } from "@/lib/city/polyline";
@@ -29,6 +34,7 @@ import {
   wireDrop,
   wireStations,
 } from "@/lib/city/tram";
+import { buildFurniture } from "./furniture-layer";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import {
   addRail,
@@ -62,6 +68,8 @@ import {
  *   break into crawling dashes. Wires never cast (the shadow map stays as
  *   it was); only the masts do.
  * - Masts: a steel pole each, instanced.
+ * - Stops: the bus stop's "H" sign (furniture-layer.ts, plan 030) on the
+ *   platform of each tram stop the bake found one for.
  *
  * Built per fine terrain tile in the Y-up frame on the cross-tile ground
  * (tracks and spans reach past the tile edge); freed with the tile.
@@ -567,8 +575,29 @@ function buildTracks(
   return meshes;
 }
 
-/** One tile's trams: tracks, masts and the overhead line. Empty input
- *  yields an empty group; freed with the tile (disposeObject3D). */
+/** The tram stops' signs: the furniture layer's stop model and instancing. */
+function buildStops(stops: TramFeature[], ctx: TramContext): Group | null {
+  const signs: FurnitureFeature[] = stops.flatMap((f) =>
+    f.geometry.type === "Point"
+      ? [
+          {
+            geometry: f.geometry,
+            properties: { k: "stop", a: f.properties?.a },
+          },
+        ]
+      : []
+  );
+  if (signs.length === 0) {
+    return null;
+  }
+  const group = buildFurniture(signs, ctx);
+  group.name = "tram-stops";
+  return group;
+}
+
+/** One tile's trams: tracks, masts, the overhead line and the stop signs.
+ *  Empty input yields an empty group; freed with the tile
+ *  (disposeObject3D). */
 export function buildTram(
   features: TramFeature[],
   bridges: BridgeFeature[],
@@ -584,7 +613,7 @@ export function buildTram(
   const decks = buildDeckTable(bridges, ctx.offset);
   const w = wires();
   const held: WirePoint[] = [];
-  const parts: (Mesh | InstancedMesh | null)[] = buildTracks(
+  const parts: (Group | Mesh | InstancedMesh | null)[] = buildTracks(
     tracks,
     decks,
     ctx,
@@ -604,7 +633,8 @@ export function buildTram(
       ),
       ctx
     ),
-    wireMesh(w, ctx.heightFog)
+    wireMesh(w, ctx.heightFog),
+    buildStops(byKind("stop"), ctx)
   );
   for (const part of parts) {
     if (part) {

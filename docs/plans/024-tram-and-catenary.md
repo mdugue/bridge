@@ -18,8 +18,9 @@
 - **Effort**: M (bake S, tracks M, overhead line M, stops S)
 - **Risk**: MED — thin wires alias; bridge decks need road-deck heights
 - **Planned at**: 2026-09-25
-- **Status**: IN PROGRESS — phases 1–2 built 2026-09-25 (bake, publish,
-  tracks, bridges, contact wire, masts, span/arm/rosette wires). Built
+- **Status**: DONE — phases 1–2 built 2026-09-25 (bake, publish,
+  tracks, bridges, contact wire, masts, span/arm/rosette wires), phase 3
+  (stop signs) the same day after plan 030. Built
   without a real GPU: every plate below is still to be taken; the look
   and the wire aliasing are unverified (SwiftShader proves only that it
   compiles and boots clean).
@@ -50,6 +51,12 @@
   cast (the shadow STOP can only be measured on a GPU).
 - Spawn tile (lite census): 7 meshes, 16 mast instances, ≈ 180 k
   triangles (rails and grooves sampled every 2 m to follow the TIN).
+- **Stops (phase 3)**: 144 of the 164 `railway=tram_stop` nodes lie on the
+  track (stop positions), so the sign cannot stand at the node: it stands
+  on the nearest mapped platform (≤ 25 m) facing the track, 107 signs over
+  the four tiles; stops within 8 m of a shelter or a bus stop's sign (plan
+  030's furniture file, which the step reads) or of another tram sign get
+  none, and the 4 stops without a mapped platform get none.
 
 ## Why this matters
 

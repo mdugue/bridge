@@ -666,7 +666,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   blend (Basis-DLM has no platform geometry); absent/empty when the site has
   no `.osm.pbf` extract.
 
-- **Trams** (plan [024](./plans/024-tram-and-catenary.md), phases 1–2) —
+- **Trams** (plan [024](./plans/024-tram-and-catenary.md)) —
   OSM `railway=tram` (ODbL; 401 ways, 59.6 km in the four tiles, every one
   `gauge=1450`, `electrified=contact_line`) + `power=catenary_mast`
   (321 points, **167 of them within 15 m of a tram track** — the rest are
@@ -706,15 +706,22 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   width is `max(true width, 0.8 px)` in the vertex shader, its alpha the
   true coverage (≥ 0.25) and a fade from 300 to 450 m — no `Line2`, no MSAA,
   no new dependency; wires never cast (`castShadow = false`). **Masts**: a
-  7.5 m steel pole, instanced, casting. Look unverified on a real GPU (the
-  plan's plates at Postplatz/Augustusbrücke, dusk and 150 m fly are open).
+  7.5 m steel pole, instanced, casting. **Stop signs** (phase 3): OSM puts
+  `railway=tram_stop` on the track (144 of 164 within 0.5 m of it), so the
+  sign stands on the nearest mapped platform (`public_transport=platform`
+  / `railway=platform`, ≤ 25 m) at its point nearest the stop, facing the
+  track — the "H" sign of plan 030 (`buildFurniture`), 107 of them; none
+  within 8 m of a shelter, a bus stop's sign or another tram sign; the 4
+  stops with no platform mapped get none. Look unverified on a real GPU
+  (the plan's plates at Postplatz/Augustusbrücke, dusk and 150 m fly are
+  open).
 
-  | tile | tracks | street km | grass km | ballast km | masts | spans | rosettes | arms |
-  |---|---|---|---|---|---|---|---|---|
-  | 33410_5656 | 95 | 20.53 | 0.76 | 4.73 | 118 | 51 | 28 | 13 |
-  | 33410_5658 | 20 | 12.17 | 0.54 | 0.25 | 33 | 13 | 36 | 6 |
-  | 33412_5656 | 51 | 11.34 | 0.98 | 1.90 | 16 | 7 | 27 | 2 |
-  | 33412_5658 | 9 | 5.66 | 0 | 1.19 | 0 | 0 | 17 | 0 |
+  | tile | tracks | street km | grass km | ballast km | masts | spans | rosettes | arms | stop signs |
+  |---|---|---|---|---|---|---|---|---|---|
+  | 33410_5656 | 95 | 20.53 | 0.76 | 4.73 | 118 | 51 | 28 | 13 | 57 |
+  | 33410_5658 | 20 | 12.17 | 0.54 | 0.25 | 33 | 13 | 36 | 6 | 16 |
+  | 33412_5656 | 51 | 11.34 | 0.98 | 1.90 | 16 | 7 | 27 | 2 | 23 |
+  | 33412_5658 | 9 | 5.66 | 0 | 1.19 | 0 | 0 | 17 | 0 | 11 |
 
 ### Retaining / city walls
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|

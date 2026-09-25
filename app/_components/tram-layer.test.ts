@@ -113,3 +113,15 @@ test("a track the OSM way puts on a bridge rides the deck, along its ramp", () =
   expect(top(on)).toBeGreaterThan(107);
   expect(top(off)).toBeCloseTo(100 + RAIL_TOP_M.street, 5);
 });
+
+test("a tram stop stands the furniture layer's stop sign", () => {
+  const stop: TramFeature = {
+    geometry: { type: "Point", coordinates: [10, 3] },
+    properties: { k: "stop", a: 180, name: "Albertplatz" },
+  };
+  const group = buildTram([track("street"), stop], [], ctx);
+  const stops = group.children.find((c) => c.name === "tram-stops");
+  const [sign] = (stops?.children ?? []) as InstancedMesh[];
+  expect(sign.name).toBe("furniture-stop");
+  expect(sign.count).toBe(1);
+});
