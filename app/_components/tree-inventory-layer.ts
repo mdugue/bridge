@@ -454,7 +454,7 @@ function crownPair(
   }
   rich.visible = false;
   const season = seasonCrowns(
-    { cheap, rich },
+    { mid: cheap, rich },
     items.map((t) => t.season),
     materials
   );
