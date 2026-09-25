@@ -29,7 +29,7 @@ import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
-import type { ViewpointGeometry } from "@/lib/city/site";
+import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import { currentSite } from "@/sites";
@@ -77,6 +77,7 @@ export type LayerName =
   | "city"
   | "lamps"
   | "rail"
+  | "stairs"
   | "terrain"
   | "vegetation"
   | "walls"
@@ -202,12 +203,14 @@ export interface CityWalkHandle {
   latLng: { lat: number; lng: number };
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
+  /** analog altitude-stick input (fly mode): +1 climbs, −1 sinks */
+  setClimbInput: (v: number) => void;
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
   setSun: (date: Date) => SunState;
   /**
-   * Lets the heavy dressing start — vegetation, lamps, rails, walls — and
+   * Lets the heavy dressing start — vegetation, lamps, rails — and
    * the terrain BVHs. Held back so its synchronous chunks cannot stutter the
    * frames the city arrives in; idempotent, and a no-op once the scene is
    * disposed.
@@ -651,9 +654,11 @@ async function bootApp(
     onModeChange: opts.onModeChange,
     onPose: opts.onPose,
   });
-  // Spawn at the recenter point (= world origin); placed again on the
-  // terrain once the spawn tile has landed (below).
-  pose.teleportTo(offset.cx, offset.cy);
+  // Spawn at the site's start vantage (on the spawn tile, so the boot's
+  // wait for that tile holds); placed again once its terrain has landed
+  // (below) — the height is above the ground, which is not there yet.
+  const spawnView = spawnViewpoint(currentSite());
+  pose.placeAt(spawnView);
 
   // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
   const tapRaycaster = new Raycaster();
@@ -703,7 +708,8 @@ async function bootApp(
         vegetation: census(dressings.map((d) => d.vegetation?.group)),
         lamps: census(dressings.map((d) => d.lamps?.group)),
         rail: census(dressings.map((d) => d.rail)),
-        walls: census(dressings.map((d) => d.walls)),
+        walls: census(terrains.map((t) => t.walls)),
+        stairs: census(terrains.map((t) => t.stairs)),
       },
     });
   };
@@ -772,6 +778,12 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
+        viewpoint: (index) => {
+          const view = currentSite().viewpoints[index];
+          if (view) {
+            pose.flyToViewpoint(view);
+          }
+        },
       }
     )
   );
@@ -974,9 +986,9 @@ async function bootApp(
   // scene (sky, sun rig, lamp light pool), under the overlay instead of in
   // the first visible frame.
   await postStack.compile(scene).catch(() => undefined);
-  // Stand on the spawn tile now that its ground exists (the pose was placed
-  // before any terrain had landed, on the fallback floor).
-  pose.teleportTo(offset.cx, offset.cy);
+  // On the spawn vantage now that its ground exists (the pose was placed
+  // before any terrain had landed, over the fallback floor).
+  pose.placeAt(spawnView);
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
@@ -988,7 +1000,7 @@ async function bootApp(
   // be dressed.
   // The two stages after the first frame measure what the cameras see:
   // the tile renderer's own load progress, and the details (vegetation,
-  // lamps, rails, walls) built per fine tile against those still queued.
+  // lamps, rails) built per fine tile against those still queued.
   // Both only ever move forward, and both end when everything in view is in.
   function reportProgress(spawnDressed: boolean): void {
     if (extras.tiles.length === 1) {
@@ -1077,6 +1089,7 @@ async function bootApp(
       hitName: lastFocusHit?.name ?? null,
     }),
     setMovementMode: pose.setMovementMode,
+    setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,
     getFootprints: (): FootprintPoly[] =>

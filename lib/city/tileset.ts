@@ -12,7 +12,7 @@
  *
  * The buildings of a tile load whenever the tile is in view; the terrain
  * refines from the coarse level to the fine one by screen-space error, and
- * only the fine level carries vegetation, lamps, rails and walls. Which tile
+ * only the fine level carries vegetation, lamps, rails, walls and stairs. Which tile
  * gets the fine level is a question of distance, not of a "primary" role.
  *
  * The tileset's frame is the site's recentered data frame (Z-up, like every
@@ -73,7 +73,6 @@ export interface DressingFiles {
   rail: string;
   railarea: string;
   vegrows: string;
-  walls: string;
 }
 
 export interface TerrainExtras {
