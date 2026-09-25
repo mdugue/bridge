@@ -4,9 +4,11 @@
 > judged on a real GPU (`bun run shots --headed`, full profile, oblique).
 > Update the status row in `docs/plans/README.md` when a phase lands.
 >
-> **Base**: `feat/tin-kataster-lowveg` reads OSM `barrier=hedge` for its
-> hedges. If it has merged, share its line reader and leave hedges to it;
-> this plan never touches hedges.
+> **Neighbours**: hedges are `pipeline/bake/lowveg.py`'s (OSM
+> `barrier=hedge`, shipped in PR #49) — this plan never touches hedges.
+> The fine terrain is a TIN with **no wall conflation**; earth-retaining
+> walls snap to the measured step instead (`lib/city/wall-snap.ts`,
+> ADR 0030). Read that ADR before touching `walls.ts`.
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- pipeline/bake/walls.py lib/city/walls.ts scripts/bake-tiles.ts scripts/prepare-data.ts`
@@ -47,13 +49,15 @@ not built at runtime.
   points **on** a wall or fence line (≤ 0.5 m) → `{kind: "gate", w}`
   (`width`, else 1.2 m; lift gates 4 m) in the same file, so the builder
   can cut the gap.
-- Fences never enter the terrain conflation (`CONFLATE_KINDS` stays as
-  it is).
+- Fences never enter the coarse level's conflation (`CONFLATE_KINDS`)
+  and never snap to a step (`RETAINING_KINDS` in `lib/city/walls.ts`
+  stays as it is): a fence stands on its OSM line.
 - Tests: a fence way, a gate on it, a gate off any line (dropped).
 
 ### Build — `lib/city/fences.ts` → `fenceMesh` in `scripts/bake-tiles.ts`
 
-- Along each fence, sampled every 2.5 m on the fine terrain surface: a
+- Along each fence, sampled every 2.5 m on the fine terrain surface (the
+  TIN, read through the same build-time `heightAt` the walls use): a
   thin post every 2.5 m (4 × 4 cm, 6 faces), a top rail, and one
   **alpha-tested double-sided panel** strip between posts whose texture
   (a tiny generated atlas: bars / mesh / pickets, 64 × 64 each) gives

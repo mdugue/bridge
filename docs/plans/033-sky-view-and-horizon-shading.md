@@ -7,9 +7,9 @@
 > row in `docs/plans/README.md` when a phase lands. Read the city-walker
 > skill's shadow section first.
 >
-> **Base**: `feat/tin-kataster-lowveg` changes the terrain to a TIN
-> (ADR 0030 there). The rasters here are sampled by data-frame position,
-> so they do not care about the mesh; rebase if it has merged.
+> **Ground**: the fine level is a TIN since PR #49 (ADR 0030), the coarse
+> one a 512² grid. The rasters here are sampled by data-frame position, so
+> they serve both levels unchanged.
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- app/_components/terrain-layer.ts app/_components/visual-style.ts app/_components/sun-rig.ts lib/city/shadow-fit.ts`
@@ -46,8 +46,10 @@ Two lighting gaps, both screen- or frustum-bound today:
 ### Bake — `pipeline/bake/skyview.py` (committed inputs only)
 
 - **Height field**: DGM1 (committed, 1 m) with the LoD2 roof surfaces
-  rasterised on top (max over triangles; the CityJSON is committed, and
-  `roof_colour.py` already reads its roof rings). No DOM1 → the bake is
+  rasterised on top (max over triangles; the CityJSON is committed;
+  `lowveg.py` `building_mask` already projects every LoD2 surface onto a
+  grid — extend that walk to burn heights, do not write a third CityJSON
+  reader). No DOM1 → the bake is
   reproducible from the repo; trees are left out on purpose (they cast
   real shadows and have their own shading).
 - Neighbour tiles are read for the margin; outside the site counts as
@@ -69,7 +71,7 @@ Two lighting gaps, both screen- or frustum-bound today:
 
 New optional rasters in `TileArtifactKind`, `TerrainExtras` (both
 levels), `DetailRasters`, `applyTerrainUniforms`, `dispose` and — easy to
-miss — the `customProgramCacheKey` has-flags (`terrain-layer.ts:608`).
+miss — the `customProgramCacheKey` has-flags (`terrain-layer.ts:613`).
 
 - SVF multiplies **indirect diffuse only**: replace the (empty, the
   terrain has no aoMap) `#include <aomap_fragment>` chunk with

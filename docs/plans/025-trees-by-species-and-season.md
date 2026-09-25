@@ -1,11 +1,11 @@
 # Plan 025: Trees by species and season
 
-> **Executor instructions**: Read fully first. **This plan builds on
-> `feat/tin-kataster-lowveg`** — the Dresden street-tree cadastre
-> (`pipeline/bake/trees.py`, `tree_archetypes.py`,
-> `lib/city/tree-inventory.ts`, `app/_components/tree-inventory-layer.ts`)
-> lives there. Do not start before that branch has merged; if it has not,
-> STOP and report. Look is judged on a real GPU (`bun run shots --headed`,
+> **Executor instructions**: Read fully first. This plan builds on the
+> street-tree cadastre shipped with PR #49 (`pipeline/bake/trees.py`,
+> `tree_archetypes.py`, `lib/city/tree-inventory.ts`,
+> `app/_components/tree-inventory-layer.ts`; ledger "Tree inventory from
+> the Dresden street-tree cadastre") and the laser-scan crowns
+> (`canopyx_<tile>`, `pipeline/bake/lowveg.py`). Look is judged on a real GPU (`bun run shots --headed`,
 > full profile). Update the status row in `docs/plans/README.md` when a
 > phase lands.
 >
@@ -18,22 +18,29 @@
 - **Effort**: M (OSM trees S, season model S, crown shader M, bare crowns M)
 - **Risk**: MED — bare crowns must not read as noise; shadows must follow
 - **Planned at**: 2026-09-25
-- **Status**: TODO (blocked on `feat/tin-kataster-lowveg`)
+- **Status**: TODO
 
 ## Why this matters
 
-The cadastre branch already places ~120 000 municipal trees with height,
-crown diameter, archetype (round, oval, columnar, conifer, weeping, small),
-leaf type and purple/golden cultivars. Two things are still missing:
+The cadastre (on by default since PR #49) places 18 444 municipal trees in
+the four tiles with height, crown diameter, archetype (round, oval,
+columnar, conifer, weeping, small), leaf type and purple/golden cultivars;
+their trunks and broadleaf crowns ride in the canopy's own chunk meshes as
+`TreeInstance`s, the three reshaped silhouettes are the inventory layer's.
+Three things are still missing:
 
 1. **Trees the city does not register.** OSM has **6 160 `natural=tree`**
    in the four tiles (BBBike extract 2026-09-19), 4 339 with `leaf_type`,
    ~370 with `genus` (Tilia 125, Castanea 124, Quercus 44, Betula 33, …)
    and some `species`. Many stand on private or Free-State land (courts,
    the Zwinger, Großer Garten edges) that the municipal register skips.
-2. **The year.** Nothing varies with the month: the scene date lives only
+2. **The genus at runtime.** `trees_<tile>.geojson` carries the archetype
+   (`a`), leaf type (`l`) and cultivar colour (`c`), but not the genus
+   (`TreeFeature`, `lib/city/features.ts:61-72`) — and phenology is per
+   genus. `tree_archetypes.parse_taxon` already extracts it in the bake.
+3. **The year.** Nothing varies with the month: the scene date lives only
    in React state (`city-walk.tsx:82-91`) and `setSun(date)`
-   (`create-app.ts:584-595`) passes on nothing but the night factor. A
+   (`create-app.ts:585-597`) passes on nothing but the night factor. A
    snapshot on 21 December shows full summer crowns. With species known,
    autumn colour and leaf fall follow from real phenology, not decoration.
 
@@ -41,10 +48,18 @@ leaf type and purple/golden cultivars. Two things are still missing:
 
 ### A. OSM trees as a complement (bake)
 
+- **Genus id**: `trees.py` writes `gn`, an index into one genus table
+  shared by the bake and `lib/city/tree-season.ts` (≈ 25 genera cover
+  almost all trees; the rest → 0, "other deciduous"); `TreeFeature` and
+  its test gain the field. `TreeInstance` (vegetation-layer) carries it so
+  the crowns in the canopy chunks get it too.
 - In `trees.py`, after the cadastre: `read_osm(tile, "points",
   "other_tags LIKE '%\"natural\"=>\"tree\"%'", ["other_tags"])`; keep a
   tree only if no cadastre tree lies within 3 m (the cadastre wins; it is
-  measured). Map `species`/`genus`/`taxon` through `tree_archetypes.py`
+  measured). Laser-scan crowns (`canopyx`) and canopy points under an OSM
+  tree go through the same `keepTree` veto the cadastre uses
+  (`lib/city/tree-inventory.ts`), so an OSM tree replaces the anonymous
+  crown it stands in rather than doubling it. Map `species`/`genus`/`taxon` through `tree_archetypes.py`
   (it already maps taxa); only `leaf_type` known → round/conifer by leaf
   type; nothing known → drop the tree (the DOM canopy fill covers
   unknown trees; do not invent a species).
@@ -75,8 +90,8 @@ leaf type and purple/golden cultivars. Two things are still missing:
 
 - `create-app.ts` `setSun(date)` stores the day of year next to
   `currentNight`; `TileStreamContext` gets `season()` like `night()`
-  (`tile-stream.ts:91`); `stream.dressings` receive `setSeason(day)`.
-- Crown material (`buildCrownMaterial`, `vegetation-layer.ts:330-472`):
+  (`tile-stream.ts:101`); `stream.dressings` receive `setSeason(day)`.
+- Crown material (`buildCrownMaterial`, `vegetation-layer.ts:433`):
   per-instance `aGenus` (u8) and the two season scalars computed on the
   CPU per instance on a date change (not per frame) into an
   `InstancedBufferAttribute`; the fragment mixes summer colour → autumn

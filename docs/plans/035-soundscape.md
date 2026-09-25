@@ -83,7 +83,7 @@ bundle stays small and nothing needs licensing.
 - **Environment sampling** at the existing 10 Hz `onPose` stream
   (`city-walk.tsx:374-381`) — never inside the render loop. The class
   raster is sampled on the CPU from the minimap-level PNGs the handle
-  already exposes (`landcoverTiles`, `create-app.ts:1136-1139`) through
+  already exposes (`landcoverTiles`, `create-app.ts:1138`) through
   `decodeGreyPng`; the paving class from the surface PNG fetched and
   decoded once per nearby tile **only while sound is on** (the viewer
   drops its own CPU copies after upload for iOS memory reasons — do not

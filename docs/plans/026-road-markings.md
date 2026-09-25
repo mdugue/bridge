@@ -6,8 +6,10 @@
 > full profile, oblique and from 150 m). Update the status row in
 > `docs/plans/README.md` when a phase lands.
 >
-> **Base**: if `feat/tin-kataster-lowveg` has merged (TIN terrain), rebase
-> first — the terrain material's patch points may have moved.
+> **Ground**: the fine level is a TIN since PR #49 (ADR 0030). The
+> markings are sampled by data-frame position (`vSplatUv`), not by mesh
+> vertex, so a few large TIN triangles on a flat road change nothing —
+> check it on a plate anyway.
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- app/_components/ground-detail.ts app/_components/terrain-layer.ts pipeline/bake/surface.py pipeline/bake/edges.py`
@@ -80,7 +82,7 @@ only in `TerrainExtras` (`lib/city/tileset.ts`), `bakeTerrain`'s
 ### Shader — `app/_components/road-markings.ts`
 
 Patched into the terrain fragment after `SPORT_GROUND`; its has-flag
-joins the `customProgramCacheKey` (`terrain-layer.ts:608`) — a new
+joins the `customProgramCacheKey` (`terrain-layer.ts:613`) — a new
 optional raster that is missing from the key recompiles into the wrong
 program.
 

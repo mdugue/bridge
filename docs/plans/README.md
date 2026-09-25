@@ -56,7 +56,7 @@ history. Decisions that came out of plans are written up as
 | 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
 | 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
 | 024 | Trams: OSM tracks (street, grass, ballast), contact wire, masts, span wires, stop signs | **TODO** | [024-tram-and-catenary.md](./024-tram-and-catenary.md) |
-| 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | **TODO** — blocked on `feat/tin-kataster-lowveg` | [025-trees-by-species-and-season.md](./025-trees-by-species-and-season.md) |
+| 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | **TODO** | [025-trees-by-species-and-season.md](./025-trees-by-species-and-season.md) |
 | 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | **TODO** | [026-road-markings.md](./026-road-markings.md) |
 | 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **TODO** | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |
 | 028 | Cultivated land: allotment colonies, orchards, vineyards | **TODO** | [028-cultivated-land.md](./028-cultivated-land.md) |
@@ -65,7 +65,7 @@ history. Decisions that came out of plans are written up as
 | 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | **TODO** | [031-elbe-riverside.md](./031-elbe-riverside.md) |
 | 032 | Street names: map lettering in fly mode, a caption on foot | **TODO** | [032-street-names.md](./032-street-names.md) |
 | 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | **TODO** | [033-sky-view-and-horizon-shading.md](./033-sky-view-and-horizon-shading.md) |
-| 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | **TODO** — blocked on `feat/tin-kataster-lowveg` and raw data | [034-dom-minus-lod2.md](./034-dom-minus-lod2.md) |
+| 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | **TODO** — needs the raw laser scan (`--ingest --lsc`) | [034-dom-minus-lod2.md](./034-dom-minus-lod2.md) |
 | 035 | A hidden, opt-in soundscape synthesised from the scene's data | **TODO** | [035-soundscape.md](./035-soundscape.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
@@ -161,8 +161,9 @@ independence:
 3. **024** trams, then **030** street furniture (shares the stop sign).
 4. **026** road markings, **029** fences and gates.
 5. **027** phases 1–3, **032** street names, **031** the Elbe.
-6. **025** and **034** after `feat/tin-kataster-lowveg` merges (they build
-   on its cadastre and laser-scan rasters); **028** reuses its hedges.
+6. **025** (on the cadastre shipped in PR #49; the genus must first reach
+   the tree data), **028** (its parcel hedges are the shipped OSM hedges),
+   **034** once the laser scan is downloaded (`lsc.py` is shipped).
 7. **035** the soundscape, last, once the data it listens to exists.
 
 ### Direction — options for the maintainer (choices, not defects)

@@ -4,10 +4,10 @@
 > judged on a real GPU (`bun run shots --headed`, full profile). Update
 > the status row in `docs/plans/README.md` when a phase lands.
 >
-> **Base**: `feat/tin-kataster-lowveg` (laser-scan hedges, low vegetation)
-> is in flight; if it has merged, reuse its `low-vegetation-layer.ts`
-> chunking and clay-block look for garden hedges instead of adding a
-> second hedge style.
+> **Hedges exist**: since PR #49 the OSM hedges (`barrier=hedge`, with
+> laser-scan height and width) are drawn by `low-vegetation-layer.ts` from
+> `lowveg_<tile>.geojson` (`pipeline/bake/lowveg.py`). Parcel hedges come
+> from there; do not add a second hedge style.
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- pipeline/bake/landcover.py app/_components/vegetation-layer.ts lib/city/landcover.ts`

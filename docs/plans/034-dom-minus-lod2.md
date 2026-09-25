@@ -6,10 +6,10 @@
 > profile). Update the status row in `docs/plans/README.md` when a phase
 > lands.
 >
-> **Base**: builds on `feat/tin-kataster-lowveg` — its `pipeline/bake/lsc.py`
-> (laser scan through laspy) writes the 0.5 m `dsm`, `dtm` and
-> **`nonground_multiecho_count`** rasters this plan uses to tell a shed
-> from a shrub. Do not start before that branch has merged.
+> **Builds on** `pipeline/bake/lsc.py` (laser scan through laspy, shipped
+> in PR #49): its 0.5 m `dsm`, `dtm` and **`nonground_multiecho_count`**
+> rasters tell a shed from a shrub; `lowveg.py` `lsc_rasters` makes them
+> on first use and `building_mask` already rasterises the LoD2.
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- pipeline/bake/lsc.py pipeline/bake/monuments.py scripts/bake-city-mesh.ts`
@@ -20,7 +20,7 @@
 - **Effort**: M (measurement S, bake M, build step S)
 - **Risk**: MED — false positives (parked vans, dense shrubs, scaffolding)
 - **Planned at**: 2026-09-25
-- **Status**: TODO (blocked on `feat/tin-kataster-lowveg` and raw data)
+- **Status**: TODO (needs the raw laser scan)
 
 ## Why this matters
 
@@ -35,15 +35,15 @@ building and is not vegetation is very likely one of them.
 
 ### Raw inputs and access
 
-- DOM1 (1 m) or, better, the branch's 0.5 m laser-scan rasters; the DGM1
-  (committed). The GeoSN share tokens for DOM1 rotated (HEAD → 401 on
-  2026-09-25; LSC → 503): fetch fresh links through the download-links
-  service `data/provenance.json` names, and record them there.
+- The laser scan: `bun run bake <tile> --ingest --lsc` (`ingest_sn.py`
+  `ingest_lsc`, ≈ 380 MB a tile) → `lsc_rasters`. On 2026-09-25 the LSC
+  share answered 503 and the DOM1 share 401 (rotated token): if the
+  ingest fails, fetch fresh links through the download-links service
+  `data/provenance.json` names, and record them there.
 
 ### Phase 0 — measure (no code shipped)
 
-For the spawn tile: rasterise the LoD2 footprints (GroundSurface rings)
-dilated by 1 m; `ndsm = dsm − dtm`; candidates = connected blobs of
+For the spawn tile: the LoD2 mask from `building_mask` dilated by 1 m; `ndsm = dsm − dtm`; candidates = connected blobs of
 `2.0 m < ndsm < 6.5 m` outside footprints, area 6–150 m², **single-echo**
 (multi-echo count ≈ 0 — vegetation returns several echoes, roofs one),
 flat top (height std < 0.35 m), compact (area / min-rect area > 0.6),
@@ -69,7 +69,7 @@ colour, triangles tagged with the new ids (`bake-city-mesh.ts`, the
 analysis in this plan's research: the weld never merges across objects,
 so picking, demolish, collision and minimap work unchanged). Add the
 GeoJSON to `cityMeshSourceFiles` and the city cache key
-(`prepare-data.ts:284`). A distinct `source` column (u8: 0 LoD2, 1 scan)
+(`prepare-data.ts:287-288`). A distinct `source` column (u8: 0 LoD2, 1 scan)
 lets the census and the knowledge base count them.
 
 ### Docs

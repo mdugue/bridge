@@ -6,9 +6,8 @@
 > Honour the STOP conditions. Update the status row in
 > `docs/plans/README.md` when a phase lands.
 >
-> **Base**: `feat/tin-kataster-lowveg` (TIN terrain, ADR 0030 there) is in
-> flight. If it has merged, work on top of it; the tram layer samples the
-> ground through `ctx.heightAt` either way.
+> **Ground**: the fine level is a TIN since PR #49 (ADR 0030); sample it
+> only through `ctx.heightAt` (it reads the TIN's triangles), never a grid.
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- pipeline/bake/rail.py app/_components/rail-layer.ts app/_components/tile-stream.ts`
@@ -69,11 +68,11 @@ streets have; they suit the ink/contour look.
 `tram` in `TileArtifactKind` + `tileArtifacts()` (`lib/city/tile.ts`),
 `TramFeature` in `lib/city/features.ts` (+ its case in `features.test.ts`),
 `tram` in `DressingFiles` (`lib/city/tileset.ts`) and `dressingOf`
-(`scripts/prepare-data.ts:370-384`). Optional artifact: missing = no trams.
+(`scripts/prepare-data.ts:373`). Optional artifact: missing = no trams.
 
 ### Runtime — `app/_components/tram-layer.ts`
 
-Built in `buildDressing` (`tile-stream.ts:273-369`) with `ctx.heightAt`,
+Built in `buildDressing` (`tile-stream.ts:336`) with `ctx.heightAt`,
 disposed in `disposeDressing`; census name `tram` (`create-app.ts:77-87`).
 
 1. **Tracks.** Two rails per way at ±`1.450/2`, reusing `addRail`'s
@@ -109,7 +108,7 @@ disposed in `disposeDressing`; census name `tram` (`create-app.ts:77-87`).
 `docs/transformations.md` (Railway & bridges: trams ✅), `docs/data-flow.md`,
 `docs/rendering.md` codebook, `docs/data-pipeline.md` step table,
 `data/provenance.json` OSM products, the credit list in
-`sites/dresden.ts:40-43`, guide `data-sources.md` OSM "Used here for" (en + de).
+`sites/dresden.ts:40-44`, guide `data-sources.md` OSM "Used here for" (en + de).
 
 ## Phases
 

@@ -47,12 +47,12 @@ building gets `glow = 0` and the housing tint (90 such parents in
    (`data/dop/roofcolor_<tile>.json`): here `data/dlm/osmbuild_<tile>.json`
    `{ objects: { <oid>: { shop: 1, heritage: 1, era: 1890 } }, attribution }`.
 2. `scripts/prepare-data.ts` `parseCity` loads it and adds it to the city
-   cache key (`:247-262`, `:284`); `cityMeshSourceFiles` in
+   cache key (`:250-262`, `:287-288`); `cityMeshSourceFiles` in
    `lib/city/tile.ts:28-36` lists it.
 3. `bakeCityMesh` row (`bake-city-mesh.ts:170-180`); `CityObjectRow` and
    the table types (`lib/city/city-mesh.ts:17-81`).
-4. The glTF property table column (`scripts/bake-tiles.ts:280-294`; types
-   limited to FLOAT32 / UINT8 / UINT32 / VEC3 FLOAT32, `tile-glb.ts:25-29`).
+4. The glTF property table column (`scripts/bake-tiles.ts` `cityMesh`; types
+   limited to FLOAT32 / UINT8 / UINT32 / VEC3 FLOAT32, `tile-glb.ts:24-29`).
 5. `readObjectTable` (`city-layer.ts:60-89`).
 6. `packObjectTexels`: band2.w is the **one free float** (`city-mesh.ts:98-115`).
    Pack the flags as bits in it (shop 1, heritage 2) — no fourth band needed.

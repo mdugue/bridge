@@ -40,8 +40,8 @@ signal poles are what make a junction read as one.
    `advertising`, `highway=traffic_signals` and `railway=tram_stop` are not
    matched yet), a branch in `kind_of` (`:99-112`), whether it gets a
    bearing `a` (`:226-230`), a test case in `test_bakes.py:370`.
-2. `FurnitureKind` in `lib/city/features.ts:59-103` + the kinds list in
-   `features.test.ts:94-111`.
+2. `FurnitureKind` in `lib/city/features.ts:107-150` + the kinds list in
+   `features.test.ts:97-119`.
 3. `FurnitureModel`, `FURNITURE_MODELS`, `MODEL_OF` in
    `lib/city/furniture.ts:11-129` + its test.
 4. A builder in `MODEL_PARTS` (`furniture-layer.ts:367-392`, the `Record`
