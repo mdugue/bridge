@@ -65,7 +65,13 @@ import {
   estimateGeometryBytes,
   trackedTextureBytes,
 } from "./three-utils";
-import { createTileStream } from "./tile-stream";
+import {
+  createTileStream,
+  DRESSING_PART_NAMES,
+  DRESSING_PARTS,
+  type DressingPartName,
+  type TileDressing,
+} from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
 import {
   treesWithin,
@@ -89,21 +95,29 @@ const DEFAULT_FOV = 55;
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
 
+/** The HUD census's layers: the content's own, and a dressing's parts
+ *  (tile-stream.ts DRESSING_PARTS). */
 export type LayerName =
   | "city"
-  | "furniture"
-  | "lamps"
-  | "lowVegetation"
-  | "monuments"
-  | "rail"
-  | "riverside"
+  | "fences"
   | "stairs"
   | "terrain"
-  | "tram"
-  | "vegetation"
   | "walls"
-  | "fences"
-  | "water";
+  | "water"
+  | DressingPartName;
+
+/** The census of every dressing part, over the visible dressings. */
+function dressingCensus(
+  dressings: TileDressing[],
+  census: (roots: (Object3D | undefined)[]) => SceneCensus
+): Record<DressingPartName, SceneCensus> {
+  return Object.fromEntries(
+    DRESSING_PART_NAMES.map((name) => [
+      name,
+      census(dressings.map(DRESSING_PARTS[name])),
+    ])
+  ) as Record<DressingPartName, SceneCensus>;
+}
 
 export interface CityWalkStats {
   buildingCount: number;
@@ -817,14 +831,7 @@ async function bootApp(
         water: census(
           terrains.flatMap((t) => [t.water?.mesh, t.water?.mistMesh])
         ),
-        vegetation: census(dressings.map((d) => d.vegetation?.group)),
-        lowVegetation: census(dressings.map((d) => d.lowVegetation)),
-        lamps: census(dressings.map((d) => d.lamps?.group)),
-        monuments: census(dressings.map((d) => d.monuments?.group)),
-        furniture: census(dressings.map((d) => d.furniture)),
-        rail: census(dressings.map((d) => d.rail)),
-        tram: census(dressings.map((d) => d.tram)),
-        riverside: census(dressings.map((d) => d.riverside)),
+        ...dressingCensus(dressings, census),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
         fences: census(terrains.map((t) => t.fences)),
