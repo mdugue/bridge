@@ -1,18 +1,16 @@
 import {
   BufferAttribute,
   type BufferGeometry,
-  CanvasTexture,
   CapsuleGeometry,
   DoubleSide,
   ExtrudeGeometry,
   Group,
-  InstancedMesh,
   LatheGeometry,
   type Material,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
   Path,
   PlaneGeometry,
   Quaternion,
@@ -20,9 +18,33 @@ import {
   ShapeGeometry,
   Vector2,
   Vector3,
-} from "three";
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+} from "three/webgpu";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import {
+  attribute,
+  dot,
+  float,
+  Fn,
+  fract,
+  materialColor,
+  materialEmissive,
+  materialOpacity,
+  mix,
+  normalize,
+  normalView,
+  positionLocal,
+  positionWorld,
+  select,
+  sin,
+  smoothstep,
+  uniform,
+  uv,
+  varying,
+  vec2,
+  vec3,
+  vec4,
+} from "three/tsl";
 import type {
   FountainStyle,
   MonumentFeature,
@@ -42,11 +64,9 @@ import {
   yawOf,
 } from "@/lib/city/monuments";
 import type { Point2 } from "@/lib/city/polyline";
-import {
-  type HeightFogUniforms,
-  injectHeightFog,
-  type OnBeforeCompileShader,
-} from "./height-fog";
+import { Instances, instancePosition } from "./instancing";
+import type { F, Live } from "./shader-chunks";
+import { sceneMaterial } from "./three-utils";
 
 /**
  * Fountains, statues, memorial stones and columns
@@ -69,12 +89,11 @@ import {
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
  * the Y-up frame; rims, water and reliefs are merged, markers and jets
- * instanced: seven draw calls per tile at most. Non-fatal: missing/empty inputs yield an empty group.
+ * instanced: seven draw calls per tile at most. Its four materials carry
+ * nothing of a tile (the clock and the night are module uniforms), so every
+ * tile wears the same ones (`sceneMaterial`). Non-fatal: missing/empty
+ * inputs yield an empty group.
  */
-
-export interface MonumentContext extends GroundContext {
-  heightFog?: HeightFogUniforms;
-}
 
 /** The buildings' clay (visual-style.ts): one material language for all that is built. */
 const CLAY_COLOR = 0xec_e7_df;
@@ -134,23 +153,26 @@ function unitBell(): BufferGeometry {
   return new LatheGeometry(profile, 24);
 }
 
-/** The bell's alpha along its profile (lathe v: 0 at the nozzle, 1 at the
- *  curtain's hem; a canvas is flipped, so its top is v = 1). */
-function bellAlpha(): CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = 4;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    const g = ctx.createLinearGradient(0, 64, 0, 0);
-    g.addColorStop(0, "rgb(90,90,90)");
-    g.addColorStop(0.4, "rgb(200,200,200)");
-    g.addColorStop(0.6, "rgb(90,90,90)");
-    g.addColorStop(1, "rgb(0,0,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 4, 64);
-  }
-  return new CanvasTexture(canvas);
+/**
+ * The bell's alpha along its profile, from the lathe's v (0 at the nozzle,
+ * 1 at the curtain's hem): a faint jet (90/255) that thickens to 200/255
+ * where it opens and falls, then thins back and dissolves to nothing at
+ * the hem — the stops of the 4×64 canvas gradient it once was (drawn from
+ * canvas bottom, stop 0, to top, stop 1; the upload's flipY put the top at
+ * v = 1, so stop 0 is v = 0), interpolated linearly as the canvas did.
+ */
+function bellAlpha(v: F): F {
+  const a = float(90 / 255);
+  const b = float(200 / 255);
+  return select(
+    v.lessThan(0.4),
+    mix(a, b, v.div(0.4)),
+    select(
+      v.lessThan(0.6),
+      mix(b, a, v.sub(0.4).div(0.2)),
+      mix(a, float(0), v.sub(0.6).div(0.4).clamp(0, 1))
+    )
+  );
 }
 
 /** A ring in shape space: (world x, −world z), which the −90° X turn maps
@@ -405,8 +427,8 @@ function instanced(
   material: Material,
   places: Placed[],
   shadows: boolean
-): InstancedMesh {
-  const mesh = new InstancedMesh(geo, material, places.length);
+): Instances {
+  const mesh = new Instances(geo, material, places.length);
   const m = new Matrix4();
   const q = new Quaternion();
   const up = new Vector3(0, 1, 0);
@@ -445,157 +467,142 @@ function merged(
 }
 
 /**
- * The one clock and night factor every tile's fountains share (uniforms
- * by reference, like the height fog): `create-app.ts` advances them each
- * frame and at dusk, tiles that stream in later pick them up as they are.
+ * The one clock and night factor every tile's fountains share (uniform
+ * nodes every material reads): `create-app.ts` advances them each frame
+ * and at dusk, tiles that stream in later pick them up as they are.
  */
-const FOUNTAIN_UNIFORMS = {
-  uFountainTime: { value: 0 },
-  uFountainNight: { value: 0 },
-};
+const fountainTime: Live = uniform(0);
+const fountainNight: Live = uniform(0);
 
 /** The frame clock (s) the jets and the water shimmer run on. */
 export function setFountainTime(elapsed: number): void {
-  FOUNTAIN_UNIFORMS.uFountainTime.value = elapsed;
+  fountainTime.value = elapsed;
 }
 
 /** 0 by day → 1 at night: the basins light up softly with the lamps. */
 export function setFountainNight(t: number): void {
-  FOUNTAIN_UNIFORMS.uFountainNight.value = Math.min(Math.max(t, 0), 1);
+  fountainNight.value = Math.min(Math.max(t, 0), 1);
 }
 
-const FOUNTAIN_HEAD = `uniform float uFountainTime;
-uniform float uFountainNight;
-`;
+/** A jet's own phase (0..2π), hashed from its instance's position (the
+ *  matrix's translation column, world x and z), 0 off an instanced set. */
+const jetPhase = Fn((builder) => {
+  if (!builder.geometry.hasAttribute("iMat3")) {
+    return float(0);
+  }
+  const at = attribute("iMat3", "vec4");
+  return fract(
+    sin(dot(vec2(at.x, at.z), vec2(12.9898, 78.233))).mul(43758.5453)
+  ).mul(6.2831);
+});
 
 /**
  * The jets: each bell breathes (its height swells and settles on its own
- * phase, from its position) and droplets run down the curtain as soft
- * streaks. By night the water catches the light.
+ * phase, from its position — the local y scaled before the instance
+ * transform) and droplets run down the curtain as soft streaks in its
+ * alpha (a swirl round the lathe's u, streaks down its v). By night the
+ * water catches the light: the spray tints toward a warm white.
  */
-function animateSpray(shader: OnBeforeCompileShader): void {
-  Object.assign(shader.uniforms, FOUNTAIN_UNIFORMS);
-  shader.vertexShader = `${FOUNTAIN_HEAD}varying float vJetPhase;
-${shader.vertexShader.replace(
-  "#include <begin_vertex>",
-  `#include <begin_vertex>
-#ifdef USE_INSTANCING
-  float jetPhase = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831;
-#else
-  float jetPhase = 0.0;
-#endif
-  transformed.y *= 1.0 + 0.07 * sin(uFountainTime * 1.1 + jetPhase) + 0.03 * sin(uFountainTime * 2.7 + jetPhase * 1.7);
-  vJetPhase = jetPhase;`
-)}`;
-  shader.fragmentShader = `${FOUNTAIN_HEAD}varying float vJetPhase;
-${shader.fragmentShader.replace(
-  "#include <alphamap_fragment>",
-  `#include <alphamap_fragment>
-  float swirl = sin(vAlphaMapUv.x * 43.98 + vJetPhase) * 1.5;
-  diffuseColor.a *= 0.72 + 0.28 * sin(vAlphaMapUv.y * 38.0 - uFountainTime * 5.0 + swirl);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.93, 0.8) * 1.5, uFountainNight * 0.5);`
-)}`;
-}
-
-/** The water: a slow shimmer of light across the surface, and a soft glow
- *  from below once the lamps are on. */
-function animateWater(shader: OnBeforeCompileShader): void {
-  Object.assign(shader.uniforms, FOUNTAIN_UNIFORMS);
-  shader.vertexShader = `${FOUNTAIN_HEAD}varying vec3 vWaterPos;
-${shader.vertexShader.replace(
-  "#include <begin_vertex>",
-  `#include <begin_vertex>
-  vWaterPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
-)}`;
-  shader.fragmentShader = `${FOUNTAIN_HEAD}varying vec3 vWaterPos;
-${shader.fragmentShader
-  .replace(
-    "#include <normal_fragment_maps>",
-    `#include <normal_fragment_maps>
-  // Three crossing swells, none aligned with another, so no stripes read.
-  float ripA = (sin(vWaterPos.x * 2.3 + vWaterPos.z * 0.7 + uFountainTime * 1.6)
-    + sin(vWaterPos.z * 2.9 - vWaterPos.x * 1.1 - uFountainTime * 1.3)
-    + sin((vWaterPos.x + vWaterPos.z) * 4.1 + uFountainTime * 2.3)) / 3.0;
-  float ripB = sin(vWaterPos.x * 3.7 - vWaterPos.z * 1.9 + uFountainTime * 2.1);
-  normal = normalize(normal + vec3(0.06 * ripA, 0.06 * ripB, 0.0));`
-  )
-  .replace(
-    "#include <emissivemap_fragment>",
-    `#include <emissivemap_fragment>
-  totalEmissiveRadiance += vec3(0.03, 0.04, 0.045) * (0.5 + 0.5 * ripA);
-  totalEmissiveRadiance += vec3(0.12, 0.17, 0.2) * uFountainNight * (0.8 + 0.2 * ripA);`
-  )}`;
-}
-
-/** The sculpture's night light: strongest where it rises from the water
- *  (the lowest 1.5 m of its world height above the basin), gone by its top. */
-function uplight(shader: OnBeforeCompileShader): void {
-  Object.assign(shader.uniforms, FOUNTAIN_UNIFORMS);
-  shader.vertexShader = `${FOUNTAIN_HEAD}attribute float aLift;
-varying float vLift;
-${shader.vertexShader.replace(
-  "#include <begin_vertex>",
-  `#include <begin_vertex>
-  vLift = aLift;`
-)}`;
-  shader.fragmentShader = `${FOUNTAIN_HEAD}varying float vLift;
-${shader.fragmentShader.replace(
-  "#include <emissivemap_fragment>",
-  `#include <emissivemap_fragment>
-  totalEmissiveRadiance += vec3(1.0, 0.82, 0.6) * 0.55 * uFountainNight * (1.0 - smoothstep(0.0, 2.5, vLift));`
-)}`;
-}
-
-function materials(
-  heightFog: HeightFogUniforms | undefined,
-  alpha: CanvasTexture
-) {
-  const clay = new MeshStandardMaterial({
-    color: CLAY_COLOR,
-    roughness: 0.95,
-    metalness: 0,
-  });
-  const water = new MeshStandardMaterial({
-    color: WATER_COLOR,
-    emissive: WATER_GLOW,
-    roughness: 0.12,
-    metalness: 0,
-  });
-  const spray = new MeshBasicMaterial({
+function sprayMaterial(): MeshBasicNodeMaterial {
+  const m = new MeshBasicNodeMaterial({
     color: SPRAY_COLOR,
-    alphaMap: alpha,
     transparent: true,
     opacity: 0.6,
     depthWrite: false,
     side: DoubleSide,
   });
-  // A fountain's sculpture, lit from its basin by night: warm at the
-  // water, fading up the form (a real fountain's floodlights, abstracted).
-  const litClay = clay.clone();
-  const fog = (sh: OnBeforeCompileShader) => {
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  clay.onBeforeCompile = fog;
-  litClay.onBeforeCompile = (sh) => {
-    uplight(sh);
-    fog(sh);
-  };
-  water.onBeforeCompile = (sh) => {
-    animateWater(sh);
-    fog(sh);
-  };
-  spray.onBeforeCompile = (sh) => {
-    animateSpray(sh);
-    fog(sh);
-  };
-  return { clay, litClay, water, spray };
+  const phase = jetPhase() as F;
+  const breath = float(1)
+    .add(sin(fountainTime.mul(1.1).add(phase)).mul(0.07))
+    .add(sin(fountainTime.mul(2.7).add(phase.mul(1.7))).mul(0.03));
+  m.positionNode = instancePosition(
+    vec3(positionLocal.x, positionLocal.y.mul(breath), positionLocal.z)
+  );
+  const vPhase = varying(phase, "vJetPhase");
+  const bell = uv();
+  const swirl = sin(bell.x.mul(43.98).add(vPhase)).mul(1.5);
+  const streaks = float(0.72).add(
+    sin(bell.y.mul(38).sub(fountainTime.mul(5)).add(swirl)).mul(0.28)
+  );
+  m.opacityNode = materialOpacity.mul(bellAlpha(bell.y)).mul(streaks);
+  m.colorNode = vec4(
+    mix(materialColor.rgb, vec3(1, 0.93, 0.8).mul(1.5), fountainNight.mul(0.5)),
+    1
+  );
+  return m;
 }
 
-/** One tile's monuments: the group, and the jets' alpha texture to free. */
+/**
+ * The water: a slow shimmer of light across the surface (three crossing
+ * swells in world x/z, none aligned with another, so no stripes read,
+ * tilting the view-space normal and brightening the emissive), and a soft
+ * glow from below once the lamps are on.
+ */
+function waterMaterial(): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial({
+    color: WATER_COLOR,
+    emissive: WATER_GLOW,
+    roughness: 0.12,
+    metalness: 0,
+  });
+  const p = positionWorld;
+  const t = fountainTime;
+  const ripA = sin(p.x.mul(2.3).add(p.z.mul(0.7)).add(t.mul(1.6)))
+    .add(sin(p.z.mul(2.9).sub(p.x.mul(1.1)).sub(t.mul(1.3))))
+    .add(sin(p.x.add(p.z).mul(4.1).add(t.mul(2.3))))
+    .div(3);
+  const ripB = sin(p.x.mul(3.7).sub(p.z.mul(1.9)).add(t.mul(2.1)));
+  m.normalNode = normalize(
+    normalView.add(vec3(ripA.mul(0.06), ripB.mul(0.06), 0))
+  );
+  m.emissiveNode = materialEmissive
+    .add(vec3(0.03, 0.04, 0.045).mul(ripA.mul(0.5).add(0.5)))
+    .add(vec3(0.12, 0.17, 0.2).mul(fountainNight).mul(ripA.mul(0.2).add(0.8)));
+  return m;
+}
+
+/** The buildings' matte clay, for rims, reliefs and markers (instanced or
+ *  merged: `instancePosition` is the plain vertex off a set). */
+function clayMaterial(): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial({
+    color: CLAY_COLOR,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  m.positionNode = instancePosition();
+  return m;
+}
+
+/**
+ * A fountain's sculpture, lit from its basin by night: warm at the water,
+ * fading up the form (a real fountain's floodlights, abstracted) — the
+ * uplight is strongest where it rises from the water and gone 2.5 m above
+ * it (`aLift`, each vertex's height over the basin's water).
+ */
+function litClayMaterial(): MeshStandardNodeMaterial {
+  const m = clayMaterial();
+  const lift = attribute("aLift", "float");
+  m.emissiveNode = materialEmissive.add(
+    vec3(1, 0.82, 0.6)
+      .mul(0.55)
+      .mul(fountainNight)
+      .mul(float(1).sub(smoothstep(0, 2.5, lift)))
+  );
+  return m;
+}
+
+/** The monuments' four materials, one each for the whole scene. */
+const materials = {
+  clay: () => sceneMaterial("monument-clay", clayMaterial),
+  litClay: () => sceneMaterial("monument-lit-clay", litClayMaterial),
+  water: () => sceneMaterial("monument-water", waterMaterial),
+  spray: () => sceneMaterial("monument-spray", sprayMaterial),
+};
+
+/** One tile's monuments: the group (freed with the scene). */
 export interface MonumentLayer {
-  /** frees the shared alpha texture; the meshes are freed with the scene */
+  /** nothing of the tile's own to free: the meshes go with the scene and
+   *  the materials are scene-wide */
   dispose: () => void;
   group: Group;
 }
@@ -606,7 +613,7 @@ export interface MonumentLayer {
  */
 export function buildMonuments(
   features: MonumentFeature[],
-  ctx: MonumentContext
+  ctx: GroundContext
 ): MonumentLayer {
   const group = new Group();
   group.name = "monuments";
@@ -626,21 +633,19 @@ export function buildMonuments(
       addMonument(f, ctx, parts);
     }
   }
-  const alpha = bellAlpha();
-  const mat = materials(ctx.heightFog, alpha);
   const meshes = [
-    merged(parts.rims, mat.clay, true),
-    merged(parts.reliefs, mat.clay, true),
-    merged(parts.sculptures, mat.litClay, true),
-    merged(parts.waters, mat.water, false),
+    merged(parts.rims, materials.clay(), true),
+    merged(parts.reliefs, materials.clay(), true),
+    merged(parts.sculptures, materials.litClay(), true),
+    merged(parts.waters, materials.water(), false),
     parts.pillars.length > 0
-      ? instanced(unitPillar(), mat.clay, parts.pillars, true)
+      ? instanced(unitPillar(), materials.clay(), parts.pillars, true)
       : null,
     parts.slabs.length > 0
-      ? instanced(unitSlab(), mat.clay, parts.slabs, true)
+      ? instanced(unitSlab(), materials.clay(), parts.slabs, true)
       : null,
     parts.jets.length > 0
-      ? instanced(unitBell(), mat.spray, parts.jets, false)
+      ? instanced(unitBell(), materials.spray(), parts.jets, false)
       : null,
   ];
   for (const mesh of meshes) {
@@ -648,14 +653,11 @@ export function buildMonuments(
       group.add(mesh);
     }
   }
-  // Unused materials are never compiled; free them now rather than leak.
-  const used = new Set(
-    group.children.map((c) => (c as Mesh).material as Material)
-  );
-  for (const m of Object.values(mat)) {
-    if (!used.has(m)) {
-      m.dispose();
-    }
-  }
-  return { group, dispose: () => alpha.dispose() };
+  return {
+    group,
+    dispose: () => {
+      // the meshes go with the tile (disposeObject3D); the materials are
+      // the scene's
+    },
+  };
 }

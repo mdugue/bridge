@@ -1,16 +1,33 @@
 import {
-  BackSide,
-  BufferGeometry,
+  type BufferGeometry,
   Color,
-  DoubleSide,
-  FrontSide,
   InstancedBufferAttribute,
-  InstancedMesh,
   type Material,
-  MeshDepthMaterial,
-  type Side,
-  type WebGLProgramParametersWithUniforms,
-} from "three";
+} from "three/webgpu";
+import {
+  abs,
+  clamp,
+  dFdx,
+  dFdy,
+  exp2,
+  float,
+  floor,
+  fract,
+  length,
+  log2,
+  mat3,
+  max,
+  min,
+  positionGeometry,
+  select,
+  sin,
+  step,
+  varying,
+  vec2,
+  vec3,
+  vec4,
+} from "three/tsl";
+import type { Node } from "three/webgpu";
 import {
   dayOfYear,
   EVERGREEN,
@@ -18,25 +35,27 @@ import {
   SEASON_JITTER_DAYS,
   seasonAt,
 } from "@/lib/city/tree-season";
-import { sceneShared } from "./three-utils";
+import { Instances, instanceFloat, instanceMatrix } from "./instancing";
+import type { F, V2, V3 } from "./shader-chunks";
 
 /**
  * The year in the crowns (lib/city/tree-season.ts in the scene): per crown
  * instance a colour between its summer green and its genus's autumn hue, and
  * a leaf cover that thins a bare crown down to a sparse, grey-brown twig
- * mass — in the main pass and, through a matching depth material, in the
- * shadow map, so a winter tree casts a thin shadow.
+ * mass — in the main pass and, through the material's `maskNode` (which
+ * three's shadow pass honours), in the shadow map, so a winter tree casts a
+ * thin shadow.
  *
  * Nothing here runs per frame. `apply(day)` evaluates the season per
  * instance on a date change and writes two per-instance buffers (the crown
- * colour three already carries, and `aBare`, 1 − leaf); the shader does the
+ * tint, `instanceTints`, and `aBare`, 1 − leaf); the node material does the
  * rest with a hashed alpha test in the crown's own local space, so the
  * stipple is fixed to the tree (it sways with it and does not crawl with
  * the camera) and about a pixel fine at every distance.
  *
  * A chunk whose crowns are all in full leaf keeps the plain crown material
- * (no discard, so early depth testing stays on); a chunk with any bare
- * instance switches to the seasonal variant and its depth material.
+ * (no mask, so early depth testing stays on); a chunk with any bare
+ * instance switches to the seasonal variant.
  */
 
 /** What one crown instance needs to follow the year. */
@@ -49,8 +68,9 @@ export interface CrownSeasonKey {
   jitter: number;
 }
 
-/** The crown material's base colour: three multiplies the per-instance
- *  colour by it, so an autumn hue is divided by it to land as itself. */
+/** The crown material's base colour: the material multiplies the
+ *  per-instance tint by it, so an autumn hue is divided by it to land as
+ *  itself. */
 export const CROWN_BASE_COLOR = 0xa6_bf_92;
 /** Twig colour of a bare crown: the trunk's grey-brown, a little paler. */
 const TWIG_COLOR = 0x9a_8f_80;
@@ -70,135 +90,103 @@ const HASH_PIXELS = 1.25;
 /** Below this `aBare` a crown counts as in full leaf. */
 const BARE_EPS = 0.002;
 
-const twigUniform = { value: new Color(TWIG_COLOR) };
-
-// A fixed rotation (rows (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3) turns the cell
-// grid off the crown's axes, so the cells do not line up in visible rows;
-// a seed from the instance's ground position offsets the hash, so
-// neighbours differ. The seed is added to the integer cell, after the
-// pixel-scale floor: added to the position it would be multiplied by that
-// scale too (thousands up close), and the hash's sin() would lose its
-// precision to arguments near 1e6 — banding on mobile GPUs.
-const VERTEX_DECL = [
-  "attribute float aBare;",
-  "varying float vBare;",
-  "varying vec3 vCrownCell;",
-  "varying vec2 vCrownSeed;",
-].join("\n");
-
-const VERTEX_BODY = [
-  "vBare = aBare;",
-  "#ifdef USE_INSTANCING",
-  " vCrownSeed = fract(instanceMatrix[3].xz * 0.0137) * 97.0;",
-  "#else",
-  " vCrownSeed = vec2(0.0);",
-  "#endif",
-  "const mat3 crownTurn = mat3(0.6667, 0.6667, 0.3333, 0.6667, -0.3333, -0.6667, 0.3333, -0.6667, 0.6667);",
-  "vCrownCell = crownTurn * position;",
-].join("\n");
-
-// three's getAlphaHashThreshold (alphahash_pars_fragment), renamed so it
-// cannot clash with a material's own alphaHash, at HASH_PIXELS.
-const FRAGMENT_DECL = [
-  "varying float vBare;",
-  "varying vec3 vCrownCell;",
-  "varying vec2 vCrownSeed;",
-  "float crownHash2(vec2 v) { return fract(1.0e4 * sin(17.0 * v.x + 0.1 * v.y) * (0.1 + abs(sin(13.0 * v.y + v.x)))); }",
-  "float crownHash3(vec3 v) { return crownHash2(vec2(crownHash2(v.xy), v.z)); }",
-  "float crownThreshold(vec3 p, vec3 seed) {",
-  " float maxDeriv = max(length(dFdx(p)), length(dFdy(p)));",
-  ` float pixScale = 1.0 / (${HASH_PIXELS.toFixed(2)} * max(maxDeriv, 1e-6));`,
-  " vec2 pixScales = vec2(exp2(floor(log2(pixScale))), exp2(ceil(log2(pixScale))));",
-  " vec2 alpha = vec2(crownHash3(floor(pixScales.x * p) + seed), crownHash3(floor(pixScales.y * p) + seed));",
-  " float lerpFactor = fract(log2(pixScale));",
-  " float x = (1.0 - lerpFactor) * alpha.x + lerpFactor * alpha.y;",
-  " float a = min(lerpFactor, 1.0 - lerpFactor);",
-  " vec3 cases = vec3(x * x / (2.0 * a * (1.0 - a)), (x - 0.5 * a) / (1.0 - a), 1.0 - ((1.0 - x) * (1.0 - x) / (2.0 * a * (1.0 - a))));",
-  " float t = (x < (1.0 - a)) ? ((x < a) ? cases.x : cases.y) : cases.z;",
-  " return clamp(t, 1.0e-6, 1.0);",
-  "}",
-].join("\n");
-
-/** The discard, and how much of this fragment is twig (`crownTwig`, 0 leaf
- *  or 1 twig) for the main pass's tint. The derivatives are taken before
- *  any branch, as GLSL requires. */
-const FRAGMENT_BODY = [
-  "float crownTwig = 0.0;",
-  "float crownCellH = crownThreshold(vCrownCell, vec3(vCrownSeed, 0.0));",
-  `if (vBare > ${BARE_EPS}) {`,
-  " float crownLeafy = 1.0 - vBare;",
-  ` if (crownCellH >= max(crownLeafy, ${TWIG_DENSITY})) discard;`,
-  " crownTwig = step(crownLeafy, crownCellH);",
-  "}",
-].join("\n");
-
-/** Patches a crown shader with the seasonal leaf cover (`main`: the lit
- *  pass, with the twig tint; otherwise the depth pass). */
-export function injectCrownSeason(
-  sh: WebGLProgramParametersWithUniforms,
-  main: boolean
-): void {
-  sh.vertexShader = sh.vertexShader
-    .replace("#include <common>", `#include <common>\n${VERTEX_DECL}`)
-    .replace(
-      "#include <begin_vertex>",
-      `#include <begin_vertex>\n${VERTEX_BODY}`
-    );
-  sh.fragmentShader = sh.fragmentShader
-    .replace("#include <common>", `#include <common>\n${FRAGMENT_DECL}`)
-    .replace(
-      "#include <clipping_planes_fragment>",
-      `#include <clipping_planes_fragment>\n${FRAGMENT_BODY}`
-    );
-  if (main) {
-    sh.uniforms.uTwig = twigUniform;
-    sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform vec3 uTwig;")
-      .replace(
-        "#include <color_fragment>",
-        "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uTwig, crownTwig);"
-      );
-  }
+/** three's alpha-hash hash (alphahash_pars_fragment), as nodes. */
+function crownHash2(v: V2): F {
+  return fract(
+    float(1e4)
+      .mul(sin(v.x.mul(17).add(v.y.mul(0.1))))
+      .mul(abs(sin(v.y.mul(13).add(v.x))).add(0.1))
+  );
 }
 
-const depthMaterial = sceneShared(() => {
-  const m = new MeshDepthMaterial();
-  m.customProgramCacheKey = () => "crown-season-depth";
-  m.onBeforeCompile = (sh) => injectCrownSeason(sh, false);
-  return m;
-});
+function crownHash3(v: V3): F {
+  return crownHash2(vec2(crownHash2(v.xy), v.z));
+}
 
 /**
- * The shadow pass's crown material: three's own depth material plus the same
- * discard, so the shadow thins with the crown. One for the whole scene (its
- * program is shared anyway), disposed with the last app that holds it
- * (`retainCrownDepthMaterial`, create-app.ts).
+ * three's alpha-hash threshold at HASH_PIXELS: the hash of the cell `p`
+ * falls in at the two power-of-two pixel scales around its derivative,
+ * blended and remapped so the threshold stays uniform across the blend.
+ * `seed` joins the integer cell, after the pixel-scale floor: added to the
+ * position it would be multiplied by that scale too (thousands up close),
+ * and the hash's sin() would lose its precision to arguments near 1e6 —
+ * banding on mobile GPUs. The derivatives are taken here, in the mask at
+ * the top of the fragment, before any discard.
  */
-export function crownDepthMaterial(): MeshDepthMaterial {
-  return depthMaterial.get();
+export function crownThreshold(p: V3, seed: V3): F {
+  const maxDeriv = max(length(dFdx(p)), length(dFdy(p)));
+  const pixScale = float(1).div(max(maxDeriv, 1e-6).mul(HASH_PIXELS));
+  const level = log2(pixScale);
+  const lo = exp2(floor(level));
+  const hi = exp2(level.ceil());
+  const alphaLo = crownHash3(floor(p.mul(lo)).add(seed));
+  const alphaHi = crownHash3(floor(p.mul(hi)).add(seed));
+  const lerpFactor = fract(level);
+  const x = float(1).sub(lerpFactor).mul(alphaLo).add(lerpFactor.mul(alphaHi));
+  const a = min(lerpFactor, float(1).sub(lerpFactor));
+  const spread = a.mul(2).mul(float(1).sub(a));
+  const low = x.mul(x).div(spread);
+  const mid = x.sub(a.mul(0.5)).div(float(1).sub(a));
+  const high = float(1).sub(float(1).sub(x).mul(float(1).sub(x)).div(spread));
+  const t = select(
+    x.lessThan(float(1).sub(a)),
+    select(x.lessThan(a), low, mid),
+    high
+  );
+  return clamp(t, 1e-6, 1);
 }
 
-/** An app's hold on the crown depth material; call the result on dispose. */
-export const retainCrownDepthMaterial = depthMaterial.retain;
-
-/** A second geometry over the same buffers plus the chunk's `aBare`: the
- *  shared crown geometry cannot carry a per-chunk instanced attribute. */
-function withBare(
-  geometry: BufferGeometry,
-  bare: InstancedBufferAttribute
-): BufferGeometry {
-  const view = new BufferGeometry();
-  view.setIndex(geometry.index);
-  for (const [name, attribute] of Object.entries(geometry.attributes)) {
-    view.setAttribute(name, attribute);
-  }
-  view.setAttribute("aBare", bare);
-  view.boundingBox = geometry.boundingBox;
-  view.boundingSphere = geometry.boundingSphere;
-  return view;
+/** The seasonal crown's nodes (crownSeasonNodes). */
+export interface CrownSeasonNodes {
+  /** false where the leaf cover drops the fragment: the material's
+   *  `maskNode`, which the shadow pass honours too */
+  keep: Node<"bool">;
+  /** how much of the fragment is twig (0 leaf or 1 twig): the lit pass
+   *  tints it grey-brown and takes its shimmer away */
+  twig: F;
+  /** the twig colour (linear, as `new Color(hex)` holds it), mixed in by
+   *  `twig` */
+  twigColour: V3;
 }
 
-/** One chunk's crowns (the two LOD meshes share instance order), driven by
+/**
+ * The leaf cover of a bare crown as nodes. A fixed rotation (rows
+ * (2,2,1)/3, (2,−1,−2)/3, (1,−2,2)/3; symmetric, so the column order does
+ * not matter) turns the cell grid off the crown's axes, so the cells do not
+ * line up in visible rows; the cell is the geometry's own position (before
+ * the sway and the instance transform), so the stipple sticks to the tree.
+ * A seed from the instance's ground position (its matrix's translation)
+ * offsets the hash, so neighbours differ.
+ */
+export function crownSeasonNodes(): CrownSeasonNodes {
+  const bare = varying(instanceFloat("aBare"));
+  const turn = mat3(
+    0.6667,
+    0.6667,
+    0.3333,
+    0.6667,
+    -0.3333,
+    -0.6667,
+    0.3333,
+    -0.6667,
+    0.6667
+  );
+  const cell = varying(turn.mul(positionGeometry));
+  // the instance's ground position: its matrix's translation (m · e₃)
+  const origin = instanceMatrix().mul(vec4(0, 0, 0, 1));
+  const seed = varying(fract(origin.xz.mul(0.0137)).mul(97));
+  const cellH = crownThreshold(cell, vec3(seed, 0)).toVar("crownCellH");
+  const leafy = float(1).sub(bare);
+  const isBare = bare.greaterThan(BARE_EPS);
+  const twig = new Color(TWIG_COLOR);
+  return {
+    keep: isBare.not().or(cellH.lessThan(max(leafy, TWIG_DENSITY))),
+    twig: select(isBare, step(leafy, cellH), float(0)),
+    twigColour: vec3(twig.r, twig.g, twig.b),
+  };
+}
+
+/** One chunk's crowns (the two LOD sets share instance order), driven by
  *  the date. */
 export interface SeasonalCrowns {
   /** re-evaluates every instance for `day` (days since 1 January); true
@@ -208,78 +196,58 @@ export interface SeasonalCrowns {
 
 /** The two crown materials a chunk switches between. */
 export interface CrownMaterials {
-  /** with the seasonal discard (any instance bare) */
+  /** with the seasonal mask (any instance bare) */
   bare: Material;
   /** the plain crown (all instances in full leaf) */
   leafy: Material;
 }
 
-/** The side three's shadow pass gives a depth material for a caster of each
- *  side (WebGLShadowMap `getDepthMaterial`, non-VSM). */
-const SHADOW_SIDE: Record<Side, Side> = {
-  [FrontSide]: BackSide,
-  [BackSide]: FrontSide,
-  [DoubleSide]: DoubleSide,
-};
-
 /**
- * Stand-ins that take the crown programs a date change switches to through
- * the scene's compile path ahead of time. A tile compiles what its meshes
- * wear (tile-stream.ts `compileRepresentatives`): in summer the plain crown
- * only, in winter the seasonal one only, and no depth program at all —
- * three's compile never looks at the shadow pass's materials (a crown's
- * `customDepthMaterial`, or three's own depth material a leafy crown casts
- * with). Without these, the first drag across the leaf fall would compile
- * the other crown and its depth program inside a frame. Programs are
- * shared by their cache key, not by material, so one set per scene covers
- * every tile's crowns.
+ * Stand-ins that take the crown materials a date change switches to
+ * through the scene's compile path ahead of time. A tile compiles what its
+ * sets wear (tile-stream.ts `compileRepresentatives`): in summer the plain
+ * crown only, in winter the seasonal one only. Without these, the first
+ * drag across the leaf fall would build the other crown inside a frame.
+ * Builds are shared by material and attribute layout, and the crown
+ * materials are scene-wide (`sceneMaterial`), so one set per scene covers
+ * every tile's crowns. The seasonal crown thins its shadow through
+ * `maskNode`, so there is no depth material to warm any more.
  */
 export interface CrownWarmup {
-  /** the seasonal crown's depth material (crownDepthMaterial()) and a plain
-   *  depth material like the one three's shadow pass gives a leafy crown,
-   *  each on the side that pass sets: compile them the way it draws (no
-   *  fog) */
-  depth: InstancedMesh[];
-  /** frees the stand-ins' own materials and geometry (never the shared
-   *  crown depth material) */
+  /** frees the stand-ins' geometry (never the scene-wide materials) */
   dispose: () => void;
   /** wear the seasonal and the plain crown: compile against the scene */
-  main: InstancedMesh[];
+  main: Instances[];
 }
 
 /**
- * Builds the stand-ins over a crown geometry and a pair of crown materials
- * of the scene's kind (the same program keys as a tile's), each an
- * instanced mesh with instance colours and `aBare`, as a crown is. They
- * are never added to the scene; keep them (and so their programs) until
- * the scene goes, then `dispose`.
+ * Builds the stand-ins over a crown geometry and the pair of crown
+ * materials, each a one-instance set with instance tints and `aBare`, as a
+ * crown is (the same attribute layout, so the same build). They are never
+ * added to the scene; keep them until the scene goes, then `dispose`.
  */
 export function crownWarmup(
   geometry: BufferGeometry,
   materials: CrownMaterials
 ): CrownWarmup {
-  const view = withBare(
-    geometry,
-    new InstancedBufferAttribute(new Float32Array(1), 1)
-  );
-  const stand = (material: Material): InstancedMesh => {
-    const mesh = new InstancedMesh(view, material, 1);
-    mesh.setColorAt(0, new Color(1, 1, 1));
-    return mesh;
+  const stand = (material: Material): Instances => {
+    const set = new Instances(geometry, material, 1);
+    set.castShadow = true;
+    set.receiveShadow = true;
+    set.setColorAt(0, new Color(1, 1, 1));
+    set.geometry.setAttribute(
+      "aBare",
+      new InstancedBufferAttribute(new Float32Array(1), 1)
+    );
+    return set;
   };
-  const crown = materials.bare;
-  const shadowSide = crown.shadowSide ?? SHADOW_SIDE[crown.side];
-  const seasonal = crownDepthMaterial();
-  seasonal.side = shadowSide;
-  const plain = new MeshDepthMaterial({ side: shadowSide });
+  const main = [stand(materials.bare), stand(materials.leafy)];
   return {
-    main: [stand(materials.bare), stand(materials.leafy)],
-    depth: [stand(seasonal), stand(plain)],
+    main,
     dispose: () => {
-      materials.bare.dispose();
-      materials.leafy.dispose();
-      plain.dispose();
-      view.dispose();
+      for (const set of main) {
+        set.geometry.dispose();
+      }
       geometry.dispose();
     },
   };
@@ -334,34 +302,36 @@ function writeInstance(
 }
 
 /**
- * Hooks one chunk's crowns to the season. Call after the meshes are painted
+ * Hooks one chunk's crowns to the season. Call after the sets are painted
  * with their summer colours (those are kept as the baseline). The mid and
- * rich tiers share one colour buffer and one `aBare`, so a date change
+ * rich tiers share one tint buffer and one `aBare`, so a date change
  * writes each instance once; the far tier holds a subset of the instances
  * (`farSlots[j]` is the shared slot of its instance `j`) and gets a copy.
+ * `aBare` goes on each set's own geometry view (an `Instances` set owns
+ * one), so the shared crown geometry stays as it is.
  */
 export function seasonCrowns(
   meshes: {
-    far?: InstancedMesh;
+    far?: Instances;
     farSlots?: readonly number[];
-    mid: InstancedMesh;
-    rich: InstancedMesh;
+    mid: Instances;
+    rich: Instances;
   },
   keys: CrownSeasonKey[],
   materials: CrownMaterials
 ): SeasonalCrowns {
   const { mid, rich, far, farSlots } = meshes;
-  const colourAttr = mid.instanceColor;
-  if (!colourAttr || keys.length !== mid.count) {
+  const colourAttr = mid.instanceTints;
+  if (!colourAttr || keys.length !== mid.drawCount) {
     return { apply: () => false };
   }
-  rich.instanceColor = colourAttr;
+  rich.instanceTints = colourAttr;
   const bareAttr = new InstancedBufferAttribute(
     new Float32Array(keys.length),
     1
   );
-  mid.geometry = withBare(mid.geometry, bareAttr);
-  rich.geometry = withBare(rich.geometry, bareAttr);
+  mid.geometry.setAttribute("aBare", bareAttr);
+  rich.geometry.setAttribute("aBare", bareAttr);
   const arrays = {
     bare: bareAttr.array as Float32Array,
     colour: colourAttr.array as Float32Array,
@@ -369,7 +339,7 @@ export function seasonCrowns(
     target: autumnTargets(keys),
   };
   const farSeason =
-    far?.instanceColor && farSlots && farSlots.length === far.count
+    far?.instanceTints && farSlots && farSlots.length === far.drawCount
       ? farTier(far, farSlots)
       : null;
   const tiers = farSeason ? [mid, rich, farSeason.mesh] : [mid, rich];
@@ -396,7 +366,6 @@ export function seasonCrowns(
         moved = true;
         for (const mesh of tiers) {
           mesh.material = anyBare ? materials.bare : materials.leafy;
-          mesh.customDepthMaterial = anyBare ? crownDepthMaterial() : undefined;
         }
       }
       return moved;
@@ -406,18 +375,18 @@ export function seasonCrowns(
 
 /** The far tier's own `aBare` and a copier from the shared arrays. */
 function farTier(
-  mesh: InstancedMesh,
+  mesh: Instances,
   slots: readonly number[]
 ): {
   copy: (from: { bare: Float32Array; colour: Float32Array }) => void;
-  mesh: InstancedMesh;
+  mesh: Instances;
 } {
-  const colourAttr = mesh.instanceColor as InstancedBufferAttribute;
+  const colourAttr = mesh.instanceTints as InstancedBufferAttribute;
   const bareAttr = new InstancedBufferAttribute(
     new Float32Array(slots.length),
     1
   );
-  mesh.geometry = withBare(mesh.geometry, bareAttr);
+  mesh.geometry.setAttribute("aBare", bareAttr);
   const bare = bareAttr.array as Float32Array;
   const colour = colourAttr.array as Float32Array;
   return {

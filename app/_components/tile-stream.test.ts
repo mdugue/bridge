@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createLookState } from "@/lib/city/look-state";
-import { Object3D } from "three";
+import { Object3D } from "three/webgpu";
 import type { CityLayer } from "./city-layer";
 import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";

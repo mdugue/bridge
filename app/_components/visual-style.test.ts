@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { DataTexture } from "three";
+import { DataTexture, MeshStandardNodeMaterial } from "three/webgpu";
+import { uniform } from "three/tsl";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import {
   applyCityLook,
@@ -8,14 +9,15 @@ import {
   setCityTransparency,
 } from "./visual-style";
 
-// three bakes the alpha-hash code path into the compiled program, so these
-// tests watch `material.version` (the counter that `needsUpdate` increments)
-// to pin down exactly when a recompile is forced.
+// The alpha-hash test is part of the built node graph, so these tests watch
+// `material.version` (the counter that `needsUpdate` increments) to pin down
+// exactly when a rebuild is forced.
 
 const objects = () => ({ rows: 1, texture: new DataTexture() });
+const resourcesAt = () => createStyleResources(uniform(0), uniform(1));
 
 test("clay switches to hash-dithered transparency and back", () => {
-  const resources = createStyleResources();
+  const resources = resourcesAt();
   const clay = createClayMaterial(resources, objects());
   const before = clay.version;
 
@@ -36,7 +38,7 @@ test("clay switches to hash-dithered transparency and back", () => {
 });
 
 test("transparency is clamped to 0..1 and reaches tiles that land later", () => {
-  const resources = createStyleResources();
+  const resources = resourcesAt();
   setCityTransparency(resources, 2);
   expect(createClayMaterial(resources, objects()).opacity).toBe(0);
   setCityTransparency(resources, -1);
@@ -44,7 +46,7 @@ test("transparency is clamped to 0..1 and reaches tiles that land later", () => 
 });
 
 test("a disposed tile's material leaves the look fan-out", () => {
-  const resources = createStyleResources();
+  const resources = resourcesAt();
   const clay = createClayMaterial(resources, objects());
   expect(resources.materials.has(clay)).toBe(true);
   clay.dispose();
@@ -52,7 +54,7 @@ test("a disposed tile's material leaves the look fan-out", () => {
 });
 
 test("applyCityLook pushes the building rows into the uniforms and the transparency", () => {
-  const resources = createStyleResources();
+  const resources = resourcesAt();
   const clay = createClayMaterial(resources, objects());
   applyCityLook(resources, {
     ...LOOK_DEFAULTS,
@@ -66,12 +68,22 @@ test("applyCityLook pushes the building rows into the uniforms and the transpare
   expect(clay.alphaHash).toBe(true);
 });
 
-test("clay detail uniforms are live references the HUD can retune", () => {
-  const resources = createStyleResources();
-  // The sliders mutate these objects in place — a copy would silently stop
-  // driving the compiled shader.
-  resources.clayDetail.uTint.value = 0.42;
-  expect(resources.clayDetail.uTint.value).toBe(0.42);
-  expect(resources.clayDetail.uRoofTint).toBeDefined();
-  expect(resources.clayDetail.uDuskGlow).toBeDefined();
+test("the clay shares the scene's night and sky-view nodes", () => {
+  const night = uniform(0);
+  const skyView = uniform(1);
+  const resources = createStyleResources(night, skyView);
+  // The sun rig and the terrain's row write these in place — a copy would
+  // silently stop driving every tile's clay.
+  expect(resources.clayDetail.uNight).toBe(night);
+  expect(resources.clayDetail.uSkyView).toBe(skyView);
+});
+
+test("a tile's clay is a node material with the facade detail wired", () => {
+  const clay = createClayMaterial(resourcesAt(), objects());
+  expect(clay).toBeInstanceOf(MeshStandardNodeMaterial);
+  expect(clay.colorNode).not.toBeNull();
+  expect(clay.normalNode).not.toBeNull();
+  expect(clay.roughnessNode).not.toBeNull();
+  expect(clay.emissiveNode).not.toBeNull();
+  expect(clay.aoNode).not.toBeNull();
 });

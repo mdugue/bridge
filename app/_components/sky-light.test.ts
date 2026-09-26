@@ -2,73 +2,25 @@ import { expect, test } from "bun:test";
 import {
   DataArrayTexture,
   DataTexture,
-  ShaderChunk,
-  ShaderLib,
+  LinearFilter,
+  Mesh,
+  MeshStandardNodeMaterial,
+  type Node,
+  TextureNode,
   Vector3,
-} from "three";
+} from "three/webgpu";
+import { float, uniform } from "three/tsl";
+import { dressFences } from "./fence-layer";
+import { dressKerbs } from "./kerb-layer";
 import {
+  applyGroundLight,
+  createClaySky,
   type GroundLight,
-  groundLightKey,
-  injectGroundLight,
-  lightsWithFarShadow,
-  skyLightBody,
-  skyLightDecl,
+  groundLitMaterial,
+  openSkyTexture,
 } from "./sky-light";
-
-test("the far horizon joins the directional shadow by min, never a product", () => {
-  const patched = lightsWithFarShadow();
-  expect(patched).toContain(
-    "? min( getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize"
-  );
-  expect(patched).toContain("vDirectionalShadowCoord[ i ] ), hzLit ) : 1.0;");
-  // a light without a shadow map still takes the horizon
-  expect(patched).toContain("directLight.color *= hzLit;");
-  // the loop body keeps no braces three's unroller would stop at
-  const loop = patched.slice(
-    patched.indexOf("DirectionalLight directionalLight;")
-  );
-  const body = loop.slice(
-    loop.indexOf("{") + 1,
-    loop.indexOf("#pragma unroll_loop_end")
-  );
-  expect(body.match(/\{/gu)).toBeNull();
-  // point and spot shadows are untouched
-  expect(patched).toContain("getPointShadow( pointShadowMap[ i ]");
-  expect(patched.length).toBeGreaterThan(
-    ShaderChunk.lights_fragment_begin.length
-  );
-});
-
-test("a chunk without the directional shadow line is refused", () => {
-  expect(() => lightsWithFarShadow("void main() {}")).toThrow();
-});
-
-test("an absent raster leaves its term at one", () => {
-  expect(skyLightBody(false, false)).toContain("float skySvf = 1.0;");
-  expect(skyLightBody(false, false)).toContain("float hzLit = 1.0;");
-  expect(skyLightDecl(false, false)).toBe("");
-  expect(skyLightBody(true, true)).toContain("hzSunVisible( vSplatUv )");
-  expect(skyLightDecl(true, true)).toContain("sampler2DArray uHorizon");
-});
-
-test("the near band reads the upper four layers and yields to the frustum", () => {
-  const decl = skyLightDecl(false, true);
-  expect(decl).toContain("uniform vec3 uShadowReach;");
-  // far band: layers 0–3 at 45°, near band: layers 4–7 at 90°
-  expect(decl).toContain("hzAngle( uv, k0, 0.0, 45.0 )");
-  expect(decl).toContain("hzAngle( uv, k0, 4.0, 90.0 )");
-  expect(decl).toContain("smoothstep( r * 0.80, r,");
-  // a sun straight overhead has no azimuth: atan(0, 0) is never taken
-  const guard = decl.indexOf("length( uSunDir.xz ) < 1e-4");
-  expect(guard).toBeGreaterThan(0);
-  expect(guard).toBeLessThan(decl.indexOf("atan( uSunDir.x, -uSunDir.z )"));
-});
-
-test("the horizon is read at an explicit LOD (it runs after a non-uniform return)", () => {
-  const decl = skyLightDecl(false, true);
-  expect(decl).toContain("textureLod( uHorizon,");
-  expect(decl).not.toMatch(/[^D]texture\( uHorizon/u);
-});
+import { dressStairs } from "./stair-layer";
+import { dressWalls } from "./wall-layer";
 
 function groundLight(parts: { horizon: boolean; svf: boolean }): GroundLight {
   return {
@@ -76,55 +28,122 @@ function groundLight(parts: { horizon: boolean; svf: boolean }): GroundLight {
     horizon: parts.horizon ? new DataArrayTexture() : undefined,
     origin: [10, 20],
     size: [1000, 1000],
-    skyView: { value: 1 },
-    horizonShade: { value: 1 },
-    shadowReach: { value: new Vector3() },
-    sunDirection: new Vector3(0, 1, 0),
+    skyView: uniform(1),
+    horizonShade: uniform(1),
+    shadowReach: uniform(new Vector3()),
+    sunDirection: uniform(new Vector3(0, 1, 0)),
   };
 }
 
-function standardShader() {
-  return {
-    vertexShader: ShaderLib.physical.vertexShader,
-    fragmentShader: ShaderLib.physical.fragmentShader,
-    uniforms: {} as Record<string, { value: unknown }>,
-  };
+/** Every node reachable from `root` through its inputs. */
+function reachable(root: Node): Set<Node> {
+  const seen = new Set<Node>();
+  root.traverse((n: Node) => {
+    seen.add(n);
+  });
+  return seen;
 }
 
-test("what stands on the ground takes its far shadow and sky view", () => {
-  const light = groundLight({ horizon: true, svf: true });
-  const sh = standardShader();
-  injectGroundLight(sh, light, true);
-  // the rows and the frustum by reference: the sliders and the sun rig
-  // reach it
-  expect(sh.uniforms.uHorizonShade).toBe(light.horizonShade);
-  expect(sh.uniforms.uShadowReach).toBe(light.shadowReach);
-  expect(sh.uniforms.uSkyView).toBe(light.skyView);
-  expect(sh.vertexShader).toContain("vSplatUv = vec2(");
-  expect(sh.fragmentShader).toContain("hzSunVisible( vSplatUv )");
-  expect(sh.fragmentShader).toContain("min( getShadow(");
-  expect(sh.fragmentShader).toContain("*= mix( 1.0, skySvf, uSkyView )");
-  // the terms are defined before anything reads them
-  expect(sh.fragmentShader.indexOf("float hzLit")).toBeLessThan(
-    sh.fragmentShader.indexOf("directLight.color *= hzLit")
-  );
+function texturesOf(root: Node): unknown[] {
+  return [...reachable(root)]
+    .filter((n): n is TextureNode => (n as TextureNode).isTextureNode === true)
+    .map((n) => n.value);
+}
+
+/** The node three's ShadowNode would get back for a shadow term. */
+function received(material: MeshStandardNodeMaterial, shadow: Node): Node {
+  const fn = material.receivedShadowNode as ((s: Node) => Node) | null;
+  if (!fn) {
+    throw new Error("no receivedShadowNode");
+  }
+  return fn(shadow);
+}
+
+test("the sky view scales the ambient through aoNode, by the shared row", () => {
+  const light = groundLight({ horizon: false, svf: true });
+  const material = groundLitMaterial({ roughness: 1 }, light, true);
+  expect(material).toBeInstanceOf(MeshStandardNodeMaterial);
+  expect(material.aoNode).not.toBeNull();
+  const ao = reachable(material.aoNode as Node);
+  // the row by reference: the slider reaches it without a rebuild
+  expect(ao.has(light.skyView)).toBe(true);
+  expect(texturesOf(material.aoNode as Node)).toContain(light.svf);
+  // no horizon, no change to the sun's shadow
+  expect(material.receivedShadowNode).toBeNull();
+});
+
+test("the far horizon joins the sun's shadow by min, never a product", () => {
+  const light = groundLight({ horizon: true, svf: false });
+  const material = new MeshStandardNodeMaterial();
+  applyGroundLight(material, light);
+  const shadow = float(0.5);
+  type Math = Node & { aNode?: Node; method?: string; node?: Math };
+  const result = received(material, shadow) as Math;
+  // three wraps a math node in a variable
+  const out = result.node ?? result;
+  expect(out.method).toBe("min");
+  expect(out.aNode).toBe(shadow);
+  // the horizon row by reference
+  expect(reachable(out).has(light.horizonShade)).toBe(true);
+  expect(material.aoNode).toBeNull();
 });
 
 test("a wall takes the far shadow without the ground's sky view", () => {
   const light = groundLight({ horizon: true, svf: true });
-  const sh = standardShader();
-  injectGroundLight(sh, light, false);
-  expect(sh.fragmentShader).toContain("hzSunVisible( vSplatUv )");
-  expect(sh.fragmentShader).not.toContain("skySvf, uSkyView");
-  expect(sh.uniforms.uSvf).toBeUndefined();
-  expect(groundLightKey(light, false)).not.toBe(groundLightKey(light, true));
+  const wall = new Mesh();
+  dressWalls(wall, light);
+  const material = wall.material as MeshStandardNodeMaterial;
+  expect(material.aoNode).toBeNull();
+  expect(material.receivedShadowNode).not.toBeNull();
+  expect(wall.castShadow).toBe(true);
 });
 
-test("a tile without the rasters leaves the shader as it was", () => {
-  const sh = standardShader();
-  injectGroundLight(sh, undefined, true);
-  injectGroundLight(sh, groundLight({ horizon: false, svf: false }), true);
-  expect(sh.fragmentShader).toBe(ShaderLib.physical.fragmentShader);
-  expect(sh.vertexShader).toBe(ShaderLib.physical.vertexShader);
-  expect(groundLightKey(undefined, true)).toBe("gl00");
+test("kerbs, stairs and fences take both terms", () => {
+  const light = groundLight({ horizon: true, svf: true });
+  for (const dress of [dressKerbs, dressStairs, dressFences]) {
+    const mesh = new Mesh();
+    dress(mesh, light);
+    const material = mesh.material as MeshStandardNodeMaterial;
+    expect(material).toBeInstanceOf(MeshStandardNodeMaterial);
+    expect(material.aoNode).not.toBeNull();
+    expect(material.receivedShadowNode).not.toBeNull();
+  }
+});
+
+test("a fence is one lit band: tone, ground normal and self-light in node slots", () => {
+  const mesh = new Mesh();
+  dressFences(mesh);
+  const material = mesh.material as MeshStandardNodeMaterial;
+  expect(material.colorNode).not.toBeNull();
+  expect(material.normalNode).not.toBeNull();
+  expect(material.emissiveNode).not.toBeNull();
+  // it receives shadows but casts none
+  expect(mesh.castShadow).toBe(false);
+  expect(mesh.receiveShadow).toBe(true);
+});
+
+test("a tile without the rasters leaves the material as it was", () => {
+  const material = new MeshStandardNodeMaterial();
+  applyGroundLight(material, undefined);
+  applyGroundLight(material, groundLight({ horizon: false, svf: false }));
+  // a sky view only, where the caller wants none
+  applyGroundLight(material, groundLight({ horizon: false, svf: true }), false);
+  expect(material.aoNode).toBeNull();
+  expect(material.receivedShadowNode).toBeNull();
+});
+
+test("the clay's sky view swaps its raster in without a new node", () => {
+  const sky = createClaySky();
+  const ao = sky.ao(float(2), float(9), float(1));
+  const [tex] = texturesOf(ao);
+  expect(tex).toBe(openSkyTexture());
+  const raster = new DataTexture();
+  sky.set(raster, [100, 200], [1000, 1000]);
+  expect(texturesOf(ao)).toContain(raster);
+});
+
+test("the open-sky texel samples as the rasters that replace it (LINEAR)", () => {
+  const tex = openSkyTexture();
+  expect(tex.magFilter).toBe(LinearFilter);
+  expect(tex.minFilter).toBe(LinearFilter);
 });

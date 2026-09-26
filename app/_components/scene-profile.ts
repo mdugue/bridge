@@ -3,13 +3,13 @@
  * expensive each frame is allowed to be.
  *
  * `full` is the product: the whole site streams (lib/city/tileset.ts), a
- * 3072² shadow map and Medium-quality SSAO. `lite` exists for the headless
- * e2e suite, where every frame is rasterized on the CPU by SwiftShader: it
- * streams the spawn tile only, shrinks the shadow map, halves the render
- * scale and runs N8AO in its Performance mode — the four knobs that actually
- * cost seconds a frame there. Everything a test asserts on — the loaders, the
- * layer construction, the shader programs of every style, the HUD wiring —
- * is identical in both profiles. Measured on two cores: a clay frame drops
+ * 3072² shadow map and 16-sample contact shadows (GTAO). `lite` exists for
+ * the headless e2e suite, where every frame is rasterized on the CPU by
+ * SwiftShader: it streams the spawn tile only, shrinks the shadow map, halves
+ * the render scale and halves the GTAO samples — the four knobs that
+ * actually cost seconds a frame there. Everything a test asserts on — the
+ * loaders, the layer construction, the node materials of every layer, the
+ * HUD wiring — is identical in both profiles. Measured on two cores: a clay frame drops
  * from ~4 s to well under one, and boot from ~14 s to ~5 s.
  *
  * Opt in with `?scene=lite`. The default is always `full`, so nothing about a
@@ -33,10 +33,13 @@ export type SceneProfile = "full" | "lite";
 
 export type DeviceTier = "desktop" | "mobile";
 
-/** The N8AO quality modes this scene uses (the pass also knows Low/High/Ultra). */
-export type AoQuality = "Medium" | "Performance";
-
 export interface SceneBudget {
+  /**
+   * `?gpu=webgl2`: WebGPURenderer on its WebGL2 backend even where WebGPU
+   * is available — what a browser without WebGPU gets, for QA and for
+   * comparing the two backends on one machine. Off by default.
+   */
+  forceWebGL: boolean;
   /** phones take the 2048² land-cover rasters (lib/city/tile.ts, MOBILE_RASTER_PX) */
   lowRasters: boolean;
   /** whether the rest of the site streams: always in `full`, in `lite` only with `?block=1` */
@@ -48,6 +51,11 @@ export interface SceneBudget {
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
 export function sceneProfileFromSearch(search: string): SceneProfile {
   return new URLSearchParams(search).get("scene") === "lite" ? "lite" : "full";
+}
+
+/** `?gpu=webgl2` forces the renderer's WebGL2 backend. Pure. */
+export function forceWebGLFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("gpu") === "webgl2";
 }
 
 /**
@@ -75,6 +83,7 @@ export function sceneBudgetFor(
   const profile = sceneProfileFromSearch(search);
   const tier = deviceTierFromMedia(coarseNoHover);
   return {
+    forceWebGL: forceWebGLFromSearch(search),
     profile,
     tier,
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
@@ -120,7 +129,7 @@ export function shadowMapSizeFor(
  * resolution (a quarter of the pixels) and lets the browser upscale — the
  * only honest way to cut fill-rate in the headless suite, where every pixel
  * is shaded on the CPU. A phone is capped at 1.5 (its 3x panel would
- * otherwise push the post stack's half-float buffers past what fits).
+ * otherwise push the post stack's screen buffers past what fits).
  */
 export function pixelRatioFor(
   profile: SceneProfile,
@@ -157,11 +166,12 @@ export function tileCacheBytesFor(tier: DeviceTier): {
 }
 
 /**
- * SSAO quality for a profile: headless SwiftShader cannot afford the product's
- * sample count. Keyed on the profile, not `navigator.webdriver` — Playwright
- * sets that flag in the `--headed` shot harness too, which must render the
- * product's AO.
+ * GTAO samples for a profile: headless SwiftShader cannot afford the
+ * product's sample count. Keyed on the profile, not `navigator.webdriver` —
+ * Playwright sets that flag in the `--headed` shot harness too, which must
+ * render the product's AO. A construction-time setting: a change of the
+ * count rebuilds the pass's material.
  */
-export function aoQualityFor(profile: SceneProfile): AoQuality {
-  return profile === "lite" ? "Performance" : "Medium";
+export function aoSamplesFor(profile: SceneProfile): number {
+  return profile === "lite" ? 8 : 16;
 }

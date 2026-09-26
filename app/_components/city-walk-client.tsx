@@ -27,7 +27,8 @@ function BootScreen() {
   );
 }
 
-// three.js needs a real browser (WebGL, pointer lock) — never prerender it.
+// three.js needs a real browser (WebGPU or WebGL2, pointer lock) — never
+// prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
 const CityWalk = dynamic(() => import("./city-walk"), {
   ssr: false,

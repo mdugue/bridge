@@ -1,5 +1,5 @@
-import type { PerspectiveCamera } from "three";
-import { Vector3 } from "three";
+import type { PerspectiveCamera } from "three/webgpu";
+import { Vector3 } from "three/webgpu";
 import { approachHeight } from "@/lib/city/ground-clamp";
 
 /** m/s. Walk is pedestrian-ish (Shift sprints); fly covers the 2 km tile. */

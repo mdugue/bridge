@@ -1,24 +1,26 @@
 import {
   AdditiveBlending,
   BoxGeometry,
-  BufferAttribute,
-  BufferGeometry,
-  CanvasTexture,
+  type BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
   Group,
-  InstancedMesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  Object3D,
+  type Material,
+  Matrix4,
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
+  PlaneGeometry,
   PointLight,
-  Points,
-  PointsMaterial,
+  PointsNodeMaterial,
   Vector3,
-} from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+} from "three/webgpu";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { color, float, mix, select, uniform, uv, vec3, vec4 } from "three/tsl";
 import type { LampFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { Instances, instancePosition } from "./instancing";
+import type { F, Live } from "./shader-chunks";
+import { sceneMaterial } from "./three-utils";
 
 /** Lamp post height (m). OSM rarely tags it; the bake defaults each lamp to 5 m. */
 const LAMP_H = 5;
@@ -48,7 +50,8 @@ interface Place {
 
 /** Per-tile lamp visuals (posts + heads + glow + ground pools) on the Y-up scene. */
 export interface LampControl {
-  /** Frees the shared glow sprite; the meshes are freed with the scene. */
+  /** Nothing of the tile's own to free: the meshes go with the scene and
+   *  the materials (and their procedural glow) are scene-wide. */
   dispose: () => void;
   group: Group;
   /** world-space (Y-up) lantern-head positions, fed to the shared light pool */
@@ -68,124 +71,161 @@ export interface LampLights {
   updateNearest: (camPos: Vector3) => void;
 }
 
-/** A 64² soft radial-alpha disc, shared by the glow sprites and ground pools. */
-function makeGlowSprite(): CanvasTexture {
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    const half = size / 2;
-    const g = ctx.createRadialGradient(half, half, 0, half, half, half);
-    g.addColorStop(0, "rgba(255,255,255,1)");
-    g.addColorStop(0.5, "rgba(255,255,255,0.4)");
-    g.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, size, size);
-  }
-  return new CanvasTexture(canvas);
+/** The lamps' warm light (the heads' emissive, halos, pools, real lights). */
+const LAMP_LIGHT = 0xff_d0_89;
+
+/**
+ * The one night factor every tile's lamps read (0 by day → 1 at night): a
+ * uniform node, so a tile's `setNightFactor` is a uniform write — every
+ * tile is driven with the same value, and one that streams in later is
+ * born with it. The materials are then the scene's (`sceneMaterial`), one
+ * node build for every tile.
+ */
+const lampNight: Live = uniform(0);
+
+/**
+ * The soft radial alpha of the halos and pools, from the quad's (or disc's)
+ * uv: 1 at the centre, 0.4 halfway out, 0 at the rim and past it — the
+ * stops of the 64² canvas gradient this used to be, interpolated linearly
+ * as the canvas did. Radially symmetric, so no uv flip can turn it.
+ */
+function glowAlpha(): F {
+  const r = uv().sub(0.5).length().mul(2);
+  return select(
+    r.lessThan(0.5),
+    mix(float(1), float(0.4), r.mul(2)),
+    mix(float(0.4), float(0), r.sub(0.5).mul(2).clamp(0, 1))
+  );
 }
 
-function placeInstances(mesh: InstancedMesh, places: Place[]): void {
-  const dummy = new Object3D();
+function placeInstances(
+  geo: BufferGeometry,
+  material: Material,
+  places: Place[],
+  scale = 1
+): Instances {
+  const mesh = new Instances(geo, material, places.length);
+  const m = new Matrix4();
   for (let i = 0; i < places.length; i++) {
-    dummy.position.set(places[i].x, places[i].y, places[i].z);
-    dummy.updateMatrix();
-    mesh.setMatrixAt(i, dummy.matrix);
+    m.makeScale(scale, scale, scale).setPosition(
+      places[i].x,
+      places[i].y,
+      places[i].z
+    );
+    mesh.setMatrixAt(i, m);
   }
   mesh.instanceMatrix.needsUpdate = true;
   // Spread-out cloud: recompute the sphere or it culls when the origin is off-screen.
   mesh.computeBoundingSphere();
+  return mesh;
 }
 
 /** Tapered pole topped by a small dark housing — a normal lit mesh (~12 tris). */
-function buildPosts(places: Place[]): InstancedMesh {
+function buildPosts(places: Place[]): Instances {
   const pole = new CylinderGeometry(0.06, 0.1, LAMP_H, 6);
   pole.translate(0, LAMP_H / 2, 0);
   const housing = new BoxGeometry(0.32, 0.22, 0.32);
   housing.translate(0, LAMP_H, 0);
   const geo = mergeGeometries([pole, housing]) ?? pole;
-  const mat = new MeshStandardMaterial({
-    color: 0x3a_3a_40,
-    roughness: 0.7,
-    metalness: 0.2,
+  const mat = sceneMaterial("lamp-post", () => {
+    const m = new MeshStandardNodeMaterial({
+      color: 0x3a_3a_40,
+      roughness: 0.7,
+      metalness: 0.2,
+    });
+    m.positionNode = instancePosition();
+    return m;
   });
-  const mesh = new InstancedMesh(geo, mat, places.length);
+  const mesh = placeInstances(geo, mat, places);
+  mesh.name = "lamp-posts";
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  placeInstances(mesh, places);
   return mesh;
 }
 
-/** Emissive lantern head; emissiveIntensity rides nightFactor (0 by day). */
-function buildHeads(places: Place[]): InstancedMesh {
+/** Emissive lantern head; the emissive rides the night factor (0 by day). */
+function buildHeads(places: Place[]): Instances {
   const geo = new BoxGeometry(0.3, 0.3, 0.3);
   geo.translate(0, LAMP_H, 0);
-  const mat = new MeshStandardMaterial({
-    color: 0x33_33_2e,
-    roughness: 0.6,
-    emissive: 0xff_d0_89,
-    emissiveIntensity: 0,
+  const mat = sceneMaterial("lamp-head", () => {
+    const m = new MeshStandardNodeMaterial({
+      color: 0x33_33_2e,
+      roughness: 0.6,
+    });
+    m.positionNode = instancePosition();
+    m.emissiveNode = color(LAMP_LIGHT).mul(lampNight.mul(HEAD_EMISSIVE));
+    return m;
   });
-  const mesh = new InstancedMesh(geo, mat, places.length);
+  const mesh = placeInstances(geo, mat, places);
+  mesh.name = "lamp-heads";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  placeInstances(mesh, places);
   return mesh;
 }
 
-/** Additive billboard halos at each head — a Points cloud (one draw call). */
-function buildGlow(heads: Vector3[], sprite: CanvasTexture): Points {
-  const positions = new Float32Array(heads.length * 3);
-  for (let i = 0; i < heads.length; i++) {
-    positions[i * 3] = heads[i].x;
-    positions[i * 3 + 1] = heads[i].y;
-    positions[i * 3 + 2] = heads[i].z;
-  }
-  const geo = new BufferGeometry();
-  geo.setAttribute("position", new BufferAttribute(positions, 3));
-  geo.computeBoundingSphere();
-  const mat = new PointsMaterial({
-    map: sprite,
-    size: GLOW_SIZE,
-    sizeAttenuation: true,
-    transparent: true,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-    color: 0xff_d0_89,
-    opacity: 0,
+/**
+ * Additive billboard halos at each head, one draw call: a unit quad per
+ * head under a `PointsNodeMaterial`, which on a mesh (not `Points`) draws
+ * each vertex's quad corner as a screen-space offset of `size` pixels,
+ * attenuated by depth as the old point sprites were (`size × half the
+ * canvas height / depth`). A real `Points` cloud will not do: WebGPU
+ * draws point primitives one pixel wide whatever their size. The instance
+ * matrix carries the head's position (the quad's centre, `positionNode`)
+ * and a scale of the halo's size, which only widens the set's bounding
+ * sphere so a halo whose head is just off-screen is not culled.
+ */
+function buildGlow(heads: Vector3[]): Instances {
+  const geo = new PlaneGeometry(1, 1);
+  geo.deleteAttribute("normal");
+  const mat = sceneMaterial("lamp-glow", () => {
+    const m = new PointsNodeMaterial({
+      color: LAMP_LIGHT,
+      size: GLOW_SIZE,
+      sizeAttenuation: true,
+      transparent: true,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    m.positionNode = instancePosition(vec3(0));
+    m.colorNode = vec4(color(LAMP_LIGHT), glowAlpha());
+    m.opacityNode = lampNight.mul(GLOW_OPACITY);
+    return m;
   });
-  const points = new Points(geo, mat);
-  points.name = "lamp-glow";
-  points.visible = false;
-  return points;
-}
-
-/** Flat additive disc on the pavement — the "pool" that sells night. */
-function buildDecals(places: Place[], sprite: CanvasTexture): InstancedMesh {
-  const geo = new CircleGeometry(POOL_R, 24);
-  geo.rotateX(-Math.PI / 2); // face up (XZ plane)
-  const mat = new MeshBasicMaterial({
-    map: sprite,
-    color: 0xff_d0_89,
-    transparent: true,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-    opacity: 0,
-    // Lift + offset so the disc doesn't z-fight the (sloped) street.
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
-  });
-  const decals = places.map((p) => ({ x: p.x, y: p.y + 0.05, z: p.z }));
-  const mesh = new InstancedMesh(geo, mat, decals.length);
+  const mesh = placeInstances(geo, mat, heads, GLOW_SIZE);
+  mesh.name = "lamp-glow";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.visible = false;
-  placeInstances(mesh, decals);
+  return mesh;
+}
+
+/** Flat additive disc on the pavement — the "pool" that sells night. */
+function buildDecals(places: Place[]): Instances {
+  const geo = new CircleGeometry(POOL_R, 24);
+  geo.rotateX(-Math.PI / 2); // face up (XZ plane)
+  const mat = sceneMaterial("lamp-pool", () => {
+    const m = new MeshBasicNodeMaterial({
+      color: LAMP_LIGHT,
+      transparent: true,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+      // Lift + offset so the disc doesn't z-fight the (sloped) street.
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+    m.positionNode = instancePosition();
+    m.opacityNode = lampNight.mul(POOL_OPACITY).mul(glowAlpha());
+    return m;
+  });
+  const decals = places.map((p) => ({ x: p.x, y: p.y + 0.05, z: p.z }));
+  const mesh = placeInstances(geo, mat, decals);
+  mesh.name = "lamp-pools";
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.visible = false;
   return mesh;
 }
 
@@ -233,31 +273,29 @@ export function buildLamps(
     };
   }
 
-  const sprite = makeGlowSprite();
   const posts = buildPosts(places);
   const heads = buildHeads(places);
-  const glow = buildGlow(headPositions, sprite);
-  const decals = buildDecals(places, sprite);
+  const glow = buildGlow(headPositions);
+  const decals = buildDecals(places);
   group.add(posts, heads, glow, decals);
-
-  const headMat = heads.material as MeshStandardMaterial;
-  const glowMat = glow.material as PointsMaterial;
-  const decalMat = decals.material as MeshBasicMaterial;
 
   return {
     group,
     headPositions,
     setNightFactor: (t) => {
       const nf = Math.min(Math.max(t, 0), 1);
-      headMat.emissiveIntensity = nf * HEAD_EMISSIVE;
-      glowMat.opacity = nf * GLOW_OPACITY;
-      decalMat.opacity = nf * POOL_OPACITY;
+      // One value for every tile: the heads' emissive, the halos' and the
+      // pools' opacity all read it. Visibility stays per tile, so by day
+      // the additive passes are skipped outright.
+      lampNight.value = nf;
       glow.visible = nf > 0.01;
       decals.visible = nf > 0.01;
     },
-    // disposeObject3D frees the meshes with the scene; the CanvasTexture the
-    // glow and pool materials share is this layer's to free.
-    dispose: () => sprite.dispose(),
+    // disposeObject3D frees the meshes with the scene; nothing else is the
+    // tile's.
+    dispose: () => {
+      // nothing of its own
+    },
   };
 }
 

@@ -1,13 +1,14 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  type Color,
   DataTexture,
   FloatType,
   LinearFilter,
   LinearMipmapLinearFilter,
   Matrix4,
   type Mesh,
-  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
   NearestFilter,
   NoColorSpace,
   RedFormat,
@@ -15,9 +16,41 @@ import {
   RGFormat,
   Texture,
   UnsignedByteType,
+  Vector2,
   Vector3,
-  type WebGLRenderer,
-} from "three";
+  Vector4,
+  type UniformNode,
+  type WebGPURenderer,
+} from "three/webgpu";
+import {
+  abs,
+  cameraViewMatrix,
+  clamp,
+  cos,
+  dot,
+  float,
+  floor,
+  fract,
+  Fn,
+  fwidth,
+  length,
+  materialColor,
+  max,
+  min,
+  mix,
+  normalize,
+  normalView,
+  positionWorld,
+  property,
+  select,
+  sin,
+  smoothstep,
+  step,
+  texture,
+  uniform,
+  vec3,
+  vec4,
+} from "three/tsl";
 import {
   sampleHeightfield,
   type TerrainBounds,
@@ -34,28 +67,29 @@ import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
 import { TinIndex } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
+import { colonyGarden } from "./cultivated-layer";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
 import {
-  GROUND_DETAIL,
-  GROUND_NORMAL,
-  groundDetailDecl,
+  type GroundColour,
+  type GroundInputs,
+  groundDetail,
   groundFields,
+  groundNormal,
   urbanGreen,
 } from "./ground-detail";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { DATA_POSITION } from "./shader-chunks";
-import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
-import { COLONY_DECL, COLONY_GARDEN_GLSL } from "./cultivated-layer";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
-import { MARKINGS_DECL, ROAD_MARKINGS } from "./road-markings";
-import type { SharedRasters } from "./shared-rasters";
+import { roadMarkings } from "./road-markings";
 import {
-  type GroundLight,
-  lightsWithFarShadow,
-  SKY_VIEW_AO,
-  skyLightBody,
-  skyLightDecl,
-} from "./sky-light";
+  dataXY,
+  type F,
+  type Live,
+  rasterUv,
+  type V2,
+  type V3,
+} from "./shader-chunks";
+import type { SharedRasters } from "./shared-rasters";
+import { applyGroundLight, type GroundLight } from "./sky-light";
+import { sportGround } from "./sport-ground";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
@@ -89,28 +123,26 @@ export interface TerrainLayer {
   /** animated water surface, present only when the class raster loaded */
   water?: WaterLayer;
   /** the tile's baked light for what stands on this level (kerbs, fences,
-   *  stairs, walls; sky-light.ts `injectGroundLight`), when it has any */
+   *  stairs, walls; sky-light.ts `applyGroundLight`), when it has any */
   light?: GroundLight;
 }
 
 export interface TerrainOptions {
   /** resolves a file named in the tile's extras to its URL */
   fileUrl: (file: string) => string;
-  /** shared valley height-fog uniforms (by reference); patched into the
-   * terrain + water materials so the river/floor pools haze without a seam */
-  heightFog?: HeightFogUniforms;
+  /** the scene fog's colour (height-fog.ts), the water's sky tint */
+  fogColor: UniformNode<"color", Color>;
   /** phones sample the ≤ 2048² class raster */
   lowRasters: boolean;
-  /** the ground's look strengths (by reference) for the HUD sliders */
-  ground?: GroundUniforms;
+  /** the ground's look rows and the sun (uniform nodes, shared by every
+   *  tile) */
+  ground: GroundUniforms;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
   /** paints the colour splat from the class raster (one GPU pass) */
-  renderer: WebGLRenderer;
+  renderer: WebGPURenderer;
   /** aborts the raster downloads */
   signal?: AbortSignal;
-  /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
-  sunDirection?: Vector3;
   /** the sky-view rasters, shared with the tile's buildings (tile-stream.ts) */
   skyView?: SharedRasters<Texture>;
   /** the horizon rasters, shared by a tile's two terrain levels (both name
@@ -119,23 +151,26 @@ export interface TerrainOptions {
 }
 
 /**
- * The terrain's look rows, shared by reference with every tile's material so
- * a slider retunes them live (a uniform write, no recompile).
+ * The terrain's look rows and the sun: uniform nodes shared by every tile's
+ * material, so a slider retunes them live (a uniform write, no rebuild).
  */
 export interface GroundUniforms {
   /** kerbs, lawn edges and paving patterns (ground-detail.ts) */
-  groundDetail: { value: number };
+  groundDetail: Live;
   /** the meadow's DOP greenness tint */
-  meadowNdvi: { value: number };
+  meadowNdvi: Live;
   /** meadow colour on green built-up ground (courtyards, parks) */
-  urbanGreen: { value: number };
+  urbanGreen: Live;
   /** the sky-view factor's hold on the ambient light (sky-light.ts) */
-  skyView: { value: number };
+  skyView: Live;
   /** the far horizon's cut of the sun (sky-light.ts) */
-  horizonShade: { value: number };
+  horizonShade: Live;
   /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
    *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
-  shadowReach: { value: Vector3 };
+  shadowReach: UniformNode<"vec3", Vector3>;
+  /** world (Y-up) sun direction, surface → sun, kept by the sun rig: the
+   *  kerb's drawn shadow, the horizon, the water's Fresnel and glitter */
+  sunDirection: UniformNode<"vec3", Vector3>;
 }
 
 /**
@@ -215,11 +250,14 @@ async function loadBitmapTexture(
   texture.flipY = false;
   texture.format = RedFormat;
   texture.needsUpdate = true;
-  // Release the decoded pixels right after the upload (see above).
-  texture.onUpdate = () => {
+  // Not closed after the upload, unlike the data rasters' bytes: three may
+  // upload the image again (a re-created GPU texture reads `image`), and a
+  // closed bitmap uploads empty — the ground would turn to class 0. Freed
+  // with the texture instead. Rare: only a PNG our decoder rejects lands
+  // here.
+  texture.addEventListener("dispose", () => {
     bitmap.close();
-    texture.onUpdate = null;
-  };
+  });
   return { texture, width: bitmap.width, height: bitmap.height };
 }
 
@@ -460,8 +498,8 @@ export interface SplatLayer {
   /** the palette-painted colours (RGB) + water coverage (A); LINEAR +
    *  mipmapped for soft transitions (landcover-splat.ts) */
   colorTexture: Texture;
-  /** the look strengths (shared refs, mutated by the HUD sliders) */
-  ground?: GroundUniforms;
+  /** the look rows and the sun (shared uniform nodes) */
+  ground: GroundUniforms;
   /** DOP NDVI raster (LINEAR) for the meadow and urban-green tints */
   ndviTexture?: Texture;
   offset: { cx: number; cy: number };
@@ -480,72 +518,108 @@ export interface SplatLayer {
   svfTexture?: Texture;
   /** far horizon, 4 RGBA layers (LINEAR) for the far sun shadow */
   horizonTexture?: Texture;
-  /** shared world sun direction (surface → sun), for the kerb's shadow */
-  sunDirection?: Vector3;
   /** class-id raster (NEAREST); the meadow detail tests it */
   texture: Texture;
 }
 
+/** The tile's size (m) in the data frame. */
+const splatSize = (splat: SplatLayer): [number, number] => {
+  const [minX, minY, maxX, maxY] = splat.bounds;
+  return [maxX - minX, maxY - minY];
+};
+
 /**
- * Meadow (class 1) painterly depth, added in the already-running terrain
- * fragment pass — zero geometry. A value mottle (±~6%) plus a faint shading-
- * normal break-up so the grazing sun catches texture; the class id comes from
- * the NEAREST class raster (`uSplatClass`), not RGB colour-distance, which would
- * misfire on the forest/copse/farmland greens. Distance-faded via `fwidth` so it
- * never aliases/shimmers in the far field (the failure mode that got plain
+ * The splat uv at the fragment: from the data-frame XY and the tile bounds
+ * (v grows southward) — the terrain geometry carries no uv attribute. The
+ * tile's north-west corner is a uniform, so every tile builds the same
+ * node code (water-layer.ts reads the splat the same way).
+ */
+export function splatUv(splat: SplatLayer): V2 {
+  const [minX, , , maxY] = splat.bounds;
+  const origin = uniform(
+    new Vector2(minX - splat.offset.cx, maxY - splat.offset.cy)
+  );
+  return rasterUv(dataXY(), origin, splatSize(splat));
+}
+
+/** The meadow's palette colour, linear — the urban green and grass pavers. */
+const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
+
+/** The road's palette colour, linear — sealed ground off the carriageway. */
+const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
+
+/**
+ * The meadow detail the colour writes and the normal reads: the grass
+ * normal's weight and the ground detail's accumulated tilt. Named shader
+ * variables (`property`), assigned by the colour node — which three builds
+ * before the lighting that asks for the normal — so the normal does not
+ * recompute the ground detail, the sports grounds' row search with it.
+ * Unwritten (no class raster), they read 0.
+ */
+const grassDetail = property("float", "terrainGrassDetail", float(0));
+const groundTilt = property("vec3", "terrainGroundTilt", vec3(0));
+
+/**
+ * Meadow (class 1) painterly depth, in the colour node — zero geometry. A
+ * value mottle (±~6%) plus a faint shading-normal break-up (`terrainNormal`)
+ * so the grazing sun catches texture; the class id comes from the NEAREST
+ * class raster, not RGB colour-distance, which would misfire on the
+ * forest/copse/farmland greens. Distance-faded via `fwidth` so it never
+ * aliases/shimmers in the far field (the failure mode that got plain
  * foliage translucency rejected as "noise").
  */
-const GRASS_MOTTLE = /* glsl */ `
-  float grCls = floor( texture2D( uSplatClass, vSplatUv ).r * 255.0 + 0.5 );
-  float grMeadow = 1.0 - step( 0.5, abs( grCls - 1.0 ) );
-  float grFw = max( fwidth( vWorldXY.x ), fwidth( vWorldXY.y ) );
-  float grDetail = grMeadow * ( 1.0 - smoothstep( 0.5, 2.5, grFw ) );
-  float grMottle = sin( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.7
-                 + sin( vWorldXY.x * 2.7 - 0.5 ) * sin( vWorldXY.y * 2.3 + 1.1 ) * 0.3;
-  baseCol *= 1.0 + grMottle * 0.035 * grDetail;
-`;
+function grassMottle(inp: GroundInputs, splat: SplatLayer): GroundColour {
+  const { xy, cls, fw } = inp;
+  const meadow = float(1)
+    .sub(step(0.5, abs(cls.sub(MEADOW_CLASS))))
+    .toVar();
+  const mottle = sin(xy.x.mul(0.85).add(1.3))
+    .mul(sin(xy.y.mul(0.78).sub(0.7)))
+    .mul(0.7)
+    .add(
+      sin(xy.x.mul(2.7).sub(0.5))
+        .mul(sin(xy.y.mul(2.3).add(1.1)))
+        .mul(0.3)
+    )
+    .toVar();
+  const col: GroundColour = {
+    baseCol: texture(splat.colorTexture, inp.uv).rgb.toVar(),
+    meadow,
+    detail: meadow.mul(float(1).sub(smoothstep(0.5, 2.5, fw))).toVar(),
+    mottle,
+  };
+  col.baseCol.mulAssign(mottle.mul(0.035).mul(col.detail).add(1));
+  return col;
+}
 
 /**
- * Calm the ground's shading. The DGM1 carries every kerb, rut and survey
- * wobble, and the baked normals are quantised to 8 bits, so lit by a low
- * sun a street, a meadow or a quay reads as coarse dark-and-light flecks —
- * "dirty" rather than drawn. Near-flat normals (under ~12°) are pulled to
- * straight up, keeping a trace of the relief; real slopes (embankments, the
- * valley sides) keep their full shading, and the contour ink carries the
- * rest of the terrain's form.
+ * Meadow NDVI tint (Wiesenfärbung): on class-1 farmland/meadow only, shift
+ * the pastel sage toward lush deep-green where the DOP greenness is high
+ * and a drier yellow-tan where it's low — large-area colour variation the
+ * flat splat can't give. The NDVI is LINEAR-filtered so the ~2 m raster
+ * reads smooth, and a tiny `step` gates out zero/nodata texels (keep the
+ * base sage, don't grey out).
  */
-const TERRAIN_NORMAL = /* glsl */ `
-  #include <normal_fragment_begin>
-  vec3 tnUp = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
-  float tnKeep = 1.0 - smoothstep( 0.93, 0.985, dot( normal, tnUp ) );
-  normal = normalize( mix( tnUp, normal, max( tnKeep, 0.12 ) ) );
-`;
-
-const GRASS_NORMAL = /* glsl */ `
-  ${TERRAIN_NORMAL}
-  float grGx = cos( vWorldXY.x * 0.85 + 1.3 ) * sin( vWorldXY.y * 0.78 - 0.7 ) * 0.85;
-  float grGy = sin( vWorldXY.x * 0.85 + 1.3 ) * cos( vWorldXY.y * 0.78 - 0.7 ) * 0.78;
-  normal = normalize( normal + vec3( grGx, grGy, 0.0 ) * 0.06 * grDetail );
-`;
-
-/**
- * Meadow NDVI tint (Wiesenfärbung): on class-1 farmland/meadow only, shift the
- * pastel sage toward lush deep-green where the DOP greenness is high and a drier
- * yellow-tan where it's low — large-area colour variation the flat splat can't
- * give. `grMeadow` (from the class raster) and `baseCol` are in scope from
- * GRASS_MOTTLE; the NDVI is LINEAR-filtered so the ~2 m raster reads smooth, and
- * a tiny `step` gates out zero/nodata texels (keep the base sage, don't grey out).
- */
-const MEADOW_NDVI = /* glsl */ `
-  // Read from a coarser mip: the 2 m raster carries every path, tree shadow
-  // and bare patch, which painted the meadows in dark flecks. Averaged over
-  // ~10 m it is what it should be — broad lush and dry drifts.
-  float grNdvi = texture2D( uNdvi, vSplatUv, 2.5 ).r;
-  float grNdviT = smoothstep( 0.1, 0.6, grNdvi );
-  vec3 grTint = mix( baseCol * vec3( 1.08, 1.02, 0.88 ),  // dry: paler warm hay
-                     baseCol * vec3( 0.84, 1.06, 0.74 ), grNdviT );  // lush: deeper grass
-  baseCol = mix( baseCol, grTint, uMeadowNdvi * grMeadow * step( 0.012, grNdvi ) );
-`;
+function meadowNdvi(
+  inp: GroundInputs,
+  col: GroundColour,
+  ndvi: Texture,
+  strength: Live
+): void {
+  // Read from a coarser mip (a bias of 2.5): the 2 m raster carries every
+  // path, tree shadow and bare patch, which painted the meadows in dark
+  // flecks. Averaged over ~10 m it is what it should be — broad lush and
+  // dry drifts.
+  const g = texture(ndvi, inp.uv).bias(float(2.5)).r.toVar();
+  const t = smoothstep(0.1, 0.6, g);
+  const c = col.baseCol;
+  const tint = mix(
+    c.mul(vec3(1.08, 1.02, 0.88)), // dry: paler warm hay
+    c.mul(vec3(0.84, 1.06, 0.74)), // lush: deeper grass
+    t
+  );
+  c.assign(mix(c, tint, strength.mul(col.meadow).mul(step(0.012, g))));
+}
 
 /**
  * Sketch contour lines (2 m minor / 10 m major) on the data-frame elevation,
@@ -554,235 +628,153 @@ const MEADOW_NDVI = /* glsl */ `
  * but a grey stipple, and on the gently rolling DGM (streets, meadows, the
  * river surface) it read as dirty blotches across the whole middle distance.
  */
-const CONTOUR_INK = /* glsl */ `
-  float minorD = vElevation / 2.0;
-  float minorW = fwidth( minorD );
-  // A flat quad lying exactly on a contour has fwidth 0: 0/0 there striped
-  // it with NaN ink (and NaN survives the slope gate's multiply).
-  float minor = minorW > 1e-6 ? 1.0 - min( abs( fract( minorD - 0.5 ) - 0.5 ) / minorW, 1.0 ) : 0.0;
-  minor *= 1.0 - smoothstep( 0.08, 0.2, minorW );
-  float majorD = vElevation / 10.0;
-  float majorW = fwidth( majorD );
-  float major = majorW > 1e-6 ? 1.0 - min( abs( fract( majorD - 0.5 ) - 0.5 ) / majorW, 1.0 ) : 0.0;
-  major *= 1.0 - smoothstep( 0.06, 0.16, majorW );
-  float ink = clamp( minor * 0.08 + major * 0.14, 0.0, 0.22 );
-`;
+function contourInk(elevation: F): F {
+  const set = (step: number, fade: [number, number]): F => {
+    const d = elevation.div(step);
+    const w = fwidth(d);
+    // A flat quad lying exactly on a contour has fwidth 0: 0/0 there
+    // striped it with NaN ink (and NaN survives the slope gate's
+    // multiply) — the select keeps the 0.
+    const line = select(
+      w.greaterThan(1e-6),
+      float(1).sub(min(abs(fract(d.sub(0.5)).sub(0.5)).div(w), 1)),
+      0
+    );
+    return line.mul(float(1).sub(smoothstep(fade[0], fade[1], w)));
+  };
+  const minor = set(2, [0.08, 0.2]);
+  const major = set(10, [0.06, 0.16]);
+  return clamp(minor.mul(0.08).add(major.mul(0.14)), 0, 0.22);
+}
 
 /**
  * Where contours mean nothing, drop them: on near-flat ground (a street,
  * a meadow, the river's DGM surface) every centimetre of measurement noise
- * crosses the 2 m level in a squiggle — the lines only belong on real slopes.
- * The slope is the elevation change per metre across the pixel footprint.
- * Under water the ink is gone too (the sheet is translucent, it showed).
+ * crosses the 2 m level in a squiggle — the lines only belong on real
+ * slopes. The slope is the elevation change per metre across the pixel
+ * footprint. Under water the ink is gone too (the sheet is translucent, it
+ * showed).
  */
-const CONTOUR_SPLAT_GATE = /* glsl */ `
-  float ctRun = max( length( fwidth( vWorldXY ) ), 1e-4 );
-  float ctSlope = fwidth( vElevation ) / ctRun;
-  ink *= smoothstep( 0.025, 0.09, ctSlope );
-  ink *= 1.0 - smoothstep( 0.05, 0.4, texture2D( uSplat, vSplatUv ).a );
-`;
+function contourGate(inp: GroundInputs, elevation: F, splat: SplatLayer): F {
+  const run = max(length(fwidth(inp.xy)), 1e-4);
+  const slope = fwidth(elevation).div(run);
+  const water = texture(splat.colorTexture, inp.uv).a;
+  return smoothstep(0.025, 0.09, slope).mul(
+    float(1).sub(smoothstep(0.05, 0.4, water))
+  );
+}
+
+/** The contour ink's colour, over the ground by the ink's weight. */
+const INK = vec3(0.3, 0.33, 0.38);
+
+/**
+ * The colour node over the class raster: the palette splat, then — term by
+ * term in the order they compose — the meadow mottle, the ground fields,
+ * urban green, the ground detail, the allotment gardens, the sports
+ * grounds, the road markings, the NDVI tint, and the gated contour ink on
+ * top. The optional rasters that did not load leave their term out (a
+ * different node graph, so three builds it apart).
+ */
+function splatColour(splat: SplatLayer): V3 {
+  return Fn(() => {
+    const uv = splatUv(splat).toVar();
+    const xy = dataXY().toVar();
+    const inp: GroundInputs = {
+      uv,
+      xy,
+      size: splatSize(splat),
+      classTexture: splat.texture,
+      fw: max(fwidth(xy.x), fwidth(xy.y)).toVar(),
+      cls: floor(texture(splat.texture, uv).r.mul(255).add(0.5)).toVar(),
+      groundDetail: splat.ground.groundDetail,
+      urbanGreen: splat.ground.urbanGreen,
+      sunDirection: splat.ground.sunDirection,
+      meadowColor: vec3(MEADOW_LINEAR[0], MEADOW_LINEAR[1], MEADOW_LINEAR[2]),
+      roadColor: vec3(ROAD_LINEAR[0], ROAD_LINEAR[1], ROAD_LINEAR[2]),
+    };
+    const col = grassMottle(inp, splat);
+    const g = groundFields(inp, splat.surfaceTexture, splat.edgesTexture);
+    const ugW = urbanGreen(inp, col, g, splat.ndviTexture);
+    groundDetail(inp, col, g, ugW);
+    if (splat.colonies) {
+      const { rect, texture: raster } = splat.colonies;
+      colonyGarden(inp, col, g, {
+        rect: uniform(new Vector4(...rect)),
+        texture: raster,
+      });
+    }
+    if (splat.sport) {
+      sportGround(inp, col, g, splat.sport);
+    }
+    if (splat.markings) {
+      roadMarkings(inp, col, g, splat.markings);
+    }
+    if (splat.ndviTexture) {
+      meadowNdvi(inp, col, splat.ndviTexture, splat.ground.meadowNdvi);
+    }
+    grassDetail.assign(col.detail);
+    groundTilt.assign(g.tilt);
+    const elevation = positionWorld.y;
+    const ink = contourInk(elevation).mul(contourGate(inp, elevation, splat));
+    return mix(col.baseCol, INK, ink);
+  })();
+}
+
+/** The flat sage ground with its contour ink (no class raster). */
+function plainColour(): V3 {
+  return mix(vec3(materialColor), INK, contourInk(positionWorld.y));
+}
+
+/**
+ * The ground's shading normal (view space). Calm first: the DGM1 carries
+ * every kerb, rut and survey wobble, and the baked normals are quantised to
+ * 8 bits, so lit by a low sun a street, a meadow or a quay reads as coarse
+ * dark-and-light flecks — "dirty" rather than drawn. Near-flat normals
+ * (under ~12°) are pulled to straight up, keeping a trace of the relief;
+ * real slopes (embankments, the valley sides) keep their full shading, and
+ * the contour ink carries the rest of the terrain's form. With the class
+ * raster, then the meadow-only break-up and the kerbs', lawn edges' and
+ * stones' tilt (the colour node's `terrainGrassDetail`/`terrainGroundTilt`).
+ */
+function terrainNormal(withDetail: boolean): V3 {
+  return Fn(() => {
+    const up = normalize(cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz);
+    const keep = float(1).sub(smoothstep(0.93, 0.985, dot(normalView, up)));
+    const calm = normalize(mix(up, normalView, max(keep, 0.12)));
+    if (!withDetail) {
+      return calm;
+    }
+    const xy = dataXY();
+    const ax = xy.x.mul(0.85).add(1.3);
+    const ay = xy.y.mul(0.78).sub(0.7);
+    const gx = cos(ax).mul(sin(ay)).mul(0.85);
+    const gy = sin(ax).mul(cos(ay)).mul(0.78);
+    const grass = normalize(
+      calm.add(vec3(gx, gy, 0).mul(grassDetail.mul(0.06)))
+    );
+    return groundNormal(grass, groundTilt);
+  })();
+}
 
 /**
  * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
- * major) drawn in the fragment shader, on the data-frame elevation derived
- * from world space (DATA_POSITION).
- *
- * When a `splat` is given, the base diffuse comes from the ATKIS land-cover
- * at each fragment (streets, water, meadow, …) instead of the flat sage; the
- * contour ink is composited on top. The colours are the palette-painted
- * splat (landcover-splat.ts; LINEAR, soft boundaries).
- * UVs are derived from the recentered data-frame XY and the tile bounds —
- * the terrain geometry carries no uv attribute.
+ * major), on the data-frame elevation derived from world space. When a
+ * `splat` is given, the base colour comes from the ATKIS land-cover at each
+ * fragment (streets, water, meadow, …) instead of the flat sage, with the
+ * ground's detail over it (`splatColour`); the contour ink is composited on
+ * top. The city's large-scale light (sky-light.ts) folds in last: the sky
+ * view on the ambient term, the far horizon on the sun.
  */
-/** The slice of an `onBeforeCompile` shader object the terrain patches touch. */
-interface TerrainShader {
-  fragmentShader: string;
-  uniforms: Record<string, { value: unknown }>;
-  vertexShader: string;
-}
-
-/** The baked large-scale light's uniforms (sky-light.ts). */
-function applySkyLightUniforms(shader: TerrainShader, splat: SplatLayer): void {
-  if (splat.svfTexture) {
-    shader.uniforms.uSvf = { value: splat.svfTexture };
-    shader.uniforms.uSkyView = splat.ground?.skyView ?? { value: 0 };
-  }
-  if (splat.horizonTexture) {
-    shader.uniforms.uHorizon = { value: splat.horizonTexture };
-    shader.uniforms.uHorizonShade = splat.ground?.horizonShade ?? { value: 0 };
-    // By reference: the sun rig keeps it on the frustum. Without one the
-    // near band counts everywhere (a frustum of no size).
-    shader.uniforms.uShadowReach = splat.ground?.shadowReach ?? {
-      value: NO_FRUSTUM,
-    };
-  }
-}
-
-function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
-  const [minX, minY, maxX, maxY] = splat.bounds;
-  // Recentered tile origin (north-west corner) + size; v grows southward.
-  shader.uniforms.uSplat = { value: splat.colorTexture };
-  shader.uniforms.uSplatOrigin = {
-    value: [minX - splat.offset.cx, maxY - splat.offset.cy],
-  };
-  shader.uniforms.uSplatSize = { value: [maxX - minX, maxY - minY] };
-  // The NEAREST class-id raster, so the meadow detail can test the exact
-  // land-cover class (the colour splat's texels are blended).
-  shader.uniforms.uSplatClass = { value: splat.texture };
-  // Bind the shared refs by identity so the HUD sliders retune them live.
-  shader.uniforms.uGroundDetail = splat.ground?.groundDetail ?? { value: 0 };
-  shader.uniforms.uMeadowColor = { value: MEADOW_LINEAR };
-  shader.uniforms.uRoadColor = { value: ROAD_LINEAR };
-  // By reference: the sun rig keeps it current.
-  shader.uniforms.uSunDir = { value: splat.sunDirection ?? DEFAULT_SUN };
-  shader.uniforms.uUrbanGreen = splat.ground?.urbanGreen ?? { value: 0 };
-  if (splat.surfaceTexture) {
-    shader.uniforms.uSurface = { value: splat.surfaceTexture };
-  }
-  if (splat.edgesTexture) {
-    shader.uniforms.uEdges = { value: splat.edgesTexture };
-  }
-  if (splat.sport) {
-    shader.uniforms.uSport = { value: splat.sport.raster };
-    shader.uniforms.uSportTable = { value: splat.sport.table };
-    shader.uniforms.uSportColors = { value: SPORT_LINEAR };
-  }
-  if (splat.colonies) {
-    shader.uniforms.uCultivated = { value: splat.colonies.texture };
-    shader.uniforms.uCultivatedRect = { value: splat.colonies.rect };
-  }
-  if (splat.markings) {
-    shader.uniforms.uMarkings = { value: splat.markings.raster };
-    shader.uniforms.uMarkingTable = { value: splat.markings.table };
-  }
-  applySkyLightUniforms(shader, splat);
-  if (splat.ndviTexture) {
-    shader.uniforms.uNdvi = { value: splat.ndviTexture };
-    shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
-  }
-}
-
-/** The meadow's palette colour, linear — the urban green and grass pavers. */
-const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
-const DEFAULT_SUN = new Vector3(0, 1, 0);
-const NO_FRUSTUM = new Vector3(0, 0, 0);
-
-/** The sports surfaces' colours, linear (sport-ground.ts). */
-const SPORT_LINEAR = sportPalette();
-
-/** The road's palette colour, linear — sealed ground off the carriageway. */
-const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
-
-function patchTerrainVertex(shader: TerrainShader, hasSplat: boolean): void {
-  const decl = hasSplat
-    ? "varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform vec2 uSplatOrigin;\nuniform vec2 uSplatSize;"
-    : "";
-  const assign = hasSplat
-    ? "vSplatUv = vec2( ( dataPos.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - dataPos.y ) / uSplatSize.y );\n         vWorldXY = dataPos.xy;"
-    : "";
-  shader.vertexShader = shader.vertexShader
-    .replace(
-      "#include <common>",
-      `#include <common>\n         varying float vElevation;\n         ${decl}`
-    )
-    .replace(
-      "#include <begin_vertex>",
-      `#include <begin_vertex>\n         ${DATA_POSITION}\n         vElevation = dataPos.z;\n         ${assign}`
-    );
-}
-
-/** The splat-dependent fragment code: declarations and the colour body. */
-function splatFragment(splat: SplatLayer): { body: string; decl: string } {
-  const hasNdvi = splat.ndviTexture !== undefined;
-  const hasSurface = splat.surfaceTexture !== undefined;
-  const hasEdges = splat.edgesTexture !== undefined;
-  const hasSport = splat.sport !== undefined;
-  const hasMarkings = splat.markings !== undefined;
-  const hasColonies = splat.colonies !== undefined;
-  const hasSvf = splat.svfTexture !== undefined;
-  const hasHorizon = splat.horizonTexture !== undefined;
-  const ndviDecl = hasNdvi
-    ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
-    : "";
-  return {
-    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}${hasMarkings ? MARKINGS_DECL : ""}${hasColonies ? COLONY_DECL : ""}${skyLightDecl(hasSvf, hasHorizon)}`,
-    body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
-         ${GRASS_MOTTLE}
-         ${groundFields(hasSurface, hasEdges)}
-         ${urbanGreen(hasNdvi, hasEdges)}
-         ${GROUND_DETAIL}
-         ${hasColonies ? COLONY_GARDEN_GLSL : ""}
-         ${hasSport ? SPORT_GROUND : ""}
-         ${hasMarkings ? ROAD_MARKINGS : ""}
-         ${hasNdvi ? MEADOW_NDVI : ""}
-         ${skyLightBody(hasSvf, hasHorizon)}`,
-  };
-}
-
-function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
-  const hasSplat = splat !== undefined;
-  const parts = splat ? splatFragment(splat) : undefined;
-  const decl = parts?.decl ?? "";
-  shader.fragmentShader = shader.fragmentShader
-    .replace(
-      "#include <common>",
-      `#include <common>\n         varying float vElevation;\n         ${decl}`
-    )
-    .replace(
-      "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `${parts?.body ?? "vec3 baseCol = diffuse;"}
-         ${CONTOUR_INK}
-         ${hasSplat ? CONTOUR_SPLAT_GATE : ""}
-         vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
-    );
-  // Calmed ground normals; with the class raster also the meadow-only
-  // shading break-up (grDetail declared above, in scope), then the kerbs',
-  // lawn edges' and stones' tilt.
-  shader.fragmentShader = shader.fragmentShader.replace(
-    "#include <normal_fragment_begin>",
-    hasSplat ? `${GRASS_NORMAL}\n${GROUND_NORMAL}` : TERRAIN_NORMAL
-  );
-  // The city's large-scale light (sky-light.ts): the sky view on the
-  // ambient term, the far horizon on the sun.
-  if (splat?.svfTexture) {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <aomap_fragment>",
-      SKY_VIEW_AO
-    );
-  }
-  if (splat?.horizonTexture) {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <lights_fragment_begin>",
-      lightsWithFarShadow()
-    );
-  }
-}
-
-function createTerrainMaterial(
-  splat?: SplatLayer,
-  heightFog?: HeightFogUniforms
-): MeshStandardMaterial {
-  const material = new MeshStandardMaterial({
+export function createTerrainMaterial(
+  splat?: SplatLayer
+): MeshStandardNodeMaterial {
+  const material = new MeshStandardNodeMaterial({
     color: 0xad_b2_9e,
     roughness: 1,
   });
-  // The patched GLSL branches on which optional rasters actually loaded, but
-  // three keys its program cache on `onBeforeCompile.toString()` — identical for
-  // every tile's terrain material. Without an explicit key a tile that lost its
-  // class raster or NDVI would be handed a neighbour's compiled program (and its
-  // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.markings !== undefined}-${splat?.colonies !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
-  material.customProgramCacheKey = () => cacheKey;
-  material.onBeforeCompile = (shader) => {
-    if (splat) {
-      applyTerrainUniforms(shader, splat);
-    }
-    patchTerrainVertex(shader, splat !== undefined);
-    patchTerrainFragment(shader, splat);
-    if (heightFog) {
-      injectHeightFog(shader, heightFog);
-    }
-  };
+  material.colorNode = splat ? splatColour(splat) : plainColour();
+  material.normalNode = terrainNormal(splat !== undefined);
+  applyGroundLight(material, splat ? groundLightOf(splat) : undefined);
   return material;
 }
 
@@ -1019,20 +1011,20 @@ async function loadDetailRasters(
 /** The splat's baked light as the fine level's kerbs, fences, stairs and
  *  walls bind it (the same textures and rows, by reference). */
 function groundLightOf(splat: SplatLayer): GroundLight | undefined {
-  const { ground, sunDirection } = splat;
-  if (!(ground && sunDirection && (splat.svfTexture || splat.horizonTexture))) {
+  const { ground } = splat;
+  if (!(splat.svfTexture || splat.horizonTexture)) {
     return undefined;
   }
-  const [minX, minY, maxX, maxY] = splat.bounds;
+  const [minX, , , maxY] = splat.bounds;
   return {
     svf: splat.svfTexture,
     horizon: splat.horizonTexture,
     origin: [minX - splat.offset.cx, maxY - splat.offset.cy],
-    size: [maxX - minX, maxY - minY],
+    size: splatSize(splat),
     skyView: ground.skyView,
     horizonShade: ground.horizonShade,
     shadowReach: ground.shadowReach,
-    sunDirection,
+    sunDirection: ground.sunDirection,
   };
 }
 
@@ -1080,14 +1072,13 @@ export async function dressTerrain(
           texture: classRaster.texture,
           colorTexture: painted.texture,
           ...splatDetail(detail),
-          sunDirection: opts.sunDirection,
           ground: opts.ground,
           bounds,
           offset: opts.offset,
         }
       : undefined;
 
-  mesh.material = createTerrainMaterial(splat, opts.heightFog);
+  mesh.material = createTerrainMaterial(splat);
   mesh.name = "terrain";
   // The terrain only RECEIVES shadows. If it also cast, the grazing sun makes
   // every triangle face self-shadow → the jagged "staircase"/triangle acne
@@ -1105,7 +1096,7 @@ export async function dressTerrain(
     extras.tin !== undefined
   );
   const water = splat
-    ? createWaterLayer(waterGeometry, splat, opts.sunDirection, opts.heightFog)
+    ? createWaterLayer(waterGeometry, splat, opts.fogColor)
     : undefined;
   if (water) {
     for (const sheet of [water.mesh, water.mistMesh]) {

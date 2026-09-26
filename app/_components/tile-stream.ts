@@ -1,17 +1,20 @@
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
+  type BufferGeometry,
   type Camera,
+  type Color,
   Group,
   Matrix4,
   type Mesh,
-  type MeshStandardMaterial,
+  type MeshStandardNodeMaterial,
   type Object3D,
   type Texture,
+  type UniformNode,
   type Vector3,
-  type WebGLRenderer,
-} from "three";
-import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+  type WebGPURenderer,
+} from "three/webgpu";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -45,11 +48,9 @@ import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
 import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
-import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
-import type { CompilePass } from "./post-stack";
 import { buildRail } from "./rail-layer";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
@@ -106,7 +107,7 @@ export interface TileDressing {
 
 export interface TileStreamContext {
   /** compiles an object's shaders before it shows (PostStack.compile) */
-  compile: (object: Object3D, pass?: CompilePass) => Promise<void>;
+  compile: (object: Object3D) => Promise<void>;
   /** resolves when the HUD lets the heavy dressing start (create-app's
    *  startStreaming): the first frames only wait on terrain + buildings */
   dressingGate: Promise<void>;
@@ -116,7 +117,8 @@ export interface TileStreamContext {
   lowRasters: boolean;
   /** bytes of out-of-view tile content kept cached (scene-profile.ts) */
   cacheBytes: { max: number; min: number };
-  heightFog: HeightFogUniforms;
+  /** the scene fog's colour (height-fog.ts): the water's sky tint */
+  fogColor: UniformNode<"color", Color>;
   /** ground height over every loaded terrain (projected coordinates) */
   heightAt: (x: number, y: number) => number | null;
   /** the ground's look strengths (by reference) */
@@ -129,7 +131,7 @@ export interface TileStreamContext {
   offset: { cx: number; cy: number };
   /** content landed, left, or changed visibility */
   onChange: () => void;
-  renderer: WebGLRenderer;
+  renderer: WebGPURenderer;
   styleResources: StyleResources;
   sunDirection: Vector3;
   /** a site tile's exact extent (the tileset's root extras) */
@@ -242,20 +244,21 @@ export function dressingParts(d: TileDressing): Object3D[] {
 }
 
 /**
- * One object per distinct material and draw kind. A dressing is hundreds of
- * objects (a vegetation cell each, lamps, rails, walls) over a handful of
- * materials; compiling every one would queue the same program hundreds of
- * times, and the node renderer yields a frame per object.
+ * One object per distinct material, draw kind and attribute layout — what
+ * three keys a node build by. A dressing is hundreds of objects (a
+ * vegetation cell each, lamps, rails, walls) over a handful of scene-wide
+ * materials, and instanced sets share their builds (instancing.ts);
+ * compiling every one would queue the same build hundreds of times.
  */
 function compileRepresentatives(roots: Object3D[]): Object3D[] {
   const seen = new Map<string, Object3D>();
   for (const root of roots) {
     root.traverse((object) => {
-      const { material } = object as Mesh;
+      const { geometry, material } = object as Mesh;
       if (!material) {
         return;
       }
-      const kind = object.type;
+      const kind = `${object.type}:${layoutOf(geometry)}`;
       for (const m of Array.isArray(material) ? material : [material]) {
         const key = `${m.uuid}:${kind}`;
         if (!seen.has(key)) {
@@ -265,6 +268,11 @@ function compileRepresentatives(roots: Object3D[]): Object3D[] {
     });
   }
   return [...seen.values()];
+}
+
+/** A geometry's attribute names, the layout part of a build's key. */
+function layoutOf(geometry: BufferGeometry | undefined): string {
+  return geometry ? Object.keys(geometry.attributes).sort().join(",") : "";
 }
 
 /** How long a tile may wait on its compile before it shows regardless. */
@@ -343,7 +351,6 @@ function buildSport(
     offset: ctx.offset,
     heightAt: terrain.heightAt,
     origin: { x: minX, y: maxY },
-    heightFog: ctx.heightFog,
   });
 }
 
@@ -499,7 +506,6 @@ async function buildDressing(
       offset: ctx.offset,
       heightAt: terrain.heightAt,
       sunDirection: ctx.sunDirection,
-      heightFog: ctx.heightFog,
     }
   );
   // Born with the current look and season, not the defaults.
@@ -510,7 +516,6 @@ async function buildDressing(
       ? buildLowVegetation(hedges, {
           offset: ctx.offset,
           heightAt: terrain.heightAt,
-          heightFog: ctx.heightFog,
         })
       : undefined;
   // The bake reads lamps with a margin around the tile; a lamp on or past a
@@ -526,21 +531,16 @@ async function buildDressing(
     heightAt: terrain.heightAt,
   });
   lampControl.setNightFactor(ctx.night());
-  const rail = buildRail(
-    { rails, bridges, ballast, platforms },
-    { ...ground, heightFog: ctx.heightFog }
-  );
+  const rail = buildRail({ rails, bridges, ballast, platforms }, ground);
   // The bake writes only the monuments a tile owns; a basin that reaches
   // past the seam samples the neighbour's ground.
   const monumentLayer = buildMonuments(monuments, {
     ...ground,
-    heightFog: ctx.heightFog,
   });
   // Owned by the bake (west/south edges in): stood on this tile's ground.
   const furnitureGroup = buildFurniture(furniture, {
     ...ground,
     heightAt: terrain.heightAt,
-    heightFog: ctx.heightFog,
   });
   const vines = vineRows(cultivated);
   const vineyards =
@@ -548,21 +548,15 @@ async function buildDressing(
       ? buildVineyards(vines, {
           offset: ctx.offset,
           heightAt: terrain.heightAt,
-          heightFog: ctx.heightFog,
         })
       : undefined;
   // Tracks are cut at the tile edge by the bake; they and the span wires
   // sample the ground over every loaded terrain, like the rails.
-  const tram =
-    trams.length > 0
-      ? buildTram(trams, bridges, { ...ground, heightFog: ctx.heightFog })
-      : undefined;
+  const tram = trams.length > 0 ? buildTram(trams, bridges, ground) : undefined;
   // Piers and pontoons are the tile's own; a ferry line or groyne cut at
   // the seam samples the neighbour's ground past it.
   const riverside =
-    river.length > 0
-      ? buildRiverside(river, { ...ground, heightFog: ctx.heightFog })
-      : undefined;
+    river.length > 0 ? buildRiverside(river, ground) : undefined;
   return {
     tile,
     tram,
@@ -689,7 +683,7 @@ export class DressingPlugin {
       const [minX, minY, maxX, maxY] = bounds;
       const { cx, cy } = this.ctx.offset;
       setClaySkyView(
-        city.mesh.material as MeshStandardMaterial,
+        city.mesh.material as MeshStandardNodeMaterial,
         texture,
         [minX - cx, maxY - cy],
         [maxX - minX, maxY - minY]
@@ -709,12 +703,11 @@ export class DressingPlugin {
     this.toData.multiplyMatrices(scene.matrix, mesh.matrix);
     const terrain = await dressTerrain(mesh, extras, this.toData, {
       fileUrl: this.url,
-      heightFog: this.ctx.heightFog,
+      fogColor: this.ctx.fogColor,
       lowRasters: this.ctx.lowRasters,
       ground: this.ctx.ground,
       offset: this.ctx.offset,
       renderer: this.ctx.renderer,
-      sunDirection: this.ctx.sunDirection,
       skyView: this.skyView,
       horizon: this.horizon,
     });
@@ -723,22 +716,22 @@ export class DressingPlugin {
     // materials here, lit by the tile's baked light as the ground is.
     const stairs = meshNamed(scene, "stairs");
     if (stairs) {
-      dressStairs(stairs, this.ctx.heightFog, terrain.light);
+      dressStairs(stairs, terrain.light);
       terrain.stairs = stairs;
     }
     const walls = meshNamed(scene, "walls");
     if (walls) {
-      dressWalls(walls, this.ctx.heightFog, terrain.light);
+      dressWalls(walls, terrain.light);
       terrain.walls = walls;
     }
     const kerbs = meshNamed(scene, "kerbs");
     if (kerbs) {
-      dressKerbs(kerbs, this.ctx.heightFog, terrain.light);
+      dressKerbs(kerbs, terrain.light);
       terrain.kerbs = kerbs;
     }
     const fences = meshNamed(scene, "fences");
     if (fences) {
-      dressFences(fences, this.ctx.heightFog, terrain.light);
+      dressFences(fences, terrain.light);
       terrain.fences = fences;
     }
     this.stream.terrains.add(terrain);
@@ -756,23 +749,24 @@ export class DressingPlugin {
   private disposed = false;
 
   /**
-   * Compiles, once per scene and before the first tree lands, the crown
-   * programs a date change may switch to: the seasonal and the plain crown
-   * and their depth programs (crown-season.ts `crownWarmup`) — no
-   * tile's compile reaches the ones its crowns do not wear yet. The
-   * stand-ins stay (holding their programs) until the stream goes.
+   * Builds, once per scene and before the first tree lands, the crown
+   * materials a date change may switch to: the seasonal and the plain crown
+   * (crown-season.ts) — no tile's compile reaches the ones its crowns do not
+   * wear yet. The stand-ins stay (holding their builds) until the stream
+   * goes. A crown's shadow is its own material under the shadow pass (the
+   * seasonal crown thins it through `maskNode`), so there is no depth
+   * material to warm.
    */
   private async warmCrowns(): Promise<void> {
     if (this.disposed) {
       return;
     }
-    const warmup = buildCrownWarmup(this.ctx.heightFog);
+    const warmup = buildCrownWarmup();
     this.warmup = warmup;
     await withinCompileWait(
-      Promise.all([
-        ...warmup.main.map((mesh) => this.ctx.compile(mesh)),
-        ...warmup.depth.map((mesh) => this.ctx.compile(mesh, "shadow")),
-      ]).then(() => undefined)
+      Promise.all(warmup.main.map((mesh) => this.ctx.compile(mesh))).then(
+        () => undefined
+      )
     );
   }
 

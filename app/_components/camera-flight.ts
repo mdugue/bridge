@@ -1,4 +1,9 @@
-import { Matrix4, type PerspectiveCamera, Quaternion, Vector3 } from "three";
+import {
+  Matrix4,
+  type PerspectiveCamera,
+  Quaternion,
+  Vector3,
+} from "three/webgpu";
 import { DEG2RAD, directionOf, type Xyz } from "@/lib/city/pose";
 import { clamp } from "@/lib/city/math";
 import { glideHull, hullLift, type LiftPoint } from "@/lib/city/clearance";
