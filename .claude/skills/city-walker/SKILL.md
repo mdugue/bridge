@@ -81,8 +81,18 @@ chip. Every tile change re-renders the shadow map. The layers:
   shaders derive data-frame coordinates from world space.
 - `sun-rig.ts` — directional light + shadow camera, sky dome, hemisphere fill,
   fog/atmosphere by time of day.
-- `post-stack.ts` — pmndrs `postprocessing`: SSAO, DoF, SMAA, depth grading,
-  paper grain, vignette.
+- `post-stack.ts` — pmndrs `postprocessing`: SSAO, DoF, the picture style,
+  SMAA, depth grading, paper grain, vignette. The picture styles (Comic, Film
+  noir, Sin City; `lib/city/render-style.ts`) are one pass,
+  `stylize-effect.ts` (ADR 0032): ink from the second difference of `1/z`
+  (zero on planes; relative to `w` = silhouette, relative to slope = fold),
+  tone bands / monochrome curves on the colour. Off (mode 0) in the default.
+  Read depth only at integer texel radii around a texel centre. Papier
+  (`paper-scene.ts`) is the one style that touches the scene: a per-frame
+  `scene.overrideMaterial` (white, flat-shaded) with sprites and depthless
+  sheets hidden, restored after the render. QA the styles on a handful of
+  views (aerial, roof sea, half-long building shot, street, river) — lite
+  at pixel ratio 0.5 hides the stroke widths, so judge them at ≥ 1.
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
   glow), hash-dithered transparency. The old ghost/standard styles are gone.

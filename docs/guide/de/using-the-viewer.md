@@ -37,6 +37,7 @@ lädt* oben im Bild (siehe
 | Klick auf die Minikarte | dorthin teleportieren |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
+| `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | immersiven Modus verlassen |
 
 | Eingabe (Touch) | Wirkung |
@@ -125,8 +126,25 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Zeitpunkt berechnet; Schatten, Himmel, Nebelfarben und das Abendlicht in
   den Gebäuden folgen ihm. *Standardzeit* springt zurück auf 14:00, die
   Uhrzeit, auf die der Standard-Look abgestimmt ist.
-- **Darstellung** — Regler in vier aufklappbaren Gruppen. Jeder Regler ist
-  eine Prozentzahl; die Voreinstellungen sind der abgestimmte Look.
+- **Darstellung** — ganz oben der **Bildstil**, darunter Regler in vier
+  aufklappbaren Gruppen. Jeder Regler ist eine Prozentzahl; die
+  Voreinstellungen sind der abgestimmte Look. *Zurücksetzen* stellt die
+  Regler zurück und lässt den Bildstil, wie er ist.
+
+Der Bildstil zeichnet dieselbe Stadt auf eine andere Art; er lässt sich
+jederzeit wechseln, per Klick oder mit `V`:
+
+| Bildstil | So sieht er aus |
+|---|---|
+| *Pastell* | der Grundstil: Tonmodell auf Papier, weiches Licht, keine Umrisse |
+| *Comic* | Tuschelinien wie von Hand gezogen — wellig, mal dick, mal dünn, mal abgesetzt, leicht neben der Fläche —, flache Farbflächen in wenigen Tönen, ein Punktraster in den tiefsten Schatten aus der Nähe; die Bäume werden runde Comic-Wolken aus drei Kugeln; aus der Höhe und in der Ferne wird die Zeichnung lockerer und sparsamer |
+| *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand; unter jeder Straßenlaterne ein weicher Lichtkegel — am Tag nur angedeutet, in der Dämmerung voll |
+| *Sin City* | harte Flächen in vier Tönen (Schwarz, fast Schwarz, fast Weiß, Weiß), die sich nach der Helligkeit der Umgebung richten, so bleibt auch eine dunkle Ansicht lesbar; Baumkronen und die Elbe werden schwarz, Wiesen bleiben hell, die Skyline und große Silhouetten stehen als weiße Kante gegen das Schwarz; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe |
+| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder, Wasser wird ebenfalls Papier, Lichter und Nebelschleier fallen weg |
+
+In den grafischen Stilen *Comic* und *Sin City* ruht die Tiefenschärfe
+(ein unscharfer Hintergrund unter scharfen Linien wirkt wie ein Fehler);
+der Schalter bleibt, wie du ihn gesetzt hast.
 
 | Gruppe | Regler | Was er tut |
 |---|---|---|
@@ -154,7 +172,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
-| | *Papierkorn* | das Papierkorn über dem ganzen Bild |
+| | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
+| | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City* und *Papier* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
 | | *Detaillierte Kronen* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 
@@ -168,8 +187,8 @@ zurück, sobald du stehst.
   Gebäude, das du anschaust (wie `R`), auf jeder Kachel im Blick; das
   lässt sich nicht rückgängig machen. *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
-- **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und Uhrzeit
-  und jeden Regler als kleinen JSON-Text; einen solchen Text in das Feld
+- **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und Uhrzeit,
+  den Bildstil und jeden Regler als kleinen JSON-Text; einen solchen Text in das Feld
   einfügen und *Anwenden* drücken stellt ihn wieder her. So wird eine
   bestimmte Ansicht geteilt oder für einen Screenshot reproduziert. Ein
   fehlerhafter Snapshot wird mit einer Meldung abgelehnt, statt die Szene

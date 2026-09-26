@@ -169,7 +169,9 @@ is the codebook.
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, from the bare ground; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80–1 500 m and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
-| Paper grain, vignette | screen-space | — | `paper-grain-effect.ts` (*Papierkorn*) |
+| Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `paper-grain-effect.ts` (*Papierkorn*) |
+| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier — one post pass over the finished frame (below); Papier also swaps every surface for one white paper material for the frame | — | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts` |
+| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | Minimap | site tile bounds + 512² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
 Every slider in the HUD is one row of `lib/city/look-controls.ts`; the
@@ -237,9 +239,70 @@ The full recipe with its rejected alternatives (VSM rings, large
 ## Post-processing
 
 `render → N8AO (half-res, depth-aware upsample) → depth of field (skipped
-while moving) → one EffectPass: SMAA + depth grading + vignette + paper
-grain`. The composer bypasses the renderer's MSAA (`antialias: false`);
-SMAA carries the anti-aliasing. `halfRes`, `aoSamples` and
+while moving) → picture style (off in the default) → one EffectPass: SMAA +
+depth grading + vignette + paper grain`. The composer bypasses the
+renderer's MSAA (`antialias: false`); SMAA carries the anti-aliasing — of
+the style's ink lines and colour bands too, which is why that pass sits
+before it.
+
+**Picture styles** ([ADR 0032](./adr/0032-picture-styles-as-one-post-pass.md))
+redraw the finished frame; no material knows about them, so a switch
+rebuilds nothing and compiles at most the one pass. The table is
+`lib/city/render-style.ts`; per style it sets the pass's shader mode, a
+weight on the *Tuschelinien*, *Tiefenfärbung* and *Papierkorn* sliders,
+the vignette, animated film grain and whether depth of field may run.
+
+- *Comic* — lightness (read through a small blur, so crowns and AO give
+  flat areas, not flecks) cut into four flat tones, the colour rebuilt from
+  a lifted **chroma** (HSL saturation explodes towards white), highlights
+  leaning into the paper, a 45° dot screen in the darkest band up close
+  only (gone by ~200 m), the sky an unbanded wash. In the distance, and
+  where the colour nears the fog colour, the band edges soften into the
+  wash — hard bands on a pale far field broke into white blotches.
+- *Film noir* — luminance through an S-curve, crushed blacks, the distance
+  lifted into grey smoke, a graduated sky; faint ink.
+- *Sin City* — masses, not contours: four inks (black, near-black,
+  near-white, white) around a threshold that leans halfway towards the
+  neighbourhood's brightness (eight taps on a ~48 px ring), so a dark park
+  or a bright square still splits into light and shade; rain as streaks on
+  a grid of world directions in depth layers hidden behind nearer
+  geometry, thinned when looking steeply down. The luminance is read
+  through a small blur before the threshold, so crowns, AO and penumbrae cannot
+  break a mass into stipple; crowns and the (faintly blue) river are pushed
+  towards black, up-facing grass is not; black sky, far things sinking into
+  the near-black; ink only on the big silhouettes (a relative depth jump
+  above ~10 %) and, up close, a building's folds, solid black; on black,
+  white cuts where the skyline or a big silhouette meets more black. Red
+  is kept on **pitched** surfaces only (the slope from the depth buffer's
+  reconstructed normal against world up), which lets the colour window be
+  wide — every terracotta, brick or rust roof turns red, lit or oxblood in
+  shade — without sand, paths or warm facades following.
+
+- *Scene dressing* (`style-dressing.ts`) — geometry a style draws with for
+  its frames only: Comic's crowns are cartoon clouds of three balls (the
+  far tier one ball), Papier's folded card polyhedra (icosahedron detail
+  0/1), both built next to the scene's crowns (`buildStyleCrownGeo`) with
+  the same anchor and size; Film noir hangs an additive light cone under
+  every lamp head, sharing the heads' instance matrices, 0.22 strength by
+  day rising with the lamps' night factor to 1. A style change redraws the
+  shadow map.
+- *Papier* — the city as a white card model. A post pass cannot do this
+  (it sees a colour, not how much of it is surface and how much light), so
+  for this style's frames `paper-scene.ts` sets `scene.overrideMaterial` to
+  one flat-shaded, off-white `MeshStandardMaterial` under the real sun,
+  sky light, shadow map and AO; a layer's own colour survives as a 10 %
+  whisper, a slow world-space drift keeps the sheets from being one white.
+  Glows, sprites and see-through sheets that write no depth are hidden for
+  the frame; the sky box's inside is culled, so a paper background shows.
+  The pass lays the light out as a duotone (shade blue-grey, light paper)
+  under a fine graphite pen.
+
+The pass reads the depth buffer at **integer** texel radii around a texel
+centre, blending two radii for the stroke weight: the buffer is sampled
+NEAREST, and a fractional radius rounds its two taps unevenly, which on a
+grazing street is as large a second difference as a fold — whole patches
+inked over. The input is clamped to [0, 1] before any HSL maths (the sun's
+halo is HDR). `halfRes`, `aoSamples` and
 `denoiseSamples` rebuild N8AO's materials and are therefore
 construction-time settings. 3DTilesRendererJS's fade and overlay plugins
 patch materials with `onBeforeCompile` and are deliberately not used.

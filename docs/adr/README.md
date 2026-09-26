@@ -19,7 +19,7 @@ each data → look transformation does and its status.
 | [0007](./0007-content-hashed-publishing-with-a-manifest.md) | Content-hashed data files with a `manifest.json` | accepted |
 | [0008](./0008-progressive-two-phase-boot.md) | Progressive two-phase boot: first frame from the primary tile, everything else streamed | accepted (second phase: 0024) |
 | [0009](./0009-shadow-recipe.md) | Shadow recipe: soft PCF, receive-only terrain, on-demand refresh with a dead zone, altitude-fitted frustum | accepted |
-| [0010](./0010-opaque-clay-buildings-only.md) | Buildings render as opaque clay only; no transmission, no outlines | accepted |
+| [0010](./0010-opaque-clay-buildings-only.md) | Buildings render as opaque clay only; no transmission, no outlines | accepted; outlines narrowed by 0032 |
 | [0011](./0011-motion-keyed-quality-regression.md) | Motion-keyed quality regression: DoF off while moving, SSAO never gated | accepted |
 | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | OpenStreetMap for what the official data lacks (walls, lamps, platforms, bridge structure), from a local extract where possible | accepted (always local: 0025) |
 | [0013](./0013-rail-layer-from-dissolved-areas-and-centreline-driven-decks.md) | Rail layer from dissolved ballast areas and centreline-driven decks, built once per block | accepted (per tile: 0024) |
@@ -41,6 +41,7 @@ each data → look transformation does and its status.
 | [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
 | [0030](./0030-terrain-tin-and-wall-snap.md) | The fine terrain level is an error-bounded TIN of the native DGM; walls snap to the measured step | accepted |
 | [0031](./0031-baked-horizon-map-for-far-shadows.md) | A baked horizon map casts the far field's shadows; the shadow map keeps the near field | accepted |
+| [0032](./0032-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
 
 ## Format
 

@@ -555,6 +555,55 @@ export function buildCrownGeoRich(): BufferGeometry {
 }
 
 /**
+ * The picture styles' crowns (lib/city/render-style.ts `crowns`), swapped in
+ * for a styled frame by style-dressing.ts and never worn otherwise. Same
+ * anchor and size as the lumpy crown, so every instance matrix fits.
+ *
+ * - "comic": a cartoon cloud — one big ball and two shoulders, each with its
+ *   own smooth radial normals, so each ball shades as a round form and the
+ *   ink finds the folds between them; the far tier is one ball.
+ * - "paper": a folded card polyhedron (icosahedron detail 0 far, 1 near),
+ *   drawn faceted by the paper material.
+ */
+export function buildStyleCrownGeo(
+  kind: "comic" | "paper",
+  tier: "far" | "mid" | "rich"
+): BufferGeometry {
+  const cy = TRUNK_H + CROWN_R * 0.5;
+  if (kind === "paper") {
+    const g = new IcosahedronGeometry(CROWN_R * 0.98, tier === "far" ? 0 : 1);
+    g.scale(1, 1.12, 1);
+    g.translate(0, cy, 0);
+    return g;
+  }
+  const detail = tier === "rich" ? 2 : 1;
+  // [x, y, z, radius] in crown radii, around the crown centre.
+  const balls: [number, number, number, number][] =
+    tier === "far"
+      ? [[0, 0, 0, 0.98]]
+      : [
+          [0, 0.1, 0, 0.8],
+          [0.52, -0.2, 0.18, 0.56],
+          [-0.44, -0.14, -0.3, 0.6],
+        ];
+  const v = new Vector3();
+  const parts = balls.map(([x, y, z, r]) => {
+    const ball = new IcosahedronGeometry(CROWN_R * r, detail);
+    const pos = ball.attributes.position;
+    const nrm = ball.attributes.normal;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).normalize();
+      nrm.setXYZ(i, v.x, v.y, v.z);
+    }
+    ball.translate(x * CROWN_R, y * CROWN_R, z * CROWN_R);
+    return ball;
+  });
+  const merged = mergeGeometries(parts) ?? parts[0] ?? buildCrownGeo(detail);
+  merged.translate(0, cy, 0);
+  return merged;
+}
+
+/**
  * Sage crown material with a shadow-gated backlit shimmer: when the sun is
  * behind the canopy the camera-facing leaves glow warm, but ONLY where the sun
  * actually reaches — the shadow is sampled 2 m toward the sun so a building
@@ -932,6 +981,11 @@ function buildTreeCell(
   // updateVegetationLod() picks the tier each frame; start on mid.
   rich.visible = false;
   far.visible = false;
+  // Which crown each mesh is, for the picture styles' crown swap
+  // (style-dressing.ts) — a tag, the layer itself knows no style.
+  far.userData.styleCrown = "far";
+  mid.userData.styleCrown = "mid";
+  rich.userData.styleCrown = "rich";
   // Same order as the slots: the placements, then the precomputed crowns.
   const keys = [
     ...trees.map((p) => genericSeasonKey(p.x, p.z)),

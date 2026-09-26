@@ -26,6 +26,7 @@ import {
   type SceneLookKey,
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
+import { nextRenderStyle } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
@@ -730,7 +731,14 @@ async function bootApp(
     },
   };
   let lastTransparency = Number.NaN;
+  let lastStyle = opts.look.get().style;
   const applyLook = (look: LookValues) => {
+    if (look.style !== lastStyle) {
+      lastStyle = look.style;
+      // A picture style may draw its own crowns (style-dressing.ts), and the
+      // crowns cast: the shadow map is redrawn with the new ones.
+      invalidateShadows();
+    }
     for (const key of Object.keys(sceneRows) as SceneLookKey[]) {
       sceneRows[key](look[key]);
     }
@@ -887,6 +895,8 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
+        cycleStyle: () =>
+          opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
         viewpoint: (index) => {
           const view = currentSite().viewpoints[index];
           if (view) {

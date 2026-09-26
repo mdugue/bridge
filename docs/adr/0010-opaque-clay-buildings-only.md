@@ -1,6 +1,8 @@
 # ADR 0010: Buildings render as opaque clay only — no transmission, no outlines
 
-- **Status:** accepted
+- **Status:** accepted; its "no outlines" and "no `style` key" consequences
+  are narrowed by [ADR 0032](./0032-picture-styles-as-one-post-pass.md)
+  (outlines exist as an optional picture style, never in the default look)
 - **Date:** 2026-06 (aesthetic PR #16), reaffirmed 2026-09
 
 ## Context
