@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import re
 import shutil
@@ -53,14 +54,40 @@ BATCH_PAGE = "https://www.geodaten.sachsen.de/batch-download-4719.html"
 GEOCLOUD = "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files"
 
 
-def download(url: str, dest: Path) -> Path:
+def download(url: str, dest: Path, md5_url: str | None = None) -> Path:
+    """`url` to `dest`, checked before it takes the name: the byte count
+    against Content-Length (a cut connection), a ZIP's CRCs, and the
+    published md5 when there is one. A download that fails a check is
+    deleted and raises, so the cache never holds a broken file."""
     if dest.exists() and dest.stat().st_size > 0:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     print(f"downloading {url}")
-    with urllib.request.urlopen(url) as res, open(tmp, "wb") as out:
-        shutil.copyfileobj(res, out, length=1 << 20)
+    digest = hashlib.md5()
+    written = 0
+    try:
+        with urllib.request.urlopen(url) as res, open(tmp, "wb") as out:
+            expected = res.headers.get("Content-Length")
+            while chunk := res.read(1 << 20):
+                out.write(chunk)
+                digest.update(chunk)
+                written += len(chunk)
+        if expected is not None and written != int(expected):
+            raise OSError(f"{url}: {written} of {expected} bytes")
+        if dest.suffix.lower() == ".zip":
+            with zipfile.ZipFile(tmp) as z:
+                bad = z.testzip()
+            if bad is not None:
+                raise OSError(f"{url}: corrupt member {bad}")
+        if md5_url is not None:
+            with urllib.request.urlopen(md5_url) as res:
+                published = res.read().decode("ascii", "replace").split()[0].lower()
+            if published != digest.hexdigest():
+                raise OSError(f"{url}: md5 {digest.hexdigest()}, published {published}")
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     tmp.rename(dest)
     return dest
 
@@ -194,7 +221,7 @@ def ingest_osm(raw: Path) -> None:
     if any(osm.glob("*.osm.pbf")):
         return
     try:
-        download(OSM, osm / Path(OSM).name)
+        download(OSM, osm / Path(OSM).name, md5_url=f"{OSM}.md5")
     except OSError as err:
         print(f"OSM extract not downloaded ({err}); put a .osm.pbf into {osm}")
 
