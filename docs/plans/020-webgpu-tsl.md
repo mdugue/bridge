@@ -223,6 +223,25 @@ frames is the post stack's own passes at boot and the shadow casters. On
 the node path a tile also waits up to 12 s (not 3 s) for its compile
 before it shows, so a finer terrain level never shows as a hole.
 
+**Hundreds of builds per tile, and iPhones gave up (2026-09-26).** On an
+iPhone the node path hung at "4/5" (the neighbour tiles), closed the tab,
+or reported a tile failing with "Maximum call stack size exceeded".
+three builds every `InstancedMesh` on its own (the render object's key
+carries the mesh's uuid, as its instancing node binds that mesh's matrix
+buffer), and a tile's dressing is hundreds of instanced meshes, each
+drawn twice (main and shadow pass): hundreds of identical WGSL
+translations and pipelines per tile. `shared-instancing.ts` hands a
+mesh's matrices and colours to the build as named geometry attributes
+(`iMat0`…`iMat3`, `iColor`, views of its own arrays) and takes the uuid
+out of the key, so every mesh with the same material and layout shares
+one build; the crown's sway reads the same attributes. A headless lite
+boot went from 255 to 31 node builds. The rasters' CPU bytes are now
+released after upload on the node path too (a re-upload counter in
+`node-probe.ts` counted none on either backend). The stack overflow did
+not reproduce: WebKit on Linux has no WebGPU, and its WebGL2 path boots
+under a much smaller stack. The toast now carries the first frames of
+the failing stack on the node path, for the next report.
+
 Also tried and dropped: one shared terrain / water / clay material with
 the per-tile textures bound per draw via `onObjectUpdate`. The per-object
 textures did not reach the draws (grey ground, untinted clay), and node

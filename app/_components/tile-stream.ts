@@ -51,6 +51,7 @@ import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { nodeRenderer } from "./gpu-mode";
 import { timed } from "./perf-mark";
+import { shareInstancing } from "./shared-instancing";
 import type { CompilePass } from "./post-stack";
 import { buildRail } from "./rail-layer";
 import { buildRiverside } from "./riverside-layer";
@@ -749,6 +750,12 @@ export class DressingPlugin {
     }
     const warmup = buildCrownWarmup(this.ctx.heightFog);
     this.warmup = warmup;
+    if (nodeRenderer()) {
+      // the stand-ins then prime the very builds the crowns share
+      for (const mesh of warmup.main) {
+        shareInstancing(mesh);
+      }
+    }
     await withinCompileWait(
       Promise.all([
         ...warmup.main.map((mesh) => this.ctx.compile(mesh)),
@@ -800,9 +807,15 @@ export class DressingPlugin {
           this.url
         );
         const parts = dressingParts(dressing);
-        // The node renderer builds every instanced mesh on its own (three
-        // keys the build by the mesh), so there a representative per
-        // material would leave the rest to build inside a frame.
+        // On the node renderer the instanced meshes share their builds
+        // (shared-instancing.ts); every part is still compiled, as most of
+        // them are a cache hit and whatever is hidden now (a crown tier)
+        // would otherwise build inside the frame that first shows it.
+        if (nodeRenderer()) {
+          for (const part of parts) {
+            shareInstancing(part);
+          }
+        }
         const toCompile = nodeRenderer()
           ? parts
           : compileRepresentatives(parts);

@@ -197,15 +197,12 @@ async function loadRasterTexture(
   // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
   // them (mipmaps are generated on the GPU). Twelve resident copies took
   // mobile Safari past its per-tab memory limit when these were bitmaps.
-  // SPIKE (plan 020): WebGPURenderer may upload again after onUpdate (the
-  // node paint pass reads the class raster before the terrain does); keep
-  // the bytes on node pages.
-  if (!nodeRenderer()) {
-    texture.onUpdate = () => {
-      (texture.image as { data: Uint8Array | null }).data = null;
-      texture.onUpdate = null;
-    };
-  }
+  // (The node renderer uploads each raster once too: node-probe.ts counts
+  // re-uploads, and a headless boot on either backend counted none.)
+  texture.onUpdate = () => {
+    (texture.image as { data: Uint8Array | null }).data = null;
+    texture.onUpdate = null;
+  };
   return { texture, width, height };
 }
 

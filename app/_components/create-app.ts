@@ -683,6 +683,21 @@ async function bootApp(
       url?: unknown;
     };
     const failure = error instanceof Error ? error : new Error(String(error));
+    if (nodeRenderer()) {
+      // SPIKE (plan 020): say where a node-renderer page failed — on a
+      // phone the console is out of reach, so the HUD's message carries
+      // the innermost frames of the stack.
+      console.error("tile load failed", url, failure);
+      const frames = (failure.stack ?? "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 4)
+        .join(" ← ");
+      if (frames) {
+        failure.message = `${failure.message} [${frames}]`;
+      }
+    }
     if (!firstFrameShown && (tile === null || String(url).includes(spawn.id))) {
       bootFailure ??= failure;
       return;

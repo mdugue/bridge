@@ -33,6 +33,7 @@ import {
 import { type Node, RenderPipeline, type WebGPURenderer } from "three/webgpu";
 import { type FocusMode, LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { guardNodeRenderer } from "./node-render-guard";
+import { installSharedInstancing } from "./shared-instancing";
 import type { PostStack } from "./post-stack";
 
 /** GTAO radius in metres (view space); N8AO ran 12 m of a different algorithm. */
@@ -131,6 +132,7 @@ export function createNodePostStack(
   onLate: () => void
 ): PostStack {
   const guard = guardNodeRenderer(renderer, onLate);
+  installSharedInstancing(renderer);
   // Two pipelines, with and without DoF, both built once: DoF drops while
   // the camera moves, and swapping one pipeline's output node would
   // re-translate the whole post graph (GTAO, DoF, SMAA, grading) on the main

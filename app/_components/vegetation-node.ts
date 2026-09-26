@@ -157,16 +157,15 @@ class CrownNodeMaterial extends MeshStandardNodeMaterial {
   override setupPosition(builder: NodeBuilder): Node {
     const object = builder.object as InstancedMesh;
     if (object.isInstancedMesh && swayBend) {
-      // columns 0 and 3 of the instance matrix
-      const matrices = instanceColumns(object);
+      // columns 0 and 3 of the instance matrix: from the shared-instancing
+      // attributes (shared-instancing.ts), else from the mesh's own buffer
+      const shared = builder.geometry.getAttribute("iMat0") !== undefined;
+      const matrices = shared ? null : instanceColumns(object);
       // reason: @types/three leaves the attribute node's type open.
       const column = (offset: number) =>
-        instancedBufferAttribute(
-          matrices,
-          "vec4",
-          16,
-          offset
-        ) as unknown as Node<"vec4">;
+        (matrices
+          ? instancedBufferAttribute(matrices, "vec4", 16, offset)
+          : attribute(`iMat${offset / 4}`, "vec4")) as unknown as Node<"vec4">;
       const origin = column(12).xz;
       crownOrigin.assign(origin);
       crownScale.assign(length(column(0).xyz));

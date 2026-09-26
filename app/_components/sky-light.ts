@@ -24,7 +24,6 @@ import {
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
 import { isAbortError } from "./fetch-optional";
-import { nodeRenderer } from "./gpu-mode";
 import { DATA_POSITION } from "./shader-chunks";
 import { sceneShared, textureBytes, trackTexture } from "./three-utils";
 
@@ -316,11 +315,6 @@ export const retainOpenSkyTexture = white.retain;
 
 /** Drops the CPU copy once the GPU has it (as terrain-layer's rasters do). */
 function releaseAfterUpload(texture: Texture): void {
-  // SPIKE (plan 020): as terrain-layer.ts's rasters, node pages keep the
-  // bytes (WebGPURenderer may upload again after onUpdate).
-  if (nodeRenderer()) {
-    return;
-  }
   texture.onUpdate = () => {
     (texture.image as { data: Uint8Array | null }).data = null;
     texture.onUpdate = null;

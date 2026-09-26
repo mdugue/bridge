@@ -24,6 +24,8 @@ export interface GpuStats {
   asyncPipelines: number;
   /** in-frame builds by pass, material and object (the first word of each) */
   syncByKind: Record<string, number>;
+  /** textures uploaded more than once (id → uploads) */
+  reuploads: Record<number, number>;
 }
 
 declare global {
@@ -53,6 +55,7 @@ interface ProbedInternals {
   backend: {
     createProgram: (program: unknown) => void;
     createRenderPipeline: (ro: unknown, promises: unknown[] | null) => void;
+    updateTexture: (texture: { id: number }, options: unknown) => void;
   };
 }
 
@@ -68,6 +71,7 @@ export function probeNodeRenderer(renderer: WebGPURenderer): void {
     syncPipelines: 0,
     asyncPipelines: 0,
     syncByKind: {},
+    reuploads: {},
   };
   window.__gpuStats = stats;
   const internals = renderer as unknown as ProbedInternals;
@@ -110,6 +114,16 @@ export function probeNodeRenderer(renderer: WebGPURenderer): void {
   backend.createProgram = (program) => {
     stats.programs += 1;
     createProgram(program);
+  };
+  const uploads = new Map<number, number>();
+  const updateTexture = backend.updateTexture.bind(backend);
+  backend.updateTexture = (texture, options) => {
+    const n = (uploads.get(texture.id) ?? 0) + 1;
+    uploads.set(texture.id, n);
+    if (n > 1) {
+      stats.reuploads[texture.id] = n;
+    }
+    updateTexture(texture, options);
   };
   const createPipeline = backend.createRenderPipeline.bind(backend);
   backend.createRenderPipeline = (ro, promises) => {
