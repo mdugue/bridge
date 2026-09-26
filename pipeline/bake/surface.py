@@ -52,10 +52,9 @@ import re
 
 import numpy as np
 import shapely
-from PIL import Image
 from rasterio.features import rasterize
 
-from .common import OSM_ATTRIBUTION, Tile, column
+from .common import OSM_ATTRIBUTION, Tile, column, save_grey_png
 from .osm import has_extract, read_osm, tag
 
 # id → key; 0 = unknown (the shader keeps the class default).
@@ -489,7 +488,7 @@ def run(tile: Tile, px: int = 2048) -> None:
         (along & 0xFF).astype(np.uint8),
         (along >> 8).astype(np.uint8),
     )
-    Image.fromarray(rgba, mode="L").save(tile.out("dlm", f"surface_{tile.id}.png"), optimize=True)
+    save_grey_png(tile.out("dlm", f"surface_{tile.id}.png"), rgba)
     legend = {
         "tile": tile.id,
         "crs": f"EPSG:{tile.epsg}",

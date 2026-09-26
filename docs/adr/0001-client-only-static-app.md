@@ -1,6 +1,6 @@
 # ADR 0001: Client-only static app — no backend, no database, no persistence
 
-- **Status:** accepted
+- **Status:** accepted; the "four fixed tiles" below became fifteen streamed ones with [ADR 0024](./0024-site-streams-as-3d-tiles.md) — still static files, so the decision stands
 - **Date:** 2026-06 (initial commit), reaffirmed 2026-09
 
 ## Context

@@ -124,7 +124,7 @@ Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 |---|---|---|---|---|
 | Gelände | DGM1-GeoTIFF | das GeoTIFF selbst | zwei **Geländenetze** je Kachel (ein detailliertes und ein grobes), mit eingearbeiteten Mauerkanten, als **glTF** | das Netz, das die Kamera gerade braucht |
 | Gebäude | LoD2-CityGML | die CityJSON-Umwandlung | ein **glTF-Gebäudenetz** je Kachel mit einer Tabelle von Stilwerten je Gebäude (Dachfarbe eingearbeitet), dazu die Grundrisse für die Minikarte | Netz + Grundrisse |
-| Bodenfarben | Basis-DLM-Shapefiles | das Landnutzungsklassen-PNG mit Legende | eine halb so große Kopie (2048²) für Handys, ferne Geländeteile und die Minikarte | die Klassen-PNGs; die Farben malt der Browser |
+| Bodenfarben | Basis-DLM-Shapefiles | das Landnutzungsklassen-PNG mit Legende | eine halb so große Kopie (2048²) für Handys und ferne Geländeteile und eine kleine (512²) für die Minikarte | die Klassen-PNGs; die Farben malt der Browser |
 | Bäume | Basis-DLM + DOM1 + DGM1 | Baumpunkte, Heckenreihen | — | wie eingecheckt |
 | Grün | DOP | das NDVI-PNG | — | wie eingecheckt |
 | Dachfarben | DOP + LoD2 | die Dachfarben-Tabelle | in die Tabelle des Gebäudenetzes eingearbeitet | im Gebäudenetz |
@@ -155,7 +155,7 @@ Es tut drei Dinge:
    offenen **3D-Tiles**-Format, listet für jede Kachel die Gebäude und die
    zwei Geländestufen und legt fest, ab welcher Nähe die detaillierte Stufe
    die grobe ersetzt. Das Landnutzungsklassen-PNG bekommt eine
-   2048²-Kopie. Ergebnisse werden in `.cache/` zwischengespeichert und nur
+   2048²- und eine 512²-Kopie. Ergebnisse werden in `.cache/` zwischengespeichert und nur
    neu erzeugt, wenn sich eine Eingabe oder der Bake-Code geändert hat.
 2. **Veröffentlicht** jede Datei nach `public/data/` unter einem Namen, der
    einen Fingerabdruck ihres Inhalts trägt (zum Beispiel
@@ -190,7 +190,8 @@ können wieder aus dem Speicher fallen. Gemessen an den aktuellen Daten
 | Gebäudegrundrisse (Minikarte) | 48 kB | bis 75 kB | mit den Gebäuden |
 | Grobes Gelände (512²) | 0,41 MB | 0,44–0,65 MB | die Kachel im Blick ist |
 | Detailliertes Gelände (ein TIN, mit seinen Mauern, Treppen und Bordsteinen) | 1,61 MB | 1,31–3,56 MB | die Kamera nahe kommt |
-| Landnutzungsklassen, 2048² | 0,08 MB | 0,06–0,11 MB | beim Start (Minikarte), dann fürs grobe Gelände |
+| Landnutzungsklassen, 512² | 15 kB | 9–18 kB | beim Start, für die Minikarte (die Klangkulisse nutzt es mit) |
+| Landnutzungsklassen, 2048² | 0,08 MB | 0,06–0,11 MB | mit dem groben Gelände (auf Handys mit jeder Stufe) |
 | Landnutzungsklassen, 4096² | 0,22 MB | 0,15–0,29 MB | mit dem detaillierten Gelände (nur Desktop) |
 | Grün (NDVI) | 0,39 MB | 0,32–0,77 MB | mit dem Gelände |
 | Baumpunkte | 36 kB | 41–526 kB | mit dem detaillierten Gelände |
@@ -228,7 +229,7 @@ und Schatten und der gesamte Nachbearbeitungs-Look.
 |---|---|---|
 | Neuer Geländestand | GeoTIFF in `data/dgm/` ersetzen; die Bakes `canopy` und `rail` neu ausführen (sie lesen es) | die Geländenetze samt Mauerkanten werden beim nächsten Build neu gebacken |
 | Neues Gebäudemodell | nach CityJSON umwandeln, in `data/cityjson/` ersetzen; das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
-| Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps`, `furniture`, `rail` und `tram` (sie lesen das Klassenraster) | die 2048²-Kopien werden neu gebacken |
+| Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps`, `furniture`, `rail` und `tram` (sie lesen das Klassenraster) | die 2048²- und 512²-Kopien werden neu gebacken |
 | Neue Luftbilder | die Bakes `ndvi` und `roof-colour` neu ausführen | die Dachfarben werden beim nächsten Build ins Netz eingearbeitet |
 | Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs`, `rail` und `tram` neu ausführen | — |
 | Andere Bodenfarben | die eine Palette im Code ändern | nichts neu zu backen: Der Browser malt die Farben |

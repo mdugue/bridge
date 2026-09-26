@@ -5,7 +5,12 @@ import {
   cityMeshSourceFiles,
   type DataManifest,
   dgmSourceFiles,
+  DRESSING_KINDS,
   manifestUrl,
+  OSM_KINDS,
+  pickFiles,
+  SMALL_RASTER_PX,
+  SOUND_KINDS,
   tileArtifacts,
   tileIds,
 } from "./tile";
@@ -38,12 +43,51 @@ test("the cadastre, hedges and scan crowns are optional side files", () => {
   expect(a.canopyx.required).toBe(false);
 });
 
-test("exactly four artifacts are required", () => {
+test("only the class rasters and the vegetation rows are required", () => {
   const required = Object.entries(tileArtifacts(PRIMARY_TILE))
     .filter(([, a]) => a.required)
     .map(([kind]) => kind)
     .sort();
-  expect(required).toEqual(["landcover", "landcoverLow", "vegrows"]);
+  expect(required).toEqual([
+    "landcover",
+    "landcoverLow",
+    "landcoverSmall",
+    "vegrows",
+  ]);
+});
+
+test("the minimap and the soundscape read a 512² class raster baked from the 4096² one", () => {
+  const { landcover, landcoverSmall } = tileArtifacts(PRIMARY_TILE);
+  expect(landcoverSmall.bakedFrom).toEqual({
+    file: landcover.file,
+    raster: SMALL_RASTER_PX,
+  });
+  expect(SMALL_RASTER_PX).toBe(512);
+});
+
+test("the dressing, sound and OSM columns name only kinds of the table", () => {
+  const kinds = Object.keys(tileArtifacts(PRIMARY_TILE));
+  for (const list of [DRESSING_KINDS, SOUND_KINDS, OSM_KINDS]) {
+    expect(list.length).toBeGreaterThan(0);
+    for (const kind of list) {
+      expect(kinds).toContain(kind);
+    }
+  }
+  expect([...SOUND_KINDS].sort()).toEqual([
+    "monuments",
+    "soundmarks",
+    "surface",
+    "svf",
+    "tram",
+  ]);
+  expect(DRESSING_KINDS).toContain("vegrows");
+  expect(DRESSING_KINDS).not.toContain("landcover");
+});
+
+test("pickFiles keeps only the named kinds a tile has", () => {
+  expect(
+    pickFiles({ tram: "t.geojson", svf: "", lamps: "l.geojson" }, SOUND_KINDS)
+  ).toEqual({ tram: "t.geojson" });
 });
 
 test("the site's tiles, the spawn tile first", () => {

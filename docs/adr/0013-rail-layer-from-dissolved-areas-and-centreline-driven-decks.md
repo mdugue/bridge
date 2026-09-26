@@ -65,5 +65,6 @@ normal so every material is `FrontSide`.
 ## References
 
 - Ledger "Railway & bridges" and the four 🗃️ rail rows;
-  `scripts/extract-rail.sh`, `app/_components/rail-layer.ts`;
+  `scripts/extract-rail.sh` (since ADR 0025: `pipeline/bake/rail.py`),
+  `app/_components/rail-layer.ts`;
   `lib/city/features.ts` (`RailFeature`, `BridgeFeature`, `AreaFeature`).

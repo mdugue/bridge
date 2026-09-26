@@ -29,6 +29,7 @@ import { tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import {
   cityMeshSourceFiles,
+  OSM_KINDS,
   stairSourceFile,
   type TileArtifact,
   terraceSourceFile,
@@ -505,6 +506,36 @@ test.each(cases)(
           expect(isPoint2(p.bank)).toBe(true);
         }
       }
+    }
+  }
+);
+
+// ODbL: every file derived from OpenStreetMap names its source (AGENTS.md,
+// "Attribution is part of the data"). The served ones are the artifact
+// table's `osm` column; the terrain-bake inputs and the building facts are
+// OSM too, and so is the paving raster's legend.
+test.each(tileIds(DRESDEN))(
+  "%s: every OSM-derived file carries the ODbL credit",
+  (tile) => {
+    const artifacts = tileArtifacts(tile);
+    const files = [
+      ...OSM_KINDS.map((kind) => `data/dlm/${artifacts[kind].file}`),
+      wallSourceFile(tile),
+      stairSourceFile(tile),
+      terraceSourceFile(tile),
+      cityMeshSourceFiles(tile).osmBuild,
+      `data/dlm/surface_${tile}.json`,
+    ];
+    for (const file of files) {
+      const path = join(DATA, "..", "..", file);
+      if (!existsSync(path)) {
+        continue;
+      }
+      const { attribution } = JSON.parse(readFileSync(path, "utf8")) as {
+        attribution?: unknown;
+      };
+      // The file name in the message says which one lost its credit.
+      expect(`${file}: ${String(attribution)}`).toContain("OpenStreetMap");
     }
   }
 );

@@ -6,7 +6,9 @@ import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
 import {
   catchUp,
+  DRESSING_PART_NAMES,
   DressingPlugin,
+  dressingParts,
   type TileDressing,
   type TileStreamContext,
 } from "./tile-stream";
@@ -70,4 +72,28 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
   expect(plugin.skyView.held()).toBe(0);
   // the app is going: no change reaches it
   expect(changes).toBe(0);
+});
+
+test("every part of a dressing is in the part table, so disposal and the census reach it", () => {
+  const group = () => new Object3D();
+  const control = () => ({ group: group() });
+  // One of each: a TileDressing field left out of DRESSING_PARTS would be
+  // neither disposed nor counted.
+  const full = {
+    tile: "t",
+    vegetation: control(),
+    lowVegetation: group(),
+    lamps: control(),
+    monuments: control(),
+    furniture: group(),
+    rail: group(),
+    tram: group(),
+    riverside: group(),
+    sport: control(),
+    vineyards: group(),
+  } as unknown as TileDressing;
+  const fields = Object.keys(full).filter((key) => key !== "tile");
+  expect([...DRESSING_PART_NAMES].sort() as string[]).toEqual(fields.sort());
+  expect(dressingParts(full)).toHaveLength(fields.length);
+  expect(dressingParts({ tile: "t" })).toEqual([]);
 });

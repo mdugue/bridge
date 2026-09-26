@@ -87,3 +87,24 @@ test("a ferry line is a faint wake that never casts; a groyne a stone ridge", ()
   const [ridge] = byName(group, "riverside-groyne");
   expect(topY(ridge)).toBeCloseTo(108.5, 4);
 });
+
+test("a ferry line past the loaded ground keeps no vertex at sea level", () => {
+  const ferry: RiversideFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, -50],
+        [200, -50],
+      ],
+    },
+    properties: { k: "ferry" },
+  };
+  // No terrain east of x = 100: those samples have no ground.
+  const partial: RiversideContext = {
+    ...ctx,
+    heightAt: (x, y) => (x > 100 ? null : ctx.heightAt(x, y)),
+  };
+  const [wake] = byName(buildRiverside([ferry], partial), "riverside-ferry");
+  wake.geometry.computeBoundingBox();
+  expect(wake.geometry.boundingBox?.min.y).toBeCloseTo(104.06, 4);
+});

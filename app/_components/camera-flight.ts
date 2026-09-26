@@ -1,5 +1,6 @@
 import { Matrix4, type PerspectiveCamera, Quaternion, Vector3 } from "three";
 import { DEG2RAD, directionOf, type Xyz } from "@/lib/city/pose";
+import { clamp } from "@/lib/city/math";
 
 /** s — minimum flight time so even a tiny hop reads as a deliberate glide. */
 const MIN_DURATION = 1.4;
@@ -50,10 +51,6 @@ export interface CameraFlight {
 /** Perlin smootherstep — zero velocity AND acceleration at both ends. */
 function smootherStep(t: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }
 
 /**

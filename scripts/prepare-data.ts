@@ -20,8 +20,9 @@
  *     immutable. Files the manifest no longer references are pruned.
  *
  * Baked outputs are cached in `.cache/prepare-data/` (gitignored) under a
- * key of their inputs, the bake's own sources and the names they reference,
- * so a rerun is cheap and a changed bake never serves a stale cache.
+ * key of their inputs' contents, every module this file imports
+ * (bake-sources.ts) and the names they reference, so a rerun is cheap and a
+ * changed bake never serves a stale cache.
  * Runs ahead of `dev` and `build`; public/data/ is gitignored.
  */
 import { createHash } from "node:crypto";
@@ -31,7 +32,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
@@ -70,6 +70,11 @@ import type { WallRibbon } from "../lib/city/walls";
 import {
   cityMeshSourceFiles,
   type DataManifest,
+  DRESSING_KINDS,
+  pickFiles,
+  SOUND_KINDS,
+  type TileArtifact,
+  type TileArtifactKind,
   dgmSourceFiles,
   kerbSourceFile,
   MANIFEST_FILE,
@@ -84,17 +89,16 @@ import {
   type BakedTile,
   buildTileset,
   type CityExtras,
-  type DressingFiles,
   TERRAIN_LEVELS,
   type TerrainExtras,
   TILESET_FILE,
   TILESET_SPAWN_FILE,
-  type TileSoundFiles,
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
 import { currentSite } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
+import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
 import {
   cityMesh,
   fenceMesh,
@@ -163,43 +167,24 @@ function publish(logical: string, content: Uint8Array): string {
 
 // --- cache --------------------------------------------------------------------
 
-/** The bake's own sources: a change to any of them re-bakes everything. */
+/**
+ * The bake's own sources — every module reachable from this file through
+ * relative imports — plus the lockfile and the dependency patches, since the
+ * glTF tools' versions shape the output too: a change to any of them
+ * re-bakes everything.
+ */
 const BAKE_SOURCES = [
-  "scripts/prepare-data.ts",
-  "scripts/bake-tiles.ts",
-  "scripts/bake-terrain-tin.ts",
-  "lib/city/terrain-tin.ts",
-  "lib/city/wall-snap.ts",
-  "scripts/bake-city-mesh.ts",
-  "scripts/tile-glb.ts",
-  "scripts/downsample-raster.ts",
-  "scripts/crop-raster.ts",
-  "lib/city/city-mesh.ts",
-  "lib/city/building-tint.ts",
-  "lib/city/minimap.ts",
-  "lib/city/small-buildings.ts",
-  "lib/city/terrain-geometry.ts",
-  "lib/city/terrain-conflate.ts",
-  "lib/city/stairs.ts",
-  "lib/city/walls.ts",
-  "lib/city/kerbs.ts",
-  "lib/city/fences.ts",
-  "lib/city/polyline.ts",
-  "lib/city/ground-clamp.ts",
-  "lib/city/tileset.ts",
+  ...moduleGraph("scripts/prepare-data.ts"),
+  "bun.lock",
+  ...readdirSync(at("patches")).map((name) => `patches/${name}`),
 ].map(at);
 
-/** A cache key over input files (by mtime + size) and any extra values. */
+const hashOf = createContentHasher();
+
+/** A cache key over the contents of the input files, the bake's sources and
+ *  any extra values. */
 function cacheKey(inputs: string[], ...extra: unknown[]): string {
-  const h = createHash("sha1");
-  for (const path of [...inputs, ...BAKE_SOURCES]) {
-    if (existsSync(path)) {
-      const { mtimeMs, size } = statSync(path);
-      h.update(`${path}:${mtimeMs}:${size};`);
-    }
-  }
-  h.update(JSON.stringify(extra));
-  return h.digest("hex").slice(0, 12);
+  return contentKey(hashOf, [...inputs, ...BAKE_SOURCES], extra);
 }
 
 /** The cached bytes for `key`, or the baked ones (then cached). */
@@ -226,8 +211,13 @@ async function cached(
 
 // --- 1. side files --------------------------------------------------------------
 
-/** tile → artifact kind → published name (absent optional files: missing) */
-const sideFiles = new Map<string, Partial<Record<string, string>>>();
+/** Artifact kind → published name (absent optional files: missing), plus
+ *  the phones' colony raster publishColonies derives beside
+ *  `cultivatedRaster`. */
+type Published = Partial<Record<TileArtifactKind | "cultivatedLow", string>>;
+
+/** tile → artifact kind → published name */
+const sideFiles = new Map<string, Published>();
 /** tile → where its published colony raster lies in the tile */
 const colonyCrops = new Map<string, ColonyCrop>();
 
@@ -238,7 +228,7 @@ const colonyCrops = new Map<string, ColonyCrop>();
 async function publishColonies(
   tile: string,
   file: string,
-  names: Partial<Record<string, string>>
+  names: Published
 ): Promise<void> {
   const src = at(`data/dlm/${file}`);
   const key = cacheKey([src]);
@@ -298,8 +288,12 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
 }
 
 for (const tile of TILES) {
-  const names: Partial<Record<string, string>> = {};
-  for (const [kind, artifact] of Object.entries(tileArtifacts(tile))) {
+  const names: Published = {};
+  const artifacts = Object.entries(tileArtifacts(tile)) as [
+    TileArtifactKind,
+    TileArtifact,
+  ][];
+  for (const [kind, artifact] of artifacts) {
     if (
       kind === "cultivatedRaster" &&
       existsSync(at(`data/dlm/${artifact.file}`))
@@ -530,38 +524,6 @@ function terraces(tile: string): Terrace[] {
   return features.flatMap((f) => terraceOf(f) ?? []);
 }
 
-function dressingOf(names: Partial<Record<string, string>>): DressingFiles {
-  const pick = (kind: keyof DressingFiles) => names[kind] ?? "";
-  return {
-    bridge: pick("bridge"),
-    canopy: pick("canopy"),
-    furniture: pick("furniture"),
-    lamps: pick("lamps"),
-    monuments: pick("monuments"),
-    platform: pick("platform"),
-    rail: pick("rail"),
-    railarea: pick("railarea"),
-    vegrows: pick("vegrows"),
-    // Only the tiles that have them name them: an absent file is a feature
-    // off, never a request that can only 404.
-    ...(names.trees ? { trees: names.trees } : {}),
-    ...(names.lowveg ? { lowveg: names.lowveg } : {}),
-    ...(names.canopyx ? { canopyx: names.canopyx } : {}),
-    ...(names.cultivated ? { cultivated: names.cultivated } : {}),
-    ...(names.tram ? { tram: names.tram } : {}),
-    ...(names.riverside ? { riverside: names.riverside } : {}),
-  };
-}
-
-/** What the hidden soundscape fetches of a tile while it plays (plan 035):
- *  only the files the tile has. */
-function soundFilesOf(names: Partial<Record<string, string>>): TileSoundFiles {
-  const kinds = ["monuments", "soundmarks", "surface", "svf", "tram"] as const;
-  return Object.fromEntries(
-    kinds.flatMap((k) => (names[k] ? [[k, names[k]]] : []))
-  );
-}
-
 /** The files a tile's shaped ground is baked from. */
 function terrainInputs(tile: string): string[] {
   const source = dgmSourceFiles(tile);
@@ -670,7 +632,7 @@ async function fineChildren(
  *  026) and both levels' baked light (plan 033): only the rasters the tile
  *  has. */
 function paintAndLight(
-  names: Partial<Record<string, string>>,
+  names: Published,
   level: 0 | 1,
   crop: ColonyCrop | undefined
 ): Partial<TerrainExtras> {
@@ -725,7 +687,7 @@ async function bakeTerrain(
       ? { sport: names.sport, sportTable: names.sportTable }
       : {}),
     ...paintAndLight(names, level, colonyCrops.get(tile)),
-    ...(level === 0 ? { dressing: dressingOf(names) } : {}),
+    ...(level === 0 ? { dressing: pickFiles(names, DRESSING_KINDS) } : {}),
   };
   const key = cacheKey(inputs, offset, described);
   const meta = parse<{
@@ -798,8 +760,8 @@ const extras: TilesetExtras = {
     id: t.id,
     bounds: t.bounds,
     footprints: footprintFiles.get(t.id) ?? "",
-    minimap: sideFiles.get(t.id)?.landcoverLow ?? "",
-    sound: soundFilesOf(sideFiles.get(t.id) ?? {}),
+    minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
+    sound: pickFiles(sideFiles.get(t.id) ?? {}, SOUND_KINDS),
   })),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));

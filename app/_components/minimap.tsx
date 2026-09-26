@@ -145,8 +145,9 @@ export function Minimap({
   }, [focusRingM]);
 
   // Decoded + recoloured land-cover tiles, kept for the life of the component:
-  // decoding four 4096² PNGs is far too costly to repeat on every demolish or
-  // sidebar resize. `requested` remembers which sources are already loading.
+  // one 512² PNG per site tile (the tileset's `minimap` raster) is cheap once
+  // but not worth repeating on every demolish or sidebar resize. `requested`
+  // remembers which sources are already loading.
   // (Assumes `landcoverTiles` is stable for a session — a future tile switcher
   // must clear both when the block changes.)
   const requestedRef = useRef(new Set<string>());

@@ -17,7 +17,8 @@ import {
 import { fogRangeFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
 import { worldToEpsg } from "@/lib/city/ground-clamp";
-import { groundRayDistance } from "@/lib/city/ground-ray";
+import { createBootPhases } from "@/lib/city/boot-phases";
+import { createGround } from "@/lib/city/ground";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
   LOOK_DEFAULTS,
@@ -71,7 +72,13 @@ import {
   estimateGeometryBytes,
   trackedTextureBytes,
 } from "./three-utils";
-import { createTileStream } from "./tile-stream";
+import {
+  createTileStream,
+  DRESSING_PART_NAMES,
+  DRESSING_PARTS,
+  type DressingPartName,
+  type TileDressing,
+} from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
 import {
   treesWithin,
@@ -95,21 +102,29 @@ const DEFAULT_FOV = 55;
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
 
+/** The HUD census's layers: the content's own, and a dressing's parts
+ *  (tile-stream.ts DRESSING_PARTS). */
 export type LayerName =
   | "city"
-  | "furniture"
-  | "lamps"
-  | "lowVegetation"
-  | "monuments"
-  | "rail"
-  | "riverside"
+  | "fences"
   | "stairs"
   | "terrain"
-  | "tram"
-  | "vegetation"
   | "walls"
-  | "fences"
-  | "water";
+  | "water"
+  | DressingPartName;
+
+/** The census of every dressing part, over the visible dressings. */
+function dressingCensus(
+  dressings: TileDressing[],
+  census: (roots: (Object3D | undefined)[]) => SceneCensus
+): Record<DressingPartName, SceneCensus> {
+  return Object.fromEntries(
+    DRESSING_PART_NAMES.map((name) => [
+      name,
+      census(dressings.map(DRESSING_PARTS[name])),
+    ])
+  ) as Record<DressingPartName, SceneCensus>;
+}
 
 export interface CityWalkStats {
   buildingCount: number;
@@ -505,14 +520,15 @@ async function bootApp(
     // replaced by the sun rig's own vector once it exists (below)
     shadowReach: { value: new Vector3() },
   };
-  // The lowest real terrain elevation so far (the Elbe surface): the floor
-  // the player stands on off every tile and the valley height-fog's start,
-  // lowered as each tile lands (a uniform write, no recompile).
-  let groundFloor = Number.POSITIVE_INFINITY;
+  // The site's ground (lib/city/ground.ts): the visible terrains' heights,
+  // fine level first, and the lowest real terrain elevation so far (the Elbe
+  // surface) — the floor the player stands on off every tile and the valley
+  // height-fog's start, lowered as each tile lands (a uniform write, no
+  // recompile).
+  const siteGround = createGround(offset);
   const lowerGroundFloor = (minElevation: number) => {
-    if (minElevation < groundFloor) {
-      groundFloor = minElevation;
-      heightFog.uFogHeightStart.value = groundFloor + 1;
+    if (siteGround.lowerFloor(minElevation)) {
+      heightFog.uFogHeightStart.value = minElevation + 1;
     }
   };
 
@@ -575,31 +591,12 @@ async function bootApp(
     openGate = resolve;
   });
 
-  // First terrain that covers (x, y) wins, fine level first; null only when
-  // off every visible tile.
+  // The visible terrains, fine level first (the ground reads them in order).
   let terrains: TerrainLayer[] = [];
-  const heightAt = (x: number, y: number): number | null => {
-    for (const t of terrains) {
-      const h = t.heightAt(x, y);
-      if (h !== null) {
-        return h;
-      }
-    }
-    return null;
-  };
-  // The same ground in world coordinates, for rays (lib/city/ground-ray.ts).
-  const groundAtWorld = (x: number, z: number): number | null => {
-    const e = worldToEpsg(x, z, offset);
-    return heightAt(e.x, e.y);
-  };
-  const rayOrigin = new Vector3();
-  const rayDirection = new Vector3();
+  const { heightAt } = siteGround;
   /** Distance along a camera ray (NDC) to the ground, or null. */
-  const groundAlong = (ray: Raycaster, far: number): number | null => {
-    rayOrigin.copy(ray.ray.origin);
-    rayDirection.copy(ray.ray.direction);
-    return groundRayDistance(rayOrigin, rayDirection, groundAtWorld, { far });
-  };
+  const groundAlong = (ray: Raycaster, far: number): number | null =>
+    siteGround.along(ray.ray.origin, ray.ray.direction, far);
 
   // The stream: what lands and leaves, and everything that follows from it.
   let onChange: () => void = () => undefined;
@@ -814,7 +811,7 @@ async function bootApp(
   // Where the player stands and looks, walk/fly, the scenic glides — and the
   // one rule that any player input cancels a glide (camera-pose.ts).
   const pose = createCameraPose(camera, {
-    groundFloor: () => (Number.isFinite(groundFloor) ? groundFloor : 0),
+    groundFloor: () => siteGround.floor() ?? 0,
     heightAt,
     offset,
     resolveStep: collider.resolveStep,
@@ -873,14 +870,7 @@ async function bootApp(
         water: census(
           terrains.flatMap((t) => [t.water?.mesh, t.water?.mistMesh])
         ),
-        vegetation: census(dressings.map((d) => d.vegetation?.group)),
-        lowVegetation: census(dressings.map((d) => d.lowVegetation)),
-        lamps: census(dressings.map((d) => d.lamps?.group)),
-        monuments: census(dressings.map((d) => d.monuments?.group)),
-        furniture: census(dressings.map((d) => d.furniture)),
-        rail: census(dressings.map((d) => d.rail)),
-        tram: census(dressings.map((d) => d.tram)),
-        riverside: census(dressings.map((d) => d.riverside)),
+        ...dressingCensus(dressings, census),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
         fences: census(terrains.map((t) => t.fences)),
@@ -916,6 +906,7 @@ async function bootApp(
       return;
     }
     terrains = stream.visibleTerrains();
+    siteGround.setSources(terrains);
     for (const t of stream.terrains) {
       lowerGroundFloor(t.minElevation);
     }
@@ -1045,13 +1036,8 @@ async function bootApp(
   // both the plane it is anchored to and the altitude its half-size derives
   // from. Off every tile the ground floor stands in, as for the walk clamp.
   const shadowViewDir = new Vector3();
-  const groundUnderCamera = (): number => {
-    const epsg = worldToEpsg(camera.position.x, camera.position.z, offset);
-    return (
-      heightAt(epsg.x, epsg.y) ??
-      (Number.isFinite(groundFloor) ? groundFloor : 0)
-    );
-  };
+  const groundUnderCamera = (): number =>
+    siteGround.underWorld(camera.position.x, camera.position.z);
 
   const timer = new Timer();
   // Pick every vegetation chunk's crown tier (rich / mid / far) over all
@@ -1132,14 +1118,9 @@ async function bootApp(
   });
   cleanups.push(() => renderer.setAnimationLoop(null));
 
-  let streamingStarted = false;
-  /** Set once, the first time everything in view is loaded and dressed. */
-  let loaded = false;
-  // Progress after the first frame (reportProgress below): declared before
-  // the first await, since tile events call checkLoaded from then on.
-  let surroundings = 0;
-  let details = 0;
-  let busy = false;
+  // The load after the first frame (lib/city/boot-phases.ts): declared
+  // before the first await, since tile events call checkLoaded from then on.
+  const boot = createBootPhases();
   // --- the first frame: the spawn tile's buildings and terrain ------------
   // Landed = shown by the renderer, not merely dressed: a dressed tile can
   // still be waiting on its compile, and the spawn teleport below needs
@@ -1191,50 +1172,27 @@ async function bootApp(
   // the tile renderer's own load progress, and the details (vegetation,
   // lamps, rails) built per fine tile against those still queued.
   // Both only ever move forward, and both end when everything in view is in.
-  function reportProgress(spawnDressed: boolean): void {
-    if (extras.tiles.length === 1) {
-      stage("surroundings", 1, true);
-    } else {
-      const progress = tilesIdle
-        ? 1
-        : Math.min(stream.tiles.loadProgress, 0.99);
-      surroundings = Math.max(surroundings, progress);
-      stage("surroundings", surroundings);
-    }
-    if (streamingStarted) {
-      const built = stream.dressings.size;
-      const queued = stream.pendingDressings();
-      const progress =
-        queued === 0 && spawnDressed
-          ? 1
-          : Math.min(built / Math.max(built + queued, 1), 0.99);
-      details = Math.max(details, progress);
-      stage("details", details);
-    }
-  }
-
   function checkLoaded(): void {
-    // Tried, not necessarily built: a dressing that failed, or whose tile
-    // left before its turn, must not hold the scene short of "loaded".
-    const spawnDressed = stream.dressingSettled(spawn.id);
-    const idleNow = tilesIdle && stream.pendingDressings() === 0;
-    if (!loaded) {
-      reportProgress(spawnDressed);
-      if (streamingStarted && spawnDressed && idleNow) {
-        loaded = true;
-        worldPartial = false;
-        applyFog();
-        stage("surroundings", 1);
-        stage("details", 1);
-        opts.onLoaded?.();
-      }
-      return;
+    const step = boot.update({
+      siteTiles: extras.tiles.length,
+      tilesIdle,
+      loadProgress: stream.tiles.loadProgress,
+      dressingsBuilt: stream.dressings.size,
+      dressingsQueued: stream.pendingDressings(),
+      // Tried, not necessarily built: a dressing that failed, or whose tile
+      // left before its turn, must not hold the scene short of "loaded".
+      spawnDressed: stream.dressingSettled(spawn.id),
+    });
+    for (const { id, fraction, skipped } of step.stages) {
+      stage(id, fraction, skipped);
     }
-    // Later loads (a flight, a turn) no longer move the bar; the HUD shows
-    // a small "loading" hint instead.
-    if (busy !== !idleNow) {
-      busy = !idleNow;
-      opts.onBusy?.(busy);
+    if (step.loaded) {
+      worldPartial = false;
+      applyFog();
+      opts.onLoaded?.();
+    }
+    if (step.busy !== undefined) {
+      opts.onBusy?.(step.busy);
     }
   }
 
@@ -1246,10 +1204,9 @@ async function bootApp(
    * idempotent; the HUD calls it once the veil is gone (city-walk.tsx).
    */
   const startStreaming = (): void => {
-    if (streamingStarted || disposed) {
+    if (disposed || !boot.startStreaming()) {
       return;
     }
-    streamingStarted = true;
     stage("details", 0);
     openGate();
     checkLoaded();

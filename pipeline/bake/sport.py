@@ -50,10 +50,9 @@ import math
 
 import numpy as np
 import shapely
-from PIL import Image
 from rasterio.features import rasterize
 
-from .common import OSM_ATTRIBUTION, Tile, column
+from .common import OSM_ATTRIBUTION, Tile, column, save_grey_png
 from .osm import has_extract, read_osm, tag
 
 # id → key; keep in step with `SPORT_SURFACES` in lib/city/sport.ts. 0 keeps
@@ -335,9 +334,7 @@ def run(tile: Tile, px: int = 2048) -> None:
         column(lfields, "other_tags", lines),
     )
     raster = index_raster([g for g, *_ in found], tile, px)
-    Image.fromarray(raster.reshape(px, 4 * px), mode="L").save(
-        tile.out("dlm", f"sport_{tile.id}.png"), optimize=True
-    )
+    save_grey_png(tile.out("dlm", f"sport_{tile.id}.png"), raster.reshape(px, 4 * px))
     table = {
         "tile": tile.id,
         "crs": f"EPSG:{tile.epsg}",

@@ -1,3 +1,4 @@
+import { clamp } from "./math";
 /**
  * Shadow-frustum fit: how wide the sun's orthographic shadow frustum has to be
  * for the camera's current altitude, and how far along the view direction to
@@ -68,10 +69,6 @@ const AHEAD_FRACTION = 0.5;
  * every edge, so nothing on screen falls out of the map between re-centres.
  */
 export const FOLLOW_DEAD_ZONE_FRACTION = 0.18;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
 
 /**
  * The frustum half-size for a camera `heightAboveGround` metres up, given the

@@ -61,10 +61,9 @@ from rasterio.windows import Window
 from scipy import ndimage as ndi
 from shapely.geometry import shape
 
-from .common import Tile, column, feature, geometry_json, owns, write_geojson
+from .common import Tile, column, feature, geometry_json, overlaps, owns, write_geojson
 from .lowveg import Grid, building_mask, dgm_on, disk, lsc_rasters
 from .osm import has_extract, read_osm, tag
-from .skyview import overlaps, site_sources
 
 GEOSN_ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0 (laser scan, LoD2)"
 RES = 0.5
@@ -291,12 +290,12 @@ def _features(path: Path) -> list:
 
 
 def area_tiles(tile: Tile, grid: Grid) -> list[Tile]:
-    """The tile and every committed neighbour (skyview.py's `site_sources`)
+    """The tile and every committed neighbour (`Tile.neighbours`)
     the grid reaches into."""
     bounds = (grid.xmin, grid.ymin, grid.xmax, grid.ymax)
     return [tile] + [
         Tile(tid, b, tile.epsg, tile.raw, tile.data)
-        for tid, b in site_sources(tile)
+        for tid, b in tile.neighbours()
         if tid != tile.id and overlaps(b, bounds)
     ]
 

@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
+import http.client
 import json
 import re
 import shutil
@@ -53,15 +55,76 @@ BATCH_PAGE = "https://www.geodaten.sachsen.de/batch-download-4719.html"
 GEOCLOUD = "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files"
 
 
-def download(url: str, dest: Path) -> Path:
+def _check_zip(path: Path, url: str) -> None:
+    """Raises OSError unless every member of the ZIP reads back intact."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            bad = z.testzip()
+    except zipfile.BadZipFile as err:
+        raise OSError(f"{url}: not a ZIP ({err})") from err
+    if bad is not None:
+        raise OSError(f"{url}: corrupt member {bad}")
+
+
+def _published_md5(md5_url: str) -> str | None:
+    """The hash a `<hash>  <name>` file publishes, or None when it cannot be
+    read (the download then goes on unverified rather than being lost)."""
+    try:
+        with urllib.request.urlopen(md5_url) as res:
+            return res.read().decode("ascii", "replace").split()[0].lower()
+    except (OSError, http.client.HTTPException, IndexError) as err:
+        print(f"{md5_url}: {err} — keeping the download unverified")
+        return None
+
+
+def download(url: str, dest: Path, md5_url: str | None = None) -> Path:
+    """`url` to `dest`, checked before it takes the name: the byte count
+    against Content-Length (a cut connection), a ZIP's CRCs, and the
+    published md5 when there is one (read first, so an extract replaced
+    mid-download fails the check instead of passing a stale one). A download
+    that fails a check is deleted and raises OSError, so the cache never
+    holds a broken file; a ZIP cached before these checks is tested once."""
+    marker = dest.with_suffix(dest.suffix + ".checked")
     if dest.exists() and dest.stat().st_size > 0:
-        return dest
+        if dest.suffix.lower() != ".zip" or marker.exists():
+            return dest
+        try:
+            _check_zip(dest, url)
+            marker.touch()
+            return dest
+        except OSError as err:
+            print(f"{err} — the cached copy is dropped and fetched again")
+            dest.unlink()
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # A marker left from a deleted copy must not vouch for the next one.
+    marker.unlink(missing_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
+    published = _published_md5(md5_url) if md5_url is not None else None
     print(f"downloading {url}")
-    with urllib.request.urlopen(url) as res, open(tmp, "wb") as out:
-        shutil.copyfileobj(res, out, length=1 << 20)
+    digest = hashlib.md5()
+    written = 0
+    try:
+        try:
+            with urllib.request.urlopen(url) as res, open(tmp, "wb") as out:
+                expected = res.headers.get("Content-Length")
+                while chunk := res.read(1 << 20):
+                    out.write(chunk)
+                    digest.update(chunk)
+                    written += len(chunk)
+        except http.client.HTTPException as err:  # e.g. IncompleteRead
+            raise OSError(f"{url}: {err!r}") from err
+        if expected is not None and written != int(expected):
+            raise OSError(f"{url}: {written} of {expected} bytes")
+        if dest.suffix.lower() == ".zip":
+            _check_zip(tmp, url)
+        if published is not None and published != digest.hexdigest():
+            raise OSError(f"{url}: md5 {digest.hexdigest()}, published {published}")
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     tmp.rename(dest)
+    if dest.suffix.lower() == ".zip":
+        marker.touch()
     return dest
 
 
@@ -194,7 +257,7 @@ def ingest_osm(raw: Path) -> None:
     if any(osm.glob("*.osm.pbf")):
         return
     try:
-        download(OSM, osm / Path(OSM).name)
+        download(OSM, osm / Path(OSM).name, md5_url=f"{OSM}.md5")
     except OSError as err:
         print(f"OSM extract not downloaded ({err}); put a .osm.pbf into {osm}")
 
