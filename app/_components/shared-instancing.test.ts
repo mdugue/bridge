@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   BoxGeometry,
+  type BufferAttribute,
   Color,
   Group,
   InstancedMesh,
@@ -31,7 +32,7 @@ describe("shareInstancing", () => {
     const column = view.getAttribute("iMat3") as InterleavedBufferAttribute;
     expect(column.data.array).toBe(mesh.instanceMatrix.array);
     expect(column.offset).toBe(12);
-    expect(view.getAttribute("iColor").array).toBe(mesh.instanceColor?.array);
+    expect(view.getAttribute("iColor").array).toBe(mesh.instanceColor!.array);
     expect(mesh.userData.sharedInstancing).toBe(true);
   });
 
@@ -45,7 +46,7 @@ describe("shareInstancing", () => {
     mesh.setMatrixAt(1, new Matrix4().makeTranslation(1, 2, 3));
     mesh.instanceMatrix.needsUpdate = true;
     expect(column.data.version).toBe(before + 1);
-    const colour = mesh.geometry.getAttribute("iColor");
+    const colour = mesh.geometry.getAttribute("iColor") as BufferAttribute;
     const colourBefore = colour.version;
     mesh.instanceColor!.needsUpdate = true;
     expect(colour.version).toBe(colourBefore + 1);
