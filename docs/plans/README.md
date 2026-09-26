@@ -172,6 +172,30 @@ S/M/L.
     2026-09-26: it moves large blocks out of files the port is rewriting,
     and unifying the winding changes baked geometry — needs its own
     earcut (`lib/city` forbids `three`) and a headed shot comparison.
+22. **One terrain raster loader driven by the artifact table (M) — with
+    plan 020.** The artifact table (`lib/city/tile.ts`) now names the
+    dressing, sound and OSM files, but the terrain's rasters still go
+    their own way: `prepare-data.ts` spells their names into the terrain
+    extras by hand, and `terrain-layer.ts` has one loader per raster
+    (splat, NDVI, paving, edges, sports grounds, colonies, markings) plus
+    the detail-raster bookkeeping. A raster column in the table (level,
+    channels, filter, mipmaps) would let one loader serve them all.
+    Deferred on 2026-09-26: the loaders create textures, which the port
+    rewrites.
+23. **A dressing's layers declare the ground they stand on (S–M).**
+    `DRESSING_PARTS` (`tile-stream.ts`) names each part once, but which
+    ground a layer samples — its own tile's terrain or the height over
+    every loaded terrain — is still chosen per call in `buildDressing` and
+    explained only in comments; the layers' ground context does not say
+    which. A layer entry carrying its artifact kinds, its ground and its
+    build function would put the choice in the interface and let
+    `buildDressing` get a unit test with a fake fetch and a fake ground;
+    today only the e2e layer census covers that wiring.
+24. **Leftovers of the 2026-09-26 refactors (S each).** The first frame is
+    still awaited by a 50 ms `setTimeout` poll in `create-app.ts`;
+    resolving it from the stream's change handler drops the poll.
+    `SceneSidebar` still takes the scene time as five props although
+    `useSceneTime` (`scene-time.ts`) owns it; a context removes them.
 
 ### 2026-09-26 audit (`improve deep` + architecture review, PR #67)
 
@@ -182,15 +206,53 @@ byte-exact and dressing fetches abortable; a dressing's parts as one
 named table; the ground and the second boot phase out of `create-app.ts`;
 the scene's time as one hook; `Tile.classes()`/`Tile.neighbours()` in the
 pipeline with tests for the four untested bakes; checked downloads;
-Pillow-13-ready PNG writes; one `clamp`; stale remnants swept. Deferred to
-the WebGPU port: items 20 and 21 above, and the port-side findings (plan
-020's drift check counts 15 `onBeforeCompile` sites, the tree has 26; the
-painted land-cover target at full size on both terrain levels; the NDVI
-texture loaded per level; the LRU budget blind to plugin textures; the
-demolish index buffer freed only by GC). Considered and left as is: the
-bridge deck table computed twice per tile (microseconds), the furniture
-models merged per tile (sharing them across tiles would make a tile's
-unload dispose another tile's geometry).
+Pillow-13-ready PNG writes; one `clamp`; stale remnants swept.
+
+Open from this run: items 20–24 above and the direction options 7–9
+below; what was considered and dropped is under "Rejected". The raw
+reports (the ranked list, the audit's finding details, the architecture
+review with its before/after diagrams) were not committed: this section,
+those items and the rejected entries are their record.
+
+**For the WebGPU port (plan 020).** The run left out every file the port
+rewrites. What it found there, checked in the code at `2ed5ab1`, for the
+port to start from rather than re-audit:
+
+- Plan 020's drift check counts 15 `onBeforeCompile` sites in 7 files;
+  the tree has 26 in 17 files, 12 of them with a
+  `customProgramCacheKey`. Several keyed closures branch on `heightFog`
+  inside the closure that is the key (item 18), which is moot once fog
+  is one `scene.fogNode`.
+- The terrain's fragment pass splices GLSL chunks from `ground-detail.ts`,
+  `sport-ground.ts`, `road-markings.ts` and `cultivated-layer.ts` that
+  share locals by name, in a fixed order, under a program key of ten
+  flags (`createTerrainMaterial` in `terrain-layer.ts`). As node functions
+  they become an ordered list.
+- The material-only layers of the baked nodes (`wall-layer.ts`,
+  `kerb-layer.ts`, `stair-layer.ts`, `fence-layer.ts`) differ only by
+  colour, side and shadow flags: one spec row each once materials are
+  nodes.
+- Crown materials are built per tile (`vegetation-layer.ts`,
+  `crown-season.ts`); per scene once item 20's environment exists.
+- The painted land-cover target is the class raster's full size and is
+  painted for both terrain levels, so two painted rasters per tile can be
+  resident; size it to the level.
+- The NDVI texture is loaded per terrain level instead of shared through
+  `shared-rasters.ts` like the sky view; one decode per tile could serve
+  both levels and the crown sampler.
+- The tile cache's byte budget (`tileCacheBytesFor`) is filled from
+  3DTilesRendererJS's estimate, taken once per tile when it loads: its
+  geometry and the textures on standard material slots. The dressing,
+  built later, and the terrain's textures bound as shader uniforms are
+  not counted. The renderer asks plugins through `calculateBytesUsed`, so
+  the dressing plugin could report them (the texture half changes with
+  the port; take it with plan 019's cache tuning).
+- Demolish replaces the city mesh's index attribute (`city-layer.ts`)
+  without disposing the old one; three's WebGL backend frees only the
+  current index when a geometry is disposed, so each demolish's old
+  buffer waits for the GC. Re-check under WebGPU.
+- Items 20 and 21 above belong inside the port's material phases or
+  after it.
 
 ### Data → scene: plans 024–035 (planned 2026-09-25)
 
@@ -250,6 +312,29 @@ independence:
    `data/<site>/<tile>.provenance.json` (dataset, edition, download date,
    licence) from the ingest adapter, for the HUD footer to read. The guide's
    dataset table and `data/provenance.json` are the hand-kept version.
+   Since 2026-09-26 the ingest adapter checks each download (length, ZIP
+   CRCs, the Geofabrik md5); those are the values to record.
+7. **Offline repeat visits: a service worker over the tileset (S–M).**
+   [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)
+   already makes every `/data/*` file immutable and content-hashed, with
+   `manifest.json` the one `no-cache` entry, so a service-worker cache is
+   bounded and updates itself: repeat visits boot from disk, a walk
+   survives a tunnel, the site becomes installable. The browser's HTTP
+   cache evicts a site this size first. Trade-offs: storage quota on
+   phones, an explicit update path (re-read the manifest). A cache is not
+   user state, but ADR 0001's "no persistence" wants a sentence on it.
+8. **Dressing built off the main thread (L, after plan 020).**
+   `buildDressing` fetches, parses and builds about seventeen layers per
+   tile on the main thread; 3DTilesRendererJS decodes its glTF in workers,
+   the dressing is ours. A worker returning transferable arrays (instance
+   matrices, positions) is renderer-agnostic but should wait for the port
+   to settle the instancing formats. Cheaper interim: time-slice the
+   builders as `lib/city/png-raster.ts` does.
+9. **A bilingual HUD (M).** The page is `lang="de"` since 2026-09-26: the
+   HUD, the spoken feedback and the `/wissen` landing are German, while
+   the guide comes in both languages. About sixty HUD strings, picked by
+   `navigator.language` or a `?lang=`, including the `aria-label`s and
+   the spoken feedback, would follow the guide's pairing.
 
 ### Maintainer actions
 
@@ -311,6 +396,27 @@ independence:
   🗃️ in the [ledger](../transformations.md)).
 - **Held back deliberately:** `n8ao` 2.x (no types, changes SSAO output —
   needs the headed harness), `postprocessing` 7.x (alpha/beta only).
+- **From the 2026-09-26 run:**
+  - *Clay materials leaking when a tile unloads* — refuted:
+    3DTilesRendererJS collects a tile's materials after `processTileModel`,
+    so the swapped clay is disposed with the tile.
+  - *Malformed OSM numeric tags crashing a bake* — every tag parse is
+    guarded or goes through a regex.
+  - *Atomic GeoJSON writes in the bakes* — a truncated file fails
+    `features.test.ts` and `tile-data.test.ts` before it ships; the bakes
+    run on the maintainer's machine.
+  - *`rehype-raw` in `/wissen` as an HTML sink* — it renders the repo's
+    own `docs/` at build time only.
+  - *Sharing the furniture models across tiles* — one tile's unload would
+    dispose another tile's geometry. *One bridge deck table for rail and
+    tram* — it saves microseconds per tile.
+  - *Deep as they are* (architecture review): the look table, store and
+    Snapshot codec (ADR 0017); `fetch-optional.ts`; `shared-rasters.ts`;
+    `TinIndex` (one implementation, two adapters: bake and viewer);
+    `camera-pose.ts`; `city-layer.ts` with `city-mesh.ts`; the bake ↔
+    viewer contract tables pinned by `features.test.ts`, `test_bakes.py`
+    and `test_committed.py`; the per-layer tests that go through
+    `buildX(features, ctx)` with a fake ground.
 
 ## What the audits did not cover
 
@@ -319,7 +425,11 @@ prompt-injection content only); `data/**` beyond names, sizes, counts,
 geometry types and property keys; anything executed (the audits ran with
 no `node_modules`; CI's green run was the baseline); real-GPU behaviour
 (every shader and fill-rate statement is reasoned from the three.js r186
-source); the production deploy environment.
+source); the production deploy environment. The 2026-09-26 run also left
+out everything the WebGPU port rewrites (the GLSL patch sites, the splat
+pass, the post stack, the renderer construction and preflight, the sky
+and lamp-halo materials, the vertex formats), and each of its audit
+categories had one reader.
 
 ## History
 
@@ -348,3 +458,11 @@ source); the production deploy environment.
   and ADR 0022 and removed plan 016's premise. Plans 019 (GPU
   verification), 020 (WebGPU/TSL, ADR 0027 proposed) and 021 (`/wissen` on
   Starlight) were written.
+- **2026-09-26 run** (against `d613345`): `improve deep` and an
+  architecture review (`improve-codebase-architecture`) ran in parallel
+  and were merged into one ranked list, scoped around the WebGPU port
+  running at the same time. Eleven audit findings and eight architecture
+  candidates; the renderer-agnostic ones were implemented on PR #67
+  (sixteen commits, three review rounds). Open: items 20–24 and the
+  direction options 7–9; the port-side notes are in the "2026-09-26
+  audit" section.
