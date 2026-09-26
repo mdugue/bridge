@@ -50,3 +50,34 @@ def test_the_published_md5_is_checked(tmp_path):
         download(src.as_uri(), dest, md5_url=bad.as_uri())
     assert not dest.exists()
     assert download(src.as_uri(), dest, md5_url=good.as_uri()) == dest
+
+
+def test_something_that_is_not_a_zip_is_an_oserror(tmp_path):
+    src = tmp_path / "page.zip"
+    src.write_bytes(b"<html>maintenance</html>")
+    dest = tmp_path / "cache" / "tile.zip"
+    with pytest.raises(OSError, match="not a ZIP"):
+        download(src.as_uri(), dest)
+    assert not dest.exists()
+
+
+def test_an_unreachable_md5_keeps_the_download(tmp_path):
+    src = tmp_path / "extract.osm.pbf"
+    src.write_bytes(b"osm data")
+    dest = tmp_path / "osm" / "extract.osm.pbf"
+    missing = (tmp_path / "nowhere.md5").as_uri()
+    assert download(src.as_uri(), dest, md5_url=missing).read_bytes() == b"osm data"
+
+
+def test_a_zip_cached_before_the_checks_is_tested_once(tmp_path):
+    dest = tmp_path / "cache" / "old.zip"
+    dest.parent.mkdir()
+    dest.write_bytes(b"truncated")
+    src = tmp_path / "fresh.zip"
+    src.write_bytes(_zip_bytes())
+    # the broken copy is dropped and fetched again
+    assert download(src.as_uri(), dest).read_bytes() == src.read_bytes()
+    good = tmp_path / "cache" / "good.zip"
+    good.write_bytes(_zip_bytes())
+    assert download("file:///unused", good) == good
+    assert good.with_suffix(".zip.checked").exists()

@@ -54,6 +54,14 @@ export function useLiveMode(
   const stopWatch = useRef<(() => void) | null>(null);
   /** the "no compass after FIRST_READING_MS" check, cleared with the mode */
   const firstReading = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** false once the HUD unmounts: a permission answer after that is moot */
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   // Compass bearings are true; the scene's are grid. The meridian
   // convergence barely changes across a site, so it is taken once.
   const convergence = useMemo(
@@ -158,6 +166,9 @@ export function useLiveMode(
     // iOS: asked from inside the click, the only place it may be asked.
     requestOrientationPermission()
       .then((granted) => {
+        if (!mounted.current) {
+          return;
+        }
         if (!granted) {
           setRefused(true);
           say("Kompass-Zugriff verweigert");
