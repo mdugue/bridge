@@ -90,7 +90,9 @@ model only what no source shows:
    the Marienbrücke's road line, 16 m beside the rail bridge's footprint,
    once took it, and the road was laid on the tracks. The measured deck is
    grade-limited from midspan outwards (8 %, rail 4 %), so a deck the scan
-   loses near an abutment ramps down instead of dropping.
+   loses near an abutment ramps down instead of dropping, and then reduced
+   to a straight ramp plus one upward camber: never sagging (the raster's
+   dips bowed the Waldschlößchenbrücke inwards).
 10. **No canopy tree within 10 m of a bridge**: on a park bank a bridge's
    steel is as tall in the nDOM as a crown (the Blaues Wunder's pylons had
    become two trees).

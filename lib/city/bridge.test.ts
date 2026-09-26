@@ -5,7 +5,8 @@ import {
   axisFrame,
   BRIDGE_STEP,
   intradosAt,
-  masonrySpans,
+  MASONRY_PIER_HALF,
+  masonryArches,
   fitParabola,
   PIER_SPACING,
   pierStations,
@@ -119,10 +120,10 @@ test("placeRibs puts the two sides on the deck edges and a lone pylon central", 
     ],
     edges
   );
-  expect(a.offset).toBeCloseTo(-5.9);
-  expect(b.offset).toBeCloseTo(5.9);
+  expect(a.offset).toBeCloseTo(-5.2);
+  expect(b.offset).toBeCloseTo(5.2);
   expect(placeRibs([{ offset: 2, rise }], edges)[0].offset).toBe(0);
-  expect(placeRibs([{ offset: -7, rise }], edges)[0].offset).toBeCloseTo(-5.9);
+  expect(placeRibs([{ offset: -7, rise }], edges)[0].offset).toBeCloseTo(-5.2);
   // both measured on one side: the outer keeps it, the inner goes across
   const same = placeRibs(
     [
@@ -131,7 +132,7 @@ test("placeRibs puts the two sides on the deck edges and a lone pylon central", 
     ],
     edges
   );
-  expect(same.map((r) => r.offset).sort((p, q) => p - q)).toEqual([-5.9, 5.9]);
+  expect(same.map((r) => r.offset).sort((p, q) => p - q)).toEqual([-5.2, 5.2]);
 });
 
 test("smoothRise calms the top edge and leaves the gaps alone", () => {
@@ -179,9 +180,11 @@ test("ribProfile: straight chords to the towers, a sag between, nothing hanging"
   expect(out[10]).toBeLessThan(0.5);
   expect(out[150]).toBeLessThan(0.5);
   expect(out[9]).toBe(0);
-  // one run from end to end, the gap bridged by the sag down to the deck
+  // one run from end to end, the gap bridged by the sag
   expect(ribRuns(out)).toEqual([[10, 150]]);
-  expect(Math.min(...out.slice(towers[0], towers[1]))).toBeLessThan(1);
+  // ...but not down onto the parapet: a chord, not a strip along the edge
+  const sagLow = Math.min(...out.slice(towers[0], towers[1]));
+  expect(sagLow).toBeCloseTo(2.6, 1);
   // no waves: the side arm rises steadily to its tower
   for (let i = 11; i <= towers[0]; i++) {
     expect(out[i]).toBeGreaterThan(out[i - 1]);
@@ -190,19 +193,26 @@ test("ribProfile: straight chords to the towers, a sag between, nothing hanging"
   expect(new Set(ribProfile([0, 6, 7, 6.5, 6, 0]).slice(1, 5)).size).toBe(1);
 });
 
-test("masonrySpans arch where the deck clears the ground, not at the banks", () => {
+test("masonryArches: arches between real piers, not at the banks", () => {
   // 260 m: banks at 118 m for 40 m each end, the river at 100 m between
   const ground = (s: number) => (s < 40 || s > 220 ? 118 : 100);
-  const spans = masonrySpans(260, ground, () => 118);
+  const { spans, piers } = masonryArches(260, ground, () => 118);
   expect(spans.length).toBeGreaterThan(3);
   for (const sp of spans) {
-    expect(sp.crown).toBe(117.5);
-    expect(sp.spring).toBe(100.5);
+    expect(sp.crown).toBe(117.4);
+    // a quarter of the clearance above the water: on a pier, not at it
+    expect(sp.spring).toBe(104.5);
     expect(sp.from).toBeGreaterThanOrEqual(26);
   }
-  const [first] = spans;
+  // each pier stands between two arches, as thick as the gap they leave
+  for (const pier of piers) {
+    expect(pier.top).toBe(104.5);
+    expect(pier.ground).toBe(100);
+  }
+  const [first, second] = spans;
+  expect(second.from - first.to).toBeCloseTo(2 * MASONRY_PIER_HALF, 6);
   const mid = (first.from + first.to) / 2;
-  expect(intradosAt(first, mid)).toBeCloseTo(117.5, 6);
-  expect(intradosAt(first, first.from)).toBeCloseTo(100.5, 6);
+  expect(intradosAt(first, mid)).toBeCloseTo(117.4, 6);
+  expect(intradosAt(first, first.from)).toBeCloseTo(104.5, 6);
   expect(intradosAt(first, first.to + 1)).toBeNull();
 });

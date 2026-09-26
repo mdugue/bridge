@@ -303,8 +303,9 @@ export function pierStations(
   return out;
 }
 
-/** A rib is drawn this far outside the deck's edge (m). */
-const RIB_OUT = 0.4;
+/** A rib stands this far inside the deck's edge (m): half a chord, so its
+ *  outer face is flush with the deck's side — on the bridge, not beside it. */
+const RIB_IN = 0.3;
 /** A lone rib this close to the axis is the bridge's centre line (m). */
 const CENTRE_RIB = 3;
 
@@ -322,7 +323,7 @@ export function placeRibs(
   edges: { left: number; right: number }
 ): BridgeRib[] {
   const side = (offset: number) =>
-    offset >= 0 ? edges.left + RIB_OUT : edges.right - RIB_OUT;
+    offset >= 0 ? edges.left - RIB_IN : edges.right + RIB_IN;
   if (ribs.length === 1 && Math.abs(ribs[0].offset) < CENTRE_RIB) {
     return [{ ...ribs[0], offset: 0 }];
   }
@@ -443,13 +444,16 @@ export function axisFrame(
 
 /** A chord never ends lower than this above the deck (m). */
 const CHORD_END = 0.3;
+/** Between two towers a chord sags no lower than this above the deck (m):
+ *  lower, it lay along the parapet as a second thin strip. */
+const SAG_LOW = 2.6;
 
 /**
  * The simple form a truss, suspension or cantilever rib is drawn in, per
  * station (0 where there is none). With towers (`ribPeaks`): a straight
  * chord from the deck at the first run's start up to the first tower, a
  * curve sagging between two towers to the lowest the rib was measured
- * there (to the deck where it was lost), a straight chord down to the deck
+ * there (SAG_LOW where it was lost), a straight chord down to the deck
  * at the last run's end — the Blaues Wunder's outline, not the raster's
  * waves, and no end left hanging in the air. Without towers: each run a
  * level girder at its median rise.
@@ -485,12 +489,14 @@ export function ribProfile(rise: readonly number[]): number[] {
 }
 
 /** Between two towers: a curve from one top to the other, its lowest the
- *  least the rib was measured there, or the deck where it was lost. */
+ *  least the rib was measured there (where the raster lost it, the deck),
+ *  but never below SAG_LOW. */
 function sag(out: number[], rise: readonly number[], p: number, q: number) {
   const between = rise.slice(p, q + 1);
-  const low = between.some((r) => r <= 0)
-    ? CHORD_END
+  const measured = between.some((r) => r <= 0)
+    ? 0
     : Math.min(...smoothRise(between));
+  const low = Math.max(measured, SAG_LOW);
   const hp = rise[p];
   const hq = rise[q];
   const dip = Math.max(0, (hp + hq) / 2 - low);
@@ -505,11 +511,13 @@ function median(values: number[]): number {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-/** Target span of a masonry arch (m). */
+/** Target span of a masonry arch, pier to pier (m). */
 export const ARCH_SPAN = 26;
-/** An arch opens only where the deck's underside clears its springing by
- *  this much (m); lower spans stay solid-free (the deck on its own). */
-const ARCH_MIN_RISE = 2.5;
+/** Half a masonry pier's thickness along the axis (m). */
+export const MASONRY_PIER_HALF = 1.6;
+/** An arch opens only where its crown clears its springing by this much
+ *  (m); a lower bay (the banks) is the deck on its own. */
+const ARCH_MIN_RISE = 2;
 
 /** One masonry arch: its stations, springing and crown heights. */
 export interface MasonrySpan {
@@ -519,35 +527,69 @@ export interface MasonrySpan {
   to: number;
 }
 
+/** A masonry pier: its station, the ground under it and its top (the
+ *  springing of the arches either side). */
+export interface MasonryPier {
+  ground: number;
+  s: number;
+  top: number;
+}
+
 /**
- * The arches of a masonry bridge (structure `arch` without a measured
- * steel arch): the axis in equal spans of about ARCH_SPAN, each springing
- * half a metre above the higher ground at its ends and rising to just under
- * the deck at its middle. `groundAt(s)` is the terrain on the axis (the
+ * The arches and piers of a masonry bridge (structure `arch` without a
+ * measured steel arch). The axis is cut into equal bays of about
+ * ARCH_SPAN; a bay whose deck clears its ground gets an arch between the
+ * piers' faces, springing a quarter of the clearance above the higher
+ * ground (at least 1.2 m) and rising to just under the deck. A pier stands
+ * at every bay boundary with an arch on either side, from the ground to
+ * its arches' springing. `groundAt(s)` is the terrain on the axis (the
  * water over the river), `underAt(s)` the deck's underside.
  */
-export function masonrySpans(
+export function masonryArches(
   length: number,
   groundAt: (s: number) => number | null,
   underAt: (s: number) => number
-): MasonrySpan[] {
-  const n = Math.min(Math.max(Math.round(length / ARCH_SPAN), 1), 12);
-  const out: MasonrySpan[] = [];
+): { piers: MasonryPier[]; spans: MasonrySpan[] } {
+  const n = Math.min(Math.max(Math.round(length / ARCH_SPAN), 1), 16);
+  const bay = (k: number) => (k * length) / n;
+  const spans: (MasonrySpan | null)[] = [];
   for (let k = 0; k < n; k++) {
-    const from = (k * length) / n;
-    const to = ((k + 1) * length) / n;
-    const g0 = groundAt(from);
-    const g1 = groundAt(to);
+    const g0 = groundAt(bay(k));
+    const g1 = groundAt(bay(k + 1));
+    const under = underAt((bay(k) + bay(k + 1)) / 2);
     if (g0 === null || g1 === null) {
+      spans.push(null);
       continue;
     }
-    const spring = Math.max(g0, g1) + 0.5;
-    const crown = underAt((from + to) / 2) - 0.5;
-    if (crown - spring >= ARCH_MIN_RISE) {
-      out.push({ from, to, spring, crown });
+    const ground = Math.max(g0, g1);
+    const spring = ground + Math.max(1.2, (under - ground) / 4);
+    const crown = under - 0.6;
+    spans.push(
+      crown - spring >= ARCH_MIN_RISE
+        ? {
+            from: bay(k) + (k > 0 ? MASONRY_PIER_HALF : 0),
+            to: bay(k + 1) - (k < n - 1 ? MASONRY_PIER_HALF : 0),
+            spring,
+            crown,
+          }
+        : null
+    );
+  }
+  const piers: MasonryPier[] = [];
+  for (let k = 1; k < n; k++) {
+    const ground = groundAt(bay(k));
+    const sides = [spans[k - 1], spans[k]].filter(
+      (sp): sp is MasonrySpan => sp !== null
+    );
+    if (ground !== null && sides.length > 0) {
+      const top = Math.max(...sides.map((sp) => sp.spring));
+      piers.push({ s: bay(k), ground, top });
     }
   }
-  return out;
+  return {
+    piers,
+    spans: spans.filter((sp): sp is MasonrySpan => sp !== null),
+  };
 }
 
 /** The underside of an arch at station `s` (a half ellipse from springing

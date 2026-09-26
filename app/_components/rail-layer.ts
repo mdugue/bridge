@@ -20,8 +20,10 @@ import {
   BRIDGE_STEP,
   type BridgeRib,
   intradosAt,
+  MASONRY_PIER_HALF,
+  masonryArches,
+  type MasonryPier,
   type MasonrySpan,
-  masonrySpans,
   type Parabola,
   PIER_SPACING,
   pierStations,
@@ -269,13 +271,15 @@ export function ringToWorld(
 /**
  * Triangulates a footprint into a top face at per-vertex `topY` plus a continuous
  * outward-facing fascia dropping `depth` — one solid slab volume, not stacked
- * planes. Used for ballast areas, bridge decks, and platforms.
+ * planes. Used for ballast areas, bridge decks, and platforms. `underside`
+ * closes the slab from below too (a bridge deck, seen from under it).
  */
 export function addFootprint(
   acc: Mesh3,
   ring: Ring2,
   topY: number[],
-  depth: number
+  depth: number,
+  underside = false
 ): void {
   const { pts } = ring;
   if (pts.length < 3) {
@@ -299,6 +303,23 @@ export function addFootprint(
       1,
       0
     );
+    if (underside) {
+      pushTri(
+        acc,
+        pts[a].x,
+        topY[a] - depth,
+        pts[a].z,
+        pts[b].x,
+        topY[b] - depth,
+        pts[b].z,
+        pts[c].x,
+        topY[c] - depth,
+        pts[c].z,
+        0,
+        -1,
+        0
+      );
+    }
   }
   const winding = ringWinding(pts);
   for (let i = 0; i < pts.length; i++) {
@@ -758,6 +779,17 @@ function drawsDeck(coords: [number, number][], ctx: RailContext): boolean {
   return ctx.owns(x / coords.length, y / coords.length);
 }
 
+/** Whether the bridge's ribs are drawn as frames on its deck edges (a
+ *  truss, suspension or cantilever bridge; `addSuperstructure`). */
+function drawsFrames(p: BridgeProps): boolean {
+  const structure = p.structure ?? "";
+  return (
+    (p.ribs?.length ?? 0) > 0 &&
+    !structure.includes("arch") &&
+    !structure.includes("cable-stayed")
+  );
+}
+
 /** The meshes a bridge is drawn into. */
 interface BridgeMeshes {
   /** fascia, parapets, piers, masonry arches */
@@ -776,9 +808,13 @@ function drawBridge(
   ctx: RailContext
 ): void {
   const { kind, structure, depth } = bridgeProps(f);
-  addFootprint(out.tops[kind] ?? out.tops.other, ring, topY, depth);
+  addFootprint(out.tops[kind] ?? out.tops.other, ring, topY, depth, true);
   const frame = bridgeFrame(f, ctx);
-  addParapetWalls(out.stone, ring, topY, frame?.ringS);
+  // where a frame stands on the deck's edge it is the railing: a parapet
+  // beside it read as a second strip along the roadway
+  if (!drawsFrames(f.properties ?? {})) {
+    addParapetWalls(out.stone, ring, topY, frame?.ringS);
+  }
   if (!frame) {
     // an older file: no axis, no measurements
     addPiers(out.stone, ring, topY, ctx, depth);
@@ -897,6 +933,8 @@ function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
     axis.project(x, y)
   );
   const offsets = onAxis.map((p) => p.offset);
+  const sMin = Math.min(...onAxis.map((p) => p.s));
+  const sMax = Math.max(...onAxis.map((p) => p.s));
   return {
     length: axis.length,
     line,
@@ -905,7 +943,11 @@ function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
       right: Math.min(0, ...offsets),
     },
     ringS: onAxis.map((p) => p.s),
-    edgesAt: (s) => ringEdgesAt(onAxis, s) ?? { left: 0, right: 0 },
+    edgesAt: (s) => {
+      // the axis may run a little past the outline: clamp into its stations
+      const at = Math.min(Math.max(s, sMin + 0.01), sMax - 0.01);
+      return ringEdgesAt(onAxis, at) ?? { left: 0, right: 0 };
+    },
     at: (s, offset) => {
       const [x, y] = axis.at(s, offset);
       const w = epsgToWorld(x, y, ctx.offset);
@@ -1108,7 +1150,7 @@ function addFrame(acc: Mesh3, frame: BridgeFrame, rib: BridgeRib): void {
     }
   }
   for (const i of ribPeaks(rib.rise)) {
-    addFramePost(acc, frame, rib.offset, i, top(i), PYLON_HALF);
+    addFramePost(acc, frame, rib.offset, i, top(i), FIN_HALF);
   }
 }
 
@@ -1390,25 +1432,25 @@ function addPiers(
   }
 }
 
-/** Half the thickness of a masonry pier along the axis (m). */
-const MASONRY_PIER_HALF = 1.2;
-/** A spandrel wall is cut into pieces about this long along an edge (m). */
+/** A spandrel wall or vault is cut into pieces about this long (m). */
 const WALL_STEP = 1;
 
 /**
  * A masonry arch bridge (structure `arch` without a measured steel arch):
- * the deck's own side edges carried down as spandrel walls to the arches'
- * underside (`masonrySpans`), and a pier across the deck at each springing.
- * The walls hang from the ring's edges — the deck's real outline and
- * slope — so nothing stands off the deck. False when no span clears its
- * ground (a low bridge keeps its box piers).
+ * arches between piers of real thickness (`masonryArches`). The deck's own
+ * side edges are carried down as spandrel walls — to the arch under them,
+ * to the pier top over a pier — each a vault across the deck underneath,
+ * so the bridge is closed from below and from the side. The walls hang
+ * from the ring's edges — the deck's real outline and slope — so nothing
+ * stands off the deck. False when no bay clears its ground (a low bridge
+ * keeps its box piers).
  */
 function addMasonry(
   acc: Mesh3,
   frame: BridgeFrame,
   deck: { ring: Ring2; topY: number[]; depth: number }
 ): boolean {
-  const spans = masonrySpans(
+  const { spans, piers } = masonryArches(
     frame.length,
     (s) => frame.groundAt(s, 0),
     (s) => frame.deckAt(s) - deck.depth
@@ -1420,7 +1462,11 @@ function addMasonry(
   const across = endEdges(ring, frame.ringS);
   const under = (s: number) => {
     const span = spans.find((sp) => s >= sp.from && s <= sp.to);
-    return span ? intradosAt(span, s) : null;
+    if (span) {
+      return intradosAt(span, s);
+    }
+    const pier = piers.find((p) => Math.abs(s - p.s) <= MASONRY_PIER_HALF);
+    return pier ? pier.top : null;
   };
   for (let i = 0; i < ring.pts.length; i++) {
     if (!across[i]) {
@@ -1433,14 +1479,18 @@ function addMasonry(
       });
     }
   }
-  for (const s of springings(spans, frame.length)) {
-    addMasonryPier(acc, frame, s, spans);
+  for (const span of spans) {
+    addVault(acc, frame, span);
+  }
+  for (const pier of piers) {
+    addMasonryPier(acc, frame, pier);
   }
   return true;
 }
 
 /** One ring edge's spandrel wall, from the fascia's foot down to the arch
- *  under it, in WALL_STEP pieces (nothing where no arch is). */
+ *  or pier under it, in WALL_STEP pieces (nothing where neither is), with
+ *  an inner face too: seen through an arch the far wall is not hollow. */
 function addSpandrel(
   acc: Mesh3,
   ring: Ring2,
@@ -1477,51 +1527,64 @@ function addSpandrel(
     if (p.bottom === null || q.bottom === null) {
       continue;
     }
-    quad(
-      acc,
+    const face: [P3, P3, P3, P3] = [
       [p.x, p.top, p.z],
       [q.x, q.top, q.z],
       [q.x, Math.min(q.bottom, q.top), q.z],
       [p.x, Math.min(p.bottom, p.top), p.z],
-      [nx, 0, nz]
-    );
+    ];
+    quad(acc, ...face, [nx, 0, nz]);
+    quad(acc, ...face, [-nx, 0, -nz]);
   }
 }
 
-/** The stations where an arch springs from a pier: every span end that is
- *  not an abutment. */
-function springings(spans: readonly MasonrySpan[], length: number): number[] {
-  const out = new Set<number>();
-  for (const sp of spans) {
-    for (const s of [sp.from, sp.to]) {
-      if (s > 1 && s < length - 1) {
-        out.add(Math.round(s * 100) / 100);
-      }
+/** The underside of an arch: a barrel across the deck (its width at each
+ *  station) following the intrados, facing down. */
+function addVault(acc: Mesh3, frame: BridgeFrame, span: MasonrySpan): void {
+  const n = Math.max(2, Math.ceil((span.to - span.from) / WALL_STEP));
+  const row = (k: number) => {
+    const s = span.from + ((span.to - span.from) * k) / n;
+    const y = intradosAt(span, s) ?? span.spring;
+    const { left, right } = frame.edgesAt(s);
+    const l = frame.at(s, left);
+    const r = frame.at(s, right);
+    return { l: [l.x, y, l.z] as P3, r: [r.x, y, r.z] as P3 };
+  };
+  let prev = row(0);
+  for (let k = 1; k <= n; k++) {
+    const next = row(k);
+    const across: P3 = [
+      prev.l[0] - prev.r[0],
+      prev.l[1] - prev.r[1],
+      prev.l[2] - prev.r[2],
+    ];
+    const along: P3 = [
+      next.r[0] - prev.r[0],
+      next.r[1] - prev.r[1],
+      next.r[2] - prev.r[2],
+    ];
+    const up = unit(cross(across, along));
+    const down: P3 = up[1] > 0 ? [-up[0], -up[1], -up[2]] : up;
+    // a row of no width (past the outline) has no face, and no normal
+    if (Math.hypot(...down) > 0.5) {
+      quad(acc, prev.r, prev.l, next.l, next.r, down);
     }
+    prev = next;
   }
-  return [...out];
 }
 
-/** A pier across the whole deck at a springing: a box from the ground up
- *  to the higher springing there. */
+/** A pier across the whole deck: a box MASONRY_PIER_HALF either side of
+ *  its station, from the ground up to its arches' springing. */
 function addMasonryPier(
   acc: Mesh3,
   frame: BridgeFrame,
-  s: number,
-  spans: readonly MasonrySpan[]
+  pier: MasonryPier
 ): void {
-  const ground = frame.groundAt(s, 0);
-  const top = Math.max(
-    ...spans
-      .filter(
-        (sp) => Math.abs(sp.from - s) < 0.01 || Math.abs(sp.to - s) < 0.01
-      )
-      .map((sp) => sp.spring)
-  );
-  if (ground === null || top - ground < 0.5) {
+  const { s, ground, top } = pier;
+  const { left, right } = frame.edgesAt(s);
+  if (top - ground < 0.3 || left - right < 1) {
     return;
   }
-  const { left, right } = frame.edgesAt(s);
   const corner = (ds: number, off: number) => frame.at(s + ds, off);
   const c = [
     corner(-MASONRY_PIER_HALF, right),
@@ -1545,14 +1608,6 @@ function addMasonryPier(
       [mx, 0, mz]
     );
   }
-  quad(
-    acc,
-    [c[0].x, top, c[0].z],
-    [c[1].x, top, c[1].z],
-    [c[2].x, top, c[2].z],
-    [c[3].x, top, c[3].z],
-    [0, 1, 0]
-  );
 }
 
 /**

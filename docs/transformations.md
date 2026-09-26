@@ -999,12 +999,19 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   the middle of the span outwards — ≤ 8 % on a road or path deck, ≤ 4 % on a
   rail deck — so where the scan loses the deck near an abutment it ramps down
   instead of dropping off a cliff (the rail bridge by Neustadt station fell
-  5 m at one end) (`bridge.py` `measured_deck`, `limit_grade`).
+  5 m at one end) (`bridge.py` `measured_deck`, `limit_grade`). What comes
+  out is then **reduced to the simplest deck it can be** (`camber_fit`): a
+  straight ramp between its two ends plus one upward camber fitted to it,
+  never sagging, no end steeper than the grade — the raster's dips (the
+  river seen through a gap) and waves are not the roadway. *(Without it the
+  Waldschlößchenbrücke and the Blaues Wunder bowed inwards.)*
   Without DOM1: the ramp + camber. The ground is a **mosaic of the tile and
   its neighbours** (700 m around it), so a deck across a seam comes out the
   same in both tiles' files, and **only the tile that owns its centre draws
-  it** (every copy still lifts that tile's rails). **Flush parapet walls** (no
-  floating cap). **Kind** (rail/road/path) from rasterising the networks +
+  it** (every copy still lifts that tile's rails). **Closed from below**
+  (the soffit: a deck seen from under it was hollow). **Flush parapet
+  walls** (no floating cap) along the sides — not where a frame stands on
+  the edge: the frame is the railing. **Kind** (rail/road/path) from rasterising the networks +
   sampling the *centreline*. *(Tried ver06_f-only — it dropped the road/path
   bridges, which lack area polygons; the DGM ramp alone — it put the
   Waldschlößchenbrücke 3 m low and rail decks up to 6 m high; per-tile
@@ -1032,7 +1039,8 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   anything higher, a tower on a river pier with a portal between the two
   frames; a straight chord from the deck at the first run's start up to
   the first tower, a curve sagging between two towers to the lowest the
-  rib was measured there (to the deck where the raster lost it), a
+  rib was measured there but no lower than 2.6 m (lower, it lay along the
+  parapet as a second thin strip), a
   straight chord down to the deck at the last run's end; without towers a
   level girder at the run's median rise. One 1.6 m chord, a post every
   10 m, no diagonals — the Blaues Wunder's silhouette at the abstraction
@@ -1041,9 +1049,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   mid-air where the raster lost the chord.)* The ribs' measured
   offsets are not trusted across the deck (the DLM centreline can sit
   metres off the bridge: the Blaues Wunder's came out −5.5 and +3.0 m around
-  an 11 m deck, a truss through the roadway) — two ribs go just outside the
-  two deck edges, a lone rib near the axis stays central
-  (`placeRibs`). Pale weathered steel `0xd9dde0`, matte; hangers and stays
+  an 11 m deck, a truss through the roadway) — two ribs stand on the two
+  deck edges, their outer face flush with the deck's side (towers
+  included), a lone rib near the axis stays central (`placeRibs`). Pale weathered steel `0xd9dde0`, matte; hangers and stays
   every 16 / 12 m. *(Drawn member by member as measured until 2026-09 —
   chord, a post every 6 m, diagonals in dark `0x8d9ca8`: busier and
   darker than anything else in the scene.)* No DOM1: no ribs. `pipeline/bake/bridge.py`
@@ -1065,12 +1073,17 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   Waldschlößchenbrücke a truss; it is an arch. No file: the OSM tag stays.
 - **Bridge arches** — `structure` containing **`arch`** without a measured
   steel arch (Augustus-, Albert-, Marienbrücke) → `addMasonry`: the axis
-  in equal spans of about 26 m (`masonrySpans`), each arch springing half a
-  metre above the higher ground at its ends and rising to just under the
-  deck; the deck's **own side edges** carried down as spandrel walls to the
-  arch under them, and a pier across the deck (its width there) at each
-  springing — a masonry-viaduct read. A span that does not clear its
-  ground by 2.5 m gets no arch (the banks). `beam`/absent → flat soffit +
+  in equal bays of about 26 m (`masonryArches`); a bay whose deck clears its
+  ground gets an arch between the faces of two **piers 3.2 m thick**,
+  springing a quarter of the clearance above the higher ground (≥ 1.2 m)
+  and rising to just under the deck; the deck's **own side edges** carried
+  down as spandrel walls (both faces) to the arch, or to the pier top over
+  a pier, and a **vault** across the deck under each arch — closed from
+  below and from the side, a masonry-viaduct read. A bay whose arch would
+  rise less than 2 m gets none (the banks). *(The first cut sprang every
+  arch half a metre over the water from a point, on 0.5 m slabs that read
+  as a second deck under the bridge, and had no vault: from below or
+  through an arch the bridge was hollow.)* `beam`/absent → flat soffit +
   box piers. *(Until 2026-09 the walls stood on a straight line between
   the deck's two farthest-apart corners, one deck width apart and at the
   lowest deck height: on a long deck they stood metres beside it, on a

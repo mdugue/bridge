@@ -291,3 +291,75 @@ test("a curved deck's sides all face out, the inner edge too", () => {
   }
   expect(sides).toBeGreaterThan(0);
 });
+
+/** Every vertex of every mesh a bridge builds, with its normal. */
+function vertices(b: BridgeFeature) {
+  const out: { x: number; y: number; z: number; ny: number }[] = [];
+  for (const child of buildRail({ ...empty, bridges: [b] }, ctx).children) {
+    const geo = (child as Mesh).geometry;
+    const pos = geo.getAttribute("position");
+    const nrm = geo.getAttribute("normal");
+    for (let i = 0; i < pos.count; i++) {
+      out.push({
+        x: pos.getX(i),
+        y: pos.getY(i),
+        z: pos.getZ(i),
+        ny: nrm.getY(i),
+      });
+    }
+  }
+  return out;
+}
+
+test("a deck is closed from below, and so is an arch", () => {
+  // the deck's underside, 1.1 m under its top
+  const soffit = vertices(deck({})).filter(
+    (v) => v.ny < -0.99 && Math.abs(v.y - 118.9) < 0.01
+  );
+  expect(soffit.length).toBeGreaterThan(0);
+  // a masonry bridge's vaults face down between springing and crown
+  const vault = vertices(deck({ structure: "arch" })).filter(
+    (v) => v.ny < -0.5 && v.y > 101 && v.y < 118
+  );
+  expect(vault.length).toBeGreaterThan(0);
+});
+
+test("a frame on the deck's edge stands in for the parapet", () => {
+  const rise = Array.from({ length: 101 }, (_, i) =>
+    i > 20 && i < 80 ? 8 : 0
+  );
+  const parapet = (b: BridgeFeature) =>
+    vertices(b).filter((v) => Math.abs(v.y - 120.85) < 0.01).length;
+  expect(parapet(deck({}))).toBeGreaterThan(0);
+  const truss = deck({
+    structure: "truss",
+    ribs: [
+      { offset: 6, rise },
+      { offset: -6, rise },
+    ],
+  });
+  expect(parapet(truss)).toBe(0);
+  // and the frames stand on the deck, not beside it
+  for (const v of vertices(truss)) {
+    expect(Math.abs(v.z)).toBeLessThanOrEqual(6.01);
+  }
+});
+
+test("no face of a bridge is left without a normal (it would shade black)", () => {
+  // the baked axis runs on a little past the outline at both ends
+  const b = deck({
+    structure: "arch",
+    axis: [
+      [-1, 0],
+      [201, 0],
+    ],
+  });
+  for (const child of buildRail({ ...empty, bridges: [b] }, ctx).children) {
+    const nrm = (child as Mesh).geometry.getAttribute("normal");
+    for (let i = 0; i < nrm.count; i++) {
+      expect(Math.hypot(nrm.getX(i), nrm.getY(i), nrm.getZ(i))).toBeGreaterThan(
+        0.5
+      );
+    }
+  }
+});
