@@ -228,14 +228,21 @@ export function createNodePostStack(
     },
     render: () => {
       guard.beginFrame();
-      updateFocus();
-      if (!warm) {
-        // Build both graphs up front (the first frames are under the load
-        // screen), so the first toggle costs nothing.
-        warm = true;
-        (pipeline === plainPipeline ? withDofPipeline : plainPipeline).render();
+      try {
+        updateFocus();
+        if (!warm) {
+          // Build both graphs up front (the first frames are under the load
+          // screen), so the first toggle costs nothing.
+          warm = true;
+          (pipeline === plainPipeline
+            ? withDofPipeline
+            : plainPipeline
+          ).render();
+        }
+        pipeline.render();
+      } finally {
+        guard.endFrame();
       }
-      pipeline.render();
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,

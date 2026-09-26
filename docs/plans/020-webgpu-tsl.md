@@ -170,6 +170,40 @@ that time is spread over every frame), and more, smaller tiles would add
 objects. Next steps for Phase 1: prime the shadow pass (compile against
 the shadow camera and map), or ask upstream.
 
+**First-visit stalls, found and fixed (2026-09-26).** The long stalls
+that came only on the first flight into unseen parts of the city (the
+same flight again was smooth) had three causes in three r186, all in the
+first frame that drew a new object — and the shadow pass above was where
+most of them landed:
+
+1. **Instanced WGSL depended on the instance count.** Under the uniform
+   buffer limit three reads an `InstancedMesh`'s matrices from a uniform
+   array whose length is written into the shader (`Instance.js`), so every
+   vegetation cell, lamp or monument group with a new instance count was a
+   new shader module and a new render pipeline, compiled blocking. A
+   headless probe (`?gpu=webgl2&scene=lite&block=1`, five hops) counted 82
+   new programs and 82 blocking pipelines on the first hop, 3 on the same
+   hop again.
+2. **Pipelines were created blocking** wherever `compileAsync` had not
+   reached — and it does not reach the shadow pass, nor anything hidden or
+   off screen when it ran (it culls like a frame).
+3. **Every instanced mesh is its own node build** (three keys the build by
+   the mesh's uuid), in the main pass and again in the shadow pass, so a
+   representative per material primed one mesh of hundreds.
+
+The fix is `app/_components/node-render-guard.ts`: a uniform buffer limit
+of 0 (instancing through instance attributes — the same code for any
+count, as on WebGL), every in-frame pipeline through the async API (an
+object waits, undrawn, until its pipeline is ready; the shadow map is
+redrawn then), and a 6 ms per-frame budget for in-frame node builds. Tiles
+and dressings compile ahead with every object exposed (not culled, not
+hidden), and the node renderer compiles every part of a dressing, not a
+representative. With the guard, the same probe counted 0 new programs and
+0 blocking pipelines on every hop (37 frames instead of 10 in the first
+hop's 45 s; SwiftShader frame times say little else). Plates and frame
+times on a real GPU are still to take. `app/_components/node-probe.ts` keeps the counters on
+`window.__gpuStats` for the next probe.
+
 Also tried and dropped: one shared terrain / water / clay material with
 the per-tile textures bound per draw via `onObjectUpdate`. The per-object
 textures did not reach the draws (grey ground, untinted clay), and node

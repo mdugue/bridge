@@ -36,8 +36,12 @@ import type { WebGPURenderer } from "three/webgpu";
 const BUILD_BUDGET_MS = 6;
 
 export interface NodeRenderGuard {
-  /** Opens a new frame's build budget; call once per frame, before render. */
+  /** Opens a frame: its build budget starts, and until `endFrame` objects
+   *  may wait for their pipeline or their build. */
   beginFrame(): void;
+  /** Closes the frame. Renders outside a frame (a raster painted once, a
+   *  compile) prepare everything they draw on the spot: they draw once. */
+  endFrame(): void;
 }
 
 interface RenderObjectLike {
@@ -78,7 +82,7 @@ interface RendererInternals {
   _pipelines: {
     getForRender: (
       ro: unknown,
-      promises: { push: (p: unknown) => void }
+      promises: { push: (p: unknown) => void } | null
     ) => unknown;
     updateForRender: (ro: unknown) => void;
   };
@@ -109,8 +113,9 @@ export function guardNodeRenderer(
       (p as Promise<void>).then(onLate, onLate);
     },
   };
+  let inFrame = false;
   pipelines.updateForRender = (ro) => {
-    pipelines.getForRender(ro, sink);
+    pipelines.getForRender(ro, inFrame ? sink : null);
   };
 
   // Node builds under a per-frame budget. A build is needed when neither
@@ -122,6 +127,10 @@ export function guardNodeRenderer(
   r._renderObjectDirect = function (this: RendererInternals, ...args) {
     const [object, material, scene, camera, lightsNode, , clipping, passId] =
       args;
+    if (!inFrame) {
+      direct.apply(this, args);
+      return;
+    }
     const ro = this._objects.get(
       object,
       material,
@@ -152,11 +161,15 @@ export function guardNodeRenderer(
 
   return {
     beginFrame: () => {
+      inFrame = true;
       spent = 0;
       if (late) {
         late = false;
         onLate();
       }
+    },
+    endFrame: () => {
+      inFrame = false;
     },
   };
 }

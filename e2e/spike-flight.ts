@@ -20,7 +20,11 @@ const HOPS = [
 ];
 
 type Poc = { ready: boolean; handle: { flyToViewpoint: (v: unknown) => void } };
-declare const window: Window & { __poc?: Poc; __ft?: number[] };
+declare const window: Window & {
+  __gpuStats?: Record<string, number>;
+  __poc?: Poc;
+  __ft?: number[];
+};
 
 const browser = await chromium.launch({
   headless: false,
@@ -61,6 +65,10 @@ if (cdp) {
   await cdp.send("Profiler.setSamplingInterval", { interval: 500 });
   await cdp.send("Profiler.start");
 }
+// What the node renderer built during the flight (node-probe.ts).
+const gpuStats = () =>
+  page.evaluate((): Record<string, number> => ({ ...window.__gpuStats }));
+const gpuBefore = await gpuStats();
 const t0 = Date.now();
 for (const id of HOPS) {
   const vp = DRESDEN.viewpoints.find((v) => v.id === id);
@@ -174,6 +182,12 @@ const report = {
   over500: ft.filter((d) => d > 500).length,
   worst: Math.round(sorted.at(-1) ?? 0),
   stalledMs: Math.round(ft.filter((d) => d > 100).reduce((s, d) => s + d, 0)),
+  gpu: Object.fromEntries(
+    Object.entries(await gpuStats()).map(([k, v]) => [
+      k,
+      Math.round(v - (gpuBefore[k] ?? 0)),
+    ])
+  ),
 };
 const detail = await page.evaluate(() => {
   const measures = performance
