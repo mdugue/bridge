@@ -307,16 +307,11 @@ function offMonuments(
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
-async function buildSport(
+function buildSport(
   terrain: TerrainLayer,
-  file: string | undefined,
-  ctx: TileStreamContext,
-  url: (file: string) => string,
-  signal?: AbortSignal
-): Promise<SportFixtureLayer | undefined> {
-  const table = file
-    ? await fetchOptionalJson<SportTable>(url(file), signal)
-    : null;
+  table: SportTable | null,
+  ctx: TileStreamContext
+): SportFixtureLayer | undefined {
   if (!table?.grounds?.length) {
     return undefined;
   }
@@ -422,7 +417,7 @@ async function buildDressing(
     bridges,
     ballast,
     platforms,
-    sport,
+    sportTable,
     inventory,
     scanTrees,
     hedges,
@@ -442,7 +437,11 @@ async function buildDressing(
     get<BridgeFeature>("bridge"),
     get<AreaFeature>("railarea"),
     get<AreaFeature>("platform"),
-    buildSport(terrain, extras.sportTable, ctx, url, signal),
+    // the table only: its fixtures are built once every fetch has landed,
+    // so an aborted dressing leaves nothing built behind
+    extras.sportTable
+      ? fetchOptionalJson<SportTable>(url(extras.sportTable), signal)
+      : Promise.resolve(null),
     // the street-tree cadastre (tree-inventory-layer.ts)
     get<TreeFeature>("trees"),
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
@@ -453,6 +452,7 @@ async function buildDressing(
     get<TramFeature>("tram"),
     get<RiversideFeature>("riverside"),
   ]);
+  const sport = buildSport(terrain, sportTable, ctx);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };

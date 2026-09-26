@@ -1,6 +1,6 @@
 /**
  * What the build cache keys on: the bake's own sources, found by walking the
- * relative imports from its entry point (so a module the bake starts to
+ * repo's own imports from its entry point (so a module the bake starts to
  * import can never be missing from the key), and file contents rather than
  * mtimes (so a checkout or a touch alone does not re-bake, and an edit
  * always does).
@@ -11,12 +11,21 @@ import { dirname, relative, resolve } from "node:path";
 
 const EXTENSIONS = [".ts", ".tsx", "/index.ts", "/index.tsx"];
 
-/** The file a relative specifier names, or null for a package import. */
-function resolveImport(from: string, spec: string): string | null {
-  if (!spec.startsWith(".")) {
+/** The file a relative or `@/` specifier names (tsconfig maps `@/*` to the
+ *  repo root), or null for a package import. */
+function resolveImport(
+  from: string,
+  spec: string,
+  root: string
+): string | null {
+  let base: string;
+  if (spec.startsWith(".")) {
+    base = resolve(dirname(from), spec);
+  } else if (spec.startsWith("@/")) {
+    base = resolve(root, spec.slice(2));
+  } else {
     return null;
   }
-  const base = resolve(dirname(from), spec);
   if (existsSync(base) && statSync(base).isFile()) {
     return base;
   }
@@ -29,7 +38,7 @@ function resolveImport(from: string, spec: string): string | null {
 }
 
 /**
- * Every source file reachable from `entry` through relative imports,
+ * Every source file reachable from `entry` through relative and `@/` imports,
  * `entry` included, as paths relative to `root`, sorted.
  */
 export function moduleGraph(entry: string, root = process.cwd()): string[] {
@@ -47,7 +56,7 @@ export function moduleGraph(entry: string, root = process.cwd()): string[] {
     const code = readFileSync(file, "utf8");
     const transpiler = file.endsWith(".tsx") ? tsx : ts;
     for (const { path } of transpiler.scanImports(code)) {
-      const next = resolveImport(file, path);
+      const next = resolveImport(file, path, resolve(root));
       if (next && !seen.has(next)) {
         queue.push(next);
       }

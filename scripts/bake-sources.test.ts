@@ -17,20 +17,23 @@ describe("moduleGraph", () => {
       "lib/city/recenter.ts",
       "lib/city/landcover.ts",
       "sites/dresden.ts",
+      // through the tsconfig alias (sites/dresden.ts: "@/lib/city/pose")
+      "lib/city/pose.ts",
     ]) {
       expect(graph).toContain(path);
     }
     expect(graph.every((path) => !path.includes("node_modules"))).toBe(true);
   });
 
-  test("follows relative imports only", () => {
+  test("follows relative and @/ imports, not packages", () => {
     const dir = mkdtempSync(join(tmpdir(), "bake-sources-"));
     writeFileSync(join(dir, "a.ts"), 'import "./b";\nimport "three";\n');
     writeFileSync(join(dir, "b.ts"), 'export * from "./c/index";\n');
     writeFileSync(join(dir, "c.ts"), "");
     expect(() => moduleGraph("a.ts", dir)).toThrow("cannot resolve");
-    writeFileSync(join(dir, "b.ts"), "export const b = 1;\n");
-    expect(moduleGraph("a.ts", dir)).toEqual(["a.ts", "b.ts"]);
+    writeFileSync(join(dir, "b.ts"), 'import "@/d";\nexport const b = 1;\n');
+    writeFileSync(join(dir, "d.ts"), "");
+    expect(moduleGraph("a.ts", dir)).toEqual(["a.ts", "b.ts", "d.ts"]);
   });
 });
 

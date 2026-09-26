@@ -56,8 +56,6 @@ import {
 import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
-/** Samples a baked raster at projected coords → 0..1, or undefined off-tile. */
-
 /**
  * Veto on a row or canopy tree at EPSG (x, y) with its measured height `h`
  * (canopy points only): false drops it because a surveyed inventory tree
