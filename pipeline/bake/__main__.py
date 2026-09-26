@@ -23,6 +23,7 @@ from . import (
     riverside,
     roof_colour,
     skyview,
+    small_buildings,
     sport,
     stairs,
     surface,
@@ -63,6 +64,10 @@ STEPS = {
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,
+    # After lowveg (the same laser-scan rasters, made on first use), walls,
+    # rail (bridges), monuments and furniture (stop shelters): the small
+    # structures LoD2 lacks, appended to the city mesh at build time.
+    "small-buildings": small_buildings.run,
 }
 
 
