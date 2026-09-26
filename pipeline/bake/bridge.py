@@ -282,7 +282,27 @@ def measured_deck(ground, ring, ramp, grade: float = MAX_GRADE, axis: Axis | Non
     seen[~np.isfinite(seen)] = np.nan
     deck = np.where(np.isnan(seen), base, np.clip(seen, base - DECK_BELOW, base + DECK_ABOVE))
     deck = limit_grade(rolling_median(deck, DECK_SMOOTH_M), SAMPLE, grade)
+    deck = camber_fit(stations, deck, grade)
     return lambda t: float(np.interp(t * length, stations, deck))
+
+
+def camber_fit(stations: np.ndarray, deck: np.ndarray, grade: float) -> np.ndarray:
+    """The measured deck line as the simplest deck it can be: a straight
+    ramp between its two ends plus one upward camber, fitted to the
+    measurement (least squares) and never sagging, no end steeper than
+    `grade`. What the raster adds on top — a dip where it saw the river
+    through a gap, a wave from traffic — is not the roadway: the
+    Waldschlößchenbrücke and the Blaues Wunder came out bowed inwards."""
+    length = float(stations[-1])
+    if len(deck) < 3 or length <= 0:
+        return deck
+    u = stations / length
+    lin = deck[0] + (deck[-1] - deck[0]) * u
+    bump = 4 * u * (1 - u)
+    k = float(np.dot(deck - lin, bump) / np.dot(bump, bump))
+    # the end slope is (Δ ± 4k) / L: keep it within the grade
+    k_max = max(0.0, (grade * length - abs(float(deck[-1] - deck[0]))) / 4)
+    return lin + min(max(k, 0.0), k_max) * bump
 
 
 def superstructure(ground, ring, deck_at, axis: Axis | None = None) -> list[dict]:

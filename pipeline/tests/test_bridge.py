@@ -66,7 +66,7 @@ def test_the_measured_deck_follows_the_roadway_but_not_a_train():
         return 123.0
 
     deck = bridge.measured_deck(FakeGround(surface), RING, lambda t: 120.0)
-    assert abs(deck(0.1) - 123.0) < 0.01  # lifted to the roadway
+    assert abs(deck(0.1) - 123.0) < 0.3  # lifted to the roadway
     assert deck(0.5) <= 124.0  # the train is not the deck (held near the ramp)
 
 
@@ -151,3 +151,16 @@ def test_a_curved_bridge_line_becomes_its_axis_run_on_to_the_ends():
     # a ring vertex is 6 m to one side, wherever it sits along the curve
     for x, y in ring[:-1]:
         assert abs(abs(axis.project(x, y)[1]) - 6.0) < 1.0
+
+
+def test_a_deck_the_raster_sees_sagging_comes_out_straight_not_bowed_in():
+    stations = np.arange(0.0, 301.0)
+    sag = 120 - 2.5 * np.sin(np.pi * stations / 300)  # 2.5 m low in the middle
+    flat = bridge.camber_fit(stations, sag, bridge.MAX_GRADE)
+    assert np.allclose(flat, 120.0)
+    # a real camber is kept, the ends stay where they were measured
+    hump = 118 + 3 * np.sin(np.pi * stations / 300) + np.where(stations % 7 == 3, 0.8, 0)
+    fit = bridge.camber_fit(stations, hump, bridge.MAX_GRADE)
+    assert fit[0] == hump[0] and fit[-1] == hump[-1]
+    assert 120.5 < fit[150] < 121.5
+    assert np.all(np.diff(fit[:150]) >= 0) and np.all(np.diff(fit[150:]) <= 0)
