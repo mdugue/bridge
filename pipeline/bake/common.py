@@ -122,6 +122,16 @@ def value_at(
     return None if at is None else int(raster[at])
 
 
+def save_grey_png(path: Path, raster: np.ndarray) -> None:
+    """A single-band 8-bit PNG, as the viewer inflates it byte-exact
+    (lib/city/png-raster.ts). The array must already be 2-D uint8: Pillow
+    drops the `mode=` override in 13, and a wider dtype must fail here, not
+    be reinterpreted."""
+    if raster.dtype != np.uint8 or raster.ndim != 2:
+        raise TypeError(f"{path.name}: want a 2-D uint8 raster, got {raster.dtype} {raster.shape}")
+    Image.fromarray(np.ascontiguousarray(raster)).save(path, optimize=True)
+
+
 def read_layer(
     path: Path,
     bbox: tuple[float, float, float, float],

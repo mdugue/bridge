@@ -74,7 +74,7 @@ def _street(tmp_path, monkeypatch, way_tags: str, extra_nodes: str = ""):
     cls = np.zeros((400, 400), np.uint8)
     cls[190:210, :] = 7  # rows 190–209 = y 105 … 95 (row 0 = north, 0.5 m)
     (tmp_path / "data" / "dlm").mkdir(parents=True)
-    Image.fromarray(cls, mode="L").save(tmp_path / "data" / "dlm" / "landcover_t.png")
+    Image.fromarray(cls).save(tmp_path / "data" / "dlm" / "landcover_t.png")
     back = Transformer.from_crs(25833, 4326, always_xy=True)
     pts = [(10, 100), (190, 100), (100, 100), (150, 100)]
     tags = {
@@ -183,7 +183,7 @@ def _seam_tiles(tmp_path, monkeypatch):
         else:
             cls[:, :8] = 7
         tile.out("dlm", f"landcover_{tid}.png")
-        Image.fromarray(cls, mode="L").save(tile.data / "dlm" / f"landcover_{tid}.png")
+        Image.fromarray(cls).save(tile.data / "dlm" / f"landcover_{tid}.png")
         tiles[tid] = tile
     back = Transformer.from_crs(25833, 4326, always_xy=True)
     pts = [(199, -100), (199, 300), (199, 100)]

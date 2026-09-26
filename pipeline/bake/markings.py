@@ -77,11 +77,10 @@ import math
 
 import numpy as np
 import shapely
-from PIL import Image
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
-from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns
+from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns, save_grey_png
 from .osm import has_extract, read_osm, tag
 
 # id → key; keep in step with `MARKING_KINDS` in lib/city/markings.ts.
@@ -716,7 +715,7 @@ def write_raster(tile: Tile, name: str, rows, index, bits, offset) -> None:
     grey = np.stack(
         [(index & 0xFF).astype(np.uint8), bits, offset, (index >> 8).astype(np.uint8)], axis=-1
     ).reshape(px, 4 * px)
-    Image.fromarray(grey, mode="L").save(tile.out("dlm", name), optimize=True)
+    save_grey_png(tile.out("dlm", name), grey)
 
 
 def run(tile: Tile, px: int = 2048) -> None:

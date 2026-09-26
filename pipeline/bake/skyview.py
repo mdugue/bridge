@@ -62,13 +62,12 @@ from pathlib import Path
 import numpy as np
 import rasterio
 import shapely
-from PIL import Image
 from rasterio.enums import Resampling
 from rasterio.transform import from_origin
 from rasterio.warp import reproject
 from scipy.ndimage import distance_transform_edt
 
-from .common import Tile, overlaps
+from .common import Tile, overlaps, save_grey_png
 from .lowveg import lod2_rings
 
 SVF_PX = 1024
@@ -418,7 +417,7 @@ def legend(count: int = AZIMUTHS) -> dict:
 
 
 def save_png(path: Path, grey: np.ndarray) -> None:
-    Image.fromarray(grey, mode="L").save(path, optimize=True)
+    save_grey_png(path, grey)
 
 
 def run(tile: Tile) -> None:

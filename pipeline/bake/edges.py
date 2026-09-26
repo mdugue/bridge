@@ -35,7 +35,7 @@ import numpy as np
 import shapely
 from PIL import Image
 
-from .common import Tile, feature, geometry_json, write_geojson
+from .common import Tile, feature, geometry_json, save_grey_png, write_geojson
 
 ROAD = 7
 MEADOW = 1
@@ -239,7 +239,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     road = encode(road_m)
     meadow = encode(edge_field(lawn, MEADOW, res, px))
     grey = np.stack([road, meadow], axis=-1).reshape(px, 2 * px)
-    Image.fromarray(grey, mode="L").save(tile.out("dlm", f"edges_{tile.id}.png"), optimize=True)
+    save_grey_png(tile.out("dlm", f"edges_{tile.id}.png"), grey)
     legend = {
         "tile": tile.id,
         "crs": f"EPSG:{tile.epsg}",

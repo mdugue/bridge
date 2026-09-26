@@ -53,7 +53,6 @@ import math
 
 import numpy as np
 import shapely
-from PIL import Image
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
@@ -65,6 +64,7 @@ from .common import (
     geometry_json,
     overlaps,
     owns,
+    save_grey_png,
     write_geojson,
 )
 from .osm import has_extract, read_osm, tag
@@ -374,7 +374,5 @@ def run(tile: Tile, px: int = 2048) -> None:
     near = shapely.union_all(parts["colonies"]) if parts["colonies"] else None
     colony_paths = [p for p in paths if near is not None and p.intersects(near)]
     raster = colony_raster(tile, px, parts["colonies"], parts["parcels"], colony_paths, cls)
-    Image.fromarray(raster.reshape(px, 2 * px), mode="L").save(
-        tile.out("dlm", f"cultivated_{tile.id}.png"), optimize=True
-    )
+    save_grey_png(tile.out("dlm", f"cultivated_{tile.id}.png"), raster.reshape(px, 2 * px))
     print(f"{tile.id}: cultivated land {parts['stats']}")
