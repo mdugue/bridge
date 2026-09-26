@@ -181,6 +181,46 @@ export interface VegetationChunk {
   trunks: InstancedMesh;
 }
 
+const nearInverse = new Matrix4();
+const nearPoint = new Vector3();
+
+/**
+ * How many trees stand within `radius` m (horizontally) of a world (Y-up)
+ * point, over the chunks — what the hidden soundscape's leaves rustle with
+ * (plan 035). Read at the pose rate while the sound plays, never per frame.
+ */
+export function treesWithin(
+  chunks: readonly VegetationChunk[],
+  x: number,
+  z: number,
+  radius: number
+): number {
+  let count = 0;
+  const r2 = radius * radius;
+  for (const chunk of chunks) {
+    const mesh = chunk.mid;
+    nearInverse.copy(mesh.matrixWorld).invert();
+    nearPoint.set(x, 0, z).applyMatrix4(nearInverse);
+    const sphere = mesh.boundingSphere;
+    if (
+      sphere &&
+      Math.hypot(sphere.center.x - nearPoint.x, sphere.center.z - nearPoint.z) >
+        sphere.radius + radius
+    ) {
+      continue;
+    }
+    const m = mesh.instanceMatrix.array;
+    for (let i = 0; i < chunk.trees; i++) {
+      const dx = m[i * 16 + 12] - nearPoint.x;
+      const dz = m[i * 16 + 14] - nearPoint.z;
+      if (dx * dx + dz * dz <= r2) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
 /** A canopy or row tree's season: the generic deciduous curve, offset by
  *  a stable hash of its position. */
 export function genericSeasonKey(x: number, z: number): CrownSeasonKey {

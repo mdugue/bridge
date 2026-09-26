@@ -65,6 +65,7 @@ export type TileArtifactKind =
   | "railarea"
   | "riverside"
   | "surface"
+  | "soundmarks"
   | "edges"
   | "sport"
   | "sportTable"
@@ -150,6 +151,10 @@ export function tileArtifacts(
     // Optional: the street names (pipeline/bake/names.py) — the lettering
     // seen from the air and the ways the on-foot caption names.
     names: dlm(`names_${tile}.geojson`),
+    // Optional: the bell towers (pipeline/bake/soundmarks.py) the hidden
+    // soundscape strikes the hour from (plan 035); fetched only while it
+    // plays.
+    soundmarks: dlm(`soundmarks_${tile}.geojson`),
     // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
     // hedges and the laser-scan crowns outside the canopy mask
     // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).

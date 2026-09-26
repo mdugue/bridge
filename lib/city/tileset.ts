@@ -156,6 +156,19 @@ export interface CityExtras {
 
 export type ContentExtras = CityExtras | TerrainExtras;
 
+/**
+ * What the hidden soundscape reads of a tile (plan 035; published names),
+ * fetched only while it plays: the paving raster (footsteps), the sky view
+ * (the wind), the bell towers, the tram tracks, the fountains.
+ */
+export interface TileSoundFiles {
+  monuments?: string;
+  soundmarks?: string;
+  surface?: string;
+  svf?: string;
+  tram?: string;
+}
+
 export interface TilesetTileInfo {
   bounds: TerrainBounds;
   /**
@@ -167,6 +180,8 @@ export interface TilesetTileInfo {
   id: string;
   /** a ≤ 2048² class raster for the minimap */
   minimap: string;
+  /** the soundscape's files (plan 035) */
+  sound?: TileSoundFiles;
 }
 
 /** What the viewer needs before any content has loaded. */

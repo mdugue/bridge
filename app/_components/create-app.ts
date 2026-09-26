@@ -68,9 +68,15 @@ import {
 import { createTileStream } from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
 import {
+  treesWithin,
   updateVegetationLod,
   type VegetationControl,
 } from "./vegetation-layer";
+import {
+  type Listening,
+  type SoundTile,
+  soundTileOf,
+} from "@/lib/city/sound-entry";
 import { applyCityLook, createStyleResources } from "./visual-style";
 
 /**
@@ -254,6 +260,14 @@ export interface CityWalkHandle {
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
+  /**
+   * The hidden soundscape's ear (plan 035): the camera's height above the
+   * ground, the movement mode, the trees within `treeRadius` m and the
+   * clock the crowns sway with. Read at the pose rate while sound plays.
+   */
+  listen: (treeRadius: number) => Listening;
+  /** per tile, the files the soundscape fetches while it plays (URLs) */
+  soundTiles: SoundTile[];
 }
 
 function createRenderer(
@@ -1216,6 +1230,18 @@ async function bootApp(
     latLng,
     terrainBounds: siteBounds,
     offset,
+    listen: (treeRadius) => ({
+      clock: timer.getElapsed(),
+      heightAboveGround: camera.position.y - groundUnderCamera(),
+      mode: pose.getMode(),
+      trees: treesWithin(
+        [...stream.dressings].flatMap((d) => d.vegetation?.chunks ?? []),
+        camera.position.x,
+        camera.position.z,
+        treeRadius
+      ),
+    }),
+    soundTiles: extras.tiles.map((t) => soundTileOf(t, tilesetUrl)),
     dispose: () => {
       if (disposed) {
         return;

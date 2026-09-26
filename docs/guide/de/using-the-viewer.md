@@ -201,3 +201,14 @@ etwas von Ko-fi lädt.
 - `?scene=lite` in der Adresszeile streamt nur die Startkachel, mit
   groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
+
+## Kleinigkeiten
+
+- **Lauschen.** Drücke **L** (oder schalte auf dem Telefon ganz unten in
+  *Erweitert* *Klang (experimentell)* ein), und die Stadt klingt leise:
+  Wind, die Elbe, Vögel am Tag und Grillen in Sommernächten, Schritte, die
+  das Pflaster unter den Füßen kennen — und wenn du die Uhr über eine
+  volle Stunde schiebst, schlagen die Kirchen in der Nähe sie, jede ein
+  wenig später, je weiter sie entfernt steht, so wie der Schall reist. Bei
+  jedem Laden der Seite ist er aus, in einem Hintergrund-Tab verstummt er,
+  und der kleine Lautsprecher oben links schaltet ihn wieder aus.

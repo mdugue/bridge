@@ -59,6 +59,7 @@ flowchart LR
     TRAM["Trams<br/>tracks · masts · contact wire"]
     RIV["Elbe landing stages<br/>piers · pontoons · groynes · ferry lines"]
     NAMES["Street names<br/>lettering from the air · caption on foot"]
+    SND["Sound (hidden, opt-in)<br/>hour bells · footsteps · river · birds"]
     BRG["Bridges"]
     PLT["Station platforms"]
     WAL["Retaining walls"]
@@ -144,6 +145,10 @@ flowchart LR
   OSM ==>|"highway name · named squares"| NAMES
   DLM -. "bridge names" .-> NAMES
   DGM -. "lettering on the ground" .-> NAMES
+  OSM ==>|"churches · bell towers · paving · tram tracks"| SND
+  CJ -. "tower tip + height" .-> SND
+  DLM -. "water · green · roads" .-> SND
+  SUN -. "night · season · the hour" .-> SND
   OSM ==>|"barrier=retaining_wall/city_wall · natural=cliff + height"| WAL
   DGM -. "snap to the measured step (fine TIN)" .-> WAL
   WAL -. "breakline burned into the coarse grid at build" .-> TER
@@ -195,6 +200,7 @@ flowchart LR
 | **Trams** | OSM `railway=tram` (each track), `power=catenary_mast` (the masts within 15 m of a tram track), the OSM building outlines (facades for the rosette spans), `railway=tram_stop` + the platforms (the stop signs) | DLM class raster (street vs lawn vs ballast bed) · DOP NDVI (lawn bed) · DGM1 (drape) · the bridge decks (a track tagged `bridge` rides the deck) | `tram-layer.ts`, `lib/city/tram.ts` (wire stations and sag); baked by `pipeline/bake/tram.py` |
 | **Elbe landing stages** | OSM `man_made=pier` (fixed or `floating`), `man_made=groyne`, `route=ferry` | DLM water class (a pontoon and a ferry line cut to the water) · DGM1 (a pier's deck from the bank; a pontoon floats on the terrain the water sheet lies on) | `riverside-layer.ts`, `map-overlay.ts` (the ferry lines show from the air only); baked by `pipeline/bake/riverside.py` |
 | **Street names** | OSM `highway=*` `name` (merged per name; label windows + the named ways), named `place=square` / pedestrian areas | Basis-DLM bridge names (`NAM`, via the bridge file) · DGM1 (the ribbons lie on the ground) · the page's font (Canvas 2D, at runtime) | `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`, `map-overlay.ts`; baked by `pipeline/bake/names.py` |
+| **Sound** (hidden, opt-in: L or *Klang*) | OSM churches and bell towers at the tip and height the LoD2 measures (`soundmarks_<t>.geojson`) — the hour bells | Basis-DLM class raster (water, green, roads) · the sky-view factor · the OSM paving raster (footsteps) · OSM tram tracks · the fountains · the loaded trees · sun and date | `app/_components/soundscape/`, `soundscape-toggle.tsx`, `lib/city/soundscape.ts`; baked by `pipeline/bake/soundmarks.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Retaining walls** | OSM `barrier=retaining_wall/city_wall/wall`, `man_made=embankment`, `natural=cliff` + `height` (Geofabrik extract) | DGM1 (ribbon snapped to the measured step of the fine TIN; the coarse grid is conflated to a step instead) — *no DGM/DOM/LiDAR product has the wall as a vertical face* | `lib/city/walls.ts` + `lib/city/wall-snap.ts` (at build, into the fine terrain glTF), `lib/city/terrain-conflate.ts` (coarse grid), `wall-layer.ts` (material); baked by `pipeline/bake/walls.py` |

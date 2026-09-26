@@ -68,6 +68,31 @@ function expectNoErrors(log: ErrorLog): void {
   log.console.length = 0;
 }
 
+/**
+ * Counts every AudioContext the page creates (an init script, before any of
+ * the page's own code): the soundscape must not create one before the
+ * visitor asks for sound (plan 035).
+ */
+function countAudioContexts(): void {
+  const w = window as unknown as { __audioContexts: number };
+  w.__audioContexts = 0;
+  const Native = window.AudioContext;
+  if (!Native) {
+    return;
+  }
+  window.AudioContext = class extends Native {
+    constructor(options?: AudioContextOptions) {
+      super(options);
+      w.__audioContexts++;
+    }
+  };
+}
+
+const audioContexts = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { __audioContexts?: number }).__audioContexts
+  );
+
 /** Resolves once the viewer has rendered `count` more frames. */
 async function waitForFrames(page: Page, count: number): Promise<void> {
   const start = await page.evaluate(() => window.__poc?.frames ?? 0);
@@ -185,6 +210,7 @@ test.describe("desktop viewer", () => {
     const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
     page = await context.newPage();
     errors = watchErrors(page);
+    await page.addInitScript(countAudioContexts);
     await page.goto(LITE);
     webgl = await hasWebGl(page);
     // On CI the SwiftShader flags above must yield WebGL; a silent skip
@@ -471,6 +497,30 @@ test.describe("desktop viewer", () => {
 
     await page.getByRole("tab", { name: "Erweitert" }).click();
     await expect(page.getByText("Statistik")).toBeVisible();
+    expectNoErrors(errors);
+  });
+
+  test("the hidden soundscape stays silent until L", async () => {
+    // Plan 035: no AudioContext, no glyph, until an explicit toggle.
+    expect(await audioContexts(page)).toBe(0);
+    const glyph = page.getByTestId("sound-glyph");
+    await expect(glyph).toHaveCount(0);
+    await page.keyboard.press("KeyL");
+    await expect(glyph).toBeVisible({ timeout: slow(10_000) });
+    expect(await audioContexts(page)).toBe(1);
+    // The engine arrives by dynamic import and samples the pose stream;
+    // a few frames let it run without spending many.
+    await waitForFrames(page, 3);
+    await expect(
+      page.getByRole("switch", { name: "Klang (experimentell)" })
+    ).toBeChecked();
+    // A click on the glyph turns it off; the one context is kept.
+    await glyph.click();
+    await expect(glyph).toHaveCount(0);
+    await expect(
+      page.getByRole("switch", { name: "Klang (experimentell)" })
+    ).not.toBeChecked();
+    expect(await audioContexts(page)).toBe(1);
     expectNoErrors(errors);
   });
 

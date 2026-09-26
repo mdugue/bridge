@@ -1248,6 +1248,61 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
   lines on flat roads). No slope, no contour line. `terrain-layer.ts`.
 
+### Sound
+Hidden and opt-in (plan [035](./plans/035-soundscape.md)): nothing below
+sounds, and no `AudioContext` exists, until the visitor presses **L** or
+turns on *Klang (experimentell)* (Erweitert tab); off at every load. All
+synthesized with WebAudio, the engine a dynamic import
+(`app/_components/soundscape/`); the pure core is `lib/city/soundscape.ts`,
+sampled at the 10 Hz pose stream. **None of it has been listened to** —
+levels and timbres are by design; a source that sounds cheesy is to be
+removed, not tuned.
+- **Bell towers** — OSM churches (`building=church|cathedral|chapel`, a
+  Christian `place_of_worship`, stand-alone bell towers) + the committed
+  LoD2 and DGM1 (ODbL; GeoSN dl-de/by-2-0) → `pipeline/bake/soundmarks.py`
+  → `soundmarks_<tile>.geojson`: the tower's tip (the highest LoD2 vertex
+  inside the outline), its height, a size class (large ≥ 65 m, medium
+  ≥ 40 m, none under 22 m). 20 towers over the fifteen tiles — the
+  Frauenkirche 94 m, Kreuzkirche 90 m, Dreikönigskirche 86 m, Hofkirche
+  83 m, Martin-Luther-Kirche 81 m, Garnisonkirche 77 m, … — seven tiles
+  have none. Runtime: the full hour a **forward** change of the scene clock
+  crosses (the last one of a long scrub, struck once the clock rests
+  0.7 s; none going back or stepping a day) is struck 1–12 times by the
+  nearest four towers within 1.5 km, each **delayed by its distance at
+  343 m/s**, 1/d quieter (full within 120 m) and low-passed by distance, a
+  minor-third bell (hum, prime, tierce, quint, nominal …; prime 147 / 196
+  / 294 Hz by size), panned by its bearing.
+- **Footsteps by paving** — the paving raster's packed byte (road surface
+  on class 7, the walkway's elsewhere) + the class (fallback) → sett
+  (a hard heel-and-toe clack), asphalt (soft, low), concrete, slabs,
+  gravel (a crunch of grains), grass (muffled); on foot only, one step per
+  0.75 m at walking pace, the stride lengthening above it (the walker's
+  9 m/s is ~2.2 steps/s), none on a jump or after a gap > 1.5 s.
+- **The Elbe** — the class raster's water (16 rays, 8 m steps, 260 m)
+  → a low pink-noise murmur rising as (1 − slant distance / 260 m)²,
+  panned to the water's bearing.
+- **Wind** — the sky-view factor (else 1 − 0.7 × the built-up share) and
+  the height above ground → level; the crowns' own sway signal
+  (`windSway`, the crown shader's formula at the listener) → its gusts
+  (level and filter corner).
+- **The city's hum** — road, rail and built-up shares within 30 m (and,
+  from the air, the whole city) → a brown-noise hum under 170 Hz, × 0.45
+  at full night.
+- **Leaves** — trees within 40 m (`treesWithin` over the loaded
+  vegetation chunks) × the generic leaf-cover year (bare Dec–Mar) × the
+  gusts; gone above the crowns.
+- **Birds** — green share and trees, the sun's night factor, the day of
+  year and the hour → a call rate (≤ 0.45/s); sparrows in the streets,
+  tits in the parks, a blackbird's phrase at dusk and in the spring dawn
+  chorus; silent at night, sparse in winter and late summer.
+- **Crickets** — summer nights (late June–mid-Aug, fading either side)
+  near meadows.
+- **Fountains** — the monuments file's fountains → a splash within 45 m,
+  April–October, 8–22 h.
+- **Tram bell** — the tram tracks → within 70 m of one, while trams run
+  (4:30–0:30), about once in 2½ minutes, a two-stroke bell from the
+  nearest point of the track.
+
 ---
 
 ## 🧪 Experimental
@@ -1333,7 +1388,8 @@ research that produced them):
     sky-view factor and a baked horizon map (033), small structures from
     DOM − LoD2 (034), a hidden soundscape (035). Built since (✅ above,
     looks unverified on a GPU): 024 (Trams), 030 (Signs and fixtures),
-    031 (Landing stages, groynes, ferries), 032 (Names).
+    031 (Landing stages, groynes, ferries), 032 (Names), 035 (Sound —
+    unheard).
 
 ---
 
