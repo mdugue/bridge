@@ -227,23 +227,27 @@ test("city page serves the viewer shell", async ({ page }) => {
 });
 
 /**
- * Every desktop assertion shares ONE booted viewer. Booting is the single
- * largest fixed cost in this suite (~14 s at the full profile on four cores,
- * ~4.5 s lite) and none of these tests needs a pristine scene — ordered so
- * the mutating ones (demolish, style switching) come after the assertions that
- * read the freshly-loaded state. `serial` makes that ordering a guarantee and
- * stops a broken boot from being reported five times over.
+ * The desktop viewer every test in the two desktop groups below reads: one
+ * booted page per group. Booting is the single largest fixed cost in this
+ * suite (~14 s at the full profile on four cores, ~4.5 s lite) and none of
+ * these tests needs a pristine scene — ordered so the mutating ones (demolish,
+ * style switching) come after the assertions that read the freshly-loaded
+ * state. `serial` makes that ordering a guarantee and stops a broken boot from
+ * being reported five times over.
  *
- * Tagged `@desktop`: CI runs it on a runner of its own (ci.yml, the e2e
- * matrix) — it is the longest stretch of the suite, and SwiftShader leaves no
- * room for a second page on the same cores.
+ * Two groups, two boots: CI runs each on a runner of its own (ci.yml, the e2e
+ * matrix, by the `@desktop-hud` and `@desktop-render` tags). SwiftShader
+ * leaves no room for a second page on the same cores, so a second runner is
+ * the only way to run them side by side, and one more boot (~20 s on a
+ * runner) is cheaper than the minute and a half the second group takes.
  */
-test.describe("desktop viewer", { tag: "@desktop" }, () => {
-  test.describe.configure({ mode: "serial" });
+let page: Page;
+let errors: ErrorLog;
+let webgl = false;
 
-  let page: Page;
-  let errors: ErrorLog;
-  let webgl = false;
+/** Boots the shared desktop page for the enclosing describe. */
+function bootDesktopViewer(): void {
+  test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
@@ -280,6 +284,11 @@ test.describe("desktop viewer", { tag: "@desktop" }, () => {
     }
     await page?.context().close();
   });
+}
+
+/** The loaded scene, and the HUD and camera controls that move through it. */
+test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
+  bootDesktopViewer();
 
   test("renders buildings, terrain and shadows", async () => {
     // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
@@ -606,6 +615,14 @@ test.describe("desktop viewer", { tag: "@desktop" }, () => {
     });
     expectNoErrors(errors);
   });
+});
+
+/**
+ * Snapshots, demolition and the look controls: each sets the pose it needs
+ * itself, so none depends on the group above.
+ */
+test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
+  bootDesktopViewer();
 
   test("snapshot camera state round-trips", async () => {
     // Applying a captured camera state must reproduce it (the basis for
@@ -864,7 +881,7 @@ test.describe("desktop viewer", { tag: "@desktop" }, () => {
   });
 });
 
-test.describe("mobile", () => {
+test.describe("mobile", { tag: "@phone" }, () => {
   // Phone emulation: Chromium maps isMobile+hasTouch to coarse-pointer
   // media queries, which is what the touch UI keys off. This is the one place
   // the viewport is prescribed by the thing under test, so it keeps its own

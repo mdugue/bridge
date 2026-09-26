@@ -447,11 +447,14 @@ is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
 and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
 on rendered frames — the control walk uses `waitForFrames` — walks straight into
 the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
-viewer pages halve each other's frame rate. CI splits the suite over **two
-runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`): the desktop
-viewer's shared boot and its tests, tagged `@desktop`, on one; the shell, the
-phone, the whole site and `/wissen` on the other. The required status check
-"E2E (Playwright)" is the small job that reports both.
+viewer pages halve each other's frame rate. CI splits the suite over **three
+runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
+whole site with the shell and `/wissen`; the desktop HUD group
+(`@desktop-hud`) with the phone (`@phone`); the desktop rendering group
+(`@desktop-render`). Each desktop group boots its own page. The required
+status check "E2E (Playwright)" is the small job that reports them all. A new
+spec lands in the whole-site shard unless it carries one of those tags —
+keep the shards within a minute of each other.
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams

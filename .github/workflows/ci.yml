@@ -72,13 +72,14 @@ jobs:
 
   # Build and e2e share a job: its build step is the build check, and the
   # Playwright step serves the artifact it just produced instead of
-  # rebuilding inside `webServer`. The suite is split over two runners that
-  # run side by side — the desktop viewer's shared boot and its tests (tagged
-  # `@desktop` in e2e/city-walk.spec.ts) on one, everything else on the
-  # other: SwiftShader is CPU-bound, so a second Playwright worker on the same
-  # runner only halves both pages' frame rates, while a second runner halves
-  # the wall-clock time. Each shard builds for itself; with the caches below
-  # that is well under a minute.
+  # rebuilding inside `webServer`. The suite is split over three runners that
+  # run side by side, by the tags in e2e/city-walk.spec.ts: SwiftShader is
+  # CPU-bound, so a second Playwright worker on the same runner only halves
+  # both pages' frame rates, while another runner takes its share off the
+  # wall clock. The shards are cut by measured time (CI, Sept 2026): the
+  # whole-site spec alone is ~140 s, the two desktop groups ~90 s each plus
+  # their boots, the phone ~25 s. Each shard builds for itself; with the
+  # caches below that is well under a minute.
   e2e:
     name: E2E (${{ matrix.shard.name }})
     runs-on: ubuntu-latest
@@ -93,12 +94,15 @@ jobs:
       fail-fast: false
       matrix:
         shard:
-          - name: desktop
-            args: --grep @desktop
+          - name: whole site, shell, docs
+            args: --grep-invert "@desktop|@phone"
             # The build check proper: builds even when the e2e half is skipped.
             buildCheck: true
-          - name: shell, phone, whole site, docs
-            args: --grep-invert @desktop
+          - name: desktop HUD, phone
+            args: --grep "@desktop-hud|@phone"
+            buildCheck: false
+          - name: desktop rendering
+            args: --grep @desktop-render
             buildCheck: false
     steps:
       - uses: actions/checkout@v7
@@ -112,7 +116,7 @@ jobs:
       # The e2e half is skipped on PRs that cannot affect it (docs, the
       # offline pipeline, this workflow). scripts/, data/, sites/ and patches/
       # do: the tileset the viewer streams is baked from them at build time.
-      # The desktop shard always runs and always builds, so the status check
+      # The build-check shard always runs and always builds, so the status check
       # stays green rather than "skipped" — which branch protection would
       # treat as never reported.
       - name: Decide whether the e2e half has to run
@@ -144,21 +148,27 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
         if: steps.scope.outputs.run == 'true' || matrix.shard.buildCheck
+      # The caches are restored by both shards but saved by the build-check
+      # shard alone: two jobs saving one key race, and the loser logs a
+      # warning on every run.
+      #
       # The tile bake's own cache (scripts/prepare-data.ts): cold, the bake
-      # takes ~90 s here; warm, about a second. Any earlier entry is a sound
+      # takes ~110 s here; warm, about a second. Any earlier entry is a sound
       # start — the bake keys every artifact by the contents of its inputs and
       # of every module it imports, and re-bakes only what changed — so the
       # key only decides when a new entry is saved.
-      - uses: actions/cache@v6
+      - uses: actions/cache/restore@v6
         if: steps.scope.outputs.run == 'true' || matrix.shard.buildCheck
+        id: bake-cache
         with:
           path: .cache/prepare-data
           key: prepare-data-${{ runner.os }}-${{ hashFiles('data/**', 'scripts/**', 'lib/**', 'sites/**', 'patches/**', 'bun.lock') }}
           restore-keys: |
             prepare-data-${{ runner.os }}-
-      # Cache the Next.js .next/cache (Turbopack's) between runs — speeds up
-      # incremental builds for repeated PR pushes.
-      - uses: actions/cache@v6
+      # Turbopack's build cache (.next/cache). It saves ~10 s of compiling, and
+      # restoring it costs about as much, so a new entry — ~100 MB and ~16 s
+      # to upload — is saved from main only; PRs start from main's.
+      - uses: actions/cache/restore@v6
         if: steps.scope.outputs.run == 'true' || matrix.shard.buildCheck
         with:
           path: .next/cache
@@ -175,20 +185,35 @@ jobs:
         env:
           NEXT_PUBLIC_POC_DEBUG: "1"
           NEXT_TELEMETRY_DISABLED: "1"
+      - uses: actions/cache/save@v6
+        if: matrix.shard.buildCheck && steps.bake-cache.outputs.cache-hit != 'true'
+        with:
+          path: .cache/prepare-data
+          key: ${{ steps.bake-cache.outputs.cache-primary-key }}
+      - uses: actions/cache/save@v6
+        if: matrix.shard.buildCheck && github.event_name == 'push'
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('**/*.ts', '**/*.tsx', '**/*.css') }}
       # Headless runs use Chromium's headless shell, never the full browser:
-      # installing the shell alone keeps the cached download to a third.
-      - uses: actions/cache@v6
+      # installing the shell alone keeps the cached download to a third. No
+      # `--with-deps`: the runner image already carries every library the
+      # shell links against (install-deps only ever added fonts and xvfb, and
+      # cost ~12 s of apt a run).
+      - uses: actions/cache/restore@v6
         if: steps.scope.outputs.run == 'true'
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-shell-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - name: Install Playwright browsers
+      - name: Install Playwright's headless shell
         if: steps.scope.outputs.run == 'true' && steps.playwright-cache.outputs.cache-hit != 'true'
-        run: bunx playwright install --with-deps --only-shell chromium
-      - name: Install OS deps only
-        if: steps.scope.outputs.run == 'true' && steps.playwright-cache.outputs.cache-hit == 'true'
-        run: bunx playwright install-deps chromium
+        run: bunx playwright install --only-shell chromium
+      - uses: actions/cache/save@v6
+        if: matrix.shard.buildCheck && steps.scope.outputs.run == 'true' && steps.playwright-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
       - name: Run Playwright tests
         if: steps.scope.outputs.run == 'true'
         run: bun run test:e2e ${{ matrix.shard.args }}
@@ -210,7 +235,7 @@ jobs:
           path: test-results/
           retention-days: 7
 
-  # The status check PRs are gated on keeps its name and reports both shards
+  # The status check PRs are gated on keeps its name and reports the shards
   # as one. It runs whenever the shards ran, so a failed (or timed-out) shard
   # fails it instead of leaving it "skipped" — which branch protection would
   # treat as never reported.
@@ -221,7 +246,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Both shards passed
+      - name: Every shard passed
         run: test "$RESULT" = success
         env:
           RESULT: ${{ needs.e2e.result }}
