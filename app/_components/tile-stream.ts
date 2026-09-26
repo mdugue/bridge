@@ -34,6 +34,7 @@ import { fetchFeatures } from "./fetch-optional";
 import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
+import { nodeRenderer } from "./gpu-mode";
 import { timed } from "./perf-mark";
 import { buildRail } from "./rail-layer";
 import {
@@ -454,10 +455,16 @@ class DressingPlugin {
           this.url
         );
         const parts = dressingParts(dressing);
+        // The node renderer builds every instanced mesh on its own (three
+        // keys the build by the mesh), so there a representative per
+        // material would leave the rest to build inside a frame.
+        const toCompile = nodeRenderer()
+          ? parts
+          : compileRepresentatives(parts);
         await withinCompileWait(
-          Promise.all(
-            compileRepresentatives(parts).map((o) => this.ctx.compile(o))
-          ).then(() => undefined)
+          Promise.all(toCompile.map((o) => this.ctx.compile(o))).then(
+            () => undefined
+          )
         );
         if (this.dressed.get(scene) !== entry) {
           disposeDressing(dressing);

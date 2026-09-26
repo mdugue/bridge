@@ -47,6 +47,7 @@ import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { gpuMode, nodeRenderer } from "./gpu-mode";
 import { createPostStack } from "./post-stack";
 import { createNodePostStack } from "./post-stack-node";
+import { probeNodeRenderer } from "./node-probe";
 import type { WebGPURenderer } from "three/webgpu";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import {
@@ -260,30 +261,7 @@ async function newRenderer(): Promise<WebGLRenderer> {
     forceWebGL: gpuMode() === "webgl2",
   });
   await renderer.init();
-  // SPIKE: name every node build over 20 ms (the flight probe lists them).
-  const nodes = (renderer as unknown as { _nodes: Record<string, unknown> })
-    ._nodes;
-  for (const fn of ["getForRender", "getForRenderAsync"]) {
-    const original = (nodes[fn] as (ro: unknown) => unknown).bind(nodes);
-    nodes[fn] = (ro: {
-      material: { name: string; type: string };
-      object: { name: string; type: string };
-    }) => {
-      const start = performance.now();
-      const done = <T>(value: T): T => {
-        const duration = performance.now() - start;
-        if (duration > 20) {
-          performance.measure(
-            `${fn === "getForRender" ? "sync" : "async"}:${ro.material.type}:${ro.object.name || ro.object.type}`,
-            { start, duration }
-          );
-        }
-        return value;
-      };
-      const result = original(ro);
-      return result instanceof Promise ? result.then(done) : done(result);
-    };
-  }
+  probeNodeRenderer(renderer);
   // reason: spike — the calls create-app makes (size, pixel ratio, shadow
   // map, tone mapping, animation loop, info, dispose) exist on both.
   return renderer as unknown as WebGLRenderer;
@@ -666,7 +644,8 @@ async function bootApp(
         // reason: spike — newRenderer() built a WebGPURenderer on this path.
         renderer as unknown as WebGPURenderer,
         scene,
-        camera
+        camera,
+        invalidateShadows
       )
     : createPostStack(renderer, scene, camera, aoQualityFor(budget.profile));
   cleanups.push(() => postStack.dispose());

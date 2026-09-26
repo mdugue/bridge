@@ -1,6 +1,7 @@
 import {
   LinearSRGBColorSpace,
   NoToneMapping,
+  type Object3D,
   type PerspectiveCamera,
   SRGBColorSpace,
   type Scene,
@@ -30,6 +31,7 @@ import {
 } from "three/tsl";
 import { type Node, RenderPipeline, type WebGPURenderer } from "three/webgpu";
 import { type FocusMode, LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { guardNodeRenderer } from "./node-render-guard";
 import type { PostStack } from "./post-stack";
 
 /** GTAO radius in metres (view space); N8AO ran 12 m of a different algorithm. */
@@ -62,6 +64,33 @@ function hash21(p: Node<"vec2">): Node<"float"> {
 }
 
 /**
+ * Makes every object under `root` visible and unculled, and returns what
+ * puts them back. Only for the synchronous half of a compileAsync call.
+ */
+function exposeForCompile(root: Object3D): () => void {
+  const hidden: Object3D[] = [];
+  const culled: Object3D[] = [];
+  root.traverse((object) => {
+    if (!object.visible) {
+      object.visible = true;
+      hidden.push(object);
+    }
+    if (object.frustumCulled) {
+      object.frustumCulled = false;
+      culled.push(object);
+    }
+  });
+  return () => {
+    for (const object of hidden) {
+      object.visible = false;
+    }
+    for (const object of culled) {
+      object.frustumCulled = true;
+    }
+  };
+}
+
+/**
  * SPIKE (plan 020): the post stack of post-stack.ts on three's node pipeline —
  * scene pass with a normal MRT → GTAO (half res) × contact slider →
  * DoF (`DepthOfFieldNode`, crosshair autofocus, dropped while moving) → SMAA →
@@ -73,8 +102,11 @@ function hash21(p: Node<"vec2">): Node<"float"> {
 export function createNodePostStack(
   renderer: WebGPURenderer,
   scene: Scene,
-  camera: PerspectiveCamera
+  camera: PerspectiveCamera,
+  /** an object skipped by a frame is ready: the shadow map must catch up */
+  onLate: () => void
 ): PostStack {
+  const guard = guardNodeRenderer(renderer, onLate);
   // Two pipelines, with and without DoF, both built once: DoF drops while
   // the camera moves, and swapping one pipeline's output node would
   // re-translate the whole post graph (GTAO, DoF, SMAA, grading) on the main
@@ -176,15 +208,26 @@ export function createNodePostStack(
   // A WebGPU pipeline is specific to the attachments it draws into: compile
   // against the scene pass's target, which compileAsync reads synchronously
   // (the shader state it reads later is the renderer's, identical above).
+  // compileAsync walks the tree the way a frame does, skipping what is
+  // hidden or outside the view; every object is exposed for that walk,
+  // or whatever the camera did not see yet would build inside the frame
+  // that first shows it.
   return {
     compile: (object) => {
       const target = renderer.getRenderTarget();
+      const restore = exposeForCompile(object);
       renderer.setRenderTarget(scenePass.renderTarget);
-      const done = renderer.compileAsync(object, camera, scene);
-      renderer.setRenderTarget(target);
-      return done.then(() => undefined);
+      try {
+        return renderer
+          .compileAsync(object, camera, scene)
+          .then(() => undefined);
+      } finally {
+        renderer.setRenderTarget(target);
+        restore();
+      }
     },
     render: () => {
+      guard.beginFrame();
       updateFocus();
       if (!warm) {
         // Build both graphs up front (the first frames are under the load
