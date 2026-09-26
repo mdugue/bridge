@@ -42,12 +42,14 @@ STEPS = {
     "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,
     "osm-buildings": osm_buildings.run,
+    # Before the furniture (it keeps benches off the bridge decks), the tram
+    # and the names (the bridge names), lowveg and small-buildings (masks).
+    "rail": rail.run,
     "lamps": lamps.run,
     "monuments": monuments.run,
     "furniture": furniture.run,
     "walls": walls.run,
     "stairs": stairs.run,
-    "rail": rail.run,
     "surface": surface.run,
     "edges": edges.run,
     # After surface and edges (reads the class raster only).
@@ -59,7 +61,6 @@ STEPS = {
     "riverside": riverside.run,
     # After rail (the bridge names).
     "names": names.run,
-    "cultivated": cultivated.run,
     # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
     "skyview": skyview.run,
     # OSM churches + the committed LoD2/DGM: the bell towers the hidden
@@ -68,6 +69,9 @@ STEPS = {
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,
+    # After lowveg: an orchard tree gives way to a measured one (the canopy,
+    # the laser-scan crowns, the cadastre).
+    "cultivated": cultivated.run,
     # After lowveg (the same laser-scan rasters, made on first use), walls,
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.

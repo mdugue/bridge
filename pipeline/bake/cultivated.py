@@ -14,11 +14,15 @@ raster stay as they are (ADR 0023); this is dressing.
     Point {k: "tree", h, d, src}          an orchard tree: the mapped
                                           `natural=tree` inside it, else an
                                           8 m grid along its long axis
-                                          (src "osm" | "grid"); the tile's own
+                                          (src "osm" | "grid"); the tile's own,
+                                          less those a measured tree (canopy,
+                                          canopyx, trees — any tile's) stands
+                                          in for: this step runs after lowveg
     Polygon/MultiPolygon {k: "vineyard"}  `landuse=vineyard`
     LineString {k: "row"}                 a vine row, 1.8 m apart along the
                                           contour (perpendicular to the DGM's
-                                          mean gradient over the vineyard)
+                                          mean gradient over the whole
+                                          vineyard, every tile's DGM)
 
 Everything is clipped to the tile. The project keeps what the data carries
 and invents nothing (furniture.py's rule): no synthetic parcel grid, no
@@ -44,10 +48,10 @@ layer.ts); prepare-data crops it to the texels that carry a colony.
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
-import rasterio
 import shapely
 from PIL import Image
 from rasterio.features import rasterize
@@ -63,11 +67,18 @@ from .common import (
     write_geojson,
 )
 from .osm import has_extract, read_osm, tag
+from .skyview import Field, dgm_field, overlaps, site_sources
 
 ORCHARD_SPACING_M = 8.0
 ORCHARD_TREE_H = 4.5  # m: a standard fruit tree, crown base ≈ 1.3 m ("small")
 ORCHARD_TREE_D = 4.0
 VINE_ROW_SPACING_M = 1.8
+# A measured tree (the DOM1 canopy, a laser-scan crown, the cadastre or a
+# classified OSM tree in trees_<tile>) this close to an orchard tree stands in
+# its place: half the grid spacing, or the measured crown's radius when
+# wider. Without it 13 crowns stood beside an orchard tree (2026-09-26).
+ORCHARD_CLEAR_M = ORCHARD_SPACING_M / 2
+MEASURED_TREES = ("canopy", "canopyx", "trees")
 PARCEL_MIN_SHARE = 0.5  # a garden is a colony's parcel when half of it lies inside
 PATH_HALF_WIDTH = {"footway": 1.0, "path": 1.0, "service": 2.5, "track": 1.5, "steps": 1.0}
 NO_BEDS = (5, 7, 8)  # rail, road, water
@@ -131,18 +142,23 @@ def grid_trees(orchard: shapely.Geometry, spacing: float = ORCHARD_SPACING_M) ->
 
 def contour_angle(tile: Tile, g: shapely.Geometry) -> float:
     """The direction along the contour over the polygon: perpendicular to
-    the DGM's mean gradient (radians from east). A flat or DGM-less area
-    runs along its long axis."""
-    if not tile.dgm.exists():
-        return long_axis(g)
-    with rasterio.open(tile.dgm) as ds:
-        z = ds.read(1).astype(np.float64)
-        mask = rasterize([(g, 1)], out_shape=z.shape, transform=ds.transform, dtype=np.uint8)
-        res = ds.transform.a
-    inside = mask.astype(bool) & np.isfinite(z)
+    the DGM's mean gradient (radians from east). The gradient is read over
+    the whole polygon from every committed DGM it touches (skyview.py's
+    `site_sources`), so a vineyard across a seam gets one angle on both
+    tiles — this tile's DGM alone kinked its rows at the seam. A flat or
+    DGM-less area runs along its long axis."""
+    xmin, ymin, xmax, ymax = g.bounds
+    # whole metres, one cell of margin: the DGM1's own grid, copied not resampled
+    field = Field(
+        (math.floor(xmin) - 1, math.floor(ymin) - 1, math.ceil(xmax) + 1, math.ceil(ymax) + 1),
+        1.0,
+    )
+    z = dgm_field(tile, field, site_sources(tile)).astype(np.float64)
+    mask = rasterize([(g, 1)], out_shape=field.shape, transform=field.transform, dtype=np.uint8)
+    gy, gx = np.gradient(z, field.res)  # rows grow south: dz/dy_north = −gy
+    inside = mask.astype(bool) & np.isfinite(gx) & np.isfinite(gy)
     if inside.sum() < 4:
         return long_axis(g)
-    gy, gx = np.gradient(z, res)  # rows grow south: dz/dy_north = −gy
     ex, ny = gx[inside].mean(), -gy[inside].mean()
     if math.hypot(ex, ny) < 0.01:  # under 1 %: flat
         return long_axis(g)
@@ -230,7 +246,44 @@ def clip_features(tile: Tile, geoms, kind: str) -> list[dict]:
     return out
 
 
-def build(tile: Tile, areas, landuse, leisure, trees, paths_in) -> tuple[list[dict], dict]:
+def measured_trees(tile: Tile, near: tuple[float, float, float, float]) -> tuple:
+    """The measured trees (MEASURED_TREES files) of every tile whose extent
+    reaches `near`, as (xy, crown radius) — across a seam too."""
+    xy, r = [], []
+    for tid, b in site_sources(tile):
+        if not overlaps(b, near):
+            continue
+        for kind in MEASURED_TREES:
+            path = tile.data / "dlm" / f"{kind}_{tid}.geojson"
+            if not path.exists():
+                continue
+            for f in json.loads(path.read_text())["features"]:
+                geom, props = f.get("geometry"), f.get("properties") or {}
+                if not geom or geom.get("type") != "Point":
+                    continue
+                xy.append(geom["coordinates"][:2])
+                r.append(float(props.get("r") or props.get("d", 0) / 2 or 0))
+    return np.asarray(xy, np.float64).reshape(-1, 2), np.asarray(r, np.float64)
+
+
+def unclaimed(points: list, measured: tuple | None) -> list:
+    """The orchard trees no measured tree stands in for (ORCHARD_CLEAR_M, or
+    its crown radius when wider)."""
+    if measured is None or not len(measured[0]) or not points:
+        return points
+    xy, r = measured
+    reach = np.maximum(r, ORCHARD_CLEAR_M)
+    out = []
+    for x, y in points:
+        d = np.hypot(xy[:, 0] - x, xy[:, 1] - y)
+        if not (d <= reach).any():
+            out.append((x, y))
+    return out
+
+
+def build(
+    tile: Tile, areas, landuse, leisure, trees, paths_in, measured: tuple | None = None
+) -> tuple[list[dict], dict]:
     box = shapely.box(*tile.bounds)
     valid = [shapely.make_valid(g) for g in areas]
     colonies = [g for g, lu in zip(valid, landuse, strict=True) if lu == "allotments"]
@@ -251,7 +304,7 @@ def build(tile: Tile, areas, landuse, leisure, trees, paths_in) -> tuple[list[di
         feats += clip_features(tile, [o], "orchard")
         mapped = [(p.x, p.y) for p in trees if o.contains(p)]
         src = "osm" if mapped else "grid"
-        for x, y in mapped or grid_trees(o):
+        for x, y in unclaimed(mapped or grid_trees(o), measured):
             if owns(tile.bounds, x, y):
                 props = {"k": "tree", "h": ORCHARD_TREE_H, "d": ORCHARD_TREE_D, "src": src}
                 feats.append(
@@ -303,8 +356,16 @@ def run(tile: Tile, px: int = 2048) -> None:
         for g, h in zip(lines, column(lf, "highway", lines), strict=True)
         if h in PATH_HALF_WIDTH
     ]
+    xmin, ymin, xmax, ymax = tile.bounds
+    reach = (xmin - 20, ymin - 20, xmax + 20, ymax + 20)
     feats, parts = build(
-        tile, areas, column(af, "landuse", areas), column(af, "leisure", areas), trees, paths
+        tile,
+        areas,
+        column(af, "landuse", areas),
+        column(af, "leisure", areas),
+        trees,
+        paths,
+        measured_trees(tile, reach),
     )
     path = tile.out("dlm", f"cultivated_{tile.id}.geojson")
     write_geojson(path, feats, tile.epsg, attribution=OSM_ATTRIBUTION)

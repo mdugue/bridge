@@ -7,7 +7,7 @@
  * bake appends them to a tile's buildings (scripts/bake-city-mesh.ts). No
  * THREE, no DOM.
  */
-import type { SmallBuildingFeature } from "./features";
+import type { PointGeometry, SmallBuildingFeature } from "./features";
 
 /** Metres the box reaches below its lowest ground, so a slope shows no gap. */
 export const SMALL_BUILDING_SINK = 0.2;
@@ -77,4 +77,102 @@ export function structureMesh(
   tri(0, low[0], low[2], low[1]);
   tri(0, low[0], low[3], low[2]);
   return out;
+}
+
+/**
+ * Metres around a scan structure within which a canopy point is the
+ * structure itself: DOM1 reads a shed's roof as a 3–4 m "tree" (859 canopy
+ * points stood inside 636 sheds, 807 of them within 1 m of the shed's own
+ * height), so the build drops them where it publishes the canopy
+ * (scripts/prepare-data.ts). The canopy bake runs before the small
+ * structures, so it cannot.
+ */
+export const STRUCTURE_TREE_CLEAR_M = 0.5;
+
+const CELL = 16;
+
+/** Squared distance from p to the segment a–b. */
+function segmentDistance2(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t =
+    len2 > 0
+      ? Math.min(Math.max(((px - ax) * dx + (py - ay) * dy) / len2, 0), 1)
+      : 0;
+  const qx = ax + t * dx - px;
+  const qy = ay + t * dy - py;
+  return qx * qx + qy * qy;
+}
+
+/** Whether (x, y) lies in the convex ring or within `clear` of it. */
+function nearRing(
+  ring: readonly (readonly [number, number])[],
+  x: number,
+  y: number,
+  clear: number
+): boolean {
+  let pos = 0;
+  let neg = 0;
+  let d2 = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < 4; i++) {
+    const [ax, ay] = ring[i];
+    const [bx, by] = ring[(i + 1) % 4];
+    const cross = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+    if (cross >= 0) {
+      pos++;
+    }
+    if (cross <= 0) {
+      neg++;
+    }
+    d2 = Math.min(d2, segmentDistance2(x, y, ax, ay, bx, by));
+  }
+  return pos === 4 || neg === 4 || d2 <= clear * clear;
+}
+
+/**
+ * The point features (canopy or laser-scan crowns) that stand neither in
+ * a scan structure's rectangle nor within `clear` metres of it.
+ */
+export function treesOffStructures<F extends { geometry: PointGeometry }>(
+  trees: readonly F[],
+  structures: readonly SmallBuildingFeature[],
+  clear = STRUCTURE_TREE_CLEAR_M
+): F[] {
+  const cells = new Map<string, (readonly [number, number])[][]>();
+  for (const s of structures) {
+    const ring = s.geometry.coordinates[0]?.slice(0, 4);
+    if (!ring || ring.length < 4) {
+      continue;
+    }
+    const xs = ring.map((c) => c[0]);
+    const ys = ring.map((c) => c[1]);
+    const c0 = Math.floor((Math.min(...xs) - clear) / CELL);
+    const c1 = Math.floor((Math.max(...xs) + clear) / CELL);
+    const r0 = Math.floor((Math.min(...ys) - clear) / CELL);
+    const r1 = Math.floor((Math.max(...ys) + clear) / CELL);
+    for (let cx = c0; cx <= c1; cx++) {
+      for (let cy = r0; cy <= r1; cy++) {
+        const key = `${cx},${cy}`;
+        const bucket = cells.get(key);
+        if (bucket) {
+          bucket.push(ring);
+        } else {
+          cells.set(key, [ring]);
+        }
+      }
+    }
+  }
+  return trees.filter((t) => {
+    const [x, y] = t.geometry.coordinates;
+    const bucket = cells.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)}`);
+    return !bucket?.some((ring) => nearRing(ring, x, y, clear));
+  });
 }

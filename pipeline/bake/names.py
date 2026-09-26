@@ -99,14 +99,26 @@ def anchors(line: shapely.LineString, name: str) -> list[shapely.LineString]:
 
 
 def streets(tile: Tile) -> dict[str, tuple[shapely.Geometry, str]]:
-    """Every name's merged lines around the tile, and its class."""
+    """Every name that has a way within MARGIN_M of the tile: all of that
+    name's ways in the extract, merged unclipped, and its class. Reading
+    the whole extract costs what a bbox read costs (GDAL's OSM driver parses
+    the file either way), and it makes the merged lines — and so the label
+    windows along them — the same on every tile: a name across a seam is
+    windowed once and lettered by whichever tile owns the window's middle.
+    Clipping to the tile (as this once did) moved the windows with the tile
+    and lettered some names on both sides of a seam."""
     geoms, fields = read_osm(
-        tile, "lines", "highway IS NOT NULL AND name IS NOT NULL", ["highway", "name", "other_tags"]
+        tile,
+        "lines",
+        "highway IS NOT NULL AND name IS NOT NULL",
+        ["highway", "name", "other_tags"],
+        margin=None,
     )
     xmin, ymin, xmax, ymax = tile.bounds
     area = shapely.box(xmin - MARGIN_M, ymin - MARGIN_M, xmax + MARGIN_M, ymax + MARGIN_M)
     parts: dict[str, list] = defaultdict(list)
     classes: dict[str, str] = {}
+    near: set[str] = set()
     for g, highway, name, other in zip(
         geoms,
         column(fields, "highway", geoms),
@@ -116,15 +128,13 @@ def streets(tile: Tile) -> dict[str, tuple[shapely.Geometry, str]]:
     ):
         if not name or highway in SKIP or tag(other, "footway") == "sidewalk":
             continue
-        clipped = g.intersection(area)
-        if clipped.is_empty:
-            continue
-        parts[name].append(clipped)
+        parts[name].append(g)
         if road_class(highway) == "main" or name not in classes:
             classes[name] = road_class(highway)
+        if g.intersects(area):
+            near.add(name)
     return {
-        name: (shapely.line_merge(shapely.union_all(ps)), classes[name])
-        for name, ps in parts.items()
+        name: (shapely.line_merge(shapely.union_all(parts[name])), classes[name]) for name in near
     }
 
 

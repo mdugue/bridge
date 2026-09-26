@@ -6,22 +6,26 @@
  *   bun run bake 33412_5656_2_sn      one tile
  *   bun run bake --ingest             fetch the raw inputs first (the site's
  *                                     ingest adapter, e.g. GeoSN for Saxony)
- *   bun run bake --step canopy        one step (landcover, canopy, trees,
- *                                     ndvi, roof-colour, osm-buildings,
- *                                     lamps, monuments,
- *                                     furniture, walls, stairs, rail,
- *                                     surface, edges, markings, sport,
- *                                     cultivated, tram, riverside, names,
- *                                     skyview, soundmarks, lowveg, small-buildings,
- *                                     islands)
+ *   bun run bake --step canopy        one step, in the order `all` runs them
+ *                                     (landcover, islands, canopy, trees,
+ *                                     ndvi, roof-colour, osm-buildings, rail,
+ *                                     lamps, monuments, furniture, walls,
+ *                                     stairs, surface, edges, markings,
+ *                                     sport, tram, riverside, names, skyview,
+ *                                     soundmarks, lowveg, cultivated,
+ *                                     small-buildings)
  *   bun run bake --ingest --lsc       ... and the laser scan (≈380 MB a tile)
  *   bun run bake --step lowveg --research   also every hedge/shrub candidate
  *
  * The site (SITE, default dresden; sites/) supplies the tiles, their extent
  * and CRS; raw inputs live in data/_raw/<site>/ (gitignored). The steps run
  * in dependency order — land cover first, the canopy, the tree cadastre,
- * lamps and street furniture are gated on it; the hedges and scan trees
- * last (they are thinned against the canopy and the cadastre). Then `bun scripts/prepare-data.ts` turns data/ into the tileset.
+ * lamps and street furniture are gated on it; the bridges (rail) before the
+ * furniture, trams and names; the hedges and scan trees late (they are
+ * thinned against the canopy and the cadastre), then the orchards (against
+ * those trees) and the small structures. Several steps read the neighbours'
+ * files across a seam, so run a step for every tile. Then
+ * `bun scripts/prepare-data.ts` turns data/ into the tileset.
  */
 import { spawnSync } from "node:child_process";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";

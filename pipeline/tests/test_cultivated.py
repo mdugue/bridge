@@ -21,10 +21,12 @@ from bake.cultivated import (
 )
 
 
-def _tile(tmp_path, slope_east: float = 0.0, slope_north: float = 0.0) -> Tile:
+def _tile(
+    tmp_path, slope_east: float = 0.0, slope_north: float = 0.0, tid: str = "t", dx: float = 0.0
+) -> Tile:
     """A 200 m tile whose DGM rises by the given gradients (m per m)."""
-    x0, y0 = 411000.0, 5656000.0
-    tile = Tile("t", (x0, y0, x0 + 200, y0 + 200), 25833, tmp_path / "raw", tmp_path / "data")
+    x0, y0 = 411000.0 + dx, 5656000.0
+    tile = Tile(tid, (x0, y0, x0 + 200, y0 + 200), 25833, tmp_path / "raw", tmp_path / "data")
     tile.dgm.parent.mkdir(parents=True)
     cols = np.arange(200)[None, :] + 0.5
     rows = np.arange(200)[:, None] + 0.5  # row 0 = north
@@ -92,6 +94,52 @@ def test_a_flat_vineyard_runs_along_its_long_axis(tmp_path):
     tile = _tile(tmp_path)
     v = shapely.box(411050, 5656050, 411070, 5656150)  # long north–south
     assert abs(math.cos(contour_angle(tile, v))) < 1e-6
+
+
+def test_a_vineyard_across_a_seam_gets_one_angle_on_both_tiles(tmp_path):
+    # west tile rises north, east tile north and twice as steeply east (the
+    # surface continuous across the seam): the angle is the whole
+    # polygon's, the same from either side (this tile's DGM alone kinked it)
+    west = _tile(tmp_path, slope_north=0.2)
+    east = _tile(tmp_path, slope_east=0.4, slope_north=0.2, tid="u", dx=200)
+    v = shapely.box(411150, 5656050, 411250, 5656100)
+    a, b = contour_angle(west, v), contour_angle(east, v)
+    assert a == pytest.approx(b, abs=1e-9)
+    # mean gradient (0.2, 0.2): the rows run along the diagonal (135°), not
+    # 0° on the west tile and 117° on the east one
+    assert math.degrees(a) == pytest.approx(135, abs=2)
+
+
+def test_a_measured_tree_takes_an_orchard_trees_place(tmp_path):
+    tile = _tile(tmp_path)
+    x0, y0 = tile.bounds[:2]
+    orchard = shapely.box(x0 + 110, y0 + 110, x0 + 150, y0 + 130)
+    free, _ = build(tile, [orchard], ["orchard"], [None], [], [])
+    spots = [f["geometry"]["coordinates"] for f in free if f["properties"]["k"] == "tree"]
+    near = [spots[0][0] + 2.0, spots[0][1]]  # a canopy crown 2 m off the first
+    wide = [spots[-1][0] + 6.0, spots[-1][1]]  # a 7 m crown 6 m off the last
+    measured = (np.array([near, wide]), np.array([0.0, 7.0]))
+    feats, parts = build(tile, [orchard], ["orchard"], [None], [], [], measured)
+    kept = [f["geometry"]["coordinates"] for f in feats if f["properties"]["k"] == "tree"]
+    assert len(kept) == len(spots) - 2
+    assert spots[0] not in kept and spots[-1] not in kept
+    assert parts["stats"]["orchardTrees"] == len(kept)
+
+
+def test_measured_trees_are_read_across_the_seam(tmp_path):
+    from bake.common import write_geojson
+    from bake.cultivated import measured_trees
+
+    west = _tile(tmp_path)
+    _tile(tmp_path, tid="u", dx=200)
+    point = {"type": "Point", "coordinates": [411205.0, 5656100.0]}
+    write_geojson(
+        west.out("dlm", "canopyx_u.geojson"),
+        [{"type": "Feature", "properties": {"h": 9, "r": 3}, "geometry": point}],
+        25833,
+    )
+    xy, r = measured_trees(west, (410980, 5655980, 411220, 5656220))
+    assert xy.tolist() == [[411205.0, 5656100.0]] and r.tolist() == [3.0]
 
 
 def _metres(code: int) -> float:

@@ -42,5 +42,6 @@
     }
   ],
   "footprints": "cells under a roof carry the nearest open cell's angles",
-  "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)"
+  "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)",
+  "attribution": "Quelle: GeoSN, dl-de/by-2-0 (DGM1, LoD2)"
 }

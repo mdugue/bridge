@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 import shapely
+import shapely.geometry
 
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, owns, write_geojson
 from .osm import has_extract, read_osm, tag
@@ -212,6 +213,34 @@ def gates_on(points, fields, walls: list, fences: list, bounds) -> list[dict]:
     return out
 
 
+def on_written_lines(features: list[dict]) -> list[dict]:
+    """The file's features less every gate whose line of its kind (`on`) the
+    file does not carry within GATE_ON_M. A fresh bake reads walls, fences and
+    gates from one extract and drops nothing (bar a gate that snapped to a
+    line's piece past the tile edge); it is the committed walls, kept from an
+    older extract while the gates came from a newer one, that left two
+    `on: "wall"` gates 70–73 m from any committed wall (2026-09-26): a gate
+    whose gap cuts nothing."""
+    lines: dict[str, list] = {"wall": [], "fence": []}
+    for f in features:
+        kind = f["properties"].get("kind")
+        if kind != "gate":
+            lines["fence" if kind == "fence" else "wall"].append(
+                shapely.geometry.shape(f["geometry"])
+            )
+    trees = {k: shapely.STRtree(v) if v else None for k, v in lines.items()}
+    out = []
+    for f in features:
+        p = f["properties"]
+        if p.get("kind") == "gate" and not p.get("seam"):
+            tree = trees.get(p.get("on"))
+            point = shapely.geometry.shape(f["geometry"])
+            if tree is None or not len(tree.query_nearest(point, max_distance=GATE_ON_M)):
+                continue
+        out.append(f)
+    return out
+
+
 def run(tile: Tile) -> None:
     if not has_extract(tile, "the walls"):
         return
@@ -220,6 +249,7 @@ def run(tile: Tile) -> None:
     fences, fence_lines = _fences(tile, box)
     points, fields = read_osm(tile, "points", GATE_WHERE, ["barrier", "other_tags"])
     gates = gates_on(points, fields, wall_lines, fence_lines, tile.bounds)
+    gates = on_written_lines(walls + fences + gates)[len(walls) + len(fences) :]
     write_geojson(
         tile.out("dlm", f"walls_{tile.id}.geojson"),
         walls + fences + gates,

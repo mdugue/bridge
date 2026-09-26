@@ -66,7 +66,7 @@ export const DRESDEN: Site = {
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
   attribution: [
     "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Bahnsteige, Straßenbahn, Anlegestellen, Straßennamen, Brücken, Läden und Baudenkmale © OpenStreetMap-Mitwirkende (ODbL)",
+    "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Straßennamen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
     "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
   ],
   spawn: "altstadt",

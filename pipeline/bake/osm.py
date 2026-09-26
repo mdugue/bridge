@@ -36,10 +36,10 @@ def has_extract(tile: Tile, what: str) -> bool:
 
 
 def read_osm(
-    tile: Tile, layer: str, where: str, columns: list[str], margin: float = 0.001
+    tile: Tile, layer: str, where: str, columns: list[str], margin: float | None = 0.001
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     """Features of one OSM layer near the tile (a `margin` in degrees around
-    it), reprojected to the tile's CRS."""
+    it; None reads the whole extract), reprojected to the tile's CRS."""
     pbf = tile.osm_extract()
     if pbf is None:
         raise SystemExit(
@@ -47,7 +47,11 @@ def read_osm(
             "(e.g. https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf)"
         )
     geoms, fields = read_layer(
-        Path(pbf), wgs84_bbox(tile, margin), where=where, columns=columns, layer=layer
+        Path(pbf),
+        wgs84_bbox(tile, margin) if margin is not None else None,
+        where=where,
+        columns=columns,
+        layer=layer,
     )
     project = _to_tile(tile)
     geoms = shapely.transform(

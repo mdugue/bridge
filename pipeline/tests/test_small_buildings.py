@@ -2,16 +2,23 @@
 shed, a shrub, a van on the road, a clipped evergreen hedge block."""
 
 import numpy as np
+import rasterio
 import shapely
+from PIL import Image
 
-from bake.lowveg import Grid
+from bake.common import Tile
+from bake.lowveg import LSC_RASTERS, Grid
 from bake.small_buildings import (
+    SEAM_MARGIN_M,
     Rasters,
     Structure,
     find_structures,
     is_excluded_area,
     is_vehicle_sized,
     keep,
+    load_rasters,
+    owned,
+    without_overlaps,
 )
 
 X0, Y0, N = 400000.0, 5600000.0, 200  # 100 m at 0.5 m
@@ -76,6 +83,118 @@ def test_a_tilted_top_is_a_pent_roof_with_its_corner_heights():
     assert 2.0 < lo < 2.4
     assert hi - lo > 0.8  # 15° over 4 m ≈ 1.07 m
     assert lo <= pent.h <= hi
+    # the roof rises to the east: the two eastern corners are the high ones
+    xs = [x for x, _ in pent.ring[:4]]
+    east = sorted(range(4), key=lambda k: -xs[k])[:2]
+    assert sorted(pent.corners[k] for k in east) == sorted(pent.corners)[2:]
+    assert (
+        min(pent.corners[k] for k in east) - max(pent.corners[k] for k in range(4) if k not in east)
+        > 0.8
+    )
+
+
+def test_a_box_on_falling_ground_stands_on_its_lowest_point_or_not_at_all():
+    grid, r = scene()
+    # the flat shed's ground falls 1 m to the east under it: z is the low side
+    r.dtm[:, 25:40] = GROUND - 1.0
+    r.dsm[20:28, 20:30] = GROUND + 2.5
+    flat = next(s for s in find_structures(r, grid) if s.corners is None)
+    assert flat.z == GROUND - 1.0
+    assert abs(flat.h - 3.5) < 0.05
+    # an embankment's edge: 2 m of fall under the rectangle, no box
+    r.dtm[:, 25:40] = GROUND - 2.0
+    assert all(s.corners is not None for s in find_structures(r, grid))
+
+
+def test_of_two_overlapping_rectangles_the_larger_stays():
+    big = rect(4.0, 5.0, 2.5)
+    small = Structure(
+        [(4.0, 3.0), (7.0, 3.0), (7.0, 6.0), (4.0, 6.0), (4.0, 3.0)], 100.0, 2.5, None
+    )
+    touch = Structure(
+        [(5.0, 0.0), (8.0, 0.0), (8.0, 3.0), (5.0, 3.0), (5.0, 0.0)], 100.0, 2.5, None
+    )
+    assert without_overlaps([small, big]) == [big]  # 1 m² in common
+    assert without_overlaps([big, touch]) == [big, touch]  # edge to edge
+
+
+def _scan_tile(tmp_path, tid: str, dx: float, dsm: np.ndarray) -> Tile:
+    """A 100 m tile with flat ground, its 0.5 m scan rasters and a class
+    raster, `dx` m east of X0."""
+    tile = Tile(
+        tid, (X0 + dx, Y0, X0 + dx + 100, Y0 + 100), 25833, tmp_path / "raw", tmp_path / "data"
+    )
+    der = tile.raw / "lsc" / tid
+    der.mkdir(parents=True)
+    bands = {
+        "dsm_050.tif": {"max": dsm, "count": np.ones((N, N))},
+        "dtm_050.tif": {"min": np.full((N, N), GROUND), "idw": np.full((N, N), GROUND)},
+        "nonground_multiecho_count_050.tif": {"count": np.zeros((N, N))},
+    }
+    for name in LSC_RASTERS:
+        layers = bands.get(name, {"count": np.zeros((N, N))})
+        with rasterio.open(
+            der / name,
+            "w",
+            driver="GTiff",
+            width=N,
+            height=N,
+            count=len(layers),
+            dtype="float32",
+            crs="EPSG:25833",
+            transform=tile.transform(N),
+            nodata=-9999,
+        ) as dst:
+            for i, (desc, a) in enumerate(layers.items(), start=1):
+                dst.write(np.nan_to_num(a, nan=-9999).astype("float32"), i)
+                dst.set_band_description(i, desc)
+    tile.dgm.parent.mkdir(parents=True)
+    with rasterio.open(
+        tile.dgm,
+        "w",
+        driver="GTiff",
+        width=100,
+        height=100,
+        count=1,
+        dtype="float32",
+        crs="EPSG:25833",
+        transform=tile.transform(100),
+    ) as dst:
+        dst.write(np.full((100, 100), GROUND, np.float32), 1)
+    Image.fromarray(np.full((N, N), 4, np.uint8)).save(tile.out("dlm", f"landcover_{tid}.png"))
+    return tile
+
+
+def test_a_shed_on_the_seam_is_found_whole_and_written_once(tmp_path):
+    west_dsm, east_dsm = np.full((N, N), np.nan), np.full((N, N), np.nan)
+    # a 6 × 4 m shed at x 96–102 m, y 40–44 m from the south: 4 m of it on
+    # the west tile, 2 m on the east one
+    west_dsm[112:120, 192:200] = GROUND + 2.5
+    east_dsm[112:120, 0:4] = GROUND + 2.5
+    west = _scan_tile(tmp_path, "t", 0.0, west_dsm)
+    east = _scan_tile(tmp_path, "u", 100.0, east_dsm)
+    found = {}
+    for tile in (west, east):
+        xmin, ymin, xmax, ymax = tile.bounds
+        m = SEAM_MARGIN_M
+        grid = Grid(xmin - m, ymin - m, xmax + m, ymax + m)
+        found[tile.id] = find_structures(load_rasters(tile, grid), grid)
+    for tid in ("t", "u"):
+        (shed,) = found[tid]  # each side sees it whole
+        assert abs(shapely.Polygon(shed.ring).area - 24.0) < 0.5
+    assert len(owned(west, found["t"])) == 1  # its centroid (x 99 m) is west's
+    assert owned(east, found["u"]) == []
+
+
+def test_a_shed_cut_by_the_sites_edge_is_dropped(tmp_path):
+    dsm = np.full((N, N), np.nan)
+    dsm[112:120, 192:200] = GROUND + 2.5  # runs into the east edge; no tile there
+    west = _scan_tile(tmp_path, "t", 0.0, dsm)
+    xmin, ymin, xmax, ymax = west.bounds
+    grid = Grid(
+        xmin - SEAM_MARGIN_M, ymin - SEAM_MARGIN_M, xmax + SEAM_MARGIN_M, ymax + SEAM_MARGIN_M
+    )
+    assert find_structures(load_rasters(west, grid), grid) == []
 
 
 def test_a_blob_under_the_lod2_mask_is_left_to_lod2():

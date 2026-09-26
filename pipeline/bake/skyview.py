@@ -84,6 +84,10 @@ AZIMUTHS = 16  # clockwise from north, 22.5° apart
 WALL_NZ = 0.05  # |n_z| below this: a vertical wall, nothing to burn
 
 
+# Derived from GeoSN's DGM1 and LoD2 alone.
+ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0 (DGM1, LoD2)"
+
+
 def azimuths(count: int = AZIMUTHS) -> np.ndarray:
     """The azimuths (degrees clockwise from north)."""
     return np.arange(count) * (360.0 / count)
@@ -425,6 +429,7 @@ def legend(count: int = AZIMUTHS) -> dict:
         ],
         "footprints": "cells under a roof carry the nearest open cell's angles",
         "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)",
+        "attribution": ATTRIBUTION,
     }
 
 

@@ -4,6 +4,7 @@ import {
   SMALL_BUILDING_SINK,
   structureCorners,
   structureMesh,
+  treesOffStructures,
 } from "./small-buildings";
 
 /** A 4 × 3 m shed at (100, 200), the ring as written (clockwise here). */
@@ -87,4 +88,27 @@ test("a pent roof takes its height at each written corner", () => {
 
 test("a feature without properties or ring draws nothing", () => {
   expect(structureMesh(shed(null), { cx: 0, cy: 0 }).positions).toEqual([]);
+});
+
+test("a canopy point in or beside a shed is the shed, not a tree", () => {
+  const tree = (x: number, y: number) => ({
+    geometry: {
+      coordinates: [x, y] as [number, number],
+      type: "Point" as const,
+    },
+    properties: { h: 3.4 },
+  });
+  const trees = [
+    tree(102, 201.5), // inside the 4 × 3 m shed
+    tree(104.4, 201), // 0.4 m east of its wall
+    tree(104.7, 201), // 0.7 m east: a tree
+    tree(99.7, 199.7), // 0.42 m off its corner
+    tree(120, 220),
+  ];
+  const kept = treesOffStructures(trees, [shed({ h: 2.5, z: 100 })]);
+  expect(kept.map((t) => t.geometry.coordinates)).toEqual([
+    [104.7, 201],
+    [120, 220],
+  ]);
+  expect(treesOffStructures(trees, [])).toHaveLength(5);
 });
