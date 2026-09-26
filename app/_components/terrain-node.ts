@@ -186,6 +186,37 @@ function groundInputs(
   };
 }
 
+/** What a pass over the ground's base colour reads and writes. */
+interface GroundPass {
+  base: Node<"vec3">;
+  fd: ReturnType<typeof groundFields>;
+  g: ReturnType<typeof groundInputs>;
+  m: ReturnType<typeof meadowVars>;
+  uv: Node<"vec2">;
+}
+
+/**
+ * The passes over the ground's base colour, in terrain-layer.ts
+ * splatFragment's order: gardens, sports grounds, road markings, then the
+ * NDVI tint (which a painted pitch opts out of). Each runs when its tile
+ * has the raster. In GLSL they are chunks spliced in a fixed order that
+ * share locals by name, under a program key of flags; here a new one is a
+ * row.
+ */
+const GROUND_PASSES: ((
+  splat: SplatLayer
+) => ((p: GroundPass) => void) | undefined)[] = [
+  ({ colonies }) =>
+    colonies && ((p) => colonyGarden(p.g, p.fd, p.m, p.base, colonies)),
+  ({ sport }) => sport && ((p) => sportGround(p.g, p.fd, p.m, p.base, sport)),
+  ({ markings }) =>
+    markings && ((p) => roadMarkings(p.g, p.fd, p.m, p.base, markings)),
+  (splat) => {
+    const ndvi = splat.ndviTexture;
+    return ndvi && ((p) => meadowNdvi(splat, ndvi, p.uv, p.m.meadow, p.base));
+  },
+];
+
 /**
  * The splat-painted ground: palette colour, meadow mottle, the ground
  * detail (ground-detail-node.ts), the NDVI tint, and gated contour ink.
@@ -210,19 +241,9 @@ function splatTerrain(
     const fd = groundFields(g, m);
     const ugW = urbanGreen(g, fd, m, base);
     tilt.assign(groundDetail(g, fd, ugW, base, m.fw));
-    // terrain-layer.ts splatFragment's order: gardens, sports grounds,
-    // road markings, then the NDVI tint (which a painted pitch opts out of).
-    if (splat.colonies) {
-      colonyGarden(g, fd, m, base, splat.colonies);
-    }
-    if (splat.sport) {
-      sportGround(g, fd, m, base, splat.sport);
-    }
-    if (splat.markings) {
-      roadMarkings(g, fd, m, base, splat.markings);
-    }
-    if (splat.ndviTexture) {
-      meadowNdvi(splat, splat.ndviTexture, uv, m.meadow, base);
+    const pass = { g, fd, m, base, uv };
+    for (const layer of GROUND_PASSES) {
+      layer(splat)?.(pass);
     }
     const run = max(length(fwidth(xy)), 1e-4);
     const slope = fwidth(elevation).div(run);

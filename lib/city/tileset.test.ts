@@ -5,6 +5,7 @@ import {
   buildTileset,
   COARSE_TERRAIN_ERROR,
   parseTilesetExtras,
+  TERRAIN_LEVELS,
   type TilesetExtras,
   tileBox,
 } from "./tileset";
@@ -98,4 +99,13 @@ test("a point on a seam belongs to exactly one tile", () => {
   expect(ownsPoint(east, ...onSeam)).toBe(true);
   expect(ownsPoint(east, 411_950, 5_657_000)).toBe(false);
   expect(ownsPoint(east, 413_999.9, 5_657_999.9)).toBe(true);
+});
+
+test("each level's colour splat is a whole fraction of its class raster", () => {
+  for (const level of Object.values(TERRAIN_LEVELS)) {
+    expect(level.splatScale).toBeGreaterThanOrEqual(1);
+    expect(level.raster % level.splatScale).toBe(0);
+  }
+  // the fine level paints at the class raster's own edge
+  expect(TERRAIN_LEVELS[0].splatScale).toBe(1);
 });

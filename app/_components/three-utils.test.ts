@@ -54,6 +54,20 @@ test("walks material arrays", () => {
   expect(secondCalls()).toBe(1);
 });
 
+test("spares a shared material but still frees its geometry", () => {
+  // the node renderer's per-scene materials (node-shared.ts)
+  const geometry = new BoxGeometry();
+  const material = new MeshBasicMaterial();
+  material.userData.shared = true;
+  const geometryCalls = countDisposals(geometry);
+  const materialCalls = countDisposals(material);
+
+  disposeObject3D(new Mesh(geometry, material));
+
+  expect(geometryCalls()).toBe(1);
+  expect(materialCalls()).toBe(0);
+});
+
 test("two meshes sharing one material dispose without throwing", () => {
   const material = new MeshBasicMaterial();
   const calls = countDisposals(material);

@@ -33,7 +33,7 @@ import { colonyCropUv } from "@/lib/city/cultivated";
 import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
 import { TinIndex } from "@/lib/city/terrain-tin";
-import type { TerrainExtras } from "@/lib/city/tileset";
+import { TERRAIN_LEVELS, type TerrainExtras } from "@/lib/city/tileset";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
 import {
   GROUND_DETAIL,
@@ -56,7 +56,7 @@ import {
   skyLightBody,
   skyLightDecl,
 } from "./sky-light";
-import { textureBytes, trackTexture } from "./three-utils";
+import { textureBytes, trackedBytesOf, trackTexture } from "./three-utils";
 import { nodeRenderer } from "./gpu-mode";
 import { timed } from "./perf-mark";
 import {
@@ -97,6 +97,13 @@ export interface TerrainLayer {
   /** the tile's baked light for what stands on this level (kerbs, fences,
    *  stairs, walls; sky-light.ts `injectGroundLight`), when it has any */
   light?: GroundLight;
+  /**
+   * GPU bytes of the rasters this level binds (the class raster, the painted
+   * splat, the detail rasters; a raster the two levels share counts on
+   * both). They are shader uniforms, which the tile renderer's own estimate
+   * does not see: the dressing plugin reports them (tile-stream.ts).
+   */
+  textureBytes: number;
 }
 
 export interface TerrainOptions {
@@ -122,6 +129,19 @@ export interface TerrainOptions {
   /** the horizon rasters, shared by a tile's two terrain levels (both name
    *  the same file) */
   horizon?: SharedRasters<Texture>;
+  /** the class rasters, shared by a tile's two levels where both name the
+   *  same file (phones: both read the ≤ 2048² one) */
+  classes: SharedRasters<ClassRaster>;
+  /** the NDVI rasters, shared by a tile's two levels (both name the same
+   *  file) */
+  ndvi: SharedRasters<Texture>;
+}
+
+/** A class raster as the splat pass and the ground's detail read it. */
+export interface ClassRaster {
+  height: number;
+  texture: Texture;
+  width: number;
 }
 
 /**
@@ -241,10 +261,10 @@ async function loadBitmapTexture(
  * must not be interpolated) in linear space (the red channel is a class id,
  * not a colour). Non-fatal: a failure just falls back to the flat sage ground.
  */
-async function loadSplatTexture(
+export async function loadSplatTexture(
   url: string,
   signal?: AbortSignal
-): Promise<{ height: number; texture: Texture; width: number } | null> {
+): Promise<ClassRaster | null> {
   try {
     const loaded = await loadRasterTexture(url, signal);
     const { texture, width, height } = loaded;
@@ -269,7 +289,7 @@ async function loadSplatTexture(
  * the meadow colour reads as a smooth gradient. Data values, not colour → no
  * sRGB. Absent/404 → null and the meadow keeps its flat pastel sage.
  */
-async function loadNdviTexture(
+export async function loadNdviTexture(
   url: string,
   signal?: AbortSignal
 ): Promise<Texture | null> {
@@ -907,13 +927,14 @@ interface DetailRasters {
   horizon: { texture: Texture | null; url: string } | null;
   /** the shared sky view's URL while this tile holds it */
   svf: { texture: Texture | null; url: string } | null;
-  ndviTexture: Texture | null;
+  /** the shared NDVI's URL while this tile holds it */
+  ndvi: { texture: Texture | null; url: string } | null;
   sport: { raster: Texture; table: DataTexture } | null;
   surfaceTexture: Texture | null;
 }
 
 const NO_DETAIL: DetailRasters = {
-  ndviTexture: null,
+  ndvi: null,
   surfaceTexture: null,
   edgesTexture: null,
   sport: null,
@@ -926,7 +947,7 @@ const NO_DETAIL: DetailRasters = {
 /** The loaded rasters as the splat's optional members (absent → unset). */
 function splatDetail(d: DetailRasters): Partial<SplatLayer> {
   return {
-    ndviTexture: d.ndviTexture ?? undefined,
+    ndviTexture: d.ndvi?.texture ?? undefined,
     surfaceTexture: d.surfaceTexture ?? undefined,
     edgesTexture: d.edgesTexture ?? undefined,
     sport: d.sport ?? undefined,
@@ -937,11 +958,26 @@ function splatDetail(d: DetailRasters): Partial<SplatLayer> {
   };
 }
 
-/** Frees a tile's rasters; the shared sky view and horizon are released,
- *  not freed. */
+/** Every raster a level binds, its own and the shared ones. */
+function detailTextures(d: DetailRasters): (Texture | null | undefined)[] {
+  return [
+    d.surfaceTexture,
+    d.edgesTexture,
+    d.sport?.raster,
+    d.sport?.table,
+    d.markings?.raster,
+    d.markings?.table,
+    d.colonies?.texture,
+    d.ndvi?.texture,
+    d.svf?.texture,
+    d.horizon?.texture,
+  ];
+}
+
+/** Frees a tile's rasters; the shared NDVI, sky view and horizon are
+ *  released, not freed. */
 function disposeDetail(d: DetailRasters, opts: TerrainOptions): void {
   for (const texture of [
-    d.ndviTexture,
     d.surfaceTexture,
     d.edgesTexture,
     d.sport?.raster,
@@ -958,6 +994,9 @@ function disposeDetail(d: DetailRasters, opts: TerrainOptions): void {
   if (d.svf) {
     opts.skyView?.release(d.svf.url);
   }
+  if (d.ndvi) {
+    opts.ndvi.release(d.ndvi.url);
+  }
 }
 
 /** The optional rasters over the class raster, one after another (see
@@ -967,8 +1006,6 @@ async function loadDetailRasters(
   opts: TerrainOptions
 ): Promise<DetailRasters> {
   const url = (file?: string) => (file ? opts.fileUrl(file) : undefined);
-  const ndvi = url(extras.ndvi);
-  const ndviTexture = ndvi ? await loadNdviTexture(ndvi, opts.signal) : null;
   // The paving patterns are close-range: the build names the raster on the
   // fine level only.
   const surface = url(extras.surface);
@@ -1015,8 +1052,12 @@ async function loadDetailRasters(
     svfUrl && opts.skyView
       ? { url: svfUrl, texture: await opts.skyView.acquire(svfUrl) }
       : null;
+  const ndviUrl = url(extras.ndvi);
+  const ndvi = ndviUrl
+    ? { url: ndviUrl, texture: await opts.ndvi.acquire(ndviUrl) }
+    : null;
   return {
-    ndviTexture,
+    ndvi,
     surfaceTexture,
     edgesTexture,
     sport,
@@ -1027,6 +1068,51 @@ async function loadDetailRasters(
     horizon,
     svf,
   };
+}
+
+/** A level's rasters: the class raster it holds, the splat painted from
+ *  it, and the detail rasters. */
+interface GroundRasters {
+  classRaster: ClassRaster | null;
+  classUrl: string | undefined;
+  detail: DetailRasters;
+  painted: LandcoverSplat | null;
+}
+
+async function loadGroundRasters(
+  extras: TerrainExtras,
+  opts: TerrainOptions
+): Promise<GroundRasters> {
+  // Decoded one after another on purpose: several 4096² rasters decoding at
+  // once is a peak mobile Safari kills the tab for. The class raster is
+  // held, not owned: a tile's two levels share it where they name the same
+  // file (on phones both read the ≤ 2048² one).
+  const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
+  const classUrl = classFile ? opts.fileUrl(classFile) : undefined;
+  const classRaster = classUrl ? await opts.classes.acquire(classUrl) : null;
+  let painted: LandcoverSplat | null = null;
+  let detail = NO_DETAIL;
+  try {
+    painted = classRaster
+      ? timed("splat-paint", () =>
+          paintLandcoverSplat(
+            opts.renderer,
+            classRaster.texture,
+            classRaster.width,
+            classRaster.height,
+            TERRAIN_LEVELS[extras.level].splatScale
+          )
+        )
+      : null;
+    detail = classRaster ? await loadDetailRasters(extras, opts) : NO_DETAIL;
+  } catch (err) {
+    painted?.dispose();
+    if (classUrl) {
+      opts.classes.release(classUrl);
+    }
+    throw err;
+  }
+  return { classUrl, classRaster, painted, detail };
 }
 
 /** The splat's baked light as the fine level's kerbs, fences, stairs and
@@ -1070,25 +1156,10 @@ export async function dressTerrain(
         sampleHeightfield({ elevations, n, bounds }, x, y)
     : tinHeightAt(mesh, bounds, toData, opts.offset);
 
-  // Decoded one after another on purpose: several 4096² rasters decoding at
-  // once is a peak mobile Safari kills the tab for.
-  const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
-  const classRaster = classFile
-    ? await loadSplatTexture(opts.fileUrl(classFile), opts.signal)
-    : null;
-  const painted: LandcoverSplat | null = classRaster
-    ? timed("splat-paint", () =>
-        paintLandcoverSplat(
-          opts.renderer,
-          classRaster.texture,
-          classRaster.width,
-          classRaster.height
-        )
-      )
-    : null;
-  const detail = classRaster
-    ? await loadDetailRasters(extras, opts)
-    : NO_DETAIL;
+  const { classUrl, classRaster, painted, detail } = await loadGroundRasters(
+    extras,
+    opts
+  );
   const splat: SplatLayer | undefined =
     classRaster && painted
       ? {
@@ -1144,6 +1215,11 @@ export async function dressTerrain(
   return {
     mesh,
     light,
+    textureBytes: [
+      classRaster?.texture,
+      painted?.texture,
+      ...detailTextures(detail),
+    ].reduce((sum, texture) => sum + trackedBytesOf(texture), 0),
     tile: extras.tileId,
     level: extras.level,
     vertexCount: mesh.geometry.getAttribute("position").count,
@@ -1154,7 +1230,9 @@ export async function dressTerrain(
     dispose: () => {
       // Shares the tile's positions; only its own index (and normals) go.
       waterGeometry.dispose();
-      classRaster?.texture.dispose();
+      if (classUrl) {
+        opts.classes.release(classUrl);
+      }
       disposeDetail(detail, opts);
       painted?.dispose();
     },

@@ -58,10 +58,11 @@ export function depthMaterialStandIns(root: Object3D): Group | null {
 }
 
 /**
- * Disposes a material unless it is shared (`userData.shared`: the style
- * materials, and on the node renderer the crowns, trunks and hedges every
- * tile wears). Disposing a shared node material would drop the render state
- * of every object still wearing it, and all of them would rebuild at once.
+ * Disposes a material unless it is shared (`userData.shared`: on the node
+ * renderer the crowns, trunks, hedges and the other materials every tile
+ * wears — node-shared.ts; the WebGL path sets it nowhere). Disposing a
+ * shared node material would drop the render state of every object still
+ * wearing it, and all of them would rebuild at once.
  */
 export function disposeMaterial(
   material: Material | Material[] | undefined
@@ -72,7 +73,9 @@ export function disposeMaterial(
     }
     return;
   }
-  material?.dispose();
+  if (material && !material.userData.shared) {
+    material.dispose();
+  }
 }
 
 /**
@@ -193,6 +196,11 @@ export function trackTexture(texture: Texture, bytes: number): void {
  */
 export function untrackTexture(texture: Texture): void {
   trackedTextures.delete(texture);
+}
+
+/** A tracked texture's recorded bytes (0 when untracked or absent). */
+export function trackedBytesOf(texture: Texture | null | undefined): number {
+  return texture ? (trackedTextures.get(texture) ?? 0) : 0;
 }
 
 /** Bytes of every live tracked texture. */

@@ -242,6 +242,21 @@ not reproduce: WebKit on Linux has no WebGPU, and its WebGL2 path boots
 under a much smaller stack. The toast now carries the first frames of
 the failing stack on the node path, for the next report.
 
+**What a tile keeps resident (2026-09-26, after the audit of PR #67).**
+The main branch's audit listed what the port should start from; the
+memory items are done here, as iPhones kept crashing while looking
+around. A tile's painted splat was the class raster's size on both
+levels: at 4096² RGBA with mipmaps that is ~89 MB for the fine level and
+~22 MB for the coarse one (phones: 22 MB each). The coarse level now
+paints at half the edge (~5.6 MB), the two levels share one class raster
+where they read the same file and one NDVI texture, and the tile cache
+counts what it did not see before: the rasters bound as uniforms and the
+dressing. With those in the count the cache's phone budget (120–180 MB)
+bounds what lingers, which it did not while a fine tile's rasters alone
+could exceed it. The merge of main also silently removed the shared-
+material check from `disposeMaterial` (dead on main, live here): restored
+with its test.
+
 Also tried and dropped: one shared terrain / water / clay material with
 the per-tile textures bound per draw via `onObjectUpdate`. The per-object
 textures did not reach the draws (grey ground, untinted clay), and node

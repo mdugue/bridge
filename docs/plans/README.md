@@ -254,6 +254,22 @@ port to start from rather than re-audit:
 - Items 20 and 21 above belong inside the port's material phases or
   after it.
 
+Taken up on the WebGPU spike branch (PR #66, 2026-09-26), for both
+renderers where the code is shared: the coarse level paints its splat at
+half the class raster's edge (each texel its block's mean colour and
+water; `TERRAIN_LEVELS` `splatScale`), and a tile's two levels hold one
+class raster where they name one file (phones) and one NDVI texture,
+through `shared-rasters.ts` like the sky view. The dressing plugin reports
+a terrain level's raster bytes and its dressing's geometry through
+`calculateBytesUsed` and recounts the tile when the dressing lands.
+Demolish writes the live triangles into the index it has (the tail
+degenerate), so no buffer waits for the GC on either renderer. On the node
+path the terrain's detail passes are an ordered table (`terrain-node.ts`
+`GROUND_PASSES`), and the crowns are one material per scene
+(`vegetation-node.ts`). Still open: the baked nodes' material spec rows
+and item 18 (moot where fog is `scene.fogNode`, open on the WebGL path);
+the NDVI decode is not yet shared with the crown sampler.
+
 ### Data → scene: plans 024–035 (planned 2026-09-25)
 
 A batch of features derived from OSM, the DGM and the laser scan, each its

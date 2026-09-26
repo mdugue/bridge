@@ -49,14 +49,21 @@ export interface TerrainLevel {
   n: number;
   /** land-cover raster edge the level samples on desktops (phones: ≤ 2048) */
   raster: number;
+  /**
+   * Class texels per texel of the colour splat the viewer paints for the
+   * level (landcover-splat.ts). The coarse level shows from ≈1.2 km out,
+   * where a 2 m texel is still finer than a pixel: painting it at half the
+   * class raster's edge keeps a quarter of the texture resident.
+   */
+  splatScale: number;
 }
 
 /** Fine (0) and coarse (1) terrain. The fine level is a TIN over the native
  *  DGM (`TerrainExtras.tin`); its `n` is the grid it falls back to when the
  *  DGM has holes. */
 export const TERRAIN_LEVELS: Record<0 | 1, TerrainLevel> = {
-  0: { n: 1024, raster: 4096 },
-  1: { n: 512, raster: 2048 },
+  0: { n: 1024, raster: 4096, splatScale: 1 },
+  1: { n: 512, raster: 2048, splatScale: 2 },
 };
 
 /**

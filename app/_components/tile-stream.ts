@@ -58,8 +58,11 @@ import { buildRail } from "./rail-layer";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
+  type ClassRaster,
   dressTerrain,
   type GroundUniforms,
+  loadNdviTexture,
+  loadSplatTexture,
   type TerrainLayer,
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
@@ -67,7 +70,7 @@ import { dressKerbs } from "./kerb-layer";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
-import { disposeObject3D } from "./three-utils";
+import { disposeObject3D, estimateGeometryBytes } from "./three-utils";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -164,6 +167,8 @@ export interface TileStream {
 interface Dressed {
   /** aborts the dressing's fetches when the tile leaves before it lands */
   aborter?: AbortController;
+  /** the dressing's geometry bytes, once it has landed (calculateBytesUsed) */
+  dressingBytes?: number;
   city?: CityLayer;
   dressing?: TileDressing;
   /** the shared sky-view raster the city holds (its URL) */
@@ -630,6 +635,19 @@ export class DressingPlugin {
     (url) => loadHorizonTexture(url),
     (texture) => texture.dispose()
   );
+  /** the class rasters a tile's two levels share where they name one file */
+  readonly classes: SharedRasters<ClassRaster> = createSharedRasters(
+    (url) => loadSplatTexture(url),
+    (raster) => raster.texture.dispose()
+  );
+  /** the NDVI rasters a tile's two terrain levels share */
+  readonly ndvi: SharedRasters<Texture> = createSharedRasters(
+    (url) => loadNdviTexture(url),
+    (texture) => texture.dispose()
+  );
+  /** the tile a content root belongs to (for recalculateBytesUsed) */
+  private readonly tileOf = new WeakMap<Object3D, object>();
+  private tiles: { recalculateBytesUsed: (tile: object) => void } | null = null;
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -650,6 +668,23 @@ export class DressingPlugin {
       });
   }
 
+  init(tiles: { recalculateBytesUsed: (tile: object) => void }): void {
+    this.tiles = tiles;
+  }
+
+  /**
+   * What a tile holds beyond the renderer's own estimate (its glTF geometry
+   * and the textures on standard material slots): the terrain's rasters,
+   * bound as shader uniforms, and the dressing built after the tile landed
+   * (reported again once it has — queueDressing). The tile cache's byte
+   * budget (scene-profile.ts `tileCacheBytesFor`) then bounds what a tile
+   * really keeps resident.
+   */
+  calculateBytesUsed(_tile: object, scene: Object3D | null): number {
+    const entry = scene ? this.dressed.get(scene) : undefined;
+    return (entry?.terrain?.textureBytes ?? 0) + (entry?.dressingBytes ?? 0);
+  }
+
   private url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
@@ -662,6 +697,7 @@ export class DressingPlugin {
       return;
     }
     this.sceneOf.set(tile, scene);
+    this.tileOf.set(scene, tile);
     if (extras.kind === "city") {
       this.dressCity(scene, mesh, extras);
     } else if (extras.kind === "terrain") {
@@ -737,6 +773,8 @@ export class DressingPlugin {
       sunDirection: this.ctx.sunDirection,
       skyView: this.skyView,
       horizon: this.horizon,
+      classes: this.classes,
+      ndvi: this.ndvi,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
@@ -823,6 +861,8 @@ export class DressingPlugin {
     }
     this.skyView.clear();
     this.horizon.clear();
+    this.classes.clear();
+    this.ndvi.clear();
   }
 
   private queueDressing(
@@ -874,6 +914,14 @@ export class DressingPlugin {
         // hangs under it and leaves with its tile.
         scene.add(...parts);
         entry.dressing = dressing;
+        entry.dressingBytes = parts.reduce(
+          (sum, part) => sum + estimateGeometryBytes(part),
+          0
+        );
+        const tile = this.tileOf.get(scene);
+        if (tile) {
+          this.tiles?.recalculateBytesUsed(tile);
+        }
         this.stream.dressings.add(dressing);
         catchUp(dressing, this.ctx);
       })

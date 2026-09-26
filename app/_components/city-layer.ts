@@ -1,5 +1,4 @@
 import {
-  BufferAttribute,
   type Camera,
   DataTexture,
   FloatType,
@@ -154,12 +153,20 @@ export function dressCity(
     if (!index) {
       return;
     }
-    geometry.setIndex(
-      new BufferAttribute(
-        liveTriangles(index.array, featureIds.array, (i) => alive[i] === 1),
-        1
-      )
+    // In place: the index only ever shrinks, so the live triangles fit its
+    // own buffer and the rest becomes degenerate (vertex 0 thrice: nothing
+    // drawn, nothing hit). A new attribute per demolish left the old GPU
+    // buffer to the garbage collector on either renderer — three frees only
+    // a geometry's current index.
+    const live = liveTriangles(
+      index.array,
+      featureIds.array,
+      (i) => alive[i] === 1
     );
+    const array = index.array as Uint16Array | Uint32Array;
+    array.set(live);
+    array.fill(0, live.length);
+    index.needsUpdate = true;
     geometry.disposeBoundsTree();
     // BVHs make per-frame collision rays (and demolish picks) cheap.
     geometry.computeBoundsTree();
