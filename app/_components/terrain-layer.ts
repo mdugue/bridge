@@ -51,7 +51,6 @@ import { MARKINGS_DECL, ROAD_MARKINGS } from "./road-markings";
 import type { SharedRasters } from "./shared-rasters";
 import {
   lightsWithFarShadow,
-  loadHorizonTexture,
   SKY_VIEW_AO,
   skyLightBody,
   skyLightDecl,
@@ -110,6 +109,9 @@ export interface TerrainOptions {
   sunDirection?: Vector3;
   /** the sky-view rasters, shared with the tile's buildings (tile-stream.ts) */
   skyView?: SharedRasters<Texture>;
+  /** the horizon rasters, shared by a tile's two terrain levels (both name
+   *  the same file) */
+  horizon?: SharedRasters<Texture>;
 }
 
 /**
@@ -884,7 +886,8 @@ interface DetailRasters {
   edgesTexture: Texture | null;
   markings: { raster: Texture; table: DataTexture } | null;
   colonies: { rect: [number, number, number, number]; texture: Texture } | null;
-  horizonTexture: Texture | null;
+  /** the shared horizon's URL while this tile holds it */
+  horizon: { texture: Texture | null; url: string } | null;
   /** the shared sky view's URL while this tile holds it */
   svf: { texture: Texture | null; url: string } | null;
   ndviTexture: Texture | null;
@@ -899,7 +902,7 @@ const NO_DETAIL: DetailRasters = {
   sport: null,
   markings: null,
   colonies: null,
-  horizonTexture: null,
+  horizon: null,
   svf: null,
 };
 
@@ -913,15 +916,13 @@ function splatDetail(d: DetailRasters): Partial<SplatLayer> {
     markings: d.markings ?? undefined,
     colonies: d.colonies ?? undefined,
     svfTexture: d.svf?.texture ?? undefined,
-    horizonTexture: d.horizonTexture ?? undefined,
+    horizonTexture: d.horizon?.texture ?? undefined,
   };
 }
 
-/** Frees a tile's rasters; the shared sky view is released, not freed. */
-function disposeDetail(
-  d: DetailRasters,
-  skyView: SharedRasters<Texture> | undefined
-): void {
+/** Frees a tile's rasters; the shared sky view and horizon are released,
+ *  not freed. */
+function disposeDetail(d: DetailRasters, opts: TerrainOptions): void {
   for (const texture of [
     d.ndviTexture,
     d.surfaceTexture,
@@ -931,12 +932,14 @@ function disposeDetail(
     d.markings?.raster,
     d.markings?.table,
     d.colonies?.texture,
-    d.horizonTexture,
   ]) {
     texture?.dispose();
   }
+  if (d.horizon) {
+    opts.horizon?.release(d.horizon.url);
+  }
   if (d.svf) {
-    skyView?.release(d.svf.url);
+    opts.skyView?.release(d.svf.url);
   }
 }
 
@@ -983,11 +986,13 @@ async function loadDetailRasters(
   const colonyTexture = colonies
     ? await loadColonyTexture(colonies, opts.signal)
     : null;
-  const horizon = url(extras.horizon);
-  const horizonTexture = horizon
-    ? await loadHorizonTexture(horizon, opts.signal)
-    : null;
-  // Last: nothing after it can throw, so the reference is always released.
+  // Last, the shared rasters: an acquire never throws and nothing after it
+  // can, so the references are always released.
+  const horizonUrl = url(extras.horizon);
+  const horizon =
+    horizonUrl && opts.horizon
+      ? { url: horizonUrl, texture: await opts.horizon.acquire(horizonUrl) }
+      : null;
   const svfUrl = url(extras.svf);
   const svf =
     svfUrl && opts.skyView
@@ -1002,7 +1007,7 @@ async function loadDetailRasters(
     colonies: colonyTexture
       ? { texture: colonyTexture, rect: colonyCropUv(extras.cultivatedCrop) }
       : null,
-    horizonTexture,
+    horizon,
     svf,
   };
 }
@@ -1100,7 +1105,7 @@ export async function dressTerrain(
       // Shares the tile's positions; only its own index (and normals) go.
       waterGeometry.dispose();
       classRaster?.texture.dispose();
-      disposeDetail(detail, opts.skyView);
+      disposeDetail(detail, opts);
       painted?.dispose();
     },
   };

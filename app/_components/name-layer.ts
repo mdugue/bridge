@@ -35,6 +35,9 @@ import { trackTexture } from "./three-utils";
  * names fade out again above 200–250 m, leaving the main roads — the
  * conservative end of the plan's aliasing STOP, taken without a GPU plate.
  * An atlas that would outgrow 2048 × 2048 drops the minor roads first.
+ * Phones (`lowRasters`) letter at half the pixels — a 1024-wide atlas, a
+ * quarter of the memory, the same metres on the ground. The canvas is
+ * emptied once the GPU has the atlas.
  *
  * Built per fine terrain tile; `dispose` frees the atlas texture, which
  * disposeObject3D does not reach.
@@ -44,6 +47,8 @@ export interface NameContext extends GroundContext {
   /** a canvas to draw the atlas on (tests pass a stand-in) */
   canvas?: (width: number, height: number) => AtlasCanvas;
   heightFog?: HeightFogUniforms;
+  /** phones: the atlas at half the pixels (NAME_ATLAS_LOW) */
+  lowRasters?: boolean;
 }
 
 /** What the layer needs of a canvas: HTMLCanvasElement or OffscreenCanvas. */
@@ -73,12 +78,32 @@ export interface NameLayer {
   ways: NamedWay[];
 }
 
-const ATLAS_PX = 2048;
-const FONT_PX = 32;
-const ROW_PX = 44;
-/** clear space either side of a name in its slot (px) */
-const PAD_PX = 8;
-const HALO_PX = 6;
+/** The atlas's pixel sizes: its width (and most height), the letters, a
+ *  row, the clear space either side of a name in its slot, the halo. A
+ *  label's metres are its pixels over `font`, so a scale changes none. */
+interface AtlasScale {
+  atlas: number;
+  font: number;
+  halo: number;
+  pad: number;
+  row: number;
+}
+
+const NAME_ATLAS: AtlasScale = {
+  atlas: 2048,
+  font: 32,
+  row: 44,
+  pad: 8,
+  halo: 6,
+};
+/** Phones: every size halved — a quarter of the atlas's memory. */
+export const NAME_ATLAS_LOW: AtlasScale = {
+  atlas: 1024,
+  font: 16,
+  row: 22,
+  pad: 4,
+  halo: 3,
+};
 const INK = "rgb(122, 130, 145)"; // the contour lines' ink, a shade deeper
 const HALO = "rgba(246, 242, 234, 0.75)";
 const SAMPLE_M = 4;
@@ -95,14 +120,14 @@ function defaultCanvas(width: number, height: number): AtlasCanvas {
 }
 
 /** The page's own sans (next/font's Inter, via its CSS variable). */
-async function labelFont(): Promise<string> {
+async function labelFont(px: number): Promise<string> {
   const family =
     typeof document === "undefined"
       ? ""
       : getComputedStyle(document.documentElement)
           .getPropertyValue("--font-sans")
           .trim();
-  const font = `600 ${FONT_PX}px ${family || "system-ui"}, sans-serif`;
+  const font = `600 ${px}px ${family || "system-ui"}, sans-serif`;
   if (typeof document !== "undefined") {
     await document.fonts?.load(font).catch(() => []);
   }
@@ -136,25 +161,26 @@ function labelsOf(features: NameFeature[]): Label[] {
 /** Packs the labels, dropping the minor roads' when the atlas overflows. */
 function fit(
   labels: Label[],
-  widths: number[]
+  widths: number[],
+  px: AtlasScale
 ): { height: number; labels: Label[]; slots: AtlasSlot[] } {
   let keep = labels.map((_, i) => i);
-  let packed = packAtlas(widths, ROW_PX, ATLAS_PX);
-  if (packed.height > ATLAS_PX) {
+  let packed = packAtlas(widths, px.row, px.atlas);
+  if (packed.height > px.atlas) {
     keep = keep.filter((i) => labels[i].cls !== "minor");
     packed = packAtlas(
       keep.map((i) => widths[i]),
-      ROW_PX,
-      ATLAS_PX
+      px.row,
+      px.atlas
     );
   }
   const within = packed.slots
     .map((slot, j) => ({ slot, i: keep[j] }))
-    .filter(({ slot }) => slot.y + slot.h <= ATLAS_PX);
+    .filter(({ slot }) => slot.y + slot.h <= px.atlas);
   return {
     labels: within.map(({ i }) => labels[i]),
     slots: within.map(({ slot }) => slot),
-    height: Math.min(packed.height, ATLAS_PX),
+    height: Math.min(packed.height, px.atlas),
   };
 }
 
@@ -164,13 +190,15 @@ function addRibbon(
   out: { minor: number[]; pos: number[]; uv: number[]; index: number[] },
   label: Label,
   slot: AtlasSlot,
-  atlasH: number,
+  atlas: { height: number; px: AtlasScale },
   ctx: NameContext
 ): void {
+  const { px } = atlas;
+  const atlasH = atlas.height;
   const letter = LETTER_M[label.cls];
-  const lengthM = ((slot.w - 2 * PAD_PX) * letter) / FONT_PX;
-  const padM = (PAD_PX * letter) / FONT_PX;
-  const heightM = (ROW_PX * letter) / FONT_PX;
+  const lengthM = ((slot.w - 2 * px.pad) * letter) / px.font;
+  const padM = (px.pad * letter) / px.font;
+  const heightM = (px.row * letter) / px.font;
   const { pts, s } = labelPath(label.line, lengthM + 2 * padM, SAMPLE_M);
   const total = s.at(-1) ?? 0;
   if (pts.length < 2 || total <= 0) {
@@ -186,7 +214,7 @@ function addRibbon(
     const t = Math.hypot(tx, ty) || 1;
     const lx = (-ty / t) * (heightM / 2);
     const ly = (tx / t) * (heightM / 2);
-    const u = (slot.x + (s[i] / total) * slot.w) / ATLAS_PX;
+    const u = (slot.x + (s[i] / total) * slot.w) / px.atlas;
     const base = out.pos.length / 3;
     for (const [side, v] of [
       [1, vTop],
@@ -245,7 +273,8 @@ function drawAtlas(
   canvas: AtlasCanvas,
   font: string,
   labels: Label[],
-  slots: AtlasSlot[]
+  slots: AtlasSlot[],
+  px: AtlasScale
 ): void {
   const g = canvas.getContext("2d");
   if (!g) {
@@ -254,13 +283,13 @@ function drawAtlas(
   g.font = font;
   g.textBaseline = "middle";
   g.lineJoin = "round";
-  g.lineWidth = HALO_PX;
+  g.lineWidth = px.halo;
   g.strokeStyle = HALO;
   g.fillStyle = INK;
   for (let i = 0; i < labels.length; i++) {
     const { x, y, h } = slots[i];
-    g.strokeText(labels[i].name, x + PAD_PX, y + h / 2);
-    g.fillText(labels[i].name, x + PAD_PX, y + h / 2);
+    g.strokeText(labels[i].name, x + px.pad, y + h / 2);
+    g.fillText(labels[i].name, x + px.pad, y + h / 2);
   }
 }
 
@@ -282,18 +311,27 @@ export async function buildNames(
   if (all.length === 0 || !probe) {
     return { group, ways, dispose: () => undefined };
   }
-  const font = await labelFont();
+  const px = ctx.lowRasters ? NAME_ATLAS_LOW : NAME_ATLAS;
+  const font = await labelFont(px.font);
   probe.font = font;
-  const widths = all.map((l) => probe.measureText(l.name).width + 2 * PAD_PX);
-  const { labels, slots, height } = fit(all, widths);
+  const widths = all.map((l) => probe.measureText(l.name).width + 2 * px.pad);
+  const { labels, slots, height } = fit(all, widths, px);
   const atlasH = atlasHeight(height);
-  const canvas = makeCanvas(ATLAS_PX, atlasH);
-  drawAtlas(canvas, font, labels, slots);
+  const canvas = makeCanvas(px.atlas, atlasH);
+  drawAtlas(canvas, font, labels, slots, px);
   const texture = new CanvasTexture(canvas as HTMLCanvasElement);
   texture.colorSpace = SRGBColorSpace;
   texture.anisotropy = 8;
+  // Once the GPU has it the canvas is dead weight (up to 2048² × 4 bytes
+  // of backing store): emptied, as the rasters drop their CPU copy
+  // (sky-light.ts releaseAfterUpload).
+  texture.onUpdate = () => {
+    canvas.width = 0;
+    canvas.height = 0;
+    texture.onUpdate = null;
+  };
   // RGBA8 with its mip chain
-  trackTexture(texture, Math.round(ATLAS_PX * atlasH * 4 * (4 / 3)));
+  trackTexture(texture, Math.round(px.atlas * atlasH * 4 * (4 / 3)));
   const out = { pos: [], uv: [], minor: [], index: [] } as {
     index: number[];
     minor: number[];
@@ -301,7 +339,7 @@ export async function buildNames(
     uv: number[];
   };
   for (let i = 0; i < labels.length; i++) {
-    addRibbon(out, labels[i], slots[i], atlasH, ctx);
+    addRibbon(out, labels[i], slots[i], { height: atlasH, px }, ctx);
   }
   if (out.index.length > 0) {
     const geo = new BufferGeometry();

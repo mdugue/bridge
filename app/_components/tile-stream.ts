@@ -62,7 +62,7 @@ import {
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
-import { loadSkyViewTexture } from "./sky-light";
+import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
 import { disposeObject3D } from "./three-utils";
 import { buildTram } from "./tram-layer";
@@ -537,7 +537,11 @@ async function buildDressing(
   // seam); its atlas is drawn once the page's font is ready.
   const names =
     streetNames.length > 0
-      ? await buildNames(streetNames, { ...ground, heightFog: ctx.heightFog })
+      ? await buildNames(streetNames, {
+          ...ground,
+          heightFog: ctx.heightFog,
+          lowRasters: ctx.lowRasters,
+        })
       : undefined;
   return {
     tile,
@@ -577,6 +581,11 @@ export class DressingPlugin {
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
     (url) => loadSkyViewTexture(url),
+    (texture) => texture.dispose()
+  );
+  /** the horizon rasters a tile's two terrain levels share */
+  readonly horizon: SharedRasters<Texture> = createSharedRasters(
+    (url) => loadHorizonTexture(url),
     (texture) => texture.dispose()
   );
 
@@ -688,6 +697,7 @@ export class DressingPlugin {
       renderer: this.ctx.renderer,
       sunDirection: this.ctx.sunDirection,
       skyView: this.skyView,
+      horizon: this.horizon,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls and kerbs: only their materials
@@ -763,6 +773,7 @@ export class DressingPlugin {
       this.release(scene);
     }
     this.skyView.clear();
+    this.horizon.clear();
   }
 
   private queueDressing(

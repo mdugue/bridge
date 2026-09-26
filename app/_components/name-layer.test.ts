@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
-import type { Mesh } from "three";
+import type { CanvasTexture, Mesh, MeshBasicMaterial } from "three";
 import type { NameFeature } from "@/lib/city/features";
 import { type AtlasCanvas, type AtlasContext, buildNames } from "./name-layer";
 
-/** A canvas stand-in: 20 px per character, records what is drawn. */
-function stubCanvas(drawn: string[]) {
+/** A canvas stand-in: 20 px per character, records what is drawn (and,
+ *  given `made`, the canvases made). */
+function stubCanvas(drawn: string[], made: AtlasCanvas[] = []) {
   return (width: number, height: number): AtlasCanvas => {
     const g: AtlasContext = {
       fillStyle: "",
@@ -17,7 +18,9 @@ function stubCanvas(drawn: string[]) {
       fillText: (text) => drawn.push(text),
       strokeText: () => undefined,
     };
-    return { width, height, getContext: () => g };
+    const canvas = { width, height, getContext: () => g };
+    made.push(canvas);
+    return canvas;
   };
 }
 
@@ -62,4 +65,32 @@ test("no labels, no lettering", async () => {
     canvas: stubCanvas([]),
   });
   expect(layer.group.children).toHaveLength(0);
+});
+
+test("a phone letters at half the pixels; the canvas empties once uploaded", async () => {
+  const made: AtlasCanvas[] = [];
+  const layer = await buildNames(
+    [
+      {
+        geometry: line(0),
+        properties: { k: "label", name: "Königstraße", c: "main" },
+      },
+    ],
+    {
+      offset: { cx: 0, cy: 0 },
+      heightAt: () => 110,
+      canvas: stubCanvas([], made),
+      lowRasters: true,
+    }
+  );
+  const atlas = made.at(-1);
+  expect(atlas?.width).toBe(1024);
+  const [mesh] = layer.group.children as Mesh[];
+  const texture = (mesh.material as MeshBasicMaterial).map as CanvasTexture;
+  // three calls onUpdate once the texture is on the GPU
+  texture.onUpdate?.(texture);
+  expect(atlas?.width).toBe(0);
+  expect(atlas?.height).toBe(0);
+  expect(texture.onUpdate).toBeNull();
+  layer.dispose();
 });
