@@ -1,7 +1,9 @@
 """Plan 032: the street names' labels and named ways on a synthetic tile."""
 
+import json
+
 import shapely
-from synthetic import local, osm_tile, read, way
+from synthetic import X0, Y0, local, osm_tile, read, way
 
 
 def _streets(tmp_path, monkeypatch):
@@ -70,3 +72,31 @@ def test_a_window_must_turn_less_than_twenty_degrees():
     assert anchors(corner, "Winkelgasse") == []
     straight = shapely.LineString([(0, 0), (1000, 0)])
     assert len(anchors(straight, "Lange Straße")) == 2  # one per 450 m
+
+
+def test_a_name_across_a_seam_is_windowed_alike_on_both_tiles(tmp_path, monkeypatch):
+    """Both tiles merge the whole street (not their clipped view of it), so
+    they find the same window and only the owner of its middle letters it."""
+    from bake import names
+    from bake.common import Tile
+
+    nodes = {1: (-100, 100, ""), 2: (60, 100, ""), 3: (520, 100, "")}
+    ways = way(1, [1, 2], {"highway": "residential", "name": "Nahtstraße"}) + way(
+        2, [2, 3], {"highway": "residential", "name": "Nahtstraße"}
+    )
+    west = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    east = Tile("u", (X0 + 200, Y0, X0 + 400, Y0 + 200), 25833, west.raw, west.data)
+    names.run(west)
+    names.run(east)
+    mids = []
+    for tile_id in ("t", "u"):
+        path = west.data / "dlm" / f"names_{tile_id}.geojson"
+        for f in json.loads(path.read_text())["features"]:
+            if f["properties"]["k"] == "label":
+                line = shapely.LineString(f["geometry"]["coordinates"])
+                mids.append((tile_id, line.interpolate(0.5, normalized=True)))
+    assert len(mids) == 1
+    tile_id, mid = mids[0]
+    # the whole 620 m street's one window sits at its middle, x ≈ 210 m
+    assert tile_id == "u"
+    assert abs(mid.x - X0 - 210) < 5
