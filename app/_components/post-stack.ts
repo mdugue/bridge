@@ -303,7 +303,11 @@ export function createPostStack(
    * One drawable, shown and unculled for the call: `compileAsync` walks a
    * tree the way a frame does, skipping what is hidden or outside the view,
    * and whatever the camera did not see yet would otherwise build inside
-   * the frame that first shows it.
+   * the frame that first shows it. One call per drawable on purpose: a
+   * call builds its node graphs (TSL → WGSL) synchronously, and the await
+   * between calls is where a frame gets in. Each call also walks the
+   * scene for its lights — cheap next to one node build, and the price of
+   * never blocking a frame for a whole tile.
    */
   const compileOne = (object: Drawable): Promise<void> => {
     const previous = renderer.getRenderTarget();

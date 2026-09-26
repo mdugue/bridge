@@ -43,6 +43,24 @@ test("two sets can share one matrix buffer (one upload)", () => {
   expect(b.getMatrixAt(0, new Matrix4()).elements[12]).toBe(1);
 });
 
+test("a set born on another's matrices shares them", () => {
+  const a = set();
+  const b = new Instances(
+    new BoxGeometry(),
+    new MeshBasicNodeMaterial(),
+    3,
+    a.instanceMatrix
+  );
+  expect(b.instanceMatrix).toBe(a.instanceMatrix);
+  a.setMatrixAt(2, new Matrix4().makeTranslation(4, 5, 6));
+  expect(b.getMatrixAt(2, new Matrix4()).elements[13]).toBe(5);
+});
+
+test("a fresh set starts on identity matrices", () => {
+  const s = set(2);
+  expect(s.getMatrixAt(1, new Matrix4()).equals(new Matrix4())).toBe(true);
+});
+
 test("the bounding sphere covers every drawn instance", () => {
   const s = set(2);
   s.setMatrixAt(0, new Matrix4().makeTranslation(-100, 0, 0));

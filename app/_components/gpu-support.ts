@@ -21,6 +21,18 @@ export function hasGpu(): boolean {
 }
 
 /**
+ * The sentence for a browser that renders neither WebGPU nor WebGL2 — the
+ * preflight's, and the renderer's when its `init()` fails after all: an
+ * advertised `navigator.gpu` without an adapter (hardware acceleration
+ * off, a blocklisted GPU) passes the preflight, and only the renderer
+ * finds out that WebGL2 is missing too.
+ */
+export const NO_GPU_MESSAGE =
+  "Dieser Viewer braucht WebGPU oder WebGL2, das dieser Browser oder " +
+  "dieses Gerät nicht bereitstellt. Bitte einen aktuellen Desktop- oder " +
+  "Mobil-Browser mit aktivierter Hardwarebeschleunigung verwenden.";
+
+/**
  * What this browser lacks for the viewer, as the sentence the HUD shows, or
  * null. WebGPU (or WebGL2) renders; DecompressionStream inflates the
  * pre-gzipped tile content (tile-stream.ts) — without it every tile would
@@ -28,11 +40,7 @@ export function hasGpu(): boolean {
  */
 export function missingPrerequisite(): string | null {
   if (!hasGpu()) {
-    return (
-      "Dieser Viewer braucht WebGPU oder WebGL2, das dieser Browser oder " +
-      "dieses Gerät nicht bereitstellt. Bitte einen aktuellen Desktop- oder " +
-      "Mobil-Browser mit aktivierter Hardwarebeschleunigung verwenden."
-    );
+    return NO_GPU_MESSAGE;
   }
   if (typeof DecompressionStream === "undefined") {
     return (

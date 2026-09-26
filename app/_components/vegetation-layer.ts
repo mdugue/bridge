@@ -945,36 +945,40 @@ function buildTreeCell(
 } {
   const crownMat = crownMats.leafy;
   const { trees, extras } = cell;
-  const trunks = new Instances(
-    geos.trunk,
-    trunkMat,
-    trees.length + extras.length
-  );
-  trunks.castShadow = true;
   const crowned = extras.filter((e) => e.crown);
   if (trees.length + crowned.length === 0) {
+    const trunks = new Instances(geos.trunk, trunkMat, extras.length);
+    trunks.castShadow = true;
     extras.forEach((e, i) => trunks.setMatrixAt(i, e.trunk));
     finishInstances(trunks);
     return { chunk: null, meshes: [trunks], season: null };
   }
   const mid = crownMesh(geos.mid, crownMat, trees, crowned, "cheap");
   let rich: Instances;
+  let trunks: Instances;
   if (extras.length === 0) {
-    rich = new Instances(geos.rich, crownMat, trees.length);
+    // Born on the mid crowns' matrices (no buffer of their own to drop).
+    trunks = new Instances(
+      geos.trunk,
+      trunkMat,
+      trees.length,
+      mid.instanceMatrix
+    );
+    rich = new Instances(geos.rich, crownMat, trees.length, mid.instanceMatrix);
     rich.castShadow = true;
     rich.receiveShadow = true;
-    trunks.instanceMatrix = mid.instanceMatrix;
-    rich.instanceMatrix = mid.instanceMatrix;
     rich.instanceTints = mid.instanceTints;
     // Each set fits its own geometry into the shared matrices.
     trunks.computeBoundingSphere();
     rich.computeBoundingSphere();
   } else {
+    trunks = new Instances(geos.trunk, trunkMat, trees.length + extras.length);
     rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
     writePlacements(trunks, trees);
     extras.forEach((e, i) => trunks.setMatrixAt(trees.length + i, e.trunk));
     finishInstances(trunks);
   }
+  trunks.castShadow = true;
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
   const farTrees = trees.filter((_, i) => keepInFarTier(i, trees.length));

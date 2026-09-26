@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import {
   BoxGeometry,
   type BufferGeometry,
-  InstancedMesh,
   type Material,
   Mesh,
   MeshBasicNodeMaterial,
@@ -16,6 +15,7 @@ import {
   sceneShared,
   textureBytes,
 } from "./three-utils";
+import { Instances } from "./instancing";
 
 /** Counts three's "dispose" events, which `.dispose()` dispatches. */
 function countDisposals(resource: BufferGeometry | Material): () => number {
@@ -63,18 +63,14 @@ test("two meshes sharing one material dispose without throwing", () => {
   expect(calls()).toBeGreaterThanOrEqual(1);
 });
 
-test("an InstancedMesh gets its own dispose event, for its instance buffers", () => {
-  const mesh = new InstancedMesh(
-    new BoxGeometry(),
-    new MeshBasicNodeMaterial(),
-    4
-  );
+test("an instanced set's buffers go with its geometry view", () => {
+  const set = new Instances(new BoxGeometry(), new MeshBasicNodeMaterial(), 4);
   let calls = 0;
-  mesh.addEventListener("dispose", () => {
+  set.geometry.addEventListener("dispose", () => {
     calls += 1;
   });
   const group = new Object3D();
-  group.add(mesh);
+  group.add(set);
 
   disposeObject3D(group);
 

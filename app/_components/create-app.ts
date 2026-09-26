@@ -40,6 +40,7 @@ import { createCityCollider } from "./collision";
 import { createSeasonClock } from "./crown-season";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
+import { NO_GPU_MESSAGE } from "./gpu-support";
 import { createSceneFog, installSceneFog } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
@@ -294,7 +295,15 @@ async function createRenderer(
     powerPreference: "high-performance",
     forceWebGL: budget.forceWebGL,
   });
-  await renderer.init();
+  try {
+    await renderer.init();
+  } catch (error) {
+    // No adapter and no WebGL2 either (the preflight only sees that
+    // `navigator.gpu` exists): free what init made, and say why in the
+    // HUD's words rather than three's raw backend error (kept as `cause`).
+    renderer.dispose().catch(() => undefined);
+    throw new Error(NO_GPU_MESSAGE, { cause: error });
+  }
   // The `lite` profile renders at half linear resolution (a quarter of the
   // pixels) and lets the browser upscale. The canvas fills the viewport and
   // the HUD needs a desktop-width window to lay out, so this — not the
@@ -306,6 +315,9 @@ async function createRenderer(
   );
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
+  // getRenderInfo reads the last rendered frame: the loop resets the
+  // counters itself, right before it draws (a held frame keeps them).
+  renderer.info.autoReset = false;
   // PCFShadowMap with a raised `shadow.radius` is soft (a Vogel disk, see
   // sun-rig.ts), and VSM paints a grid on lit faces here: tight contact +
   // artefact-free surfaces. Its only weakness is the texel staircase on
@@ -1079,6 +1091,9 @@ async function bootApp(
     }
     // Read the flag BEFORE the render: three clears it once the map is drawn.
     const shadowRendered = sunRig.shadowPending();
+    // The counters cover this frame's passes only (autoReset is off: the
+    // loop's own reset also ran on held frames, which read back as zero).
+    renderer.info.reset();
     postStack.render();
     tickPocFrame(shadowRendered);
   });

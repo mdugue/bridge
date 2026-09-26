@@ -84,6 +84,8 @@ function placeholderClass(): DataTexture {
 interface SplatPass {
   classNode: ReturnType<typeof texture>;
   material: NodeMaterial;
+  /** the class texture bound between paints */
+  placeholder: DataTexture;
   quad: QuadMesh;
 }
 
@@ -91,7 +93,8 @@ interface SplatPass {
 const passes = new Map<string, SplatPass>();
 
 function buildPass(key: string, width: number, height: number): NodeMaterial {
-  const classNode = texture(placeholderClass());
+  const placeholder = placeholderClass();
+  const classNode = texture(placeholder);
   const palette = uniformArray(paletteVectors(), "vec3" as const);
   // Texel centres, clamped to the raster's edge texels before truncating
   // to the texel index.
@@ -123,7 +126,20 @@ function buildPass(key: string, width: number, height: number): NodeMaterial {
   material.depthTest = false;
   material.depthWrite = false;
   material.fog = false;
-  passes.set(key, { classNode, material, quad: new QuadMesh(material) });
+  passes.set(key, {
+    classNode,
+    material,
+    placeholder,
+    quad: new QuadMesh(material),
+  });
+  // Freed with the last app (sceneMaterial): the pass and its stand-in go
+  // with the material, so nothing of the old renderer's lingers here.
+  material.addEventListener("dispose", () => {
+    if (passes.get(key)?.material === material) {
+      passes.delete(key);
+    }
+    placeholder.dispose();
+  });
   return material;
 }
 
@@ -173,6 +189,9 @@ export function paintLandcoverSplat(
   renderer.setRenderTarget(target);
   pass.quad.render(renderer);
   renderer.setRenderTarget(previous);
+  // Unbind the tile's raster: the scene-wide pass would otherwise hold the
+  // last tile's class texture until the next tile paints.
+  pass.classNode.value = pass.placeholder;
   trackTexture(target.texture, textureBytes(width, height, 4, true));
   return {
     texture: target.texture,

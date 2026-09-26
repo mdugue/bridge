@@ -1,10 +1,4 @@
-import type {
-  BufferGeometry,
-  InstancedMesh,
-  Material,
-  Object3D,
-  Texture,
-} from "three/webgpu";
+import type { BufferGeometry, Material, Object3D, Texture } from "three/webgpu";
 
 /**
  * Disposes a material unless it is scene-wide (`userData.shared`,
@@ -39,13 +33,10 @@ export function disposeObject3D(root: Object3D): void {
       geometry?: BufferGeometry;
       material?: Material | Material[];
     };
+    // An `Instances` set's matrix and colour buffers are attributes of its
+    // geometry view (instancing.ts), so they go with the geometry.
     resource.geometry?.dispose();
     disposeMaterial(resource.material);
-    // The per-instance matrix/colour buffers are released on the mesh's own
-    // dispose event, not the geometry's.
-    if ((obj as InstancedMesh).isInstancedMesh) {
-      (obj as InstancedMesh).dispose();
-    }
   });
 }
 

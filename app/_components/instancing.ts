@@ -56,8 +56,20 @@ export class Instances<M extends Material = Material> extends Mesh<
   readonly capacity: number;
   #matrices!: InstancedInterleavedBuffer;
   #colours: InstancedBufferAttribute | null = null;
+  /** the base geometry (its sphere is cached there, shared by its views) */
+  readonly #base: BufferGeometry;
 
-  constructor(base: BufferGeometry, material: M, capacity: number) {
+  /**
+   * `matrices`, when given, is a buffer another set owns (at least
+   * `capacity` matrices): the set shares it from the start instead of
+   * allocating its own and dropping it at the first `instanceMatrix =`.
+   */
+  constructor(
+    base: BufferGeometry,
+    material: M,
+    capacity: number,
+    matrices?: InstancedInterleavedBuffer
+  ) {
     const view = new InstancedBufferGeometry();
     view.index = base.index;
     for (const [name, value] of Object.entries(base.attributes)) {
@@ -66,16 +78,21 @@ export class Instances<M extends Material = Material> extends Mesh<
     view.groups = base.groups;
     view.instanceCount = capacity;
     super(view, material);
+    this.#base = base;
     this.capacity = capacity;
-    this.instanceMatrix = new InstancedInterleavedBuffer(
-      new Float32Array(capacity * 16),
-      16,
-      1
-    );
-    const identity = new Matrix4();
-    for (let i = 0; i < capacity; i++) {
-      this.setMatrixAt(i, identity);
+    if (matrices) {
+      this.instanceMatrix = matrices;
+      return;
     }
+    // Every slot starts as the identity: the diagonal of each 4×4.
+    const array = new Float32Array(capacity * 16);
+    for (let i = 0; i < array.length; i += 16) {
+      array[i] = 1;
+      array[i + 5] = 1;
+      array[i + 10] = 1;
+      array[i + 15] = 1;
+    }
+    this.instanceMatrix = new InstancedInterleavedBuffer(array, 16, 1);
   }
 
   /** The instance matrices (16 floats each, column-major). Assigning a
@@ -151,10 +168,13 @@ export class Instances<M extends Material = Material> extends Mesh<
    * whenever the origin is off-screen.
    */
   computeBoundingSphere(): void {
-    const probe = new InstancedBufferGeometry();
-    probe.setAttribute("position", this.geometry.getAttribute("position"));
-    probe.computeBoundingSphere();
-    const base = probe.boundingSphere ?? new Sphere();
+    // The base geometry's own sphere, computed once and cached on it: a
+    // tile's chunks share one crown or trunk geometry, and each of their
+    // sets would otherwise walk every vertex of it again.
+    if (!this.#base.boundingSphere) {
+      this.#base.computeBoundingSphere();
+    }
+    const base = this.#base.boundingSphere ?? new Sphere();
     const box = new Box3();
     const m = new Matrix4();
     const p = new Vector3();

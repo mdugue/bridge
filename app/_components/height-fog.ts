@@ -1,7 +1,8 @@
-import { Color, type Scene, Vector4 } from "three/webgpu";
+import { AdditiveBlending, Color, type Scene, Vector4 } from "three/webgpu";
 import {
   clamp,
   float,
+  Fn,
   fog,
   max,
   min,
@@ -10,8 +11,9 @@ import {
   rangeFogFactor,
   smoothstep,
   uniform,
+  vec3,
 } from "three/tsl";
-import type { Node, UniformNode } from "three/webgpu";
+import type { Node, NodeBuilder, UniformNode } from "three/webgpu";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { F } from "./shader-chunks";
 
@@ -103,9 +105,25 @@ export function fogFactor(f: SceneFog): F {
   return max(pooled, edge.mul(edge).mul(float(3).sub(edge.mul(2))));
 }
 
+/**
+ * The colour a material fogs toward, chosen when its node graph is built:
+ * the fog's, except for additive light (the lamp halos and pools), which
+ * fades to black instead — mixed toward the fog colour, an additive
+ * fragment would *add* fog-coloured light, and in the valley pool the
+ * halos would glow grey rather than drown in the haze.
+ */
+function fogColourFor(f: SceneFog): Node {
+  return Fn((builder: NodeBuilder) =>
+    builder.material?.blending === AdditiveBlending ? vec3(0) : f.color
+  )();
+}
+
 /** Hands the fog to the scene: every fogged material reads it. */
 export function installSceneFog(scene: Scene, f: SceneFog): void {
   // reason: `fogNode` is read by WebGPURenderer but not declared on
   // three's Scene type.
-  (scene as Scene & { fogNode: Node }).fogNode = fog(f.color, fogFactor(f));
+  (scene as Scene & { fogNode: Node }).fogNode = fog(
+    fogColourFor(f),
+    fogFactor(f)
+  );
 }
