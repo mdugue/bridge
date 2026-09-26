@@ -13,7 +13,7 @@
  * so shaders derive data-frame coordinates from world space, never from
  * `position`. Build-time only; no DOM.
  */
-import { Document, NodeIO, type Primitive } from "@gltf-transform/core";
+import { Document, Logger, NodeIO, type Primitive } from "@gltf-transform/core";
 import {
   EXTMeshoptCompression,
   KHRMeshQuantization,
@@ -67,9 +67,14 @@ export interface MeshInput {
   weld?: boolean;
 }
 
+/** Warnings only: at INFO every transform logs a line per glTF ("prune:
+ *  Removed types…"), a hundred lines of noise in each build log. */
+const logger = new Logger(Logger.Verbosity.WARN);
+
 async function io(): Promise<NodeIO> {
   await MeshoptEncoder.ready;
   return new NodeIO()
+    .setLogger(logger)
     .registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
     .registerDependencies({ "meshopt.encoder": MeshoptEncoder });
 }
@@ -119,7 +124,7 @@ function addPrimitive(
 /** The glb for one mesh (plus any `children`, each on its own node),
  *  meshopt-compressed, optionally with a feature table. */
 export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
-  const doc = new Document();
+  const doc = new Document().setLogger(logger);
   doc
     .createExtension(EXTMeshoptCompression)
     .setRequired(true)

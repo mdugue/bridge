@@ -46,7 +46,7 @@ import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
-import { tickPocFrame, updatePocDebug } from "./poc-debug";
+import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
@@ -1013,6 +1013,11 @@ async function bootApp(
   let tickDue = 0;
   let fpsDue = 0;
   renderer.setAnimationLoop((time) => {
+    // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
+    // the clamp below keeps the skipped time from jumping the scene.
+    if (pocFramesHeld()) {
+      return;
+    }
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();
