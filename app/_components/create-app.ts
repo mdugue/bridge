@@ -36,15 +36,19 @@ import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
+import { createSeasonClock, retainCrownDepthMaterial } from "./crown-season";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
+import { setClockTime, setFurnitureNight } from "./furniture-layer";
+import { setMapAltitude } from "./map-overlay";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
-import { createPostStack } from "./post-stack";
+import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
+import { retainOpenSkyTexture } from "./sky-light";
 import {
   aoQualityFor,
   type DeviceTier,
@@ -64,9 +68,15 @@ import {
 import { createTileStream } from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
 import {
+  treesWithin,
   updateVegetationLod,
   type VegetationControl,
 } from "./vegetation-layer";
+import {
+  type Listening,
+  type SoundTile,
+  soundTileOf,
+} from "@/lib/city/sound-entry";
 import { applyCityLook, createStyleResources } from "./visual-style";
 
 /**
@@ -86,10 +96,13 @@ export type LayerName =
   | "lowVegetation"
   | "monuments"
   | "rail"
+  | "riverside"
   | "stairs"
   | "terrain"
+  | "tram"
   | "vegetation"
   | "walls"
+  | "fences"
   | "water";
 
 export interface CityWalkStats {
@@ -243,6 +256,14 @@ export interface CityWalkHandle {
   teleportTo: (epsgX: number, epsgY: number) => void;
   /** the site's extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
+  /**
+   * The hidden soundscape's ear (plan 035): the camera's height above the
+   * ground, the movement mode, the trees within `treeRadius` m and the
+   * clock the crowns sway with. Read at the pose rate while sound plays.
+   */
+  listen: (treeRadius: number) => Listening;
+  /** per tile, the files the soundscape fetches while it plays (URLs) */
+  soundTiles: SoundTile[];
 }
 
 function createRenderer(
@@ -316,18 +337,39 @@ export async function createCityWalkApp(
   // one) frees exactly what a clean dispose would. Without it the post stack's
   // half-float targets, the style materials, the listeners and the per-tile
   // layer controls survived a failed boot.
-  const cleanups: Array<() => void> = [];
+  // The scene-wide shared resources (three-utils.ts `sceneShared`) go with
+  // the last app that holds them: first in, so they unwind last.
+  const cleanups: Array<() => void> = [
+    retainCrownDepthMaterial(),
+    retainOpenSkyTexture(),
+  ];
   try {
     return await bootApp(opts, renderer, scene, cleanups);
   } catch (err) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
-    runCleanups(cleanups);
-    disposeObject3D(scene);
-    renderer.dispose();
-    renderer.domElement.remove();
+    teardown(cleanups, scene, renderer);
     throw err;
   }
+}
+
+/**
+ * The one teardown of an app, clean or failed: its registered cleanups, the
+ * scene's GPU resources, then the renderer and its context. The context is
+ * lost on purpose — the next app (a StrictMode remount, a round trip to
+ * /wissen) makes its own canvas, and a browser holds only a handful of
+ * contexts; whatever still points at this one draws nothing.
+ */
+function teardown(
+  cleanups: Array<() => void>,
+  scene: Scene,
+  renderer: WebGLRenderer
+): void {
+  runCleanups(cleanups);
+  disposeObject3D(scene);
+  renderer.dispose();
+  renderer.forceContextLoss();
+  renderer.domElement.remove();
 }
 
 /** Unwinds registered teardowns in reverse creation order. */
@@ -420,6 +462,10 @@ async function bootApp(
     groundDetail: { value: LOOK_DEFAULTS.groundDetail },
     meadowNdvi: { value: LOOK_DEFAULTS.meadowNdvi },
     urbanGreen: { value: LOOK_DEFAULTS.urbanGreen },
+    skyView: { value: LOOK_DEFAULTS.skyView },
+    horizonShade: { value: LOOK_DEFAULTS.horizonShade },
+    // replaced by the sun rig's own vector once it exists (below)
+    shadowReach: { value: new Vector3() },
   };
   // The lowest real terrain elevation so far (the Elbe surface): the floor
   // the player stands on off every tile and the valley height-fog's start,
@@ -450,6 +496,8 @@ async function bootApp(
     sunDirection
   );
   cleanups.push(sunRig.dispose);
+  // The horizon's near band hands over to the shadow map inside the frustum.
+  ground.shadowReach.value = sunRig.shadowReach;
 
   /**
    * Forces one shadow-map re-render. The map is otherwise only redrawn when the
@@ -476,7 +524,12 @@ async function bootApp(
   }
   cleanups.push(() => lampLights.dispose());
 
-  const styleResources = createStyleResources(heightFog, clayNight);
+  // The facades share the ground's Himmelslicht strength (by reference).
+  const styleResources = createStyleResources(
+    heightFog,
+    clayNight,
+    ground.skyView
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -515,12 +568,25 @@ async function bootApp(
   // Shader compiles go through the post stack (it knows the target the
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
-  let compileWith: ((object: Object3D) => Promise<void>) | null = null;
+  let compileWith: PostStack["compile"] | null = null;
+  // The trees follow the scene's calendar day (crown-season.ts): colour and
+  // leaf cover are rewritten on a change of day, never per frame, and a
+  // crown that changed redraws the shadow map.
+  const seasonClock = createSeasonClock(opts.initialDate, (day) => {
+    let changed = false;
+    for (const d of stream.dressings) {
+      changed = (d.vegetation?.setSeason(day) ?? false) || changed;
+    }
+    if (changed) {
+      invalidateShadows();
+    }
+  });
+  cleanups.push(() => seasonClock.dispose());
   const stream = createTileStream(
     {
-      compile: (object) =>
+      compile: (object, pass) =>
         compileWith
-          ? compileWith(object).catch(() => undefined)
+          ? compileWith(object, pass).catch(() => undefined)
           : Promise.resolve(),
       dressingGate,
       heightAt,
@@ -530,6 +596,7 @@ async function bootApp(
       cacheBytes: tileCacheBytesFor(budget.tier),
       ground,
       night: () => currentNight,
+      season: () => seasonClock.day(),
       offset,
       onChange: () => onChange(),
       renderer,
@@ -596,7 +663,10 @@ async function bootApp(
     }
     lampLights.setNightFactor(state.nightFactor);
     setFountainNight(state.nightFactor);
+    setFurnitureNight(state.nightFactor);
+    setClockTime(date);
     clayNight.value = state.nightFactor;
+    seasonClock.set(date);
     invalidateShadows();
     return state;
   };
@@ -649,6 +719,12 @@ async function bootApp(
     },
     urbanGreen: (strength) => {
       ground.urbanGreen.value = strength;
+    },
+    skyView: (strength) => {
+      ground.skyView.value = strength;
+    },
+    horizonShade: (strength) => {
+      ground.horizonShade.value = strength;
     },
     waterMist: (strength) => {
       for (const t of stream.terrains) {
@@ -747,8 +823,11 @@ async function bootApp(
         monuments: census(dressings.map((d) => d.monuments?.group)),
         furniture: census(dressings.map((d) => d.furniture)),
         rail: census(dressings.map((d) => d.rail)),
+        tram: census(dressings.map((d) => d.tram)),
+        riverside: census(dressings.map((d) => d.riverside)),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
+        fences: census(terrains.map((t) => t.fences)),
       },
     });
   };
@@ -968,7 +1047,10 @@ async function bootApp(
     }
     // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
     camera.getWorldDirection(shadowViewDir);
-    sunRig.follow(camera.position, shadowViewDir, groundUnderCamera());
+    const ground = groundUnderCamera();
+    sunRig.follow(camera.position, shadowViewDir, ground);
+    // The map's own marks (the ferry lines) show from the air.
+    setMapAltitude(camera.position.y - ground);
     // Drift the sky dome's clouds (one uniform write/frame).
     sunRig.setTime(elapsed);
     // Repoint the shared real lamp lights at the nearest heads.
@@ -1158,6 +1240,18 @@ async function bootApp(
     latLng,
     terrainBounds: siteBounds,
     offset,
+    listen: (treeRadius) => ({
+      clock: timer.getElapsed(),
+      heightAboveGround: camera.position.y - groundUnderCamera(),
+      mode: pose.getMode(),
+      trees: treesWithin(
+        [...stream.dressings].flatMap((d) => d.vegetation?.chunks ?? []),
+        camera.position.x,
+        camera.position.z,
+        treeRadius
+      ),
+    }),
+    soundTiles: extras.tiles.map((t) => soundTileOf(t, tilesetUrl)),
     dispose: () => {
       if (disposed) {
         return;
@@ -1166,10 +1260,7 @@ async function bootApp(
       // Same list, same order as a failed boot unwinds: animation loop ->
       // resize observer -> listeners -> touch -> post stack -> stream ->
       // lights -> sun rig.
-      runCleanups(cleanups);
-      disposeObject3D(scene);
-      renderer.dispose();
-      renderer.domElement.remove();
+      teardown(cleanups, scene, renderer);
     },
   };
 }

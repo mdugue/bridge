@@ -12,15 +12,25 @@
  *   bun run fetch --lsc               ... and the laser scan, where the
  *                                     provider's adapter reads one (≈380 MB
  *                                     a tile)
- *   bun run bake --step canopy        one step (landcover, islands, canopy,
- *                                     trees, ndvi, roof-colour, lamps,
- *                                     monuments, furniture, walls, stairs,
- *                                     rail, surface, edges, sport, lowveg)
+ *   bun run bake --step canopy        one step, in the order `all` runs them
+ *                                     (landcover, islands, canopy, trees,
+ *                                     ndvi, roof-colour, osm-buildings, rail,
+ *                                     lamps, monuments, furniture, walls,
+ *                                     stairs, surface, edges, markings,
+ *                                     sport, tram, riverside, skyview,
+ *                                     soundmarks, lowveg, cultivated,
+ *                                     small-buildings)
  *   bun run bake --step lowveg --research   also every hedge/shrub
  *                                     candidate, under the raw folder
  *
- * The site config (sites/) becomes one JSON spec (pipeline/bake/spec.py), so
- * Python never re-derives tiles, extents or products. Then `bun dev` /
+ * The steps run in dependency order: land cover first (the canopy, the
+ * tree cadastre, lamps and street furniture are gated on it); the bridges
+ * (rail) before the furniture and trams; the hedges and scan trees late
+ * (thinned against the canopy and the cadastre), then the orchards and the
+ * small structures. Several steps read the neighbours' files across a seam,
+ * so run a step for every tile. The site config (sites/) becomes one JSON
+ * spec (pipeline/bake/spec.py), so Python never re-derives tiles, extents
+ * or products. Then `bun dev` /
  * `bun run build` turn data/<site>/ into the tileset (prepare-data.ts).
  */
 import { spawnSync } from "node:child_process";

@@ -27,10 +27,10 @@
   sections — the shape differs from what is written below). Open: NAS
   input (phase 3) and OSM rails / bridge decks for providers without a DLM.
 
-## Progress, second round (plan 024)
+## Progress, second round (plan 036)
 
-[Plan 024](./024-many-sites-one-env-var.md) and
-[ADR 0031](../adr/0031-sites-providers-and-per-site-data.md) finished most
+[Plan 036](./036-many-sites-one-env-var.md) and
+[ADR 0032](../adr/0032-sites-providers-and-per-site-data.md) finished most
 of what is open below, in a different shape again: a typed `Provider` per
 Land instead of `Site.ingest`; `bun run fetch` with one adapter per
 provider — Saxony, NRW, Bavaria, Hamburg (tested), Berlin (untested) — that

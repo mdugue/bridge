@@ -159,15 +159,16 @@ def dgm_on(grid, path, epsg):
     return out
 
 
-def building_mask(grid, cityjson):
-    """Every LoD2 surface projected to 2D — the roof outline incl. overhangs."""
+def lod2_rings(cityjson):
+    """Every LoD2 surface ring of a CityJSON file as (n, 3) vertex arrays in
+    the projected CRS (x, y, absolute z) — the one CityJSON walk the bakes
+    share (the building mask here, the roof heights in skyview.py). Missing
+    file → nothing."""
     if not Path(cityjson).exists():
-        return np.zeros((grid.n, grid.n), bool)
+        return
     d = json.loads(Path(cityjson).read_text())
     sc, tr = d["transform"]["scale"], d["transform"]["translate"]
-    V = np.asarray(d["vertices"], dtype=np.float64)
-    X, Y = V[:, 0] * sc[0] + tr[0], V[:, 1] * sc[1] + tr[1]
-    polys = []
+    V = np.asarray(d["vertices"], dtype=np.float64) * sc + tr
 
     def rings(b):
         if b and isinstance(b[0], int):
@@ -180,9 +181,16 @@ def building_mask(grid, cityjson):
         for g in o.get("geometry", []):
             for ring in rings(g["boundaries"]):
                 if len(ring) >= 3:
-                    p = Polygon(list(zip(X[ring], Y[ring], strict=True)))
-                    if p.is_valid and p.area > 0.05:
-                        polys.append(p)
+                    yield V[ring]
+
+
+def building_mask(grid, cityjson):
+    """Every LoD2 surface projected to 2D — the roof outline incl. overhangs."""
+    polys = []
+    for ring in lod2_rings(cityjson):
+        p = Polygon(ring[:, :2])
+        if p.is_valid and p.area > 0.05:
+            polys.append(p)
     return grid.burn(polys)
 
 
@@ -594,7 +602,12 @@ def load_inputs(tile: Tile, grid: Grid) -> dict:
         else np.zeros((grid.n, grid.n), np.float32)
     )
     inputs["bld"] = building_mask(grid, tile.data / "cityjson" / f"lod2_{tile.id}.city.json")
-    walls = _features(dlm("walls").with_suffix(".geojson"))
+    # The walls file also carries fences and gates (walls.py): only walls mask.
+    walls = [
+        f
+        for f in _features(dlm("walls").with_suffix(".geojson"))
+        if f["properties"].get("kind") not in ("fence", "gate")
+    ]
     inputs["walls"] = grid.burn([shape(f["geometry"]).buffer(WALL_BUF_M) for f in walls])
     bridges = _features(dlm("bridge").with_suffix(".geojson"))
     inputs["bridge"] = grid.burn([shape(f["geometry"]) for f in bridges])

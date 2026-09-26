@@ -8,7 +8,7 @@
  *
  * What belongs to the Land rather than the place — CRS, licence and credit,
  * which products are open, the OSM extract — is the `Provider`, shared by
- * every site of that Land (ADR 0031).
+ * every site of that Land (ADR 0032).
  */
 
 import type { FacadeMaterial } from "./building-tint";
@@ -219,12 +219,24 @@ export function siteTitle(site: Site): string {
   return `City Walk — ${site.name}`;
 }
 
-/** The OSM credit, naming what the site takes from OSM. */
+/** What every site takes from OSM, as the HUD credit names it. */
+const OSM_LAYERS =
+  "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme";
+const OSM_LICENCE = "© OpenStreetMap-Mitwirkende (ODbL)";
+
+/** The OSM credit, naming what the site takes from OSM (the land cover too
+ *  where the provider has no open Basis-DLM). */
 function osmCredit(site: Site): string {
   const layers = site.provider.products.dlm
-    ? "Lampen, Bänke, Brunnen, Mauern, Hecken, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken"
-    : "Landbedeckung, Lampen, Bänke, Brunnen, Mauern, Hecken, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken";
-  return `${layers} © OpenStreetMap-Mitwirkende (ODbL)`;
+    ? OSM_LAYERS
+    : `Landbedeckung, ${OSM_LAYERS}`;
+  return `${layers} ${OSM_LICENCE}`;
+}
+
+/** The street-tree register's credit; the trees bake adds the OSM trees the
+ *  register does not cover (pipeline/bake/trees.py). */
+function treeCredit(cadastre: TreeCadastre): string {
+  return `${cadastre.credit}; weitere Bäume ${OSM_LICENCE}`;
 }
 
 /** The credit of the land cover (what the ground is painted from): the
@@ -232,7 +244,7 @@ function osmCredit(site: Site): string {
 export function landcoverCredit(site: Site): string {
   return site.provider.products.dlm
     ? `Basis-DLM, ${site.provider.credit}`
-    : "OpenStreetMap, © OpenStreetMap-Mitwirkende (ODbL)";
+    : `OpenStreetMap, ${OSM_LICENCE}`;
 }
 
 /** The credit lines the HUD footer shows (the sources' licence terms). */
@@ -240,7 +252,7 @@ export function siteAttribution(site: Site): string[] {
   return [
     site.provider.credit,
     osmCredit(site),
-    ...(site.treeCadastre ? [site.treeCadastre.credit] : []),
+    ...(site.treeCadastre ? [treeCredit(site.treeCadastre)] : []),
   ];
 }
 

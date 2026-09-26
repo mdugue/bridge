@@ -78,8 +78,8 @@ test("Dresden keeps its tile ids, credits and extract", () => {
   ]);
   expect(siteAttribution(DRESDEN)).toEqual([
     "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Bänke, Brunnen, Mauern, Hecken, Treppen, Plätze, Beläge, Sportplätze, Bahnsteige und Brücken © OpenStreetMap-Mitwirkende (ODbL)",
-    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
+    "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
+    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
   ]);
   // Only Dresden names a tree cadastre; the others credit two sources.
   expect(siteAttribution(SITES.leipzig)).toHaveLength(2);

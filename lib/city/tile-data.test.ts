@@ -113,6 +113,8 @@ test("every Dresden tile has every artifact the viewer reads and every bake inpu
       terraceSourceFile(DRESDEN, tile),
       cityMeshSourceFiles(DRESDEN, tile).city,
       cityMeshSourceFiles(DRESDEN, tile).roofColor,
+      cityMeshSourceFiles(DRESDEN, tile).osmBuild,
+      cityMeshSourceFiles(DRESDEN, tile).smallBuild,
       dgmSourceFiles(DRESDEN, tile).tif,
       dgmSourceFiles(DRESDEN, tile).tfw,
     ];

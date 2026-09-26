@@ -87,6 +87,10 @@ export function tileReport(
     ...artifacts
       .filter((a) => !a.required)
       .map((a) => sideFileSource(site, a.file)),
+    // The building bake's optional inputs: what OSM knows per building,
+    // the laser scan's small structures (never served).
+    cityMeshSourceFiles(site, tile).osmBuild,
+    cityMeshSourceFiles(site, tile).smallBuild,
     // The terrain bake's optional inputs (never served).
     wallSourceFile(site, tile),
     stairSourceFile(site, tile),

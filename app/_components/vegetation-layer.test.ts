@@ -1,10 +1,21 @@
 import { expect, test } from "bun:test";
-import { Color, Matrix4, Vector3 } from "three";
+import {
+  Color,
+  type InstancedMesh,
+  type Material,
+  Matrix4,
+  Vector3,
+} from "three";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { TRUNK_ROWS, trunkRadiusAt } from "@/lib/city/tree-inventory";
+import { createHeightFogUniforms } from "./height-fog";
 import { sceneCensus } from "./scene-census";
 import {
+  buildCrownWarmup,
+  buildTrunkGeo,
   buildVegetation,
+  TRUNK_H,
   updateVegetationLod,
   type VegetationContext,
 } from "./vegetation-layer";
@@ -124,4 +135,56 @@ test("a chunk with precomputed trees keeps its own matrices per mesh", () => {
   expect(chunk.trunks.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
   expect(chunk.rich.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
   expect(chunk.far.count).toBe(2);
+});
+
+test("the crown warm-up carries the program keys a tile's crowns switch between", () => {
+  const heightFog = createHeightFogUniforms();
+  const veg = buildVegetation(
+    { rows: [], canopy: [canopy(0, 12), canopy(20, 14)] },
+    { ...ctx, heightFog }
+  );
+  const keyOf = (m: Material | Material[]) =>
+    (m as Material).customProgramCacheKey();
+  const worn = new Set<string>();
+  veg.group.traverse((o) => {
+    const mesh = o as InstancedMesh;
+    if (mesh.isInstancedMesh && keyOf(mesh.material).startsWith("crown-")) {
+      worn.add(keyOf(mesh.material));
+    }
+  });
+  expect([...worn]).toEqual(["crown-true-leafy"]); // before any season: the plain crown
+  const warm = buildCrownWarmup(heightFog);
+  expect(warm.main.map((m) => keyOf(m.material))).toEqual([
+    "crown-true-bare",
+    "crown-true-leafy",
+  ]);
+  expect(warm.depth[0].geometry.getAttribute("normal")).toBeDefined();
+  warm.dispose();
+});
+
+test("the trunk geometry's rings are the profile its girth is fitted to", () => {
+  const geo = buildTrunkGeo();
+  const pos = geo.getAttribute("position");
+  for (let k = 0; k <= TRUNK_ROWS; k++) {
+    const y = (k / TRUNK_ROWS) * TRUNK_H;
+    const ring: [number, number][] = [];
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - y) < 1e-4) {
+        ring.push([pos.getX(i), pos.getZ(i)]);
+      }
+    }
+    // The bend moves a ring sideways, not apart: measure from its centre,
+    // leaving out the end caps' centre vertices.
+    const centre = (ps: [number, number][]) =>
+      [0, 1].map((c) => ps.reduce((s, p) => s + p[c], 0) / ps.length);
+    const [ax, az] = centre(ring);
+    const rim = ring.filter(([x, z]) => Math.hypot(x - ax, z - az) > 0.02);
+    const [cx, cz] = centre(rim);
+    const mean =
+      rim.reduce((s, [x, z]) => s + Math.hypot(x - cx, z - cz), 0) / rim.length;
+    // ±10 % bark bumps per vertex average out to a few per cent.
+    expect(Math.abs(mean / trunkRadiusAt(k / TRUNK_ROWS) - 1)).toBeLessThan(
+      0.08
+    );
+  }
 });

@@ -8,8 +8,50 @@ import {
   MIN_FOOTPRINT_R,
   overtops,
   TREE_ARCHETYPES,
+  TRUNK_FOOT_R,
+  TRUNK_ROWS,
+  TRUNK_TOP_R,
   treeExtents,
+  trunkGirth,
+  trunkRadiusAt,
 } from "./tree-inventory";
+
+test("a measured trunk sets the girth; without one it follows the height", () => {
+  const ext = treeExtents(15, 9, "round");
+  // Unmeasured: the height rule.
+  expect(trunkGirth(ext)).toBeCloseTo((15 / 5.8) * 0.8);
+  expect(trunkGirth(ext, Number.NaN)).toBeCloseTo((15 / 5.8) * 0.8);
+  // Measured: the unit trunk's radius at 1.3 m, scaled to half the
+  // diameter (× the style factor) — and monotone in the diameter.
+  const g40 = trunkGirth(ext, 40);
+  expect(g40 * trunkRadiusAt(1.3 / ext.trunkTop)).toBeCloseTo(0.2 * 1.3);
+  expect(trunkGirth(ext, 60)).toBeGreaterThan(g40);
+  // Clamped at both ends: a sapling and a register typo.
+  expect(trunkGirth(ext, 1)).toBe(0.3);
+  expect(trunkGirth(ext, 5000)).toBe(5);
+});
+
+test("the trunk is fitted to the radius drawn, flared foot included", () => {
+  // The rings: the taper at the top, the taper × the flare at the foot.
+  expect(trunkRadiusAt(1)).toBeCloseTo(TRUNK_TOP_R);
+  expect(trunkRadiusAt(0)).toBeCloseTo(TRUNK_FOOT_R * 1.9);
+  // A 25 m tree's breast height lies in the bottom segment, between the
+  // flared foot ring and the next: wider than the taper alone says, so the
+  // fitted girth is narrower than a taper fit's (which drew it too thick).
+  const ext = treeExtents(25, 14, "round");
+  const t = 1.3 / ext.trunkTop;
+  expect(t).toBeLessThan(1 / TRUNK_ROWS);
+  const taper = TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * t;
+  expect(trunkRadiusAt(t)).toBeGreaterThan(taper * 1.15);
+  // Drawn: girth × the unit radius at 1.3 m = the measured radius × style.
+  const drawnCm = trunkGirth(ext, 80) * trunkRadiusAt(t) * 200;
+  expect(drawnCm).toBeCloseTo(80 * 1.3);
+  // Above the flare the faces run straight between the rings.
+  const mid = (2.5 / TRUNK_ROWS + 3.5 / TRUNK_ROWS) / 2;
+  expect(trunkRadiusAt(mid)).toBeCloseTo(
+    TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * mid
+  );
+});
 
 test("archetype ids follow the bake's order and fall back to round", () => {
   expect(TREE_ARCHETYPES[2]).toBe("columnar");

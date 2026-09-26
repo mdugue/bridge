@@ -29,6 +29,8 @@ import {
   srgbToLinear,
 } from "@/lib/city/landcover";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
+import { colonyCropUv } from "@/lib/city/cultivated";
+import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
 import { TinIndex } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
@@ -43,7 +45,17 @@ import {
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
 import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
+import { COLONY_DECL, COLONY_GARDEN_GLSL } from "./cultivated-layer";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
+import { MARKINGS_DECL, ROAD_MARKINGS } from "./road-markings";
+import type { SharedRasters } from "./shared-rasters";
+import {
+  type GroundLight,
+  lightsWithFarShadow,
+  SKY_VIEW_AO,
+  skyLightBody,
+  skyLightDecl,
+} from "./sky-light";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
@@ -66,6 +78,8 @@ export interface TerrainLayer {
   stairs?: Mesh;
   /** the tile's baked kerb stones (fine level only; kerb-layer.ts) */
   kerbs?: Mesh;
+  /** the tile's baked fences and gates (fine level only; fence-layer.ts) */
+  fences?: Mesh;
   /** the tile's baked walls (fine level only; wall-layer.ts) */
   walls?: Mesh;
   /** lowest valid elevation (m) on this tile — the valley/river floor */
@@ -74,6 +88,9 @@ export interface TerrainLayer {
   vertexCount: number;
   /** animated water surface, present only when the class raster loaded */
   water?: WaterLayer;
+  /** the tile's baked light for what stands on this level (kerbs, fences,
+   *  stairs, walls; sky-light.ts `injectGroundLight`), when it has any */
+  light?: GroundLight;
 }
 
 export interface TerrainOptions {
@@ -94,6 +111,11 @@ export interface TerrainOptions {
   signal?: AbortSignal;
   /** shared world (Y-up) sun direction, read by the water Fresnel/glitter */
   sunDirection?: Vector3;
+  /** the sky-view rasters, shared with the tile's buildings (tile-stream.ts) */
+  skyView?: SharedRasters<Texture>;
+  /** the horizon rasters, shared by a tile's two terrain levels (both name
+   *  the same file) */
+  horizon?: SharedRasters<Texture>;
 }
 
 /**
@@ -107,6 +129,13 @@ export interface GroundUniforms {
   meadowNdvi: { value: number };
   /** meadow colour on green built-up ground (courtyards, parks) */
   urbanGreen: { value: number };
+  /** the sky-view factor's hold on the ambient light (sky-light.ts) */
+  skyView: { value: number };
+  /** the far horizon's cut of the sun (sky-light.ts) */
+  horizonShade: { value: number };
+  /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
+   *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
+  shadowReach: { value: Vector3 };
 }
 
 /**
@@ -349,6 +378,82 @@ async function loadSportGrounds(
   }
 }
 
+/**
+ * Loads the allotment-colony raster (pipeline/bake/cultivated.py, cropped
+ * by prepare-data): R = the signed distance to the garden land's edge,
+ * G = the colony's axis. LINEAR, so the edge is smooth (the shader fetches
+ * the axis texel by texel); no mipmaps (the texture fades out before it
+ * would need them). Absent → null and the colonies keep their class colour.
+ */
+async function loadColonyTexture(
+  url: string,
+  signal?: AbortSignal
+): Promise<Texture | null> {
+  try {
+    const { texture, width, height } = await loadRasterTexture(url, signal, 2);
+    texture.magFilter = LinearFilter;
+    texture.minFilter = LinearFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    trackTexture(texture, textureBytes(width, height, 2, false));
+    return texture;
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
+/**
+ * Loads the road markings (pipeline/bake/markings.py): the index raster
+ * (RA = the row, G = lane bits, B = the centre offset; NEAREST) and its
+ * table as a 2-texel-high float texture (lib/city/markings.ts). Either
+ * absent or undecodable → null and the roads stay unpainted.
+ */
+async function loadMarkings(
+  rasterUrl: string,
+  tableUrl: string,
+  signal?: AbortSignal
+): Promise<{ raster: Texture; table: DataTexture } | null> {
+  const doc = await fetchOptionalJson<MarkingTable>(tableUrl, signal);
+  if (!doc?.markings) {
+    return null;
+  }
+  try {
+    const { texture, width, height } = await loadRasterTexture(
+      rasterUrl,
+      signal,
+      4
+    );
+    texture.magFilter = NearestFilter;
+    texture.minFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = NoColorSpace;
+    trackTexture(texture, textureBytes(width, height, 4, false));
+    const packed = packMarkingTable(doc);
+    // A table with no rows still binds a (1-texel) texture: the lane bits
+    // need the program, the row lookups never run.
+    const table = new DataTexture(
+      packed.width > 0 ? packed.data : new Float32Array(8),
+      Math.max(packed.width, 1),
+      2,
+      RGBAFormat,
+      FloatType
+    );
+    table.magFilter = NearestFilter;
+    table.minFilter = NearestFilter;
+    table.generateMipmaps = false;
+    table.needsUpdate = true;
+    return { raster: texture, table };
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
 export interface SplatLayer {
   bounds: TerrainBounds;
@@ -366,6 +471,15 @@ export interface SplatLayer {
   edgesTexture?: Texture;
   /** sports grounds: the index raster (NEAREST, RGBA) and its table */
   sport?: { raster: Texture; table: Texture };
+  /** allotment colonies (LINEAR, RG): the garden edge and the axis, and
+   *  where the (cropped) raster lies in the tile's uv */
+  colonies?: { rect: [number, number, number, number]; texture: Texture };
+  /** road markings: the index raster (NEAREST, RGBA) and its table */
+  markings?: { raster: Texture; table: Texture };
+  /** sky-view factor (LINEAR, R) for the ambient light */
+  svfTexture?: Texture;
+  /** far horizon, 4 RGBA layers (LINEAR) for the far sun shadow */
+  horizonTexture?: Texture;
   /** shared world sun direction (surface → sun), for the kerb's shadow */
   sunDirection?: Vector3;
   /** class-id raster (NEAREST); the meadow detail tests it */
@@ -487,6 +601,23 @@ interface TerrainShader {
   vertexShader: string;
 }
 
+/** The baked large-scale light's uniforms (sky-light.ts). */
+function applySkyLightUniforms(shader: TerrainShader, splat: SplatLayer): void {
+  if (splat.svfTexture) {
+    shader.uniforms.uSvf = { value: splat.svfTexture };
+    shader.uniforms.uSkyView = splat.ground?.skyView ?? { value: 0 };
+  }
+  if (splat.horizonTexture) {
+    shader.uniforms.uHorizon = { value: splat.horizonTexture };
+    shader.uniforms.uHorizonShade = splat.ground?.horizonShade ?? { value: 0 };
+    // By reference: the sun rig keeps it on the frustum. Without one the
+    // near band counts everywhere (a frustum of no size).
+    shader.uniforms.uShadowReach = splat.ground?.shadowReach ?? {
+      value: NO_FRUSTUM,
+    };
+  }
+}
+
 function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
   const [minX, minY, maxX, maxY] = splat.bounds;
   // Recentered tile origin (north-west corner) + size; v grows southward.
@@ -516,6 +647,15 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
     shader.uniforms.uSportTable = { value: splat.sport.table };
     shader.uniforms.uSportColors = { value: SPORT_LINEAR };
   }
+  if (splat.colonies) {
+    shader.uniforms.uCultivated = { value: splat.colonies.texture };
+    shader.uniforms.uCultivatedRect = { value: splat.colonies.rect };
+  }
+  if (splat.markings) {
+    shader.uniforms.uMarkings = { value: splat.markings.raster };
+    shader.uniforms.uMarkingTable = { value: splat.markings.table };
+  }
+  applySkyLightUniforms(shader, splat);
   if (splat.ndviTexture) {
     shader.uniforms.uNdvi = { value: splat.ndviTexture };
     shader.uniforms.uMeadowNdvi = splat.ground?.meadowNdvi ?? { value: 0 };
@@ -525,6 +665,7 @@ function applyTerrainUniforms(shader: TerrainShader, splat: SplatLayer): void {
 /** The meadow's palette colour, linear — the urban green and grass pavers. */
 const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
 const DEFAULT_SUN = new Vector3(0, 1, 0);
+const NO_FRUSTUM = new Vector3(0, 0, 0);
 
 /** The sports surfaces' colours, linear (sport-ground.ts). */
 const SPORT_LINEAR = sportPalette();
@@ -556,18 +697,25 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
   const hasSurface = splat.surfaceTexture !== undefined;
   const hasEdges = splat.edgesTexture !== undefined;
   const hasSport = splat.sport !== undefined;
+  const hasMarkings = splat.markings !== undefined;
+  const hasColonies = splat.colonies !== undefined;
+  const hasSvf = splat.svfTexture !== undefined;
+  const hasHorizon = splat.horizonTexture !== undefined;
   const ndviDecl = hasNdvi
     ? "uniform sampler2D uNdvi;\nuniform float uMeadowNdvi;\n"
     : "";
   return {
-    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}`,
+    decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}${hasMarkings ? MARKINGS_DECL : ""}${hasColonies ? COLONY_DECL : ""}${skyLightDecl(hasSvf, hasHorizon)}`,
     body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
          ${GRASS_MOTTLE}
          ${groundFields(hasSurface, hasEdges)}
          ${urbanGreen(hasNdvi, hasEdges)}
          ${GROUND_DETAIL}
+         ${hasColonies ? COLONY_GARDEN_GLSL : ""}
          ${hasSport ? SPORT_GROUND : ""}
-         ${hasNdvi ? MEADOW_NDVI : ""}`,
+         ${hasMarkings ? ROAD_MARKINGS : ""}
+         ${hasNdvi ? MEADOW_NDVI : ""}
+         ${skyLightBody(hasSvf, hasHorizon)}`,
   };
 }
 
@@ -594,6 +742,20 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
     "#include <normal_fragment_begin>",
     hasSplat ? `${GRASS_NORMAL}\n${GROUND_NORMAL}` : TERRAIN_NORMAL
   );
+  // The city's large-scale light (sky-light.ts): the sky view on the
+  // ambient term, the far horizon on the sun.
+  if (splat?.svfTexture) {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <aomap_fragment>",
+      SKY_VIEW_AO
+    );
+  }
+  if (splat?.horizonTexture) {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <lights_fragment_begin>",
+      lightsWithFarShadow()
+    );
+  }
 }
 
 function createTerrainMaterial(
@@ -609,7 +771,7 @@ function createTerrainMaterial(
   // every tile's terrain material. Without an explicit key a tile that lost its
   // class raster or NDVI would be handed a neighbour's compiled program (and its
   // unbound samplers). Neighbour tiles do load independently, so this happens.
-  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${heightFog !== undefined}`;
+  const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.markings !== undefined}-${splat?.colonies !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
   material.onBeforeCompile = (shader) => {
     if (splat) {
@@ -726,6 +888,12 @@ function waterGeometryOf(
 
 interface DetailRasters {
   edgesTexture: Texture | null;
+  markings: { raster: Texture; table: DataTexture } | null;
+  colonies: { rect: [number, number, number, number]; texture: Texture } | null;
+  /** the shared horizon's URL while this tile holds it */
+  horizon: { texture: Texture | null; url: string } | null;
+  /** the shared sky view's URL while this tile holds it */
+  svf: { texture: Texture | null; url: string } | null;
   ndviTexture: Texture | null;
   sport: { raster: Texture; table: DataTexture } | null;
   surfaceTexture: Texture | null;
@@ -736,7 +904,48 @@ const NO_DETAIL: DetailRasters = {
   surfaceTexture: null,
   edgesTexture: null,
   sport: null,
+  markings: null,
+  colonies: null,
+  horizon: null,
+  svf: null,
 };
+
+/** The loaded rasters as the splat's optional members (absent → unset). */
+function splatDetail(d: DetailRasters): Partial<SplatLayer> {
+  return {
+    ndviTexture: d.ndviTexture ?? undefined,
+    surfaceTexture: d.surfaceTexture ?? undefined,
+    edgesTexture: d.edgesTexture ?? undefined,
+    sport: d.sport ?? undefined,
+    markings: d.markings ?? undefined,
+    colonies: d.colonies ?? undefined,
+    svfTexture: d.svf?.texture ?? undefined,
+    horizonTexture: d.horizon?.texture ?? undefined,
+  };
+}
+
+/** Frees a tile's rasters; the shared sky view and horizon are released,
+ *  not freed. */
+function disposeDetail(d: DetailRasters, opts: TerrainOptions): void {
+  for (const texture of [
+    d.ndviTexture,
+    d.surfaceTexture,
+    d.edgesTexture,
+    d.sport?.raster,
+    d.sport?.table,
+    d.markings?.raster,
+    d.markings?.table,
+    d.colonies?.texture,
+  ]) {
+    texture?.dispose();
+  }
+  if (d.horizon) {
+    opts.horizon?.release(d.horizon.url);
+  }
+  if (d.svf) {
+    opts.skyView?.release(d.svf.url);
+  }
+}
 
 /** The optional rasters over the class raster, one after another (see
  *  dressTerrain); each absent one is null. */
@@ -763,7 +972,68 @@ async function loadDetailRasters(
     sportRaster && sportTable
       ? await loadSportGrounds(sportRaster, sportTable, opts.signal)
       : null;
-  return { ndviTexture, surfaceTexture, edgesTexture, sport };
+  // Road markings: close-range paint, the fine level only; phones read the
+  // 1024² twin (the same table).
+  const markingsRaster = url(
+    (opts.lowRasters ? extras.markingsLow : undefined) ?? extras.markings
+  );
+  const markingsTable = url(extras.markingsTable);
+  const markings =
+    markingsRaster && markingsTable
+      ? await loadMarkings(markingsRaster, markingsTable, opts.signal)
+      : null;
+  // Allotment colonies: the fine level only, phones the half-resolution
+  // twin of the same crop.
+  const colonies = url(
+    (opts.lowRasters ? extras.cultivatedLow : undefined) ?? extras.cultivated
+  );
+  const colonyTexture = colonies
+    ? await loadColonyTexture(colonies, opts.signal)
+    : null;
+  // Last, the shared rasters: an acquire never throws and nothing after it
+  // can, so the references are always released.
+  const horizonUrl = url(extras.horizon);
+  const horizon =
+    horizonUrl && opts.horizon
+      ? { url: horizonUrl, texture: await opts.horizon.acquire(horizonUrl) }
+      : null;
+  const svfUrl = url(extras.svf);
+  const svf =
+    svfUrl && opts.skyView
+      ? { url: svfUrl, texture: await opts.skyView.acquire(svfUrl) }
+      : null;
+  return {
+    ndviTexture,
+    surfaceTexture,
+    edgesTexture,
+    sport,
+    markings,
+    colonies: colonyTexture
+      ? { texture: colonyTexture, rect: colonyCropUv(extras.cultivatedCrop) }
+      : null,
+    horizon,
+    svf,
+  };
+}
+
+/** The splat's baked light as the fine level's kerbs, fences, stairs and
+ *  walls bind it (the same textures and rows, by reference). */
+function groundLightOf(splat: SplatLayer): GroundLight | undefined {
+  const { ground, sunDirection } = splat;
+  if (!(ground && sunDirection && (splat.svfTexture || splat.horizonTexture))) {
+    return undefined;
+  }
+  const [minX, minY, maxX, maxY] = splat.bounds;
+  return {
+    svf: splat.svfTexture,
+    horizon: splat.horizonTexture,
+    origin: [minX - splat.offset.cx, maxY - splat.offset.cy],
+    size: [maxX - minX, maxY - minY],
+    skyView: ground.skyView,
+    horizonShade: ground.horizonShade,
+    shadowReach: ground.shadowReach,
+    sunDirection,
+  };
 }
 
 /**
@@ -801,7 +1071,7 @@ export async function dressTerrain(
         classRaster.height
       )
     : null;
-  const { ndviTexture, surfaceTexture, edgesTexture, sport } = classRaster
+  const detail = classRaster
     ? await loadDetailRasters(extras, opts)
     : NO_DETAIL;
   const splat: SplatLayer | undefined =
@@ -809,10 +1079,7 @@ export async function dressTerrain(
       ? {
           texture: classRaster.texture,
           colorTexture: painted.texture,
-          ndviTexture: ndviTexture ?? undefined,
-          surfaceTexture: surfaceTexture ?? undefined,
-          edgesTexture: edgesTexture ?? undefined,
-          sport: sport ?? undefined,
+          ...splatDetail(detail),
           sunDirection: opts.sunDirection,
           ground: opts.ground,
           bounds,
@@ -851,6 +1118,7 @@ export async function dressTerrain(
 
   return {
     mesh,
+    light: splat ? groundLightOf(splat) : undefined,
     tile: extras.tileId,
     level: extras.level,
     vertexCount: mesh.geometry.getAttribute("position").count,
@@ -861,16 +1129,8 @@ export async function dressTerrain(
     dispose: () => {
       // Shares the tile's positions; only its own index (and normals) go.
       waterGeometry.dispose();
-      for (const texture of [
-        classRaster?.texture,
-        ndviTexture,
-        surfaceTexture,
-        edgesTexture,
-        sport?.raster,
-        sport?.table,
-      ]) {
-        texture?.dispose();
-      }
+      classRaster?.texture.dispose();
+      disposeDetail(detail, opts);
       painted?.dispose();
     },
   };

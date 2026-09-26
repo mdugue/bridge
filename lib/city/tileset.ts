@@ -74,6 +74,8 @@ export interface DressingFiles {
   canopy: string;
   /** laser-scan crowns outside the canopy mask (tiles with a laser scan) */
   canopyx?: string;
+  /** allotments, orchards, vineyards (orchard trees, vine rows) */
+  cultivated?: string;
   furniture: string;
   lamps: string;
   /** OSM hedges */
@@ -82,6 +84,10 @@ export interface DressingFiles {
   platform: string;
   rail: string;
   railarea: string;
+  /** OSM trams: tracks, catenary supports, stop signs */
+  tram?: string;
+  /** OSM landing stages, groynes, ferry lines */
+  riverside?: string;
   /** the street-tree cadastre */
   trees?: string;
   vegrows: string;
@@ -118,16 +124,48 @@ export interface TerrainExtras {
   /** sports-ground index raster and its table of grounds (both levels) */
   sport?: string;
   sportTable?: string;
+  /** allotment-colony raster cropped to the colonies, its half-resolution
+   *  twin for phones, and where the crop lies: `[x, y, width, height,
+   *  size]` in texels of the full `size`² raster (fine level only) */
+  cultivated?: string;
+  cultivatedLow?: string;
+  cultivatedCrop?: [number, number, number, number, number];
+  /** road-marking raster, its 1024² twin for phones, and the table they
+   *  share (fine level only) */
+  markings?: string;
+  markingsLow?: string;
+  markingsTable?: string;
+  /** sky-view factor raster (both levels; the clay reads it too) */
+  svf?: string;
+  /** horizon raster, eight RGBA layers stacked: the far band, then the
+   *  near band (both levels) */
+  horizon?: string;
   /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
   tileId: string;
 }
 
 export interface CityExtras {
   kind: "city";
+  /** the tile's sky-view raster, shared with its terrain (the facades'
+   *  ambient light) */
+  svf?: string;
   tileId: string;
 }
 
 export type ContentExtras = CityExtras | TerrainExtras;
+
+/**
+ * What the hidden soundscape reads of a tile (plan 035; published names),
+ * fetched only while it plays: the paving raster (footsteps), the sky view
+ * (the wind), the bell towers, the tram tracks, the fountains.
+ */
+export interface TileSoundFiles {
+  monuments?: string;
+  soundmarks?: string;
+  surface?: string;
+  svf?: string;
+  tram?: string;
+}
 
 export interface TilesetTileInfo {
   bounds: TerrainBounds;
@@ -140,6 +178,8 @@ export interface TilesetTileInfo {
   id: string;
   /** a ≤ 2048² class raster for the minimap */
   minimap: string;
+  /** the soundscape's files (plan 035) */
+  sound?: TileSoundFiles;
 }
 
 /** What the viewer needs before any content has loaded. */

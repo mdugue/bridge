@@ -138,7 +138,7 @@ The button in the corner opens a panel with three tabs.
 | | *Traufkante* | a soft line where wall meets roof |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
-| Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
+| Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
 | | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas like meadow, from the infrared aerial photo |
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
 | | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
@@ -146,6 +146,8 @@ The button in the corner opens a panel with three tabs.
 | | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |
 | | *Windhelligkeit* | crowns brighten as they lean into a gust |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
+| | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
+| | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
 | | *Detaillierte Kronen* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
@@ -169,10 +171,11 @@ cannot resolve it in motion) and comes back when you stop.
 
 The footer credits the data sources: the Land's survey office (in
 Dresden the Saxon one) for the official datasets and OpenStreetMap
-contributors for lamps, fountains, walls, stairs, platforms and bridge
-structures (and the land cover where the Land publishes no Basis-DLM).
-Next to it, *Unterstützen* (support) leads to the project's Ko-fi page; it
-is a plain link that loads nothing from Ko-fi until it is clicked.
+contributors for, among others, lamps, walls and fences, platforms, bridge
+structures, shops and listed buildings (and the land cover where the Land
+publishes no Basis-DLM). Next to it, *Unterstützen* (support) leads to the
+project's Ko-fi page; it is a plain link that loads nothing from Ko-fi
+until it is clicked.
 
 ## Tips
 
@@ -185,3 +188,14 @@ is a plain link that loads nothing from Ko-fi until it is clicked.
 - `?scene=lite` in the address bar streams only the start tile, with
   coarse shadows. It exists for automated tests and is not how the scene
   is meant to look.
+
+## Small things
+
+- **Listen.** Press **L** (or, on a phone, turn on *Klang (experimentell)*
+  at the very bottom of *Erweitert*) and the city makes a quiet sound: wind,
+  the Elbe, birds by day and crickets on summer nights, footsteps that
+  know the paving underfoot — and when you move the clock past a full
+  hour, the nearby churches strike it, each a little later the further
+  away it stands, as sound travels. It is off every time the page loads,
+  goes quiet in a background tab, and the small speaker in the top left
+  corner turns it off again.

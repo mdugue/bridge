@@ -28,7 +28,10 @@ glTF (`terrain_<tile>_l0.glb.gz`), as named nodes beside the grid:
 
 The viewer finds a tile's meshes by node name (`terrain`, `city`,
 `stairs`, `walls`) and only gives the baked nodes their materials
-(`stair-layer.ts`, `wall-layer.ts`). The GeoJSON they come from stays in
+(`stair-layer.ts`, `wall-layer.ts`). The kerb stones (`kerbs`) and the
+fences with their gates (`fences`, plan 029: `lib/city/fences.ts`, one
+low band per line in a tone `fence-layer.ts` gives it) followed the
+same way. The GeoJSON they come from stays in
 `data/<site>/dlm/` as a build input and is no longer served.
 
 ## Consequences
