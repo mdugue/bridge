@@ -13,6 +13,7 @@ import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { bucketByCell, hash } from "./vegetation-layer";
+import { clamp } from "@/lib/city/math";
 
 /**
  * Hedges — the OSM `barrier=hedge` lines, at the laser-scan height where the
@@ -48,10 +49,6 @@ const HEDGE_P_BASE = 7;
 /** sanity clamps on the baked sizes */
 const H_RANGE: [number, number] = [0.4, 3.5];
 const W_RANGE: [number, number] = [0.5, 3];
-
-function clamp(v: number, [lo, hi]: [number, number]): number {
-  return Math.min(Math.max(v, lo), hi);
-}
 
 /** One hedge instance: centre, heading and extents, in EPSG metres. */
 export interface HedgePiece {
@@ -258,8 +255,8 @@ function hedgeInstances(
     if (f.geometry?.type !== "LineString" || !f.properties) {
       continue;
     }
-    const h = clamp(f.properties.h ?? 1.5, H_RANGE);
-    const w = clamp(f.properties.w ?? 1, W_RANGE);
+    const h = clamp(f.properties.h ?? 1.5, ...H_RANGE);
+    const w = clamp(f.properties.w ?? 1, ...W_RANGE);
     for (const piece of hedgePieces(f.geometry.coordinates, h, w)) {
       const ground = ctx.heightAt(piece.x, piece.y);
       if (ground === null) {

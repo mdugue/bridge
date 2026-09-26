@@ -1,3 +1,4 @@
+import { clamp } from "./math";
 /**
  * Pure placement math for individually surveyed trees — a tree inventory such
  * as the Dresden street-tree cadastre (pipeline/bake/trees.py): each tree's
@@ -81,10 +82,6 @@ export interface TreeExtents {
   trunkTop: number;
 }
 
-function clamp(v: number, [lo, hi]: [number, number]): number {
-  return Math.min(Math.max(v, lo), hi);
-}
-
 /**
  * Crown and trunk extents for one tree. A non-finite height or diameter
  * falls back to a modest street tree rather than poisoning the instance
@@ -96,8 +93,8 @@ export function treeExtents(
   archetype: TreeArchetype,
   globe = false
 ): TreeExtents {
-  const height = clamp(Number.isFinite(h) ? h : 8, H_RANGE);
-  const width = clamp(Number.isFinite(d) ? d : height * 0.55, D_RANGE);
+  const height = clamp(Number.isFinite(h) ? h : 8, ...H_RANGE);
+  const width = clamp(Number.isFinite(d) ? d : height * 0.55, ...D_RANGE);
   const base = height * (globe ? GLOBE_CROWN_BASE : CROWN_BASE[archetype]);
   return {
     crownBase: base,
@@ -163,10 +160,10 @@ const GIRTH_RANGE: [number, number] = [0.3, 5];
  */
 export function trunkGirth(ext: TreeExtents, dbhCm?: number): number {
   if (dbhCm === undefined || !Number.isFinite(dbhCm) || dbhCm <= 0) {
-    return clamp((ext.crownTop / 5.8) * 0.8, [0.45, 5]);
+    return clamp((ext.crownTop / 5.8) * 0.8, 0.45, 5);
   }
   const unitR = trunkRadiusAt(BREAST_HEIGHT / Math.max(ext.trunkTop, 0.1));
-  return clamp((dbhCm / 200 / unitR) * TRUNK_STYLE, GIRTH_RANGE);
+  return clamp((dbhCm / 200 / unitR) * TRUNK_STYLE, ...GIRTH_RANGE);
 }
 
 /** Radius (m) around an inventory tree inside which a canopy or row tree is
