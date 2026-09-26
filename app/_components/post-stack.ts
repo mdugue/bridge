@@ -165,7 +165,7 @@ export function createPostStack(
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
-  const stylize = new StylizeEffect(scene);
+  const stylize = new StylizeEffect(scene, camera);
   const stylePass = new EffectPass(camera, stylize);
   stylePass.enabled = false;
   composer.addPass(stylePass);

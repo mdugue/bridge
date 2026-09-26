@@ -139,7 +139,7 @@ jederzeit wechseln, per Klick oder mit `V`:
 | *Pastell* | der Grundstil: Tonmodell auf Papier, weiches Licht, keine Umrisse |
 | *Comic* | feine, leicht zittrige Tuschelinien wie von Hand gezogen, flache Farbflächen in wenigen Tönen, ein Punktraster in den tiefsten Schatten |
 | *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand |
-| *Sin City* | nur reines Schwarz und Weiß; wo es schwarz wird, schneiden weiße Konturen die Formen aus der Nacht; nur rote Dächer behalten Farbe |
+| *Sin City* | harte schwarze und weiße Flächen statt Linien: Bäume, Wiesen und die Elbe werden schwarz, beleuchtete Wände weiß, die Skyline steht als weiße Kante gegen den schwarzen Himmel; nur die roten Ziegeldächer behalten Farbe |
 
 In den grafischen Stilen *Comic* und *Sin City* ruht die Tiefenschärfe
 (ein unscharfer Hintergrund unter scharfen Linien wirkt wie ein Fehler);

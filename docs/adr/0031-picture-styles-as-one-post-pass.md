@@ -42,7 +42,14 @@ stroke weight.
 - Switching a style costs no rebuild and at most one compile (the first
   non-default style); the e2e control walk draws frames through it.
 - A non-default style adds one full-screen pass of ~17 depth taps — fill
-  rate, the scene's bottleneck, but only when chosen.
+  rate, the scene's bottleneck, but only when chosen. Sin City adds nine
+  colour taps (a blur before its threshold, so it draws masses, not
+  stipple) and four depth taps for the skyline; the pass is therefore
+  marked CONVOLUTION, which is free while it holds this effect alone.
+- The pass knows a surface's slope (a normal rebuilt from the depth
+  buffer's derivatives against world up), which is how Sin City keeps its
+  red to pitched roofs: a post pass can tell a roof from the ground by
+  geometry where colour alone cannot.
 - New scene layers get outlines for free, and so does demolish (the depth
   buffer changes with the index buffer).
 - Screen-space noise and halftone are anchored to the screen, not the

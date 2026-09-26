@@ -217,9 +217,16 @@ the vignette, animated film grain and whether depth of field may run.
   45° dot screen in the darkest band, the sky an unbanded wash.
 - *Film noir* — luminance through an S-curve, crushed blacks, the distance
   lifted into grey smoke, a graduated sky; faint ink.
-- *Sin City* — one threshold, black sky, far things sinking into the night;
-  on black the contour is cut out in white (silhouettes only); saturated
-  reds survive as a cut-out red.
+- *Sin City* — masses, not contours: the luminance is read through a
+  small blur before one threshold, so crowns, AO and penumbrae cannot
+  break a mass into stipple; foliage, meadow and the (faintly blue) river
+  are pushed towards black; black sky, far things sinking into the night;
+  ink only on the big silhouettes (a relative depth jump above ~10 %),
+  solid black; on black one white cut, the skyline against the sky. Red
+  is kept on **pitched** surfaces only (the slope from the depth buffer's
+  reconstructed normal against world up), which lets the colour window be
+  wide — every terracotta, brick or rust roof turns red, lit or oxblood in
+  shade — without sand, paths or warm facades following.
 
 The pass reads the depth buffer at **integer** texel radii around a texel
 centre, blending two radii for the stroke weight: the buffer is sampled

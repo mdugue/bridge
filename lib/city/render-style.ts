@@ -89,9 +89,9 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     id: "sincity",
     label: "Sin City",
     description:
-      "Reines Schwarz und Weiß, weiße Konturen in der Nacht, nur Rot bleibt Farbe",
+      "Harte schwarze und weiße Flächen, schwarze Bäume, die Skyline weiß gegen die Nacht — nur die roten Dächer behalten Farbe",
     shaderMode: 3,
-    inkWeight: 1.25,
+    inkWeight: 0.8,
     gradingWeight: 0,
     grainWeight: 0.5,
     grainAnimated: true,

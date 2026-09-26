@@ -133,7 +133,7 @@ with a click or with `V`:
 | *Pastell* | the default: a clay model on paper, soft light, no outlines |
 | *Comic* | fine, slightly wavering ink lines as if drawn by hand, flat colour areas in a few tones, a dot screen in the deepest shade |
 | *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge |
-| *Sin City* | pure black and white only; where it goes black, white contours cut the shapes out of the night; only red roofs keep their colour |
+| *Sin City* | hard black and white masses instead of lines: trees, meadows and the Elbe go black, lit walls white, the skyline stands as a white edge against the black sky; only the red tiled roofs keep their colour |
 
 In the graphic styles *Comic* and *Sin City* the depth of field rests (a
 blurred background under crisp lines reads as a mistake); the switch stays
