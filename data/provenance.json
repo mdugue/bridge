@@ -133,7 +133,7 @@
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
       "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
-      "editionInUse": "land cover and veg rows: the quarterly package current in June 2026; rail, ballast, bridges: the package downloaded 2026-09-24 (exact release dates unrecorded); monuments: the package downloaded 2026-09-24 (the ZIP's inner package dated 2026-07-27, basisdlm_akt.csv 2026-07-28)"
+      "editionInUse": "land cover and veg rows: the quarterly package current in June 2026; rail, ballast, bridges: the package downloaded 2026-09-24 (exact release dates unrecorded), re-baked with it on 2026-09-26 for the measured bridges (ADR 0032); monuments: the package downloaded 2026-09-24 (the ZIP's inner package dated 2026-07-27, basisdlm_akt.csv 2026-07-28)"
     }
   },
   "dresden": {
@@ -168,6 +168,12 @@
       }
     }
   },
+  "wikidata": {
+    "$comment": "The bridges Wikidata places within 500 m of each tile (class, main span P2787, length P2043), fetched by the ingest (pipeline/bake/bridge.py fetch_wikidata) into data/_raw/<site>/wikidata/bridges_<tile>.json and matched to the decks by the rail bake; the matched item is the `wikidata` member of data/dlm/bridge_<tile>.geojson. Licence CC0, no credit required.",
+    "endpoint": "https://query.wikidata.org/sparql",
+    "raw": "data/_raw/<site>/wikidata/bridges_<tile>.json",
+    "dataAsOf": "2026-09-26 (the live database on the query day)"
+  },
   "openstreetmap": {
     "overpass": {
       "$comment": "How the lamp, platform and bridge-structure files were fetched until 2026-09-24 (the bash bakes). Every OSM layer is now read from the Geofabrik extract below; kept for the history.",
@@ -198,6 +204,8 @@
       "extract": "Dresden.osm.pbf (BBBike, Last-Modified 2026-09-19)",
       "products": {
         "fountains": { "query": "amenity=fountain (points and areas), with fountain=* and water=* for the basin style (data/dlm/monuments_<tile>.geojson)", "dataAsOf": "2026-09-19 or shortly before (baked 2026-09-24)" },
+        "bridges": { "query": "man_made=bridge (bridge:structure, wikidata) and the inland-waterway marks seamark:type=bridge (seamark:bridge:clearance_height, wikidata); data/dlm/bridge_<tile>.geojson", "dataAsOf": "2026-09-19 (re-baked for every tile 2026-09-26)" },
+        "platforms": { "query": "railway=platform, or public_transport=platform on a railway feature (re-written by the rail step)", "dataAsOf": "2026-09-19 (re-baked for every tile 2026-09-26)" },
         "stairs": { "query": "highway=steps (+ area:highway=steps outlines and barrier=wall/retaining_wall/city_wall for the width)", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" },
         "terraces": { "query": "multipolygons on layer >= 1 (no building, man_made, landuse, bridge, railway or public_transport) that a flight the DGM runs flat under climbs onto", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" },
         "furniture": { "query": "amenity in (bench, waste_basket, bicycle_parking, post_box), leisure=picnic_table, barrier=bollard (+ height, material), leisure=playground areas, playground=* equipment (points, ways, areas), highway=bus_stop / public_transport=platform with shelter=yes, amenity=shelter of shelter_type=public_transport; bench ways; every highway line for the bearing. Plan 030 (re-baked 2026-09-25, earlier objects unchanged): advertising=column (+ lit), highway=traffic_signals (+ traffic_signals:direction), emergency=fire_hydrant (+ fire_hydrant:type), amenity=clock (+ support, display), amenity=drinking_water, highway=bus_stop without a shelter; building outlines for wall clocks", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },

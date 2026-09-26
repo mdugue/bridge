@@ -29,7 +29,7 @@ import {
 import type { LookState } from "@/lib/city/look-state";
 import { nextRenderStyle } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
@@ -239,7 +239,7 @@ export interface CityWalkHandle {
     triangles: number;
   };
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
-  landcoverTiles: { bounds: TerrainBounds; src: string }[];
+  landcoverTiles: MapTile[];
   /** the scene's geographic position — the HUD's sunrise/sunset times */
   latLng: { lat: number; lng: number };
   /** recenter offset, lets callers map EPSG coords -> world coords */
@@ -1264,6 +1264,7 @@ async function bootApp(
     landcoverTiles: extras.tiles.map((t) => ({
       src: new URL(t.minimap, tilesetUrl).href,
       bounds: t.bounds,
+      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
     })),
     latLng,
     terrainBounds: siteBounds,

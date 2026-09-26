@@ -19,7 +19,7 @@ import {
  *
  * It is a render-time swap (`scene.overrideMaterial`), not a branch in any
  * layer's material: nothing a tile builds knows about it, and leaving the
- * style restores the scene exactly (ADR 0033). What the paper material
+ * style restores the scene exactly (ADR 0034). What the paper material
  * cannot stand in for is hidden for the frame — glows and sprites, and every
  * see-through sheet (the river, mist, lamp halos, nets): as opaque paper
  * they would be walls, and the river's sheet would cover the whole ground.

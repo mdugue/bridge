@@ -138,8 +138,9 @@ is the codebook.
 | Canopy on a monument | a canopy point on a relief cell is dropped (the DOM1 "tree" was the monument) | DOM1, Basis-DLM | `onRelief` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
 | Rails | `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`), draped or lifted onto a deck | Basis-DLM | `buildRails` |
-| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
-| Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
+| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height (the roadway DOM1 measures, held near the DGM abutment ramp and within 8 % grade, 4 % on rail), width by `kind`, the top in its land-cover class colour (road, path, railway; stone otherwise), parapet walls along the sides only (none where a frame stands on the edge), closed from below; the deck line a straight ramp plus one upward camber fitted to the measurement, never sagging; slab `depth` = deck − (water + fairway clearance), 0.6–5 m, else 1.1 m; drawn by the tile that owns its centre | Basis-DLM + DGM1/DOM1 + OSM seamarks | `drawBridge` |
+| Bridge superstructure | `ribs` (lateral `offset` + `rise` per 2 m): on an arch bridge the ribs that follow the tightest rib's parabola → steel arches carried below the deck to their springing, hangers/posts every 16 m (a rib that follows no arch: not drawn); cable-stayed → pylon + stays every 12 m fanned to the deck; else an open frame on each deck edge, its outer face flush with the deck's side, in a simple form (`ribProfile`: straight chords from the deck to the towers, a sag between them no lower than 2.6 m, a level girder without towers) — one 1.6 m chord, a post every 10 m, no diagonals — and a tower on a river pier + portal where it peaks ≥ 10 m (4 m prominent); two ribs snap to the two deck edges (`placeRibs`); pale matte steel `0xd9dde0` | DOM1 (+ Wikidata/OSM class) | `addSuperstructure`, `lib/city/bridge.ts` |
+| Bridge underside | `structure` contains `arch` and no steel arch → arches of ~26 m between piers 3.2 m thick, springing a quarter of the clearance above the ground, the deck's own side edges carried down to them as spandrel walls (both faces), a vault across the deck under each arch; else box piers every ~26 m on the axis, the fairway kept clear (main span wide, else 40 m); a frame's tower stands on its river pier | OSM / Wikidata | `addMasonry`, `masonryArches`, `pierStations` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
 | Landing stage | OSM pier outline + `deck` → timber slab 0.3 m, instanced piles every 4 m round its edge over the water, railing (rail + posts 2 m) along the edges over the water | OSM + DGM1 | `riverside-layer.ts` (`addPier`) |
 | Pontoon | outline cut to the water → soft slate hull −0.3…+0.35 m and pale deck +0.5 m over the lowest ground under it (= the drawn water); clay hut + slate roof when `len` > 15 m; 1.4 m gangway to `bank` | OSM + the terrain the water lies on | `riverside-layer.ts` (`addPontoon`) |
@@ -172,7 +173,7 @@ is the codebook.
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `paper-grain-effect.ts` (*Papierkorn*) |
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier — one post pass over the finished frame (below); Papier also swaps every surface for one white paper material for the frame, the ground keeping its paint and water as greys; remembered per browser | sun altitude (noir's dusk exposure) | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
-| Minimap | site tile bounds + 512² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
+| Minimap | site tile bounds + 512² class raster in the palette + the bridge decks in the colour of the class they carry (hairline edge) + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
 Every slider in the HUD is one row of `lib/city/look-controls.ts`; the
 German label in parentheses above is the slider that scales the term. The
@@ -245,7 +246,7 @@ renderer's MSAA (`antialias: false`); SMAA carries the anti-aliasing — of
 the style's ink lines and colour bands too, which is why that pass sits
 before it.
 
-**Picture styles** ([ADR 0033](./adr/0033-picture-styles-as-one-post-pass.md))
+**Picture styles** ([ADR 0034](./adr/0034-picture-styles-as-one-post-pass.md))
 redraw the finished frame; no material knows about them (the ground's
 Papier tones aside, below), so a switch rebuilds nothing. Their programs —
 the pass, the Papier and lamp-cone materials — compile against stand-ins

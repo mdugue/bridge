@@ -1,4 +1,4 @@
-# ADR 0033: Picture styles are one optional post pass over the clay scene
+# ADR 0034: Picture styles are one optional post pass over the clay scene
 
 - **Status:** accepted
 - **Date:** 2026-09
