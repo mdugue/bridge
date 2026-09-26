@@ -158,6 +158,8 @@ export interface TileStream {
 
 /** Every dressed object of a tile, keyed by its content root. */
 interface Dressed {
+  /** aborts the dressing's fetches when the tile leaves before it lands */
+  aborter?: AbortController;
   city?: CityLayer;
   dressing?: TileDressing;
   /** the shared sky-view raster the city holds (its URL) */
@@ -309,9 +311,12 @@ async function buildSport(
   terrain: TerrainLayer,
   file: string | undefined,
   ctx: TileStreamContext,
-  url: (file: string) => string
+  url: (file: string) => string,
+  signal?: AbortSignal
 ): Promise<SportFixtureLayer | undefined> {
-  const table = file ? await fetchOptionalJson<SportTable>(url(file)) : null;
+  const table = file
+    ? await fetchOptionalJson<SportTable>(url(file), signal)
+    : null;
   if (!table?.grounds?.length) {
     return undefined;
   }
@@ -393,7 +398,8 @@ async function buildDressing(
   terrain: TerrainLayer,
   extras: TerrainExtras,
   ctx: TileStreamContext,
-  url: (file: string) => string
+  url: (file: string) => string,
+  signal?: AbortSignal
 ): Promise<TileDressing> {
   const d = extras.dressing;
   const tile = extras.tileId;
@@ -403,7 +409,7 @@ async function buildDressing(
   // A kind the tile lacks is a feature off, never a request.
   const get = <T>(kind: DressingKind): Features<T> => {
     const file = d[kind];
-    return file ? fetchFeatures<T>(url(file)) : Promise.resolve([]);
+    return file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
   };
   const [
     rows,
@@ -427,7 +433,7 @@ async function buildDressing(
     get<VegRowFeature>("vegrows"),
     get<CanopyFeature>("canopy"),
     extras.ndvi
-      ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
+      ? loadNdviSampler(url(extras.ndvi), terrain.bounds, signal)
       : Promise.resolve(null),
     get<LampFeature>("lamps"),
     get<MonumentFeature>("monuments"),
@@ -436,7 +442,7 @@ async function buildDressing(
     get<BridgeFeature>("bridge"),
     get<AreaFeature>("railarea"),
     get<AreaFeature>("platform"),
-    buildSport(terrain, extras.sportTable, ctx, url),
+    buildSport(terrain, extras.sportTable, ctx, url, signal),
     // the street-tree cadastre (tree-inventory-layer.ts)
     get<TreeFeature>("trees"),
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
@@ -774,12 +780,15 @@ export class DressingPlugin {
         if (!entry || this.disposed) {
           return; // the tile (or the stream) left before its turn
         }
+        entry.aborter = new AbortController();
         const dressing = await buildDressing(
           terrain,
           extras,
           this.ctx,
-          this.url
+          this.url,
+          entry.aborter.signal
         );
+        entry.aborter = undefined;
         const parts = dressingParts(dressing);
         await withinCompileWait(
           Promise.all(
@@ -826,6 +835,7 @@ export class DressingPlugin {
       return;
     }
     this.dressed.delete(scene);
+    dressed.aborter?.abort();
     if (dressed.city) {
       this.stream.cities.delete(dressed.city);
       dressed.city.dispose();
