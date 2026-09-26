@@ -28,6 +28,7 @@ test("the default style is the pastel one, and it costs no pass", () => {
   expect(pastel.grainWeight).toBe(1);
   expect(pastel.grainAnimated).toBe(false);
   expect(pastel.allowDof).toBe(true);
+  expect(pastel.paperScene).toBe(false);
   expect(pastel.vignette).toEqual({ offset: 0.28, darkness: 0.5 });
 });
 
@@ -36,6 +37,12 @@ test("every other style runs the pass and draws ink", () => {
     expect(def.shaderMode).toBeGreaterThan(0);
     expect(def.inkWeight).toBeGreaterThan(0);
   }
+});
+
+test("only Papier swaps the scene's materials", () => {
+  expect(
+    RENDER_STYLES.filter((def) => def.paperScene).map((def) => def.id)
+  ).toEqual(["paper"]);
 });
 
 test("the monochrome styles take the colour grade out", () => {

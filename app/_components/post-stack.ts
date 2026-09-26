@@ -21,6 +21,7 @@ import {
 } from "@/lib/city/render-style";
 import { DepthGradingEffect } from "./depth-grading-effect";
 import { PaperGrainEffect } from "./paper-grain-effect";
+import { createPaperScene } from "./paper-scene";
 import type { AoQuality } from "./scene-profile";
 import { StylizeEffect } from "./stylize-effect";
 
@@ -166,6 +167,7 @@ export function createPostStack(
   let regressed = false;
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
   const stylize = new StylizeEffect(scene, camera);
+  const paperScene = createPaperScene(scene);
   const stylePass = new EffectPass(camera, stylize);
   stylePass.enabled = false;
   composer.addPass(stylePass);
@@ -251,7 +253,15 @@ export function createPostStack(
       renderer.setRenderTarget(previous);
       return done.then(() => undefined);
     },
-    render: (deltaSeconds) => composer.render(deltaSeconds),
+    render: (deltaSeconds) => {
+      // The Papier style swaps the scene's materials for this frame only.
+      const restore = style.paperScene ? paperScene.begin() : null;
+      try {
+        composer.render(deltaSeconds);
+      } finally {
+        restore?.();
+      }
+    },
     getFocusInfo: () => ({
       focusDistance: dof.cocMaterial.focusDistance,
       focusRange: dof.cocMaterial.focusRange,
@@ -297,6 +307,9 @@ export function createPostStack(
         camera.position.distanceTo(point)
       );
     },
-    dispose: () => composer.dispose(),
+    dispose: () => {
+      paperScene.dispose();
+      composer.dispose();
+    },
   };
 }

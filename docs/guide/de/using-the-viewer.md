@@ -37,7 +37,7 @@ lädt* oben im Bild (siehe
 | Klick auf die Minikarte | dorthin teleportieren |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
-| `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City) |
+| `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | immersiven Modus verlassen |
 
 | Eingabe (Touch) | Wirkung |
@@ -137,9 +137,10 @@ jederzeit wechseln, per Klick oder mit `V`:
 | Bildstil | So sieht er aus |
 |---|---|
 | *Pastell* | der Grundstil: Tonmodell auf Papier, weiches Licht, keine Umrisse |
-| *Comic* | feine, leicht zittrige Tuschelinien wie von Hand gezogen, flache Farbflächen in wenigen Tönen, ein Punktraster in den tiefsten Schatten |
+| *Comic* | Tuschelinien wie von Hand gezogen — wellig, mal dick, mal dünn, mal abgesetzt, leicht neben der Fläche —, flache Farbflächen in wenigen Tönen, ein Punktraster in den tiefsten Schatten aus der Nähe; aus der Höhe und in der Ferne wird die Zeichnung lockerer und sparsamer |
 | *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand |
 | *Sin City* | harte schwarze und weiße Flächen statt Linien: Bäume, Wiesen und die Elbe werden schwarz, beleuchtete Wände weiß, die Skyline steht als weiße Kante gegen den schwarzen Himmel; nur die roten Ziegeldächer behalten Farbe |
+| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; Bäume und Wasser werden ebenfalls Papier, Lichter und Nebelschleier fallen weg |
 
 In den grafischen Stilen *Comic* und *Sin City* ruht die Tiefenschärfe
 (ein unscharfer Hintergrund unter scharfen Linien wirkt wie ein Fehler);
@@ -170,7 +171,7 @@ der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
-| | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir* und *Sin City* sind |
+| | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City* und *Papier* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
 | | *Detaillierte Kronen* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 

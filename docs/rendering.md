@@ -144,8 +144,8 @@ is the codebook.
 | Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `paper-grain-effect.ts` (*Papierkorn*) |
-| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City — one post pass over the finished frame (below) | — | `lib/city/render-style.ts`, `stylize-effect.ts` |
-| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; a screen-fixed noise wobbles the stroke ≈ 1 px and swells its weight; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
+| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier — one post pass over the finished frame (below); Papier also swaps every surface for one white paper material for the frame | — | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts` |
+| Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | Minimap | site tile bounds + 2048² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
 Every slider in the HUD is one row of `lib/city/look-controls.ts`; the
@@ -211,10 +211,13 @@ rebuilds nothing and compiles at most the one pass. The table is
 weight on the *Tuschelinien*, *Tiefenfärbung* and *Papierkorn* sliders,
 the vignette, animated film grain and whether depth of field may run.
 
-- *Comic* — lightness cut into four flat tones (steps one pixel wide by the
-  input's own gradient), the colour rebuilt from a lifted **chroma** (HSL
-  saturation explodes towards white), highlights leaning into the paper, a
-  45° dot screen in the darkest band, the sky an unbanded wash.
+- *Comic* — lightness (read through a small blur, so crowns and AO give
+  flat areas, not flecks) cut into four flat tones, the colour rebuilt from
+  a lifted **chroma** (HSL saturation explodes towards white), highlights
+  leaning into the paper, a 45° dot screen in the darkest band up close
+  only (gone by ~200 m), the sky an unbanded wash. In the distance, and
+  where the colour nears the fog colour, the band edges soften into the
+  wash — hard bands on a pale far field broke into white blotches.
 - *Film noir* — luminance through an S-curve, crushed blacks, the distance
   lifted into grey smoke, a graduated sky; faint ink.
 - *Sin City* — masses, not contours: the luminance is read through a
@@ -227,6 +230,17 @@ the vignette, animated film grain and whether depth of field may run.
   reconstructed normal against world up), which lets the colour window be
   wide — every terracotta, brick or rust roof turns red, lit or oxblood in
   shade — without sand, paths or warm facades following.
+
+- *Papier* — the city as a white card model. A post pass cannot do this
+  (it sees a colour, not how much of it is surface and how much light), so
+  for this style's frames `paper-scene.ts` sets `scene.overrideMaterial` to
+  one flat-shaded, off-white `MeshStandardMaterial` under the real sun,
+  sky light, shadow map and AO; a layer's own colour survives as a 10 %
+  whisper, a slow world-space drift keeps the sheets from being one white.
+  Glows, sprites and see-through sheets that write no depth are hidden for
+  the frame; the sky box's inside is culled, so a paper background shows.
+  The pass lays the light out as a duotone (shade blue-grey, light paper)
+  under a fine graphite pen.
 
 The pass reads the depth buffer at **integer** texel radii around a texel
 centre, blending two radii for the stroke weight: the buffer is sampled

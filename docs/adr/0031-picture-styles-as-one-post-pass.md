@@ -7,7 +7,8 @@
 
 The pastel look (clay on paper, ADR 0010) is the product. The maintainer
 asked for further styles to switch to at runtime — a comic with fine,
-hand-drawn outlines and flat colour areas, film noir, Sin City. ADR 0010
+hand-drawn outlines and flat colour areas, film noir, Sin City, and later
+"Papier": the city as a white paper model with real light and shadow. ADR 0010
 removed the earlier building styles because each one was a second material
 path (every shader patch twice) or a second scene render (transmission),
 and rejected ink outlines built from `EdgesGeometry` (seconds at boot and
@@ -30,6 +31,16 @@ uniform. Per style the table also weights the existing *Tiefenfärbung*,
 *Papierkorn* and new *Tuschelinien* sliders, sets the vignette, switches
 the grain to animated film grain and may gate depth of field (a gate, like
 the motion regression, never a write to the user's switch).
+
+Papier is the one style a post pass cannot make: it needs every surface
+white with its shading intact, and a colour does not say how much of it is
+surface and how much is light. For that style's frames only, the post
+stack sets `scene.overrideMaterial` to one white paper material
+(`paper-scene.ts`) and hides what that material cannot stand in for
+(sprites, glows, see-through sheets without depth); the render restores
+the scene right after. That is a render-time swap owned by the post stack
+— still no branch in any layer's material, and nothing a tile builds knows
+about it.
 
 Lines come from the second difference of inverse view depth, which is zero
 on any plane: relative to `w` it marks silhouettes, relative to the local
@@ -61,6 +72,11 @@ stroke weight.
 - Anything whose outline matters but writes no depth (water sheets, mist)
   gets none.
 
+- Papier costs the scene render its specialised shaders (wind sway, water
+  wobble, the terrain's ground detail): the white model is static and
+  plain by design. The override material compiles a few programs
+  (instanced, vertex-coloured, plain) the first time the style is chosen.
+
 ## Alternatives
 
 - **Per-material toon shading** (a cel ramp in the clay, terrain and
@@ -71,6 +87,9 @@ stroke weight.
 - **Bake-time outlines from the CityJSON rings** (ADR 0010's suggestion):
   buildings only, not trees, terrain or dressing, and a style switch would
   have to toggle geometry.
+- **Papier from colour alone** (desaturate, lift, normalise locally):
+  albedo and light cannot be told apart in the finished frame — green
+  crowns stay grey, a lit dark roof and a shaded light wall meet.
 - **Kuwahara / painterly filter for the flat areas:** 60+ colour taps per
   pixel; the tone bands plus lines already read as flat colour.
 

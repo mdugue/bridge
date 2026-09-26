@@ -86,7 +86,7 @@ export interface LookValues extends Record<LookKey, number> {
   focusMode: FocusMode;
   /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
   multiTuft: boolean;
-  /** the picture style (render-style.ts): pastel, comic, film noir, Sin City */
+  /** the picture style (render-style.ts): pastel, comic, film noir, Sin City, Papier */
   style: RenderStyle;
 }
 
@@ -315,7 +315,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "ink-lines",
     label: "Tuschelinien",
     description:
-      "Stärke der Umrisslinien in den Stilen Comic, Film noir und Sin City",
+      "Stärke der Umrisslinien in den Stilen Comic, Film noir, Sin City und Papier",
     group: "rendering",
     initial: 0.7,
     snapshotKey: "inkPct",

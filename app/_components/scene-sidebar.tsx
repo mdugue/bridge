@@ -299,7 +299,7 @@ function FocusControls({
 }
 
 /**
- * The picture style: four swatch cards, exactly one pressed — the same
+ * The picture style: five swatch cards, exactly one pressed — the same
  * single-value ToggleGroup as walk/fly and the focus mode, so the keyboard
  * moves through it the same way.
  */
@@ -314,7 +314,7 @@ function StylePicker({
     <div className="flex flex-col gap-2 pb-2">
       <ToggleGroup
         aria-label="Bildstil"
-        className="grid w-full grid-cols-4 gap-1.5"
+        className="grid w-full grid-cols-3 gap-1.5"
         id="render-style"
         onValueChange={(value: string[]) => {
           const next = value[0] as RenderStyle | undefined;

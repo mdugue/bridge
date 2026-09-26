@@ -3,11 +3,13 @@
  * the same scene — the clay city, the painted ground, the trees — not a
  * different scene: it lives in the post stack (post-stack.ts + the stylize
  * pass in stylize-effect.ts), so switching it at runtime rebuilds no
- * material and recompiles nothing. The HUD renders its picker from this
+ * material and recompiles nothing. One style also swaps the scene's
+ * materials for the frame (`paperScene`, paper-scene.ts) — a render-time
+ * override, still no branch in any layer. The HUD renders its picker from this
  * table, the look store validates against it and the snapshot codec
  * persists `id`. No THREE, no DOM.
  */
-export type RenderStyle = "comic" | "noir" | "pastel" | "sincity";
+export type RenderStyle = "comic" | "noir" | "paper" | "pastel" | "sincity";
 
 export interface RenderStyleDef {
   /**
@@ -25,6 +27,12 @@ export interface RenderStyleDef {
   grainAnimated: boolean;
   /** weight on the grain slider */
   grainWeight: number;
+  /**
+   * Draw every surface with one white paper material under the real light
+   * (paper-scene.ts). Only the Papier style: its whole point is white
+   * surfaces with true shading, which no post pass can recover from colour.
+   */
+  paperScene: boolean;
   /** stable id — persisted in snapshots, never rename */
   id: RenderStyle;
   /** weight on the ink slider (the outline strength) */
@@ -53,6 +61,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1,
     grainAnimated: false,
     allowDof: true,
+    paperScene: false,
     vignette: { offset: 0.28, darkness: 0.5 },
     swatch: ["#efe6d8", "#b9c7d6"],
   },
@@ -68,6 +77,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1.2,
     grainAnimated: false,
     allowDof: false,
+    paperScene: false,
     vignette: { offset: 0.35, darkness: 0.22 },
     swatch: ["#f6ecd2", "#e0674f"],
   },
@@ -82,6 +92,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1.6,
     grainAnimated: true,
     allowDof: true,
+    paperScene: false,
     vignette: { offset: 0.12, darkness: 0.9 },
     swatch: ["#c9c9c4", "#1b1b1d"],
   },
@@ -96,8 +107,26 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 0.5,
     grainAnimated: true,
     allowDof: false,
+    paperScene: false,
     vignette: { offset: 0.25, darkness: 0.55 },
     swatch: ["#f4f4f0", "#c1121f"],
+  },
+  {
+    id: "paper",
+    label: "Papier",
+    description:
+      "Die Stadt als weißes Papiermodell: echtes Licht und Schatten, feine, gezeichnete Konturen",
+    shaderMode: 4,
+    inkWeight: 1,
+    // The duotone carries the light; a warm/cool grade would tint the paper.
+    gradingWeight: 0,
+    grainWeight: 1.1,
+    grainAnimated: false,
+    // A shallow focus on a white model reads as a miniature — welcome here.
+    allowDof: true,
+    paperScene: true,
+    vignette: { offset: 0.32, darkness: 0.28 },
+    swatch: ["#f4f0e8", "#7a8092"],
   },
 ];
 

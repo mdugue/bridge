@@ -115,7 +115,8 @@ config change.
   - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`,
     `stylize-effect.ts` (the picture styles' one pass: ink lines + tone;
-    the table is `lib/city/render-style.ts`), `visual-style.ts`
+    the table is `lib/city/render-style.ts`), `paper-scene.ts` (Papier's
+    render-time white material), `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
@@ -372,12 +373,15 @@ is off-screen.
 The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
 loader's raw LoD colours) styles were removed. Keep transmission out of the
 scene: it re-renders everything into a buffer each frame (~2× cost). The
-*picture* styles (Comic, Film noir, Sin City; the HUD's *Bildstil*, key `V`)
-are not material styles: they are one post pass over the finished frame
-(`stylize-effect.ts`, ADR 0031), off in the default pastel look. Give a new
-style a row in `lib/city/render-style.ts` and a mode in that pass — never a
-branch in a scene material. Its depth taps stay at integer texel radii (the
-buffer is read NEAREST; a fractional radius inks whole grazing streets).
+*picture* styles (Comic, Film noir, Sin City, Papier; the HUD's *Bildstil*,
+key `V`) are not material styles: they are one post pass over the finished
+frame (`stylize-effect.ts`, ADR 0031), off in the default pastel look.
+Papier additionally swaps every surface for one white paper material for
+its frames (`paper-scene.ts`, `scene.overrideMaterial`, restored after the
+render). Give a new style a row in `lib/city/render-style.ts` and a mode in
+that pass — never a branch in a scene material. Its depth taps stay at
+integer texel radii (the buffer is read NEAREST; a fractional radius inks
+whole grazing streets).
 
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on

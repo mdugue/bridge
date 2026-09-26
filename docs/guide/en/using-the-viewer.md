@@ -35,7 +35,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Click on the minimap | teleport there |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
 | `R` | demolish the building under the crosshair |
-| `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City) |
+| `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | leave immersive mode |
 
 | Input (touch) | Does |
@@ -131,9 +131,10 @@ with a click or with `V`:
 | Style | What it looks like |
 |---|---|
 | *Pastell* | the default: a clay model on paper, soft light, no outlines |
-| *Comic* | fine, slightly wavering ink lines as if drawn by hand, flat colour areas in a few tones, a dot screen in the deepest shade |
+| *Comic* | ink lines as if drawn by hand — wavy, thick and thin, now and then broken, a little off the fill —, flat colour areas in a few tones, a dot screen in the deepest shade up close; from the air and in the distance the drawing gets looser and sparser |
 | *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge |
 | *Sin City* | hard black and white masses instead of lines: trees, meadows and the Elbe go black, lit walls white, the skyline stands as a white edge against the black sky; only the red tiled roofs keep their colour |
+| *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; trees and water turn to paper too, lights and mist sheets drop out |
 
 In the graphic styles *Comic* and *Sin City* the depth of field rests (a
 blurred background under crisp lines reads as a mistake); the switch stays
@@ -164,7 +165,7 @@ as you set it.
 | | *Windhelligkeit* | crowns brighten as they lean into a gust |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
-| | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir* and *Sin City* |
+| | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City* and *Papier* |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
 | | *Detaillierte Kronen* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 
