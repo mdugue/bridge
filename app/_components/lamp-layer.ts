@@ -196,6 +196,9 @@ function buildNodeGlow(
     new InstancedBufferAttribute(positions, 3)
   );
   const glow = new Sprite(mat);
+  // Its own quad: a Sprite starts on three's one module-wide quad, which
+  // the tile's dispose would free under every other tile's glow.
+  glow.geometry = glow.geometry.clone();
   glow.count = count;
   glow.frustumCulled = false;
   glow.name = "lamp-glow";

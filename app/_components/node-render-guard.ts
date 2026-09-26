@@ -18,7 +18,7 @@
  *   through the async API (`createRenderPipelineAsync`, or
  *   KHR_parallel_shader_compile on WebGL2); an object whose pipeline is
  *   still compiling is skipped by the renderer (`Pipelines.isReady`) and
- *   drawn from the frame it is ready, and the shadow map is redrawn then.
+ *   drawn from the frame it is ready (the shadow map is redrawn then).
  * - **Node builds (TSL → WGSL) run on the main thread.** three keys an
  *   instanced mesh's build by its uuid, so each cell is its own build, in
  *   the main pass and again in the shadow pass. Tiles compile ahead of time
@@ -47,10 +47,16 @@ export interface NodeRenderGuard {
 interface RenderObjectLike {
   _nodeBuilderState?: unknown;
   initialCacheKey: number;
+  material: unknown;
 }
 
+/** The shadow pass draws every caster with one override material. */
+const isShadowPass = (material: unknown): boolean =>
+  (material as { isShadowPassMaterial?: boolean } | null)
+    ?.isShadowPassMaterial === true;
+
 type RenderObjectArgs = [
-  object: Object3D,
+  object: Object3D & { isQuadMesh?: boolean },
   material: unknown,
   scene: unknown,
   camera: unknown,
@@ -84,7 +90,7 @@ interface RendererInternals {
       ro: unknown,
       promises: { push: (p: unknown) => void } | null
     ) => unknown;
-    updateForRender: (ro: unknown) => void;
+    updateForRender: (ro: RenderObjectLike) => void;
   };
   backend: { capabilities: { getUniformBufferLimit: () => number } };
 }
@@ -106,23 +112,32 @@ export function guardNodeRenderer(
 
   // Every pipeline through the async API. The descriptor is read from the
   // render object synchronously, so a shadow-pass override material (whose
-  // nodes three swaps per object) is captured correctly.
+  // nodes three swaps per object) is captured correctly. The main pass is
+  // drawn every frame and picks a ready pipeline up by itself; the shadow
+  // map is not, so a shadow-pass pipeline that lands asks for a redraw.
   const pipelines = r._pipelines;
-  const sink = {
+  const shadowSink = {
     push: (p: unknown) => {
       (p as Promise<void>).then(onLate, onLate);
     },
   };
+  const frameSink = { push: () => undefined };
   let inFrame = false;
   pipelines.updateForRender = (ro) => {
+    const sink = isShadowPass(ro.material) ? shadowSink : frameSink;
     pipelines.getForRender(ro, inFrame ? sink : null);
   };
 
   // Node builds under a per-frame budget. A build is needed when neither
   // the render object nor the cache holds its node state; a cache hit costs
-  // microseconds and always goes through.
+  // microseconds and always goes through. Renders nest — the shadow pass
+  // runs inside the first receiver's draw, the whole scene pass inside the
+  // output quad's — so a draw is charged its own time only, never its
+  // children's, and full-screen quads (the post stack) are never held back:
+  // holding the output quad would hold the frame.
   let spent = 0;
   let late = false;
+  const nested: number[] = [];
   const direct = r._renderObjectDirect;
   r._renderObjectDirect = function (this: RendererInternals, ...args) {
     const [object, material, scene, camera, lightsNode, , clipping, passId] =
@@ -141,20 +156,28 @@ export function guardNodeRenderer(
       clipping,
       passId
     );
-    if (
-      ro._nodeBuilderState !== undefined ||
-      this._nodes.nodeBuilderCache.has(ro.initialCacheKey)
-    ) {
-      direct.apply(this, args);
+    // (three sets _nodeBuilderState to null until the state is looked up)
+    const fresh =
+      ro._nodeBuilderState == null &&
+      !this._nodes.nodeBuilderCache.has(ro.initialCacheKey);
+    if (fresh && spent >= BUILD_BUDGET_MS && !object.isQuadMesh) {
+      late ||= isShadowPass(material);
       return;
     }
-    if (spent >= BUILD_BUDGET_MS) {
-      late = true;
-      return;
-    }
+    nested.push(0);
     const start = performance.now();
-    direct.apply(this, args);
-    spent += performance.now() - start;
+    try {
+      direct.apply(this, args);
+    } finally {
+      const elapsed = performance.now() - start;
+      const children = nested.pop() ?? 0;
+      if (fresh) {
+        spent += elapsed - children;
+      }
+      if (nested.length > 0) {
+        nested[nested.length - 1] += elapsed;
+      }
+    }
   };
   // The constructor bound the original; every scene render re-reads it.
   r._handleObjectFunction = r._renderObjectDirect;

@@ -26,6 +26,7 @@ import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
 import {
   MAP_FADE_GLSL,
   MAP_OVERLAY_UNIFORMS,
@@ -442,7 +443,9 @@ function ferryMesh(lines: Point2[][], ctx: RiversideContext): Mesh | null {
   geo.computeBoundingSphere();
   const mesh = new Mesh(
     geo,
-    nodeRenderer() ? nodeWakeMaterial() : wakeMaterial(ctx)
+    nodeRenderer()
+      ? sharedNodeMaterial("ferry-wake", nodeWakeMaterial)
+      : wakeMaterial(ctx)
   );
   mesh.name = "riverside-ferry";
   mesh.castShadow = false;

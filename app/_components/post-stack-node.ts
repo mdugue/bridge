@@ -1,6 +1,7 @@
 import {
   LinearSRGBColorSpace,
   NoToneMapping,
+  type BufferGeometry,
   type Object3D,
   type PerspectiveCamera,
   SRGBColorSpace,
@@ -63,30 +64,46 @@ function hash21(p: Node<"vec2">): Node<"float"> {
   return fract(r.x.mul(r.y));
 }
 
+type Drawable = Object3D & { geometry?: BufferGeometry };
+
 /**
- * Makes every object under `root` visible and unculled, and returns what
- * puts them back. Only for the synchronous half of a compileAsync call.
+ * Every drawable under `root`, and a set that learns which of them lose
+ * their geometry (a tile unloaded, a dressing thrown away) while the
+ * compile still runs.
  */
-function exposeForCompile(root: Object3D): () => void {
-  const hidden: Object3D[] = [];
-  const culled: Object3D[] = [];
+function drawables(root: Object3D): {
+  gone: WeakSet<BufferGeometry>;
+  list: Drawable[];
+  stop: () => void;
+} {
+  const list: Drawable[] = [];
   root.traverse((object) => {
-    if (!object.visible) {
-      object.visible = true;
-      hidden.push(object);
-    }
-    if (object.frustumCulled) {
-      object.frustumCulled = false;
-      culled.push(object);
+    const o = object as Drawable & {
+      isLine?: boolean;
+      isMesh?: boolean;
+      isPoints?: boolean;
+      isSprite?: boolean;
+    };
+    if (o.geometry && (o.isMesh || o.isLine || o.isPoints || o.isSprite)) {
+      list.push(o);
     }
   });
-  return () => {
-    for (const object of hidden) {
-      object.visible = false;
-    }
-    for (const object of culled) {
-      object.frustumCulled = true;
-    }
+  const gone = new WeakSet<BufferGeometry>();
+  const onDispose = (event: { target: BufferGeometry }) => {
+    gone.add(event.target);
+  };
+  const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
+  for (const geometry of geometries) {
+    geometry.addEventListener("dispose", onDispose);
+  }
+  return {
+    gone,
+    list,
+    stop: () => {
+      for (const geometry of geometries) {
+        geometry.removeEventListener("dispose", onDispose);
+      }
+    },
   };
 }
 
@@ -208,22 +225,47 @@ export function createNodePostStack(
   // A WebGPU pipeline is specific to the attachments it draws into: compile
   // against the scene pass's target, which compileAsync reads synchronously
   // (the shader state it reads later is the renderer's, identical above).
-  // compileAsync walks the tree the way a frame does, skipping what is
-  // hidden or outside the view; every object is exposed for that walk,
-  // or whatever the camera did not see yet would build inside the frame
-  // that first shows it.
+  // compileAsync walks a tree the way a frame does, skipping what is hidden
+  // or outside the view, so each drawable is compiled on its own, shown
+  // and unculled for the call: whatever the camera did not see yet would
+  // otherwise build inside the frame that first shows it. One at a time,
+  // so a drawable whose tile left meanwhile is skipped — compiling it
+  // would re-create the GPU buffers of a disposed geometry, and nothing
+  // would free them again.
+  const compileOne = (object: Object3D): Promise<void> => {
+    const target = renderer.getRenderTarget();
+    const { visible, frustumCulled } = object;
+    object.visible = true;
+    object.frustumCulled = false;
+    renderer.setRenderTarget(scenePass.renderTarget);
+    try {
+      return renderer.compileAsync(object, camera, scene);
+    } finally {
+      renderer.setRenderTarget(target);
+      object.visible = visible;
+      object.frustumCulled = frustumCulled;
+    }
+  };
+  // What was compiled already (a tile, before the whole scene's compile at
+  // boot walks it again): once is enough for a drawable and its material.
+  const compiled = new WeakMap<Object3D, unknown>();
   return {
-    compile: (object) => {
-      const target = renderer.getRenderTarget();
-      const restore = exposeForCompile(object);
-      renderer.setRenderTarget(scenePass.renderTarget);
+    compile: async (object) => {
+      const { gone, list, stop } = drawables(object);
       try {
-        return renderer
-          .compileAsync(object, camera, scene)
-          .then(() => undefined);
+        for (const drawable of list) {
+          const { material } = drawable as Drawable & { material?: unknown };
+          if (
+            compiled.get(drawable) === material ||
+            gone.has(drawable.geometry as BufferGeometry)
+          ) {
+            continue;
+          }
+          compiled.set(drawable, material);
+          await compileOne(drawable);
+        }
       } finally {
-        renderer.setRenderTarget(target);
-        restore();
+        stop();
       }
     },
     render: () => {

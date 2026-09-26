@@ -33,3 +33,29 @@ export function retainNodeScene(): () => void {
     }
   };
 }
+
+const materials = new Map<string, { dispose: () => void; userData: object }>();
+onNodeSceneEnd(() => {
+  for (const material of materials.values()) {
+    material.dispose();
+  }
+  materials.clear();
+});
+
+/**
+ * A node material every tile shares, made on first use (`userData.shared`,
+ * so no tile's dispose frees it), freed with the last app. For materials
+ * that carry no per-tile state: three keys a node graph by its nodes' ids,
+ * so a copy per tile would be translated anew for each.
+ */
+export function sharedNodeMaterial<
+  T extends { dispose: () => void; userData: Record<string, unknown> },
+>(key: string, make: () => T): T {
+  let material = materials.get(key) as T | undefined;
+  if (!material) {
+    material = make();
+    material.userData.shared = true;
+    materials.set(key, material);
+  }
+  return material;
+}

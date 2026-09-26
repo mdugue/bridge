@@ -277,6 +277,13 @@ export function catchUp(
   d.lamps?.setNightFactor(ctx.night());
 }
 
+/** The textures a material binds (its texture-valued members). */
+function materialTextures(material: Material): Texture[] {
+  return Object.values(material).filter(
+    (v): v is Texture => (v as Texture | null)?.isTexture === true
+  );
+}
+
 function disposeDressing(d: TileDressing): void {
   d.lamps?.dispose();
   d.monuments?.dispose();
@@ -819,13 +826,24 @@ export class DressingPlugin {
   }
 
   disposeTile(tile: {
-    engineData?: { materials?: Material[] | null; scene?: Object3D | null };
+    engineData?: {
+      materials?: Material[] | null;
+      scene?: Object3D | null;
+      textures?: Texture[] | null;
+    };
   }): void {
-    // Runs before the renderer frees the tile's materials: keep the shared
-    // ones (userData.shared) out of that list, they serve every tile.
+    // Runs before the renderer frees the tile's materials and textures: keep
+    // the shared ones (userData.shared) and their textures out of those
+    // lists, they serve every tile. (A dressing hung under the content
+    // before the renderer collected it would otherwise be in them.)
     const data = tile.engineData;
     if (data?.materials) {
+      const shared = data.materials.filter((m) => m.userData.shared);
       data.materials = data.materials.filter((m) => !m.userData.shared);
+      if (shared.length > 0 && data.textures) {
+        const kept = new Set(shared.flatMap(materialTextures));
+        data.textures = data.textures.filter((t) => !kept.has(t));
+      }
     }
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);

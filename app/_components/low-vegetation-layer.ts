@@ -28,6 +28,7 @@ import {
 } from "three/tsl";
 import { MeshStandardNodeMaterial, type Node } from "three/webgpu";
 import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { bucketByCell, hash } from "./vegetation-layer";
 
@@ -177,7 +178,7 @@ function buildHedgeMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
   if (nodeRenderer()) {
-    return nodeHedgeMaterial();
+    return sharedNodeMaterial("low-hedge", nodeHedgeMaterial);
   }
   const m = new MeshStandardMaterial({ color: 0xff_ff_ff, roughness: 1 });
   m.customProgramCacheKey = () => `lowveg-hedge-${heightFog !== undefined}`;
@@ -255,7 +256,7 @@ function lvNoise(p: Node<"vec2">): Node<"float"> {
  * mottle and its yellow lean. three multiplies the instance tint in after
  * `colorNode`, as the GLSL's colour pass does after the map chunk; every term
  * here scales the colour, so the order does not matter. The height fog is
- * the scene's fog node. Built per tile, like the GLSL material.
+ * the scene's fog node. Shared by every tile (sharedNodeMaterial).
  */
 function nodeHedgeMaterial(): MeshStandardMaterial {
   const m = new MeshStandardNodeMaterial({ color: 0xff_ff_ff, roughness: 1 });

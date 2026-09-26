@@ -282,7 +282,9 @@ async function newRenderer(): Promise<WebGLRenderer> {
       powerPreference: "high-performance",
     });
   }
-  // SPIKE (plan 020): WebGPURenderer, loaded only on ?gpu=… pages.
+  // SPIKE (plan 020): WebGPURenderer on ?gpu=… pages. (The TSL materials
+  // import three/webgpu statically, so it is in every page's bundle; a
+  // real port puts the node path behind one dynamic import.)
   const { WebGPURenderer } = await import("three/webgpu");
   const renderer = new WebGPURenderer({
     antialias: false,
@@ -392,7 +394,11 @@ function teardown(
 ): void {
   runCleanups(cleanups);
   disposeObject3D(scene);
-  renderer.dispose();
+  // WebGPURenderer's dispose is async (it destroys the device at the end).
+  const disposed: unknown = renderer.dispose();
+  if (disposed instanceof Promise) {
+    disposed.catch(() => undefined);
+  }
   // WebGPURenderer has no context to lose: its dispose() destroys the
   // device it made.
   if (!nodeRenderer()) {

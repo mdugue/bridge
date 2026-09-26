@@ -4,8 +4,10 @@ import type { WebGPURenderer } from "three/webgpu";
 import { guardNodeRenderer } from "./node-render-guard";
 
 interface FakeRenderObject {
-  _nodeBuilderState?: unknown;
+  /** null until looked up, as three's RenderObject starts it */
+  _nodeBuilderState: unknown;
   initialCacheKey: number;
+  material: unknown;
 }
 type Promises = { push: (p: unknown) => void } | null;
 
@@ -31,7 +33,11 @@ class FakeRenderer {
     get: (object: Object3D): FakeRenderObject => {
       let ro = this.renderObjects.get(object);
       if (!ro) {
-        ro = { initialCacheKey: object.id };
+        ro = {
+          _nodeBuilderState: null,
+          initialCacheKey: object.id,
+          material: object.userData.material,
+        };
         this.renderObjects.set(object, ro);
       }
       return ro;
@@ -48,7 +54,9 @@ class FakeRenderer {
     },
     updateForRender: (_ro: unknown): void => undefined,
   };
-  _handleObjectFunction: ((object: Object3D) => void) | null = null;
+  _handleObjectFunction:
+    | ((object: Object3D, material: unknown) => void)
+    | null = null;
   constructor(private readonly buildMs: number) {}
 
   _renderObjectDirect(object: Object3D): void {
@@ -58,13 +66,18 @@ class FakeRenderer {
       this.clock += this.buildMs;
       cache.set(ro.initialCacheKey, {});
     }
+    ro._nodeBuilderState = cache.get(ro.initialCacheKey);
     this._pipelines.updateForRender(ro);
     this.drawn.push(object.name);
+    // a pass that renders inside this draw (the shadow map, a scene pass)
+    for (const child of (object.userData.nested ?? []) as Object3D[]) {
+      this.draw(child);
+    }
   }
 
   /** what three's render list does for each object */
   draw(object: Object3D): void {
-    this._handleObjectFunction?.call(this, object);
+    this._handleObjectFunction?.call(this, object, object.userData.material);
   }
 }
 
@@ -72,11 +85,14 @@ function install(fake: FakeRenderer, onLate: () => void) {
   return guardNodeRenderer(fake as unknown as WebGPURenderer, onLate);
 }
 
-function named(name: string): Object3D {
+function named(name: string, userData: Record<string, unknown> = {}) {
   const o = new Object3D();
   o.name = name;
+  o.userData = userData;
   return o;
 }
+
+const SHADOW = { isShadowPassMaterial: true };
 
 test("instancing no longer depends on the instance count", () => {
   const fake = new FakeRenderer(0);
@@ -90,7 +106,7 @@ test("in a frame, new builds share a budget and the rest wait", () => {
   const now = spyOn(performance, "now").mockImplementation(() => fake.clock);
   try {
     const guard = install(fake, () => late++);
-    const objects = ["a", "b", "c", "d"].map(named);
+    const objects = ["a", "b", "c", "d"].map((n) => named(n));
     guard.beginFrame();
     for (const o of objects) {
       fake.draw(o);
@@ -98,8 +114,8 @@ test("in a frame, new builds share a budget and the rest wait", () => {
     guard.endFrame();
     // 4 ms each against a 6 ms budget: two build, two wait.
     expect(fake.drawn).toEqual(["a", "b"]);
-    guard.beginFrame(); // the skipped ones ask for a shadow redraw
-    expect(late).toBe(1);
+    guard.beginFrame(); // main-pass objects are drawn next frame anyway
+    expect(late).toBe(0);
     fake.drawn.length = 0;
     for (const o of objects) {
       fake.draw(o);
@@ -117,12 +133,79 @@ test("pipelines are async inside a frame and blocking outside it", async () => {
   let late = 0;
   const guard = install(fake, () => late++);
   guard.beginFrame();
-  fake.draw(named("in"));
+  fake.draw(named("main"));
+  fake.draw(named("caster", { material: SHADOW }));
   guard.endFrame();
   // A one-off render (the land-cover paint) draws at once, blocking.
   fake.draw(named("out"));
-  expect(fake.pipelineCalls).toEqual(["async", "sync"]);
+  expect(fake.pipelineCalls).toEqual(["async", "async", "sync"]);
   await Promise.all(fake.pending);
   await Promise.resolve();
+  // Only the shadow pass's pipeline asks for a redraw: the main pass is
+  // drawn every frame anyway.
   expect(late).toBe(1);
+});
+
+test("a caster held back by the budget asks for a shadow redraw", () => {
+  const fake = new FakeRenderer(4);
+  let late = 0;
+  const now = spyOn(performance, "now").mockImplementation(() => fake.clock);
+  try {
+    const guard = install(fake, () => late++);
+    guard.beginFrame();
+    for (const name of ["a", "b", "c"]) {
+      fake.draw(named(name, { material: SHADOW }));
+    }
+    guard.endFrame();
+    expect(fake.drawn).toEqual(["a", "b"]);
+    guard.beginFrame();
+    guard.endFrame();
+    expect(late).toBe(1);
+  } finally {
+    now.mockRestore();
+  }
+});
+
+test("a draw is charged its own build, not the passes inside it", () => {
+  const fake = new FakeRenderer(1.5);
+  const now = spyOn(performance, "now").mockImplementation(() => fake.clock);
+  try {
+    const guard = install(fake, () => undefined);
+    // The output quad (new) renders the scene pass (two new objects) inside
+    // its own draw; then two more objects are met.
+    const quad = named("quad", { nested: [named("s1"), named("s2")] });
+    (quad as Object3D & { isQuadMesh: boolean }).isQuadMesh = true;
+    guard.beginFrame();
+    fake.draw(quad);
+    fake.draw(named("late1"));
+    fake.draw(named("late2"));
+    guard.endFrame();
+    // Charged 1.5 × 3 = 4.5 so far, so late1 still builds (6), late2
+    // waits. Charging the quad its children's time too (4.5 + 3) would
+    // have held late1 back.
+    expect(fake.drawn).toEqual(["quad", "s1", "s2", "late1"]);
+  } finally {
+    now.mockRestore();
+  }
+});
+
+test("full-screen quads are never held back", () => {
+  const fake = new FakeRenderer(10);
+  const now = spyOn(performance, "now").mockImplementation(() => fake.clock);
+  try {
+    const guard = install(fake, () => undefined);
+    const quads = ["q1", "q2"].map((n) => {
+      const q = named(n) as Object3D & { isQuadMesh: boolean };
+      q.isQuadMesh = true;
+      return q;
+    });
+    guard.beginFrame();
+    for (const q of quads) {
+      fake.draw(q);
+    }
+    guard.endFrame();
+    expect(fake.drawn).toEqual(["q1", "q2"]);
+  } finally {
+    now.mockRestore();
+  }
 });

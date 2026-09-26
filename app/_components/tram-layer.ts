@@ -57,6 +57,7 @@ import {
 import { MeshBasicNodeMaterial } from "three/webgpu";
 import { buildFurniture } from "./furniture-layer";
 import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import {
   addRail,
@@ -304,7 +305,9 @@ function wireMesh(w: Wires, heightFog?: HeightFogUniforms): Mesh | null {
   const node = nodeRenderer();
   const mesh = new Mesh(
     g,
-    node ? nodeWireMaterial() : wireMaterial(uniforms, heightFog)
+    node
+      ? sharedNodeMaterial("tram-wire", nodeWireMaterial)
+      : wireMaterial(uniforms, heightFog)
   );
   mesh.name = "tram-wires";
   mesh.castShadow = false;

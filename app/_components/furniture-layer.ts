@@ -54,6 +54,7 @@ import {
 } from "three/tsl";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
@@ -689,7 +690,7 @@ const HAND_VERTEX = `
 
 function handMaterial(ctx: FurnitureContext): MeshBasicMaterial {
   if (nodeRenderer()) {
-    return nodeHandMaterial();
+    return sharedNodeMaterial("clock-hands", nodeHandMaterial);
   }
   const m = new MeshBasicMaterial({ color: new Color(INK), side: DoubleSide });
   const { heightFog } = ctx;
@@ -948,7 +949,7 @@ function liftAt(areas: FurnitureArea[], x: number, y: number): number {
 /** The furniture material, glowing softly at dusk (the lit columns). */
 function glowMaterial(ctx: FurnitureContext): MeshStandardMaterial {
   if (nodeRenderer()) {
-    return nodeGlowMaterial();
+    return sharedNodeMaterial("furniture-glow", nodeGlowMaterial);
   }
   const material = furnitureMaterial(ctx);
   const { heightFog } = ctx;
