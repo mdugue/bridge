@@ -130,7 +130,8 @@ config change.
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
     stands and looks, walk/fly and the scenic glides; every input cancels a
-    glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
+    glide; the camera is never below the ground or inside a building —
+    `lib/city/clearance.ts`, ADR 0032), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
     `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
     `altitude-stick.tsx` (the fly-mode climb control opposite it),
     `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS

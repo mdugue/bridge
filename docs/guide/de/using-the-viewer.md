@@ -52,8 +52,12 @@ lädt* oben im Bild (siehe
 | Zwei Finger zusammenziehen | zoomen |
 
 Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
-und Mauern an. Beim Fliegen gibt es keine Kollision; nur sinken kannst du
-nicht tiefer als bis auf Augenhöhe über dem Boden. Jede Eingabe bricht
+und Mauern an. Auch im Flug stößt du an Fassaden, sinken kannst du nicht
+tiefer als bis auf Augenhöhe über dem Boden, und über ansteigendem Gelände
+hebt dich der Boden mit. In einem Gebäude oder unter der Erde landest du
+nie: Ein Doppelklick auf eine Fassade, ein Snapshot oder dein Standort in
+einem Haus setzt dich davor ab, in der Luft über das Dach, und ein
+Gleitflug steigt über das, was auf seinem Weg steht. Jede Eingabe bricht
 einen laufenden Gleitflug ab.
 
 Unten rechts liegt die **Werkzeugleiste**; jeder Knopf trägt seinen Namen
