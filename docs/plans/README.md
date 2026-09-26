@@ -39,7 +39,7 @@ history. Decisions that came out of plans are written up as
 | 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | DONE (PR #25) | [completed.md](./completed.md#005--input-and-collision-correctness--done-pr-25) |
 | 006 | Scaffold cleanup, unused deps, lint config, fonts, README + AGENTS.md | DONE (PR #25) | [completed.md](./completed.md#006--scaffold-cleanup-dependencies-readme--done-pr-25) |
 | 007 | Adaptive quality while the camera moves | DONE (PR #25; SSAO gating reverted 2026-09-22; step 4 open) | [completed.md](./completed.md#007--adaptive-quality-while-the-camera-moves--done-pr-25-step-4-open-amended) |
-| 008 | Make the verification net catch what it exists to catch | **PARTIAL** — steps 1–4, 8 done; 5, 6 (rest), 7 open | [008-verification-net.md](./008-verification-net.md) |
+| 008 | Make the verification net catch what it exists to catch | **PARTIAL** — steps 1–4, 8 done; 5, 6 (rest) open; 7 moot since plan 020 | [008-verification-net.md](./008-verification-net.md) |
 | 009 | Re-render the shadow map only when the player has moved a real distance | DONE | [completed.md](./completed.md#009--shadow-refresh-dead-zone--done) |
 | 010 | One tile artifact map, one fetch/abort policy, walls fetched once, neighbours loaded concurrently | DONE | [completed.md](./completed.md#010--tile-artifact-map-and-parallel-loads--done) |
 | 011 | Six confirmed defects: flight cancel, keyup in text fields, minimap re-decode, null/MultiPolygon rail data, WebGL2 preflight | DONE | [completed.md](./completed.md#011--six-confirmed-defects--done) |
@@ -51,7 +51,7 @@ history. Decisions that came out of plans are written up as
 | 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **PARTIAL** — phases 1–2 done for Saxony (site config in TS, Python bakes, `ingest_sn`); 3 half; 4 (OSM land cover), NRW, 5 (rest) open | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
 | 019 | Verify and tune the 3D Tiles branch on a real GPU (palette, quantisation, LOD, seams, shadows, frame time, phones, deploy host) | **TODO** — needs a GPU | [019-gpu-verification.md](./019-gpu-verification.md) |
-| 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | **IN PROGRESS** — Phase 0 spike done (look matches; WebGPU 40–80 % faster than today, WebGL2 backend on par but stalls while compiling); gate awaits the maintainer | [020-webgpu-tsl.md](./020-webgpu-tsl.md) |
+| 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | DONE (2026-09-26) — the whole port, one path (WebGPU, its WebGL2 backend as the fallback), public API only; the spike's internal patches rejected for a top-level scene pass, `Instances` and `sceneMaterial`; look unjudged on a real GPU | [completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26) |
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
 | 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
 | 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
@@ -78,28 +78,35 @@ S/M/L.
    was verified headless only; look at it on a real GPU, tune the LOD and
    cache knobs, check phones and the deploy host. Take plan 023 phase 4
    along (the ground detail's look and cost on the same GPU); its phases
-   5–8 follow on their own.
+   5–8 follow on their own. Take the WebGPU port along too: plates against
+   the spike's, GTAO's contact shadows re-tuned by eye, the flight probe
+   on both backends (completed.md, plan 020).
 2. **Plan 017, the rest (M).** OSM land cover as a DLM substitute (now a
    class raster only), the NRW adapter and a second site, `site:check`.
    Run the OSM bakes once against a Geofabrik extract (unreachable from
    the environment that ported them).
-3. **Plan 020 (L, GPU-gated).** WebGPU + TSL; removes every
-   `onBeforeCompile` patch, two post libraries and plan 008 step 7.
-4. **Plan 008, steps 5–7 (S).** The coverage artifact; the remaining
-   fixture-integrity checks; shader-anchor tests (moot with plan 020).
+3. ~~**Plan 020 (L, GPU-gated).**~~ Done 2026-09-26: WebGPU + TSL, every
+   `onBeforeCompile` patch and both post libraries gone
+   ([completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26)).
+   Its GPU look is item 1's.
+4. **Plan 008, steps 5–6 (S).** The coverage artifact; the remaining
+   fixture-integrity checks. (Step 7, the shader-anchor tests, is moot
+   since plan 020.)
 5. **Plan 021 (M, maintainer-gated).** `/wissen` on Starlight: about 2 000
    lines of hand-built docs site out, search in.
 6. **Pixel-ratio drop while moving (S, GPU).** Plan 007 step 4:
    `setPixelRatio` reallocates every render target, so hold ~1 s before
    restoring; judge on a real GPU.
 7. **Atmospheric motes (S, GPU).** The one unbuilt item of the aesthetic
-   roadmap. Design: camera-local `Points` (2–4 k) with a toroidal wrap on
-   the camera-relative offset (R ≈ 30 m), additive, `depthWrite: false`,
-   `depthTest: true`, `toneMapped: false`, `fog: false` (fog would brighten
-   distant motes), hash-seeded for reproducible snapshots, one slider
-   driving opacity *and* `setDrawRange`, `material.map` disposed
-   explicitly. +1 draw call, sub-0.1 ms of JS; vertex-shader-only beyond
-   ~8 k points. Ledger: 📋 planned #10.
+   roadmap. Design: 2–4 k camera-local billboards — not `Points`, which
+   WebGPU draws 1 px wide; an `Instances` quad under a
+   `PointsNodeMaterial`, as the lamp halos — with a toroidal wrap on the
+   camera-relative offset (R ≈ 30 m) in the `positionNode`, additive,
+   `depthWrite: false`, `depthTest: true`, `fog: false` (the scene's fog
+   node would brighten distant motes), hash-seeded for reproducible
+   snapshots, one slider driving opacity *and* `drawCount`, a
+   `sceneMaterial`. +1 draw call, sub-0.1 ms of JS; vertex-stage-only
+   beyond ~8 k motes. Ledger: 📋 planned #10.
 8. **Water and mist sheets draw the whole terrain geometry (M, bake +
    GPU).** ≈7.3 M of the ≈10.9 M terrain-derived triangles per frame belong
    to transparent sheets that `discard` on ~95 % of each tile (counted
@@ -107,7 +114,7 @@ S/M/L.
    whole 1024² grid). Fix, now in the bake: a water-only index buffer over
    the shared positions, written into the terrain glTF as a second
    primitive from the class raster.
-9. **Far crown LOD tier (S–M, GPU).** A third InstancedMesh per cell
+9. **Far crown LOD tier (S–M, GPU).** A third instanced set per cell
    (detail 1 or 0, trunk hidden) beyond ~500 m; today a tree 2 km away
    draws ~400 triangles in the main and every shadow pass. Ledger 📋 #11.
 10. ~~**Terrain BVH → grid ray-march (M).**~~ Done 2026-09-24
@@ -120,7 +127,10 @@ S/M/L.
    problem (ledger 📋 #7).
 12. ~~**First-frame compile (S, GPU).**~~ Done 2026-09-24: every tile and
     dressing is compiled with `compileAsync` before it shows
-    (`PostStack.compile`).
+    (`PostStack.compile`; since plan 020 against the scene pass's own
+    target, one drawable per material and attribute layout). Open: the
+    shadow pass's pipelines for new casters still build in-frame, and the
+    WebGL2 backend compiles synchronously (ADR 0027).
 13. **Bundle: `proj4` for one conversion (S).** A 40-line UTM inverse for
     zones 32/33 replaces it (`lib/city/crs.ts`). Size unmeasured.
     (`GLTFLoader` is load-bearing now: every tile is glTF.)
@@ -138,30 +148,35 @@ S/M/L.
     on a neighbour), vegetation (`sampleLine`, `bucketByCell`, `crownColor`,
     `updateLod`), lamps, walls. (`prepare-data`'s cache is content-keyed
     and tested since 2026-09-26: `scripts/bake-sources.ts`.)
-17. **`dispose()` leaves textures, the shadow map and the GL context to the
-    GC (S).** Bounded today (only dev/CI unmount).
-18. **Materials whose GLSL depends on `heightFog` but whose cache key does
-    not (S).** Latent while every caller passes it; one
-    `customProgramCacheKey` each.
+17. **`dispose()` leaves stray textures to the GC (S).** Mostly closed:
+    the sun rig frees the shadow map, the post stack its target and
+    pipelines, and the teardown disposes the renderer (its device, or on
+    the WebGL2 backend its context). Left: a texture whose layer does not
+    free it waits for the GC (`disposeObject3D` never reaches textures).
+    Bounded today (only dev/CI unmount).
+18. ~~**Materials whose GLSL depends on `heightFog` but whose cache key
+    does not (S).**~~ Moot since plan 020: fog is one `scene.fogNode`, and
+    there are no cache keys to keep.
 19. **Low-confidence, investigate not fix:** NoData next to valid samples
     in the terrain bake's resample (`scripts/bake-tiles.ts`); the lowest
     terrain bound (with the 30 m skirt) as the ground fallback; the
     joystick releases on any `pointerup`; the `crs.ts`
     trailing-slash regex.
-20. **One scene environment the dressings bind at birth (M) — with plan
-    020.** Scene-wide values reach the dressings two ways: by-reference
-    uniforms (the sun, the ground rows, three module-level singletons —
-    `FOUNTAIN_UNIFORMS`, `FURNITURE_UNIFORMS`, `MAP_OVERLAY_UNIFORMS`) and
-    per-dressing setters `create-app.ts` loops over on every change (the
-    lamps' night, the vegetation's look and per-frame clock), each tile
-    holding its own copy; `catchUp` (`tile-stream.ts`) exists only because
-    the loops miss a dressing still compiling. One environment object
-    created in `bootApp` and bound once would delete `catchUp`, the loops
-    and the singletons. Deferred on 2026-09-26: the setters are uniform
-    writes, i.e. how materials bind values, which is what the WebGPU/TSL
-    port rewrites (`uniform()` nodes, `scene.fogNode`) — do it inside the
-    port's material phases, not before.
-21. **A geometry kit for what stands on the ground (M) — after plan 020.**
+20. **One scene environment the dressings bind at birth (M).** Half done
+    by plan 020: the per-tile copies are gone. Scene-wide values are
+    uniform nodes every tile's materials share — the sun, the ground rows,
+    the fog (`scene.fogNode`), the crowns' look and wind clock
+    (`sceneCrowns`), and module-level nodes for the lamps' night, the
+    fountains, the furniture and the map overlay (the old
+    `FOUNTAIN_UNIFORMS`/`FURNITURE_UNIFORMS`/`MAP_OVERLAY_UNIFORMS`
+    objects). Left: `create-app.ts` still loops over every dressing on a
+    change (the lamps' night, the vegetation's look and per-frame clock),
+    now writing the same nodes once per tile, and `catchUp`
+    (`tile-stream.ts`) still brings a dressing that was compiling up to the
+    present (season, look, night). One environment object bound once
+    would delete the loops and shrink `catchUp` to the per-dressing state
+    (the season's instance buffers, the rich-crown toggle).
+21. **A geometry kit for what stands on the ground (M).**
     Seven triangle-soup writers decide the winding rule in four ways
     (rail's `pushTri` auto-winds to the normal, furniture's `addSlab`,
     `kerbs.ts` reorders, `walls.ts` is double-sided, `fences.ts`,
@@ -169,19 +184,20 @@ S/M/L.
     library of `tram-layer.ts` and `riverside-layer.ts`. One pure module
     (soup accumulator with one winding rule, ribbons, footprints, columns,
     the resamplers) used by the runtime layers and the bakes. Deferred on
-    2026-09-26: it moves large blocks out of files the port is rewriting,
-    and unifying the winding changes baked geometry — needs its own
-    earcut (`lib/city` forbids `three`) and a headed shot comparison.
-22. **One terrain raster loader driven by the artifact table (M) — with
-    plan 020.** The artifact table (`lib/city/tile.ts`) now names the
-    dressing, sound and OSM files, but the terrain's rasters still go
-    their own way: `prepare-data.ts` spells their names into the terrain
-    extras by hand, and `terrain-layer.ts` has one loader per raster
-    (splat, NDVI, paving, edges, sports grounds, colonies, markings) plus
-    the detail-raster bookkeeping. A raster column in the table (level,
+    2026-09-26 until the WebGPU port had rewritten those files (done);
+    unifying the winding changes baked geometry — needs its own earcut
+    (`lib/city` forbids `three`) and a headed shot comparison.
+22. **One terrain raster loader driven by the artifact table (M).** The
+    artifact table (`lib/city/tile.ts`) now names the dressing, sound and
+    OSM files, but the terrain's rasters still go their own way:
+    `prepare-data.ts` spells their names into the terrain extras by hand,
+    and `terrain-layer.ts` has one loader per raster (splat, NDVI, paving,
+    edges, sports grounds, colonies, markings) plus the detail-raster
+    bookkeeping. A raster column in the table (level,
     channels, filter, mipmaps) would let one loader serve them all.
-    Deferred on 2026-09-26: the loaders create textures, which the port
-    rewrites.
+    Deferred on 2026-09-26 until the port had rewritten the loaders; it
+    kept them as `DataTexture` loaders bound to node textures, so this is
+    unblocked.
 23. **A dressing's layers declare the ground they stand on (S–M).**
     `DRESSING_PARTS` (`tile-stream.ts`) names each part once, but which
     ground a layer samples — its own tile's terrain or the height over
@@ -208,51 +224,60 @@ the scene's time as one hook; `Tile.classes()`/`Tile.neighbours()` in the
 pipeline with tests for the four untested bakes; checked downloads;
 Pillow-13-ready PNG writes; one `clamp`; stale remnants swept.
 
-Open from this run: items 20–24 above and the direction options 7–9
+Open from this run: items 20–24 above (20–22 no longer wait for the
+port) and the direction options 7–9
 below; what was considered and dropped is under "Rejected". The raw
 reports (the ranked list, the audit's finding details, the architecture
 review with its before/after diagrams) were not committed: this section,
 those items and the rejected entries are their record.
 
 **For the WebGPU port (plan 020).** The run left out every file the port
-rewrites. What it found there, checked in the code at `2ed5ab1`, for the
-port to start from rather than re-audit:
+rewrites. What it found there, checked in the code at `2ed5ab1`, and what
+the port (2026-09-26) made of it:
 
-- Plan 020's drift check counts 15 `onBeforeCompile` sites in 7 files;
-  the tree has 26 in 17 files, 12 of them with a
-  `customProgramCacheKey`. Several keyed closures branch on `heightFog`
-  inside the closure that is the key (item 18), which is moot once fog
-  is one `scene.fogNode`.
-- The terrain's fragment pass splices GLSL chunks from `ground-detail.ts`,
+- Plan 020's drift check counted 15 `onBeforeCompile` sites in 7 files;
+  the tree had 26 in 17 files, 12 of them with a
+  `customProgramCacheKey`, several keyed closures branching on
+  `heightFog` (item 18). *Outcome:* 33 sites in 19 files by the port, all
+  replaced by node materials; fog is one `scene.fogNode`, item 18 moot.
+- The terrain's fragment pass spliced GLSL chunks from `ground-detail.ts`,
   `sport-ground.ts`, `road-markings.ts` and `cultivated-layer.ts` that
-  share locals by name, in a fixed order, under a program key of ten
-  flags (`createTerrainMaterial` in `terrain-layer.ts`). As node functions
-  they become an ordered list.
+  shared locals by name, in a fixed order, under a program key of ten
+  flags (`createTerrainMaterial` in `terrain-layer.ts`). *Outcome:* node
+  functions (`groundDetail`, `colonyGarden`, `sportGround`,
+  `roadMarkings`) called in order on one shared set of ground inputs and
+  colour fields; no key.
 - The material-only layers of the baked nodes (`wall-layer.ts`,
-  `kerb-layer.ts`, `stair-layer.ts`, `fence-layer.ts`) differ only by
-  colour, side and shadow flags: one spec row each once materials are
-  nodes.
-- Crown materials are built per tile (`vegetation-layer.ts`,
-  `crown-season.ts`); per scene once item 20's environment exists.
+  `kerb-layer.ts`, `stair-layer.ts`, `fence-layer.ts`) differed only by
+  colour, side and shadow flags. *Outcome:* each is one
+  `groundLitMaterial(params, light, skyView)` call (`sky-light.ts`), the
+  ground's baked light included.
+- Crown materials were built per tile (`vegetation-layer.ts`,
+  `crown-season.ts`). *Outcome:* one pair per scene (`sceneCrowns`, a
+  `sceneMaterial`), their uniforms shared; the seasonal crown thins its
+  shadow through `maskNode`, no depth material.
 - The painted land-cover target is the class raster's full size and is
   painted for both terrain levels, so two painted rasters per tile can be
-  resident; size it to the level.
+  resident; size it to the level. *Still open* (the paint pass is one
+  scene-wide node material per raster size now; the target size is
+  unchanged).
 - The NDVI texture is loaded per terrain level instead of shared through
   `shared-rasters.ts` like the sky view; one decode per tile could serve
-  both levels and the crown sampler.
+  both levels and the crown sampler. *Still open.*
 - The tile cache's byte budget (`tileCacheBytesFor`) is filled from
   3DTilesRendererJS's estimate, taken once per tile when it loads: its
   geometry and the textures on standard material slots. The dressing,
-  built later, and the terrain's textures bound as shader uniforms are
-  not counted. The renderer asks plugins through `calculateBytesUsed`, so
-  the dressing plugin could report them (the texture half changes with
-  the port; take it with plan 019's cache tuning).
+  built later, and the terrain's textures bound as node textures are not
+  counted. The renderer asks plugins through `calculateBytesUsed`, so the
+  dressing plugin could report them. *Still open;* take it with plan
+  019's cache tuning.
 - Demolish replaces the city mesh's index attribute (`city-layer.ts`)
-  without disposing the old one; three's WebGL backend frees only the
-  current index when a geometry is disposed, so each demolish's old
-  buffer waits for the GC. Re-check under WebGPU.
-- Items 20 and 21 above belong inside the port's material phases or
-  after it.
+  without disposing the old one. *Re-checked under the node renderer:*
+  its `Geometries` also frees only the current index when a geometry is
+  disposed, so each demolish's old buffer still waits for the GC. Still
+  open (S).
+- Items 20 and 21 above were to go inside the port or after it; they no
+  longer wait for it.
 
 ### Data → scene: plans 024–035 (planned 2026-09-25)
 
@@ -323,13 +348,15 @@ independence:
    cache evicts a site this size first. Trade-offs: storage quota on
    phones, an explicit update path (re-read the manifest). A cache is not
    user state, but ADR 0001's "no persistence" wants a sentence on it.
-8. **Dressing built off the main thread (L, after plan 020).**
+8. **Dressing built off the main thread (L).**
    `buildDressing` fetches, parses and builds about seventeen layers per
    tile on the main thread; 3DTilesRendererJS decodes its glTF in workers,
    the dressing is ours. A worker returning transferable arrays (instance
-   matrices, positions) is renderer-agnostic but should wait for the port
-   to settle the instancing formats. Cheaper interim: time-slice the
-   builders as `lib/city/png-raster.ts` does.
+   matrices, positions) is renderer-agnostic; the port settled the
+   instancing formats (`Instances`: one Float32 buffer of 16 floats per
+   instance, a Float32 RGB tint attribute, extra per-instance floats as
+   named attributes). Cheaper interim: time-slice the builders as
+   `lib/city/png-raster.ts` does.
 9. **A bilingual HUD (M).** The page is `lang="de"` since 2026-09-26: the
    HUD, the spoken feedback and the `/wissen` landing are German, while
    the guide comes in both languages. About sixty HUD strings, picked by
@@ -359,8 +386,9 @@ independence:
 ## Rejected (kept so nobody re-audits them)
 
 - **react-three-fiber** — frame loop identical to `setAnimationLoop`; every
-  `onBeforeCompile` an escape hatch; the `__poc` handle rebuilt on a store;
-  a static-after-load scene is r3f's weakest case
+  `onBeforeCompile` an escape hatch (moot since the TSL port, the rest
+  stands); the `__poc` handle rebuilt on a store; a static-after-load
+  scene is r3f's weakest case
   ([ADR 0002](../adr/0002-imperative-threejs-in-a-react-shell.md)).
 - **Render-on-demand loop** — continuous input needs continuous frames and
   it breaks `waitForFrames`; motion-keyed quality is the version that pays.
@@ -394,8 +422,16 @@ independence:
   maintainer saw it on a device: the map look reads better without text
   ([completed.md](./completed.md#032--street-names-lettering-and-the-on-foot-caption--rejected-removed-2026-09-26),
   🗃️ in the [ledger](../transformations.md)).
-- **Held back deliberately:** `n8ao` 2.x (no types, changes SSAO output —
-  needs the headed harness), `postprocessing` 7.x (alpha/beta only).
+- **Held back deliberately:** `n8ao` 2.x and `postprocessing` 7.x — moot:
+  both libraries left with plan 020 (three's node post replaced them).
+- **Patching three's renderer internals** to fix node-build stalls (the
+  plan 020 spike's render guard, shared-instancing patch and
+  render-context override) — fixed stalls on paper, depended on private
+  members, misbehaved in ways that could not be pinned down; replaced by
+  public-API designs ([ADR 0027](../adr/0027-webgpu-renderer-and-tsl.md)).
+- **A WebGLRenderer fallback beside WebGPU** (the spike's gate
+  recommendation) — every look written twice; the maintainer chose one
+  path, the WebGL2 backend of `WebGPURenderer` as the fallback.
 - **From the 2026-09-26 run:**
   - *Clay materials leaking when a tile unloads* — refuted:
     3DTilesRendererJS collects a tile's materials after `processTileModel`,
@@ -466,3 +502,9 @@ categories had one reader.
   (sixteen commits, three review rounds). Open: items 20–24 and the
   direction options 7–9; the port-side notes are in the "2026-09-26
   audit" section.
+- **2026-09-26, the WebGPU/TSL port**: the maintainer asked for the whole
+  of plan 020 with no second path; the spike branch (internal patches)
+  was set aside and the port restarted from `main`, several agents
+  porting the layers side by side against one contract. ADR 0027
+  accepted; plan 020 condensed into [completed.md](./completed.md); the
+  port-side audit notes above got their outcomes.

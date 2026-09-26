@@ -32,7 +32,7 @@ visual-variable codebook is in
   new committed input). The viewer indexes its triangles for `heightAt`
   (`lib/city/terrain-tin.ts` `TinIndex`, skirt skipped) and gives the water
   an up-facing normal twin (`terrain-layer.ts` `tinHeightAt`,
-  `upFacingTwin`). **No wall conflation** on the TIN: the earth-retaining
+  `waterGeometryOf`). **No wall conflation** on the TIN: the earth-retaining
   ribbons baked beside it snap to the step the ground measures
   (`lib/city/wall-snap.ts` via `lib/city/walls.ts`: steepest metre within
   6 m of the OSM line, running medians along the wall, face just in front of
@@ -142,8 +142,8 @@ visual-variable codebook is in
   `terrain-layer.ts`.
 - **Meadow NDVI tint** (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
   DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
-  shifts the pastel sage lush deep-green↔dry hay. In the terrain fragment shader
-  (`uNdvi`/`uMeadowNdvi`, gated by the class raster `grMeadow`), HUD slider
+  shifts the pastel sage lush deep-green↔dry hay. In the terrain's colour node
+  (`meadowNdvi`, gated by the meadow class of the raster), HUD slider
   *Wiesenfärbung* (default 0.5). The higher-variance NDVI canvas the analysis
   flagged (meadow carries 1.46× the crown NDVI variance). Absent raster → no-op.
 - **Kerbs and lawn edges** (*Bordsteine, Rasenkanten*) — the DLM road
@@ -374,7 +374,8 @@ visual-variable codebook is in
   flag. The per-object style (tint, roof colour, base, eave and storey
   heights, glow, roughness) and the demolish tree ride as an
   `EXT_structural_metadata` **property table** (`scripts/tile-glb.ts`); the
-  client packs it into an RGBA32F texture the clay shader `texelFetch`es
+  client packs it into an RGBA32F texture the clay node reads with
+  `textureLoad`
   (`lib/city/city-mesh.ts` `packObjectTexels`), so the style lives once per
   building, not once per vertex. Footprints go to `footprints_<tile>.json`
   for the minimap. Demolish = filter the building tree out of the index
@@ -511,8 +512,8 @@ visual-variable codebook is in
   it cropped to the colonies, phones at half resolution). No new
   land-cover class (ADR 0023): dressing only. **Allotments** get little
   gardens in the terrain's fragment pass (`cultivated-layer.ts`
-  `COLONY_GARDEN_GLSL`): the colony's edge is the baked distance field
-  (the colony less its paths — OSM footways, paths, service roads, tracks —
+  `colonyGarden`, a node function): the colony's edge is the baked
+  distance field (the colony less its paths — OSM footways, paths, service roads, tracks —
   roads, rail and water), sampled LINEAR and faded over a metre with a
   slow wobble, so it is soft and organic from walking height to 200 m up;
   inside, everything is analytic in the data frame — plots ≈12 × 17 m
@@ -551,8 +552,8 @@ visual-variable codebook is in
   the seasonal bare
   canes wait for plan 025's season plumbing. ≈18 s per tile. **Not yet
   judged on a GPU** (the chessboard check is the plan's other STOP).
-- **Tree/hedge rows** — Basis-DLM hedge & tree-row lines → InstancedMesh, chunked
-  into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
+- **Tree/hedge rows** — Basis-DLM hedge & tree-row lines → instanced sets
+  (`Instances`), chunked into 250 m cells for frustum culling. `pipeline/bake/landcover.py`
   (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
 - **Canopy fill** — `nDOM = DOM1 − DGM1`, one tree per ~7 m cell at the tallest
   pixel, scaled to measured height, **gated off road/bridge/water** via the DLM
@@ -587,13 +588,17 @@ visual-variable codebook is in
   7 m) put ~9 000 rich crowns on screen — ~80 M triangles per pass over the
   site, which stalled the GPU into a lost context; the same view is now
   ~23 M;
-  **backlight shimmer** (one shadow-gated sample, far cheaper than transmission).
+  **backlight shimmer** (far cheaper than transmission; gated on the sun's
+  daylight ramp — until plan 020 on one shadow-map sample 2 m toward the sun,
+  which a node material cannot reach: node lights keep their shadow map to
+  themselves, so a crown behind a building now glows too).
 - **Canopy motion** — per-frame in `buildCrownMaterial`, **main pass only** (the
-  shadow/depth material has none of it → no shadow-pass cost, no extra buffers):
+  shadow pass draws the rigid `castShadowPositionNode` → no shadow-pass cost, no
+  extra buffers):
   **wind sway** (vertex bend, stiff base → loose top, per-tree phase from the
   instance origin); **leaf flutter** (small world-space value-noise specks, ~1-2 m,
   blend the crown toward a paler silver-sage "underside" on *sunlit, sun-facing*
-  leaves — shadow + NdotL gated + distance-faded, so it reads as light glinting off
+  leaves — daylight + NdotL gated + distance-faded, so it reads as light glinting off
   turning leaves, leaf-clump-sized, not a tree-group-wide band);
   **sway-coupled brightness** (the crown brightens leaning into the same gust,
   centred so the mean colour is unchanged). Flutter & brightness are independent
@@ -702,24 +707,26 @@ visual-variable codebook is in
   calendar day only** (the local calendar the HUD composes the date in;
   never per frame; throttled to one run per 150 ms),
   each crown's colour (summer green → the genus hue, divided by the crown
-  material's base so it lands as itself) into the per-instance colour
-  three already carries, and `aBare` = 1 − leaf into a per-chunk
-  instanced attribute. A chunk with any bare crown switches to the
-  **seasonal crown material**: a hashed alpha test in the crown's own
+  material's base so it lands as itself) into the sets' per-instance tint
+  (`instanceTints`), and `aBare` = 1 − leaf into a per-chunk instanced
+  attribute (read with `instanceFloat`). A chunk with any bare crown
+  switches to the **seasonal crown material**: a hashed alpha test in the crown's own
   local space (Wyman & McGuire's method, as three's `alphaHash`: cells
   about 1.25 px wide at every distance, fixed to the tree so they sway
   with it) discards the leafless part down to a 25 % grey-brown twig
-  stipple; the matching **custom depth material** thins the shadow the
-  same way (PCF softens the stipple into a lighter shadow). The first cut
+  stipple; the test is the material's `maskNode`, which three's **shadow
+  pass honours**, so the shadow thins the same way (PCF softens the stipple
+  into a lighter shadow; until plan 020 a matching custom depth material
+  did this). The first cut
   used fixed cells in crown space (~8 across a crown) with a solid,
   twig-tinted crown past 160–320 m: headless plates showed big trees
   shattered into flat brown shards up close, so it was replaced before
   shipping. A chunk in full leaf keeps the plain material (no
   discard, early depth test intact). A season change redraws the shadow
-  map. Both crown materials and both crown depth programs are compiled
-  once per scene before the first tree lands (`crownWarmup`, stand-ins
-  through `PostStack.compile`), so the first date change across the leaf
-  fall compiles nothing inside a frame. *Cost* (`scripts/eval/season-cost.ts`, the whole site, 58 988
+  map. Both crown materials are scene-wide (`sceneCrowns`) and are
+  compiled once per scene before the first tree lands (`crownWarmup`,
+  stand-ins through `PostStack.compile`), so the first date change across
+  the leaf fall builds nothing inside a frame. *Cost* (`scripts/eval/season-cost.ts`, the whole site, 58 988
   crowns, CPU): 4–7 ms median per date change (July → October 6.4 ms,
   October → January 3.6 ms), under the plan's 16 ms bar; the upload is 16 B
   per crown. *Not seasonal:* hedges and trunks. *Unverified:* the autumn
@@ -1219,8 +1226,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   mipmaps pulled a dark 1–2 m band onto the wall feet and dimmed distant
   streets (a tile's mean at mip 4 fell 0.03–0.05 below its open mean; now
   equal). Scales the **indirect diffuse
-  only** (the hemisphere fill), in `aomap_fragment`, after the lights: the
-  sun is untouched. Terrain: `mix(1, svf, row)`. Clay facades: the ground's
+  only** (the hemisphere fill), as the material's `aoNode`, which three
+  multiplies into the indirect light after the lights: the sun is
+  untouched. Terrain: `mix(1, svf, row)`. Clay facades: the ground's
   value 2.5 m outside the wall (a margin past the footprint's filled texels),
   doubled (a vertical face sees at most half the sky; the ground at its foot
   the wall too) and faded to 1 toward the eaves — a courtyard's ground floor
@@ -1229,9 +1237,10 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   (`shared-rasters.ts`); the clay binds a white texel until it lands.
   Trees are left out on purpose (they cast their own shadows). Default
   0.5 — **not yet judged on a GPU**: the plan's plates (a Neustadt
-  courtyard, the Prager Straße, the Elbwiesen) and the N8AO
-  double-darkening check are open; *Boden-Verlauf* (the clay's 5 m
-  ground darkening) is kept as it was, not retuned against it yet.
+  courtyard, the Prager Straße, the Elbwiesen) and the double-darkening
+  check against the contact shadows (GTAO since plan 020) are open;
+  *Boden-Verlauf* (the clay's 5 m ground darkening) is kept as it was, not
+  retuned against it yet.
   **Fallback:** no raster → the light as before. `pipeline/bake/skyview.py`,
   `app/_components/sky-light.ts`, `lib/city/skyview.ts`.
 - **Horizon shade** (*Ferne Schatten*, plan 033,
@@ -1247,7 +1256,8 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   `smoothstep(h − 0.8°, h + 0.8°, elevation)`, combined with the shadow map
   by **min** (never a product: where both see the same occluder it must
   not darken twice). The bands split the work with the shadow map by the
-  fragment's distance from the frustum's centre (`uShadowReach`, kept by
+  fragment's distance from the frustum's centre (`shadowReach`, a shared
+  uniform node kept by
   the sun rig as the frustum follows and grows): inside, the map has the
   near occluders with their shapes and only the far band counts; over the
   frustum's last 20 % the near band fades in, and beyond it the horizon is
@@ -1266,23 +1276,25 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   0.54–0.60 MB; both bands fit the cap). Terrain only; facades wait on
   plates. Default 0.8 — **not yet judged on a GPU** (the plan's 21
   December plate from the Brühlsche Terrasse and the frustum seam are
-  open). `sky-light.ts` `lightsWithFarShadow`, `hzSunVisible`.
+  open). `sky-light.ts` `applyGroundLight` (the material's
+  `receivedShadowNode`, `min` with the shadow map), `hzSunVisible`.
 
 ### Atmosphere & time of day
 - **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
-  pooling in low ground, folded into every fog-receiving material via
-  `onBeforeCompile`; HUD *Talnebel*. `height-fog.ts`.
+  pooling in low ground, a term of the one `scene.fogNode` every material
+  takes (`fog = false` opts out: the river mist); HUD *Talnebel*.
+  `height-fog.ts`.
 - **River mist** — DLM water mask (the painted splat's alpha) → a drifting,
   sun-lit mist sheet over the Elbe; HUD *Flussnebel*. `water-layer.ts`
   `createWaterMist`.
-- **Drifting clouds** — sun instant → the sky dome's `time`/`cloudSpeed` so the
-  cloud cover moves with the frame. `sun-rig.ts`.
+- **Drifting clouds** — `SkyMesh`'s procedural clouds drift on TSL `time`
+  (slow `cloudSpeed`), lit by the sun instant. `sun-rig.ts`.
 - **Golden/blue-hour palette stops** — sun altitude → sky/fog/hemisphere colours
   from a palette with stops at −2° (blue hour) and +6° (golden hour).
   `lib/city/atmosphere.ts` `STOPS`.
 - **Meadow mottle** — DLM class 1 (farmland/meadow) → a low-frequency
   colour + normal mottle so grass reads as ground, not paint. `terrain-layer.ts`
-  `GRASS_MOTTLE`/`GRASS_NORMAL`.
+  `grassMottle`/`terrainNormal`.
 - **Contour ink guard** — a flat terrain quad lying exactly on a 2 m or 10 m
   contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
   lines on flat roads). No slope, no contour line. `terrain-layer.ts`.
@@ -1371,8 +1383,9 @@ research that produced them):
    where OSM is thin (ADR 0028).
 4. **Cartographic minimap** — DTK / basemap.de P10 raster tile + Ortsteile labels
    replacing the math-drawn minimap.
-5. **Dappled canopy shadow** — alpha-tested colour-less proxy caster per chunk
-   (mind the `WebGLShadowMap` alphaMap-override gotcha; see skill).
+5. **Dappled canopy shadow** — a colour-less proxy caster per chunk whose
+   `maskNode` cuts the gaps (the shadow pass honours it; the old
+   `WebGLShadowMap` alphaMap-override gotcha left with plan 020).
 6. **Real trees from the laser-scan point cloud** — segment high-veg returns →
    per-tree position/height/crown; bake to per-tile GeoJSON. *(First step ✅
    above: `canopyx` crown peaks with `h` + `r`, outside the canopy mask only,
@@ -1385,25 +1398,25 @@ research that produced them):
    field's and, beyond the frustum, the next building's — for a few texture
    fetches; what CSM would still add is the middle distance's *shape* (a
    tree's or a facade's shadow past the frustum, at 8 m and 22.5° the
-   horizon only has its angle, on facades too). Sizeable
-   integration on WebGL;
-   `CSMShadowNode` comes with the proposed move to WebGPURenderer + TSL
-   ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
-   [plan 020](./plans/020-webgpu-tsl.md)), as its own decision.
+   horizon only has its angle, on facades too). Since the move to
+   WebGPURenderer + TSL ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md),
+   plan 020 in [completed.md](./plans/completed.md)) three's
+   `CSMShadowNode` is available without shader patching — still a depth
+   pass per cascade on every sun or camera move, and its own decision.
 8. **Adaptive resolution while moving** — *partly shipped*: DoF is skipped
    while the camera moves (`lib/city/regression.ts`, plan 007). AO is **not**
-   — gating it made the contact shadows blink on every step, so N8AO runs
-   permanently at half resolution instead
+   — gating it made the contact shadows blink on every step, so the AO pass
+   (GTAO since plan 020) runs permanently at half resolution instead
    ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). A pixel-ratio
    drop under motion is the open half (needs a ~1 s hold and a real-GPU look).
 9. **Cable-stayed / truss bridge structures** — arch + beam now ship (✅ above);
    `bridge:structure=cable-stayed` (Pieschener Molenbrücke) / `truss` still fall
    back to a flat soffit. Pylons + stay cables / truss webs would finish the set.
 10. **Atmospheric motes** — the one unbuilt item of the aesthetic roadmap:
-    camera-local `Points` (2–4 k) drifting in a toroidal volume (R ≈ 30 m),
-    additive, `depthWrite: false`, `fog: false` (fog would brighten distant
-    motes), hash-seeded so snapshots reproduce, opacity + `setDrawRange` on
-    one slider. +1 draw call. Design notes in [plans/README.md](./plans/README.md#open-work).
+    2–4 k camera-local billboards (not `Points`: WebGPU draws them 1 px wide)
+    drifting in a toroidal volume (R ≈ 30 m), additive, `depthWrite: false`,
+    `fog: false` (fog would brighten distant motes), hash-seeded so
+    snapshots reproduce, opacity + `drawCount` on one slider. +1 draw call. Design notes in [plans/README.md](./plans/README.md#open-work).
 11. **Far crown LOD tier** — ✅ shipped (see *Crown shaping* above); still to
     judge on a real GPU with the `--headed` harness: whether the far tier's
     pop at 650 m and the thinned forest read well, and whether a detail-0
@@ -1444,7 +1457,7 @@ research that produced them):
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four first tiles, measured 2026-09-25 (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
-| **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). |
+| **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). Since plan 020 the gate is the sun's daylight ramp plus the near/large-crown limit (a node material cannot sample the sun's shadow map) — judge on a GPU whether the noise returns. |
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |
 | **Large `normalBias`** | Bright peter-panning contact strip. | Keep `normalBias=0`, small negative `bias`. |
 | **Bigger shadow frustum / 4096 map** | Coarser texels → fraying / cost without gain once radius softens. | Tight ~110 m frustum at 3072 + radius. |
@@ -1457,7 +1470,7 @@ research that produced them):
 | **`ver06_l` centreline-buffered decks** (rail v1) | Buffered planks stacked deck-top + ballast + parapet-cap → "2-story" bridges, and one plank merged the parallel Marienbrücke spans. | Replaced by **`ver06_f` deck polygons** (one slab per real footprint); kept as the no-`ver06_f` portability fallback. |
 | **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build on the **cross-tile `heightAt`** — once for the block until ADR 0024, now per fine terrain tile over every loaded terrain. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
-| **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | N8AO runs permanently at `halfRes`; only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
+| **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | The AO pass runs permanently at half resolution (N8AO's `halfRes` then, GTAO since plan 020); only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
 | **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Multi-echo ratio as the low-vegetation cue** (LSC, low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
 | **Blob-wide "multi-echo ≈ 0" for small structures** (plan 034 as planned) | A shed's roof edge splits the pulse (part roof, part ground), so no blob's multi-echo share is ≈ 0: 4 blobs on the spawn tile at ≤ 0.05, 43 at ≤ 0.10 (median over all band blobs 0.93); the interior share admits 377, 112 of them against tree crowns. | The rule works per cell: no multi-echo return in a cell's 3 × 3 window, the rim grown back after (the ✅ "Small structures from the laser scan"). |
@@ -1465,8 +1478,8 @@ research that produced them):
 | **Laser-scan-only hedges** (LSC, the 478 unmapped "hedges" of the low-vegetation bake) | ~30 % of the low-vegetation mask lies 1–2 m from a > 3 m crown: crown-rim false positives a first-surface model cannot tell from understory, and they read as stray hedges along tree rows. | Only the OSM hedges ship (with the LSC height). The bake still finds them (`--research`); revisit with a leaf-on scan or a crown-rim test. |
 | **Shrubs** (LSC blobs + OSM `natural=shrub` nodes, 3 226 on the primary) | Same crown-rim false positives, and the lobed dome reads as a faceted grey "boulder" at arm's length. | Kept in the bake behind `--research`; a better shrub shape is shape polish, not data. |
 | **Camera-follow grass tuft ring** | Shadow-casting instances rewritten every frame; reads as confetti. | Meadow mottle + normal perturbation in the terrain shader (✅ above). |
-| **Per-lamp real point lights** | three bakes the light count into every program → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
-| **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above). |
+| **Per-lamp real point lights** | three bakes the light count into every program (since plan 020: every light into every lit node build's key) → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
+| **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above; daylight-gated since plan 020, see *Plain foliage translucency*). |
 | **Baked RGB splatmap** (`landcover_rgb_<tile>.png`: RGB = pastel palette, A = water coverage, plus a 2048² variant) | The look lived in the bake: a colour change meant re-baking every tile, and the palette was spelled three times (bake, minimap, shader fallback). Its alpha was data, so every resize had to split colour from alpha — sharp premultiplies alpha across a resize, which once turned every land texel black ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md), superseding ADR 0016). | The bake writes class ids only; the one palette (`lib/city/landcover.ts`) is painted on the GPU at load. A per-fragment palette lookup was rejected too: class ids cannot be mipmapped, so far boundaries would alias. |
 | **Overpass-based OSM bakes** (lamps, platforms, bridge structure) | Live queries: rate-limited and not reproducible, and one more way of reading OSM next to the local extract the walls already used ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)). | Every OSM layer comes from one local Geofabrik `.osm.pbf` via GDAL's OSM driver (`pipeline/bake/osm.py`). The committed lamp/platform/bridge-structure files still predate this; the next re-bake moves them (`data/provenance.json`). |
 | **Bash bakes** (`scripts/extract-*.sh` + Python/Pillow heredocs) | Three languages, string-built paths, tile names and CRS spelled per script; numpy and `gdal_calc.py` were missing, so raster maths was written around Pillow ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)). | One package, `pipeline/bake/`, on numpy/rasterio/pyogrio/shapely in a uv environment, driven per site tile by `bun run bake`. |

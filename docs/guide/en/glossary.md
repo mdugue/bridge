@@ -159,9 +159,16 @@ them for Dresden; the first is the *spawn tile*. The viewer streams them
 ## Rendering
 
 **three.js** — the JavaScript library that talks to the graphics card
-through WebGL; the whole scene is built with it.
+through WebGPU (or WebGL2); the whole scene is built with it.
 
-**WebGL2** — the browser's interface to the graphics card. Required.
+**WebGPU / WebGL2** — the browser's interfaces to the graphics card. The
+viewer uses WebGPU, the newer and faster one, and falls back to WebGL2
+where a browser lacks it; one of the two is required.
+
+**Shader / node material** — the small programs the graphics card runs to
+colour each pixel. Here every material is written as a *node material*
+(three.js's TSL): the look is assembled from building blocks, which
+three.js translates for WebGPU or WebGL2.
 
 **Mesh / triangle** — everything drawn is triangles. A mesh is a set of
 triangles with a material. The buildings of a tile are one mesh; a
@@ -192,9 +199,8 @@ where. Here it is not downloaded: the browser paints it once per tile on
 the graphics card, from the land-use class raster and one pastel palette;
 its transparency channel encodes water coverage, softened at the shore.
 
-**Instancing / InstancedMesh** — drawing thousands of copies of one shape
-(trees, lamp posts) in a single draw call, each with its own position and
-scale.
+**Instancing** — drawing thousands of copies of one shape (trees, lamp
+posts) in a single draw call, each with its own position and scale.
 
 **LOD** — *level of detail*: a cheaper version of a shape drawn when it is
 far away (the tree crown has two versions, the terrain two levels; see
@@ -204,9 +210,10 @@ far away (the tree crown has two versions, the terrain two levels; see
 pixel then checks whether it is the closest thing to the sun. Soft edges
 come from sampling it several times (PCF).
 
-**SSAO / contact shadows** — *screen-space ambient occlusion*: darkening in
-corners, under eaves and where objects meet the ground, computed from the
-depth buffer.
+**Contact shadows (SSAO, GTAO)** — *screen-space ambient occlusion*
+(SSAO) is the family of methods that darken corners, under eaves and where
+objects meet the ground, computed from the depth buffer. The viewer uses
+one of them, *GTAO* (ground-truth ambient occlusion), at half resolution.
 
 **Depth of field (DoF)** — the photographic blur outside the focus
 distance; here focused on the crosshair by default.

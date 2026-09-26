@@ -36,7 +36,7 @@ each data → look transformation does and its status.
 | [0024](./0024-site-streams-as-3d-tiles.md) | The site streams as OGC 3D Tiles with glTF content through 3DTilesRendererJS | accepted |
 | [0025](./0025-bakes-are-one-python-package.md) | The bakes are one Python package in a uv environment; OSM comes only from a local extract | accepted |
 | [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted |
-| [0027](./0027-webgpu-renderer-and-tsl.md) | Move to WebGPURenderer and TSL node materials | proposed (GPU spike, plan 020) |
+| [0027](./0027-webgpu-renderer-and-tsl.md) | WebGPURenderer and TSL node materials, one path, public API only | accepted (2026-09-26) |
 | [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
 | [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
 | [0030](./0030-terrain-tin-and-wall-snap.md) | The fine terrain level is an error-bounded TIN of the native DGM; walls snap to the measured step | accepted |

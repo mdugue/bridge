@@ -44,6 +44,21 @@ vignette / grain pass and the shadow map are never regressed.
 - **Gating SSAO (the original plan):** rejected after shipping — the
   blink.
 
+## Update (2026-09, ADR 0027)
+
+The decision holds; the passes changed. N8AO is gone: the contact shadows
+are three's `GTAONode`, always on, at half resolution with normals
+reconstructed from depth, its occlusion raised to the *Kontaktschatten*
+slider's exponent (0 = no darkening; there is no `aoWanted` and no pass
+`.enabled` any more). The sample count (`aoSamplesFor`: 16, lite 8)
+rebuilds the pass's material and stays a construction-time setting. DoF is
+dropped while moving by switching between **two prebuilt
+`RenderPipeline`s**, with and without `DepthOfFieldNode`, both built under
+the load screen — never by swapping one pipeline's output node, which
+would re-translate the whole post graph on the main thread each time a
+flight starts or stops. `dofWanted` and `regressed` stay separate layers
+and only the pipeline choice combines them (`post-stack.ts`).
+
 ## References
 
 - plan 007; AGENTS.md "Contact shadows (SSAO) are never motion-gated";

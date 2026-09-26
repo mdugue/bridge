@@ -168,10 +168,17 @@ Standort-Konfiguration nennt für Dresden fünfzehn davon; die erste ist die
 
 ## Rendering
 
-**three.js** — die JavaScript-Bibliothek, die über WebGL mit der Grafikkarte
-spricht; die ganze Szene ist damit gebaut.
+**three.js** — die JavaScript-Bibliothek, die über WebGPU (oder WebGL2) mit
+der Grafikkarte spricht; die ganze Szene ist damit gebaut.
 
-**WebGL2** — die Schnittstelle des Browsers zur Grafikkarte. Voraussetzung.
+**WebGPU / WebGL2** — die Schnittstellen des Browsers zur Grafikkarte. Der
+Viewer nutzt WebGPU, die neuere und schnellere, und weicht auf WebGL2 aus,
+wo ein Browser sie nicht hat; eine der beiden ist Voraussetzung.
+
+**Shader / Node-Material** — die kleinen Programme, mit denen die
+Grafikkarte jedes Pixel einfärbt. Hier ist jedes Material als
+*Node-Material* geschrieben (TSL von three.js): Der Look wird aus
+Bausteinen zusammengesetzt, die three.js für WebGPU oder WebGL2 übersetzt.
 
 **Mesh / Dreieck** — alles Gezeichnete besteht aus Dreiecken. Ein Mesh ist
 eine Menge Dreiecke mit einem Material. Die Gebäude einer Kachel sind ein
@@ -206,9 +213,8 @@ je Kachel auf der Grafikkarte, aus dem Landnutzungs-Klassenraster und einer
 Pastellpalette; ihr Transparenzkanal kodiert den Wasseranteil, am Ufer
 weich auslaufend.
 
-**Instancing / InstancedMesh** — tausende Kopien einer Form (Bäume,
-Laternenmasten) in einem einzigen Zeichenaufruf, jede mit eigener Position
-und Größe.
+**Instancing** — tausende Kopien einer Form (Bäume, Laternenmasten) in
+einem einzigen Zeichenaufruf, jede mit eigener Position und Größe.
 
 **LOD** — *Level of Detail*: eine günstigere Version einer Form, die in der
 Ferne gezeichnet wird (die Baumkrone hat zwei Versionen, das Gelände zwei
@@ -218,9 +224,11 @@ Stufen; siehe *Tileset*).
 dann, ob es das Nächste zur Sonne ist. Weiche Kanten entstehen durch
 mehrfaches Abtasten (PCF).
 
-**SSAO / Kontaktschatten** — *Screen-Space Ambient Occlusion*: Abdunkelung
-in Ecken, unter Traufen und wo Objekte den Boden berühren, aus dem
-Tiefenpuffer berechnet.
+**Kontaktschatten (SSAO, GTAO)** — *Screen-Space Ambient Occlusion*
+(SSAO) heißt die Familie von Verfahren, die Ecken, den Raum unter Traufen
+und die Stellen, wo Objekte den Boden berühren, aus dem Tiefenpuffer
+abdunkeln. Der Viewer nutzt eines davon, *GTAO* (Ground-Truth Ambient
+Occlusion), in halber Auflösung.
 
 **Tiefenschärfe (DoF)** — die fotografische Unschärfe außerhalb der
 Fokusentfernung; hier standardmäßig auf das Fadenkreuz fokussiert.
