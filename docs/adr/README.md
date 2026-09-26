@@ -22,7 +22,7 @@ each data → look transformation does and its status.
 | [0010](./0010-opaque-clay-buildings-only.md) | Buildings render as opaque clay only; no transmission, no outlines | accepted |
 | [0011](./0011-motion-keyed-quality-regression.md) | Motion-keyed quality regression: DoF off while moving, SSAO never gated | accepted |
 | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | OpenStreetMap for what the official data lacks (walls, lamps, platforms, bridge structure), from a local extract where possible | accepted (always local: 0025) |
-| [0013](./0013-rail-layer-from-dissolved-areas-and-centreline-driven-decks.md) | Rail layer from dissolved ballast areas and centreline-driven decks, built once per block | accepted (per tile: 0024; decks measured: 0032) |
+| [0013](./0013-rail-layer-from-dissolved-areas-and-centreline-driven-decks.md) | Rail layer from dissolved ballast areas and centreline-driven decks, built once per block | accepted (per tile: 0024; decks measured: 0033) |
 | [0014](./0014-wall-to-terrain-breakline-conflation.md) | Burn OSM wall lines into the heightfield as breaklines | accepted (at bake time: 0024); the coarse level only since 0030 |
 | [0015](./0015-roof-colour-from-orthophotos-with-vibrance-lift.md) | Roof colour from orthophotos with a hue-preserving vibrance lift | accepted |
 | [0016](./0016-land-cover-rasters-downsampled-with-alpha-as-data.md) | Land-cover rasters downsampled to 2048² with the alpha channel treated as data | superseded by 0023 |
@@ -41,7 +41,8 @@ each data → look transformation does and its status.
 | [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
 | [0030](./0030-terrain-tin-and-wall-snap.md) | The fine terrain level is an error-bounded TIN of the native DGM; walls snap to the measured step | accepted |
 | [0031](./0031-baked-horizon-map-for-far-shadows.md) | A baked horizon map casts the far field's shadows; the shadow map keeps the near field | accepted |
-| [0032](./0032-bridges-measured-in-the-surface-model.md) | Bridges are measured in the surface model, typed by Wikidata | accepted |
+| [0032](./0032-camera-never-inside-a-building.md) | The camera is never below the ground or inside a building | accepted |
+| [0033](./0033-bridges-measured-in-the-surface-model.md) | Bridges are measured in the surface model, typed by Wikidata | accepted |
 
 ## Format
 

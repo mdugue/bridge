@@ -860,7 +860,7 @@ function buildBridges(features: BridgeFeature[], ctx: RailContext): Mesh[] {
   return meshes;
 }
 
-// --- the measured bridge (ADR 0030) -------------------------------------------------
+// --- the measured bridge (ADR 0033) -------------------------------------------------
 
 /** A bridge's axis frame: stations along it, lateral offsets across it. */
 interface BridgeFrame {

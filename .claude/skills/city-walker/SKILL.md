@@ -337,7 +337,7 @@ shimmer and the LOD-gated multi-tuft crown are in `vegetation-layer.ts`.
 `aesthetic-sandbox.html` at the repo root is the historical playground those
 were ported from; the layer file, not the sandbox, is the source of truth.
 
-## Bridges (ADR 0013, ADR 0032)
+## Bridges (ADR 0013, ADR 0033)
 
 Decks come from the Basis-DLM (`ver06_l` centrelines, `ver06_f` outlines),
 built per fine terrain tile by `rail-layer.ts`; **only the tile owning a

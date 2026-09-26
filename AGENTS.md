@@ -108,7 +108,7 @@ config change.
     grounds: surface and lines in the same pass), `sport-fixtures.ts`
     (their goals, posts and nets), `rail-layer.ts` (rails, ballast,
     platforms and the bridges: decks, the measured steel above them,
-    arches, pylons, piers — ADR 0032), `wall-layer.ts`,
+    arches, pylons, piers — ADR 0033), `wall-layer.ts`,
     `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
     materials: walls, kerbs, stairs and fences are baked into the fine
     terrain glTF; a fence is one low band in a muted tone — no pattern),
@@ -132,7 +132,8 @@ config change.
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
     stands and looks, walk/fly and the scenic glides; every input cancels a
-    glide), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
+    glide; the camera is never below the ground or inside a building —
+    `lib/city/clearance.ts`, ADR 0032), `fps-movement.ts`, `camera-flight.ts`, `keyboard-controls.ts`,
     `touch-controls.ts`, `collision.ts`, `virtual-joystick.tsx`,
     `altitude-stick.tsx` (the fly-mode climb control opposite it),
     `locate-me.ts` + `locate-button.tsx` ("take me to where I am": GPS
@@ -327,10 +328,10 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
-  ≈ 3 min for fifteen tiles, warm ≈ 1 s): the key covers the inputs'
+  ≈ 2 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
   contents and every module the bake imports (`scripts/bake-sources.ts`
-  walks the import graph — there is no list to keep in step); the glTF quantisation, meshopt and gzip settings live in
-  `scripts/tile-glb.ts`.
+  walks the import graph — there is no list to keep in step); the glTF quantisation and meshopt settings live in
+  `scripts/tile-glb.ts`, the gzip (Bun's libdeflate) in `prepare-data.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)
 
@@ -453,7 +454,14 @@ is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
 and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
 on rendered frames — the control walk uses `waitForFrames` — walks straight into
 the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
-viewer pages halve each other's frame rate.
+viewer pages halve each other's frame rate. CI splits the suite over **three
+runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
+whole site with the shell and `/wissen`; the desktop HUD group
+(`@desktop-hud`); the desktop rendering group (`@desktop-render`) with the
+phone (`@phone`). Each desktop group boots its own page. The required
+status check "E2E (Playwright)" is the small job that reports them all. A new
+spec lands in the whole-site shard unless it carries one of those tags —
+keep the shards within a minute of each other.
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams
@@ -470,6 +478,15 @@ ones a test asserts on. Two rules when you add a spec:
 - Share a booted page across assertions (`test.describe.configure({ mode:
   "serial" })` + a `beforeAll` context) rather than booting per test — the boot
   is the single largest fixed cost left.
+- Wrap steps that only touch the HUD (sidebar tabs, buttons, drawers) in
+  `withFramesHeld` (`e2e/city-walk.spec.ts`): it sets `__poc.hold`, and the
+  render loop skips its frames while it is set. Every Playwright action waits
+  on animation frames (a click on two), and each scene frame holds the main
+  thread for half a second or more, so a single click used to cost seconds —
+  up to ten on a runner. Never wait on frames inside it.
+- A spec that boots its own page and needs no sidebar takes a small viewport:
+  with several tiles in view a SwiftShader frame is bound by its pixels (the
+  whole-site spec reaches `ready` in 54 s at 400×300, 156 s at 800×600).
 
 Lite is for headless CI, **never for looking at pixels**: for anything visual use
 the `--headed` snapshot harness below, at the full profile, on a real GPU.

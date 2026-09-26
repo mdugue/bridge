@@ -1047,7 +1047,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   every 16 / 12 m. *(Drawn member by member as measured until 2026-09 —
   chord, a post every 6 m, diagonals in dark `0x8d9ca8`: busier and
   darker than anything else in the scene.)* No DOM1: no ribs. `pipeline/bake/bridge.py`
-  ([ADR 0032](./adr/0032-bridges-measured-in-the-surface-model.md)).
+  ([ADR 0033](./adr/0033-bridges-measured-in-the-surface-model.md)).
 - **Bridge depth and fairway** — OSM's inland-waterway marks
   (`seamark:type=bridge` + `seamark:bridge:clearance_height`, ODbL) within
   30 m of a deck: the navigation clearance over the DGM's water surface gives

@@ -283,7 +283,7 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
       expect(deck).toHaveLength(outer.length);
       expect(deck.every((z) => Number.isFinite(z))).toBe(true);
     }
-    // The measured extras (ADR 0030) share the axis's 2 m stations.
+    // The measured extras (ADR 0033) share the axis's 2 m stations.
     const p = f.properties;
     if (p?.line) {
       // the centreline: a polyline of at least two points

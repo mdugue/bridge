@@ -145,6 +145,20 @@ test("walk mode applies exactly what resolveStep returns", () => {
   expect(proposals[0]?.z).toBeCloseTo(-WALK_STEP, 5);
 });
 
+test("flying meets the facades too: fly mode applies resolveStep", () => {
+  const blocked = rig({ resolveStep: () => new Vector3() });
+  blocked.movement.setMode("fly");
+  blocked.movement.press("KeyW");
+  blocked.movement.update(1);
+  expect(blocked.camera.position.z).toBeCloseTo(0, 5);
+
+  const free = rig({ resolveStep: (_position, displacement) => displacement });
+  free.movement.setMode("fly");
+  free.movement.press("KeyW");
+  free.movement.update(1);
+  expect(free.camera.position.z).toBeCloseTo(-FLY_STEP, 5);
+});
+
 test("off the terrain the eye height is held, not dropped", () => {
   const { camera, movement } = rig({ groundHeight: () => null });
   movement.update(1);

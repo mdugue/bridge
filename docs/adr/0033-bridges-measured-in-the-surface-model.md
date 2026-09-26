@@ -1,4 +1,4 @@
-# ADR 0032: Bridges are measured in the surface model, typed by Wikidata
+# ADR 0033: Bridges are measured in the surface model, typed by Wikidata
 
 - **Status:** accepted
 - **Date:** 2026-09
