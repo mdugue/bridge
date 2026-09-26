@@ -1,6 +1,7 @@
 import { Matrix4, type PerspectiveCamera, Quaternion, Vector3 } from "three";
 import { DEG2RAD, directionOf, type Xyz } from "@/lib/city/pose";
 import { clamp } from "@/lib/city/math";
+import { glideHull, hullLift, type LiftPoint } from "@/lib/city/clearance";
 
 /** s — minimum flight time so even a tiny hop reads as a deliberate glide. */
 const MIN_DURATION = 1.4;
@@ -31,6 +32,8 @@ interface ActiveFlight {
   endFov: number;
   endPos: Vector3;
   endQuat: Quaternion;
+  /** the lift over the straight line that clears what lies beneath it */
+  hull: LiftPoint[];
   startFov: number;
   startPos: Vector3;
   startQuat: Quaternion;
@@ -39,8 +42,16 @@ interface ActiveFlight {
 export interface CameraFlight {
   cancel: () => void;
   isActive: () => boolean;
-  /** Begins gliding the camera from its current pose to `target`. */
-  start: (target: FlightTarget) => void;
+  /**
+   * Begins gliding the camera from its current pose to `target`. With
+   * `floorAt` — the lowest height the camera may pass at over world (x, z)
+   * — the path climbs over whatever stands between the two poses instead
+   * of cutting through it.
+   */
+  start: (
+    target: FlightTarget,
+    floorAt?: (x: number, z: number) => number
+  ) => void;
   /**
    * Advances the active flight by `dt` seconds, driving the camera. Returns
    * true while a flight owns the camera (so the caller suspends player input).
@@ -84,13 +95,14 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
     cancel: () => {
       flight = null;
     },
-    start: (target) => {
+    start: (target, floorAt) => {
       const startPos = camera.position.clone();
       const endPos = new Vector3(target.pos.x, target.pos.y, target.pos.z);
       const dist = startPos.distanceTo(endPos);
       flight = {
         startPos,
         endPos,
+        hull: floorAt ? glideHull({ from: startPos, to: endPos }, floorAt) : [],
         startQuat: camera.quaternion.clone(),
         endQuat: targetQuat(endPos, target.headingDeg, target.pitchDeg),
         startFov: camera.fov,
@@ -113,8 +125,13 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
       const e = smootherStep(t);
       tmpPos.lerpVectors(flight.startPos, flight.endPos, e);
       // Bow the path upward, peaking at the midpoint, so the camera lifts and
-      // settles rather than sliding through whatever sits between the two poses.
-      tmpPos.y += flight.arc * Math.sin(Math.PI * e);
+      // settles rather than sliding through whatever sits between the two
+      // poses — and at least as high as the hull that clears the roofs and
+      // hills on the way.
+      tmpPos.y += Math.max(
+        flight.arc * Math.sin(Math.PI * e),
+        hullLift(flight.hull, e)
+      );
       camera.position.copy(tmpPos);
       tmpQuat.slerpQuaternions(flight.startQuat, flight.endQuat, e);
       camera.quaternion.copy(tmpQuat);

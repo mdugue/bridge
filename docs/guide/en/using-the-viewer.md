@@ -50,9 +50,12 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Two-finger pinch | zoom |
 
 While walking you are held at eye height on the terrain and collide with
-buildings and walls. While flying there is no collision; only sinking
-stops at eye height above the ground. Any input cancels
-a glide that is in progress.
+buildings and walls. Flying, you meet facades too, sinking stops at eye
+height above the ground, and rising ground lifts you with it. You never
+end up inside a building or below the ground: a double click on a facade,
+a snapshot or your location inside a house sets you down in front of it,
+in the air over its roof, and a glide climbs over whatever stands on its
+way. Any input cancels a glide that is in progress.
 
 Bottom right sits the **toolbar**; each button carries its name under the
 icon. The ⌄ below it folds it into one small button, which the browser

@@ -24,6 +24,14 @@ export interface PocDebugInfo {
   frames: number;
   /** The booted scene's handle — the object the HUD calls; set at the first frame. */
   handle?: CityWalkHandle;
+  /**
+   * Set by the e2e specs around steps that only touch the HUD: the render
+   * loop skips its frames while it is true (`pocFramesHeld`). Under
+   * SwiftShader a frame holds the main thread for half a second or more,
+   * and every Playwright action waits on animation frames (a click on two),
+   * so each click in the sidebar cost seconds.
+   */
+  hold?: boolean;
   /** The HUD's look store: `look.set(...)` is exactly what a slider does. */
   look?: LookState;
   ready: boolean;
@@ -60,6 +68,12 @@ export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
     ...window.__poc,
     ...patch,
   };
+}
+
+/** True while the e2e specs hold the render loop (`hold`); never in a
+ *  production build. */
+export function pocFramesHeld(): boolean {
+  return enabled && window.__poc?.hold === true;
 }
 
 /** Called once per rendered frame from the animation loop. */

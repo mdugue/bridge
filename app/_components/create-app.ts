@@ -17,6 +17,7 @@ import {
 import { fogRangeFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
 import { worldToEpsg } from "@/lib/city/ground-clamp";
+import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
 import { createGround } from "@/lib/city/ground";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
@@ -47,7 +48,7 @@ import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
-import { tickPocFrame, updatePocDebug } from "./poc-debug";
+import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
 import { gpuMode, nodeRenderer } from "./gpu-mode";
 import { createPostStack, type PostStack } from "./post-stack";
 import { createNodePostStack } from "./post-stack-node";
@@ -804,7 +805,8 @@ async function bootApp(
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
 
-  // Wall collision against the buildings of every visible tile.
+  // Wall collision against the buildings of every visible tile, and the
+  // vertical rays that keep the camera out of them.
   const collider = createCityCollider(() =>
     stream.visibleCities().map((c) => c.mesh)
   );
@@ -815,6 +817,7 @@ async function bootApp(
     heightAt,
     offset,
     resolveStep: collider.resolveStep,
+    solids: collider,
     onFollowEnd: opts.onFollowEnd,
     onModeChange: opts.onModeChange,
     onPose: opts.onPose,
@@ -826,6 +829,17 @@ async function bootApp(
   pose.placeAt(spawnView);
 
   // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
+  /** A step of the wall clearance from `point` towards the camera, level. */
+  const towardsCamera = (point: Vector3): Vector3 => {
+    const back = new Vector3(
+      camera.position.x - point.x,
+      0,
+      camera.position.z - point.z
+    );
+    return back.lengthSq() > 0
+      ? back.normalize().multiplyScalar(WALL_CLEARANCE)
+      : back;
+  };
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
   const canvasControls = attachTouchControls(renderer.domElement, {
@@ -835,11 +849,21 @@ async function bootApp(
     onPinch: pose.zoomTo,
     onWheel: pose.zoomBy,
     onDoubleTap: (ndcX, ndcY) => {
-      // Travel to the tapped spot on the terrain.
+      // Travel to the tapped spot on the terrain — or, when a building is
+      // in front of it, to the foot of the building on this side (the
+      // pose sets a spot inside one out beside it).
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
-      const t = groundAlong(tapRaycaster, 6000);
-      if (t !== null) {
-        const hit = tapRaycaster.ray.at(t, new Vector3());
+      tapRaycaster.far = 6000;
+      const building = tapRaycaster.intersectObjects(
+        stream.visibleCities().map((c) => c.mesh),
+        false
+      )[0];
+      const t = groundAlong(tapRaycaster, building?.distance ?? 6000);
+      const hit =
+        t === null
+          ? (building?.point.clone().add(towardsCamera(building.point)) ?? null)
+          : tapRaycaster.ray.at(t, new Vector3());
+      if (hit) {
         const epsg = worldToEpsg(hit.x, hit.z, offset);
         pose.teleportTo(epsg.x, epsg.y);
       }
@@ -1069,6 +1093,11 @@ async function bootApp(
   let tickDue = 0;
   let fpsDue = 0;
   renderer.setAnimationLoop((time) => {
+    // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
+    // the clamp below keeps the skipped time from jumping the scene.
+    if (pocFramesHeld()) {
+      return;
+    }
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     const elapsed = timer.getElapsed();

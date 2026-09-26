@@ -385,8 +385,12 @@ so every `lib/city/` module and site config the bake reaches is in the key,
 plus `bun.lock` and `patches/` (the glTF tools' versions shape the output).
 A changed input, a changed bake or a renamed side file re-bakes; a checkout
 or a touch alone does not; anything else is a cache
-read. A cold run of the Dresden site (fifteen tiles) takes ≈ 3 min on four
-cores, a warm one ≈ 1 s.
+read. A cold run of the Dresden site (fifteen tiles) takes ≈ 2 min on four
+cores, a warm one ≈ 1 s. CI keeps the directory between runs (`actions/cache`
+in the e2e job): any earlier entry is a sound start, since every artifact is
+keyed by what it was baked from. Most of a cold run is decoding the DGM
+GeoTIFFs (LZW, twice per tile: once per terrain level), the fine level's TIN
+(delatin) and the glTF quantisation.
 
 **Publish.** Each file is written to `public/data/` as
 `<stem>.<8 hex of sha1>.<ext>` (`.glb.gz` keeps both suffixes);
