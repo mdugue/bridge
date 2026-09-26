@@ -96,6 +96,8 @@ def download(url: str, dest: Path, md5_url: str | None = None) -> Path:
             print(f"{err} — the cached copy is dropped and fetched again")
             dest.unlink()
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # A marker left from a deleted copy must not vouch for the next one.
+    marker.unlink(missing_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     published = _published_md5(md5_url) if md5_url is not None else None
     print(f"downloading {url}")

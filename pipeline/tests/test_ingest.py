@@ -81,3 +81,16 @@ def test_a_zip_cached_before_the_checks_is_tested_once(tmp_path):
     good.write_bytes(_zip_bytes())
     assert download("file:///unused", good) == good
     assert good.with_suffix(".zip.checked").exists()
+
+
+def test_a_stale_marker_does_not_vouch_for_a_new_copy(tmp_path):
+    good = tmp_path / "src.zip"
+    good.write_bytes(_zip_bytes())
+    dest = tmp_path / "cache" / "tile.zip"
+    download(good.as_uri(), dest)
+    dest.unlink()  # the user forces a re-fetch …
+    with pytest.raises(OSError):
+        download((tmp_path / "gone.zip").as_uri(), dest)  # … which fails
+    dest.write_bytes(b"truncated")  # and a broken copy is dropped in by hand
+    download(good.as_uri(), dest)  # tested, dropped and fetched again
+    assert dest.read_bytes() == good.read_bytes()
