@@ -17,10 +17,30 @@
     315.0,
     337.5
   ],
-  "layout": "plane p (stacked north-to-south), channel c = azimuth 4p + c",
-  "degPerUnit": 0.17647058823529413,
+  "layout": "plane p (stacked north-to-south), channel c = azimuth 4 (p mod 4) + c; planes 0-3 the far band, 4-7 the near band",
   "px": 256,
-  "nearM": 80.0,
-  "farM": 1500.0,
+  "bands": [
+    {
+      "name": "far",
+      "planes": [
+        0,
+        4
+      ],
+      "nearM": 80.0,
+      "farM": 1500.0,
+      "degPerUnit": 0.17647058823529413
+    },
+    {
+      "name": "near",
+      "planes": [
+        4,
+        8
+      ],
+      "nearM": 8.0,
+      "farM": 80.0,
+      "degPerUnit": 0.35294117647058826
+    }
+  ],
+  "footprints": "cells under a roof carry the nearest open cell's angles",
   "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)"
 }
