@@ -1,0 +1,115 @@
+import { expect, test } from "bun:test";
+import {
+  ARCHETYPE_SHAPE,
+  archetypeOf,
+  FOOTPRINT_CELL,
+  footprintIndex,
+  footprintRadius,
+  MIN_FOOTPRINT_R,
+  overtops,
+  TREE_ARCHETYPES,
+  TRUNK_FOOT_R,
+  TRUNK_ROWS,
+  TRUNK_TOP_R,
+  treeExtents,
+  trunkGirth,
+  trunkRadiusAt,
+} from "./tree-inventory";
+
+test("a measured trunk sets the girth; without one it follows the height", () => {
+  const ext = treeExtents(15, 9, "round");
+  // Unmeasured: the height rule.
+  expect(trunkGirth(ext)).toBeCloseTo((15 / 5.8) * 0.8);
+  expect(trunkGirth(ext, Number.NaN)).toBeCloseTo((15 / 5.8) * 0.8);
+  // Measured: the unit trunk's radius at 1.3 m, scaled to half the
+  // diameter (× the style factor) — and monotone in the diameter.
+  const g40 = trunkGirth(ext, 40);
+  expect(g40 * trunkRadiusAt(1.3 / ext.trunkTop)).toBeCloseTo(0.2 * 1.3);
+  expect(trunkGirth(ext, 60)).toBeGreaterThan(g40);
+  // Clamped at both ends: a sapling and a register typo.
+  expect(trunkGirth(ext, 1)).toBe(0.3);
+  expect(trunkGirth(ext, 5000)).toBe(5);
+});
+
+test("the trunk is fitted to the radius drawn, flared foot included", () => {
+  // The rings: the taper at the top, the taper × the flare at the foot.
+  expect(trunkRadiusAt(1)).toBeCloseTo(TRUNK_TOP_R);
+  expect(trunkRadiusAt(0)).toBeCloseTo(TRUNK_FOOT_R * 1.9);
+  // A 25 m tree's breast height lies in the bottom segment, between the
+  // flared foot ring and the next: wider than the taper alone says, so the
+  // fitted girth is narrower than a taper fit's (which drew it too thick).
+  const ext = treeExtents(25, 14, "round");
+  const t = 1.3 / ext.trunkTop;
+  expect(t).toBeLessThan(1 / TRUNK_ROWS);
+  const taper = TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * t;
+  expect(trunkRadiusAt(t)).toBeGreaterThan(taper * 1.15);
+  // Drawn: girth × the unit radius at 1.3 m = the measured radius × style.
+  const drawnCm = trunkGirth(ext, 80) * trunkRadiusAt(t) * 200;
+  expect(drawnCm).toBeCloseTo(80 * 1.3);
+  // Above the flare the faces run straight between the rings.
+  const mid = (2.5 / TRUNK_ROWS + 3.5 / TRUNK_ROWS) / 2;
+  expect(trunkRadiusAt(mid)).toBeCloseTo(
+    TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * mid
+  );
+});
+
+test("archetype ids follow the bake's order and fall back to round", () => {
+  expect(TREE_ARCHETYPES[2]).toBe("columnar");
+  expect(archetypeOf(3)).toBe("conifer");
+  expect(archetypeOf(undefined)).toBe("round");
+  expect(archetypeOf(99)).toBe("round");
+  // Proportion-only archetypes share the broadleaf crown.
+  expect(ARCHETYPE_SHAPE.oval).toBe("broad");
+  expect(ARCHETYPE_SHAPE.small).toBe("broad");
+  expect(ARCHETYPE_SHAPE.columnar).toBe("spindle");
+});
+
+test("extents: the crown spans clear stem to the top, the trunk reaches into it", () => {
+  const e = treeExtents(20, 12, "round");
+  expect(e.crownTop).toBe(20);
+  expect(e.crownWidth).toBe(12);
+  expect(e.crownBase).toBeCloseTo(6.6);
+  expect(e.trunkTop).toBeGreaterThan(e.crownBase);
+  expect(e.trunkTop).toBeLessThan(e.crownTop);
+  // A columnar tree keeps its crown low; a globe cultivar is a ball on a stem.
+  expect(treeExtents(15, 4, "columnar").crownBase).toBeLessThan(3);
+  expect(treeExtents(6, 4, "small", true).crownBase).toBeCloseTo(2.7);
+});
+
+test("extents never carry NaN or absurd sizes into a matrix", () => {
+  const e = treeExtents(Number.NaN, Number.NaN, "oval");
+  for (const v of Object.values(e)) {
+    expect(Number.isFinite(v)).toBe(true);
+  }
+  expect(treeExtents(90, 126, "round").crownWidth).toBe(30);
+  expect(treeExtents(0.2, 0.1, "round").crownTop).toBe(1.5);
+});
+
+test("footprint radius: half the crown, floored at half the canopy grid, capped at a cell", () => {
+  expect(footprintRadius(12)).toBe(6);
+  expect(footprintRadius(2)).toBe(MIN_FOOTPRINT_R);
+  expect(footprintRadius(60)).toBe(FOOTPRINT_CELL);
+  expect(footprintRadius(Number.NaN)).toBe(MIN_FOOTPRINT_R);
+});
+
+test("footprintIndex covers each tree's radius, across cell borders", () => {
+  const covers = footprintIndex([
+    { x: 1000, y: 2000, r: 5, h: 10 },
+    { x: 1015.9, y: 2000, r: 16, h: 10 },
+  ]);
+  expect(covers(1004, 2000)).toBe(true);
+  expect(covers(1000, 2006)).toBe(false);
+  // the second tree sits at a cell edge; its radius reaches two cells over
+  expect(covers(1031, 2000)).toBe(true);
+  expect(covers(1033, 2000)).toBe(false);
+  expect(footprintIndex([])(0, 0)).toBe(false);
+});
+
+test("a canopy point clearly taller than the inventory tree is another tree", () => {
+  const covers = footprintIndex([{ x: 0, y: 0, r: 5, h: 6 }]);
+  expect(covers(1, 0, 9)).toBe(true); // within max(5 m, 30 %)
+  expect(covers(1, 0, 12)).toBe(false); // a big park tree over a young one
+  expect(covers(1, 0)).toBe(true); // rows carry no height
+  expect(overtops(30, 20)).toBe(true);
+  expect(overtops(25, 20)).toBe(false);
+});

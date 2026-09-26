@@ -69,6 +69,7 @@ earlier one:
 flowchart LR
   DLM["landcover<br/>land-use classes + hedge rows"] --> CAN["canopy<br/>tree points"]
   DLM --> LAMP["lamps<br/>lamp points"]
+  DLM --> FURN["furniture<br/>benches · bins · stands · shelters"]
   NDVI["ndvi<br/>greenness raster"]
   ROOF["roof-colour<br/>roof colour table"]
   WALL["walls<br/>wall lines"]
@@ -98,17 +99,18 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `vegrows_<tile>.geojson` | hedge and tree-row lines | a few kB |
 | | `canopy_<tile>.geojson` | one point per tree with its height (5,000–16,000 per tile) | 0.6–1.8 MB |
 | | `lamps_<tile>.geojson` | lamp positions | up to 60 kB |
+| | `furniture_<tile>.geojson` | benches, bins, bicycle stands, bollards, post boxes and shelters, each with the way it faces | 50–180 kB |
 | | `monuments_<tile>.geojson` | fountain basins and monument points with kind and official name | 2–55 kB |
-| | `walls_<tile>.geojson` | wall lines with kind and height | 50–120 kB |
+| | `walls_<tile>.geojson` | wall lines with kind and height, then the fences and railings (with their kind) and the gates on them | 130–290 kB |
 | | `stairs_<tile>.geojson` | flights of steps: axis, width, step count, the heights at foot and head | a few kB |
 | | `terraces_<tile>.geojson` | raised areas the terrain model lacks (the Brühlsche Terrasse) with their level | a few kB |
 | | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |
 | | `bridge_<tile>.geojson` | bridge deck outlines with a height per corner, kind and structure | a few kB |
 | | `platform_<tile>.geojson` | station platforms | a few kB |
+| | `osmbuild_<tile>.json` | per building: a shop or café on the ground floor, listed | 15–40 kB |
 | `data/dop/` | `roofcolor_<tile>.json` | one colour per building, sampled from the aerial photo | 0.2 MB |
 
-In total the repository carries about 125 MB of data for the four tiles
-(plus two terrain tiles to the east that nothing loads yet).
+In total the repository carries about 400 MB of data for the fifteen tiles.
 
 **Single source of truth versus derivative, at a glance:**
 
@@ -120,9 +122,10 @@ In total the repository carries about 125 MB of data for the four tiles
 | Trees | Basis-DLM + DOM1 + DGM1 | tree points, hedge rows | — | as committed |
 | Greenness | DOP | the NDVI PNG | — | as committed |
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
+| Shop fronts, listed buildings | OpenStreetMap + LoD2 | the per-building table | folded into the building mesh's table | inside the building mesh |
 | Monuments and fountains | Basis-DLM (names, positions) + OpenStreetMap (basins) | the GeoJSON files | — | as committed |
 | Lamps, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
-| Walls, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls and steps as part of the mesh | inside the terrain mesh |
+| Walls, fences, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls, fences and steps as part of the mesh | inside the terrain mesh |
 | Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
@@ -172,23 +175,25 @@ as sent over the network):
 
 | What | Start tile | Other tiles | Fetched when |
 |---|---|---|---|
-| Buildings (with the style table) | 1.34 MB | 1.09–1.46 MB | the tile is in view |
-| Building footprints (minimap) | 48 kB | 59–76 kB | with the buildings |
-| Coarse terrain (512²) | 0.41 MB | 0.44–0.54 MB | the tile is in view |
-| Detailed terrain (1024², with its walls and stairs) | 1.62 MB | 1.62–2.03 MB | the camera comes close |
-| Land-use classes, 2048² | 0.08 MB | 0.07–0.08 MB | at the start (minimap), then for the coarse terrain |
-| Land-use classes, 4096² | 0.22 MB | 0.22–0.25 MB | with the detailed terrain (desktop only) |
-| Greenness (NDVI) | 0.39 MB | 0.32–0.45 MB | with the terrain |
-| Tree points | 36 kB | 54–106 kB | with the detailed terrain |
+| Buildings (with the style table) | 1.34 MB | up to 1.91 MB | the tile is in view |
+| Building footprints (minimap) | 48 kB | up to 75 kB | with the buildings |
+| Coarse terrain (512²) | 0.41 MB | 0.44–0.65 MB | the tile is in view |
+| Detailed terrain (a TIN, with its walls, stairs and kerb stones) | 1.61 MB | 1.31–3.56 MB | the camera comes close |
+| Land-use classes, 2048² | 0.08 MB | 0.06–0.11 MB | at the start (minimap), then for the coarse terrain |
+| Land-use classes, 4096² | 0.22 MB | 0.15–0.29 MB | with the detailed terrain (desktop only) |
+| Greenness (NDVI) | 0.39 MB | 0.32–0.77 MB | with the terrain |
+| Tree points | 36 kB | 41–526 kB | with the detailed terrain |
+| Street furniture | 19 kB | 0.3–19 kB | with the detailed terrain |
 | Lamps, rails, ballast, bridges, platforms, hedge rows | under 5 kB each | under 5 kB each | with the detailed terrain |
-| **Per tile, in full detail** | **≈ 4.2 MB** | **≈ 4.0–5.0 MB** | |
-| **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 2.0–2.6 MB | |
+| Paving and road-edge rasters | 2.18 MB | 0.28–2.76 MB | with the detailed terrain |
+| **Per tile, in full detail** | **≈ 6.4 MB** | **≈ 4.0–9.7 MB** | |
+| **Per tile, as distant backdrop** | ≈ 2.3 MB | ≈ 1.3–3.3 MB | |
 
 How much a visit downloads therefore depends on where you go. With every
-tile in full detail, a desktop has fetched about **17 MB** for the four
-tiles; a phone about 16 MB (it takes the 2048² land-use raster for every
+tile in full detail, a desktop has fetched about **97 MB** for the fifteen
+tiles; a phone about 95 MB (it takes the 2048² land-use raster for every
 tile); the test-only "lite" profile, which streams the start tile alone,
-about 4 MB. That is more than before the switch to streaming (a full visit
+about 6 MB. That is more than before the switch to streaming (a full visit
 used to be about 10.6 MB), because the terrain now arrives as a ready-made
 mesh instead of a compact grid of heights; in exchange every file is in a
 standard format that common 3D tools can open.
@@ -201,7 +206,7 @@ feature files.
 What is **computed in the browser** rather than downloaded: the ground
 colours (painted once per tile on the graphics card, from the land-use
 classes and one pastel palette), the water surface, every tree from its
-point and height, lamp posts from their points, bridges from their
+point and height, lamp posts and benches from their points, bridges from their
 outlines, the sun position, all lighting and shadows, and the whole
 post-processing look.
 
@@ -211,9 +216,9 @@ post-processing look.
 |---|---|---|
 | New terrain edition | replace the GeoTIFF in `data/dgm/`; re-run the `canopy` and `rail` bakes (they read it) | the terrain meshes, walls included, are re-baked on the next build |
 | New building model | convert to CityJSON, replace in `data/cityjson/`; re-run the `roof-colour` bake | the building mesh is re-baked on the next build |
-| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps` and `rail` (they read the class raster) | the 2048² copies are re-baked |
+| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture`, `rail` and `tram` (they read the class raster) | the 2048² copies are re-baked |
 | New aerial photos | re-run the `ndvi` and `roof-colour` bakes | the roof colours are folded into the mesh on the next build |
-| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `monuments`, `walls`, `stairs` and `rail` bakes | — |
+| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs`, `rail` and `tram` bakes | — |
 | Different ground colours | edit the one palette in the code | nothing to re-bake: the browser paints the colours |
 | A new tile | download its terrain and building model by hand (the building model converted to CityJSON) and commit both; add the tile to the site config `sites/dresden.ts`; `bun run bake --ingest` fetches the rest and runs all seven bakes | the build adds it to the tileset and publishes it |
 

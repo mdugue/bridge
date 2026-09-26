@@ -1,4 +1,11 @@
-import { type BufferGeometry, Color, Mesh, type Texture, Vector3 } from "three";
+import {
+  type BufferGeometry,
+  Color,
+  Mesh,
+  type Texture,
+  Vector2,
+  Vector3,
+} from "three";
 import {
   abs,
   cameraPosition,
@@ -45,6 +52,11 @@ import {
   groundFields,
   urbanGreen,
 } from "./ground-detail-node";
+import { colonyGarden } from "./cultivated-node";
+import { roadMarkings } from "./road-markings-node";
+import type { GroundLight } from "./sky-light";
+import { applyGroundLightNodes } from "./sky-light-node";
+import { sportGround } from "./sport-ground-node";
 import type { SplatLayer } from "./terrain-layer";
 import type { WaterLayer } from "./water-layer";
 
@@ -66,16 +78,21 @@ const live = (ref: Live) => uniform(ref.value).onRenderUpdate(() => ref.value);
 const dataXY = (): Node<"vec2"> =>
   vec2(positionWorld.x, positionWorld.z.negate());
 
+/**
+ * The splat's uv at the fragment. The tile's corner is a uniform, not a
+ * constant: every tile then compiles to the same shader (the tiles share
+ * their size), and a tile flown into reuses the pipeline the first one
+ * built instead of compiling the terrain's — the largest — anew.
+ */
 function splatUv(splat: SplatLayer): Node<"vec2"> {
   const [minX, minY, maxX, maxY] = splat.bounds;
-  const ox = minX - splat.offset.cx;
-  const oy = maxY - splat.offset.cy;
+  const origin = uniform(
+    new Vector2(minX - splat.offset.cx, maxY - splat.offset.cy)
+  );
   const xy = dataXY();
   return vec2(
-    xy.x.sub(ox).div(maxX - minX),
-    float(oy)
-      .sub(xy.y)
-      .div(maxY - minY)
+    xy.x.sub(origin.x).div(maxX - minX),
+    origin.y.sub(xy.y).div(maxY - minY)
   );
 }
 
@@ -194,6 +211,17 @@ function splatTerrain(
     const fd = groundFields(g, m);
     const ugW = urbanGreen(g, fd, m, base);
     tilt.assign(groundDetail(g, fd, ugW, base, m.fw));
+    // terrain-layer.ts splatFragment's order: gardens, sports grounds,
+    // road markings, then the NDVI tint (which a painted pitch opts out of).
+    if (splat.colonies) {
+      colonyGarden(g, fd, m, base, splat.colonies);
+    }
+    if (splat.sport) {
+      sportGround(g, fd, m, base, splat.sport);
+    }
+    if (splat.markings) {
+      roadMarkings(g, fd, m, base, splat.markings);
+    }
     if (splat.ndviTexture) {
       meadowNdvi(splat, splat.ndviTexture, uv, m.meadow, base);
     }
@@ -226,7 +254,8 @@ function splatTerrain(
 }
 
 export function createNodeTerrainMaterial(
-  splat?: SplatLayer
+  splat?: SplatLayer,
+  light?: GroundLight
 ): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({
     color: 0xad_b2_9e,
@@ -234,6 +263,9 @@ export function createNodeTerrainMaterial(
   });
   if (splat) {
     splatTerrain(material, splat);
+    // The city's large-scale light (sky-light.ts): the sky view on the
+    // ambient term, the far horizon on the sun.
+    applyGroundLightNodes(material, light);
     return material;
   }
   const elevation = positionWorld.y;

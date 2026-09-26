@@ -31,13 +31,15 @@ retargeted/lowered as tiles land.
 
 **Streaming** (`tile-stream.ts`, ADR 0024): the build bakes the site into an
 OGC 3D Tiles tileset (`lib/city/tileset.ts`): per site tile the buildings
-(refine ADD) over the terrain at two levels (512², geometric error 40 m,
-replaced by 1024² near the camera). Content is glTF (meshopt, quantised,
+(refine ADD) over the terrain at two levels (a 512² grid, geometric error
+40 m, replaced near the camera by an error-bounded TIN of the native DGM,
+ADR 0030). Content is glTF (meshopt, quantised,
 pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
 camera, so casters outside the view stay loaded. A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
-heavy part (vegetation, lamps, rails on the fine terrain level; its walls
+heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
+lamps, rails on the fine terrain level; its walls
 and stairs are baked into the glTF) waits
 behind the HUD's gate and is built one tile at a time behind the streaming
 chip. Every tile change re-renders the shadow map. The layers:
@@ -50,19 +52,31 @@ chip. Every tile change re-renders the shadow map. The layers:
   the index buffer and rebuild the tile's BVH (you can't hide one building
   in a batched mesh). Picking/collision use `three-mesh-bvh` on every loaded
   tile. No CityJSON reaches the browser.
-- `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF grid (DGM1
-  resampled with the wall breaklines burned in, the ground shaped under
-  OSM stairs, and the steps and wall ribbons as `stairs`/`walls` nodes, all
-  at bake time,
-  `scripts/bake-tiles.ts` + `lib/city/terrain-geometry.ts`) gets the
-  land-cover material; also hangs the water and mist sheets.
+- `terrain-layer.ts` — `dressTerrain` on a terrain tile: the glTF mesh
+  gets the land-cover material and hangs the water and mist sheets. The
+  fine level is a TIN of the native 1 m DGM1 (±0.15 m,
+  `scripts/bake-terrain-tin.ts`; `extras.tin`): `heightAt` reads its
+  triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`),
+  and the water gets an up-facing normal twin. Nothing is burned into it;
+  the wall ribbons in its `walls` node snap to the measured step at bake
+  time (`lib/city/wall-snap.ts`, ADR 0030). The coarse level is the 512²
+  grid with the wall breaklines burned in (ADR 0014), heights read back
+  from its first n·n vertices. Both are shaped under OSM stairs and
+  terraces at bake time (`scripts/bake-tiles.ts`, ADR 0028); study and
+  numbers in the ledger's "Terrain TIN" entry.
 - `landcover-splat.ts` — paints the class raster with the one palette
   (`lib/city/landcover.ts`) into the colour splat on the GPU (ADR 0023).
 - `water-layer.ts` — sheets over the terrain geometry, masked by the splat's
   alpha (water coverage), animated normal wobble.
-- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy) and hedges,
-  chunked for culling. Lives in the **Y-up frame** (a tile's content root),
-  never inside the rotated `world` group itself.
+- `vegetation-layer.ts` — InstancedMesh trees (rows + DOM1 canopy + the
+  laser-scan extra trees + the cadastre's trunks and broadleaf crowns, passed
+  in as precomputed `TreeInstance`s) and DLM hedges, chunked for culling.
+  Lives in the **Y-up frame** (a tile's content root), never inside the
+  rotated `world` group itself. `tree-inventory-layer.ts` draws only the
+  cadastre's reshaped silhouettes (flame / cone / dome) and vetoes canopy
+  trees inside its crowns (not in forest/copse); `tile-stream.ts`
+  (`buildTileVegetation`) joins both into the tile's one vegetation
+  control. `low-vegetation-layer.ts` draws the OSM hedges.
 - `shader-chunks.ts` — `DATA_POSITION`: glTF positions are quantised, so
   shaders derive data-frame coordinates from world space.
 - `sun-rig.ts` — directional light + shadow camera, sky dome, hemisphere fill,
@@ -72,6 +86,28 @@ chip. Every tile change re-renders the shadow map. The layers:
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
   glow), hash-dithered transparency. The old ghost/standard styles are gone.
+- The map's own marks: the ferry wakes of `riverside-layer.ts` (landing
+  stages, groynes, ferries), faded in with height by `map-overlay.ts`. No
+  text anywhere in the scene or HUD (plan 032's street names were removed;
+  🗃️ in the ledger).
+- More dressing: `tram-layer.ts` (tracks in their bed, the contact wire
+  sagging between spans and arms, stop signs; `lib/city/tram.ts`),
+  `fence-layer.ts` (the fences' material; baked into the fine terrain),
+  `furniture-layer.ts` (benches … plan 030's advertising columns, signals,
+  hydrants, clocks, drinking fountains, bus-stop signs), `crown-season.ts`
+  (per-day crown colour and bare stipple, `lib/city/tree-season.ts`).
+- Terrain pass chunks: `road-markings.ts` (`lib/city/markings.ts`),
+  `cultivated-layer.ts` (colony gardens, vine rows; `lib/city/cultivated.ts`),
+  `sky-light.ts` (sky view + far horizon; `lib/city/skyview.ts`, the raster
+  shared with the buildings through `shared-rasters.ts`).
+- Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
+  bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
+  the canopy points they veto at build time).
+- Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
+  AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
+  `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
+  `lib/city/soundscape.ts` (the mix) and `lib/city/sound-entry.ts` (the
+  boot-side half).
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -141,13 +177,40 @@ map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
 the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
 them anyway.
 
+### The far field: baked horizon + sky view (plan 033)
+
+What the frustum cannot reach is baked: `pipeline/bake/skyview.py` writes,
+from the committed DGM1 + LoD2 only, a **sky-view factor** (≈2 m) and a
+**horizon** (≈8 m, 16 azimuths, two bands: occluders 80–1 500 m and
+8–80 m away; eight layers of one array texture). The terrain folds it into
+three's directional-light loop (`sky-light.ts` `lightsWithFarShadow`
+rewrites `lights_fragment_begin`: `min(getShadow(…), hzLit)`, and `hzLit`
+alone where the light casts no shadow) — `min`, never a product, so an
+occluder both see never darkens twice. **The near band only counts outside
+the shadow frustum**: the sun rig keeps the frustum's ground centre and
+half-size in `shadowReach` (the terrain's `uShadowReach`, by reference);
+the near band fades in over the frustum's last 20 % and beyond it the
+horizon is max(near, far) — without it a street past the frustum lost the
+shadow of the block beside it. Change the frustum fit and this follows by
+itself; never feed the near band inside the frustum (its 8 m / 22.5° smear
+would fight the map's crisp edges). The sky view scales only
+`reflectedLight.indirectDiffuse` in `aomap_fragment` (after the lights), on
+the terrain and the clay facades (sampled 2.5 m outside the wall, doubled,
+faded out toward the eaves); cells under a roof carry the nearest open
+value in both rasters (no dark bleed through LINEAR/mipmaps). Rows
+*Himmelslicht* and *Ferne Schatten*; 0 = the old picture. Unjudged on a GPU
+as of 2026-09-25 — watch for SVF + N8AO reading as dirt in courtyards
+(lower N8AO there first) and the hand-over at the frustum's edge.
+[ADR 0031](../../../docs/adr/0031-baked-horizon-map-for-far-shadows.md).
+
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
 fraying — the fit is careful to keep the base radius while walking), 4096 map
-(cost without visible gain once radius softens). **Open limit:** very long
-low-sun shadows still clip beyond the frustum, and the far field at high
-altitude is unshadowed — only Cascaded Shadow Maps fix that properly (three has
-CSM in examples; sizeable integration, custom-material patching).
+(cost without visible gain once radius softens). **Open limit:** past the frustum
+the ground's shadows are the horizon's (an angle at 8 m and 22.5°, no shape,
+not on facades or trees) — only Cascaded Shadow Maps give the middle distance
+its shapes (three has CSM in examples; sizeable integration, custom-material
+patching).
 
 ## Surfaces (the land-cover splat)
 
@@ -182,6 +245,30 @@ the bytes interleaved, so the viewer's own decoder (`lib/city/png-raster.ts`)
 reads them exactly. *Bodendetail* and *Stadtgrün* (urban green painted as
 meadow) are the sliders. The contour ink guards `fwidth == 0`.
 
+**Sports grounds** (`sport-ground.ts`, same pass, after the ground
+detail): `pipeline/bake/sport.py` writes a table of grounds (frame,
+surface, line scheme, shape) and an RGBA index raster (row on top, a
+second row grown wider, the exact bit). The fragment evaluates up to eight
+candidate rows' *analytic* shapes (rotated rect, a track's capsule band,
+else the raster outline) and keeps the deepest — reading one row per texel
+sawed teeth into a track's inner edge where the capsule model strays past
+the mapped outline. Lines use `spLine`, an exact box filter over the pixel
+footprint; keep new lines on it (no `smoothstep` lines — they shimmer).
+Goals, posts and nets are dressing (`sport-fixtures.ts`), one merged mesh
+per tile, owned by the tile holding the ground's centre.
+
+**Road markings and allotment beds** (plans 026, 028) are two more
+chunks in the same pass, fine level only. `road-markings.ts` reads a
+table of rotated rectangles (crossings, stop lines; axis across the road)
+and an RGBA raster (`markings.py`: 16-bit row in R + 256·A, per-side
+cycle-lane bit and centre-line bit in G, the signed offset to the
+carriageway's middle in B — the side is resolved in the bake because the
+paving raster's bearing is modulo 180°). Every stripe is box-filtered
+exactly (`rmStripes`), and along-street periods divide 165 m.
+`cultivated-layer.ts` paints faint beds on the colony raster
+(`cultivated.py`) in jittered-Voronoi plots — no colony in the fifteen tiles
+maps its parcels, so keep it faint.
+
 ## Terrain seams
 
 Vertices sit at pixel centres, so a tile stops half a pixel short of its bounds;
@@ -193,10 +280,23 @@ not sky.
 ## Vegetation
 
 - Trees = InstancedMesh (trunk + crown), hedges = InstancedMesh boxes. Crown =
-  `IcosahedronGeometry(r, 2)` (≈320 tris) with lobes and radial normals; the
-  near-camera **rich multi-tuft crown** (~1 440 tris) is swapped in per 250 m
-  chunk by `updateLod` (in at 220 m, out at 300 m). Detail 1 (≈80 tris) is the
-  fallback if the far field ever needs a third tier.
+  `IcosahedronGeometry(r, 2)` (180 tris) with lobes and radial normals. Three
+  tiers per 250 m chunk, planned over the whole site each frame
+  (`lib/city/vegetation-lod.ts`, applied by `updateVegetationLod`): the
+  **rich multi-tuft crown** (~1 440 tris) near the camera (in 220 m / out
+  300 m) but only within a **site-wide budget of 2 500 trees**, nearest
+  chunks first — forest tiles (one tree per 7 m, up to ~1 300 per chunk)
+  otherwise put ~9 000 rich crowns on screen and lost the WebGL context; the
+  mid crown + trunk; and past 650 m (back at 550 m) a detail-1 crown (80
+  tris), no trunk, dense chunks thinned to every other tree drawn wider.
+  Trunks, mid and rich crowns of a chunk share ONE `instanceMatrix` (and
+  the crowns one `instanceColor`) — ~9 MB instead of ~21 MB for a forest
+  tile; compute each mesh's bounding sphere after sharing.
+- Phones keep only 120–180 MB of out-of-view tile content cached
+  (`tileCacheBytesFor`, `lruCache.min/maxBytesSize`): with the library's
+  0.3–0.4 GB default, a minimap jump from the start into the Heide kept the
+  start area loaded while the forest tiles arrived and Safari killed the
+  tab.
 - **Chunking:** placements are bucketed into 250 m cells, one InstancedMesh per
   cell (shared geo/material), so off-screen cells frustum-cull from both the
   main and shadow pass. After `setMatrixAt` you **must**
@@ -205,9 +305,28 @@ not sky.
 - Canopy from `pipeline/bake/canopy.py`: `nDOM = DOM1 − DGM1`, one tree per ~7 m cell
   at the tallest pixel, scaled to measured height, gated off road/bridge/water
   via the class raster.
-- **Tree LOD (shipped):** per-chunk distance swaps the rich crown in near the
-  camera and the cheap one far away; a swap invalidates the shadow map
-  (plan 009).
+- **Tree LOD (shipped):** the three tiers above; a tier change invalidates
+  the shadow map (plan 009).
+- **Cadastre + laser scan + hedges (all default-on):** the street-tree
+  cadastre (`pipeline/bake/trees.py`), the laser-scan trees outside the canopy
+  mask (`canopyx`, thinned in the bake against the cadastre within max(4 m,
+  crown radius)) and the OSM hedges with their laser-scan height
+  (`low-vegetation-layer.ts`, superellipsoid chains, static, chunked) from
+  `pipeline/bake/lowveg.py`. The bake's laser-scan-only hedges and shrubs are NOT
+  shipped (~30 % crown-rim false positives; `--step lowveg --research` writes them for
+  research). Measured lesson: the LSC **multi-echo ratio is a tall-tree cue,
+  not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5). Draw-call model:
+  `scripts/eval/kataster-cost.ts`. Numbers in `docs/transformations.md`.
+- **Species and season (plan 025):** the tree data carries the genus (`gn`,
+  an index into the file's `genera` = `lib/city/tree-season.ts`
+  TREE_GENERA) and the trunk diameter; OSM `natural=tree` fills in where the
+  cadastre has no tree within 3 m. `crown-season.ts` turns the scene date
+  into per-instance colour and `aBare` (1 − leaf) **on a change of calendar
+  day only** (throttled, never per frame); a chunk with a bare crown wears
+  the seasonal crown material (a hashed alpha test in crown space, ~1.25 px
+  cells — fixed cells shattered big crowns into shards) plus the matching
+  `customDepthMaterial`, so the winter shadow thins. Cost:
+  `scripts/eval/season-cost.ts`.
 
 ### Sandbox crown — what is left to port
 
@@ -245,6 +364,8 @@ change yourself:
 # drop the snapshot JSON into shots/, then:
 bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
+# Before/after pairs: SHOTS_QUERY=scene=lite SHOTS_TAG=x bun run shots
+# appends the query to the page URL and writes shots/<name>.x.png.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
@@ -287,7 +408,7 @@ because boot is the largest fixed cost left once frames are cheap. The
 ## Data pipeline
 
 Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
-`data/_raw/<site>/{dom1,dop,dlm,osm,downloads}`; no Git-LFS. Committed by
+`data/_raw/<site>/{dom1,dop,dlm,osm,trees,lsc,downloads}`; no Git-LFS. Committed by
 design: the small derived per-tile artifacts in `data/dlm/` and `data/dop/`,
 the CityJSON, **and the DGM1 GeoTIFF + `.tfw` per tile in `data/dgm/`**
 (~13–15 MB each), because `prepare-data.ts` bakes the terrain from it at
@@ -295,7 +416,8 @@ build time and the canopy/rail bakes read it.
 
 **Stage 1, the offline bakes** (ADR 0025): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
-Pillow; GDAL inside the wheels, with the OSM driver). If a tool is missing,
+Pillow, scipy, scikit-image; GDAL inside the wheels, with the OSM driver;
+laspy for the laser scan — no PDAL). If a tool is missing,
 fix the environment (`pipeline/pyproject.toml`), don't bend the code.
 `bun run bake` runs every step for every tile of the site with its extent and
 CRS, land cover first:
@@ -303,12 +425,27 @@ CRS, land cover first:
 ```bash
 bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|ndvi|roof-colour|lamps|walls|stairs|rail|surface
+bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
+                                       #   landcover islands canopy trees ndvi roof-colour osm-buildings
+                                       #   rail lamps monuments furniture walls stairs surface edges
+                                       #   markings sport tram riverside names skyview soundmarks
+                                       #   lowveg cultivated small-buildings
 bun run test:pipeline                  # pytest + ruff
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
-runtime falls back); rail decks fall back to the DGM ramp. All OSM layers come
+runtime falls back); rail decks fall back to the DGM ramp.
+
+The later modules, one step each: `osm_buildings.py` (shops and heritage
+per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
+`riverside.py`, `skyview.py` (DGM + LoD2 only),
+`soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
+a step whose result must agree on both sides of a tile edge reads the
+neighbours through `skyview.site_sources` (the committed DGMs): markings
+measure on the neighbours' class rasters and paint a neighbour's crossing
+that reaches in, cultivated
+takes a vineyard's slope from every DGM it touches, tram and small-buildings
+read the neighbours' furniture / scan — so bake those steps on every tile. All OSM layers come
 from the Geofabrik extract — no Overpass.
 
 **Stage 2, the build step** (`bun dev` / `bun run build` → `prepare-data.ts`):

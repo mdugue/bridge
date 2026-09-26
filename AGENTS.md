@@ -7,9 +7,11 @@ Entrypoint for coding agents working on this repo.
 A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
 rendering of Dresden built from Saxon open geodata and walk (or fly) through it.
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
-rasters, surfaces (roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover
-class raster (painted with one palette at runtime), and trees from DLM
-hedge/tree-rows plus a **DOM1**-derived canopy. The build bakes it all into an
+rasters (the walked-on level an error-bounded TIN), surfaces
+(roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover class raster
+(painted with one palette at runtime), and trees from DLM hedge/tree-rows, a
+**DOM1**-derived canopy, the city's **street-tree cadastre** and laser-scan
+crowns, plus OSM hedges. The build bakes it all into an
 **OGC 3D Tiles** tileset of glTF content that the browser streams with
 **3DTilesRendererJS** and renders with **three.js**; there is no backend.
 
@@ -96,15 +98,33 @@ config change.
     `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
-    `water-layer.ts`, `vegetation-layer.ts`, `city-layer.ts` (dresses a
+    `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
+    the street-tree cadastre's silhouettes, `crown-season.ts`, the
+    crowns' autumn colour and bare winter stipple, and
+    `low-vegetation-layer.ts`, the OSM hedges), `city-layer.ts` (dresses a
     building tile: clay material, object table, BVH, demolish),
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
-    green in the terrain's fragment pass), `rail-layer.ts`, `wall-layer.ts`,
-    `kerb-layer.ts` and `stair-layer.ts` (only their
-    materials: walls and stairs are baked into the fine terrain glTF),
+    green in the terrain's fragment pass), `sport-ground.ts` (sports
+    grounds: surface and lines in the same pass), `sport-fixtures.ts`
+    (their goals, posts and nets), `rail-layer.ts`, `wall-layer.ts`,
+    `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
+    materials: walls, kerbs, stairs and fences are baked into the fine
+    terrain glTF; a fence is one low band in a muted tone — no pattern),
     `lamp-layer.ts`, `monument-layer.ts` (fountains, statues, stones),
+    `furniture-layer.ts` (benches, picnic tables, bins, bicycle stands,
+    bollards, post boxes, stop shelters and bus-stop signs, advertising
+    columns, traffic signals, hydrants, clocks, drinking fountains,
+    playgrounds with their mapped equipment),
+    `road-markings.ts` (crossings, stop, cycle and centre lines in the
+    terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
+    vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
+    stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
+    lines) and `map-overlay.ts` (fades the ferry lines in with height),
     `shader-chunks.ts` (data-frame positions from world space)
-  - lighting/post: `sun-rig.ts`, `height-fog.ts`, `post-stack.ts`,
+  - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
+    factor on the ambient light, the far horizon on the sun; its raster
+    shared by a tile's terrain and buildings through `shared-rasters.ts`),
+    `height-fog.ts`, `post-stack.ts`,
     `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
@@ -121,14 +141,28 @@ config change.
     `device-orientation.ts` (the one orientation-event adapter both use);
     the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
+  - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
+    key; no AudioContext before it) and `soundscape/` (`engine.ts`,
+    `hearing.ts`, `voices.ts`: loaded by dynamic import on the first
+    toggle, driven from the 10 Hz pose tick, all synthesized)
 - `lib/brand.ts` — `SUPPORT_URL`, the Ko-fi link in the HUD footer
   (`scene-sidebar.tsx`): a plain link, never Ko-fi's widget, so nothing
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `site.ts` (the site
-  type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
-  extras), `landcover.ts` (the classes and the one palette), `city-mesh.ts`
+  policy, the look table + store, the Snapshot codec, `terrain-tin.ts`
+  (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
+  the measured step), `fences.ts` (fence panels and gate gaps),
+  `tree-inventory.ts` (the cadastre's archetypes and veto), `tree-season.ts`
+  (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
+  per-building clay tint, storey height, roof palette), `small-buildings.ts`
+  (the scan's sheds as boxes; the canopy points they veto), `markings.ts`,
+  `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
+  of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
+  mix and its boot-side half), `site.ts` (the
+  site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
+  extras), `landcover.ts` (the classes and the one palette), `sport.ts`
+  (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
   (the per-object table: packing, demolish, footprints), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
@@ -136,18 +170,26 @@ config change.
 - `sites/` — one config per place (`dresden.ts`: tiles, CRS, labels,
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
-  (`bake/landcover.py`, `canopy.py`, `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `monuments.py`, `walls.py`, `stairs.py`, `rail.py`,
-  `surface.py`, `edges.py`, `osm.py`; `ingest_sn.py` is Saxony's download adapter; tests
-  in `pipeline/tests/`), run by `bun run bake`
+  (`bake/landcover.py`, `canopy.py`, `trees.py` (+ `tree_archetypes.py`),
+  `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `small_buildings.py`
+  (the sheds and garden houses LoD2 lacks, appended to the city mesh),
+  `ndvi.py`, `roof_colour.py`,
+  `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
+  `rail.py`, `surface.py`, `edges.py`, `sport.py`, `markings.py`,
+  `cultivated.py`, `skyview.py`, `osm_buildings.py` (shops and heritage
+  per LoD2 object), `tram.py`, `riverside.py`, `soundmarks.py`
+  (the bell towers), `osm.py`; `ingest_sn.py` is Saxony's
+  download adapter; tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
   `tileset-spawn.json`) with glTF content under content-hashed names +
   `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
   CityJSON loader, `bake-tiles.ts` turns it into glTF with a per-object
-  property table) and the terrain at two levels (the DGM resampled, the
-  wall breaklines burned in), written by `tile-glb.ts` (meshopt, quantised,
+  property table) and the terrain at two levels (fine: an error-bounded TIN
+  of the native DGM, `bake-terrain-tin.ts`, the walls snapped to its
+  measured steps; coarse: the DGM resampled to 512², the wall breaklines
+  burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
   `bake.ts` (the pipeline runner), `downsample-raster.ts` (the 2048² class
   raster), `bake-wissen-hero.ts`, `render-diagrams.ts`
@@ -236,24 +278,37 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   GDAL comes inside the wheels (with the OSM driver): fix the environment,
   don't bend the code around a missing tool. `bun run bake` passes each
   tile's extent and CRS from the site config; the steps run land cover
-  first (the canopy and lamps are gated on it). `bun run test:pipeline` and
+  first (the canopy, lamps and street furniture are gated on it). `bun run test:pipeline` and
   CI's `pipeline` job run pytest + ruff.
 - `landcover.py` bakes **only class ids** (4096² 8-bit PNG + legend); the
   colours are `lib/city/landcover.ts`, painted on the GPU at runtime
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
+- `trees.py` bakes Dresden's street-tree cadastre (the ingest adapter
+  caches the city's WFS per tile); `lowveg.py` the OSM hedges at their
+  laser-scan height and the scan's trees outside the canopy mask, thinned
+  against the cadastre. The laser scan (`<raw>/lsc/<tile>.laz`) is placed
+  there by `bun run bake --ingest --lsc` (or by hand) and rasterised in
+  Python (`lsc.py`, laspy — no PDAL); without it the step is OSM only.
 - `monuments.py` takes the monuments (statues, stones, columns, named
   fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
   basins from OSM `amenity=fountain`; a DLM monument inside an OSM basin
   names that fountain. A monument's form is its measured nDOM patch
   (`relief`, when it stands clear of trees/facades), smoothed at runtime —
   never an invented figure.
-- All OSM layers (walls, cliffs, stairs, lamps, fountains, platforms,
-  bridge structure, paving) come from the site's Geofabrik `.osm.pbf` via GDAL's
-  OSM driver — no Overpass.
+- All OSM layers (walls, cliffs, stairs, lamps, street furniture,
+  fountains, platforms, bridge structure, paving) come from the site's
+  Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass. `furniture.py`
+  turns a bench without a tagged `direction` towards the nearest highway line.
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
+- **Every tile carries the same baked files** — `lib/city/tile-data.test.ts`
+  fails when one tile has a kind of file another lacks. The runtime treats a
+  missing optional artifact as "layer off", so without that test a tile
+  added before a new bake step (or a step run on some tiles only) ships
+  quietly poorer. After merging a new step, or adding a tile, bake it on
+  every tile the test names; a step that finds nothing writes an empty file.
 - `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
   with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
@@ -281,8 +336,9 @@ safe at 0 because terrain doesn't cast and buildings/trees cast via back faces,
 so lit faces never self-acne); a small negative `bias`; and a tight,
 camera-following frustum on a right-sized map (finer texels = cleaner edges).
 **VSM rings** ("corduroy"/grid) on large ground planes at grazing angles — avoid
-it here. The remaining limit (very long shadows clipping beyond the frustum at
-low sun) is only solvable with Cascaded Shadow Maps.
+it here. Past the frustum the ground's shadows come from a baked horizon map (two
+bands, ADR 0031); their *shapes* there (and on facades) remain a job for
+Cascaded Shadow Maps.
 
 **The shadow frustum is not fixed** (`lib/city/shadow-fit.ts`). A 110 m
 half-size is right at eye level and wrong in fly mode: from 200 m up it covers
@@ -324,8 +380,13 @@ its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
 Before a tile or its dressing shows, its shaders are compiled with
 `compileAsync` against the scene pass's target (`PostStack.compile`) —
 add new per-tile objects inside that path, or they compile inside a frame.
-The terrain has no BVH: ground rays march the height grid
-(`lib/city/ground-ray.ts`). The glTF extras key is **`tileId`**: the
+`compileAsync` never reaches a mesh's `customDepthMaterial` (three r186
+compiles `object.material` only); `PostStack.compile` compiles those
+through stand-ins (`depthMaterialStandIns` in `three-utils.ts`) set up as
+the shadow pass sets them, so the shadow pass finds the program cached.
+The terrain has no BVH: ground rays march the height function
+(`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
+triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
 streaming camera, so tiles that cast into the view stay loaded;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
@@ -345,8 +406,8 @@ scene: it re-renders everything into a buffer each frame (~2× cost).
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
 screen; `startStreaming` then opens the dressing gate, and vegetation,
-lamps and rails are built tile by tile behind a HUD chip (stairs and
-walls are baked into the fine terrain glTF and arrive with it)
+lamps and rails are built tile by tile behind a HUD chip (stairs, walls,
+kerbs and fences are baked into the fine terrain glTF and arrive with it)
 (the streaming pill). `onLoaded` flips it to `ready` once the
 spawn tile is dressed, the renderer is idle and no dressing is pending.
 Anything added to the scene after the first frame must re-render the shadow

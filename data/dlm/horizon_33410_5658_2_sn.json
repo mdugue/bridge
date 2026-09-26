@@ -1,0 +1,47 @@
+{
+  "azimuthsDeg": [
+    0.0,
+    22.5,
+    45.0,
+    67.5,
+    90.0,
+    112.5,
+    135.0,
+    157.5,
+    180.0,
+    202.5,
+    225.0,
+    247.5,
+    270.0,
+    292.5,
+    315.0,
+    337.5
+  ],
+  "layout": "plane p (stacked north-to-south), channel c = azimuth 4 (p mod 4) + c; planes 0-3 the far band, 4-7 the near band",
+  "px": 256,
+  "bands": [
+    {
+      "name": "far",
+      "planes": [
+        0,
+        4
+      ],
+      "nearM": 80.0,
+      "farM": 1500.0,
+      "degPerUnit": 0.17647058823529413
+    },
+    {
+      "name": "near",
+      "planes": [
+        4,
+        8
+      ],
+      "nearM": 8.0,
+      "farM": 80.0,
+      "degPerUnit": 0.35294117647058826
+    }
+  ],
+  "footprints": "cells under a roof carry the nearest open cell's angles",
+  "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)",
+  "attribution": "Quelle: GeoSN, dl-de/by-2-0 (DGM1, LoD2)"
+}

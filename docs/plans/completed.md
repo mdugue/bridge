@@ -398,3 +398,25 @@ accepted.
 - The fixed lamp light pool (ADR 0020) is fed from the visible dressings;
   its size never changes at runtime.
 - Class and NDVI rasters stay lossless (ids must be exact, `NEAREST`).
+
+## 032 — Street names: lettering and the on-foot caption · REJECTED (removed 2026-09-26)
+
+**Problem.** The contour-map look had no text. The plan lettered the OSM
+street names (plus named squares and the DLM bridge names) on the ground,
+fading in from 25 m up, and named the street underfoot in a HUD caption
+while walking.
+
+**Outcome.** Built on 2026-09-25 (`pipeline/bake/names.py` →
+`names_<tile>.geojson`, a Canvas-2D atlas per tile in `name-layer.ts`,
+`street-caption.tsx`, `lib/city/names.ts`; ≈ 1 500 labels over the fifteen
+tiles), then removed completely on 2026-09-26 by the maintainer's decision
+after seeing it on a device: the map look reads better without text. The
+bake, the committed files, the layer, the caption and their docs are gone;
+the full implementation is in git history (`4b08993` and its follow-ups).
+
+**Keep in mind.**
+- `map-overlay.ts` (the altitude fade shared by map marks) stays: the
+  ferry lines use it.
+- The DLM bridge `name` stays in the bridge files.
+- Street-name *signs* were never drawn: OSM maps almost none.
+- Revive only with a new look decision, not as a re-audit finding.

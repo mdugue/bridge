@@ -9,12 +9,14 @@ the [glossary](./glossary.md).
 
 ## What you see
 
-A stylised, walkable 3D model of the centre of Dresden: a square of
-4 km × 4 km on both banks of the Elbe, with the historic Altstadt in the
-south-west, the Inner and Outer Neustadt in the north and the Johannstadt
-in the south-east. You start low over the Elbe near the Carolabrücke,
-looking at the Altstadt skyline, and can walk at street level or fly above
-the roofs.
+A stylised, walkable 3D model of the centre of Dresden: fifteen tiles of
+2 km × 2 km on both banks of the Elbe, 10 km × 6 km, with the historic
+Altstadt, the Inner and Outer Neustadt, the Johannstadt, the Friedrichstadt,
+Löbtau and Pieschen to the west, the Hauptbahnhof and the Großer Garten to
+the south, and upriver past the
+Waldschlößchenbrücke to Blasewitz, Loschwitz and the Blaues Wunder. You
+start low over the Elbe near the Carolabrücke, looking at the Altstadt
+skyline, and can walk at street level or fly above the roofs.
 
 Nothing is installed, nothing is stored about you, and no server computes
 the picture. Your browser downloads prepared files as you move — about
@@ -53,13 +55,18 @@ and each is a mix of measured fact and deliberate simplification.
 | **Ground** | The shape of the terrain: river banks, the slope up to the Neustadt, embankments | The official 1 m terrain model (**DGM1**) | Real heights, on a grid of about 2 m near you and 4 m further away. Vertical walls and stairs are smoothed into ramps by the source, so the project sharpens them again where OpenStreetMap knows a wall, a cliff edge or a flight of steps |
 | **Ground colours** | Roads grey, paths sand, meadows sage, forest moss, built-up areas pale clay, water blue | The official land-use map (**Basis-DLM**), squares refined from **OpenStreetMap** | Real classification; the colours are a designed pastel palette, painted in your browser, not photographs |
 | **Kerbs and paving** | A kerb line where the road meets the pavement; asphalt, paving slabs, cobbles or gravel underfoot; painted parking bays along streets and in car parks; green courtyards | Road edges from the **Basis-DLM**, the material and the parking from **OpenStreetMap** (`surface`, `parking`), the green from the infrared aerial photo (**NDVI**) | The kerb stone (a low 12 cm step, casting its shadow) follows the surveyed road width; the material is what volunteers mapped (about two thirds of the streets), the rest shows asphalt or slabs by default; the patterns themselves are drawn, not photographed, and the pavement behind the kerb stays at road level |
+| **Sports grounds** | Football pitches in mown stripes, clay tennis courts, tartan running tracks with their lanes, basketball courts, beach-volleyball sand — each with its lines, goals, basketball posts and nets | **OpenStreetMap** (`leisure=pitch`, `leisure=track`, with `sport` and `surface`) | The outline, sport and surface are what volunteers mapped; without a surface the sport's usual one is shown (football on grass, tennis on clay). The lines are the standard ones, scaled to the mapped size, not surveyed; goals and nets are simple stand-ins, not the real ones |
 | **Water** | The Elbe and smaller water bodies, with a gently moving surface and drifting mist | Basis-DLM water areas, laid on the real terrain | Real outline, invented ripples |
-| **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 16,000 buildings and building parts in the four tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
+| **On the Elbe** | The landing stages below the Brühlsche Terrasse and the smaller jetties — fixed piers on piles, floating pontoons with their gangways and ticket huts —, a groyne, and the ferry routes as a faint dashed wake seen from the air | **OpenStreetMap** (`man_made=pier`, `man_made=groyne`, `route=ferry`) | Real positions and outlines; the huts, railings and piles are simple stand-ins; the pontoons float on the drawn river surface. The paddle steamers are not shown: no dataset has them |
+| **Buildings** | Every building with its real footprint, height and roof shape | The official 3D building model (**LoD2**), roughly 58,000 buildings and building parts in the fifteen tiles | Real geometry. Facades are plain by design; there are no windows in the source data |
 | **Building colours** | Roof colours; a subtle tint per building; a warm glow in shops and public buildings at dusk | Roof colour sampled from aerial photos (**DOP**); the rest derived from building attributes | Roof colours are real (about 83 % coverage), wall tints are synthesised |
-| **Trees and hedges** | Individual trees with crowns of the measured height; hedges and tree rows | Tree positions and heights from the difference between the surface model (**DOM1**) and the terrain model; rows from Basis-DLM; greenness from the infrared aerial photo (**NDVI**) | Positions and heights are measured; the crown shape is generic, the species unknown |
+| **Trees and hedges** | Individual trees with crowns of the measured height, through the year: bare in winter, leaves out in late April, autumn colours in October; hedges and tree rows | The city's street-tree register (position, height, crown, trunk, species) and, where it has no tree, the trees mapped in **OpenStreetMap**; elsewhere tree positions and heights from the difference between the surface model (**DOM1**) and the terrain model; rows from Basis-DLM; greenness from the infrared aerial photo (**NDVI**) | Registered trees are measured and follow their species: a lime turns butter yellow and early, an oak late and russet and keeps some brown leaves all winter, a ginkgo drops its leaves within days. The dates are typical, not this year's observations, and the autumn colours are the scene's pastel palette, not photographs. For the other trees positions and heights are measured, the species unknown: they follow a generic tree's year. Hedges stay green |
 | **Street lamps** | Lamp posts along streets and squares | **OpenStreetMap** | Real positions, default height |
+| **Street furniture** | Benches, picnic tables, litter bins, bicycle stands, bollards, post boxes, stop shelters and stop signs, advertising columns, traffic signals, hydrants, street clocks, drinking fountains | **OpenStreetMap**; which way a bench faces from its tagged direction, else from the nearest path or street | Real positions (a bollard at its tagged height); one soft, abstracted model per kind in the scene's pastels — like the pieces of an architect's model. Few benches say which way they look, so most are turned towards the nearest way — a guess that is usually, not always, right. Traffic signals are mapped at the stop line in the road, so they are moved to the kerb; their lamps stay dark (there is no traffic to time). The posters on the advertising columns are colour fields, not real posters. A street clock's hands show the scene's time |
+| **Playgrounds** | The playground's area as a pale sand floor, with its swings, slides, climbing frames, sandpits and seesaws as soft, single-coloured pastel sculptures | **OpenStreetMap** (the outline and each piece of equipment mapped on it) | Real outline and positions; only the equipment that is mapped stands there — many playgrounds are mapped without it and stay empty rather than being filled with invented pieces |
 | **Fountains and monuments** | Fountain basins with still water and translucent water bells; statues, memorial stones and columns | Positions and official names from the Basis-DLM; basin outlines and the smaller fountains from OpenStreetMap; the sculpture's form from the surface model (**DOM1**) | Real positions and outlines. A sculpture is its measured bulk, softened into clay — the right size and silhouette, no detail; where nothing could be measured, an abstract marker. The water bells, their gentle motion and the night lighting are designed. Both surveys were flown while the fountains were drained and their sculptures boxed for winter, so the measured bulk at the Albertplatz is the winter housing |
 | **Railways and bridges** | Tracks, ballast beds, bridge decks with arches or piers, station platforms | Basis-DLM (tracks, bridges), terrain and surface models (deck heights), OpenStreetMap (platforms, whether a bridge is an arch bridge) | Real alignment and deck heights; the structural detail is simplified |
+| **Trams** | Tram tracks in their bed — rails flush in the street, on a lawn or on ballast — the overhead contact wire above each track, the masts and the wires strung across the street that hold it; the stop signs on the platforms | **OpenStreetMap** (`railway=tram`, `power=catenary_mast`, the building outlines); the bed from the land-use map and the infrared aerial photo | Real track positions and masts. The bed is inferred, not mapped; which masts hold which wire, the wire's sag and the spans between facades in narrow streets (where no mast is mapped) are reconstructed from the geometry. No trams run: there is no vehicle data |
 | **Walls** | The Brühlsche Terrasse and other retaining walls and city walls, cliff edges | OpenStreetMap lines with their tagged heights | Real position, tagged or default height |
 | **Stairs** | Flights of steps such as the one beside the Italienisches Dörfchen or the one from the Schlossplatz up to the Brühlsche Terrasse, as individual steps | OpenStreetMap (`highway=steps`: position, width, step count; without a width a flight spans wall to wall when the slope between climbs); the heights at the foot and the head from the terrain model | Real position and height; step count as tagged or estimated from the height (16 cm a step). The Brühlsche Terrasse stands on casemates and is missing from the terrain model; there the tagged steps set the height, and the terrace area from OpenStreetMap is lifted to it |
 | **Sun, shadows and sky** | Sunlight for any date and time of day; blue hour, golden hour, night | Computed from the calendar, the clock and Dresden's latitude | Astronomically correct sun position; the colours are designed |
@@ -103,10 +110,11 @@ heights and roof shapes, land use, water outlines, railway alignments,
 bridge positions and deck heights, tree positions and heights, roof colours,
 meadow greenness.
 
-**Contributed by volunteers (OpenStreetMap):** street lamps, station
-platforms, retaining walls with their heights, the structural type of
-bridges, what streets and pavements are paved with. Completeness varies
-from street to street.
+**Contributed by volunteers (OpenStreetMap):** street lamps, benches and
+other street furniture, playgrounds, station platforms, tram tracks and
+overhead-line masts, retaining walls
+with their heights, the structural type of bridges, what streets and
+pavements are paved with. Completeness varies from street to street.
 
 **Computed:** the sun position, all shadows, fog and haze, the depth of
 field, the slow motion of leaves and water.
@@ -116,9 +124,15 @@ the shape of tree crowns, the wall tint per building, the ripples on the
 water, the stones and slabs of the paving patterns, the warm windows at dusk (the *presence* of a shop or public building
 is real; its lit windows are not).
 
-**Not in the data at all:** windows and doors, facade materials, street
-furniture other than lamps, vehicles, people, vegetation smaller than about
-3 m, and anything indoors.
+**Not in the data at all:** windows and doors, facade materials, the
+smaller street furniture (planters; traffic and street-name signs are
+mapped too sparsely to show), vehicles (the trams' tracks and
+wires are there, the trams are not), people, vegetation
+smaller than about 3 m, and anything indoors.
+
+**Left out on purpose:** text. OpenStreetMap has the names of the streets
+and squares, but the viewer writes none of them — not on the ground, not as a
+caption on the screen: the map look reads better without it.
 
 ## Things worth knowing before you draw conclusions from the picture
 

@@ -1,0 +1,27 @@
+{
+  "tile": "33416_5658_2_sn",
+  "crs": "EPSG:25833",
+  "bounds": [
+    416000,
+    5658000,
+    418000,
+    5660000
+  ],
+  "size": 2048,
+  "lowSize": 1024,
+  "encoding": {
+    "layout": "8-bit greyscale, 4 * size wide: R0 G0 B0 A0 R1 ... per row; markings_low_<tile>.png the same at lowSize (phones)",
+    "ra": "1 + the row of `markings` reaching the texel (R low, A high byte; 0 none)",
+    "g": "lane bits: 1 cycle lane along this side's kerb, 4 centre-line road",
+    "b": "128 + 20 * the signed distance (m) to the carriageway's middle",
+    "markings": "[cx, cy, angle, halfLength, halfWidth, kind]: the centre in m from the tile's north-west corner (x east, y north), the axis across the road (rad from east, ccw), half the extent across and along the road"
+  },
+  "kinds": {
+    "0": "none",
+    "1": "zebra",
+    "2": "furt",
+    "3": "stop"
+  },
+  "attribution": "\u00a9 OpenStreetMap contributors (ODbL)",
+  "markings": []
+}

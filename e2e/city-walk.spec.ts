@@ -68,6 +68,31 @@ function expectNoErrors(log: ErrorLog): void {
   log.console.length = 0;
 }
 
+/**
+ * Counts every AudioContext the page creates (an init script, before any of
+ * the page's own code): the soundscape must not create one before the
+ * visitor asks for sound (plan 035).
+ */
+function countAudioContexts(): void {
+  const w = window as unknown as { __audioContexts: number };
+  w.__audioContexts = 0;
+  const Native = window.AudioContext;
+  if (!Native) {
+    return;
+  }
+  window.AudioContext = class extends Native {
+    constructor(options?: AudioContextOptions) {
+      super(options);
+      w.__audioContexts++;
+    }
+  };
+}
+
+const audioContexts = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { __audioContexts?: number }).__audioContexts
+  );
+
 /** Resolves once the viewer has rendered `count` more frames. */
 async function waitForFrames(page: Page, count: number): Promise<void> {
   const start = await page.evaluate(() => window.__poc?.frames ?? 0);
@@ -185,6 +210,7 @@ test.describe("desktop viewer", () => {
     const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
     page = await context.newPage();
     errors = watchErrors(page);
+    await page.addInitScript(countAudioContexts);
     await page.goto(LITE);
     webgl = await hasWebGl(page);
     // On CI the SwiftShader flags above must yield WebGL; a silent skip
@@ -249,17 +275,30 @@ test.describe("desktop viewer", () => {
     expect(stats.city.triangles).toBeGreaterThan(0);
     expect(stats.terrain.meshes).toBe(1); // lite = primary tile only
     expect(stats.water.meshes).toBeGreaterThanOrEqual(1);
-    // 5 118 canopy points + 25 tree rows on 33412_5656 (trunk + two crowns each)
+    // 5 118 canopy points + 25 tree rows + 5 788 laser-scan trees + 6 121
+    // cadastre trees on 33412_5656 (trunk + two crowns each)
     expect(stats.vegetation.instances).toBeGreaterThan(1000);
+    // 116 OSM hedges, cut into ≤2.5 m pieces
+    expect(stats.lowVegetation.instances).toBeGreaterThan(100);
     // 339 OSM lamps: posts + heads + decals are instanced
     expect(stats.lamps.instances).toBeGreaterThan(100);
     // 48 fountains, statues and stones (Albertplatz and around): plinths,
     // figures and jets are instanced
     expect(stats.monuments.instances).toBeGreaterThan(20);
+    // ~1 300 OSM benches, bins, stands, bollards, post boxes and shelters
+    expect(stats.furniture.instances).toBeGreaterThan(500);
     // 3 bridges, 1 ballast yard, 21 platforms (this tile has no rail lines)
     expect(stats.rail.triangles).toBeGreaterThan(0);
+    // 51 OSM tram tracks (13.4 km), 16 masts and their wires
+    expect(stats.tram.triangles).toBeGreaterThan(0);
+    expect(stats.tram.instances).toBeGreaterThan(0);
+    // 20 pontoons, a groyne and the ferry lines below the Terrasse
+    expect(stats.riverside.triangles).toBeGreaterThan(0);
     // 292 wall lines
     expect(stats.walls.triangles).toBeGreaterThan(0);
+    // 277 fence lines and 145 gates (114 on a fence, 31 on a wall), baked
+    // with the fine terrain
+    expect(stats.fences.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);
   });
 
@@ -456,6 +495,34 @@ test.describe("desktop viewer", () => {
 
     await page.getByRole("tab", { name: "Erweitert" }).click();
     await expect(page.getByText("Statistik")).toBeVisible();
+    expectNoErrors(errors);
+  });
+
+  test("the hidden soundscape stays silent until L", async () => {
+    // Plan 035: no AudioContext, no glyph, until an explicit toggle.
+    expect(await audioContexts(page)).toBe(0);
+    const glyph = page.getByTestId("sound-glyph");
+    await expect(glyph).toHaveCount(0);
+    await page.keyboard.press("KeyL");
+    await expect(glyph).toBeVisible({ timeout: slow(10_000) });
+    expect(await audioContexts(page)).toBe(1);
+    // The engine arrives by dynamic import and samples the pose stream;
+    // a few frames let it run without spending many.
+    await waitForFrames(page, 3);
+    // The switch lives in the Erweitert tab: opened here, not inherited
+    // from the test before (this one runs alone with -g soundscape).
+    await openSidebar(page);
+    await page.getByRole("tab", { name: "Erweitert" }).click();
+    await expect(
+      page.getByRole("switch", { name: "Klang (experimentell)" })
+    ).toBeChecked();
+    // A click on the glyph turns it off; the one context is kept.
+    await glyph.click();
+    await expect(glyph).toHaveCount(0);
+    await expect(
+      page.getByRole("switch", { name: "Klang (experimentell)" })
+    ).not.toBeChecked();
+    expect(await audioContexts(page)).toBe(1);
     expectNoErrors(errors);
   });
 
@@ -904,12 +971,20 @@ test.describe("mobile", () => {
  * leaves `ready` false forever, which is exactly what this waits on.
  */
 test.describe("whole site streamed", () => {
+  // A retry would start the same ten-minute boot again and run the job past
+  // its budget, which cancels it without a report; a failure here should
+  // report instead.
+  test.describe.configure({ retries: 0 });
+
   test("several tiles load, dress and settle without errors", async ({
     browser,
   }) => {
-    // Its own boot, and a longer one than the spawn-only specs: several
-    // tiles' terrain, buildings and dressings, all shaded on the CPU.
-    test.setTimeout(slow(240_000));
+    // Its own boot, and a longer one than the spawn-only specs: every tile
+    // the spawn view reaches (five of the fifteen) with its terrain,
+    // buildings and dressings — ~136 000 tree instances — all shaded on the
+    // CPU. Measured at ~200 s to `ready` on a four-core machine (about 50
+    // frames at 4 s each); a shared runner is about half as fast.
+    test.setTimeout(slow(260_000));
     const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
     const page = await context.newPage();
     const errors = watchErrors(page);
@@ -925,7 +1000,7 @@ test.describe("whole site streamed", () => {
         () => window.__poc?.ready === true,
         undefined,
         {
-          timeout: slow(150_000),
+          timeout: slow(200_000),
         }
       );
       const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);

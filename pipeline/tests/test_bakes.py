@@ -1,10 +1,13 @@
 """Units of the bakes that need no raw data (the end-to-end comparison
 against the committed artifacts is in docs/data-pipeline.md)."""
 
+import math
+
 import numpy as np
 import shapely
 
 from bake.common import owns, round_coords
+from bake.ingest_sn import current_share_url, share_catalogue
 from bake.landcover import CLASSES
 from bake.osm import tag
 from bake.rail import buffer_line, is_platform, merge_lines
@@ -295,6 +298,119 @@ def test_cliffs_come_through_as_walls_of_their_own_kind(tmp_path, monkeypatch):
     assert walls.kind_of("retaining_wall", None, '"natural"=>"cliff"') == "retaining_wall"
 
 
+def test_fences_follow_the_walls_and_gates_on_a_line_come_last(tmp_path, monkeypatch):
+    from bake import walls
+
+    nodes = _osm_nodes(
+        11,
+        [
+            (100.2, 75, {"barrier": "gate"}),  # 20 cm off the fence: on it
+            (100, 150, {"barrier": "gate"}),  # on no line: dropped
+            (100, 105, {"barrier": "lift_gate"}),  # on the wall
+        ],
+    )
+    ways = (
+        '<way id="1" version="1"><nd ref="3"/><nd ref="4"/><tag k="barrier" v="fence"/>'
+        '<tag k="fence_type" v="chain_link"/></way>'
+        '<way id="2" version="1"><nd ref="6"/><nd ref="5"/><tag k="barrier" v="wall"/></way>'
+    )
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
+    walls.run(tile)
+    doc = _read(tile, "walls")
+    assert doc["attribution"].startswith("©")
+    wall, fence, gate_on_fence, gate_on_wall = doc["features"]
+    assert wall["properties"] == {"kind": "wall", "h": 1.5}
+    assert fence["properties"] == {"kind": "fence", "type": "mesh", "h": 1.2}
+    assert gate_on_fence["properties"] == {"kind": "gate", "w": 1.2, "on": "fence"}
+    x, y = gate_on_fence["geometry"]["coordinates"]
+    assert abs(y - 5656075) < 0.02  # snapped onto the line
+    assert gate_on_wall["properties"] == {
+        "kind": "gate",
+        "w": 4.0,
+        "on": "wall",
+        "type": "lift_gate",
+    }
+
+
+def _on_tile_edge(tile, coords) -> float:
+    """Metres of a line that run along the tile's edge."""
+    xmin, ymin, xmax, ymax = tile.bounds
+    on = 0.0
+    for (xa, ya), (xb, yb) in zip(coords, coords[1:], strict=False):
+        for axis, v in ((0, xmin), (0, xmax), (1, ymin), (1, ymax)):
+            if abs((xa, ya)[axis] - v) < 0.005 and abs((xb, yb)[axis] - v) < 0.005:
+                on += math.dist((xa, ya), (xb, yb))
+    return on
+
+
+def test_an_area_across_the_tile_edge_stands_no_fence_on_the_seam(tmp_path, monkeypatch):
+    from bake import walls
+
+    # A fenced yard and a walled garden, both 20 m wide, straddling the east
+    # edge (x = 200) of the 200 m tile; the ring starts outside the tile.
+    corners = [(210, 20), (190, 20), (190, 40), (210, 40), (210, 60), (190, 60), (190, 80)]
+    nodes = _osm_nodes(11, [(x, y, {}) for x, y in corners + [(210, 80)]])
+    ways = (
+        '<way id="1" version="1"><nd ref="11"/><nd ref="12"/><nd ref="13"/><nd ref="14"/>'
+        '<nd ref="11"/><tag k="barrier" v="fence"/><tag k="area" v="yes"/></way>'
+        '<way id="2" version="1"><nd ref="15"/><nd ref="16"/><nd ref="17"/><nd ref="18"/>'
+        '<nd ref="15"/><tag k="barrier" v="wall"/><tag k="area" v="yes"/></way>'
+    )
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
+    walls.run(tile)
+    lines = [f for f in _read(tile, "walls")["features"] if f["geometry"]["type"] == "LineString"]
+    assert sorted(f["properties"]["kind"] for f in lines) == ["fence", "wall"]
+    for f in lines:
+        coords = [tuple(c) for c in f["geometry"]["coordinates"]]
+        assert _on_tile_edge(tile, coords) == 0.0
+        # One open line inside the tile, 10 + 20 + 10 m: the ring's three
+        # sides in the tile, joined across its closing vertex.
+        assert coords[0] != coords[-1]
+        assert abs(shapely.LineString(coords).length - 40.0) < 0.05
+
+
+def test_a_neighbours_gate_whose_gap_reaches_over_the_seam_cuts_here_too(tmp_path, monkeypatch):
+    from bake import walls
+
+    # A fence across the east edge (x = 200), a 4 m gate on it 1 m past the
+    # edge (the neighbour's: its gap reaches 1 m into this tile) and a 1.2 m
+    # gate 1 m past the edge (its gap stays on the neighbour's side).
+    nodes = _osm_nodes(
+        11,
+        [
+            (180, 50, {}),
+            (220, 50, {}),
+            (201, 50, {"barrier": "gate", "width": "4"}),
+            (201, 50.1, {"barrier": "gate"}),
+        ],
+    )
+    ways = '<way id="1" version="1"><nd ref="11"/><nd ref="12"/><tag k="barrier" v="fence"/></way>'
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + ways)
+    walls.run(tile)
+    gates = [f for f in _read(tile, "walls")["features"] if f["properties"]["kind"] == "gate"]
+    assert [g["properties"] for g in gates] == [
+        {"kind": "gate", "w": 4.0, "on": "fence", "seam": True}
+    ]
+    assert walls.reaches_in((0, 0, 200, 200), shapely.Point(202, 50), 4.0)
+    assert not walls.reaches_in((0, 0, 200, 200), shapely.Point(202.1, 50), 4.0)
+
+
+def test_fence_types_and_heights_come_from_the_tags():
+    from bake.walls import fence_height, fence_type, gate_width
+
+    assert fence_type("fence", None) == "railing"  # Dresden's wrought iron
+    assert fence_type("fence", '"fence_type"=>"wood"') == "picket"
+    assert fence_type("fence", '"fence_type"=>"metal"') == "railing"
+    assert fence_type("fence", '"fence_type"=>"concrete"') == "railing"
+    assert fence_type("handrail", '"fence_type"=>"wire"') == "rail"
+    assert fence_height("fence", '"height"=>"1.8 m"') == 1.8
+    assert fence_height("fence", '"height"=>"25"') == 1.2  # implausible: default
+    assert fence_height("handrail", None) == 1.0
+    assert gate_width("gate", '"width"=>"3"') == 3.0
+    assert gate_width("lift_gate", None) == 4.0
+    assert gate_width("gate", None) == 1.2
+
+
 class _Bank:
     """A DGM stub: 100 m south of y = 0, rising 4 m to y = 20 across all x."""
 
@@ -363,6 +479,79 @@ def test_a_terrace_platform_fills_the_holes_of_its_area():
         [(0, 0), (40, 0), (40, 20), (0, 20)], holes=[[(10, 5), (20, 5), (20, 15), (10, 15)]]
     )
     assert platform(promenade).area == 800
+
+
+def test_furniture_kinds_come_from_the_tags():
+    from bake.furniture import kind_of
+
+    assert kind_of(None, None, '"amenity"=>"bench"') == "bench"
+    assert kind_of("bollard", None, None) == "bollard"
+    assert kind_of(None, None, '"leisure"=>"picnic_table"') == "picnic"
+    assert kind_of(None, "bus_stop", '"shelter"=>"yes"') == "shelter"
+    assert kind_of(None, "bus_stop", '"shelter"=>"no"') == "stop"  # its sign (plan 030)
+    stands = '"amenity"=>"bicycle_parking","bicycle_parking"=>"stands"'
+    assert kind_of(None, None, stands) == "bike"
+    assert kind_of(None, None, stands.replace("stands", "wall_loops")) is None
+    assert kind_of(None, None, '"amenity"=>"restaurant"') is None
+
+
+def test_furniture_indoors_or_underground_is_hidden():
+    from bake.furniture import hidden
+
+    assert hidden('"indoor"=>"yes"')
+    assert hidden('"level"=>"-1"')
+    assert not hidden('"level"=>"0"')
+    assert not hidden(None)
+
+
+def test_a_bench_direction_reads_degrees_or_a_compass_point():
+    from bake.furniture import direction, hoops
+
+    assert direction("SW") == 225.0
+    assert direction("370") == 10.0
+    assert direction("left") is None
+    assert hoops("10") == 5
+    assert hoops("1") == 1
+    assert hoops("lots") == 1
+
+
+def test_an_untagged_bench_faces_the_nearest_way_or_across_the_one_it_is_on():
+    from bake.furniture import bench_on_way, facing
+
+    lines = np.array([shapely.LineString([(0, 0), (100, 0)])], dtype=object)
+    ways = shapely.STRtree(lines)
+    # 5 m north of an east-west path: it looks south, onto it.
+    assert facing(shapely.Point(50, 5), ways, lines) == 180.0
+    # On the path: a quarter turn from its run (east → south).
+    assert facing(shapely.Point(50, 0), ways, lines) == 180.0
+    assert facing(shapely.Point(50, 500), ways, lines) is None
+    # A bench mapped as a way north of the path faces it, at its length.
+    mid, a, length = bench_on_way(shapely.LineString([(40, 3), (43, 3)]), ways, lines)
+    assert (mid.x, mid.y, a, length) == (41.5, 3.0, 180.0, 3.0)
+
+
+def test_a_bollard_keeps_its_tagged_height_and_metal():
+    from bake.furniture import bollard
+
+    # The Stallhof's bronze columns are mapped as bollards.
+    assert bollard('"height"=>"1.46","material"=>"bronze"') == {"h": 1.46, "metal": True}
+    assert bollard('"height"=>"40 m"') == {"h": 3.0}
+    assert bollard(None) == {}
+
+
+def test_playground_equipment_is_only_what_is_mapped():
+    from bake.furniture import _equipment_piece, equipment_kind
+
+    assert equipment_kind('"playground"=>"basketswing"') == "swing"
+    assert equipment_kind('"playground"=>"structure"') == "climb"
+    assert equipment_kind('"playground"=>"mound"') is None
+    # A slide drawn as a way stands at its midpoint, turned along it.
+    geom, props = _equipment_piece(shapely.LineString([(0, 0), (0, 4)]), "slide")
+    assert (geom.x, geom.y, props) == (0.0, 2.0, {"k": "slide", "a": 0})
+    # A sandpit drawn as an area keeps its outline; a point stays a point.
+    square = shapely.Polygon([(0, 0), (3, 0), (3, 3), (0, 3)])
+    assert _equipment_piece(square, "sandpit")[0].geom_type == "Polygon"
+    assert _equipment_piece(shapely.Point(1, 1), "swing")[0].geom_type == "Point"
 
 
 def test_surface_values_map_to_the_paving_ids():
@@ -558,3 +747,460 @@ def test_osm_islands_carve_only_road_texels_lawn_over_walk(tmp_path, monkeypatch
     assert raster[64 - 32, 4] == 4  # was built-up, untouched
     assert changed == np.count_nonzero(raster[:, 8:] != 7)
     assert landcover.carve_islands(raster, tile) == 0  # idempotent
+
+
+def test_sports_grounds_take_their_surface_from_the_tag_else_the_sport():
+    from bake.sport import classify
+
+    assert classify("pitch", "soccer", None) == (1, 1)  # grass, football lines
+    assert classify("pitch", "soccer", "artificial_turf") == (2, 1)
+    assert classify("pitch", "tennis;padel", None) == (4, 2)  # clay by default
+    assert classify("pitch", "beachvolleyball", "sand") == (5, 4)
+    assert classify("pitch", "basketball", "tartan") == (3, 3)
+    assert classify("track", None, None) == (3, 6)  # a tartan track, lanes
+    assert classify("pitch", "table_tennis", None) == (6, 0)  # a hard pad, no lines
+    assert classify("pitch", "curling", None) is None  # nothing to show
+    assert classify("pitch", None, "sand") == (5, 0)  # an unknown sport: its surface
+    assert classify("pitch", None, None) is None
+
+
+def test_a_pitch_is_a_rotated_rectangle_along_its_long_side():
+    from bake.sport import frame
+
+    pitch = shapely.affinity.rotate(shapely.box(-50, -30, 50, 30), 30, origin=(0, 0))
+    shape, (cx, cy, angle, hl, hw, _) = frame(pitch, 1)
+    assert shape == 0
+    assert (round(cx, 6), round(cy, 6)) == (0, 0)
+    assert round(math.degrees(angle) % 180, 3) == 30
+    assert (round(hl, 3), round(hw, 3)) == (50, 30)
+
+
+def test_an_oval_track_is_a_capsule_band_of_its_measured_width():
+    from bake.sport import frame
+
+    straight, outer, band = 42.0, 46.0, 8.0
+    core = shapely.LineString([(-straight, 0), (straight, 0)])
+    ring = shapely.difference(core.buffer(outer), core.buffer(outer - band))
+    shape, (_, _, _, a, r, w) = frame(ring, 6)
+    assert shape == 1
+    assert abs(a - straight) < 0.1
+    assert abs(r - outer) < 0.1
+    assert abs(w - band) < 0.2
+    # A narrow bent strip is no oval: it keeps a rectangle or its outline.
+    strip = shapely.LineString([(0, 0), (40, 0), (60, 8)]).buffer(2.0)
+    assert frame(strip, 6)[0] != 1
+
+
+def test_the_index_raster_names_a_court_inside_a_larger_ground(tmp_path):
+    from bake.common import Tile
+    from bake.sport import index_raster
+
+    tile = Tile("t", (0.0, 0.0, 64.0, 64.0), 25833, tmp_path, tmp_path)
+    big = shapely.box(4, 4, 60, 60)
+    court = shapely.box(20, 20, 40, 40)
+    raster = index_raster([big, court], tile, 64)
+    assert raster.shape == (64, 64, 4)
+    assert raster[64 - 30, 30].tolist()[:3] == [2, 1, 255]  # the court, then the ground
+    assert raster[64 - 10, 10].tolist()[:3] == [1, 1, 255]
+    assert raster[33, 3, 0] == 1  # the grown edge, half a metre out
+    assert raster[33, 1].tolist()[:3] == [0, 1, 0]  # only the wider growth
+
+
+def _osm_nodes(first_id: int, pts) -> str:
+    """OSM XML nodes at tile-local metres (the `_osm_tile` origin), with tags."""
+    from pyproj import Transformer
+
+    back = Transformer.from_crs(25833, 4326, always_xy=True)
+    out = []
+    for i, (px, py, tags) in enumerate(pts):
+        lon, lat = back.transform(411000.0 + px, 5656000.0 + py)
+        body = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in tags.items())
+        out.append(
+            f'<node id="{first_id + i}" lat="{lat:.9f}" lon="{lon:.9f}" version="1">{body}</node>'
+        )
+    return "".join(out)
+
+
+def _lod2_box(first: int) -> dict:
+    """A box solid over the eight vertices from `first`: ground, roof, walls."""
+    a, b, c, d, e, f, g, k = range(first, first + 8)
+    return {
+        "type": "Solid",
+        "lod": "2",
+        "boundaries": [
+            [[[a, d, c, b]], [[e, f, g, k]], [[a, b, f, e]], [[b, c, g, f]], [[c, d, k, g]]]
+        ],
+        "semantics": {
+            "surfaces": [
+                {"type": "GroundSurface"},
+                {"type": "RoofSurface"},
+                {"type": "WallSurface"},
+            ],
+            "values": [[0, 1, 2, 2, 2]],
+        },
+    }
+
+
+def _lod2_city(tile, boxes: dict) -> None:
+    """A CityJSON for the `_osm_tile` tile: `boxes` maps an id to its
+    (x0, y0, x1, y1) in tile-local metres; `shop` is a part of `shop-bldg`."""
+    import json
+
+    verts, objects = [], {}
+    for oid, (x0, y0, x1, y1) in boxes.items():
+        first = len(verts)
+        ring = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        verts += [[411000 + x, 5656000 + y, 100] for x, y in ring]
+        verts += [[411000 + x, 5656000 + y, 110] for x, y in ring]
+        objects[oid] = {"type": "BuildingPart", "geometry": [_lod2_box(first)]}
+    objects["shop"]["parents"] = ["shop-bldg"]
+    objects["shop-bldg"] = {"type": "Building", "children": ["shop"]}
+    path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"type": "CityJSON", "vertices": verts, "CityObjects": objects}))
+
+
+def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp_path, monkeypatch):
+    import json
+
+    from bake import osm_buildings
+
+    heritage = [(10, 10, {}), (40, 10, {}), (40, 40, {}), (10, 40, {})]
+    nodes = _osm_nodes(
+        11,
+        [
+            (150, 150, {"shop": "bakery"}),  # inside `shop`
+            (163, 150, {"amenity": "cafe"}),  # 1 m off `other`'s facade: snapped
+            (25, 25, {"shop": "clothes", "level": "1"}),  # upstairs: dropped
+            (100, 190, {"shop": "kiosk"}),  # on no building
+            *heritage,
+        ],
+    )
+    outline = "".join(f'<nd ref="{i}"/>' for i in (15, 16, 17, 18, 15))
+    tags = '<tag k="building" v="yes"/><tag k="heritage" v="4"/>'
+    way = f'<way id="9" version="1">{outline}{tags}</way>'
+    tile = _osm_tile(tmp_path, monkeypatch, nodes + way)
+    _lod2_city(
+        tile,
+        {"shop": (140, 140, 160, 160), "other": (164, 140, 180, 160), "old": (15, 15, 35, 35)},
+    )
+    osm_buildings.run(tile)
+    doc = json.loads((tile.data / "dlm" / "osmbuild_t.json").read_text())
+    assert doc["attribution"].startswith("©")
+    assert doc["objects"] == {
+        "shop": {"shop": 1},
+        "shop-bldg": {"shop": 1},  # the part's root
+        "other": {"shop": 1},
+        "old": {"heritage": 1},  # the outline covers all of it
+    }
+    assert doc["meta"]["shop_points_placed"] == 2
+
+
+def test_only_ground_floor_levels_count_as_street_shops():
+    from bake.osm_buildings import is_shop, on_ground_floor
+
+    assert on_ground_floor(None)
+    assert on_ground_floor('"level"=>"0"')
+    assert on_ground_floor('"level"=>"-1;0"')
+    assert on_ground_floor('"level"=>"EG"')  # unreadable: kept
+    assert not on_ground_floor('"level"=>"1"')
+    assert not on_ground_floor('"level"=>"-1"')
+    assert is_shop("bakery", None) and is_shop(None, "pub")
+    assert not is_shop("no", None) and not is_shop(None, "bench")
+
+
+def _cadastre_tree(x, y, h=None, d=None, botanical="Tilia cordata", german="Winter-Linde"):
+    return {
+        "properties": {
+            "gis_x_utm": x,
+            "gis_y_utm": y,
+            "baumhoehe_akt": h,
+            "kronendurchmesser_akt": d,
+            "art_botanisch": botanical,
+            "art_deutsch": german,
+        }
+    }
+
+
+def test_the_tile_owns_its_cadastre_trees_and_skips_stumps():
+    from bake.trees import parse_trees
+
+    raw = {
+        "features": [
+            _cadastre_tree(100.0, 100.0, 12, 8),
+            _cadastre_tree(200.0, 100.0, 12, 8),  # the east seam: the neighbour's
+            _cadastre_tree(150.0, 150.0, 2, 1, botanical="Stammstück"),
+        ]
+    }
+    trees = parse_trees(raw, (0.0, 0.0, 200.0, 200.0))
+    assert [(t["x"], t["y"]) for t in trees] == [(100.0, 100.0)]
+    assert trees[0]["leaf"] == "d"
+
+
+def test_missing_sizes_come_from_the_tiles_own_trees_clamped():
+    from bake.trees import H_MAX, impute, parse_trees
+
+    raw = {
+        "features": [
+            *(_cadastre_tree(float(i), 1.0, 10, 5) for i in range(3)),
+            _cadastre_tree(9.0, 1.0, None, None),  # both imputed: genus median, ratio
+            _cadastre_tree(8.0, 1.0, 99, None),  # clamped
+        ]
+    }
+    sizes, imputed_h, imputed_d = impute(parse_trees(raw, (0.0, 0.0, 10.0, 10.0)))
+    assert (imputed_h, imputed_d) == (1, 2)
+    assert sizes[3] == (10, 5)
+    assert sizes[4][0] == H_MAX
+
+
+def test_a_cadastre_tree_in_forest_is_flagged():
+    from bake.trees import tree_features
+
+    cls = np.zeros((4, 4), dtype=np.uint8)
+    cls[0, 0] = 2  # forest in the north-west corner
+    tree = {"x": 1.0, "y": 9.0, "archetype": 0, "leaf": "d", "foliage": 1, "globe": True}
+    f = tree_features([tree], [(10.0, 6.0)], cls, (0.0, 0.0, 10.0, 10.0))[0]
+    assert f["properties"] == {"h": 10.0, "d": 6.0, "a": 0, "l": "d", "c": 1, "g": 1, "f": 1}
+
+
+def test_a_cadastre_tree_carries_its_genus_and_trunk():
+    from bake.tree_archetypes import GENERA
+    from bake.trees import parse_trees, tree_props
+
+    raw = {"features": [_cadastre_tree(1.0, 1.0, 12, 8, botanical="Acer rub. 'October Glory'")]}
+    raw["features"][0]["properties"]["stammdurchmesser_akt"] = 41.0
+    t = parse_trees(raw, (0.0, 0.0, 10.0, 10.0))[0]
+    props = tree_props(t, 12.0, 8.0)
+    assert GENERA[props["gn"]] == "Acer rubrum"
+    assert props["t"] == 41
+    assert "s" not in props
+
+
+def test_the_genus_table_keys_the_autumn_not_just_the_genus():
+    from bake.tree_archetypes import GENERA, genus_id
+
+    assert GENERA[0] == ""
+    assert GENERA[genus_id("Tilia cordata 'Greenspire'")] == "Tilia"
+    assert GENERA[genus_id("Acer x freemanii 'Autumn Blaze'")] == "Acer rubrum"
+    assert GENERA[genus_id("Acer platanoides")] == "Acer"
+    assert GENERA[genus_id("Quercus rubra")] == "Quercus rubra"
+    assert GENERA[genus_id("Styphnolobium japonicum")] == "Sophora"
+    assert genus_id("Pinus nigra") == 0  # evergreen: the leaf type keeps it
+    assert len(set(GENERA)) == len(GENERA)
+
+
+def test_an_osm_tree_needs_a_taxon_or_a_leaf_type():
+    from bake.tree_archetypes import CONIFER, GENERA
+    from bake.trees import osm_tree
+
+    lime = osm_tree(0, 0, '"natural"=>"tree","species"=>"Tilia platyphyllos","height"=>"14 m"')
+    assert lime is not None
+    assert (GENERA[lime["gn"]], lime["h"], lime["src"]) == ("Tilia", 14.0, "osm")
+    plane = osm_tree(0, 0, '"natural"=>"tree","species"=>"Platane","circumference"=>"2,2"')
+    assert plane is not None
+    assert GENERA[plane["gn"]] == "Platanus"
+    assert round(plane["t"]) == 70  # 2.2 m around = 70 cm across
+    pine = osm_tree(0, 0, '"natural"=>"tree","leaf_type"=>"needleleaved"')
+    assert pine is not None
+    assert (pine["archetype"], pine["leaf"], pine["gn"]) == (CONIFER, "e", 0)
+    assert osm_tree(0, 0, '"natural"=>"tree","denotation"=>"urban"') is None
+
+
+def test_an_osm_taxon_must_name_a_genus_the_bake_knows():
+    from bake.tree_archetypes import CONIFER, GENERA, ROUND
+    from bake.trees import osm_tree
+
+    def tree(tags: str) -> dict:
+        t = osm_tree(0, 0, '"natural"=>"tree",' + tags)
+        assert t is not None
+        return t
+
+    # A German common name is no genus: read by its last word, or the leaf
+    # type decides — never a round deciduous "Gemeine".
+    spruce = tree('"species"=>"Gemeine Fichte","leaf_type"=>"needleleaved"')
+    assert (spruce["archetype"], spruce["leaf"]) == (CONIFER, "e")
+    assert GENERA[tree('"genus"=>"Linden","leaf_type"=>"broadleaved"')["gn"]] == "Tilia"
+    assert GENERA[tree('"species"=>"Winter-Linde"')["gn"]] == "Tilia"
+    assert GENERA[tree('"species"=>"Eberesche"')["gn"]] == "Sorbus"
+    assert GENERA[tree('"species"=>"Rosskastanie"')["gn"]] == "Aesculus"
+    # A family or an English name: the leaf type, or nothing.
+    fir = tree('"species"=>"Pinaceae","leaf_type"=>"needleleaved"')
+    assert (fir["archetype"], fir["gn"]) == (CONIFER, 0)
+    mulberry = tree('"species"=>"White Mulberry","leaf_type"=>"broadleaved"')
+    assert (mulberry["archetype"], mulberry["gn"]) == (ROUND, 0)
+    assert osm_tree(0, 0, '"natural"=>"tree","species"=>"Pinaceae"') is None
+    # A lower-case genus is still the genus; a bare epithet only when it
+    # names one tree.
+    assert GENERA[tree('"genus"=>"tilia"')["gn"]] == "Tilia"
+    assert GENERA[tree('"species"=>"hippocastanum"')["gn"]] == "Aesculus"
+    assert osm_tree(0, 0, '"natural"=>"tree","species"=>"domestica"') is None
+    # A later key that reads as a genus serves when the first does not.
+    assert GENERA[tree('"species"=>"Gingo","genus"=>"Ginkgo"')["gn"]] == "Ginkgo"
+
+
+def test_an_osm_leaf_type_or_cycle_overrides_the_taxon():
+    from bake.tree_archetypes import CONIFER
+    from bake.trees import osm_tree
+
+    # A needle-leaved "lime": the taxon is the suspect.
+    t = osm_tree(0, 0, '"natural"=>"tree","genus"=>"Tilia","leaf_type"=>"needleleaved"')
+    assert t is not None
+    assert (t["archetype"], t["leaf"], t["gn"]) == (CONIFER, "e", 0)
+    # Agreeing tags keep the genus; leaf_cycle sets the leaf type.
+    t = osm_tree(0, 0, '"natural"=>"tree","genus"=>"Larix","leaf_type"=>"needleleaved"')
+    assert t is not None
+    assert (t["archetype"], t["leaf"]) == (CONIFER, "d")
+    t = osm_tree(0, 0, '"natural"=>"tree","genus"=>"Magnolia","leaf_cycle"=>"evergreen"')
+    assert t is not None
+    assert t["leaf"] == "e"
+
+
+def test_the_cadastre_wins_within_three_metres_and_fills_osm_sizes():
+    from bake.trees import cadastre_points, complement, impute, osm_tree, parse_trees, size_stats
+
+    raw = {"features": [_cadastre_tree(float(i) * 20, 0.0, 10, 5) for i in range(3)]}
+    cadastre = parse_trees(raw, (0.0, -1.0, 100.0, 100.0))
+    tags = '"natural"=>"tree","genus"=>"Tilia"'
+    osm = [osm_tree(2.5, 0.0, tags), osm_tree(23.5, 0.0, tags), osm_tree(50.0, 0.0, tags)]
+    kept = complement([t for t in osm if t], cadastre_points(raw))
+    assert [t["x"] for t in kept] == [23.5, 50.0]
+    sizes, imputed_h, _ = impute(kept, size_stats(cadastre))
+    assert imputed_h == 2
+    assert sizes[0] == (10, 5)  # the cadastre's lime median and crown ratio
+
+
+def test_a_cadastre_tree_across_the_seam_claims_its_osm_twin():
+    from bake.trees import cadastre_points, complement, osm_tree, parse_trees
+
+    # The WFS answer's margin: a tree 1 m past the tile's east seam.
+    raw = {"features": [_cadastre_tree(101.0, 50.0, 10, 5), _cadastre_tree(50.0, 50.0, 10, 5)]}
+    assert len(parse_trees(raw, (0.0, 0.0, 100.0, 100.0))) == 1
+    twin = osm_tree(99.0, 50.0, '"natural"=>"tree","genus"=>"Tilia"')
+    assert twin is not None
+    assert complement([twin], cadastre_points(raw)) == []
+    assert complement([twin], cadastre_points({"features": []})) == [twin]
+
+
+def test_an_implausible_trunk_is_dropped_not_clamped():
+    from bake.trees import T_MAX, tree_props
+
+    tree = {"archetype": 0, "leaf": "d", "foliage": 0, "globe": False}
+    assert "t" not in tree_props({**tree, "t": 120.0}, 5.0, 4.0)  # a 5 m tree
+    assert tree_props({**tree, "t": 120.0}, 20.0, 12.0)["t"] == 120
+    assert "t" not in tree_props({**tree, "t": T_MAX + 50}, 40.0, 20.0)
+
+
+def test_only_the_osm_hedges_ship():
+    from bake.lowveg import hedge_feature, shipped, shrub_feature
+
+    line = shapely.LineString([(0, 0), (5, 0)])
+    feats = [
+        hedge_feature(line, 1.43, 1.0, "osm"),
+        hedge_feature(line, 1.2, 0.8, "osm+lsc"),
+        hedge_feature(line, 1.2, 0.8, "lsc"),
+        shrub_feature(shapely.Point(1, 1), 1.5, 1.0, "lsc"),
+    ]
+    kept = shipped(feats)
+    assert [f["properties"]["src"] for f in kept] == ["osm", "osm+lsc"]
+    assert kept[0]["properties"]["h"] == 1.4
+
+
+def test_a_hedge_height_tag_is_read_when_plausible():
+    from bake.lowveg import osm_height
+
+    assert osm_height('"height"=>"1.8 m"') == 1.8
+    assert osm_height('"height"=>"12"') is None
+    assert osm_height(None) is None
+
+
+def test_scan_trees_a_cadastre_tree_claims_are_dropped(tmp_path):
+    from bake.lowveg import cadastre_filter
+
+    trees = tmp_path / "trees.geojson"
+    trees.write_text(
+        '{"features":[{"geometry":{"type":"Point","coordinates":[0,0]},"properties":{"d":12}}]}'
+    )
+
+    def point(x):
+        return {"geometry": {"type": "Point", "coordinates": [x, 0.0]}, "properties": {}}
+
+    # 3 m: within the 4 m floor; 5.5 m: inside the 6 m crown; 7 m: its own tree
+    kept, dropped = cadastre_filter([point(3.0), point(5.5), point(7.0)], trees)
+    assert dropped == 2
+    assert [f["geometry"]["coordinates"][0] for f in kept] == [7.0]
+
+
+def test_a_closed_hedge_way_stays_a_line_of_hedge():
+    from bake.lowveg import hedge_rings
+
+    square = shapely.Polygon([(0, 0), (4, 0), (4, 4), (0, 4)])
+    rings = hedge_rings(square)
+    assert len(rings) == 1
+    assert rings[0].is_ring and rings[0].length == 16.0
+
+
+def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
+    import laspy
+    import rasterio
+
+    from bake.lsc import rasterise
+
+    # A 4 m tile at 0.5 m = 8×8 cells. Two ground points in the south-west
+    # cell (the first in file order is its idw, as PDAL's bin mode has it),
+    # one in the cell diagonally north-east of the empty cell north of it,
+    # a 1.5 m shrub return and a 12 m crown return (two echoes) in that cell.
+    # A last non-ground return 0.1 m over the DTM's idw but 0.6 m over its
+    # min: PDAL's hag_dem reads band 2, which is `idw` in PDAL's band order.
+    x = [0.1, 0.25, 0.75, 0.25, 0.3, 0.2]
+    y = [0.1, 0.25, 1.25, 0.75, 0.7, 0.8]
+    z = [101.0, 100.0, 104.0, 103.5, 114.0, 102.6]
+    header = laspy.LasHeader(point_format=6, version="1.4")
+    header.scales = [0.01, 0.01, 0.01]
+    header.offsets = [0, 0, 0]
+    las = laspy.LasData(header)
+    las.x, las.y, las.z = np.array(x), np.array(y), np.array(z)
+    las.classification = np.array([2, 2, 2, 20, 20, 20], np.uint8)
+    las.number_of_returns = np.array([1, 1, 1, 1, 2, 1], np.uint8)
+    las.intensity = np.array([0, 0, 0, 1000, 3000, 5000], np.uint16)
+    laz = tmp_path / "t.laz"
+    las.write(laz)
+    rasterise(laz, tmp_path, (0.0, 0.0, 4.0, 4.0), 25833)
+
+    def band(name, desc):
+        with rasterio.open(tmp_path / name) as ds:
+            return ds.read(list(ds.descriptions).index(desc) + 1)
+
+    idw = band("dtm_050.tif", "idw")
+    assert idw[7, 0] == 101.0  # the first point, not the one on the centre
+    assert band("dtm_050.tif", "min")[7, 0] == 100.0
+    assert band("dtm_050.tif", "count")[7, 0] == 2
+    # the empty cell north of it: its two donors are both 1 cell away by
+    # Chebyshev distance (the diagonal one would be √2 by Euclid's)
+    assert idw[6, 0] == 102.5
+    assert band("dtm_050.tif", "min")[6, 0] == 102.0
+    assert band("dsm_050.tif", "max")[6, 0] == 114.0
+    assert band("nonground_count_050.tif", "count")[6, 0] == 3
+    with rasterio.open(tmp_path / "dtm_050.tif") as ds:
+        assert ds.descriptions == ("min", "idw", "count")  # PDAL's band order
+    assert band("nonground_multiecho_count_050.tif", "count")[6, 0] == 1
+    # only the shrub return is 0.25–4 m above the DTM
+    assert band("lowint_050.tif", "mean")[6, 0] == 1000.0
+    assert band("lowint_050.tif", "count")[6, 0] == 1
+    assert band("lowint_050.tif", "mean")[0, 7] == -9999.0
+
+
+def test_a_rotated_share_is_found_in_the_batch_catalogue():
+    page = (
+        '"LSC":{"fullname":"Laserscandaten","shortname":"LSC","share_id":"NewLsc123",'
+        '"packagesize":2000,"filename":"lsc_33$Rechtswert$_$Hochwert$_2_sn_laz.zip","category":"x"},'
+        '"LoD2_CityGML":{"shortname":"LoD2_CityGML","share_id":"NewLod2",'
+        '"packagesize":2000,"filename":"lod2_33$Rechtswert$_$Hochwert$_2_sn_citygml.zip"}'
+    )
+    catalogue = share_catalogue(page)
+    assert current_share_url("lsc_33414_5656_2_sn_laz.zip", catalogue) == (
+        "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/NewLsc123/lsc_33414_5656_2_sn_laz.zip"
+    )
+    assert current_share_url("lod2_33412_5656_2_sn_citygml.zip", catalogue).endswith(
+        "/NewLod2/lod2_33412_5656_2_sn_citygml.zip"
+    )
+    assert current_share_url("dop20rgb_33412_5656_2_sn_tiff.zip", catalogue) is None

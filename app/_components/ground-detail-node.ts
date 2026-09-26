@@ -64,7 +64,8 @@ const kindId = (kind: SurfaceKind) => surfaceId(kind);
 const PI = Math.PI;
 
 /** The meadow's and the road's palette colours, linear. */
-const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
+export const MEADOW_LINEAR =
+  LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
 const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
 
 /** What the terrain material hands in. */
@@ -99,13 +100,15 @@ const texSize = (t: Texture): [number, number] => {
   return [img.width, img.height];
 };
 
-function hash(p: V2): F {
+/** gdHash of ground-detail.ts. */
+export function hash(p: V2): F {
   const a = fract(vec3(p.x, p.y, p.x).mul(0.1031));
   const b = a.add(dot(a, a.yzx.add(33.33)));
   return fract(b.x.add(b.y).mul(b.z));
 }
 
-function noise(p: V2): F {
+/** gdNoise of ground-detail.ts. */
+export function noise(p: V2): F {
   const i = floor(p);
   const f0 = fract(p);
   const f = f0.mul(f0).mul(float(3).sub(f0.mul(2)));
@@ -155,7 +158,8 @@ function sd(fld: V3): F {
 const toView = (d: V2): V3 =>
   cameraViewMatrix.mul(vec4(d.x, 0, d.y.negate(), 0)).xyz;
 
-interface Fields {
+/** The ground fields (ground-detail.ts `groundFields`: gdW, gdDr, …). */
+export interface Fields {
   alongM: F;
   cls: F;
   dl: F;

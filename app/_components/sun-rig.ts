@@ -63,6 +63,10 @@ export interface SunRig {
   shadowCamera: Camera;
   /** GPU bytes of the shadow map (RGBA8 depth-packed, no mipmaps). */
   shadowMapBytes: number;
+  /** The shadow frustum on the ground, kept current: its centre in the data
+   *  frame (x east, y north: world x, −z) and its half-size (z, m). The
+   *  terrain reads it by reference (the horizon's near band, sky-light.ts). */
+  shadowReach: Vector3;
   /** True when the next render will redraw the shadow map. */
   shadowPending: () => boolean;
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
@@ -89,6 +93,12 @@ interface SkyDome {
 function createNodeSkyDome(scene: Scene): SkyDome {
   const sky = new SkyMesh();
   sky.scale.setScalar(4500);
+  // Travels with the camera, as createSkyDome's does (see there).
+  sky.frustumCulled = false;
+  sky.onBeforeRender = (_renderer, _scene, camera) => {
+    sky.position.setFromMatrixPosition(camera.matrixWorld);
+    sky.updateMatrixWorld();
+  };
   sky.turbidity.value = 4.5;
   sky.rayleigh.value = 1.6;
   sky.mieCoefficient.value = 0.0025;
@@ -136,6 +146,18 @@ function createSkyDome(scene: Scene): SkyDome {
   const sky = new Sky();
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
+  // The dome is a box ±2250 m around its centre, so it has to travel with
+  // the camera: anchored at the origin (the spawn tile), a camera on the
+  // far tiles (the Blaues Wunder is ~3 km out) stood outside it and saw the
+  // bare clear colour where the sky should be. The shader only reads the
+  // direction from the camera, so re-centring changes nothing else. This
+  // runs after culling (hence no culling) and before the model-view
+  // matrix is taken from `matrixWorld`.
+  sky.frustumCulled = false;
+  sky.onBeforeRender = (_renderer, _scene, camera) => {
+    sky.position.setFromMatrixPosition(camera.matrixWorld);
+    sky.updateMatrixWorld();
+  };
   const u = sky.material.uniforms;
   // Moderate haze and a small Mie lobe: more of either blows the sky around
   // the sun (and with it half the horizon) out to flat white.
@@ -298,6 +320,7 @@ export function createSunRig(
     sunDirectionOut?.copy(dir);
   }
   const focus = center.clone();
+  const shadowReach = new Vector3(center.x, -center.z, radius);
   const lastCentre = new Vector3(Number.NaN, Number.NaN, Number.NaN);
   const reposition = () => {
     // Snap the focus to the texel grid to keep shadow edges stable.
@@ -305,6 +328,7 @@ export function createSunRig(
     const fy = Math.round(focus.y / texelSize) * texelSize;
     const fz = Math.round(focus.z / texelSize) * texelSize;
     sun.target.position.set(fx, fy, fz);
+    shadowReach.set(fx, -fz, radius);
     sun.position.set(
       fx + dir.x * shadowDistance,
       fy + dir.y * shadowDistance,
@@ -405,6 +429,7 @@ export function createSunRig(
     // flag stays raised (and is consumed at sunrise), so it is not "pending".
     shadowPending: () => sun.visible && sun.shadow.needsUpdate,
     shadowMapBytes: shadowMapSize * shadowMapSize * 4,
+    shadowReach,
     shadowCamera: sun.shadow.camera,
     dispose: () => sun.dispose(),
   };

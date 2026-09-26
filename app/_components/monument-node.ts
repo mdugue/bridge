@@ -35,6 +35,7 @@ import {
   WATER_COLOR,
   WATER_GLOW,
 } from "./monument-layer";
+import { onNodeSceneEnd } from "./node-shared";
 
 /**
  * SPIKE (plan 020): the fountain materials of monument-layer.ts in TSL, term
@@ -55,6 +56,18 @@ export interface MonumentMaterials {
 }
 
 let shared: MonumentMaterials | null = null;
+let sharedAlpha: Texture | null = null;
+// Freed with the last app (node-shared.ts), the bells' alpha with them.
+onNodeSceneEnd(() => {
+  if (shared) {
+    for (const m of [shared.clay, shared.litClay, shared.water, shared.spray]) {
+      m.dispose();
+    }
+  }
+  sharedAlpha?.dispose();
+  shared = null;
+  sharedAlpha = null;
+});
 
 const fountainTime = () =>
   uniform(0).onRenderUpdate(() => FOUNTAIN_UNIFORMS.uFountainTime.value);
@@ -173,7 +186,7 @@ export function nodeMonumentMaterials(
       clay,
       litClay: litClayMaterial(),
       water: waterMaterial(),
-      spray: sprayMaterial(makeAlpha()),
+      spray: sprayMaterial((sharedAlpha = makeAlpha())),
     };
     for (const m of [shared.clay, shared.litClay, shared.water, shared.spray]) {
       m.userData.shared = true;

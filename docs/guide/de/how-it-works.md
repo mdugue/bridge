@@ -9,12 +9,15 @@ davon „echt“ ist. Begriffe in **Fettschrift** stehen im
 
 ## Was du siehst
 
-Ein stilisiertes, begehbares 3D-Modell der Dresdner Innenstadt: ein Quadrat
-von 4 km × 4 km auf beiden Elbseiten, mit der historischen Altstadt im
-Südwesten, Innerer und Äußerer Neustadt im Norden und der Johannstadt im
-Südosten. Du startest tief über der Elbe nahe der Carolabrücke, mit Blick
-auf die Altstadt-Silhouette, und kannst auf Straßenniveau gehen oder über
-die Dächer fliegen.
+Ein stilisiertes, begehbares 3D-Modell der Dresdner Innenstadt: fünfzehn
+Kacheln zu 2 km × 2 km auf beiden Elbseiten, 10 km × 6 km, mit der
+historischen Altstadt, Innerer und Äußerer Neustadt, der Johannstadt, der
+Friedrichstadt, Löbtau und Pieschen im Westen, dem Hauptbahnhof und dem
+Großen Garten im Süden und elbaufwärts vorbei an der
+Waldschlößchenbrücke bis Blasewitz, Loschwitz und zum Blauen Wunder. Du
+startest tief über der Elbe nahe der Carolabrücke, mit Blick auf die
+Altstadt-Silhouette, und kannst auf Straßenniveau gehen oder über die
+Dächer fliegen.
 
 Nichts wird installiert, nichts über dich gespeichert, und kein Server
 berechnet das Bild. Dein Browser lädt vorbereitete Dateien, während du dich
@@ -54,14 +57,19 @@ bewusster Vereinfachung.
 |---|---|---|---|
 | **Gelände** | Die Form des Bodens: Flussufer, der Anstieg zur Neustadt, Dämme | Das amtliche Geländemodell mit 1 m Raster (**DGM1**) | Echte Höhen, auf einem Raster von etwa 2 m in deiner Nähe und 4 m weiter weg. Senkrechte Mauern und Treppen glättet die Quelle zu Rampen; wo OpenStreetMap eine Mauer, eine Felskante oder eine Treppe kennt, schärft das Projekt sie wieder |
 | **Bodenfarben** | Straßen grau, Wege sandfarben, Wiesen salbeigrün, Wald moosgrün, Siedlung tonfarben, Wasser blau | Das amtliche Landschaftsmodell (**Basis-DLM**), Plätze aus **OpenStreetMap** verfeinert | Echte Klassifizierung; die Farben sind eine entworfene Pastellpalette, erst in deinem Browser aufgemalt, keine Fotos |
+| **Sportplätze** | Fußballplätze mit Mähstreifen, Tennisplätze aus Sand, Tartanbahnen mit ihren Bahnen, Basketballfelder, Beachvolleyball-Sand — jeweils mit Linien, Toren, Basketballkörben und Netzen | **OpenStreetMap** (`leisure=pitch`, `leisure=track`, mit `sport` und `surface`) | Umriss, Sportart und Belag sind, was Freiwillige erfasst haben; ohne Belag zeigt der Viewer den für die Sportart üblichen (Fußball auf Rasen, Tennis auf Sand). Die Linien sind die Standardmaße, auf die erfasste Größe skaliert, nicht vermessen; Tore und Netze sind schlichte Platzhalter, nicht die echten |
 | **Bordsteine und Beläge** | Eine Bordsteinkante, wo Straße auf Gehweg trifft; Asphalt, Gehwegplatten, Kopfsteinpflaster oder Kies unter den Füßen; markierte Stellplätze am Straßenrand und auf Parkplätzen; begrünte Höfe | Straßenränder aus dem **Basis-DLM**, Material und Parkplätze aus **OpenStreetMap** (`surface`, `parking`), das Grün aus dem Infrarot-Luftbild (**NDVI**) | Der Bordstein (eine flache 12-cm-Stufe mit Schatten) folgt der vermessenen Fahrbahnbreite; das Material ist, was Freiwillige erfasst haben (etwa zwei Drittel der Straßen), der Rest zeigt Asphalt oder Platten als Vorgabe; die Muster sind gezeichnet, nicht fotografiert, und der Gehweg hinter dem Bordstein liegt auf Straßenniveau |
 | **Wasser** | Die Elbe und kleinere Gewässer mit leicht bewegter Oberfläche und treibendem Nebel | Wasserflächen aus dem Basis-DLM, auf das echte Gelände gelegt | Echter Umriss, erfundene Wellen |
-| **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 16 000 Gebäude und Gebäudeteile in den vier Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
+| **Auf der Elbe** | Die Anlegestellen unter der Brühlschen Terrasse und die kleineren Stege — feste Stege auf Pfählen, schwimmende Pontons mit Laufsteg und Kassenhäuschen —, eine Buhne und die Fährrouten als zarte gestrichelte Kielspur aus der Luft | **OpenStreetMap** (`man_made=pier`, `man_made=groyne`, `route=ferry`) | Echte Lage und Umrisse; Häuschen, Geländer und Pfähle sind schlichte Platzhalter; die Pontons schwimmen auf der gezeichneten Flussoberfläche. Die Raddampfer fehlen: kein Datensatz hat sie |
+| **Gebäude** | Jedes Gebäude mit echtem Grundriss, Höhe und Dachform | Das amtliche 3D-Gebäudemodell (**LoD2**), rund 58 000 Gebäude und Gebäudeteile in den fünfzehn Kacheln | Echte Geometrie. Fassaden sind bewusst glatt; Fenster gibt es in den Quelldaten nicht |
 | **Gebäudefarben** | Dachfarben; eine leichte Tönung je Gebäude; abends ein warmes Leuchten in Läden und öffentlichen Bauten | Dachfarbe aus Luftbildern (**DOP**) gemessen; der Rest aus Gebäudeattributen abgeleitet | Dachfarben sind echt (etwa 83 % Abdeckung), Wandtöne sind synthetisch |
-| **Bäume und Hecken** | Einzelbäume mit Kronen in gemessener Höhe; Hecken und Baumreihen | Baumpositionen und -höhen aus der Differenz von Oberflächenmodell (**DOM1**) und Geländemodell; Reihen aus dem Basis-DLM; Grünfärbung aus dem Infrarot-Luftbild (**NDVI**) | Positionen und Höhen sind gemessen; die Kronenform ist generisch, die Baumart unbekannt |
+| **Bäume und Hecken** | Einzelbäume mit Kronen in gemessener Höhe, durchs Jahr: kahl im Winter, Blattaustrieb Ende April, Herbstfarben im Oktober; Hecken und Baumreihen | Das Stadtbaumkataster (Standort, Höhe, Krone, Stamm, Art) und, wo es keinen Baum führt, die in **OpenStreetMap** kartierten Bäume; sonst Baumpositionen und -höhen aus der Differenz von Oberflächenmodell (**DOM1**) und Geländemodell; Reihen aus dem Basis-DLM; Grünfärbung aus dem Infrarot-Luftbild (**NDVI**) | Katasterbäume sind gemessen und folgen ihrer Art: eine Linde färbt sich früh und buttergelb, eine Eiche spät und rostbraun und behält den Winter über braunes Laub, ein Ginkgo wirft sein Laub binnen Tagen ab. Die Termine sind typische Werte, keine Beobachtungen dieses Jahres, und die Herbstfarben sind die Pastelltöne der Szene, keine Fotos. Bei den übrigen Bäumen sind Position und Höhe gemessen, die Art unbekannt: Sie folgen dem Jahr eines allgemeinen Laubbaums. Hecken bleiben grün |
 | **Straßenlampen** | Laternen an Straßen und Plätzen | **OpenStreetMap** | Echte Positionen, Standardhöhe |
+| **Stadtmöbel** | Sitzbänke, Picknicktische, Papierkörbe, Fahrradbügel, Poller, Briefkästen, Wartehäuschen und Haltestellenschilder, Litfaßsäulen, Ampeln, Hydranten, Straßenuhren, Trinkbrunnen | **OpenStreetMap**; wohin eine Bank blickt, aus ihrer eingetragenen Richtung, sonst zum nächsten Weg oder zur nächsten Straße | Echte Positionen (ein Poller in seiner eingetragenen Höhe); ein weiches, abstrahiertes Modell je Art in den Pastelltönen der Szene — wie Figuren eines Architekturmodells. Nur wenige Bänke sagen, wohin sie blicken, die meisten sind zum nächsten Weg gedreht — meist, nicht immer richtig. Ampeln sind an der Haltlinie auf der Fahrbahn eingetragen und werden deshalb an den Bordstein versetzt; ihre Lampen bleiben dunkel (es gibt keinen Verkehr zu regeln). Die Plakate an den Litfaßsäulen sind Farbflächen, keine echten Plakate. Die Zeiger einer Straßenuhr zeigen die Uhrzeit der Szene |
+| **Spielplätze** | Die Spielplatzfläche als heller Sandboden, mit ihren Schaukeln, Rutschen, Klettergerüsten, Sandkästen und Wippen als weiche, einfarbige Pastell-Skulpturen | **OpenStreetMap** (der Umriss und jedes darauf eingetragene Gerät) | Echter Umriss und echte Positionen; es steht nur, was eingetragen ist — viele Spielplätze sind ohne Geräte erfasst und bleiben leer, statt mit erfundenen Geräten gefüllt zu werden |
 | **Brunnen und Denkmäler** | Brunnenbecken mit stillem Wasser und durchscheinenden Wasserglocken; Statuen, Gedenksteine und Säulen | Lage und amtliche Namen aus dem Basis-DLM; Beckenumrisse und die kleineren Brunnen aus OpenStreetMap; die Form der Skulptur aus dem Oberflächenmodell (**DOM1**) | Echte Lage und Umrisse. Eine Skulptur ist ihr gemessener Körper, zu Ton geglättet — richtige Größe und Silhouette, keine Details; wo nichts messbar war, eine abstrakte Markierung. Die Wasserglocken, ihre sanfte Bewegung und die Nachtbeleuchtung sind entworfen. Beide Befliegungen fanden statt, als die Brunnen leer und ihre Figuren winterlich eingehaust waren; der gemessene Körper am Albertplatz ist also die Einhausung |
 | **Bahn und Brücken** | Gleise, Schotterbetten, Brückendecks mit Bögen oder Pfeilern, Bahnsteige | Basis-DLM (Gleise, Brücken), Gelände- und Oberflächenmodell (Deckhöhen), OpenStreetMap (Bahnsteige, ob eine Brücke eine Bogenbrücke ist) | Echter Verlauf und echte Deckhöhen; das Tragwerk ist vereinfacht |
+| **Straßenbahn** | Straßenbahngleise in ihrem Bett — Schienen bündig in der Straße, auf Rasen oder auf Schotter —, darüber der Fahrdraht jedes Gleises, die Masten und die über die Straße gespannten Querseile, an denen er hängt; die Haltestellenschilder auf den Bahnsteigen | **OpenStreetMap** (`railway=tram`, `power=catenary_mast`, die Gebäudeumrisse); das Gleisbett aus der Landnutzungskarte und dem Infrarot-Luftbild | Echte Gleislage und Masten. Das Gleisbett ist abgeleitet, nicht eingetragen; welcher Mast welchen Draht hält, der Durchhang und die Querseile zwischen den Fassaden enger Straßen (wo kein Mast eingetragen ist) sind aus der Geometrie rekonstruiert. Es fahren keine Bahnen: dafür gibt es keine Daten |
 | **Mauern** | Die Brühlsche Terrasse und andere Stütz- und Stadtmauern, Felskanten | OpenStreetMap-Linien mit ihren eingetragenen Höhen | Echte Lage, eingetragene oder Standardhöhe |
 | **Treppen** | Freitreppen wie die neben dem Italienischen Dörfchen oder die vom Schlossplatz zur Brühlschen Terrasse, als einzelne Stufen | OpenStreetMap (`highway=steps`: Lage, Breite, Stufenzahl; ohne Breitenangabe reicht eine Treppe von Mauer zu Mauer, wenn der Hang dazwischen ansteigt); Höhe von Fuß und Kopf aus dem Geländemodell | Echte Lage und Höhe; Stufenzahl eingetragen oder aus der Höhe geschätzt (16 cm je Stufe). Die Brühlsche Terrasse steht auf Kasematten und fehlt im Geländemodell; dort geben die eingetragenen Stufen die Höhe vor, und die Terrassenfläche aus OpenStreetMap wird auf diese Höhe angehoben |
 | **Sonne, Schatten und Himmel** | Sonnenlicht für beliebiges Datum und Uhrzeit; blaue Stunde, goldene Stunde, Nacht | Aus Kalender, Uhr und Dresdens Breitengrad berechnet | Astronomisch korrekter Sonnenstand; die Farben sind entworfen |
@@ -106,10 +114,11 @@ Gelände bist.
 Brückenlagen und Deckhöhen, Baumpositionen und -höhen, Dachfarben,
 Wiesengrün.
 
-**Von Freiwilligen beigetragen (OpenStreetMap):** Straßenlampen,
-Bahnsteige, Stützmauern mit Höhen, der Tragwerkstyp von Brücken, womit
-Straßen und Gehwege belegt sind. Die Vollständigkeit schwankt von Straße
-zu Straße.
+**Von Freiwilligen beigetragen (OpenStreetMap):** Straßenlampen, Bänke
+und andere Stadtmöbel, Spielplätze, Bahnsteige, Straßenbahngleise und
+Oberleitungsmasten, Stützmauern mit Höhen,
+der Tragwerkstyp von Brücken, womit Straßen und Gehwege belegt sind. Die
+Vollständigkeit schwankt von Straße zu Straße.
 
 **Berechnet:** der Sonnenstand, alle Schatten, Nebel und Dunst, die
 Tiefenschärfe, die langsame Bewegung von Blättern und Wasser.
@@ -121,8 +130,16 @@ warmen Fenster in der Dämmerung (dass es ein Laden oder öffentliches
 Gebäude *ist*, stimmt; seine leuchtenden Fenster sind erfunden).
 
 **Gar nicht in den Daten:** Fenster und Türen, Fassadenmaterialien,
-Straßenmöbel außer Lampen, Fahrzeuge, Menschen, Bewuchs unter etwa 3 m und
+die kleineren Stadtmöbel (Pflanzkübel; Verkehrs- und Straßennamensschilder
+sind zu lückenhaft erfasst, um sie zu zeigen),
+Fahrzeuge (Gleise und Oberleitung der Straßenbahn sind da, die Bahnen
+nicht), Menschen, Bewuchs unter etwa 3 m und
 alles im Inneren von Gebäuden.
+
+**Bewusst weggelassen:** Schrift. OpenStreetMap kennt die Namen der
+Straßen und Plätze, doch der Viewer schreibt keinen davon hin — weder auf
+den Boden noch als Einblendung auf dem Bildschirm: Das Kartenbild wirkt
+ohne Text ruhiger.
 
 ## Bevor du aus dem Bild Schlüsse ziehst
 

@@ -144,7 +144,7 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
-| Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), aus der Nähe sichtbar |
+| Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
 | | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
@@ -152,6 +152,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Blattflimmern* | Böen drehen Blätter auf sonnigen Kronen auf die helle Unterseite |
 | | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
+| | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
+| | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
 | | *Detaillierte Kronen* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
@@ -176,8 +178,9 @@ zurück, sobald du stehst.
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
 Die Fußzeile nennt die Datenquellen: die sächsische Landesvermessung für
-die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden für Lampen,
-Mauern, Bahnsteige und Brückentragwerke. Daneben führt *Unterstützen* zur
+die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden unter anderem
+für Lampen, Mauern und Zäune, Bahnsteige, Brückentragwerke, Läden und
+Baudenkmale. Daneben führt *Unterstützen* zur
 Ko-fi-Seite des Projekts; es ist ein einfacher Link, der erst beim Klick
 etwas von Ko-fi lädt.
 
@@ -193,3 +196,14 @@ etwas von Ko-fi lädt.
 - `?scene=lite` in der Adresszeile streamt nur die Startkachel, mit
   groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
+
+## Kleinigkeiten
+
+- **Lauschen.** Drücke **L** (oder schalte auf dem Telefon ganz unten in
+  *Erweitert* *Klang (experimentell)* ein), und die Stadt klingt leise:
+  Wind, die Elbe, Vögel am Tag und Grillen in Sommernächten, Schritte, die
+  das Pflaster unter den Füßen kennen — und wenn du die Uhr über eine
+  volle Stunde schiebst, schlagen die Kirchen in der Nähe sie, jede ein
+  wenig später, je weiter sie entfernt steht, so wie der Schall reist. Bei
+  jedem Laden der Seite ist er aus, in einem Hintergrund-Tab verstummt er,
+  und der kleine Lautsprecher oben links schaltet ihn wieder aus.

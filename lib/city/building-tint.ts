@@ -257,6 +257,30 @@ export function roofColor(
 }
 
 /**
+ * An object's attributes resolved through the root of its building tree: the
+ * object's own value first, the root's as the fallback. In the Saxon LoD2 a
+ * `BuildingPart` carries its geometry, heights and roof, but never the ALKIS
+ * `function` — only its geometry-less parent `Building` does — so reading
+ * the part alone gave every part of a shop or school the housing tint and
+ * no dusk glow. `root` is undefined (or the object's own bag) for a root.
+ */
+export function inheritedAttributes(
+  own: Record<string, unknown> = {},
+  root?: Record<string, unknown>
+): Record<string, unknown> {
+  if (!root || root === own) {
+    return own;
+  }
+  const out: Record<string, unknown> = { ...root };
+  for (const [key, value] of Object.entries(own)) {
+    if (value !== undefined && value !== null) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/**
  * Whether a building earns a warm interior glow at dusk: commerce
  * (`31001_2xxx`), public (`31001_3xxx`) and special structures (non-`31001`).
  * Housing (`31001_9998`/`1xxx`) stays dark, so the lit centre reads as civic.

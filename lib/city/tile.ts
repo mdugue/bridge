@@ -24,14 +24,19 @@ export function cityJsonFile(tile: string): string {
   return `lod2_${tile}.city.json`;
 }
 
-/** The committed inputs of the building bake (CityJSON + DOP roof LUT). */
+/** The committed inputs of the building bake (CityJSON + DOP roof LUT +
+ *  the OSM facts per object + the laser scan's small structures). */
 export function cityMeshSourceFiles(tile: string): {
   city: string;
+  osmBuild: string;
   roofColor: string;
+  smallBuild: string;
 } {
   return {
     city: `data/cityjson/${cityJsonFile(tile)}`,
+    osmBuild: `data/dlm/osmbuild_${tile}.json`,
     roofColor: `data/dop/roofcolor_${tile}.json`,
+    smallBuild: `data/dlm/smallbuild_${tile}.geojson`,
   };
 }
 
@@ -48,16 +53,32 @@ export interface TileArtifact {
 export type TileArtifactKind =
   | "bridge"
   | "canopy"
+  | "canopyx"
+  | "furniture"
   | "lamps"
   | "landcover"
   | "landcoverLow"
+  | "lowveg"
   | "monuments"
   | "ndvi"
   | "platform"
   | "rail"
   | "railarea"
+  | "riverside"
   | "surface"
+  | "soundmarks"
   | "edges"
+  | "sport"
+  | "sportTable"
+  | "svf"
+  | "horizon"
+  | "markings"
+  | "markingsLow"
+  | "markingsTable"
+  | "cultivated"
+  | "cultivatedRaster"
+  | "tram"
+  | "trees"
   | "vegrows";
 
 /**
@@ -91,12 +112,53 @@ export function tileArtifacts(
     // (pipeline/bake/edges.py); without them the shader reads the class
     // texels (kerb band only, no parking lanes).
     edges: dlm(`edges_${tile}.png`),
+    // Optional: the OSM sports grounds (pipeline/bake/sport.py) — the index
+    // raster and the table of grounds it names; without them the ground
+    // under a pitch is its land-cover class.
+    sport: dlm(`sport_${tile}.png`),
+    sportTable: dlm(`sport_${tile}.json`),
+    // Optional: the sky-view factor and the far horizon
+    // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
+    // ambient light the city lets through and the long shadows past the
+    // shadow map. Without them the light is as before.
+    svf: dlm(`svf_${tile}.png`),
+    horizon: dlm(`horizon_${tile}.png`),
+    // Optional: the road markings (pipeline/bake/markings.py) — the index
+    // raster (rows, lane bits, centre offset) and the table of crossings
+    // and stop lines; without them the roads stay unpainted.
+    markings: dlm(`markings_${tile}.png`),
+    // The same at 1024² for phones (`lowRasters`): 4 MiB of GPU memory
+    // instead of 16, the table's rows still resolved (a wider core).
+    markingsLow: dlm(`markings_low_${tile}.png`),
+    markingsTable: dlm(`markings_${tile}.json`),
+    // Optional: allotment colonies, orchards and vineyards
+    // (pipeline/bake/cultivated.py) — the features (orchard trees, vine
+    // rows) and the colony raster the ground paints beds on.
+    cultivated: dlm(`cultivated_${tile}.geojson`),
+    cultivatedRaster: dlm(`cultivated_${tile}.png`),
     lamps: dlm(`lamps_${tile}.geojson`),
     monuments: dlm(`monuments_${tile}.geojson`),
+    furniture: dlm(`furniture_${tile}.geojson`),
     rail: dlm(`rail_${tile}.geojson`),
     bridge: dlm(`bridge_${tile}.geojson`),
     railarea: dlm(`railarea_${tile}.geojson`),
     platform: dlm(`platform_${tile}.geojson`),
+    // Optional: the OSM trams — tracks, catenary supports, stop signs
+    // (pipeline/bake/tram.py); without it the tile has no trams.
+    tram: dlm(`tram_${tile}.geojson`),
+    // Optional: the OSM landing stages, groynes and ferry lines
+    // (pipeline/bake/riverside.py); a tile without the river has none.
+    riverside: dlm(`riverside_${tile}.geojson`),
+    // Optional: the bell towers (pipeline/bake/soundmarks.py) the hidden
+    // soundscape strikes the hour from (plan 035); fetched only while it
+    // plays.
+    soundmarks: dlm(`soundmarks_${tile}.geojson`),
+    // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
+    // hedges and the laser-scan crowns outside the canopy mask
+    // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
+    trees: dlm(`trees_${tile}.geojson`),
+    lowveg: dlm(`lowveg_${tile}.geojson`),
+    canopyx: dlm(`canopyx_${tile}.geojson`),
   };
 }
 
