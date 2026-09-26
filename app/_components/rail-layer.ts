@@ -4,10 +4,10 @@ import {
   Float32BufferAttribute,
   Group,
   Mesh,
-  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
   ShapeUtils,
   Vector2,
-} from "three";
+} from "three/webgpu";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -15,7 +15,7 @@ import type {
 } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { sceneMaterial } from "./three-utils";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
@@ -37,6 +37,9 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  *
  * All geometry is hand-wound to match its supplied normal (see pushTri), so every
  * material is FrontSide. Authored in Y-up world coords → added to `scene`.
+ * The materials are plain lit node materials, one per colour/finish for the
+ * whole scene (`sceneMaterial`): they carry no per-tile data, and the
+ * scene's fog node reaches them like every other material.
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 
@@ -54,10 +57,6 @@ function outerRings(
       .filter((ring): ring is [number, number][] => ring !== undefined);
   }
   return [];
-}
-
-export interface RailContext extends GroundContext {
-  heightFog?: HeightFogUniforms;
 }
 
 /** The whole block's baked features, every tile's lists merged. */
@@ -174,24 +173,28 @@ interface MatOpts {
   roughness?: number;
 }
 
-function material(
-  color: number,
-  heightFog?: HeightFogUniforms,
-  opts: MatOpts = {}
-): MeshStandardMaterial {
-  const m = new MeshStandardMaterial({
-    color: new Color(color),
-    roughness: opts.roughness ?? 0.95,
+/**
+ * The scene-wide lit material of one colour and finish (the key holds every
+ * setting, so two layers asking for the same look share one build). The
+ * polygon offset pulls a surface lying on the ground (ballast, rails, a
+ * track bed) in front of the terrain it covers.
+ */
+function material(color: number, opts: MatOpts = {}): MeshStandardNodeMaterial {
+  const roughness = opts.roughness ?? 0.95;
+  const offsetUnits = opts.offsetUnits ?? 0;
+  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}`;
+  return sceneMaterial(key, () => {
+    const m = new MeshStandardNodeMaterial({
+      color: new Color(color),
+      roughness,
+    });
+    if (offsetUnits) {
+      m.polygonOffset = true;
+      m.polygonOffsetFactor = -1;
+      m.polygonOffsetUnits = offsetUnits;
+    }
+    return m;
   });
-  if (opts.offsetUnits) {
-    m.polygonOffset = true;
-    m.polygonOffsetFactor = -1;
-    m.polygonOffsetUnits = opts.offsetUnits;
-  }
-  if (heightFog) {
-    m.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
-  }
-  return m;
 }
 
 export interface Ring2 {
@@ -512,7 +515,7 @@ export function buildDeckTable(
 function clampRing(
   ring: Ring2,
   raise: number,
-  ctx: RailContext
+  ctx: GroundContext
 ): number[] | null {
   const ys: (number | null)[] = ring.pts.map((p) => {
     const e = worldToEpsg(p, ctx.offset);
@@ -619,7 +622,6 @@ export function addRibbon(
 export function meshFrom(
   acc: Mesh3,
   color: number,
-  heightFog: HeightFogUniforms | undefined,
   opts: { cast: boolean; offsetUnits?: number; roughness?: number }
 ): Mesh | null {
   const geo = finishGeo(acc);
@@ -628,7 +630,7 @@ export function meshFrom(
   }
   const m = new Mesh(
     geo,
-    material(color, heightFog, {
+    material(color, {
       offsetUnits: opts.offsetUnits,
       roughness: opts.roughness,
     })
@@ -652,7 +654,7 @@ function bridgeProps(f: BridgeFeature): {
 }
 
 /** Builds the bridge decks (slab, parapets, piers or arches). */
-function buildBridges(features: BridgeFeature[], ctx: RailContext): Mesh[] {
+function buildBridges(features: BridgeFeature[], ctx: GroundContext): Mesh[] {
   const tops: Record<string, Mesh3> = {
     rail: mesh3(),
     road: mesh3(),
@@ -690,14 +692,14 @@ function buildBridges(features: BridgeFeature[], ctx: RailContext): Mesh[] {
     other: COLORS.deckStone,
   };
   for (const kind of Object.keys(tops)) {
-    const m = meshFrom(tops[kind], topColor[kind], ctx.heightFog, {
+    const m = meshFrom(tops[kind], topColor[kind], {
       cast: true,
     });
     if (m) {
       meshes.push(m);
     }
   }
-  const stoneMesh = meshFrom(stone, COLORS.deckStone, ctx.heightFog, {
+  const stoneMesh = meshFrom(stone, COLORS.deckStone, {
     cast: true,
   });
   if (stoneMesh) {
@@ -738,7 +740,7 @@ function addPiers(
   acc: Mesh3,
   ring: Ring2,
   topY: number[],
-  ctx: RailContext
+  ctx: GroundContext
 ): void {
   // Long axis = farthest-apart ring vertices (the two abutment ends).
   let ai = 0;
@@ -792,7 +794,7 @@ function addArches(
   acc: Mesh3,
   ring: Ring2,
   topY: number[],
-  ctx: RailContext
+  ctx: GroundContext
 ): boolean {
   const { a, b, span } = longAxis(ring.pts);
   if (span < 16) {
@@ -869,7 +871,7 @@ function addArches(
  */
 export function buildBallast(
   features: AreaFeature[],
-  ctx: RailContext
+  ctx: GroundContext
 ): Mesh | null {
   const acc = mesh3();
   for (const f of features) {
@@ -881,7 +883,7 @@ export function buildBallast(
       }
     }
   }
-  return meshFrom(acc, COLORS.ballast, ctx.heightFog, {
+  return meshFrom(acc, COLORS.ballast, {
     cast: false,
     offsetUnits: -2,
     roughness: 1,
@@ -891,7 +893,7 @@ export function buildBallast(
 /** Steel rails: one pair per track, draped on terrain / lifted onto rail decks. */
 function buildRails(
   features: RailFeature[],
-  ctx: RailContext,
+  ctx: GroundContext,
   decks: DeckPoly[]
 ): Mesh | null {
   const acc = mesh3();
@@ -927,7 +929,7 @@ function buildRails(
     }
     flush();
   }
-  return meshFrom(acc, COLORS.rail, ctx.heightFog, {
+  return meshFrom(acc, COLORS.rail, {
     cast: false,
     offsetUnits: -1,
     roughness: 0.5,
@@ -937,7 +939,7 @@ function buildRails(
 /** Station platforms: flat slabs raised above ground (polygons + line ribbons). */
 function buildPlatforms(
   features: AreaFeature[],
-  ctx: RailContext
+  ctx: GroundContext
 ): Mesh | null {
   const acc = mesh3();
   for (const f of features) {
@@ -962,7 +964,7 @@ function buildPlatforms(
       addRail(acc, run, 0); // a thin slab ribbon for line-mapped platforms
     }
   }
-  return meshFrom(acc, COLORS.platform, ctx.heightFog, { cast: true });
+  return meshFrom(acc, COLORS.platform, { cast: true });
 }
 
 /**
@@ -971,7 +973,7 @@ function buildPlatforms(
  * build first so the rails can ride their decks. Empty inputs yield an empty
  * group; the group is freed with the scene (disposeObject3D).
  */
-export function buildRail(features: RailFeatures, ctx: RailContext): Group {
+export function buildRail(features: RailFeatures, ctx: GroundContext): Group {
   const group = new Group();
   group.name = "rail";
 

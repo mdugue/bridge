@@ -36,11 +36,11 @@ flowchart TB
   TER --> WALL["L0: walls node, baked on every tile's TIN<br/>sandstone ribbons snapped to the measured step"]
   TER --> FENCE["L0: fences node, baked on every tile's TIN<br/>one low band per line, cut at the gates"]
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
-  DRESS --> VEG["vegetation<br/>InstancedMesh per 250 m cell<br/>trunk + crown (two LODs), hedges<br/>canopy + scan + cadastre trees share the meshes"]
+  DRESS --> VEG["vegetation<br/>instanced sets per 250 m cell<br/>trunk + crown (two LODs), hedges<br/>canopy + scan + cadastre trees share the meshes"]
   DRESS --> INV["cadastre silhouettes<br/>flame / cone / dome per 250 m cell"]
   DRESS --> LOW["OSM hedges<br/>clay block chains per 250 m cell"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
-  DRESS --> FURN["street furniture<br/>one InstancedMesh per model:<br/>benches, bins, hoops, bollards, shelters"]
+  DRESS --> FURN["street furniture<br/>one instanced set per model:<br/>benches, bins, hoops, bollards, shelters"]
   DRESS --> MON["monuments<br/>fountain rims + water, water bells,<br/>measured sculptures, markers"]
   DRESS --> RAIL["rail layer<br/>ballast, rails, decks, arches, platforms"]
   DRESS --> TRAM["tram layer<br/>rails in their bed, masts (instanced),<br/>one wire ribbon mesh (never casts)"]
@@ -50,8 +50,12 @@ flowchart TB
 ```
 
 Every tile's buildings get their **own clay material**: it binds that
-tile's object texture, while the program and the live look uniforms are
-shared (`visual-style.ts` `StyleResources`). Everything a tile adds —
+tile's object texture, while the live look uniforms are shared nodes
+(`visual-style.ts` `StyleResources`). What carries no per-tile data —
+crowns, trunks, hedges, fountains, furniture, wires — is one node material
+for the whole scene (`three-utils.ts` `sceneMaterial`), and instanced layers
+draw through `Instances` (`instancing.ts`) so every set with the same
+material shares one node build. Everything a tile adds —
 material, object texture, BVH, splat, water, dressing — is disposed with it
 (`disposeTile` in `tile-stream.ts`).
 
@@ -60,12 +64,14 @@ recenter offset captured from the spawn tile's CityJSON at bake time, carried
 in the tileset's root `extras` (`lib/city/tileset.ts`) and shared by every
 tile (`lib/city/recenter.ts`, `lib/city/ground-clamp.ts`).
 
-**Shaders derive data-frame positions from world space.** The streamed
+**Materials derive data-frame positions from world space.** The streamed
 glTF positions are quantised (the dequantisation sits on the node), so
 `position` is not in metres; but `world` only rotates, so world (x, y, z)
-is data (x, −z, y) exactly. The terrain, water and clay shaders read their
-elevation and data-frame XY through that one chunk
-(`app/_components/shader-chunks.ts` `DATA_POSITION`).
+is data (x, −z, y) exactly. Every material is a TSL node material on
+`WebGPURenderer` ([ADR 0027](./adr/0027-webgpu-renderer-and-tsl.md)); the
+terrain, water, clay and ground-light nodes read their elevation and
+data-frame XY through one helper (`app/_components/shader-chunks.ts`
+`dataXY`, `dataPosition`, `rasterUv`).
 
 ## Visual encoding — which data drives which pixel
 
@@ -81,10 +87,10 @@ is the codebook.
 | Ground step at walls (coarse level only) | wall line + `kind` ∈ retaining/city/embankment/cliff, height ≥ 1.5 m, burned into the 512² grid at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
 | Contour lines | data-frame elevation (`DATA_POSITION`), 2 m minor / 10 m major; each set fades once its lines crowd closer than a few pixels, and on near-flat ground (< ~3 % grade) and under water, where the DGM's noise only drew squiggles | DGM1 | `terrain-layer.ts` (`CONTOUR_INK`) |
 | Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat; the class PNG is decoded byte-exact by `lib/city/png-raster.ts`, never by the browser (WebKit colour-managed and dithered the ids into speckles) | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
-| Meadow lush ↔ dry | NDVI on class 1 only (`uMeadowNdvi`), read from a coarse mip (~10 m) so it drifts rather than flecks | DOP | `terrain-layer.ts` |
+| Meadow lush ↔ dry | NDVI on class 1 only (`meadowNdvi`), read from a coarse mip (~10 m) so it drifts rather than flecks | DOP | `terrain-layer.ts` |
 | Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `GRASS_MOTTLE` / `GRASS_NORMAL` |
 | Kerb stone | a 12 × 24 cm stone band on the kerb lines (the smoothed road edge), in the fine terrain glTF, casting | Basis-DLM (+ OSM islands) | `lib/city/kerbs.ts`, `kerb-layer.ts` |
-| Kerb shadow | the road strip out to 0.12 m · cot(sun elevation) across the kerb, when the sun stands behind it: −28 % | Basis-DLM + sun | `ground-detail.ts` (`uSunDir`) |
+| Kerb shadow | the road strip out to 0.12 m · cot(sun elevation) across the kerb, when the sun stands behind it: −28 % | Basis-DLM + sun | `ground-detail.ts` (`sunDirection`) |
 | Kerb band | signed distance (m) to the road edge, baked and smoothed (`edges_<t>.png`; else the class texels box-smoothed): a pale band 0.25 m on the pavement side, a gutter 0.35 m on the road side; only where the far side is ground (classes 0–4, 6); fades out past ~0.5 m/px (*Bodendetail*) | Basis-DLM | `ground-detail.ts` |
 | Lawn edge | the same distance for the meadow (urban green included): a darker lip 0.25 m and a normal kink | Basis-DLM (+ DOP) | `ground-detail.ts` |
 | Paving pattern | OSM `surface` on the road (class 7) and on the pavement (the rest), the way direction orienting slabs and sett rows; unknown → asphalt on the road, slabs on class 4, sand on class 6; joints fade out past ~5 cm/px, the material's tint stays | OSM (+ Basis-DLM class) | `ground-detail.ts`, `surface_<t>.png` |
@@ -99,7 +105,7 @@ is the codebook.
 | River mist | water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; thinned within ~90 m of the eye | Basis-DLM (mask) | `createWaterMist` (*Flussnebel*) |
 | Building silhouette | solid geometry | LoD2 | `city-layer.ts` |
 | Small structures LoD2 lacks | a closed box per structure the laser scan measured (garden houses, sheds, container buildings): its rectangle, from the lowest ground under the rectangle (sunk 0.2 m) to the fitted top, flat or pent, no storey band; appended to the tile's building mesh as objects of their own (column `source` = 1), so the clay look, demolish, picking, collision and the minimap treat them as buildings; wall tint hashed from its first corner, the flat-roof slate palette, no glow; the canopy and scan points in or within 0.5 m of one are dropped at build time (its roof, read as a tree) | LSC (+ OSM exclusions, DOP NDVI) | `lib/city/small-buildings.ts`, `bake-city-mesh.ts` `appendScanStructures`; `pipeline/bake/small_buildings.py` |
-| Per-building attributes (the rows below) | `_FEATURE_ID_0` per vertex → `EXT_structural_metadata` property table → RGBA32F texture, three texels per object, `texelFetch`ed per vertex | LoD2 (+ DOP, OSM) | `city-layer.ts`, `lib/city/city-mesh.ts` `packObjectTexels`, `visual-style.ts` |
+| Per-building attributes (the rows below) | `_FEATURE_ID_0` per vertex → `EXT_structural_metadata` property table → RGBA32F texture, three texels per object, read per vertex with `textureLoad` | LoD2 (+ DOP, OSM) | `city-layer.ts`, `lib/city/city-mesh.ts` `packObjectTexels`, `visual-style.ts` |
 | Wall tint | `hash(objectid)` + `function` family (a part's own value, else its root Building's) + `measuredHeight` nudge (column `tint`) | LoD2 (+ synth) | `lib/city/building-tint.ts` at bake time (*Farbvariation*) |
 | Roof colour | DOP median per roof when sampled, else palette from `roofType` / `Dachneigung` (column `roof`) | DOP, LoD2 | `roofColor()`, baked into the property table (*Dachfarbe*) |
 | Roof chroma | hue-preserving vibrance lift, strongest on drab roofs | — | `visual-style.ts` (*Dachsättigung*) |
@@ -108,8 +114,8 @@ is the codebook.
 | Ground darkening on walls | height above the building's own base (column `baseZ`) | LoD2 geometry | (*Boden-Verlauf*) |
 | Rim light | view/normal/sun geometry | — | (*Streiflicht*) |
 | Dusk glow | `function` ∈ commerce/public/special (column `glow`; a BuildingPart takes its Building's `function` through `root`) × `nightFactor` | LoD2, sun | (*Abendlicht*) |
-| Shop fronts | OSM shop / café on the ground floor (column `flags`, bit 1) → a warm wash under the first storey line, soft top edge, walls only, a ≈3.5 m hash along the facade; × dusk glow × `nightFactor`; no window structure | OSM, LoD2, sun | `visual-style.ts` `addOsmFacade` (*Abendlicht*) |
-| Listed facades | OSM `heritage=*` (column `flags`, bit 2) → a barely-there warm lift of the wall tint and a finer second cornice 0.45 m under the eave | OSM, LoD2 | `addOsmFacade` (*Farbvariation*, *Traufkante*) |
+| Shop fronts | OSM shop / café on the ground floor (column `flags`, bit 1) → a warm wash under the first storey line, soft top edge, walls only, a ≈3.5 m hash along the facade; × dusk glow × `nightFactor`; no window structure | OSM, LoD2, sun | `visual-style.ts` `clayGlow` (*Abendlicht*) |
+| Listed facades | OSM `heritage=*` (column `flags`, bit 2) → a barely-there warm lift of the wall tint and a finer second cornice 0.45 m under the eave | OSM, LoD2 | `visual-style.ts` `osmColour` (*Farbvariation*, *Traufkante*) |
 | Roughness jitter | `hash(objectid)` (column `rough`) → [0.55, 1.0] | — | (*Materialstreuung*) |
 | Transparency | slider, hash-dithered (no transmission) | — | (*Transparenz*) |
 | Tree position and height | canopy point + `h` (3–45 m); rows every 9 m along `veg04_l` | DOM1−DGM1, Basis-DLM | `vegetation-layer.ts` |
@@ -128,12 +134,12 @@ is the codebook.
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
 | Lamp light | nearest three heads of the visible tiles get a real point light; the rest emissive + sprites, all × `nightFactor` | OSM, sun | `MAX_REAL_LAMPS = 3` |
 | Street furniture | OSM point → one small abstracted model per kind (bench, backless bench, picnic table, bin, bicycle hoop, bollard — stone or metal, at its tagged height —, post box, stop shelter): softened blocks, capsules, tube strokes in the scene's pastels, vertex-coloured under one matte material; front turned to the bake's bearing `a` (OSM `direction`, else the nearest highway), a bench stretched to its mapped length `l`, a stand as `n` hoops 0.9 m apart; none on classes 5 and 8 or bridge decks | OSM | `furniture-layer.ts`, `lib/city/furniture.ts`, `pipeline/bake/furniture.py` |
-| Signs and fixtures | OSM point → advertising column (paper drum Ø 1.2 m, 2.7 m, a darker ring and dome, three pastel poster fields; `lit` ones emissive × `nightFactor`), traffic signal (3.2 m pole, a three-lamp head a shade deeper than the metal, facing `a`, unlit), pillar hydrant (0.8 m, red ochre), underground-hydrant sign plate on a post (one soft rose field, at 70 %), clock on a 3.5 m post (double face) or on a facade (one face, bracket to the wall), drinking fountain (1 m bronze column + basin), bus-stop "H" sign (2.6 m pole, a soft green disc in a yellow one — no letter —, timetable box); clock hands (soft slate) turned by the scene's time (`uClockMinutes`, on the minute), never casting | OSM | `furniture-layer.ts` (`column`, `signal`, `hydrant`, `hydrantSign`, `poleClock`, `wallClock`, `drinkingWater`, `stopSign`, `clockHands`), `pipeline/bake/furniture.py` |
+| Signs and fixtures | OSM point → advertising column (paper drum Ø 1.2 m, 2.7 m, a darker ring and dome, three pastel poster fields; `lit` ones emissive × `nightFactor`), traffic signal (3.2 m pole, a three-lamp head a shade deeper than the metal, facing `a`, unlit), pillar hydrant (0.8 m, red ochre), underground-hydrant sign plate on a post (one soft rose field, at 70 %), clock on a 3.5 m post (double face) or on a facade (one face, bracket to the wall), drinking fountain (1 m bronze column + basin), bus-stop "H" sign (2.6 m pole, a soft green disc in a yellow one — no letter —, timetable box); clock hands (soft slate) turned by the scene's time (`clockMinutes`, on the minute), never casting | OSM | `furniture-layer.ts` (`column`, `signal`, `hydrant`, `hydrantSign`, `poleClock`, `wallClock`, `drinkingWater`, `stopSign`, `clockHands`), `pipeline/bake/furniture.py` |
 | Playground | OSM outline → a pale sand floor 4 cm over the ground, skirted 0.2 m; the mapped equipment only stands on it, each piece one soft single-coloured sculpture in a pastel from the scene at the buildings' brightness (swing = an arch with a pill seat, dusk blue; slide = an extruded wave, peach; climbing frame = a faceted dome, sage; springy = an egg on a stem, butter; seesaw = a plank on a half-round, lilac; roundabout = a rimmed disc; playhouse = an extruded house silhouette; sandpit = sand in a rounded sage frame); a sandpit area a sand slab 6 cm above | OSM | `furniture-layer.ts` (`addSlab`), `lib/city/furniture.ts` |
 | Fountain basin | OSM outline → clay rim (+0.35 m over the highest ground; 0.2 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
 | Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain; breathes ±7 % on a per-jet phase, streaks run down the curtain; warm glow × `nightFactor`), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
 | Monument / fountain sculpture | `relief` (nDOM patch, 1 m) → ×4 bilinear, one [1 2 1] pass, fringe below 0.08 m sunk; heights over the terrain per sample; the buildings' clay; a fountain's sculpture uplit warm × `nightFactor`, fading over its lowest 2.5 m above the water | DOM1 − DGM1, Basis-DLM | `reliefSurface`, `reliefMesh`, `uplight` |
-| Fountain water | three crossing swells perturb the normal and the emissive (shimmer); a cool glow × `nightFactor` | — | `animateWater` |
+| Fountain water | three crossing swells perturb the normal and the emissive (shimmer); a cool glow × `nightFactor` | — | `monument-layer.ts` `waterMaterial` |
 | Unmeasured statue / stone / column | abstract clay marker: rounded pillar 2.2 m · slab 1 m · shaft 4.5 m, a stable yaw from the position | Basis-DLM | `MARKER_SHAPE` |
 | Canopy on a monument | a canopy point on a relief cell is dropped (the DOM1 "tree" was the monument) | DOM1, Basis-DLM | `onRelief` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
@@ -159,17 +165,17 @@ is the codebook.
 | Steps | `n` treads at z0 + (k+1)·rise across `w`, cheeks down to z0 − 0.6 m; sandstone `0xc4b090`, risers × 0.62, cheeks × 0.8 — baked into the fine terrain glTF (vertex colours) | OSM + DGM1 | `lib/city/stairs.ts` `stairGeometry`/`stairColors` at build, `stair-layer.ts` (material) |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
-| Valley fog | world height below a floor derived from the lowest terrain landed so far | DGM1 | `height-fog.ts` (*Talnebel*) |
+| Valley fog | world height below a floor derived from the lowest terrain landed so far — one `scene.fogNode` for every material | DGM1 | `height-fog.ts` (*Talnebel*) |
 | Distance fog | slider; far plane clamped to ~1.1 km until the site has first loaded | — | `create-app.ts` (*Nebel*) |
 | Site-edge haze | distance to the site's outer tile edge: everything fades into the fog colour over the last 450 m (never within ~60 m of the eye) | tile bounds | `height-fog.ts` (`SITE_EDGE_FADE_M`) |
-| Horizon haze | the sky dome blends into the fog colour below the horizon and feathers up to ~16°, so the data's edge, the fog and the sky meet in one band | — | `sun-rig.ts` (`uHazeColor`) |
+| Horizon haze | the sky dome blends into the fog colour below the horizon and feathers up to ~16°, so the data's edge, the fog and the sky meet in one band | — | `sun-rig.ts` (the haze node) |
 | Sky dome position | the dome (a ±2250 m box) is re-centred on the rendering camera every frame; fixed at the origin, the outer tiles (the Blaues Wunder is ~3 km out) stood outside it and saw the bare clear colour | — | `sun-rig.ts` (`onBeforeRender`) |
-| Depth tint | screen depth → warm near / cool far | — | `depth-grading-effect.ts` (*Tiefenfärbung*) |
-| Contact shadows | N8AO at half resolution, never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
+| Depth tint | screen depth → warm near / cool + desaturated far | — | `post-stack.ts` (*Tiefenfärbung*) |
+| Contact shadows | GTAO at half resolution (normals from depth, 6 m radius), never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, from the bare ground; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80–1 500 m and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
-| Paper grain, vignette | screen-space | — | `paper-grain-effect.ts` (*Papierkorn*) |
+| Paper grain, vignette | screen-space | — | `post-stack.ts` (*Papierkorn*) |
 | Minimap | site tile bounds + 512² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
 Every slider in the HUD is one row of `lib/city/look-controls.ts`; the
@@ -183,15 +189,16 @@ is spelled: changing one is a look change, not a re-bake
 - **Sun:** one `DirectionalLight` whose direction comes from suncalc for the
   chosen instant (2.x reports degrees with a north-based azimuth; the 1.x →
   2.x flip rotated the sun by 180° until the tests caught it). A physical
-  `Sky` dome with drifting fbm clouds and a `HemisphereLight` take their
-  colours from the altitude palette. The dome is tempered (a little less
-  radiance and chroma — untouched, its lower third tone-maps to paper white)
-  and dissolves into the fog colour at and below the horizon: past the
-  last tile there is no ground, only haze. Its clouds start a few degrees
-  up — lower, the cloud plane's projection crowded them into one sunlit
-  white sheet along the horizon.
-- **Shadow map:** `PCFShadowMap` with a raised `shadow.radius` (three r182
-  made PCF the soft option and deprecated `PCFSoftShadowMap`), 3072² on
+  sky dome (three's TSL `SkyMesh`, its fbm clouds drifting on TSL `time`)
+  and a `HemisphereLight` take their colours from the altitude palette. The
+  dome is tempered (a little less radiance and chroma — untouched, its lower
+  third reads as paper white) and dissolves into the fog colour at and below
+  the horizon: past the last tile there is no ground, only haze. The haze
+  band also covers the low sky, where the cloud plane's projection crowds
+  the clouds into one sunlit sheet (SkyMesh's own cloud fade sits inside its
+  colour node, out of reach).
+- **Shadow map:** `PCFShadowMap` with a raised `shadow.radius` (three's
+  `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel), 3072² on
   desktop, 2048² on phones, 512² in the lite profile. Terrain **receives
   only**. `normalBias = 0`, a small negative `bias`. The frustum follows the
   camera, half-size 110 m at eye level growing in octaves to 880 m with
@@ -212,16 +219,17 @@ is spelled: changing one is a look change, not a re-bake
   fans out to lamp heads, sprites and the building dusk glow. Real point
   lights are a fixed pool of three, allocated before the first frame and
   retargeted to the nearest heads of the visible tiles' dressings (re-fed on
-  every stream change), because three.js bakes the light count into every
-  compiled program.
+  every stream change), because the light count is part of every lit node
+  build.
 
 - **Baked large-scale light** (plan 033): two rasters from the committed
   DGM1 + LoD2 (`pipeline/bake/skyview.py`). The *sky-view factor* dims the
   hemisphere fill where the city hides the sky (courtyards, street
   canyons), on the terrain and the clay facades, and never touches the
-  sun. The *horizon* answers "is the sun above the skyline here?" on the
-  terrain, folded into three's directional-light loop as
-  `min(shadow map, horizon)` so one occluder never darkens twice. Its far
+  sun (the material's `aoNode`). The *horizon* answers "is the sun above
+  the skyline here?" on the terrain, folded into the sun's shadow through
+  the material's `receivedShadowNode` as `min(shadow map, horizon)` so one
+  occluder never darkens twice. Its far
   band (occluders 80–1 500 m away) holds the long low-sun shadows the
   frustum above cuts off; its near band (8–80 m) the neighbours' shadows on
   ground past the frustum, faded in over the frustum's last 20 % and whole
@@ -236,13 +244,20 @@ The full recipe with its rejected alternatives (VSM rings, large
 
 ## Post-processing
 
-`render → N8AO (half-res, depth-aware upsample) → depth of field (skipped
-while moving) → one EffectPass: SMAA + depth grading + vignette + paper
-grain`. The composer bypasses the renderer's MSAA (`antialias: false`);
-SMAA carries the anti-aliasing. `halfRes`, `aoSamples` and
-`denoiseSamples` rebuild N8AO's materials and are therefore
-construction-time settings. 3DTilesRendererJS's fade and overlay plugins
-patch materials with `onBeforeCompile` and are deliberately not used.
+The scene renders **top-level into its own half-float target** with a
+depth texture (`post-stack.ts`), and three's node `RenderPipeline` reads
+colour and depth from it: `GTAO (half resolution, normals from depth) × the
+contact slider → DepthOfFieldNode (skipped while moving) → SMAANode → depth
+grading + vignette + paper grain → sRGB`. Rendering the scene outside the
+pipeline is what lets a tile's `compileAsync` prepare the very build its
+frames use (a build is keyed by render context, a context by target and
+call depth). The target has no MSAA (`antialias: false`); SMAA carries the
+anti-aliasing. There is no tone mapping: the look was tuned without it. Two
+pipelines, with and without DoF, are built once — swapping one pipeline's
+output node would re-translate the whole post graph every time a flight
+starts or stops. The GTAO sample count is a construction-time setting (16;
+8 in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
+GLSL and stay unused.
 
 ## The frame budget
 
@@ -262,7 +277,7 @@ renderer decides how much of the site is loaded (screen-space error target
 | Shadow map | 3072² | 2048² | 512² |
 | Pixel ratio | ≤ 2 | ≤ 1.5 | 0.5 |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere | L0 4096², L1 2048² |
-| N8AO quality | Medium | Medium | Performance |
+| GTAO samples | 16 | 16 | 8 |
 | Tile cache (content no longer in use) | 0.3–0.4 GB (the library default) | 120–180 MB | 0.3–0.4 GB |
 
 What one site tile costs (Dresden, as published; the `.glb.gz` are
@@ -290,8 +305,8 @@ triangle-heavy layer, but it never casts, so it stays out of the shadow
 depth pass.
 
 While the camera moves, DoF is dropped and restored after 250 ms of
-stillness (`lib/city/regression.ts`); SSAO stays on because gating it made
-contact shadows blink on every step.
+stillness (`lib/city/regression.ts`); the contact shadows stay on because
+gating them made them blink on every step.
 
 ## Boot sequence
 
@@ -320,9 +335,12 @@ first set. Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own
 load, so no tile is shown half-dressed. Before a tile or a dressing shows,
-its shaders are compiled with `compileAsync` against the target the scene
-pass renders into (`PostStack.compile`), so a landing tile never compiles
-inside a frame. The heavy dressing — vegetation,
+its node materials are built and compiled with `compileAsync` against the
+target the scene renders into (`PostStack.compile`, one drawable per
+material and attribute layout, shown and unculled for the call), so a
+landing tile never builds inside a frame. The shadow pass's pipelines for
+new casters are the exception: they compile in the frame that first draws
+them. The heavy dressing — vegetation,
 lamps, monuments, rails — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0008](./adr/0008-progressive-two-phase-boot.md)'s
 second phase) and is built one tile at a time. **Ready** (`onLoaded`,

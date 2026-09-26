@@ -1,8 +1,6 @@
 import {
-  ACESFilmicToneMapping,
   Box3,
   Color,
-  Fog,
   Group,
   type Object3D,
   PCFShadowMap,
@@ -12,8 +10,9 @@ import {
   Timer,
   Vector2,
   Vector3,
-  WebGLRenderer,
-} from "three";
+  WebGPURenderer,
+} from "three/webgpu";
+import { uniform } from "three/tsl";
 import { fogRangeFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
 import { worldToEpsg } from "@/lib/city/ground-clamp";
@@ -38,10 +37,10 @@ import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
-import { createSeasonClock, retainCrownDepthMaterial } from "./crown-season";
+import { createSeasonClock } from "./crown-season";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
-import { createHeightFogUniforms } from "./height-fog";
+import { createSceneFog, installSceneFog } from "./height-fog";
 import { attachKeyboardControls } from "./keyboard-controls";
 import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
@@ -52,11 +51,9 @@ import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
-  aoQualityFor,
-  type DeviceTier,
+  aoSamplesFor,
   pixelRatioFor,
   type SceneBudget,
-  type SceneProfile,
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
@@ -65,6 +62,7 @@ import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   disposeObject3D,
   estimateGeometryBytes,
+  retainSceneMaterials,
   trackedTextureBytes,
 } from "./three-utils";
 import {
@@ -225,16 +223,13 @@ export interface CityWalkHandle {
   getFootprints: () => FootprintPoly[];
   getPose: () => PlayerPose;
   /**
-   * GPU counters for perf work. `programs` is the live shader-program count;
-   * `calls`/`triangles` reflect only the LAST render() pass, so with the
-   * post-processing composer active they report the final fullscreen pass, not
-   * the scene total (disable post-processing to read true scene counts).
+   * GPU counters for perf work: the draw calls and triangles of the last
+   * frame (every pass: shadow map, scene, post).
    */
   getRenderInfo: () => {
     calls: number;
     /** estimated GPU bytes of geometry + textures + shadow map */
     gpuBytes: number;
-    programs: number;
     triangles: number;
   };
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
@@ -282,44 +277,46 @@ export interface CityWalkHandle {
   soundTiles: SoundTile[];
 }
 
-function createRenderer(
+/**
+ * three's WebGPURenderer: WebGPU where the browser has it, its WebGL2
+ * backend otherwise (or on `?gpu=webgl2`, scene-profile.ts). One renderer,
+ * one set of node materials either way (ADR 0027).
+ */
+async function createRenderer(
   container: HTMLElement,
-  profile: SceneProfile,
-  tier: DeviceTier
-): WebGLRenderer {
-  // No MSAA: everything renders through the EffectComposer and SMAA carries
-  // the AA (see post-stack.ts); a multisampled default framebuffer would only
-  // be resolved for a full-screen quad.
-  const renderer = new WebGLRenderer({
+  budget: SceneBudget
+): Promise<WebGPURenderer> {
+  // No MSAA: the scene renders into the post stack's own target and SMAA
+  // carries the AA (post-stack.ts); a multisampled canvas would only be
+  // resolved for a full-screen quad.
+  const renderer = new WebGPURenderer({
     antialias: false,
     powerPreference: "high-performance",
+    forceWebGL: budget.forceWebGL,
   });
+  await renderer.init();
   // The `lite` profile renders at half linear resolution (a quarter of the
   // pixels) and lets the browser upscale. The canvas fills the viewport and
   // the HUD needs a desktop-width window to lay out, so this — not the
   // Playwright viewport — is the only honest way to cut fill-rate in the
   // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
   // the post stack costs, and the post stack is most of a frame.
-  renderer.setPixelRatio(pixelRatioFor(profile, tier, window.devicePixelRatio));
+  renderer.setPixelRatio(
+    pixelRatioFor(budget.profile, budget.tier, window.devicePixelRatio)
+  );
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  // three r182 deprecated PCFSoftShadowMap (silently falls back to hard PCF),
-  // and VSM paints a grid on lit faces here, so PCFShadowMap is the cleanest
-  // option: tight contact + artefact-free surfaces. Its only weakness is the
-  // texel staircase on shadow edges at a grazing sun, which a fine-texel
-  // camera-following frustum (see sun-rig) keeps small.
+  // PCFShadowMap with a raised `shadow.radius` is soft (a Vogel disk, see
+  // sun-rig.ts), and VSM paints a grid on lit faces here: tight contact +
+  // artefact-free surfaces. Its only weakness is the texel staircase on
+  // shadow edges at a grazing sun, which a fine-texel camera-following
+  // frustum keeps small.
   renderer.shadowMap.type = PCFShadowMap;
   // The on-demand shadow gate lives on the LIGHT (`sun.shadow.autoUpdate` in
-  // sun-rig.ts), not here. three has both gates — WebGLShadowMap.render returns
-  // early on `shadowMap.autoUpdate === false && !needsUpdate`, before it ever
-  // looks at the lights — and the light-level one is the one that fits this
-  // scene: the sun is the only shadow caster (lamp lights are castShadow:false)
-  // and the rig re-renders the map from inside the render loop whenever its
-  // camera-following frustum moves. Closing the renderer-level gate as well
-  // would swallow those per-frame invalidations and freeze the shadows while
-  // walking. The saving is identical either way — the ~640k-triangle depth pass
-  // is what gets skipped.
-  renderer.toneMapping = ACESFilmicToneMapping;
+  // sun-rig.ts): the sun is the only shadow caster (lamp lights are
+  // castShadow:false) and the rig re-renders the map from inside the render
+  // loop whenever its camera-following frustum moves. The ~640k-triangle
+  // depth pass is what gets skipped.
   renderer.domElement.style.display = "block";
   // Touch gestures (look/pinch/double-tap) need the browser to keep its
   // hands off scrolling and double-tap zoom on the canvas.
@@ -341,22 +338,19 @@ function siteLatLng(
 export async function createCityWalkApp(
   opts: CityWalkOptions
 ): Promise<CityWalkHandle> {
-  const { profile, tier } = opts.budget;
-  const renderer = createRenderer(opts.container, profile, tier);
+  const renderer = await createRenderer(opts.container, opts.budget);
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
-  const fogRange = fogRangeFor(opts.look.get().fogAmount);
-  scene.fog = new Fog(SKY_COLOR, fogRange.near, fogRange.far);
 
   // Everything bootApp creates registers its teardown here, so a boot that
   // throws halfway (a real load failure, or the StrictMode remount aborting
   // one) frees exactly what a clean dispose would. Without it the post stack's
-  // half-float targets, the style materials, the listeners and the per-tile
+  // screen targets, the style materials, the listeners and the per-tile
   // layer controls survived a failed boot.
   // The scene-wide shared resources (three-utils.ts `sceneShared`) go with
   // the last app that holds them: first in, so they unwind last.
   const cleanups: Array<() => void> = [
-    retainCrownDepthMaterial(),
+    retainSceneMaterials(),
     retainOpenSkyTexture(),
   ];
   try {
@@ -371,20 +365,20 @@ export async function createCityWalkApp(
 
 /**
  * The one teardown of an app, clean or failed: its registered cleanups, the
- * scene's GPU resources, then the renderer and its context. The context is
- * lost on purpose — the next app (a StrictMode remount, a round trip to
- * /wissen) makes its own canvas, and a browser holds only a handful of
- * contexts; whatever still points at this one draws nothing.
+ * scene's GPU resources, then the renderer with its device (or, on the
+ * WebGL2 backend, its context) — the next app (a StrictMode remount, a round
+ * trip to /wissen) makes its own canvas, and a browser holds only a handful
+ * of contexts; whatever still points at this one draws nothing.
  */
 function teardown(
   cleanups: Array<() => void>,
   scene: Scene,
-  renderer: WebGLRenderer
+  renderer: WebGPURenderer
 ): void {
   runCleanups(cleanups);
   disposeObject3D(scene);
-  renderer.dispose();
-  renderer.forceContextLoss();
+  // Async: it destroys the device (or loses the context) at the end.
+  renderer.dispose().catch(() => undefined);
   renderer.domElement.remove();
 }
 
@@ -415,7 +409,7 @@ function unionBounds(extras: TilesetExtras): TerrainBounds {
 
 async function bootApp(
   opts: CityWalkOptions,
-  renderer: WebGLRenderer,
+  renderer: WebGPURenderer,
   scene: Scene,
   cleanups: Array<() => void>
 ): Promise<CityWalkHandle> {
@@ -461,27 +455,35 @@ async function bootApp(
   const siteBounds = unionBounds(extras);
 
   // Shared world sun direction (surface→sun), kept in sync by the sun rig and
-  // read by the water glitter and the crown shimmer (by reference).
+  // read by the water glitter, the kerb shadow and the crown shimmer (by
+  // reference: the uniform nodes hold this very vector).
   const sunDirection = new Vector3(0, 1, 0);
-  // Shared valley height-fog uniforms (by reference): folded into every
-  // fog-receiving material; the start follows the lowest terrain landed.
-  const heightFog = createHeightFogUniforms();
+  // The scene's fog, one node for every material (height-fog.ts): the range
+  // follows the look, the colour the sun rig, the valley pool's start the
+  // lowest terrain landed.
+  const sceneFog = createSceneFog(
+    SKY_COLOR,
+    fogRangeFor(opts.look.get().fogAmount)
+  );
+  installSceneFog(scene, sceneFog);
   // The site's world XZ rectangle: EPSG north is world −Z.
-  heightFog.uFogSiteRect.value.set(
+  sceneFog.siteRect.value.set(
     siteBounds[0] - offset.cx,
     -(siteBounds[3] - offset.cy),
     siteBounds[2] - offset.cx,
     -(siteBounds[1] - offset.cy)
   );
-  // Shared ground look strengths (by reference) for the HUD sliders.
+  // The ground's look strengths and the sun: uniform nodes every tile's
+  // materials share, so a slider is one uniform write.
   const ground: GroundUniforms = {
-    groundDetail: { value: LOOK_DEFAULTS.groundDetail },
-    meadowNdvi: { value: LOOK_DEFAULTS.meadowNdvi },
-    urbanGreen: { value: LOOK_DEFAULTS.urbanGreen },
-    skyView: { value: LOOK_DEFAULTS.skyView },
-    horizonShade: { value: LOOK_DEFAULTS.horizonShade },
-    // replaced by the sun rig's own vector once it exists (below)
-    shadowReach: { value: new Vector3() },
+    groundDetail: uniform(LOOK_DEFAULTS.groundDetail),
+    meadowNdvi: uniform(LOOK_DEFAULTS.meadowNdvi),
+    urbanGreen: uniform(LOOK_DEFAULTS.urbanGreen),
+    skyView: uniform(LOOK_DEFAULTS.skyView),
+    horizonShade: uniform(LOOK_DEFAULTS.horizonShade),
+    // the sun rig's own vector once it exists (below)
+    shadowReach: uniform(new Vector3()),
+    sunDirection: uniform(sunDirection),
   };
   // The site's ground (lib/city/ground.ts): the visible terrains' heights,
   // fine level first, and the lowest real terrain elevation so far (the Elbe
@@ -491,7 +493,7 @@ async function bootApp(
   const siteGround = createGround(offset);
   const lowerGroundFloor = (minElevation: number) => {
     if (siteGround.lowerFloor(minElevation)) {
-      heightFog.uFogHeightStart.value = minElevation + 1;
+      sceneFog.heightStart.value = minElevation + 1;
     }
   };
 
@@ -510,7 +512,8 @@ async function bootApp(
     worldBounds,
     latLng,
     shadowMapSizeFor(budget.profile, budget.tier),
-    sunDirection
+    sunDirection,
+    sceneFog.color
   );
   cleanups.push(sunRig.dispose);
   // The horizon's near band hands over to the shadow map inside the frustum.
@@ -530,23 +533,19 @@ async function bootApp(
 
   // One scalar (nightFactor ∈ [0,1]) ignites every lamp at dusk; clayNight
   // gates the clay dusk glow by reference.
-  const clayNight = { value: 0 };
+  const clayNight = uniform(0);
   let currentNight = 0;
   // Single fixed pool of real point lights for the nearest lamps across ALL
-  // tiles, built before the first render so NUM_POINT_LIGHTS is baked into
-  // every lit program once (ADR 0020); each tile's lamps retarget it.
+  // tiles, built before the first render so the light count is part of
+  // every lit node build once (ADR 0020); each tile's lamps retarget it.
   const lampLights = createLampLights();
   for (const light of lampLights.lights) {
     scene.add(light);
   }
   cleanups.push(() => lampLights.dispose());
 
-  // The facades share the ground's Himmelslicht strength (by reference).
-  const styleResources = createStyleResources(
-    heightFog,
-    clayNight,
-    ground.skyView
-  );
+  // The facades share the ground's Himmelslicht strength (the same node).
+  const styleResources = createStyleResources(clayNight, ground.skyView);
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: () => void = () => undefined;
@@ -582,13 +581,13 @@ async function bootApp(
   cleanups.push(() => seasonClock.dispose());
   const stream = createTileStream(
     {
-      compile: (object, pass) =>
+      compile: (object) =>
         compileWith
-          ? compileWith(object, pass).catch(() => undefined)
+          ? compileWith(object).catch(() => undefined)
           : Promise.resolve(),
       dressingGate,
+      fogColor: sceneFog.color,
       heightAt,
-      heightFog,
       look: opts.look,
       lowRasters: budget.lowRasters,
       cacheBytes: tileCacheBytesFor(budget.tier),
@@ -676,15 +675,12 @@ async function bootApp(
   let fogAmount = opts.look.get().fogAmount;
   let worldPartial = extras.tiles.length > 1;
   const applyFog = () => {
-    if (!(scene.fog instanceof Fog)) {
-      return;
-    }
     const range = fogRangeFor(fogAmount);
     const far = worldPartial
       ? Math.min(range.far, PARTIAL_WORLD_FOG_FAR)
       : range.far;
-    scene.fog.far = far;
-    scene.fog.near = Math.min(range.near, far * 0.6);
+    sceneFog.far.value = far;
+    sceneFog.near.value = Math.min(range.near, far * 0.6);
   };
   applyFog();
 
@@ -693,7 +689,7 @@ async function bootApp(
     renderer,
     scene,
     camera,
-    aoQualityFor(budget.profile)
+    aoSamplesFor(budget.profile)
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
@@ -707,7 +703,7 @@ async function bootApp(
       applyFog();
     },
     heightFog: (strength) => {
-      heightFog.uFogHeightStrength.value = strength;
+      sceneFog.heightStrength.value = strength;
     },
     groundDetail: (strength) => {
       ground.groundDetail.value = strength;
@@ -925,7 +921,7 @@ async function bootApp(
     camera.aspect = container.clientWidth / Math.max(container.clientHeight, 1);
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
-    postStack.setSize(container.clientWidth, container.clientHeight);
+    postStack.setSize();
     stream.tiles.setResolution(
       camera,
       container.clientWidth,
@@ -1036,7 +1032,8 @@ async function bootApp(
 
   let tickDue = 0;
   let fpsDue = 0;
-  renderer.setAnimationLoop((time) => {
+  // (It resolves once the loop is installed: nothing to wait for.)
+  void renderer.setAnimationLoop((time) => {
     // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
     // the clamp below keeps the skipped time from jumping the scene.
     if (pocFramesHeld()) {
@@ -1053,12 +1050,10 @@ async function bootApp(
     // What to stream, from where the cameras look now.
     camera.updateMatrixWorld();
     stream.tiles.update();
-    // Advance every tile's water ripple/glitter and feed it the current
-    // palette sky colour (Fresnel sky-tint stays in lockstep with the sun).
-    if (scene.fog instanceof Fog) {
-      for (const t of terrains) {
-        t.water?.update(elapsed, scene.fog.color);
-      }
+    // Advance every tile's water ripple and glitter (its sky tint is the
+    // fog colour's node, in lockstep with the sun by construction).
+    for (const t of terrains) {
+      t.water?.update(elapsed);
     }
     // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
     camera.getWorldDirection(shadowViewDir);
@@ -1066,8 +1061,6 @@ async function bootApp(
     sunRig.follow(camera.position, shadowViewDir, ground);
     // The map's own marks (the ferry lines) show from the air.
     setMapAltitude(camera.position.y - ground);
-    // Drift the sky dome's clouds (one uniform write/frame).
-    sunRig.setTime(elapsed);
     // Repoint the shared real lamp lights at the nearest heads.
     lampLights.updateNearest(camera.position);
     stepVegetation(elapsed);
@@ -1086,10 +1079,10 @@ async function bootApp(
     }
     // Read the flag BEFORE the render: three clears it once the map is drawn.
     const shadowRendered = sunRig.shadowPending();
-    postStack.render(dt);
+    postStack.render();
     tickPocFrame(shadowRendered);
   });
-  cleanups.push(() => renderer.setAnimationLoop(null));
+  cleanups.push(() => void renderer.setAnimationLoop(null));
 
   // The load after the first frame (lib/city/boot-phases.ts): declared
   // before the first await, since tile events call checkLoaded from then on.
@@ -1198,10 +1191,9 @@ async function bootApp(
     getCameraState: pose.getCameraState,
     applyCameraState: pose.applyCameraState,
     getRenderInfo: () => ({
-      calls: renderer.info.render.calls,
+      calls: renderer.info.render.drawCalls,
       triangles: renderer.info.render.triangles,
       gpuBytes: gpuBytes(),
-      programs: renderer.info.programs?.length ?? 0,
     }),
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),

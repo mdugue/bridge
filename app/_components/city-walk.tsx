@@ -59,7 +59,7 @@ import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { VirtualJoystick } from "./virtual-joystick";
-import { missingPrerequisite } from "./webgl-support";
+import { missingPrerequisite } from "./gpu-support";
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
@@ -220,9 +220,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const hud = useHudMessage();
   const locate = useLocateMe(handleRef, hud.say);
 
-  // Probed once, before the renderer is created: three's raw "Error creating
-  // WebGL context" (or a tile's bare ReferenceError) is replaced by a
-  // sentence naming the missing prerequisite.
+  // Probed once, before the renderer is created: three's raw backend error
+  // (or a tile's bare ReferenceError) is replaced by a sentence naming the
+  // missing prerequisite.
   const [missing] = useState(missingPrerequisite);
   const supported = missing === null;
   const [status, setStatus] = useState<Status>(() =>
@@ -285,7 +285,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     if (!container) {
       return;
     }
-    // The WebGL2 preflight already failed (see the status initializer): no
+    // The GPU preflight already failed (see the status initializer): no
     // renderer, no handle, nothing to clean up.
     if (!supported) {
       return;
@@ -497,7 +497,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       style={{ "--sidebar-width": "21.25rem" } as CSSProperties}
     >
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
-          it), so toggling the panel can't flash the WebGL canvas. */}
+          it), so toggling the panel can't flash the canvas. */}
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
         <div className="absolute inset-0" ref={mountRef} />
 

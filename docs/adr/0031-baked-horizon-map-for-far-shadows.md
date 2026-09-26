@@ -102,6 +102,18 @@ courtyard as brightly as a meadow.
 - **Occluders from DOM1** — includes trees (which cast their own shadows)
   and needs a raw download; the bake is reproducible from the repository.
 
+## Update (2026-09, ADR 0027)
+
+The mechanism is node slots now, the terms unchanged. The horizon is the
+ground material's `receivedShadowNode`, combined with the shadow map by
+`min` (`sky-light.ts` `applyGroundLight`, which replaced the patch of
+three's directional-light loop, `lightsWithFarShadow`, and
+`injectGroundLight`); the sky view is its `aoNode`, which three multiplies
+into the indirect light only; the frustum reaches the terrain as a shared
+`uniform` (`shadowReach`). The "CSM on WebGL" alternative is now
+`CSMShadowNode` on the same renderer — no shader patching to compete
+with, but still a pass per cascade; its own decision.
+
 ## References
 
 - [plan 033](../plans/033-sky-view-and-horizon-shading.md), ledger

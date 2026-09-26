@@ -2,17 +2,27 @@ import {
   type BufferGeometry,
   Color,
   Group,
-  InstancedMesh,
-  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
   Object3D,
   SphereGeometry,
   Vector3,
-} from "three";
+} from "three/webgpu";
+import {
+  materialColor,
+  mix,
+  positionGeometry,
+  positionWorld,
+  smoothstep,
+  varying,
+  vec2,
+  vec3,
+} from "three/tsl";
 import type { LowVegFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { bucketByCell, hash } from "./vegetation-layer";
+import { Instances, instancePosition, instanceTint } from "./instancing";
+import { sceneMaterial } from "./three-utils";
+import { bucketByCell, hash, leafNoise } from "./vegetation-layer";
 import { clamp } from "@/lib/city/math";
 
 /**
@@ -24,14 +34,15 @@ import { clamp } from "@/lib/city/math";
  *
  * Kept apart from vegetation-layer.ts on purpose: nothing here animates (a
  * trimmed hedge does not sway, and ADR 0020 keeps casters static anyway), so
- * it needs none of the crown shader, and the tree layer stays untouched.
+ * it needs none of the crown material (only its value noise), and the tree
+ * layer stays untouched.
  *
  * - A hedge is a chain of soft superellipsoid "clay" blocks, one instance per
  *   ≤2.5 m piece of the polyline, stretched to the piece's length and to the
  *   baked height and width, overlapping so the joins read as waists, not seams.
  * The material: pastel moss with a darker rooted base (the
  * trunks' trick), a static world-space foliage mottle, per-instance tint
- * jitter and the valley height fog.
+ * jitter; the scene's fog (height-fog.ts) reaches it like every material.
  * Chunked into 250 m cells like the trees, so off-screen cells cull out of the
  * main AND the shadow pass.
  */
@@ -152,62 +163,38 @@ export function buildHedgeGeo(): BufferGeometry {
  * Pastel moss with a rooted base: the unit geometry's own Y (0 at the ground,
  * 1 at the top, before the instance scale) darkens the lower third — the soft
  * contact shading that seats a hedge on the lawn in the watercolour look.
+ * Scene-wide (`sceneMaterial`): it carries nothing of a tile.
  */
-function buildHedgeMaterial(
-  heightFog?: HeightFogUniforms
-): MeshStandardMaterial {
-  const m = new MeshStandardMaterial({ color: 0xff_ff_ff, roughness: 1 });
-  m.customProgramCacheKey = () => `lowveg-hedge-${heightFog !== undefined}`;
-  m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader
-      .replace(
-        "#include <common>",
-        "#include <common>\nvarying float vLowY;\nvarying vec3 vLowWP;"
-      )
-      .replace(
-        "#include <begin_vertex>",
-        [
-          "#include <begin_vertex>",
-          " vLowY = position.y;",
-          "#ifdef USE_INSTANCING",
-          " vLowWP = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;",
-          "#else",
-          " vLowWP = (modelMatrix * vec4(position, 1.0)).xyz;",
-          "#endif",
-        ].join("\n")
-      );
-    sh.fragmentShader = sh.fragmentShader
-      .replace(
-        "#include <common>",
-        [
-          "#include <common>",
-          "varying float vLowY;",
-          "varying vec3 vLowWP;",
-          "float lvHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }",
-          "float lvNoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(lvHash(i), lvHash(i + vec2(1.0, 0.0)), f.x), mix(lvHash(i + vec2(0.0, 1.0)), lvHash(i + vec2(1.0, 1.0)), f.x), f.y); }",
-        ].join("\n")
-      )
-      .replace(
-        "#include <map_fragment>",
-        [
-          "#include <map_fragment>",
-          // rooted base: darker toward the ground (contact shading)
-          " diffuseColor.rgb *= mix(0.8, 1.05, smoothstep(0.0, 0.7, vLowY));",
-          // foliage mottle: leaf-clump-sized (~0.4 m) and bush-sized (~1.3 m)
-          // value noise in world space, so neighbouring pieces never repeat;
-          // the bright clumps lean a touch yellow — a watercolour wash, not a
-          // texture. Static: nothing here moves (ADR 0020).
-          " vec2 lvUV = vLowWP.xz + vLowWP.y * vec2(0.63, -0.41);",
-          " float lvM = 0.6 * lvNoise(lvUV * 2.6) + 0.4 * lvNoise(lvUV * 0.75 + 7.1);",
-          " diffuseColor.rgb *= 0.82 + 0.34 * lvM;",
-          " diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 1.06, 0.86), smoothstep(0.55, 0.9, lvM));",
-        ].join("\n")
-      );
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  return m;
+function hedgeMaterial(): MeshStandardNodeMaterial {
+  return sceneMaterial("low-vegetation-hedge", () => {
+    const m = new MeshStandardNodeMaterial({ color: 0xff_ff_ff, roughness: 1 });
+    m.name = "lowveg-hedge";
+    m.positionNode = instancePosition();
+    // rooted base: darker toward the ground (contact shading)
+    const rooted = mix(
+      0.8,
+      1.05,
+      smoothstep(0, 0.7, varying(positionGeometry.y))
+    );
+    // foliage mottle: leaf-clump-sized (~0.4 m) and bush-sized (~1.3 m)
+    // value noise in world space, so neighbouring pieces never repeat; the
+    // bright clumps lean a touch yellow — a watercolour wash, not a
+    // texture. Static: nothing here moves (ADR 0020).
+    const uv = positionWorld.xz.add(positionWorld.y.mul(vec2(0.63, -0.41)));
+    const mottle = leafNoise(uv.mul(2.6))
+      .mul(0.6)
+      .add(leafNoise(uv.mul(0.75).add(7.1)).mul(0.4));
+    const moss = materialColor
+      .mul(instanceTint())
+      .mul(rooted)
+      .mul(mottle.mul(0.34).add(0.82));
+    m.colorNode = mix(
+      moss,
+      moss.mul(vec3(1.08, 1.06, 0.86)),
+      smoothstep(0.55, 0.9, mottle)
+    );
+    return m;
+  });
 }
 
 /** Hedges read a touch deeper and cooler than crowns. */
@@ -218,12 +205,12 @@ function tintColor(col: Color, t: number): void {
 function buildChunks(
   items: Instance[],
   geo: BufferGeometry,
-  mat: MeshStandardMaterial
-): InstancedMesh[] {
+  mat: MeshStandardNodeMaterial
+): Instances[] {
   const dummy = new Object3D();
   const col = new Color();
   return bucketByCell(items).map((cell) => {
-    const mesh = new InstancedMesh(geo, mat, cell.length);
+    const mesh = new Instances(geo, mat, cell.length);
     mesh.name = "lowveg-hedge";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -237,8 +224,8 @@ function buildChunks(
       mesh.setColorAt(i, col);
     });
     mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) {
-      mesh.instanceColor.needsUpdate = true;
+    if (mesh.instanceTints) {
+      mesh.instanceTints.needsUpdate = true;
     }
     // Without this the cull test uses the unit geometry's sphere at the origin.
     mesh.computeBoundingSphere();
@@ -282,9 +269,8 @@ function hedgeInstances(
   return out;
 }
 
-export interface LowVegetationContext extends GroundContext {
-  heightFog?: HeightFogUniforms;
-}
+/** What the hedges need of a tile: its ground. */
+export type LowVegetationContext = GroundContext;
 
 /**
  * Builds one tile's hedges onto a Y-up group (add it to `scene`,
@@ -299,9 +285,7 @@ export function buildLowVegetation(
   group.name = "low-vegetation";
   const hedges = hedgeInstances(features, ctx);
   if (hedges.length > 0) {
-    group.add(
-      ...buildChunks(hedges, buildHedgeGeo(), buildHedgeMaterial(ctx.heightFog))
-    );
+    group.add(...buildChunks(hedges, buildHedgeGeo(), hedgeMaterial()));
   }
   return group;
 }

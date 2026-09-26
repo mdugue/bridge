@@ -1,45 +1,56 @@
-/**
- * Height-term fog (valley pooling). Built-in three `Fog` is purely
- * distance-based; this adds a world-Y term so the Elbe valley floor pools with
- * deeper haze than bridge decks / high ground at the same distance — on-aesthetic
- * aerial depth.
- *
- * It is **folded into** each fog-receiving material's existing `onBeforeCompile`
- * (NOT wrapped around it): three derives a material's program-cache key from
- * `onBeforeCompile.toString()`, so replacing every fog material's callback with
- * one identical wrapper would collapse distinct shaders (terrain, crown, clay…)
- * onto a shared cached program. Each builder keeps its own callback and calls
- * `injectHeightFog(shader, uniforms)` at the end.
- *
- * Apply it to ALL of them or a seam appears (e.g. terrain pools but the water
- * sheet floats out of the haze). The uniforms are by-reference so the start (the
- * river/DGM minimum, captured at boot) and strength retune with no recompile.
- */
-
-import { Vector4 } from "three";
+import { Color, type Scene, Vector4 } from "three/webgpu";
+import {
+  clamp,
+  float,
+  fog,
+  max,
+  min,
+  positionView,
+  positionWorld,
+  rangeFogFactor,
+  smoothstep,
+  uniform,
+} from "three/tsl";
+import type { Node, UniformNode } from "three/webgpu";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { F } from "./shader-chunks";
 
-/** Shape passed to a material's `onBeforeCompile` (the bits we touch). */
-export interface OnBeforeCompileShader {
-  fragmentShader: string;
-  uniforms: Record<string, { value: unknown }>;
-  vertexShader: string;
-}
-
-export interface HeightFogUniforms {
-  /**
-   * The site's extent in world XZ (minX, minZ, maxX, maxZ). Terrain and
-   * everything on it dissolve into the fog colour over the last
-   * `SITE_EDGE_FADE_M` before this edge, so the data's end reads as haze
-   * rather than a cut against the sky. Infinite = no edge haze.
-   */
-  uFogSiteRect: { value: Vector4 };
-  /** metres of fade above the start over which the height haze decays to 0 */
-  uFogHeightFalloff: { value: number };
+/**
+ * The scene's fog: one node for every material (`scene.fogNode`), so
+ * nothing can float out of the haze — terrain, water, clay, trees, rails,
+ * walls and lamps all take it without asking; a material opts out with
+ * `fog = false` (the river mist). Three terms:
+ *
+ * - three's distance fog (`rangeFogFactor`, the *Nebel* slider's range);
+ * - a world-Y pool above the valley floor (*Talnebel*): the Elbe valley
+ *   pools deeper haze than bridge decks and high ground at the same
+ *   distance. It builds on the distance fog, never replaces it — only adds
+ *   haze toward the fog colour in low ground, so distant high ground still
+ *   hazes normally. The start follows the lowest terrain landed so far;
+ * - the site-edge haze: the data ends at the outer tile edge, so the world
+ *   dissolves into the fog colour over the last `SITE_EDGE_FADE_M` before
+ *   it — never on what is right in front of the camera, so walking along
+ *   the edge does not wade through a wall of mist.
+ *
+ * Every term is a uniform node: the sun rig writes the colour, the look the
+ * range and the pool's strength, the stream the pool's start — uniform
+ * writes, never a rebuild.
+ */
+export interface SceneFog {
+  /** the palette fog colour (sun-rig.ts); also the water's sky tint */
+  color: UniformNode<"color", Color>;
+  /** distance fog range (m) */
+  near: UniformNode<"float", number>;
+  far: UniformNode<"float", number>;
   /** world-Y (elevation, m) below which the extra haze pools */
-  uFogHeightStart: { value: number };
-  /** 0..1 — extra haze added toward the palette fog colour in low ground */
-  uFogHeightStrength: { value: number };
+  heightStart: UniformNode<"float", number>;
+  /** metres of fade above the start over which the pool decays to 0 */
+  heightFalloff: UniformNode<"float", number>;
+  /** 0..1 — extra haze toward the fog colour in low ground */
+  heightStrength: UniformNode<"float", number>;
+  /** the site's extent in world XZ (minX, minZ, maxX, maxZ); infinite =
+   *  no edge haze */
+  siteRect: UniformNode<"vec4", Vector4>;
 }
 
 /** Default fade height (m) above the valley floor — ~the Elbe-to-rim drop. */
@@ -52,67 +63,49 @@ const DEFAULT_FALLOFF = 28;
  */
 export const SITE_EDGE_FADE_M = 450;
 
-export function createHeightFogUniforms(): HeightFogUniforms {
+/** The fog's uniforms (no edge until the site is known). */
+export function createSceneFog(
+  colour: number,
+  range: { far: number; near: number }
+): SceneFog {
   const far = 1e9;
   return {
-    uFogSiteRect: { value: new Vector4(-far, -far, far, far) },
-    uFogHeightStart: { value: 0 },
-    uFogHeightFalloff: { value: DEFAULT_FALLOFF },
-    uFogHeightStrength: { value: LOOK_DEFAULTS.heightFog },
+    color: uniform(new Color(colour)),
+    near: uniform(range.near),
+    far: uniform(range.far),
+    heightStart: uniform(0),
+    heightFalloff: uniform(DEFAULT_FALLOFF),
+    heightStrength: uniform(LOOK_DEFAULTS.heightFog),
+    siteRect: uniform(new Vector4(-far, -far, far, far)),
   };
 }
 
-// vFogWP = TRUE world position (Y = elevation): modelMatrix bakes the −90°
-// world rotation for terrain/buildings, and is ~identity for the Y-up
-// vegetation/scene — so the same expression is correct everywhere. Guarded for
-// instanced meshes.
-const FOG_VERTEX_INJECT = `#include <fog_vertex>
-#ifdef USE_INSTANCING
-	vFogWP = ( modelMatrix * instanceMatrix * vec4( transformed, 1.0 ) ).xyz;
-#else
-	vFogWP = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
-#endif`;
+/** How much of the fog colour a fragment takes (0..1). */
+export function fogFactor(f: SceneFog): F {
+  const distance = rangeFogFactor(f.near, f.far);
+  const pool = float(1).sub(
+    smoothstep(
+      f.heightStart,
+      f.heightStart.add(f.heightFalloff),
+      positionWorld.y
+    )
+  );
+  const pooled = clamp(
+    distance.add(f.heightStrength.mul(pool).mul(float(1).sub(distance))),
+    0,
+    1
+  );
+  const xz = positionWorld.xz;
+  const edgeD = min(xz.sub(f.siteRect.xy), f.siteRect.zw.sub(xz));
+  const edge = float(1)
+    .sub(smoothstep(0, SITE_EDGE_FADE_M, min(edgeD.x, edgeD.y)))
+    .mul(smoothstep(60, 600, positionView.z.negate()));
+  return max(pooled, edge.mul(edge).mul(float(3).sub(edge.mul(2))));
+}
 
-// Builds ON the existing distance fogFactor (never replaces it): only adds haze
-// toward fogColor in low+near ground, so distant high ground still hazes normally.
-const FOG_FRAGMENT_REPLACE = `#ifdef USE_FOG
-	#ifdef FOG_EXP2
-		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
-	#else
-		float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
-	#endif
-	float heightMask = 1.0 - smoothstep( uFogHeightStart, uFogHeightStart + uFogHeightFalloff, vFogWP.y );
-	fogFactor = clamp( fogFactor + uFogHeightStrength * heightMask * ( 1.0 - fogFactor ), 0.0, 1.0 );
-	// Site-edge haze: the data ends at the outer tile edge, so let the world
-	// dissolve into the fog colour over the last stretch before it. Never on
-	// what is right in front of the camera (the depth ramp), so walking along
-	// the edge does not wade through a wall of mist.
-	vec2 edgeD = min( vFogWP.xz - uFogSiteRect.xy, uFogSiteRect.zw - vFogWP.xz );
-	float edgeHaze = 1.0 - smoothstep( 0.0, ${SITE_EDGE_FADE_M.toFixed(1)}, min( edgeD.x, edgeD.y ) );
-	edgeHaze *= smoothstep( 60.0, 600.0, vFogDepth );
-	fogFactor = max( fogFactor, edgeHaze * edgeHaze * ( 3.0 - 2.0 * edgeHaze ) );
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
-#endif`;
-
-/**
- * Registers the by-reference uniforms and patches the (untouched) `<fog_vertex>`
- * / `<fog_fragment>` chunks. Declarations are prepended (the materials' own
- * compiles already replaced `<common>`, so a second replace there would no-op).
- */
-export function injectHeightFog(
-  shader: OnBeforeCompileShader,
-  uniforms: HeightFogUniforms
-): void {
-  shader.uniforms.uFogSiteRect = uniforms.uFogSiteRect;
-  shader.uniforms.uFogHeightStart = uniforms.uFogHeightStart;
-  shader.uniforms.uFogHeightFalloff = uniforms.uFogHeightFalloff;
-  shader.uniforms.uFogHeightStrength = uniforms.uFogHeightStrength;
-  shader.vertexShader = `varying vec3 vFogWP;
-${shader.vertexShader.replace("#include <fog_vertex>", FOG_VERTEX_INJECT)}`;
-  shader.fragmentShader = `varying vec3 vFogWP;
-uniform vec4 uFogSiteRect;
-uniform float uFogHeightStart;
-uniform float uFogHeightFalloff;
-uniform float uFogHeightStrength;
-${shader.fragmentShader.replace("#include <fog_fragment>", FOG_FRAGMENT_REPLACE)}`;
+/** Hands the fog to the scene: every fogged material reads it. */
+export function installSceneFog(scene: Scene, f: SceneFog): void {
+  // reason: `fogNode` is read by WebGPURenderer but not declared on
+  // three's Scene type.
+  (scene as Scene & { fogNode: Node }).fogNode = fog(f.color, fogFactor(f));
 }

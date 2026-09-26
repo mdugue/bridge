@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import type { Mesh } from "three";
+import { type Mesh, MeshStandardNodeMaterial } from "three/webgpu";
 import type { AreaFeature, RailFeature } from "@/lib/city/features";
-import { buildBallast, buildRail, type RailContext } from "./rail-layer";
+import type { GroundContext } from "@/lib/city/ground-clamp";
+import { buildBallast, buildRail } from "./rail-layer";
 
-const ctx: RailContext = {
+const ctx: GroundContext = {
   offset: { cx: 0, cy: 0 },
   heightAt: () => 100,
 };
@@ -92,4 +93,18 @@ test("a null geometry is skipped, not thrown", () => {
   const feature: AreaFeature = { geometry: null, properties: null };
   expect(buildBallast([feature, polygon], ctx)).not.toBeNull();
   expect(buildBallast([feature], ctx)).toBeNull();
+});
+
+test("the materials are scene-wide lit node materials, one per look", () => {
+  const a = buildBallast([polygon], ctx);
+  const b = buildBallast([multiPolygon], ctx);
+  expect(a?.material).toBeInstanceOf(MeshStandardNodeMaterial);
+  // the same colour and finish on two builds is one shared material
+  expect(a?.material).toBe(b?.material as MeshStandardNodeMaterial);
+  const material = a?.material as MeshStandardNodeMaterial;
+  expect(material.userData.shared).toBe(true);
+  expect(material.polygonOffset).toBe(true);
+  expect(material.polygonOffsetUnits).toBe(-2);
+  expect(material.fog).toBe(true);
+  expect(a?.castShadow).toBe(false);
 });

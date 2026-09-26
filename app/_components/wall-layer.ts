@@ -1,10 +1,5 @@
-import { DoubleSide, type Mesh, MeshStandardMaterial } from "three";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import {
-  type GroundLight,
-  groundLightKey,
-  injectGroundLight,
-} from "./sky-light";
+import { DoubleSide, type Mesh } from "three/webgpu";
+import { type GroundLight, groundLitMaterial } from "./sky-light";
 
 const WALL_COLOR = 0xc9_bd_a4; // warm sandstone
 
@@ -20,26 +15,12 @@ const WALL_COLOR = 0xc9_bd_a4; // warm sandstone
  * darken every wall by half (the facades correct for that, lib/city/
  * skyview.ts `facadeSkyView`; a wall is too low to be worth it).
  */
-export function dressWalls(
-  mesh: Mesh,
-  heightFog?: HeightFogUniforms,
-  light?: GroundLight
-): void {
-  const material = new MeshStandardMaterial({
-    color: WALL_COLOR,
-    roughness: 0.95,
-    metalness: 0,
-    side: DoubleSide,
-  });
-  const key = `walls-${groundLightKey(light, false)}-${heightFog !== undefined}`;
-  material.customProgramCacheKey = () => key;
-  material.onBeforeCompile = (sh) => {
-    injectGroundLight(sh, light, false);
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  mesh.material = material;
+export function dressWalls(mesh: Mesh, light?: GroundLight): void {
+  mesh.material = groundLitMaterial(
+    { color: WALL_COLOR, roughness: 0.95, metalness: 0, side: DoubleSide },
+    light,
+    false
+  );
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 }

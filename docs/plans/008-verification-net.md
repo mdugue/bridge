@@ -1,8 +1,9 @@
 # Plan 008 — Make the verification net catch what it exists to catch
 
 - **Status:** PARTIAL — steps 1–4 and 8 done (2026-09-21); step 5's CI
-  scope done (2026-09-24), its coverage artifact, step 6 (rest) and step 7
-  open. Step 7 becomes moot if [plan 020](./020-webgpu-tsl.md) (TSL) lands
+  scope done (2026-09-24); its coverage artifact and step 6 (rest) open.
+  Step 7 is moot since the WebGPU/TSL port (plan 020, 2026-09-26: no
+  `onBeforeCompile` patch is left to pin)
 - **Priority / effort of the remainder:** P2 / S
 - **Written:** 2026-09-20 against `2079c3a`; condensed 2026-09-22 (the
   original step text is in git history at `761d609`)
@@ -23,7 +24,7 @@ and `patches/`.
 - On CI (`process.env.CI`) a missing WebGL **fails**; locally it still
   skips. `afterAll` checks for page errors.
 - **Scene census** (`app/_components/scene-census.ts`): per layer, meshes,
-  instanced-mesh instances and triangles × instances, exposed on
+  instances of the instanced sets and triangles × instances, exposed on
   `__poc.stats.layerStats`; the e2e asserts every layer under the lite
   profile (`vegetation.instances > 1000`, `lamps.instances > 100`,
   `terrain.meshes === 1`, water ≥ 1, city/rail/walls triangles > 0) and
@@ -65,44 +66,22 @@ features (legitimately empty); `bridge.kind ∈ {rail, road, path, other}`;
 [r,g,b]> }`; `type === "FeatureCollection"`. Never modify `data/` to prove a
 test bites — point the test's data root at a scratch copy.
 
-### Step 7 — shader-anchor tests
+### Step 7 — shader-anchor tests · MOOT
 
-> Moot if [plan 020](./020-webgpu-tsl.md) replaces the `onBeforeCompile`
-> patches with TSL node materials. Until then the anchors below still
-> apply. Since ADR 0024 the terrain and clay patches also derive data-frame
-> positions from world space (`DATA_POSITION`, `shader-chunks.ts`), and the
-> clay shader reads the per-object table (`uObjects`, `uObjectRows`):
-> pin those markers too.
-
-No `app/_components/shader-patches.test.ts` exists. Export
-`createTerrainMaterial` (terrain-layer.ts), `buildCrownMaterial` and
-`buildTrunkMaterial` (vegetation-layer.ts). A helper `patchStandard(
-onBeforeCompile)` runs a material's callback against a copy of
-`ShaderLib.standard` (`vertexShader`, `fragmentShader`, `uniforms: {}`, the
-renderer cast with a `// reason:`). Assert that every anchor exists
-upstream — `#include <common>`, `<beginnormal_vertex>`, `<begin_vertex>`,
-`<roughnessmap_fragment>`, `<map_fragment>`, `<emissivemap_fragment>`,
-`<normal_fragment_begin>`, `<fog_vertex>`, `<fog_fragment>`, the literal
-`vec4 diffuseColor = vec4( diffuse, opacity );`, plus every `.replace(`
-anchor in vegetation-layer.ts — and that each patch left its marker:
-clay (`vLocalH`, `vClayWN`, `uRoofVibrance`, `clayFres`,
-`uFogHeightStrength`, no `<fog_fragment>`; `uniforms.uTint` is the same
-object as `clayDetail.uTint`), terrain with a splat (`vSplatUv`, `grMeadow`,
-`uMeadowNdvi`; without a splat `vElevation` and no `vSplatUv`), water
-(`waterCoverage(`, `wtrFres`, `vWaterWP`), `injectHeightFog` alone
-(`vWorldY` in both stages, `<fog_fragment>` gone, `uniforms.uFogHeightStart`
-is the passed object), and each vegetation builder. The plan's
-`customProgramCacheKey` expectations are stale — today's keys are
-`clay-${fog}`, `crown-${fog}`, `trunk-${fog}`, `water-${hasColor}-${fog}`
-and a terrain `cacheKey`; assert the current format. A failed `.replace`
-leaves a feature silently off with green CI, and Dependabot bumps `three`
-weekly — this is the test that catches a renamed chunk.
+The WebGPU/TSL port ([ADR 0027](../adr/0027-webgpu-renderer-and-tsl.md),
+plan 020 in [completed.md](./completed.md)) removed every
+`onBeforeCompile` patch: a look term is a type-checked node expression,
+and the layers' unit tests assert the node setup (a node material, the
+expected slots set, the uniforms shared) instead of chunk anchors. The
+step's text (the anchors, markers and cache keys to pin) is in git
+history.
 
 ## Invariants this plan established
 
 - Adding a layer needs a `LayerName`, a census line and an e2e assertion;
-  adding a GeoJSON artifact needs a contract row and test; a shader patch
-  needs its anchors pinned. Reviewers reject PRs missing the matching test.
+  adding a GeoJSON artifact needs a contract row and test (the shader-patch
+  anchors went with the port). Reviewers reject PRs missing the matching
+  test.
 - `CityWalkStats` fields propagate to `__poc` automatically, but
   `PocDebugInfo` must gain the typed member.
 

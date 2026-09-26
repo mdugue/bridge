@@ -9,7 +9,7 @@ import {
   RGBAFormat,
   Raycaster,
   Vector2,
-} from "three";
+} from "three/webgpu";
 import {
   type CityObjectTable,
   countBuildings as countLiveBuildings,
@@ -142,8 +142,8 @@ export function dressCity(
   mesh.material = createClayMaterial(resources, objects);
   (mesh as CityMesh).isCityObjectMesh = true;
   mesh.name = `city:${tile}`;
-  // Casting works with three's default depth pass; receiving works because
-  // the clay material is a lit MeshStandardMaterial.
+  // Casting works with three's default shadow pass; receiving works because
+  // the clay is a lit standard node material.
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 

@@ -1,10 +1,26 @@
 import { expect, test } from "bun:test";
-import { type InstancedMesh, Vector3 } from "three";
+import { type Object3D, Vector3 } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
-import { sceneCensus } from "./scene-census";
+import { isInstances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
-import { buildVegetation, type VegetationContext } from "./vegetation-layer";
+import {
+  buildVegetation,
+  sceneCrowns,
+  type VegetationContext,
+} from "./vegetation-layer";
+
+/** The sets under a root and the instances they draw (`drawCount`). */
+function census(root: Object3D): { instances: number; meshes: number } {
+  const out = { instances: 0, meshes: 0 };
+  root.traverse((o) => {
+    if (isInstances(o)) {
+      out.meshes++;
+      out.instances += o.drawCount;
+    }
+  });
+  return out;
+}
 
 const ctx: VegetationContext = {
   offset: { cx: 0, cy: 0 },
@@ -36,10 +52,15 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
     ctx
   );
   expect(inv.counts).toEqual({ broad: 3, spindle: 1, cone: 1, weep: 1 });
-  const census = sceneCensus([inv.control.group]);
-  // 3 reshaped shapes × 2 LODs, all in one 250 m chunk; no trunk mesh
-  expect(census.meshes).toBe(3 * 2);
-  expect(census.instances).toBe(3 * 2);
+  const own = census(inv.control.group);
+  // 3 reshaped shapes × 2 LODs, all in one 250 m chunk; no trunk set
+  expect(own.meshes).toBe(3 * 2);
+  expect(own.instances).toBe(3 * 2);
+  // the silhouettes wear the scene's crown material, as the canopy does
+  const { leafy } = sceneCrowns();
+  for (const child of inv.control.group.children) {
+    expect((child as unknown as { material: unknown }).material).toBe(leafy);
+  }
   // Every trunk and the 3 broadleaf crowns ride in the canopy's meshes: one
   // trunk mesh + the mid, rich and far crown, no extra draw call.
   expect(inv.instances).toHaveLength(6);
@@ -48,7 +69,7 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
     { rows: [], canopy: [canopy(100)], extraTrees: inv.instances },
     ctx
   );
-  const merged = sceneCensus([veg.group]);
+  const merged = census(veg.group);
   expect(merged.meshes).toBe(4);
   expect(merged.instances).toBe(1 + 6 + (1 + 3) * 3);
 });
@@ -56,9 +77,8 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
 test("crowns stand on the ground, never NaN (a NaN matrix culls the chunk)", () => {
   const inv = buildTreeInventory([tree(0, 2, 15, 4)], ctx);
   for (const child of inv.control.group.children) {
-    const sphere = (
-      child as { boundingSphere?: { center: Vector3; radius: number } }
-    ).boundingSphere;
+    expect(isInstances(child)).toBe(true);
+    const sphere = isInstances(child) ? child.geometry.boundingSphere : null;
     expect(sphere).toBeDefined();
     expect(Number.isFinite(sphere?.radius)).toBe(true);
     expect(sphere?.center.y).toBeGreaterThan(100);
@@ -74,7 +94,7 @@ test("keepTree vetoes the canopy points inside an inventory crown", () => {
     ctx
   );
   // only the far canopy point survives: trunk + mid, rich and far crown
-  expect(sceneCensus([veg.group]).instances).toBe(4);
+  expect(census(veg.group).instances).toBe(4);
 });
 
 test("a tree in forest/copse (f = 1) vetoes no canopy tree", () => {
@@ -104,10 +124,11 @@ test("a deciduous silhouette bares in winter, a conifer never", () => {
   const inv = buildTreeInventory([tree(0, 2), tree(10, 3)], ctx);
   expect(inv.control.setSeason(190)).toBe(false); // July: all in leaf
   expect(inv.control.setSeason(9)).toBe(true); // January
+  const seasonal = sceneCrowns().bare;
   const bare = (part: string) =>
     inv.control.group.children
       .filter((c) => c.userData.treePart === part)
-      .every((c) => (c as InstancedMesh).customDepthMaterial !== undefined);
+      .every((c) => isInstances(c) && c.material === seasonal);
   expect(bare("spindle")).toBe(true);
   expect(bare("cone")).toBe(false);
 });

@@ -1,70 +1,28 @@
-import {
-  BackSide,
-  type BufferGeometry,
-  DoubleSide,
-  FrontSide,
-  Group,
-  type InstancedMesh,
-  type Material,
-  type Mesh,
-  type MeshDepthMaterial,
-  type Object3D,
-  type Side,
-  type Texture,
-} from "three";
-
-/** The side a shadow pass renders a material's caster with (WebGLShadowMap's
- *  `shadowSide`, PCF: back faces of a front-sided material). */
-const SHADOW_SIDE: Record<Side, Side> = {
-  [FrontSide]: BackSide,
-  [BackSide]: FrontSide,
-  [DoubleSide]: DoubleSide,
-};
+import type {
+  BufferGeometry,
+  InstancedMesh,
+  Material,
+  Object3D,
+  Texture,
+} from "three/webgpu";
 
 /**
- * Stand-ins that wear each mesh's `customDepthMaterial` as their material,
- * so that `compileAsync` compiles the sun's shadow-pass program too: three
- * (r186) compiles only `object.material`, and a custom depth material would
- * otherwise compile inside the first shadow render after its tile lands.
- * Each stand-in is a shallow clone of its mesh (same geometry, same kind),
- * and the depth material is set up as WebGLShadowMap sets it before it draws
- * (side, map, alpha map and test from the colour material) — so the
- * program's parameters, and with them its cache key, are the ones the
- * shadow pass will ask for: the shadow pass then reuses the program. Both
- * passes render into a target (the scene pass's, the shadow map), so tone
- * mapping and colour space agree too. Null when no mesh has one.
+ * Disposes a material unless it is scene-wide (`userData.shared`,
+ * `sceneMaterial`): disposing one would drop the render state of every
+ * object still wearing it, and all of them would rebuild at once.
  */
-export function depthMaterialStandIns(root: Object3D): Group | null {
-  const group = new Group();
-  root.traverse((obj) => {
-    const mesh = obj as Mesh;
-    const depth = mesh.customDepthMaterial as MeshDepthMaterial | undefined;
-    if (!(mesh.isMesh && depth) || Array.isArray(mesh.material)) {
-      return;
-    }
-    const colour = mesh.material as Material & {
-      alphaMap?: MeshDepthMaterial["alphaMap"];
-      map?: MeshDepthMaterial["map"];
-    };
-    depth.side = colour.shadowSide ?? SHADOW_SIDE[colour.side];
-    depth.alphaMap = colour.alphaMap ?? null;
-    depth.alphaTest = colour.alphaToCoverage ? 0.5 : colour.alphaTest;
-    depth.map = colour.map ?? null;
-    const standIn = mesh.clone(false);
-    standIn.material = depth;
-    group.add(standIn);
-  });
-  return group.children.length > 0 ? group : null;
-}
-
-function disposeMaterial(material: Material | Material[] | undefined): void {
+export function disposeMaterial(
+  material: Material | Material[] | undefined
+): void {
   if (Array.isArray(material)) {
     for (const m of material) {
       disposeMaterial(m);
     }
     return;
   }
-  material?.dispose();
+  if (material && !material.userData.shared) {
+    material.dispose();
+  }
 }
 
 /**
@@ -127,7 +85,7 @@ export function estimateGeometryBytes(root: Object3D): number {
  * made on first use and disposed when the last app that retained it goes.
  * A plain module singleton outlives its app: the renderer's "dispose"
  * listener stays on it, and through that listener the old renderer and its
- * WebGL context stay reachable (a StrictMode remount, a round trip to
+ * GPU device stay reachable (a StrictMode remount, a round trip to
  * /wissen). Counted, not owned by one app, because a remount may boot the
  * next app before the last one is gone.
  */
@@ -206,3 +164,40 @@ export function textureBytes(
   const base = width * height * bytesPerTexel;
   return mipmaps ? Math.round(base * (4 / 3)) : base;
 }
+
+// --- scene-wide node materials ------------------------------------------------
+
+const sceneMaterials = new Map<string, Material>();
+const materialsShared = sceneShared(() => ({
+  dispose: () => {
+    for (const material of sceneMaterials.values()) {
+      material.dispose();
+    }
+    sceneMaterials.clear();
+  },
+}));
+
+/**
+ * A node material every tile wears, made on first use and marked
+ * `userData.shared` (no tile's disposal frees it; the last app does,
+ * `retainSceneMaterials`). For materials that carry no per-tile data —
+ * crowns, trunks, hedges, fountains, furniture, wires: three keys a build
+ * by the material and its nodes, so one material per tile would be built
+ * anew for each tile, in the scene pass and in the shadow pass.
+ */
+export function sceneMaterial<T extends Material>(
+  key: string,
+  make: () => T
+): T {
+  materialsShared.get();
+  let material = sceneMaterials.get(key) as T | undefined;
+  if (!material) {
+    material = make();
+    material.userData.shared = true;
+    sceneMaterials.set(key, material);
+  }
+  return material;
+}
+
+/** An app's hold on the scene-wide materials; call the result on dispose. */
+export const retainSceneMaterials = materialsShared.retain;

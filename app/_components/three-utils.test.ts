@@ -1,20 +1,18 @@
 import { expect, test } from "bun:test";
 import {
-  BackSide,
   BoxGeometry,
   type BufferGeometry,
-  DoubleSide,
   InstancedMesh,
   type Material,
   Mesh,
-  MeshBasicMaterial,
-  MeshDepthMaterial,
+  MeshBasicNodeMaterial,
   Object3D,
-} from "three";
+} from "three/webgpu";
 import {
-  depthMaterialStandIns,
   disposeObject3D,
   estimateGeometryBytes,
+  retainSceneMaterials,
+  sceneMaterial,
   sceneShared,
   textureBytes,
 } from "./three-utils";
@@ -30,7 +28,7 @@ function countDisposals(resource: BufferGeometry | Material): () => number {
 
 test("disposes the geometry and material of a nested mesh", () => {
   const geometry = new BoxGeometry();
-  const material = new MeshBasicMaterial();
+  const material = new MeshBasicNodeMaterial();
   const geometryCalls = countDisposals(geometry);
   const materialCalls = countDisposals(material);
   const group = new Object3D();
@@ -43,8 +41,8 @@ test("disposes the geometry and material of a nested mesh", () => {
 });
 
 test("walks material arrays", () => {
-  const first = new MeshBasicMaterial();
-  const second = new MeshBasicMaterial();
+  const first = new MeshBasicNodeMaterial();
+  const second = new MeshBasicNodeMaterial();
   const firstCalls = countDisposals(first);
   const secondCalls = countDisposals(second);
 
@@ -55,7 +53,7 @@ test("walks material arrays", () => {
 });
 
 test("two meshes sharing one material dispose without throwing", () => {
-  const material = new MeshBasicMaterial();
+  const material = new MeshBasicNodeMaterial();
   const calls = countDisposals(material);
   const group = new Object3D();
   group.add(new Mesh(new BoxGeometry(), material));
@@ -66,7 +64,11 @@ test("two meshes sharing one material dispose without throwing", () => {
 });
 
 test("an InstancedMesh gets its own dispose event, for its instance buffers", () => {
-  const mesh = new InstancedMesh(new BoxGeometry(), new MeshBasicMaterial(), 4);
+  const mesh = new InstancedMesh(
+    new BoxGeometry(),
+    new MeshBasicNodeMaterial(),
+    4
+  );
   let calls = 0;
   mesh.addEventListener("dispose", () => {
     calls += 1;
@@ -91,8 +93,8 @@ test("estimateGeometryBytes counts each geometry once, index included", () => {
       0
     ) + (geometry.index?.array.byteLength ?? 0);
   const root = new Object3D();
-  root.add(new Mesh(geometry, new MeshBasicMaterial()));
-  root.add(new Mesh(geometry, new MeshBasicMaterial()));
+  root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
+  root.add(new Mesh(geometry, new MeshBasicNodeMaterial()));
   expect(estimateGeometryBytes(root)).toBe(expected);
 });
 
@@ -101,34 +103,38 @@ test("textureBytes adds a third for a mip chain", () => {
   expect(textureBytes(4, 4, 1, true)).toBe(21);
 });
 
-test("depthMaterialStandIns wears each custom depth material as the shadow pass will", () => {
+test("a scene-wide material survives its tile's disposal", () => {
+  const release = retainSceneMaterials();
+  const shared = sceneMaterial(
+    "test-shared",
+    () => new MeshBasicNodeMaterial()
+  );
+  expect(sceneMaterial("test-shared", () => new MeshBasicNodeMaterial())).toBe(
+    shared
+  );
+  const own = new MeshBasicNodeMaterial();
   const root = new Object3D();
-  const geometry = new BoxGeometry();
-  const fence = new Mesh(geometry, new MeshBasicMaterial({ side: DoubleSide }));
-  const depth = new MeshDepthMaterial();
-  fence.customDepthMaterial = depth;
-  fence.receiveShadow = true;
-  const post = new Mesh(geometry, new MeshBasicMaterial());
-  const postDepth = new MeshDepthMaterial();
-  post.customDepthMaterial = postDepth;
-  root.add(fence, post, new Mesh(geometry, new MeshBasicMaterial()));
-  const standIns = depthMaterialStandIns(root);
-  expect(standIns?.children).toHaveLength(2);
-  const [a, b] = (standIns?.children ?? []) as Mesh[];
-  expect(a.material).toBe(depth);
-  expect(a.geometry).toBe(geometry);
-  expect(a.receiveShadow).toBe(true);
-  expect(depth.side).toBe(DoubleSide);
-  // A front-sided caster casts with its back faces.
-  expect(b.material).toBe(postDepth);
-  expect(postDepth.side).toBe(BackSide);
-  // The meshes themselves are untouched.
-  expect(fence.material).not.toBe(depth);
-  expect(depthMaterialStandIns(new Mesh(geometry))).toBeNull();
+  root.add(
+    new Mesh(new BoxGeometry(), shared),
+    new Mesh(new BoxGeometry(), own)
+  );
+  const sharedDisposed = countDisposals(shared);
+  const ownDisposed = countDisposals(own);
+  disposeObject3D(root);
+  expect(sharedDisposed()).toBe(0);
+  expect(ownDisposed()).toBe(1);
+  // the last app frees it; the next one makes a fresh one
+  release();
+  expect(sharedDisposed()).toBe(1);
+  const again = retainSceneMaterials();
+  expect(
+    sceneMaterial("test-shared", () => new MeshBasicNodeMaterial())
+  ).not.toBe(shared);
+  again();
 });
 
 test("a scene-shared resource is disposed with the last app that holds it", () => {
-  const share = sceneShared(() => new MeshDepthMaterial());
+  const share = sceneShared(() => new MeshBasicNodeMaterial());
   const releaseA = share.retain();
   const first = share.get();
   expect(share.get()).toBe(first);

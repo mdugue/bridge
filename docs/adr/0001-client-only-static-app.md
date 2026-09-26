@@ -37,8 +37,9 @@ is done by copying a Snapshot JSON, not by a server-side link.
 
 - **A tile server / API** for on-demand data: rejected — the world is four
   fixed tiles; precomputing them is simpler and faster.
-- **Server-side rendering of the scene:** not applicable; WebGL runs in
-  the browser.
+- **Server-side rendering of the scene:** not applicable; the renderer
+  runs in the browser (WebGL then; WebGPU with a WebGL2 fallback since
+  [ADR 0027](./0027-webgpu-renderer-and-tsl.md)).
 
 ## References
 

@@ -18,7 +18,8 @@
 
 - **Priority**: P1 (light is the look; this fixes the long-shadow limit cheaply)
 - **Effort**: M (bake M, terrain S, clay S–M, horizon shadow M)
-- **Risk**: MED — double-darkening with SSAO and the shadow map
+- **Risk**: MED — double-darkening with the contact shadows (GTAO since
+  plan 020) and the shadow map
 - **Planned at**: 2026-09-25
 - **Status**: PARTIAL (2026-09-25) — built without a GPU:
   - Phase 1: `pipeline/bake/skyview.py` (committed DGM + LoD2 only,
@@ -42,9 +43,15 @@
     of the SVF and both bands carry the nearest open value (no dark bleed
     through LINEAR/mipmaps); the horizon's azimuth guarded for a sun
     straight overhead. ADR 0031 amended.
-  - Open: every plate the phases name, the N8AO double-darkening check and
-    the frustum hand-over check (both STOPs need a GPU; the conservative
-    defaults stand in).
+  - Since the WebGPU/TSL port (plan 020, 2026-09-26): the sky view is the
+    ground's and the facades' `aoNode` (three multiplies it into the
+    indirect light only), the horizon the ground's `receivedShadowNode`,
+    folded into the shadow map by `min` (`sky-light.ts`
+    `applyGroundLight`, `createClaySky`); the frustum reaches the terrain
+    as a shared uniform node (`shadowReach`). Same terms, no chunk hooks.
+  - Open: every plate the phases name, the double-darkening check against
+    the contact shadows (GTAO now, not N8AO) and the frustum hand-over
+    check (both STOPs need a GPU; the conservative defaults stand in).
 
 ## Why this matters
 
@@ -52,7 +59,8 @@ Two lighting gaps, both screen- or frustum-bound today:
 
 1. **Ambient light does not know the city.** The hemisphere light
    (`sun-rig.ts:155`) lights a narrow Neustadt courtyard as brightly as the
-   open Elbwiesen. N8AO only darkens contact creases, and only on screen,
+   open Elbwiesen. The contact shadows (N8AO then, GTAO since plan 020)
+   only darken contact creases, and only on screen,
    at half resolution. A **sky-view factor** (the fraction of the sky a
    point sees) is the physical answer, and it is a static property of the
    DGM and the LoD2 — bakeable once.
@@ -143,8 +151,9 @@ depends on it), `rendering.md` light/post section and codebook,
 
 ## STOP conditions
 
-- Double-darkening with N8AO in courtyards (SVF + SSAO read as dirt):
-  lower the N8AO intensity where SVF is low before lowering SVF.
+- Double-darkening with the contact shadows in courtyards (SVF + GTAO
+  read as dirt): weaken the contact shadows where SVF is low before
+  lowering SVF.
 - A visible seam at the shadow frustum's edge where the shadow map hands
   over to the horizon term: fade the horizon term in across the last
   20 % of the frustum radius; report the plate.

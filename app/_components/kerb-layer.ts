@@ -1,10 +1,5 @@
-import { type Mesh, MeshStandardMaterial } from "three";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import {
-  type GroundLight,
-  groundLightKey,
-  injectGroundLight,
-} from "./sky-light";
+import type { Mesh } from "three/webgpu";
+import { type GroundLight, groundLitMaterial } from "./sky-light";
 
 const KERB_COLOR = 0xd9_d5_cc; // pale granite, a shade above the pavement
 
@@ -17,25 +12,12 @@ const KERB_COLOR = 0xd9_d5_cc; // pale granite, a shade above the pavement
  * takes the tile's baked light as the ground does (`light`, sky-light.ts):
  * a kerb on a far-shadowed street is shadowed with it.
  */
-export function dressKerbs(
-  mesh: Mesh,
-  heightFog?: HeightFogUniforms,
-  light?: GroundLight
-): void {
-  const material = new MeshStandardMaterial({
-    color: KERB_COLOR,
-    roughness: 0.9,
-    metalness: 0,
-  });
-  const key = `kerb-${groundLightKey(light, true)}-${heightFog !== undefined}`;
-  material.customProgramCacheKey = () => key;
-  material.onBeforeCompile = (sh) => {
-    injectGroundLight(sh, light, true);
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  mesh.material = material;
+export function dressKerbs(mesh: Mesh, light?: GroundLight): void {
+  mesh.material = groundLitMaterial(
+    { color: KERB_COLOR, roughness: 0.9, metalness: 0 },
+    light,
+    true
+  );
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 }

@@ -70,6 +70,14 @@ tileset (`lib/city/tileset.ts`) and 3DTilesRendererJS streams it.
   `onBeforeCompile`; they are not used (they would clash with a later
   TSL migration, ADR 0027).
 
+*Update (2026-09, ADR 0027):* the viewer is on `WebGPURenderer` with TSL
+node materials. 3DTilesRendererJS needed no change for loading; its fade
+and overlay plugins still patch GLSL and stay unused. The glTF's
+one-component 8/16-bit attributes (the feature id, the roof flag) are
+baked as FLOAT, since WebGPU has no vertex format for them.
+`shader-chunks.ts` now holds the shared TSL pieces (`dataXY`,
+`dataPosition`, `rasterUv`).
+
 ## Alternatives
 
 - **The hand-written manager of ADR 0022:** 1–1.5 k lines of schedule,

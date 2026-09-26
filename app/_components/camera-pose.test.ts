@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PerspectiveCamera } from "three";
+import { PerspectiveCamera } from "three/webgpu";
 import { EYE_HEIGHT, PITCH_LIMIT, RAD2DEG } from "@/lib/city/pose";
 import { type CameraPoseOptions, createCameraPose } from "./camera-pose";
 import type { MovementMode } from "./fps-movement";

@@ -1,10 +1,5 @@
-import { DoubleSide, type Mesh, MeshStandardMaterial } from "three";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import {
-  type GroundLight,
-  groundLightKey,
-  injectGroundLight,
-} from "./sky-light";
+import { DoubleSide, type Mesh } from "three/webgpu";
+import { type GroundLight, groundLitMaterial } from "./sky-light";
 
 /**
  * Flights of steps from OSM (`pipeline/bake/stairs.py`), baked with the
@@ -16,26 +11,12 @@ import {
  * light as the ground is (`light`, sky-light.ts). It arrives and leaves
  * with its tile, and the renderer frees it with the tile's content.
  */
-export function dressStairs(
-  mesh: Mesh,
-  heightFog?: HeightFogUniforms,
-  light?: GroundLight
-): void {
-  const material = new MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.92,
-    metalness: 0,
-    side: DoubleSide,
-  });
-  const key = `stairs-${groundLightKey(light, true)}-${heightFog !== undefined}`;
-  material.customProgramCacheKey = () => key;
-  material.onBeforeCompile = (sh) => {
-    injectGroundLight(sh, light, true);
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  mesh.material = material;
+export function dressStairs(mesh: Mesh, light?: GroundLight): void {
+  mesh.material = groundLitMaterial(
+    { vertexColors: true, roughness: 0.92, metalness: 0, side: DoubleSide },
+    light,
+    true
+  );
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 }

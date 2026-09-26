@@ -1,10 +1,16 @@
 import { expect, test } from "bun:test";
-import type { InstancedMesh, Mesh } from "three";
+import type {
+  Mesh,
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
+} from "three/webgpu";
 import type { RiversideFeature } from "@/lib/city/features";
-import { buildRiverside, type RiversideContext } from "./riverside-layer";
+import type { GroundContext } from "@/lib/city/ground-clamp";
+import type { Instances } from "./instancing";
+import { buildRiverside } from "./riverside-layer";
 
 /** A bank at 108 m north of y = 0, the flat river at 104 m south of it. */
-const ctx: RiversideContext = {
+const ctx: GroundContext = {
   offset: { cx: 0, cy: 0 },
   heightAt: (_x, y) => (y >= 0 ? 108 : 104),
 };
@@ -41,8 +47,13 @@ test("a pier stands its deck on piles over the water, not on the bank", () => {
   const group = buildRiverside([pier], ctx);
   const [deck] = byName(group, "riverside-pier");
   expect(topY(deck)).toBeCloseTo(108.4, 4);
-  const [piles] = byName(group, "riverside-piles") as InstancedMesh[];
-  expect(piles.count).toBeGreaterThan(4);
+  const [piles] = byName(
+    group,
+    "riverside-piles"
+  ) as unknown as Instances<MeshStandardNodeMaterial>[];
+  expect(piles.isInstances).toBe(true);
+  expect(piles.drawCount).toBeGreaterThan(4);
+  expect(piles.material.positionNode).not.toBeNull();
   expect(byName(group, "riverside-railing")).toHaveLength(1);
 });
 
@@ -83,6 +94,13 @@ test("a ferry line is a faint wake that never casts; a groyne a stone ridge", ()
   const group = buildRiverside([ferry, groyne], ctx);
   const [wake] = byName(group, "riverside-ferry");
   expect(wake.castShadow).toBe(false);
+  const ink = wake.material as MeshBasicNodeMaterial;
+  expect(ink.isNodeMaterial).toBe(true);
+  expect(ink.userData.shared).toBe(true);
+  expect(ink.transparent).toBe(true);
+  expect(ink.depthWrite).toBe(false);
+  expect(ink.opacityNode).not.toBeNull();
+  expect(wake.geometry.hasAttribute("wakeAlong")).toBe(true);
   expect(topY(wake)).toBeCloseTo(104.06, 4);
   const [ridge] = byName(group, "riverside-groyne");
   expect(topY(ridge)).toBeCloseTo(108.5, 4);
@@ -100,7 +118,7 @@ test("a ferry line past the loaded ground keeps no vertex at sea level", () => {
     properties: { k: "ferry" },
   };
   // No terrain east of x = 100: those samples have no ground.
-  const partial: RiversideContext = {
+  const partial: GroundContext = {
     ...ctx,
     heightAt: (x, y) => (x > 100 ? null : ctx.heightAt(x, y)),
   };

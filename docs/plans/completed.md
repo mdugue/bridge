@@ -399,6 +399,131 @@ accepted.
   its size never changes at runtime.
 - Class and NDVI rasters stay lossless (ids must be exact, `NEAREST`).
 
+## 020 — WebGPURenderer and TSL node materials · DONE (2026-09-26)
+
+**Problem.** Every custom look was a string patch on three's GLSL chunks
+(`onBeforeCompile` + `.replace("#include <…>")`: 15 sites in 7 files when
+the plan was written, 26 in 17 files by the 2026-09-26 audit, 33 in 19 at
+the port), with `customProgramCacheKey` bookkeeping; a failed replace
+switched a feature off with green CI (plan 008 step 7 existed only to
+catch that). The post stack was two libraries (`postprocessing`, `n8ao`
+with a hand-written type shim) plus two custom effect classes, and height
+fog a patch every lit material had to carry. three r186 has the
+replacements in the box: node materials, `scene.fogNode`, `GTAONode`,
+`DepthOfFieldNode`, `SMAANode`, `RenderPipeline`, `CSMShadowNode`.
+
+**Phase 0 spike** (2026-09-24, Apple Silicon Mac, Chrome, 1600×1000 @2×,
+on a throwaway branch). Ported term for term: the clay, terrain, water,
+crowns and trunks, the land-cover paint pass, the sky (`SkyMesh`), the lamp
+halos, fog as one `scene.fogNode`, the post stack as a `RenderPipeline`.
+Frame rate, all effects on, settled (fps):
+
+| View | WebGL + GLSL + postprocessing | WebGPURenderer → WebGL2 | WebGPURenderer → WebGPU |
+|---|---|---|---|
+| Canaletto (eye level) | 67 | 59 | **94** |
+| Über den Dächern | 42 | 30 | **60** |
+| Elbe-Panorama (246 m) | 33 | 39 | **50** |
+| Carolabrücke (70 m) | 54 | 63 | **98** |
+| ready (dev server) | 8.1 s | 18.7 s | **6.3 s** |
+
+WebGPU was 40–80 % faster at the same look and booted faster. The WebGL2
+backend was on par in steady state but stalled for seconds whenever new
+materials appeared (1.8 fps right after a jump, 43 fps a few seconds
+later): it compiles node shaders synchronously, even under
+`compileAsync`. Stalls on a 56 s flight over eight viewpoints:
+
+| | frames > 100 ms | > 500 ms | total stalled |
+|---|---|---|---|
+| WebGL, before | 6 | 2 | 2.4 s |
+| WebGL, with `compileAsync` + no terrain BVH | **0** | 0 | **0 s** |
+| WebGPU, before | 21 | 4 | 7.8 s |
+| WebGPU, with both | 5 | 2 | 2.4 s |
+| WebGPURenderer → WebGL2, with both | 69 | 24 | 55 s |
+
+Both fixes landed on `main` before the port (`PostStack.compile`,
+`lib/city/ground-ray.ts`). What remained on WebGPU (two tasks of
+0.6–1.2 s early in a flight) was the **first shadow render of newly
+landed content**: the profile's longest task sits in
+`render › updateBefore › render`, the shadow pass creating its render
+objects and pipelines for the new casters — `compileAsync` primes only the
+main pass. Neither geometry upload nor tile size was the cause.
+
+**Other findings.**
+- *Vertex formats:* the first WebGPU run drew nothing. three pads
+  snorm16×3 / snorm8×3 by itself, but has no WebGPU mapping for
+  **one-component 8/16-bit** attributes (the feature id, uint16; the roof
+  flag, uint8), and its WebGL2 backend rejects them against TSL's float
+  attribute. They are baked as FLOAT now (`scripts/tile-glb.ts`; tens of
+  KB per tile after meshopt + gzip).
+- *Colour:* the WebGL path applied **no tone mapping** — three tone-maps
+  only renders straight to the screen, the composer rendered to a target
+  and its passes were `toneMapped: false`, so `ACESFilmicToneMapping` was
+  inert. ACES in the output node washed the clay out; the output is plain
+  sRGB, as before.
+- Closing the class raster's `ImageBitmap` in `onUpdate` left it empty on
+  node pages (the renderer uploads it again).
+- WebGPU draws point primitives 1 px wide whatever their size: the lamp
+  halos are billboard quads (an instanced mesh under a
+  `PointsNodeMaterial`), not `Points`.
+- One shared terrain/water/clay material with per-tile textures bound per
+  draw (`onObjectUpdate`) failed (grey ground, untinted clay), and builds
+  per tile material were cheap (none over 20 ms): only materials without
+  per-tile data are shared.
+- DoF as two prebuilt pipelines, not one pipeline whose output node is
+  swapped when the camera starts or stops.
+- 3DTilesRendererJS needed no change; its fade and overlay plugins patch
+  GLSL and stay unused.
+
+**Gate reading.** Neither reject criterion triggered (the WebGL2 backend
+not > 25 % slower, the clay matched). The spike recommended WebGPU for
+browsers that have it and keeping the WebGLRenderer path as the fallback.
+
+**Outcome.** The maintainer asked for **the whole port with no second
+path**: `WebGPURenderer` only (its WebGL2 backend as the fallback,
+`?gpu=webgl2` to force it), every material a TSL node material, no GLSL
+left ([ADR 0027](../adr/0027-webgpu-renderer-and-tsl.md), accepted
+2026-09-26). The spike branch had answered the stalls by patching three's
+internals — a render guard, a shared-instancing patch and a
+render-context override — which kept misbehaving in ways that could not
+be pinned down; that work was **rejected** and the port restarted from
+`main`, the TSL written from the GLSL on the branch, on public API only:
+- the scene renders **top-level into its own target** and the node
+  `RenderPipeline` reads its colour and depth (three keys a build by
+  render context, a context by target *and* call depth: a nested scene
+  `pass()` never matched what `compileAsync` prepared);
+- **`Instances`** (`instancing.ts`) replace `InstancedMesh` (three puts an
+  InstancedMesh's uuid in the build key): a plain `Mesh` over an
+  `InstancedBufferGeometry`, so every set with the same material and
+  layout shares one build;
+- **`sceneMaterial`** (`three-utils.ts`): one build for the site for every
+  material without per-tile data; tiles compile ahead one drawable per
+  material and layout.
+The post stack is GTAO (half res, normals from depth; 16 samples, lite 8)
+× the contact slider → DoF → SMAA → grading, vignette, grain → sRGB.
+`postprocessing`, `n8ao`, `types/n8ao.d.ts`, `depth-grading-effect.ts`,
+`paper-grain-effect.ts` and `webgl-support.ts` (now `gpu-support.ts`) are
+gone; `shader-chunks.ts` stayed, as the shared TSL helpers. The six phase
+PRs the plan staged became one port; plan 008 step 7 is moot.
+
+**Keep in mind.**
+- Public API only: no prototype patches, no `_` members. Before adding
+  machinery against a stall, measure it with the flight probe.
+- Known limits: the shadow pass's pipelines for new casters still build
+  in the frame that first draws them; the WebGL2 backend compiles
+  synchronously (the table above is what a browser without WebGPU pays).
+- `Instances` traps: `drawCount`, never a `count` above 1 (it puts the
+  uuid back in the key); `instanceTints`, never `instanceColor` (three
+  multiplies any object carrying one by an InstancedMesh-only varying —
+  black sets); the material applies the transform and the tint itself.
+- Look terms that could not be ported exactly: the crown shimmer's
+  shadow-map gate (node lights keep their map to themselves; the gate is
+  the sun's daylight ramp, so a crown behind a building glows too) and
+  `SkyMesh`'s own cloud horizon fade (inside its colour node; the horizon
+  haze band covers it). GTAO is not N8AO: the contact shadows want a look
+  on a real GPU, as does the whole port against the spike's plates.
+- CSM (`CSMShadowNode`) and clustered lamp lights are in reach now, each
+  its own decision.
+
 ## 032 — Street names: lettering and the on-foot caption · REJECTED (removed 2026-09-26)
 
 **Problem.** The contour-map look had no text. The plan lettered the OSM

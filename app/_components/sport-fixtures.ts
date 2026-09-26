@@ -5,16 +5,16 @@ import {
   Group,
   Matrix4,
   Mesh,
-  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
   PlaneGeometry,
   Quaternion,
   TorusGeometry,
   Vector3,
-} from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+} from "three/webgpu";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import type { SportFixture } from "@/lib/city/sport";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { sceneMaterial } from "./three-utils";
 
 /**
  * What stands on the sports grounds (lib/city/sport.ts `sportFixtures`):
@@ -24,9 +24,13 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * as a pitch from the ground without a single texture. Everything of a tile
  * is two merged meshes: the frames (casting shadows) and the nets (a
  * translucent, shadowless lavender-grey veil). Lives in the Y-up frame (world
- * coordinates), like the lamps.
+ * coordinates), like the lamps. Both materials carry nothing of a tile, so
+ * every tile wears the same two (`sceneMaterial`: one node build for the
+ * scene); the scene's fog node reaches them like everything else.
  */
 export interface SportFixtureLayer {
+  /** nothing of the tile's own to free: the meshes go with the scene and
+   *  the materials are scene-wide */
   dispose: () => void;
   group: Group;
 }
@@ -34,7 +38,6 @@ export interface SportFixtureLayer {
 export interface SportFixtureContext extends GroundContext {
   /** the table's frame: the tile's north-west corner, EPSG */
   origin: { x: number; y: number };
-  heightFog?: HeightFogUniforms;
 }
 
 /*
@@ -127,15 +130,27 @@ function fixtureParts(f: SportFixture): {
   };
 }
 
-function fogged(
-  material: MeshStandardMaterial,
-  heightFog?: HeightFogUniforms
-): MeshStandardMaterial {
-  if (heightFog) {
-    material.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
-  }
-  return material;
-}
+/** The frames' matte clay, one for the scene. */
+const frameMaterial = () =>
+  sceneMaterial(
+    "sport-frame",
+    () => new MeshStandardNodeMaterial({ color: FRAME_COLOR, roughness: MATTE })
+  );
+
+/** The nets' translucent veil, one for the scene. */
+const netMaterial = () =>
+  sceneMaterial(
+    "sport-net",
+    () =>
+      new MeshStandardNodeMaterial({
+        color: NET_COLOR,
+        roughness: MATTE,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+        side: DoubleSide,
+      })
+  );
 
 export function buildSportFixtures(
   fixtures: SportFixture[],
@@ -164,30 +179,15 @@ export function buildSportFixtures(
       nets.push(g.applyMatrix4(m));
     }
   }
-  const frameMat = fogged(
-    new MeshStandardMaterial({ color: FRAME_COLOR, roughness: MATTE }),
-    ctx.heightFog
-  );
-  const netMat = fogged(
-    new MeshStandardMaterial({
-      color: NET_COLOR,
-      roughness: MATTE,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false,
-      side: DoubleSide,
-    }),
-    ctx.heightFog
-  );
   const meshes: Mesh[] = [];
   if (frames.length > 0) {
-    const mesh = new Mesh(mergeGeometries(frames.map(plain)), frameMat);
+    const mesh = new Mesh(mergeGeometries(frames.map(plain)), frameMaterial());
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     meshes.push(mesh);
   }
   if (nets.length > 0) {
-    const mesh = new Mesh(mergeGeometries(nets.map(plain)), netMat);
+    const mesh = new Mesh(mergeGeometries(nets.map(plain)), netMaterial());
     mesh.receiveShadow = true;
     meshes.push(mesh);
   }
@@ -201,8 +201,8 @@ export function buildSportFixtures(
   return {
     group,
     dispose: () => {
-      frameMat.dispose();
-      netMat.dispose();
+      // the merged geometries go with the tile (disposeObject3D); the
+      // materials are the scene's
     },
   };
 }

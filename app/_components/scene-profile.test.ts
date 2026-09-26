@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import {
-  aoQualityFor,
+  aoSamplesFor,
   deviceTierFromMedia,
   liteKeepsBlockFromSearch,
   pixelRatioFor,
@@ -59,12 +59,14 @@ test("deviceTierFromMedia maps the coarse-pointer query", () => {
 
 test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters in one go", () => {
   expect(sceneBudgetFor("", false)).toEqual({
+    forceWebGL: false,
     profile: "full",
     tier: "desktop",
     neighbourTiles: true,
     lowRasters: false,
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
+    forceWebGL: false,
     profile: "lite",
     tier: "mobile",
     neighbourTiles: false,
@@ -75,11 +77,14 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     true
   );
   expect(sceneBudgetFor("?block=1", false).neighbourTiles).toBe(true);
+  // WebGPU where available; the WebGL2 backend only on request.
+  expect(sceneBudgetFor("?gpu=webgl2", false).forceWebGL).toBe(true);
+  expect(sceneBudgetFor("?gpu=webgpu", false).forceWebGL).toBe(false);
 });
 
-test("aoQualityFor drops to Performance only in the lite profile", () => {
-  expect(aoQualityFor("full")).toBe("Medium");
-  expect(aoQualityFor("lite")).toBe("Performance");
+test("aoSamplesFor halves the GTAO samples only in the lite profile", () => {
+  expect(aoSamplesFor("full")).toBe(16);
+  expect(aoSamplesFor("lite")).toBe(8);
 });
 
 test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
