@@ -1,7 +1,97 @@
 import { expect, test } from "bun:test";
-import { SITES } from "../../sites";
+import { DEFAULT_SITE, SITES } from "../../sites";
+import { DRESDEN } from "../../sites/dresden";
 import { directionOf } from "./pose";
-import { overlook, spawnViewpoint, tileExtentOf } from "./site";
+import {
+  landcoverCredit,
+  osmExtractUrl,
+  siteAttribution,
+  overlook,
+  siteTitle,
+  spawnViewpoint,
+  TILE_KM,
+  tileExtentOf,
+  tileIdOf,
+} from "./site";
+
+const sites = Object.entries(SITES);
+
+test("the land-cover credit names the DLM's provider, or OSM without one", () => {
+  expect(landcoverCredit(SITES.dresden)).toBe(
+    "Basis-DLM, Quelle: GeoSN, dl-de/by-2-0"
+  );
+  expect(landcoverCredit(SITES.hamburg)).toContain("OpenStreetMap");
+});
+
+test("the registry key is the site's id, and the default exists", () => {
+  for (const [key, site] of sites) {
+    expect(site.id).toBe(key);
+  }
+  expect(SITES[DEFAULT_SITE]).toBeDefined();
+});
+
+test.each(sites)(
+  "%s: every viewpoint stands on one of its tiles",
+  (_, site) => {
+    const onSite = (x: number, y: number) =>
+      site.tiles.some((cell) => {
+        const [x0, y0, x1, y1] = tileExtentOf(cell);
+        return x >= x0 && x < x1 && y >= y0 && y < y1;
+      });
+    expect(site.viewpoints.length).toBeGreaterThanOrEqual(3);
+    for (const v of site.viewpoints) {
+      expect(onSite(v.epsg.x, v.epsg.y)).toBe(true);
+      expect(v.headingDeg).toBeGreaterThanOrEqual(0);
+      expect(v.headingDeg).toBeLessThan(360);
+    }
+    expect(new Set(site.viewpoints.map((v) => v.id)).size).toBe(
+      site.viewpoints.length
+    );
+  }
+);
+
+test.each(sites)(
+  "%s: tiles sit on the even 2 km grid, once each",
+  (_, site) => {
+    const ids = site.tiles.map((cell) => tileIdOf(site, cell));
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const cell of site.tiles) {
+      expect(cell.e % TILE_KM).toBe(0);
+      expect(cell.n % TILE_KM).toBe(0);
+    }
+  }
+);
+
+test.each(sites)(
+  "%s: the spawn is a viewpoint on the first tile",
+  (_, site) => {
+    const { x, y } = spawnViewpoint(site).epsg;
+    const [x0, y0, x1, y1] = tileExtentOf(site.tiles[0]);
+    expect(x >= x0 && x < x1 && y >= y0 && y < y1).toBe(true);
+  }
+);
+
+test("Dresden keeps its tile ids, credits and extract", () => {
+  expect(tileIdOf(DRESDEN, DRESDEN.tiles[0])).toBe("33412_5656_2_sn");
+  expect(tileExtentOf(DRESDEN.tiles[0])).toEqual([
+    412_000, 5_656_000, 414_000, 5_658_000,
+  ]);
+  expect(siteAttribution(DRESDEN)).toEqual([
+    "Quelle: GeoSN, dl-de/by-2-0",
+    "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
+    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
+  ]);
+  // Only Dresden names a tree cadastre; the others credit two sources.
+  expect(siteAttribution(SITES.leipzig)).toHaveLength(2);
+  expect(siteTitle(DRESDEN)).toBe("City Walk — Dresden");
+  expect(osmExtractUrl(DRESDEN)).toBe(
+    "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf"
+  );
+});
+
+test("a site without an open Basis-DLM credits OSM for its land cover", () => {
+  expect(siteAttribution(SITES.hamburg)[1]).toStartWith("Landbedeckung");
+});
 
 const DEG = Math.PI / 180;
 
@@ -40,30 +130,3 @@ test("overlook refuses a vantage that does not look down", () => {
     )
   ).toThrow();
 });
-
-for (const site of Object.values(SITES)) {
-  const inside = (
-    [x0, y0, x1, y1]: [number, number, number, number],
-    p: { x: number; y: number }
-  ) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
-
-  test(`${site.id}: every viewpoint stands on one of its tiles`, () => {
-    const extents = site.tiles.map((cell) => tileExtentOf(site, cell));
-    for (const view of site.viewpoints) {
-      expect({
-        id: view.id,
-        onATile: extents.some((e) => inside(e, view.epsg)),
-      }).toEqual({ id: view.id, onATile: true });
-    }
-  });
-
-  test(`${site.id}: viewpoint ids are unique`, () => {
-    const ids = site.viewpoints.map((v) => v.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  test(`${site.id}: the spawn is a viewpoint on the first tile`, () => {
-    const spawn = spawnViewpoint(site);
-    expect(inside(tileExtentOf(site, site.tiles[0]), spawn.epsg)).toBe(true);
-  });
-}

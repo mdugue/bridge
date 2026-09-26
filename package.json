@@ -16,7 +16,9 @@
     "shots": "SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed",
     "verify": "bun run lint && bun run typecheck && bun run test",
     "docs:diagrams": "bun scripts/render-diagrams.ts",
-    "bake": "bun scripts/bake.ts",
+    "site": "bun scripts/site-report.ts",
+    "fetch": "bun scripts/pipeline.ts fetch",
+    "bake": "bun scripts/pipeline.ts bake",
     "test:pipeline": "cd pipeline && uv run pytest -q tests && uv run ruff check . && uv run ruff format --check ."
   },
   "dependencies": {

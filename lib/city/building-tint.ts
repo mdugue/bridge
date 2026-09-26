@@ -26,6 +26,14 @@
 
 export type TintRgb = [number, number, number];
 
+/**
+ * What a site's walls are mostly made of (`Site.facades`): rendered plaster
+ * — the default, Dresden and most southern and central old towns — or
+ * brick, the northern clinker cities (Hamburg). It swaps the palette of
+ * housing and commerce; civic buildings keep their cool stone.
+ */
+export type FacadeMaterial = "brick" | "render";
+
 /** Muted clay-family swatches (sRGB 0..255), grouped by building use. Families
  *  overlap at the edges so the warm/neutral/cool transition is never abrupt.
  *  (Stored as channel tuples, not hex, to keep the module free of bitwise ops.) */
@@ -48,6 +56,19 @@ const FAMILIES = {
     [217, 213, 204],
     [207, 210, 206],
     [199, 205, 210],
+  ],
+  // Brick cities — the clinker of the Kontorhäuser and the Speicherstadt,
+  // from orange brick to dark red-brown, plus one pale render for the white
+  // stucco between them. The swatches are strong on purpose: at the default
+  // mix (60 % into the pale clay, in linear light) they land on a washed,
+  // dusty brick (≈ sRGB 182–218, 157–170, 150–155), rosier and darker than
+  // the plaster families, and still inside the watercolour register.
+  brick: [
+    [190, 78, 42],
+    [150, 52, 36],
+    [204, 104, 62],
+    [130, 50, 40],
+    [229, 214, 184],
   ],
 } as const;
 
@@ -115,13 +136,17 @@ function readNumber(v: unknown): number | undefined {
 /**
  * Stable linear-RGB tint for one building. `objectId` seeds the hash (so the
  * same building always gets the same colour across reloads/demolish), `attrs`
- * is the CityJSON `attributes` bag (`function`, `measuredHeight`).
+ * is the CityJSON `attributes` bag (`function`, `measuredHeight`), `facades`
+ * the site's wall material.
  */
 export function buildingTint(
   objectId: string,
-  attrs: Record<string, unknown> = {}
+  attrs: Record<string, unknown> = {},
+  facades: FacadeMaterial = "render"
 ): TintRgb {
-  const family = FAMILIES[familyOf(readString(attrs.function))];
+  const use = familyOf(readString(attrs.function));
+  const family =
+    FAMILIES[facades === "brick" && use !== "cool" ? "brick" : use];
   const pick =
     family[
       Math.min(family.length - 1, Math.floor(hash01(objectId) * family.length))

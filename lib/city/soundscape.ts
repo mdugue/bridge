@@ -444,7 +444,7 @@ export function advanceSteps(
 
 export type BellSize = "large" | "medium" | "small";
 
-/** A bell tower (data/dlm/soundmarks_<tile>.geojson), projected metres. */
+/** A bell tower (data/<site>/dlm/soundmarks_<tile>.geojson), projected metres. */
 export interface BellTower {
   size: BellSize;
   x: number;

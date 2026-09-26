@@ -228,14 +228,14 @@ or the feature falls back).
 
 ```mermaid
 flowchart LR
-  subgraph IN["📦 Inputs — data/_raw/dresden/ (gitignored) + committed sources"]
+  subgraph IN["📦 Inputs — data/_raw/&lt;provider&gt;/ (gitignored) + data/&lt;site&gt;/ sources"]
     direction TB
     iDLM["Basis-DLM<br/>dlm/*.shp"]
     iDOM["DOM1<br/>dom1/*.tif"]
     iDOP["DOP RGBI<br/>dop/*.tif"]
     iOSM["OSM extract<br/>osm/*.osm.pbf"]
-    iDGM["DGM1 GeoTIFF<br/>data/dgm (committed)"]
-    iCJ["LoD2 CityJSON<br/>data/cityjson (committed)"]
+    iDGM["DGM1 GeoTIFF<br/>data/&lt;site&gt;/dgm"]
+    iCJ["LoD2 CityJSON<br/>data/&lt;site&gt;/cityjson"]
   end
 
   subgraph PY["pipeline/bake — Python (uv)"]
@@ -367,6 +367,7 @@ flowchart LR
   dWALL -. "fences and gate leaves (L0)" .-> tTER
 ```
 
-The ingest adapter that fills the inputs (`pipeline/bake/ingest_sn.py` for
-Saxony) and the tileset's tree and glTF encoding are described in
+The fetch adapter that fills the inputs (`pipeline/bake/providers/<id>.py`,
+one per Land), the OSM land cover for providers without an open Basis-DLM
+(`landcover_osm.py`), and the tileset's tree and glTF encoding are described in
 [data-pipeline.md](./data-pipeline.md).

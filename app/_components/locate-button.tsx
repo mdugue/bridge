@@ -71,7 +71,7 @@ export function useLocateMe(
           return;
         }
         const site = currentSite();
-        const placement = placementOf(fix, site.epsg, h.terrainBounds);
+        const placement = placementOf(fix, site.provider.epsg, h.terrainBounds);
         if (placement.kind === "inside") {
           const now = h.getCameraState();
           h.placeAt({

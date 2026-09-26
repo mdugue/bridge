@@ -407,12 +407,17 @@ because boot is the largest fixed cost left once frames are cheap. The
 
 ## Data pipeline
 
+The site is `SITE` in `.env.local` (ADR 0032); its data is `data/<site>/`.
 Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
-`data/_raw/<site>/{dom1,dop,dlm,osm,trees,lsc,downloads}`; no Git-LFS. Committed by
-design: the small derived per-tile artifacts in `data/dlm/` and `data/dop/`,
-the CityJSON, **and the DGM1 GeoTIFF + `.tfw` per tile in `data/dgm/`**
-(~13–15 MB each), because `prepare-data.ts` bakes the terrain from it at
-build time and the canopy/rail bakes read it.
+`data/_raw/<provider>/{dom1,dop,dlm,osm,trees,lsc,downloads}`, shared by the
+provider's sites; no Git-LFS. The build sources are the CityJSON **and the
+DGM1 GeoTIFF per tile in `data/<site>/{cityjson,dgm}/`** — `prepare-data.ts`
+bakes the terrain from it at build time and the canopy/rail bakes read it —
+next to the small derived artifacts in `data/<site>/{dlm,dop}/`. Only
+`data/dresden/` is committed; another site's folder is a maintainer
+decision. `bun run fetch` downloads everything through the provider's
+adapter (`pipeline/bake/providers/<id>.py`) and converts the LoD2 CityGML
+itself (`citygml.py`); `bun run site` says what is missing.
 
 **Stage 1, the offline bakes** (ADR 0025): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
@@ -423,7 +428,8 @@ fix the environment (`pipeline/pyproject.toml`), don't bend the code.
 CRS, land cover first:
 
 ```bash
-bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
+bun run fetch                          # download what the site needs (its provider's adapter)
+bun run bake                           # every tile, every step
 bun run bake 33412_5656_2_sn           # one tile, all steps
 bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands canopy trees ndvi roof-colour osm-buildings

@@ -12,7 +12,7 @@ Committed neighbour tiles fill the margin; beyond the site the ground is
 open, at the mean height of the tile's edge.
 
 Outputs:
-  data/dlm/svf_<tile>.png      1024² (≈2 m), 8-bit: 255 · svf, where
+  data/<site>/dlm/svf_<tile>.png      1024² (≈2 m), 8-bit: 255 · svf, where
                                svf = 1 − mean over 16 azimuths of sin² h and
                                h is the horizon within 150 m (isotropic sky).
                                Texels under a roof (their ground sees almost
@@ -20,7 +20,7 @@ Outputs:
                                LINEAR filtering and the mipmaps never pull a
                                dark band out of the footprints onto the
                                street
-  data/dlm/horizon_<tile>.png  256² (≈8 m) × 16 azimuths × two bands: the
+  data/<site>/dlm/horizon_<tile>.png  256² (≈8 m) × 16 azimuths × two bands: the
                                horizon angle of occluders 80–1 500 m away
                                (the far band, 0–45° in 8 bits) and 8–80 m
                                away (the near band, 0–90° in 8 bits). Eight
@@ -33,7 +33,7 @@ Outputs:
                                (lib/city/png-raster.ts). Footprint texels
                                take the nearest open texel's angles, as the
                                sky view's do
-  data/dlm/horizon_<tile>.json the legend (azimuths, bands, angle scales) —
+  data/<site>/dlm/horizon_<tile>.json the legend (azimuths, bands, angle scales) —
                                lib/city/skyview.ts keeps the same constants
 The observer is the bare ground (DGM): the rasters shade the terrain and,
 sampled just outside a wall, its facade.
@@ -85,7 +85,6 @@ WALL_NZ = 0.05  # |n_z| below this: a vertical wall, nothing to burn
 
 
 # Derived from GeoSN's DGM1 and LoD2 alone.
-ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0 (DGM1, LoD2)"
 
 
 def azimuths(count: int = AZIMUTHS) -> np.ndarray:
@@ -405,7 +404,7 @@ def pack_bands(far: np.ndarray, near: np.ndarray) -> np.ndarray:
     return np.concatenate([pack_horizon(far, HORIZON_MAX_DEG), pack_horizon(near, NEAR_MAX_DEG)])
 
 
-def legend(count: int = AZIMUTHS) -> dict:
+def legend(credit: str, count: int = AZIMUTHS) -> dict:
     return {
         "azimuthsDeg": [float(a) for a in azimuths(count)],
         "layout": "plane p (stacked north-to-south), channel c = azimuth 4 (p mod 4) + c; "
@@ -429,7 +428,7 @@ def legend(count: int = AZIMUTHS) -> dict:
         ],
         "footprints": "cells under a roof carry the nearest open cell's angles",
         "observer": "DGM1 ground; occluders DGM1 + LoD2 surfaces (no trees)",
-        "attribution": ATTRIBUTION,
+        "attribution": f"{credit} (DGM1, LoD2)",
     }
 
 
@@ -460,7 +459,9 @@ def run(tile: Tile) -> None:
     near = fill_footprints(near_horizon(ground, surface, margin, res), covered)
     png = tile.out("dlm", f"horizon_{tile.id}.png")
     save_png(png, pack_bands(far, near))
-    tile.out("dlm", f"horizon_{tile.id}.json").write_text(json.dumps(legend(), indent=2) + "\n")
+    tile.out("dlm", f"horizon_{tile.id}.json").write_text(
+        json.dumps(legend(tile.credit), indent=2) + "\n"
+    )
     t2 = time.perf_counter()
     print(
         f"{tile.id}: sky view mean {svf.mean():.3f} (min {svf.min():.2f}; "

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
+import { DRESDEN } from "../../sites/dresden";
 import {
   packSportTable,
   SPORT_MARKINGS,
@@ -14,6 +15,7 @@ import {
   sportSurfaceId,
   type SportTable,
 } from "./sport";
+import { siteDataDir } from "./tile";
 
 interface CommittedTable extends SportTable {
   markings: Record<string, string>;
@@ -21,10 +23,11 @@ interface CommittedTable extends SportTable {
   surfaces: Record<string, string>;
 }
 
-const committed = readdirSync("data/dlm")
+const DLM = `${siteDataDir(DRESDEN)}/dlm`;
+const committed = readdirSync(DLM)
   .filter((f) => /^sport_.*\.json$/u.test(f))
   .map(
-    (f) => JSON.parse(readFileSync(`data/dlm/${f}`, "utf8")) as CommittedTable
+    (f) => JSON.parse(readFileSync(`${DLM}/${f}`, "utf8")) as CommittedTable
   );
 
 const asMap = (keys: readonly string[]) =>

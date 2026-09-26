@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (can opt-in for committing if needed); .env.example documents SITE
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -49,10 +50,12 @@ next-env.d.ts
 # POC tile data copied from data/ by scripts/prepare-data.ts
 /public/data/
 
-# Raw bulk geodata downloads (e.g. the ~1 GB statewide ATKIS Basis-DLM).
-# These are reproducible public downloads — never commit them. Only the
-# small clipped per-tile outputs (data/dlm/…) go into git.
-/data/_raw/
+# Site data: data/<site>/ is what `bun run fetch` and `bun run bake` write
+# for a site, data/_raw/<provider>/ the bulk downloads (never committed).
+# A site's folder is committed only by decision (ADR 0032): un-ignore it
+# below to deploy it from git. `bun run site` prints its size.
+/data/*
+!/data/dresden/
 
 # Local snapshot screenshot harness output (e2e/snapshot-shot.spec.ts)
 shots/

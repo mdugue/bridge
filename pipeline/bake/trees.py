@@ -5,8 +5,8 @@ height, crown, silhouette archetype, genus and trunk.
 Street trees, parks, schools and other municipal land (not the Großer
 Garten, not private courtyards); licence dl-de/by-2-0, credit
 "Landeshauptstadt Dresden" — the output carries an `attribution` member.
-The ingest adapter caches the WFS response as `<raw>/trees/<tile>.geojson`
-(ingest_sn.py `ingest_trees`); this step:
+`bun run fetch` caches the WFS response as `<raw>/trees/<tile>.geojson`
+(`bun run fetch`, cadastre.py; only for a site that names a register); this step:
 
   1. keeps the trees whose `gis_x_utm`/`gis_y_utm` (= the geometry, verified
      to µm) the tile owns — west/south edges in, so each tree lands in
@@ -35,7 +35,7 @@ The ingest adapter caches the WFS response as `<raw>/trees/<tile>.geojson`
   6. drops a trunk diameter that cannot be the tree's (over T_MAX, or over
      T_PER_H cm per metre of its height) rather than clamping it.
 
-Output `data/dlm/trees_<tile>.geojson`, points with
+Output `data/<site>/dlm/trees_<tile>.geojson`, points with
   h tree height (m), d crown diameter (m), a archetype id (0 round, 1 oval,
   2 columnar, 3 conifer, 4 weeping, 5 small), l leaf type ("e"/"d"),
   c foliage colour (1 purple, 2 golden; absent = green), g 1 = globe
@@ -61,7 +61,6 @@ from . import tree_archetypes as ta
 from .common import OSM_ATTRIBUTION, Tile, crs_member, feature, owns
 from .osm import has_extract, read_osm, tag
 
-ATTRIBUTION = "Stadtbaumkataster © Landeshauptstadt Dresden (dl-de/by-2-0)"
 H_MIN, H_MAX, D_MIN, D_MAX = 1.5, 40.0, 0.8, 30.0
 WOODLAND = (2, 3)  # the class raster's forest and copse (landcover.py)
 DEFAULT_RATIO = 0.55  # crown / height where an archetype has no sample
@@ -421,6 +420,9 @@ def _osm_complement(tile: Tile, cadastre: np.ndarray) -> list[dict]:
 
 
 def run(tile: Tile) -> None:
+    if tile.tree_cadastre is None:
+        print(f"{tile.id}: the site names no tree cadastre — skipping the inventory trees")
+        return
     raw_path = tile.raw / "trees" / f"{tile.id}.geojson"
     if not raw_path.exists():
         print(f"{tile.id}: no tree cadastre at {raw_path} — skipping the inventory trees")
@@ -448,9 +450,10 @@ def run(tile: Tile) -> None:
         landcover = tile.out("dlm", f"landcover_{tile.id}.png")
         cls = np.asarray(Image.open(landcover).convert("L")) if landcover.exists() else None
         features = tree_features([r[0] for r in rows], [r[1] for r in rows], cls, tile.bounds)
+    credit = tile.tree_cadastre.credit
     doc = {
         "type": "FeatureCollection",
-        "attribution": f"{ATTRIBUTION}; {OSM_ATTRIBUTION}" if osm else ATTRIBUTION,
+        "attribution": f"{credit}; {OSM_ATTRIBUTION}" if osm else credit,
         "archetypes": ta.ARCHETYPES,
         "genera": ta.GENERA,
         "crs": crs_member(tile.epsg),

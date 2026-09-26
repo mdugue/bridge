@@ -112,7 +112,7 @@ a raised pavement would mean shaping the terrain along every kerb.
 
 ## Phase 2 — Paving from OSM ✅
 
-`pipeline/bake/surface.py` → `data/dlm/surface_<tile>.png` (+ legend JSON
+`pipeline/bake/surface.py` → `data/<site>/dlm/surface_<tile>.png` (+ legend JSON
 with the ODbL credit), a new optional tile artifact, named in the **fine**
 terrain level's extras only (`surface`), loaded NEAREST as an RG texture
 (two interleaved bytes per texel in a greyscale PNG, see 2b).

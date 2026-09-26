@@ -57,7 +57,11 @@ export function useLiveMode(
   const convergence = useMemo(
     () =>
       latLng
-        ? (gridConvergenceDeg(currentSite().epsg, latLng.lat, latLng.lng) ?? 0)
+        ? (gridConvergenceDeg(
+            currentSite().provider.epsg,
+            latLng.lat,
+            latLng.lng
+          ) ?? 0)
         : 0,
     [latLng]
   );
@@ -111,7 +115,7 @@ export function useLiveMode(
           return;
         }
         const site = currentSite();
-        const placement = placementOf(fix, site.epsg, h.terrainBounds);
+        const placement = placementOf(fix, site.provider.epsg, h.terrainBounds);
         if (placement.kind === "inside") {
           h.setFollowPosition({ x: placement.epsgX, y: placement.epsgY });
           if (first || wasOutside) {

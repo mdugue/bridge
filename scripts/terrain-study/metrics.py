@@ -4,7 +4,7 @@ Inputs (all in <study_dir>, see build_grids.py / tin-study.ts):
   lsc_ground.npz            class-2 ground points, 90/10 train/test split
   <grid>.f32                raw float32 n*n grids (row 0 = north, pixel centres)
   <grid>_tin<cm>.{coords,tris}.u32   Delatin meshes of those grids
-Plus the committed data/dlm/walls_<tile>.geojson and the prepared 512²
+Plus the committed data/dresden/dlm/walls_<tile>.geojson and the prepared 512²
 neighbour DGMs (resampled to the coarse level's 512²) for the seam check.
 
 Metrics:
@@ -100,7 +100,7 @@ class Tin:
 
 
 def load_walls():
-    doc = json.loads((ROOT / f"data/dlm/walls_{TILE}.geojson").read_text())
+    doc = json.loads((ROOT / f"data/dresden/dlm/walls_{TILE}.geojson").read_text())
     return doc["features"]
 
 
@@ -280,7 +280,7 @@ def neighbour_grid(tile, n=512):
     import rasterio
     from rasterio.enums import Resampling
 
-    path = ROOT / f"data/dgm/dgm1_{tile}_tiff/dgm1_{tile}.tif"
+    path = ROOT / f"data/dresden/dgm/dgm1_{tile}_tiff/dgm1_{tile}.tif"
     with rasterio.open(path) as ds:
         z = ds.read(1, out_shape=(n, n), resampling=Resampling.bilinear).astype(np.float64)
         b = ds.bounds

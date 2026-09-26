@@ -1,4 +1,4 @@
-"""Hedges and the trees outside the canopy mask, from the GeoSN laser scan
+"""Hedges and the trees outside the canopy mask, from the provider's laser scan
 (LSC) + OpenStreetMap. The viewer draws the OSM hedges
 (low-vegetation-layer.ts) at the height the scan measures along them, and
 the extra trees join the canopy; the scan-only hedges and the shrubs this
@@ -7,7 +7,7 @@ step also finds are NOT shipped (docs/transformations.md, "Low vegetation":
 writes every candidate for study.
 
 Inputs, beyond the committed bakes it depends on (landcover, ndvi, walls,
-bridge, canopy, trees under data/dlm/, the CityJSON and the DGM):
+bridge, canopy, trees under data/<site>/dlm/, the CityJSON and the DGM):
   <raw>/lsc/<tile>.laz   the laser scan (≈380 MB; the only raw input with
                          heights below 3 m that tells vegetation apart),
                          rasterised once (lsc.py: laspy, PDAL's rules) into
@@ -22,9 +22,9 @@ Without the LAZ the tile falls back to OSM only: mapped hedges at their
 tagged (or a default) height, and no extra trees (docs/portability.md).
 
 Outputs:
-  data/dlm/lowveg_<tile>.geojson   the OSM hedge LineStrings {kind:"hedge",
+  data/<site>/dlm/lowveg_<tile>.geojson   the OSM hedge LineStrings {kind:"hedge",
                                    h, w, src: "osm" | "osm+lsc"}
-  data/dlm/canopyx_<tile>.geojson  LSC crown peaks > 3 m that the canopy
+  data/<site>/dlm/canopyx_<tile>.geojson  LSC crown peaks > 3 m that the canopy
                                    (canopy_<tile>.geojson) does not cover and
                                    no cadastre tree (trees_<tile>.geojson)
                                    claims {h, r} — courtyard and garden trees
@@ -727,14 +727,16 @@ def shipped(feats: list[dict]) -> list[dict]:
     ]
 
 
-LSC_ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0 (laser scan)"
+def lsc_credit(tile: Tile) -> str:
+    """The laser scan's credit: the provider's, whose scan it is."""
+    return f"{tile.credit} (laser scan)"
 
 
 def run(tile: Tile, research: bool = False) -> None:
     if not has_extract(tile, "the hedges"):
         return
     inputs, feats = build(tile)
-    attribution = f"{LSC_ATTRIBUTION}; {OSM_ATTRIBUTION}" if inputs["has_lsc"] else OSM_ATTRIBUTION
+    attribution = f"{lsc_credit(tile)}; {OSM_ATTRIBUTION}" if inputs["has_lsc"] else OSM_ATTRIBUTION
     if research:
         out = tile.raw / "lsc" / f"lowveg_all_{tile.id}.geojson"
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -748,7 +750,7 @@ def run(tile: Tile, research: bool = False) -> None:
     dlm = tile.data / "dlm"
     extra, peaks = canopy_extra(inputs, dlm / f"canopy_{tile.id}.geojson")
     extra, dropped = cadastre_filter(extra, dlm / f"trees_{tile.id}.geojson")
-    write_geojson(tile.out("dlm", f"canopyx_{tile.id}.geojson"), extra, tile.epsg, LSC_ATTRIBUTION)
+    write_geojson(tile.out("dlm", f"canopyx_{tile.id}.geojson"), extra, tile.epsg, lsc_credit(tile))
     print(
         f"{tile.id}: {len(extra)} extra trees of {peaks} crown peaks "
         f"({dropped} dropped as cadastre trees)"

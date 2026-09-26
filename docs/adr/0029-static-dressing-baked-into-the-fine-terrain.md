@@ -32,7 +32,7 @@ The viewer finds a tile's meshes by node name (`terrain`, `city`,
 fences with their gates (`fences`, plan 029: `lib/city/fences.ts`, one
 low band per line in a tone `fence-layer.ts` gives it) followed the
 same way. The GeoJSON they come from stays in
-`data/dlm/` as a build input and is no longer served.
+`data/<site>/dlm/` as a build input and is no longer served.
 
 ## Consequences
 

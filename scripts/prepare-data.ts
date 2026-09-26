@@ -4,7 +4,7 @@
  * content-hashed names. Four steps:
  *
  *  1. **Side files** — each tile's rasters and feature collections
- *     (lib/city/tile.ts, `tileArtifacts`): committed files under data/dlm/
+ *     (lib/city/tile.ts, `tileArtifacts`): the site's files under data/<site>/dlm/
  *     as they are, plus the 2048² class raster downsampled from the 4096²
  *     one (downsample-raster.ts).
  *  2. **Content** — per tile, the buildings (CityJSON → glTF with a
@@ -73,6 +73,7 @@ import {
   dgmSourceFiles,
   kerbSourceFile,
   MANIFEST_FILE,
+  sideFileSource,
   stairSourceFile,
   terraceSourceFile,
   tileArtifacts,
@@ -116,6 +117,9 @@ const OUT_DIR = join(process.cwd(), "public/data");
 const CACHE_DIR = join(process.cwd(), ".cache/prepare-data");
 const SITE = currentSite();
 const TILES = tileIds(SITE);
+const FACADES = SITE.facades ?? "render";
+/** What a missing source means for a site that has not been fetched yet. */
+const HINT = ` — run \`bun run fetch\` and \`bun run bake\` for SITE=${SITE.id}`;
 
 function fail(message: string): never {
   process.stderr.write(`prepare-data: ${message}\n`);
@@ -240,7 +244,7 @@ async function publishColonies(
   file: string,
   names: Partial<Record<string, string>>
 ): Promise<void> {
-  const src = at(`data/dlm/${file}`);
+  const src = at(sideFileSource(SITE, file));
   const key = cacheKey([src]);
   const lowFile = file.replace(/\.png$/u, ".r1024.png");
   const cropFile = file.replace(/\.png$/u, ".crop.json");
@@ -278,8 +282,8 @@ async function publishColonies(
  * the canopy bake, because the structures are baked after the canopy.
  */
 async function publishCanopy(tile: string, file: string): Promise<string> {
-  const src = at(`data/dlm/${file}`);
-  const sheds = at(cityMeshSourceFiles(tile).smallBuild);
+  const src = at(sideFileSource(SITE, file));
+  const sheds = at(cityMeshSourceFiles(SITE, tile).smallBuild);
   const bytes = await cached(file, cacheKey([src, sheds]), () => {
     const doc = readJson<FeatureCollection<CanopyFeature>>(src);
     if (!existsSync(sheds)) {
@@ -302,22 +306,23 @@ for (const tile of TILES) {
   for (const [kind, artifact] of Object.entries(tileArtifacts(tile))) {
     if (
       kind === "cultivatedRaster" &&
-      existsSync(at(`data/dlm/${artifact.file}`))
+      existsSync(at(sideFileSource(SITE, artifact.file)))
     ) {
       await publishColonies(tile, artifact.file, names);
       continue;
     }
     if (
       (kind === "canopy" || kind === "canopyx") &&
-      existsSync(at(`data/dlm/${artifact.file}`))
+      existsSync(at(sideFileSource(SITE, artifact.file)))
     ) {
       names[kind] = await publishCanopy(tile, artifact.file);
       continue;
     }
     if (artifact.bakedFrom) {
-      const src = at(`data/dlm/${artifact.bakedFrom.file}`);
+      const source = sideFileSource(SITE, artifact.bakedFrom.file);
+      const src = at(source);
       if (!existsSync(src)) {
-        fail(`missing source file data/dlm/${artifact.bakedFrom.file}`);
+        fail(`missing source file ${source}${HINT}`);
       }
       const { raster } = artifact.bakedFrom;
       const bytes = await cached(artifact.file, cacheKey([src]), () =>
@@ -326,11 +331,12 @@ for (const tile of TILES) {
       names[kind] = publish(artifact.file, bytes);
       continue;
     }
-    const src = at(`data/dlm/${artifact.file}`);
+    const source = sideFileSource(SITE, artifact.file);
+    const src = at(source);
     if (existsSync(src)) {
       names[kind] = publish(artifact.file, readFileSync(src));
     } else if (artifact.required) {
-      fail(`missing source file data/dlm/${artifact.file}`);
+      fail(`missing source file ${source}${HINT}`);
     } else {
       // The loader treats a missing optional artifact as "feature off".
       log(`optional source absent, skipping ${artifact.file}`);
@@ -348,9 +354,9 @@ for (const tile of TILES) {
 let sharedMatrix: Matrix4 | null = null;
 
 function parseCity(tile: string): BakedCityMesh {
-  const src = cityMeshSourceFiles(tile);
+  const src = cityMeshSourceFiles(SITE, tile);
   if (!existsSync(at(src.city))) {
-    fail(`missing source file ${src.city}`);
+    fail(`missing source file ${src.city}${HINT}`);
   }
   if (!sharedMatrix && tile !== TILES[0]) {
     parseCity(TILES[0]);
@@ -366,7 +372,15 @@ function parseCity(tile: string): BakedCityMesh {
     ? readJson<FeatureCollection<SmallBuildingFeature>>(at(src.smallBuild))
         .features
     : undefined;
-  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix, osmLut, scan);
+  const baked = bakeCityMesh(
+    tile,
+    doc,
+    roofLut,
+    sharedMatrix,
+    osmLut,
+    scan,
+    FACADES
+  );
   sharedMatrix ??= baked.matrix;
   return baked;
 }
@@ -375,7 +389,7 @@ function parseCity(tile: string): BakedCityMesh {
 const frame = parse<{ cx: number; cy: number; epsg: number }>(
   await cached(
     "frame.json",
-    cacheKey([at(cityMeshSourceFiles(TILES[0]).city)]),
+    cacheKey([at(cityMeshSourceFiles(SITE, TILES[0]).city)]),
     () => {
       const baked = parseCity(TILES[0]);
       return utf8({ ...baked.offset, epsg: baked.epsg });
@@ -390,14 +404,14 @@ const gz = (bytes: Uint8Array) => gzipSync(bytes, { level: 9 });
 async function bakeCity(
   tile: string
 ): Promise<{ file: string; footprints: string; maxZ: number }> {
-  const src = cityMeshSourceFiles(tile);
+  const src = cityMeshSourceFiles(SITE, tile);
   const inputs = [
     at(src.city),
     at(src.roofColor),
     at(src.osmBuild),
     at(src.smallBuild),
   ];
-  const key = cacheKey(inputs, offset);
+  const key = cacheKey(inputs, offset, FACADES);
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
     mesh ??= cityMesh(parseCity(tile));
@@ -421,14 +435,17 @@ async function bakeCity(
     ...(svf ? { svf } : {}),
   };
   const name = `city_${tile}.glb.gz`;
-  const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
-    gz(
-      await writeMeshGlb({
-        ...built().input,
-        name: "city",
-        extras: { ...extras },
-      })
-    )
+  const glb = await cached(
+    name,
+    cacheKey(inputs, offset, FACADES, extras),
+    async () =>
+      gz(
+        await writeMeshGlb({
+          ...built().input,
+          name: "city",
+          extras: { ...extras },
+        })
+      )
   );
   return { file: publish(name, glb), footprints, maxZ };
 }
@@ -436,7 +453,7 @@ async function bakeCity(
 /** The tile's kerb lines (the smoothed DLM road edge), for the kerb stones
  *  the fine level carries. */
 function kerbLines(tile: string): Point2[][] {
-  const path = at(kerbSourceFile(tile));
+  const path = at(kerbSourceFile(SITE, tile));
   if (!existsSync(path)) {
     return [];
   }
@@ -448,7 +465,7 @@ function kerbLines(tile: string): Point2[][] {
 
 /** Everything the tile's walls file carries: walls, fences, gates. */
 function wallFile(tile: string): WallFileFeature[] {
-  const path = at(wallSourceFile(tile));
+  const path = at(wallSourceFile(SITE, tile));
   return existsSync(path)
     ? readJson<{ features: WallFileFeature[] }>(path).features
     : [];
@@ -512,7 +529,7 @@ function gatePoints(tile: string): GatePoint[] {
 /** The tile's OSM stairs: the terrain bake shapes the ground under them and
  *  writes them into the fine level's glTF. */
 function stairLines(tile: string): StairLine[] {
-  const path = at(stairSourceFile(tile));
+  const path = at(stairSourceFile(SITE, tile));
   if (!existsSync(path)) {
     return [];
   }
@@ -522,7 +539,7 @@ function stairLines(tile: string): StairLine[] {
 
 /** The raised areas the terrain bake lifts to their level. */
 function terraces(tile: string): Terrace[] {
-  const path = at(terraceSourceFile(tile));
+  const path = at(terraceSourceFile(SITE, tile));
   if (!existsSync(path)) {
     return [];
   }
@@ -564,14 +581,14 @@ function soundFilesOf(names: Partial<Record<string, string>>): TileSoundFiles {
 
 /** The files a tile's shaped ground is baked from. */
 function terrainInputs(tile: string): string[] {
-  const source = dgmSourceFiles(tile);
+  const source = dgmSourceFiles(SITE, tile);
   return [
     at(source.tif),
     at(source.tfw),
-    at(wallSourceFile(tile)),
-    at(stairSourceFile(tile)),
-    at(terraceSourceFile(tile)),
-    at(kerbSourceFile(tile)),
+    at(wallSourceFile(SITE, tile)),
+    at(stairSourceFile(SITE, tile)),
+    at(terraceSourceFile(SITE, tile)),
+    at(kerbSourceFile(SITE, tile)),
   ];
 }
 
@@ -591,7 +608,7 @@ function shapedTerrain(
   let built = terrains.get(memo);
   if (!built) {
     built = (async () => {
-      const source = dgmSourceFiles(tile);
+      const source = dgmSourceFiles(SITE, tile);
       const tif = at(source.tif);
       const tfw = at(source.tfw);
       const buf = readFileSync(tif);
@@ -701,9 +718,9 @@ async function bakeTerrain(
   tile: string,
   level: 0 | 1
 ): Promise<{ file: string; maxZ: number; minZ: number }> {
-  const source = dgmSourceFiles(tile);
+  const source = dgmSourceFiles(SITE, tile);
   if (!existsSync(at(source.tif))) {
-    fail(`missing source file ${source.tif}`);
+    fail(`missing source file ${source.tif}${HINT}`);
   }
   const names = sideFiles.get(tile) ?? {};
   const { n } = TERRAIN_LEVELS[level];
@@ -777,7 +794,7 @@ for (const [i, tile] of TILES.entries()) {
   const maxZ = Math.max(fine.maxZ, coarse.maxZ, city.maxZ);
   baked.push({
     id: tile,
-    bounds: tileExtentOf(SITE, SITE.tiles[i]),
+    bounds: tileExtentOf(SITE.tiles[i]),
     city: city.file,
     terrain: { 0: fine.file, 1: coarse.file },
     zRange: [
@@ -820,7 +837,7 @@ publish(
 
 const HERO_FILE = "wissen-hero.webp";
 const rasters = TILES.map((tile) =>
-  at(`data/dlm/${tileArtifacts(tile).landcover.file}`)
+  at(sideFileSource(SITE, tileArtifacts(tile).landcover.file))
 );
 if (rasters.every((path) => existsSync(path))) {
   const heroSources = [
@@ -829,12 +846,7 @@ if (rasters.every((path) => existsSync(path))) {
     at("lib/city/landcover.ts"),
   ];
   const hero = await cached(HERO_FILE, cacheKey(heroSources), () =>
-    bakeWissenHero(
-      TILES,
-      (tile) => rasters[TILES.indexOf(tile)],
-      1600,
-      SITE.tileKm
-    )
+    bakeWissenHero(SITE.tiles, rasters, 1600)
   );
   publish(HERO_FILE, hero);
 } else {

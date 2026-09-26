@@ -14,8 +14,8 @@ const PRIMARY_TILE = "33412_5656_2_sn";
 
 test("the artifact map reproduces the served file names", () => {
   const a = tileArtifacts(PRIMARY_TILE);
-  expect(wallSourceFile(PRIMARY_TILE)).toBe(
-    "data/dlm/walls_33412_5656_2_sn.geojson"
+  expect(wallSourceFile(DRESDEN, PRIMARY_TILE)).toBe(
+    "data/dresden/dlm/walls_33412_5656_2_sn.geojson"
   );
   expect(a.ndvi.file).toBe("ndvi_33412_5656_2_sn.png");
   expect(a.landcover.file).toBe("landcover_33412_5656_2_sn.png");
@@ -64,11 +64,11 @@ test("the site's tiles, the spawn tile first", () => {
     "33408_5656_2_sn",
     "33408_5658_2_sn",
   ]);
-  expect(dgmSourceFiles(PRIMARY_TILE).tif).toBe(
-    "data/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif"
+  expect(dgmSourceFiles(DRESDEN, PRIMARY_TILE).tif).toBe(
+    "data/dresden/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn.tif"
   );
-  expect(cityMeshSourceFiles(PRIMARY_TILE).city).toBe(
-    "data/cityjson/lod2_33412_5656_2_sn.city.json"
+  expect(cityMeshSourceFiles(DRESDEN, PRIMARY_TILE).city).toBe(
+    "data/dresden/cityjson/lod2_33412_5656_2_sn.city.json"
   );
 });
 

@@ -1,4 +1,4 @@
-"""Churches with a bell tower → `data/dlm/soundmarks_<tile>.geojson`, the
+"""Churches with a bell tower → `data/<site>/dlm/soundmarks_<tile>.geojson`, the
 points the hidden soundscape (plan 035) strikes the full hour from.
 
 OSM says which buildings are churches — `building=church|cathedral|chapel`,
@@ -31,7 +31,6 @@ from .common import OSM_ATTRIBUTION, Tile, column, feature, owns, write_geojson
 from .osm import has_extract, read_osm, tag
 from .skyview import overlaps, site_sources
 
-GEOSN_HEIGHTS = "tower heights: Quelle: GeoSN, dl-de/by-2-0"
 CHURCH_BUILDINGS = ("church", "cathedral", "chapel")
 CHURCH_WHERE = (
     "building IN ('church', 'cathedral', 'chapel', 'bell_tower') "
@@ -224,7 +223,7 @@ def run(tile: Tile) -> None:
         tile.out("dlm", f"soundmarks_{tile.id}.geojson"),
         features,
         tile.epsg,
-        f"{OSM_ATTRIBUTION}; {GEOSN_HEIGHTS}",
+        f"{OSM_ATTRIBUTION}; tower heights: {tile.credit}",
     )
     sizes = {
         s: sum(1 for m in marks if m["props"]["size"] == s) for s in ("large", "medium", "small")

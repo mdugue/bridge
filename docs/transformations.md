@@ -139,7 +139,14 @@ visual-variable codebook is in
   with. The minimap and the `/wissen` picture use the same table; a colour
   change is a look change, not a re-bake
   ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)).
-  `terrain-layer.ts`.
+  `terrain-layer.ts`. **Fallback: OpenStreetMap** where the provider
+  publishes no Basis-DLM in the Shape profile (Hamburg, Berlin):
+  `pipeline/bake/landcover_osm.py` writes the same class raster, legend and
+  hedge / tree-row lines from `landuse`/`natural`/`leisure` areas, buildings
+  and amenity areas (as settlement, burned first because OSM nests the green
+  inside it), buffered highways, waterways and rail. On Leipzig's centre
+  tile 71 % of texels agree with the DLM raster — water 95 %, settlement
+  78 %, roads 55 % ([ADR 0032](./adr/0032-sites-providers-and-per-site-data.md)).
 - **Meadow NDVI tint** (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
   DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
   shifts the pastel sage lush deep-green↔dry hay. In the terrain fragment shader
@@ -289,8 +296,14 @@ visual-variable codebook is in
   (`markings_low_<tile>.png`, 25–36 KB; a 1.45 m core so the rows still
   resolve — none loses paint): 4 MiB of GPU memory per fine tile instead
   of 16; its lane bits are coarser (≈90 % of the cycle-lane and
-  centre-line texels agree with the 2048² raster). **Not yet judged on a
-  GPU.**
+  centre-line texels agree with the 2048² raster). **Two carriageways
+  in line** (the other sites, 2026-09-26): on Leipzig's ring and Hamburg's
+  wide streets the crossings of both carriageways touch across the median
+  and merged into one row painted over it (44 m across on Leipzig's
+  ring); a merge that would reach further across than one carriageway
+  plus a metre (`MAX_MERGED_HALF_M`, 16 m half-length) now leaves them two
+  rows. Dresden's largest merged row is 15.18 m, so its files are
+  unchanged. **Not yet judged on a GPU.**
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
   courtyards, front gardens and parks inside the settlement alike. Where
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM
@@ -402,7 +415,7 @@ visual-variable codebook is in
   sites and surface car parks; monuments and stop shelters (other layers
   draw them) within 3 m. Each is its rectangle with `z` (lowest ground),
   `h` (the fitted top's median above it) and, tilted > 8°, `hc` (a pent
-  roof's corner heights) → `data/dlm/smallbuild_<tile>.geojson` (GeoSN).
+  roof's corner heights) → `data/<site>/dlm/smallbuild_<tile>.geojson` (the provider's credit).
   **6 625** on the fifteen tiles (703 pent roofs; the first bake shipped
   6 783 of 8 168 before the OSM context), the allotment colonies most of
   them. `bakeCityMesh` appends each
@@ -433,8 +446,14 @@ visual-variable codebook is in
   `function` family + `measuredHeight` nudge → muted per-building wall colour.
   **Source preference:** real per-building colour *(planned: DOP)* would replace
   the hash; the hash exists precisely so the look survives when `function` is 86 %
-  "unspecified". `lib/city/building-tint.ts` (at bake time, into the property
-  table's `tint`), `visual-style.ts`.
+  "unspecified". **Per site:** `Site.facades` picks the wall material —
+  `"render"` (default: sand, ochre, soft terracotta plaster) or `"brick"`
+  (Hamburg: four clinker swatches from orange brick to dark red-brown plus
+  one pale render; civic buildings keep their cool stone). The brick
+  swatches are saturated because the shader mixes them 60 % into the pale
+  clay in linear light, where they land on a washed, dusty brick.
+  `lib/city/building-tint.ts` (at bake time, into the property table's
+  `tint`), `visual-style.ts`.
 - **Roof colour** (*Dachfarbe*) — real **DOP-sampled** colour per building when
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
@@ -571,7 +590,7 @@ visual-variable codebook is in
   left ~95 % of crowns reading "dry" (invisible); the footprint max +
   recentre make lush↔dry read clearly.
   The low median has a cause: the DOP was flown on **2024-03-19**, leaf-off
-  (`data/provenance.json`), so deciduous crowns are bare in the imagery and
+  (`data/dresden/provenance.json`), so deciduous crowns are bare in the imagery and
   the index mostly separates evergreens and grass from everything else. A
   summer DOP would make the recentre less necessary and the meadow tint truer.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
@@ -601,7 +620,7 @@ visual-variable codebook is in
   default) — *inputs:* the city's *Stadtbaumkataster* (WFS `cls:L1261`, dl-de/by-2-0
   "Landeshauptstadt Dresden"; street trees, parks, schools — not the Großer
   Garten, not private ground): position, height, crown diameter, taxon.
-  `pipeline/bake/trees.py` bakes `data/dlm/trees_<tile>.geojson` (from the WFS cache the ingest adapter writes) (h, d,
+  `pipeline/bake/trees.py` bakes `data/<site>/dlm/trees_<tile>.geojson` (from the WFS cache `bun run fetch` writes, `cadastre.py`) (h, d,
   archetype id, leaf type, foliage colour; missing h/d imputed from the genus
   median / the archetype's d:h), with the taxonomy in
   `pipeline/bake/tree_archetypes.py`: genus + cultivar + German name → six
@@ -727,7 +746,7 @@ visual-variable codebook is in
 
 - **Hedges (OSM, laser-scan height)** and **trees outside the canopy mask**
   (laser scan) — on by default. The laser scan is baked for every tile of the
-  site (`bun run bake --ingest --lsc`); a tile without one would bake
+  site (`bun run fetch --lsc`, then `bun run bake`); a tile without one would bake
   OSM-only (hedges at their tag / 1.5 m, no extra trees). **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
   `osm+lsc`) and the extra trees. **Not shipped** (🗃️ below): the
   laser-scan-only hedges and all shrubs — the bake still finds them
@@ -1467,7 +1486,7 @@ research that produced them):
 | **Per-lamp real point lights** | three bakes the light count into every program → a recompile storm on every add/remove, plus per-light cost. | A fixed pool of 3 real lights retargeted to the nearest heads; every other lamp is emissive + sprite ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Plain (non-shadow-gated) foliage translucency, quad leaf billboards, selective bloom** | Noise at instance distance / no payoff for the cost. | Shadow-gated shimmer + translucency only (✅ above). |
 | **Baked RGB splatmap** (`landcover_rgb_<tile>.png`: RGB = pastel palette, A = water coverage, plus a 2048² variant) | The look lived in the bake: a colour change meant re-baking every tile, and the palette was spelled three times (bake, minimap, shader fallback). Its alpha was data, so every resize had to split colour from alpha — sharp premultiplies alpha across a resize, which once turned every land texel black ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md), superseding ADR 0016). | The bake writes class ids only; the one palette (`lib/city/landcover.ts`) is painted on the GPU at load. A per-fragment palette lookup was rejected too: class ids cannot be mipmapped, so far boundaries would alias. |
-| **Overpass-based OSM bakes** (lamps, platforms, bridge structure) | Live queries: rate-limited and not reproducible, and one more way of reading OSM next to the local extract the walls already used ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)). | Every OSM layer comes from one local Geofabrik `.osm.pbf` via GDAL's OSM driver (`pipeline/bake/osm.py`). The committed lamp/platform/bridge-structure files still predate this; the next re-bake moves them (`data/provenance.json`). |
+| **Overpass-based OSM bakes** (lamps, platforms, bridge structure) | Live queries: rate-limited and not reproducible, and one more way of reading OSM next to the local extract the walls already used ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)). | Every OSM layer comes from one local Geofabrik `.osm.pbf` via GDAL's OSM driver (`pipeline/bake/osm.py`). The committed lamp/platform/bridge-structure files still predate this; the next re-bake moves them (`data/dresden/provenance.json`). |
 | **Bash bakes** (`scripts/extract-*.sh` + Python/Pillow heredocs) | Three languages, string-built paths, tile names and CRS spelled per script; numpy and `gdal_calc.py` were missing, so raster maths was written around Pillow ([ADR 0025](./adr/0025-bakes-are-one-python-package.md)). | One package, `pipeline/bake/`, on numpy/rasterio/pyogrio/shapely in a uv environment, driven per site tile by `bun run bake`. |
 | **uint16 heightfield + custom building vertex-stream codecs** (`<tile>.heightfield-<n>.json` + `.u16.gz`; vertex stream + meta JSON) | Private formats with a codec on each side that no other tool could open, and the browser still burned the wall breaklines into the grid at load ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)). | Standard glTF 2.0 (meshopt + quantisation) with an `EXT_structural_metadata` table; the bake does the breaklines. Costs wire size (≈1.0 + 1.1 MB → ≈1.4 + 1.5 + 0.4 MB per tile); a heightmap-PNG custom content type is the fallback if that ever matters more than tooling. |
 | **The terrain TIN's own payload** (`dgm1_<tile>.tin-<cm>cm.json` + `.bin.gz`: byte-split delta planes + varint triangles; the prototype, ±0.25 m on the neighbours) | A private format again, next to the glTF every other content is ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)), and two terrain paths in the viewer. | The fine level's glTF *is* the TIN (reordered for meshopt, `extras.tin`), ±0.15 m on every tile — 20–27 % smaller than the 1024² grid it replaced ([ADR 0030](./adr/0030-terrain-tin-and-wall-snap.md)). |

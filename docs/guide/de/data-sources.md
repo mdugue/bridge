@@ -19,8 +19,22 @@ Downloads auf seinem Portal für offene Geodaten bereit,
 dieselben **2 km × 2 km großen Kacheln** geschnitten, weshalb auch der
 Viewer in Kacheln denkt. Welche Kacheln er zeigt, steht an einer einzigen
 Stelle, der Standort-Konfiguration `sites/dresden.ts`: die fünfzehn Kacheln
-(die erste ist die, auf der du startest), die Aussichtspunkte und die
-Quellenvermerke.
+(die erste ist die, auf der du startest) und die Aussichtspunkte; die
+Quellenvermerke kommen vom Anbieter.
+
+**Andere Orte, andere Anbieter.** Jedes Bundesland hat seine eigene
+Landesvermessung, und der Viewer kann fünf davon nutzen: das GeoSN für
+Dresden, Leipzig, Meißen und Grimma; **Geobasis NRW** für Unna; die
+**Bayerische Vermessungsverwaltung (LDBV)** für München; den **LGV** in
+Hamburg; und die **Senatsverwaltung für Stadtentwicklung** in Berlin. Sie
+veröffentlichen dieselben Arten von Datensätzen in anderem Zuschnitt —
+1-km-Kacheln, ein Archiv für die ganze Stadt, Luftbilder ohne Infrarotkanal
+—, und ein kleiner Adapter je Amt schneidet sie auf die 2-km-Kacheln des
+Viewers zu. Hamburg und Berlin veröffentlichen das Landschaftsmodell nicht
+in der Form, die der Viewer liest; dort kommen die Bodenfarben aus
+OpenStreetMap. Welcher Ort gebaut wird, legt eine einzige Variable fest,
+`SITE`; die Liste der Ämter mit ihren Lizenzen steht in
+`sites/providers.ts`.
 
 **OpenStreetMap (OSM)** — die von Freiwilligen gepflegte Weltkarte. Sie
 füllt Lücken, die die amtlichen Datensätze lassen: Straßenlampen,
@@ -207,7 +221,9 @@ GeoSN veröffentlicht zu jeder Kachel und jedem Produkt ein Feld „Stand“
 über den Download-Dienst hinter seinem Portal; die Werte unten wurden dort
 am 2026-09-22 abgelesen und stimmen mit den Metadatendateien in den
 Kachel-ZIPs überein. Die maschinenlesbare Fassung mit dem Download-Link
-jeder Datei ist [`data/provenance.json`](../../../data/provenance.json).
+jeder Datei ist [`data/dresden/provenance.json`](../../../data/dresden/provenance.json).
+Die Stände unten sind die Dresdens; die eines anderen Orts liest man beim
+Laden seiner Daten aus demselben Dienst ab.
 „Eingecheckt“ ist das Datum, an dem die Datei ins Repository kam; der
 Download fand an diesem Tag oder kurz davor statt.
 
@@ -219,10 +235,10 @@ Download fand an diesem Tag oder kurz davor statt.
 | DOP (RGBI) | alle fünfzehn | beflogen am **2024-03-19** (ohne Laub) | GeoSN-Download-Dienst | abgeleitete Dachfarben und NDVI 2026-06-16/17; die elf neuen Kacheln 2026-09-25 |
 | Basis-DLM | landesweites Paket | das im **Juni 2026** aktuelle Quartalspaket; das genaue Freigabedatum wurde nicht notiert und lässt sich nachträglich nicht vom Portal ablesen, weil das Paket unter demselben Dateinamen ersetzt wird (die Datei auf dem Share trug beim Prüfen das Datum 2026-07-28) | Download-Seite: „quartalsweise aktualisiert“; Git-History | abgeleitete Dateien 2026-06-12, Bahn- und Brückendateien neu gebacken 2026-09-18; die elf neuen Kacheln 2026-09-25 aus dem Paket vom 2026-07-28 |
 | OSM über Overpass (von den Bakes nicht mehr genutzt; die eingecheckten Lampen-, Bahnsteig- und Brückentragwerk-Dateien stammen noch daher) | die ursprünglichen vier | die Live-Datenbank am Abfragetag: 2026-06-12 oder früher (Lampen), 2026-06-17 oder früher (Bahnsteige, Brückentragwerk) | Git-History; die zwischengespeicherten Rohantworten tragen den exakten `timestamp_osm_base` | 2026-06-12 / 2026-06-17 |
-| OSM über BBBike | Auszug Dresden | der Auszug vom 2026-09-19 (Brunnen, Treppen, Beläge, Sportplätze, Straßenbahn, Anlegestellen, und alle OSM-Ebenen der elf am 2026-09-25 hinzugekommenen Kacheln: Geofabrik war vom Build-Rechner aus nicht erreichbar) | `data/provenance.json` | 2026-09-24 |
+| OSM über BBBike | Auszug Dresden | der Auszug vom 2026-09-19 (Brunnen, Treppen, Beläge, Sportplätze, Straßenbahn, Anlegestellen, und alle OSM-Ebenen der elf am 2026-09-25 hinzugekommenen Kacheln: Geofabrik war vom Build-Rechner aus nicht erreichbar) | `data/dresden/provenance.json` | 2026-09-24 |
 | OSM über Geofabrik | landesweiter Auszug | der Tagesauszug vom 2026-09-18 oder kurz davor | Git-History (Mauern an dem Tag neu gebacken); `osmium fileinfo -e` auf der Rohdatei zeigt den exakten Zeitstempel | 2026-09-18 |
-| OSM über BBBike (Treppen) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/provenance.json` | 2026-09-24 |
-| OSM über BBBike (Beläge) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/provenance.json` | 2026-09-25 |
+| OSM über BBBike (Treppen) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/dresden/provenance.json` | 2026-09-24 |
+| OSM über BBBike (Beläge) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/dresden/provenance.json` | 2026-09-25 |
 
 Beachte die **unterschiedlichen Stände in einem Bild**: Boden und Baumhöhen
 stammen von Ende 2024, die Gebäudeformen aus einem Laserscan von 2016 mit
@@ -251,13 +267,15 @@ Produkt und Format:
 | Basis-DLM (Shape, landesweit, 1,23 GB) | `…/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip` | [Basis-DLM](https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html) |
 
 `…` steht für `https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/`.
-Die Ordner-Tokens können wechseln; der dauerhafte Index ist der in
+Die Ordner-Tokens können wechseln; der in
 [data-pipeline.md](../../data-pipeline.md#provenance) (englisch)
-beschriebene Download-Dienst, der zu jeder Kachel den aktuellen Link und
-„Stand“ nennt. `bun run bake --ingest` holt über diesen Dienst
-Oberflächenmodell und Luftbild jeder Kachel und lädt außerdem das
-landesweite Basis-DLM-Paket und den OpenStreetMap-Auszug; DGM1 und LoD2
-sind eingecheckt und werden von Hand geladen. OpenStreetMap-Daten kommen
+beschriebene Download-Dienst nennt zu jeder Kachel den „Stand“, die
+Batch-Download-Seite des GeoSN die aktuellen Tokens. `bun run fetch` liest
+die Tokens von dieser Seite und holt jedes Produkt jeder Kachel —
+Gelände, Oberflächenmodell, Gebäudemodell (unterwegs nach CityJSON
+umgewandelt), Luftbild — sowie das landesweite Basis-DLM-Paket und den
+OpenStreetMap-Auszug. Dresdens Gelände- und Gebäudemodelle sind so
+eingecheckt, wie sie zuerst geladen wurden. OpenStreetMap-Daten kommen
 jetzt nur noch aus dem Geofabrik-Auszug für Sachsen
 (`sachsen-latest.osm.pbf`); die eingecheckten Lampen-, Bahnsteig- und
 Brückentragwerk-Dateien stammen noch aus früheren Abfragen über die
@@ -268,10 +286,16 @@ Overpass-API.
 | Quelle | Lizenz | Erforderlicher Vermerk |
 |---|---|---|
 | GeoSN-Datensätze (DGM1, DOM1, LoD2, Basis-DLM, DOP) | *Datenlizenz Deutschland – Namensnennung – Version 2.0* (`dl-de/by-2-0`), laut den [Nutzungsbedingungen](https://www.landesvermessung.sachsen.de/allgemeine-nutzungsbedingungen-8954.html) des GeoSN (geprüft am 2026-09-22) | „Quelle: GeoSN, dl-de/by-2-0“ |
+| Geobasis NRW (Unna) | *Datenlizenz Deutschland – Zero – Version 2.0* (`dl-de/zero-2-0`): kein Vermerk nötig | trotzdem: „Geobasis NRW, dl-de/zero-2-0“ |
+| Bayerische Vermessungsverwaltung (München) | *CC BY 4.0* | „Bayerische Vermessungsverwaltung – www.geodaten.bayern.de, CC BY 4.0“ |
+| LGV Hamburg | `dl-de/by-2-0` | „Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung (LGV), dl-de/by-2-0“ |
+| Geoportal Berlin | `dl-de/zero-2-0`: kein Vermerk nötig | trotzdem: „Geoportal Berlin, dl-de/zero-2-0“ |
 | OpenStreetMap | *Open Database License* (ODbL) | „© OpenStreetMap-Mitwirkende“ |
 | Stadtbaumkataster | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
 
-Der Viewer zeigt diese Vermerke in der Fußzeile seines Einstellungsfelds.
+Der Viewer zeigt den Vermerk des Anbieters des Orts, den OSM-Vermerk und,
+wo es eines gibt, den des städtischen Baumkatasters in der Fußzeile seines
+Einstellungsfelds.
 Die abgeleiteten Lampen- und Mauerdateien tragen den OSM-Vermerk zusätzlich
 in der Datei selbst; die Denkmaldatei trägt die Vermerke von GeoSN und OSM,
 weil sie beide Quellen verbindet, und die Stadtbaumdatei den der Stadt

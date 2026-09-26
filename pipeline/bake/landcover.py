@@ -1,6 +1,8 @@
 """Basis-DLM → the land-cover class raster (one byte per texel, 4096² over a
-2 km tile), its legend, and the hedge / tree-row lines. Where the DLM's road
-area swallows a square's pedestrian island or lawn, OSM carves it back out
+2 km tile), its legend, and the hedge / tree-row lines. Without an open
+Basis-DLM (Provider.products.dlm) the same three files come from
+OpenStreetMap (landcover_osm.py). Where the DLM's road area swallows a
+square's pedestrian island or lawn, OSM carves it back out
 (`carve_islands`).
 
 The client paints the classes with the palette in lib/city/landcover.ts; this
@@ -18,7 +20,17 @@ import shapely
 from PIL import Image
 from rasterio.features import rasterize
 
-from .common import Tile, column, feature, geometry_json, read_layer, write_geojson
+from . import landcover_osm
+from .common import (
+    OSM_ATTRIBUTION,
+    Tile,
+    column,
+    dlm_complete,
+    feature,
+    geometry_json,
+    read_layer,
+    write_geojson,
+)
 from .osm import has_extract, read_osm, tag
 
 # id → key: the legend the client's palette is keyed by (lib/city/landcover.ts).
@@ -76,10 +88,12 @@ def burn_order(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
     ]
 
 
-def class_raster(tile: Tile, px: int) -> np.ndarray:
+def class_raster(
+    tile: Tile, px: int, order: list[tuple[int, list[shapely.Geometry]]]
+) -> np.ndarray:
     raster = np.zeros((px, px), dtype=np.uint8)
     transform = tile.transform(px)
-    for cls, geoms in burn_order(tile):
+    for cls, geoms in order:
         valid = [g for g in geoms if g is not None and not g.is_empty]
         if valid:
             rasterize(
@@ -95,7 +109,6 @@ def class_raster(tile: Tile, px: int) -> np.ndarray:
 # its lawns, a traffic island. Burned only over road texels, walk first so a
 # lawn inside a pedestrian area wins. The DLM draws the Albertplatz (and many
 # squares) as one road area; OSM knows the island in the middle.
-ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0; islands: © OpenStreetMap contributors (ODbL)"
 WALK_AREAS = {"footway", "pedestrian", "traffic_island", "path", "cycleway"}
 GREEN_LANDUSE = {"grass", "village_green", "meadow", "flowerbed"}
 GREEN_LEISURE = {"park", "garden"}
@@ -147,9 +160,13 @@ def carve_islands(raster: np.ndarray, tile: Tile) -> int:
     return int(np.count_nonzero(carve))
 
 
+def _island_credit(tile: Tile) -> str:
+    return f"{tile.credit}; islands: {OSM_ATTRIBUTION}"
+
+
 def run_islands(tile: Tile) -> None:
     """The OSM islands over the committed class raster, without the DLM."""
-    if not has_extract(tile, "the road islands"):
+    if not tile.products.dlm or not has_extract(tile, "the road islands"):
         return
     path = tile.out("dlm", f"landcover_{tile.id}.png")
     raster = np.array(Image.open(path).convert("L"))
@@ -157,7 +174,7 @@ def run_islands(tile: Tile) -> None:
     Image.fromarray(raster, mode="L").save(path, optimize=True)
     legend_path = tile.out("dlm", f"landcover_{tile.id}.json")
     legend = json.loads(legend_path.read_text())
-    legend["attribution"] = ATTRIBUTION
+    legend["attribution"] = _island_credit(tile)
     legend_path.write_text(json.dumps(legend, indent=2) + "\n")
     print(f"{tile.id}: {changed} road texels re-classed from OSM islands")
 
@@ -174,15 +191,22 @@ def veg_rows(tile: Tile) -> list[dict]:
 
 
 def run(tile: Tile, px: int = 4096) -> None:
-    if not any(tile.dlm.glob("*.shp")):
-        raise SystemExit(
-            f"{tile.id}: no Basis-DLM under {tile.dlm} — the land cover is required; "
-            "run `bun run bake --ingest` first"
-        )
-    raster = class_raster(tile, px)
+    if tile.products.dlm:
+        if not dlm_complete(tile.dlm):
+            raise SystemExit(
+                f"{tile.id}: no complete Basis-DLM under {tile.dlm} — the land cover is required; "
+                "run `bun run fetch` first"
+            )
+        order, rows, source = burn_order(tile), veg_rows(tile), "Basis-DLM"
+    else:
+        if not has_extract(tile, "the land cover"):
+            raise SystemExit(f"{tile.id}: the land cover is required; run `bun run fetch` first")
+        (order, rows), source = landcover_osm.burn_order(tile), "OpenStreetMap"
+    raster = class_raster(tile, px, order)
     if not raster.any():
-        raise SystemExit(f"{tile.id}: nothing rasterized (no DLM features in the tile?)")
-    islands = has_extract(tile, "the road islands")
+        raise SystemExit(f"{tile.id}: nothing rasterized (no {source} features in the tile?)")
+    # OSM land cover has its islands already; only the DLM's roads swallow them.
+    islands = tile.products.dlm and has_extract(tile, "the road islands")
     if islands:
         carve_islands(raster, tile)
     Image.fromarray(raster, mode="L").save(
@@ -193,9 +217,10 @@ def run(tile: Tile, px: int = 4096) -> None:
         "crs": f"EPSG:{tile.epsg}",
         "bounds": [round(b) for b in tile.bounds],
         "size": px,
+        "source": source,
         "classes": {str(k): v for k, v in CLASSES.items()},
-        **({"attribution": ATTRIBUTION} if islands else {}),
+        **({"attribution": _island_credit(tile)} if islands else {}),
     }
     tile.out("dlm", f"landcover_{tile.id}.json").write_text(json.dumps(legend, indent=2) + "\n")
-    write_geojson(tile.out("dlm", f"vegrows_{tile.id}.geojson"), veg_rows(tile), tile.epsg)
-    print(f"{tile.id}: land cover {px}², {int(np.count_nonzero(raster))} classified texels")
+    write_geojson(tile.out("dlm", f"vegrows_{tile.id}.geojson"), rows, tile.epsg)
+    print(f"{tile.id}: land cover {px}² from {source} ({landcover_osm.stats(raster)})")

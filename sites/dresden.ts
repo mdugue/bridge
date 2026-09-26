@@ -1,5 +1,6 @@
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import { overlook, type Site } from "@/lib/city/site";
+import { SAXONY } from "./providers";
 
 /** Landmarks the aerial vantages frame (EPSG:25833, from their WGS84 spots). */
 const FRAUENKIRCHE = { x: 411_795, y: 5_656_346 };
@@ -35,11 +36,12 @@ const HAUPTBAHNHOF = { x: 411_066, y: 5_655_082 };
 export const DRESDEN: Site = {
   id: "dresden",
   label: "Dresden · Altstadt",
-  title: "City Walk — Dresden",
-  epsg: 25_833,
-  ingest: "sn",
-  tileKm: 2,
-  tileSuffix: "_sn",
+  name: "Dresden",
+  provider: SAXONY,
+  treeCadastre: {
+    id: "dresden",
+    credit: "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",
+  },
   tiles: [
     { e: 412, n: 5656 },
     { e: 410, n: 5656 },
@@ -64,11 +66,6 @@ export const DRESDEN: Site = {
     { e: 408, n: 5658 },
   ],
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
-  attribution: [
-    "Quelle: GeoSN, dl-de/by-2-0",
-    "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
-    "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
-  ],
   spawn: "altstadt",
   viewpoints: [
     // The start: low over the Elbe just west of the Carolabrücke, the whole

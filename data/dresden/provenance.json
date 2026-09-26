@@ -11,7 +11,7 @@
   "geosn": {
     "DGM1": {
       "layer": 6,
-      "committed": "data/dgm/dgm1_<tile>_tiff/",
+      "committed": "data/dresden/dgm/dgm1_<tile>_tiff/",
       "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/canopy.py", "pipeline/bake/rail.py", "pipeline/bake/stairs.py", "pipeline/bake/monuments.py", "pipeline/bake/lowveg.py", "pipeline/bake/riverside.py", "pipeline/bake/cultivated.py", "pipeline/bake/skyview.py", "pipeline/bake/soundmarks.py", "pipeline/bake/small_buildings.py"],
       "$usedBy": "markings.py and tram.py read only the DGM files' extents, to find a tile's neighbours (skyview.site_sources); skyview.py's horizon_<tile>.json carries the GeoSN credit",
       "tiles": {
@@ -35,7 +35,7 @@
     "DOM1": {
       "layer": 4,
       "committed": null,
-      "raw": "data/_raw/<site>/dom1/<tile>.tif (+ .tfw), via pipeline/bake/ingest_sn.py",
+      "raw": "data/_raw/sn/dom1/<tile>.tif (+ .tfw), via pipeline/bake/providers/sn.py",
       "usedBy": ["pipeline/bake/canopy.py", "pipeline/bake/rail.py", "pipeline/bake/monuments.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/S6wwnFwX7882sZm/dom1_33410_5656_2_sn_tiff.zip" },
@@ -56,10 +56,10 @@
       }
     },
     "LSC": {
-      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used by the low-vegetation bake (pipeline/bake/lowveg.py; 0.5 m rasters under data/_raw/<site>/lsc/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask; and by the small-structure bake (pipeline/bake/small_buildings.py, plan 034, on the same rasters): the sheds, garden houses and container buildings LoD2 lacks, data/dlm/smallbuild_<tile>.geojson, baked on all fifteen tiles on 2026-09-26 from the LAZ files of 2026-09-25, and re-baked the same day reading 40 m of the neighbours' scan across each seam (a structure on a seam is kept once, by the tile holding its centroid), z the lowest ground under the whole rectangle (none where it falls > 1.5 m), overlaps > 0.5 m² resolved to the larger. The canopyx files were re-baked on 2026-09-26 too, against the trees files that by then carried the OSM trees (1 518 scan crowns a cadastre or OSM tree claims dropped). The flight (27-30 Nov 2024) caught the Christmas markets (the Striezelmarkt opened on 27 Nov): they are excluded through OSM pedestrian areas and squares. Baked for every tile. The spawn tile was baked first from a LAZ placed by hand; the other fourteen on 2026-09-25 by `bun run bake --ingest --lsc`. That day the download-links service still named the retired share rqcqdt8QMcLFUvC (503, Sabre NotFound); the current one, EpkzyJHScGb5ndd, is the `share_id` of LSC on the batch-download page, which ingest_sn.py now falls back to on its own.",
+      "$comment": "Laser-scan point cloud (LAZ): same flight as DGM1/DOM1 (Aktualität 2024-11-30 for 33412_5656 per the tile's _akt.csv — leaf-off). Used by the low-vegetation bake (pipeline/bake/lowveg.py; 0.5 m rasters under data/_raw/sn/lsc/<tile>/, never committed): the measured height of the OSM hedges and the extra trees outside the canopy mask; and by the small-structure bake (pipeline/bake/small_buildings.py, plan 034, on the same rasters): the sheds, garden houses and container buildings LoD2 lacks, data/dresden/dlm/smallbuild_<tile>.geojson, baked on all fifteen tiles on 2026-09-26 from the LAZ files of 2026-09-25, and re-baked the same day reading 40 m of the neighbours' scan across each seam (a structure on a seam is kept once, by the tile holding its centroid), z the lowest ground under the whole rectangle (none where it falls > 1.5 m), overlaps > 0.5 m² resolved to the larger. The canopyx files were re-baked on 2026-09-26 too, against the trees files that by then carried the OSM trees (1 518 scan crowns a cadastre or OSM tree claims dropped). The flight (27-30 Nov 2024) caught the Christmas markets (the Striezelmarkt opened on 27 Nov): they are excluded through OSM pedestrian areas and squares. Baked for every tile. The spawn tile was baked first from a LAZ placed by hand; the other fourteen on 2026-09-25 by `bun run bake --ingest --lsc`. That day the download-links service still named the retired share rqcqdt8QMcLFUvC (503, Sabre NotFound); the current one, EpkzyJHScGb5ndd, is the `share_id` of LSC on the batch-download page, which the Saxony adapter (pipeline/bake/providers/sn.py) reads every link from; `bun run fetch --lsc` fetches it.",
       "layer": 1,
-      "committed": "derived only: data/dlm/lowveg_<tile>.geojson, data/dlm/canopyx_<tile>.geojson, data/dlm/smallbuild_<tile>.geojson — every tile",
-      "raw": "data/_raw/<site>/lsc/<tile>.laz, via pipeline/bake/ingest_sn.py --lsc (33412_5656 was baked from a LAZ placed by hand under data/_raw/lsc/lsc_<tile>_laz/)",
+      "committed": "derived only: data/dresden/dlm/lowveg_<tile>.geojson, data/dresden/dlm/canopyx_<tile>.geojson, data/dresden/dlm/smallbuild_<tile>.geojson — every tile",
+      "raw": "data/_raw/sn/lsc/<tile>.laz, via `bun run fetch --lsc` (33412_5656 was baked from a LAZ placed by hand)",
       "usedBy": ["pipeline/bake/lowveg.py", "pipeline/bake/small_buildings.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-11-30", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/EpkzyJHScGb5ndd/lsc_33410_5656_2_sn_laz.zip" },
@@ -82,7 +82,7 @@
     "LoD2": {
       "$comment": "`stand` is the model's production year with the currency of its inputs in parentheses (laser scan for the roofs, Basis-DLM for the footprints, DGM for the ground); `creationDate` inside the CityJSON is the export date of each object. On 2026-09-25 the download-links service still listed the retired share GVzwbSyp7Yl7mBD (NotFound); the current one, AyJqXpJAZJXomCb, comes from the batch-download page (geodaten.sachsen.de/batch-download-4719.html, `share_id` of LoD2_CityGML). The eleven tiles added that day were converted with citygml4j 3.2.4 (the library citygml-tools wraps: CityJSON 2.0, 3 decimals); re-converting 33412_5656 that way reproduced the committed file object for object and vertex for vertex.",
       "layer": 3,
-      "committed": "data/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
+      "committed": "data/dresden/cityjson/lod2_<tile>.city.json (converted from the CityGML package)",
       "usedBy": ["scripts/prepare-data.ts", "pipeline/bake/roof_colour.py", "pipeline/bake/osm_buildings.py", "pipeline/bake/lowveg.py", "pipeline/bake/skyview.py", "pipeline/bake/soundmarks.py", "pipeline/bake/small_buildings.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2023 (LSC: 2016, Basis-DLM: 2021, DGM: 2016)", "creationDate": "2025-06-28 (most objects; some 2020-10, 2023-04)", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/AyJqXpJAZJXomCb/lod2_33410_5656_2_sn_citygml.zip" },
@@ -105,8 +105,8 @@
     "DOP_RGBI": {
       "$comment": "`stand` is the flight date. 19 March 2024 is a leaf-off spring flight: deciduous crowns are bare, which is why the NDVI raster is low and median-centred and the crown colour remap recentres on that median.",
       "layer": 17,
-      "committed": "derived only: data/dop/roofcolor_<tile>.json, data/dlm/ndvi_<tile>.png",
-      "raw": "data/_raw/<site>/dop/<tile>.tif, via pipeline/bake/ingest_sn.py",
+      "committed": "derived only: data/dresden/dop/roofcolor_<tile>.json, data/dresden/dlm/ndvi_<tile>.png",
+      "raw": "data/_raw/sn/dop/<tile>.tif, via pipeline/bake/providers/sn.py",
       "usedBy": ["pipeline/bake/roof_colour.py", "pipeline/bake/ndvi.py"],
       "tiles": {
         "33410_5656_2_sn": { "stand": "2024-03-19", "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/sX3GPcdBMGrfXT9/dop20rgbi_33410_5656_2_sn_tiff.zip" },
@@ -128,8 +128,8 @@
     },
     "Basis-DLM": {
       "$comment": "One statewide package, replaced quarterly under the same URL, so the edition of a past download cannot be read from the portal afterwards. The derived files were baked from the package current in June 2026 (commits of 2026-06-12) and re-baked for rails and walls on 2026-09-18 and for rails, ballast and bridges again on 2026-09-24 (package downloaded that day); the package on the share was dated 2026-07-28 (Last-Modified, 1.23 GB) when this file was written. Record the package's Last-Modified and the metadata inside the ZIP at the next download.",
-      "committed": "derived only: data/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge/monuments_<tile>.geojson",
-      "raw": "data/_raw/<site>/dlm/*.shp, via pipeline/bake/ingest_sn.py",
+      "committed": "derived only: data/dresden/dlm/landcover*_<tile>.png, vegrows/rail/railarea/bridge/monuments_<tile>.geojson",
+      "raw": "data/_raw/sn/dlm/*.shp, via pipeline/bake/providers/sn.py",
       "download": "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/DtPWngtLEJP8K3k/basisdlm_sn_shape.zip",
       "downloadPage": "https://www.geodaten.sachsen.de/downloadbereich-basis-dlm-4168.html",
       "schema": "AAA-Anwendungsschema 7.1.2 (since 2025); Grundaktualisierung every 3–5 years, Spitzenaktualisierung of priority objects every 3, 6 or 12 months",
@@ -137,7 +137,7 @@
     }
   },
   "dresden": {
-    "$comment": "Landeshauptstadt Dresden open data, drawn by default (tree-inventory-layer.ts); also thins the laser-scan extra trees (pipeline/bake/lowveg.py). The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; the ingest adapter (pipeline/bake/ingest_sn.py ingest_trees; extract-trees.sh when the committed files were baked) checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
+    "$comment": "Landeshauptstadt Dresden open data, drawn by default (tree-inventory-layer.ts); also thins the laser-scan extra trees (pipeline/bake/lowveg.py). The WFS implements no paging and no count default, so one BBOX request per tile (+10 m) returns every tree; `bun run fetch` (pipeline/bake/cadastre.py; extract-trees.sh when the committed files were baked) checks the feature count against the server's numberMatched (resultType=hits) and writes it, the request and the retrieval time to a .meta.json beside the raw cache. `aend_dat` in the raw file is each record's own last-change date (mostly 2025–2026).",
     "Stadtbaumkataster": {
       "service": "https://kommisdd.dresden.de/net3/public/ogcsl.ashx?NODEID=1633&Service=WFS",
       "typeName": "cls:L1261",
@@ -145,8 +145,8 @@
       "licence": "dl-de/by-2-0; credit: Landeshauptstadt Dresden",
       "coverage": "street trees, parks, schools and other municipal land; not the Großer Garten, not private ground",
       "retrieved": "2026-09-23 (the eleven tiles added on main: 2026-09-25; the four first tiles re-read 2026-09-25)",
-      "raw": "data/_raw/<site>/trees/<tile>.geojson (+ .meta.json); first baked from data/_raw/baumkataster/stadtbaum_<tile>.geojson, re-baked 2026-09-25 from the ingest adapter's cache (genus and trunk diameter `stammdurchmesser_akt` added)",
-      "committed": "data/dlm/trees_<tile>.geojson",
+      "raw": "data/_raw/sn/trees/<tile>.geojson (+ .meta.json); first baked from data/_raw/baumkataster/stadtbaum_<tile>.geojson, re-baked 2026-09-25 from `bun run fetch`'s cache (pipeline/bake/cadastre.py) (genus and trunk diameter `stammdurchmesser_akt` added)",
+      "committed": "data/dresden/dlm/trees_<tile>.geojson",
       "usedBy": ["pipeline/bake/trees.py", "pipeline/bake/lowveg.py", "scripts/eval/kataster-eval.py"],
       "numberMatched": {
         "$comment": "per tile bbox incl. the 10 m margin; after the half-open tile clip: 3195, 3663, 6121, 5465 trees",
@@ -173,16 +173,16 @@
       "$comment": "How the lamp, platform and bridge-structure files were fetched until 2026-09-24 (the bash bakes). Every OSM layer is now read from the Geofabrik extract below; kept for the history.",
       "endpoint": "https://overpass-api.de/api/interpreter",
       "products": {
-        "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dlm/lamps_*.geojson)" },
-        "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dlm/platform_*.geojson)" },
+        "lamps": { "query": "node[highway=street_lamp]", "dataAsOf": "2026-06-12 or earlier (first commit of data/dresden/dlm/lamps_*.geojson)" },
+        "platforms": { "query": "way/relation[railway=platform]", "dataAsOf": "2026-06-17 or earlier (first commit of data/dresden/dlm/platform_*.geojson)" },
         "bridgeStructure": { "query": "way/relation[man_made=bridge] bridge:structure", "dataAsOf": "2026-06-17 or earlier; re-baked 2026-09-18" },
-        "lowveg": { "query": "way[barrier=hedge], way/relation[natural~scrub|shrubbery], node[natural=shrub]", "dataAsOf": "2026-09-23 (timestamp_osm_base 16:16–16:20Z, data/_raw/osm/lowveg_<tile>.json; fetched from the maps.mail.ru Overpass mirror, overpass-api.de was overloaded)", "usedBy": ["scripts/extract-lowveg.sh (the committed lowveg files; pipeline/bake/lowveg.py reads the local extract)"] }
+        "lowveg": { "query": "way[barrier=hedge], way/relation[natural~scrub|shrubbery], node[natural=shrub]", "dataAsOf": "2026-09-23 (timestamp_osm_base 16:16–16:20Z, data/_raw/sn/osm/lowveg_<tile>.json; fetched from the maps.mail.ru Overpass mirror, overpass-api.de was overloaded)", "usedBy": ["scripts/extract-lowveg.sh (the committed lowveg files; pipeline/bake/lowveg.py reads the local extract)"] }
       }
     },
     "geofabrik": {
       "$comment": "Regional extract read by pipeline/bake/osm.py (walls, lamps, platforms, bridge structure). `osmium fileinfo -e <file>` prints the extract's replication timestamp.",
       "download": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
-      "raw": "data/_raw/<site>/osm/*.osm.pbf",
+      "raw": "data/_raw/sn/osm/*.osm.pbf",
       "extract": "sachsen-260615.osm.pbf (Geofabrik, 2026-06-15)",
       "products": {
         "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-06-15 (re-baked 2026-09-24 by the Python pipeline; identical geometry. 2026-09-25: the two seam artefacts of the old polygon-first clip cut off — the 107.8 m on-edge segment along x = 412000 of wall #328 in 33410_5658 and #202 in 33412_5658 — exactly as the fixed bake cuts them; every other wall verbatim)" },
@@ -194,22 +194,22 @@
     "bbbike": {
       "$comment": "City extract used where download.geofabrik.de is unreachable (it resets connections from the Claude Code cloud container; it was first used on 2026-09-24 for the fountains). Same OSM data and licence, cut to a bounding box (13.43–14.18 E, 50.88–51.23 N) that covers every Dresden tile; osm.py reads whichever .osm.pbf under osm/ is newest.",
       "download": "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf",
-      "raw": "data/_raw/<site>/osm/Dresden.osm.pbf",
+      "raw": "data/_raw/sn/osm/Dresden.osm.pbf",
       "extract": "Dresden.osm.pbf (BBBike, Last-Modified 2026-09-19)",
       "products": {
-        "fountains": { "query": "amenity=fountain (points and areas), with fountain=* and water=* for the basin style (data/dlm/monuments_<tile>.geojson)", "dataAsOf": "2026-09-19 or shortly before (baked 2026-09-24)" },
+        "fountains": { "query": "amenity=fountain (points and areas), with fountain=* and water=* for the basin style (data/dresden/dlm/monuments_<tile>.geojson)", "dataAsOf": "2026-09-19 or shortly before (baked 2026-09-24)" },
         "stairs": { "query": "highway=steps (+ area:highway=steps outlines and barrier=wall/retaining_wall/city_wall for the width)", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" },
         "terraces": { "query": "multipolygons on layer >= 1 (no building, man_made, landuse, bridge, railway or public_transport) that a flight the DGM runs flat under climbs onto", "dataAsOf": "2026-09-19 (first baked 2026-09-24)" },
         "furniture": { "query": "amenity in (bench, waste_basket, bicycle_parking, post_box), leisure=picnic_table, barrier=bollard (+ height, material), leisure=playground areas, playground=* equipment (points, ways, areas), highway=bus_stop / public_transport=platform with shelter=yes, amenity=shelter of shelter_type=public_transport; bench ways; every highway line for the bearing. Plan 030 (re-baked 2026-09-25, earlier objects unchanged): advertising=column (+ lit), highway=traffic_signals (+ traffic_signals:direction), emergency=fire_hydrant (+ fire_hydrant:type), amenity=clock (+ support, display), amenity=drinking_water, highway=bus_stop without a shelter; building outlines for wall clocks", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "surface": { "query": "highway=* lines (surface, width, footway=sidewalk, sidewalk:*:surface, footway:surface) and highway/area:highway/amenity=parking multipolygons with a surface", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "sport": { "query": "leisure in (pitch, track) multipolygons with sport=* and surface=* (nothing indoor, covered or on a roof), and leisure=track lines", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
-        "fences": { "query": "barrier in (fence, handrail) lines and area outer rings (fence_type, height); barrier in (gate, lift_gate, swing_gate, cycle_barrier) points within 0.5 m of a wall or fence line (width). Rings are clipped to the tile as lines (never the area as a polygon); a neighbour's gate whose gap reaches over the seam comes along as seam: true. Appended to data/dlm/walls_<tile>.geojson after its walls, which were kept from the Geofabrik bake of 2026-06-15. Trade-off: the older walls and the newer gates disagree in two places — two on: wall gates stood 70–73 m from any committed wall (33412_5656 at 412636.51, 5657834.37; 33412_5658 at 412288.74, 5658654.76); walls.py now keeps a gate only on a line its own file carries, and the two were dropped from the committed files on 2026-09-26 (a full walls re-bake from this extract would update the walls too and renumber them for scripts/terrain-study)", "dataAsOf": "2026-09-19 (first baked 2026-09-25; re-baked the same day with the seam fix)" },
-        "osmBuildings": { "query": "shop=* or amenity in (cafe, restaurant, bar, pub, fast_food, ice_cream, biergarten) points on the ground floor (no level, or a level list with 0) and building multipolygons carrying them; building multipolygons with heritage=*; joined to the LoD2 footprints (data/dlm/osmbuild_<tile>.json)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
+        "fences": { "query": "barrier in (fence, handrail) lines and area outer rings (fence_type, height); barrier in (gate, lift_gate, swing_gate, cycle_barrier) points within 0.5 m of a wall or fence line (width). Rings are clipped to the tile as lines (never the area as a polygon); a neighbour's gate whose gap reaches over the seam comes along as seam: true. Appended to data/dresden/dlm/walls_<tile>.geojson after its walls, which were kept from the Geofabrik bake of 2026-06-15. Trade-off: the older walls and the newer gates disagree in two places — two on: wall gates stood 70–73 m from any committed wall (33412_5656 at 412636.51, 5657834.37; 33412_5658 at 412288.74, 5658654.76); walls.py now keeps a gate only on a line its own file carries, and the two were dropped from the committed files on 2026-09-26 (a full walls re-bake from this extract would update the walls too and renumber them for scripts/terrain-study)", "dataAsOf": "2026-09-19 (first baked 2026-09-25; re-baked the same day with the seam fix)" },
+        "osmBuildings": { "query": "shop=* or amenity in (cafe, restaurant, bar, pub, fast_food, ice_cream, biergarten) points on the ground floor (no level, or a level list with 0) and building multipolygons carrying them; building multipolygons with heritage=*; joined to the LoD2 footprints (data/dresden/dlm/osmbuild_<tile>.json)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
         "cultivated": { "query": "landuse in (allotments, orchard, vineyard) and leisure=garden multipolygons, natural=tree points, highway lines (a colony's paths); the vine rows' slope from every committed DGM the vineyard touches; orchard trees less those a canopy, canopyx or trees point stands in for", "dataAsOf": "2026-09-19 (first baked 2026-09-25; re-baked 2026-09-26)" },
         "markings": { "query": "highway=crossing nodes (crossing, crossing:markings, crossing_ref), highway=traffic_signals nodes with traffic_signals:direction or direction, highway=* lines (lanes, oneway, lane_markings, cycleway, cycleway:right/left/both); measured on the class rasters of the tile and its neighbours, a neighbour's row reaching into the tile painted too", "dataAsOf": "2026-09-19 (first baked 2026-09-25; re-baked 2026-09-26 across the seams)" },
         "trees": { "query": "natural=tree nodes (species/taxon/genus, genus:de/species:de, leaf_type/leaf_cycle, height, diameter_crown, circumference) more than 3 m from every cadastre tree; one with neither a taxon nor a leaf type is dropped", "dataAsOf": "2026-09-19 (first baked 2026-09-25 on the four first tiles: 1 820 trees; on all fifteen tiles 3 453 of the 10 854 natural=tree in the site, 8 292 of them classified, 298 with a genus)" },
         "riverside": { "query": "man_made=pier (lines, buffered by width, and areas; floating=yes), man_made=groyne lines, route=ferry lines (name)", "dataAsOf": "2026-09-19 (first baked 2026-09-25)" },
-        "soundmarks": { "query": "building=church|cathedral|chapel outlines, amenity=place_of_worship + religion=christian outlines, man_made=tower + tower:type=bell_tower and building=bell_tower; the tower's tip and height from the committed LoD2 and DGM1 of every tile (GeoSN, dl-de/by-2-0) — data/dlm/soundmarks_<tile>.geojson", "dataAsOf": "2026-09-19 (first baked 2026-09-26)" },
+        "soundmarks": { "query": "building=church|cathedral|chapel outlines, amenity=place_of_worship + religion=christian outlines, man_made=tower + tower:type=bell_tower and building=bell_tower; the tower's tip and height from the committed LoD2 and DGM1 of every tile (GeoSN, dl-de/by-2-0) — data/dresden/dlm/soundmarks_<tile>.geojson", "dataAsOf": "2026-09-19 (first baked 2026-09-26)" },
         "smallBuildingsContext": { "query": "the OSM context of the laser scan's small structures (see geosn.LSC): pedestrian areas and lines, place=square, amenity=marketplace, landuse=construction, amenity=parking (surface or untagged) — nothing kept there; building outlines confirm a vehicle-sized box", "dataAsOf": "2026-09-19 (first baked 2026-09-26)" },
         "tram": { "query": "railway=tram lines (bridge, layer); power=catenary_mast points within 15 m of a tram track; building outlines (the facades of the rosette spans); railway=tram_stop points and public_transport=platform / railway=platform (the stop signs, none by a shelter in the furniture of the tile or of its neighbours); all within 30 m of the tile", "dataAsOf": "2026-09-19 (first baked 2026-09-25; re-baked 2026-09-26, unchanged)" }
       }

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DRESDEN } from "../../sites/dresden";
+import { SITES } from "../../sites";
 import {
   facadeSkyView,
   farSunVisibility,
@@ -19,14 +19,20 @@ import {
   nearBandWeight,
   sunAngles,
 } from "./skyview";
-import { tileIds } from "./tile";
+import { sideFileSource, tileIds } from "./tile";
 
-const DATA = join(import.meta.dir, "..", "..", "data", "dlm");
+const ROOT = join(import.meta.dir, "..", "..");
+
+/** Every tile of every site, with its site (the ones whose bakes are on
+ *  disk are checked; Dresden's are committed). */
+const TILES = Object.values(SITES).flatMap((site) =>
+  tileIds(site).map((tile) => ({ site, tile }))
+);
 
 test("the committed horizon legends match the constants the shader uses", () => {
   let checked = 0;
-  for (const tile of tileIds(DRESDEN)) {
-    const path = join(DATA, `horizon_${tile}.json`);
+  for (const { site, tile } of TILES) {
+    const path = join(ROOT, sideFileSource(site, `horizon_${tile}.json`));
     if (!existsSync(path)) {
       continue;
     }
@@ -46,8 +52,9 @@ test("the committed horizon legends match the constants the shader uses", () => 
       Array.from({ length: HORIZON_AZIMUTHS }, (_, k) => k * 22.5)
     );
     expect(legend.px).toBe(HORIZON_PX);
-    // derived from GeoSN's DGM1 and LoD2: the credit travels with the data
-    expect(legend.attribution).toStartWith("Quelle: GeoSN, dl-de/by-2-0");
+    // derived from the provider's DGM1 and LoD2: its credit travels with
+    // the data
+    expect(legend.attribution).toStartWith(site.provider.credit);
     const [far, near] = legend.bands;
     expect(far.name).toBe("far");
     expect(far.planes).toEqual([0, HORIZON_LAYERS]);

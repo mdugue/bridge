@@ -2,12 +2,12 @@
 that a port of a bake reproduces what it replaces.
 
   uv run --project pipeline python scripts/eval/compare-bakes.py [--ref HEAD]
-      trees_/lowveg_/canopyx_<tile>.geojson under data/dlm against the same
+      trees_/lowveg_/canopyx_<tile>.geojson under data/dresden/dlm against the same
       files at a git ref (default HEAD): features only in one of them,
       properties that differ, line lengths that moved. Order is ignored.
 
   uv run --project pipeline python scripts/eval/compare-bakes.py \\
-      --rasters data/_raw/dresden/lsc/33412_5656_2_sn data/_raw/lsc/derived/33412_5656_2_sn
+      --rasters data/_raw/sn/lsc/33412_5656_2_sn data/_raw/lsc/derived/33412_5656_2_sn
       the laser-scan rasters of two folders (e.g. pipeline/bake/lsc.py against
       the PDAL-made ones): per band, how many cells differ and by how much.
 
@@ -89,11 +89,11 @@ def compare_lines(old: dict, new: dict) -> list[str]:
 
 def compare_files(ref: str) -> bool:
     same = True
-    for path in sorted((ROOT / "data" / "dlm").glob("*.geojson")):
+    for path in sorted((ROOT / "data" / "dresden" / "dlm").glob("*.geojson")):
         kind = path.name.split("_")[0]
         if kind not in KINDS:
             continue
-        rel = f"data/dlm/{path.name}"
+        rel = f"data/dresden/dlm/{path.name}"
         old = at_ref(ref, rel)
         new = json.loads(path.read_text())
         if old is None:

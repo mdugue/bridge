@@ -15,7 +15,7 @@ export type Rgb = [number, number, number];
 
 /**
  * What OSM knows about a CityObject, keyed by its id
- * (`pipeline/bake/osm_buildings.py` → `data/dlm/osmbuild_<tile>.json`).
+ * (`pipeline/bake/osm_buildings.py` → `data/<site>/dlm/osmbuild_<tile>.json`).
  */
 export type OsmBuildingLut = Record<
   string,

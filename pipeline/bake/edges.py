@@ -260,7 +260,7 @@ def run(tile: Tile, px: int = 2048) -> None:
         tile.out("dlm", f"kerbs_{tile.id}.geojson"),
         [feature(geometry_json(line)) for line in kerbs],
         tile.epsg,
-        "Quelle: GeoSN, dl-de/by-2-0",
+        tile.landcover_credit,
     )
     total = sum(line.length for line in kerbs) / 1000
     print(f"{tile.id}: edge distances {px}², {len(kerbs)} kerbs ({total:.1f} km)")

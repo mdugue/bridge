@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { DRESDEN } from "../../sites/dresden";
 import {
   BUILTUP_CLASS,
   EDGE_SCALE,
@@ -19,6 +20,7 @@ import {
   unpackSurface,
   WATER_CLASS,
 } from "./landcover";
+import { siteDataDir } from "./tile";
 
 test("class ids are the table index, 0..8", () => {
   expect(LANDCOVER_CLASSES.map((c) => c.id)).toEqual([
@@ -32,7 +34,7 @@ test("class ids are the table index, 0..8", () => {
 });
 
 test("every committed surface legend names the same paving kinds", () => {
-  const dir = "data/dlm";
+  const dir = `${siteDataDir(DRESDEN)}/dlm`;
   const legends = readdirSync(dir).filter(
     (f) => f.startsWith("surface_") && f.endsWith(".json")
   );
@@ -54,7 +56,7 @@ test("every committed surface legend names the same paving kinds", () => {
 });
 
 test("every committed edge legend has the viewer's scale", () => {
-  const dir = "data/dlm";
+  const dir = `${siteDataDir(DRESDEN)}/dlm`;
   const legends = readdirSync(dir).filter(
     (f) => f.startsWith("edges_") && f.endsWith(".json")
   );
@@ -77,13 +79,17 @@ test("a surface texel unpacks into the road and the walk material", () => {
 });
 
 test("every committed legend names the same classes", () => {
-  const dir = "data/dlm";
-  const legends = readdirSync(dir).filter(
-    (f) => f.startsWith("landcover_") && f.endsWith(".json")
-  );
+  // every site folder with baked data (data/_raw is the downloads)
+  const legends = readdirSync("data")
+    .filter((site) => !site.startsWith("_") && existsSync(`data/${site}/dlm`))
+    .flatMap((site) =>
+      readdirSync(`data/${site}/dlm`)
+        .filter((f) => f.startsWith("landcover_") && f.endsWith(".json"))
+        .map((f) => `data/${site}/dlm/${f}`)
+    );
   expect(legends.length).toBeGreaterThan(0);
   for (const file of legends) {
-    const { classes } = JSON.parse(readFileSync(`${dir}/${file}`, "utf8")) as {
+    const { classes } = JSON.parse(readFileSync(file, "utf8")) as {
       classes: Record<string, string>;
     };
     for (const c of LANDCOVER_CLASSES) {

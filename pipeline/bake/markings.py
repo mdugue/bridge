@@ -40,7 +40,9 @@ indexes `KINDS` (keep them in step with lib/city/markings.ts).
   other become one row covering both across the road, in the frame and
   kind of the preferred one (a zebra over a furt, else the larger); along
   the road the union too when they are parallel, else the preferred one's
-  width. Rows that still overlap (two arms of a junction, a stop line on a
+  width — unless the row would reach further across than one carriageway
+  (`MAX_MERGED_HALF_M`: two carriageways' crossings in line, a median
+  between). Rows that still overlap (two arms of a junction, a stop line on a
   crossing) keep their order in the raster's core pass: the smaller on
   top, so it loses nothing and the larger only the overlap, which the
   smaller paints.
@@ -119,6 +121,11 @@ CORE_M = 0.75
 # Crossings closer than this in axis are one crossing (a node on a curve,
 # a node on each way of a junction's arm); farther apart they are two arms.
 MERGE_ANGLE_DEG = 30.0
+# A merge that would paint further across than one carriageway (plus a
+# metre for nodes at an angle) joins the crossings of two carriageways in
+# line — a dual carriageway, a tram median between them (Leipzig's ring,
+# Hamburg's wide streets): they stay two rows.
+MAX_MERGED_HALF_M = MAX_CARRIAGEWAY_M / 2 + 1.0
 PARALLEL_DEG = 10.0
 CROSSINGS = (ZEBRA, FURT)
 EDGE_SCALE = 20.0  # bytes per metre, as edges.py
@@ -373,8 +380,11 @@ def merge_rows(rows: list[list[float]]) -> list[list[float]]:
         merged = False
         for i in range(len(rows)):
             for j in range(i + 1, len(rows)):
-                if _mergeable(rows[i], rows[j]):
-                    rows[i] = merge_pair(rows[i], rows[j])
+                if not _mergeable(rows[i], rows[j]):
+                    continue
+                pair = merge_pair(rows[i], rows[j])
+                if pair[3] <= MAX_MERGED_HALF_M:
+                    rows[i] = pair
                     del rows[j]
                     merged = True
                     break

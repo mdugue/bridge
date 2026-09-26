@@ -135,8 +135,8 @@ dl-de/by-2-0".
 
 **OSM / Overpass** — *OpenStreetMap*, the volunteer world map, mapped from
 GPS traces, surveys and traced aerial imagery, updated continuously, with
-no accuracy guarantee. The viewer's lamps, walls, platforms and bridge
-structure types come from it; the bakes read it from the Geofabrik extract.
+no accuracy guarantee. The viewer's lamps, walls, stairs, platforms and
+bridge structure types come from it; the bakes read it from the Geofabrik extract.
 The *Overpass API* is a live query service for it; the bakes no longer use
 it, but the committed lamp, platform and bridge-structure files were still
 fetched through it. [Fact sheet](./data-sources.md#osm--openstreetmap).

@@ -26,5 +26,9 @@ def run(tile: Tile, px: int = 1024) -> None:
     if not tile.raw_raster("dop").exists():
         print(f"{tile.id}: no DOP — skipping NDVI (crowns keep the hash sage)")
         return
+    with rasterio.open(tile.raw_raster("dop")) as dop:
+        if dop.count < 4:
+            print(f"{tile.id}: the DOP has no infrared band — skipping NDVI")
+            return
     Image.fromarray(ndvi_raster(tile, px), mode="L").save(tile.out("dlm", f"ndvi_{tile.id}.png"))
     print(f"{tile.id}: NDVI {px}²")

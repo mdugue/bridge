@@ -3,13 +3,13 @@
 
 Reproducible analysis behind the 🧪 "tree inventory" entry in
 docs/transformations.md. Reads only committed artifacts plus the raw cadastre
-cache that `bun run bake --ingest` writes (pipeline/bake/ingest_sn.py):
+cache that `bun run fetch` writes (pipeline/bake/cadastre.py):
 
-  data/_raw/dresden/trees/<tile>.geojson            (raw WFS, all attributes)
-  data/dlm/canopy_<tile>.geojson                    (DOM1 canopy points, `h`)
-  data/dlm/vegrows_<tile>.geojson                   (DLM tree rows)
-  data/dlm/landcover_<tile>.png  (+ .json legend)   (DLM class ids, 4096²)
-  data/dlm/ndvi_<tile>.png                          (leaf-off DOP NDVI, 1024²)
+  data/_raw/sn/trees/<tile>.geojson            (raw WFS, all attributes)
+  data/dresden/dlm/canopy_<tile>.geojson                    (DOM1 canopy points, `h`)
+  data/dresden/dlm/vegrows_<tile>.geojson                   (DLM tree rows)
+  data/dresden/dlm/landcover_<tile>.png  (+ .json legend)   (DLM class ids, 4096²)
+  data/dresden/dlm/ndvi_<tile>.png                          (leaf-off DOP NDVI, 1024²)
 
 Answers:
   a. overlap — cadastre trees that already have a canopy point within
@@ -43,7 +43,7 @@ from bake import tree_archetypes as ta  # noqa: E402
 
 TILES = ["33412_5656_2_sn", "33410_5656_2_sn", "33410_5658_2_sn", "33412_5658_2_sn"]
 PRIMARY = TILES[0]
-DLM = ROOT / "data" / "dlm"
+DLM = ROOT / "data" / "dresden" / "dlm"
 MIN_MATCH_R = 3.5  # m: the canopy grid is 7 m, so half a cell is the floor
 TREE_SPACING = 9.0  # vegetation-layer.ts TREE_SPACING (rows)
 CANOPY_MINH = 3.0  # pipeline/bake/canopy.py MIN_H
@@ -248,7 +248,7 @@ def classifier(values, truth):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--raw", default=str(ROOT / "data" / "_raw" / "dresden" / "trees"))
+    ap.add_argument("--raw", default=str(ROOT / "data" / "_raw" / "sn" / "trees"))
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
     raw = Path(args.raw)

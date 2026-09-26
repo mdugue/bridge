@@ -148,10 +148,13 @@ def test_both_bands_pack_into_eight_planes_with_their_own_scales():
     assert grey.shape == (8 * n, 4 * n)
     assert np.all(grey[: 4 * n] == 255)
     assert np.all(grey[4 * n :] == 128)
-    bands = legend()["bands"]
+    bands = legend("Quelle: GeoSN, dl-de/by-2-0")["bands"]
     assert [b["planes"] for b in bands] == [[0, 4], [4, 8]]
     assert bands[1]["farM"] == bands[0]["nearM"]  # the bands meet
-    assert legend()["attribution"].startswith("Quelle: GeoSN, dl-de/by-2-0")
+    # the provider's credit, whichever Land the site lies in
+    assert legend("© LGV Hamburg, dl-de/by-2-0")["attribution"] == (
+        "© LGV Hamburg, dl-de/by-2-0 (DGM1, LoD2)"
+    )
 
 
 def _dgm(tile: Tile, tid: str, x0: float, y0: float, size: int, z: float) -> None:
