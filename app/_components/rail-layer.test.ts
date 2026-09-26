@@ -225,3 +225,69 @@ test("no parapet wall runs across the roadway at the abutments", () => {
   }
   expect(across).toBe(0);
 });
+
+test("a masonry bridge's walls hang from the deck's own edges", () => {
+  // 200 m over a river at 100 m, deck 120 m, 12 m wide, the axis given
+  // corner to corner the way the old bake wrote it would put walls off it
+  const built = buildRail(
+    { ...empty, bridges: [deck({ structure: "arch" })] },
+    ctx
+  );
+  const stone = built.children.at(-1) as Mesh;
+  const pos = stone.geometry.getAttribute("position");
+  let below = 0;
+  for (let i = 0; i < pos.count; i++) {
+    // nothing stands outside the deck's width...
+    expect(Math.abs(pos.getZ(i))).toBeLessThanOrEqual(6.01);
+    if (pos.getY(i) < 110) {
+      below++;
+    }
+  }
+  // ...and the arches and piers reach down towards the water
+  expect(below).toBeGreaterThan(0);
+});
+
+test("a curved deck's sides all face out, the inner edge too", () => {
+  // a quarter ring, radius 94–106 m around the origin: its centroid lies
+  // off the deck, in the hollow of the curve
+  const arc = (r: number) =>
+    Array.from({ length: 13 }, (_, k): [number, number] => {
+      const a = (k / 12) * (Math.PI / 2);
+      return [r * Math.cos(a), r * Math.sin(a)];
+    });
+  const ring = [...arc(106), ...arc(94).reverse()];
+  ring.push(ring[0]);
+  const bridge: BridgeFeature = {
+    geometry: { type: "Polygon", coordinates: [ring] },
+    properties: {
+      kind: "road",
+      deck: ring.map(() => 120),
+      axis: arc(100),
+      line: Array.from({ length: 79 }, () => 120),
+    },
+  };
+  const built = buildRail({ ...empty, bridges: [bridge] }, ctx);
+  let sides = 0;
+  for (const child of built.children) {
+    const geo = (child as Mesh).geometry;
+    const pos = geo.getAttribute("position");
+    const nrm = geo.getAttribute("normal");
+    for (let i = 0; i < pos.count; i++) {
+      // the deck's sides and parapets (the piers below are square columns)
+      if (Math.abs(nrm.getY(i)) > 0.1 || pos.getY(i) < 119.5) {
+        continue;
+      }
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const r = Math.hypot(x, z);
+      const radial = (nrm.getX(i) * x + nrm.getZ(i) * z) / r;
+      if (Math.abs(radial) < 0.5) {
+        continue; // an end face: along the curve, not across it
+      }
+      sides++;
+      // outer edge faces away from the centre, inner edge towards it
+      expect(Math.sign(radial)).toBe(r > 100 ? 1 : -1);
+    }
+  }
+  expect(sides).toBeGreaterThan(0);
+});

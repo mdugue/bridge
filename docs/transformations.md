@@ -377,7 +377,9 @@ visual-variable codebook is in
   client packs it into an RGBA32F texture the clay shader `texelFetch`es
   (`lib/city/city-mesh.ts` `packObjectTexels`), so the style lives once per
   building, not once per vertex. Footprints go to `footprints_<tile>.json`
-  for the minimap. Demolish = filter the building tree out of the index
+  for the minimap (which draws the bridge decks from each tile's `bridge`
+  file too, in the colour of the class they carry — the class raster
+  shows the river under them). Demolish = filter the building tree out of the index
   buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
   roof LUT is folded in at bake time.
 - **Small structures from the laser scan** (plan 034) — what the laser saw
@@ -971,6 +973,15 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   every deck kind that the tram layer shares. Railway
   class recoloured dusty-mauve → **ballast warm-grey** (class 5 in
   `lib/city/landcover.ts`).
+- **Bridge axis** — every deck is measured and drawn along a **centreline**
+  (`bridge.py` `deck_axis`, `lib/city/bridge.ts` `axisFrame`): the DLM
+  bridge line where there is one, clipped to the outline and run on to its
+  ends (a polyline — the Marienbrücke's road deck curves); else the long
+  axis of the outline's minimum rotated rectangle, through its middle.
+  *(The first cut took the outline's two farthest-apart vertices — the ends
+  of a diagonal: across a deck 11 m wide the offsets ran skewed by up to
+  half its width, the Blaues Wunder's truss was measured at −5.5/+3.0 m and
+  drawn beside the deck at its ends.)*
 - **Bridge decks** — driven by the **complete `ver06_l` (`BWF=1800`) centreline
   set** (carries every road/rail/path bridge + `NAM`), each snapped to a clean
   **`ver06_f` deck AREA footprint** the line runs on (half its length within
@@ -1016,11 +1027,18 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   follows no arch is not drawn (the Marienbrücke's). On a
   **cable-stayed** bridge the peak is a pylon on a river pier with stays
   fanned to the deck by rule (the Molenbrücke). Otherwise the rib is drawn
-  as an **open frame** on the deck edge: its top the measured rise smoothed
-  over 10 m as one 1.6 m chord, a post every 10 m, no diagonals, and where
-  it peaks ≥ 10 m a tower on a river pier with a portal between the two
-  frames — the Blaues Wunder's silhouette at the abstraction of the clay
-  buildings (a solid fin, tried first, read as a dark tent). The ribs' measured
+  as an **open frame** on the deck edge in a **simple form**
+  (`ribProfile`): where it peaks ≥ 10 m and ≥ 4 m above the dip to
+  anything higher, a tower on a river pier with a portal between the two
+  frames; a straight chord from the deck at the first run's start up to
+  the first tower, a curve sagging between two towers to the lowest the
+  rib was measured there (to the deck where the raster lost it), a
+  straight chord down to the deck at the last run's end; without towers a
+  level girder at the run's median rise. One 1.6 m chord, a post every
+  10 m, no diagonals — the Blaues Wunder's silhouette at the abstraction
+  of the clay buildings. *(A solid fin, tried first, read as a dark tent;
+  the measured rise itself, smoothed, as waves, its side arms ending in
+  mid-air where the raster lost the chord.)* The ribs' measured
   offsets are not trusted across the deck (the DLM centreline can sit
   metres off the bridge: the Blaues Wunder's came out −5.5 and +3.0 m around
   an 11 m deck, a truss through the roadway) — two ribs go just outside the
@@ -1046,12 +1064,17 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   Balkenbrücke …) **override OSM's `bridge:structure`** — OSM calls the
   Waldschlößchenbrücke a truss; it is an arch. No file: the OSM tag stays.
 - **Bridge arches** — `structure` containing **`arch`** without a measured
-  steel arch (Augustus-, Albert-, Marienbrücke) → `addArches` builds
-  segmental spandrel walls (arched intrados, high at the crown, springing
-  low) on both deck edges, carried on slim **river piers** — a
-  masonry-viaduct read. `beam`/absent → flat soffit + box piers. Gated on
-  real deck clearance (`ARCH_MIN_RISE`) so flat bridges don't get spurious
-  arches. The structure comes from Wikidata when it knows the bridge, else
+  steel arch (Augustus-, Albert-, Marienbrücke) → `addMasonry`: the axis
+  in equal spans of about 26 m (`masonrySpans`), each arch springing half a
+  metre above the higher ground at its ends and rising to just under the
+  deck; the deck's **own side edges** carried down as spandrel walls to the
+  arch under them, and a pier across the deck (its width there) at each
+  springing — a masonry-viaduct read. A span that does not clear its
+  ground by 2.5 m gets no arch (the banks). `beam`/absent → flat soffit +
+  box piers. *(Until 2026-09 the walls stood on a straight line between
+  the deck's two farthest-apart corners, one deck width apart and at the
+  lowest deck height: on a long deck they stood metres beside it, on a
+  curved one off it entirely, with water showing between wall and deck.)* The structure comes from Wikidata when it knows the bridge, else
   from the nearest OSM `man_made=bridge` `bridge:structure` (≤60 m).
 - **Station platforms** — OSM `railway=platform` (ODbL) → triangulated flat slabs
   (`ShapeUtils.triangulateShape`), per-vertex terrain-clamped. The OSM half of the

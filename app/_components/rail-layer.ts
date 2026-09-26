@@ -16,15 +16,19 @@ import type {
 import {
   archFits,
   archSpringing,
+  axisFrame,
   BRIDGE_STEP,
-  type Parabola,
   type BridgeRib,
+  intradosAt,
+  type MasonrySpan,
+  masonrySpans,
+  type Parabola,
   PIER_SPACING,
   pierStations,
   placeRibs,
   ribPeaks,
+  ribProfile,
   ribRuns,
-  smoothRise,
 } from "@/lib/city/bridge";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
@@ -106,8 +110,6 @@ const PARAPET_H = 0.85; // bridge parapet wall height (m)
 const PIER_MIN_GAP = 2.5; // only pier where the deck clears the ground by this (m)
 const PIER_HALF = 0.65; // pier column half-width (m)
 const PLATFORM_H = 0.55; // station platform height above ground (m)
-const ARCH_SPAN_M = 26; // target span between arch piers (m)
-const ARCH_MIN_RISE = 2.5; // min deck clearance to bother arching (else box piers)
 // The steel is abstracted like the buildings are: a truss is an open frame
 // (its measured top as one calm chord, a few posts, no diagonals), an arch
 // one band with a few hangers, a cable-stayed pylon a handful of stays.
@@ -298,16 +300,10 @@ export function addFootprint(
       0
     );
   }
+  const winding = ringWinding(pts);
   for (let i = 0; i < pts.length; i++) {
     const j = (i + 1) % pts.length;
-    let nx = pts[j].z - pts[i].z;
-    let nz = -(pts[j].x - pts[i].x);
-    const mx = (pts[i].x + pts[j].x) / 2 - ring.cx;
-    const mz = (pts[i].z + pts[j].z) / 2 - ring.cz;
-    if (nx * mx + nz * mz < 0) {
-      nx = -nx;
-      nz = -nz;
-    }
+    const [nx, nz] = outward(pts, i, winding);
     quad(
       acc,
       [pts[i].x, topY[i], pts[i].z],
@@ -319,32 +315,54 @@ export function addFootprint(
   }
 }
 
+/** +1 when the ring runs counter-clockwise in (x, z), else −1. */
+function ringWinding(pts: readonly { x: number; z: number }[]): 1 | -1 {
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    area += pts[i].x * pts[j].z - pts[j].x * pts[i].z;
+  }
+  return area >= 0 ? 1 : -1;
+}
+
+/**
+ * The outward normal (x, z; the edge's length) of ring edge i, from the
+ * ring's winding. (A test against the ring's centroid, used before, points
+ * the inner edge of a curved deck inwards: its centroid lies off the deck,
+ * and those faces were culled from outside.)
+ */
+function outward(
+  pts: readonly { x: number; z: number }[],
+  i: number,
+  winding: 1 | -1
+): [number, number] {
+  const j = (i + 1) % pts.length;
+  return [(pts[j].z - pts[i].z) * winding, -(pts[j].x - pts[i].x) * winding];
+}
+
 /** A flush parapet: a vertical wall rising `height` from the deck edge (outward
  *  + inward faces + a thin top), starting exactly at the deck top so it reads as
  *  a wall on the deck, never a floating second deck. */
-function addParapetWalls(acc: Mesh3, ring: Ring2, topY: number[]): void {
+function addParapetWalls(
+  acc: Mesh3,
+  ring: Ring2,
+  topY: number[],
+  ringS?: number[]
+): void {
   const { pts } = ring;
-  const { a, b, span } = longAxis(pts);
-  const ux = (b.x - a.x) / (span || 1);
-  const uz = (b.z - a.z) / (span || 1);
+  const across = endEdges(ring, ringS);
+  const winding = ringWinding(pts);
   for (let i = 0; i < pts.length; i++) {
     const j = (i + 1) % pts.length;
-    let nx = pts[j].z - pts[i].z;
-    let nz = -(pts[j].x - pts[i].x);
-    const len = Math.hypot(nx, nz) || 1;
-    nx /= len;
-    nz /= len;
     // No wall across the roadway at the abutments: an edge running across
     // the axis is where the deck meets the road, not its side.
-    if (Math.abs(nz * ux - nx * uz) < END_EDGE_COS) {
+    if (across[i]) {
       continue;
     }
-    const mx = (pts[i].x + pts[j].x) / 2 - ring.cx;
-    const mz = (pts[i].z + pts[j].z) / 2 - ring.cz;
-    if (nx * mx + nz * mz < 0) {
-      nx = -nx;
-      nz = -nz;
-    }
+    const [ox, oz] = outward(pts, i, winding);
+    const len = Math.hypot(ox, oz) || 1;
+    const nx = ox / len;
+    const nz = oz / len;
     const yi = topY[i];
     const yj = topY[j];
     // outer face (flush with the deck edge)
@@ -366,6 +384,29 @@ function addParapetWalls(acc: Mesh3, ring: Ring2, topY: number[]): void {
       [0, 1, 0]
     );
   }
+}
+
+/**
+ * Which ring edges (edge i runs from vertex i to i + 1) cross the axis
+ * rather than run along it: the abutment ends. With the vertices' stations
+ * an edge that advances along the axis by less than END_EDGE_COS of its
+ * length is an end (this holds on a curved deck); without them, the edge's
+ * direction against the ring's long axis decides.
+ */
+function endEdges(ring: Ring2, ringS?: number[]): boolean[] {
+  const { pts } = ring;
+  const { a, b, span } = longAxis(pts);
+  const ux = (b.x - a.x) / (span || 1);
+  const uz = (b.z - a.z) / (span || 1);
+  return pts.map((p, i) => {
+    const j = (i + 1) % pts.length;
+    const len = Math.hypot(pts[j].x - p.x, pts[j].z - p.z) || 1;
+    const along =
+      ringS && ringS.length === pts.length
+        ? Math.abs(ringS[j] - ringS[i])
+        : Math.abs((pts[j].x - p.x) * ux + (pts[j].z - p.z) * uz);
+    return along < END_EDGE_COS * len;
+  });
 }
 
 /** Axis-aligned box column (4 sides + top) for a bridge pier. */
@@ -736,18 +777,11 @@ function drawBridge(
 ): void {
   const { kind, structure, depth } = bridgeProps(f);
   addFootprint(out.tops[kind] ?? out.tops.other, ring, topY, depth);
-  addParapetWalls(out.stone, ring, topY);
   const frame = bridgeFrame(f, ctx);
+  addParapetWalls(out.stone, ring, topY, frame?.ringS);
   if (!frame) {
     // an older file: no axis, no measurements
-    if (
-      !(
-        structure.includes("arch") &&
-        addArches(out.stone, ring, topY, ctx, depth)
-      )
-    ) {
-      addPiers(out.stone, ring, topY, ctx, depth);
-    }
+    addPiers(out.stone, ring, topY, ctx, depth);
     return;
   }
   const carried = addSuperstructure(out, frame, f.properties ?? {}, depth);
@@ -757,7 +791,7 @@ function drawBridge(
   if (
     carried.arches.length === 0 &&
     structure.includes("arch") &&
-    addArches(out.stone, ring, topY, ctx, depth)
+    addMasonry(out.stone, frame, { ring, topY, depth })
   ) {
     return;
   }
@@ -841,43 +875,45 @@ interface BridgeFrame {
   deckAt(s: number): number;
   /** the deck ring's extreme offsets from the axis (left > 0 > right) */
   edges: { left: number; right: number };
+  /** each ring vertex's station (the open ring, as `ringToWorld`) */
+  ringS: number[];
+  /** the deck's edges at station `s`: its outline's offsets there (a
+   *  curved deck around a straight axis is narrower locally than `edges`) */
+  edgesAt(s: number): { left: number; right: number };
 }
 
 function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
-  const axis = f.properties?.axis;
   const line = f.properties?.line;
-  if (!(axis && line && line.length >= 2)) {
+  const axis = f.properties?.axis ? axisFrame(f.properties.axis) : null;
+  if (!(axis && line && line.length >= 2) || axis.length < 1) {
     return null;
   }
-  const [[ax, ay], [bx, by]] = axis;
-  const length = Math.hypot(bx - ax, by - ay);
-  if (length < 1) {
-    return null;
-  }
-  const ux = (bx - ax) / length;
-  const uy = (by - ay) / length;
-  const epsg = (s: number, offset: number) => ({
-    x: ax + ux * s - uy * offset,
-    y: ay + uy * s + ux * offset,
-  });
-  const offsets = (f.geometry?.coordinates[0] ?? []).map(
-    ([x, y]) => (x - ax) * -uy + (y - ay) * ux
+  const coords = f.geometry?.coordinates[0] ?? [];
+  const closed =
+    coords.length > 1 &&
+    coords[0][0] === coords.at(-1)?.[0] &&
+    coords[0][1] === coords.at(-1)?.[1];
+  const onAxis = (closed ? coords.slice(0, -1) : coords).map(([x, y]) =>
+    axis.project(x, y)
   );
+  const offsets = onAxis.map((p) => p.offset);
   return {
-    length,
+    length: axis.length,
     line,
     edges: {
       left: Math.max(0, ...offsets),
       right: Math.min(0, ...offsets),
     },
+    ringS: onAxis.map((p) => p.s),
+    edgesAt: (s) => ringEdgesAt(onAxis, s) ?? { left: 0, right: 0 },
     at: (s, offset) => {
-      const e = epsg(s, offset);
-      const w = epsgToWorld(e.x, e.y, ctx.offset);
+      const [x, y] = axis.at(s, offset);
+      const w = epsgToWorld(x, y, ctx.offset);
       return { x: w.x, z: w.z };
     },
     groundAt: (s, offset) => {
-      const e = epsg(s, offset);
-      return ctx.heightAt(e.x, e.y);
+      const [x, y] = axis.at(s, offset);
+      return ctx.heightAt(x, y);
     },
     deckAt: (s) => {
       const t = Math.min(Math.max(s / BRIDGE_STEP, 0), line.length - 1);
@@ -885,6 +921,26 @@ function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
       return line[i] + (line[i + 1] - line[i]) * (t - i);
     },
   };
+}
+
+/** The outline's extreme offsets where it crosses station `s` (linear
+ *  along each ring edge); null when it does not reach `s`. */
+function ringEdgesAt(
+  ring: readonly { offset: number; s: number }[],
+  s: number
+): { left: number; right: number } | null {
+  let left = Number.NEGATIVE_INFINITY;
+  let right = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    if ((a.s - s) * (b.s - s) <= 0 && a.s !== b.s) {
+      const off = a.offset + ((b.offset - a.offset) * (s - a.s)) / (b.s - a.s);
+      left = Math.max(left, off);
+      right = Math.min(right, off);
+    }
+  }
+  return Number.isFinite(left) ? { left, right } : null;
 }
 
 /**
@@ -1034,14 +1090,15 @@ function point(frame: BridgeFrame, s: number, offset: number, y: number): P3 {
 }
 
 /**
- * A truss, suspension or cantilever girder as an open frame: its measured
- * top (smoothed) as one calm chord CHORD_DEPTH deep on the deck edge, a
- * post every FRAME_POST_EVERY stations and a tower where it peaks — no
- * diagonals. The Blaues Wunder's silhouette at the abstraction of the
- * buildings; a solid fin read as a dark tent.
+ * A truss, suspension or cantilever girder as an open frame: its simple
+ * form (`ribProfile`: straight chords to the towers, a sag between them)
+ * as one chord CHORD_DEPTH deep on the deck edge, a post every
+ * FRAME_POST_EVERY stations and a tower where it peaks — no diagonals. The
+ * Blaues Wunder's silhouette at the abstraction of the buildings; a solid
+ * fin read as a dark tent, the measured rise as waves.
  */
 function addFrame(acc: Mesh3, frame: BridgeFrame, rib: BridgeRib): void {
-  const rise = smoothRise(rib.rise);
+  const rise = ribProfile(rib.rise);
   const top = (i: number) => frame.line[i] + rise[i];
   const low = (i: number) => Math.max(frame.line[i], top(i) - CHORD_DEPTH);
   for (const [i0, i1] of ribRuns(rise)) {
@@ -1333,87 +1390,169 @@ function addPiers(
   }
 }
 
+/** Half the thickness of a masonry pier along the axis (m). */
+const MASONRY_PIER_HALF = 1.2;
+/** A spandrel wall is cut into pieces about this long along an edge (m). */
+const WALL_STEP = 1;
+
 /**
- * Spandrel-arch treatment for arch bridges (OSM `bridge:structure ~ "arch"`):
- * along the deck's long axis, a vertical side wall on each edge whose BOTTOM
- * follows a row of segmental arch intrados (high at each crown, springing low at
- * the piers), carried on slim river piers. Reads as a masonry arch viaduct from
- * the side. Returns false (→ caller falls back to box piers) when the deck
- * doesn't clear the ground enough to be worth arching (a low/flat bridge).
+ * A masonry arch bridge (structure `arch` without a measured steel arch):
+ * the deck's own side edges carried down as spandrel walls to the arches'
+ * underside (`masonrySpans`), and a pier across the deck at each springing.
+ * The walls hang from the ring's edges — the deck's real outline and
+ * slope — so nothing stands off the deck. False when no span clears its
+ * ground (a low bridge keeps its box piers).
  */
-function addArches(
+function addMasonry(
   acc: Mesh3,
-  ring: Ring2,
-  topY: number[],
-  ctx: RailContext,
-  depth: number
+  frame: BridgeFrame,
+  deck: { ring: Ring2; topY: number[]; depth: number }
 ): boolean {
-  const { a, b, span } = longAxis(ring.pts);
-  if (span < 16) {
+  const spans = masonrySpans(
+    frame.length,
+    (s) => frame.groundAt(s, 0),
+    (s) => frame.deckAt(s) - deck.depth
+  );
+  if (spans.length === 0) {
     return false;
   }
-  const axx = (b.x - a.x) / span;
-  const axz = (b.z - a.z) / span;
-  const pxu = -axz; // perpendicular unit
-  const pzu = axx;
-  let half = 0;
-  for (const p of ring.pts) {
-    half = Math.max(half, Math.abs((p.x - a.x) * pxu + (p.z - a.z) * pzu));
-  }
-  half = Math.max(half, 1.5);
-  const groundAt = (x: number, z: number) => {
-    const e = worldToEpsg({ x, z }, ctx.offset);
-    return ctx.heightAt(e.x, e.y);
+  const { ring, topY, depth } = deck;
+  const across = endEdges(ring, frame.ringS);
+  const under = (s: number) => {
+    const span = spans.find((sp) => s >= sp.from && s <= sp.to);
+    return span ? intradosAt(span, s) : null;
   };
-  const deckUnder = Math.min(...topY) - depth;
-  const ga = groundAt(a.x, a.z) ?? deckUnder - 6;
-  const gb = groundAt(b.x, b.z) ?? deckUnder - 6;
-  const springY = Math.min(ga, gb) + 0.8;
-  if (deckUnder - springY < ARCH_MIN_RISE) {
-    return false;
+  for (let i = 0; i < ring.pts.length; i++) {
+    if (!across[i]) {
+      addSpandrel(acc, ring, i, {
+        s0: frame.ringS[i],
+        s1: frame.ringS[(i + 1) % ring.pts.length],
+        y0: topY[i] - depth,
+        y1: topY[(i + 1) % ring.pts.length] - depth,
+        under,
+      });
+    }
   }
-  const n = Math.min(Math.max(Math.round(span / ARCH_SPAN_M), 1), 8);
-  const segLen = span / n;
-  const rise = Math.min(segLen / 2, deckUnder - springY - 0.3);
-  const edge = (t: number, side: number) => ({
-    x: a.x + (b.x - a.x) * t + pxu * side * half,
-    z: a.z + (b.z - a.z) * t + pzu * side * half,
-  });
-  const intrados = (frac: number) => {
-    const dx = (frac - 0.5) * segLen;
-    return springY + Math.sqrt(Math.max(0, rise * rise - dx * dx));
-  };
-  const M = 10;
-  for (let k = 0; k < n; k++) {
-    for (const side of [1, -1]) {
-      for (let m = 0; m < M; m++) {
-        const f0 = m / M;
-        const f1 = (m + 1) / M;
-        const A = edge((k + f0) / n, side);
-        const B = edge((k + f1) / n, side);
-        quad(
-          acc,
-          [A.x, deckUnder, A.z],
-          [B.x, deckUnder, B.z],
-          [B.x, intrados(f1), B.z],
-          [A.x, intrados(f0), A.z],
-          [pxu * side, 0, pzu * side]
-        );
-      }
-    }
-    // River pier under each springing point (skip the bank abutments at k=0).
-    if (k > 0) {
-      const t = k / n;
-      const g =
-        groundAt(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t) ??
-        ga + (gb - ga) * t;
-      for (const side of [1, -1]) {
-        const e = edge(t, side);
-        addColumn(acc, e.x, e.z, g, springY + 0.3, PIER_HALF);
-      }
-    }
+  for (const s of springings(spans, frame.length)) {
+    addMasonryPier(acc, frame, s, spans);
   }
   return true;
+}
+
+/** One ring edge's spandrel wall, from the fascia's foot down to the arch
+ *  under it, in WALL_STEP pieces (nothing where no arch is). */
+function addSpandrel(
+  acc: Mesh3,
+  ring: Ring2,
+  i: number,
+  edge: {
+    s0: number;
+    s1: number;
+    y0: number;
+    y1: number;
+    under: (s: number) => number | null;
+  }
+): void {
+  const { pts } = ring;
+  const a = pts[i];
+  const b = pts[(i + 1) % pts.length];
+  const [nx, nz] = outward(pts, i, ringWinding(pts));
+  const n = Math.max(
+    1,
+    Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / WALL_STEP)
+  );
+  const at = (k: number) => {
+    const t = k / n;
+    const s = edge.s0 + (edge.s1 - edge.s0) * t;
+    return {
+      x: a.x + (b.x - a.x) * t,
+      z: a.z + (b.z - a.z) * t,
+      top: edge.y0 + (edge.y1 - edge.y0) * t,
+      bottom: edge.under(s),
+    };
+  };
+  for (let k = 0; k < n; k++) {
+    const p = at(k);
+    const q = at(k + 1);
+    if (p.bottom === null || q.bottom === null) {
+      continue;
+    }
+    quad(
+      acc,
+      [p.x, p.top, p.z],
+      [q.x, q.top, q.z],
+      [q.x, Math.min(q.bottom, q.top), q.z],
+      [p.x, Math.min(p.bottom, p.top), p.z],
+      [nx, 0, nz]
+    );
+  }
+}
+
+/** The stations where an arch springs from a pier: every span end that is
+ *  not an abutment. */
+function springings(spans: readonly MasonrySpan[], length: number): number[] {
+  const out = new Set<number>();
+  for (const sp of spans) {
+    for (const s of [sp.from, sp.to]) {
+      if (s > 1 && s < length - 1) {
+        out.add(Math.round(s * 100) / 100);
+      }
+    }
+  }
+  return [...out];
+}
+
+/** A pier across the whole deck at a springing: a box from the ground up
+ *  to the higher springing there. */
+function addMasonryPier(
+  acc: Mesh3,
+  frame: BridgeFrame,
+  s: number,
+  spans: readonly MasonrySpan[]
+): void {
+  const ground = frame.groundAt(s, 0);
+  const top = Math.max(
+    ...spans
+      .filter(
+        (sp) => Math.abs(sp.from - s) < 0.01 || Math.abs(sp.to - s) < 0.01
+      )
+      .map((sp) => sp.spring)
+  );
+  if (ground === null || top - ground < 0.5) {
+    return;
+  }
+  const { left, right } = frame.edgesAt(s);
+  const corner = (ds: number, off: number) => frame.at(s + ds, off);
+  const c = [
+    corner(-MASONRY_PIER_HALF, right),
+    corner(MASONRY_PIER_HALF, right),
+    corner(MASONRY_PIER_HALF, left),
+    corner(-MASONRY_PIER_HALF, left),
+  ];
+  const cx = (c[0].x + c[2].x) / 2;
+  const cz = (c[0].z + c[2].z) / 2;
+  for (let k = 0; k < 4; k++) {
+    const p = c[k];
+    const q = c[(k + 1) % 4];
+    const mx = (p.x + q.x) / 2 - cx;
+    const mz = (p.z + q.z) / 2 - cz;
+    quad(
+      acc,
+      [p.x, top, p.z],
+      [q.x, top, q.z],
+      [q.x, ground, q.z],
+      [p.x, ground, p.z],
+      [mx, 0, mz]
+    );
+  }
+  quad(
+    acc,
+    [c[0].x, top, c[0].z],
+    [c[1].x, top, c[1].z],
+    [c[2].x, top, c[2].z],
+    [c[3].x, top, c[3].z],
+    [0, 1, 0]
+  );
 }
 
 /**

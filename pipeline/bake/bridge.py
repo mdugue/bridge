@@ -58,16 +58,118 @@ RAIL_GRADE = 0.04  # ...a railway deck no steeper than this
 # --- the deck axis ---------------------------------------------------------------
 
 
-def long_axis(ring):
-    """The two farthest-apart vertices: the abutment ends (as deck_profile)."""
-    uniq = ring[:-1] if len(ring) > 1 and ring[0] == ring[-1] else ring
-    a, b, best = uniq[0], uniq[-1], -1.0
-    for i in range(len(uniq)):
-        for j in range(i + 1, len(uniq)):
-            d = (uniq[i][0] - uniq[j][0]) ** 2 + (uniq[i][1] - uniq[j][1]) ** 2
-            if d > best:
-                best, a, b = d, uniq[i], uniq[j]
-    return a, b
+class Axis:
+    """A deck's centreline, first abutment → last: a polyline with stations
+    (m along it) and, across it, offsets (m, + to the left)."""
+
+    def __init__(self, pts):
+        self.pts = np.asarray(pts, dtype=float)
+        seg = np.diff(self.pts, axis=0)
+        self.seg_len = np.hypot(seg[:, 0], seg[:, 1])
+        keep = self.seg_len > 1e-6
+        self.pts = np.vstack([self.pts[:1], self.pts[1:][keep]])
+        seg = seg[keep]
+        self.seg_len = self.seg_len[keep]
+        self.dirs = seg / self.seg_len[:, None]
+        self.cum = np.concatenate([[0.0], np.cumsum(self.seg_len)])
+        self.length = float(self.cum[-1])
+
+    def _segment(self, s):
+        return np.clip(np.searchsorted(self.cum, s, side="right") - 1, 0, len(self.seg_len) - 1)
+
+    def points(self, s, offset):
+        """World (x, y) at stations `s` and offsets `offset` (broadcast)."""
+        s = np.asarray(s, dtype=float)
+        i = self._segment(s)
+        d = self.dirs[i]
+        base = self.pts[i] + d * (s - self.cum[i])[..., None]
+        offset = np.asarray(offset, dtype=float)
+        x = base[..., 0] - d[..., 1] * offset
+        y = base[..., 1] + d[..., 0] * offset
+        return x, y
+
+    def point(self, s: float) -> tuple[float, float]:
+        x, y = self.points(np.float64(s), 0.0)
+        return float(x), float(y)
+
+    def project(self, x: float, y: float) -> tuple[float, float]:
+        """(station, offset) of the nearest point on the axis; beyond an end
+        the station runs on along the end segment."""
+        best = None
+        last = len(self.seg_len) - 1
+        for i, (p, d, n) in enumerate(zip(self.pts[:-1], self.dirs, self.seg_len, strict=True)):
+            t = (x - p[0]) * d[0] + (y - p[1]) * d[1]
+            tc = t if (i == 0 and t < 0) or (i == last and t > n) else min(max(t, 0.0), n)
+            off = -(x - p[0]) * d[1] + (y - p[1]) * d[0]
+            px, py = p[0] + d[0] * tc, p[1] + d[1] * tc
+            dist = math.hypot(x - px, y - py)
+            if best is None or dist < best[0]:
+                best = (dist, float(self.cum[i] + tc), float(off))
+        return best[1], best[2]
+
+    def coords(self) -> list[list[float]]:
+        return [[round(float(x), 2), round(float(y), 2)] for x, y in self.pts]
+
+
+AXIS_REACH = 60.0  # a centreline is extended at most this far to the outline (m)
+
+
+def deck_axis(ring, line=None) -> Axis:
+    """The deck's centreline. The DLM bridge line where there is one, clipped
+    to the outline and run on to its ends; else the long axis of the
+    outline's minimum rotated rectangle, through its middle. (The two
+    farthest-apart vertices, used before, are the corners of a diagonal:
+    everything measured or drawn across the deck came out skewed by up to
+    half its width.) Oriented from the end nearer the ring's first vertex."""
+    poly = shapely.make_valid(shapely.Polygon(ring))
+    pts = _line_axis(poly, line) if line is not None and len(line) >= 2 else None
+    if pts is None:
+        pts = _rect_axis(poly)
+    first = ring[0]
+    if math.dist(pts[-1], first) < math.dist(pts[0], first):
+        pts = pts[::-1]
+    return Axis(pts)
+
+
+def _rect_axis(poly) -> list[tuple[float, float]]:
+    rect = shapely.minimum_rotated_rectangle(poly)
+    c = list(rect.exterior.coords)[:4] if rect.geom_type == "Polygon" else None
+    if c is None:
+        (x0, y0, x1, y1) = poly.bounds
+        return [(x0, (y0 + y1) / 2), (x1, (y0 + y1) / 2)]
+    mid = [((c[i][0] + c[(i + 1) % 4][0]) / 2, (c[i][1] + c[(i + 1) % 4][1]) / 2) for i in range(4)]
+    # the short edges' midpoints: edge 0 and 2 or edge 1 and 3
+    if math.dist(c[0], c[1]) < math.dist(c[1], c[2]):
+        return [mid[0], mid[2]]
+    return [mid[1], mid[3]]
+
+
+def _line_axis(poly, line) -> list[tuple[float, float]] | None:
+    inside = shapely.intersection(shapely.LineString(line), poly.buffer(1.0))
+    parts = [g for g in shapely.get_parts(inside) if g.geom_type == "LineString"]
+    if not parts:
+        return None
+    part = max(parts, key=lambda g: g.length)
+    pts = [(x, y) for x, y, *_ in part.coords]
+    if len(pts) < 2:
+        return None
+    grown = poly.buffer(0.5)
+    for end in (0, -1):
+        a, b = (pts[1], pts[0]) if end == 0 else (pts[-2], pts[-1])
+        length = math.dist(a, b) or 1.0
+        ux, uy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+        reach = 0.0
+        while reach < AXIS_REACH and shapely.contains_xy(
+            grown, b[0] + ux * (reach + 0.5), b[1] + uy * (reach + 0.5)
+        ):
+            reach += 0.5
+        tip = (b[0] + ux * reach, b[1] + uy * reach)
+        if end == 0:
+            pts[0] = tip
+        else:
+            pts[-1] = tip
+    simple = shapely.LineString(pts).simplify(0.3)
+    return [(x, y) for x, y, *_ in simple.coords]
 
 
 def opening(values: np.ndarray, window: int) -> np.ndarray:
@@ -115,26 +217,23 @@ def clean_rise(rise: np.ndarray) -> np.ndarray:
     return keep
 
 
-def cross_sections(ground, ring, edge: float):
-    """DOM1 over the deck, one row per SAMPLE along a→b and one column per
-    ACROSS: (stations, across offsets, heights) — NaN outside the outline
-    grown by `edge`. None without DOM1 or for a stub."""
+def cross_sections(ground, ring, edge: float, axis: Axis | None = None):
+    """DOM1 over the deck, one row per SAMPLE along the axis and one column
+    per ACROSS: (stations, across offsets, heights) — NaN outside the
+    outline grown by `edge`. None without DOM1 or for a stub."""
     if ground.dom is None:
         return None
-    a, b = long_axis(ring)
-    length = math.dist(a, b)
+    axis = axis or deck_axis(ring)
+    length = axis.length
     if length < 2 * SAMPLE:
         return None
-    ux, uy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
-    nx, ny = -uy, ux
-    outline = shapely.Polygon(ring)
+    outline = shapely.make_valid(shapely.Polygon(ring))
     if edge > 0:
         outline = outline.buffer(edge)
-    offs = [(x - a[0]) * nx + (y - a[1]) * ny for x, y in ring]
+    offs = [axis.project(x, y)[1] for x, y in ring]
     across = np.arange(min(offs) - edge, max(offs) + edge + 1e-6, ACROSS)
     stations = np.arange(0.0, length + 1e-6, SAMPLE)
-    xs = a[0] + ux * stations[:, None] + nx * across[None, :]
-    ys = a[1] + uy * stations[:, None] + ny * across[None, :]
+    xs, ys = axis.points(stations[:, None], across[None, :])
     top = ground.sample(ground.dom, xs, ys)
     top[~shapely.contains_xy(outline, xs, ys)] = np.nan
     return stations, across, top
@@ -165,14 +264,14 @@ def limit_grade(deck: np.ndarray, step: float, grade: float) -> np.ndarray:
     return out
 
 
-def measured_deck(ground, ring, ramp, grade: float = MAX_GRADE):
+def measured_deck(ground, ring, ramp, grade: float = MAX_GRADE, axis: Axis | None = None):
     """The deck line as DOM1 sees the roadway: per station the lower third
     of the surface across the deck (parapets, cars and lamps stand above
     it), held within DECK_BELOW/DECK_ABOVE of the abutment ramp (a train or
     a canopy over the deck is not the deck), smoothed along the axis and
     no steeper than `grade`. Returns deck(t), or the ramp itself without
     DOM1."""
-    section = cross_sections(ground, ring, 0.0)
+    section = cross_sections(ground, ring, 0.0, axis)
     if section is None:
         return ramp
     stations, _, top = section
@@ -186,11 +285,11 @@ def measured_deck(ground, ring, ramp, grade: float = MAX_GRADE):
     return lambda t: float(np.interp(t * length, stations, deck))
 
 
-def superstructure(ground, ring, deck_at) -> list[dict]:
+def superstructure(ground, ring, deck_at, axis: Axis | None = None) -> list[dict]:
     """The deck's ribs from DOM1: [{offset, rise}] — `offset` the signed
-    distance from the axis (m, + to the left of a→b), `rise` the height above
-    the deck line per STEP from `a` (m, 0 where there is none)."""
-    section = cross_sections(ground, ring, EDGE)
+    distance from the axis (m, + to its left), `rise` the height above the
+    deck line per STEP from the first abutment (m, 0 where there is none)."""
+    section = cross_sections(ground, ring, EDGE, axis)
     if section is None or section[0][-1] < MIN_RUN:
         return []
     stations, across, top = section
@@ -241,9 +340,10 @@ def fairway_marks(tile: Tile) -> list[tuple[float, float, float, str | None]]:
     return out
 
 
-def fairway(ground, ring, deck_at, marks) -> dict:
+def fairway(ground, ring, deck_at, marks, axis: Axis | None = None) -> dict:
     """{fairway, clearance, depth} for a deck a fairway mark belongs to:
-    `fairway` where along a→b (0..1), `depth` = deck − (water + clearance)."""
+    `fairway` where along the axis (0..1), `depth` = deck − (water +
+    clearance)."""
     poly = shapely.Polygon(ring)
     best, bd = None, CLEARANCE_REACH
     for mark in marks:
@@ -252,11 +352,9 @@ def fairway(ground, ring, deck_at, marks) -> dict:
             best, bd = mark, d
     if best is None:
         return {}
-    a, b = long_axis(ring)
-    ax, ay = b[0] - a[0], b[1] - a[1]
-    l2 = ax * ax + ay * ay
-    t = ((best[0] - a[0]) * ax + (best[1] - a[1]) * ay) / l2 if l2 > 0 else 0.5
-    t = min(max(t, 0.0), 1.0)
+    axis = axis or deck_axis(ring)
+    s_at, _ = axis.project(best[0], best[1])
+    t = min(max(s_at / axis.length, 0.0), 1.0) if axis.length > 0 else 0.5
     water = ground.lowest(best[0], best[1], 15)
     if water is None:
         return {}

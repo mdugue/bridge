@@ -2,12 +2,16 @@ import { expect, test } from "bun:test";
 import {
   archFits,
   archSpringing,
+  axisFrame,
   BRIDGE_STEP,
+  intradosAt,
+  masonrySpans,
   fitParabola,
   PIER_SPACING,
   pierStations,
   placeRibs,
   ribPeaks,
+  ribProfile,
   ribRuns,
   smoothRise,
 } from "./bridge";
@@ -132,4 +136,73 @@ test("placeRibs puts the two sides on the deck edges and a lone pylon central", 
 
 test("smoothRise calms the top edge and leaves the gaps alone", () => {
   expect(smoothRise([0, 10, 20, 10, 0], 3)).toEqual([0, 15, 40 / 3, 15, 0]);
+});
+
+test("axisFrame follows a bent centreline and projects onto it", () => {
+  // 100 m east, then 100 m north
+  const frame = axisFrame([
+    [0, 0],
+    [100, 0],
+    [100, 100],
+  ]);
+  expect(frame?.length).toBe(200);
+  expect(frame?.at(50, 6)).toEqual([50, 6]);
+  expect(frame?.at(150, 6)).toEqual([94, 50]);
+  const p = frame?.project(106, 50);
+  expect(p?.s).toBeCloseTo(150, 6);
+  expect(p?.offset).toBeCloseTo(-6, 6);
+  // beyond the first abutment the station runs on, negative
+  expect(frame?.project(-5, 2).s).toBeCloseTo(-5, 6);
+  expect(axisFrame([[1, 1]])).toBeNull();
+});
+
+test("ribProfile: straight chords to the towers, a sag between, nothing hanging", () => {
+  // two towers 24 m up, a wavy side arm that stops 9 m above the deck,
+  // the middle lost to the raster
+  const rise = Array.from({ length: 160 }, (_, i) => {
+    if (i < 10 || i > 150 || (i > 60 && i < 80)) {
+      return 0;
+    }
+    const tower = Math.max(
+      0,
+      24 - Math.min(Math.abs(i - 35), Math.abs(i - 105)) * 0.5
+    );
+    return Math.max(9, tower) + (i % 3) * 0.8;
+  });
+  const out = ribProfile(rise);
+  const towers = ribPeaks(rise);
+  expect(towers).toHaveLength(2);
+  for (const i of towers) {
+    expect(out[i]).toBe(rise[i]);
+  }
+  // the ends come down to the deck
+  expect(out[10]).toBeLessThan(0.5);
+  expect(out[150]).toBeLessThan(0.5);
+  expect(out[9]).toBe(0);
+  // one run from end to end, the gap bridged by the sag down to the deck
+  expect(ribRuns(out)).toEqual([[10, 150]]);
+  expect(Math.min(...out.slice(towers[0], towers[1]))).toBeLessThan(1);
+  // no waves: the side arm rises steadily to its tower
+  for (let i = 11; i <= towers[0]; i++) {
+    expect(out[i]).toBeGreaterThan(out[i - 1]);
+  }
+  // no towers: a level girder
+  expect(new Set(ribProfile([0, 6, 7, 6.5, 6, 0]).slice(1, 5)).size).toBe(1);
+});
+
+test("masonrySpans arch where the deck clears the ground, not at the banks", () => {
+  // 260 m: banks at 118 m for 40 m each end, the river at 100 m between
+  const ground = (s: number) => (s < 40 || s > 220 ? 118 : 100);
+  const spans = masonrySpans(260, ground, () => 118);
+  expect(spans.length).toBeGreaterThan(3);
+  for (const sp of spans) {
+    expect(sp.crown).toBe(117.5);
+    expect(sp.spring).toBe(100.5);
+    expect(sp.from).toBeGreaterThanOrEqual(26);
+  }
+  const [first] = spans;
+  const mid = (first.from + first.to) / 2;
+  expect(intradosAt(first, mid)).toBeCloseTo(117.5, 6);
+  expect(intradosAt(first, first.from)).toBeCloseTo(100.5, 6);
+  expect(intradosAt(first, first.to + 1)).toBeNull();
 });

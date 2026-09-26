@@ -370,8 +370,10 @@ export interface BridgeFeature {
      *  "suspension;cantilever"): Wikidata's class when it knows the bridge,
      *  else the nearest OSM outline's tag */
     structure?: string | null;
-    /** the deck's axis, first → last abutment (EPSG) */
-    axis?: [[number, number], [number, number]];
+    /** the deck's centreline, first → last abutment (EPSG): the DLM
+     *  bridge line where there is one, else the outline's long axis
+     *  through its middle */
+    axis?: [number, number][];
     /** deck height per BRIDGE_STEP (2 m) along the axis (m) */
     line?: number[];
     /** superstructure measured in DOM1 (pipeline/bake/bridge.py) */

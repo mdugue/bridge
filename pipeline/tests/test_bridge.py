@@ -122,3 +122,32 @@ def test_a_bridge_line_beside_a_footprint_is_not_laid_on_it():
     assert footprint_of(LineString([(-10, 0), (210, 0)]), polys) == 0
     polys[0][3] = True  # a claimed footprint is not matched twice
     assert footprint_of(LineString([(-10, 0), (210, 0)]), polys) == -1
+
+
+def test_the_axis_runs_down_the_middle_of_the_deck_not_corner_to_corner():
+    axis = bridge.deck_axis(RING)
+    assert abs(axis.length - 200.0) < 1e-6
+    assert axis.point(0.0) == (0.0, 0.0)  # starts at the end nearer the first vertex
+    assert abs(axis.project(100.0, 6.0)[1] - 6.0) < 1e-6  # the edges are ±6 all along
+    assert abs(axis.project(190.0, -6.0)[1] + 6.0) < 1e-6
+
+
+def test_a_curved_bridge_line_becomes_its_axis_run_on_to_the_ends():
+    import math
+
+    import shapely
+
+    # a deck 12 m wide along a quarter circle of radius 100 m
+    arc = [(100 * math.cos(a), 100 * math.sin(a)) for a in np.linspace(0, math.pi / 2, 30)]
+    ring = [
+        (x, y) for x, y, *_ in shapely.LineString(arc).buffer(6, cap_style="flat").exterior.coords
+    ]
+    line = arc[1:-1]  # the DLM line stops a few metres short of the abutments
+    axis = bridge.deck_axis(ring, line)
+    assert abs(axis.length - 100 * math.pi / 2) < 2.0
+    for s in (10.0, 80.0, 150.0):
+        x, y = axis.point(s)
+        assert abs(math.hypot(x, y) - 100) < 0.6  # on the curve, not on its chord
+    # a ring vertex is 6 m to one side, wherever it sits along the curve
+    for x, y in ring[:-1]:
+        assert abs(abs(axis.project(x, y)[1]) - 6.0) < 1.0

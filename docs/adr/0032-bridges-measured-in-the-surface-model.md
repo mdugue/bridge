@@ -53,8 +53,9 @@ model only what no source shows:
    (`pipeline/bake/bridge.py`). At runtime a rib on an arch bridge that fits
    a parabola becomes a steel arch continued below the deck to where it
    meets the ground; any other rib is drawn as an **open frame** on its
-   deck edge — the measured rise smoothed as one chord, a post every 10 m,
-   no diagonals — with a tower on a river pier and a portal where it
+   deck edge in a simple form — straight chords from the deck to its
+   towers, a sag between them, one chord, a post every 10 m, no
+   diagonals — with a tower on a river pier and a portal where it
    peaks (`app/_components/rail-layer.ts`,
    `lib/city/bridge.ts`). The measurement gives the silhouette, not the
    members: the first cut drew chord, posts and diagonals as measured, in
@@ -63,7 +64,8 @@ model only what no source shows:
    matte steel, the deck tops in their land-cover colours — and two ribs
    are placed on the deck's two edges rather than at their measured
    offsets, which follow a DLM centreline that can sit metres off the
-   bridge.
+   bridge. The measured rise, drawn as it came, read as waves, and ended
+   in mid-air wherever the raster lost the chord.
 4. **The deck's depth comes from the fairway clearance** over the DGM's
    water surface; beam-bridge piers leave the fairway clear.
 5. **Wikidata's class overrides OSM's `bridge:structure`** when a deck
@@ -77,12 +79,19 @@ model only what no source shows:
    truss, suspension, cantilever, cable-stayed): over a beam bridge the
    filters still pass catenary, trains and trees. On an arch bridge a rib
    that follows no arch is not drawn either.
-8. **A bridge line takes the footprint it runs on**, not the nearest one:
+8. **Everything across a deck is measured from its centreline** — the DLM
+   bridge line (a polyline, clipped to the outline and run on to its
+   ends), else the outline's minimum rotated rectangle's long axis. The
+   outline's two farthest-apart vertices, used first, are a diagonal:
+   offsets came out skewed by up to half the deck's width, and what hung
+   from them (the frames, the masonry arches) stood beside the deck. A
+   masonry arch's walls now hang from the deck's own side edges.
+9. **A bridge line takes the footprint it runs on**, not the nearest one:
    the Marienbrücke's road line, 16 m beside the rail bridge's footprint,
    once took it, and the road was laid on the tracks. The measured deck is
    grade-limited from midspan outwards (8 %, rail 4 %), so a deck the scan
    loses near an abutment ramps down instead of dropping.
-9. **No canopy tree within 10 m of a bridge**: on a park bank a bridge's
+10. **No canopy tree within 10 m of a bridge**: on a park bank a bridge's
    steel is as tall in the nDOM as a crown (the Blaues Wunder's pylons had
    become two trees).
 

@@ -37,21 +37,30 @@ export function ribRuns(rise: readonly number[]): [number, number][] {
 
 /** A pylon stands where a rib peaks this high (m)... */
 const PYLON_MIN_RISE = 10;
-/** ...at least this far from the next one (m). */
+/** ...at least this far from the next one (m)... */
 const PYLON_MIN_GAP = 30;
+/** ...and standing this far above the dip to anything higher (m): a wave
+ *  in a chord is no pylon. */
+const PYLON_PROMINENCE = 4;
 
 /**
  * Station indices of the rib's pylons: local maxima at least
- * PYLON_MIN_RISE high, the higher one winning within PYLON_MIN_GAP. A truss
- * that sags between two pylons (the Blaues Wunder) has two; an arch has its
- * crown (callers only ask for non-arch ribs).
+ * PYLON_MIN_RISE high and PYLON_PROMINENCE prominent, the higher one
+ * winning within PYLON_MIN_GAP. A truss that sags between two pylons (the
+ * Blaues Wunder) has two; an arch has its crown (callers only ask for
+ * non-arch ribs).
  */
 export function ribPeaks(rise: readonly number[]): number[] {
   const candidates: number[] = [];
   for (let i = 0; i < rise.length; i++) {
     const left = i > 0 ? rise[i - 1] : Number.NEGATIVE_INFINITY;
     const right = i < rise.length - 1 ? rise[i + 1] : Number.NEGATIVE_INFINITY;
-    if (rise[i] >= PYLON_MIN_RISE && rise[i] >= left && rise[i] > right) {
+    if (
+      rise[i] >= PYLON_MIN_RISE &&
+      rise[i] >= left &&
+      rise[i] > right &&
+      prominence(rise, i) >= PYLON_PROMINENCE
+    ) {
       candidates.push(i);
     }
   }
@@ -64,6 +73,22 @@ export function ribPeaks(rise: readonly number[]): number[] {
     }
   }
   return kept.sort((p, q) => p - q);
+}
+
+/** How far station i stands above the higher of the two lowest points
+ *  between it and anything higher on either side (or the rib's end). */
+function prominence(rise: readonly number[], i: number): number {
+  const dip = (dir: -1 | 1) => {
+    let low = rise[i];
+    for (let k = i + dir; k >= 0 && k < rise.length; k += dir) {
+      if (rise[k] > rise[i]) {
+        return low;
+      }
+      low = Math.min(low, rise[k]);
+    }
+    return low;
+  };
+  return rise[i] - Math.max(dip(-1), dip(1));
 }
 
 /** y = a·s² + b·s + c */
@@ -340,4 +365,200 @@ export function smoothRise(rise: readonly number[], window = 5): number[] {
     }
     return sum / n;
   });
+}
+
+/** A deck's centreline (EPSG), first abutment → last: points at a station
+ *  and offset, and where a point lies in those terms. */
+export interface AxisFrame {
+  /** the point at station `s` (m along the axis), `offset` to its left */
+  at(s: number, offset: number): [number, number];
+  length: number;
+  /** station and offset of the nearest axis point (beyond an end the
+   *  station runs on along the end segment) */
+  project(x: number, y: number): { offset: number; s: number };
+}
+
+/** The frame of a baked `axis` polyline; null for fewer than two distinct
+ *  points (pipeline/bake/bridge.py `Axis`). */
+export function axisFrame(
+  points: readonly (readonly [number, number])[]
+): AxisFrame | null {
+  const pts: [number, number][] = [];
+  for (const [x, y] of points) {
+    const last = pts.at(-1);
+    if (!last || Math.hypot(x - last[0], y - last[1]) > 1e-6) {
+      pts.push([x, y]);
+    }
+  }
+  if (pts.length < 2) {
+    return null;
+  }
+  const dirs: [number, number][] = [];
+  const cum = [0];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const dx = pts[i + 1][0] - pts[i][0];
+    const dy = pts[i + 1][1] - pts[i][1];
+    const len = Math.hypot(dx, dy);
+    dirs.push([dx / len, dy / len]);
+    cum.push(cum[i] + len);
+  }
+  const last = dirs.length - 1;
+  const segment = (s: number) => {
+    let i = 0;
+    while (i < last && s >= cum[i + 1]) {
+      i++;
+    }
+    return i;
+  };
+  return {
+    length: cum[last + 1],
+    at: (s, offset) => {
+      const i = segment(s);
+      const [dx, dy] = dirs[i];
+      const t = s - cum[i];
+      return [
+        pts[i][0] + dx * t - dy * offset,
+        pts[i][1] + dy * t + dx * offset,
+      ];
+    },
+    project: (x, y) => {
+      let best = { d: Number.POSITIVE_INFINITY, s: 0, offset: 0 };
+      for (let i = 0; i <= last; i++) {
+        const [dx, dy] = dirs[i];
+        const len = cum[i + 1] - cum[i];
+        const rx = x - pts[i][0];
+        const ry = y - pts[i][1];
+        const t = rx * dx + ry * dy;
+        const open = (i === 0 && t < 0) || (i === last && t > len);
+        const tc = open ? t : Math.min(Math.max(t, 0), len);
+        const d = Math.hypot(rx - dx * tc, ry - dy * tc);
+        if (d < best.d) {
+          best = { d, s: cum[i] + tc, offset: -rx * dy + ry * dx };
+        }
+      }
+      return { s: best.s, offset: best.offset };
+    },
+  };
+}
+
+/** A chord never ends lower than this above the deck (m). */
+const CHORD_END = 0.3;
+
+/**
+ * The simple form a truss, suspension or cantilever rib is drawn in, per
+ * station (0 where there is none). With towers (`ribPeaks`): a straight
+ * chord from the deck at the first run's start up to the first tower, a
+ * curve sagging between two towers to the lowest the rib was measured
+ * there (to the deck where it was lost), a straight chord down to the deck
+ * at the last run's end — the Blaues Wunder's outline, not the raster's
+ * waves, and no end left hanging in the air. Without towers: each run a
+ * level girder at its median rise.
+ */
+export function ribProfile(rise: readonly number[]): number[] {
+  const out = rise.map(() => 0);
+  const runs = ribRuns(rise);
+  if (runs.length === 0) {
+    return out;
+  }
+  const peaks = ribPeaks(rise);
+  if (peaks.length === 0) {
+    for (const [a, b] of runs) {
+      const level = median(rise.slice(a, b + 1));
+      out.fill(level, a, b + 1);
+    }
+    return out;
+  }
+  const start = runs[0][0];
+  const end = runs.at(-1)?.[1] ?? start;
+  const line = (a: number, ya: number, b: number, yb: number) => {
+    for (let i = a; i <= b; i++) {
+      out[i] = b === a ? yb : ya + ((yb - ya) * (i - a)) / (b - a);
+    }
+  };
+  line(start, CHORD_END, peaks[0], rise[peaks[0]]);
+  for (let k = 0; k < peaks.length - 1; k++) {
+    sag(out, rise, peaks[k], peaks[k + 1]);
+  }
+  const lastPeak = peaks.at(-1) ?? start;
+  line(lastPeak, rise[lastPeak], end, CHORD_END);
+  return out;
+}
+
+/** Between two towers: a curve from one top to the other, its lowest the
+ *  least the rib was measured there, or the deck where it was lost. */
+function sag(out: number[], rise: readonly number[], p: number, q: number) {
+  const between = rise.slice(p, q + 1);
+  const low = between.some((r) => r <= 0)
+    ? CHORD_END
+    : Math.min(...smoothRise(between));
+  const hp = rise[p];
+  const hq = rise[q];
+  const dip = Math.max(0, (hp + hq) / 2 - low);
+  for (let i = p; i <= q; i++) {
+    const u = (i - p) / (q - p);
+    out[i] = hp + (hq - hp) * u - dip * 4 * u * (1 - u);
+  }
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+/** Target span of a masonry arch (m). */
+export const ARCH_SPAN = 26;
+/** An arch opens only where the deck's underside clears its springing by
+ *  this much (m); lower spans stay solid-free (the deck on its own). */
+const ARCH_MIN_RISE = 2.5;
+
+/** One masonry arch: its stations, springing and crown heights. */
+export interface MasonrySpan {
+  crown: number;
+  from: number;
+  spring: number;
+  to: number;
+}
+
+/**
+ * The arches of a masonry bridge (structure `arch` without a measured
+ * steel arch): the axis in equal spans of about ARCH_SPAN, each springing
+ * half a metre above the higher ground at its ends and rising to just under
+ * the deck at its middle. `groundAt(s)` is the terrain on the axis (the
+ * water over the river), `underAt(s)` the deck's underside.
+ */
+export function masonrySpans(
+  length: number,
+  groundAt: (s: number) => number | null,
+  underAt: (s: number) => number
+): MasonrySpan[] {
+  const n = Math.min(Math.max(Math.round(length / ARCH_SPAN), 1), 12);
+  const out: MasonrySpan[] = [];
+  for (let k = 0; k < n; k++) {
+    const from = (k * length) / n;
+    const to = ((k + 1) * length) / n;
+    const g0 = groundAt(from);
+    const g1 = groundAt(to);
+    if (g0 === null || g1 === null) {
+      continue;
+    }
+    const spring = Math.max(g0, g1) + 0.5;
+    const crown = underAt((from + to) / 2) - 0.5;
+    if (crown - spring >= ARCH_MIN_RISE) {
+      out.push({ from, to, spring, crown });
+    }
+  }
+  return out;
+}
+
+/** The underside of an arch at station `s` (a half ellipse from springing
+ *  to crown), or null outside it. */
+export function intradosAt(span: MasonrySpan, s: number): number | null {
+  if (s < span.from || s > span.to) {
+    return null;
+  }
+  const half = (span.to - span.from) / 2;
+  const u = (s - span.from - half) / half;
+  return (
+    span.spring + (span.crown - span.spring) * Math.sqrt(Math.max(0, 1 - u * u))
+  );
 }

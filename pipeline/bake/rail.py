@@ -32,10 +32,10 @@ from .bridge import (
     RAIL_GRADE,
     STANDING,
     STEP,
+    deck_axis,
     fairway,
     fairway_marks,
     load_wikidata,
-    long_axis,
     measured_deck,
     structure_of,
     superstructure,
@@ -260,42 +260,44 @@ class Ground:
         return "path" if path > 0 else "other"
 
 
-def ramp_line(ground: Ground, ring: list[tuple[float, float]]):
-    """A ramp between the abutments (the farthest-apart ring vertices) plus a
-    midspan camber — never dipping into the river — as a function of
-    t ∈ [0, 1] along a→b. None when there is no valid ground at all."""
-    uniq = ring[:-1] if len(ring) > 1 and ring[0] == ring[-1] else ring
-    a, b = long_axis(ring)
+def ramp_line(ground: Ground, axis):
+    """A ramp between the abutments (the axis's ends) plus a midspan camber —
+    never dipping into the river — as a function of t ∈ [0, 1] along the
+    axis. None when there is no valid ground at all."""
+    a, b = axis.point(0.0), axis.point(axis.length)
     h0, h1 = ground.endpoint_h(*a), ground.endpoint_h(*b)
     if h0 is None and h1 is None:
-        hs = sorted(h for h in (ground.endpoint_h(x, y) for x, y in uniq) if h is not None)
+        stations = np.linspace(0.0, axis.length, 9)
+        hs = sorted(
+            h for h in (ground.endpoint_h(*axis.point(s)) for s in stations) if h is not None
+        )
         if not hs:
             return None
         h0 = h1 = hs[len(hs) // 2]
     h0 = h1 if h0 is None else h0
     h1 = h0 if h1 is None else h1
-    camber = min(math.dist(a, b) * CAMBER, 1.6)
+    camber = min(axis.length * CAMBER, 1.6)
     return lambda t: h0 + (h1 - h0) * t + camber * math.sin(math.pi * t)
 
 
-def deck_line(ground: Ground, ring: list[tuple[float, float]], kind: str = "road"):
-    """The deck height along a→b, t ∈ [0, 1]: the roadway DOM1 measures, held
-    near the abutment ramp and within the kind's grade (bridge.measured_deck).
-    None without ground."""
-    ramp = ramp_line(ground, ring)
+def deck_line(ground: Ground, ring: list[tuple[float, float]], axis, kind: str = "road"):
+    """The deck height along the axis, t ∈ [0, 1]: the roadway DOM1 measures,
+    held near the abutment ramp and within the kind's grade
+    (bridge.measured_deck). None without ground."""
+    ramp = ramp_line(ground, axis)
     if ramp is None:
         return None
-    return measured_deck(ground, ring, ramp, RAIL_GRADE if kind == "rail" else MAX_GRADE)
+    grade = RAIL_GRADE if kind == "rail" else MAX_GRADE
+    return measured_deck(ground, ring, ramp, grade, axis)
 
 
-def deck_profile(line, ring: list[tuple[float, float]]) -> list[float]:
-    """Per-ring-vertex deck height (the deck line at each vertex's projection)."""
-    a, b = long_axis(ring)
-    ax, ay = b[0] - a[0], b[1] - a[1]
-    l2 = ax * ax + ay * ay
+def deck_profile(line, ring: list[tuple[float, float]], axis) -> list[float]:
+    """Per-ring-vertex deck height (the deck line where each vertex projects
+    onto the axis)."""
     deck = []
     for x, y in ring:
-        t = ((x - a[0]) * ax + (y - a[1]) * ay) / l2 if l2 > 0 else 0.0
+        s, _ = axis.project(x, y)
+        t = s / axis.length if axis.length > 0 else 0.0
         deck.append(round(line(max(0.0, min(1.0, t))), 2))
     return deck
 
@@ -333,9 +335,13 @@ def near(structures, cx: float, cy: float, reach: float = 60.0):
     return sorted((h for h in hits if h[0] < reach), key=lambda h: h[0])
 
 
-def bridge_properties(ground, ring, name, kind, structures, marks, known) -> dict | None:
-    """Everything the viewer draws a deck from (see bridge.py)."""
-    line = deck_line(ground, ring, kind)
+def bridge_properties(
+    ground, ring, name, kind, structures, marks, known, centre=None
+) -> dict | None:
+    """Everything the viewer draws a deck from (see bridge.py). `centre` is
+    the DLM bridge line the deck was built from, if any."""
+    axis = deck_axis(ring, centre)
+    line = deck_line(ground, ring, axis, kind)
     if line is None:
         return None
     cx = sum(x for x, _ in ring) / len(ring)
@@ -346,14 +352,13 @@ def bridge_properties(ground, ring, name, kind, structures, marks, known) -> dic
         "name": name,
         "kind": kind,
         "structure": structure,
-        "deck": deck_profile(line, ring),
+        "deck": deck_profile(line, ring, axis),
     }
-    a, b = long_axis(ring)
-    props["axis"] = [[round(a[0], 2), round(a[1], 2)], [round(b[0], 2), round(b[1], 2)]]
-    length = math.dist(a, b)
+    props["axis"] = axis.coords()
+    length = axis.length
     stations = [i * STEP for i in range(int(length // STEP) + 1)]
     props["line"] = [round(line(s / length), 2) if length > 0 else 0.0 for s in stations]
-    props.update(fairway(ground, ring, line, marks))
+    props.update(fairway(ground, ring, line, marks, axis))
     outline = shapely.Polygon(ring)
     qids = [qid for _, _, qid in around if qid]
     qids += [m[3] for m in marks if m[3] and outline.distance(shapely.Point(m[0], m[1])) < 30]
@@ -366,7 +371,7 @@ def bridge_properties(ground, ring, name, kind, structures, marks, known) -> dic
     # Only a bridge of a kind that stands above its deck keeps what DOM1 saw
     # there: over a beam bridge it is catenary, trains or trees.
     if any(kind in props["structure"] for kind in STANDING):
-        ribs = superstructure(ground, ring, line)
+        ribs = superstructure(ground, ring, line, axis)
         if ribs:
             props["ribs"] = ribs
     return props
@@ -407,8 +412,8 @@ def bridges(tile: Tile, structures, marks, known) -> list[dict]:
 
     features = []
 
-    def emit(ring, name, kind):
-        props = bridge_properties(ground, ring, name, kind, structures, marks, known)
+    def emit(ring, name, kind, centre=None):
+        props = bridge_properties(ground, ring, name, kind, structures, marks, known, centre)
         if props is None:
             return
         features.append(
@@ -432,9 +437,9 @@ def bridges(tile: Tile, structures, marks, known) -> list[dict]:
             best = footprint_of(part, polys)
             if best >= 0:
                 polys[best][3] = True
-                emit(polys[best][0], name or None, kind)
+                emit(polys[best][0], name or None, kind, coords)
             else:
-                emit(buffer_line(coords, WIDTH[kind] / 2), name or None, kind)
+                emit(buffer_line(coords, WIDTH[kind] / 2), name or None, kind, coords)
     for p in polys:
         if not p[3]:
             emit(p[0], None, ground.classify(p[0] + [(p[1], p[2])]))
