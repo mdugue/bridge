@@ -68,7 +68,7 @@ from rasterio.transform import from_origin
 from rasterio.warp import reproject
 from scipy.ndimage import distance_transform_edt
 
-from .common import Tile
+from .common import Tile, overlaps
 from .lowveg import lod2_rings
 
 SVF_PX = 1024
@@ -109,22 +109,6 @@ class Field:
     @property
     def shape(self) -> tuple[int, int]:
         return self.rows, self.cols
-
-
-def site_sources(tile: Tile) -> list[tuple[str, tuple[float, float, float, float]]]:
-    """Every committed tile (its DGM on disk) as (id, bounds): the tile's
-    neighbours fill the margins."""
-    found = []
-    for tif in sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")):
-        tid = tif.stem.removeprefix("dgm1_")
-        with rasterio.open(tif) as ds:
-            b = ds.bounds
-        found.append((tid, (b.left, b.bottom, b.right, b.top)))
-    return found
-
-
-def overlaps(a, b) -> bool:
-    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
 def dgm_field(tile: Tile, field: Field, sources) -> np.ndarray:
@@ -442,7 +426,7 @@ def run(tile: Tile) -> None:
     if not tile.dgm.exists():
         print(f"{tile.id}: no DGM at {tile.dgm} — skipping the sky view")
         return
-    roofs = Roofs(tile, site_sources(tile))
+    roofs = Roofs(tile, tile.neighbours())
     xmin, _, xmax, _ = tile.bounds
 
     res = (xmax - xmin) / SVF_PX

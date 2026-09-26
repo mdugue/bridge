@@ -57,7 +57,7 @@ def osm_tile(
 
 def neighbour(tile: Tile, tile_id: str, dx: float = SIZE, dy: float = 0.0) -> Tile:
     """A second tile beside `tile` (sharing its raw and data folders), with a
-    flat DGM so the site's tile list (skyview.site_sources) finds it."""
+    flat DGM so the site's tile list (Tile.neighbours) finds it."""
     xmin, ymin, _, _ = tile.bounds
     other = Tile(
         tile_id,

@@ -229,11 +229,10 @@ def encode(metres: np.ndarray) -> np.ndarray:
 
 
 def run(tile: Tile, px: int = 2048) -> None:
-    src = tile.out("dlm", f"landcover_{tile.id}.png")
-    if not src.exists():
+    cls = tile.classes()
+    if cls is None:
         print(f"{tile.id}: no class raster — skipping the edge distances")
         return
-    cls = np.asarray(Image.open(src).convert("L"))
     res = (tile.bounds[2] - tile.bounds[0]) / cls.shape[1]
     road_m = edge_field(cls, ROAD, res, px)
     lawn = np.where(urban_green(tile, cls), MEADOW, cls)

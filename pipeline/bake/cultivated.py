@@ -63,11 +63,12 @@ from .common import (
     column,
     feature,
     geometry_json,
+    overlaps,
     owns,
     write_geojson,
 )
 from .osm import has_extract, read_osm, tag
-from .skyview import Field, dgm_field, overlaps, site_sources
+from .skyview import Field, dgm_field
 
 ORCHARD_SPACING_M = 8.0
 ORCHARD_TREE_H = 4.5  # m: a standard fruit tree, crown base ≈ 1.3 m ("small")
@@ -144,7 +145,7 @@ def contour_angle(tile: Tile, g: shapely.Geometry) -> float:
     """The direction along the contour over the polygon: perpendicular to
     the DGM's mean gradient (radians from east). The gradient is read over
     the whole polygon from every committed DGM it touches (skyview.py's
-    `site_sources`), so a vineyard across a seam gets one angle on both
+    `Tile.neighbours`), so a vineyard across a seam gets one angle on both
     tiles — this tile's DGM alone kinked its rows at the seam. A flat or
     DGM-less area runs along its long axis."""
     xmin, ymin, xmax, ymax = g.bounds
@@ -153,7 +154,7 @@ def contour_angle(tile: Tile, g: shapely.Geometry) -> float:
         (math.floor(xmin) - 1, math.floor(ymin) - 1, math.ceil(xmax) + 1, math.ceil(ymax) + 1),
         1.0,
     )
-    z = dgm_field(tile, field, site_sources(tile)).astype(np.float64)
+    z = dgm_field(tile, field, tile.neighbours()).astype(np.float64)
     mask = rasterize([(g, 1)], out_shape=field.shape, transform=field.transform, dtype=np.uint8)
     gy, gx = np.gradient(z, field.res)  # rows grow south: dz/dy_north = −gy
     inside = mask.astype(bool) & np.isfinite(gx) & np.isfinite(gy)
@@ -250,7 +251,7 @@ def measured_trees(tile: Tile, near: tuple[float, float, float, float]) -> tuple
     """The measured trees (MEASURED_TREES files) of every tile whose extent
     reaches `near`, as (xy, crown radius) — across a seam too."""
     xy, r = [], []
-    for tid, b in site_sources(tile):
+    for tid, b in tile.neighbours():
         if not overlaps(b, near):
             continue
         for kind in MEASURED_TREES:
@@ -369,8 +370,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     )
     path = tile.out("dlm", f"cultivated_{tile.id}.geojson")
     write_geojson(path, feats, tile.epsg, attribution=OSM_ATTRIBUTION)
-    cls_png = tile.data / "dlm" / f"landcover_{tile.id}.png"
-    cls = np.asarray(Image.open(cls_png).convert("L")) if cls_png.exists() else None
+    cls = tile.classes()
     near = shapely.union_all(parts["colonies"]) if parts["colonies"] else None
     colony_paths = [p for p in paths if near is not None and p.intersects(near)]
     raster = colony_raster(tile, px, parts["colonies"], parts["parcels"], colony_paths, cls)

@@ -202,7 +202,7 @@ measured one, canopyx included) and `small-buildings` last (the same scan
 rasters; walls, bridges, monuments and stop shelters mask it). Steps that
 read a neighbour's files (`markings`, `cultivated`, `tram`, `skyview`,
 `soundmarks`, `small-buildings`) find the neighbours by their committed
-DGM (`skyview.site_sources`); run them for every tile.
+DGM (`Tile.neighbours` in `common.py`); run them for every tile.
 
 | Step | Reads | Writes (`data/…`) | Notes |
 |---|---|---|---|

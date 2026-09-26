@@ -81,9 +81,8 @@ from PIL import Image
 from rasterio.features import rasterize
 from scipy import ndimage as ndi
 
-from .common import OSM_ATTRIBUTION, Tile, column, owns
+from .common import OSM_ATTRIBUTION, Tile, column, overlaps, owns
 from .osm import has_extract, read_osm, tag
-from .skyview import overlaps, site_sources
 
 # id → key; keep in step with `MARKING_KINDS` in lib/city/markings.ts.
 KINDS = {0: "none", 1: "zebra", 2: "furt", 3: "stop"}
@@ -487,16 +486,13 @@ def lane_fields(
 
 
 def road_mask(tile: Tile, px: int) -> ClassRaster | None:
-    png = tile.data / "dlm" / f"landcover_{tile.id}.png"
-    if not png.exists():
-        return None
-    cls = np.asarray(Image.open(png).convert("L"))
-    return ClassRaster(cls, tile.bounds)
+    cls = tile.classes()
+    return None if cls is None else ClassRaster(cls, tile.bounds)
 
 
 def wide_mask(tile: Tile, own: ClassRaster, margin: float = SEAM_MARGIN_M) -> ClassRaster:
     """The class raster over the tile and `margin` around it: this tile's,
-    and each committed neighbour's (skyview.py's `site_sources`) where it
+    and each committed neighbour's (`Tile.neighbours`) where it
     has one at the same resolution; 0 (no road) where none reaches."""
     m = int(math.ceil(margin / own.res))
     n = own.n + 2 * m
@@ -504,12 +500,11 @@ def wide_mask(tile: Tile, own: ClassRaster, margin: float = SEAM_MARGIN_M) -> Cl
     xmax, ymax = xmin + n * own.res, ymin + n * own.res
     wide = np.zeros((n, n), np.uint8)
     wide[m : m + own.n, m : m + own.n] = own.cls
-    for tid, b in site_sources(tile):
-        png = tile.data / "dlm" / f"landcover_{tid}.png"
-        if tid == tile.id or not overlaps(b, (xmin, ymin, xmax, ymax)) or not png.exists():
+    for tid, b in tile.neighbours():
+        if tid == tile.id or not overlaps(b, (xmin, ymin, xmax, ymax)):
             continue
-        cls = np.asarray(Image.open(png).convert("L"))
-        if abs((b[2] - b[0]) / cls.shape[1] - own.res) > 1e-9:
+        cls = tile.classes(tid)
+        if cls is None or abs((b[2] - b[0]) / cls.shape[1] - own.res) > 1e-9:
             continue
         c0 = int(round((b[0] - xmin) / own.res))
         r0 = int(round((ymax - b[3]) / own.res))
