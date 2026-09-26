@@ -76,7 +76,7 @@ import {
   type Listening,
   type SoundTile,
   soundTileOf,
-} from "@/lib/city/soundscape";
+} from "@/lib/city/sound-entry";
 import { applyCityLook, createStyleResources } from "./visual-style";
 
 /**

@@ -12,8 +12,18 @@
  * the engine's, and where it is heard is decided here.
  */
 
-import type { TerrainBounds } from "./terrain-geometry";
-import type { TileSoundFiles, TilesetTileInfo } from "./tileset";
+import type { MovementMode } from "./sound-entry";
+
+// The boot-side half (what the viewer carries before anyone asks for
+// sound) lives in sound-entry.ts; re-exported for the engine and tests.
+export {
+  audible,
+  type Listening,
+  type MovementMode,
+  type SilenceInputs,
+  type SoundTile,
+  soundTileOf,
+} from "./sound-entry";
 
 /** The speed of sound (m/s): a bell 686 m away strikes two seconds late. */
 export const SPEED_OF_SOUND = 343;
@@ -25,46 +35,6 @@ export interface ClassShares {
   road: number;
   rail: number;
   builtup: number;
-}
-
-export type MovementMode = "fly" | "walk";
-
-/** What the scene tells the soundscape at each pose sample (the handle's
- *  `listen`). */
-export interface Listening {
-  /** the scene clock (s) the crowns sway with */
-  clock: number;
-  heightAboveGround: number;
-  mode: MovementMode;
-  /** trees within the asked radius */
-  trees: number;
-}
-
-/** A tile as the soundscape fetches it: its extent, its ≤ 2048² class
- *  raster and its sound files, all as served URLs. */
-export interface SoundTile {
-  bounds: TerrainBounds;
-  files: TileSoundFiles;
-  id: string;
-  landcover: string;
-}
-
-/** A tileset tile's sound files resolved against the tileset's URL. */
-export function soundTileOf(info: TilesetTileInfo, base: string): SoundTile {
-  const files: TileSoundFiles = {};
-  const kinds = ["monuments", "soundmarks", "surface", "svf", "tram"] as const;
-  for (const kind of kinds) {
-    const name = info.sound?.[kind];
-    if (name) {
-      files[kind] = new URL(name, base).href;
-    }
-  }
-  return {
-    bounds: info.bounds,
-    files,
-    id: info.id,
-    landcover: new URL(info.minimap, base).href,
-  };
 }
 
 /** The environment around the listener, sampled at the pose rate. */
@@ -672,24 +642,6 @@ export function birdCall(env: SoundEnv, u: number): BirdCall {
 /** The chance of a bird call in a tick of `dt` seconds at `level`. */
 export function birdCallChance(level: number, dt: number): number {
   return clamp01(level * BIRD_CALLS_PER_S * dt);
-}
-
-// --- silence -------------------------------------------------------------------
-
-export interface SilenceInputs {
-  /** the visitor turned the sound on (L or the switch) */
-  enabled: boolean;
-  /** the tab is hidden */
-  hidden: boolean;
-  /** the loading screen is up */
-  loading: boolean;
-}
-
-/** Whether the master is open: only after an explicit toggle (the speaker
- *  glyph's click turns it off again), never in a hidden tab, never behind
- *  the loading screen. */
-export function audible(s: SilenceInputs): boolean {
-  return s.enabled && !s.hidden && !s.loading;
 }
 
 /** The master volume (linear) the soundscape starts at: quiet. */

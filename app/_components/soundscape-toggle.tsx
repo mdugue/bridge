@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import type { PlayerPose } from "@/lib/city/pose";
-import { audible } from "@/lib/city/soundscape";
+import { audible } from "@/lib/city/sound-entry";
 import type { CityWalkHandle } from "./create-app";
 import { isTextEntry } from "./keyboard-controls";
 import type { Soundscape } from "./soundscape/engine";
