@@ -8,7 +8,15 @@ import {
   VignetteEffect,
 } from "postprocessing";
 import type { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from "three";
-import { HalfFloatType, Vector2, Vector3 } from "three";
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Group,
+  HalfFloatType,
+  Mesh,
+  Vector2,
+  Vector3,
+} from "three";
 import {
   type FocusMode,
   LOOK_DEFAULTS,
@@ -101,6 +109,21 @@ export interface PostStack {
    */
   setRegressed: (on: boolean) => void;
   setSize: (width: number, height: number) => void;
+  /** The sun's altitude in degrees (Film noir opens up at dusk). */
+  setSunAltitude: (altitudeDeg: number) => void;
+  /**
+   * Objects came, went or changed visibility: the styles' scene halves
+   * (the Papier swap, the style dressing) re-read the scene on their next
+   * frame instead of walking it every frame.
+   */
+  sceneChanged: () => void;
+  /**
+   * Compiles every picture style's programs off the frame — the style pass,
+   * the Papier material in each shape it draws, the noir lamp cones — so
+   * the first switch to a style does not stall on a synchronous compile.
+   * Idempotent; create-app calls it once the scene has loaded.
+   */
+  warmStyles: () => Promise<void>;
 }
 
 /**
@@ -255,6 +278,47 @@ export function createPostStack(
     }
   };
 
+  // The style pass's material is built when the composer adds the pass
+  // (EffectPass.initialize), enabled or not; every style is one program
+  // (the mode is a uniform). The stand-ins are single triangles.
+  let stylesWarm: Promise<void> | null = null;
+  const compileStyles = (): Promise<void> => {
+    // Program keys hold more than the material: the scene's lights (lit
+    // material or not) and whether the geometry has normals. The pass draws
+    // a bare triangle in its own empty scene; the scene's materials draw
+    // meshes with normals under the scene's lights.
+    const bare = new BufferGeometry();
+    bare.setAttribute(
+      "position",
+      new Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3)
+    );
+    const triangle = bare.clone();
+    triangle.computeVertexNormals();
+    const pass = new Mesh(bare, stylePass.fullscreenMaterial);
+    const sceneProxies = new Group();
+    sceneProxies.add(
+      ...paperScene.proxies(triangle),
+      ...styleDressing.proxies(triangle)
+    );
+    const previous = renderer.getRenderTarget();
+    // The style pass draws into the composer's buffers, the scene materials
+    // into the scene pass's target: both are the same kind of target.
+    renderer.setRenderTarget(composer.inputBuffer);
+    try {
+      return Promise.all([
+        renderer.compileAsync(pass, camera),
+        renderer.compileAsync(sceneProxies, camera, scene),
+      ])
+        .then(() => undefined)
+        .finally(() => {
+          bare.dispose();
+          triangle.dispose();
+        });
+    } finally {
+      renderer.setRenderTarget(previous);
+    }
+  };
+
   return {
     compile: (object, pass = "main") => {
       // The synchronous half of compileAsync reads the current target (and
@@ -280,6 +344,15 @@ export function createPostStack(
         renderer.setRenderTarget(previous);
       }
     },
+    warmStyles: () => {
+      stylesWarm ??= compileStyles().catch(() => undefined);
+      return stylesWarm;
+    },
+    sceneChanged: () => {
+      paperScene.sceneChanged();
+      styleDressing.sceneChanged();
+    },
+    setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
     render: (deltaSeconds) => {
       // A style's scene dressing (its crowns, lamp cones) and the Papier
       // material are swapped in for this frame only, and out right after.

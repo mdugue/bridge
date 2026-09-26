@@ -532,6 +532,10 @@ async function bootApp(
   // gates the clay dusk glow by reference.
   const clayNight = { value: 0 };
   let currentNight = 0;
+  // The picture styles follow the sun too (Film noir's dusk exposure); the
+  // post stack is built after the first setSun, so it catches up there.
+  let sunAltitude = 90;
+  let sunToStyles: ((altitudeDeg: number) => void) | null = null;
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles, built before the first render so NUM_POINT_LIGHTS is baked into
   // every lit program once (ADR 0020); each tile's lamps retarget it.
@@ -656,6 +660,8 @@ async function bootApp(
   const setSun = (date: Date): SunState => {
     const state = sunRig.update(date);
     currentNight = state.nightFactor;
+    sunAltitude = state.altitudeDeg;
+    sunToStyles?.(state.altitudeDeg);
     for (const d of stream.dressings) {
       d.lamps?.setNightFactor(state.nightFactor);
     }
@@ -697,6 +703,8 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  sunToStyles = postStack.setSunAltitude;
+  sunToStyles(sunAltitude);
 
   // The look store is the one source of every slider value: applied now, on
   // every change, and (in tile-stream.ts) to each tile that lands later. The
@@ -865,6 +873,7 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
+    postStack.sceneChanged();
     invalidateShadows();
     emitStats();
     checkLoaded();
@@ -1122,6 +1131,28 @@ async function bootApp(
   // the cameras); the dressing waits for the gate. "Loaded" is the first
   // moment after the gate at which nothing is loading and nothing waits to
   // be dressed.
+
+  // The picture styles' programs compile once the scene has loaded and the
+  // browser is idle, so the first switch to a style does not hitch — at no
+  // cost to the boot, which never draws a style the viewer did not pick.
+  let stylesWarming = false;
+  function warmStylesWhenIdle(): void {
+    if (stylesWarming) {
+      return;
+    }
+    stylesWarming = true;
+    const warm = () => {
+      if (!disposed) {
+        void postStack.warmStyles();
+      }
+    };
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(warm, { timeout: 4000 });
+    } else {
+      setTimeout(warm, 1000);
+    }
+  }
+
   // The two stages after the first frame measure what the cameras see:
   // the tile renderer's own load progress, and the details (vegetation,
   // lamps, rails) built per fine tile against those still queued.
@@ -1144,6 +1175,7 @@ async function bootApp(
       worldPartial = false;
       applyFog();
       opts.onLoaded?.();
+      warmStylesWhenIdle();
     }
     if (step.busy !== undefined) {
       opts.onBusy?.(step.busy);

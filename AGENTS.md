@@ -129,7 +129,8 @@ config change.
     `stylize-effect.ts` (the picture styles' one pass: ink lines + tone;
     the table is `lib/city/render-style.ts`), `paper-scene.ts` (Papier's
     render-time white material), `style-dressing.ts` (a style's own crowns
-    and noir's lamp cones, swapped in for its frames), `visual-style.ts`
+    and noir's lamp cones, swapped in for its frames), `style-memory.ts`
+    (the last style, kept in local storage), `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
@@ -418,9 +419,18 @@ Papier additionally swaps every surface for one white paper material for
 its frames (`paper-scene.ts`, `scene.overrideMaterial`, restored after the
 render); `style-dressing.ts` likewise swaps in a style's crowns and lamp
 cones — layers only tag what may be dressed (`userData.styleCrown`,
-`userData.styleLampHeads`). Give a new style a row in
+`userData.styleLampHeads`); both gather what they touch once per stream
+change (`PostStack.sceneChanged`), not every frame. The one sanctioned
+exception is the ground: the terrain material (`userData.paperOwn`) opts
+out of the override and draws Papier's paper, paint and water itself
+under the shared `PAPER_GROUND_ON` uniform. Give a new style a row in
 `lib/city/render-style.ts` and a mode in that pass — never a branch in a
-scene material. Its depth taps stay at
+scene material — and any new style material a stand-in in
+`PostStack.warmStyles`, which compiles them all once the scene is idle. A
+stand-in must match the real draw in more than its material: three keys a
+program on the scene's lights (even for an unlit material) and on whether
+the geometry has normals — the pass's stand-in has neither.
+Its depth taps stay at
 integer texel radii (the buffer is read NEAREST; a fractional radius inks
 whole grazing streets).
 

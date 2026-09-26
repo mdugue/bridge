@@ -48,6 +48,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 upView;       // world up in view space (roof slopes)
   uniform vec2 projScale;    // tan(fov/2)·aspect, tan(fov/2): uv → view ray
   uniform mat3 viewToWorld;  // the camera's rotation: view ray → world ray
+  uniform float dusk;        // 0 by day → 1 once the sun is well below (noir exposure)
 
   const float SKY_Z = 4000.0;        // the sky dome writes no depth (far = 6000)
   const float CREASE_FLOOR = 0.0012; // slope noise floor, relative to w0
@@ -303,7 +304,12 @@ const fragmentShader = /* glsl */ `
 
   // --- Film noir: hard silver-gelatine curve, smoky distance, dark sky. ---
   vec3 noir(vec3 p, vec2 uv, float z, bool sky) {
-    float y = lumaOf(p);
+    // Dusk: the whole frame darkens as the sun sets, and a fixed S-curve
+    // would crush everything under its pivot to black. The camera opens up
+    // instead — an exposure gain (less on the sky, which should stay the
+    // darkest thing in a night scene) and a gentler curve pivoting lower.
+    float y = lumaOf(p) * mix(1.0, sky ? 1.25 : 1.6, dusk);
+    y /= 1.0 + dusk * 0.4 * y; // a shoulder: lit crowns keep their modelling
     // Smoke in the distance, a lighter grey than the night it sits in.
     y = mix(y, 0.58, smoothstep(300.0, 2600.0, z) * 0.5);
     if (sky) {
@@ -311,7 +317,8 @@ const fragmentShader = /* glsl */ `
       y = mix(y * 0.95, y * 0.35, smoothstep(0.35, 1.0, uv.y));
     }
     // S-curve: steep mid-tones, crushed shadows, highlights that still hold.
-    y = clamp((y - 0.47) * 1.55 + 0.5, 0.0, 1.0);
+    float pivot = mix(0.47, 0.43, dusk);
+    y = clamp((y - pivot) * mix(1.55, 1.45, dusk) + 0.5, 0.0, 1.0);
     y = mix(y, y * y * (3.0 - 2.0 * y), 0.6);
     y = max(y - 0.025, 0.0) / 0.975;
     return vec3(y) * vec3(0.985, 1.0, 1.02);
@@ -531,6 +538,7 @@ export class StylizeEffect extends Effect {
         ["upView", new Uniform(new Vector3(0, 1, 0))],
         ["projScale", new Uniform(new Vector2(1, 1))],
         ["viewToWorld", new Uniform(new Matrix3())],
+        ["dusk", new Uniform(0)],
       ]),
     });
     this.scene = scene;
@@ -550,6 +558,19 @@ export class StylizeEffect extends Effect {
     const uniform = this.uniforms.get("ink");
     if (uniform) {
       uniform.value = Math.max(value, 0);
+    }
+  }
+
+  /**
+   * The sun's altitude, for Film noir's exposure: the light starts to go
+   * well before sunset (the sun's intensity ramps below ~12°), so the gain
+   * follows from there to civil dusk (-6°), where the lamps are all lit.
+   */
+  setSunAltitude(altitudeDeg: number): void {
+    const uniform = this.uniforms.get("dusk");
+    if (uniform) {
+      const t = MathUtils.clamp((12 - altitudeDeg) / 18, 0, 1);
+      uniform.value = t * t * (3 - 2 * t);
     }
   }
 

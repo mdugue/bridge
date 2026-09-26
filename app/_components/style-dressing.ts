@@ -88,6 +88,13 @@ export interface StyleDressing {
   /** Dresses the scene for one render; returns the restore. */
   begin: (options: StyleDressingOptions) => () => void;
   dispose: () => void;
+  /**
+   * A stand-in wearing the lamp cones' material, for compiling its program
+   * ahead of the first noir frame; shares the caller's geometry.
+   */
+  proxies: (geometry: BufferGeometry) => Object3D[];
+  /** The scene's objects changed: the next frame re-reads what to dress. */
+  sceneChanged: () => void;
 }
 
 export function createStyleDressing(scene: Scene): StyleDressing {
@@ -187,34 +194,55 @@ export function createStyleDressing(scene: Scene): StyleDressing {
 
   const crowns: { geometry: BufferGeometry; mesh: InstancedMesh }[] = [];
   const added: { cone: InstancedMesh; parent: Object3D }[] = [];
+  // The tagged meshes, gathered once per scene change rather than walked
+  // for every frame. A crown hidden by its level of detail may wear the
+  // style's geometry unseen; a lamp's own visibility is read per frame.
+  let tagged: {
+    crowns: { mesh: InstancedMesh; tier: string }[];
+    lamps: { heads: InstancedMesh; tag: LampHeadsTag }[];
+  } | null = null;
+  const gather = () => {
+    const found: NonNullable<typeof tagged> = { crowns: [], lamps: [] };
+    scene.traverse((node) => {
+      if (!(node instanceof InstancedMesh)) {
+        return;
+      }
+      const mesh = node as InstancedMesh;
+      const tier = mesh.userData.styleCrown as string | undefined;
+      const lamp = mesh.userData.styleLampHeads as LampHeadsTag | undefined;
+      if (tier) {
+        found.crowns.push({ mesh, tier });
+      } else if (lamp) {
+        found.lamps.push({ heads: mesh, tag: lamp });
+      }
+    });
+    return found;
+  };
 
   return {
     begin: ({ crowns: crownStyle, lampCones }) => {
       crowns.length = 0;
       added.length = 0;
+      tagged ??= gather();
       let night = 0;
-      scene.traverseVisible((node) => {
-        if (!(node instanceof InstancedMesh)) {
-          return;
+      if (crownStyle) {
+        for (const { mesh, tier } of tagged.crowns) {
+          crowns.push({ mesh, geometry: mesh.geometry });
+          mesh.geometry = styledFor(mesh.geometry, crownStyle, tier);
         }
-        const object = node as InstancedMesh;
-        const tier = object.userData.styleCrown as string | undefined;
-        if (crownStyle && tier) {
-          crowns.push({ mesh: object, geometry: object.geometry });
-          object.geometry = styledFor(object.geometry, crownStyle, tier);
-          return;
+      }
+      for (const { heads, tag } of lampCones ? tagged.lamps : []) {
+        if (!(heads.visible && heads.parent)) {
+          continue;
         }
-        const lamp = object.userData.styleLampHeads as LampHeadsTag | undefined;
-        if (lampCones && lamp && object.parent) {
-          const material = object.material as MeshStandardMaterial;
-          night = Math.max(
-            night,
-            material.emissiveIntensity / lamp.emissiveAtNight
-          );
-          coneMaterial.uniforms.coneHeight.value = lamp.height;
-          added.push({ cone: coneFor(object, lamp), parent: object.parent });
-        }
-      });
+        const material = heads.material as MeshStandardMaterial;
+        night = Math.max(
+          night,
+          material.emissiveIntensity / tag.emissiveAtNight
+        );
+        coneMaterial.uniforms.coneHeight.value = tag.height;
+        added.push({ cone: coneFor(heads, tag), parent: heads.parent });
+      }
       coneMaterial.uniforms.strength.value =
         CONE_DAY + (CONE_NIGHT - CONE_DAY) * Math.min(Math.max(night, 0), 1);
       for (const { cone, parent } of added) {
@@ -231,6 +259,10 @@ export function createStyleDressing(scene: Scene): StyleDressing {
         added.length = 0;
       };
     },
+    sceneChanged: () => {
+      tagged = null;
+    },
+    proxies: (geometry) => [new InstancedMesh(geometry, coneMaterial, 1)],
     dispose: () => {
       for (const g of crownGeos.values()) {
         g.dispose();

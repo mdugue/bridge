@@ -170,7 +170,7 @@ is the codebook.
 | Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80–1 500 m and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
 | Depth of field | crosshair raycast distance, focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving | — | `post-stack.ts` (*Tiefenschärfe*) |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `paper-grain-effect.ts` (*Papierkorn*) |
-| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier — one post pass over the finished frame (below); Papier also swaps every surface for one white paper material for the frame | — | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts` |
+| Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier — one post pass over the finished frame (below); Papier also swaps every surface for one white paper material for the frame, the ground keeping its paint and water as greys; remembered per browser | sun altitude (noir's dusk exposure) | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
 | Minimap | site tile bounds + 512² class raster in the palette + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
 
@@ -246,8 +246,12 @@ the style's ink lines and colour bands too, which is why that pass sits
 before it.
 
 **Picture styles** ([ADR 0032](./adr/0032-picture-styles-as-one-post-pass.md))
-redraw the finished frame; no material knows about them, so a switch
-rebuilds nothing and compiles at most the one pass. The table is
+redraw the finished frame; no material knows about them (the ground's
+Papier tones aside, below), so a switch rebuilds nothing. Their programs —
+the pass, the Papier and lamp-cone materials — compile against stand-ins
+once the scene has loaded and the browser is idle (`PostStack.warmStyles`),
+so the first switch does not hitch either; the viewer's last style is
+kept in local storage (`style-memory.ts`). The table is
 `lib/city/render-style.ts`; per style it sets the pass's shader mode, a
 weight on the *Tuschelinien*, *Tiefenfärbung* and *Papierkorn* sliders,
 the vignette, animated film grain and whether depth of field may run.
@@ -260,7 +264,10 @@ the vignette, animated film grain and whether depth of field may run.
   where the colour nears the fog colour, the band edges soften into the
   wash — hard bands on a pale far field broke into white blotches.
 - *Film noir* — luminance through an S-curve, crushed blacks, the distance
-  lifted into grey smoke, a graduated sky; faint ink.
+  lifted into grey smoke, a graduated sky; faint ink. From a sun altitude
+  of ~12° down to civil dusk (−6°) the exposure opens (×1.6, ×1.25 on the
+  sky, with a shoulder) and the curve pivots lower and flatter — a fixed
+  curve crushed a darkening frame to black.
 - *Sin City* — masses, not contours: four inks (black, near-black,
   near-white, white) around a threshold that leans halfway towards the
   neighbourhood's brightness (eight taps on a ~48 px ring), so a dark park
@@ -285,15 +292,22 @@ the vignette, animated film grain and whether depth of field may run.
   the same anchor and size; Film noir hangs an additive light cone under
   every lamp head, sharing the heads' instance matrices, 0.22 strength by
   day rising with the lamps' night factor to 1. A style change redraws the
-  shadow map.
+  shadow map. The tagged meshes are gathered once per change of the tile
+  stream, not walked every frame.
 - *Papier* — the city as a white card model. A post pass cannot do this
   (it sees a colour, not how much of it is surface and how much light), so
   for this style's frames `paper-scene.ts` sets `scene.overrideMaterial` to
   one flat-shaded, off-white `MeshStandardMaterial` under the real sun,
   sky light, shadow map and AO; a layer's own colour survives as a 10 %
   whisper, a slow world-space drift keeps the sheets from being one white.
-  Glows, sprites and see-through sheets that write no depth are hidden for
-  the frame; the sky box's inside is culled, so a paper background shows.
+  Glows, sprites and every see-through sheet (the river's too) are hidden for
+  the frame (the list, too, is gathered per stream change); the sky box's
+  inside is culled, so a paper background shows. The ground is the
+  exception: the terrain material sets `userData.paperOwn`, opts out of the
+  override for these frames (`allowOverride`) and, under one shared
+  uniform, draws itself as paper — its road markings, parking bays and
+  sports lines in a light pencil grey, the water's extent (the splat's
+  alpha) a cool, deeper paper — with its own light, sky view and contours.
   The pass lays the light out as a duotone (shade blue-grey, light paper)
   under a fine graphite pen.
 

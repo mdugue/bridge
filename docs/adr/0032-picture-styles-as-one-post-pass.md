@@ -37,10 +37,17 @@ white with its shading intact, and a colour does not say how much of it is
 surface and how much is light. For that style's frames only, the post
 stack sets `scene.overrideMaterial` to one white paper material
 (`paper-scene.ts`) and hides what that material cannot stand in for
-(sprites, glows, see-through sheets without depth); the render restores
+(sprites, glows, see-through sheets — the river's among them, which as
+opaque paper covered the whole ground); the render restores
 the scene right after. That is a render-time swap owned by the post stack
-— still no branch in any layer's material, and nothing a tile builds knows
-about it.
+— nothing a tile builds knows about it. The one exception is the ground:
+its paint (road markings, parking bays, sports lines) and the water's
+extent exist only in the terrain's own shader, and Papier should keep
+them as faint greys. So the terrain material opts out of the override for
+Papier's frames (`userData.paperOwn`; three's `material.allowOverride`)
+and draws itself as paper under one shared uniform, which the swap turns
+on and off with the rest. It is a uniform, not a variant: no extra
+program.
 
 The same frame-scoped swap dresses a style's geometry
 (`style-dressing.ts`): Comic draws its trees as cartoon clouds of three
@@ -52,6 +59,20 @@ undone after it, and a style change redraws the shadow map because the
 crowns cast. Sin City's rain is drawn in the pass instead: streaks on a
 grid of world directions in three depth layers, each hidden behind nearer
 geometry — as scene geometry it would not survive the style's threshold.
+What the swaps touch (the tagged meshes, the objects Papier hides) is
+gathered once per scene change — the tile stream's change event — not
+walked every frame.
+
+The styles cost nothing until they are used and never stall the switch:
+once the scene has loaded and the browser is idle, the post stack compiles
+the style pass and the Papier and lamp-cone materials against stand-ins
+(`warmStyles`). The viewer's last style is remembered in the browser's
+local storage (`style-memory.ts`) — the style only; the sliders stay a
+session's tuning.
+
+Film noir follows the sun's altitude: from about 12° down to civil dusk
+it opens the exposure and softens its S-curve, which would otherwise
+crush a darkening frame to black.
 
 Lines come from the second difference of inverse view depth, which is zero
 on any plane: relative to `w` it marks silhouettes, relative to the local
@@ -61,8 +82,10 @@ stroke weight.
 
 ## Consequences
 
-- Switching a style costs no rebuild and at most one compile (the first
-  non-default style); the e2e control walk draws frames through it.
+- Switching a style costs no rebuild and, after the idle warm-up, no
+  compile; the e2e control walk draws frames through it. About 16 KB
+  (gzip) of code is in the viewer bundle either way; the style geometry
+  (~100 KB) is built on first use.
 - A non-default style adds one full-screen pass of ~17 depth taps — fill
   rate, the scene's bottleneck, but only when chosen. Sin City adds nine
   colour taps (a blur before its threshold, so it draws masses, not
@@ -87,9 +110,11 @@ stroke weight.
   reads the style. A style crown must keep the scene crown's anchor and
   size, so every instance matrix fits (`buildStyleCrownGeo`).
 - Papier costs the scene render its specialised shaders (wind sway, water
-  wobble, the terrain's ground detail): the white model is static and
-  plain by design. The override material compiles a few programs
-  (instanced, vertex-coloured, plain) the first time the style is chosen.
+  wobble): the white model is static and plain by design. The override
+  material has a few programs (instanced, vertex-coloured, plain, with and
+  without received shadows), compiled by the warm-up. The ground keeps its
+  shader; a material that should do the same sets `userData.paperOwn` and
+  reads the shared uniform — the exception, for paint only it knows.
 
 ## Alternatives
 
