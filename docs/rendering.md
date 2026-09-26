@@ -333,6 +333,11 @@ message; a dressing that fails leaves its tile bare — neither takes the
 scene down. Collision, demolish, autofocus and double-tap work on every
 visible tile; the two ground rays (double-tap travel, autofocus) march the
 terrain's height grid (`lib/city/ground-ray.ts`) — the terrain has no BVH.
+Whatever moves the camera — walking, flying, a glide on its way, a double
+tap, a snapshot, a GPS fix, a tile landing — it ends up neither below the
+ground nor inside a building: `camera-pose.ts` sets a walker out beside a
+building and lifts a flyer over its roof, and a glide plans its path over
+what lies between ([ADR 0032](./adr/0032-camera-never-inside-a-building.md)).
 
 The HUD's five load stages and their weights are declared once in
 `lib/city/load-stages.ts`. The first three are the first frame; the other

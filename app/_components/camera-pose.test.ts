@@ -370,3 +370,132 @@ test("live mode and flying combine: the GPS moves the camera at its altitude, cl
   expect(pose.getMode()).toBe("fly");
   expect(pose.getCameraState().pitchDeg).toBeCloseTo(-30, 3);
 });
+
+/** A block between the spawn (world 0, 0) and VIEW (world 300, −200). */
+const BLOCK = { x0: 130, x1: 170, z0: -120, z1: -80, roof: GROUND + 30 };
+const inBlockXz = (x: number, z: number) =>
+  x > BLOCK.x0 && x < BLOCK.x1 && z > BLOCK.z0 && z < BLOCK.z1;
+const blockSolids = {
+  roofAbove: (x: number, y: number, z: number) =>
+    inBlockXz(x, z) && y < BLOCK.roof ? BLOCK.roof : null,
+  topAt: (x: number, z: number) => (inBlockXz(x, z) ? BLOCK.roof : null),
+};
+/** The camera is inside the block, or below the ground. */
+const buried = (p: { x: number; y: number; z: number }) =>
+  (inBlockXz(p.x, p.z) && p.y < BLOCK.roof) || p.y < GROUND;
+const BLOCK_EPSG = { x: OFFSET.cx + 150, y: OFFSET.cy + 100 };
+
+test("a scenic glide climbs over a building on its way, never through it", () => {
+  // A tower, taller than the glide's own bow (~43 m over this distance).
+  const tower = GROUND + 80;
+  const { camera, pose } = rig({
+    solids: {
+      roofAbove: (x, y, z) => (inBlockXz(x, z) && y < tower ? tower : null),
+      topAt: (x, z) => (inBlockXz(x, z) ? tower : null),
+    },
+  });
+  pose.flyToViewpoint(VIEW);
+  let crossed = false;
+  for (let i = 0; i < 300; i += 1) {
+    pose.step(1 / 60);
+    const { x, y, z } = camera.position;
+    expect(inBlockXz(x, z) && y < tower).toBe(false);
+    expect(y).toBeGreaterThanOrEqual(GROUND);
+    crossed ||= inBlockXz(x, z);
+  }
+  expect(crossed).toBe(true);
+  expect(camera.position.x).toBeCloseTo(300, 6);
+});
+
+test("a teleport (double tap, minimap) into a building stands beside it", () => {
+  const { camera, pose } = rig({ solids: blockSolids });
+  pose.teleportTo(BLOCK_EPSG.x, BLOCK_EPSG.y);
+  expect(inBlockXz(camera.position.x, camera.position.z)).toBe(false);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  expect(pose.getMode()).toBe("walk");
+});
+
+test("a snapshot inside a building: on foot beside it, in the air over its roof", () => {
+  const { camera, pose } = rig({ solids: blockSolids });
+  const state = {
+    pos: { x: 150, y: GROUND + 10, z: -100 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg: 0,
+    fov: 55,
+  };
+  pose.applyCameraState({ ...state, mode: "walk" });
+  expect(inBlockXz(camera.position.x, camera.position.z)).toBe(false);
+  pose.applyCameraState({ ...state, mode: "fly" });
+  expect(camera.position.x).toBe(150);
+  expect(camera.position.y).toBeGreaterThanOrEqual(BLOCK.roof);
+  // Below the ground, too: lifted onto it.
+  pose.applyCameraState({ ...state, mode: "fly", pos: { x: 0, y: 20, z: 0 } });
+  expect(camera.position.y).toBeGreaterThanOrEqual(GROUND);
+});
+
+test("a GPS fix indoors (locate me, live mode) puts the walker at the door", () => {
+  const { camera, pose } = rig({ solids: blockSolids });
+  pose.placeAt({ ...VIEW, epsg: BLOCK_EPSG });
+  expect(inBlockXz(camera.position.x, camera.position.z)).toBe(false);
+  pose.teleportTo(OFFSET.cx, OFFSET.cy);
+  pose.setFollowPosition(BLOCK_EPSG);
+  for (let i = 0; i < 600; i += 1) {
+    pose.step(1 / 60);
+    expect(buried(camera.position)).toBe(false);
+  }
+});
+
+test("a building landing around a still walker, or walking into one unhindered, sets them out", () => {
+  // The block's tile lands later: nothing stands there yet.
+  const tile: { solids?: CameraPoseOptions["solids"] } = {};
+  const { camera, pose } = rig({
+    solids: {
+      roofAbove: (x, y, z) => tile.solids?.roofAbove(x, y, z) ?? null,
+      topAt: (x, z) => tile.solids?.topAt(x, z) ?? null,
+    },
+  });
+  pose.applyCameraState({
+    mode: "walk",
+    pos: { x: 150, y: GROUND + EYE_HEIGHT, z: -100 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 90,
+    pitchDeg: 0,
+    fov: 55,
+  });
+  tile.solids = blockSolids;
+  pose.step(1 / 60);
+  expect(buried(camera.position)).toBe(false);
+  // Facing the block from the west and walking on: no collider here.
+  pose.teleportTo(OFFSET.cx + 120, OFFSET.cy + 100);
+  pose.press("KeyW");
+  for (let i = 0; i < 120; i += 1) {
+    pose.step(1 / 60);
+    expect(buried(camera.position)).toBe(false);
+  }
+});
+
+test("flying low over rising ground rises with it; with nowhere to stand, a walker hovers", () => {
+  let ground = GROUND;
+  const { camera, pose } = rig({ heightAt: () => ground });
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 2, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg: 0,
+    fov: 55,
+  });
+  ground = GROUND + 10;
+  pose.step(1 / 60);
+  expect(camera.position.y).toBeGreaterThanOrEqual(ground);
+
+  const solid = rig({
+    solids: {
+      roofAbove: (_x, y) => (y < GROUND + 50 ? GROUND + 50 : null),
+      topAt: () => GROUND + 50,
+    },
+  });
+  expect(solid.pose.getMode()).toBe("fly");
+  expect(solid.camera.position.y).toBeGreaterThanOrEqual(GROUND + 50);
+});

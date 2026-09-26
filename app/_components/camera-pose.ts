@@ -17,6 +17,12 @@ import {
   type Xyz,
 } from "@/lib/city/pose";
 import { easeAngleDeg } from "@/lib/city/geolocation";
+import {
+  clearHeight,
+  GROUND_CLEARANCE,
+  nearestFree,
+  ROOF_CLEARANCE,
+} from "@/lib/city/clearance";
 import { createCameraFlight, type FlightTarget } from "./camera-flight";
 import {
   createFpsMovement,
@@ -43,6 +49,20 @@ const FOLLOW_SNAP_M = 40;
 export interface FollowAim {
   headingDeg: number;
   pitchDeg: number;
+}
+
+/**
+ * m above the ground where a walker's knees are: a shed lower than the eye
+ * still counts as standing in it.
+ */
+const KNEE_HEIGHT = 0.5;
+
+/** The buildings, as the clearance guard asks after them (collision.ts). */
+export interface CameraSolids {
+  /** inside a building at world (x, y, z): the roof's height above, else null */
+  roofAbove: (x: number, y: number, z: number) => number | null;
+  /** the highest building surface over world (x, z), or null */
+  topAt: (x: number, z: number) => number | null;
 }
 
 /** rad per CSS px of grab-look drag — a full phone-width swipe ≈ 90° */
@@ -73,8 +93,13 @@ export interface CameraPoseOptions {
    * for the continuous updates.
    */
   onPose?: (pose: PlayerPose) => void;
-  /** wall collision for walking (collision.ts) */
+  /** wall collision for walking and flying (collision.ts) */
   resolveStep?: FpsMovementOptions["resolveStep"];
+  /**
+   * The buildings the camera must never end up inside; without them only
+   * the ground bounds it.
+   */
+  solids?: CameraSolids;
 }
 
 export interface CameraPose {
@@ -157,6 +182,12 @@ export interface CameraPose {
  * switch cancels a scenic glide instead of fighting it or being swallowed by
  * it. Poses set from outside (spawn, teleport, snapshot) do the same.
  *
+ * The other rule: **the camera is never below the ground or inside a
+ * building** — not after a step, a glide frame (the glide plans its path
+ * over what lies between), a teleport, a snapshot, a GPS fix, nor when a
+ * tile lands around it. A walker is set out beside the building, anything
+ * in the air lifted over its roof (lib/city/clearance.ts).
+ *
  * Movement physics is fps-movement.ts, the tween is camera-flight.ts; the
  * DOM adapters (keyboard-controls.ts, touch-controls.ts) translate events
  * into these calls.
@@ -186,6 +217,72 @@ export function createCameraPose(
 
   const groundAt = (epsgX: number, epsgY: number): number =>
     opts.heightAt(epsgX, epsgY) ?? opts.groundFloor();
+  const groundWorld = (x: number, z: number): number => {
+    const epsg = worldToEpsg(x, z, offset);
+    return groundAt(epsg.x, epsg.y);
+  };
+  const { solids } = opts;
+
+  /**
+   * A walker standing at world (x, z) is outside every building. Where no
+   * terrain has landed yet the height to test at is unknown (the floor may
+   * lie under a building's base): free until it lands.
+   */
+  const standsFree = (x: number, z: number): boolean => {
+    const epsg = worldToEpsg(x, z, offset);
+    const ground = opts.heightAt(epsg.x, epsg.y);
+    if (!solids || ground === null) {
+      return true;
+    }
+    return (
+      solids.roofAbove(x, ground + KNEE_HEIGHT, z) === null &&
+      solids.roofAbove(x, ground + EYE_HEIGHT, z) === null
+    );
+  };
+
+  /**
+   * `pos` with its x/z set out of the building it stands in (same height
+   * above the ground), or null when there is no free spot near.
+   */
+  const standOutside = (pos: Xyz): Xyz | null => {
+    const out = nearestFree(pos.x, pos.z, standsFree);
+    if (!out) {
+      return null;
+    }
+    if (out.x === pos.x && out.z === pos.z) {
+      return pos;
+    }
+    const rise = groundWorld(out.x, out.z) - groundWorld(pos.x, pos.z);
+    return { x: out.x, y: pos.y + rise, z: out.z };
+  };
+
+  /** `pos` lifted clear of the ground and out of any roof above it. */
+  const liftClear = (pos: Xyz): Xyz => ({
+    x: pos.x,
+    y: clearHeight(
+      pos.y,
+      groundWorld(pos.x, pos.z),
+      (y) => solids?.roofAbove(pos.x, y, pos.z) ?? null
+    ),
+    z: pos.z,
+  });
+
+  /**
+   * Where `pos` is clear: a stander (`stand`) is set out beside the
+   * building, then anything is lifted clear. `stand` comes back false when
+   * nowhere near was free to stand — the pose has to fly.
+   */
+  const clearOf = (pos: Xyz, stand: boolean): { pos: Xyz; stand: boolean } => {
+    const out = stand ? standOutside(pos) : null;
+    return { pos: liftClear(out ?? pos), stand: stand && out !== null };
+  };
+
+  /** The lowest height a glide may pass at over world (x, z). */
+  const glideFloor = (x: number, z: number): number =>
+    Math.max(
+      groundWorld(x, z) + GROUND_CLEARANCE,
+      (solids?.topAt(x, z) ?? Number.NEGATIVE_INFINITY) + ROOF_CLEARANCE
+    );
 
   const getPose = (): PlayerPose => {
     camera.getWorldDirection(dir);
@@ -217,9 +314,24 @@ export function createCameraPose(
     opts.onModeChange?.(mode);
   };
 
+  /**
+   * Keeps the camera clear where it is now: a walker (`stand`) is set out
+   * of a building, anything else lifted out of it and off the ground.
+   * Nowhere near to stand, a walker takes off and hovers over the roof.
+   */
+  const keepClear = (stand: boolean) => {
+    const p = camera.position;
+    const clear = clearOf({ x: p.x, y: p.y, z: p.z }, stand);
+    if (stand && !clear.stand && movement.getMode() === "walk") {
+      settle("fly");
+    }
+    p.set(clear.pos.x, clear.pos.y, clear.pos.z);
+  };
+
   const setMovementMode = (mode: MovementMode) => {
     cancelGlide();
     settle(mode);
+    keepClear(mode === "walk");
   };
 
   const setFov = (fov: number) => {
@@ -228,12 +340,20 @@ export function createCameraPose(
     camera.updateProjectionMatrix();
   };
 
-  /** Where a viewpoint puts the camera, on the ground as it stands now. */
+  /**
+   * Where a viewpoint puts the camera, on the ground as it stands now and
+   * clear of it — beside a building rather than in it on foot, over its
+   * roof in the air.
+   */
   const targetOf = (viewpoint: ViewpointGeometry): FlightTarget => {
     const { x, y } = viewpoint.epsg;
     const w = epsgToWorld(x, y, offset);
+    const { pos } = clearOf(
+      { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
+      viewpoint.mode === "walk"
+    );
     return {
-      pos: { x: w.x, y: groundAt(x, y) + viewpoint.aboveGround, z: w.z },
+      pos,
       headingDeg: viewpoint.headingDeg,
       pitchDeg: clampPitch(viewpoint.pitchDeg * DEG2RAD) * RAD2DEG,
       fov: viewpoint.fov,
@@ -323,6 +443,7 @@ export function createCameraPose(
         camera.fov = s.fov;
         camera.updateProjectionMatrix();
       }
+      keepClear(s.mode === "walk");
       poseJumped();
     },
     teleportTo: (epsgX, epsgY) => {
@@ -335,6 +456,8 @@ export function createCameraPose(
       euler.x = 0;
       euler.z = 0;
       camera.quaternion.setFromEuler(euler);
+      // A teleport stands the player there, whichever the mode.
+      keepClear(true);
       poseJumped();
     },
     flyTo: (position, lookAt) => {
@@ -342,6 +465,7 @@ export function createCameraPose(
       settle("fly");
       camera.position.set(position.x, position.y, position.z);
       camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+      keepClear(false);
       poseJumped();
     },
     captureViewpoint: () => {
@@ -361,7 +485,7 @@ export function createCameraPose(
       // Fly during the glide so the ground clamp can't fight the vertical arc;
       // pendingMode restores walk (and snaps to the ground) once it settles.
       settle("fly");
-      flight.start(targetOf(viewpoint));
+      flight.start(targetOf(viewpoint), glideFloor);
       pendingMode = viewpoint.mode;
     },
     placeAt: (viewpoint) => {
@@ -380,13 +504,17 @@ export function createCameraPose(
       camera.fov = target.fov;
       camera.updateProjectionMatrix();
       settle(viewpoint.mode);
+      keepClear(viewpoint.mode === "walk");
       poseJumped();
     },
     cancelGlide,
     step: (dt) => {
       // A scenic flight, while active, owns the camera — player movement is
-      // suspended so input can't tug against the tween.
+      // suspended so input can't tug against the tween. Its path is planned
+      // over what it knew at the start; a tile that landed since is caught
+      // here, frame by frame.
       if (flight.update(dt)) {
+        keepClear(false);
         return;
       }
       if (pendingMode) {
@@ -400,6 +528,9 @@ export function createCameraPose(
         followPositionStep(followPos, dt);
       }
       movement.update(dt);
+      // Also catches the world changing under a still camera: a finer
+      // terrain or a building tile landing where the player stands.
+      keepClear(movement.getMode() === "walk");
     },
     setMovementMode,
     setFollowAim: (aim) => {
@@ -410,7 +541,12 @@ export function createCameraPose(
         followPos = null;
         return;
       }
-      const w = epsgToWorld(epsg.x, epsg.y, offset);
+      const at = epsgToWorld(epsg.x, epsg.y, offset);
+      // A fix indoors (at home, in a shop) follows to the door, not inside.
+      const w =
+        movement.getMode() === "walk"
+          ? (standOutside({ x: at.x, y: 0, z: at.z }) ?? { x: at.x, z: at.z })
+          : at;
       followPos = { x: w.x, z: w.z };
       const far =
         Math.hypot(w.x - camera.position.x, w.z - camera.position.z) >
@@ -421,6 +557,7 @@ export function createCameraPose(
         if (movement.getMode() === "walk") {
           movement.snapToGround();
         }
+        keepClear(movement.getMode() === "walk");
         poseJumped();
       }
     },
