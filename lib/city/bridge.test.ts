@@ -6,8 +6,10 @@ import {
   fitParabola,
   PIER_SPACING,
   pierStations,
+  placeRibs,
   ribPeaks,
   ribRuns,
+  smoothRise,
 } from "./bridge";
 
 test("ribRuns finds each stretch a rib stands on", () => {
@@ -101,4 +103,33 @@ test("the ribs of one arch share the tightest rib's curve", () => {
   expect(b?.c).toBeCloseTo((a?.c ?? 0) - 1, 0);
   expect(c).toBeNull();
   expect(archFits([{ offset: 0, rise: wire }], line)).toEqual([null]);
+});
+
+test("placeRibs puts the two sides on the deck edges and a lone pylon central", () => {
+  const rise = [0, 5, 0];
+  const edges = { left: 5.5, right: -5.5 };
+  const [a, b] = placeRibs(
+    [
+      { offset: -5.5, rise },
+      { offset: 3, rise },
+    ],
+    edges
+  );
+  expect(a.offset).toBeCloseTo(-5.9);
+  expect(b.offset).toBeCloseTo(5.9);
+  expect(placeRibs([{ offset: 2, rise }], edges)[0].offset).toBe(0);
+  expect(placeRibs([{ offset: -7, rise }], edges)[0].offset).toBeCloseTo(-5.9);
+  // both measured on one side: the outer keeps it, the inner goes across
+  const same = placeRibs(
+    [
+      { offset: 1.5, rise },
+      { offset: 6, rise },
+    ],
+    edges
+  );
+  expect(same.map((r) => r.offset).sort((p, q) => p - q)).toEqual([-5.9, 5.9]);
+});
+
+test("smoothRise calms the top edge and leaves the gaps alone", () => {
+  expect(smoothRise([0, 10, 20, 10, 0], 3)).toEqual([0, 15, 40 / 3, 15, 0]);
 });

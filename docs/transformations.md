@@ -972,14 +972,22 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   `lib/city/landcover.ts`).
 - **Bridge decks** — driven by the **complete `ver06_l` (`BWF=1800`) centreline
   set** (carries every road/rail/path bridge + `NAM`), each snapped to a clean
-  **`ver06_f` deck AREA footprint** where one matches (≤50 m) else **buffered by
-  kind-width** — so the parallel Marienbrücke rail + road decks are separate
-  single-volume slabs (top face + one continuous fascia) AND road/path bridges
-  without an area polygon still render. **Deck height = the roadway DOM1
+  **`ver06_f` deck AREA footprint** the line runs on (half its length within
+  1 m of it) else **buffered by kind-width** — so the parallel Marienbrücke
+  rail + road decks are separate single-volume slabs (top face + one
+  continuous fascia) AND road/path bridges without an area polygon still
+  render. *(The match used to be the nearest footprint centre within 50 m:
+  the Marienbrücke's road line, 16 m beside the rail bridge's footprint, took
+  that footprint — the road was laid on the tracks, the tracks got no rail
+  deck and the road bridge was not drawn at all.)* **Deck height = the roadway DOM1
   measures**: per 1 m station along the deck's axis the lower third of the
   surface across the deck (parapets, cars and lamps stand above it), held
   within −6/+4 m of the abutment ramp from DGM1 (a train or a canopy over the
-  deck is not the deck), smoothed over 15 m (`bridge.py` `measured_deck`).
+  deck is not the deck), smoothed over 15 m and then **grade-limited** from
+  the middle of the span outwards — ≤ 8 % on a road or path deck, ≤ 4 % on a
+  rail deck — so where the scan loses the deck near an abutment it ramps down
+  instead of dropping off a cliff (the rail bridge by Neustadt station fell
+  5 m at one end) (`bridge.py` `measured_deck`, `limit_grade`).
   Without DOM1: the ramp + camber. The ground is a **mosaic of the tile and
   its neighbours** (700 m around it), so a deck across a seam comes out the
   same in both tiles' files, and **only the tile that owns its centre draws
@@ -1007,10 +1015,19 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   follows no arch is not drawn (the Marienbrücke's). On a
   **cable-stayed** bridge the peak is a pylon on a river pier with stays
   fanned to the deck by rule (the Molenbrücke). Otherwise the rib is drawn
-  **as measured** (chord, a post every 6 m, diagonals), and where it peaks
-  ≥ 10 m a **pylon** stands on a river pier with a portal between the two
-  ribs — the Blaues Wunder's two towers and sagging truss. Painted-steel
-  material. No DOM1: no ribs. `pipeline/bake/bridge.py`
+  as an **open frame** on the deck edge: its top the measured rise smoothed
+  over 10 m as one 1.6 m chord, a post every 10 m, no diagonals, and where
+  it peaks ≥ 10 m a tower on a river pier with a portal between the two
+  frames — the Blaues Wunder's silhouette at the abstraction of the clay
+  buildings (a solid fin, tried first, read as a dark tent). The ribs' measured
+  offsets are not trusted across the deck (the DLM centreline can sit
+  metres off the bridge: the Blaues Wunder's came out −5.5 and +3.0 m around
+  an 11 m deck, a truss through the roadway) — two ribs go just outside the
+  two deck edges, a lone rib near the axis stays central
+  (`placeRibs`). Pale weathered steel `0xd9dde0`, matte; hangers and stays
+  every 16 / 12 m. *(Drawn member by member as measured until 2026-09 —
+  chord, a post every 6 m, diagonals in dark `0x8d9ca8`: busier and
+  darker than anything else in the scene.)* No DOM1: no ribs. `pipeline/bake/bridge.py`
   ([ADR 0032](./adr/0032-bridges-measured-in-the-surface-model.md)).
 - **Bridge depth and fairway** — OSM's inland-waterway marks
   (`seamark:type=bridge` + `seamark:bridge:clearance_height`, ODbL) within

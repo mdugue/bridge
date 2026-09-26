@@ -131,7 +131,7 @@ const trianglesOf = (bridge: BridgeFeature, c: RailContext = ctx) =>
     0
   );
 
-test("a measured truss adds its chords, posts and pylons", () => {
+test("a measured truss becomes an open frame with towers", () => {
   // two pylons 24 m up at 60 m and 140 m, the chord sagging between them
   const rise = Array.from({ length: 101 }, (_, i) => {
     const s = i * 2;
@@ -160,7 +160,9 @@ test("a measured truss adds its chords, posts and pylons", () => {
   expect(truss.children).toHaveLength(3);
   const steel = truss.children.at(-1) as Mesh;
   const box = new Box3().setFromObject(steel);
-  expect(box.max.y).toBeCloseTo(144, 0);
+  // the chord is the measured rib, smoothed: just under the 24 m peak
+  expect(box.max.y).toBeGreaterThan(142);
+  expect(box.max.y).toBeLessThan(144.5);
   expect(
     trianglesOf(deck({ structure: "suspension", ribs: [{ offset: 6, rise }] }))
   ).toBeGreaterThan(plain);
@@ -182,7 +184,8 @@ test("an arch rib reaches down to its springing", () => {
   const steel = built.children.at(-1) as Mesh;
   const box = new Box3().setFromObject(steel);
   expect(box.min.y).toBeLessThan(102);
-  expect(box.max.y).toBeCloseTo(128, 0);
+  // the crown plus half the band
+  expect(box.max.y).toBeCloseTo(128.6, 0);
 });
 
 test("a deck across a seam is drawn by its owner only", () => {
@@ -200,4 +203,25 @@ test("the fairway stays free of piers", () => {
   expect(pierCount(deck({ fairway: 0.5, span: 120 }))).toBeLessThan(
     pierCount(deck({}))
   );
+});
+
+test("no parapet wall runs across the roadway at the abutments", () => {
+  const built = buildRail({ ...empty, bridges: [deck({})] }, ctx);
+  const stone = built.children.at(-1) as Mesh;
+  const pos = stone.geometry.getAttribute("position");
+  let across = 0;
+  for (let i = 0; i < pos.count; i++) {
+    // the deck runs along x from 0 to 200, 12 m wide: an end wall would
+    // stand at x = 0 or 200 across the middle of the road
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    if (
+      (Math.abs(x) < 0.01 || Math.abs(x - 200) < 0.01) &&
+      Math.abs(z) < 4 &&
+      pos.getY(i) > 120
+    ) {
+      across++;
+    }
+  }
+  expect(across).toBe(0);
 });

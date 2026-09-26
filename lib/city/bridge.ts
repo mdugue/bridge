@@ -277,3 +277,67 @@ export function pierStations(
   }
   return out;
 }
+
+/** A rib is drawn this far outside the deck's edge (m). */
+const RIB_OUT = 0.4;
+/** A lone rib this close to the axis is the bridge's centre line (m). */
+const CENTRE_RIB = 3;
+
+/**
+ * Where the ribs are drawn across the deck. The bake measures a rib's
+ * offset against the DLM centreline, which can sit a metre or two off the
+ * real bridge (the Blaues Wunder's ribs came out at −5.5 and +3.0 m around a
+ * deck 11 m wide: a truss through the roadway). Two ribs are the two sides:
+ * each goes just outside its deck edge (`left` > 0 > `right`, the ring's
+ * extreme offsets). A lone rib near the axis is central (a pylon on the
+ * centre line); a lone rib off it goes to its side's edge.
+ */
+export function placeRibs(
+  ribs: readonly BridgeRib[],
+  edges: { left: number; right: number }
+): BridgeRib[] {
+  const side = (offset: number) =>
+    offset >= 0 ? edges.left + RIB_OUT : edges.right - RIB_OUT;
+  if (ribs.length === 1 && Math.abs(ribs[0].offset) < CENTRE_RIB) {
+    return [{ ...ribs[0], offset: 0 }];
+  }
+  if (
+    ribs.length === 2 &&
+    Math.sign(ribs[0].offset) === Math.sign(ribs[1].offset)
+  ) {
+    // both measured on one side of a misplaced centreline: the outer one
+    // keeps its side, the other takes the opposite edge
+    const [inner, outer] =
+      Math.abs(ribs[0].offset) < Math.abs(ribs[1].offset)
+        ? [ribs[0], ribs[1]]
+        : [ribs[1], ribs[0]];
+    return [
+      { ...outer, offset: side(outer.offset) },
+      { ...inner, offset: side(-outer.offset) },
+    ];
+  }
+  return ribs.map((rib) => ({ ...rib, offset: side(rib.offset) }));
+}
+
+/**
+ * A rib's rise smoothed along the axis (a centred moving average over
+ * `window` stations, never raising a station that had none): a frame's
+ * chord is a calm line, not the raster's 1 m jitter.
+ */
+export function smoothRise(rise: readonly number[], window = 5): number[] {
+  const half = Math.floor(window / 2);
+  return rise.map((r, i) => {
+    if (r <= 0) {
+      return 0;
+    }
+    let sum = 0;
+    let n = 0;
+    for (let k = i - half; k <= i + half; k++) {
+      if (k >= 0 && k < rise.length && rise[k] > 0) {
+        sum += rise[k];
+        n++;
+      }
+    }
+    return sum / n;
+  });
+}
