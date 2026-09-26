@@ -11,7 +11,6 @@ import {
   startTransition,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -58,7 +57,7 @@ import { SceneSidebar } from "./scene-sidebar";
 import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
-import type { SunState } from "./sun-rig";
+import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./webgl-support";
 
@@ -82,15 +81,9 @@ type Status =
 
 // Evaluated once in the browser (the component is loaded with ssr: false).
 const INITIAL_DATE = new Date();
-const INITIAL_MINUTES = 14 * 60;
 
 /** A little air after the veil is gone before the heavy work resumes. */
 const STREAM_SETTLE_MS = 250;
-
-/** Local-time instant from a calendar day + minutes-of-day slider. */
-function composeDate(day: Date, minutes: number): Date {
-  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes);
-}
 
 /** Floating button that opens the sidebar; hidden while it is open. */
 function SettingsToggle() {
@@ -218,6 +211,10 @@ function SceneOverlays({
 export default function CityWalk({ budget, tilesetUrl }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
+  const applySceneTime = useCallback(
+    (date: Date) => handleRef.current?.setSun(date),
+    []
+  );
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
   const hud = useHudMessage();
@@ -247,9 +244,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
   const [stats, setStats] = useState<CityWalkStats | null>(null);
-  const [sun, setSun] = useState<SunState | null>(null);
-  const [day, setDay] = useState(INITIAL_DATE);
-  const [minutes, setMinutes] = useState(INITIAL_MINUTES);
+  const time = useSceneTime(applySceneTime, INITIAL_DATE);
+  const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
   // boots the new instance from it, so sliders and scene never disagree.
   const [look] = useState(createLookState);
@@ -306,7 +302,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       budget,
       look,
       tilesetUrl,
-      initialDate: composeDate(INITIAL_DATE, INITIAL_MINUTES),
+      initialDate: timeNow(),
       signal: aborter.signal,
       onStage: ({ id, fraction, skipped: isSkipped }) => {
         if (cancelled) {
@@ -389,7 +385,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         }
         handle = h;
         handleRef.current = h;
-        setSun(h.setSun(composeDate(INITIAL_DATE, INITIAL_MINUTES)));
+        syncTime();
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
         setLatLng(h.latLng);
@@ -438,27 +434,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         look: undefined,
       });
     };
-  }, [budget, look, tilesetUrl, supported]);
-
-  const updateSun = (nextDay: Date, nextMinutes: number) => {
-    setDay(nextDay);
-    setMinutes(nextMinutes);
-    const state = handleRef.current?.setSun(composeDate(nextDay, nextMinutes));
-    if (state) {
-      setSun(state);
-    }
-  };
+  }, [budget, look, tilesetUrl, supported, timeNow, syncTime]);
 
   const copySnapshot = () => {
     const h = handleRef.current;
     if (!h) {
       return;
     }
-    const snap = encodeSnapshot(
-      look.get(),
-      h.getCameraState(),
-      composeDate(day, minutes)
-    );
+    const snap = encodeSnapshot(look.get(), h.getCameraState(), time.date);
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
     navigator.clipboard?.writeText(text).then(
@@ -484,23 +467,16 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     h.applyCameraState(snap.camera);
     // The minute the sliders can show (see snapshotInstant), for the sun and
     // the two time controls alike.
-    const date = snapshotInstant(snap);
-    const nextDay = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate()
-    );
-    updateSun(nextDay, date.getHours() * 60 + date.getMinutes());
+    time.setInstant(snapshotInstant(snap));
     look.set(decodeLook(snap.look));
     setSnapshotMsg("Snapshot angewendet");
   };
 
   // The hidden soundscape (plan 035): off until L or the Erweitert switch.
-  const sceneDate = useMemo(() => composeDate(day, minutes), [day, minutes]);
   const sound = useSoundscape({
-    date: sceneDate,
+    date: time.date,
     handleRef,
-    nightFactor: sun?.nightFactor ?? 0,
+    nightFactor: time.sun?.nightFactor ?? 0,
     ready: status.phase === "running" && !veilUp,
     subscribePose,
   });
@@ -590,17 +566,17 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           bounds={bounds}
           coarse={coarse}
           copySnapshot={copySnapshot}
-          day={day}
+          day={time.day}
           footprints={footprints}
           fps={fps}
           handleRef={handleRef}
           landcoverTiles={landcoverTiles}
           latLng={latLng}
           look={lookValues}
-          minutes={minutes}
+          minutes={time.minutes}
           mode={mode}
           onLook={look.set}
-          onDefaultTime={() => updateSun(day, INITIAL_MINUTES)}
+          onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
           rememberedView={rememberedView}
@@ -612,9 +588,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           sound={sound}
           stats={stats}
           subscribePose={subscribePose}
-          sun={sun}
+          sun={time.sun}
           tab={tab}
-          updateSun={updateSun}
+          updateSun={time.set}
         />
       )}
     </SidebarProvider>

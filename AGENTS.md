@@ -150,7 +150,10 @@ config change.
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `terrain-tin.ts`
+  policy, the look table + store, the Snapshot codec, `ground.ts` (the
+  site's ground: terrain heights, the floor, rays — one owner for the pose,
+  focus, shadow fit and soundscape), `boot-phases.ts` (the load after the
+  first frame as a pure state machine), `terrain-tin.ts`
   (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
   the measured step), `fences.ts` (fence panels and gate gaps),
   `tree-inventory.ts` (the cadastre's archetypes and veto), `tree-season.ts`
@@ -191,8 +194,8 @@ config change.
   measured steps; coarse: the DGM resampled to 512², the wall breaklines
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
-  `bake.ts` (the pipeline runner), `downsample-raster.ts` (the 2048² class
-  raster), `bake-wissen-hero.ts`, `render-diagrams.ts`
+  `bake.ts` (the pipeline runner), `downsample-raster.ts` (the 2048² and
+  512² class rasters), `bake-wissen-hero.ts`, `render-diagrams.ts`
 - `data/` — committed *derived* geodata; `data/_raw/<site>/` is
   **gitignored** bulk source. `public/data/` is generated, gitignored.
 - `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
@@ -309,8 +312,8 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   added before a new bake step (or a step run on some tiles only) ships
   quietly poorer. After merging a new step, or adding a tile, bake it on
   every tile the test names; a step that finds nothing writes an empty file.
-- `prepare-data.ts` downsamples the class raster to 2048² (phones, minimap)
-  with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
+- `prepare-data.ts` downsamples the class raster to 2048² (phones, the
+  coarse terrain) and 512² (the minimap, the soundscape) with NEAREST, so no class ids blend. Nothing whose alpha carries data goes
   through an image resize any more (sharp premultiplies alpha — that once
   painted the ground black). Nor through the browser's image decoder: the
   class and NDVI PNGs are inflated byte-exact by `lib/city/png-raster.ts`
@@ -318,7 +321,9 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
-  ≈ 20 s); the glTF quantisation, meshopt and gzip settings live in
+  ≈ 3 min for fifteen tiles, warm ≈ 1 s): the key covers the inputs'
+  contents and every module the bake imports (`scripts/bake-sources.ts`
+  walks the import graph — there is no list to keep in step); the glTF quantisation, meshopt and gzip settings live in
   `scripts/tile-glb.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)

@@ -1,3 +1,4 @@
+import type { RasterSampler } from "@/lib/city/raster-sampler";
 import {
   type BufferGeometry,
   Color,
@@ -42,7 +43,6 @@ import {
   type CellLod,
   crownColor,
   hash,
-  type RasterSampler,
   swapCrownLod,
   TRUNK_H,
   type TreeInstance,

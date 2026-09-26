@@ -18,7 +18,7 @@ import shapely
 from PIL import Image
 from rasterio.features import rasterize
 
-from .common import Tile, column, feature, geometry_json, read_layer, write_geojson
+from .common import Tile, column, feature, geometry_json, read_layer, save_grey_png, write_geojson
 from .osm import has_extract, read_osm, tag
 
 # id → key: the legend the client's palette is keyed by (lib/city/landcover.ts).
@@ -154,7 +154,7 @@ def run_islands(tile: Tile) -> None:
     path = tile.out("dlm", f"landcover_{tile.id}.png")
     raster = np.array(Image.open(path).convert("L"))
     changed = carve_islands(raster, tile)
-    Image.fromarray(raster, mode="L").save(path, optimize=True)
+    save_grey_png(path, raster)
     legend_path = tile.out("dlm", f"landcover_{tile.id}.json")
     legend = json.loads(legend_path.read_text())
     legend["attribution"] = ATTRIBUTION
@@ -185,9 +185,7 @@ def run(tile: Tile, px: int = 4096) -> None:
     islands = has_extract(tile, "the road islands")
     if islands:
         carve_islands(raster, tile)
-    Image.fromarray(raster, mode="L").save(
-        tile.out("dlm", f"landcover_{tile.id}.png"), optimize=True
-    )
+    save_grey_png(tile.out("dlm", f"landcover_{tile.id}.png"), raster)
     legend = {
         "tile": tile.id,
         "crs": f"EPSG:{tile.epsg}",

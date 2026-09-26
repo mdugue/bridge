@@ -45,7 +45,7 @@ provider downloads (data/_raw/, gitignored)
 ```
 
 The place is one **site config**, [`sites/dresden.ts`](sites/dresden.ts):
-four 2 km tiles, the CRS, labels, attribution and viewpoints; `SITE` picks it
+fifteen 2 km tiles, the CRS, labels, attribution and viewpoints; `SITE` picks it
 at build time. You spawn on `33412_5656_2_sn`; the viewer streams every tile
 of the site around the camera — detailed near, coarse far, unloaded when out
 of view — and walking, collision and demolish work on every loaded tile.

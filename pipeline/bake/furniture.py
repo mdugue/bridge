@@ -44,9 +44,16 @@ import re
 
 import numpy as np
 import shapely
-from PIL import Image
 
-from .common import OSM_ATTRIBUTION, Tile, feature, geometry_json, owns, write_geojson
+from .common import (
+    OSM_ATTRIBUTION,
+    Tile,
+    feature,
+    geometry_json,
+    owns,
+    value_at,
+    write_geojson,
+)
 from .osm import has_extract, read_osm, tag
 
 BLOCKED = (5, 8)  # railway, water
@@ -218,7 +225,10 @@ class Gate:
 
     def __init__(self, tile: Tile) -> None:
         self.bounds = tile.bounds
-        self.cls = np.asarray(Image.open(tile.out("dlm", f"landcover_{tile.id}.png")).convert("L"))
+        cls = tile.classes()
+        if cls is None:
+            raise FileNotFoundError(f"{tile.id}: no class raster — bake landcover first")
+        self.cls = cls
         bridge = tile.out("dlm", f"bridge_{tile.id}.geojson")
         decks = []
         if bridge.exists():
@@ -230,13 +240,7 @@ class Gate:
 
     def cls_at(self, x: float, y: float) -> int | None:
         """The class under a point, None off the tile's raster."""
-        xmin, ymin, xmax, ymax = self.bounds
-        if not (xmin <= x < xmax and ymin <= y < ymax):
-            return None
-        ch, cw = self.cls.shape
-        c = min(int((x - xmin) / (xmax - xmin) * cw), cw - 1)
-        r = min(int((ymax - y) / (ymax - ymin) * ch), ch - 1)
-        return int(self.cls[r, c])
+        return value_at(self.cls, self.bounds, x, y)
 
     def on_road(self, p: shapely.Point) -> bool:
         return self.cls_at(p.x, p.y) == ROAD

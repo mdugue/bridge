@@ -398,6 +398,12 @@ function ferryMesh(lines: Point2[][], ctx: RiversideContext): Mesh | null {
       }
       prev = dense[i];
       const g = ctx.heightAt(ex, ey);
+      if (g === null) {
+        // No ground here (off every loaded tile): no vertex either — one at
+        // height 0 would stretch the bounding sphere down to sea level.
+        prevOk = false;
+        continue;
+      }
       const next = dense[Math.min(i + 1, dense.length - 1)];
       const last = dense[Math.max(i - 1, 0)];
       const tx = next[0] - last[0];
@@ -406,17 +412,17 @@ function ferryMesh(lines: Point2[][], ctx: RiversideContext): Mesh | null {
       // across the route, in projected coordinates
       const ax = (-ty / t) * FERRY_HALF;
       const ay = (tx / t) * FERRY_HALF;
-      const y = (g ?? 0) + 0.06;
+      const y = g + 0.06;
       const base = pos.length / 3;
       for (const side of [-1, 1]) {
         const w = epsgToWorld(ex + ax * side, ey + ay * side, ctx.offset);
         pos.push(w.x, y, w.z);
         along.push(s);
       }
-      if (prevOk && g !== null) {
+      if (prevOk) {
         index.push(base - 2, base, base - 1, base - 1, base, base + 1);
       }
-      prevOk = g !== null;
+      prevOk = true;
     }
   }
   if (index.length === 0) {

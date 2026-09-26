@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import numpy as np
 import rasterio
-from PIL import Image
 from rasterio.features import rasterize
 
 from .common import Tile, feature, read_layer, write_geojson
@@ -31,7 +30,11 @@ def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
 
 def blocked_mask(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
     """The class raster's blocked classes, nearest-sampled onto `shape`."""
-    cls = np.asarray(Image.open(tile.out("dlm", f"landcover_{tile.id}.png")).convert("L"))
+    cls = tile.classes()
+    if cls is None:
+        raise FileNotFoundError(
+            f"{tile.id}: the canopy is gated on the class raster; bake landcover first"
+        )
     rows = np.minimum((np.arange(shape[0]) * cls.shape[0]) // shape[0], cls.shape[0] - 1)
     cols = np.minimum((np.arange(shape[1]) * cls.shape[1]) // shape[1], cls.shape[1] - 1)
     return np.isin(cls[np.ix_(rows, cols)], BLOCKED)

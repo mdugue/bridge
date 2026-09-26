@@ -26,7 +26,7 @@ import { fetchFeatures } from "../fetch-optional";
  * What the soundscape knows of the tiles around the listener — CPU copies
  * fetched and decoded only while the sound plays, and dropped with it (the
  * viewer drops its own copies after upload, for iOS memory): the class
- * raster at 4 m (256 KB a tile, from the ≤ 2048² one), the sky view, the
+ * raster at 4 m (256 KB a tile, the tileset's 512² one), the sky view, the
  * paving raster's surface byte for the tile underfoot, and the small
  * vector files (bell towers, tram tracks, fountains) of every tile within
  * bell reach.
