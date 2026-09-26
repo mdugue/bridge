@@ -372,12 +372,16 @@ is missing.
 ### Cache and publish
 
 **Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored),
-one entry per output, under a key over its input files (path, mtime and
-size), the bake's own sources (`BAKE_SOURCES` in `prepare-data.ts`: the
-bake scripts and the `lib/city/` modules they use) and the values it
-depends on (the recenter offset, the `extras` it names). A changed input,
-a changed bake or a renamed side file re-bakes; anything else is a cache
-read. A cold run of the Dresden site takes ≈ 21 s on four cores.
+one entry per output, under a key over the **contents** of its input
+files, the bake's own sources and the values it depends on (the recenter
+offset, the `extras` it names). The sources are not a hand-kept list:
+`scripts/bake-sources.ts` walks the relative imports from `prepare-data.ts`,
+so every `lib/city/` module and site config the bake reaches is in the key,
+plus `bun.lock` and `patches/` (the glTF tools' versions shape the output).
+A changed input, a changed bake or a renamed side file re-bakes; a checkout
+or a touch alone does not; anything else is a cache
+read. A cold run of the Dresden site (fifteen tiles) takes ≈ 3 min on four
+cores, a warm one ≈ 1 s.
 
 **Publish.** Each file is written to `public/data/` as
 `<stem>.<8 hex of sha1>.<ext>` (`.glb.gz` keeps both suffixes);

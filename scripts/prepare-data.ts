@@ -20,8 +20,9 @@
  *     immutable. Files the manifest no longer references are pruned.
  *
  * Baked outputs are cached in `.cache/prepare-data/` (gitignored) under a
- * key of their inputs, the bake's own sources and the names they reference,
- * so a rerun is cheap and a changed bake never serves a stale cache.
+ * key of their inputs' contents, every module this file imports
+ * (bake-sources.ts) and the names they reference, so a rerun is cheap and a
+ * changed bake never serves a stale cache.
  * Runs ahead of `dev` and `build`; public/data/ is gitignored.
  */
 import { createHash } from "node:crypto";
@@ -31,7 +32,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
@@ -95,6 +95,7 @@ import {
 import type { CityJsonDocument } from "../lib/city/types";
 import { currentSite } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
+import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
 import {
   cityMesh,
   fenceMesh,
@@ -163,43 +164,24 @@ function publish(logical: string, content: Uint8Array): string {
 
 // --- cache --------------------------------------------------------------------
 
-/** The bake's own sources: a change to any of them re-bakes everything. */
+/**
+ * The bake's own sources — every module reachable from this file through
+ * relative imports — plus the lockfile and the dependency patches, since the
+ * glTF tools' versions shape the output too: a change to any of them
+ * re-bakes everything.
+ */
 const BAKE_SOURCES = [
-  "scripts/prepare-data.ts",
-  "scripts/bake-tiles.ts",
-  "scripts/bake-terrain-tin.ts",
-  "lib/city/terrain-tin.ts",
-  "lib/city/wall-snap.ts",
-  "scripts/bake-city-mesh.ts",
-  "scripts/tile-glb.ts",
-  "scripts/downsample-raster.ts",
-  "scripts/crop-raster.ts",
-  "lib/city/city-mesh.ts",
-  "lib/city/building-tint.ts",
-  "lib/city/minimap.ts",
-  "lib/city/small-buildings.ts",
-  "lib/city/terrain-geometry.ts",
-  "lib/city/terrain-conflate.ts",
-  "lib/city/stairs.ts",
-  "lib/city/walls.ts",
-  "lib/city/kerbs.ts",
-  "lib/city/fences.ts",
-  "lib/city/polyline.ts",
-  "lib/city/ground-clamp.ts",
-  "lib/city/tileset.ts",
+  ...moduleGraph("scripts/prepare-data.ts"),
+  "bun.lock",
+  ...readdirSync(at("patches")).map((name) => `patches/${name}`),
 ].map(at);
 
-/** A cache key over input files (by mtime + size) and any extra values. */
+const hashOf = createContentHasher();
+
+/** A cache key over the contents of the input files, the bake's sources and
+ *  any extra values. */
 function cacheKey(inputs: string[], ...extra: unknown[]): string {
-  const h = createHash("sha1");
-  for (const path of [...inputs, ...BAKE_SOURCES]) {
-    if (existsSync(path)) {
-      const { mtimeMs, size } = statSync(path);
-      h.update(`${path}:${mtimeMs}:${size};`);
-    }
-  }
-  h.update(JSON.stringify(extra));
-  return h.digest("hex").slice(0, 12);
+  return contentKey(hashOf, [...inputs, ...BAKE_SOURCES], extra);
 }
 
 /** The cached bytes for `key`, or the baked ones (then cached). */

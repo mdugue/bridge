@@ -318,7 +318,9 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
-  ≈ 20 s); the glTF quantisation, meshopt and gzip settings live in
+  ≈ 3 min for fifteen tiles, warm ≈ 1 s): the key covers the inputs'
+  contents and every module the bake imports (`scripts/bake-sources.ts`
+  walks the import graph — there is no list to keep in step); the glTF quantisation, meshopt and gzip settings live in
   `scripts/tile-glb.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)
