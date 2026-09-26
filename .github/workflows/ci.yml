@@ -76,10 +76,10 @@ jobs:
   # run side by side, by the tags in e2e/city-walk.spec.ts: SwiftShader is
   # CPU-bound, so a second Playwright worker on the same runner only halves
   # both pages' frame rates, while another runner takes its share off the
-  # wall clock. The shards are cut by measured time (CI, Sept 2026): the
-  # whole-site spec alone is ~140 s, the two desktop groups ~90 s each plus
-  # their boots, the phone ~25 s. Each shard builds for itself; with the
-  # caches below that is well under a minute.
+  # wall clock. The shards are cut by measured time (the Playwright step on
+  # CI, Sept 2026): the whole site with the shell and /wissen ~100 s, the
+  # desktop HUD group ~135 s, the rendering group ~85 s and the phone ~40 s.
+  # Each shard builds for itself; with the caches below that is ~15 s.
   e2e:
     name: E2E (${{ matrix.shard.name }})
     runs-on: ubuntu-latest
@@ -98,11 +98,11 @@ jobs:
             args: --grep-invert "@desktop|@phone"
             # The build check proper: builds even when the e2e half is skipped.
             buildCheck: true
-          - name: desktop HUD, phone
-            args: --grep "@desktop-hud|@phone"
+          - name: desktop HUD
+            args: --grep @desktop-hud
             buildCheck: false
-          - name: desktop rendering
-            args: --grep @desktop-render
+          - name: desktop rendering, phone
+            args: --grep "@desktop-render|@phone"
             buildCheck: false
     steps:
       - uses: actions/checkout@v7

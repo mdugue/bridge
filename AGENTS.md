@@ -450,8 +450,8 @@ the per-test timeout if it spends frames carelessly. Playwright runs a single wo
 viewer pages halve each other's frame rate. CI splits the suite over **three
 runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
 whole site with the shell and `/wissen`; the desktop HUD group
-(`@desktop-hud`) with the phone (`@phone`); the desktop rendering group
-(`@desktop-render`). Each desktop group boots its own page. The required
+(`@desktop-hud`); the desktop rendering group (`@desktop-render`) with the
+phone (`@phone`). Each desktop group boots its own page. The required
 status check "E2E (Playwright)" is the small job that reports them all. A new
 spec lands in the whole-site shard unless it carries one of those tags —
 keep the shards within a minute of each other.
