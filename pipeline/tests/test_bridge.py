@@ -97,3 +97,28 @@ def test_a_deck_finds_its_wikidata_item_by_tag_or_by_name():
     assert bridge.wikidata_for(RING, None, ["Q1"], known)["id"] == "Q1"
     assert bridge.wikidata_for(RING, "Blaues Wunder", [], known)["id"] == "Q1"
     assert bridge.wikidata_for(RING, "Albertbrücke", [], known) is None  # too far
+
+
+def test_the_deck_line_ramps_instead_of_dropping_off_a_cliff():
+    # a rail deck at 118 m whose first 6 m the DOM sees as the street below
+    deck = np.full(60, 118.0)
+    deck[:6] = 112.5
+    limited = bridge.limit_grade(deck, 1.0, bridge.RAIL_GRADE)
+    assert limited[10] == 118.0
+    assert np.all(np.abs(np.diff(limited)) <= bridge.RAIL_GRADE + 1e-9)
+    assert limited[0] > 117.5
+
+
+def test_a_bridge_line_beside_a_footprint_is_not_laid_on_it():
+    from shapely import LineString, Polygon
+
+    from bake.rail import footprint_of
+
+    # the rail bridge's footprint, 30 m wide; the road bridge's line 16 m
+    # beside it (the Marienbrücke), then a line running along its middle
+    rail = Polygon([(0, -15), (200, -15), (200, 15), (0, 15)])
+    polys = [[list(rail.exterior.coords), 100, 0, False, rail]]
+    assert footprint_of(LineString([(-10, 31), (210, 31)]), polys) == -1
+    assert footprint_of(LineString([(-10, 0), (210, 0)]), polys) == 0
+    polys[0][3] = True  # a claimed footprint is not matched twice
+    assert footprint_of(LineString([(-10, 0), (210, 0)]), polys) == -1

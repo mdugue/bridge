@@ -28,6 +28,8 @@ from rasterio.features import rasterize
 from rasterio.merge import merge
 
 from .bridge import (
+    MAX_GRADE,
+    RAIL_GRADE,
     STANDING,
     STEP,
     fairway,
@@ -276,18 +278,18 @@ def ramp_line(ground: Ground, ring: list[tuple[float, float]]):
     return lambda t: h0 + (h1 - h0) * t + camber * math.sin(math.pi * t)
 
 
-def deck_line(ground: Ground, ring: list[tuple[float, float]]):
+def deck_line(ground: Ground, ring: list[tuple[float, float]], kind: str = "road"):
     """The deck height along a→b, t ∈ [0, 1]: the roadway DOM1 measures, held
-    near the abutment ramp (bridge.measured_deck). None without ground."""
+    near the abutment ramp and within the kind's grade (bridge.measured_deck).
+    None without ground."""
     ramp = ramp_line(ground, ring)
-    return None if ramp is None else measured_deck(ground, ring, ramp)
-
-
-def deck_profile(ground: Ground, ring: list[tuple[float, float]]) -> list[float] | None:
-    """Per-ring-vertex deck height (`deck_line` at each vertex's projection)."""
-    line = deck_line(ground, ring)
-    if line is None:
+    if ramp is None:
         return None
+    return measured_deck(ground, ring, ramp, RAIL_GRADE if kind == "rail" else MAX_GRADE)
+
+
+def deck_profile(line, ring: list[tuple[float, float]]) -> list[float]:
+    """Per-ring-vertex deck height (the deck line at each vertex's projection)."""
     a, b = long_axis(ring)
     ax, ay = b[0] - a[0], b[1] - a[1]
     l2 = ax * ax + ay * ay
@@ -333,7 +335,7 @@ def near(structures, cx: float, cy: float, reach: float = 60.0):
 
 def bridge_properties(ground, ring, name, kind, structures, marks, known) -> dict | None:
     """Everything the viewer draws a deck from (see bridge.py)."""
-    line = deck_line(ground, ring)
+    line = deck_line(ground, ring, kind)
     if line is None:
         return None
     cx = sum(x for x, _ in ring) / len(ring)
@@ -344,7 +346,7 @@ def bridge_properties(ground, ring, name, kind, structures, marks, known) -> dic
         "name": name,
         "kind": kind,
         "structure": structure,
-        "deck": deck_profile(ground, ring),
+        "deck": deck_profile(line, ring),
     }
     a, b = long_axis(ring)
     props["axis"] = [[round(a[0], 2), round(a[1], 2)], [round(b[0], 2), round(b[1], 2)]]
@@ -370,6 +372,23 @@ def bridge_properties(ground, ring, name, kind, structures, marks, known) -> dic
     return props
 
 
+LINE_ON_FOOTPRINT = 0.5  # a bridge line lies on a footprint when this share of it is inside
+
+
+def footprint_of(line, polys) -> int:
+    """The unclaimed footprint a bridge line runs on, or −1. Nearness is not
+    enough: the Marienbrücke's road line runs 16 m beside the rail bridge's
+    footprint (the road bridge has none of its own), and matching it by
+    centroid laid the road on the tracks and left the road bridge undrawn."""
+    best, most = -1, LINE_ON_FOOTPRINT * line.length
+    for pi, p in enumerate(polys):
+        if not p[3]:
+            inside = line.intersection(shapely.buffer(p[4], 1.0)).length
+            if inside > most:
+                most, best = inside, pi
+    return best
+
+
 def bridges(tile: Tile, structures, marks, known) -> list[dict]:
     ground = Ground(tile)
     line_geoms, line_fields = read_layer(
@@ -384,7 +403,7 @@ def bridges(tile: Tile, structures, marks, known) -> list[dict]:
                 if len(ring) >= 4:
                     cx = sum(x for x, _ in ring) / len(ring)
                     cy = sum(y for _, y in ring) / len(ring)
-                    polys.append([ring, cx, cy, False])
+                    polys.append([ring, cx, cy, False, part])
 
     features = []
 
@@ -410,14 +429,7 @@ def bridges(tile: Tile, structures, marks, known) -> list[dict]:
                 pts += [a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)]
             pts.append(coords[-1])
             kind = ground.classify(pts)
-            mx = sum(x for x, _ in coords) / len(coords)
-            my = sum(y for _, y in coords) / len(coords)
-            best, bd = -1, 50.0**2
-            for pi, p in enumerate(polys):
-                if not p[3]:
-                    d = (p[1] - mx) ** 2 + (p[2] - my) ** 2
-                    if d < bd:
-                        bd, best = d, pi
+            best = footprint_of(part, polys)
             if best >= 0:
                 polys[best][3] = True
                 emit(polys[best][0], name or None, kind)

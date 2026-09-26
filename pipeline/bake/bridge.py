@@ -51,6 +51,8 @@ DEPTH_MIN, DEPTH_MAX = 0.6, 5.0  # the deck's structural depth, clamped (m)
 CLEARANCE_REACH = 30.0  # a fairway mark belongs to a deck this close (m)
 DECK_BELOW, DECK_ABOVE = 6.0, 4.0  # the measured deck stays this close to the ramp (m)
 DECK_SMOOTH_M = 15  # along-axis median window for the measured deck (m)
+MAX_GRADE = 0.08  # a road or path deck is no steeper than this
+RAIL_GRADE = 0.04  # ...a railway deck no steeper than this
 
 
 # --- the deck axis ---------------------------------------------------------------
@@ -145,12 +147,31 @@ def rolling_median(values: np.ndarray, window: int) -> np.ndarray:
     )
 
 
-def measured_deck(ground, ring, ramp):
+def limit_grade(deck: np.ndarray, step: float, grade: float) -> np.ndarray:
+    """The deck line no steeper than `grade`: anchored on the median of its
+    middle third, walked out to both ends. A deck's end over a street below
+    (the DOM sees the street there) ramps instead of dropping off a cliff."""
+    n = len(deck)
+    if n < 3:
+        return deck
+    out = deck.copy()
+    mid = n // 2
+    out[mid] = float(np.median(deck[n // 3 : max(n // 3 + 1, 2 * n // 3)]))
+    rise = grade * step
+    for i in range(mid + 1, n):
+        out[i] = min(max(deck[i], out[i - 1] - rise), out[i - 1] + rise)
+    for i in range(mid - 1, -1, -1):
+        out[i] = min(max(deck[i], out[i + 1] - rise), out[i + 1] + rise)
+    return out
+
+
+def measured_deck(ground, ring, ramp, grade: float = MAX_GRADE):
     """The deck line as DOM1 sees the roadway: per station the lower third
     of the surface across the deck (parapets, cars and lamps stand above
     it), held within DECK_BELOW/DECK_ABOVE of the abutment ramp (a train or
-    a canopy over the deck is not the deck), smoothed along the axis.
-    Returns deck(t), or the ramp itself without DOM1."""
+    a canopy over the deck is not the deck), smoothed along the axis and
+    no steeper than `grade`. Returns deck(t), or the ramp itself without
+    DOM1."""
     section = cross_sections(ground, ring, 0.0)
     if section is None:
         return ramp
@@ -161,7 +182,7 @@ def measured_deck(ground, ring, ramp):
         seen = np.nanpercentile(np.where(np.isnan(top), np.inf, top), 30, axis=1)
     seen[~np.isfinite(seen)] = np.nan
     deck = np.where(np.isnan(seen), base, np.clip(seen, base - DECK_BELOW, base + DECK_ABOVE))
-    deck = rolling_median(deck, DECK_SMOOTH_M)
+    deck = limit_grade(rolling_median(deck, DECK_SMOOTH_M), SAMPLE, grade)
     return lambda t: float(np.interp(t * length, stations, deck))
 
 
