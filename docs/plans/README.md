@@ -124,18 +124,20 @@ S/M/L.
 13. **Bundle: `proj4` for one conversion (S).** A 40-line UTM inverse for
     zones 32/33 replaces it (`lib/city/crs.ts`). Size unmeasured.
     (`GLTFLoader` is load-bearing now: every tile is glTF.)
-14. **Split the 1 000-line `create-app.ts` (L).** The tile path left for
-    `tile-stream.ts`, but the ground, lamps, focus and loaded-state logic
-    still sit in one closure: `focus-controller.ts`, `ground.ts`, ….
-15. **`lib/city/math.ts` and one `densify` (S–M).** `clamp` re-implemented
-    dozens of times; four polyline resamplers with divergent carry
-    semantics; unifying changes geometry slightly and needs a shot
-    comparison.
+14. **Split the 1 000-line `create-app.ts` (L).** Partly done 2026-09-26:
+    the ground (`lib/city/ground.ts`) and the second boot phase
+    (`lib/city/boot-phases.ts`) left the closure. Left: lamps, focus and
+    the scene-wide state the dressings bind — see item 20.
+15. **One `densify` (S–M).** `clamp` is one module since 2026-09-26
+    (`lib/city/math.ts`); left: four polyline resamplers with divergent
+    carry semantics — unifying changes geometry slightly and needs a shot
+    comparison. Folds into item 21.
 16. **Pure-helper tests (S each, when a module is next touched).** Rail
     geometry (`pushTri`, `deckLift`, `addArches`, `buildRails` — none run in
     CI because the lite tile has no rail lines and the only arch bridge is
     on a neighbour), vegetation (`sampleLine`, `bucketByCell`, `crownColor`,
-    `updateLod`), lamps, walls, `prepare-data`'s content-keyed cache.
+    `updateLod`), lamps, walls. (`prepare-data`'s cache is content-keyed
+    and tested since 2026-09-26: `scripts/bake-sources.ts`.)
 17. **`dispose()` leaves textures, the shadow map and the GL context to the
     GC (S).** Bounded today (only dev/CI unmount).
 18. **Materials whose GLSL depends on `heightFog` but whose cache key does
@@ -146,6 +148,49 @@ S/M/L.
     terrain bound (with the 30 m skirt) as the ground fallback; the
     joystick releases on any `pointerup`; the `crs.ts`
     trailing-slash regex.
+20. **One scene environment the dressings bind at birth (M) — with plan
+    020.** Scene-wide values reach the dressings two ways: by-reference
+    uniforms (the sun, the ground rows, three module-level singletons —
+    `FOUNTAIN_UNIFORMS`, `FURNITURE_UNIFORMS`, `MAP_OVERLAY_UNIFORMS`) and
+    per-dressing setters `create-app.ts` loops over on every change (the
+    lamps' night, the vegetation's look and per-frame clock), each tile
+    holding its own copy; `catchUp` (`tile-stream.ts`) exists only because
+    the loops miss a dressing still compiling. One environment object
+    created in `bootApp` and bound once would delete `catchUp`, the loops
+    and the singletons. Deferred on 2026-09-26: the setters are uniform
+    writes, i.e. how materials bind values, which is what the WebGPU/TSL
+    port rewrites (`uniform()` nodes, `scene.fogNode`) — do it inside the
+    port's material phases, not before.
+21. **A geometry kit for what stands on the ground (M) — after plan 020.**
+    Seven triangle-soup writers decide the winding rule in four ways
+    (rail's `pushTri` auto-winds to the normal, furniture's `addSlab`,
+    `kerbs.ts` reorders, `walls.ts` is double-sided, `fences.ts`,
+    `stairs.ts`, `small-buildings.ts`), and `rail-layer.ts` is the geometry
+    library of `tram-layer.ts` and `riverside-layer.ts`. One pure module
+    (soup accumulator with one winding rule, ribbons, footprints, columns,
+    the resamplers) used by the runtime layers and the bakes. Deferred on
+    2026-09-26: it moves large blocks out of files the port is rewriting,
+    and unifying the winding changes baked geometry — needs its own
+    earcut (`lib/city` forbids `three`) and a headed shot comparison.
+
+### 2026-09-26 audit (`improve deep` + architecture review, PR #67)
+
+Done on PR #67: the build cache keyed on contents and the bake's import
+graph; one artifact table (`dressing`, `sound`, `osm` columns) with a 512²
+minimap/soundscape raster and the ODbL credit tested; the NDVI sampler
+byte-exact and dressing fetches abortable; a dressing's parts as one
+named table; the ground and the second boot phase out of `create-app.ts`;
+the scene's time as one hook; `Tile.classes()`/`Tile.neighbours()` in the
+pipeline with tests for the four untested bakes; checked downloads;
+Pillow-13-ready PNG writes; one `clamp`; stale remnants swept. Deferred to
+the WebGPU port: items 20 and 21 above, and the port-side findings (plan
+020's drift check counts 15 `onBeforeCompile` sites, the tree has 26; the
+painted land-cover target at full size on both terrain levels; the NDVI
+texture loaded per level; the LRU budget blind to plugin textures; the
+demolish index buffer freed only by GC). Considered and left as is: the
+bridge deck table computed twice per tile (microseconds), the furniture
+models merged per tile (sharing them across tiles would make a tile's
+unload dispose another tile's geometry).
 
 ### Data → scene: plans 024–035 (planned 2026-09-25)
 
