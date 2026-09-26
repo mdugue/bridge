@@ -150,7 +150,10 @@ config change.
   loads from there until it is clicked
 - `lib/city/` — pure, DOM-free logic (terrain geometry, minimap math, CRS,
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
-  policy, the look table + store, the Snapshot codec, `terrain-tin.ts`
+  policy, the look table + store, the Snapshot codec, `ground.ts` (the
+  site's ground: terrain heights, the floor, rays — one owner for the pose,
+  focus, shadow fit and soundscape), `boot-phases.ts` (the load after the
+  first frame as a pure state machine), `terrain-tin.ts`
   (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
   the measured step), `fences.ts` (fence panels and gate gaps),
   `tree-inventory.ts` (the cadastre's archetypes and veto), `tree-season.ts`
