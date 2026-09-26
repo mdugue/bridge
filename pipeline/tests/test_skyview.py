@@ -24,7 +24,6 @@ from bake.skyview import (
     near_horizon,
     pack_bands,
     pack_horizon,
-    site_sources,
     sky_view,
     surface_triangles,
 )
@@ -188,7 +187,7 @@ def test_the_neighbour_tile_fills_the_margin_across_the_seam(tmp_path):
     _dgm(tile, "b", 200, 0, 200, 100.0)
     # a 50 m block on the neighbour, 20 m past the seam
     _cityjson(tile, "b", 220, 80, 240, 120, 150.0)
-    roofs = Roofs(tile, site_sources(tile))
+    roofs = Roofs(tile, tile.neighbours())
     assert {tid for tid, _ in roofs.sources} == {"a", "b"}
     ground, surface, margin = fields(tile, 100, 60.0, roofs)
     res = 2.0

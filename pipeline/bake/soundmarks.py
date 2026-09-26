@@ -27,9 +27,8 @@ import numpy as np
 import rasterio
 import shapely
 
-from .common import OSM_ATTRIBUTION, Tile, column, feature, owns, write_geojson
+from .common import OSM_ATTRIBUTION, Tile, column, feature, overlaps, owns, write_geojson
 from .osm import has_extract, read_osm, tag
-from .skyview import overlaps, site_sources
 
 GEOSN_HEIGHTS = "tower heights: Quelle: GeoSN, dl-de/by-2-0"
 CHURCH_BUILDINGS = ("church", "cathedral", "chapel")
@@ -73,7 +72,7 @@ class Lod2:
 
     def __init__(self, tile: Tile) -> None:
         self.data = tile.data
-        self.sources = site_sources(tile)
+        self.sources = tile.neighbours()
         self._xyz: dict[str, np.ndarray] = {}
 
     def _vertices(self, tid: str) -> np.ndarray:

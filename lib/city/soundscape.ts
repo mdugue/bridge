@@ -13,6 +13,7 @@
  */
 
 import type { MovementMode } from "./sound-entry";
+import { clamp01 } from "./math";
 
 // The boot-side half (what the viewer carries before anyone asks for
 // sound) lives in sound-entry.ts; re-exported for the engine and tests.
@@ -79,8 +80,6 @@ export const WATER_REACH_M = 260;
 export const FOUNTAIN_REACH_M = 45;
 /** Trees within TREES_M for the fullest rustle. */
 const TREES_FULL = 30;
-
-const clamp01 = (v: number) => Math.min(Math.max(v, 0), 1);
 
 function smoothstep(e0: number, e1: number, x: number): number {
   const t = clamp01((x - e0) / (e1 - e0));

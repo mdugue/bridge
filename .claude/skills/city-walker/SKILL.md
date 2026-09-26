@@ -451,7 +451,7 @@ per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
 `riverside.py`, `skyview.py` (DGM + LoD2 only),
 `soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the
-neighbours through `skyview.site_sources` (the committed DGMs): markings
+neighbours through `Tile.neighbours` (the committed DGMs): markings
 measure on the neighbours' class rasters and paint a neighbour's crossing
 that reaches in, cultivated
 takes a vineyard's slope from every DGM it touches, tram and small-buildings

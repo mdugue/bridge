@@ -356,13 +356,13 @@ describe("sampling", () => {
         bounds: [0, 0, 2000, 2000],
         footprints: "f.json",
         id: "t",
-        minimap: "landcover_t.r2048.abc.png",
+        minimap: "landcover_t.r512.abc.png",
         sound: { soundmarks: "soundmarks_t.abc.geojson" },
       },
       "https://example.org/data/tileset.json"
     );
     expect(tile.landcover).toBe(
-      "https://example.org/data/landcover_t.r2048.abc.png"
+      "https://example.org/data/landcover_t.r512.abc.png"
     );
     expect(tile.files).toEqual({
       soundmarks: "https://example.org/data/soundmarks_t.abc.geojson",

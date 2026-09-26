@@ -64,11 +64,7 @@ function disposeMaterial(material: Material | Material[] | undefined): void {
     }
     return;
   }
-  // Style materials are shared across demolish-reloads; freeing them here
-  // would force a shader recompile (or break textures) on the next frame.
-  if (material && !material.userData.shared) {
-    material.dispose();
-  }
+  material?.dispose();
 }
 
 /**
