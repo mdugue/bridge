@@ -531,7 +531,14 @@ async function buildDressing(
     heightAt: terrain.heightAt,
   });
   lampControl.setNightFactor(ctx.night());
-  const rail = buildRail({ rails, bridges, ballast, platforms }, ground);
+  const rail = buildRail(
+    { rails, bridges, ballast, platforms },
+    {
+      ...ground,
+      // a deck across a seam is in both tiles' files; its owner draws it
+      owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
+    }
+  );
   // The bake writes only the monuments a tile owns; a basin that reaches
   // past the seam samples the neighbour's ground.
   const monumentLayer = buildMonuments(monuments, {

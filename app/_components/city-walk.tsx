@@ -28,7 +28,7 @@ import {
 } from "@/lib/city/load-stages";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import {
   decodeLook,
@@ -263,9 +263,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   useEffect(() => {
     liveEnded.current = live.ended;
   }, [live.ended]);
-  const [landcoverTiles, setLandcoverTiles] = useState<
-    { bounds: TerrainBounds; src: string }[]
-  >([]);
+  const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);

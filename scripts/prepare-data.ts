@@ -767,6 +767,7 @@ const extras: TilesetExtras = {
     bounds: t.bounds,
     footprints: footprintFiles.get(t.id) ?? "",
     minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
+    bridges: sideFiles.get(t.id)?.bridge,
     sound: pickFiles(sideFiles.get(t.id) ?? {}, SOUND_KINDS),
   })),
 };
