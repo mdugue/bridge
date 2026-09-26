@@ -21,8 +21,9 @@
 - **Risk**: MED — false positives (parked vans, dense shrubs, scaffolding)
 - **Planned at**: 2026-09-25
 - **Status**: DONE (2026-09-26) — the gate passed with the echo rule
-  tightened to a per-cell window (phase 0 below); 6 783 structures on the
-  fifteen tiles, appended to the city mesh (+3.4 % city glTF). Plates on a
+  tightened to a per-cell window (phase 0 below); 6 625 structures on the
+  fifteen tiles (6 783 before the review fixes below), appended to the
+  city mesh (+3.3 % city glTF). Plates on a
   real GPU (an allotment colony, a Neustadt courtyard) are still open: the
   look was checked headless only.
 
@@ -141,7 +142,7 @@ rule); the misses there were a clipped evergreen block (NDVI 0.56 → the
 NDVI rule), a van on a car park, a trailer in a depot (→ the vehicle rule)
 and roof-edge slivers.
 
-Areas of the 6 783 shipped structures (all tiles): 6–10 m² 90, 10–15 m²
+Areas of the 6 783 structures first shipped (all tiles): 6–10 m² 90, 10–15 m²
 1 211, 15–20 m² 1 452, 20–30 m² 2 119, 30–50 m² 1 429, 50–75 m² 314,
 75–100 m² 85, 100–200 m² 76 (the rectangle, which can exceed the blob);
 median 22.5 m², median height 2.7 m.
@@ -166,28 +167,46 @@ there that day and may not be now.
 
 ### Per tile
 
-| Tile | Found | Shipped | Pent roofs | city glTF (gz) |
-|---|---|---|---|---|
-| 33408_5654 | 906 | 813 | 67 | +63.5 kB (+4.1 %) |
-| 33408_5656 | 1 474 | 1 110 | 77 | +90.8 kB (+11.9 %) |
-| 33408_5658 | 764 | 612 | 45 | +46.7 kB (+6.3 %) |
-| 33410_5654 | 252 | 154 | 20 | +16.9 kB (+1.5 %) |
-| 33410_5656 | 526 | 244 | 30 | +24.1 kB (+2.2 %) |
-| 33410_5658 | 1 617 | 1 516 | 226 | +128.3 kB (+10.2 %) |
-| 33412_5654 | 149 | 133 | 12 | +8.3 kB (+1.2 %) |
-| 33412_5656 | 265 | 213 | 22 | +22.3 kB (+1.6 %) |
-| 33412_5658 | 518 | 454 | 53 | +42.6 kB (+2.9 %) |
-| 33414_5654 | 623 | 573 | 58 | +48.3 kB (+2.5 %) |
-| 33414_5656 | 319 | 266 | 27 | +22.7 kB (+1.8 %) |
-| 33414_5658 | 140 | 128 | 19 | +14.1 kB (+3.6 %) |
-| 33416_5654 | 368 | 343 | 34 | +32.7 kB (+1.9 %) |
-| 33416_5656 | 246 | 223 | 40 | +21.9 kB (+1.2 %) |
-| 33416_5658 | 1 | 1 | 1 | +0.1 kB |
-| **all** | **8 168** | **6 783** | **731** | **+583 kB (+3.4 %)** |
+After the final review (2026-09-26) the bake reads 40 m of the neighbours'
+scan and layers across each seam and writes a structure on the tile that
+owns its rectangle's centroid (27 structures now straddle a seam; before,
+a blob touching the tile's edge was dropped on both sides); `z` is the
+lowest ground under the whole rectangle and the DGM1 at its corners, and
+a rectangle over ground that falls > 1.5 m is dropped (an embankment's
+edge: 324 boxes stood > 0.1 m above the DGM at a corner, 21 > 0.5 m, the
+worst 1.74 m; now 25, 1 and 0.84 m); of two rectangles overlapping by
+> 0.5 m² the smaller goes (43 such pairs, all z-fighting; now 0 — 49 pairs
+touch by less). The build no longer draws storey bands on them (the first
+stroke fell 0.2 m under the eave on ~66 %), hashes their tint from the
+first corner (a changed LoD2 object count no longer reshuffles it), and
+drops the canopy and scan points in or within 0.5 m of one — 1 232 of
+them (a shed's roof read as a 3–4 m tree; before: 970 points inside 732
+sheds).
 
-"Found" is after the shape rules, before the OSM context. The allotment
-colonies carry most of them (1 182 of 1 516 on 33410_5658, 721 of 1 110 on
-33408_5656). The committed GeoJSON is 1.6 MB for all fifteen tiles.
+| Tile | Found (tile + 40 m) | Shipped (before → after) | Pent roofs | city glTF (gz, vs none) | change |
+|---|---|---|---|---|---|
+| 33408_5654 | 947 | 813 → 810 | 67 | +63.1 kB (+4.1 %) | -0.4 kB |
+| 33408_5656 | 1 517 | 1 110 → 1 106 | 76 | +90.5 kB (+11.9 %) | -0.3 kB |
+| 33408_5658 | 776 | 612 → 610 | 44 | +46.6 kB (+6.3 %) | -0.1 kB |
+| 33410_5654 | 264 | 154 → 146 | 18 | +16.0 kB (+1.4 %) | -0.9 kB |
+| 33410_5656 | 529 | 244 → 232 | 29 | +23.2 kB (+2.1 %) | -0.9 kB |
+| 33410_5658 | 1 660 | 1 516 → 1 485 | 221 | +127.2 kB (+10.1 %) | -1.1 kB |
+| 33412_5654 | 146 | 133 → 123 | 12 | +7.1 kB (+1.0 %) | -1.2 kB |
+| 33412_5656 | 282 | 213 → 204 | 20 | +20.2 kB (+1.5 %) | -2.1 kB |
+| 33412_5658 | 575 | 454 → 444 | 51 | +41.8 kB (+2.8 %) | -0.8 kB |
+| 33414_5654 | 635 | 573 → 571 | 57 | +48.1 kB (+2.5 %) | -0.2 kB |
+| 33414_5656 | 323 | 266 → 256 | 27 | +21.9 kB (+1.8 %) | -0.8 kB |
+| 33414_5658 | 136 | 128 → 121 | 17 | +13.4 kB (+3.4 %) | -0.7 kB |
+| 33416_5654 | 372 | 343 → 332 | 31 | +31.3 kB (+1.8 %) | -1.4 kB |
+| 33416_5656 | 214 | 223 → 184 | 32 | +17.3 kB (+0.9 %) | -4.6 kB |
+| 33416_5658 | 1 | 1 → 1 | 1 | +0.1 kB | 0.0 kB |
+| **all** | **8 377** | **6 783 → 6 625** | **703** | **+568 kB (+3.3 %)** | **-15.6 kB** |
+
+"Found" is after the shape rules, before the OSM context, over the tile
+and its 40 m margin (so a seam's structures count on both sides). The
+allotment colonies carry most of them. The committed GeoJSON is 1.6 MB for
+all fifteen tiles. The first bake (6 783; found 8 168 on the tiles alone)
+added +583 kB (+3.4 %).
 
 ### Look
 

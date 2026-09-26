@@ -86,6 +86,29 @@ chip. Every tile change re-renders the shadow map. The layers:
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
   glow), hash-dithered transparency. The old ghost/standard styles are gone.
+- The map's own marks: `name-layer.ts` (street names lettered on the
+  ground, a Canvas 2D atlas per tile; `lib/city/names.ts`), the ferry
+  wakes of `riverside-layer.ts` (landing stages, groynes, ferries), both
+  faded in with height by `map-overlay.ts`; `street-caption.tsx` names the
+  street underfoot on foot.
+- More dressing: `tram-layer.ts` (tracks in their bed, the contact wire
+  sagging between spans and arms, stop signs; `lib/city/tram.ts`),
+  `fence-layer.ts` (the fences' material; baked into the fine terrain),
+  `furniture-layer.ts` (benches … plan 030's advertising columns, signals,
+  hydrants, clocks, drinking fountains, bus-stop signs), `crown-season.ts`
+  (per-day crown colour and bare stipple, `lib/city/tree-season.ts`).
+- Terrain pass chunks: `road-markings.ts` (`lib/city/markings.ts`),
+  `cultivated-layer.ts` (colony gardens, vine rows; `lib/city/cultivated.ts`),
+  `sky-light.ts` (sky view + far horizon; `lib/city/skyview.ts`, the raster
+  shared with the buildings through `shared-rasters.ts`).
+- Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
+  bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
+  the canopy points they veto at build time).
+- Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
+  AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
+  `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
+  `lib/city/soundscape.ts` (the mix) and `lib/city/sound-entry.ts` (the
+  boot-side half).
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -244,7 +267,7 @@ carriageway's middle in B — the side is resolved in the bake because the
 paving raster's bearing is modulo 180°). Every stripe is box-filtered
 exactly (`rmStripes`), and along-street periods divide 165 m.
 `cultivated-layer.ts` paints faint beds on the colony raster
-(`cultivated.py`) in jittered-Voronoi plots — no colony in the four tiles
+(`cultivated.py`) in jittered-Voronoi plots — no colony in the fifteen tiles
 maps its parcels, so keep it faint.
 
 ## Terrain seams
@@ -403,12 +426,27 @@ CRS, land cover first:
 ```bash
 bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|trees|ndvi|roof-colour|lamps|walls|stairs|rail|surface|lowveg
+bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
+                                       #   landcover islands canopy trees ndvi roof-colour osm-buildings
+                                       #   rail lamps monuments furniture walls stairs surface edges
+                                       #   markings sport tram riverside names skyview soundmarks
+                                       #   lowveg cultivated small-buildings
 bun run test:pipeline                  # pytest + ruff
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
-runtime falls back); rail decks fall back to the DGM ramp. All OSM layers come
+runtime falls back); rail decks fall back to the DGM ramp.
+
+The later modules, one step each: `osm_buildings.py` (shops and heritage
+per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
+`riverside.py`, `names.py`, `skyview.py` (DGM + LoD2 only),
+`soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
+a step whose result must agree on both sides of a tile edge reads the
+neighbours through `skyview.site_sources` (the committed DGMs): markings
+measure on the neighbours' class rasters and paint a neighbour's crossing
+that reaches in, names merge a street over the whole extract, cultivated
+takes a vineyard's slope from every DGM it touches, tram and small-buildings
+read the neighbours' furniture / scan — so bake those steps on every tile. All OSM layers come
 from the Geofabrik extract — no Overpass.
 
 **Stage 2, the build step** (`bun dev` / `bun run build` → `prepare-data.ts`):

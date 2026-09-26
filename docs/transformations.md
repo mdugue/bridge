@@ -228,7 +228,8 @@ visual-variable codebook is in
   (`sport-fixtures.ts`, `sportFixtures`): pale-clay bars, the nets a
   lavender-grey veil in the street furniture's palette and matte material, one merged mesh each per tile, in the tile that owns
   the ground's centre. Both terrain levels; absent files → the land-cover
-  class. Dresden (2026-09-19 extract): ~175 grounds over the four tiles.
+  class. Dresden (2026-09-19 extract): 431 grounds over the fifteen tiles
+  (175 on the four first; a table row per tile a ground reaches).
   Textures scale with HUD *Bodendetail*; colours and lines stay.
 - **Road markings** (plan 026) — OSM `highway=crossing` nodes,
   `highway=traffic_signals` nodes with a `traffic_signals:direction` (or
@@ -259,12 +260,19 @@ visual-variable codebook is in
   they mostly are in Dresden. Painted in the terrain's fragment pass
   (`road-markings.ts`), box-filtered (a zebra far off averages to a pale
   band), clipped to the carriageway, worn, fine level only; scales with
-  *Bodendetail*. Baked 2026-09-25 from the BBBike extract of 2026-09-19:
-  **364 crossings** (59 zebra, 305 *Furt*) and **214 stop lines** over the
-  four tiles; 60 crossings and 32 signals left unpainted (no DLM road
+  *Bodendetail*. Baked from the BBBike extract of 2026-09-19: over the
+  fifteen tiles (2026-09-26) **837 crossings** (127 zebra, 710 *Furt*) and
+  **583 stop lines**, 169 crossings and 93 signals left unpainted; the
+  first bake (2026-09-25, four tiles) had 364 crossings (59 zebra, 305
+  *Furt*) and 214 stop lines, 60 crossings and 32 signals unpainted (no DLM road
   within 3 m of the node — mostly service roads the DLM does not carry —
-  or no carriageway narrower than 30 m nearby). Checked against the
-  crossing footway through each node: the painted axis is within 20° of
+  or no carriageway narrower than 30 m nearby). **Across a seam**
+  (2026-09-26): rows are measured on the class rasters of the tile and its
+  neighbours, so a carriageway is no longer cut at the tile edge (8 rows
+  had been, one down to a 0.12 m half-length), and a neighbour's row whose
+  paint reaches into the tile is painted there too (13 such rows; before,
+  4 rows reached past an edge that no neighbour painted). Checked on the
+  four first tiles against the crossing footway through each node: the painted axis is within 20° of
   it for 278 of 301 (median 2°), and 18 of 364 rectangles lie less than
   70 % on the DLM carriageway — under the plan's 1-in-10 stop. ≈12 s per
   tile, 77–107 KB raster + 5–11 KB table. **Overlapping rows** (review,
@@ -301,8 +309,9 @@ visual-variable codebook is in
   buffered by `width`, else 3 m, flat ends; 5 areas), `man_made=groyne`
   (1) and `route=ferry` ways (3: the Johannstadt ferry, two paddle-steamer
   routes) (ODbL) → `pipeline/bake/riverside.py` → `riverside_<tile>.geojson`
-  (25 piers, 31 pontoons, 1 groyne, 4 ferry stretches over the four
-  tiles). A pier's `deck` = the bank's DGM at its landward end (its
+  (44 piers, 43 pontoons, 1 groyne, 9 ferry stretches over the fifteen
+  tiles, 2026-09-26; the OSM counts above and 25 / 31 / 1 / 4 are the four
+  first tiles'). A pier's `deck` = the bank's DGM at its landward end (its
   highest dry sample) + 0.4 m. A **pontoon** (`floating=yes`, or a pier
   reaching > 25 m out on the water class) is cut to its part on the water
   class — OSM draws many up the bank, and the DGM's river surface is flat
@@ -395,13 +404,23 @@ visual-variable codebook is in
   draw them) within 3 m. Each is its rectangle with `z` (lowest ground),
   `h` (the fitted top's median above it) and, tilted > 8°, `hc` (a pent
   roof's corner heights) → `data/dlm/smallbuild_<tile>.geojson` (GeoSN).
-  **6 783** on the fifteen tiles (8 168 before the OSM context; 731 pent
-  roofs), the allotment colonies most of them. `bakeCityMesh` appends each
+  **6 625** on the fifteen tiles (703 pent roofs; the first bake shipped
+  6 783 of 8 168 before the OSM context), the allotment colonies most of
+  them. `bakeCityMesh` appends each
   as a closed box (`lib/city/small-buildings.ts`, sunk 0.2 m) — its own
   object and root (demolish, picking, collision and the minimap work
-  unchanged), `building` true, the hashed wall tint, the flat-roof slate
-  palette, no glow, `source` = 1 in the property table (0 = LoD2).
-  +3.4 % city glTF. Gate (phase 0): 16 of 20 sampled on the spawn tile are
+  unchanged), `building` true, the wall tint hashed from its first corner,
+  the flat-roof slate palette, no glow, no storey band, `source` = 1 in the
+  property table (0 = LoD2). +3.3 % city glTF. **Review fixes (2026-09-26):**
+  the bake reads 40 m of the neighbours' scan and layers across each seam
+  and keeps a structure on the tile holding its centroid (27 now straddle
+  a seam; before, a blob touching the edge was lost on both sides); `z` is
+  the lowest ground under the whole rectangle and the DGM1 at its corners,
+  and a box over ground falling > 1.5 m is dropped (21 boxes had floated
+  > 0.5 m at a corner, the worst 1.74 m; now 1, 0.84 m); of two rectangles
+  overlapping > 0.5 m² the larger stays (43 z-fighting pairs → 0); the
+  canopy and scan points in or within 0.5 m of one are dropped at build
+  time (1 232; see *Canopy fill*). Gate (phase 0): 16 of 20 sampled on the spawn tile are
   structures against the DOP (March 2024; the misses two roof-edge slivers,
   now ruled out, and a shadow). Unverified on a real GPU. Remaining
   temporaries: 3 probable stalls on the Schloßstraße pavement (a living
@@ -437,8 +456,8 @@ visual-variable codebook is in
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special
   (`function`), gated by the sun rig's `nightFactor`.
 - **Attributes through the building tree** — the Saxon LoD2 puts the
-  geometry of 2 391 Buildings (four tiles; 2 327 have none of their own) on
-  7 239 `BuildingPart`s, and the parts carry no `function`: only the
+  geometry of 7 950 Buildings (fifteen tiles; 7 866 have none of their
+  own — 2 391 / 2 327 on the four first) on 24 143 `BuildingPart`s (7 239), and the parts carry no `function`: only the
   parent does. The bake resolves each object's attributes through its
   `root` (the part's own value first, `inheritedAttributes` in
   `lib/city/building-tint.ts`), so
@@ -468,8 +487,9 @@ visual-variable codebook is in
   plan's 20 %, so the join stays containment-first. Strength 0.4, **not
   yet judged on a real GPU** (plan 019). Plan 027 phase 1.
 - **Listed facades** (*Farbvariation*, *Traufkante*) — OSM building
-  outlines with `heritage=*` (167 touch the four tiles) mark the LoD2 objects
-  they cover ≥ 50 % (842 objects: 478 / 28 / 139 / 197 on `33410_5656` /
+  outlines with `heritage=*` (167 touch the four first tiles) mark the LoD2 objects
+  they cover ≥ 50 % (1 302 over the fifteen tiles, 2026-09-26; on the four
+  first 842 objects: 478 / 28 / 139 / 197 on `33410_5656` /
   `33410_5658` / `33412_5656` / `33412_5658` — the Zwinger, the Schloss and
   the Altstadt blocks are many parts each; with a root's flag handed to its
   parts, 882 drawn: 513 / 28 / 141 / 200). A barely-there warm lift of the
@@ -506,20 +526,29 @@ visual-variable codebook is in
   the maintainer looked at it on a phone* — see 🗃️ *Allotment bed bands*.
   A mapped parcel takes its own axis and a 0.5 m seam along its border.
   **STOP measured:** of the 66 colonies
-  (77.9 ha) in the four tiles, **0** carry mapped parcels (the 351
+  (77.9 ha) in the four first tiles, **0** carry mapped parcels — and 0 of
+  the ≈195 (208 ha) over the fifteen tiles (2026-09-26; the four first
+  tiles' counts: the 351
   `leisure=garden` areas lie elsewhere; inside the colonies OSM maps
   sheds, 196 footways and 123 fences) — under the plan's one-third, so
   the plots are invented texture, kept low in contrast
   (`COLONY_GARDEN.strength` 0.85 of *Bodendetail*), and no parcel outline
   is claimed as data. **Orchards**: the mapped
   `natural=tree` inside, else a grid 8 m apart along the long axis,
-  centred (4 orchards, 0.1 ha, 7 trees), drawn by the tree layer as the
+  centred, less the spots a measured tree already fills (a canopy, scan or
+  inventory tree of any tile within 4 m, or within its crown radius when
+  wider — so the step runs after `lowveg`): 5 orchards and 35 trees over
+  the fifteen tiles (43 before that dedupe, 2026-09-26; 4 orchards, 7
+  trees on the four first), drawn by the tree layer as the
   cadastre's "small" archetype (a round crown on a ≈1.3 m stem).
   **Vineyards**: rows 1.8 m apart along the contour (perpendicular to the
-  DGM's mean gradient over the polygon; a flat one along its long axis),
+  DGM's mean gradient over the whole polygon, read from every committed
+  DGM it touches — this tile's alone kinked the rows at the seam x =
+  416 000, 152.0° against 149.8°; a flat one along its long axis),
   drawn as chains of low boxes 1.3 m tall and 0.5 m wide, chunked into
-  250 m cells — built and unit-tested; no vineyard lies in the four tiles
-  (the Elbe slopes' are east of them, plan 017), and the seasonal bare
+  250 m cells: 11 vineyards with 305 rows on the Loschwitz slopes
+  (33414_5656, 33416_5654, 33416_5656; none in the four first tiles), and
+  the seasonal bare
   canes wait for plan 025's season plumbing. ≈18 s per tile. **Not yet
   judged on a GPU** (the chessboard check is the plan's other STOP).
 - **Tree/hedge rows** — Basis-DLM hedge & tree-row lines → InstancedMesh, chunked
@@ -527,7 +556,13 @@ visual-variable codebook is in
   (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
 - **Canopy fill** — `nDOM = DOM1 − DGM1`, one tree per ~7 m cell at the tallest
   pixel, scaled to measured height, **gated off road/bridge/water** via the DLM
-  class raster. `pipeline/bake/canopy.py`.
+  class raster. `pipeline/bake/canopy.py`. At build time
+  (`scripts/prepare-data.ts`, `treesOffStructures` in
+  `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within
+  0.5 m of one of the tile's small structures is dropped: DOM1 reads a
+  shed's roof as a 3–4 m tree (859 canopy points stood in 636 sheds, 807
+  within 1 m of the shed's own height). Not in the canopy bake: it runs
+  before the structures are found.
 - **NDVI crown colour** — per-tree DOP greenness (`ndvi_<tile>.png`, sampled on
   the CPU at placement) shifts the crown dry pale-sage → lush deep green.
   `pipeline/bake/ndvi.py` → `vegetation-layer.ts` `crownColor`; falls back to
@@ -634,7 +669,8 @@ visual-variable codebook is in
   `tree-inventory.ts` `trunkGirth` / `trunkRadiusAt`; a taper-only fit
   drew a 25 m tree's trunk half as thick again), the height rule stays
   where none is measured. **OSM trees**: the BBBike extract (2026-09-19)
-  has 6 018 `natural=tree` in the four tiles; 4 385 carry a taxon that
+  has 10 854 `natural=tree` in the fifteen tiles (6 018 in the four first);
+  8 292 (4 385) carry a taxon that
   names a genus the classifier knows (`species`/`taxon`/`genus`, then
   `species:de`/`genus:de`; German names such as "Platane" or "Gemeine
   Fichte" mapped by their last word, a lower-case genus capitalised, an
@@ -644,10 +680,11 @@ visual-variable codebook is in
   dropped (the DOM canopy covers unknown trees; no species is invented).
   **The cadastre wins**: an OSM tree within 3 m of a cadastre tree — any
   of the cached WFS answer, its 10 m margin across the seams included —
-  is taken to be it (2 565 dropped), leaving **1 820** (854 / 252 / 368 /
-  346 per tile, `s: "osm"`, 211 with a genus) — courts, the Zwinger,
+  is taken to be it (4 839 dropped; 2 565 on the four first), leaving
+  **3 453** over the fifteen tiles (0–854 per tile; 1 820 on the four
+  first, 854 / 252 / 368 / 346; `s: "osm"`, 298 with a genus) — courts, the Zwinger,
   Free-State and private ground. Their height/crown/circumference tags are read (53 / 1 /
-  2 in the extract), the gaps filled from the cadastre's own statistics
+  2 in the four first tiles), the gaps filled from the cadastre's own statistics
   for the tile. They join the cadastre's veto path (`keepTree`), so an OSM
   tree replaces the canopy or laser-scan crown it stands in. The re-bake
   left the cadastre trees unchanged (same set, positions, properties);
@@ -789,7 +826,9 @@ visual-variable codebook is in
   bollards, post boxes and stop shelters (`highway=bus_stop` /
   `public_transport=platform` with `shelter=yes`, `amenity=shelter` of
   `shelter_type=public_transport`; one per 8 m) → one point layer per tile
-  (ODbL), about 3 000 objects over the four tiles. OSM seldom says which way
+  (ODbL), about 3 000 objects over the four first tiles when first baked;
+  11 782 of every kind (plan 030's included) over the fifteen tiles
+  (2026-09-26). OSM seldom says which way
   a bench looks (`direction`, on ~3 %), so **the bake turns an untagged
   object to the nearest highway within 25 m** (across it when it stands on
   it); a bench way stands at its midpoint at its mapped length, facing the
@@ -811,8 +850,10 @@ visual-variable codebook is in
   mapped as areas, planters, traffic signs (OSM maps ~100 here) and
   street-name signs (almost none).
 - **Signs and fixtures** (plan [030](./plans/030-street-furniture-2.md)) —
-  the same bake and layer, eight more kinds (four tiles, BBBike
-  2026-09-19): **advertising columns** (`advertising=column`, 85; a pale
+  the same bake and layer, eight more kinds (the counts below are the four
+  first tiles', BBBike 2026-09-19; over the fifteen: 175 columns, 786
+  signals, 24 hydrants and 1 482 sign plates, 20 + 3 clocks, 15 drinking
+  fountains, 231 bus-stop signs): **advertising columns** (`advertising=column`, 85; a pale
   paper drum on a plinth with a darker ring and dome, three poster fields
   in the palette wrapped round it — colour, no text, turned by the scatter
   yaw so no two read alike; the 4 `lit=yes` ones glow softly with the
@@ -846,8 +887,8 @@ visual-variable codebook is in
   the shadow map is not redrawn for them. All in the furniture's soft
   pastels: nothing near-black, no fine detail. The re-bake leaves every earlier object byte-identical (checked
   per tile); the new kinds are appended. Look unverified on a GPU.
-- **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 88 over the
-  four tiles) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
+- **Playgrounds** — OSM `leisure=playground` outlines (≥ 20 m²; 339 over the
+  fifteen tiles, 88 on the four first) → a pale sand floor flush on the ground (a breath warmer than the paving), seated on the
   ground under each ring vertex (densified to 2 m), and **only the
   equipment OSM maps** (`playground=swing/basketswing/slide/sandpit/
   climbingframe/structure/climbingwall/springy/spring_board/seesaw/
@@ -952,9 +993,10 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   no `.osm.pbf` extract.
 
 - **Trams** (plan [024](./plans/024-tram-and-catenary.md)) —
-  OSM `railway=tram` (ODbL; 401 ways, 59.6 km in the four tiles, every one
+  OSM `railway=tram` (ODbL; 401 ways, 59.6 km in the four first tiles —
+  146.8 km of track drawn over the fifteen —, every one
   `gauge=1450`, `electrified=contact_line`) + `power=catenary_mast`
-  (321 points, **167 of them within 15 m of a tram track** — the rest are
+  (321 points on the four first tiles, **167 of them within 15 m of a tram track** — the rest are
   the railway's) + the OSM building outlines. `pipeline/bake/tram.py` →
   `tram_<tile>.geojson`: each track (fragments chained at 1 m, cut at the
   tile edge) with its **bed** — `street` when ≥ 70 % of its 2 m samples lie
@@ -1018,18 +1060,22 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 ### Names
 - **Street lettering** (plan [032](./plans/032-street-names.md), phase
   1) — OSM `highway=*` ways with a `name` (not `service`, not
-  `footway=sidewalk`; 2 920 named ways over the four tiles) + the DLM
+  `footway=sidewalk`; 2 920 named ways over the four first tiles) + the DLM
   bridge names (`bridge_<tile>` `name`) + named `place=square` /
   pedestrian areas (≥ 400 m²) (ODbL) → `pipeline/bake/names.py` →
-  `names_<tile>.geojson`. Every way of a name around the tile (50 m
-  margin) is merged (`line_merge`); anchors along its straightest
+  `names_<tile>.geojson`. Every name with a way within 50 m of the tile is
+  merged whole, from all its ways in the extract (`line_merge`, unclipped:
+  clipped to the tile + 50 m, as first built, the windows moved with the
+  tile and 55 names were lettered on both sides of a seam < 200 m apart —
+  Paul-Scholze-Weg 3 m; none since 2026-09-26); anchors along its straightest
   stretches — a window of `len(name) × 4.2 m + 20 m` turning less than 20°,
   one per 450 m, the straightest nearest the middle of its share, none
   within 200 m of the same name's last (the other carriageway, a fragment)
   — each written by the tile owning its middle; a square's own streets are
   not lettered again; bridges and squares get a straight label across
-  their long axis. Labels per tile: 138 / 135 / 122 / 105 (33412_5656,
-  33410_5656, 33410_5658, 33412_5658). Runtime `name-layer.ts`: no new
+  their long axis. Labels per tile: 122 / 126 / 116 / 94 (33412_5656,
+  33410_5656, 33410_5658, 33412_5658; 138 / 135 / 122 / 105 before the
+  whole-street merge), 1 489 over the fifteen tiles (1 640 before). Runtime `name-layer.ts`: no new
   dependency — **Canvas 2D in the page's own font** (Inter, via
   next/font's `--font-sans`, awaited with `document.fonts.load`), so
   umlauts, ß and shaping come from the browser; one atlas per tile, 2048
@@ -1107,10 +1153,15 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   a wall or fence line, snapped onto it, `{kind: "gate", w, on}`: `width`,
   else 1.2 m, a lift gate 4 m); a neighbour's gate whose gap reaches over
   the seam comes along as `{seam: true}` and cuts this tile's piece too
-  (none in today's four tiles). 97.7 km of fence and 875 gates on a line
-  (15.5 / 45.0 / 14.7 / 22.5 km on `33410_5656` / `33410_5658` /
-  `33412_5656` / `33412_5658`; 746 gates on fences, 129 on walls; about 520
-  gate points stand on no mapped line and are dropped). **Baked into the
+  (none over the fifteen tiles). 189.3 km of fence and 1 452 gates on a
+  line over the fifteen tiles (1 238 on fences, 214 on walls; 2026-09-26);
+  on the four first 97.7 km and 875 gates (15.5 / 45.0 / 14.7 / 22.5 km
+  on `33410_5656` / `33410_5658` / `33412_5656` / `33412_5658`; 746 gates
+  on fences, 129 on walls; about 520 gate points stand on no mapped line
+  and are dropped). The committed walls are older than the gates (below):
+  a gate is kept only on a line of its kind the file itself carries, which
+  dropped two `on: "wall"` gates 70–73 m from any committed wall
+  (33412_5656, 33412_5658) on 2026-09-26. **Baked into the
   fine terrain glTF** as a `fences` node (`lib/city/fences.ts`,
   `scripts/bake-tiles.ts` `fenceMesh`, ADR 0029): **one low, calm band**
   along the line on the fine TIN — a flat, double-sided quad per ≤ 2.5 m at
@@ -1289,7 +1340,7 @@ sounds, and no `AudioContext` exists, until the visitor presses **L** or
 turns on *Klang (experimentell)* (Erweitert tab); off at every load. All
 synthesized with WebAudio, the engine a dynamic import
 (`app/_components/soundscape/`); the pure core is `lib/city/soundscape.ts`,
-sampled at the 10 Hz pose stream. **None of it has been listened to** —
+sampled at the 10 Hz pose tick (no per-frame work). **None of it has been listened to** —
 levels and timbres are by design; a source that sounds cheesy is to be
 removed, not tuned.
 - **Bell towers** — OSM churches (`building=church|cathedral|chapel`, a
@@ -1422,9 +1473,10 @@ research that produced them):
     Elbe landing stages, groynes and ferries (031), street names (032),
     sky-view factor and a baked horizon map (033), small structures from
     DOM − LoD2 (034), a hidden soundscape (035). Built since (✅ above,
-    looks unverified on a GPU): 024 (Trams), 030 (Signs and fixtures),
-    031 (Landing stages, groynes, ferries), 032 (Names), 034 (Small
-    structures from the laser scan), 035 (Sound — unheard).
+    looks unverified on a GPU): 024 (Trams), 026 (Road markings), 028
+    (Cultivated land), 030 (Signs and fixtures), 031 (Landing stages,
+    groynes, ferries), 032 (Names), 033 (Sky-view factor, Horizon shade),
+    034 (Small structures from the laser scan), 035 (Sound — unheard).
 
 ---
 
@@ -1434,7 +1486,7 @@ research that produced them):
 |---|---|---|
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
-| **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four tiles (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
+| **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four first tiles, measured 2026-09-25 (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |
 | **Plain foliage translucency** | Reads as "noise" at instance distance. | Only OK if **shadow-gated** (kept as the shimmer transform). |

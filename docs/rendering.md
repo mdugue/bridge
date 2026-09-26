@@ -99,7 +99,7 @@ is the codebook.
 | Water ripple, glitter, sky tint | time, sun direction, fog palette; the sheet shades from a level normal, not the terrain grid's | — (synth) | `water-layer.ts` |
 | River mist | water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; thinned within ~90 m of the eye | Basis-DLM (mask) | `createWaterMist` (*Flussnebel*) |
 | Building silhouette | solid geometry | LoD2 | `city-layer.ts` |
-| Small structures LoD2 lacks | a closed box per structure the laser scan measured (garden houses, sheds, container buildings): its rectangle, from the lowest ground (sunk 0.2 m) to the fitted top, flat or pent; appended to the tile's building mesh as objects of their own (column `source` = 1), so the clay look, demolish, picking, collision and the minimap treat them as buildings; hashed wall tint, the flat-roof slate palette, no glow | LSC (+ OSM exclusions, DOP NDVI) | `lib/city/small-buildings.ts`, `bake-city-mesh.ts` `appendScanStructures`; `pipeline/bake/small_buildings.py` |
+| Small structures LoD2 lacks | a closed box per structure the laser scan measured (garden houses, sheds, container buildings): its rectangle, from the lowest ground under the rectangle (sunk 0.2 m) to the fitted top, flat or pent, no storey band; appended to the tile's building mesh as objects of their own (column `source` = 1), so the clay look, demolish, picking, collision and the minimap treat them as buildings; wall tint hashed from its first corner, the flat-roof slate palette, no glow; the canopy and scan points in or within 0.5 m of one are dropped at build time (its roof, read as a tree) | LSC (+ OSM exclusions, DOP NDVI) | `lib/city/small-buildings.ts`, `bake-city-mesh.ts` `appendScanStructures`; `pipeline/bake/small_buildings.py` |
 | Per-building attributes (the rows below) | `_FEATURE_ID_0` per vertex → `EXT_structural_metadata` property table → RGBA32F texture, three texels per object, `texelFetch`ed per vertex | LoD2 (+ DOP, OSM) | `city-layer.ts`, `lib/city/city-mesh.ts` `packObjectTexels`, `visual-style.ts` |
 | Wall tint | `hash(objectid)` + `function` family (a part's own value, else its root Building's) + `measuredHeight` nudge (column `tint`) | LoD2 (+ synth) | `lib/city/building-tint.ts` at bake time (*Farbvariation*) |
 | Roof colour | DOP median per roof when sampled, else palette from `roofType` / `Dachneigung` (column `roof`) | DOP, LoD2 | `roofColor()`, baked into the property table (*Dachfarbe*) |
@@ -122,8 +122,8 @@ is the codebook.
 | Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance) and thins the shadow through the same discard in a custom depth material; evergreens constant, canopy/row trees a generic curve; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
 | Allotment gardens | OSM `landuse=allotments`: a soft, slightly wandering edge (the baked distance to the garden land, LINEAR — paths, roads, rail and water cut out); inside, analytic plots ≈12 × 17 m (a jittered Voronoi in the colony's axis frame, meandering borders drawn as thin soft paths), each a lawn in one of a few soft greens — a third with warm vegetable beds, some with sparse pastel flower dots, the rest with darker shrub mottles — and a faint hedge green inside the rim; box-filtered, fading to the plots' tones and then to one calm tone with distance (0.85 of *Bodendetail*; no colony maps its parcels, so the plots are invented) | OSM | `cultivated-layer.ts`, `cultivated_<t>.png` |
-| Orchard tree | OSM `landuse=orchard`: the mapped trees, else an 8 m grid along the long axis, as the cadastre's "small" archetype | OSM | `tile-stream.ts` → `tree-inventory-layer.ts` |
-| Vine row | OSM `landuse=vineyard`: rows 1.8 m apart along the contour, 1.3 × 0.5 m boxes (none in the four tiles) | OSM + DGM1 | `cultivated-layer.ts` |
+| Orchard tree | OSM `landuse=orchard`: the mapped trees, else an 8 m grid along the long axis, less the spots a canopy, scan or inventory tree fills (4 m, or its crown), as the cadastre's "small" archetype | OSM | `tile-stream.ts` → `tree-inventory-layer.ts` |
+| Vine row | OSM `landuse=vineyard`: rows 1.8 m apart along the contour, 1.3 × 0.5 m boxes (11 vineyards, 305 rows, on the Loschwitz slopes: 33414_5656, 33416_5654, 33416_5656) | OSM + DGM1 | `cultivated-layer.ts` |
 | OSM hedge | polyline → ≤ 2.5 m superellipsoid pieces scaled to `h` × `w`; OSM line, LSC height where measured (else tag / 1.5 m) | OSM, LSC | `low-vegetation-layer.ts` |
 | Extra tree | LSC crown peak + `h` outside the canopy mask and away from any cadastre tree, appended to the canopy points | LSC | `tile-stream.ts` → `vegetation-layer.ts` |
 | Lamp post | point, 5 m default; none on classes 5 and 8 | OSM | `lamp-layer.ts`, `pipeline/bake/lamps.py` |
@@ -273,7 +273,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 
 | Content | Wire size per tile | Triangles |
 |---|---|---|
-| buildings `city_<tile>.glb.gz` | up to 2.0 MB (the laser scan's small structures add 1–12 %, +3.4 % over the site) | ≈143 k on the spawn tile (+2.6 k for its 213 scan structures, 12 each) |
+| buildings `city_<tile>.glb.gz` | up to 2.0 MB (the laser scan's small structures add 1–12 %, +3.3 % over the site) | ≈143 k on the spawn tile (+2.4 k for its 204 scan structures, 12 each) |
 | fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.3–3.6 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
 | footprints (minimap) | 0.23–0.33 MB | — |
@@ -367,7 +367,8 @@ looped noise beds through filters, short scheduled event graphs that free
 themselves, a dark generated "air" reverb for the far sounds, a quiet
 master (0.32) and a gentle compressor. Levels move by `setTargetAtTime`
 ramps on the audio thread (0.4 s; the master fades over ≈ 2 s). The scene
-is read at the **10 Hz pose stream**, never in the render loop: the
+is sampled at the **10 Hz pose tick** (the render loop's throttled pose
+callback, ~100 ms apart — no per-frame work): the
 handle's `listen` (height above ground, mode, trees within 40 m of the
 loaded vegetation chunks, the crowns' sway clock) and the tiles' own
 rasters, fetched and decoded on the CPU only while the sound plays and
