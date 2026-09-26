@@ -151,6 +151,7 @@ def test_both_bands_pack_into_eight_planes_with_their_own_scales():
     bands = legend()["bands"]
     assert [b["planes"] for b in bands] == [[0, 4], [4, 8]]
     assert bands[1]["farM"] == bands[0]["nearM"]  # the bands meet
+    assert legend()["attribution"].startswith("Quelle: GeoSN, dl-de/by-2-0")
 
 
 def _dgm(tile: Tile, tid: str, x0: float, y0: float, size: int, z: float) -> None:

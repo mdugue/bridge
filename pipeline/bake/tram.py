@@ -25,8 +25,10 @@ and (plan 024 phase 3) the stop signs.
   stop position), so its "H" sign stands on the nearest OSM platform
   (`public_transport=platform` or `railway=platform`, ≤ 25 m) at the point
   nearest the stop, facing the track — not where a shelter or a bus stop's
-  sign already stands (the tile's committed furniture, ≤ 8 m), one per
-  8 m. A stop without a mapped platform gets no sign: nothing is invented.
+  sign already stands (the committed furniture of the tile and of its
+  neighbours across a seam, ≤ 8 m), one per 8 m (decided over every stop
+  around the tile, written by the tile that owns the sign). A stop without
+  a mapped platform gets no sign: nothing is invented.
 
 Everything is decided on the tracks and masts within 30 m around the tile,
 so a support on a seam is the same in both tiles; a span or arm is written
@@ -46,6 +48,7 @@ from PIL import Image
 from .common import OSM_ATTRIBUTION, Tile, column, feature, owns, write_geojson
 from .osm import has_extract, read_osm, tag
 from .rail import merge_lines
+from .skyview import overlaps, site_sources
 
 MARGIN_M = 30.0  # tracks and masts around the tile the supports are decided on
 SAMPLE_M = 2.0
@@ -390,17 +393,26 @@ def nearest_on(p: shapely.Point, platform: shapely.Geometry) -> shapely.Point:
     return shapely.get_point(shapely.shortest_line(p, platform), 1)
 
 
-def taken(tile: Tile) -> list[shapely.Point]:
-    """Where the tile's committed furniture already stands a shelter or a
-    stop sign."""
-    path = tile.data / "dlm" / f"furniture_{tile.id}.geojson"
-    if not path.exists():
-        return []
-    return [
-        shapely.Point(f["geometry"]["coordinates"])
-        for f in json.loads(path.read_text())["features"]
-        if f["properties"].get("k") in ("shelter", "stop")
-    ]
+def taken(tile: Tile, margin: float = PLATFORM_M + SIGN_DEDUP_M) -> list[shapely.Point]:
+    """Where the committed furniture already stands a shelter or a stop
+    sign: the tile's own and, within `margin` of it, its neighbours' (each
+    tile's furniture file holds only what it owns, so a shelter across the
+    seam is in the neighbour's)."""
+    xmin, ymin, xmax, ymax = tile.bounds
+    near = (xmin - margin, ymin - margin, xmax + margin, ymax + margin)
+    ids = [tile.id] + [tid for tid, b in site_sources(tile) if tid != tile.id and overlaps(b, near)]
+    out = []
+    for tid in ids:
+        path = tile.data / "dlm" / f"furniture_{tid}.geojson"
+        if not path.exists():
+            continue
+        for f in json.loads(path.read_text())["features"]:
+            if f["properties"].get("k") not in ("shelter", "stop"):
+                continue
+            x, y = f["geometry"]["coordinates"][:2]
+            if near[0] <= x <= near[2] and near[1] <= y <= near[3]:
+                out.append(shapely.Point(x, y))
+    return out
 
 
 def stop_signs(tile: Tile, lines: list[tuple[shapely.LineString, dict]]) -> tuple[list[dict], int]:
@@ -423,9 +435,11 @@ def stop_signs(tile: Tile, lines: list[tuple[shapely.LineString, dict]]) -> tupl
                 bare += 1
             continue
         at = nearest_on(g, plats[hit[0]])
-        if not owns(tile.bounds, at.x, at.y):
-            continue
         if any(at.distance(p) < SIGN_DEDUP_M for p in busy):
+            continue
+        # every tile decides the signs around it alike, and writes its own
+        busy.append(at)
+        if not owns(tile.bounds, at.x, at.y):
             continue
         track = track_tree.query_nearest(at)
         props: dict = {"k": "stop"}
@@ -436,7 +450,6 @@ def stop_signs(tile: Tile, lines: list[tuple[shapely.LineString, dict]]) -> tupl
 
         if name:
             props["name"] = name
-        busy.append(at)
         out.append(
             feature({"type": "Point", "coordinates": [round(at.x, 2), round(at.y, 2)]}, props)
         )

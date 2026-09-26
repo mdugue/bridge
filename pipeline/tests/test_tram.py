@@ -1,5 +1,5 @@
 import numpy as np
-from synthetic import X0, Y0, local, osm_tile, read, tags, way
+from synthetic import X0, Y0, local, neighbour, osm_tile, read, tags, way
 
 TRAM = {"railway": "tram", "gauge": "1450", "electrified": "contact_line"}
 MAST = tags(power="catenary_mast")
@@ -163,3 +163,34 @@ def test_a_tram_stop_signs_its_platform_unless_a_shelter_stands_there(tmp_path, 
     [sign] = _by_kind(read(tile, "tram"), "stop")
     assert local(sign["geometry"]["coordinates"]) == (40.0, 96.0)
     assert sign["properties"] == {"k": "stop", "a": 0, "name": "Albertplatz"}
+
+
+def test_a_shelter_across_the_seam_takes_the_stops_sign(tmp_path, monkeypatch):
+    import json
+
+    from bake import tram
+
+    stop = tags(railway="tram_stop", name="Nahtstelle")
+    nodes = {
+        1: (0, 100, ""),
+        2: (260, 100, ""),
+        3: (197, 100, stop),  # the sign would stand at (197, 96), on this tile
+        4: (185, 96, ""),
+        5: (215, 96, ""),
+    }
+    ways = [
+        way(1, [1, 3, 2], TRAM),
+        way(2, [4, 5], {"public_transport": "platform", "tram": "yes"}),
+    ]
+    tile = osm_tile(tmp_path, monkeypatch, nodes, "".join(ways))
+    east = neighbour(tile, "u")
+    shelter = {
+        "type": "Feature",
+        "properties": {"k": "shelter", "a": 0},
+        "geometry": {"type": "Point", "coordinates": [X0 + 203, Y0 + 95]},
+    }
+    doc = {"type": "FeatureCollection", "features": [shelter]}
+    (east.data / "dlm" / "furniture_u.geojson").write_text(json.dumps(doc))
+    tram.run(tile)
+    # the shelter 6 m away is the neighbour's: it stands for the stop still
+    assert _by_kind(read(tile, "tram"), "stop") == []

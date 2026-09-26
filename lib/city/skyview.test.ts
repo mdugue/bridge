@@ -31,6 +31,7 @@ test("the committed horizon legends match the constants the shader uses", () => 
       continue;
     }
     const legend = JSON.parse(readFileSync(path, "utf8")) as {
+      attribution: string;
       azimuthsDeg: number[];
       bands: {
         degPerUnit: number;
@@ -45,6 +46,8 @@ test("the committed horizon legends match the constants the shader uses", () => 
       Array.from({ length: HORIZON_AZIMUTHS }, (_, k) => k * 22.5)
     );
     expect(legend.px).toBe(HORIZON_PX);
+    // derived from GeoSN's DGM1 and LoD2: the credit travels with the data
+    expect(legend.attribution).toStartWith("Quelle: GeoSN, dl-de/by-2-0");
     const [far, near] = legend.bands;
     expect(far.name).toBe("far");
     expect(far.planes).toEqual([0, HORIZON_LAYERS]);

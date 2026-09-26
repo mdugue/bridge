@@ -150,6 +150,82 @@ def test_no_extract_leaves_the_files_alone(tmp_path, monkeypatch):
     assert not (tmp_path / "data" / "dlm" / "markings_t.json").exists()
 
 
+def _seam_tiles(tmp_path, monkeypatch):
+    """Two 200 m tiles side by side (t, u east of it), a 10 m north-south
+    carriageway at x = 194–204 across their seam, its way along x = 199 and
+    a zebra node on it at y = 100 — on t, 1 m short of the seam."""
+    import rasterio
+    from pyproj import Transformer
+
+    x0, y0 = 411000.0, 5656000.0
+    tiles = {}
+    for tid, dx in (("t", 0.0), ("u", 200.0)):
+        tile = Tile(
+            tid, (x0 + dx, y0, x0 + dx + 200, y0 + 200), 25833, tmp_path / "raw", tmp_path / "data"
+        )
+        tile.dgm.parent.mkdir(parents=True)
+        with rasterio.open(
+            tile.dgm,
+            "w",
+            driver="GTiff",
+            width=2,
+            height=2,
+            count=1,
+            dtype="float32",
+            crs="EPSG:25833",
+            transform=tile.transform(2),
+        ) as dst:
+            dst.write(np.full((2, 2), 100, np.float32), 1)
+        cls = np.zeros((400, 400), np.uint8)
+        # x 194–204 at 0.5 m texels: t's columns 388–399, u's 0–7
+        if tid == "t":
+            cls[:, 388:] = 7
+        else:
+            cls[:, :8] = 7
+        tile.out("dlm", f"landcover_{tid}.png")
+        Image.fromarray(cls, mode="L").save(tile.data / "dlm" / f"landcover_{tid}.png")
+        tiles[tid] = tile
+    back = Transformer.from_crs(25833, 4326, always_xy=True)
+    pts = [(199, -100), (199, 300), (199, 100)]
+    tags = {3: '<tag k="highway" v="crossing"/><tag k="crossing" v="marked"/>'}
+    nodes = "".join(
+        f'<node id="{i + 1}" lat="{lat:.9f}" lon="{lon:.9f}" version="1">'
+        f"{tags.get(i + 1, '')}</node>"
+        for i, (px, py) in enumerate(pts)
+        for lon, lat in [back.transform(x0 + px, y0 + py)]
+    )
+    way = (
+        '<way id="10" version="1"><nd ref="1"/><nd ref="3"/><nd ref="2"/>'
+        '<tag k="highway" v="residential"/></way>'
+    )
+    osm = tmp_path / "raw" / "osm" / "t.osm"
+    osm.parent.mkdir(parents=True)
+    osm.write_text(f'<?xml version="1.0"?><osm version="0.6">{nodes}{way}</osm>')
+    monkeypatch.setattr(Tile, "osm_extract", lambda self: osm)
+    return tiles["t"], tiles["u"]
+
+
+def test_a_crossing_on_the_seam_is_measured_whole_and_painted_on_both_tiles(tmp_path, monkeypatch):
+    west, east = _seam_tiles(tmp_path, monkeypatch)
+    run(west, px=200)
+    run(east, px=200)
+    found = {}
+    for tile in (west, east):
+        doc = json.loads((tile.data / "dlm" / f"markings_{tile.id}.json").read_text())
+        xmin, _, _, ymax = tile.bounds
+        found[tile.id] = [[xmin + r[0], ymax + r[1], *r[2:]] for r in doc["markings"]]
+    # the owner measures the whole carriageway (its half stopped at the seam)
+    ((cx, cy, _, hl, hw, kind),) = found["t"]
+    assert kind == ZEBRA and hw == 2.0
+    assert cx - west.bounds[0] == pytest.approx(199.0, abs=0.3)
+    assert hl == pytest.approx(5.0, abs=0.3)
+    # the neighbour paints the same row: its half east of the seam
+    assert found["u"] == found["t"]
+    grey = np.asarray(Image.open(east.data / "dlm" / "markings_u.png")).reshape(200, 200, 4)
+    index = grey[..., 0].astype(int) + 256 * grey[..., 3].astype(int)
+    assert (index[100, 0:4] == 1).all()  # x 200–204 at y 100
+
+
 # --- overlapping rows ------------------------------------------------------------
 
 KM2 = Tile("k", (0.0, 0.0, 2000.0, 2000.0), 25833, Path("."), Path("."))

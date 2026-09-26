@@ -26,6 +26,12 @@ indexes `KINDS` (keep them in step with lib/city/markings.ts).
   `traffic_signals:direction` (or `direction`) is forward or backward, on
   the right half of the approach (right-hand traffic; the whole carriageway
   on a oneway), 0.5 m wide.
+- Across a seam: the rows are measured on the class raster of this tile and
+  its neighbours (`SEAM_MARGIN_M` around it), so a carriageway is not cut
+  at the tile edge, and a neighbour's crossing or stop line whose painted
+  rectangle (grown by the raster's fringe) reaches into the tile joins
+  this tile's rows too — paint only: its owner (the tile holding its node)
+  counts it. Both tiles measure it alike, so its halves meet at the seam.
 - Overlapping rows are merged: OSM often maps one crossing twice (a node on
   each way, a zebra and a signal node side by side), and the raster holds
   one row per texel, so the second would clip the first's paint. Rows of
@@ -77,6 +83,7 @@ from scipy import ndimage as ndi
 
 from .common import OSM_ATTRIBUTION, Tile, column, owns
 from .osm import has_extract, read_osm, tag
+from .skyview import overlaps, site_sources
 
 # id → key; keep in step with `MARKING_KINDS` in lib/city/markings.ts.
 KINDS = {0: "none", 1: "zebra", 2: "furt", 3: "stop"}
@@ -116,6 +123,10 @@ PARALLEL_DEG = 10.0
 CROSSINGS = (ZEBRA, FURT)
 EDGE_SCALE = 20.0  # bytes per metre, as edges.py
 SIDE_REACH_M = 20.0  # texels farther from every way get no side
+# How far past the tile the rows are measured and a neighbour's node is
+# read: a row's centre lies within SNAP_M + MAX_CARRIAGEWAY_M / 2 + the
+# farthest sample (10 m) of its node, its paint half a carriageway past that.
+SEAM_MARGIN_M = 64.0
 
 
 def _base(highway: str | None) -> str | None:
@@ -483,6 +494,38 @@ def road_mask(tile: Tile, px: int) -> ClassRaster | None:
     return ClassRaster(cls, tile.bounds)
 
 
+def wide_mask(tile: Tile, own: ClassRaster, margin: float = SEAM_MARGIN_M) -> ClassRaster:
+    """The class raster over the tile and `margin` around it: this tile's,
+    and each committed neighbour's (skyview.py's `site_sources`) where it
+    has one at the same resolution; 0 (no road) where none reaches."""
+    m = int(math.ceil(margin / own.res))
+    n = own.n + 2 * m
+    xmin, ymin = own.xmin - m * own.res, own.ymin - m * own.res
+    xmax, ymax = xmin + n * own.res, ymin + n * own.res
+    wide = np.zeros((n, n), np.uint8)
+    wide[m : m + own.n, m : m + own.n] = own.cls
+    for tid, b in site_sources(tile):
+        png = tile.data / "dlm" / f"landcover_{tid}.png"
+        if tid == tile.id or not overlaps(b, (xmin, ymin, xmax, ymax)) or not png.exists():
+            continue
+        cls = np.asarray(Image.open(png).convert("L"))
+        if abs((b[2] - b[0]) / cls.shape[1] - own.res) > 1e-9:
+            continue
+        c0 = int(round((b[0] - xmin) / own.res))
+        r0 = int(round((ymax - b[3]) / own.res))
+        rs, cs = max(r0, 0), max(c0, 0)
+        re_, ce = min(r0 + cls.shape[0], n), min(c0 + cls.shape[1], n)
+        if rs < re_ and cs < ce:
+            wide[rs:re_, cs:ce] = cls[rs - r0 : re_ - r0, cs - c0 : ce - c0]
+    return ClassRaster(wide, (xmin, ymin, xmax, ymax))
+
+
+def reaches_tile(tile: Tile, row, grow: float) -> bool:
+    """Whether a row's rectangle, grown by the raster's fringe, reaches into
+    the tile."""
+    return rotated_rect(row).buffer(grow).intersects(shapely.box(*tile.bounds))
+
+
 def _frame(row, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Points in the row's frame: across (s) and along (t) the road."""
     cx, cy, angle, _, _, _ = row
@@ -604,10 +647,19 @@ def table_json(table: dict, rows: list[list]) -> str:
 
 
 def build(
-    tile: Tile, raster: ClassRaster, sizes: tuple[int, ...], points, pt_fields, lines, ln_fields
+    tile: Tile,
+    raster: ClassRaster,
+    sizes: tuple[int, ...],
+    points,
+    pt_fields,
+    lines,
+    ln_fields,
+    wide: ClassRaster | None = None,
 ):
-    """The rows, the lane fields (bits, offset) at each raster size, and the
-    counts."""
+    """The rows (the tile's own, then a neighbour's that reach into it), the
+    lane fields (bits, offset) at each raster size, and the counts (own rows
+    only). Rows are measured on `wide` (the tile and its neighbours) when
+    given."""
     highways = column(ln_fields, "highway", lines)
     line_tags = column(ln_fields, "other_tags", lines)
     motor = [i for i, h in enumerate(highways) if _base(h) in MOTOR]
@@ -615,7 +667,10 @@ def build(
     tags = [line_tags[i] for i in motor]
     tree = shapely.STRtree(ways) if ways else None
     oneway = [is_oneway(t) for t in tags]
-    rows, counts = [], {"crossings": 0, "crossings_unplaced": 0, "stops": 0, "stops_unplaced": 0}
+    rows, seam = [], []
+    counts = {"crossings": 0, "crossings_unplaced": 0, "stops": 0, "stops_unplaced": 0}
+    measure = wide if wide is not None else raster
+    grow = reach(tile, max(sizes))[0]
     if tree is not None:
         for p, hw, t in zip(
             points,
@@ -623,21 +678,27 @@ def build(
             column(pt_fields, "other_tags", points),
             strict=True,
         ):
-            if not owns(tile.bounds, p.x, p.y):
+            own = owns(tile.bounds, p.x, p.y)
+            if not own and (wide is None or not _near(tile, p, SEAM_MARGIN_M)):
                 continue
             if hw == "crossing" and (kind := crossing_kind(t)):
-                row = crossing_row(raster, ways, tree, p, kind)
+                row = crossing_row(measure, ways, tree, p, kind)
                 key = "crossings"
             elif hw == "traffic_signals" and (direction := signal_direction(t)):
-                row = stop_row(raster, ways, tree, oneway, p, direction)
+                row = stop_row(measure, ways, tree, oneway, p, direction)
                 key = "stops"
             else:
                 continue
-            if row is None:
+            if not own:
+                if row is not None and reaches_tile(tile, row, grow):
+                    seam.append(row)
+            elif row is None:
                 counts[f"{key}_unplaced"] += 1
             else:
                 counts[key] += 1
                 rows.append(row)
+    counts["seam"] = len(seam)
+    rows += seam
     motor_hw = [highways[i] for i in motor]
     centre = [has_centre_line(h, t) for h, t in zip(motor_hw, tags, strict=True)]
     cycle = [cycle_sides(t) for t in tags]
@@ -648,6 +709,11 @@ def build(
         road = (raster.cls == ROAD).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
         fields[px] = lane_fields(tile, px, road, ways, motor_hw, centre, cycle)
     return rows, fields, counts
+
+
+def _near(tile: Tile, p: shapely.Point, margin: float) -> bool:
+    xmin, ymin, xmax, ymax = tile.bounds
+    return xmin - margin <= p.x < xmax + margin and ymin - margin <= p.y < ymax + margin
 
 
 def write_raster(tile: Tile, name: str, rows, index, bits, offset) -> None:
@@ -670,7 +736,8 @@ def run(tile: Tile, px: int = 2048) -> None:
     )
     lines, lf = read_osm(tile, "lines", "highway IS NOT NULL", ["highway", "other_tags"], 0.003)
     low = px // 2
-    rows, fields, counts = build(tile, raster, (px, low), points, pf, lines, lf)
+    wide = wide_mask(tile, raster)
+    rows, fields, counts = build(tile, raster, (px, low), points, pf, lines, lf, wide)
     placed = len(rows)
     rows = merge_rows(rows)
     report = []

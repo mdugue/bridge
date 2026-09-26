@@ -55,6 +55,33 @@ def osm_tile(
     return tile
 
 
+def neighbour(tile: Tile, tile_id: str, dx: float = SIZE, dy: float = 0.0) -> Tile:
+    """A second tile beside `tile` (sharing its raw and data folders), with a
+    flat DGM so the site's tile list (skyview.site_sources) finds it."""
+    xmin, ymin, _, _ = tile.bounds
+    other = Tile(
+        tile_id,
+        (xmin + dx, ymin + dy, xmin + dx + SIZE, ymin + dy + SIZE),
+        25833,
+        tile.raw,
+        tile.data,
+    )
+    other.dgm.parent.mkdir(parents=True)
+    with rasterio.open(
+        other.dgm,
+        "w",
+        driver="GTiff",
+        width=2,
+        height=2,
+        count=1,
+        dtype="float32",
+        crs="EPSG:25833",
+        transform=other.transform(2),
+    ) as dst:
+        dst.write(np.full((2, 2), 100.0, dtype="float32"), 1)
+    return other
+
+
 def way(way_id: int, refs: list[int], tags: dict[str, str]) -> str:
     nds = "".join(f'<nd ref="{r}"/>' for r in refs)
     kv = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in tags.items())
