@@ -12,7 +12,7 @@ import { Color, Fog, MeshStandardMaterial } from "three";
  *
  * It is a render-time swap (`scene.overrideMaterial`), not a branch in any
  * layer's material: nothing a tile builds knows about it, and leaving the
- * style restores the scene exactly (ADR 0031). What the paper material
+ * style restores the scene exactly (ADR 0032). What the paper material
  * cannot stand in for is hidden for the frame — glows and sprites, and the
  * see-through sheets that write no depth (mist, lamp halos, nets): as
  * opaque paper they would be walls. The sky dome's inside is culled by the

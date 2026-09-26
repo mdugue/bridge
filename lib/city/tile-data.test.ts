@@ -85,6 +85,8 @@ test("every tile has every artifact the viewer reads and every bake input", () =
       terraceSourceFile(tile),
       cityMeshSourceFiles(tile).city,
       cityMeshSourceFiles(tile).roofColor,
+      cityMeshSourceFiles(tile).osmBuild,
+      cityMeshSourceFiles(tile).smallBuild,
       dgmSourceFiles(tile).tif,
       dgmSourceFiles(tile).tfw,
     ];

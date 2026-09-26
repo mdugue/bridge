@@ -11,6 +11,7 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -54,6 +55,7 @@ import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import type { ViewpointGeometry } from "@/lib/city/site";
 import { SceneSidebar } from "./scene-sidebar";
+import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import type { SunState } from "./sun-rig";
@@ -493,6 +495,16 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     setSnapshotMsg("Snapshot angewendet");
   };
 
+  // The hidden soundscape (plan 035): off until L or the Erweitert switch.
+  const sceneDate = useMemo(() => composeDate(day, minutes), [day, minutes]);
+  const sound = useSoundscape({
+    date: sceneDate,
+    handleRef,
+    nightFactor: sun?.nightFactor ?? 0,
+    ready: status.phase === "running" && !veilUp,
+    subscribePose,
+  });
+
   const stages: LoadStageState[] = loadStageStates(
     progress.fractions,
     progress.skipped
@@ -545,7 +557,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             {streamError && (
               <output
                 aria-live="polite"
-                className="pointer-events-none absolute top-15 left-1/2 -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
+                className="pointer-events-none absolute top-15 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
               >
                 Eine Schicht konnte nicht geladen werden: {streamError}
               </output>
@@ -553,6 +565,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
 
             <LocateMessage message={hud.message} />
 
+            {sound.on && <SoundGlyph onClick={sound.toggle} />}
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
@@ -600,6 +613,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           setSnapshotText={setSnapshotText}
           snapshotMsg={snapshotMsg}
           snapshotText={snapshotText}
+          sound={sound}
           stats={stats}
           subscribePose={subscribePose}
           sun={sun}

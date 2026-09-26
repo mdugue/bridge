@@ -84,7 +84,7 @@ chip. Every tile change re-renders the shadow map. The layers:
 - `post-stack.ts` — pmndrs `postprocessing`: SSAO, DoF, the picture style,
   SMAA, depth grading, paper grain, vignette. The picture styles (Comic, Film
   noir, Sin City; `lib/city/render-style.ts`) are one pass,
-  `stylize-effect.ts` (ADR 0031): ink from the second difference of `1/z`
+  `stylize-effect.ts` (ADR 0032): ink from the second difference of `1/z`
   (zero on planes; relative to `w` = silhouette, relative to slope = fold),
   tone bands / monochrome curves on the colour. Off (mode 0) in the default.
   Read depth only at integer texel radii around a texel centre. Papier
@@ -96,6 +96,28 @@ chip. Every tile change re-renders the shadow map. The layers:
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
   glow), hash-dithered transparency. The old ghost/standard styles are gone.
+- The map's own marks: the ferry wakes of `riverside-layer.ts` (landing
+  stages, groynes, ferries), faded in with height by `map-overlay.ts`. No
+  text anywhere in the scene or HUD (plan 032's street names were removed;
+  🗃️ in the ledger).
+- More dressing: `tram-layer.ts` (tracks in their bed, the contact wire
+  sagging between spans and arms, stop signs; `lib/city/tram.ts`),
+  `fence-layer.ts` (the fences' material; baked into the fine terrain),
+  `furniture-layer.ts` (benches … plan 030's advertising columns, signals,
+  hydrants, clocks, drinking fountains, bus-stop signs), `crown-season.ts`
+  (per-day crown colour and bare stipple, `lib/city/tree-season.ts`).
+- Terrain pass chunks: `road-markings.ts` (`lib/city/markings.ts`),
+  `cultivated-layer.ts` (colony gardens, vine rows; `lib/city/cultivated.ts`),
+  `sky-light.ts` (sky view + far horizon; `lib/city/skyview.ts`, the raster
+  shared with the buildings through `shared-rasters.ts`).
+- Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
+  bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
+  the canopy points they veto at build time).
+- Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
+  AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
+  `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
+  `lib/city/soundscape.ts` (the mix) and `lib/city/sound-entry.ts` (the
+  boot-side half).
 - `minimap.tsx`, `city-walk.tsx` (HUD), `poc-debug.ts` (`window.__poc`).
 
 Constants live in the layer files and are the source of truth; values quoted
@@ -165,13 +187,40 @@ map size, same 5-tap PCF); only the caster set inside the frustum grows. This is
 the cheap 90% of CSM: texels coarsen exactly where a far cascade would coarsen
 them anyway.
 
+### The far field: baked horizon + sky view (plan 033)
+
+What the frustum cannot reach is baked: `pipeline/bake/skyview.py` writes,
+from the committed DGM1 + LoD2 only, a **sky-view factor** (≈2 m) and a
+**horizon** (≈8 m, 16 azimuths, two bands: occluders 80–1 500 m and
+8–80 m away; eight layers of one array texture). The terrain folds it into
+three's directional-light loop (`sky-light.ts` `lightsWithFarShadow`
+rewrites `lights_fragment_begin`: `min(getShadow(…), hzLit)`, and `hzLit`
+alone where the light casts no shadow) — `min`, never a product, so an
+occluder both see never darkens twice. **The near band only counts outside
+the shadow frustum**: the sun rig keeps the frustum's ground centre and
+half-size in `shadowReach` (the terrain's `uShadowReach`, by reference);
+the near band fades in over the frustum's last 20 % and beyond it the
+horizon is max(near, far) — without it a street past the frustum lost the
+shadow of the block beside it. Change the frustum fit and this follows by
+itself; never feed the near band inside the frustum (its 8 m / 22.5° smear
+would fight the map's crisp edges). The sky view scales only
+`reflectedLight.indirectDiffuse` in `aomap_fragment` (after the lights), on
+the terrain and the clay facades (sampled 2.5 m outside the wall, doubled,
+faded out toward the eaves); cells under a roof carry the nearest open
+value in both rasters (no dark bleed through LINEAR/mipmaps). Rows
+*Himmelslicht* and *Ferne Schatten*; 0 = the old picture. Unjudged on a GPU
+as of 2026-09-25 — watch for SVF + N8AO reading as dirt in courtyards
+(lower N8AO there first) and the hand-over at the frustum's edge.
+[ADR 0031](../../../docs/adr/0031-baked-horizon-map-for-far-shadows.md).
+
 Dead ends (don't repeat): large `normalBias` (peter-panning), VSM at any blur
 (rings/grid on lit faces), a bigger frustum *at eye level* (coarser texels →
 fraying — the fit is careful to keep the base radius while walking), 4096 map
-(cost without visible gain once radius softens). **Open limit:** very long
-low-sun shadows still clip beyond the frustum, and the far field at high
-altitude is unshadowed — only Cascaded Shadow Maps fix that properly (three has
-CSM in examples; sizeable integration, custom-material patching).
+(cost without visible gain once radius softens). **Open limit:** past the frustum
+the ground's shadows are the horizon's (an angle at 8 m and 22.5°, no shape,
+not on facades or trees) — only Cascaded Shadow Maps give the middle distance
+its shapes (three has CSM in examples; sizeable integration, custom-material
+patching).
 
 ## Surfaces (the land-cover splat)
 
@@ -217,6 +266,18 @@ the mapped outline. Lines use `spLine`, an exact box filter over the pixel
 footprint; keep new lines on it (no `smoothstep` lines — they shimmer).
 Goals, posts and nets are dressing (`sport-fixtures.ts`), one merged mesh
 per tile, owned by the tile holding the ground's centre.
+
+**Road markings and allotment beds** (plans 026, 028) are two more
+chunks in the same pass, fine level only. `road-markings.ts` reads a
+table of rotated rectangles (crossings, stop lines; axis across the road)
+and an RGBA raster (`markings.py`: 16-bit row in R + 256·A, per-side
+cycle-lane bit and centre-line bit in G, the signed offset to the
+carriageway's middle in B — the side is resolved in the bake because the
+paving raster's bearing is modulo 180°). Every stripe is box-filtered
+exactly (`rmStripes`), and along-street periods divide 165 m.
+`cultivated-layer.ts` paints faint beds on the colony raster
+(`cultivated.py`) in jittered-Voronoi plots — no colony in the fifteen tiles
+maps its parcels, so keep it faint.
 
 ## Terrain seams
 
@@ -266,6 +327,16 @@ not sky.
   research). Measured lesson: the LSC **multi-echo ratio is a tall-tree cue,
   not a shrub cue** (hedges 26 % vs fences 56 % at ≥ 0.5). Draw-call model:
   `scripts/eval/kataster-cost.ts`. Numbers in `docs/transformations.md`.
+- **Species and season (plan 025):** the tree data carries the genus (`gn`,
+  an index into the file's `genera` = `lib/city/tree-season.ts`
+  TREE_GENERA) and the trunk diameter; OSM `natural=tree` fills in where the
+  cadastre has no tree within 3 m. `crown-season.ts` turns the scene date
+  into per-instance colour and `aBare` (1 − leaf) **on a change of calendar
+  day only** (throttled, never per frame); a chunk with a bare crown wears
+  the seasonal crown material (a hashed alpha test in crown space, ~1.25 px
+  cells — fixed cells shattered big crowns into shards) plus the matching
+  `customDepthMaterial`, so the winter shadow thins. Cost:
+  `scripts/eval/season-cost.ts`.
 
 ### Sandbox crown — what is left to port
 
@@ -364,12 +435,27 @@ CRS, land cover first:
 ```bash
 bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
 bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step: landcover|canopy|trees|ndvi|roof-colour|lamps|walls|stairs|rail|surface|lowveg
+bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
+                                       #   landcover islands canopy trees ndvi roof-colour osm-buildings
+                                       #   rail lamps monuments furniture walls stairs surface edges
+                                       #   markings sport tram riverside names skyview soundmarks
+                                       #   lowveg cultivated small-buildings
 bun run test:pipeline                  # pytest + ruff
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
-runtime falls back); rail decks fall back to the DGM ramp. All OSM layers come
+runtime falls back); rail decks fall back to the DGM ramp.
+
+The later modules, one step each: `osm_buildings.py` (shops and heritage
+per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
+`riverside.py`, `skyview.py` (DGM + LoD2 only),
+`soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
+a step whose result must agree on both sides of a tile edge reads the
+neighbours through `skyview.site_sources` (the committed DGMs): markings
+measure on the neighbours' class rasters and paint a neighbour's crossing
+that reaches in, cultivated
+takes a vineyard's slope from every DGM it touches, tram and small-buildings
+read the neighbours' furniture / scan — so bake those steps on every tile. All OSM layers come
 from the Geofabrik extract — no Overpass.
 
 **Stage 2, the build step** (`bun dev` / `bun run build` → `prepare-data.ts`):

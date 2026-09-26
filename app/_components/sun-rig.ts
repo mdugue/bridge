@@ -45,6 +45,10 @@ export interface SunRig {
   shadowCamera: Camera;
   /** GPU bytes of the shadow map (RGBA8 depth-packed, no mipmaps). */
   shadowMapBytes: number;
+  /** The shadow frustum on the ground, kept current: its centre in the data
+   *  frame (x east, y north: world x, −z) and its half-size (z, m). The
+   *  terrain reads it by reference (the horizon's near band, sky-light.ts). */
+  shadowReach: Vector3;
   /** True when the next render will redraw the shadow map. */
   shadowPending: () => boolean;
   /** Re-aims sun, sky dome, fog and fill light for the given instant. */
@@ -222,6 +226,7 @@ export function createSunRig(
     sunDirectionOut?.copy(dir);
   }
   const focus = center.clone();
+  const shadowReach = new Vector3(center.x, -center.z, radius);
   const lastCentre = new Vector3(Number.NaN, Number.NaN, Number.NaN);
   const reposition = () => {
     // Snap the focus to the texel grid to keep shadow edges stable.
@@ -229,6 +234,7 @@ export function createSunRig(
     const fy = Math.round(focus.y / texelSize) * texelSize;
     const fz = Math.round(focus.z / texelSize) * texelSize;
     sun.target.position.set(fx, fy, fz);
+    shadowReach.set(fx, -fz, radius);
     sun.position.set(
       fx + dir.x * shadowDistance,
       fy + dir.y * shadowDistance,
@@ -333,6 +339,7 @@ export function createSunRig(
     // flag stays raised (and is consumed at sunrise), so it is not "pending".
     shadowPending: () => sun.visible && sun.shadow.needsUpdate,
     shadowMapBytes: shadowMapSize * shadowMapSize * 4,
+    shadowReach,
     shadowCamera: sun.shadow.camera,
     dispose: () => sun.dispose(),
   };

@@ -27,6 +27,11 @@ import {
   type WallRibbon,
   wallGeometry,
 } from "../lib/city/walls";
+import {
+  type FenceLine,
+  fenceGeometry,
+  type GatePoint,
+} from "../lib/city/fences";
 import { kerbGeometry } from "../lib/city/kerbs";
 import type { Point2 } from "../lib/city/polyline";
 import {
@@ -377,6 +382,31 @@ export function wallMesh(
 }
 
 /**
+ * The tile's fences, railings and gates as one mesh (lib/city/fences.ts),
+ * standing on `heightAt` — the final fine ground of every tile, like the
+ * walls. `wallLeaves` are the gates cut into freestanding walls. Null when
+ * nothing stands.
+ */
+export function fenceMesh(
+  fences: FenceLine[],
+  gates: GatePoint[],
+  heightAt: (x: number, y: number) => number | null,
+  offset: { cx: number; cy: number },
+  wallLeaves: Parameters<typeof fenceGeometry>[4] = []
+): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
+  const data = fenceGeometry(fences, gates, heightAt, offset, wallLeaves);
+  return data
+    ? {
+        name: "fences",
+        positions: worldToData(data.positions),
+        normals: worldToData(data.normals),
+        uvs: new Float32Array(data.uvs),
+        indices: new Uint32Array(data.indices),
+      }
+    : null;
+}
+
+/**
  * The tile's kerb stones as one mesh, standing on `heightAt` — the final
  * shaped ground (lib/city/kerbs.ts).
  */
@@ -417,10 +447,12 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       baseZ: { type: "SCALAR", componentType: "FLOAT32", values: t.baseZ },
       building: { type: "SCALAR", componentType: "UINT8", values: t.building },
       eaveH: { type: "SCALAR", componentType: "FLOAT32", values: t.eaveH },
+      flags: { type: "SCALAR", componentType: "UINT8", values: t.flags },
       glow: { type: "SCALAR", componentType: "UINT8", values: t.glow },
       roof: { type: "VEC3", componentType: "FLOAT32", values: t.roof },
       root: { type: "SCALAR", componentType: "UINT32", values: t.root },
       rough: { type: "SCALAR", componentType: "FLOAT32", values: t.rough },
+      source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
       tint: { type: "VEC3", componentType: "FLOAT32", values: t.tint },
     },

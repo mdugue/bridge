@@ -40,7 +40,7 @@ function viewpointIndexOf(code: string): number | null {
 }
 
 /** True for a key event aimed at a text field — the HUD owns those keys. */
-function isTextEntry(target: EventTarget | null): boolean {
+export function isTextEntry(target: EventTarget | null): boolean {
   const el = target as {
     isContentEditable?: boolean;
     matches?: (selector: string) => boolean;
