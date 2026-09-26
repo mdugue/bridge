@@ -321,10 +321,10 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
   `colorSpaceConversion: "none"` — on iPhones the ground came out speckled
   with neighbouring classes).
 - `prepare-data.ts` caches by content in `.cache/prepare-data` (cold run
-  ≈ 3 min for fifteen tiles, warm ≈ 1 s): the key covers the inputs'
+  ≈ 2 min for fifteen tiles, warm ≈ 1 s; CI restores it between runs): the key covers the inputs'
   contents and every module the bake imports (`scripts/bake-sources.ts`
-  walks the import graph — there is no list to keep in step); the glTF quantisation, meshopt and gzip settings live in
-  `scripts/tile-glb.ts`.
+  walks the import graph — there is no list to keep in step); the glTF quantisation and meshopt settings live in
+  `scripts/tile-glb.ts`, the gzip (Bun's libdeflate) in `prepare-data.ts`.
 
 ## Rendering gotchas (hard-won — don't relearn these)
 
@@ -447,7 +447,11 @@ is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
 and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
 on rendered frames — the control walk uses `waitForFrames` — walks straight into
 the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
-viewer pages halve each other's frame rate.
+viewer pages halve each other's frame rate. CI splits the suite over **two
+runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`): the desktop
+viewer's shared boot and its tests, tagged `@desktop`, on one; the shell, the
+phone, the whole site and `/wissen` on the other. The required status check
+"E2E (Playwright)" is the small job that reports both.
 
 **The viewer specs therefore run the `lite` scene profile** — `?scene=lite`, see
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams
@@ -464,6 +468,15 @@ ones a test asserts on. Two rules when you add a spec:
 - Share a booted page across assertions (`test.describe.configure({ mode:
   "serial" })` + a `beforeAll` context) rather than booting per test — the boot
   is the single largest fixed cost left.
+- Wrap steps that only touch the HUD (sidebar tabs, buttons, drawers) in
+  `withFramesHeld` (`e2e/city-walk.spec.ts`): it sets `__poc.hold`, and the
+  render loop skips its frames while it is set. Every Playwright action waits
+  on animation frames (a click on two), and each scene frame holds the main
+  thread for half a second or more, so a single click used to cost seconds —
+  up to ten on a runner. Never wait on frames inside it.
+- A spec that boots its own page and needs no sidebar takes a small viewport:
+  with several tiles in view a SwiftShader frame is bound by its pixels (the
+  whole-site spec reaches `ready` in 54 s at 400×300, 156 s at 800×600).
 
 Lite is for headless CI, **never for looking at pixels**: for anything visual use
 the `--headed` snapshot harness below, at the full profile, on a real GPU.

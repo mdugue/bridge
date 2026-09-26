@@ -27,6 +27,15 @@ const LITE = "/?scene=lite";
  */
 const DESKTOP_VIEWPORT = { width: 800, height: 600 };
 
+/**
+ * The whole-site spec's viewport. It needs no sidebar, and with several tiles
+ * in view a SwiftShader frame is bound by its pixels: at 400×300 the site
+ * reaches `ready` in about a third of the time it takes at 800×600 (54 s vs
+ * 156 s on four cores), with the same tiles, buildings and trees loaded —
+ * the frustum keeps its aspect, only the pixel count shrinks.
+ */
+const SITE_VIEWPORT = { width: 400, height: 300 };
+
 // Software-rendered WebGL so the smoke test also runs on headless CI boxes
 // without a GPU (ANGLE -> SwiftShader).
 test.use({
@@ -101,6 +110,32 @@ async function waitForFrames(page: Page, count: number): Promise<void> {
     start + count,
     { timeout: slow(60_000) }
   );
+}
+
+/**
+ * Runs steps that only touch the HUD with the render loop held (poc-debug.ts
+ * `hold`). Every Playwright action waits on animation frames — a click on
+ * two, to see the target stand still — and under SwiftShader each scene frame
+ * holds the main thread for half a second or more, so one sidebar click cost
+ * several seconds (up to ten on a shared runner). Held, the same steps run
+ * about three times faster. Nothing inside may wait on scene frames.
+ */
+async function withFramesHeld(
+  target: Page,
+  steps: () => Promise<void>
+): Promise<void> {
+  const hold = (on: boolean) =>
+    target.evaluate((value) => {
+      if (window.__poc) {
+        window.__poc.hold = value;
+      }
+    }, on);
+  await hold(true);
+  try {
+    await steps();
+  } finally {
+    await hold(false);
+  }
 }
 
 /**
@@ -198,8 +233,12 @@ test("city page serves the viewer shell", async ({ page }) => {
  * the mutating ones (demolish, style switching) come after the assertions that
  * read the freshly-loaded state. `serial` makes that ordering a guarantee and
  * stops a broken boot from being reported five times over.
+ *
+ * Tagged `@desktop`: CI runs it on a runner of its own (ci.yml, the e2e
+ * matrix) — it is the longest stretch of the suite, and SwiftShader leaves no
+ * room for a second page on the same cores.
  */
-test.describe("desktop viewer", () => {
+test.describe("desktop viewer", { tag: "@desktop" }, () => {
   test.describe.configure({ mode: "serial" });
 
   let page: Page;
@@ -464,11 +503,13 @@ test.describe("desktop viewer", () => {
       target,
       { timeout: slow(20_000) }
     );
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await page.evaluate(() => {
       const w = window as unknown as { __compass?: number };
       window.clearInterval(w.__compass);
+    });
+    await withFramesHeld(page, async () => {
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
     });
     expectNoErrors(errors);
   });
@@ -478,23 +519,25 @@ test.describe("desktop viewer", () => {
     // the vantages, Szene the sun and the look groups (each collapsed), and
     // Erweitert the tools and counters. A slider is only two taps away, and
     // this is what proves the three panels are actually wired.
-    await openSidebar(page);
-    await expect(page.getByText("Aussichtspunkte")).toBeVisible({
-      timeout: slow(30_000),
-    });
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await expect(page.getByText("Aussichtspunkte")).toBeVisible({
+        timeout: slow(30_000),
+      });
 
-    await page.getByRole("tab", { name: "Szene" }).click();
-    await expect(page.getByText("Sonne & Zeit")).toBeVisible();
-    // Look sliders live one collapsed group down, and stay collapsed until
-    // asked for — that is the point of the restructure.
-    await expect(page.getByText("Boden-Verlauf")).toHaveCount(0);
-    await page.getByRole("button", { name: /^Gebäude/ }).click();
-    await expect(page.getByText("Boden-Verlauf")).toBeVisible({
-      timeout: slow(30_000),
-    });
+      await page.getByRole("tab", { name: "Szene" }).click();
+      await expect(page.getByText("Sonne & Zeit")).toBeVisible();
+      // Look sliders live one collapsed group down, and stay collapsed until
+      // asked for — that is the point of the restructure.
+      await expect(page.getByText("Boden-Verlauf")).toHaveCount(0);
+      await page.getByRole("button", { name: /^Gebäude/ }).click();
+      await expect(page.getByText("Boden-Verlauf")).toBeVisible({
+        timeout: slow(30_000),
+      });
 
-    await page.getByRole("tab", { name: "Erweitert" }).click();
-    await expect(page.getByText("Statistik")).toBeVisible();
+      await page.getByRole("tab", { name: "Erweitert" }).click();
+      await expect(page.getByText("Statistik")).toBeVisible();
+    });
     expectNoErrors(errors);
   });
 
@@ -511,17 +554,19 @@ test.describe("desktop viewer", () => {
     await waitForFrames(page, 3);
     // The switch lives in the Erweitert tab: opened here, not inherited
     // from the test before (this one runs alone with -g soundscape).
-    await openSidebar(page);
-    await page.getByRole("tab", { name: "Erweitert" }).click();
-    await expect(
-      page.getByRole("switch", { name: "Klang (experimentell)" })
-    ).toBeChecked();
-    // A click on the glyph turns it off; the one context is kept.
-    await glyph.click();
-    await expect(glyph).toHaveCount(0);
-    await expect(
-      page.getByRole("switch", { name: "Klang (experimentell)" })
-    ).not.toBeChecked();
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erweitert" }).click();
+      await expect(
+        page.getByRole("switch", { name: "Klang (experimentell)" })
+      ).toBeChecked();
+      // A click on the glyph turns it off; the one context is kept.
+      await glyph.click();
+      await expect(glyph).toHaveCount(0);
+      await expect(
+        page.getByRole("switch", { name: "Klang (experimentell)" })
+      ).not.toBeChecked();
+    });
     expect(await audioContexts(page)).toBe(1);
     expectNoErrors(errors);
   });
@@ -543,20 +588,22 @@ test.describe("desktop viewer", () => {
   test("the saved view can be set, cleared and set again", async () => {
     // It is a removable item, not a one-shot: clearing it is also how you
     // re-assign it, so the whole loop has to work from the UI alone.
-    await openSidebar(page);
-    await page.getByRole("tab", { name: "Erkunden" }).click();
-    const save = page.getByRole("button", { name: "Aktuelle Sicht merken" });
-    await expect(save).toBeVisible({ timeout: slow(15_000) });
-    await save.click();
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      const save = page.getByRole("button", { name: "Aktuelle Sicht merken" });
+      await expect(save).toBeVisible({ timeout: slow(15_000) });
+      await save.click();
 
-    const clear = page.getByRole("button", {
-      name: "Gemerkte Sicht entfernen",
+      const clear = page.getByRole("button", {
+        name: "Gemerkte Sicht entfernen",
+      });
+      await expect(clear).toBeVisible();
+      await clear.click();
+      await expect(save).toBeVisible();
+      await save.click();
+      await expect(clear).toBeVisible();
     });
-    await expect(clear).toBeVisible();
-    await clear.click();
-    await expect(save).toBeVisible();
-    await save.click();
-    await expect(clear).toBeVisible();
     expectNoErrors(errors);
   });
 
@@ -844,57 +891,62 @@ test.describe("mobile", () => {
       timeout: slow(120_000),
     });
 
-    // Touch chrome instead of keyboard hints.
-    await expect(page.getByTestId("joystick")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Szeneneinstellungen" })
-    ).toBeVisible();
-    await expect(page.getByText("WASD")).toHaveCount(0);
+    // Everything up to the drag is the HUD alone: no scene frames needed.
+    await withFramesHeld(page, async () => {
+      // Touch chrome instead of keyboard hints.
+      await expect(page.getByTestId("joystick")).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Szeneneinstellungen" })
+      ).toBeVisible();
+      await expect(page.getByText("WASD")).toHaveCount(0);
 
-    // Demolish/insert live in the sidebar's Werkzeuge section; they used to
-    // float over the scene as well, on the screens with the least room.
-    await expect(page.getByRole("button", { name: "Abreißen" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Einsetzen" })).toHaveCount(
-      0
-    );
+      // Demolish/insert live in the sidebar's Werkzeuge section; they used to
+      // float over the scene as well, on the screens with the least room.
+      await expect(page.getByRole("button", { name: "Abreißen" })).toHaveCount(
+        0
+      );
+      await expect(page.getByRole("button", { name: "Einsetzen" })).toHaveCount(
+        0
+      );
 
-    // The hint bar fits the viewport (it wraps rather than being cut off) and
-    // can be waved away — everything it says is in the sidebar too.
-    const hintBar = page.getByText("umsehen").first();
-    const hintBox = await hintBar.boundingBox();
-    const viewport = page.viewportSize();
-    expect(hintBox && viewport).toBeTruthy();
-    if (hintBox && viewport) {
-      expect(hintBox.x + hintBox.width).toBeLessThanOrEqual(viewport.width);
-    }
-    const dismiss = page.getByRole("button", { name: "Verstanden" });
-    await expect(dismiss).toBeVisible();
-    await dismiss.tap();
-    await expect(dismiss).toHaveCount(0);
+      // The hint bar fits the viewport (it wraps rather than being cut off) and
+      // can be waved away — everything it says is in the sidebar too.
+      const hintBar = page.getByText("umsehen").first();
+      const hintBox = await hintBar.boundingBox();
+      const viewport = page.viewportSize();
+      expect(hintBox && viewport).toBeTruthy();
+      if (hintBox && viewport) {
+        expect(hintBox.x + hintBox.width).toBeLessThanOrEqual(viewport.width);
+      }
+      const dismiss = page.getByRole("button", { name: "Verstanden" });
+      await expect(dismiss).toBeVisible();
+      await dismiss.tap();
+      await expect(dismiss).toHaveCount(0);
 
-    // The start view is aerial, so the altitude stick stands opposite the
-    // joystick; the plane button — the F key's stand-in — lands you on foot
-    // and takes the stick away with fly mode.
-    await expect(page.getByTestId("altitude-stick")).toBeVisible();
-    const flyButton = page.getByRole("button", { name: "Fliegen" });
-    await expect(flyButton).toHaveAttribute("aria-pressed", "true");
-    const toolbar = page.getByRole("toolbar", { name: "Werkzeuge" });
-    const flyingBox = await toolbar.boundingBox();
-    await flyButton.tap();
-    await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
-    // The stick sits above the toolbar, so the toolbar doesn't jump.
-    const walkingBox = await toolbar.boundingBox();
-    expect(walkingBox?.y).toBe(flyingBox?.y);
-    await expect(flyButton).toHaveAttribute("aria-pressed", "false");
-    expect(
-      await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)
-    ).toBe("walk");
+      // The start view is aerial, so the altitude stick stands opposite the
+      // joystick; the plane button — the F key's stand-in — lands you on foot
+      // and takes the stick away with fly mode.
+      await expect(page.getByTestId("altitude-stick")).toBeVisible();
+      const flyButton = page.getByRole("button", { name: "Fliegen" });
+      await expect(flyButton).toHaveAttribute("aria-pressed", "true");
+      const toolbar = page.getByRole("toolbar", { name: "Werkzeuge" });
+      const flyingBox = await toolbar.boundingBox();
+      await flyButton.tap();
+      await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
+      // The stick sits above the toolbar, so the toolbar doesn't jump.
+      const walkingBox = await toolbar.boundingBox();
+      expect(walkingBox?.y).toBe(flyingBox?.y);
+      await expect(flyButton).toHaveAttribute("aria-pressed", "false");
+      expect(
+        await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)
+      ).toBe("walk");
 
-    // The toolbar folds away into one button and back.
-    await page.getByRole("button", { name: "Werkzeuge einklappen" }).tap();
-    await expect(flyButton).toHaveCount(0);
-    await page.getByRole("button", { name: "Werkzeuge zeigen" }).tap();
-    await expect(flyButton).toBeVisible();
+      // The toolbar folds away into one button and back.
+      await page.getByRole("button", { name: "Werkzeuge einklappen" }).tap();
+      await expect(flyButton).toHaveCount(0);
+      await page.getByRole("button", { name: "Werkzeuge zeigen" }).tap();
+      await expect(flyButton).toBeVisible();
+    });
 
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
@@ -949,13 +1001,14 @@ test.describe("mobile", () => {
       { timeout: slow(15_000) }
     );
 
-    // Drawer opens with the scene settings (generous timeout: the main
-    // thread shares time with software-rendered frames).
-    await page.getByRole("button", { name: "Szeneneinstellungen" }).tap();
-    // The Erkunden tab is what a drawer opens on; the tabbed structure
-    // itself is asserted on the desktop page, which is already booted.
-    await expect(page.getByText("Aussichtspunkte")).toBeVisible({
-      timeout: slow(30_000),
+    // Drawer opens with the scene settings.
+    await withFramesHeld(page, async () => {
+      await page.getByRole("button", { name: "Szeneneinstellungen" }).tap();
+      // The Erkunden tab is what a drawer opens on; the tabbed structure
+      // itself is asserted on the desktop page, which is already booted.
+      await expect(page.getByText("Aussichtspunkte")).toBeVisible({
+        timeout: slow(30_000),
+      });
     });
 
     expectNoErrors(errors);
@@ -971,7 +1024,7 @@ test.describe("mobile", () => {
  * leaves `ready` false forever, which is exactly what this waits on.
  */
 test.describe("whole site streamed", () => {
-  // A retry would start the same ten-minute boot again and run the job past
+  // A retry would start the same long boot again and run the job past
   // its budget, which cancels it without a report; a failure here should
   // report instead.
   test.describe.configure({ retries: 0 });
@@ -981,11 +1034,12 @@ test.describe("whole site streamed", () => {
   }) => {
     // Its own boot, and a longer one than the spawn-only specs: every tile
     // the spawn view reaches (five of the fifteen) with its terrain,
-    // buildings and dressings — ~136 000 tree instances — all shaded on the
-    // CPU. Measured at ~200 s to `ready` on a four-core machine (about 50
-    // frames at 4 s each); a shared runner is about half as fast.
-    test.setTimeout(slow(260_000));
-    const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+    // buildings and dressings — ~180 000 tree instances — all shaded on the
+    // CPU. Measured at ~55 s to `ready` on a four-core machine at
+    // SITE_VIEWPORT (about 45 frames at 1.2 s each; ~155 s at 800×600); a
+    // shared runner is about half as fast.
+    test.setTimeout(slow(180_000));
+    const context = await browser.newContext({ viewport: SITE_VIEWPORT });
     const page = await context.newPage();
     const errors = watchErrors(page);
     try {
@@ -1000,7 +1054,7 @@ test.describe("whole site streamed", () => {
         () => window.__poc?.ready === true,
         undefined,
         {
-          timeout: slow(200_000),
+          timeout: slow(150_000),
         }
       );
       const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
