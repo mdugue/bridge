@@ -123,3 +123,37 @@ test("a part carries its root Building's flags as well as its own", () => {
   });
   expect(rootOnly.objects.map((o) => o.flags)).toEqual([1, 1, 0]);
 });
+
+test("the scan's small structures join as their own buildings, source 1", () => {
+  const baked = bakeCityMesh("t", fixture(), undefined, null, undefined, [
+    {
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [412_020, 5_656_020],
+            [412_024, 5_656_020],
+            [412_024, 5_656_023],
+            [412_020, 5_656_023],
+            [412_020, 5_656_020],
+          ],
+        ],
+      },
+      properties: { h: 2.5, z: 100 },
+    },
+  ]);
+  expect(baked.objects.length).toBe(4);
+  const shed = baked.objects[3];
+  expect(shed.root).toBe(3);
+  expect(shed.building).toBe(true);
+  expect(shed.source).toBe(1);
+  expect(shed.eaveH).toBeCloseTo(2.7, 2);
+  expect(shed.footprints[0].length).toBe(4);
+  // 12 triangles tagged with the new id, appended after the LoD2 stream.
+  const ids = [...baked.vertices.objectIds];
+  expect(ids.filter((i) => i === 3).length).toBe(36);
+  expect(ids.slice(-36).every((i) => i === 3)).toBe(true);
+  const table = cityMesh(baked).input.table?.properties;
+  expect([...(table?.source.values ?? [])]).toEqual([0, 0, 0, 1]);
+  expect([...(table?.root.values ?? [])]).toEqual([0, 0, 2, 3]);
+});

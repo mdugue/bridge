@@ -80,11 +80,18 @@ export interface CityObjectRow {
   root: number;
   /** signed roughness jitter [-1, 1] */
   rough: number;
+  /** where the object comes from (column `source`): OBJECT_SOURCE_* */
+  source?: number;
   /** storey height (m) for the contour bands */
   storeyH: number;
   /** wall colour (linear RGB) */
   tint: Rgb;
 }
+
+/** An object of the LoD2 CityJSON (column `source`, the default). */
+export const OBJECT_SOURCE_LOD2 = 0;
+/** A small structure from the laser scan (pipeline/bake/small_buildings.py). */
+export const OBJECT_SOURCE_SCAN = 1;
 
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {
@@ -97,6 +104,7 @@ export interface CityObjectTable {
   roof: Float32Array;
   root: Uint32Array;
   rough: Float32Array;
+  source: Uint8Array;
   storeyH: Float32Array;
   tint: Float32Array;
 }
@@ -114,6 +122,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
     rough: new Float32Array(count),
+    source: new Uint8Array(count),
     storeyH: new Float32Array(count),
     tint: new Float32Array(count * 3),
   };
@@ -126,6 +135,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.roof.set(r.roof, i * 3);
     table.root[i] = r.root;
     table.rough[i] = r.rough;
+    table.source[i] = r.source ?? OBJECT_SOURCE_LOD2;
     table.storeyH[i] = r.storeyH;
     table.tint.set(r.tint, i * 3);
   });

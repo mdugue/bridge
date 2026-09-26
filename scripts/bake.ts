@@ -12,7 +12,7 @@
  *                                     furniture, walls, stairs, rail,
  *                                     surface, edges, markings, sport,
  *                                     cultivated, tram, riverside, names,
- *                                     skyview, soundmarks, lowveg,
+ *                                     skyview, soundmarks, lowveg, small-buildings,
  *                                     islands)
  *   bun run bake --ingest --lsc       ... and the laser scan (≈380 MB a tile)
  *   bun run bake --step lowveg --research   also every hedge/shrub candidate

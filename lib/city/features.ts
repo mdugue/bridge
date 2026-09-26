@@ -212,6 +212,18 @@ export interface MonumentFeature {
   } | null;
 }
 
+/**
+ * A small structure the laser scan saw and LoD2 lacks
+ * (pipeline/bake/small_buildings.py, GeoSN; a city-mesh bake input, not
+ * served): its footprint rectangle (4 corners + the closing one), the
+ * lowest ground under it `z`, its top `h` above `z`, and for a pent roof
+ * `hc`, the height above `z` at each of the ring's first four corners.
+ */
+export interface SmallBuildingFeature {
+  geometry: PolygonGeometry;
+  properties: { h: number; hc?: number[]; z: number } | null;
+}
+
 /** OSM retaining/city walls and cliffs (pipeline/bake/walls.py, ODbL): the
  *  barrier/man_made kind or "cliff" (only retaining kinds and cliffs reshape
  *  the terrain) and the height in metres. */

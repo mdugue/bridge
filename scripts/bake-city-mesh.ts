@@ -4,8 +4,9 @@
  * folds in everything the clay style needs per building (tints, roof colour
  * incl. the DOP LUT, storey/eave heights, dusk glow, roughness jitter), the
  * OSM flags (shop, heritage; a part carries its Building's too), the
- * demolish tree and the minimap footprints. Called by
- * scripts/prepare-data.ts; no DOM.
+ * demolish tree and the minimap footprints, then appends the small
+ * structures the laser scan saw and LoD2 lacks (`appendScanStructures`).
+ * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import type { BufferGeometry, Matrix4, Mesh } from "three";
@@ -15,17 +16,25 @@ import {
   inheritedAttributes,
   type RoofColorLut,
   roofColor,
+  roofTint,
   roughJitter,
   storeyHeight,
 } from "../lib/city/building-tint";
 import {
   type CityObjectRow,
   inheritedFlags,
+  OBJECT_SOURCE_SCAN,
   type OsmBuildingLut,
 } from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
+import type { SmallBuildingFeature } from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
 import { recenterOffset } from "../lib/city/recenter";
+import {
+  SMALL_BUILDING_SINK,
+  structureCorners,
+  structureMesh,
+} from "../lib/city/small-buildings";
 import type { CityJsonDocument } from "../lib/city/types";
 
 /** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
@@ -119,6 +128,68 @@ export interface BakedCityMesh {
 }
 
 /**
+ * The laser scan's small structures (pipeline/bake/small_buildings.py)
+ * appended to a parsed tile: one object each at `objects.length + j`, its
+ * own root (demolish takes it alone), a Building (the HUD counts it), the
+ * hashed wall tint, a calm slate roof (the flat-roof palette — no DOP colour
+ * is sampled for them) and `source` 1. Its triangles carry its own id, so
+ * the weld never merges across objects.
+ */
+export function appendScanStructures(
+  tile: string,
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  features: readonly SmallBuildingFeature[]
+): void {
+  const positions: number[] = [];
+  const objectIds: number[] = [];
+  const isRoof: number[] = [];
+  for (const f of features) {
+    const box = structureMesh(f, baked.offset);
+    const corners = structureCorners(f);
+    const z = f.properties?.z;
+    if (box.positions.length === 0 || !corners || z === undefined) {
+      continue;
+    }
+    const index = baked.objects.length;
+    const id = `scan:${tile}:${index}`;
+    const eave = Math.min(...corners.map((c) => c.h));
+    positions.push(...box.positions);
+    isRoof.push(...box.isRoof);
+    objectIds.push(...box.isRoof.map(() => index));
+    baked.objects.push({
+      building: true,
+      root: index,
+      baseZ: cm(z - SMALL_BUILDING_SINK),
+      eaveH: cm(eave + SMALL_BUILDING_SINK),
+      flags: 0,
+      storeyH: cm(storeyHeight(eave)),
+      glow: 0,
+      rough: r3(roughJitter(id)),
+      tint: rgb(buildingTint(id)),
+      roof: rgb(roofTint(id, { roofType: "1000" })),
+      source: OBJECT_SOURCE_SCAN,
+      footprints: [corners.map((c): [number, number] => [cm(c.x), cm(c.y)])],
+    });
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(v.isRoof, isRoof),
+  };
+}
+
+function concat(
+  a: Float32Array<ArrayBuffer>,
+  b: readonly number[]
+): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(a.length + b.length);
+  out.set(a);
+  out.set(b, a.length);
+  return out;
+}
+
+/**
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
@@ -130,7 +201,8 @@ export function bakeCityMesh(
   doc: CityJsonDocument,
   roofLut: RoofColorLut | undefined,
   sharedMatrix: Matrix4 | null,
-  osmLut?: OsmBuildingLut
+  osmLut?: OsmBuildingLut,
+  scan?: readonly SmallBuildingFeature[]
 ): BakedCityMesh {
   const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
   if (epsg === null) {
@@ -197,5 +269,9 @@ export function bakeCityMesh(
     };
   });
 
-  return { epsg, matrix, objects, offset, vertices: v };
+  const baked = { epsg, matrix, objects, offset, vertices: v };
+  if (scan) {
+    appendScanStructures(tile, baked, scan);
+  }
+  return baked;
 }

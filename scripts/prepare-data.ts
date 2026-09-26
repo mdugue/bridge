@@ -40,7 +40,9 @@ import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
 import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
+  FeatureCollection,
   KerbFeature,
+  SmallBuildingFeature,
   StairFeature,
   GateFeature,
   TerraceFeature,
@@ -173,6 +175,7 @@ const BAKE_SOURCES = [
   "lib/city/city-mesh.ts",
   "lib/city/building-tint.ts",
   "lib/city/minimap.ts",
+  "lib/city/small-buildings.ts",
   "lib/city/terrain-geometry.ts",
   "lib/city/terrain-conflate.ts",
   "lib/city/stairs.ts",
@@ -324,7 +327,11 @@ function parseCity(tile: string): BakedCityMesh {
   const osmLut = existsSync(at(src.osmBuild))
     ? readJson<{ objects?: OsmBuildingLut }>(at(src.osmBuild)).objects
     : undefined;
-  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix, osmLut);
+  const scan = existsSync(at(src.smallBuild))
+    ? readJson<FeatureCollection<SmallBuildingFeature>>(at(src.smallBuild))
+        .features
+    : undefined;
+  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix, osmLut, scan);
   sharedMatrix ??= baked.matrix;
   return baked;
 }
@@ -349,7 +356,12 @@ async function bakeCity(
   tile: string
 ): Promise<{ file: string; footprints: string; maxZ: number }> {
   const src = cityMeshSourceFiles(tile);
-  const inputs = [at(src.city), at(src.roofColor), at(src.osmBuild)];
+  const inputs = [
+    at(src.city),
+    at(src.roofColor),
+    at(src.osmBuild),
+    at(src.smallBuild),
+  ];
   const key = cacheKey(inputs, offset);
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {

@@ -157,7 +157,9 @@ config change.
   attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
 - `pipeline/` — the offline bakes, one Python package in a uv environment
   (`bake/landcover.py`, `canopy.py`, `trees.py` (+ `tree_archetypes.py`),
-  `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `ndvi.py`, `roof_colour.py`,
+  `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `small_buildings.py`
+  (the sheds and garden houses LoD2 lacks, appended to the city mesh),
+  `ndvi.py`, `roof_colour.py`,
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
   `rail.py`, `surface.py`, `edges.py`, `sport.py`, `markings.py`,
   `cultivated.py`, `skyview.py`, `osm.py`; `ingest_sn.py` is Saxony's

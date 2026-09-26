@@ -71,6 +71,7 @@ export function readObjectTable(
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
     rough: new Float32Array(count),
+    source: new Uint8Array(count),
     storeyH: new Float32Array(count),
     tint: new Float32Array(count * 3),
   };
@@ -84,6 +85,8 @@ export function readObjectTable(
     table.roof.set(xyz(row.roof), i * 3);
     table.root[i] = Number(row.root);
     table.rough[i] = Number(row.rough);
+    // LoD2 (0) or the laser scan's small structures (1); absent before plan 034
+    table.source[i] = Number(row.source ?? 0);
     table.storeyH[i] = Number(row.storeyH);
     table.tint.set(xyz(row.tint), i * 3);
   }

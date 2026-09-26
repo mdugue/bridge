@@ -16,6 +16,7 @@ import type {
   RailFeature,
   RiversideFeature,
   SoundmarkFeature,
+  SmallBuildingFeature,
   StairFeature,
   TerraceFeature,
   TramFeature,
@@ -28,6 +29,7 @@ import { DRESDEN } from "../../sites/dresden";
 import { tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import {
+  cityMeshSourceFiles,
   stairSourceFile,
   type TileArtifact,
   terraceSourceFile,
@@ -170,6 +172,28 @@ test.each(cases)("%s: lamps are points", (_, a) => {
     expect(isPoint2(f.geometry.coordinates)).toBe(true);
   }
 });
+
+test.each(tileIds(DRESDEN))(
+  "%s: small structures are rectangles with a ground and a top in range",
+  (tile) => {
+    const src = cityMeshSourceFiles(tile).smallBuild;
+    for (const f of loadSource<SmallBuildingFeature>(src)) {
+      expect(f.geometry.type).toBe("Polygon");
+      const ring = f.geometry.coordinates[0];
+      expect(isRing(ring)).toBe(true);
+      expect(ring.length).toBe(5);
+      const p = f.properties;
+      expect(Number.isFinite(p?.z)).toBe(true);
+      // the bake's band: 2–6.5 m above ground (a pent corner may dip)
+      expect(p?.h ?? 0).toBeGreaterThan(1.5);
+      expect(p?.h ?? 99).toBeLessThan(8);
+      if (p?.hc !== undefined) {
+        expect(p.hc.length).toBe(4);
+        expect(p.hc.every((h) => h > 1 && h < 12)).toBe(true);
+      }
+    }
+  }
+);
 
 test.each(tileIds(DRESDEN))("%s: kerbs are LineStrings", (tile) => {
   for (const f of loadSource<KerbFeature>(kerbSourceFile(tile))) {
