@@ -734,7 +734,14 @@ async function bootApp(
     },
   };
   let lastTransparency = Number.NaN;
+  let lastStyle = opts.look.get().style;
   const applyLook = (look: LookValues) => {
+    if (look.style !== lastStyle) {
+      lastStyle = look.style;
+      // A picture style may draw its own crowns (style-dressing.ts), and the
+      // crowns cast: the shadow map is redrawn with the new ones.
+      invalidateShadows();
+    }
     for (const key of Object.keys(sceneRows) as SceneLookKey[]) {
       sceneRows[key](look[key]);
     }

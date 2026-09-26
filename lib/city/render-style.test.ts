@@ -39,6 +39,20 @@ test("every other style runs the pass and draws ink", () => {
   }
 });
 
+test("the styled scene dressing: Comic's and Papier's crowns, noir's lamp cones", () => {
+  expect(
+    RENDER_STYLES.filter((def) => def.crowns).map((def) => [def.id, def.crowns])
+  ).toEqual([
+    ["comic", "comic"],
+    ["paper", "paper"],
+  ]);
+  expect(
+    RENDER_STYLES.filter((def) => def.lampCones).map((def) => def.id)
+  ).toEqual(["noir"]);
+  expect(RENDER_STYLE_BY_ID.pastel.crowns).toBeNull();
+  expect(RENDER_STYLE_BY_ID.pastel.lampCones).toBe(false);
+});
+
 test("only Papier swaps the scene's materials", () => {
   expect(
     RENDER_STYLES.filter((def) => def.paperScene).map((def) => def.id)

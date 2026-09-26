@@ -22,6 +22,7 @@ import {
 import { DepthGradingEffect } from "./depth-grading-effect";
 import { PaperGrainEffect } from "./paper-grain-effect";
 import { createPaperScene } from "./paper-scene";
+import { createStyleDressing } from "./style-dressing";
 import type { AoQuality } from "./scene-profile";
 import { StylizeEffect } from "./stylize-effect";
 import { depthMaterialStandIns } from "./three-utils";
@@ -178,6 +179,7 @@ export function createPostStack(
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
   const stylize = new StylizeEffect(scene, camera);
   const paperScene = createPaperScene(scene);
+  const styleDressing = createStyleDressing(scene);
   const stylePass = new EffectPass(camera, stylize);
   stylePass.enabled = false;
   composer.addPass(stylePass);
@@ -279,12 +281,21 @@ export function createPostStack(
       }
     },
     render: (deltaSeconds) => {
-      // The Papier style swaps the scene's materials for this frame only.
+      // A style's scene dressing (its crowns, lamp cones) and the Papier
+      // material are swapped in for this frame only, and out right after.
+      const dressed =
+        style.crowns || style.lampCones
+          ? styleDressing.begin({
+              crowns: style.crowns,
+              lampCones: style.lampCones,
+            })
+          : null;
       const restore = style.paperScene ? paperScene.begin() : null;
       try {
         composer.render(deltaSeconds);
       } finally {
         restore?.();
+        dressed?.();
       }
     },
     getFocusInfo: () => ({
@@ -334,6 +345,7 @@ export function createPostStack(
     },
     dispose: () => {
       paperScene.dispose();
+      styleDressing.dispose();
       composer.dispose();
     },
   };

@@ -1,6 +1,14 @@
 import { Effect, EffectAttribute } from "postprocessing";
 import type { PerspectiveCamera, Scene, WebGLRenderer } from "three";
-import { Color, Fog, MathUtils, Uniform, Vector2, Vector3 } from "three";
+import {
+  Color,
+  Fog,
+  MathUtils,
+  Matrix3,
+  Uniform,
+  Vector2,
+  Vector3,
+} from "three";
 
 /**
  * The picture styles' one pass (lib/city/render-style.ts): ink lines from
@@ -39,6 +47,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 fogColor;     // the scene's fog colour (linear)
   uniform vec3 upView;       // world up in view space (roof slopes)
   uniform vec2 projScale;    // tan(fov/2)·aspect, tan(fov/2): uv → view ray
+  uniform mat3 viewToWorld;  // the camera's rotation: view ray → world ray
 
   const float SKY_Z = 4000.0;        // the sky dome writes no depth (far = 6000)
   const float CREASE_FLOOR = 0.0012; // slope noise floor, relative to w0
@@ -87,9 +96,10 @@ const fragmentShader = /* glsl */ `
     }
     if (mode > 2.5) {
       // Sin City only inks the big jumps — a building standing clear of what
-      // is behind it — never a tree lobe over the next one; no folds.
-      return Pen(vec2(0.09, 0.22), 0.0, 2.0, 0.0, vec2(0.0), vec2(0.8, 1.6),
-                 0.0, 0.0);
+      // is behind it — never a tree lobe over the next one; the folds of a
+      // building (eaves, corners, a hall's vaults) out to a few hundred metres.
+      return Pen(vec2(0.09, 0.22), 0.55, 2.0, 0.0, vec2(0.0), vec2(0.8, 1.6),
+                 0.0, 480.0);
     }
     if (mode > 1.5) {
       return Pen(vec2(0.012, 0.045), 0.7, 2.0, 0.0, vec2(0.0),
@@ -315,15 +325,34 @@ const fragmentShader = /* glsl */ `
   // into stipple. Foliage and meadow are pushed towards black (Sin City's
   // trees are black shapes, their sunlit tops cut out in white), and so is
   // the river: water at night is black, only its glints stay white.
-  float sinCityLuma(vec2 uv) {
+  float sinCityLuma(vec2 uv, float up, float upRough) {
     vec3 c = blurredColor(uv, 3.0);
     float green = c.g - max(c.r, c.b);
     float blue = c.b - max(c.r, c.g);
+    // Crowns go black; open grass (facing up) keeps its light — a park of
+    // black meadows read as one black hole.
+    // Open grass is flat as well as facing up: a crown's sunlit top also
+    // faces up, but its slope changes from pixel to pixel.
+    float grass = smoothstep(0.85, 0.96, up) * (1.0 - smoothstep(0.03, 0.1, upRough));
+    float crown = 1.0 - grass;
     return lumaOf(c)
-      - 0.36 * smoothstep(0.01, 0.05, green)
+      - 0.36 * crown * smoothstep(0.01, 0.05, green)
       // The pastel river is only faintly blue (b − max(r, g) ≈ 0.02 where
       // the paths and roads are ≤ 0), hence the low, narrow window.
       - 0.42 * smoothstep(0.006, 0.02, blue);
+  }
+
+  // The neighbourhood's brightness: eight taps on a wide ring (~48 CSS px).
+  // Sin City's threshold leans towards it, so a dark view still splits into
+  // light and dark, and a bright one keeps its shadows.
+  float localLuma(vec2 uv) {
+    vec2 r = texelSize * 48.0 * pixelScale;
+    float sum = 0.0;
+    for (int i = 0; i < 8; i++) {
+      float a = float(i) * 0.7854 + 0.39;
+      sum += lumaOf(toPerceptual(texture2D(inputBuffer, uv + r * vec2(cos(a), sin(a))).rgb));
+    }
+    return sum / 8.0;
   }
 
   // Does the skyline pass through this pixel? (A neighbour two pixels away
@@ -339,13 +368,60 @@ const fragmentShader = /* glsl */ `
     return hit;
   }
 
-  vec3 sincity(vec3 p, vec2 uv, float z, bool sky, float roofSlope, out float white) {
-    float y = sinCityLuma(uv);
-    // Night takes the distance: far things sink into black.
-    y *= 1.0 - smoothstep(700.0, 2600.0, z) * 0.85;
-    white = aaStep(0.42, y) * (sky ? 0.0 : 1.0);
+  // Sin City's rain: streaks on a grid of world DIRECTIONS (azimuth,
+  // elevation), so they stay put when the camera turns and fall with time,
+  // slanted by the wind. Each layer stands at a distance and is hidden
+  // behind anything nearer — rain in front of a wall, not painted on it.
+  float rainLayer(vec3 dir, float cellsPerRad, float speed, float seed, float pixelAngle) {
+    float az = atan(dir.z, dir.x);
+    float el = asin(clamp(dir.y, -1.0, 1.0));
+    vec2 q = vec2(az * cellsPerRad, el * cellsPerRad * 0.22 + time * speed);
+    q.x += q.y * 0.9;
+    vec2 cell = floor(q);
+    vec2 f = fract(q);
+    float present = step(0.84, hash21(cell + seed));
+    float x0 = 0.2 + 0.6 * hash21(cell + seed + 7.1);
+    float y0 = 0.1 + 0.4 * hash21(cell + seed + 3.3);
+    float len = 0.28 + 0.22 * hash21(cell + seed + 9.9);
+    // At least a pixel wide, whatever the layer's scale.
+    float w = max(0.035, 1.1 * pixelAngle * cellsPerRad);
+    float across = 1.0 - smoothstep(w * 0.5, w, abs(f.x - x0));
+    float along = smoothstep(y0, y0 + 0.05, f.y)
+      * (1.0 - smoothstep(y0 + len - 0.05, y0 + len, f.y));
+    return present * across * along;
+  }
+
+  float sinCityRain(vec2 uv, float z) {
+    vec3 ray = normalize(vec3((uv * 2.0 - 1.0) * projScale, -1.0));
+    vec3 dir = normalize(viewToWorld * ray);
+    float pixelAngle = length(fwidth(dir));
+    float near = rainLayer(dir, 55.0, 1.5, 1.7, pixelAngle) * step(4.0, z);
+    float mid = rainLayer(dir, 120.0, 1.05, 5.3, pixelAngle) * step(12.0, z);
+    // Looking steeply down (a flight over the roofs) the rain would only be
+    // noise over everything: it thins out.
+    float down = 1.0 - smoothstep(0.3, 0.75, -dir.y);
+    return max(near * 0.85, mid * 0.55) * down;
+  }
+
+  vec3 sincity(vec3 p, vec2 uv, float z, bool sky, float roofSlope, float up, out float white) {
+    float y = sinCityLuma(uv, up, fwidth(up));
+    // Night takes the distance — into the near-black, not into nothing, so
+    // a far block keeps its shape.
+    float far = smoothstep(700.0, 2600.0, z);
+    y *= 1.0 - far * 0.55;
+    // The threshold leans towards the neighbourhood's own brightness.
+    // Only a third of the way: further, and a meadow a shade darker than
+    // its paths already fell below it — a park in black and white blotches.
+    float t = clamp(mix(0.38, localLuma(uv) * (1.0 - far * 0.55), 0.33), 0.24, 0.56);
+    // Four inks, not two: black, a near-black, a near-white and white. The
+    // in-between tones carry shade and turned-away walls without going grey.
+    float b1 = aaStep(t - 0.13, y);
+    float b2 = aaStep(t, y);
+    float b3 = aaStep(t + 0.15, y);
+    float tone = 0.012 + 0.13 * b1 + 0.63 * b2 + 0.175 * b3;
+    white = b2 * (sky ? 0.0 : 1.0);
     vec3 paper = vec3(0.96, 0.955, 0.94);
-    vec3 col = paper * white;
+    vec3 col = sky ? vec3(0.0) : paper * (tone / 0.947);
     // Selective colour: the red roofs. Gated on the surface's slope (a
     // pitched roof, from the depth buffer's normal), the colour window can
     // be wide — every terracotta, brick and rust-brown roof — without the
@@ -414,14 +490,23 @@ const fragmentShader = /* glsl */ `
       outP = mix(outP, vec3(0.22, 0.23, 0.28), clamp(line, 0.0, 1.0) * 0.92);
     } else {
       float white = 0.0;
-      outP = sincity(p, uv, z, sky, roofSlope, white);
+      outP = sincity(p, uv, z, sky, roofSlope, up, white);
+      float rain = sinCityRain(uv, z);
       if (white > 0.5) {
         // On white, only the big silhouettes are inked — in solid black: a
         // half-weight stroke would be grey, and Sin City has no grey.
         outP = mix(outP, vec3(0.0), smoothstep(0.3, 0.55, line));
-      } else if (!sky) {
-        // On black, one white cut: the skyline against the night.
-        outP = mix(outP, vec3(0.93), skyRim(uv) * step(0.001, ink));
+        // On a lit wall the rain barely shows.
+        outP = mix(outP, vec3(0.0), rain * 0.18);
+      } else {
+        if (!sky) {
+          // On black, white cuts: the skyline against the night, and a big
+          // silhouette against a black behind it — without them a tree
+          // before a dark wall is one black mass.
+          float cut = max(skyRim(uv), smoothstep(0.35, 0.6, line * silhouette));
+          outP = mix(outP, vec3(0.93), cut * step(0.001, ink));
+        }
+        outP = mix(outP, vec3(0.93), rain);
       }
     }
     outputColor = vec4(toLinear(outP), inputColor.a);
@@ -445,6 +530,7 @@ export class StylizeEffect extends Effect {
         ["fogColor", new Uniform(new Color(1, 1, 1))],
         ["upView", new Uniform(new Vector3(0, 1, 0))],
         ["projScale", new Uniform(new Vector2(1, 1))],
+        ["viewToWorld", new Uniform(new Matrix3())],
       ]),
     });
     this.scene = scene;
@@ -488,5 +574,8 @@ export class StylizeEffect extends Effect {
     proj?.set(tanHalf * camera.aspect, tanHalf);
     const up = this.uniforms.get("upView")?.value as Vector3 | undefined;
     up?.set(0, 1, 0).transformDirection(camera.matrixWorldInverse);
+    (
+      this.uniforms.get("viewToWorld")?.value as Matrix3 | undefined
+    )?.setFromMatrix4(camera.matrixWorld);
   }
 }

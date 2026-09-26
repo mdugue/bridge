@@ -137,10 +137,10 @@ jederzeit wechseln, per Klick oder mit `V`:
 | Bildstil | So sieht er aus |
 |---|---|
 | *Pastell* | der Grundstil: Tonmodell auf Papier, weiches Licht, keine Umrisse |
-| *Comic* | Tuschelinien wie von Hand gezogen — wellig, mal dick, mal dünn, mal abgesetzt, leicht neben der Fläche —, flache Farbflächen in wenigen Tönen, ein Punktraster in den tiefsten Schatten aus der Nähe; aus der Höhe und in der Ferne wird die Zeichnung lockerer und sparsamer |
-| *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand |
-| *Sin City* | harte schwarze und weiße Flächen statt Linien: Bäume, Wiesen und die Elbe werden schwarz, beleuchtete Wände weiß, die Skyline steht als weiße Kante gegen den schwarzen Himmel; nur die roten Ziegeldächer behalten Farbe |
-| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; Bäume und Wasser werden ebenfalls Papier, Lichter und Nebelschleier fallen weg |
+| *Comic* | Tuschelinien wie von Hand gezogen — wellig, mal dick, mal dünn, mal abgesetzt, leicht neben der Fläche —, flache Farbflächen in wenigen Tönen, ein Punktraster in den tiefsten Schatten aus der Nähe; die Bäume werden runde Comic-Wolken aus drei Kugeln; aus der Höhe und in der Ferne wird die Zeichnung lockerer und sparsamer |
+| *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand; unter jeder Straßenlaterne ein weicher Lichtkegel — am Tag nur angedeutet, in der Dämmerung voll |
+| *Sin City* | harte Flächen in vier Tönen (Schwarz, fast Schwarz, fast Weiß, Weiß), die sich nach der Helligkeit der Umgebung richten, so bleibt auch eine dunkle Ansicht lesbar; Baumkronen und die Elbe werden schwarz, Wiesen bleiben hell, die Skyline und große Silhouetten stehen als weiße Kante gegen das Schwarz; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe |
+| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder, Wasser wird ebenfalls Papier, Lichter und Nebelschleier fallen weg |
 
 In den grafischen Stilen *Comic* und *Sin City* ruht die Tiefenschärfe
 (ein unscharfer Hintergrund unter scharfen Linien wirkt wie ein Fehler);

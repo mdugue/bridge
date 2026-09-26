@@ -9,6 +9,9 @@
  * table, the look store validates against it and the snapshot codec
  * persists `id`. No THREE, no DOM.
  */
+/** A style's own tree crowns (style-dressing.ts), or null for the scene's. */
+export type CrownStyle = "comic" | "paper";
+
 export type RenderStyle = "comic" | "noir" | "paper" | "pastel" | "sincity";
 
 export interface RenderStyleDef {
@@ -19,6 +22,12 @@ export interface RenderStyleDef {
    * kept, only gated (post-stack.ts), like the motion regression.
    */
   allowDof: boolean;
+  /**
+   * The tree crowns this style draws with (style-dressing.ts swaps them in
+   * for its frames): Comic's cloud of balls, Papier's folded card, or null
+   * for the scene's own lumpy crowns.
+   */
+  crowns: CrownStyle | null;
   /** one line for the picker (German, like the rest of the HUD) */
   description: string;
   /** weight on the depth-grading slider (warm near / cool far); 0 for monochrome */
@@ -38,6 +47,8 @@ export interface RenderStyleDef {
   /** weight on the ink slider (the outline strength) */
   inkWeight: number;
   label: string;
+  /** Soft light cones under the street lamps (style-dressing.ts). */
+  lampCones: boolean;
   /**
    * The stylize pass's shader mode (stylize-effect.ts); 0 = the pass is off,
    * which is what keeps the default style free.
@@ -62,6 +73,8 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainAnimated: false,
     allowDof: true,
     paperScene: false,
+    crowns: null,
+    lampCones: false,
     vignette: { offset: 0.28, darkness: 0.5 },
     swatch: ["#efe6d8", "#b9c7d6"],
   },
@@ -78,6 +91,8 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainAnimated: false,
     allowDof: false,
     paperScene: false,
+    crowns: "comic",
+    lampCones: false,
     vignette: { offset: 0.35, darkness: 0.22 },
     swatch: ["#f6ecd2", "#e0674f"],
   },
@@ -93,6 +108,8 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainAnimated: true,
     allowDof: true,
     paperScene: false,
+    crowns: null,
+    lampCones: true,
     vignette: { offset: 0.12, darkness: 0.9 },
     swatch: ["#c9c9c4", "#1b1b1d"],
   },
@@ -108,6 +125,8 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainAnimated: true,
     allowDof: false,
     paperScene: false,
+    crowns: null,
+    lampCones: false,
     vignette: { offset: 0.25, darkness: 0.55 },
     swatch: ["#f4f4f0", "#c1121f"],
   },
@@ -125,6 +144,8 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     // A shallow focus on a white model reads as a miniature — welcome here.
     allowDof: true,
     paperScene: true,
+    crowns: "paper",
+    lampCones: false,
     vignette: { offset: 0.32, darkness: 0.28 },
     swatch: ["#f4f0e8", "#7a8092"],
   },

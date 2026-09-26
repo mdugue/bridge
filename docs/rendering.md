@@ -261,17 +261,31 @@ the vignette, animated film grain and whether depth of field may run.
   wash — hard bands on a pale far field broke into white blotches.
 - *Film noir* — luminance through an S-curve, crushed blacks, the distance
   lifted into grey smoke, a graduated sky; faint ink.
-- *Sin City* — masses, not contours: the luminance is read through a
-  small blur before one threshold, so crowns, AO and penumbrae cannot
-  break a mass into stipple; foliage, meadow and the (faintly blue) river
-  are pushed towards black; black sky, far things sinking into the night;
-  ink only on the big silhouettes (a relative depth jump above ~10 %),
-  solid black; on black one white cut, the skyline against the sky. Red
+- *Sin City* — masses, not contours: four inks (black, near-black,
+  near-white, white) around a threshold that leans halfway towards the
+  neighbourhood's brightness (eight taps on a ~48 px ring), so a dark park
+  or a bright square still splits into light and shade; rain as streaks on
+  a grid of world directions in depth layers hidden behind nearer
+  geometry, thinned when looking steeply down. The luminance is read
+  through a small blur before the threshold, so crowns, AO and penumbrae cannot
+  break a mass into stipple; crowns and the (faintly blue) river are pushed
+  towards black, up-facing grass is not; black sky, far things sinking into
+  the near-black; ink only on the big silhouettes (a relative depth jump
+  above ~10 %) and, up close, a building's folds, solid black; on black,
+  white cuts where the skyline or a big silhouette meets more black. Red
   is kept on **pitched** surfaces only (the slope from the depth buffer's
   reconstructed normal against world up), which lets the colour window be
   wide — every terracotta, brick or rust roof turns red, lit or oxblood in
   shade — without sand, paths or warm facades following.
 
+- *Scene dressing* (`style-dressing.ts`) — geometry a style draws with for
+  its frames only: Comic's crowns are cartoon clouds of three balls (the
+  far tier one ball), Papier's folded card polyhedra (icosahedron detail
+  0/1), both built next to the scene's crowns (`buildStyleCrownGeo`) with
+  the same anchor and size; Film noir hangs an additive light cone under
+  every lamp head, sharing the heads' instance matrices, 0.22 strength by
+  day rising with the lamps' night factor to 1. A style change redraws the
+  shadow map.
 - *Papier* — the city as a white card model. A post pass cannot do this
   (it sees a colour, not how much of it is surface and how much light), so
   for this style's frames `paper-scene.ts` sets `scene.overrideMaterial` to

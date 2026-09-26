@@ -131,10 +131,10 @@ with a click or with `V`:
 | Style | What it looks like |
 |---|---|
 | *Pastell* | the default: a clay model on paper, soft light, no outlines |
-| *Comic* | ink lines as if drawn by hand — wavy, thick and thin, now and then broken, a little off the fill —, flat colour areas in a few tones, a dot screen in the deepest shade up close; from the air and in the distance the drawing gets looser and sparser |
-| *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge |
-| *Sin City* | hard black and white masses instead of lines: trees, meadows and the Elbe go black, lit walls white, the skyline stands as a white edge against the black sky; only the red tiled roofs keep their colour |
-| *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; trees and water turn to paper too, lights and mist sheets drop out |
+| *Comic* | ink lines as if drawn by hand — wavy, thick and thin, now and then broken, a little off the fill —, flat colour areas in a few tones, a dot screen in the deepest shade up close; the trees become round cartoon clouds of three balls; from the air and in the distance the drawing gets looser and sparser |
+| *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge; a soft light cone under every street lamp — only hinted at by day, full at dusk |
+| *Sin City* | hard areas in four tones (black, near-black, near-white, white) that follow the brightness around them, so even a dark view stays readable; crowns and the Elbe go black, meadows stay light, the skyline and big silhouettes stand as a white edge against the black; rain falls in front of the scene; only the red tiled roofs keep their colour |
+| *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra, water turns to paper too, lights and mist sheets drop out |
 
 In the graphic styles *Comic* and *Sin City* the depth of field rests (a
 blurred background under crisp lines reads as a mistake); the switch stays

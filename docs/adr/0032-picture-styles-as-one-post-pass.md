@@ -42,6 +42,17 @@ the scene right after. That is a render-time swap owned by the post stack
 — still no branch in any layer's material, and nothing a tile builds knows
 about it.
 
+The same frame-scoped swap dresses a style's geometry
+(`style-dressing.ts`): Comic draws its trees as cartoon clouds of three
+balls, Papier as folded card polyhedra, and Film noir hangs a soft light
+cone under every street lamp (faint by day, full at night — no forced
+night). The layers only tag what may be dressed (`userData.styleCrown`,
+`userData.styleLampHeads`); the swap happens before the render and is
+undone after it, and a style change redraws the shadow map because the
+crowns cast. Sin City's rain is drawn in the pass instead: streaks on a
+grid of world directions in three depth layers, each hidden behind nearer
+geometry — as scene geometry it would not survive the style's threshold.
+
 Lines come from the second difference of inverse view depth, which is zero
 on any plane: relative to `w` it marks silhouettes, relative to the local
 slope it marks folds at any distance. The hand-drawn quality is a
@@ -72,6 +83,9 @@ stroke weight.
 - Anything whose outline matters but writes no depth (water sheets, mist)
   gets none.
 
+- A layer that wants its geometry dressed by a style tags it; it never
+  reads the style. A style crown must keep the scene crown's anchor and
+  size, so every instance matrix fits (`buildStyleCrownGeo`).
 - Papier costs the scene render its specialised shaders (wind sway, water
   wobble, the terrain's ground detail): the white model is static and
   plain by design. The override material compiles a few programs

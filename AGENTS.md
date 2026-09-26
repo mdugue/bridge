@@ -128,7 +128,8 @@ config change.
     `depth-grading-effect.ts`, `paper-grain-effect.ts`,
     `stylize-effect.ts` (the picture styles' one pass: ink lines + tone;
     the table is `lib/city/render-style.ts`), `paper-scene.ts` (Papier's
-    render-time white material), `visual-style.ts`
+    render-time white material), `style-dressing.ts` (a style's own crowns
+    and noir's lamp cones, swapped in for its frames), `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
@@ -410,8 +411,11 @@ key `V`) are not material styles: they are one post pass over the finished
 frame (`stylize-effect.ts`, ADR 0032), off in the default pastel look.
 Papier additionally swaps every surface for one white paper material for
 its frames (`paper-scene.ts`, `scene.overrideMaterial`, restored after the
-render). Give a new style a row in `lib/city/render-style.ts` and a mode in
-that pass — never a branch in a scene material. Its depth taps stay at
+render); `style-dressing.ts` likewise swaps in a style's crowns and lamp
+cones — layers only tag what may be dressed (`userData.styleCrown`,
+`userData.styleLampHeads`). Give a new style a row in
+`lib/city/render-style.ts` and a mode in that pass — never a branch in a
+scene material. Its depth taps stay at
 integer texel radii (the buffer is read NEAREST; a fractional radius inks
 whole grazing streets).
 
