@@ -175,6 +175,9 @@ describe("footsteps", () => {
   test("standing still and jumping are silent", () => {
     expect(advanceSteps(0.5, 0, 0.1)).toEqual({ carry: 0.5, steps: 0 });
     expect(advanceSteps(0.5, 500, 0.1)).toEqual({ carry: 0, steps: 0 });
+    expect(advanceSteps(0.5, 20, 3)).toEqual({ carry: 0, steps: 0 });
+    // a slow frame is still a walk
+    expect(advanceSteps(0, 9, 1).steps).toBe(2);
   });
 
   test("the paving raster decides, the class falls back", () => {

@@ -428,6 +428,9 @@ export function stepSurface(classId: number, surfaceByte: number): StepSurface {
 export const STRIDE_M = 0.75;
 /** Faster than this between two samples is a jump, not a walk (m/s). */
 export const TELEPORT_SPEED = 80;
+/** A gap between two samples longer than this (s) — a hidden tab, a stall —
+ *  is no walk either. */
+export const MAX_STEP_GAP_S = 1.5;
 
 /**
  * Steps per second at a speed: a person walks ~1.9 steps a second and
@@ -458,7 +461,7 @@ export function advanceSteps(
     return { carry, steps: 0 };
   }
   const speed = distance / dt;
-  if (speed > TELEPORT_SPEED) {
+  if (speed > TELEPORT_SPEED || dt > MAX_STEP_GAP_S) {
     return { carry: 0, steps: 0 };
   }
   const stride = strideFor(speed);
