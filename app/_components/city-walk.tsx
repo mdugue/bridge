@@ -555,22 +555,25 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 last layer has landed and it has been readable for a moment. */}
             <StreamPill busy={streamingMore} stages={stages} />
 
-            {streamError && (
-              <output
-                aria-live="polite"
-                className="pointer-events-none absolute top-15 left-1/2 -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
-              >
-                Eine Schicht konnte nicht geladen werden: {streamError}
-              </output>
-            )}
+            {/* Under the pill, one column: the street's name, then a stream
+                error — stacked, so neither covers the other. */}
+            <div className="pointer-events-none absolute top-13 left-1/2 z-10 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-center gap-1">
+              <StreetCaption
+                handleRef={handleRef}
+                mode={mode}
+                subscribePose={subscribePose}
+              />
+              {streamError && (
+                <output
+                  aria-live="polite"
+                  className="rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
+                >
+                  Eine Schicht konnte nicht geladen werden: {streamError}
+                </output>
+              )}
+            </div>
 
             <LocateMessage message={hud.message} />
-
-            <StreetCaption
-              handleRef={handleRef}
-              mode={mode}
-              subscribePose={subscribePose}
-            />
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
             <SettingsToggle />
