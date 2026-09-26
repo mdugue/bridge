@@ -1,3 +1,4 @@
+import { clamp01 } from "./math";
 /**
  * Per-building clay tint — pure, DOM/three-free so it unit-tests under `bun test`
  * and runs in the offline annotate step.
@@ -60,10 +61,6 @@ const COOL_END_M = 30;
 const COOL_SHIFT = 0.05;
 /** Max per-building lightness jitter (sRGB units), from a decorrelated hash. */
 const LIGHT_JITTER = 0.03;
-
-function clamp01(x: number): number {
-  return Math.min(Math.max(x, 0), 1);
-}
 
 /**
  * Deterministic, well-spread string hash → float in [0,1), with no bitwise ops.

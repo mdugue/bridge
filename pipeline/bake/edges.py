@@ -35,7 +35,7 @@ import numpy as np
 import shapely
 from PIL import Image
 
-from .common import Tile, feature, geometry_json, write_geojson
+from .common import Tile, feature, geometry_json, save_grey_png, write_geojson
 
 ROAD = 7
 MEADOW = 1
@@ -229,18 +229,17 @@ def encode(metres: np.ndarray) -> np.ndarray:
 
 
 def run(tile: Tile, px: int = 2048) -> None:
-    src = tile.out("dlm", f"landcover_{tile.id}.png")
-    if not src.exists():
+    cls = tile.classes()
+    if cls is None:
         print(f"{tile.id}: no class raster — skipping the edge distances")
         return
-    cls = np.asarray(Image.open(src).convert("L"))
     res = (tile.bounds[2] - tile.bounds[0]) / cls.shape[1]
     road_m = edge_field(cls, ROAD, res, px)
     lawn = np.where(urban_green(tile, cls), MEADOW, cls)
     road = encode(road_m)
     meadow = encode(edge_field(lawn, MEADOW, res, px))
     grey = np.stack([road, meadow], axis=-1).reshape(px, 2 * px)
-    Image.fromarray(grey, mode="L").save(tile.out("dlm", f"edges_{tile.id}.png"), optimize=True)
+    save_grey_png(tile.out("dlm", f"edges_{tile.id}.png"), grey)
     legend = {
         "tile": tile.id,
         "crs": f"EPSG:{tile.epsg}",

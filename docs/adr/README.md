@@ -10,7 +10,7 @@ each data → look transformation does and its status.
 
 | # | Decision | Status |
 |---|---|---|
-| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted |
+| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024) |
 | [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber | accepted |
 | [0003](./0003-bake-heavy-inputs-at-build-time.md) | Bake heavy inputs at build time; the browser decodes no raster and parses no CityJSON | accepted |
 | [0004](./0004-commit-derived-artifacts-not-raw-data.md) | Commit small derived artifacts, not raw bulk data; the DGM1 GeoTIFF is the one exception; no Git-LFS | accepted |

@@ -9,7 +9,9 @@ from pathlib import Path
 
 import numpy as np
 import pyogrio.raw
+import rasterio
 import shapely
+from PIL import Image
 from rasterio.transform import from_bounds
 
 OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
@@ -61,6 +63,25 @@ class Tile:
             return False
         return True
 
+    def classes(self, tile_id: str | None = None) -> np.ndarray | None:
+        """The committed class raster (lib/city/landcover.ts ids, row 0 =
+        north) of this tile or of `tile_id` beside it; None when it is not
+        baked yet. Read with `value_at` / `pixel_of`."""
+        path = self.data / "dlm" / f"landcover_{tile_id or self.id}.png"
+        return np.asarray(Image.open(path).convert("L")) if path.exists() else None
+
+    def neighbours(self) -> list[tuple[str, tuple[float, float, float, float]]]:
+        """Every committed tile of the site (its DGM on disk), this one
+        included, as (id, bounds): what a seam-aware step reads beyond its
+        edge."""
+        found = []
+        for tif in sorted((self.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")):
+            tid = tif.stem.removeprefix("dgm1_")
+            with rasterio.open(tif) as ds:
+                b = ds.bounds
+            found.append((tid, (b.left, b.bottom, b.right, b.top)))
+        return found
+
     def osm_extract(self) -> Path | None:
         found = sorted((self.raw / "osm").glob("*.osm.pbf"), key=lambda p: p.stat().st_mtime)
         return found[-1] if found else None
@@ -72,6 +93,43 @@ def owns(bounds: tuple[float, float, float, float], x: float, y: float) -> bool:
     `ownsPoint`, lib/city/tileset.ts)."""
     xmin, ymin, xmax, ymax = bounds
     return xmin <= x < xmax and ymin <= y < ymax
+
+
+def overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    """Whether two extents overlap (touching edges do not)."""
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def pixel_of(
+    shape: tuple[int, ...], bounds: tuple[float, float, float, float], x: float, y: float
+) -> tuple[int, int] | None:
+    """The (row, column) of a raster of `shape` laid over `bounds` (row 0 =
+    north) under a point; None off it (the half-open extent of `owns`)."""
+    if not owns(bounds, x, y):
+        return None
+    xmin, ymin, xmax, ymax = bounds
+    h, w = shape[0], shape[1]
+    c = min(int((x - xmin) / (xmax - xmin) * w), w - 1)
+    r = min(int((ymax - y) / (ymax - ymin) * h), h - 1)
+    return r, c
+
+
+def value_at(
+    raster: np.ndarray, bounds: tuple[float, float, float, float], x: float, y: float
+) -> int | None:
+    """The raster's value under a point (see `pixel_of`); None off it."""
+    at = pixel_of(raster.shape, bounds, x, y)
+    return None if at is None else int(raster[at])
+
+
+def save_grey_png(path: Path, raster: np.ndarray) -> None:
+    """A single-band 8-bit PNG, as the viewer inflates it byte-exact
+    (lib/city/png-raster.ts). The array must already be 2-D uint8: Pillow
+    drops the `mode=` override in 13, and a wider dtype must fail here, not
+    be reinterpreted."""
+    if raster.dtype != np.uint8 or raster.ndim != 2:
+        raise TypeError(f"{path.name}: want a 2-D uint8 raster, got {raster.dtype} {raster.shape}")
+    Image.fromarray(np.ascontiguousarray(raster)).save(path, optimize=True)
 
 
 def read_layer(

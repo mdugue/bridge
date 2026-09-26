@@ -21,7 +21,12 @@ import {
   type LookValues,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
+import { decodeGreyPng } from "@/lib/city/png-raster";
 import { samplePolyline } from "@/lib/city/polyline";
+import {
+  maxWindowSampler,
+  type RasterSampler,
+} from "@/lib/city/raster-sampler";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   TRUNK_FOOT_R,
@@ -50,9 +55,6 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-
-/** Samples a baked raster at projected coords → 0..1, or undefined off-tile. */
-export type RasterSampler = (x: number, y: number) => number | undefined;
 
 /**
  * Veto on a row or canopy tree at EPSG (x, y) with its measured height `h`
@@ -1070,65 +1072,25 @@ function buildHedges(
   return meshes;
 }
 
-/** Max byte over a 5×5 (~10 m) window = the crown footprint. The NDVI raster is
- *  ~2 m/px and median-zero, so a single-pixel sample drops ~28% of trees onto an
- *  empty pixel; the footprint max recovers the real canopy value (cuts zeros to
- *  ~4% and roughly triples the median — measured). */
-function sampleMaxWindow(
-  data: Uint8ClampedArray,
-  w: number,
-  h: number,
-  cx: number,
-  cy: number
-): number {
-  let m = 0;
-  for (let dy = -2; dy <= 2; dy++) {
-    const py = Math.min(h - 1, Math.max(0, cy + dy));
-    for (let dx = -2; dx <= 2; dx++) {
-      const px = Math.min(w - 1, Math.max(0, cx + dx));
-      m = Math.max(m, data[(py * w + px) * 4]); // R of the L→RGBA decode
-    }
-  }
-  return m;
-}
-
 /**
- * Loads the DOP NDVI PNG into a CPU sampler (EPSG → 0..1). Returns null on any
- * failure (no raster, decode error, no OffscreenCanvas) so crowns fall back to
- * the hash-only sage — graceful degradation, see docs/portability.md.
+ * Loads the DOP NDVI PNG into a CPU sampler (EPSG → 0..1). The bytes are
+ * inflated as written (lib/city/png-raster.ts), never through the browser's
+ * image decoder, which colour-manages untagged greyscale on WebKit. Returns
+ * null on any failure (no raster, decode error) so crowns fall back to the
+ * hash-only sage — graceful degradation, see docs/portability.md.
  */
 export async function loadNdviSampler(
   url: string,
   bounds: TerrainBounds,
   signal?: AbortSignal
 ): Promise<RasterSampler | null> {
-  if (typeof OffscreenCanvas === "undefined") {
-    return null;
-  }
   try {
     const res = await fetch(url, { signal });
     if (!res.ok) {
       return null;
     }
-    const bmp = await createImageBitmap(await res.blob());
-    const { width: w, height: h } = bmp;
-    const c2d = new OffscreenCanvas(w, h).getContext("2d");
-    if (!c2d) {
-      return null;
-    }
-    c2d.drawImage(bmp, 0, 0);
-    const data = c2d.getImageData(0, 0, w, h).data;
-    const [minX, minY, maxX, maxY] = bounds;
-    return (ex, ey) => {
-      const u = (ex - minX) / (maxX - minX);
-      const vv = (maxY - ey) / (maxY - minY); // raster row 0 = north
-      if (u < 0 || u > 1 || vv < 0 || vv > 1) {
-        return;
-      }
-      const cx = Math.min(w - 1, Math.floor(u * w));
-      const cy = Math.min(h - 1, Math.floor(vv * h));
-      return sampleMaxWindow(data, w, h, cx, cy) / 255;
-    };
+    const png = new Uint8Array(await res.arrayBuffer());
+    return maxWindowSampler(await decodeGreyPng(png), bounds);
   } catch (err) {
     if (isAbortError(err)) {
       throw err;

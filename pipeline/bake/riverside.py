@@ -27,7 +27,6 @@ import math
 import numpy as np
 import rasterio
 import shapely
-from PIL import Image
 from rasterio.features import shapes
 from rasterio.windows import Window
 
@@ -38,6 +37,7 @@ from .common import (
     feature,
     geometry_json,
     owns,
+    pixel_of,
     write_geojson,
 )
 from .osm import has_extract, read_osm, tag
@@ -57,18 +57,15 @@ class River:
 
     def __init__(self, tile: Tile) -> None:
         self.bounds = tile.bounds
-        self.cls = np.asarray(Image.open(tile.out("dlm", f"landcover_{tile.id}.png")).convert("L"))
+        cls = tile.classes()
+        if cls is None:
+            raise FileNotFoundError(f"{tile.id}: no class raster — bake landcover first")
+        self.cls = cls
         with rasterio.open(tile.dgm) as dgm:
             self.dgm = dgm.read(1).astype(np.float64)
 
     def _px(self, raster: np.ndarray, x: float, y: float) -> tuple[int, int] | None:
-        xmin, ymin, xmax, ymax = self.bounds
-        if not (xmin <= x < xmax and ymin <= y < ymax):
-            return None
-        h, w = raster.shape
-        c = min(int((x - xmin) / (xmax - xmin) * w), w - 1)
-        r = min(int((ymax - y) / (ymax - ymin) * h), h - 1)
-        return r, c
+        return pixel_of(raster.shape, self.bounds, x, y)
 
     def wet_part(self, shape: shapely.Polygon) -> shapely.Polygon | None:
         """The largest part of a shape over the water class."""

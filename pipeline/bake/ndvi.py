@@ -6,10 +6,9 @@ from __future__ import annotations
 
 import numpy as np
 import rasterio
-from PIL import Image
 from rasterio.enums import Resampling
 
-from .common import Tile
+from .common import Tile, save_grey_png
 
 
 def ndvi_raster(tile: Tile, px: int) -> np.ndarray:
@@ -26,5 +25,5 @@ def run(tile: Tile, px: int = 1024) -> None:
     if not tile.raw_raster("dop").exists():
         print(f"{tile.id}: no DOP — skipping NDVI (crowns keep the hash sage)")
         return
-    Image.fromarray(ndvi_raster(tile, px), mode="L").save(tile.out("dlm", f"ndvi_{tile.id}.png"))
+    save_grey_png(tile.out("dlm", f"ndvi_{tile.id}.png"), ndvi_raster(tile, px))
     print(f"{tile.id}: NDVI {px}²")

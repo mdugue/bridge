@@ -1,3 +1,4 @@
+import { clamp01 } from "./math";
 /**
  * The load pipeline as the HUD shows it: five named stages with a fixed share
  * of the bar each, declared ONCE. `create-app.ts` reports a fraction per stage
@@ -146,10 +147,6 @@ export interface LoadStageState extends LoadStageDef {
   skipped: boolean;
   /** right-hand column of the list: "geladen" / "42 %" / "lädt…" / "wartet" */
   stateText: string;
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
 }
 
 function stateTextFor(

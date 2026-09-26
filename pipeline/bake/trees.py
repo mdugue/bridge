@@ -54,7 +54,6 @@ import statistics
 from dataclasses import dataclass
 
 import numpy as np
-from PIL import Image
 from scipy.spatial import cKDTree
 
 from . import tree_archetypes as ta
@@ -445,8 +444,7 @@ def run(tile: Tile) -> None:
             zip(trees + osm, sizes + osm_sizes, strict=True),
             key=lambda r: (r[0]["x"], r[0]["y"]),
         )
-        landcover = tile.out("dlm", f"landcover_{tile.id}.png")
-        cls = np.asarray(Image.open(landcover).convert("L")) if landcover.exists() else None
+        cls = tile.classes()
         features = tree_features([r[0] for r in rows], [r[1] for r in rows], cls, tile.bounds)
     doc = {
         "type": "FeatureCollection",

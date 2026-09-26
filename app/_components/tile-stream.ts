@@ -39,6 +39,7 @@ import {
   ownsPoint,
   type TerrainExtras,
 } from "@/lib/city/tileset";
+import type { DressingKind } from "@/lib/city/tile";
 import { type CityLayer, dressCity } from "./city-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
@@ -157,6 +158,8 @@ export interface TileStream {
 
 /** Every dressed object of a tile, keyed by its content root. */
 interface Dressed {
+  /** aborts the dressing's fetches when the tile leaves before it lands */
+  aborter?: AbortController;
   city?: CityLayer;
   dressing?: TileDressing;
   /** the shared sky-view raster the city holds (its URL) */
@@ -206,19 +209,36 @@ function meshNamed(root: Object3D, name: string): Mesh | undefined {
   return found;
 }
 
-function dressingParts(d: TileDressing): Object3D[] {
-  return [
-    d.vegetation?.group,
-    d.lowVegetation,
-    d.lamps?.group,
-    d.monuments?.group,
-    d.furniture,
-    d.rail,
-    d.tram,
-    d.riverside,
-    d.sport?.group,
-    d.vineyards,
-  ].filter((part): part is Group => part !== undefined);
+/**
+ * A dressing's scene parts by name — the one list its parts, its disposal,
+ * its visibility and the HUD's layer census (create-app.ts) walk. A field
+ * added to TileDressing does not compile until it has its entry here.
+ */
+export const DRESSING_PARTS = {
+  vegetation: (d) => d.vegetation?.group,
+  lowVegetation: (d) => d.lowVegetation,
+  lamps: (d) => d.lamps?.group,
+  monuments: (d) => d.monuments?.group,
+  furniture: (d) => d.furniture,
+  rail: (d) => d.rail,
+  tram: (d) => d.tram,
+  riverside: (d) => d.riverside,
+  sport: (d) => d.sport?.group,
+  vineyards: (d) => d.vineyards,
+} as const satisfies Record<
+  // every field but the id: a new part cannot be left out
+  Exclude<keyof TileDressing, "tile">,
+  (d: TileDressing) => Object3D | undefined
+>;
+
+export type DressingPartName = keyof typeof DRESSING_PARTS;
+
+export const DRESSING_PART_NAMES = Object.keys(
+  DRESSING_PARTS
+) as DressingPartName[];
+
+export function dressingParts(d: TileDressing): Object3D[] {
+  return DRESSING_PART_NAMES.flatMap((name) => DRESSING_PARTS[name](d) ?? []);
 }
 
 /**
@@ -304,13 +324,11 @@ function offMonuments(
 
 /** The goals, posts and nets of the grounds this tile owns (a ground on a
  *  seam is in both tiles' tables; its centre decides). */
-async function buildSport(
+function buildSport(
   terrain: TerrainLayer,
-  file: string | undefined,
-  ctx: TileStreamContext,
-  url: (file: string) => string
-): Promise<SportFixtureLayer | undefined> {
-  const table = file ? await fetchOptionalJson<SportTable>(url(file)) : null;
+  table: SportTable | null,
+  ctx: TileStreamContext
+): SportFixtureLayer | undefined {
   if (!table?.grounds?.length) {
     return undefined;
   }
@@ -388,20 +406,35 @@ function buildTileVegetation(
   };
 }
 
+/** `Promise.all` over named promises: no position to get out of step. */
+async function allNamed<T extends Record<string, Promise<unknown>>>(
+  promises: T
+): Promise<{ [K in keyof T]: Awaited<T[K]> }> {
+  const keys = Object.keys(promises) as (keyof T)[];
+  const values = await Promise.all(keys.map((key) => promises[key]));
+  return Object.fromEntries(keys.map((key, i) => [key, values[i]])) as {
+    [K in keyof T]: Awaited<T[K]>;
+  };
+}
+
 async function buildDressing(
   terrain: TerrainLayer,
   extras: TerrainExtras,
   ctx: TileStreamContext,
-  url: (file: string) => string
+  url: (file: string) => string,
+  signal?: AbortSignal
 ): Promise<TileDressing> {
   const d = extras.dressing;
   const tile = extras.tileId;
   if (!d) {
     return { tile };
   }
-  const get = <T>(file: string): Features<T> =>
-    file ? fetchFeatures<T>(url(file)) : Promise.resolve([]);
-  const [
+  // A kind the tile lacks is a feature off, never a request.
+  const get = <T>(kind: DressingKind): Features<T> => {
+    const file = d[kind];
+    return file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
+  };
+  const {
     rows,
     canopy,
     ndviAt,
@@ -412,37 +445,42 @@ async function buildDressing(
     bridges,
     ballast,
     platforms,
-    sport,
+    sportTable,
     inventory,
     scanTrees,
     hedges,
     cultivated,
     trams,
     river,
-  ] = await Promise.all([
-    get<VegRowFeature>(d.vegrows),
-    get<CanopyFeature>(d.canopy),
-    extras.ndvi
-      ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
+  } = await allNamed({
+    rows: get<VegRowFeature>("vegrows"),
+    canopy: get<CanopyFeature>("canopy"),
+    ndviAt: extras.ndvi
+      ? loadNdviSampler(url(extras.ndvi), terrain.bounds, signal)
       : Promise.resolve(null),
-    get<LampFeature>(d.lamps),
-    get<MonumentFeature>(d.monuments),
-    get<FurnitureFeature>(d.furniture),
-    get<RailFeature>(d.rail),
-    get<BridgeFeature>(d.bridge),
-    get<AreaFeature>(d.railarea),
-    get<AreaFeature>(d.platform),
-    buildSport(terrain, extras.sportTable, ctx, url),
+    lamps: get<LampFeature>("lamps"),
+    monuments: get<MonumentFeature>("monuments"),
+    furniture: get<FurnitureFeature>("furniture"),
+    rails: get<RailFeature>("rail"),
+    bridges: get<BridgeFeature>("bridge"),
+    ballast: get<AreaFeature>("railarea"),
+    platforms: get<AreaFeature>("platform"),
+    // the table only: its fixtures are built once every fetch has landed,
+    // so an aborted dressing leaves nothing built behind
+    sportTable: extras.sportTable
+      ? fetchOptionalJson<SportTable>(url(extras.sportTable), signal)
+      : Promise.resolve(null),
     // the street-tree cadastre (tree-inventory-layer.ts)
-    get<TreeFeature>(d.trees ?? ""),
+    inventory: get<TreeFeature>("trees"),
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
-    get<CanopyExtraFeature>(d.canopyx ?? ""),
-    get<LowVegFeature>(d.lowveg ?? ""),
+    scanTrees: get<CanopyExtraFeature>("canopyx"),
+    hedges: get<LowVegFeature>("lowveg"),
     // allotments, orchards, vineyards (cultivated-layer.ts)
-    get<CultivatedFeature>(d.cultivated ?? ""),
-    get<TramFeature>(d.tram ?? ""),
-    get<RiversideFeature>(d.riverside ?? ""),
-  ]);
+    cultivated: get<CultivatedFeature>("cultivated"),
+    trams: get<TramFeature>("tram"),
+    river: get<RiversideFeature>("riverside"),
+  });
+  const sport = buildSport(terrain, sportTable, ctx);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
@@ -775,12 +813,15 @@ export class DressingPlugin {
         if (!entry || this.disposed) {
           return; // the tile (or the stream) left before its turn
         }
+        entry.aborter = new AbortController();
         const dressing = await buildDressing(
           terrain,
           extras,
           this.ctx,
-          this.url
+          this.url,
+          entry.aborter.signal
         );
+        entry.aborter = undefined;
         const parts = dressingParts(dressing);
         await withinCompileWait(
           Promise.all(
@@ -827,6 +868,7 @@ export class DressingPlugin {
       return;
     }
     this.dressed.delete(scene);
+    dressed.aborter?.abort();
     if (dressed.city) {
       this.stream.cities.delete(dressed.city);
       dressed.city.dispose();
@@ -918,10 +960,9 @@ export function createTileStream(
     visibleCities: memo(() =>
       [...stream.cities].filter((c) => isShown(c.mesh))
     ),
+    // Every part hangs under its tile's content root: any one tells.
     visibleDressings: memo(() =>
-      [...stream.dressings].filter((d) =>
-        isShown(d.vegetation?.group ?? d.lamps?.group ?? d.rail ?? null)
-      )
+      [...stream.dressings].filter((d) => isShown(dressingParts(d)[0] ?? null))
     ),
     dispose: () => {
       tiles.dispose();

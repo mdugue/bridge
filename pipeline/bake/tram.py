@@ -45,10 +45,18 @@ import numpy as np
 import shapely
 from PIL import Image
 
-from .common import OSM_ATTRIBUTION, Tile, column, feature, owns, write_geojson
+from .common import (
+    OSM_ATTRIBUTION,
+    Tile,
+    column,
+    feature,
+    overlaps,
+    owns,
+    value_at,
+    write_geojson,
+)
 from .osm import has_extract, read_osm, tag
 from .rail import merge_lines
-from .skyview import overlaps, site_sources
 
 MARGIN_M = 30.0  # tracks and masts around the tile the supports are decided on
 SAMPLE_M = 2.0
@@ -81,18 +89,15 @@ class Beds:
 
     def __init__(self, tile: Tile) -> None:
         self.bounds = tile.bounds
-        self.cls = np.asarray(Image.open(tile.out("dlm", f"landcover_{tile.id}.png")).convert("L"))
+        cls = tile.classes()
+        if cls is None:
+            raise FileNotFoundError(f"{tile.id}: no class raster — bake landcover first")
+        self.cls = cls
         ndvi = tile.data / "dlm" / f"ndvi_{tile.id}.png"
         self.ndvi = np.asarray(Image.open(ndvi).convert("L")) if ndvi.exists() else None
 
     def _at(self, raster: np.ndarray, x: float, y: float) -> int | None:
-        xmin, ymin, xmax, ymax = self.bounds
-        if not (xmin <= x < xmax and ymin <= y < ymax):
-            return None
-        h, w = raster.shape
-        c = min(int((x - xmin) / (xmax - xmin) * w), w - 1)
-        r = min(int((ymax - y) / (ymax - ymin) * h), h - 1)
-        return int(raster[r, c])
+        return value_at(raster, self.bounds, x, y)
 
     def bed(self, line: shapely.LineString) -> str | None:
         """street / grass / ballast by the share of 2 m samples; None when no
@@ -400,7 +405,7 @@ def taken(tile: Tile, margin: float = PLATFORM_M + SIGN_DEDUP_M) -> list[shapely
     seam is in the neighbour's)."""
     xmin, ymin, xmax, ymax = tile.bounds
     near = (xmin - margin, ymin - margin, xmax + margin, ymax + margin)
-    ids = [tile.id] + [tid for tid, b in site_sources(tile) if tid != tile.id and overlaps(b, near)]
+    ids = [tile.id] + [tid for tid, b in tile.neighbours() if tid != tile.id and overlaps(b, near)]
     out = []
     for tid in ids:
         path = tile.data / "dlm" / f"furniture_{tid}.geojson"

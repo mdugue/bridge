@@ -23,6 +23,7 @@
  * `world` group like every other data-frame layer.
  */
 import type { TerrainBounds } from "./terrain-geometry";
+import type { DressingKind, SoundKind } from "./tile";
 
 /**
  * Whether a tile owns the point: west and south edges in, east and north
@@ -68,30 +69,10 @@ export const COARSE_TERRAIN_ERROR = 40;
 /** Large enough that a visible tile always refines to its terrain. */
 const TILE_ERROR = 100_000;
 
-/** The rasters and features a fine terrain tile is dressed with (file names). */
-export interface DressingFiles {
-  bridge: string;
-  canopy: string;
-  /** laser-scan crowns outside the canopy mask (tiles with a laser scan) */
-  canopyx?: string;
-  /** allotments, orchards, vineyards (orchard trees, vine rows) */
-  cultivated?: string;
-  furniture: string;
-  lamps: string;
-  /** OSM hedges */
-  lowveg?: string;
-  monuments: string;
-  platform: string;
-  rail: string;
-  railarea: string;
-  /** OSM trams: tracks, catenary supports, stop signs */
-  tram?: string;
-  /** OSM landing stages, groynes, ferry lines */
-  riverside?: string;
-  /** the street-tree cadastre */
-  trees?: string;
-  vegrows: string;
-}
+/** The features a fine terrain tile is dressed with (published names; only
+ *  the files the tile has). Which kinds these are is the artifact table's
+ *  `dressing` column (lib/city/tile.ts). */
+export type DressingFiles = Partial<Record<DressingKind, string>>;
 
 export interface TerrainExtras {
   bounds: TerrainBounds;
@@ -156,16 +137,11 @@ export type ContentExtras = CityExtras | TerrainExtras;
 
 /**
  * What the hidden soundscape reads of a tile (plan 035; published names),
- * fetched only while it plays: the paving raster (footsteps), the sky view
- * (the wind), the bell towers, the tram tracks, the fountains.
+ * fetched only while it plays — the artifact table's `sound` column
+ * (lib/city/tile.ts): the paving raster (footsteps), the sky view (the
+ * wind), the bell towers, the tram tracks, the fountains.
  */
-export interface TileSoundFiles {
-  monuments?: string;
-  soundmarks?: string;
-  surface?: string;
-  svf?: string;
-  tram?: string;
-}
+export type TileSoundFiles = Partial<Record<SoundKind, string>>;
 
 export interface TilesetTileInfo {
   bounds: TerrainBounds;
@@ -176,7 +152,8 @@ export interface TilesetTileInfo {
    */
   footprints: string;
   id: string;
-  /** a ≤ 2048² class raster for the minimap */
+  /** the 512² class raster the minimap and the soundscape read
+   *  (`landcoverSmall`, lib/city/tile.ts) */
   minimap: string;
   /** the soundscape's files (plan 035) */
   sound?: TileSoundFiles;

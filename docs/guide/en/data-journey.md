@@ -118,7 +118,7 @@ In total the repository carries about 400 MB of data for the fifteen tiles.
 |---|---|---|---|---|
 | Ground | DGM1 GeoTIFF | the GeoTIFF itself | two **terrain meshes** per tile (a detailed and a coarse one), with the walls sharpened in, as **glTF** | the mesh the camera needs |
 | Buildings | LoD2 CityGML | the CityJSON conversion | one **glTF building mesh** per tile with a table of per-building style values (roof colour folded in), plus the footprints for the minimap | mesh + footprints |
-| Ground colours | Basis-DLM shapefiles | the land-use class PNG and its legend | a half-size (2048²) copy for phones, distant terrain and the minimap | the class PNGs; the colours are painted in the browser |
+| Ground colours | Basis-DLM shapefiles | the land-use class PNG and its legend | a half-size (2048²) copy for phones and distant terrain, and a small 512² one for the minimap | the class PNGs; the colours are painted in the browser |
 | Trees | Basis-DLM + DOM1 + DGM1 | tree points, hedge rows | — | as committed |
 | Greenness | DOP | the NDVI PNG | — | as committed |
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
@@ -148,7 +148,7 @@ three things:
    8–11 MB CityJSON. A small index file, `tileset.json`, in the open
    **3D Tiles** format, lists every tile's buildings and its two terrain
    levels, and says from how close the detailed level replaces the coarse
-   one. The land-use class PNG gets a 2048² copy. Results are cached in
+   one. The land-use class PNG gets a 2048² and a 512² copy. Results are cached in
    `.cache/` and only redone when an input or the bake code changed.
 2. **Publishes** every file into `public/data/` under a name that contains
    a fingerprint of its content (for example
@@ -179,7 +179,8 @@ as sent over the network):
 | Building footprints (minimap) | 48 kB | up to 75 kB | with the buildings |
 | Coarse terrain (512²) | 0.41 MB | 0.44–0.65 MB | the tile is in view |
 | Detailed terrain (a TIN, with its walls, stairs and kerb stones) | 1.61 MB | 1.31–3.56 MB | the camera comes close |
-| Land-use classes, 2048² | 0.08 MB | 0.06–0.11 MB | at the start (minimap), then for the coarse terrain |
+| Land-use classes, 512² | 15 kB | 9–18 kB | at the start, for the minimap (the soundscape reuses it) |
+| Land-use classes, 2048² | 0.08 MB | 0.06–0.11 MB | with the coarse terrain (on phones with every level) |
 | Land-use classes, 4096² | 0.22 MB | 0.15–0.29 MB | with the detailed terrain (desktop only) |
 | Greenness (NDVI) | 0.39 MB | 0.32–0.77 MB | with the terrain |
 | Tree points | 36 kB | 41–526 kB | with the detailed terrain |
@@ -216,7 +217,7 @@ post-processing look.
 |---|---|---|
 | New terrain edition | replace the GeoTIFF in `data/dgm/`; re-run the `canopy` and `rail` bakes (they read it) | the terrain meshes, walls included, are re-baked on the next build |
 | New building model | convert to CityJSON, replace in `data/cityjson/`; re-run the `roof-colour` bake | the building mesh is re-baked on the next build |
-| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture`, `rail` and `tram` (they read the class raster) | the 2048² copies are re-baked |
+| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture`, `rail` and `tram` (they read the class raster) | the 2048² and 512² copies are re-baked |
 | New aerial photos | re-run the `ndvi` and `roof-colour` bakes | the roof colours are folded into the mesh on the next build |
 | New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs`, `rail` and `tram` bakes | — |
 | Different ground colours | edit the one palette in the code | nothing to re-bake: the browser paints the colours |

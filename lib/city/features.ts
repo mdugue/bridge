@@ -1,5 +1,5 @@
 /**
- * The GeoJSON feature shapes the offline bakes write (scripts/extract-*.sh)
+ * The GeoJSON feature shapes the offline bakes write (pipeline/bake/*.py)
  * and the layers read — the one contract between data/dlm and the viewer.
  * features.test.ts checks every committed file against it, so a bake that
  * changes a property name fails there, not as an empty layer in the browser.
