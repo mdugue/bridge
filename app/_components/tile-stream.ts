@@ -700,26 +700,26 @@ export class DressingPlugin {
       horizon: this.horizon,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
-    // The fine level's baked stairs, walls and kerbs: only their materials
-    // here.
+    // The fine level's baked stairs, walls, kerbs and fences: only their
+    // materials here, lit by the tile's baked light as the ground is.
     const stairs = meshNamed(scene, "stairs");
     if (stairs) {
-      dressStairs(stairs, this.ctx.heightFog);
+      dressStairs(stairs, this.ctx.heightFog, terrain.light);
       terrain.stairs = stairs;
     }
     const walls = meshNamed(scene, "walls");
     if (walls) {
-      dressWalls(walls, this.ctx.heightFog);
+      dressWalls(walls, this.ctx.heightFog, terrain.light);
       terrain.walls = walls;
     }
     const kerbs = meshNamed(scene, "kerbs");
     if (kerbs) {
-      dressKerbs(kerbs, this.ctx.heightFog);
+      dressKerbs(kerbs, this.ctx.heightFog, terrain.light);
       terrain.kerbs = kerbs;
     }
     const fences = meshNamed(scene, "fences");
     if (fences) {
-      dressFences(fences, this.ctx.heightFog);
+      dressFences(fences, this.ctx.heightFog, terrain.light);
       terrain.fences = fences;
     }
     this.stream.terrains.add(terrain);

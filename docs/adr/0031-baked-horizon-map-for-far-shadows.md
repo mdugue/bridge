@@ -76,6 +76,10 @@ courtyard as brightly as a meadow.
   continuous skyline (a block, a ridge) is where it is right.
 - Only the ground receives it; facades do not (the plan's phase 3 waits on
   plates). Trees cast nothing into it.
+  What is baked into the fine terrain takes the ground's terms too
+  (`sky-light.ts` `injectGroundLight`): kerbs, fences and stairs both,
+  walls the horizon only (the ground's sky view at a wall's foot counts
+  the wall itself).
 - CSM is no longer needed for "the far streets are sunlit"; it would still
   add the middle distance's shadow *shapes* and shadows on facades, and
   stays the ledger's 📋 #7 for that.

@@ -1,6 +1,11 @@
 import { Color, DoubleSide, type Mesh, MeshStandardMaterial } from "three";
 import { FENCE_CODE, FENCE_UV_CODES } from "@/lib/city/fences";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import {
+  type GroundLight,
+  groundLightKey,
+  injectGroundLight,
+} from "./sky-light";
 
 /*
  * A fence is one calm band (lib/city/fences.ts), in a single muted tone close
@@ -74,20 +79,27 @@ totalEmissiveRadiance += ${f1(LIFT)} * diffuseColor.rgb;`;
  * terrain glTF carries a `fences` node (lib/city/fences.ts, written by
  * scripts/bake-tiles.ts `fenceMesh` on the final ground). This gives it its
  * material: an opaque, double-sided band in one tone, lit as the ground
- * (FRAGMENT_NORMAL). It receives shadows
+ * (FRAGMENT_NORMAL) — and by the ground's baked light too, its sky view
+ * and far horizon (`light`, sky-light.ts). It receives shadows
  * but casts none — an opaque band would cast a solid wall of shadow, and a
  * light one needs a dithered depth pass, which is what crawled. It arrives
  * and leaves with its tile.
  */
-export function dressFences(mesh: Mesh, heightFog?: HeightFogUniforms): void {
+export function dressFences(
+  mesh: Mesh,
+  heightFog?: HeightFogUniforms,
+  light?: GroundLight
+): void {
   const material = new MeshStandardMaterial({
     color: 0xff_ff_ff,
     roughness: 1,
     metalness: 0,
     side: DoubleSide,
   });
-  material.customProgramCacheKey = () => `fence-${heightFog !== undefined}`;
+  const key = `fence-${groundLightKey(light, true)}-${heightFog !== undefined}`;
+  material.customProgramCacheKey = () => key;
   material.onBeforeCompile = (sh) => {
+    injectGroundLight(sh, light, true);
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vFenceUv;")
       .replace("#include <begin_vertex>", VERTEX_UV);

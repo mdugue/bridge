@@ -50,6 +50,7 @@ import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
 import { MARKINGS_DECL, ROAD_MARKINGS } from "./road-markings";
 import type { SharedRasters } from "./shared-rasters";
 import {
+  type GroundLight,
   lightsWithFarShadow,
   SKY_VIEW_AO,
   skyLightBody,
@@ -87,6 +88,9 @@ export interface TerrainLayer {
   vertexCount: number;
   /** animated water surface, present only when the class raster loaded */
   water?: WaterLayer;
+  /** the tile's baked light for what stands on this level (kerbs, fences,
+   *  stairs, walls; sky-light.ts `injectGroundLight`), when it has any */
+  light?: GroundLight;
 }
 
 export interface TerrainOptions {
@@ -1012,6 +1016,26 @@ async function loadDetailRasters(
   };
 }
 
+/** The splat's baked light as the fine level's kerbs, fences, stairs and
+ *  walls bind it (the same textures and rows, by reference). */
+function groundLightOf(splat: SplatLayer): GroundLight | undefined {
+  const { ground, sunDirection } = splat;
+  if (!(ground && sunDirection && (splat.svfTexture || splat.horizonTexture))) {
+    return undefined;
+  }
+  const [minX, minY, maxX, maxY] = splat.bounds;
+  return {
+    svf: splat.svfTexture,
+    horizon: splat.horizonTexture,
+    origin: [minX - splat.offset.cx, maxY - splat.offset.cy],
+    size: [maxX - minX, maxY - minY],
+    skyView: ground.skyView,
+    horizonShade: ground.horizonShade,
+    shadowReach: ground.shadowReach,
+    sunDirection,
+  };
+}
+
 /**
  * Dresses a streamed terrain mesh: loads its class raster (and NDVI), paints
  * the colour splat, swaps in the land-cover material and hangs the water and
@@ -1094,6 +1118,7 @@ export async function dressTerrain(
 
   return {
     mesh,
+    light: splat ? groundLightOf(splat) : undefined,
     tile: extras.tileId,
     level: extras.level,
     vertexCount: mesh.geometry.getAttribute("position").count,

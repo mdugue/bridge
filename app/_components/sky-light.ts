@@ -9,6 +9,7 @@ import {
   ShaderChunk,
   type Texture,
   UnsignedByteType,
+  type Vector3,
 } from "three";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import {
@@ -23,6 +24,7 @@ import {
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
 import { isAbortError } from "./fetch-optional";
+import { DATA_POSITION } from "./shader-chunks";
 import { sceneShared, textureBytes, trackTexture } from "./three-utils";
 
 /**
@@ -33,7 +35,8 @@ import { sceneShared, textureBytes, trackTexture } from "./three-utils";
  *   sees within 150 m scales the INDIRECT diffuse light only — the
  *   hemisphere fill that lit a narrow courtyard as brightly as the open
  *   Elbwiesen. It runs in `aomap_fragment` (after `lights_fragment_end`),
- *   so the sun's direct light is untouched. Terrain and clay facades.
+ *   so the sun's direct light is untouched. Terrain (with its kerbs,
+ *   fences and stairs) and clay facades.
  * - **Ferne Schatten** (horizon): per texel the skyline's elevation angle
  *   in 16 azimuths, in two bands — occluders 80–1 500 m out, and 8–80 m
  *   out. Where the sun stands below it, the sun's direct light is cut: the
@@ -43,7 +46,9 @@ import { sceneShared, textureBytes, trackTexture } from "./three-utils";
  *   only fades in over the frustum's last 20 % (`uShadowReach`, kept by the
  *   sun rig) and counts whole beyond it. Combined with the shadow map by
  *   `min`, never a product: where both see the same occluder it must not
- *   darken twice. Terrain only (the plan's facade step waits on plates).
+ *   darken twice. The ground only, with what is baked into it (kerbs,
+ *   fences, stairs, walls: `injectGroundLight`); the plan's facade step
+ *   waits on plates.
  *
  * Both rows at 0 are the picture without them.
  */
@@ -65,7 +70,9 @@ export function skyLightDecl(hasSvf: boolean, hasHorizon: boolean): string {
   // Azimuth k's horizon angle (°) at uv in the band whose planes start at
   // layer base: layer base + k / 4, channel k % 4.
   float hzAngle( vec2 uv, float k, float base, float maxDeg ) {
-    vec4 v = texture( uHorizon, vec3( uv, base + floor( k / 4.0 ) ) );
+    // explicit LOD: the near band reads after a non-uniform return (the
+    // array has no mips; level 0 is what it read)
+    vec4 v = textureLod( uHorizon, vec3( uv, base + floor( k / 4.0 ) ), 0.0 );
     float c = mod( k, 4.0 );
     float s = c < 0.5 ? v.r : c < 1.5 ? v.g : c < 2.5 ? v.b : v.a;
     return s * maxDeg;
@@ -140,6 +147,111 @@ export function lightsWithFarShadow(
 		directLight.color *= hzLit;
 		#endif`
     );
+}
+
+// --- what stands on the fine terrain -------------------------------------------------
+
+/**
+ * A tile's baked light as the things baked into its fine terrain read it
+ * (kerbs, fences, stairs, walls): the terrain's own rasters, where they lie,
+ * and the rows and the frustum it binds (by reference). Without it a kerb
+ * on a far-shadowed street stayed sunlit on a shadowed carriageway.
+ */
+export interface GroundLight {
+  svf?: Texture;
+  horizon?: Texture;
+  /** the tile's recentered north-west corner and size (data frame, m) */
+  origin: [number, number];
+  size: [number, number];
+  skyView: { value: number };
+  horizonShade: { value: number };
+  shadowReach: { value: Vector3 };
+  sunDirection: Vector3;
+}
+
+/** The slice of an `onBeforeCompile` shader object the patch touches. */
+interface PatchedShader {
+  fragmentShader: string;
+  uniforms: Record<string, { value: unknown }>;
+  vertexShader: string;
+}
+
+/** What a material's program key must add for the ground light: the patch
+ *  branches on which rasters the tile has. */
+export function groundLightKey(
+  light: GroundLight | undefined,
+  skyView: boolean
+): string {
+  const svf = skyView && light?.svf !== undefined;
+  return `gl${svf ? 1 : 0}${light?.horizon ? 1 : 0}`;
+}
+
+/**
+ * Folds the tile's sky view (`skyView`: the ambient term) and far horizon
+ * (the sun) into a MeshStandardMaterial's shader, as the terrain has them —
+ * the same GLSL, read at the fragment's own ground position. A few texture
+ * reads on a few pixels; nothing when the tile has neither raster. Pair it
+ * with `groundLightKey` in the material's program key.
+ */
+export function injectGroundLight(
+  sh: PatchedShader,
+  light: GroundLight | undefined,
+  skyView: boolean
+): void {
+  const hasSvf = skyView && light?.svf !== undefined;
+  const hasHorizon = light?.horizon !== undefined;
+  if (!(light && (hasSvf || hasHorizon))) {
+    return;
+  }
+  sh.uniforms.uSplatOrigin = { value: light.origin };
+  sh.uniforms.uSplatSize = { value: light.size };
+  sh.uniforms.uSunDir = { value: light.sunDirection };
+  if (hasSvf) {
+    sh.uniforms.uSvf = { value: light.svf };
+    sh.uniforms.uSkyView = light.skyView;
+  }
+  if (hasHorizon) {
+    sh.uniforms.uHorizon = { value: light.horizon };
+    sh.uniforms.uHorizonShade = light.horizonShade;
+    sh.uniforms.uShadowReach = light.shadowReach;
+  }
+  sh.vertexShader = sh.vertexShader
+    .replace(
+      "#include <common>",
+      "#include <common>\nvarying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform vec2 uSplatOrigin;\nuniform vec2 uSplatSize;"
+    )
+    .replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>
+${DATA_POSITION}
+vSplatUv = vec2( ( dataPos.x - uSplatOrigin.x ) / uSplatSize.x, ( uSplatOrigin.y - dataPos.y ) / uSplatSize.y );
+vWorldXY = dataPos.xy;`
+    );
+  sh.fragmentShader = sh.fragmentShader
+    .replace(
+      "#include <common>",
+      `#include <common>
+varying vec2 vSplatUv;
+varying vec2 vWorldXY;
+uniform vec3 uSunDir;
+${skyLightDecl(hasSvf, hasHorizon)}`
+    )
+    .replace(
+      "#include <clipping_planes_fragment>",
+      `#include <clipping_planes_fragment>\n${skyLightBody(hasSvf, hasHorizon)}`
+    );
+  if (hasSvf) {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      "#include <aomap_fragment>",
+      SKY_VIEW_AO
+    );
+  }
+  if (hasHorizon) {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      "#include <lights_fragment_begin>",
+      lightsWithFarShadow()
+    );
+  }
 }
 
 // --- the clay facades --------------------------------------------------------------

@@ -104,7 +104,9 @@ export const COLONY_GARDEN_GLSL = /* glsl */ `
   {
     vec2 ctUv = ( vSplatUv - uCultivatedRect.xy ) / uCultivatedRect.zw;
     if ( uGroundDetail > 0.0 && all( greaterThan( ctUv, vec2( 0.0 ) ) ) && all( lessThan( ctUv, vec2( 1.0 ) ) ) ) {
-      float ctR = texture( uCultivated, ctUv ).r * 255.0;
+      // explicit LOD: implicit derivatives are undefined in non-uniform
+      // control flow (the texture has no mips; level 0 is what it read)
+      float ctR = textureLod( uCultivated, ctUv, 0.0 ).r * 255.0;
       // metres inside the garden land's edge (0: farther outside than held)
       float ctD = ctR > 0.5 ? ( ctR - 128.0 ) / ${f(COLONY_EDGE_SCALE)} : -10.0;
       float ctW = max( gdW, 0.01 );

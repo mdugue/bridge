@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { InstancedMesh } from "three";
-import { buildVineyards, vineInstances } from "./cultivated-layer";
+import {
+  buildVineyards,
+  COLONY_GARDEN_GLSL,
+  vineInstances,
+} from "./cultivated-layer";
 import { disposeObject3D } from "./three-utils";
 
 const flat = { offset: { cx: 100, cy: 200 }, heightAt: () => 110 };
@@ -61,4 +65,10 @@ test("vine rows are chunked instanced meshes that cast shadows", () => {
     true
   );
   disposeObject3D(group);
+});
+
+test("the garden raster is read at an explicit LOD inside its branch", () => {
+  // implicit derivatives are undefined in non-uniform control flow
+  expect(COLONY_GARDEN_GLSL).not.toMatch(/[^D]texture\( uCultivated/u);
+  expect(COLONY_GARDEN_GLSL).toContain("textureLod( uCultivated, ctUv, 0.0 )");
 });
