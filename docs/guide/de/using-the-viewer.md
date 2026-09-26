@@ -94,8 +94,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 
 ### Erkunden
 
-- **Minikarte** — das ganze Gebiet von oben, mit den Landnutzungsfarben
-  und den Grundrissen der gerade geladenen Gebäude. Deine Position und
+- **Minikarte** — das ganze Gebiet von oben, mit den Landnutzungsfarben,
+  den Brücken und den Grundrissen der gerade geladenen Gebäude. Deine Position und
   Blickrichtung sind eingezeichnet; ein Klick teleportiert.
 - **Gehen / Fliegen** — der Bewegungsmodus.
 - **Aussichtspunkte** — handverlesene Standpunkte, zu denen die Kamera

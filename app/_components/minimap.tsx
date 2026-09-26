@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { landcoverSrgb } from "@/lib/city/landcover";
+import { LANDCOVER_CLASSES, landcoverSrgb } from "@/lib/city/landcover";
 import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
   type FootprintPoly,
+  type MapBridge,
+  mapBridges,
   mapHeightPx,
   mapPxToEpsg,
+  type MapTile,
 } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
@@ -57,6 +60,48 @@ function colorizeLandcover(
   return canvas;
 }
 
+/** A deck's fill: the colour of the class it carries (the class raster
+ *  shows the river under a bridge). */
+const DECK_CLASS: Record<string, string> = {
+  rail: "railway",
+  road: "road",
+  path: "path",
+};
+
+function deckFill(kind: string): string {
+  const key = DECK_CLASS[kind] ?? "road";
+  const id = LANDCOVER_CLASSES.find((c) => c.key === key)?.id ?? 0;
+  const [r, g, b] = landcoverSrgb(id);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** The bridge decks over the land cover, each in its class colour with a
+ *  hairline edge so it reads against the water. */
+function drawBridges(
+  ctx: CanvasRenderingContext2D,
+  bridges: MapBridge[],
+  bounds: TerrainBounds,
+  size: number
+): void {
+  ctx.strokeStyle = FRAME;
+  ctx.lineWidth = 0.5;
+  for (const deck of bridges) {
+    ctx.beginPath();
+    deck.pts.forEach(([x, y], i) => {
+      const { px, py } = epsgToMapPx(x, y, bounds, size);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    });
+    ctx.closePath();
+    ctx.fillStyle = deckFill(deck.kind);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
 /**
  * Draws true building footprints as soft-filled, thin-outlined polygons so the
  * map reads as a figure-ground plan instead of a few oversized solid blocks.
@@ -94,13 +139,47 @@ interface MinimapProps {
   /** manual DoF focus distance (m) to draw as a ring around the player; null = off */
   focusRingM?: number | null;
   footprints: FootprintPoly[];
-  /** per-tile land-cover class PNGs + their EPSG bounds, drawn as background */
-  landcoverTiles?: { bounds: TerrainBounds; src: string }[];
+  /** per-tile land-cover class PNGs + their EPSG bounds, drawn as
+   *  background, and each tile's bridge decks over them */
+  landcoverTiles?: MapTile[];
   onTeleport: (epsgX: number, epsgY: number) => void;
   /** CSS pixel width; the height follows the site's aspect ratio */
   size?: number;
   /** subscribe to throttled pose updates; returns an unsubscribe fn */
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
+}
+
+/**
+ * Every tile's bridge decks, loaded once (a few kB a tile; the same files
+ * the dressing reads, so a later load hits the cache). A tile whose file
+ * fails just shows no bridges. A deck across a seam comes in both tiles'
+ * files and is drawn twice, in the same place.
+ */
+function useBridges(tiles: MapTile[] | undefined): MapBridge[] {
+  const [bridges, setBridges] = useState<MapBridge[]>([]);
+  useEffect(() => {
+    const urls = (tiles ?? []).flatMap((t) => (t.bridges ? [t.bridges] : []));
+    if (urls.length === 0) {
+      return;
+    }
+    const controller = new AbortController();
+    Promise.all(
+      urls.map((url) =>
+        fetch(url, { signal: controller.signal })
+          .then((res) => (res.ok ? res.json() : null))
+          .then(mapBridges)
+          .catch((): MapBridge[] => [])
+      )
+    )
+      .then((perTile) => {
+        if (!controller.signal.aborted) {
+          setBridges(perTile.flat());
+        }
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [tiles]);
+  return bridges;
 }
 
 function setupCanvas(
@@ -154,6 +233,7 @@ export function Minimap({
   const [decoded, setDecoded] = useState(
     () => new Map<string, HTMLCanvasElement>()
   );
+  const bridges = useBridges(landcoverTiles);
   useEffect(() => {
     let cancelled = false;
     const requested = requestedRef.current;
@@ -210,10 +290,11 @@ export function Minimap({
       const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
       ctx.drawImage(cv, a.px, a.py, b.px - a.px, b.py - a.py);
     }
+    drawBridges(ctx, bridges, bounds, size);
     ctx.strokeStyle = FRAME;
     ctx.strokeRect(0.5, 0.5, size - 1, height - 1);
     drawFootprints(ctx, footprints, bounds, size);
-  }, [footprints, bounds, size, height, landcoverTiles, decoded]);
+  }, [footprints, bounds, size, height, landcoverTiles, decoded, bridges]);
 
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {
