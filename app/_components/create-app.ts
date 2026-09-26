@@ -36,7 +36,7 @@ import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
-import { createSeasonClock } from "./crown-season";
+import { createSeasonClock, retainCrownDepthMaterial } from "./crown-season";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
 import { createHeightFogUniforms } from "./height-fog";
@@ -49,6 +49,7 @@ import { nearestName } from "@/lib/city/names";
 import { tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
+import { retainOpenSkyTexture } from "./sky-light";
 import {
   aoQualityFor,
   type DeviceTier,
@@ -341,18 +342,39 @@ export async function createCityWalkApp(
   // one) frees exactly what a clean dispose would. Without it the post stack's
   // half-float targets, the style materials, the listeners and the per-tile
   // layer controls survived a failed boot.
-  const cleanups: Array<() => void> = [];
+  // The scene-wide shared resources (three-utils.ts `sceneShared`) go with
+  // the last app that holds them: first in, so they unwind last.
+  const cleanups: Array<() => void> = [
+    retainCrownDepthMaterial(),
+    retainOpenSkyTexture(),
+  ];
   try {
     return await bootApp(opts, renderer, scene, cleanups);
   } catch (err) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
-    runCleanups(cleanups);
-    disposeObject3D(scene);
-    renderer.dispose();
-    renderer.domElement.remove();
+    teardown(cleanups, scene, renderer);
     throw err;
   }
+}
+
+/**
+ * The one teardown of an app, clean or failed: its registered cleanups, the
+ * scene's GPU resources, then the renderer and its context. The context is
+ * lost on purpose — the next app (a StrictMode remount, a round trip to
+ * /wissen) makes its own canvas, and a browser holds only a handful of
+ * contexts; whatever still points at this one draws nothing.
+ */
+function teardown(
+  cleanups: Array<() => void>,
+  scene: Scene,
+  renderer: WebGLRenderer
+): void {
+  runCleanups(cleanups);
+  disposeObject3D(scene);
+  renderer.dispose();
+  renderer.forceContextLoss();
+  renderer.domElement.remove();
 }
 
 /** Unwinds registered teardowns in reverse creation order. */
@@ -1250,10 +1272,7 @@ async function bootApp(
       // Same list, same order as a failed boot unwinds: animation loop ->
       // resize observer -> listeners -> touch -> post stack -> stream ->
       // lights -> sun rig.
-      runCleanups(cleanups);
-      disposeObject3D(scene);
-      renderer.dispose();
-      renderer.domElement.remove();
+      teardown(cleanups, scene, renderer);
     },
   };
 }

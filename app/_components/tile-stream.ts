@@ -560,9 +560,11 @@ async function buildDressing(
  * the renderer's own load (awaited before the tile is marked loaded), so a
  * tile is never shown half-dressed.
  */
-class DressingPlugin {
+export class DressingPlugin {
   name = "BRIDGE_DRESSING";
-  readonly dressed = new WeakMap<Object3D, Dressed>();
+  /** every content root dressed and not yet released: a Map, not a
+   *  WeakMap, so the stream's dispose can release them all (see dispose) */
+  readonly dressed = new Map<Object3D, Dressed>();
   /** the content root a tile is being dressed for (before the renderer
    *  records it in engineData, which it skips when the load is aborted) */
   private readonly sceneOf = new WeakMap<object, Object3D>();
@@ -585,7 +587,11 @@ class DressingPlugin {
       "cities" | "demolished" | "dressings" | "terrains"
     >
   ) {
-    this.chain = ctx.dressingGate
+    // The warm-up runs beside the dressings, not ahead of them: its compile
+    // may take up to COMPILE_WAIT_MS, and the spawn tile's trees need none
+    // of its programs (they compile their own).
+    this.chain = ctx.dressingGate;
+    ctx.dressingGate
       .then(() => this.warmCrowns())
       .catch(() => {
         // Without the warm-up a date change compiles in a frame; the
@@ -614,8 +620,9 @@ class DressingPlugin {
     // ready by then instead of compiling inside a frame.
     await withinCompileWait(this.ctx.compile(scene));
     // Disposed while it was being dressed: the renderer drops an aborted
-    // load without ever recording the scene, so nothing else frees it.
-    if (this.released.has(scene)) {
+    // load without ever recording the scene, so nothing else frees it. The
+    // same once the stream is gone (its plugins are unregistered first).
+    if (this.disposed || this.released.has(scene)) {
       this.release(scene);
     }
   }
@@ -713,7 +720,7 @@ class DressingPlugin {
   }
 
   /** Dressings build one at a time, after the gate: each is a long task.
-   *  The first link warms the crowns' seasonal programs (warmCrowns). */
+   *  The crowns' seasonal programs warm up beside them (warmCrowns). */
   private chain: Promise<void>;
   pending = 0;
   private warmup: CrownWarmup | null = null;
@@ -740,11 +747,22 @@ class DressingPlugin {
     );
   }
 
-  /** Called by the renderer when the stream is disposed. */
+  /**
+   * Called by the renderer when the stream is disposed — before it disposes
+   * its tiles, and with this plugin already unregistered, so `disposeTile`
+   * never runs for them: every dressed tile is released here, and the
+   * shared sky views with them. Whatever is still being built finds the
+   * stream gone and frees itself (processTileModel, queueDressing).
+   */
   dispose(): void {
     this.disposed = true;
     this.warmup?.dispose();
     this.warmup = null;
+    // (release deletes the entry it is on: a Map iterates on safely)
+    for (const scene of this.dressed.keys()) {
+      this.release(scene);
+    }
+    this.skyView.clear();
   }
 
   private queueDressing(
@@ -757,8 +775,8 @@ class DressingPlugin {
       .then(() => this.ctx.dressingGate)
       .then(async () => {
         const entry = this.dressed.get(scene);
-        if (!entry) {
-          return; // the tile left before its turn
+        if (!entry || this.disposed) {
+          return; // the tile (or the stream) left before its turn
         }
         const dressing = await buildDressing(
           terrain,
@@ -790,7 +808,9 @@ class DressingPlugin {
       .finally(() => {
         this.pending--;
         this.settled.add(extras.tileId);
-        this.ctx.onChange();
+        if (!this.disposed) {
+          this.ctx.onChange();
+        }
       });
   }
 
@@ -825,7 +845,9 @@ class DressingPlugin {
       this.stream.dressings.delete(dressed.dressing);
       disposeDressing(dressed.dressing);
     }
-    this.ctx.onChange();
+    if (!this.disposed) {
+      this.ctx.onChange();
+    }
   }
 }
 

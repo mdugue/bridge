@@ -126,6 +126,50 @@ export function estimateGeometryBytes(root: Object3D): number {
   return bytes;
 }
 
+/**
+ * A GPU resource every tile of a scene shares (one program, one upload),
+ * made on first use and disposed when the last app that retained it goes.
+ * A plain module singleton outlives its app: the renderer's "dispose"
+ * listener stays on it, and through that listener the old renderer and its
+ * WebGL context stay reachable (a StrictMode remount, a round trip to
+ * /wissen). Counted, not owned by one app, because a remount may boot the
+ * next app before the last one is gone.
+ */
+export interface SceneShared<T> {
+  /** the resource, made now if nothing holds it */
+  get: () => T;
+  /** one app more; the returned release (idempotent) is one app less */
+  retain: () => () => void;
+}
+
+export function sceneShared<T extends { dispose: () => void }>(
+  create: () => T
+): SceneShared<T> {
+  let value: T | null = null;
+  let refs = 0;
+  return {
+    get: () => {
+      value ??= create();
+      return value;
+    },
+    retain: () => {
+      refs++;
+      let released = false;
+      return () => {
+        if (released) {
+          return;
+        }
+        released = true;
+        refs--;
+        if (refs === 0) {
+          value?.dispose();
+          value = null;
+        }
+      };
+    },
+  };
+}
+
 // Textures register their upload size here; an ImageBitmap that was closed
 // after its upload reports 0×0, so the size is recorded at load time and
 // forgotten when the texture is disposed.

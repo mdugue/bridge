@@ -18,6 +18,7 @@ import {
   SEASON_JITTER_DAYS,
   seasonAt,
 } from "@/lib/city/tree-season";
+import { sceneShared } from "./three-utils";
 
 /**
  * The year in the crowns (lib/city/tree-season.ts in the scene): per crown
@@ -160,22 +161,25 @@ export function injectCrownSeason(
   }
 }
 
-let depthMaterial: MeshDepthMaterial | null = null;
+const depthMaterial = sceneShared(() => {
+  const m = new MeshDepthMaterial();
+  m.customProgramCacheKey = () => "crown-season-depth";
+  m.onBeforeCompile = (sh) => injectCrownSeason(sh, false);
+  return m;
+});
 
 /**
  * The shadow pass's crown material: three's own depth material plus the same
  * discard, so the shadow thins with the crown. One for the whole scene (its
- * program is shared anyway); never disposed.
+ * program is shared anyway), disposed with the last app that holds it
+ * (`retainCrownDepthMaterial`, create-app.ts).
  */
 export function crownDepthMaterial(): MeshDepthMaterial {
-  if (!depthMaterial) {
-    const m = new MeshDepthMaterial();
-    m.customProgramCacheKey = () => "crown-season-depth";
-    m.onBeforeCompile = (sh) => injectCrownSeason(sh, false);
-    depthMaterial = m;
-  }
-  return depthMaterial;
+  return depthMaterial.get();
 }
+
+/** An app's hold on the crown depth material; call the result on dispose. */
+export const retainCrownDepthMaterial = depthMaterial.retain;
 
 /** A second geometry over the same buffers plus the chunk's `aBare`: the
  *  shared crown geometry cannot carry a per-chunk instanced attribute. */

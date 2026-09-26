@@ -23,7 +23,7 @@ import {
   NEAR_MAX_DEG,
 } from "@/lib/city/skyview";
 import { isAbortError } from "./fetch-optional";
-import { textureBytes, trackTexture } from "./three-utils";
+import { sceneShared, textureBytes, trackTexture } from "./three-utils";
 
 /**
  * The city's large-scale light (plan 033), from two baked rasters
@@ -175,21 +175,25 @@ export const CLAY_SKY_AO = /* glsl */ `
   }
 `;
 
-let white: DataTexture | null = null;
-/** The 1×1 sky view "all sky" a clay tile binds until its raster lands. */
+const white = sceneShared(() => {
+  const texture = new DataTexture(
+    new Uint8Array([255]),
+    1,
+    1,
+    RedFormat,
+    UnsignedByteType
+  );
+  texture.needsUpdate = true;
+  return texture;
+});
+/** The 1×1 sky view "all sky" a clay tile binds until its raster lands;
+ *  disposed with the last app that holds it (`retainOpenSkyTexture`). */
 export function openSkyTexture(): DataTexture {
-  if (!white) {
-    white = new DataTexture(
-      new Uint8Array([255]),
-      1,
-      1,
-      RedFormat,
-      UnsignedByteType
-    );
-    white.needsUpdate = true;
-  }
-  return white;
+  return white.get();
 }
+
+/** An app's hold on the open-sky texel; call the result on dispose. */
+export const retainOpenSkyTexture = white.retain;
 
 // --- loading -------------------------------------------------------------------------
 

@@ -11,6 +11,9 @@ export interface SharedRasters<T> {
   held: () => number;
   /** one reference less; the last one frees it (once it has loaded) */
   release: (key: string) => void;
+  /** frees every raster whatever its references (the stream's teardown);
+   *  a later release of a cleared key is a no-op */
+  clear: () => void;
 }
 
 export function createSharedRasters<T>(
@@ -21,6 +24,13 @@ export function createSharedRasters<T>(
     string,
     { promise: Promise<T | null>; refs: number }
   >();
+  const freeWhenLoaded = (promise: Promise<T | null>) => {
+    void promise.then((value) => {
+      if (value !== null) {
+        free(value);
+      }
+    });
+  };
   return {
     acquire: (key) => {
       let entry = entries.get(key);
@@ -41,11 +51,13 @@ export function createSharedRasters<T>(
         return;
       }
       entries.delete(key);
-      void entry.promise.then((value) => {
-        if (value !== null) {
-          free(value);
-        }
-      });
+      freeWhenLoaded(entry.promise);
+    },
+    clear: () => {
+      for (const entry of entries.values()) {
+        freeWhenLoaded(entry.promise);
+      }
+      entries.clear();
     },
     held: () => entries.size,
   };

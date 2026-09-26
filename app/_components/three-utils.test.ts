@@ -15,6 +15,7 @@ import {
   depthMaterialStandIns,
   disposeObject3D,
   estimateGeometryBytes,
+  sceneShared,
   textureBytes,
 } from "./three-utils";
 
@@ -141,4 +142,23 @@ test("depthMaterialStandIns wears each custom depth material as the shadow pass 
   // The meshes themselves are untouched.
   expect(fence.material).not.toBe(depth);
   expect(depthMaterialStandIns(new Mesh(geometry))).toBeNull();
+});
+
+test("a scene-shared resource is disposed with the last app that holds it", () => {
+  const share = sceneShared(() => new MeshDepthMaterial());
+  const releaseA = share.retain();
+  const first = share.get();
+  expect(share.get()).toBe(first);
+  const disposed = countDisposals(first);
+  // a remount boots the next app before the last one is gone
+  const releaseB = share.retain();
+  releaseA();
+  releaseA();
+  expect(disposed()).toBe(0);
+  releaseB();
+  expect(disposed()).toBe(1);
+  // the next app makes a fresh one, its renderer's listeners on it alone
+  const releaseC = share.retain();
+  expect(share.get()).not.toBe(first);
+  releaseC();
 });
