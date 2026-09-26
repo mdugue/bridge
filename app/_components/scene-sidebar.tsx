@@ -67,7 +67,7 @@ import {
   lookPatch,
   type LookValues,
 } from "@/lib/city/look-controls";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
@@ -338,7 +338,7 @@ function MinimapCard({
   bounds: TerrainBounds;
   focusRingM: number | null;
   footprints: FootprintPoly[];
-  landcoverTiles: { bounds: TerrainBounds; src: string }[];
+  landcoverTiles: MapTile[];
   onTeleport: (epsgX: number, epsgY: number) => void;
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
 }) {
@@ -637,7 +637,7 @@ export interface SceneSidebarProps {
   footprints: FootprintPoly[];
   fps: number | null;
   handleRef: RefObject<CityWalkHandle | null>;
-  landcoverTiles: { bounds: TerrainBounds; src: string }[];
+  landcoverTiles: MapTile[];
   latLng: { lat: number; lng: number } | null;
   look: LookValues;
   minutes: number;

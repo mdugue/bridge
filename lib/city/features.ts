@@ -366,8 +366,28 @@ export interface BridgeFeature {
     deck?: number[];
     kind?: "other" | "path" | "rail" | "road";
     name?: string | null;
-    /** OSM bridge:structure (e.g. "arch", "beam", "beam;arch") for arch synthesis */
+    /** OSM bridge:structure vocabulary (e.g. "arch", "beam;arch",
+     *  "suspension;cantilever"): Wikidata's class when it knows the bridge,
+     *  else the nearest OSM outline's tag */
     structure?: string | null;
+    /** the deck's centreline, first → last abutment (EPSG): the DLM
+     *  bridge line where there is one, else the outline's long axis
+     *  through its middle */
+    axis?: [number, number][];
+    /** deck height per BRIDGE_STEP (2 m) along the axis (m) */
+    line?: number[];
+    /** superstructure measured in DOM1 (pipeline/bake/bridge.py) */
+    ribs?: { offset: number; rise: number[] }[];
+    /** where the fairway mark sits along the axis (0..1) */
+    fairway?: number;
+    /** the fairway's navigation clearance (m, OSM seamark) */
+    clearance?: number;
+    /** structural depth of the deck at the fairway (m) */
+    depth?: number;
+    /** the Wikidata item the bridge was matched to */
+    wikidata?: string;
+    /** its main span (m, Wikidata P2787) */
+    span?: number;
   } | null;
 }
 

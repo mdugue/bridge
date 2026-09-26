@@ -155,6 +155,9 @@ export interface TilesetTileInfo {
   /** the 512² class raster the minimap and the soundscape read
    *  (`landcoverSmall`, lib/city/tile.ts) */
   minimap: string;
+  /** the tile's bridge decks (the artifact `bridge`): the minimap draws
+   *  them over the class raster, which shows the river under a bridge */
+  bridges?: string;
   /** the soundscape's files (plan 035) */
   sound?: TileSoundFiles;
 }

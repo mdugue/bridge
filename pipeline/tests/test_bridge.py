@@ -1,0 +1,153 @@
+"""bridge.py: the measured bridge."""
+
+import numpy as np
+
+from bake import bridge
+
+
+class FakeGround:
+    """A flat DGM at 100 m and a DOM that is `surface(x, y)` on a 1 m grid."""
+
+    def __init__(self, surface):
+        self.surface = surface
+        self.dom = np.zeros((1, 1))
+
+    def sample(self, _arr, xs, ys):
+        return np.vectorize(self.surface)(xs, ys).astype(float)
+
+    def lowest(self, _x, _y, _win):
+        return 100.0
+
+
+RING = [(0.0, -6.0), (200.0, -6.0), (200.0, 6.0), (0.0, 6.0), (0.0, -6.0)]
+
+
+def test_the_opening_drops_lamps_and_the_closing_bridges_gaps():
+    rise = np.zeros(160)
+    rise[10] = 8.0  # a lamp
+    rise[40:100] = 12.0  # a chord...
+    rise[70:75] = 0.0  # ...with a hole in the raster
+    rise[140:148] = 6.0  # a lorry-length bump: too short to be structure
+    clean = bridge.clean_rise(rise)
+    assert clean[10] == 0
+    assert clean[72] == 12.0
+    assert clean[144] == 0
+    assert (clean[40:100] > 0).all()
+
+
+def test_a_truss_on_the_deck_edges_becomes_two_ribs():
+    def surface(x, y):
+        chord = 120 + max(0.0, 20 - abs(x - 100) * 0.3)  # a pylon at 100 m
+        return chord if abs(abs(y) - 5.5) < 0.6 and 30 <= x <= 170 else 120.5
+
+    ribs = bridge.superstructure(FakeGround(surface), RING, lambda t: 120.0)
+    assert len(ribs) == 2
+    assert sorted(round(r["offset"]) for r in ribs) in ([-6, 5], [-5, 5], [-6, 6], [-5, 6])
+    rise = ribs[0]["rise"]
+    assert len(rise) == 101
+    assert max(rise) > 17
+    assert rise[5] == 0  # before the truss starts
+
+
+def test_a_central_arch_is_one_rib():
+    def surface(x, y):
+        crown = 132 - 0.004 * (x - 100) ** 2
+        return crown if abs(y) < 0.6 and crown > 121 else 120.5
+
+    ribs = bridge.superstructure(FakeGround(surface), RING, lambda t: 120.0)
+    assert len(ribs) == 1
+    assert abs(ribs[0]["offset"]) < 1
+
+
+def test_the_measured_deck_follows_the_roadway_but_not_a_train():
+    def surface(x, y):
+        if 80 <= x <= 120:
+            return 131.0  # a train standing on the deck
+        return 123.0
+
+    deck = bridge.measured_deck(FakeGround(surface), RING, lambda t: 120.0)
+    assert abs(deck(0.1) - 123.0) < 0.01  # lifted to the roadway
+    assert deck(0.5) <= 124.0  # the train is not the deck (held near the ramp)
+
+
+def test_the_fairway_mark_sets_the_structural_depth():
+    ground = FakeGround(lambda x, y: 120.0)
+    marks = [(150.0, 0.0, 11.5, "Q1"), (900.0, 0.0, 9.0, None)]
+    got = bridge.fairway(ground, RING, lambda t: 114.0, marks)
+    assert got["clearance"] == 11.5
+    assert got["depth"] == 2.5  # 114 − (100 + 11.5)
+    assert abs(got["fairway"] - 0.75) < 0.01
+    assert bridge.fairway(ground, RING, lambda t: 114.0, marks[1:]) == {}
+
+
+def test_wikidata_classes_map_to_the_osm_vocabulary():
+    assert bridge.structure_of(["Bogenbrücke", "Straßenbrücke"]) == "arch"
+    assert (
+        bridge.structure_of(["Gerberträgerbrücke", "Hängebrücke", "Kettenbrücke"])
+        == "suspension;cantilever"
+    )
+    assert bridge.structure_of(["Straßenbrücke"]) == ""
+
+
+def test_a_deck_finds_its_wikidata_item_by_tag_or_by_name():
+    known = [
+        {"id": "Q1", "label": "Blaues Wunder", "x": 100.0, "y": 0.0, "types": []},
+        {"id": "Q2", "label": "Albertbrücke", "x": 5000.0, "y": 0.0, "types": []},
+    ]
+    assert bridge.wikidata_for(RING, None, ["Q1"], known)["id"] == "Q1"
+    assert bridge.wikidata_for(RING, "Blaues Wunder", [], known)["id"] == "Q1"
+    assert bridge.wikidata_for(RING, "Albertbrücke", [], known) is None  # too far
+
+
+def test_the_deck_line_ramps_instead_of_dropping_off_a_cliff():
+    # a rail deck at 118 m whose first 6 m the DOM sees as the street below
+    deck = np.full(60, 118.0)
+    deck[:6] = 112.5
+    limited = bridge.limit_grade(deck, 1.0, bridge.RAIL_GRADE)
+    assert limited[10] == 118.0
+    assert np.all(np.abs(np.diff(limited)) <= bridge.RAIL_GRADE + 1e-9)
+    assert limited[0] > 117.5
+
+
+def test_a_bridge_line_beside_a_footprint_is_not_laid_on_it():
+    from shapely import LineString, Polygon
+
+    from bake.rail import footprint_of
+
+    # the rail bridge's footprint, 30 m wide; the road bridge's line 16 m
+    # beside it (the Marienbrücke), then a line running along its middle
+    rail = Polygon([(0, -15), (200, -15), (200, 15), (0, 15)])
+    polys = [[list(rail.exterior.coords), 100, 0, False, rail]]
+    assert footprint_of(LineString([(-10, 31), (210, 31)]), polys) == -1
+    assert footprint_of(LineString([(-10, 0), (210, 0)]), polys) == 0
+    polys[0][3] = True  # a claimed footprint is not matched twice
+    assert footprint_of(LineString([(-10, 0), (210, 0)]), polys) == -1
+
+
+def test_the_axis_runs_down_the_middle_of_the_deck_not_corner_to_corner():
+    axis = bridge.deck_axis(RING)
+    assert abs(axis.length - 200.0) < 1e-6
+    assert axis.point(0.0) == (0.0, 0.0)  # starts at the end nearer the first vertex
+    assert abs(axis.project(100.0, 6.0)[1] - 6.0) < 1e-6  # the edges are ±6 all along
+    assert abs(axis.project(190.0, -6.0)[1] + 6.0) < 1e-6
+
+
+def test_a_curved_bridge_line_becomes_its_axis_run_on_to_the_ends():
+    import math
+
+    import shapely
+
+    # a deck 12 m wide along a quarter circle of radius 100 m
+    arc = [(100 * math.cos(a), 100 * math.sin(a)) for a in np.linspace(0, math.pi / 2, 30)]
+    ring = [
+        (x, y) for x, y, *_ in shapely.LineString(arc).buffer(6, cap_style="flat").exterior.coords
+    ]
+    line = arc[1:-1]  # the DLM line stops a few metres short of the abutments
+    axis = bridge.deck_axis(ring, line)
+    assert abs(axis.length - 100 * math.pi / 2) < 2.0
+    for s in (10.0, 80.0, 150.0):
+        x, y = axis.point(s)
+        assert abs(math.hypot(x, y) - 100) < 0.6  # on the curve, not on its chord
+    # a ring vertex is 6 m to one side, wherever it sits along the curve
+    for x, y in ring[:-1]:
+        assert abs(abs(axis.project(x, y)[1]) - 6.0) < 1.0

@@ -92,8 +92,8 @@ The button in the corner opens a panel with three tabs.
 
 ### Erkunden ("Explore")
 
-- **Minimap** — the whole area from above, with the land-use colours and
-  the footprints of the buildings currently loaded. Your position and view
+- **Minimap** — the whole area from above, with the land-use colours, the
+  bridges and the footprints of the buildings currently loaded. Your position and view
   direction are drawn on it; a click teleports.
 - **Gehen / Fliegen** — walk or fly.
 - **Aussichtspunkte** ("viewpoints") — hand-picked vantages the camera

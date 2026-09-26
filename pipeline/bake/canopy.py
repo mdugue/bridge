@@ -1,12 +1,16 @@
 """DOM1 − DGM1 → tree canopy points. One tree per `cell` metres at the
 tallest canopy texel between 3 and 45 m, only inside forest, copse or park
 (rasterised from the DLM), never on rail, path, road or water (the class
-raster — the gate that stopped trees growing through bridge decks)."""
+raster — the gate that stopped trees growing through bridge decks), and
+never on or beside a bridge (the DLM's decks, grown by BRIDGE_REACH): where
+a bridge lands on a park bank, its steel — the Blaues Wunder's pylons — is
+as tall in the nDOM as a crown, and would have become one."""
 
 from __future__ import annotations
 
 import numpy as np
 import rasterio
+import shapely
 from rasterio.features import rasterize
 
 from .common import Tile, feature, read_layer, write_geojson
@@ -14,6 +18,8 @@ from .common import Tile, feature, read_layer, write_geojson
 MIN_H, MAX_H = 3.0, 45.0
 BLOCKED = (5, 6, 7, 8)  # railway, path, road, water
 PARK = "OBJART_TXT='AX_SportFreizeitUndErholungsflaeche'"
+BRIDGE = "BWF='1800'"
+BRIDGE_REACH = 10.0  # no tree this close to a bridge's centreline or deck (m)
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
@@ -25,6 +31,20 @@ def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
     mask = np.zeros((px, px), dtype=np.uint8)
     if geoms:
         rasterize(((g, 1) for g in geoms), out=mask, transform=tile.transform(px))
+    return mask
+
+
+def bridge_mask(tile: Tile, px: int) -> np.ndarray:
+    """The bridges of the DLM (centrelines and deck outlines), grown by
+    BRIDGE_REACH."""
+    geoms = [
+        *read_layer(tile.dlm / "ver06_l.shp", tile.bounds, where=BRIDGE)[0],
+        *read_layer(tile.dlm / "ver06_f.shp", tile.bounds, where=BRIDGE)[0],
+    ]
+    mask = np.zeros((px, px), dtype=np.uint8)
+    if geoms:
+        grown = (shapely.buffer(g, BRIDGE_REACH) for g in geoms)
+        rasterize(((g, 1) for g in grown), out=mask, transform=tile.transform(px))
     return mask
 
 
@@ -45,6 +65,7 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
         ndom = dom.read(1).astype(np.float64) - dgm.read(1).astype(np.float64)
     h, w = ndom.shape
     ok = (vegetation_mask(tile, w) == 1) & ~blocked_mask(tile, ndom.shape)
+    ok &= bridge_mask(tile, w) == 0
     ok &= (ndom > MIN_H) & (ndom < MAX_H)
     heights = np.where(ok, ndom, -1.0)
     xmin, _, _, ymax = tile.bounds

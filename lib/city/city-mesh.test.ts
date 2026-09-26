@@ -5,6 +5,7 @@ import {
   doomedObjects,
   footprintPolys,
   hasObjectFlag,
+  isTrafficStructure,
   liveTriangles,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_SHOP,
@@ -14,7 +15,9 @@ import {
   objectFlags,
   objectTable,
   packObjectTexels,
+  withoutTrafficStructures,
 } from "./city-mesh";
+import type { CityJsonDocument } from "./types";
 
 function row(partial: Partial<CityObjectRow>): CityObjectRow {
   return {
@@ -116,4 +119,34 @@ test("countBuildings and footprintPolys follow the alive set", () => {
   const footprints = rows.map((r) => r.footprints);
   expect(footprintPolys(footprints, () => true)).toHaveLength(3);
   expect(footprintPolys(footprints, (i) => i !== 2)).toHaveLength(1);
+});
+
+test("LoD2 traffic structures (ALKIS 53001, bridges) leave the building mesh", () => {
+  expect(isTrafficStructure({ function: "53001_1800" })).toBe(true);
+  expect(isTrafficStructure({ function: "31001_2000" })).toBe(false);
+  expect(isTrafficStructure({ function: "51009_1700" })).toBe(false);
+  expect(isTrafficStructure(undefined)).toBe(false);
+  const doc: CityJsonDocument = {
+    type: "CityJSON",
+    version: "2.0",
+    vertices: [
+      [0, 0, 0],
+      [9, 9, 9],
+    ],
+    CityObjects: {
+      house: { type: "Building", attributes: { function: "31001_1000" } },
+      bridge: {
+        type: "Building",
+        attributes: { function: "53001_1800" },
+        children: ["deck"],
+      },
+      deck: { type: "BuildingPart", parents: ["bridge"] },
+    },
+  };
+  const kept = withoutTrafficStructures(doc);
+  expect(Object.keys(kept.CityObjects)).toEqual(["house"]);
+  // the recenter matrix is computed over every vertex: they stay
+  expect(kept.vertices).toBe(doc.vertices);
+  const plain = { ...doc, CityObjects: { house: doc.CityObjects.house } };
+  expect(withoutTrafficStructures(plain)).toBe(plain);
 });

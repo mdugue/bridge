@@ -3,6 +3,7 @@ import {
   buildingFootprintPolys,
   buildingFootprints,
   epsgToMapPx,
+  mapBridges,
   mapHeightPx,
   mapPxToEpsg,
 } from "./minimap";
@@ -145,4 +146,30 @@ test("buildingFootprintPolys falls back to bbox for a leaf Building with no geom
       ],
     },
   ]);
+});
+
+test("mapBridges reads the decks' outer rings and kinds, skipping the rest", () => {
+  const ring: [number, number][] = [
+    [0, 0],
+    [10, 0],
+    [10, 2],
+    [0, 0],
+  ];
+  const doc = {
+    features: [
+      {
+        geometry: { type: "Polygon", coordinates: [ring] },
+        properties: { kind: "rail" },
+      },
+      { geometry: { type: "Polygon", coordinates: [ring] }, properties: null },
+      { geometry: { type: "Point", coordinates: [1, 2] }, properties: {} },
+      { geometry: null, properties: {} },
+    ],
+  };
+  expect(mapBridges(doc)).toEqual([
+    { kind: "rail", pts: ring },
+    { kind: "other", pts: ring },
+  ]);
+  expect(mapBridges(null)).toEqual([]);
+  expect(mapBridges({ features: "no" })).toEqual([]);
 });
