@@ -17,7 +17,9 @@
 - **Risk**: LOW for the scene (audio is a separate graph, lazy-loaded);
   MED for taste — procedural sound gets cheesy fast
 - **Planned at**: 2026-09-25
-- **Status**: TODO
+- **Status**: **BUILT, UNHEARD** (2026-09-26) — all four phases; nothing
+  has been listened to (see *Notes from the build* below). The listening
+  pass in real browsers (Chrome, Safari, iOS Safari) is the open step.
 
 ## Idea
 
@@ -125,3 +127,52 @@ soundmarks bake.
   (scheduled parameters) or lower its rate.
 - The maintainer finds a source cheesy on listening: it is removed, not
   tuned endlessly — the soundscape is better sparse.
+
+## Notes from the build (2026-09-26)
+
+Built as planned, with these decisions and deviations:
+
+- **Entry.** `L` and the *Klang (experimentell)* switch
+  (`app/_components/soundscape-toggle.tsx`); the context is created in
+  the gesture, with `navigator.audioSession.type = "ambient"` where Safari
+  has it (mixes with the visitor's audio, keeps to the silent switch —
+  switch it to `"playback"` if a listening test finds iPhones silent). The
+  glyph's click turns the sound **off** (the same as `L`) rather than a
+  separate mute. The e2e suite asserts no `AudioContext` before `L` and
+  exactly one after it.
+- **Bundle.** Measured on the production build (`/?scene=lite`): the JS
+  the viewer loads at boot grows by 6.1 kB (2 497 430 → 2 503 490 bytes);
+  the engine is a 17.0 kB chunk (7.1 kB gzipped) fetched on the first
+  toggle. The boot-side half is `lib/city/sound-entry.ts`.
+- **Environment.** The handle gained `listen(radius)` (height above the
+  ground, mode, trees within 40 m over the loaded vegetation chunks —
+  `treesWithin` —, the crowns' sway clock) and `soundTiles` (the files in
+  the tileset's root extras, `TileSoundFiles`). The class raster is
+  re-fetched from the ≤ 2048² minimap file and kept at 4 m (256 kB a
+  tile) for tiles within ≈ 320 m; the sky view (1 MB) with it; the paving
+  raster's surface byte (4 MB) only for the tile underfoot. All dropped
+  when the sound goes off. Wind openness uses the sky-view factor (plan
+  033), else the built-up share.
+- **Footsteps.** The walker moves at 9 m/s (27 sprinting): one step per
+  0.75 m would be a drum roll, so above walking pace the stride lengthens
+  (cadence 1.9 + 0.035 · speed, ≤ 2.8 steps/s). A jump (> 80 m/s) or a
+  gap over 1.5 s is no walk.
+- **Bells.** The scene clock does not run on its own in this viewer
+  (14:00 unless moved), so the bells answer a scrub of the time slider or
+  a snapshot: the last full hour a forward move crosses, once the clock
+  rests 0.7 s (nothing if it was moved back before it). Nearest four
+  towers within 1.5 km. `pipeline/bake/soundmarks.py` finds each tower's
+  tip in the LoD2 (OSM does not say where on the church it is): 20 towers
+  over the fifteen tiles, seven tiles empty. In the `lite` profile only
+  the spawn tile's towers are known.
+- **Fountains** splash only April–October, 8–22 h. **Tram bell**:
+  within 70 m of a track, ≈ once in 2½ minutes, 4:30–0:30.
+- **Levels** (linear, before the 0.32 master): wind 0.34, hum 0.30,
+  water 0.40, fountain 0.20, leaves 0.13, crickets 0.035; event buses
+  birds 0.16, steps 0.32, bells 0.34, tram 0.12, with a generated
+  2.4 s "air" reverb send (bells 0.4, tram 0.3, birds 0.22, steps 0.05).
+  All chosen on paper.
+- **Unverified**: every level and timbre; iOS unlock and the ambient
+  session; CPU cost on a phone (the 10 Hz sampling is ≈ 600 raster reads
+  and a tree count; the reverb is one 2.4 s convolver). The render loop
+  is untouched.

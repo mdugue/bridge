@@ -192,3 +192,14 @@ from Ko-fi until it is clicked.
 - `?scene=lite` in the address bar streams only the start tile, with
   coarse shadows. It exists for automated tests and is not how the scene
   is meant to look.
+
+## Small things
+
+- **Listen.** Press **L** (or, on a phone, turn on *Klang (experimentell)*
+  at the very bottom of *Erweitert*) and the city makes a quiet sound: wind,
+  the Elbe, birds by day and crickets on summer nights, footsteps that
+  know the paving underfoot — and when you move the clock past a full
+  hour, the nearby churches strike it, each a little later the further
+  away it stands, as sound travels. It is off every time the page loads,
+  goes quiet in a background tab, and the small speaker in the top left
+  corner turns it off again.

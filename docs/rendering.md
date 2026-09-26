@@ -343,6 +343,50 @@ lädt* hint instead (`onBusy`). The minimap loads every tile's footprints
 up front (named in the tileset's root extras), so it is complete from the
 start.
 
+## Sound (hidden, opt-in)
+
+The viewer is silent. A hidden soundscape ([plan 035](./plans/035-soundscape.md))
+plays only after an explicit toggle — the **L** key (listed in no hint) or
+the quiet *Klang (experimentell)* switch at the bottom of the Erweitert
+tab — and is off again at every load. No `AudioContext` exists before
+that gesture (the e2e suite asserts it); the context is created inside
+it, as iOS Safari requires, with an *ambient* audio session where Safari
+offers one (it mixes with the visitor's own audio and keeps to the silent
+switch). The engine (`app/_components/soundscape/`, 17 kB) is a dynamic
+import on the first toggle; the viewer carries only the switch, the
+speaker glyph that shows while it plays (a click turns it off) and
+`lib/city/sound-entry.ts` (≈ 6 kB of boot JS in all). A hidden tab fades
+out and suspends the context.
+
+It is one WebAudio graph, all synthesized (no samples, no dependency):
+looped noise beds through filters, short scheduled event graphs that free
+themselves, a dark generated "air" reverb for the far sounds, a quiet
+master (0.32) and a gentle compressor. Levels move by `setTargetAtTime`
+ramps on the audio thread (0.4 s; the master fades over ≈ 2 s). The scene
+is read at the **10 Hz pose stream**, never in the render loop: the
+handle's `listen` (height above ground, mode, trees within 40 m of the
+loaded vegetation chunks, the crowns' sway clock) and the tiles' own
+rasters, fetched and decoded on the CPU only while the sound plays and
+dropped with it (the class raster kept at 4 m, the sky view, the paving
+raster's surface byte for the tile underfoot).
+
+| Data | Sound (`lib/city/soundscape.ts`) |
+|---|---|
+| sky-view factor (else the built-up share), height above ground, the crowns' sway phase | wind: low-passed pink noise, gusting with the same signal the crowns bend with |
+| road / rail / built-up share within 30 m, height, night factor | the city's far hum (brown noise under 170 Hz), half of it at night |
+| distance to the water class (16 rays, 260 m), its bearing | the Elbe's low murmur, panned towards it |
+| fountains (monuments file), date and hour | a fountain's splash within 45 m, April–October, 8–22 h |
+| trees within 40 m, the generic leaf-cover year, the wind | leaves: high-passed noise that swells in the gusts |
+| green share, trees, sun (night factor), day of year, hour | birds by day — sparrows in streets, tits in parks, a blackbird's phrase at dusk and in the spring dawn chorus; silent at night, sparse in winter |
+| meadow share, summer nights | two crickets |
+| paving raster (sett, asphalt, concrete, slabs, gravel, grass) + class | footsteps on foot, one per 0.75 m at walking pace, the stride lengthening above it |
+| bell towers (`soundmarks_<tile>.geojson`), the scene clock | the full hour a forward clock change crosses, struck by the nearest four towers within 1.5 km, each **delayed by its distance at 343 m/s**, quieter and duller with distance, a deeper bell in a taller tower |
+| tram tracks (`tram_<tile>.geojson`) | now and then (≈ once in 2½ min beside a track, 4:30–0:30) a two-stroke tram bell |
+
+Unjudged by ear: the levels and timbres are designed, not listened to
+(the plan's STOP rule applies — a source that sounds cheesy is removed,
+not tuned endlessly).
+
 ## Verifying a change
 
 Headless CI runs the lite profile under SwiftShader and asserts *presence*
