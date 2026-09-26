@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   buildingGlows,
+  NightLight,
+  nightLight,
   buildingTint,
   inheritedAttributes,
   roofColor,
@@ -105,7 +107,23 @@ test("buildingGlows: commerce/public/special glow, housing does not", () => {
   expect(buildingGlows({ function: "31001_3021" })).toBe(true); // public
   expect(buildingGlows({ function: "53001_1800" })).toBe(true); // special
   expect(buildingGlows({ function: "31001_9998" })).toBe(false); // housing
+  expect(buildingGlows({ function: "31001_2463" })).toBe(false); // garage
   expect(buildingGlows({})).toBe(false);
+});
+
+test("nightLight: landmarks floodlit, garages dark, the rest by use", () => {
+  expect(nightLight({ function: "31001_3041" })).toBe(NightLight.landmark); // church
+  expect(nightLight({ function: "31001_3045" })).toBe(NightLight.landmark); // synagogue
+  expect(nightLight({ function: "31001_3031" })).toBe(NightLight.landmark); // castle
+  expect(nightLight({ function: "31001_3032" })).toBe(NightLight.landmark); // opera
+  expect(nightLight({ function: "31001_3034" })).toBe(NightLight.landmark); // museum
+  expect(nightLight({ function: "31001_3035" })).toBe(NightLight.busy); // broadcaster
+  expect(nightLight({ function: "31001_3021" })).toBe(NightLight.busy); // school
+  expect(nightLight({ function: "31001_2000" })).toBe(NightLight.busy); // commerce
+  expect(nightLight({ function: "31001_2463" })).toBe(NightLight.dark); // garage
+  expect(nightLight({ function: "51002_1290" })).toBe(NightLight.dark); // tower
+  expect(nightLight({ function: "31001_9998" })).toBe(NightLight.home);
+  expect(nightLight({})).toBe(NightLight.home);
 });
 
 test("inheritedAttributes: a part inherits its Building's function", () => {

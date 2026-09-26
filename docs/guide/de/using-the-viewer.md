@@ -143,6 +143,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Abendlicht* | warme Fenster in Läden und öffentlichen Bauten in der Dämmerung |
+| | *Nachtlicht* | nachts: weich erleuchtete Fenster in Wohn- und Geschäftshäusern; Kirchen, Schlösser, Theater und Museen werden angestrahlt |
+| | *Scheibenglanz* | die tief stehende Sonne spiegelt sich in den Scheiben besonnter Fassaden, nur morgens und abends |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet wie Wiese, aus dem Infrarot-Luftbild |

@@ -453,7 +453,7 @@ visual-variable codebook is in
 - **Eave line** (*Traufkante*) — cornice stroke at min RoofSurface-Z per building
   (geometry-derived; the attribute is ~4 %).
 - **Dusk glow** (*Abendlicht*) — warm emissive on commerce/public/special
-  (`function`), gated by the sun rig's `nightFactor`.
+  (`function`; garages and car parks stay dark), gated by the sun rig's `nightFactor`.
 - **Attributes through the building tree** — the Saxon LoD2 puts the
   geometry of 7 950 Buildings (fifteen tiles; 7 866 have none of their
   own — 2 391 / 2 327 on the four first) on 24 143 `BuildingPart`s (7 239), and the parts carry no `function`: only the
@@ -497,6 +497,40 @@ visual-variable codebook is in
   *Kulturdenkmale_Flaeche*) is reachable only as a WMS here: a possible
   second source. Not yet judged on a real GPU — off if it reads as
   highlighting. Plan 027 phase 2.
+- **Night light** (*Nachtlicht*) — how a building shows after dusk
+  (× `nightFactor`), by its use: the bake's `night` column
+  (`lib/city/building-tint.ts` `nightLight`, from `function` through the
+  building tree, above; packed with the OSM bits as `flags + 4·night` in
+  band 2's last float).
+  - *Houses, commerce:* soft panes, no UVs — along a wall the world
+    position on its tangent in window axes of the building's own rhythm
+    (2.5–3.5 m, pane proportions per building), upwards its storeys
+    (`storeyH`). A pane is a tall rounded rectangle with a soft edge and a
+    pool of lamp light inside (honey under the lintel, amber at the sill,
+    dimmer at the jambs), a faint round glow on the wall in the wall's own
+    colour. A hash of (axis, storey, wall plane, building) lights panes at
+    a density per building, draws some curtains (dimmer), makes the odd
+    one a cool screen; commerce is busier; a mapped shop's ground floor is
+    left to the shop-front wash below.
+    Whole storeys under the eave only (`eaveH`), none on buildings whose
+    eave is under ~3.8 m. Far away the pattern fades to its mean.
+  - *Landmarks* (churches, synagogues, castles, theatres, museums,
+    libraries — ALKIS `303x`/`304x`): no panes — floodlit from the foot as
+    Dresden lights them: overlapping cones every ~6.5 m that merge into an
+    even wash higher up, fading towards the top, in the wall's own colour;
+    towers and domes catch it, flat roofs stay dark. The flat dusk glow is
+    off for them. *(First cut, discontinued: one hashed window grid for
+    every building — hard-edged blocks, and a church read as a block of
+    flats.)*
+  - *Dark:* garages, car parks, non-building structures, the laser scan's
+    sheds.
+  Invented, like the dusk glow: the data has no windows. `visual-style.ts`
+  (`CLAY_NIGHT`). *Planned:* OSM `building:levels` for the storey height.
+- **Low-sun glint** (*Scheibenglanz*) — at sun altitudes up to ~15° the
+  panes (same grid) of facades turned to the sun catch a warm glint along
+  the mirror direction, each pane at its own strength, and only where the
+  sun really reaches: the lit fraction of the sun's direct light after the
+  light loop (`CLAY_GLINT_SHADOW`). Zero by full day and at night.
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
@@ -1439,7 +1473,7 @@ research that produced them):
 |---|---|---|
 | **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only daytime remnant; windows return only as light — lit panes at night (*Nachtlicht*), the low sun in the glass (*Scheibenglanz*). |
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four first tiles, measured 2026-09-25 (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |

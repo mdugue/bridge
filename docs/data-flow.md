@@ -49,7 +49,7 @@ flowchart LR
     PAVE["Kerbs, paving &amp; parking<br/>kerb stones · lawn edge · sett · slabs · bays"]
     WAT["Water (Elbe)"]
     BLD["Buildings<br/>(geometry)"]
-    DET["Building detailing<br/>tint · roof · eave · glow · shop fronts"]
+    DET["Building detailing<br/>tint · roof · eave · glow · shop fronts · night light"]
     VEG["Trees &amp; hedges"]
     LOW["OSM hedges"]
     LAMP["Street lamps"]

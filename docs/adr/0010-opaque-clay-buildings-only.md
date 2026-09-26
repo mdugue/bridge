@@ -28,7 +28,14 @@ not hidden behind a flag. Keep `transmission` out of the scene entirely.
   second scene render.
 - The Snapshot has no `style` key; the lite profile has no transmission
   knob.
-- Faint storey banding is the only remnant of the window-grid experiment.
+- Faint storey banding is the only *daytime* remnant of the window-grid
+  experiment. Windows came back (2026-09) only as light: *Nachtlicht*
+  lights soft panes × `nightFactor` (and floodlights landmarks instead),
+  *Scheibenglanz* lets the low sun glint in them on sunlit facades. By full
+  day both are zero, so the facades are exactly as before and the veto
+  stands: any daytime window drawing — lines, recesses, dark glass — is
+  still out. A first cut with hard-edged hashed panes on every building
+  read as blocks, and made churches look like housing.
 - Contour ink survives only as a fragment-shader term on the terrain.
 - If outlines ever return, derive them from the CityJSON polygon rings at
   bake time (plan 003's extractor design: ~85 ms for ~88 k segments), never

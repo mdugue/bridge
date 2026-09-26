@@ -24,6 +24,7 @@ function row(partial: Partial<CityObjectRow>): CityObjectRow {
     flags: 0,
     footprints: [],
     glow: 0,
+    night: 1,
     roof: [0.5, 0.2, 0.1],
     root: 0,
     rough: 0.3,
@@ -40,7 +41,7 @@ const square: [number, number][] = [
 ];
 const rows: CityObjectRow[] = [
   row({ root: 0, footprints: [square] }),
-  row({ root: 0, building: false, glow: 1, baseZ: 101, flags: 3 }),
+  row({ root: 0, building: false, glow: 1, night: 3, baseZ: 101, flags: 3 }),
   row({ root: 2, footprints: [square, square], tint: [0.1, 0.2, 0.3] }),
 ];
 
@@ -50,6 +51,7 @@ test("objectTable turns rows into typed columns", () => {
   expect([...t.root]).toEqual([0, 0, 2]);
   expect([...t.building]).toEqual([1, 0, 1]);
   expect([...t.glow]).toEqual([0, 1, 0]);
+  expect([...t.night]).toEqual([1, 3, 1]);
   expect(Array.from(t.tint.subarray(6, 9))).toEqual(
     [0.1, 0.2, 0.3].map((v) => Math.fround(v))
   );
@@ -63,14 +65,14 @@ test("packObjectTexels lays three bands over the object index", () => {
   const texels = packObjectTexels(t);
   const band = OBJECT_TEXTURE_WIDTH * bandRows * 4;
   expect(texels.length).toBe(band * 3);
-  // object 1: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough, 0)
+  // object 1: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough, flags + 4·night)
   expect(texels[4 + 3]).toBe(101);
   expect(texels[band + 4 + 3]).toBe(9);
   expect(texels[2 * band + 4 + 1]).toBe(1);
   expect(texels[2 * band + 4 + 2]).toBeCloseTo(0.3, 6);
-  // band 2's last float carries the OSM flags
-  expect(texels[2 * band + 4 + 3]).toBe(3);
-  expect(texels[2 * band + 3]).toBe(0);
+  // band 2's last float: the OSM flags + 4 × the night-light kind
+  expect(texels[2 * band + 4 + 3]).toBe(3 + 4 * 3);
+  expect(texels[2 * band + 3]).toBe(4);
 });
 
 test("objectFlags sums the OSM facts as bits, hasObjectFlag reads them", () => {

@@ -18,6 +18,8 @@ import {
   roofColor,
   roofTint,
   roughJitter,
+  NightLight,
+  nightLight,
   storeyHeight,
 } from "../lib/city/building-tint";
 import {
@@ -168,6 +170,8 @@ export function appendScanStructures(
       // one band above the eave: none on the box
       storeyH: cm(eave + SMALL_BUILDING_SINK + 1),
       glow: 0,
+      // sheds and garden huts: no lit windows
+      night: NightLight.dark,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id)),
       roof: rgb(roofTint(id, { roofType: "1000" })),
@@ -273,6 +277,7 @@ export function bakeCityMesh(
       flags: inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
       storeyH: cm(storeyHeight(measured)),
       glow: buildingGlows(attrs) ? 1 : 0,
+      night: nightLight(attrs),
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs)),
       roof: rgb(roofColor(id, attrs, roofLut)),

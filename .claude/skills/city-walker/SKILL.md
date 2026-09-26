@@ -46,7 +46,7 @@ chip. Every tile change re-renders the shadow map. The layers:
 
 - `city-layer.ts` — `dressCity` on a building tile: one glTF mesh per tile
   with a per-vertex feature id (`EXT_mesh_features`); the per-object table
-  (`EXT_structural_metadata`: tint, heights, roof colour, glow, roughness,
+  (`EXT_structural_metadata`: tint, heights, roof colour, glow, night light, roughness,
   the demolish tree) is packed into a float texture the clay shader reads
   (`lib/city/city-mesh.ts`). Demolish = drop the object's building tree from
   the index buffer and rebuild the tile's BVH (you can't hide one building
@@ -85,7 +85,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   paper grain, vignette.
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
-  glow), hash-dithered transparency. The old ghost/standard styles are gone.
+  glow, Nachtlicht — soft lit panes, floodlit landmarks — and the low-sun
+  Scheibenglanz; windows exist only as light, ADR 0010), hash-dithered
+  transparency. The old ghost/standard styles are gone.
 - The map's own marks: the ferry wakes of `riverside-layer.ts` (landing
   stages, groynes, ferries), faded in with height by `map-overlay.ts`. No
   text anywhere in the scene or HUD (plan 032's street names were removed;

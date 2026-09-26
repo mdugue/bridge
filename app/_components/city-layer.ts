@@ -68,6 +68,7 @@ export function readObjectTable(
     eaveH: new Float32Array(count),
     flags: new Uint8Array(count),
     glow: new Uint8Array(count),
+    night: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
     rough: new Float32Array(count),
@@ -82,6 +83,8 @@ export function readObjectTable(
     table.eaveH[i] = Number(row.eaveH);
     table.flags[i] = Number(row.flags);
     table.glow[i] = Number(row.glow);
+    // Tiles baked before the column existed read as housing.
+    table.night[i] = row.night === undefined ? 1 : Number(row.night);
     table.roof.set(xyz(row.roof), i * 3);
     table.root[i] = Number(row.root);
     table.rough[i] = Number(row.rough);

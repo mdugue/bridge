@@ -528,7 +528,8 @@ async function bootApp(
   const styleResources = createStyleResources(
     heightFog,
     clayNight,
-    ground.skyView
+    ground.skyView,
+    sunDirection
   );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).

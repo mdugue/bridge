@@ -74,6 +74,8 @@ export interface CityObjectRow {
   footprints: [number, number][][];
   /** 1 = warm dusk glow (commerce/public/special), 0 = housing */
   glow: 0 | 1;
+  /** how the building is lit at night (building-tint.ts `NightLight`, 0..3) */
+  night: number;
   /** roof colour (linear RGB): DOP-sampled when available, else synthesized */
   roof: Rgb;
   /** index of the root of this object's building tree (itself for a root) */
@@ -101,6 +103,7 @@ export interface CityObjectTable {
   eaveH: Float32Array;
   flags: Uint8Array;
   glow: Uint8Array;
+  night: Uint8Array;
   roof: Float32Array;
   root: Uint32Array;
   rough: Float32Array;
@@ -119,6 +122,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     eaveH: new Float32Array(count),
     flags: new Uint8Array(count),
     glow: new Uint8Array(count),
+    night: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
     rough: new Float32Array(count),
@@ -132,6 +136,7 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.eaveH[i] = r.eaveH;
     table.flags[i] = r.flags;
     table.glow[i] = r.glow;
+    table.night[i] = r.night;
     table.roof.set(r.roof, i * 3);
     table.root[i] = r.root;
     table.rough[i] = r.rough;
@@ -144,7 +149,11 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
 
 /** Objects per texel row of the packed table (a WebGL2-safe edge). */
 export const OBJECT_TEXTURE_WIDTH = 1024;
-/** RGBA texels per object: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough, flags). */
+/**
+ * RGBA texels per object: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough,
+ * flags + 4·night) — the OSM flags in the low two bits, the night-light kind
+ * (building-tint.ts `NightLight`) above them.
+ */
 export const OBJECT_TEXEL_BANDS = 3;
 
 /** Rows of one band: the texture is `OBJECT_TEXTURE_WIDTH × bandRows·3`. */
@@ -169,7 +178,12 @@ export function packObjectTexels(table: CityObjectTable): Float32Array {
       band + at
     );
     out.set(
-      [table.storeyH[i], table.glow[i], table.rough[i], table.flags[i]],
+      [
+        table.storeyH[i],
+        table.glow[i],
+        table.rough[i],
+        table.flags[i] + 4 * table.night[i],
+      ],
       2 * band + at
     );
   }

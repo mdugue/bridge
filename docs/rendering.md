@@ -107,9 +107,12 @@ is the codebook.
 | Eave line | min RoofSurface Z per building (column `eaveH`) | LoD2 geometry | (*Traufkante*) |
 | Ground darkening on walls | height above the building's own base (column `baseZ`) | LoD2 geometry | (*Boden-Verlauf*) |
 | Rim light | view/normal/sun geometry | — | (*Streiflicht*) |
-| Dusk glow | `function` ∈ commerce/public/special (column `glow`; a BuildingPart takes its Building's `function` through `root`) × `nightFactor` | LoD2, sun | (*Abendlicht*) |
+| Dusk glow | `function` ∈ commerce/public/special, not parking (column `glow`; a BuildingPart takes its Building's `function` through `root`) × `nightFactor`; off on landmarks | LoD2, sun | (*Abendlicht*) |
 | Shop fronts | OSM shop / café on the ground floor (column `flags`, bit 1) → a warm wash under the first storey line, soft top edge, walls only, a ≈3.5 m hash along the facade; × dusk glow × `nightFactor`; no window structure | OSM, LoD2, sun | `visual-style.ts` `addOsmFacade` (*Abendlicht*) |
 | Listed facades | OSM `heritage=*` (column `flags`, bit 2) → a barely-there warm lift of the wall tint and a finer second cornice 0.45 m under the eave | OSM, LoD2 | `addOsmFacade` (*Farbvariation*, *Traufkante*) |
+| Night light: panes | houses/commerce (column `night` 1/2, packed as `flags + 4·night`): soft lamp-lit panes on a wall-tangent × storey grid (`storeyH`, `eaveH`), hashed per pane, busier on commerce; a mapped shop's ground floor is left to the shop-front wash; × `nightFactor` | LoD2, sun | `CLAY_NIGHT` (*Nachtlicht*) |
+| Night light: floodlit landmarks | churches, castles, theatres, museums (column `night` 3): cones from the foot merging into a wash, in the wall's colour, on steep faces; × `nightFactor` | LoD2, sun | `CLAY_NIGHT` (*Nachtlicht*) |
+| Low-sun glint | the same panes along the mirror direction to the sun, altitude ≲ 15°, sunlit faces only | sun, shadow | `CLAY_NIGHT`, `CLAY_GLINT_SHADOW` (*Scheibenglanz*) |
 | Roughness jitter | `hash(objectid)` (column `rough`) → [0.55, 1.0] | — | (*Materialstreuung*) |
 | Transparency | slider, hash-dithered (no transmission) | — | (*Transparenz*) |
 | Tree position and height | canopy point + `h` (3–45 m); rows every 9 m along `veg04_l` | DOM1−DGM1, Basis-DLM | `vegetation-layer.ts` |

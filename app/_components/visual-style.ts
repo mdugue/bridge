@@ -1,4 +1,9 @@
-import { type DataTexture, MeshStandardMaterial, type Texture } from "three";
+import {
+  type DataTexture,
+  MeshStandardMaterial,
+  type Texture,
+  Vector3,
+} from "three";
 import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import {
   type ClayLookKey,
@@ -40,6 +45,12 @@ export interface ClayDetailUniforms {
   /** the sky view's hold on the facades' ambient light (Himmelslicht; the
    *  terrain's ref, a scene row) */
   uSkyView: { value: number };
+  /** low-sun glint in the panes (Scheibenglanz) */
+  uGlint: { value: number };
+  /** night light strength: lit panes, floodlit landmarks (Nachtlicht) */
+  uNightLights: { value: number };
+  /** world direction surface → sun, shared with the sun rig */
+  uSunDir: { value: Vector3 };
   uTint: { value: number };
 }
 
@@ -68,6 +79,145 @@ export interface StyleResources {
   /** the current transparency, applied to materials created later too */
   transparency: number;
 }
+
+/**
+ * Nachtlicht and Scheibenglanz: how a building shows at night and in the
+ * low sun. The data has no windows (LoD2), and a drawn window grid was
+ * rejected — it made historic houses read as office blocks (ADR 0010) — so
+ * windows only ever appear as light: lit from inside after dusk, or
+ * catching the low sun. By full day both terms are zero and the clay stays
+ * calm. What lights up depends on the building's `night` column
+ * (building-tint.ts `nightLight`, packed above the OSM flags):
+ *
+ *  - Houses and commerce: soft panes on a grid that needs no UVs — along
+ *    the wall the world position on its tangent, in window axes of the
+ *    building's own rhythm (2.5–3.5 m, pane proportions per building);
+ *    upwards the building's storeys. A pane is a tall rounded rectangle with
+ *    a soft edge and a pool of lamp light inside it (honey under the
+ *    lintel, amber at the sill, dimmer at the jambs), with a faint round
+ *    glow on the wall around it in the wall's own colour. A hash of (axis, storey, wall plane, building)
+ *    decides which panes are lit and whether their curtains are drawn, at a
+ *    density per building; commerce is busier. A mapped shop's ground floor
+ *    is left to Ladenlicht (addOsmFacade). Only whole storeys under the
+ *    eave, and none on sheds and garages.
+ *  - Landmarks (churches, castles, theatres, museums): no panes at all —
+ *    they are floodlit from their foot, as Dresden lights them: overlapping
+ *    cones every ~6.5 m that merge into an even wash higher up, in the
+ *    wall's own colour, fading softly towards the top.
+ *  - In the low sun (altitude ≲ 15°) the panes of sunlit facades turned
+ *    towards it catch a warm glint along the mirror direction — only where
+ *    the sun really reaches (see CLAY_GLINT_SHADOW).
+ *
+ * Far away the pane pattern fades to its mean before it can shimmer.
+ */
+const CLAY_NIGHT_PARS = /* glsl */ `
+uvec4 clayPcg4(uvec4 v) {
+  v = v * 1664525u + 1013904223u;
+  v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+  v ^= v >> 16u;
+  v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+  return v;
+}
+vec4 clayRand4(ivec4 key) {
+  return vec4(clayPcg4(uvec4(key))) / 4294967295.0;
+}
+// Signed distance (m) to a rounded rectangle, negative inside.
+float claySdBox(vec2 p, vec2 halfSize, float r) {
+  vec2 q = abs(p) - halfSize + r;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+`;
+
+const CLAY_NIGHT = /* glsl */ `
+  float nlNight = uNightLights * uNight;
+  float nlGlint = uGlint * (1.0 - uNight)
+    * smoothstep(-0.02, 0.04, uSunDir.y) * (1.0 - smoothstep(0.12, 0.28, uSunDir.y));
+  vec3 nlGlintRad = vec3(0.0);
+  // A uniform branch: by full day nothing below runs. Derivatives are taken
+  // here, before the per-building branches.
+  if (nlNight + nlGlint > 0.0) {
+    // The object's flags float (city-mesh.ts): OSM bits low, night kind above.
+    float nlFlags = floor(vClayFlags + 0.5);
+    float nlCat = floor(nlFlags / 4.0);
+    float nlShopFlag = mod(nlFlags, 2.0);
+    int nlId = int(vClayId + 0.5);
+    vec4 nlB = clayRand4(ivec4(nlId, 40503, 7, 1));
+    vec2 nlN = vClayWN.xz;
+    float nlNL = max(length(nlN), 1e-3);
+    float nlU = dot(vClayWP.xz, vec2(-nlN.y, nlN.x) / nlNL);
+    float nlPx = max(length(fwidth(vec2(nlU, clayH))), 1e-4);
+    if (nlCat > 2.5) {
+      // Anstrahlung: cones from the foot, an even wash higher up.
+      float nlDu = (fract(nlU / 6.5 + 0.5) - 0.5) * 6.5;
+      float nlSig = 0.9 + 0.3 * clayH;
+      float nlCone = exp(-nlDu * nlDu / (2.0 * nlSig * nlSig));
+      float nlWash = mix(0.35 + 0.9 * nlCone, 1.0, max(smoothstep(1.5, 14.0, clayH), smoothstep(0.3, 1.2, nlPx)));
+      float nlFall = 0.4 + 0.6 * exp(-clayH / max(0.7 * vClayBuild.z, 8.0));
+      // Walls, towers and domes catch the beams; flat roofs stay dark.
+      float nlSteep = 1.0 - smoothstep(0.82, 0.98, abs(vClayWN.y));
+      totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.85, 0.64) * (nlFall * nlWash * nlSteep * nlNight * 1.1);
+    } else if (nlCat > 0.5) {
+      float nlStorey = max(vClayBuild.y, 2.5);
+      float nlA = mix(2.5, 3.5, nlB.y);
+      vec2 nlCR = vec2(nlU / nlA, clayH / nlStorey);
+      vec2 nlCell = floor(nlCR);
+      vec2 nlF = nlCR - nlCell;
+      float nlPlane = floor(dot(vClayWP.xz, nlN / nlNL) + 0.5);
+      vec4 nlR = clayRand4(ivec4(int(nlCell.x), int(nlCell.y), int(nlPlane), nlId));
+      vec2 nlSize = vec2(mix(0.26, 0.36, nlB.z) * nlA, mix(0.52, 0.64, nlB.w) * nlStorey);
+      nlSize *= 0.94 + 0.12 * nlR.zw;
+      vec2 nlP = (nlF - vec2(0.5, 0.52)) * vec2(nlA, nlStorey);
+      float nlD = claySdBox(nlP, 0.5 * nlSize, 0.1);
+      float nlSoft = max(0.09, 1.5 * nlPx);
+      float nlPane = 1.0 - smoothstep(-nlSoft, nlSoft, nlD);
+      float nlRows = step(0.0, nlCell.y)
+        * step((nlCell.y + 0.85) * nlStorey, vClayBuild.z)
+        * step(3.8, vClayBuild.z) * clayWall * (1.0 - clayIsRoof)
+        // a mapped shop's ground floor is Ladenlicht's (addOsmFacade)
+        * (1.0 - nlShopFlag * step(nlCell.y, 0.5));
+      float nlFar = smoothstep(0.45, 1.0, nlPx / min(nlSize.x, nlSize.y));
+      float nlArea = nlSize.x * nlSize.y / (nlA * nlStorey);
+      // Lit from inside.
+      float nlDensity = mix(0.2, 0.42, step(1.5, nlCat)) * (0.55 + 0.9 * nlB.x);
+      float nlOn = step(nlR.x, nlDensity) * (nlR.y < 0.35 ? 0.4 : 1.0);
+      float nlUp = clamp(nlP.y / nlSize.y + 0.5, 0.0, 1.0);
+      // The room's lamp: a pool of light under the lintel, amber at the sill
+      // and dimmer towards the jambs; now and then the cool of a screen.
+      float nlSide = nlP.x / (0.5 * nlSize.x);
+      float nlPool = mix(0.45, 1.0, nlUp * nlUp) * (1.0 - 0.3 * nlSide * nlSide);
+      vec3 nlRoom = nlR.z < 0.07
+        ? vec3(0.62, 0.68, 0.95) * mix(0.55, 0.85, nlUp)
+        : mix(vec3(0.9, 0.46, 0.24), vec3(1.0, 0.76, 0.5), nlUp) * nlPool;
+      // A faint round glow on the wall, in the wall's own colour.
+      float nlGlow = exp(-2.2 * length(nlP / (0.5 * nlSize + 0.35))) * (1.0 - nlPane);
+      vec3 nlLit = (nlRoom * nlPane + diffuseColor.rgb * vec3(1.0, 0.8, 0.55) * nlGlow * 0.3) * nlOn;
+      vec3 nlMean = vec3(1.0, 0.68, 0.42) * nlDensity * 0.6 * (nlArea + 0.05);
+      totalEmissiveRadiance += mix(nlLit, nlMean, nlFar) * nlRows * nlNight;
+      // The low sun in the glass, along the mirror direction.
+      vec3 nlRefl = reflect(normalize(vClayWP - cameraPosition), vClayWN);
+      float nlSpec = pow(max(dot(nlRefl, uSunDir), 0.0), 20.0);
+      float nlFacing = smoothstep(0.0, 0.3, dot(vClayWN, uSunDir));
+      // Panes stand at slightly different angles: each catches it its own way.
+      float nlTilt = nlR.w * nlR.w;
+      float nlGlass = mix(nlPane * nlTilt, nlArea * 0.33, nlFar);
+      nlGlintRad = vec3(1.0, 0.8, 0.56) * (nlGlass * nlSpec * nlFacing * nlRows * nlGlint * 1.8);
+    }
+  }
+`;
+
+/**
+ * The glint only where the sun really reaches: the lit fraction of the
+ * sun's direct light (shadowed / unshadowed Lambert) after the light loop.
+ * Without a sun (below the horizon) there is no glint.
+ */
+const CLAY_GLINT_SHADOW = /* glsl */ `
+  #if NUM_DIR_LIGHTS > 0
+    float nlSunIrr = dot(BRDF_Lambert(material.diffuseContribution)
+      * directionalLights[0].color * max(dot(normal, directionalLights[0].direction), 0.0), vec3(1.0));
+    float nlSunLit = smoothstep(0.2, 0.8, dot(reflectedLight.directDiffuse, vec3(1.0)) / max(nlSunIrr, 1e-4));
+    totalEmissiveRadiance += nlGlintRad * nlSunLit;
+  #endif
+`;
 
 /**
  * Procedural facade detail injected into the opaque clay material, keyed to each
@@ -116,13 +266,16 @@ function addClayDetail(
     shader.uniforms.uNight = uniforms.uNight;
     shader.uniforms.uRough = uniforms.uRough;
     shader.uniforms.uSkyView = uniforms.uSkyView;
+    shader.uniforms.uNightLights = uniforms.uNightLights;
+    shader.uniforms.uGlint = uniforms.uGlint;
+    shader.uniforms.uSunDir = uniforms.uSunDir;
     shader.uniforms.uSvf = sky.uSvf;
     shader.uniforms.uSvfOrigin = sky.uSvfOrigin;
     shader.uniforms.uSvfSize = sky.uSvfSize;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float featureId;\nattribute float roof;\nuniform highp sampler2D uObjects;\nuniform int uObjectRows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;"
+        "#include <common>\nattribute float featureId;\nattribute float roof;\nuniform highp sampler2D uObjects;\nuniform int uObjectRows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;"
       )
       .replace(
         "#include <beginnormal_vertex>",
@@ -150,12 +303,13 @@ function addClayDetail(
           "vClayTint = roof > 0.5 ? clayB.rgb : clayA.rgb;",
           "vClayBuild = vec4( roof, clayC.x, clayB.w, clayC.y );",
           "vClayRough = clayC.z;",
+          "vClayId = featureId;",
         ].join("\n")
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        `#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\n${CLAY_SKY_DECL}`
+        `#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nuniform float uNightLights;\nuniform float uGlint;\nuniform vec3 uSunDir;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;\n${CLAY_SKY_DECL}\n${CLAY_NIGHT_PARS}`
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -205,7 +359,11 @@ function addClayDetail(
         ].join("\n")
       )
       // Himmelslicht: the courtyard's ground floor gets less of the sky.
-      .replace("#include <aomap_fragment>", CLAY_SKY_AO)
+      // Scheibenglanz only where the sun reaches, read off the direct light.
+      .replace(
+        "#include <aomap_fragment>",
+        `${CLAY_GLINT_SHADOW}\n${CLAY_SKY_AO}`
+      )
       .replace(
         "#include <emissivemap_fragment>",
         [
@@ -216,9 +374,11 @@ function addClayDetail(
           "clayFres *= clayFres;",
           "totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
           // Abendlicht: warm interior glow on commercial/public buildings at
-          // dusk (build.w = 1), gated by nightFactor, walls only.
-          "float clayGlow = vClayBuild.w * uDuskGlow * uNight;",
+          // dusk (build.w = 1), gated by nightFactor, walls only. Landmarks
+          // (night kind 3, above the OSM flags) are floodlit instead.
+          "float clayGlow = vClayBuild.w * uDuskGlow * uNight * step(floor(vClayFlags + 0.5), 11.5);",
           "totalEmissiveRadiance += clayGlow * clayWall * vec3(1.0, 0.82, 0.5) * 0.5;",
+          CLAY_NIGHT,
         ].join("\n")
       );
     addOsmFacade(shader);
@@ -296,7 +456,8 @@ function addOsmFacade(shader: {
 export function createStyleResources(
   heightFog?: HeightFogUniforms,
   night?: { value: number },
-  skyView?: { value: number }
+  skyView?: { value: number },
+  sunDirection?: Vector3
 ): StyleResources {
   // Booted at the table defaults; applyCityLook retunes them live.
   const clayDetail: ClayDetailUniforms = {
@@ -311,6 +472,9 @@ export function createStyleResources(
     uNight: night ?? { value: 0 },
     uRough: { value: LOOK_DEFAULTS.roughness },
     uSkyView: skyView ?? { value: LOOK_DEFAULTS.skyView },
+    uNightLights: { value: LOOK_DEFAULTS.nightLights },
+    uGlint: { value: LOOK_DEFAULTS.glint },
+    uSunDir: { value: sunDirection ?? new Vector3(0, 1, 0) },
   };
   return {
     clayDetail,
@@ -408,12 +572,14 @@ export function setCityTransparency(
  */
 const CLAY_UNIFORM_FOR: Record<
   Exclude<ClayLookKey, "transparency">,
-  keyof Omit<ClayDetailUniforms, "uNight">
+  keyof Omit<ClayDetailUniforms, "uNight" | "uSunDir">
 > = {
   bands: "uBands",
   duskGlow: "uDuskGlow",
   eave: "uEave",
+  glint: "uGlint",
   groundShade: "uAO",
+  nightLights: "uNightLights",
   rim: "uRim",
   roofTint: "uRoofTint",
   roofVibrance: "uRoofVibrance",
@@ -422,7 +588,7 @@ const CLAY_UNIFORM_FOR: Record<
 };
 
 /**
- * Pushes the building rows of the look into the clay: the nine facade
+ * Pushes the building rows of the look into the clay: the eleven facade
  * detail uniforms (live references, no recompile) and the transparency.
  */
 export function applyCityLook(

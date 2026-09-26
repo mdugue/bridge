@@ -137,6 +137,8 @@ The button in the corner opens a panel with three tabs.
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
 | | *Abendlicht* | warm windows in shops and public buildings at dusk |
+| | *Nachtlicht* | at night: softly lit windows in houses and shops; churches, castles, theatres and museums are floodlit |
+| | *Scheibenglanz* | the low sun glints in the windows of sunlit facades, mornings and evenings only |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
 | | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas like meadow, from the infrared aerial photo |

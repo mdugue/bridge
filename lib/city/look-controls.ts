@@ -29,6 +29,8 @@ export type ClayLookKey =
   | "roofVibrance"
   | "roughness"
   | "tint"
+  | "glint"
+  | "nightLights"
   | "transparency";
 /** Rows the post stack applies (post-stack.ts). */
 export type PostLookKey = "contact" | "grading" | "grain";
@@ -213,6 +215,26 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     group: "buildings",
     initial: 0.5,
     snapshotKey: "duskGlowPct",
+  },
+  {
+    key: "nightLights",
+    id: "building-night-lights",
+    label: "Nachtlicht",
+    description:
+      "Nachts: weich erleuchtete Fenster in Wohn- und Geschäftshäusern, angestrahlte Kirchen, Schlösser, Theater und Museen",
+    group: "buildings",
+    initial: 0.6,
+    snapshotKey: "nightLightsPct",
+  },
+  {
+    key: "glint",
+    id: "building-glint",
+    label: "Scheibenglanz",
+    description:
+      "Die tiefe Sonne spiegelt sich in den Scheiben besonnter Fassaden — nur morgens und abends",
+    group: "buildings",
+    initial: 0.5,
+    snapshotKey: "glintPct",
   },
   {
     key: "roughness",
