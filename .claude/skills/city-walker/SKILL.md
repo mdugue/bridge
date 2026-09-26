@@ -337,6 +337,27 @@ shimmer and the LOD-gated multi-tuft crown are in `vegetation-layer.ts`.
 `aesthetic-sandbox.html` at the repo root is the historical playground those
 were ported from; the layer file, not the sandbox, is the source of truth.
 
+## Bridges (ADR 0013, ADR 0032)
+
+Decks come from the Basis-DLM (`ver06_l` centrelines, `ver06_f` outlines),
+built per fine terrain tile by `rail-layer.ts`; **only the tile owning a
+deck's centre draws it** (`RailContext.owns`), every copy still lifts that
+tile's rails. The bake (`rail.py` + `bridge.py`) reads a DGM/DOM mosaic
+700 m around the tile, so a seam bridge is the same in both files. What it
+measures in DOM1: the **roadway** (lower third across the deck, held
+−6/+4 m around the abutment ramp) and, on bridges whose class stands above
+the deck (Wikidata over OSM: arch, truss, suspension, cantilever,
+cable-stayed), the **ribs** — per half of the cross-section, the highest
+surface over the deck, opened 7 m / closed 11 m, kept ≥ 3 m for ≥ 25 m.
+Runtime (`lib/city/bridge.ts`): arch ribs share the tightest rib's
+parabola (`archFits`) and are carried below the deck to the ground
+(`archSpringing`) — the Waldschlößchenbrücke; a rib that fits no arch is
+not drawn (catenary, trees). Truss/suspension ribs are drawn as measured
+with pylons where they peak ≥ 10 m (the Blaues Wunder); cable-stayed gets
+a pylon and a fan. The deck's `depth` comes from the OSM fairway clearance
+over the DGM water; beam piers keep the fairway clear. The LoD2's own
+bridge slabs (`53001_*`) are dropped from the building mesh.
+
 ## Performance model
 
 Buildings are already merged (low draw calls) — **BatchedMesh is moot** and

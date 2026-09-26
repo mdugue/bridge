@@ -138,8 +138,9 @@ is the codebook.
 | Canopy on a monument | a canopy point on a relief cell is dropped (the DOM1 "tree" was the monument) | DOM1, Basis-DLM | `onRelief` |
 | Ballast surface | dissolved `ver03_f` polygons, ground-clamped per vertex | Basis-DLM | `rail-layer.ts` |
 | Rails | `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`), draped or lifted onto a deck | Basis-DLM | `buildRails` |
-| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height, width by `kind` | Basis-DLM + DGM1/DOM1 | `rail-layer.ts` |
-| Bridge underside | `structure` contains `arch` → spandrel arches on river piers; else box piers | OSM | `addArches` |
+| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height (the roadway DOM1 measures, held near the DGM abutment ramp), width by `kind`; slab `depth` = deck − (water + fairway clearance), 0.6–5 m, else 1.1 m; drawn by the tile that owns its centre | Basis-DLM + DGM1/DOM1 + OSM seamarks | `drawBridge` |
+| Bridge superstructure | `ribs` (lateral `offset` + `rise` per 2 m): on an arch bridge the ribs that follow the tightest rib's parabola → steel arches carried below the deck to their springing, hangers/posts every 6 m (a rib that follows no arch: not drawn); cable-stayed → pylon + stays fanned to the deck; else the rib as measured — chord, posts, diagonals — and a pylon (+ river pier, portal) where it peaks ≥ 10 m; painted steel `0x8d9ca8` | DOM1 (+ Wikidata/OSM class) | `addSuperstructure`, `lib/city/bridge.ts` |
+| Bridge underside | `structure` contains `arch` and no steel arch → spandrel arches on river piers; else box piers every ~26 m, the fairway kept clear (main span wide, else 40 m); pylons carry the deck alone | OSM / Wikidata | `addArches`, `pierStations` |
 | Platform | `railway=platform` polygons, terrain-clamped | OSM | `rail-layer.ts` |
 | Landing stage | OSM pier outline + `deck` → timber slab 0.3 m, instanced piles every 4 m round its edge over the water, railing (rail + posts 2 m) along the edges over the water | OSM + DGM1 | `riverside-layer.ts` (`addPier`) |
 | Pontoon | outline cut to the water → soft slate hull −0.3…+0.35 m and pale deck +0.5 m over the lowest ground under it (= the drawn water); clay hut + slate roof when `len` > 15 m; 1.4 m gangway to `bank` | OSM + the terrain the water lies on | `riverside-layer.ts` (`addPontoon`) |

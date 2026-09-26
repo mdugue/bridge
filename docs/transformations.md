@@ -555,7 +555,9 @@ visual-variable codebook is in
   (`vegrows_<tile>.geojson`) → `vegetation-layer.ts`, per fine terrain tile.
 - **Canopy fill** — `nDOM = DOM1 − DGM1`, one tree per ~7 m cell at the tallest
   pixel, scaled to measured height, **gated off road/bridge/water** via the DLM
-  class raster. `pipeline/bake/canopy.py`. At build time
+  class raster, and off everything within 10 m of a DLM bridge (a bridge's
+  steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
+  out as two trees). `pipeline/bake/canopy.py`. At build time
   (`scripts/prepare-data.ts`, `treesOffStructures` in
   `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within
   0.5 m of one of the tile's small structures is dropped: DOM1 reads a
@@ -973,19 +975,66 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   **`ver06_f` deck AREA footprint** where one matches (≤50 m) else **buffered by
   kind-width** — so the parallel Marienbrücke rail + road decks are separate
   single-volume slabs (top face + one continuous fascia) AND road/path bridges
-  without an area polygon still render. Per-ring-vertex deck Z = abutment ramp from
-  **DGM1** lifted to the **DOM1** surface (+ camber) so Elbe spans float above the
-  water. **Flush parapet walls** (no floating cap). **Kind** (rail/road/path) from
-  rasterising the networks + sampling the *centreline*. *(Tried ver06_f-only — it
-  dropped the road/path bridges, which lack area polygons; see 🗃️.)*
-- **Bridge arches** — OSM `man_made=bridge` `bridge:structure` (ODbL, from the
-  local extract; nearest-centroid match ≤60 m → deck `structure`) drives the
-  under-deck shape: where it contains **`arch`** (Augustus-/Marienbrücke),
-  `addArches` builds segmental spandrel walls (arched intrados, high at the
-  crown, springing low) on both deck edges, carried on slim **river piers** —
-  a masonry-viaduct read. `beam`/absent → flat soffit + box piers. Gated on
+  without an area polygon still render. **Deck height = the roadway DOM1
+  measures**: per 1 m station along the deck's axis the lower third of the
+  surface across the deck (parapets, cars and lamps stand above it), held
+  within −6/+4 m of the abutment ramp from DGM1 (a train or a canopy over the
+  deck is not the deck), smoothed over 15 m (`bridge.py` `measured_deck`).
+  Without DOM1: the ramp + camber. The ground is a **mosaic of the tile and
+  its neighbours** (700 m around it), so a deck across a seam comes out the
+  same in both tiles' files, and **only the tile that owns its centre draws
+  it** (every copy still lifts that tile's rails). **Flush parapet walls** (no
+  floating cap). **Kind** (rail/road/path) from rasterising the networks +
+  sampling the *centreline*. *(Tried ver06_f-only — it dropped the road/path
+  bridges, which lack area polygons; the DGM ramp alone — it put the
+  Waldschlößchenbrücke 3 m low and rail decks up to 6 m high; per-tile
+  ground — seam bridges drawn twice at two heights; see 🗃️.)*
+- **Bridge superstructure** (*Oberbau*: truss, pylons, steel arch) — **DOM1**
+  above the deck line, per half of the cross-section (the outline grown by
+  3 m): the highest surface per station, a morphological **opening** (7 m:
+  lamps, poles, cars go) and **closing** (11 m: gaps the 1 m raster leaves in
+  a slender member fill), kept where it rises ≥ 3 m for ≥ 25 m and peaks
+  ≥ 5 m. Each half gives one **rib** (lateral offset + rise per 2 m station;
+  two within 3 m merge). Only a bridge whose class stands above its deck
+  (arch, truss, suspension, cantilever, cable-stayed — Wikidata over OSM)
+  keeps its ribs: over a beam bridge DOM1 sees catenary, trains and trees.
+  At runtime (`rail-layer.ts`, `lib/city/bridge.ts`): on an **arch** bridge
+  the tightest rib that fits a parabola (rms ≤ 1.5 m, sag ≥ 2 m, crown
+  inside the run) gives its curve to every rib that follows it (the raster
+  sees one side of the Waldschlößchenbrücke patchily), drawn as a steel arch
+  **extended below the deck to where it meets the ground** (the springing
+  the DOM cannot see), hangers above and posts below the deck; a rib that
+  follows no arch is not drawn (the Marienbrücke's). On a
+  **cable-stayed** bridge the peak is a pylon on a river pier with stays
+  fanned to the deck by rule (the Molenbrücke). Otherwise the rib is drawn
+  **as measured** (chord, a post every 6 m, diagonals), and where it peaks
+  ≥ 10 m a **pylon** stands on a river pier with a portal between the two
+  ribs — the Blaues Wunder's two towers and sagging truss. Painted-steel
+  material. No DOM1: no ribs. `pipeline/bake/bridge.py`
+  ([ADR 0032](./adr/0032-bridges-measured-in-the-surface-model.md)).
+- **Bridge depth and fairway** — OSM's inland-waterway marks
+  (`seamark:type=bridge` + `seamark:bridge:clearance_height`, ODbL) within
+  30 m of a deck: the navigation clearance over the DGM's water surface gives
+  the soffit there, hence the deck's **structural depth** (deck − water −
+  clearance, clamped 0.6–5 m; 1.1 m without a mark), and **where the fairway
+  crosses**. Beam-bridge piers keep the fairway clear (the main span wide when
+  Wikidata knows it, else 40 m). The clearance's reference level is not
+  NHN-anchored in OSM, so the DGM's water surface at scan time stands in.
+- **Bridge type and main span from Wikidata** (CC0) — the ingest fetches the
+  bridges Wikidata knows around each tile (class, main span P2787, length)
+  into `data/_raw/<site>/wikidata/`; a deck is matched by an OSM `wikidata`
+  tag on its outline or fairway mark, else by its DLM name within 150 m.
+  Wikidata's classes (Bogen-, Hänge-, Ketten-, Gerberträger-, Fachwerk-,
+  Balkenbrücke …) **override OSM's `bridge:structure`** — OSM calls the
+  Waldschlößchenbrücke a truss; it is an arch. No file: the OSM tag stays.
+- **Bridge arches** — `structure` containing **`arch`** without a measured
+  steel arch (Augustus-, Albert-, Marienbrücke) → `addArches` builds
+  segmental spandrel walls (arched intrados, high at the crown, springing
+  low) on both deck edges, carried on slim **river piers** — a
+  masonry-viaduct read. `beam`/absent → flat soffit + box piers. Gated on
   real deck clearance (`ARCH_MIN_RISE`) so flat bridges don't get spurious
-  arches. Falls back to box piers when no OSM/structure.
+  arches. The structure comes from Wikidata when it knows the bridge, else
+  from the nearest OSM `man_made=bridge` `bridge:structure` (≤60 m).
 - **Station platforms** — OSM `railway=platform` (ODbL) → triangulated flat slabs
   (`ShapeUtils.triangulateShape`), per-vertex terrain-clamped. The OSM half of the
   blend (Basis-DLM has no platform geometry); absent/empty when the site has
@@ -1395,9 +1444,12 @@ research that produced them):
    permanently at half resolution instead
    ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). A pixel-ratio
    drop under motion is the open half (needs a ~1 s hold and a real-GPU look).
-9. **Cable-stayed / truss bridge structures** — arch + beam now ship (✅ above);
-   `bridge:structure=cable-stayed` (Pieschener Molenbrücke) / `truss` still fall
-   back to a flat soffit. Pylons + stay cables / truss webs would finish the set.
+9. **Stay cables and bridge colour** — trusses, pylons and steel arches now
+   come from DOM1 (✅ above). The Pieschener Molenbrücke's pylon measures,
+   but its stay cables are too thin for a 1 m raster: they are fanned from
+   the measured pylon top by rule; tracing them would need the laser point
+   cloud (LSC). The steel is one painted colour; sampling the DOP
+   along a rib's chord could give the Blaues Wunder its blue.
 10. **Atmospheric motes** — the one unbuilt item of the aesthetic roadmap:
     camera-local `Points` (2–4 k) drifting in a toroidal volume (R ≈ 30 m),
     additive, `depthWrite: false`, `fog: false` (fog would brighten distant
@@ -1455,6 +1507,9 @@ research that produced them):
 | **Per-line ballast ribbons** (rail v1: one ~9.6 m ribbon per `ver03_l` line) | 42+ overlapping coplanar ribbons in the yard z-fought into ragged/torn edges. | Replaced by the **dissolved `ver03_f` area** as one merged surface. |
 | **`ver06_l` centreline-buffered decks** (rail v1) | Buffered planks stacked deck-top + ballast + parapet-cap → "2-story" bridges, and one plank merged the parallel Marienbrücke spans. | Replaced by **`ver06_f` deck polygons** (one slab per real footprint); kept as the no-`ver06_f` portability fallback. |
 | **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build on the **cross-tile `heightAt`** — once for the block until ADR 0024, now per fine terrain tile over every loaded terrain. |
+| **LoD2 bridge objects as buildings** (ALKIS `53001_*` in the CityJSON) | Saxony's LoD2 carries its bridges as `Building`s (52 on the first four tiles): flat 1 m slabs at one height. The building bake drew them as clay houses (with the facade detail) 1–3 m off the rail layer's decks — every Elbe bridge had a second deck. | `withoutTrafficStructures` drops them from the building mesh; the rail layer draws bridges alone. Their footprint is no better than the DLM's. |
+| **Deck height from the DGM abutment ramp alone** | Two endpoints + camber: the Waldschlößchenbrücke's deck came out 3 m low (below its own navigation clearance), and rail decks whose ends sit under catenaries or trees up to 6 m high. | The roadway measured in DOM1 along the axis, held near the ramp (✅ above); the ramp stays the no-DOM fallback. |
+| **Per-tile ground for bridge decks** | The rasters stopped at the tile edge (sampling clamped there), so a deck across a seam got two different profiles — and both tiles drew it: two decks metres apart (Schlachthofbrücke). | A DGM/DOM mosaic around the tile; the owner draws, every copy lifts rails. |
 | **`ver06_f`-only bridge decks** (rail v2 first cut) | `ver06_f` has area polygons only for (mostly rail) major spans → road/path bridges (Augustusbrücke etc.) vanished + everything mis-classified rail. | Drive from the **complete `ver06_l`** set, footprint from `ver06_f` where matched. |
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | N8AO runs permanently at `halfRes`; only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
 | **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
