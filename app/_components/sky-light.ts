@@ -296,6 +296,10 @@ const white = sceneShared(() => {
     RedFormat,
     UnsignedByteType
   );
+  // Filterable like the rasters that replace it: the node renderer compiles
+  // a NEAREST texture as an unfiltered load, and a swap keeps the program.
+  texture.magFilter = LinearFilter;
+  texture.minFilter = LinearFilter;
   texture.needsUpdate = true;
   return texture;
 });

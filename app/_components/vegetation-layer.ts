@@ -17,6 +17,7 @@ import { nodeRenderer } from "./gpu-mode";
 import {
   createNodeCrownMaterial,
   createNodeTrunkMaterial,
+  nodeCrownRefs,
   nodeHedgeMaterial,
 } from "./vegetation-node";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -581,14 +582,8 @@ export function buildCrownMaterial(
   bare = false
 ): MeshStandardMaterial {
   if (nodeRenderer()) {
-    return createNodeCrownMaterial(
-      sunDirection,
-      shimmer,
-      translucency,
-      leafFlutter,
-      leafBright,
-      bare
-    );
+    // The node crowns read the scene's shared refs (crownLookRefs).
+    return createNodeCrownMaterial(sunDirection, bare);
   }
   const m = new MeshStandardMaterial({ color: CROWN_BASE_COLOR, roughness: 1 });
   // The closure branches on `heightFog` and `bare`; three keys programs on
@@ -975,6 +970,29 @@ function buildTreeCell(
 
 /** The crown's live uniforms (by reference), shared by every crown material
  *  of a tile. */
+/**
+ * A tile's crown look refs and wind clock (by reference: applyLook and
+ * setTime write them, the crown shader reads them). The clock is advanced
+ * once per frame by the render loop (same elapsed seconds as the water
+ * ripple). On the node renderer every tile shares one set
+ * (vegetation-node.ts `nodeCrownRefs`), as it shares the crown materials:
+ * a shared material cannot follow one tile's refs.
+ */
+export function crownLookRefs(): CrownLookRefs {
+  if (nodeRenderer()) {
+    return nodeCrownRefs();
+  }
+  return {
+    shimmer: { value: LOOK_DEFAULTS.shimmer },
+    translucency: { value: LOOK_DEFAULTS.translucency },
+    leafFlutter: { value: LOOK_DEFAULTS.leafFlutter },
+    leafBright: { value: LOOK_DEFAULTS.leafBright },
+    uTime: { value: 0 },
+  };
+}
+
+export type CrownLookRefs = Omit<CrownUniforms, "sunDirection">;
+
 export interface CrownUniforms {
   leafBright: { value: number };
   leafFlutter: { value: number };
@@ -1216,10 +1234,8 @@ export function buildVegetation(
   group.name = "vegetation";
 
   // Booted at the table defaults; the caller applies the current look next.
-  const shimmer = { value: LOOK_DEFAULTS.shimmer };
-  const translucency = { value: LOOK_DEFAULTS.translucency };
-  const leafFlutter = { value: LOOK_DEFAULTS.leafFlutter };
-  const leafBright = { value: LOOK_DEFAULTS.leafBright };
+  const { shimmer, translucency, leafFlutter, leafBright, uTime } =
+    crownLookRefs();
   // The crown uniform each vegetation row drives — a Record over the keys, so
   // a row added to the table cannot go unapplied.
   const rowUniform: Record<VegetationLookKey, { value: number }> = {
@@ -1228,10 +1244,6 @@ export function buildVegetation(
     shimmer,
     translucency,
   };
-  // By-reference clock for the crown wind sway; advanced once per frame by the
-  // render loop (same elapsed seconds as the water ripple). One uniform write
-  // per tile per frame.
-  const uTime = { value: 0 };
   const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let chunks: VegetationChunk[] = [];

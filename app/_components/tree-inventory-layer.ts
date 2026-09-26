@@ -39,6 +39,7 @@ import {
   buildCrownGeoRich,
   buildCrownMaterials,
   bucketByCell,
+  crownLookRefs,
   type CellLod,
   crownColor,
   hash,
@@ -489,17 +490,14 @@ export function buildTreeInventory(
 ): TreeInventory {
   const group = new Group();
   group.name = "tree-inventory";
-  const shimmer = { value: LOOK_DEFAULTS.shimmer };
-  const translucency = { value: LOOK_DEFAULTS.translucency };
-  const leafFlutter = { value: LOOK_DEFAULTS.leafFlutter };
-  const leafBright = { value: LOOK_DEFAULTS.leafBright };
+  const { shimmer, translucency, leafFlutter, leafBright, uTime } =
+    crownLookRefs();
   const rowUniform: Record<VegetationLookKey, { value: number }> = {
     leafBright,
     leafFlutter,
     shimmer,
     translucency,
   };
-  const uTime = { value: 0 };
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   const counts = { broad: 0, spindle: 0, cone: 0, weep: 0 };
 

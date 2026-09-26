@@ -43,9 +43,11 @@ import { openSkyTexture } from "./sky-light";
  * SPIKE (plan 020): sky-light.ts on the node renderer — the same two terms
  * from the same rasters, as node-material slots instead of chunk patches:
  *
- * - Himmelslicht scales the indirect diffuse light only: three's `aoNode`
- *   (the ambient-occlusion slot multiplies `indirectDiffuse`, as
- *   `aomap_fragment` does in the GLSL).
+ * - Himmelslicht scales the indirect diffuse light: three's `aoNode` (the
+ *   ambient-occlusion slot multiplies `indirectDiffuse`, as `aomap_fragment`
+ *   does in the GLSL). It also occludes the indirect specular, which the
+ *   GLSL leaves alone — zero here (no environment map); revisit if one
+ *   comes.
  * - Ferne Schatten cuts the sun's direct light: `receivedShadowNode`
  *   folds the horizon into the directional shadow by `min`, exactly the
  *   `min( shadow map, hzLit )` of `lightsWithFarShadow`.

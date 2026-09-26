@@ -96,8 +96,11 @@ export function createNodeClayMaterial(
   // --- per vertex: the object's row --------------------------------------
   const id = int(attribute("featureId", "float").add(0.5));
   const at = ivec2(id.mod(OBJECT_TEXTURE_WIDTH), id.div(OBJECT_TEXTURE_WIDTH));
+  // The table's band height as a uniform, as the GLSL's uObjectRows: a
+  // constant would make each tile's row count a shader of its own.
+  const rows = uniform(objects.rows, "int");
   const texel = (band: number) =>
-    textureLoad(objects.texture, at.add(ivec2(0, band * objects.rows)));
+    textureLoad(objects.texture, at.add(ivec2(0, rows.mul(band))));
   const a = texel(0);
   const b = texel(1);
   const c = texel(2);

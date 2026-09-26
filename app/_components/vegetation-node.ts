@@ -1,4 +1,9 @@
-import { type MeshStandardMaterial, Vector3 } from "three";
+import {
+  InstancedInterleavedBuffer,
+  type InstancedMesh,
+  type MeshStandardMaterial,
+  Vector3,
+} from "three";
 import {
   abs,
   attribute,
@@ -14,9 +19,8 @@ import {
   float,
   floor,
   fract,
-  hash,
   instanceColor,
-  instanceIndex,
+  instancedBufferAttribute,
   length,
   log2,
   max,
@@ -33,13 +37,18 @@ import {
   sin,
   smoothstep,
   step,
-  time,
   uniform,
   varying,
+  varyingProperty,
   vec2,
   vec3,
 } from "three/tsl";
-import { MeshStandardNodeMaterial, type Node } from "three/webgpu";
+import {
+  MeshStandardNodeMaterial,
+  type Node,
+  type NodeBuilder,
+} from "three/webgpu";
+import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { onNodeSceneEnd } from "./node-shared";
 import {
   BARE_EPS,
@@ -64,18 +73,22 @@ type Live = { value: number };
 /**
  * The crown and trunk materials are shared by every tile's vegetation (three
  * keys a node graph by its nodes' ids, so a per-tile copy would be
- * translated anew for each tile). Every tile's look refs carry the same
- * values; the shared uniforms read whichever tile built last — the sun's
- * direction too, so a remounted app's crowns follow its own sun. Freed with
- * the last app (node-shared.ts).
+ * translated anew for each tile). So are the crowns' look refs and clock on
+ * this path (`nodeCrownRefs`): every tile's vegetation writes the same
+ * objects, so a slider still reaches the crowns after the tile that built
+ * them last has left. The sun is the latest caller's (one per app). Freed
+ * with the last app (node-shared.ts).
  */
-let refs: {
+export interface CrownRefs {
   leafBright: Live;
   leafFlutter: Live;
   shimmer: Live;
-  sunDirection: Vector3;
   translucency: Live;
-} | null = null;
+  /** the render loop's clock (vegetation setTime), as the GLSL's uTime */
+  uTime: Live;
+}
+let refs: CrownRefs | null = null;
+let sun: Vector3 | null = null;
 /** the leafy and the seasonal (bare) crown */
 const crownShared = new Map<boolean, MeshStandardMaterial>();
 const trunkShared = new Map<number, MeshStandardMaterial>();
@@ -89,10 +102,82 @@ onNodeSceneEnd(() => {
   trunkShared.clear();
   hedgeShared = null;
   refs = null;
+  sun = null;
 });
-const live = (pick: (r: NonNullable<typeof refs>) => Live) =>
-  uniform(0).onRenderUpdate(() => (refs ? pick(refs).value : 0));
+
+/** The crowns' look refs and clock, one set per scene on the node path. */
+export function nodeCrownRefs(): CrownRefs {
+  refs ??= {
+    leafBright: { value: LOOK_DEFAULTS.leafBright },
+    leafFlutter: { value: LOOK_DEFAULTS.leafFlutter },
+    shimmer: { value: LOOK_DEFAULTS.shimmer },
+    translucency: { value: LOOK_DEFAULTS.translucency },
+    uTime: { value: 0 },
+  };
+  return refs;
+}
+const live = (pick: (r: CrownRefs) => Live) =>
+  uniform(0).onRenderUpdate(() => pick(nodeCrownRefs()).value);
 const UP = new Vector3(0, 1, 0);
+
+/** Set per vertex from the instance's matrix (CrownNodeMaterial). */
+const crownOrigin = varyingProperty("vec2", "vCrownOrigin");
+const crownScale = varyingProperty("float", "vCrownScale");
+/** The wind's bend in the crown's own frame (the GLSL's, before the
+ *  instance transform): stiff at the base, loose at the top. */
+let swayBend: ((phase: Node<"float">) => Node<"vec3">) | null = null;
+
+/**
+ * The crown material with the GLSL's order of things: the sway bends the
+ * crown in its own space before the instance transform (so a tall tree
+ * sways more and each leans its own way), and the instance's world column
+ * and scale reach the fragment (the sway phase, the leaf-cover seed, the
+ * large-crown translucency). Read from the instance matrix per build —
+ * three builds every instanced mesh on its own anyway. The shadow pass
+ * draws with its own material, so the cast shadow stays rigid, as it does
+ * on WebGL.
+ */
+/**
+ * The instance matrices as an instance-stepped buffer the columns read:
+ * handed a plain attribute, three wraps it in a vertex-stepped one (the
+ * step mode comes from the buffer), and the draw overruns it. One per mesh
+ * (the crowns' matrices are written once, at build).
+ */
+const columnBuffers = new WeakMap<InstancedMesh, InstancedInterleavedBuffer>();
+function instanceColumns(mesh: InstancedMesh): InstancedInterleavedBuffer {
+  let buffer = columnBuffers.get(mesh);
+  if (!buffer) {
+    buffer = new InstancedInterleavedBuffer(mesh.instanceMatrix.array, 16, 1);
+    columnBuffers.set(mesh, buffer);
+  }
+  return buffer;
+}
+
+class CrownNodeMaterial extends MeshStandardNodeMaterial {
+  override setupPosition(builder: NodeBuilder): Node {
+    const object = builder.object as InstancedMesh;
+    if (object.isInstancedMesh && swayBend) {
+      // columns 0 and 3 of the instance matrix
+      const matrices = instanceColumns(object);
+      // reason: @types/three leaves the attribute node's type open.
+      const column = (offset: number) =>
+        instancedBufferAttribute(
+          matrices,
+          "vec4",
+          16,
+          offset
+        ) as unknown as Node<"vec4">;
+      const origin = column(12).xz;
+      crownOrigin.assign(origin);
+      crownScale.assign(length(column(0).xyz));
+      positionLocal.addAssign(swayBend(dot(origin, vec2(0.07, 0.11))));
+    } else {
+      crownOrigin.assign(vec2(0));
+      crownScale.assign(1);
+    }
+    return super.setupPosition(builder);
+  }
+}
 
 /** Smoothed value noise over a hash lattice (the GLSL leafNoise). */
 function valueNoise(p: Node<"vec2">): Node<"float"> {
@@ -149,9 +234,9 @@ function crownThreshold(p: Node<"vec3">, seed: Node<"vec3">): Node<"float"> {
  */
 function crownSeason(): { keep: Node<"bool">; twig: Node<"float"> } {
   const bare = varying(attribute("aBare", "float"));
-  // A fixed rotation turns the cells off the crown's axes; the seed
-  // (per instance, as crown-season.ts's from the instance's column) offsets
-  // the hash, so neighbours differ.
+  // A fixed rotation turns the cells off the crown's axes; the seed (from
+  // the instance's column, as crown-season.ts's) offsets the hash, so
+  // neighbours differ and a tree keeps its stipple across the LOD tiers.
   const cell = varying(
     vec3(
       dot(positionGeometry, vec3(0.6667, 0.6667, 0.3333)),
@@ -159,9 +244,7 @@ function crownSeason(): { keep: Node<"bool">; twig: Node<"float"> } {
       dot(positionGeometry, vec3(0.3333, -0.6667, 0.6667))
     )
   );
-  const seed = varying(
-    vec2(hash(instanceIndex), hash(instanceIndex.add(7919))).mul(97)
-  );
+  const seed = fract(crownOrigin.mul(0.0137)).mul(97);
   const h = crownThreshold(cell, vec3(seed, 0));
   const leafy = float(1).sub(bare);
   const isBare = bare.greaterThan(BARE_EPS);
@@ -173,45 +256,38 @@ function crownSeason(): { keep: Node<"bool">; twig: Node<"float"> } {
 
 export function createNodeCrownMaterial(
   sunDirection: Vector3,
-  shimmer: Live,
-  translucency: Live,
-  leafFlutter: Live,
-  leafBright: Live,
   bare = false
 ): MeshStandardMaterial {
-  refs = { leafBright, leafFlutter, shimmer, sunDirection, translucency };
+  sun = sunDirection;
   const cached = crownShared.get(bare);
   if (cached) {
     return cached;
   }
-  const m = new MeshStandardNodeMaterial({
-    color: CROWN_BASE_COLOR,
-    roughness: 1,
-  });
+  const m = new CrownNodeMaterial({ color: CROWN_BASE_COLOR, roughness: 1 });
   m.userData.shared = true;
   const season = bare ? crownSeason() : null;
-  const sunDir = uniform(new Vector3(0, 1, 0)).onRenderUpdate(
-    () => refs?.sunDirection ?? UP
-  );
+  const sunDir = uniform(new Vector3(0, 1, 0)).onRenderUpdate(() => sun ?? UP);
+  const uTime = live((r) => r.uTime);
 
-  // Wind sway, after instancing (positionLocal is already the tree's frame
-  // in the Y-up scene): stiff at the base, loose at the top.
-  const phase = hash(instanceIndex).mul(40);
-  const k = clamp(positionGeometry.y.div(7), 0, 1).pow(2);
-  const sway = sin(time.mul(0.38).add(phase)).add(
-    sin(time.mul(0.8).add(phase.mul(1.7))).mul(0.5)
-  );
-  const bend = 0.22;
-  m.positionNode = positionLocal.add(
-    vec3(
-      sway.mul(k).mul(bend),
+  // Wind sway (vegetation-layer.ts): phase from the instance's column.
+  const phase = varyingProperty("float", "vCrownPhase");
+  const swayOf = (p: Node<"float">) =>
+    sin(uTime.mul(0.38).add(p)).add(
+      sin(uTime.mul(0.8).add(p.mul(1.7))).mul(0.5)
+    );
+  swayBend = (p) => {
+    phase.assign(p);
+    const k = clamp(positionLocal.y.div(7), 0, 1).pow(2);
+    return vec3(
+      swayOf(p).mul(k).mul(0.16),
       0,
-      sin(time.mul(0.31).add(phase).add(1.7))
+      sin(uTime.mul(0.31).add(p).add(1.7))
         .mul(k)
-        .mul(0.6 * bend)
-    )
-  );
-  const swayOut = varying(sway);
+        .mul(0.6 * 0.16)
+    );
+  };
+  // the gust signal again in the fragment (vSway), for the brightness pulse
+  const sway = swayOf(phase);
 
   const view = normalize(cameraPosition.sub(positionWorld));
   const dayGate = clamp(sunDir.y, 0, 1);
@@ -220,9 +296,11 @@ export function createNodeCrownMaterial(
   // Leaf twinkle: pale undersides flipping in the wind, sunlit and near only.
   const leafUV = positionWorld.xz.add(positionWorld.y.mul(vec2(0.7, 0.5)));
   const twk = valueNoise(
-    leafUV.mul(1.2).add(vec2(time.mul(0.7), time.mul(0.45)))
+    leafUV.mul(1.2).add(vec2(uTime.mul(0.7), uTime.mul(0.45)))
   ).add(
-    valueNoise(leafUV.mul(2.8).sub(vec2(time.mul(1.1), time.mul(0.8)))).mul(0.6)
+    valueNoise(leafUV.mul(2.8).sub(vec2(uTime.mul(1.1), uTime.mul(0.8)))).mul(
+      0.6
+    )
   );
   const sunFace = clamp(dot(normalWorld, sunDir), 0, 1);
   const camDist = distance(cameraPosition, positionWorld);
@@ -231,40 +309,46 @@ export function createNodeCrownMaterial(
     .mul(float(0.3).add(sunFace.mul(0.7)))
     .mul(float(1).sub(smoothstep(150, 420, camDist).mul(0.7)));
   const flutter = live((r) => r.leafFlutter);
-  const base = materialColor.rgb;
-  const luma = dot(base, vec3(0.299, 0.587, 0.114));
-  const under = mix(base, vec3(luma.mul(1.25).add(0.06)), 0.6);
-  const leaf = mix(base, under, clamp(flutter.mul(twinkle), 0, 1));
+  // The GLSL works on diffuseColor — base × the instance colour, or the
+  // twig colour — and three multiplies the instance colour in after this
+  // node: work on the product, divide it out at the end.
+  // reason: instanceColor is a varying property three types loosely.
+  const perInstance = max(instanceColor as unknown as Node<"vec3">, vec3(1e-3));
+  let diffuse: Node<"vec3"> = materialColor.rgb.mul(perInstance);
+  if (season) {
+    diffuse = mix(
+      diffuse,
+      color(TWIG_COLOR) as unknown as Node<"vec3">,
+      season.twig
+    );
+  }
+  const luma = dot(diffuse, vec3(0.299, 0.587, 0.114));
+  const under = mix(diffuse, vec3(luma.mul(1.25).add(0.06)), 0.6);
+  const leaf = mix(diffuse, under, clamp(flutter.mul(twinkle), 0, 1));
   // Sway-coupled brightness: the crown brightens leaning into the gust.
   const lit = leaf.mul(
     float(1).add(
       live((r) => r.leafBright)
-        .mul(swayOut)
+        .mul(sway)
         .mul(0.18)
     )
   );
-  // Twigs of a bare crown take the twig colour; three multiplies the
-  // instance colour in after this node, so it is divided out here.
-  // reason: instanceColor is a varying property three types loosely.
-  const perInstance = instanceColor as unknown as Node<"vec3">;
-  const twigCol = (color(TWIG_COLOR) as unknown as Node<"vec3">).div(
-    max(perInstance, vec3(1e-3))
-  );
-  m.colorNode = season ? mix(lit, twigCol, season.twig) : lit;
+  m.colorNode = lit.div(perInstance);
   if (season) {
     m.maskNode = season.keep;
   }
 
-  const nearOrDay = float(1)
-    .sub(smoothstep(120, 260, camDist))
-    .mul(dayGate);
+  // Translucency near OR on a large crown, by day.
+  const large = smoothstep(1.2, 3, crownScale);
+  const near = float(1).sub(smoothstep(120, 260, camDist));
+  const gate = max(large, near).mul(dayGate);
   const glow = vec3(0.95, 0.85, 0.45)
     .mul(live((r) => r.shimmer).mul(pow(back, 3.6)))
     .add(
       vec3(0.45, 0.62, 0.3).mul(
         live((r) => r.translucency)
           .mul(pow(back, 1.6))
-          .mul(nearOrDay)
+          .mul(gate)
       )
     )
     .add(vec3(0.9, 0.95, 0.6).mul(flutter.mul(twinkle).mul(0.14)));

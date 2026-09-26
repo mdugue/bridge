@@ -34,7 +34,6 @@ import {
   smoothstep,
   step,
   texture,
-  time,
   uniform,
   vec2,
   vec3,
@@ -311,6 +310,8 @@ export function createNodeWaterLayer(
 ): WaterLayer {
   const sun = sunDirection ?? new Vector3(0, 1, 0);
   const sunDir = uniform(sun).onRenderUpdate(() => sun);
+  // The render loop's clock (update), as the GLSL sheets' uTime.
+  const clock = uniform(0);
   const skyTint = uniform(new Color(0x9f_b6_cc));
   const uv = splatUv(splat);
   const xy = dataXY();
@@ -342,10 +343,10 @@ export function createNodeWaterLayer(
   material.alphaTest = 0.001;
   // Ripples on a level sheet: the terrain grid's normals carry the DGM's
   // noisy river surface, so start from straight up (as the GLSL does).
-  const wv = sin(xy.x.mul(0.35).add(time.mul(0.8))).add(
-    sin(xy.y.mul(0.27).sub(time.mul(0.6)))
+  const wv = sin(xy.x.mul(0.35).add(clock.mul(0.8))).add(
+    sin(xy.y.mul(0.27).sub(clock.mul(0.6)))
   );
-  const wu = sin(xy.x.add(xy.y).mul(0.2).add(time.mul(0.5)));
+  const wu = sin(xy.x.add(xy.y).mul(0.2).add(clock.mul(0.5)));
   const up = normalize(cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz);
   material.normalNode = normalize(up.add(vec3(wv, wu, 0).mul(0.06)));
   // Sun glitter off a Y-up ripple normal, gone after sunset.
@@ -386,12 +387,12 @@ export function createNodeWaterLayer(
   const banks = smoothstep(
     0.15,
     0.85,
-    fbm(xy.mul(0.012).add(vec2(time.mul(0.01), time.mul(0.006))))
+    fbm(xy.mul(0.012).add(vec2(clock.mul(0.01), clock.mul(0.006))))
   );
   const wisps = fbm(
     xy
       .mul(0.031)
-      .sub(vec2(time.mul(0.004), time.mul(0.013)))
+      .sub(vec2(clock.mul(0.004), clock.mul(0.013)))
       .add(banks.mul(1.7))
   );
   const steam = mix(0.25, 1, banks).mul(mix(0.7, 1.15, wisps));
@@ -405,7 +406,8 @@ export function createNodeWaterLayer(
     .mul(0.62)
     .mul(step(0.01, cov));
   mist.alphaTest = 0.002;
-  mist.fog = true;
+  // Not fogged, as the GLSL mist (a ShaderMaterial without fog chunks).
+  mist.fog = false;
   const mistMesh = new Mesh(geometry, mist);
   mistMesh.name = "water-mist";
   mistMesh.renderOrder = 3;
@@ -418,7 +420,8 @@ export function createNodeWaterLayer(
       mistStrength.value = v;
       mistMesh.visible = v > 0.001;
     },
-    update: (_seconds, skyColor) => {
+    update: (seconds, skyColor) => {
+      clock.value = seconds;
       skyTint.value.copy(skyColor);
     },
   };
