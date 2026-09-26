@@ -40,6 +40,7 @@ import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
 import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
+  CanopyFeature,
   FeatureCollection,
   KerbFeature,
   SmallBuildingFeature,
@@ -56,6 +57,7 @@ import {
 } from "../lib/city/fences";
 import type { Point2 } from "../lib/city/polyline";
 import { tileExtentOf } from "../lib/city/site";
+import { treesOffStructures } from "../lib/city/small-buildings";
 import {
   type StairLine,
   stairLineOf,
@@ -269,6 +271,32 @@ async function publishColonies(
   names.cultivatedLow = publish(lowFile, low);
 }
 
+/**
+ * The canopy (DOM1) or the laser-scan crowns without the points that stand
+ * in or within 0.5 m of one of the tile's scan structures: DOM1 reads a
+ * shed's roof as a 3–4 m tree (lib/city/small-buildings.ts). Here, not in
+ * the canopy bake, because the structures are baked after the canopy.
+ */
+async function publishCanopy(tile: string, file: string): Promise<string> {
+  const src = at(`data/dlm/${file}`);
+  const sheds = at(cityMeshSourceFiles(tile).smallBuild);
+  const bytes = await cached(file, cacheKey([src, sheds]), () => {
+    const doc = readJson<FeatureCollection<CanopyFeature>>(src);
+    if (!existsSync(sheds)) {
+      return readFileSync(src);
+    }
+    const trees = doc.features ?? [];
+    const structures =
+      readJson<FeatureCollection<SmallBuildingFeature>>(sheds).features ?? [];
+    const features = treesOffStructures(trees, structures);
+    log(
+      `${file}: ${trees.length - features.length} points in a scan structure dropped`
+    );
+    return utf8({ ...doc, features });
+  });
+  return publish(file, bytes);
+}
+
 for (const tile of TILES) {
   const names: Partial<Record<string, string>> = {};
   for (const [kind, artifact] of Object.entries(tileArtifacts(tile))) {
@@ -277,6 +305,13 @@ for (const tile of TILES) {
       existsSync(at(`data/dlm/${artifact.file}`))
     ) {
       await publishColonies(tile, artifact.file, names);
+      continue;
+    }
+    if (
+      (kind === "canopy" || kind === "canopyx") &&
+      existsSync(at(`data/dlm/${artifact.file}`))
+    ) {
+      names[kind] = await publishCanopy(tile, artifact.file);
       continue;
     }
     if (artifact.bakedFrom) {

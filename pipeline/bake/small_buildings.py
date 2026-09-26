@@ -28,12 +28,23 @@ non-ground returns were part of a multi-echo pulse. In the leaf-off flight
    construction sites and surface car parks; on a mapped wall or bridge;
    within 3 m of a monument or a stop shelter;
    vehicle-sized (2.0–2.8 m wide, 4.5–18 m long, under 4.2 m) unless an
-   OSM building outline confirms a structure; touching the tile's edge.
+   OSM building outline confirms a structure;
+5. on ground that falls more than 1.5 m under its rectangle (an embankment's
+   edge, not a shed: the box would float over the low side);
+6. of two rectangles overlapping by more than 0.5 m², the smaller (they
+   z-fight in the city mesh).
 
-Each is written as its rectangle with `z` (the lowest ground under it),
-`h` (the top above `z`, the median of the fitted plane) and, where the top
-tilts more than 8°, `hc`: the height above `z` at each of the ring's four
-corners (a pent roof). Measurement and the gate: docs/plans/034-dom-minus-lod2.md.
+Across a seam: the rasters and layers are read over the tile and
+`SEAM_MARGIN_M` around it, the neighbours' included, so a structure on the
+seam is found whole on both sides and written by the tile that owns its
+rectangle's centroid. A blob that reaches the margin's edge, or where no
+tile has a scan (the site's edge), is dropped: it is cut.
+
+Each is written as its rectangle with `z` (the lowest ground under it: the
+ground under the rectangle and the DGM at its corners), `h` (the top above
+`z`, the median of the fitted plane) and, where the top tilts more than 8°,
+`hc`: the height above `z` at each of the ring's four corners (a pent roof).
+Measurement and the gate: docs/plans/034-dom-minus-lod2.md.
 """
 
 from __future__ import annotations
@@ -44,13 +55,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import rasterio
 import shapely
+from rasterio.windows import Window
 from scipy import ndimage as ndi
 from shapely.geometry import shape
 
-from .common import Tile, column, feature, geometry_json, write_geojson
-from .lowveg import Grid, building_mask, dgm_on, disk, lsc_rasters, read_band
+from .common import Tile, column, feature, geometry_json, owns, write_geojson
+from .lowveg import Grid, building_mask, dgm_on, disk, lsc_rasters
 from .osm import has_extract, read_osm, tag
+from .skyview import overlaps, site_sources
 
 GEOSN_ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0 (laser scan, LoD2)"
 RES = 0.5
@@ -71,6 +85,11 @@ VEHICLE = {"width": (2.0, 2.8), "length": (4.5, 18.0), "h": 4.2}
 PEDESTRIAN_STREET_M = 6.0  # half-width around a pedestrian street's line
 NEAR_M = 3.0  # a monument or stop shelter this close draws the structure already
 WALL_BUF_M = 0.75
+GROUND_RANGE_M = 1.5  # the ground under a rectangle may fall this much, no more
+OVERLAP_M2 = 0.5  # two rectangles overlapping by more: the smaller goes
+# Read around the tile: a kept rectangle is ≤ 150 m² at ≥ 2 m wide and fills
+# it > 60 %, so all but the rare 40 m+ strip ends inside the margin.
+SEAM_MARGIN_M = 40.0
 
 
 @dataclass
@@ -83,6 +102,8 @@ class Rasters:
     cls: np.ndarray  # land-cover class ids
     ndvi: np.ndarray  # the DOP's greenness, 0–1 (zeros without it)
     masked: np.ndarray  # LoD2 (already grown), walls, bridges: never a candidate
+    dgm: np.ndarray | None = None  # the DGM1 (absolute m), for the corners
+    covered: np.ndarray | None = None  # where a tile's scan was read (None: all)
 
 
 @dataclass
@@ -129,14 +150,42 @@ def edge_share(masked: np.ndarray, sl, m: np.ndarray) -> float:
     return float((ring & masked[r0:r1, c0:c1]).sum()) / max(int(ring.sum()), 1)
 
 
+def is_cut(r: Rasters, grid: Grid, sl) -> bool:
+    """Whether a blob reaches the edge of what was read: the grid's edge, or
+    (one cell around it) where no tile's scan was."""
+    if sl[0].start == 0 or sl[1].start == 0 or sl[0].stop == grid.n or sl[1].stop == grid.n:
+        return True
+    if r.covered is None:
+        return False
+    return not r.covered[sl[0].start - 1 : sl[0].stop + 1, sl[1].start - 1 : sl[1].stop + 1].all()
+
+
+def ground_under(r: Rasters, grid: Grid, rect: shapely.Geometry) -> np.ndarray:
+    """The ground heights under a rectangle: every cell whose centre it
+    holds (the scan's ground, the DGM where the scan has none) and the DGM
+    at its four corners."""
+    x0, y0, x1, y1 = rect.bounds
+    (r0, c0), (r1, c1) = grid.rc(x0, y1), grid.rc(x1, y0)
+    rows, cols = np.mgrid[r0 : r1 + 1, c0 : c1 + 1]
+    xs, ys = grid.xmin + (cols + 0.5) * RES, grid.ymax - (rows + 0.5) * RES
+    inside = shapely.contains_xy(rect, xs, ys)
+    samples = [r.dtm[rows[inside], cols[inside]]]
+    if r.dgm is not None:
+        ring = np.asarray(rect.exterior.coords)[:4]
+        rr, cc = grid.rc(ring[:, 0], ring[:, 1])
+        samples.append(r.dgm[rr, cc])
+    out = np.concatenate(samples)
+    return out[np.isfinite(out)]
+
+
 def measure(r: Rasters, grid: Grid, lab: np.ndarray, sl, i: int) -> Structure | None:
     """One blob → a structure, or None when it fails the shape rules."""
     m = lab[sl] == i
     area = float(m.sum()) * RES * RES
     if not AREA_M2[0] <= area <= AREA_M2[1]:
         return None
-    if sl[0].start == 0 or sl[1].start == 0 or sl[0].stop == grid.n or sl[1].stop == grid.n:
-        return None  # cut by the tile's edge: the neighbour's scan is not read
+    if is_cut(r, grid, sl):
+        return None
     rr, cc = np.nonzero(m)
     xs = grid.xmin + (cc + sl[1].start + 0.5) * RES
     ys = grid.ymax - (rr + sl[0].start + 0.5) * RES
@@ -158,7 +207,12 @@ def measure(r: Rasters, grid: Grid, lab: np.ndarray, sl, i: int) -> Structure | 
         return None
     if sides[1] / sides[0] >= SLIVER["aspect"] and edge_share(r.masked, sl, m) >= SLIVER["share"]:
         return None
-    z = float(np.nanmin(r.dtm[sl][m]))
+    ground = ground_under(r, grid, rect)
+    if not len(ground):
+        ground = r.dtm[sl][m]
+    z = float(np.nanmin(ground))
+    if float(np.nanmax(ground)) - z > GROUND_RANGE_M:
+        return None  # an embankment's edge: the box would float over the low side
     plane = lambda x, y: a + b * (x - mx) + c * (y - my)  # noqa: E731
     h = float(np.median(plane(xs, ys))) - z
     corners = None
@@ -212,14 +266,15 @@ def osm_context(tile: Tile) -> tuple[shapely.Geometry | None, shapely.Geometry |
         'OR other_tags LIKE \'%"area:highway"=>"pedestrian"%\''
     )
     cols = ["amenity", "landuse", "place", "other_tags"]
-    geoms, fields = read_osm(tile, "multipolygons", where, cols, margin=0.0005)
+    # 0.001° ≥ 64 m either way: the whole SEAM_MARGIN_M
+    geoms, fields = read_osm(tile, "multipolygons", where, cols, margin=0.001)
     rows = zip(geoms, *(column(fields, c, geoms) for c in cols), strict=True)
     areas = [g.buffer(0) for g, *tags in rows if is_excluded_area(*tags)]
     # Pedestrian streets mapped as a line only (Schloßstraße, Hauptstraße):
     # the stalls stand along them.
-    streets, _ = read_osm(tile, "lines", "highway = 'pedestrian'", ["highway"], margin=0.0005)
+    streets, _ = read_osm(tile, "lines", "highway = 'pedestrian'", ["highway"], margin=0.001)
     areas += [g.buffer(PEDESTRIAN_STREET_M) for g in streets]
-    blds, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"], margin=0.0005)
+    blds, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"], margin=0.001)
     return _union(areas), _union([g.buffer(0) for g in blds])
 
 
@@ -235,50 +290,114 @@ def _features(path: Path) -> list:
     return json.loads(path.read_text())["features"] if path.exists() else []
 
 
-def layer_mask(tile: Tile, grid: Grid) -> np.ndarray:
-    """LoD2 grown 1 m, the mapped walls (not fences) and the bridge decks."""
-    dlm = tile.data / "dlm"
-    bld = building_mask(grid, tile.data / "cityjson" / f"lod2_{tile.id}.city.json")
+def area_tiles(tile: Tile, grid: Grid) -> list[Tile]:
+    """The tile and every committed neighbour (skyview.py's `site_sources`)
+    the grid reaches into."""
+    bounds = (grid.xmin, grid.ymin, grid.xmax, grid.ymax)
+    return [tile] + [
+        Tile(tid, b, tile.epsg, tile.raw, tile.data)
+        for tid, b in site_sources(tile)
+        if tid != tile.id and overlaps(b, bounds)
+    ]
+
+
+def layer_mask(tiles: list[Tile], grid: Grid) -> np.ndarray:
+    """LoD2 grown 1 m, the mapped walls (not fences) and the bridge decks, of
+    every tile the grid reaches into."""
+    bld = np.zeros((grid.n, grid.n), bool)
+    geoms = []
+    for t in tiles:
+        dlm = t.data / "dlm"
+        bld |= building_mask(grid, t.data / "cityjson" / f"lod2_{t.id}.city.json")
+        geoms += [
+            shape(f["geometry"]).buffer(WALL_BUF_M)
+            for f in _features(dlm / f"walls_{t.id}.geojson")
+            if f["properties"].get("kind") not in ("fence", "gate")
+        ]
+        geoms += [shape(f["geometry"]) for f in _features(dlm / f"bridge_{t.id}.geojson")]
     mask = ndi.binary_dilation(bld, structure=disk(BLD_BUF_PX))
-    walls = [
-        shape(f["geometry"]).buffer(WALL_BUF_M)
-        for f in _features(dlm / f"walls_{tile.id}.geojson")
-        if f["properties"].get("kind") not in ("fence", "gate")
-    ]
-    bridges = [shape(f["geometry"]) for f in _features(dlm / f"bridge_{tile.id}.geojson")]
-    return mask | grid.burn(walls + bridges)
+    return mask | grid.burn(geoms)
 
 
-def drawn_elsewhere(tile: Tile) -> shapely.Geometry | None:
+def drawn_elsewhere(tiles: list[Tile]) -> shapely.Geometry | None:
     """Monuments and stop shelters: other layers draw them."""
-    dlm = tile.data / "dlm"
-    geoms = [shape(f["geometry"]) for f in _features(dlm / f"monuments_{tile.id}.geojson")]
-    geoms += [
-        shape(f["geometry"])
-        for f in _features(dlm / f"furniture_{tile.id}.geojson")
-        if f["properties"].get("k") == "shelter"
-    ]
+    geoms = []
+    for t in tiles:
+        dlm = t.data / "dlm"
+        geoms += [shape(f["geometry"]) for f in _features(dlm / f"monuments_{t.id}.geojson")]
+        geoms += [
+            shape(f["geometry"])
+            for f in _features(dlm / f"furniture_{t.id}.geojson")
+            if f["properties"].get("k") == "shelter"
+        ]
     return _union([g.buffer(NEAR_M) for g in geoms])
 
 
-def load_rasters(tile: Tile, grid: Grid, der: Path) -> Rasters:
-    ground = read_band(der / "dtm_050.tif", "idw")
-    ground = np.where(np.isnan(ground), dgm_on(grid, tile.dgm, tile.epsg), ground)
-    dlm = tile.data / "dlm"
-    cls = grid.resample_png(dlm / f"landcover_{tile.id}.png", nearest=True)
-    ndvi_png = dlm / f"ndvi_{tile.id}.png"
-    ndvi = (
-        grid.resample_png(ndvi_png, nearest=False)
-        if ndvi_png.exists()
-        else np.zeros((grid.n, grid.n), np.float32)
-    )
+def window(grid: Grid, b) -> tuple | None:
+    """The part of `grid` a tile with bounds `b` covers: (the grid's slices,
+    the same cells' slices in the tile's own 0.5 m grid), or None."""
+    x0, y0 = max(grid.xmin, b[0]), max(grid.ymin, b[1])
+    x1, y1 = min(grid.xmax, b[2]), min(grid.ymax, b[3])
+    if x0 >= x1 or y0 >= y1:
+        return None
+
+    def cells(a: float, z: float) -> slice:
+        return slice(int(round(a / RES)), int(round(z / RES)))
+
+    at = (cells(grid.ymax - y1, grid.ymax - y0), cells(x0 - grid.xmin, x1 - grid.xmin))
+    own = (cells(b[3] - y1, b[3] - y0), cells(x0 - b[0], x1 - b[0]))
+    return at, own
+
+
+def read_window(path: Path, desc: str | None, own) -> np.ndarray:
+    """One band of a tile's scan raster over the cells `own` (its grid)."""
+    with rasterio.open(path) as ds:
+        i = list(ds.descriptions).index(desc) + 1 if desc else 1
+        win = Window.from_slices(*own)
+        a = ds.read(i, window=win).astype(np.float32)
+    a[a == -9999] = np.nan
+    return a
+
+
+def load_rasters(tile: Tile, grid: Grid) -> Rasters:
+    """The inputs over `grid` (the tile and its margin), from every tile
+    with a scan that the grid reaches into."""
+    n = grid.n
+    dsm = np.full((n, n), np.nan, np.float32)
+    dtm = np.full((n, n), np.nan, np.float32)
+    dgm = np.full((n, n), np.nan, np.float32)
+    me = np.zeros((n, n), np.float32)
+    cls = np.zeros((n, n), np.uint8)
+    ndvi = np.zeros((n, n), np.float32)
+    covered = np.zeros((n, n), bool)
+    tiles = area_tiles(tile, grid)
+    for t in tiles:
+        win = window(grid, t.bounds)
+        der = lsc_rasters(t) if win is not None else None
+        if der is None:
+            continue
+        at, own = win
+        dlm = t.data / "dlm"
+        ground = read_window(der / "dtm_050.tif", "idw", own)
+        here = dgm_on(Grid(*t.bounds), t.dgm, t.epsg)[own] if t.dgm.exists() else ground
+        dgm[at] = here
+        dtm[at] = np.where(np.isnan(ground), here, ground)
+        dsm[at] = read_window(der / "dsm_050.tif", "max", own)
+        me[at] = np.nan_to_num(read_window(der / "nonground_multiecho_count_050.tif", None, own))
+        tgrid = Grid(*t.bounds)
+        cls[at] = tgrid.resample_png(dlm / f"landcover_{t.id}.png", nearest=True)[own]
+        if (dlm / f"ndvi_{t.id}.png").exists():
+            ndvi[at] = tgrid.resample_png(dlm / f"ndvi_{t.id}.png", nearest=False)[own]
+        covered[at] = True
     return Rasters(
-        dsm=read_band(der / "dsm_050.tif", "max"),
-        dtm=ground,
-        multiecho=np.nan_to_num(read_band(der / "nonground_multiecho_count_050.tif", None)),
+        dsm=dsm,
+        dtm=dtm,
+        multiecho=me,
         cls=cls,
         ndvi=ndvi,
-        masked=layer_mask(tile, grid),
+        masked=layer_mask(tiles, grid),
+        dgm=dgm,
+        covered=covered,
     )
 
 
@@ -290,6 +409,28 @@ def keep(s: Structure, excluded, drawn, buildings) -> bool:
         return False
     confirmed = buildings is not None and buildings.contains(c)
     return confirmed or not is_vehicle_sized(s)
+
+
+def without_overlaps(found: list[Structure]) -> list[Structure]:
+    """Of two rectangles overlapping by more than OVERLAP_M2, the larger
+    stays (they would z-fight in the city mesh)."""
+    polys = [shapely.Polygon(s.ring) for s in found]
+    order = sorted(range(len(found)), key=lambda i: (-polys[i].area, found[i].ring[0]))
+    kept: list[int] = []
+    for i in order:
+        if all(polys[i].intersection(polys[k]).area <= OVERLAP_M2 for k in kept):
+            kept.append(i)
+    return [found[i] for i in sorted(kept)]
+
+
+def owned(tile: Tile, found: list[Structure]) -> list[Structure]:
+    """The structures whose rectangle's centroid lies on the tile."""
+    out = []
+    for s in found:
+        c = shapely.Polygon(s.ring).centroid
+        if owns(tile.bounds, c.x, c.y):
+            out.append(s)
+    return out
 
 
 def structure_feature(s: Structure) -> dict:
@@ -307,11 +448,15 @@ def run(tile: Tile) -> None:
         return
     if not has_extract(tile, "the small structures (the markets and building sites)"):
         return
-    grid = Grid(*tile.bounds)
-    found = find_structures(load_rasters(tile, grid, der), grid)
+    xmin, ymin, xmax, ymax = tile.bounds
+    m = SEAM_MARGIN_M
+    grid = Grid(xmin - m, ymin - m, xmax + m, ymax + m)
+    found = find_structures(load_rasters(tile, grid), grid)
     excluded, buildings = osm_context(tile)
-    drawn = drawn_elsewhere(tile)
+    drawn = drawn_elsewhere(area_tiles(tile, grid))
     kept = [s for s in found if keep(s, excluded, drawn, buildings)]
+    # Decided over the margin too, so both tiles of a seam decide alike.
+    kept = owned(tile, without_overlaps(kept))
     # Stable order: the committed file diffs by feature, not by label order.
     kept.sort(key=lambda s: (round(s.ring[0][0], 1), round(s.ring[0][1], 1)))
     write_geojson(out, [structure_feature(s) for s in kept], tile.epsg, GEOSN_ATTRIBUTION)

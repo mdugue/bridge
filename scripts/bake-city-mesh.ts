@@ -133,7 +133,10 @@ export interface BakedCityMesh {
  * own root (demolish takes it alone), a Building (the HUD counts it), the
  * hashed wall tint, a calm slate roof (the flat-roof palette — no DOP colour
  * is sampled for them) and `source` 1. Its triangles carry its own id, so
- * the weld never merges across objects.
+ * the weld never merges across objects. The tint hashes its first corner
+ * (rounded to the decimetre), not its index, so a changed LoD2 object count
+ * leaves every shed its colour; no storey band (the stroke would fall 0.2 m
+ * under the eave, the sink's depth, on nearly every shed).
  */
 export function appendScanStructures(
   tile: string,
@@ -151,7 +154,7 @@ export function appendScanStructures(
       continue;
     }
     const index = baked.objects.length;
-    const id = `scan:${tile}:${index}`;
+    const id = scanStructureId(tile, f);
     const eave = Math.min(...corners.map((c) => c.h));
     positions.push(...box.positions);
     isRoof.push(...box.isRoof);
@@ -162,7 +165,8 @@ export function appendScanStructures(
       baseZ: cm(z - SMALL_BUILDING_SINK),
       eaveH: cm(eave + SMALL_BUILDING_SINK),
       flags: 0,
-      storeyH: cm(storeyHeight(eave)),
+      // one band above the eave: none on the box
+      storeyH: cm(eave + SMALL_BUILDING_SINK + 1),
       glow: 0,
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id)),
@@ -177,6 +181,13 @@ export function appendScanStructures(
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
   };
+}
+
+/** A scan structure's hash key: the tile and its ring's first corner to the
+ *  decimetre — stable when the tile's LoD2 object count changes. */
+export function scanStructureId(tile: string, f: SmallBuildingFeature): string {
+  const [x, y] = f.geometry.coordinates[0]?.[0] ?? [0, 0];
+  return `scan:${tile}:${x.toFixed(1)}:${y.toFixed(1)}`;
 }
 
 function concat(

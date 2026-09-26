@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { CityJsonDocument } from "../lib/city/types";
-import { bakeCityMesh } from "./bake-city-mesh";
+import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
+import { bakeCityMesh, scanStructureId } from "./bake-city-mesh";
 import { cityMesh } from "./bake-tiles";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
@@ -148,7 +149,30 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   expect(shed.building).toBe(true);
   expect(shed.source).toBe(1);
   expect(shed.eaveH).toBeCloseTo(2.7, 2);
+  // no storey band on a shed: the first would stand above its eave
+  expect(shed.storeyH).toBeGreaterThan(shed.eaveH);
+  expect(shed.flags).toBe(0);
+  expect(shed.glow).toBe(0);
   expect(shed.footprints[0].length).toBe(4);
+  // the box stands where the ring says, recentred on the spawn tile's offset
+  const shedXs: number[] = [];
+  const shedYs: number[] = [];
+  const shedZs: number[] = [];
+  const p = baked.vertices.positions;
+  baked.vertices.objectIds.forEach((id, v) => {
+    if (id === 3) {
+      shedXs.push(p[3 * v]);
+      shedYs.push(p[3 * v + 1]);
+      shedZs.push(p[3 * v + 2]);
+    }
+  });
+  const { cx, cy } = baked.offset;
+  expect(Math.min(...shedXs)).toBeCloseTo(412_020 - cx, 3);
+  expect(Math.max(...shedXs)).toBeCloseTo(412_024 - cx, 3);
+  expect(Math.min(...shedYs)).toBeCloseTo(5_656_020 - cy, 3);
+  expect(Math.max(...shedYs)).toBeCloseTo(5_656_023 - cy, 3);
+  expect(Math.min(...shedZs)).toBeCloseTo(100 - SMALL_BUILDING_SINK, 3);
+  expect(Math.max(...shedZs)).toBeCloseTo(102.5, 3);
   // 12 triangles tagged with the new id, appended after the LoD2 stream.
   const ids = [...baked.vertices.objectIds];
   expect(ids.filter((i) => i === 3).length).toBe(36);
@@ -156,4 +180,31 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   const table = cityMesh(baked).input.table?.properties;
   expect([...(table?.source.values ?? [])]).toEqual([0, 0, 0, 1]);
   expect([...(table?.root.values ?? [])]).toEqual([0, 0, 2, 3]);
+});
+
+test("a scan structure's tint key is its first corner, not its index", () => {
+  const shed = (x: number) => ({
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [x, 5_656_020],
+          [x + 4, 5_656_020],
+          [x + 4, 5_656_023],
+          [x, 5_656_023],
+          [x, 5_656_020],
+        ] as [number, number][],
+      ],
+    },
+    properties: { h: 2.5, z: 100 },
+  });
+  expect(scanStructureId("t", shed(412_020.04))).toBe(
+    "scan:t:412020.0:5656020.0"
+  );
+  expect(scanStructureId("t", shed(412_020.04))).toBe(
+    scanStructureId("t", shed(412_020.01))
+  );
+  expect(scanStructureId("t", shed(412_030))).not.toBe(
+    scanStructureId("t", shed(412_020))
+  );
 });
