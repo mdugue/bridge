@@ -25,6 +25,7 @@ import {
   inheritedFlags,
   OBJECT_SOURCE_SCAN,
   type OsmBuildingLut,
+  withoutTrafficStructures,
 } from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import type { SmallBuildingFeature } from "../lib/city/features";
@@ -209,12 +210,14 @@ function concat(
  */
 export function bakeCityMesh(
   tile: string,
-  doc: CityJsonDocument,
+  source: CityJsonDocument,
   roofLut: RoofColorLut | undefined,
   sharedMatrix: Matrix4 | null,
   osmLut?: OsmBuildingLut,
   scan?: readonly SmallBuildingFeature[]
 ): BakedCityMesh {
+  // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
+  const doc = withoutTrafficStructures(source);
   const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
   if (epsg === null) {
     throw new Error(

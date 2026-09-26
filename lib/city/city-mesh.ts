@@ -1,4 +1,5 @@
 import type { FootprintPoly } from "./minimap";
+import type { CityJsonDocument } from "./types";
 
 /**
  * The buildings' per-object table. The bake (scripts/bake-city-mesh.ts)
@@ -248,4 +249,47 @@ export function footprintPolys(
     }
   });
   return out;
+}
+
+/**
+ * ALKIS "Bauwerk im Verkehrsbereich" (object type 53001: bridges, tunnel
+ * mouths, culverts). Saxony's LoD2 carries them as `Building`s with a flat
+ * 1 m slab at deck height; the rail layer builds the bridges from the
+ * Basis-DLM, DOM1 and OSM, so as clay "houses" they only doubled the decks.
+ */
+const TRAFFIC_STRUCTURE = "53001_";
+
+/** True for a CityObject the building mesh leaves out. */
+export function isTrafficStructure(attributes: unknown): boolean {
+  const fn = (attributes as { function?: unknown } | undefined)?.function;
+  return typeof fn === "string" && fn.startsWith(TRAFFIC_STRUCTURE);
+}
+
+/**
+ * The document without its traffic structures (and their parts). The
+ * vertex list stays untouched: the loader's recenter matrix is computed
+ * over it, and the spawn tile's matrix is the frame every tile shares.
+ */
+export function withoutTrafficStructures(
+  doc: CityJsonDocument
+): CityJsonDocument {
+  const drop = new Set<string>();
+  for (const [id, o] of Object.entries(doc.CityObjects)) {
+    if (isTrafficStructure(o.attributes)) {
+      drop.add(id);
+      for (const child of o.children ?? []) {
+        drop.add(child);
+      }
+    }
+  }
+  if (drop.size === 0) {
+    return doc;
+  }
+  const CityObjects: CityJsonDocument["CityObjects"] = {};
+  for (const [id, o] of Object.entries(doc.CityObjects)) {
+    if (!drop.has(id)) {
+      CityObjects[id] = o;
+    }
+  }
+  return { ...doc, CityObjects };
 }
