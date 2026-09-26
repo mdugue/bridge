@@ -356,6 +356,41 @@ visual-variable codebook is in
   for the minimap. Demolish = filter the building tree out of the index
   buffer + rebuild the BVH; BVH picking/collision. `city-layer.ts`. The DOP
   roof LUT is folded in at bake time.
+- **Small structures from the laser scan** (plan 034) — what the laser saw
+  2–6.5 m above ground and LoD2 does not carry: garden and allotment
+  houses, sheds, carports, container buildings, pavilions, and parts of
+  larger buildings the LoD2 lacks. `pipeline/bake/small_buildings.py` on
+  the 0.5 m scan rasters (`lsc.py`): candidates outside the LoD2 (+1 m),
+  mapped walls and bridge decks, off rail/road/water (classes 5/7/8); the
+  **core** = cells with no multi-echo return in their 3 × 3 window (in the
+  leaf-off flight vegetation splits the pulse, a roof does not — but a
+  roof's *edge* does, so the plan's blob-wide "multi-echo ≈ 0" rule found
+  4 blobs on the spawn tile, the per-cell rule 130, none of them touching
+  a crown); cores ≥ 4 m² grown back one cell, kept at 6–150 m² with a
+  planar top (residual < 0.35 m, tilt ≤ 35°), filling > 60 % of their
+  minimum rotated rectangle, ≥ 2 m wide, NDVI ≤ 0.25 (a clipped evergreen
+  block is flat and single-echo too), not a roof-edge sliver (aspect ≥ 3
+  with ≥ 20 % of its rim on the LoD2), not vehicle-sized (2–2.8 × 4.5–18 m,
+  < 4.2 m) unless an OSM building outline confirms it. **What the flight
+  saw that day only** is left out through OSM: pedestrian areas and
+  squares (the Christmas markets were up on 27–30 Nov 2024 — the Altmarkt
+  alone held 101 blobs, the Neumarkt 39, the Stallhof 11, Prager Straße
+  28), within 6 m of a pedestrian street's line, marketplaces, building
+  sites and surface car parks; monuments and stop shelters (other layers
+  draw them) within 3 m. Each is its rectangle with `z` (lowest ground),
+  `h` (the fitted top's median above it) and, tilted > 8°, `hc` (a pent
+  roof's corner heights) → `data/dlm/smallbuild_<tile>.geojson` (GeoSN).
+  **6 783** on the fifteen tiles (8 168 before the OSM context; 731 pent
+  roofs), the allotment colonies most of them. `bakeCityMesh` appends each
+  as a closed box (`lib/city/small-buildings.ts`, sunk 0.2 m) — its own
+  object and root (demolish, picking, collision and the minimap work
+  unchanged), `building` true, the hashed wall tint, the flat-roof slate
+  palette, no glow, `source` = 1 in the property table (0 = LoD2).
+  +3.4 % city glTF. Gate (phase 0): 16 of 20 sampled on the spawn tile are
+  structures against the DOP (March 2024; the misses two roof-edge slivers,
+  now ruled out, and a shadow). Unverified on a real GPU. Remaining
+  temporaries: 3 probable stalls on the Schloßstraße pavement (a living
+  street), container stacks in the Alberthafen.
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
@@ -1269,7 +1304,8 @@ research that produced them):
     sky-view factor and a baked horizon map (033), small structures from
     DOM − LoD2 (034), a hidden soundscape (035). Built since (✅ above,
     looks unverified on a GPU): 024 (Trams), 030 (Signs and fixtures),
-    031 (Landing stages, groynes, ferries), 032 (Names).
+    031 (Landing stages, groynes, ferries), 032 (Names), 034 (Small
+    structures from the laser scan).
 
 ---
 
@@ -1296,6 +1332,7 @@ research that produced them):
 | **Motion-gated SSAO** (plan 007 as first shipped) | The contact shadows blinked on every footstep — reads as a bug, not a saving. | N8AO runs permanently at `halfRes`; only DoF is dropped while moving ([ADR 0011](./adr/0011-motion-keyed-quality-regression.md)). |
 | **Cloud shadows / per-frame shadow updates for wind sway** | Would force the 3072² depth pass every frame over tens of thousands of trees, undoing the on-demand shadow map. | Sway, flutter and cloud drift run in the main pass only; the cast shadow stays static ([ADR 0020](./adr/0020-fixed-light-pool-and-static-shadow-casters.md)). |
 | **Multi-echo ratio as the low-vegetation cue** (LSC, low vegetation) | Measured: only 26 % of OSM-hedge pixels reach echo ≥ 0.5, fences 56 % (AUC hedge-vs-fence 0.28); recall 25 % of observable hedge length vs 58 % for the NDVI + intensity rule. | Keep it as the *tall*-vegetation cue (100 % of > 5 m forest vs 3 % of roofs) and as a qualifier of intensity. |
+| **Blob-wide "multi-echo ≈ 0" for small structures** (plan 034 as planned) | A shed's roof edge splits the pulse (part roof, part ground), so no blob's multi-echo share is ≈ 0: 4 blobs on the spawn tile at ≤ 0.05, 43 at ≤ 0.10 (median over all band blobs 0.93); the interior share admits 377, 112 of them against tree crowns. | The rule works per cell: no multi-echo return in a cell's 3 × 3 window, the rim grown back after (the ✅ "Small structures from the laser scan"). |
 | **OSM scrub polygons filled with shrubs** (OSM-only tiles) | A jittered 3–4 m grid gave 4–9 k shrubs per neighbour tile — more than the laser scan finds on the primary — mostly under existing crowns. | OSM-only tiles get the OSM hedges only. |
 | **Laser-scan-only hedges** (LSC, the 478 unmapped "hedges" of the low-vegetation bake) | ~30 % of the low-vegetation mask lies 1–2 m from a > 3 m crown: crown-rim false positives a first-surface model cannot tell from understory, and they read as stray hedges along tree rows. | Only the OSM hedges ship (with the LSC height). The bake still finds them (`--research`); revisit with a leaf-on scan or a crown-rim test. |
 | **Shrubs** (LSC blobs + OSM `natural=shrub` nodes, 3 226 on the primary) | Same crown-rim false positives, and the lobed dome reads as a faceted grey "boulder" at arm's length. | Kept in the bake behind `--research`; a better shrub shape is shape polish, not data. |
