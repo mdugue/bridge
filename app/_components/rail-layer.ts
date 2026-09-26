@@ -13,6 +13,17 @@ import type {
   BridgeFeature,
   RailFeature,
 } from "@/lib/city/features";
+import {
+  archFits,
+  archSpringing,
+  BRIDGE_STEP,
+  type Parabola,
+  type BridgeRib,
+  PIER_SPACING,
+  pierStations,
+  ribPeaks,
+  ribRuns,
+} from "@/lib/city/bridge";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
@@ -58,6 +69,13 @@ function outerRings(
 
 export interface RailContext extends GroundContext {
   heightFog?: HeightFogUniforms;
+  /**
+   * Whether this tile draws a bridge whose deck centre is at (x, y) (EPSG).
+   * A deck across a seam is in both tiles' files — the same, from the
+   * bake's mosaic — and every copy lifts the tile's own rails, but only its
+   * owner draws it. Absent: every bridge is drawn.
+   */
+  owns?: (x: number, y: number) => boolean;
 }
 
 /** The whole block's baked features, every tile's lists merged. */
@@ -83,12 +101,19 @@ const TRACK_PITCH = 4.0; // spacing between parallel track centres (m)
 const RAIL_HALF = 0.075; // half-width of a drawn rail (m)
 const DECK_DEPTH = 1.1; // bridge-deck slab thickness (m)
 const PARAPET_H = 0.85; // bridge parapet wall height (m)
-const PIER_SPACING = 26; // distance between bridge piers (m)
 const PIER_MIN_GAP = 2.5; // only pier where the deck clears the ground by this (m)
 const PIER_HALF = 0.65; // pier column half-width (m)
 const PLATFORM_H = 0.55; // station platform height above ground (m)
 const ARCH_SPAN_M = 26; // target span between arch piers (m)
 const ARCH_MIN_RISE = 2.5; // min deck clearance to bother arching (else box piers)
+const CHORD_HALF = 0.35; // half-section of a measured rib's chord (m)
+const ARCH_HALF = 0.45; // half-section of a steel arch rib (m)
+const MEMBER_HALF = 0.12; // half-section of posts, hangers and diagonals (m)
+const STAY_HALF = 0.06; // half-section of a stay cable (m)
+const POST_HALF = 0.25; // half-section of a spandrel post under the deck (m)
+const PYLON_HALF = 0.55; // half-section of a pylon (m)
+const PYLON_PIER_HALF = 1.3; // half-width of the river pier under a pylon (m)
+const MEMBER_EVERY = 3; // a post every this many 2 m stations (6 m)
 
 /** The heavy rails ride only rail decks (a road bridge over a railway is
  *  not what the train runs on). */
@@ -101,6 +126,7 @@ export const COLORS = {
   deckRoad: 0x6f_70_77, // asphalt
   deckPath: 0xc2_ad_8a, // pale sand
   platform: 0xcf_c9_bd, // pale platform concrete
+  steel: 0x8d_9c_a8, // painted steel, a pastel blue-grey
 };
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
@@ -638,47 +664,114 @@ export function meshFrom(
   return m;
 }
 
+type BridgeProps = NonNullable<BridgeFeature["properties"]>;
+
 /** A bridge feature's properties with defaults (`properties` may be null). */
 function bridgeProps(f: BridgeFeature): {
   deck: number[];
-  kind: NonNullable<NonNullable<BridgeFeature["properties"]>["kind"]>;
+  depth: number;
+  kind: NonNullable<BridgeProps["kind"]>;
   structure: string;
 } {
   return {
     deck: f.properties?.deck ?? [],
+    depth: f.properties?.depth ?? DECK_DEPTH,
     kind: f.properties?.kind ?? "other",
     structure: f.properties?.structure ?? "",
   };
 }
 
-/** Builds the bridge decks (slab, parapets, piers or arches). */
+/** Whether this tile draws the deck (its centre is the tile's, or no
+ *  owner test was given). */
+function drawsDeck(coords: [number, number][], ctx: RailContext): boolean {
+  if (!ctx.owns) {
+    return true;
+  }
+  let x = 0;
+  let y = 0;
+  for (const [ex, ey] of coords) {
+    x += ex;
+    y += ey;
+  }
+  return ctx.owns(x / coords.length, y / coords.length);
+}
+
+/** The meshes a bridge is drawn into. */
+interface BridgeMeshes {
+  /** fascia, parapets, piers, masonry arches */
+  stone: Mesh3;
+  /** measured superstructure: chords, arches, pylons, posts */
+  steel: Mesh3;
+  tops: Record<string, Mesh3>;
+}
+
+/** Draws one bridge: deck, parapets, whatever carries it and stands on it. */
+function drawBridge(
+  f: BridgeFeature,
+  ring: Ring2,
+  topY: number[],
+  out: BridgeMeshes,
+  ctx: RailContext
+): void {
+  const { kind, structure, depth } = bridgeProps(f);
+  addFootprint(out.tops[kind] ?? out.tops.other, ring, topY, depth);
+  addParapetWalls(out.stone, ring, topY);
+  const frame = bridgeFrame(f, ctx);
+  if (!frame) {
+    // an older file: no axis, no measurements
+    if (
+      !(
+        structure.includes("arch") &&
+        addArches(out.stone, ring, topY, ctx, depth)
+      )
+    ) {
+      addPiers(out.stone, ring, topY, ctx, depth);
+    }
+    return;
+  }
+  const carried = addSuperstructure(out, frame, f.properties ?? {}, depth);
+  if (carried.pylons) {
+    return;
+  }
+  if (
+    carried.arches.length === 0 &&
+    structure.includes("arch") &&
+    addArches(out.stone, ring, topY, ctx, depth)
+  ) {
+    return;
+  }
+  const p = f.properties ?? {};
+  const piers = pierStations(frame.length, {
+    fairway: p.fairway,
+    span: p.span,
+  }).filter((s) => carried.arches.every(([from, to]) => s < from || s > to));
+  for (const s of piers) {
+    addPierAt(out.stone, frame, s, 0, depth, PIER_HALF);
+  }
+}
+
+/** Builds the bridges this tile draws (deck, parapets, what carries them
+ *  and what stands on them). The rails' deck table is buildDeckTable's. */
 function buildBridges(features: BridgeFeature[], ctx: RailContext): Mesh[] {
-  const tops: Record<string, Mesh3> = {
-    rail: mesh3(),
-    road: mesh3(),
-    path: mesh3(),
-    other: mesh3(),
+  const out: BridgeMeshes = {
+    tops: { rail: mesh3(), road: mesh3(), path: mesh3(), other: mesh3() },
+    stone: mesh3(),
+    steel: mesh3(),
   };
-  const stone = mesh3(); // fascia + parapets + piers
 
   for (const f of features) {
     if (f.geometry?.type !== "Polygon" || !f.geometry.coordinates[0]) {
       continue;
     }
-    const ring = ringToWorld(f.geometry.coordinates[0], ctx.offset);
-    const { deck, kind, structure } = bridgeProps(f);
+    const coords = f.geometry.coordinates[0];
+    const ring = ringToWorld(coords, ctx.offset);
+    const { deck } = bridgeProps(f);
     if (ring.pts.length < 3 || deck.length < ring.pts.length) {
       continue;
     }
     const topY = ring.pts.map((_, i) => deck[i]);
-    addFootprint(tops[kind] ?? tops.other, ring, topY, DECK_DEPTH);
-    addParapetWalls(stone, ring, topY);
-    // Arch bridges (OSM bridge:structure ~ "arch") get spandrel arches spanning
-    // between piers; everything else gets plain box piers.
-    if (structure.includes("arch") && addArches(stone, ring, topY, ctx)) {
-      // arches placed their own piers
-    } else {
-      addPiers(stone, ring, topY, ctx);
+    if (drawsDeck(coords, ctx)) {
+      drawBridge(f, ring, topY, out, ctx);
     }
   }
 
@@ -689,21 +782,378 @@ function buildBridges(features: BridgeFeature[], ctx: RailContext): Mesh[] {
     path: COLORS.deckPath,
     other: COLORS.deckStone,
   };
-  for (const kind of Object.keys(tops)) {
-    const m = meshFrom(tops[kind], topColor[kind], ctx.heightFog, {
+  for (const kind of Object.keys(out.tops)) {
+    const m = meshFrom(out.tops[kind], topColor[kind], ctx.heightFog, {
       cast: true,
     });
     if (m) {
       meshes.push(m);
     }
   }
-  const stoneMesh = meshFrom(stone, COLORS.deckStone, ctx.heightFog, {
+  const stoneMesh = meshFrom(out.stone, COLORS.deckStone, ctx.heightFog, {
     cast: true,
   });
   if (stoneMesh) {
     meshes.push(stoneMesh);
   }
+  const steelMesh = meshFrom(out.steel, COLORS.steel, ctx.heightFog, {
+    cast: true,
+    roughness: 0.6,
+  });
+  if (steelMesh) {
+    meshes.push(steelMesh);
+  }
   return meshes;
+}
+
+// --- the measured bridge (ADR 0030) -------------------------------------------------
+
+/** A bridge's axis frame: stations along it, lateral offsets across it. */
+interface BridgeFrame {
+  /** world point at station `s` (m from the first abutment), `offset` to the left */
+  at(s: number, offset: number): { x: number; z: number };
+  /** the terrain there (the DGM's water surface over the river) */
+  groundAt(s: number, offset: number): number | null;
+  length: number;
+  /** deck height per BRIDGE_STEP */
+  line: number[];
+  /** the deck height at station `s` */
+  deckAt(s: number): number;
+}
+
+function bridgeFrame(f: BridgeFeature, ctx: RailContext): BridgeFrame | null {
+  const axis = f.properties?.axis;
+  const line = f.properties?.line;
+  if (!(axis && line && line.length >= 2)) {
+    return null;
+  }
+  const [[ax, ay], [bx, by]] = axis;
+  const length = Math.hypot(bx - ax, by - ay);
+  if (length < 1) {
+    return null;
+  }
+  const ux = (bx - ax) / length;
+  const uy = (by - ay) / length;
+  const epsg = (s: number, offset: number) => ({
+    x: ax + ux * s - uy * offset,
+    y: ay + uy * s + ux * offset,
+  });
+  return {
+    length,
+    line,
+    at: (s, offset) => {
+      const e = epsg(s, offset);
+      const w = epsgToWorld(e.x, e.y, ctx.offset);
+      return { x: w.x, z: w.z };
+    },
+    groundAt: (s, offset) => {
+      const e = epsg(s, offset);
+      return ctx.heightAt(e.x, e.y);
+    },
+    deckAt: (s) => {
+      const t = Math.min(Math.max(s / BRIDGE_STEP, 0), line.length - 1);
+      const i = Math.min(Math.floor(t), line.length - 2);
+      return line[i] + (line[i + 1] - line[i]) * (t - i);
+    },
+  };
+}
+
+/**
+ * Draws what the bake measured above the deck. On an arch bridge the ribs
+ * that follow an arch (`archFits`) become steel arches carried down to
+ * their springing; the rest is no arch and is not drawn. On a cable-stayed
+ * bridge a peaking rib is a pylon with its fan of stays. Otherwise a rib is
+ * drawn as measured — chord, posts, diagonals — with pylons on river piers
+ * where it peaks. Returns the arches' station ranges and whether pylons
+ * carry the deck (then it needs no other piers).
+ */
+function addSuperstructure(
+  out: BridgeMeshes,
+  frame: BridgeFrame,
+  p: BridgeProps,
+  depth: number
+): { arches: [number, number][]; pylons: boolean } {
+  const ribs = p.ribs ?? [];
+  const structure = p.structure ?? "";
+  if (structure.includes("arch")) {
+    const arches: [number, number][] = [];
+    archFits(ribs, frame.line).forEach((fit, r) => {
+      if (fit) {
+        const offset = ribs[r].offset;
+        const span = archSpringing(fit, frame.length, (s) =>
+          frame.groundAt(s, offset)
+        );
+        addArchRib(out.steel, frame, offset, { fit, ...span }, depth);
+        arches.push([span.from, span.to]);
+      }
+    });
+    return { arches, pylons: false };
+  }
+  if (structure.includes("cable-stayed")) {
+    return { arches: [], pylons: addStays(out, frame, ribs, depth) };
+  }
+  for (const rib of ribs) {
+    addMeasuredRib(out.steel, frame, rib, true);
+  }
+  return { arches: [], pylons: addPylons(out, frame, ribs, depth) };
+}
+
+/**
+ * A cable-stayed bridge: DOM1 sees the pylon and a haze of stays around
+ * it, too thin to trace. The pylon stands where the rib peaks (on a river
+ * pier), and stays fan from its top to the deck every MEMBER_EVERY
+ * stations of the rib's run, on both sides.
+ */
+function addStays(
+  out: BridgeMeshes,
+  frame: BridgeFrame,
+  ribs: readonly BridgeRib[],
+  depth: number
+): boolean {
+  let any = false;
+  for (const rib of ribs) {
+    for (const i of ribPeaks(rib.rise)) {
+      any = true;
+      const s = i * BRIDGE_STEP;
+      const top = point(frame, s, rib.offset, frame.line[i] + rib.rise[i]);
+      addStrut(
+        out.steel,
+        point(frame, s, rib.offset, frame.line[i] - depth),
+        top,
+        PYLON_HALF
+      );
+      addPierAt(out.stone, frame, s, rib.offset, depth, PYLON_PIER_HALF);
+      const run = ribRuns(rib.rise).find(([a, b]) => a <= i && i <= b);
+      for (let k = run?.[0] ?? i; k <= (run?.[1] ?? i); k += MEMBER_EVERY) {
+        if (Math.abs(k - i) >= MEMBER_EVERY) {
+          const at = k * BRIDGE_STEP;
+          addStrut(
+            out.steel,
+            top,
+            point(frame, at, rib.offset, frame.line[k]),
+            STAY_HALF
+          );
+        }
+      }
+    }
+  }
+  return any;
+}
+
+/** A square prism from `a` to `b` (half-section `half`), wound outward. */
+function addStrut(acc: Mesh3, a: P3, b: P3, half: number): void {
+  const d: P3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(...d);
+  if (len < 1e-3) {
+    return;
+  }
+  const dn: P3 = [d[0] / len, d[1] / len, d[2] / len];
+  const up: P3 = Math.abs(dn[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
+  const side = unit(cross(dn, up));
+  const top = unit(cross(side, dn));
+  const corner = (p: P3, i: number): P3 => {
+    const ss = i === 0 || i === 3 ? half : -half;
+    const tt = i < 2 ? half : -half;
+    return [
+      p[0] + side[0] * ss + top[0] * tt,
+      p[1] + side[1] * ss + top[1] * tt,
+      p[2] + side[2] * ss + top[2] * tt,
+    ];
+  };
+  const normals: P3[] = [
+    top,
+    [-side[0], -side[1], -side[2]],
+    [-top[0], -top[1], -top[2]],
+    side,
+  ];
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    quad(
+      acc,
+      corner(a, i),
+      corner(a, j),
+      corner(b, j),
+      corner(b, i),
+      normals[i]
+    );
+  }
+  quad(acc, corner(b, 0), corner(b, 1), corner(b, 2), corner(b, 3), dn);
+  quad(acc, corner(a, 0), corner(a, 1), corner(a, 2), corner(a, 3), [
+    -dn[0],
+    -dn[1],
+    -dn[2],
+  ]);
+}
+
+function cross(a: P3, b: P3): P3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function unit(v: P3): P3 {
+  const l = Math.hypot(...v) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+/** The world point at a station and offset, at height `y`. */
+function point(frame: BridgeFrame, s: number, offset: number, y: number): P3 {
+  const w = frame.at(s, offset);
+  return [w.x, y, w.z];
+}
+
+/**
+ * A rib as DOM1 measured it: its chord along the stations, a post down to
+ * the deck every MEMBER_EVERY stations and at both ends, and — on a truss,
+ * a suspension or cantilever girder — a diagonal in each panel.
+ */
+function addMeasuredRib(
+  acc: Mesh3,
+  frame: BridgeFrame,
+  rib: BridgeRib,
+  diagonals: boolean
+): void {
+  for (const [i0, i1] of ribRuns(rib.rise)) {
+    const chord = (i: number) =>
+      point(frame, i * BRIDGE_STEP, rib.offset, frame.line[i] + rib.rise[i]);
+    const deck = (i: number) =>
+      point(frame, i * BRIDGE_STEP, rib.offset, frame.line[i]);
+    for (let i = i0; i < i1; i++) {
+      addStrut(acc, chord(i), chord(i + 1), CHORD_HALF);
+    }
+    const posts: number[] = [];
+    for (let i = i0; i <= i1; i += MEMBER_EVERY) {
+      posts.push(i);
+    }
+    if (posts.at(-1) !== i1) {
+      posts.push(i1);
+    }
+    posts.forEach((i, k) => {
+      addStrut(acc, deck(i), chord(i), MEMBER_HALF);
+      const next = posts[k + 1];
+      if (diagonals && next !== undefined) {
+        const [from, to] = k % 2 === 0 ? [i, next] : [next, i];
+        addStrut(acc, deck(from), chord(to), MEMBER_HALF);
+      }
+    });
+  }
+}
+
+/**
+ * A steel arch through a measured rib: the fitted parabola from springing
+ * to springing, hangers down to the deck where it rises above it, posts up
+ * to the deck's underside where it runs below.
+ */
+function addArchRib(
+  acc: Mesh3,
+  frame: BridgeFrame,
+  offset: number,
+  arch: { fit: Parabola; from: number; to: number },
+  depth: number
+): void {
+  const { fit, from, to } = arch;
+  const y = (s: number) => fit.a * s * s + fit.b * s + fit.c;
+  const n = Math.max(2, Math.ceil((to - from) / BRIDGE_STEP));
+  const s = (k: number) => from + ((to - from) * k) / n;
+  for (let k = 0; k < n; k++) {
+    addStrut(
+      acc,
+      point(frame, s(k), offset, y(s(k))),
+      point(frame, s(k + 1), offset, y(s(k + 1))),
+      ARCH_HALF
+    );
+  }
+  for (let k = MEMBER_EVERY; k < n; k += MEMBER_EVERY) {
+    const at = s(k);
+    const deck = frame.deckAt(at);
+    const archY = y(at);
+    if (archY > deck + 0.5) {
+      addStrut(
+        acc,
+        point(frame, at, offset, deck),
+        point(frame, at, offset, archY),
+        MEMBER_HALF
+      );
+    } else if (archY < deck - depth - 0.5) {
+      addStrut(
+        acc,
+        point(frame, at, offset, archY),
+        point(frame, at, offset, deck - depth),
+        POST_HALF
+      );
+    }
+  }
+}
+
+/**
+ * Pylons where a non-arch rib peaks (the Blaues Wunder's towers): a post
+ * from the deck to the peak on each rib, a portal between two ribs, and a
+ * river pier under each. Returns whether there were any: then the pylons
+ * carry the deck and no other piers are drawn.
+ */
+function addPylons(
+  out: BridgeMeshes,
+  frame: BridgeFrame,
+  ribs: readonly BridgeRib[],
+  depth: number
+): boolean {
+  const peaks = ribs.map((rib) => ribPeaks(rib.rise));
+  if (peaks.every((p) => p.length === 0)) {
+    return false;
+  }
+  ribs.forEach((rib, r) => {
+    for (const i of peaks[r]) {
+      const s = i * BRIDGE_STEP;
+      const top = frame.line[i] + rib.rise[i];
+      addStrut(
+        out.steel,
+        point(frame, s, rib.offset, frame.line[i] - depth),
+        point(frame, s, rib.offset, top),
+        PYLON_HALF
+      );
+      addPierAt(out.stone, frame, s, rib.offset, depth, PYLON_PIER_HALF);
+    }
+  });
+  // portals between the first two ribs' matching pylons
+  if (ribs.length >= 2) {
+    for (const i of peaks[0]) {
+      const j = peaks[1].find((k) => Math.abs(k - i) <= 3);
+      if (j !== undefined) {
+        const y =
+          Math.min(
+            frame.line[i] + ribs[0].rise[i],
+            frame.line[j] + ribs[1].rise[j]
+          ) - 1.5;
+        addStrut(
+          out.steel,
+          point(frame, i * BRIDGE_STEP, ribs[0].offset, y),
+          point(frame, j * BRIDGE_STEP, ribs[1].offset, y),
+          CHORD_HALF
+        );
+      }
+    }
+  }
+  return true;
+}
+
+/** A pier from the ground up to the deck's underside at a station. */
+function addPierAt(
+  acc: Mesh3,
+  frame: BridgeFrame,
+  s: number,
+  offset: number,
+  depth: number,
+  half: number
+): void {
+  const under = frame.deckAt(s) - depth;
+  const ground = frame.groundAt(s, offset);
+  if (ground === null || under - ground < PIER_MIN_GAP) {
+    return;
+  }
+  const w = frame.at(s, offset);
+  addColumn(acc, w.x, w.z, ground, under, half);
 }
 
 /** The two farthest-apart ring vertices (the deck's abutment ends) + their span. */
@@ -738,7 +1188,8 @@ function addPiers(
   acc: Mesh3,
   ring: Ring2,
   topY: number[],
-  ctx: RailContext
+  ctx: RailContext,
+  depth: number
 ): void {
   // Long axis = farthest-apart ring vertices (the two abutment ends).
   let ai = 0;
@@ -762,15 +1213,15 @@ function addPiers(
     const e = worldToEpsg(p, ctx.offset);
     return ctx.heightAt(e.x, e.y);
   };
-  const ga = groundEnd(a) ?? Math.min(...topY) - DECK_DEPTH - 4;
-  const gb = groundEnd(b) ?? Math.min(...topY) - DECK_DEPTH - 4;
+  const ga = groundEnd(a) ?? Math.min(...topY) - depth - 4;
+  const gb = groundEnd(b) ?? Math.min(...topY) - depth - 4;
   const span = Math.hypot(b.x - a.x, b.z - a.z);
   const n = Math.floor(span / PIER_SPACING);
   for (let k = 1; k < n; k++) {
     const t = k / n;
     const px = a.x + (b.x - a.x) * t;
     const pz = a.z + (b.z - a.z) * t;
-    const deckUnder = topY[ai] + (topY[bi] - topY[ai]) * t - DECK_DEPTH;
+    const deckUnder = topY[ai] + (topY[bi] - topY[ai]) * t - depth;
     const e = worldToEpsg({ x: px, z: pz }, ctx.offset);
     const ground = ctx.heightAt(e.x, e.y) ?? ga + (gb - ga) * t;
     if (deckUnder - ground < PIER_MIN_GAP) {
@@ -792,7 +1243,8 @@ function addArches(
   acc: Mesh3,
   ring: Ring2,
   topY: number[],
-  ctx: RailContext
+  ctx: RailContext,
+  depth: number
 ): boolean {
   const { a, b, span } = longAxis(ring.pts);
   if (span < 16) {
@@ -811,7 +1263,7 @@ function addArches(
     const e = worldToEpsg({ x, z }, ctx.offset);
     return ctx.heightAt(e.x, e.y);
   };
-  const deckUnder = Math.min(...topY) - DECK_DEPTH;
+  const deckUnder = Math.min(...topY) - depth;
   const ga = groundAt(a.x, a.z) ?? deckUnder - 6;
   const gb = groundAt(b.x, b.z) ?? deckUnder - 6;
   const springY = Math.min(ga, gb) + 0.8;

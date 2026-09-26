@@ -6,9 +6,12 @@
   fragments merged by shared endpoints (1 m snap);
 - bridge decks, driven by every `ver06_l` centreline (BWF 1800): snapped to a
   `ver06_f` footprint within 50 m, else buffered by kind width; per-ring-vertex
-  deck height = the abutment ramp lifted to the DOM surface; `kind` from the
-  rail/road/path networks under the centreline; `structure` from the nearest
-  OSM `man_made=bridge` within 60 m;
+  deck height = the abutment ramp lifted to the DOM surface, on a mosaic of
+  the tile and its neighbours (a deck across a seam comes out the same in
+  both tiles' files); `kind` from the rail/road/path networks under the
+  centreline; `structure` from the nearest OSM `man_made=bridge` within
+  60 m, or Wikidata; the DOM1 superstructure, the fairway clearance and the
+  main span (bridge.py);
 - platforms: OSM `railway=platform`.
 """
 
@@ -16,12 +19,26 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 import rasterio
 import shapely
 from rasterio.features import rasterize
+from rasterio.merge import merge
 
+from .bridge import (
+    STANDING,
+    STEP,
+    fairway,
+    fairway_marks,
+    load_wikidata,
+    long_axis,
+    measured_deck,
+    structure_of,
+    superstructure,
+    wikidata_for,
+)
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, read_layer, write_geojson
 from .osm import has_extract, read_osm, tag
 
@@ -119,20 +136,53 @@ def rails(tile: Tile) -> list[dict]:
 # --- bridge decks --------------------------------------------------------------
 
 
+MARGIN = 700.0  # the ground a tile's decks see reaches this far past it (m)
+
+
+def mosaic(paths: list[Path], bounds: tuple[float, float, float, float]):
+    """The rasters that overlap `bounds`, merged on their 1 m grid (NaN where
+    none has data), with the mosaic's transform. None when none overlaps."""
+    xmin, ymin, xmax, ymax = bounds
+    sources = []
+    for path in paths:
+        src = rasterio.open(path)
+        b = src.bounds
+        if b.left < xmax and b.right > xmin and b.bottom < ymax and b.top > ymin:
+            sources.append(src)
+        else:
+            src.close()
+    if not sources:
+        return None, None
+    try:
+        arr, transform = merge(sources, bounds=bounds, nodata=NODATA)
+    finally:
+        for src in sources:
+            src.close()
+    out = arr[0].astype(np.float64)
+    out[out <= NODATA + 1] = np.nan
+    return out, transform
+
+
+NODATA = -9999.0
+
+
 class Ground:
-    """DGM1 and DOM1 on the tile's 1 m grid, and the network masks."""
+    """DGM1 and DOM1 around the tile — its own and its neighbours', so a deck
+    across a seam gets the same heights from either tile — on a 1 m grid,
+    and the network masks."""
 
     def __init__(self, tile: Tile):
-        self.xmin, _, _, self.ymax = tile.bounds
-        with rasterio.open(tile.dgm) as dgm:
-            self.dgm = dgm.read(1).astype(np.float64)
-        dom_path = tile.raw_raster("dom1")
-        if dom_path.exists():
-            with rasterio.open(dom_path) as dom:
-                self.dom = dom.read(1).astype(np.float64)
-        else:
-            self.dom = None  # decks fall back to the DGM ramp
-        self.size = self.dgm.shape[0]
+        xmin, ymin, xmax, ymax = tile.bounds
+        self.bounds = (xmin - MARGIN, ymin - MARGIN, xmax + MARGIN, ymax + MARGIN)
+        dgms = sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
+        self.dgm, self.transform = mosaic(dgms, self.bounds)
+        if self.dgm is None:
+            raise SystemExit(f"{tile.id}: no DGM1 under {tile.data / 'dgm'}")
+        self.dom = None  # decks fall back to the DGM ramp
+        if tile.raw_raster("dom1").exists():
+            dom, dom_transform = mosaic(sorted((tile.raw / "dom1").glob("*.tif")), self.bounds)
+            if dom is not None and dom.shape == self.dgm.shape and dom_transform == self.transform:
+                self.dom = dom
         self.masks = {
             "rail": self._mask(tile, "ver03_l", 8, "SPW='1000'"),  # heavy rail only
             "road": self._mask(tile, "ver01_l", 8),
@@ -140,29 +190,47 @@ class Ground:
         }
 
     def _mask(self, tile: Tile, layer: str, buffer: float, where: str | None = None):
-        geoms, _ = read_layer(tile.dlm / f"{layer}.shp", tile.bounds, where=where)
+        geoms, _ = read_layer(tile.dlm / f"{layer}.shp", self.bounds, where=where)
         if len(geoms) == 0:
             return None
-        out = np.zeros((self.size, self.size), dtype=np.uint8)
+        out = np.zeros(self.dgm.shape, dtype=np.uint8)
         rasterize(
             ((shapely.buffer(g, buffer), 1) for g in geoms),
             out=out,
-            transform=tile.transform(self.size),
+            transform=self.transform,
         )
         return out
 
     def px(self, x: float, y: float) -> tuple[int, int]:
-        c = min(max(int(x - self.xmin), 0), self.size - 1)
-        r = min(max(int(self.ymax - y), 0), self.size - 1)
+        h, w = self.dgm.shape
+        c = min(max(int(x - self.transform.c), 0), w - 1)
+        r = min(max(int(self.transform.f - y), 0), h - 1)
         return c, r
+
+    def sample(self, arr: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        """`arr` at many points (NaN outside the mosaic or without data)."""
+        h, w = arr.shape
+        c = np.floor(xs - self.transform.c).astype(int)
+        r = np.floor(self.transform.f - ys).astype(int)
+        inside = (c >= 0) & (c < w) & (r >= 0) & (r < h)
+        out = np.full(xs.shape, np.nan)
+        out[inside] = arr[r[inside], c[inside]]
+        return out
 
     def robust(self, arr: np.ndarray | None, x: float, y: float, win: int) -> float | None:
         if arr is None:
             return None
         c, r = self.px(x, y)
         block = arr[max(r - win, 0) : r + win + 1, max(c - win, 0) : c + win + 1]
-        vals = np.sort(block[block > -1000], axis=None)
+        vals = np.sort(block[~np.isnan(block)], axis=None)
         return float(vals[len(vals) // 2]) if len(vals) else None
+
+    def lowest(self, x: float, y: float, win: int) -> float | None:
+        """The DGM's low tenth around a point: the water surface under a mark."""
+        c, r = self.px(x, y)
+        block = self.dgm[max(r - win, 0) : r + win + 1, max(c - win, 0) : c + win + 1]
+        vals = block[~np.isnan(block)]
+        return float(np.percentile(vals, 10)) if len(vals) else None
 
     def endpoint_h(self, x: float, y: float) -> float | None:
         g = self.robust(self.dgm, x, y, 3)
@@ -190,17 +258,12 @@ class Ground:
         return "path" if path > 0 else "other"
 
 
-def deck_profile(ground: Ground, ring: list[tuple[float, float]]) -> list[float] | None:
-    """Per-ring-vertex deck height: a ramp between the abutments (the
-    farthest-apart ring vertices) plus a midspan camber — never dipping into
-    the river. None when there is no valid ground under the deck at all."""
+def ramp_line(ground: Ground, ring: list[tuple[float, float]]):
+    """A ramp between the abutments (the farthest-apart ring vertices) plus a
+    midspan camber — never dipping into the river — as a function of
+    t ∈ [0, 1] along a→b. None when there is no valid ground at all."""
     uniq = ring[:-1] if len(ring) > 1 and ring[0] == ring[-1] else ring
-    a, b, best = uniq[0], uniq[-1], -1.0
-    for i in range(len(uniq)):
-        for j in range(i + 1, len(uniq)):
-            d = (uniq[i][0] - uniq[j][0]) ** 2 + (uniq[i][1] - uniq[j][1]) ** 2
-            if d > best:
-                best, a, b = d, uniq[i], uniq[j]
+    a, b = long_axis(ring)
     h0, h1 = ground.endpoint_h(*a), ground.endpoint_h(*b)
     if h0 is None and h1 is None:
         hs = sorted(h for h in (ground.endpoint_h(x, y) for x, y in uniq) if h is not None)
@@ -209,14 +272,29 @@ def deck_profile(ground: Ground, ring: list[tuple[float, float]]) -> list[float]
         h0 = h1 = hs[len(hs) // 2]
     h0 = h1 if h0 is None else h0
     h1 = h0 if h1 is None else h1
+    camber = min(math.dist(a, b) * CAMBER, 1.6)
+    return lambda t: h0 + (h1 - h0) * t + camber * math.sin(math.pi * t)
+
+
+def deck_line(ground: Ground, ring: list[tuple[float, float]]):
+    """The deck height along a→b, t ∈ [0, 1]: the roadway DOM1 measures, held
+    near the abutment ramp (bridge.measured_deck). None without ground."""
+    ramp = ramp_line(ground, ring)
+    return None if ramp is None else measured_deck(ground, ring, ramp)
+
+
+def deck_profile(ground: Ground, ring: list[tuple[float, float]]) -> list[float] | None:
+    """Per-ring-vertex deck height (`deck_line` at each vertex's projection)."""
+    line = deck_line(ground, ring)
+    if line is None:
+        return None
+    a, b = long_axis(ring)
     ax, ay = b[0] - a[0], b[1] - a[1]
     l2 = ax * ax + ay * ay
-    camber = min(math.sqrt(l2) * CAMBER, 1.6)
     deck = []
     for x, y in ring:
         t = ((x - a[0]) * ax + (y - a[1]) * ay) / l2 if l2 > 0 else 0.0
-        t = max(0.0, min(1.0, t))
-        deck.append(round(h0 + (h1 - h0) * t + camber * math.sin(math.pi * t), 2))
+        deck.append(round(line(max(0.0, min(1.0, t))), 2))
     return deck
 
 
@@ -234,20 +312,65 @@ def buffer_line(coords, half: float) -> list[tuple[float, float]]:
     return left + right[::-1]
 
 
-def osm_structures(tile: Tile) -> list[tuple[float, float, str]]:
-    """(centroid x, y, bridge:structure) of the OSM bridge outlines."""
+def osm_structures(tile: Tile) -> list[tuple[float, float, str, str | None]]:
+    """(centroid x, y, bridge:structure, wikidata) of the OSM bridge outlines."""
     out = []
     for layer in ("multipolygons", "lines"):
         geoms, fields = read_osm(tile, layer, "man_made = 'bridge'", ["man_made", "other_tags"])
         for g, other in zip(geoms, column(fields, "other_tags", geoms), strict=True):
-            structure = tag(other, "bridge:structure")
-            if structure and not g.is_empty:
+            if not g.is_empty:
                 c = g.centroid
-                out.append((c.x, c.y, structure))
+                structure = tag(other, "bridge:structure") or ""
+                out.append((c.x, c.y, structure, tag(other, "wikidata")))
     return out
 
 
-def bridges(tile: Tile, structures: list[tuple[float, float, str]]) -> list[dict]:
+def near(structures, cx: float, cy: float, reach: float = 60.0):
+    """The OSM outlines around a deck centroid, nearest first."""
+    hits = [(math.hypot(ox - cx, oy - cy), st, qid) for ox, oy, st, qid in structures]
+    return sorted((h for h in hits if h[0] < reach), key=lambda h: h[0])
+
+
+def bridge_properties(ground, ring, name, kind, structures, marks, known) -> dict | None:
+    """Everything the viewer draws a deck from (see bridge.py)."""
+    line = deck_line(ground, ring)
+    if line is None:
+        return None
+    cx = sum(x for x, _ in ring) / len(ring)
+    cy = sum(y for _, y in ring) / len(ring)
+    around = near(structures, cx, cy)
+    structure = next((st for _, st, _ in around if st), "")
+    props: dict = {
+        "name": name,
+        "kind": kind,
+        "structure": structure,
+        "deck": deck_profile(ground, ring),
+    }
+    a, b = long_axis(ring)
+    props["axis"] = [[round(a[0], 2), round(a[1], 2)], [round(b[0], 2), round(b[1], 2)]]
+    length = math.dist(a, b)
+    stations = [i * STEP for i in range(int(length // STEP) + 1)]
+    props["line"] = [round(line(s / length), 2) if length > 0 else 0.0 for s in stations]
+    props.update(fairway(ground, ring, line, marks))
+    outline = shapely.Polygon(ring)
+    qids = [qid for _, _, qid in around if qid]
+    qids += [m[3] for m in marks if m[3] and outline.distance(shapely.Point(m[0], m[1])) < 30]
+    wd = wikidata_for(ring, name, qids, known)
+    if wd:
+        props["wikidata"] = wd["id"]
+        props["structure"] = structure_of(wd["types"]) or structure
+        if wd.get("mainSpan"):
+            props["span"] = wd["mainSpan"]
+    # Only a bridge of a kind that stands above its deck keeps what DOM1 saw
+    # there: over a beam bridge it is catenary, trains or trees.
+    if any(kind in props["structure"] for kind in STANDING):
+        ribs = superstructure(ground, ring, line)
+        if ribs:
+            props["ribs"] = ribs
+    return props
+
+
+def bridges(tile: Tile, structures, marks, known) -> list[dict]:
     ground = Ground(tile)
     line_geoms, line_fields = read_layer(
         tile.dlm / "ver06_l.shp", tile.bounds, where="BWF='1800'", columns=["BWF", "NAM"]
@@ -263,26 +386,16 @@ def bridges(tile: Tile, structures: list[tuple[float, float, str]]) -> list[dict
                     cy = sum(y for _, y in ring) / len(ring)
                     polys.append([ring, cx, cy, False])
 
-    def structure_at(cx: float, cy: float) -> str:
-        best, bd = "", 60.0**2
-        for ox, oy, st in structures:
-            d = (ox - cx) ** 2 + (oy - cy) ** 2
-            if d < bd:
-                bd, best = d, st
-        return best
-
     features = []
 
     def emit(ring, name, kind):
-        deck = deck_profile(ground, ring)
-        if deck is None:
+        props = bridge_properties(ground, ring, name, kind, structures, marks, known)
+        if props is None:
             return
-        cx = sum(x for x, _ in ring) / len(ring)
-        cy = sum(y for _, y in ring) / len(ring)
         features.append(
             feature(
                 {"type": "Polygon", "coordinates": [[[round(x, 2), round(y, 2)] for x, y in ring]]},
-                {"name": name, "kind": kind, "structure": structure_at(cx, cy), "deck": deck},
+                props,
             )
         )
 
@@ -375,9 +488,10 @@ def run(tile: Tile) -> None:
     write_geojson(tile.out("dlm", f"rail_{tile.id}.geojson"), rails(tile), tile.epsg)
     has_osm = has_extract(tile, "bridge structure and platforms")
     structures = osm_structures(tile) if has_osm else []
+    marks = fairway_marks(tile) if has_osm else []
     write_geojson(
         tile.out("dlm", f"bridge_{tile.id}.geojson"),
-        bridges(tile, structures),
+        bridges(tile, structures, marks, load_wikidata(tile)),
         tile.epsg,
         OSM_ATTRIBUTION,
     )

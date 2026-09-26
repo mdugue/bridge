@@ -27,6 +27,7 @@ import type {
 import { DRESDEN } from "../../sites/dresden";
 import { tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
+import { BRIDGE_STEP } from "./bridge";
 import {
   cityMeshSourceFiles,
   stairSourceFile,
@@ -280,6 +281,27 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
     if (deck) {
       expect(deck).toHaveLength(outer.length);
       expect(deck.every((z) => Number.isFinite(z))).toBe(true);
+    }
+    // The measured extras (ADR 0030) share the axis's 2 m stations.
+    const p = f.properties;
+    if (p?.line) {
+      expect(p.axis).toHaveLength(2);
+      const length = Math.hypot(
+        (p.axis?.[1][0] ?? 0) - (p.axis?.[0][0] ?? 0),
+        (p.axis?.[1][1] ?? 0) - (p.axis?.[0][1] ?? 0)
+      );
+      // (the axis is rounded to the centimetre: a station may tip over)
+      const stations = Math.floor(length / BRIDGE_STEP) + 1;
+      expect(Math.abs(p.line.length - stations)).toBeLessThanOrEqual(1);
+      for (const rib of p.ribs ?? []) {
+        expect(rib.rise).toHaveLength(p.line.length);
+        expect(rib.rise.every((r) => r >= 0)).toBe(true);
+      }
+    }
+    if (p?.depth !== undefined) {
+      expect(p.depth).toBeGreaterThan(0);
+      expect(p.fairway).toBeGreaterThanOrEqual(0);
+      expect(p.fairway).toBeLessThanOrEqual(1);
     }
   }
   for (const kind of ["railarea", "platform"] as const) {
