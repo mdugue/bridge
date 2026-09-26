@@ -84,7 +84,7 @@ chip. Every tile change re-renders the shadow map. The layers:
 - `post-stack.ts` — pmndrs `postprocessing`: SSAO, DoF, the picture style,
   SMAA, depth grading, paper grain, vignette. The picture styles (Comic, Film
   noir, Sin City; `lib/city/render-style.ts`) are one pass,
-  `stylize-effect.ts` (ADR 0032): ink from the second difference of `1/z`
+  `stylize-effect.ts` (ADR 0033): ink from the second difference of `1/z`
   (zero on planes; relative to `w` = silhouette, relative to slope = fold),
   tone bands / monochrome curves on the colour. Off (mode 0) in the default.
   Read depth only at integer texel radii around a texel centre. Papier

@@ -35,7 +35,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { gzipSync } from "node:zlib";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
 import type { OsmBuildingLut } from "../lib/city/city-mesh";
@@ -378,7 +377,14 @@ const frame = parse<{ cx: number; cy: number; epsg: number }>(
 );
 const offset = { cx: frame.cx, cy: frame.cy };
 
-const gz = (bytes: Uint8Array) => gzipSync(bytes, { level: 9 });
+/** Bun's libdeflate: at the same level about twice as fast as zlib here and
+ *  a little smaller (the site's glTF: 3.0 s vs 6.5 s, 52.96 vs 53.13 MB). */
+const gz = (bytes: Uint8Array) =>
+  // The glb writers build on plain ArrayBuffers; Bun's types only take those.
+  Bun.gzipSync(bytes as Uint8Array<ArrayBuffer>, {
+    level: 9,
+    library: "libdeflate",
+  });
 
 /** A tile's buildings: footprints JSON + glTF, both from one parse. */
 async function bakeCity(

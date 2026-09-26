@@ -31,8 +31,9 @@ export interface FpsMovementOptions {
   /** ground elevation (world Y) at world (x, z); null = off the terrain */
   groundHeight: (x: number, z: number) => number | null;
   /**
-   * Optional wall collision (walk mode only): receives the current position
-   * and the proposed horizontal step, returns the step to actually apply.
+   * Optional wall collision (walking and flying): receives the current
+   * position and the proposed horizontal step, returns the step to actually
+   * apply.
    */
   resolveStep?: (position: Vector3, displacement: Vector3) => Vector3;
 }
@@ -63,7 +64,8 @@ export interface FpsMovement {
  * WASD movement with two modes:
  *  - walk: eye glued to terrain + eyeHeight (smoothed); Shift sprints.
  *  - fly: free movement, Space/E climb and Shift/Q sink (or the altitude
- *    stick); sinking stops at eye height above the ground.
+ *    stick); sinking stops at eye height above the ground, and facades
+ *    stop it like a walker.
  * Horizontal motion always follows the camera heading projected onto the
  * ground plane.
  */
@@ -154,20 +156,24 @@ export function createFpsMovement(
     );
   };
 
+  /** The horizontal step, slid along (or stopped by) a facade it meets. */
+  const collide = (proposed: Vector3): Vector3 =>
+    options.resolveStep
+      ? options.resolveStep(camera.position, proposed)
+      : proposed;
+
   const update = (dt: number) => {
     if (mode === "walk") {
       const step = WALK_SPEED * (shiftHeld() ? SPRINT_FACTOR : 1) * dt;
-      const proposed = horizontalStep(step);
-      const applied = options.resolveStep
-        ? options.resolveStep(camera.position, proposed)
-        : proposed;
-      camera.position.add(applied);
+      camera.position.add(collide(horizontalStep(step)));
       clampToGround(dt);
       return;
     }
-    // Fly mode is deliberately collision-free (QA, aerial shots).
+    // Flying meets the facades too: a flight never passes into a building
+    // (over its roof it has nothing to meet). The roofs themselves are
+    // camera-pose.ts's clearance guard.
     const step = FLY_SPEED * dt;
-    camera.position.add(horizontalStep(step));
+    camera.position.add(collide(horizontalStep(step)));
     const climb = verticalInput() * step;
     if (climb > 0) {
       camera.position.y += climb;
