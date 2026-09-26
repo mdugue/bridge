@@ -40,6 +40,7 @@ each data → look transformation does and its status.
 | [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
 | [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
 | [0030](./0030-terrain-tin-and-wall-snap.md) | The fine terrain level is an error-bounded TIN of the native DGM; walls snap to the measured step | accepted |
+| [0031](./0031-baked-horizon-map-for-far-shadows.md) | A baked horizon map casts the far field's shadows; the shadow map keeps the near field | accepted |
 
 ## Format
 

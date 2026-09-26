@@ -1,5 +1,8 @@
 """OSM street furniture → one point layer per tile: benches, picnic tables,
-litter bins, bicycle stands, bollards, post boxes and stop shelters.
+litter bins, bicycle stands, bollards, post boxes, stop shelters and stop
+signs, advertising columns, traffic signals, fire hydrants (the pillars,
+and the sign plates of the underground ones), clocks and drinking
+fountains.
 
 Every object is a Point with its kind (`k`) and, where it has a front, the
 compass bearing it faces (`a`, degrees clockwise from north). OSM seldom
@@ -15,6 +18,16 @@ and so is anything indoors, underground, on the railway or water (the class
 raster) or on a bridge deck (the terrain under it is the river). Each tile
 writes only what it owns (west/south edges in, lib/city/tileset.ts
 `ownsPoint`), so an object on a seam stands once.
+
+What stands in the carriageway on the map moves to the kerb: a traffic
+signal mapped on the road (its stop line) stands at the kerb on the right
+of the traffic it faces (`traffic_signals:direction` along the way through
+the node), a hydrant sign whose hydrant lies in the lane at the nearest
+kerb — the kerb read from the class raster. A bus stop without a shelter
+gets the "H" sign, unless a shelter stands within 8 m. A clock on a pole
+stands where it is mapped; a wall clock hangs on the nearest facade (the
+OSM building outline, ≤ 3 m), else it is dropped, as are tower clocks (the
+tower is the building model's) and sundials.
 
 Playgrounds come the same way and only as mapped: the `leisure=playground`
 outline as a Polygon (`k: playground`), and each piece of equipment OSM
@@ -46,6 +59,11 @@ MAX_HOOPS = 12
 BOLLARD_M = (0.3, 3.0)  # a tagged bollard height, clamped
 METAL = {"metal", "steel", "iron", "bronze", "cast_iron", "stainless_steel", "aluminium"}
 SHELTER_DEDUP_M = 8.0  # a stop's bus_stop and platform nodes share one shelter
+ROAD = 7  # the class raster's road (landcover.py CLASSES)
+KERB_MAX_M = 15.0  # how far a signal or sign is moved to reach the kerb
+KERB_STEP_M = 0.5
+KERB_CLEAR_M = 0.6  # past the kerb line onto the pavement
+WALL_CLOCK_M = 3.0  # a wall clock's facade is at most this far from its node
 CARDINAL = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
             "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]  # fmt: skip
 AMENITIES = {
@@ -55,11 +73,17 @@ AMENITIES = {
     "post_box": "postbox",
 }
 POINT_WHERE = (
-    "barrier = 'bollard' OR highway = 'bus_stop' "
+    "barrier = 'bollard' OR highway IN ('bus_stop', 'traffic_signals') "
     'OR other_tags LIKE \'%"amenity"=>"%\' '
     'OR other_tags LIKE \'%"leisure"=>"picnic_table"%\' '
-    'OR other_tags LIKE \'%"public_transport"=>"platform"%\''
+    'OR other_tags LIKE \'%"public_transport"=>"platform"%\' '
+    'OR other_tags LIKE \'%"advertising"=>"column"%\' '
+    'OR other_tags LIKE \'%"emergency"=>"fire_hydrant"%\''
 )
+# Kinds without a front: they get no bearing.
+ROUND = {"bollard", "bin", "column", "hydrant"}
+HYDRANT = {"pillar": "hydrant", "underground": "hydrantsign"}
+CLOCK = {"pole": "clock", "wall": "wallclock", "wall_mounted": "wallclock"}
 # OSM `playground=*` → the equipment model the viewer stands (others dropped).
 EQUIPMENT = {
     "swing": "swing",
@@ -102,13 +126,27 @@ def kind_of(barrier: str | None, highway: str | None, other: str | None) -> str 
         return "bollard"
     if tag(other, "leisure") == "picnic_table":
         return "picnic"
+    if highway == "traffic_signals":
+        return "signal"
+    if tag(other, "advertising") == "column":
+        return "column"
+    if tag(other, "emergency") == "fire_hydrant":
+        return HYDRANT.get(tag(other, "fire_hydrant:type") or "")
     amenity = tag(other, "amenity")
     if amenity == "shelter":
         return "shelter" if tag(other, "shelter_type") == "public_transport" else None
-    if highway == "bus_stop" or tag(other, "public_transport") == "platform":
+    if highway == "bus_stop":
+        return "shelter" if tag(other, "shelter") == "yes" else "stop"
+    if tag(other, "public_transport") == "platform":
         return "shelter" if tag(other, "shelter") == "yes" else None
     if amenity == "bicycle_parking" and tag(other, "bicycle_parking") == "wall_loops":
         return None
+    if amenity == "clock":
+        if tag(other, "display") == "sundial":
+            return None
+        return CLOCK.get(tag(other, "support") or "")
+    if amenity == "drinking_water":
+        return "water"
     return AMENITIES.get(amenity or "")
 
 
@@ -190,6 +228,39 @@ class Gate:
             ]
         self.decks = shapely.STRtree(decks) if decks else None
 
+    def cls_at(self, x: float, y: float) -> int | None:
+        """The class under a point, None off the tile's raster."""
+        xmin, ymin, xmax, ymax = self.bounds
+        if not (xmin <= x < xmax and ymin <= y < ymax):
+            return None
+        ch, cw = self.cls.shape
+        c = min(int((x - xmin) / (xmax - xmin) * cw), cw - 1)
+        r = min(int((ymax - y) / (ymax - ymin) * ch), ch - 1)
+        return int(self.cls[r, c])
+
+    def on_road(self, p: shapely.Point) -> bool:
+        return self.cls_at(p.x, p.y) == ROAD
+
+    def kerb_along(self, p: shapely.Point, deg: float) -> shapely.Point | None:
+        """Walking from p towards the bearing, just past where the road ends."""
+        dx, dy = math.sin(math.radians(deg)), math.cos(math.radians(deg))
+        d = 0.0
+        while d <= KERB_MAX_M:
+            if self.cls_at(p.x + dx * d, p.y + dy * d) != ROAD:
+                d += KERB_CLEAR_M
+                return shapely.Point(p.x + dx * d, p.y + dy * d)
+            d += KERB_STEP_M
+        return None
+
+    def nearest_kerb(self, p: shapely.Point) -> shapely.Point | None:
+        """The nearest point off the road (16 directions), or None."""
+        best = None
+        for i in range(16):
+            q = self.kerb_along(p, i * 22.5)
+            if q is not None and (best is None or p.distance(q) < p.distance(best)):
+                best = q
+        return best
+
     def open(self, p: shapely.Point) -> bool:
         x, y = p.x, p.y
         if not owns(self.bounds, x, y):
@@ -207,34 +278,132 @@ def _point_feature(p: shapely.Point, props: dict) -> dict:
     return feature({"type": "Point", "coordinates": [round(p.x, 2), round(p.y, 2)]}, props)
 
 
+def way_bearing(p: shapely.Point, ways, lines) -> float | None:
+    """The digitised direction of the way the point lies on (≤ 0.5 m)."""
+    hit = ways.query_nearest(p, max_distance=ON_WAY_M)
+    if len(hit) == 0:
+        return None
+    line = lines[hit[0]]
+    s = line.project(p)
+    a = line.interpolate(max(s - 1.0, 0.0))
+    b = line.interpolate(min(s + 1.0, line.length))
+    return bearing(b.x - a.x, b.y - a.y)
+
+
+def signal_place(
+    p: shapely.Point, other: str | None, gate: Gate, ways, lines
+) -> tuple[shapely.Point, float | None] | None:
+    """Where a traffic signal stands and which way its head looks. Mapped on
+    the carriageway (at its stop line), it moves to the kerb on the right of
+    the traffic it controls and faces that traffic; a signal off the road
+    stands where it is, facing the nearest way."""
+    along = way_bearing(p, ways, lines)
+    towards = tag(other, "traffic_signals:direction")
+    if along is not None and towards in ("forward", "backward") and gate.on_road(p):
+        travel = along if towards == "forward" else (along + 180.0) % 360
+        kerb = gate.kerb_along(p, (travel + 90.0) % 360)
+        if kerb is not None:
+            return kerb, (travel + 180.0) % 360
+    if gate.on_road(p):
+        kerb = gate.nearest_kerb(p)
+        if kerb is None:
+            return None
+        p = kerb
+    return p, facing(p, ways, lines)
+
+
+class Facades:
+    """The OSM building outlines a wall clock hangs on."""
+
+    def __init__(self, tile: Tile) -> None:
+        geoms, _ = read_osm(tile, "multipolygons", "building IS NOT NULL", ["building"])
+        self.walls = [g.boundary for g in geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        self.tree = shapely.STRtree(self.walls) if self.walls else None
+
+    def hang(self, p: shapely.Point) -> tuple[shapely.Point, float] | None:
+        """The facade point nearest p (≤ WALL_CLOCK_M) and the bearing out
+        of the wall there."""
+        if self.tree is None:
+            return None
+        hit = self.tree.query_nearest(p, max_distance=WALL_CLOCK_M)
+        if len(hit) == 0:
+            return None
+        wall = self.walls[hit[0]]
+        q = shapely.get_point(shapely.shortest_line(p, wall), 1)
+        s = wall.project(q) if wall.geom_type == "LineString" else None
+        if p.distance(q) > 0.05:
+            out = bearing(p.x - q.x, p.y - q.y)
+        elif s is not None:
+            a, b = wall.interpolate(max(s - 0.5, 0)), wall.interpolate(min(s + 0.5, wall.length))
+            out = (bearing(b.x - a.x, b.y - a.y) - 90.0) % 360
+        else:
+            return None
+        return q, out
+
+
+def _placed(
+    k: str, g: shapely.Point, other: str | None, gate: Gate, ways, lines, facades
+) -> tuple[shapely.Point, float | None] | None:
+    """Where a point object stands and the bearing it faces (None: round)."""
+    if k == "signal":
+        return signal_place(g, other, gate, ways, lines)
+    if k == "wallclock":
+        return facades.hang(g) if facades is not None else None
+    if k == "hydrantsign" and gate.on_road(g):
+        kerb = gate.nearest_kerb(g)
+        return (kerb, facing(kerb, ways, lines)) if kerb is not None else None
+    if k in ROUND:
+        return g, None
+    a = direction(tag(other, "direction")) if k == "bench" else None
+    return g, a if a is not None else facing(g, ways, lines)
+
+
+def _props(k: str, other: str | None) -> dict:
+    props: dict = {"k": k}
+    if k == "bench" and tag(other, "backrest") == "no":
+        props["back"] = False
+    if k == "bike":
+        props["n"] = hoops(tag(other, "capacity"))
+    if k == "bollard":
+        props.update(bollard(other))
+    if k == "column" and tag(other, "lit") == "yes":
+        props["lit"] = True
+    return props
+
+
 def _points(tile: Tile, gate: Gate, ways, lines) -> list[dict]:
     geoms, fields = read_osm(
         tile, "points", POINT_WHERE, ["barrier", "highway", "other_tags"], margin=0.0005
     )
-    out, shelters = [], []
-    for g, barrier, highway, other in zip(
-        geoms, fields["barrier"], fields["highway"], fields["other_tags"], strict=True
-    ):
-        k = kind_of(barrier, highway, other)
+    kinds = [
+        kind_of(barrier, highway, other)
+        for barrier, highway, other in zip(
+            fields["barrier"], fields["highway"], fields["other_tags"], strict=True
+        )
+    ]
+    facades = Facades(tile) if "wallclock" in kinds else None
+    out, shelters, stops = [], [], []
+    for g, k, other in zip(geoms, kinds, fields["other_tags"], strict=True):
         if k is None or hidden(other) or not gate.open(g):
             continue
+        placed = _placed(k, g, other, gate, ways, lines, facades)
+        if placed is None or not gate.open(placed[0]):
+            continue
+        at, a = placed
         if k == "shelter":
-            if any(g.distance(s) < SHELTER_DEDUP_M for s in shelters):
+            if any(at.distance(s) < SHELTER_DEDUP_M for s in shelters):
                 continue
-            shelters.append(g)
-        props: dict = {"k": k}
-        if k not in ("bollard", "bin"):
-            a = direction(tag(other, "direction")) if k == "bench" else None
-            a = a if a is not None else facing(g, ways, lines)
-            if a is not None:
-                props["a"] = round(a)
-        if k == "bench" and tag(other, "backrest") == "no":
-            props["back"] = False
-        if k == "bike":
-            props["n"] = hoops(tag(other, "capacity"))
-        if k == "bollard":
-            props.update(bollard(other))
-        out.append(_point_feature(g, props))
+            shelters.append(at)
+        props = _props(k, other)
+        if a is not None:
+            props["a"] = round(a)
+        feature_ = _point_feature(at, props)
+        (stops if k == "stop" else out).append(feature_)
+    # A stop sign only where no shelter stands (the shelter carries the sign).
+    for f in stops:
+        at = shapely.Point(f["geometry"]["coordinates"])
+        if not any(at.distance(s) < SHELTER_DEDUP_M for s in shelters):
+            out.append(f)
     return out
 
 

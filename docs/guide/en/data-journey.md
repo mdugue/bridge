@@ -101,12 +101,13 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `lamps_<tile>.geojson` | lamp positions | up to 60 kB |
 | | `furniture_<tile>.geojson` | benches, bins, bicycle stands, bollards, post boxes and shelters, each with the way it faces | 50–180 kB |
 | | `monuments_<tile>.geojson` | fountain basins and monument points with kind and official name | 2–55 kB |
-| | `walls_<tile>.geojson` | wall lines with kind and height | 50–120 kB |
+| | `walls_<tile>.geojson` | wall lines with kind and height, then the fences and railings (with their kind) and the gates on them | 130–290 kB |
 | | `stairs_<tile>.geojson` | flights of steps: axis, width, step count, the heights at foot and head | a few kB |
 | | `terraces_<tile>.geojson` | raised areas the terrain model lacks (the Brühlsche Terrasse) with their level | a few kB |
 | | `rail_<tile>.geojson`, `railarea_<tile>.geojson` | track lines with track count; dissolved ballast areas | a few kB |
 | | `bridge_<tile>.geojson` | bridge deck outlines with a height per corner, kind and structure | a few kB |
 | | `platform_<tile>.geojson` | station platforms | a few kB |
+| | `osmbuild_<tile>.json` | per building: a shop or café on the ground floor, listed | 15–40 kB |
 | `data/dop/` | `roofcolor_<tile>.json` | one colour per building, sampled from the aerial photo | 0.2 MB |
 
 In total the repository carries about 400 MB of data for the fifteen tiles.
@@ -121,9 +122,10 @@ In total the repository carries about 400 MB of data for the fifteen tiles.
 | Trees | Basis-DLM + DOM1 + DGM1 | tree points, hedge rows | — | as committed |
 | Greenness | DOP | the NDVI PNG | — | as committed |
 | Roof colours | DOP + LoD2 | the roof colour table | folded into the building mesh's table | inside the building mesh |
+| Shop fronts, listed buildings | OpenStreetMap + LoD2 | the per-building table | folded into the building mesh's table | inside the building mesh |
 | Monuments and fountains | Basis-DLM (names, positions) + OpenStreetMap (basins) | the GeoJSON files | — | as committed |
 | Lamps, platforms, bridge structure | OpenStreetMap | the GeoJSON files | — | as committed |
-| Walls, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls and steps as part of the mesh | inside the terrain mesh |
+| Walls, fences, stairs, terraces | OpenStreetMap + DGM1 | the GeoJSON files | built into the detailed terrain mesh: the ground shaped along and under them, the walls, fences and steps as part of the mesh | inside the terrain mesh |
 | Rails, ballast, bridges | Basis-DLM (+ DOM1/DGM1 for heights) | the GeoJSON files | — | as committed |
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
@@ -214,9 +216,9 @@ post-processing look.
 |---|---|---|
 | New terrain edition | replace the GeoTIFF in `data/dgm/`; re-run the `canopy` and `rail` bakes (they read it) | the terrain meshes, walls included, are re-baked on the next build |
 | New building model | convert to CityJSON, replace in `data/cityjson/`; re-run the `roof-colour` bake | the building mesh is re-baked on the next build |
-| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture` and `rail` (they read the class raster) | the 2048² copies are re-baked |
+| New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture`, `rail` and `tram` (they read the class raster) | the 2048² copies are re-baked |
 | New aerial photos | re-run the `ndvi` and `roof-colour` bakes | the roof colours are folded into the mesh on the next build |
-| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `furniture`, `monuments`, `walls`, `stairs` and `rail` bakes | — |
+| New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs`, `rail` and `tram` bakes | — |
 | Different ground colours | edit the one palette in the code | nothing to re-bake: the browser paints the colours |
 | A new tile | download its terrain and building model by hand (the building model converted to CityJSON) and commit both; add the tile to the site config `sites/dresden.ts`; `bun run bake --ingest` fetches the rest and runs all seven bakes | the build adds it to the tileset and publishes it |
 

@@ -82,7 +82,9 @@ function wallLines(): WallLine[] {
     features: WallFeature[];
   };
   return doc.features
-    .filter((f) => f.geometry?.type === "LineString")
+    .filter(
+      (f) => f.geometry?.type === "LineString" && f.properties?.kind !== "fence"
+    )
     .map((f) => ({
       coords: f.geometry.coordinates,
       kind: f.properties?.kind ?? "wall",

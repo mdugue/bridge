@@ -107,6 +107,68 @@ export function treeExtents(
   };
 }
 
+/**
+ * The shared trunk geometry (vegetation-layer.ts buildTrunkGeo) is a
+ * cylinder of these radii (m) at the unit scale, tapering from the foot to
+ * the top; its instance scale is (girth, trunkTop / TRUNK_H, girth).
+ */
+export const TRUNK_FOOT_R = 0.16;
+export const TRUNK_TOP_R = 0.09;
+/** The cylinder's height segments: a ring of vertices at every fifth of
+ *  the trunk, straight faces between them. */
+export const TRUNK_ROWS = 5;
+/** The root flare: the rings below this fraction of the trunk widen,
+ *  up to 1 + TRUNK_FLARE at the ground. */
+const TRUNK_FLARE_TO = 0.16;
+const TRUNK_FLARE = 0.9;
+
+/** How much the trunk's rings widen at `t` (0 the foot, 1 the top). */
+export function trunkFlare(t: number): number {
+  return t < TRUNK_FLARE_TO
+    ? 1 + ((TRUNK_FLARE_TO - t) / TRUNK_FLARE_TO) * TRUNK_FLARE
+    : 1;
+}
+
+function ringRadius(t: number): number {
+  return (TRUNK_FOOT_R - (TRUNK_FOOT_R - TRUNK_TOP_R) * t) * trunkFlare(t);
+}
+
+/**
+ * The unit trunk's radius at `t` (0 the foot, 1 the top) as drawn: the
+ * faces run straight from ring to ring, so it is the rings' radii (taper ×
+ * flare) interpolated — not the taper alone. On a tall tree breast height
+ * falls in the bottom segment, whose foot ring is flared: the taper alone
+ * understated the radius there and so drew a measured trunk too thick.
+ */
+export function trunkRadiusAt(t: number): number {
+  const u = Math.min(Math.max(t, 0), 1) * TRUNK_ROWS;
+  const i = Math.min(Math.floor(u), TRUNK_ROWS - 1);
+  const f = u - i;
+  return (
+    ringRadius(i / TRUNK_ROWS) * (1 - f) + ringRadius((i + 1) / TRUNK_ROWS) * f
+  );
+}
+/** Breast height (m), where a cadastre measures the trunk. */
+const BREAST_HEIGHT = 1.3;
+/** A flat-shaded seven-sided trunk without bark reads thinner than the real
+ *  one of the same width; this much wider it reads right. */
+const TRUNK_STYLE = 1.3;
+const GIRTH_RANGE: [number, number] = [0.3, 5];
+
+/**
+ * The trunk's horizontal instance scale. With a measured diameter at breast
+ * height (`dbhCm`, the cadastre's `stammdurchmesser_akt` or an OSM
+ * circumference) the geometry's radius at 1.3 m is fitted to it (× the style
+ * factor); without one, the girth follows the tree's height, as before.
+ */
+export function trunkGirth(ext: TreeExtents, dbhCm?: number): number {
+  if (dbhCm === undefined || !Number.isFinite(dbhCm) || dbhCm <= 0) {
+    return clamp((ext.crownTop / 5.8) * 0.8, [0.45, 5]);
+  }
+  const unitR = trunkRadiusAt(BREAST_HEIGHT / Math.max(ext.trunkTop, 0.1));
+  return clamp((dbhCm / 200 / unitR) * TRUNK_STYLE, GIRTH_RANGE);
+}
+
 /** Radius (m) around an inventory tree inside which a canopy or row tree is
  *  taken to be the same tree: its crown radius, but never less than half the
  *  canopy bake's 7 m grid (the tallest-pixel pick wanders within its cell),

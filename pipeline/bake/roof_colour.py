@@ -23,6 +23,12 @@ def srgb_to_linear(c: float) -> float:
 
 def roof_rings(geometry: dict):
     """Each RoofSurface exterior ring (vertex indices) of one geometry."""
+    return surface_rings(geometry, "RoofSurface")
+
+
+def surface_rings(geometry: dict, kind: str):
+    """Each exterior ring (vertex indices) of one geometry's `kind` surfaces
+    (RoofSurface, GroundSurface, …)."""
     semantics = geometry.get("semantics") or {}
     surfaces = semantics.get("surfaces", [])
     values = semantics.get("values")
@@ -37,8 +43,8 @@ def roof_rings(geometry: dict):
         for i, surface in enumerate(boundaries):
             pairs.append((surface, values[i] if values else None))
     for surface, s in pairs:
-        is_roof = s is not None and s < len(surfaces) and surfaces[s].get("type") == "RoofSurface"
-        if is_roof and surface and surface[0]:
+        is_kind = s is not None and s < len(surfaces) and surfaces[s].get("type") == kind
+        if is_kind and surface and surface[0]:
             yield surface[0]
 
 

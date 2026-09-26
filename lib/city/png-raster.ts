@@ -79,11 +79,14 @@ function readParts(png: Uint8Array): PngParts {
   return { width, height, idat: joined };
 }
 
-async function inflate(zlib: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
-  const stream = new Blob([zlib])
+/** The inflated stream, chunk by chunk (never the whole of it at once). */
+function inflateChunks(
+  zlib: Uint8Array<ArrayBuffer>
+): ReadableStreamDefaultReader<Uint8Array> {
+  return new Blob([zlib])
     .stream()
-    .pipeThrough(new DecompressionStream("deflate"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+    .pipeThrough(new DecompressionStream("deflate"))
+    .getReader();
 }
 
 /**
@@ -154,28 +157,84 @@ const yieldToFrame = () =>
   });
 
 /**
- * Decodes an 8-bit greyscale PNG to its exact bytes. Throws on anything else.
- * The inflate runs in the browser's stream machinery; the unfiltering is
- * sliced (yielding every few hundred rows) so a 4096² raster — ~80 ms of
- * work — never stalls a frame while a tile streams in.
+ * Where the unfiltered rows go: straight into the raster (every column
+ * kept), or through two row buffers from which every `every`-th byte is
+ * kept — the unfilter needs the whole row above, the raster does not.
  */
-export async function decodeGreyPng(png: Uint8Array): Promise<GreyRaster> {
+function rowSink(width: number, height: number, every: number) {
+  const outWidth = Math.ceil(width / every);
+  const data = new Uint8Array(outWidth * height);
+  let prev = new Uint8Array(width);
+  let cur = new Uint8Array(width);
+  return {
+    data,
+    outWidth,
+    /** unfilters row y (filter byte + scanline) into the raster */
+    push: (y: number, filter: number, line: Uint8Array) => {
+      if (every === 1) {
+        const out = data.subarray(y * width, (y + 1) * width);
+        const above = y > 0 ? data.subarray((y - 1) * width, y * width) : prev;
+        unfilterRow(filter, line, above, out);
+        return;
+      }
+      unfilterRow(filter, line, prev, cur);
+      const at = y * outWidth;
+      for (let i = 0; i < outWidth; i++) {
+        data[at + i] = cur[i * every];
+      }
+      [prev, cur] = [cur, prev];
+    },
+  };
+}
+
+/**
+ * Decodes an 8-bit greyscale PNG to its exact bytes. Throws on anything else.
+ * The inflate runs in the browser's stream machinery and is unfiltered row
+ * by row as it arrives, so the inflated stream is never held whole; the
+ * work is sliced (yielding every few hundred rows) so a 4096² raster —
+ * ~80 ms of work — never stalls a frame while a tile streams in.
+ *
+ * `every` keeps one column in that many (the first of each run): a raster
+ * packed several bytes per texel keeps one of its bytes without the rest
+ * ever being allocated — the soundscape's 8192 × 2048 paving raster is
+ * 4 MB of R, not 16 MB of RGBA (soundscape/hearing.ts).
+ */
+export async function decodeGreyPng(
+  png: Uint8Array,
+  every = 1
+): Promise<GreyRaster> {
   const { width, height, idat } = readParts(png);
-  const raw = await inflate(idat);
   const stride = width + 1;
-  if (raw.length < stride * height) {
-    throw new Error("truncated PNG data");
-  }
-  const data = new Uint8Array(width * height);
-  const zeroRow = new Uint8Array(width);
-  for (let y = 0; y < height; y++) {
-    const line = raw.subarray(y * stride + 1, (y + 1) * stride);
-    const out = data.subarray(y * width, (y + 1) * width);
-    const prev = y > 0 ? data.subarray((y - 1) * width, y * width) : zeroRow;
-    unfilterRow(raw[y * stride], line, prev, out);
-    if (y % ROWS_PER_SLICE === ROWS_PER_SLICE - 1) {
-      await yieldToFrame();
+  const sink = rowSink(width, height, every);
+  const row = new Uint8Array(stride);
+  let filled = 0;
+  let y = 0;
+  const reader = inflateChunks(idat);
+  while (y < height) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    let at = 0;
+    while (at < value.length && y < height) {
+      const take = Math.min(stride - filled, value.length - at);
+      row.set(value.subarray(at, at + take), filled);
+      filled += take;
+      at += take;
+      if (filled < stride) {
+        break;
+      }
+      sink.push(y, row[0], row.subarray(1));
+      filled = 0;
+      y++;
+      if (y % ROWS_PER_SLICE === 0) {
+        await yieldToFrame();
+      }
     }
   }
-  return { width, height, data };
+  if (y < height) {
+    throw new Error("truncated PNG data");
+  }
+  await reader.cancel();
+  return { width: sink.outWidth, height, data: sink.data };
 }
