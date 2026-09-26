@@ -39,6 +39,7 @@ import {
   ownsPoint,
   type TerrainExtras,
 } from "@/lib/city/tileset";
+import type { DressingKind } from "@/lib/city/tile";
 import { type CityLayer, dressCity } from "./city-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
@@ -399,8 +400,11 @@ async function buildDressing(
   if (!d) {
     return { tile };
   }
-  const get = <T>(file: string): Features<T> =>
-    file ? fetchFeatures<T>(url(file)) : Promise.resolve([]);
+  // A kind the tile lacks is a feature off, never a request.
+  const get = <T>(kind: DressingKind): Features<T> => {
+    const file = d[kind];
+    return file ? fetchFeatures<T>(url(file)) : Promise.resolve([]);
+  };
   const [
     rows,
     canopy,
@@ -420,28 +424,28 @@ async function buildDressing(
     trams,
     river,
   ] = await Promise.all([
-    get<VegRowFeature>(d.vegrows),
-    get<CanopyFeature>(d.canopy),
+    get<VegRowFeature>("vegrows"),
+    get<CanopyFeature>("canopy"),
     extras.ndvi
       ? loadNdviSampler(url(extras.ndvi), terrain.bounds)
       : Promise.resolve(null),
-    get<LampFeature>(d.lamps),
-    get<MonumentFeature>(d.monuments),
-    get<FurnitureFeature>(d.furniture),
-    get<RailFeature>(d.rail),
-    get<BridgeFeature>(d.bridge),
-    get<AreaFeature>(d.railarea),
-    get<AreaFeature>(d.platform),
+    get<LampFeature>("lamps"),
+    get<MonumentFeature>("monuments"),
+    get<FurnitureFeature>("furniture"),
+    get<RailFeature>("rail"),
+    get<BridgeFeature>("bridge"),
+    get<AreaFeature>("railarea"),
+    get<AreaFeature>("platform"),
     buildSport(terrain, extras.sportTable, ctx, url),
     // the street-tree cadastre (tree-inventory-layer.ts)
-    get<TreeFeature>(d.trees ?? ""),
+    get<TreeFeature>("trees"),
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
-    get<CanopyExtraFeature>(d.canopyx ?? ""),
-    get<LowVegFeature>(d.lowveg ?? ""),
+    get<CanopyExtraFeature>("canopyx"),
+    get<LowVegFeature>("lowveg"),
     // allotments, orchards, vineyards (cultivated-layer.ts)
-    get<CultivatedFeature>(d.cultivated ?? ""),
-    get<TramFeature>(d.tram ?? ""),
-    get<RiversideFeature>(d.riverside ?? ""),
+    get<CultivatedFeature>("cultivated"),
+    get<TramFeature>("tram"),
+    get<RiversideFeature>("riverside"),
   ]);
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.

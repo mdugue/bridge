@@ -361,7 +361,8 @@ visual-variable codebook is in
   NEAREST, one band (`scripts/downsample-raster.ts` `downsampleClassRaster`),
   to a quarter of the texture memory: for the coarse terrain level on every
   device, for every level on phones (`MOBILE_RASTER_PX`, chosen by the
-  client per device tier), and for the minimap. No raster whose alpha is
+  client per device tier); a 512² one for the minimap and the soundscape.
+  No raster whose alpha is
   data goes through an image resize any more (the painted splat has the
   only such alpha, and it is made on the GPU). Cost: ~1 m instead of ~0.5 m
   class boundaries — on desktop only on the far terrain, on phones

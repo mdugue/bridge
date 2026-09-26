@@ -297,9 +297,14 @@ Runs ahead of `next dev` and `next build` (`bun dev`, `bun build`) and turns
 
 1. **Side files.** Each tile's rasters and feature collections
    (`tileArtifacts` in `lib/city/tile.ts`) are published as committed,
-   plus `landcover_<t>.r2048.png`: the class raster downsampled NEAREST to
-   2048², single band (`scripts/downsample-raster.ts`, sharp) — for phones,
-   the coarse terrain and the minimap. Only class rasters are resized; no
+   plus two downsampled class rasters (NEAREST, single band,
+   `scripts/downsample-raster.ts`, sharp): `landcover_<t>.r2048.png` for
+   phones and the coarse terrain, and `landcover_<t>.r512.png` for the
+   minimap (256² a tile) and the soundscape (512² a tile). Which files a
+   tile has, where the viewer finds each (`dressing`, `sound`) and which
+   carry the ODbL credit (`osm`, checked by `features.test.ts`) is one
+   table, `tileArtifacts` in `lib/city/tile.ts`; the extras' types derive
+   from it. Only class rasters are resized; no
    raster whose alpha carries data goes through an image tool any more.
 2. **Content.** Per tile, three glTF files (below), each naming its side
    files in the glTF scene `extras`.
@@ -329,9 +334,9 @@ switches at ≈ 1.2 km from the tile on a 1080p screen. Only L0 is
 are built when a fine terrain tile arrives and leave with it. The root's
 `extras` carry what the viewer needs before any content: the site id, the
 EPSG code, the recenter offset `(cx, cy)` and per tile its id, extent and
-minimap raster, and `sound`: the files the hidden soundscape fetches
-while (and only while) it plays — `soundmarks`, `tram`, `monuments`,
-`surface`, `svf` (`TileSoundFiles`, plan 035).
+minimap raster (the 512² one), and `sound`: the files the hidden
+soundscape fetches while (and only while) it plays — `soundmarks`, `tram`,
+`monuments`, `surface`, `svf` (the table's `sound` column, plan 035).
 
 ### The glTF content
 
@@ -409,7 +414,7 @@ optional one is logged and the feature is off.
 | DGM → terrain grid, `.tfw` fallback | `scripts/bake-tiles.ts` | `bake-tiles.test.ts` (reads the committed spawn-tile DGM) |
 | The per-object table and its texture packing, demolish | `lib/city/city-mesh.ts` | `city-mesh.test.ts` |
 | Class ids ↔ palette | `lib/city/landcover.ts`, `pipeline/bake/landcover.py` | `landcover.test.ts` (every committed legend), `test_bakes.py` |
-| The 2048² class raster keeps exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
+| The 2048² and 512² class rasters keep exact ids | `scripts/downsample-raster.ts` | `downsample-raster.test.ts` |
 | GeoJSON feature shapes per kind | `lib/city/features.ts` | `features.test.ts` reads **every committed file** of every tile: a bake that renames a property fails there, not as an empty layer |
 | Terrain TIN (the fine level) | `lib/city/terrain-tin.ts` (`tinFromMesher`, `buildTinGeometryData`, `TinIndex`), `TerrainExtras.tin` | `terrain-tin.test.ts`, `scripts/bake-terrain-tin.test.ts` (every grid point within the tolerance; the committed spawn DGM at its native 2000²) |
 | Optional-artifact fetch policy | `app/_components/fetch-optional.ts` | 404 / network / parse → `null`/`[]` (feature off); **abort always rethrows** so a torn-down instance stops building from partial data |

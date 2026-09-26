@@ -50,116 +50,190 @@ export interface TileArtifact {
   required: boolean;
 }
 
-export type TileArtifactKind =
-  | "bridge"
-  | "canopy"
-  | "canopyx"
-  | "furniture"
-  | "lamps"
-  | "landcover"
-  | "landcoverLow"
-  | "lowveg"
-  | "monuments"
-  | "ndvi"
-  | "platform"
-  | "rail"
-  | "railarea"
-  | "riverside"
-  | "surface"
-  | "soundmarks"
-  | "edges"
-  | "sport"
-  | "sportTable"
-  | "svf"
-  | "horizon"
-  | "markings"
-  | "markingsLow"
-  | "markingsTable"
-  | "cultivated"
-  | "cultivatedRaster"
-  | "tram"
-  | "trees"
-  | "vegrows";
+/** The edge of the class raster the minimap and the soundscape read: the
+ *  minimap paints 256² per tile, the soundscape keeps 512². */
+export const SMALL_RASTER_PX = 512;
+
+/**
+ * One row per side file. Besides its name, a row says where the viewer
+ * finds it — `dressing`: named in the fine terrain's dressing extras
+ * (tile-stream.ts fetches it per tile); `sound`: named in the tileset's
+ * tile list for the soundscape (plan 035) — and `osm`: the file is derived
+ * from OpenStreetMap, so its JSON carries the ODbL credit (checked over
+ * every committed file by features.test.ts). The raster rows the terrain
+ * reads are named by prepare-data.ts's terrain extras.
+ */
+interface ArtifactSpec {
+  bakedFrom?: { file: (tile: string) => string; raster: number };
+  dressing?: true;
+  file: (tile: string) => string;
+  osm?: true;
+  required?: true;
+  sound?: true;
+}
+
+const named =
+  (stem: string, ext: string) =>
+  (tile: string): string =>
+    `${stem}_${tile}.${ext}`;
+
+const ARTIFACTS = {
+  landcover: { file: named("landcover", "png"), required: true },
+  // The edge phones get (MOBILE_RASTER_PX), downsampled (NEAREST) by
+  // prepare-data from the committed 4096² raster.
+  landcoverLow: {
+    file: (tile) => `landcover_${tile}.r${MOBILE_RASTER_PX}.png`,
+    required: true,
+    bakedFrom: { file: named("landcover", "png"), raster: MOBILE_RASTER_PX },
+  },
+  // The minimap's and the soundscape's class raster: 1/16 of the phone
+  // raster's pixels, which is all either of them keeps.
+  landcoverSmall: {
+    file: (tile) => `landcover_${tile}.r${SMALL_RASTER_PX}.png`,
+    required: true,
+    bakedFrom: { file: named("landcover", "png"), raster: SMALL_RASTER_PX },
+  },
+  vegrows: {
+    file: named("vegrows", "geojson"),
+    required: true,
+    dressing: true,
+  },
+  // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
+  canopy: { file: named("canopy", "geojson"), dressing: true },
+  ndvi: { file: named("ndvi", "png") },
+  // Optional: the OSM paving raster (pipeline/bake/surface.py); without
+  // it the ground draws the land-cover class's default pattern.
+  surface: { file: named("surface", "png"), sound: true },
+  // Optional: the smoothed road/meadow edge distances
+  // (pipeline/bake/edges.py); without them the shader reads the class
+  // texels (kerb band only, no parking lanes).
+  edges: { file: named("edges", "png") },
+  // Optional: the OSM sports grounds (pipeline/bake/sport.py) — the index
+  // raster and the table of grounds it names; without them the ground
+  // under a pitch is its land-cover class.
+  sport: { file: named("sport", "png") },
+  sportTable: { file: named("sport", "json"), osm: true },
+  // Optional: the sky-view factor and the far horizon
+  // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
+  // ambient light the city lets through and the long shadows past the
+  // shadow map. Without them the light is as before.
+  svf: { file: named("svf", "png"), sound: true },
+  horizon: { file: named("horizon", "png") },
+  // Optional: the road markings (pipeline/bake/markings.py) — the index
+  // raster (rows, lane bits, centre offset) and the table of crossings
+  // and stop lines; without them the roads stay unpainted.
+  markings: { file: named("markings", "png") },
+  // The same at 1024² for phones (`lowRasters`): 4 MiB of GPU memory
+  // instead of 16, the table's rows still resolved (a wider core).
+  markingsLow: { file: named("markings_low", "png") },
+  markingsTable: { file: named("markings", "json"), osm: true },
+  // Optional: allotment colonies, orchards and vineyards
+  // (pipeline/bake/cultivated.py) — the features (orchard trees, vine
+  // rows) and the colony raster the ground paints beds on.
+  cultivated: {
+    file: named("cultivated", "geojson"),
+    dressing: true,
+    osm: true,
+  },
+  cultivatedRaster: { file: named("cultivated", "png") },
+  lamps: { file: named("lamps", "geojson"), dressing: true, osm: true },
+  // Basis-DLM monuments, plus the OSM fountain basins where the tile has
+  // them: the bake credits OSM only then, so the row is not `osm`.
+  monuments: {
+    file: named("monuments", "geojson"),
+    dressing: true,
+    sound: true,
+  },
+  furniture: { file: named("furniture", "geojson"), dressing: true, osm: true },
+  rail: { file: named("rail", "geojson"), dressing: true },
+  bridge: { file: named("bridge", "geojson"), dressing: true, osm: true },
+  railarea: { file: named("railarea", "geojson"), dressing: true },
+  platform: { file: named("platform", "geojson"), dressing: true, osm: true },
+  // Optional: the OSM trams — tracks, catenary supports, stop signs
+  // (pipeline/bake/tram.py); without it the tile has no trams.
+  tram: {
+    file: named("tram", "geojson"),
+    dressing: true,
+    sound: true,
+    osm: true,
+  },
+  // Optional: the OSM landing stages, groynes and ferry lines
+  // (pipeline/bake/riverside.py); a tile without the river has none.
+  riverside: { file: named("riverside", "geojson"), dressing: true, osm: true },
+  // Optional: the bell towers (pipeline/bake/soundmarks.py) the hidden
+  // soundscape strikes the hour from (plan 035); fetched only while it
+  // plays.
+  soundmarks: { file: named("soundmarks", "geojson"), sound: true, osm: true },
+  // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
+  // hedges and the laser-scan crowns outside the canopy mask
+  // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
+  trees: { file: named("trees", "geojson"), dressing: true },
+  lowveg: { file: named("lowveg", "geojson"), dressing: true, osm: true },
+  canopyx: { file: named("canopyx", "geojson"), dressing: true },
+} as const satisfies Record<string, ArtifactSpec>;
+
+type Specs = typeof ARTIFACTS;
+export type TileArtifactKind = keyof Specs;
+type KindsWith<F extends "dressing" | "osm" | "sound"> = {
+  [K in TileArtifactKind]: Specs[K] extends Record<F, true> ? K : never;
+}[TileArtifactKind];
+/** The side files named in a fine terrain's dressing extras. */
+export type DressingKind = KindsWith<"dressing">;
+/** The side files the soundscape fetches. */
+export type SoundKind = KindsWith<"sound">;
+
+const kindsWith = <F extends "dressing" | "osm" | "sound">(flag: F) =>
+  (Object.keys(ARTIFACTS) as TileArtifactKind[]).filter(
+    (kind) => (ARTIFACTS[kind] as ArtifactSpec)[flag]
+  ) as KindsWith<F>[];
+
+export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
+export const SOUND_KINDS: readonly SoundKind[] = kindsWith("sound");
+/** Side files derived from OSM (their JSON must carry the ODbL credit). */
+export const OSM_KINDS: readonly TileArtifactKind[] = kindsWith("osm");
+
+/** The files of `kinds` a tile has, by kind (absent ones left out: an absent
+ *  file is a feature off, never a request that can only 404). */
+export function pickFiles<K extends TileArtifactKind>(
+  names: Partial<Record<TileArtifactKind, string>>,
+  kinds: readonly K[]
+): Partial<Record<K, string>> {
+  const out: Partial<Record<K, string>> = {};
+  for (const kind of kinds) {
+    const name = names[kind];
+    if (name) {
+      out[kind] = name;
+    }
+  }
+  return out;
+}
 
 /**
  * Every side file of a tile — the ONE list scripts/prepare-data.ts publishes
- * and names in the tile's glTF extras. Committed under data/dlm/, except the
- * `landcoverLow` class raster, which prepare-data downsamples (NEAREST) from
- * the committed 4096² one.
+ * and names in the tile's glTF extras and the tileset. Committed under
+ * data/dlm/, except the class rasters with `bakedFrom`, which prepare-data
+ * downsamples (NEAREST) from the committed 4096² one.
  */
 export function tileArtifacts(
   tile: string
 ): Record<TileArtifactKind, TileArtifact> {
-  const dlm = (file: string, required = false): TileArtifact => ({
-    file,
-    required,
-  });
-  return {
-    landcover: dlm(`landcover_${tile}.png`, true),
-    landcoverLow: {
-      file: `landcover_${tile}.r${MOBILE_RASTER_PX}.png`,
-      required: true,
-      bakedFrom: { file: `landcover_${tile}.png`, raster: MOBILE_RASTER_PX },
-    },
-    vegrows: dlm(`vegrows_${tile}.geojson`, true),
-    // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
-    canopy: dlm(`canopy_${tile}.geojson`),
-    ndvi: dlm(`ndvi_${tile}.png`),
-    // Optional: the OSM paving raster (pipeline/bake/surface.py); without
-    // it the ground draws the land-cover class's default pattern.
-    surface: dlm(`surface_${tile}.png`),
-    // Optional: the smoothed road/meadow edge distances
-    // (pipeline/bake/edges.py); without them the shader reads the class
-    // texels (kerb band only, no parking lanes).
-    edges: dlm(`edges_${tile}.png`),
-    // Optional: the OSM sports grounds (pipeline/bake/sport.py) — the index
-    // raster and the table of grounds it names; without them the ground
-    // under a pitch is its land-cover class.
-    sport: dlm(`sport_${tile}.png`),
-    sportTable: dlm(`sport_${tile}.json`),
-    // Optional: the sky-view factor and the far horizon
-    // (pipeline/bake/skyview.py, from the committed DGM + LoD2): the
-    // ambient light the city lets through and the long shadows past the
-    // shadow map. Without them the light is as before.
-    svf: dlm(`svf_${tile}.png`),
-    horizon: dlm(`horizon_${tile}.png`),
-    // Optional: the road markings (pipeline/bake/markings.py) — the index
-    // raster (rows, lane bits, centre offset) and the table of crossings
-    // and stop lines; without them the roads stay unpainted.
-    markings: dlm(`markings_${tile}.png`),
-    // The same at 1024² for phones (`lowRasters`): 4 MiB of GPU memory
-    // instead of 16, the table's rows still resolved (a wider core).
-    markingsLow: dlm(`markings_low_${tile}.png`),
-    markingsTable: dlm(`markings_${tile}.json`),
-    // Optional: allotment colonies, orchards and vineyards
-    // (pipeline/bake/cultivated.py) — the features (orchard trees, vine
-    // rows) and the colony raster the ground paints beds on.
-    cultivated: dlm(`cultivated_${tile}.geojson`),
-    cultivatedRaster: dlm(`cultivated_${tile}.png`),
-    lamps: dlm(`lamps_${tile}.geojson`),
-    monuments: dlm(`monuments_${tile}.geojson`),
-    furniture: dlm(`furniture_${tile}.geojson`),
-    rail: dlm(`rail_${tile}.geojson`),
-    bridge: dlm(`bridge_${tile}.geojson`),
-    railarea: dlm(`railarea_${tile}.geojson`),
-    platform: dlm(`platform_${tile}.geojson`),
-    // Optional: the OSM trams — tracks, catenary supports, stop signs
-    // (pipeline/bake/tram.py); without it the tile has no trams.
-    tram: dlm(`tram_${tile}.geojson`),
-    // Optional: the OSM landing stages, groynes and ferry lines
-    // (pipeline/bake/riverside.py); a tile without the river has none.
-    riverside: dlm(`riverside_${tile}.geojson`),
-    // Optional: the bell towers (pipeline/bake/soundmarks.py) the hidden
-    // soundscape strikes the hour from (plan 035); fetched only while it
-    // plays.
-    soundmarks: dlm(`soundmarks_${tile}.geojson`),
-    // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
-    // hedges and the laser-scan crowns outside the canopy mask
-    // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
-    trees: dlm(`trees_${tile}.geojson`),
-    lowveg: dlm(`lowveg_${tile}.geojson`),
-    canopyx: dlm(`canopyx_${tile}.geojson`),
-  };
+  const out = {} as Record<TileArtifactKind, TileArtifact>;
+  for (const kind of Object.keys(ARTIFACTS) as TileArtifactKind[]) {
+    const spec: ArtifactSpec = ARTIFACTS[kind];
+    out[kind] = {
+      file: spec.file(tile),
+      required: spec.required === true,
+      ...(spec.bakedFrom
+        ? {
+            bakedFrom: {
+              file: spec.bakedFrom.file(tile),
+              raster: spec.bakedFrom.raster,
+            },
+          }
+        : {}),
+    };
+  }
+  return out;
 }
 
 /** The committed OSM walls (pipeline/bake/walls.py): a terrain bake input

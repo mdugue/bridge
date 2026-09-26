@@ -7,6 +7,7 @@
  */
 
 import type { TerrainBounds } from "./terrain-geometry";
+import { SOUND_KINDS } from "./tile";
 import type { TileSoundFiles, TilesetTileInfo } from "./tileset";
 
 export type MovementMode = "fly" | "walk";
@@ -22,7 +23,7 @@ export interface Listening {
   trees: number;
 }
 
-/** A tile as the soundscape fetches it: its extent, its ≤ 2048² class
+/** A tile as the soundscape fetches it: its extent, its 512² class
  *  raster and its sound files, all as served URLs. */
 export interface SoundTile {
   bounds: TerrainBounds;
@@ -34,8 +35,7 @@ export interface SoundTile {
 /** A tileset tile's sound files resolved against the tileset's URL. */
 export function soundTileOf(info: TilesetTileInfo, base: string): SoundTile {
   const files: TileSoundFiles = {};
-  const kinds = ["monuments", "soundmarks", "surface", "svf", "tram"] as const;
-  for (const kind of kinds) {
+  for (const kind of SOUND_KINDS) {
     const name = info.sound?.[kind];
     if (name) {
       files[kind] = new URL(name, base).href;
