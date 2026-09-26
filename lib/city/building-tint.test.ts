@@ -4,6 +4,7 @@ import {
   NightLight,
   nightLight,
   buildingTint,
+  inheritedAttributes,
   roofColor,
   roofTint,
   roughJitter,
@@ -123,6 +124,32 @@ test("nightLight: landmarks floodlit, garages dark, the rest by use", () => {
   expect(nightLight({ function: "51002_1290" })).toBe(NightLight.dark); // tower
   expect(nightLight({ function: "31001_9998" })).toBe(NightLight.home);
   expect(nightLight({})).toBe(NightLight.home);
+});
+
+test("inheritedAttributes: a part inherits its Building's function", () => {
+  const building = {
+    function: "31001_2000",
+    name: "Kaufhaus",
+    roofType: "3100",
+  };
+  const part = { measuredHeight: 12, roofType: "1000" };
+  const resolved = inheritedAttributes(part, building);
+  expect(resolved.function).toBe("31001_2000");
+  expect(buildingGlows(resolved)).toBe(true);
+  expect(buildingGlows(part)).toBe(false);
+  // The part's own values win over the root's.
+  expect(resolved.roofType).toBe("1000");
+  expect(resolved.measuredHeight).toBe(12);
+  // A part's own function wins too; a null own value falls back.
+  expect(
+    inheritedAttributes({ function: "31001_1000" }, building).function
+  ).toBe("31001_1000");
+  expect(inheritedAttributes({ function: null }, building).function).toBe(
+    "31001_2000"
+  );
+  // A root resolves to itself; no root leaves the bag untouched.
+  expect(inheritedAttributes(building, building)).toBe(building);
+  expect(inheritedAttributes(part)).toBe(part);
 });
 
 test("storeyHeight: snaps near ~3.2 m, clamps, falls back to 3", () => {

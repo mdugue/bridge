@@ -3,24 +3,40 @@
  * glTF, scripts/bake-tiles.ts): runs cityjson-threejs-loader once, then
  * folds in everything the clay style needs per building (tints, roof colour
  * incl. the DOP LUT, storey/eave heights, dusk glow, roughness jitter), the
- * demolish tree and the minimap footprints. Called by
- * scripts/prepare-data.ts; no DOM.
+ * OSM flags (shop, heritage; a part carries its Building's too), the
+ * demolish tree and the minimap footprints, then appends the small
+ * structures the laser scan saw and LoD2 lacks (`appendScanStructures`).
+ * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import type { BufferGeometry, Matrix4, Mesh } from "three";
 import {
   buildingGlows,
   buildingTint,
+  inheritedAttributes,
   type RoofColorLut,
   roofColor,
+  roofTint,
   roughJitter,
+  NightLight,
   nightLight,
   storeyHeight,
 } from "../lib/city/building-tint";
-import type { CityObjectRow } from "../lib/city/city-mesh";
+import {
+  type CityObjectRow,
+  inheritedFlags,
+  OBJECT_SOURCE_SCAN,
+  type OsmBuildingLut,
+} from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
+import type { SmallBuildingFeature } from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
 import { recenterOffset } from "../lib/city/recenter";
+import {
+  SMALL_BUILDING_SINK,
+  structureCorners,
+  structureMesh,
+} from "../lib/city/small-buildings";
 import type { CityJsonDocument } from "../lib/city/types";
 
 /** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
@@ -114,15 +130,94 @@ export interface BakedCityMesh {
 }
 
 /**
+ * The laser scan's small structures (pipeline/bake/small_buildings.py)
+ * appended to a parsed tile: one object each at `objects.length + j`, its
+ * own root (demolish takes it alone), a Building (the HUD counts it), the
+ * hashed wall tint, a calm slate roof (the flat-roof palette — no DOP colour
+ * is sampled for them) and `source` 1. Its triangles carry its own id, so
+ * the weld never merges across objects. The tint hashes its first corner
+ * (rounded to the decimetre), not its index, so a changed LoD2 object count
+ * leaves every shed its colour; no storey band (the stroke would fall 0.2 m
+ * under the eave, the sink's depth, on nearly every shed).
+ */
+export function appendScanStructures(
+  tile: string,
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  features: readonly SmallBuildingFeature[]
+): void {
+  const positions: number[] = [];
+  const objectIds: number[] = [];
+  const isRoof: number[] = [];
+  for (const f of features) {
+    const box = structureMesh(f, baked.offset);
+    const corners = structureCorners(f);
+    const z = f.properties?.z;
+    if (box.positions.length === 0 || !corners || z === undefined) {
+      continue;
+    }
+    const index = baked.objects.length;
+    const id = scanStructureId(tile, f);
+    const eave = Math.min(...corners.map((c) => c.h));
+    positions.push(...box.positions);
+    isRoof.push(...box.isRoof);
+    objectIds.push(...box.isRoof.map(() => index));
+    baked.objects.push({
+      building: true,
+      root: index,
+      baseZ: cm(z - SMALL_BUILDING_SINK),
+      eaveH: cm(eave + SMALL_BUILDING_SINK),
+      flags: 0,
+      // one band above the eave: none on the box
+      storeyH: cm(eave + SMALL_BUILDING_SINK + 1),
+      glow: 0,
+      // sheds and garden huts: no lit windows
+      night: NightLight.dark,
+      rough: r3(roughJitter(id)),
+      tint: rgb(buildingTint(id)),
+      roof: rgb(roofTint(id, { roofType: "1000" })),
+      source: OBJECT_SOURCE_SCAN,
+      footprints: [corners.map((c): [number, number] => [cm(c.x), cm(c.y)])],
+    });
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(v.isRoof, isRoof),
+  };
+}
+
+/** A scan structure's hash key: the tile and its ring's first corner to the
+ *  decimetre — stable when the tile's LoD2 object count changes. */
+export function scanStructureId(tile: string, f: SmallBuildingFeature): string {
+  const [x, y] = f.geometry.coordinates[0]?.[0] ?? [0, 0];
+  return `scan:${tile}:${x.toFixed(1)}:${y.toFixed(1)}`;
+}
+
+function concat(
+  a: Float32Array<ArrayBuffer>,
+  b: readonly number[]
+): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(a.length + b.length);
+  out.set(a);
+  out.set(b, a.length);
+  return out;
+}
+
+/**
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
+ * `osmLut` holds what OSM knows per object (shops, heritage), when baked;
+ * a part carries its own flags and its root Building's.
  */
 export function bakeCityMesh(
   tile: string,
   doc: CityJsonDocument,
   roofLut: RoofColorLut | undefined,
-  sharedMatrix: Matrix4 | null
+  sharedMatrix: Matrix4 | null,
+  osmLut?: OsmBuildingLut,
+  scan?: readonly SmallBuildingFeature[]
 ): BakedCityMesh {
   const epsg = epsgCodeFromReferenceSystem(doc.metadata?.referenceSystem);
   if (epsg === null) {
@@ -157,18 +252,18 @@ export function bakeCityMesh(
 
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
-    const attrs = o.attributes ?? {};
     const root = rootOf(doc, keys, index);
-    // A BuildingPart carries no function of its own (7 k of them here, the
-    // Frauenkirche among them): its use is its building's.
-    const use = {
-      function:
-        attrs.function ?? doc.CityObjects[keys[root]]?.attributes?.function,
-    };
+    const own = o.attributes ?? {};
+    // A BuildingPart takes its use (`function`) from its Building: tint,
+    // roof and glow read the resolved bag; heights stay the part's own.
+    const attrs = inheritedAttributes(
+      own,
+      doc.CityObjects[keys[root]].attributes
+    );
     const baseZ = minZ.get(index) ?? 0;
     const total = (maxZ.get(index) ?? baseZ) - baseZ;
     const measured =
-      typeof attrs.measuredHeight === "number" ? attrs.measuredHeight : total;
+      typeof own.measuredHeight === "number" ? own.measuredHeight : total;
     const roofMin = roofMinZ.get(index);
     const footprints = buildingFootprintPolys({
       ...doc,
@@ -179,9 +274,10 @@ export function bakeCityMesh(
       root,
       baseZ: cm(baseZ),
       eaveH: cm(roofMin === undefined ? total : Math.max(roofMin - baseZ, 0)),
+      flags: inheritedFlags(osmLut?.[id], osmLut?.[keys[root]]),
       storeyH: cm(storeyHeight(measured)),
-      glow: buildingGlows(use) ? 1 : 0,
-      night: nightLight(use),
+      glow: buildingGlows(attrs) ? 1 : 0,
+      night: nightLight(attrs),
       rough: r3(roughJitter(id)),
       tint: rgb(buildingTint(id, attrs)),
       roof: rgb(roofColor(id, attrs, roofLut)),
@@ -189,5 +285,9 @@ export function bakeCityMesh(
     };
   });
 
-  return { epsg, matrix, objects, offset, vertices: v };
+  const baked = { epsg, matrix, objects, offset, vertices: v };
+  if (scan) {
+    appendScanStructures(tile, baked, scan);
+  }
+  return baked;
 }

@@ -1,4 +1,9 @@
-import { type DataTexture, MeshStandardMaterial, Vector3 } from "three";
+import {
+  type DataTexture,
+  MeshStandardMaterial,
+  type Texture,
+  Vector3,
+} from "three";
 import { OBJECT_TEXTURE_WIDTH } from "@/lib/city/city-mesh";
 import {
   type ClayLookKey,
@@ -7,6 +12,7 @@ import {
 } from "@/lib/city/look-controls";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { DATA_POSITION } from "./shader-chunks";
+import { CLAY_SKY_AO, CLAY_SKY_DECL, openSkyTexture } from "./sky-light";
 
 /**
  * The city is rendered in one style: archviz clay — opaque, cheap, and the
@@ -36,13 +42,26 @@ export interface ClayDetailUniforms {
   uRoofVibrance: { value: number };
   /** per-building roughness jitter strength */
   uRough: { value: number };
-  uTint: { value: number };
+  /** the sky view's hold on the facades' ambient light (Himmelslicht; the
+   *  terrain's ref, a scene row) */
+  uSkyView: { value: number };
   /** low-sun glint in the panes (Scheibenglanz) */
   uGlint: { value: number };
   /** night light strength: lit panes, floodlit landmarks (Nachtlicht) */
   uNightLights: { value: number };
   /** world direction surface → sun, shared with the sun rig */
   uSunDir: { value: Vector3 };
+  uTint: { value: number };
+}
+
+/** One tile's sky-view raster as its clay reads it (sky-light.ts): a white
+ *  texel until the tile's raster lands (setClaySkyView). */
+interface ClaySkyUniforms {
+  uSvf: { value: Texture };
+  /** the raster's north-west corner, recentered data frame */
+  uSvfOrigin: { value: [number, number] };
+  /** its extent (m) */
+  uSvfSize: { value: [number, number] };
 }
 
 /**
@@ -68,7 +87,7 @@ export interface StyleResources {
  * windows only ever appear as light: lit from inside after dusk, or
  * catching the low sun. By full day both terms are zero and the clay stays
  * calm. What lights up depends on the building's `night` column
- * (building-tint.ts `nightLight`):
+ * (building-tint.ts `nightLight`, packed above the OSM flags):
  *
  *  - Houses and commerce: soft panes on a grid that needs no UVs — along
  *    the wall the world position on its tangent, in window axes of the
@@ -78,8 +97,9 @@ export interface StyleResources {
  *    lintel, amber at the sill, dimmer at the jambs), with a faint round
  *    glow on the wall around it in the wall's own colour. A hash of (axis, storey, wall plane, building)
  *    decides which panes are lit and whether their curtains are drawn, at a
- *    density per building; commerce is busier and lights its shop fronts.
- *    Only whole storeys under the eave, and none on sheds and garages.
+ *    density per building; commerce is busier. A mapped shop's ground floor
+ *    is left to Ladenlicht (addOsmFacade). Only whole storeys under the
+ *    eave, and none on sheds and garages.
  *  - Landmarks (churches, castles, theatres, museums): no panes at all —
  *    they are floodlit from their foot, as Dresden lights them: overlapping
  *    cones every ~6.5 m that merge into an even wash higher up, in the
@@ -116,7 +136,10 @@ const CLAY_NIGHT = /* glsl */ `
   // A uniform branch: by full day nothing below runs. Derivatives are taken
   // here, before the per-building branches.
   if (nlNight + nlGlint > 0.0) {
-    float nlCat = floor(vClayNight + 0.5);
+    // The object's flags float (city-mesh.ts): OSM bits low, night kind above.
+    float nlFlags = floor(vClayFlags + 0.5);
+    float nlCat = floor(nlFlags / 4.0);
+    float nlShopFlag = mod(nlFlags, 2.0);
     int nlId = int(vClayId + 0.5);
     vec4 nlB = clayRand4(ivec4(nlId, 40503, 7, 1));
     vec2 nlN = vClayWN.xz;
@@ -141,10 +164,7 @@ const CLAY_NIGHT = /* glsl */ `
       vec2 nlF = nlCR - nlCell;
       float nlPlane = floor(dot(vClayWP.xz, nlN / nlNL) + 0.5);
       vec4 nlR = clayRand4(ivec4(int(nlCell.x), int(nlCell.y), int(nlPlane), nlId));
-      bool nlShop = nlCat > 1.5 && nlCell.y < 0.5;
-      vec2 nlSize = nlShop
-        ? vec2(0.8 * nlA, 0.6 * nlStorey)
-        : vec2(mix(0.26, 0.36, nlB.z) * nlA, mix(0.52, 0.64, nlB.w) * nlStorey);
+      vec2 nlSize = vec2(mix(0.26, 0.36, nlB.z) * nlA, mix(0.52, 0.64, nlB.w) * nlStorey);
       nlSize *= 0.94 + 0.12 * nlR.zw;
       vec2 nlP = (nlF - vec2(0.5, 0.52)) * vec2(nlA, nlStorey);
       float nlD = claySdBox(nlP, 0.5 * nlSize, 0.1);
@@ -152,11 +172,13 @@ const CLAY_NIGHT = /* glsl */ `
       float nlPane = 1.0 - smoothstep(-nlSoft, nlSoft, nlD);
       float nlRows = step(0.0, nlCell.y)
         * step((nlCell.y + 0.85) * nlStorey, vClayBuild.z)
-        * step(3.8, vClayBuild.z) * clayWall * (1.0 - clayIsRoof);
+        * step(3.8, vClayBuild.z) * clayWall * (1.0 - clayIsRoof)
+        // a mapped shop's ground floor is Ladenlicht's (addOsmFacade)
+        * (1.0 - nlShopFlag * step(nlCell.y, 0.5));
       float nlFar = smoothstep(0.45, 1.0, nlPx / min(nlSize.x, nlSize.y));
       float nlArea = nlSize.x * nlSize.y / (nlA * nlStorey);
       // Lit from inside.
-      float nlDensity = (nlShop ? 0.8 : mix(0.2, 0.42, step(1.5, nlCat))) * (0.55 + 0.9 * nlB.x);
+      float nlDensity = mix(0.2, 0.42, step(1.5, nlCat)) * (0.55 + 0.9 * nlB.x);
       float nlOn = step(nlR.x, nlDensity) * (nlR.y < 0.35 ? 0.4 : 1.0);
       float nlUp = clamp(nlP.y / nlSize.y + 0.5, 0.0, 1.0);
       // The room's lamp: a pool of light under the lintel, amber at the sill
@@ -216,8 +238,6 @@ const CLAY_GLINT_SHADOW = /* glsl */ `
  *  - Streiflicht (uRim): a Fresnel rim that separates silhouettes from like-
  *    coloured neighbours. Strength is squared-Fresnel + a healthy multiplier
  *    because the rim competes with ACES tone-mapping and there is no bloom.
- *  - Nachtlicht / Scheibenglanz (uNightLights, uGlint): lit panes and
- *    floodlit landmarks at night, the low sun in the glass — CLAY_NIGHT.
  * Heights come from world space (world Y is elevation), normals/positions
  * for the rim too, via `modelMatrix`. The uniforms are passed by reference
  * so a setter can retune them live.
@@ -226,6 +246,7 @@ function addClayDetail(
   material: MeshStandardMaterial,
   uniforms: ClayDetailUniforms,
   objects: { rows: number; texture: DataTexture },
+  sky: ClaySkyUniforms,
   heightFog?: HeightFogUniforms
 ): void {
   // The closure branches on `heightFog`, but three keys its program cache on
@@ -244,13 +265,17 @@ function addClayDetail(
     shader.uniforms.uDuskGlow = uniforms.uDuskGlow;
     shader.uniforms.uNight = uniforms.uNight;
     shader.uniforms.uRough = uniforms.uRough;
+    shader.uniforms.uSkyView = uniforms.uSkyView;
     shader.uniforms.uNightLights = uniforms.uNightLights;
     shader.uniforms.uGlint = uniforms.uGlint;
     shader.uniforms.uSunDir = uniforms.uSunDir;
+    shader.uniforms.uSvf = sky.uSvf;
+    shader.uniforms.uSvfOrigin = sky.uSvfOrigin;
+    shader.uniforms.uSvfSize = sky.uSvfSize;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float featureId;\nattribute float roof;\nuniform highp sampler2D uObjects;\nuniform int uObjectRows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;\nvarying float vClayNight;"
+        "#include <common>\nattribute float featureId;\nattribute float roof;\nuniform highp sampler2D uObjects;\nuniform int uObjectRows;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;"
       )
       .replace(
         "#include <beginnormal_vertex>",
@@ -279,14 +304,12 @@ function addClayDetail(
           "vClayBuild = vec4( roof, clayC.x, clayB.w, clayC.y );",
           "vClayRough = clayC.z;",
           "vClayId = featureId;",
-          "vClayNight = clayC.w;",
         ].join("\n")
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nuniform float uNightLights;\nuniform float uGlint;\nuniform vec3 uSunDir;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;\nvarying float vClayNight;\n" +
-          CLAY_NIGHT_PARS
+        `#include <common>\nuniform float uAO;\nuniform float uBands;\nuniform float uRim;\nuniform float uTint;\nuniform float uRoofTint;\nuniform float uRoofVibrance;\nuniform float uEave;\nuniform float uDuskGlow;\nuniform float uNight;\nuniform float uRough;\nuniform float uNightLights;\nuniform float uGlint;\nuniform vec3 uSunDir;\nvarying float vLocalH;\nvarying vec3 vClayWN;\nvarying vec3 vClayWP;\nvarying vec3 vClayTint;\nvarying vec4 vClayBuild;\nvarying float vClayRough;\nvarying float vClayId;\n${CLAY_SKY_DECL}\n${CLAY_NIGHT_PARS}`
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -335,6 +358,12 @@ function addClayDetail(
           "diffuseColor.rgb *= 1.0 - clayEave * uEave * clayWall * 0.6;",
         ].join("\n")
       )
+      // Himmelslicht: the courtyard's ground floor gets less of the sky.
+      // Scheibenglanz only where the sun reaches, read off the direct light.
+      .replace(
+        "#include <aomap_fragment>",
+        `${CLAY_GLINT_SHADOW}\n${CLAY_SKY_AO}`
+      )
       .replace(
         "#include <emissivemap_fragment>",
         [
@@ -346,20 +375,79 @@ function addClayDetail(
           "totalEmissiveRadiance += clayFres * uRim * vec3(1.0, 0.95, 0.8);",
           // Abendlicht: warm interior glow on commercial/public buildings at
           // dusk (build.w = 1), gated by nightFactor, walls only. Landmarks
-          // are floodlit instead (CLAY_NIGHT).
-          "float clayGlow = vClayBuild.w * uDuskGlow * uNight * step(vClayNight, 2.5);",
+          // (night kind 3, above the OSM flags) are floodlit instead.
+          "float clayGlow = vClayBuild.w * uDuskGlow * uNight * step(floor(vClayFlags + 0.5), 11.5);",
           "totalEmissiveRadiance += clayGlow * clayWall * vec3(1.0, 0.82, 0.5) * 0.5;",
           CLAY_NIGHT,
         ].join("\n")
-      )
-      .replace(
-        "#include <aomap_fragment>",
-        `${CLAY_GLINT_SHADOW}\n#include <aomap_fragment>`
       );
+    addOsmFacade(shader);
     if (heightFog) {
       injectHeightFog(shader, heightFog);
     }
   };
+}
+
+/**
+ * What OSM knows about a building (the `flags` float of its third texel,
+ * lib/city/city-mesh.ts: shop 1, heritage 2), layered onto the clay after
+ * `addClayDetail` has written its chunks — it reuses that block's locals
+ * (`clayWall`, `clayH`, `vClayBuild`) and uniforms, and adds no slider:
+ *  - Ladenlicht: a warm wash on a shop's ground floor at dusk, under the
+ *    first storey line with a soft top edge, walls only, on the dusk-glow
+ *    slider × nightFactor. A low-frequency hash along the facade (≈3.5 m
+ *    cells) keeps a long front from reading as one strip. No window
+ *    structure: the procedural window grid is a recorded veto.
+ *  - Denkmal: a barely-there warm lift of a listed facade (on the
+ *    Farbvariation slider) and a finer second cornice line under the eave
+ *    (on the Traufkante slider).
+ * Strengths are conservative defaults, not yet judged on a real GPU.
+ */
+function addOsmFacade(shader: {
+  fragmentShader: string;
+  vertexShader: string;
+}): void {
+  shader.vertexShader = shader.vertexShader
+    .replace(
+      "varying float vClayRough;",
+      "varying float vClayRough;\nvarying float vClayFlags;"
+    )
+    .replace(
+      "vClayRough = clayC.z;",
+      "vClayRough = clayC.z;\nvClayFlags = clayC.w;"
+    );
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      "varying float vClayRough;",
+      "varying float vClayRough;\nvarying float vClayFlags;"
+    )
+    .replace(
+      "#include <color_fragment>",
+      [
+        "#include <color_fragment>",
+        "float clayFlags = floor(vClayFlags + 0.5);",
+        "float clayShop = mod(clayFlags, 2.0);",
+        "float clayListed = mod(floor(clayFlags / 2.0), 2.0);",
+        "diffuseColor.rgb *= 1.0 + clayListed * uTint * clayWall * vec3(0.035, 0.012, -0.012);",
+        "float clayCornice = 1.0 - min(abs(clayH - (vClayBuild.z - 0.45)) / max(fwidth(clayH), 1e-4), 1.0);",
+        "diffuseColor.rgb *= 1.0 - clayCornice * clayListed * step(2.0, vClayBuild.z) * uEave * clayWall * 0.35;",
+      ].join("\n")
+    )
+    .replace(
+      "#include <emissivemap_fragment>",
+      [
+        "#include <emissivemap_fragment>",
+        "float clayFloor = 1.0 - smoothstep(0.7, 1.0, clayH / max(vClayBuild.y, 0.5));",
+        "vec2 clayAlong = normalize(vec2(-vClayWN.z, vClayWN.x) + 1e-5);",
+        "float claySeg = dot(vClayWP.xz, clayAlong) / 3.5;",
+        "float clayCell = floor(claySeg);",
+        "float clayN0 = fract(sin(clayCell * 12.9898) * 43758.5453);",
+        "float clayN1 = fract(sin((clayCell + 1.0) * 12.9898) * 43758.5453);",
+        "float clayLit = mix(0.45, 1.0, mix(clayN0, clayN1, smoothstep(0.0, 1.0, fract(claySeg))));",
+        "float clayShopGlow = clayShop * clayFloor * clayWall * clayLit * uDuskGlow * uNight;",
+        "totalEmissiveRadiance += clayShopGlow * vec3(1.0, 0.78, 0.45) * 0.4;",
+      ].join("\n")
+    );
 }
 
 /** The shared clay state, created once per app instance. `night` is a
@@ -368,6 +456,7 @@ function addClayDetail(
 export function createStyleResources(
   heightFog?: HeightFogUniforms,
   night?: { value: number },
+  skyView?: { value: number },
   sunDirection?: Vector3
 ): StyleResources {
   // Booted at the table defaults; applyCityLook retunes them live.
@@ -382,6 +471,7 @@ export function createStyleResources(
     uDuskGlow: { value: LOOK_DEFAULTS.duskGlow },
     uNight: night ?? { value: 0 },
     uRough: { value: LOOK_DEFAULTS.roughness },
+    uSkyView: skyView ?? { value: LOOK_DEFAULTS.skyView },
     uNightLights: { value: LOOK_DEFAULTS.nightLights },
     uGlint: { value: LOOK_DEFAULTS.glint },
     uSunDir: { value: sunDirection ?? new Vector3(0, 1, 0) },
@@ -407,11 +497,38 @@ export function createClayMaterial(
     roughness: 1,
     metalness: 0,
   });
-  addClayDetail(clay, resources.clayDetail, objects, resources.heightFog);
+  const sky: ClaySkyUniforms = {
+    uSvf: { value: openSkyTexture() },
+    uSvfOrigin: { value: [0, 0] },
+    uSvfSize: { value: [1, 1] },
+  };
+  clay.userData.sky = sky;
+  addClayDetail(clay, resources.clayDetail, objects, sky, resources.heightFog);
   applyTransparency(clay, resources.transparency);
   resources.materials.add(clay);
   clay.addEventListener("dispose", () => resources.materials.delete(clay));
   return clay;
+}
+
+/**
+ * Hands a tile's clay its sky-view raster (loaded after the tile shows, so
+ * the buildings never wait on it): a uniform write, no recompile.
+ * `origin` is the raster's north-west corner in the recentered data frame,
+ * `size` its extent (m).
+ */
+export function setClaySkyView(
+  clay: MeshStandardMaterial,
+  texture: Texture,
+  origin: [number, number],
+  size: [number, number]
+): void {
+  const sky = clay.userData.sky as ClaySkyUniforms | undefined;
+  if (!sky) {
+    return;
+  }
+  sky.uSvf.value = texture;
+  sky.uSvfOrigin.value = origin;
+  sky.uSvfSize.value = size;
 }
 
 /**
@@ -460,14 +577,14 @@ const CLAY_UNIFORM_FOR: Record<
   bands: "uBands",
   duskGlow: "uDuskGlow",
   eave: "uEave",
+  glint: "uGlint",
   groundShade: "uAO",
+  nightLights: "uNightLights",
   rim: "uRim",
   roofTint: "uRoofTint",
   roofVibrance: "uRoofVibrance",
   roughness: "uRough",
   tint: "uTint",
-  glint: "uGlint",
-  nightLights: "uNightLights",
 };
 
 /**

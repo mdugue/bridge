@@ -13,7 +13,12 @@ export type FurnitureModel =
   | "bin"
   | "bollard"
   | "climb"
+  | "clock"
+  | "column"
+  | "columnLit"
   | "hoop"
+  | "hydrant"
+  | "hydrantSign"
   | "picnic"
   | "playhouse"
   | "post"
@@ -22,10 +27,14 @@ export type FurnitureModel =
   | "sandbox"
   | "seesaw"
   | "shelter"
+  | "signal"
   | "slide"
   | "springy"
+  | "stop"
   | "stool"
-  | "swing";
+  | "swing"
+  | "wallClock"
+  | "water";
 
 export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "bench",
@@ -37,6 +46,15 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "post",
   "postbox",
   "shelter",
+  "stop",
+  "column",
+  "columnLit",
+  "signal",
+  "hydrant",
+  "hydrantSign",
+  "clock",
+  "wallClock",
+  "water",
   "swing",
   "slide",
   "climb",
@@ -118,6 +136,14 @@ const MODEL_OF: Record<string, (f: FurnitureFeature) => FurnitureModel> = {
   picnic: () => "picnic",
   postbox: () => "postbox",
   shelter: () => "shelter",
+  stop: () => "stop",
+  column: (f) => (f.properties?.lit ? "columnLit" : "column"),
+  signal: () => "signal",
+  hydrant: () => "hydrant",
+  hydrantsign: () => "hydrantSign",
+  clock: () => "clock",
+  wallclock: () => "wallClock",
+  water: () => "water",
   swing: () => "swing",
   slide: () => "slide",
   climb: () => "climb",

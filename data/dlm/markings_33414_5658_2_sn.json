@@ -1,0 +1,48 @@
+{
+  "tile": "33414_5658_2_sn",
+  "crs": "EPSG:25833",
+  "bounds": [
+    414000,
+    5658000,
+    416000,
+    5660000
+  ],
+  "size": 2048,
+  "lowSize": 1024,
+  "encoding": {
+    "layout": "8-bit greyscale, 4 * size wide: R0 G0 B0 A0 R1 ... per row; markings_low_<tile>.png the same at lowSize (phones)",
+    "ra": "1 + the row of `markings` reaching the texel (R low, A high byte; 0 none)",
+    "g": "lane bits: 1 cycle lane along this side's kerb, 4 centre-line road",
+    "b": "128 + 20 * the signed distance (m) to the carriageway's middle",
+    "markings": "[cx, cy, angle, halfLength, halfWidth, kind]: the centre in m from the tile's north-west corner (x east, y north), the axis across the road (rad from east, ccw), half the extent across and along the road"
+  },
+  "kinds": {
+    "0": "none",
+    "1": "zebra",
+    "2": "furt",
+    "3": "stop"
+  },
+  "attribution": "\u00a9 OpenStreetMap contributors (ODbL)",
+  "markings": [
+    [290.03, -1959.43, -1.8713, 10.33, 1.5000000000802949, 2],
+    [1024.48, -1786.77, 2.4773, 4.38, 1.5, 2],
+    [221.2, -1721.29, 0.6857, 5.25, 1.5, 2],
+    [200.3, -1692.39, 1.0357, 12.25, 1.5, 2],
+    [209.36, -1695.19, -2.5056, 8.38, 1.5, 2],
+    [284.21, -1983.06, 1.271, 4.88, 1.5, 2],
+    [267.32, -1951.05, 0.1374, 3.75, 1.5, 2],
+    [234.87, -1697.75, 1.8052, 2.5, 1.5, 2],
+    [240.14, -1705.78, 2.8452, 5.12, 1.5, 2],
+    [260.98, -1972.42, -1.3059, 14.62, 1.5, 2],
+    [1019.03, -1762.01, -2.1186, 2.62, 0.25, 3],
+    [53.56, -1780.07, 0.2562, 2.75, 2.0, 1],
+    [240.83, -1695.55, 1.8046, 1.25, 0.25, 3],
+    [1128.95, -1660.87, 2.4343, 4.5, 1.5, 2],
+    [1022.04, -1792.84, -0.6543, 2.31, 0.25, 3],
+    [1048.48, -1753.44, 2.4281, 2.19, 0.25, 3],
+    [264.53, -1942.69, -3.0319, 1.88, 0.25, 3],
+    [1024.95, -1766.36, 0.9669, 3.8, 2.538754922477881, 2],
+    [443.89, -1660.66, 1.2558, 2.5, 2.0, 1],
+    [114.75, -2007.5, 1.8359, 9.62, 0.25, 3]
+  ]
+}

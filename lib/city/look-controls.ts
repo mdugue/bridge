@@ -13,7 +13,9 @@ export type SceneLookKey =
   | "fogAmount"
   | "groundDetail"
   | "heightFog"
+  | "horizonShade"
   | "meadowNdvi"
+  | "skyView"
   | "urbanGreen"
   | "waterMist";
 /** Rows the shared clay material applies (visual-style.ts). */
@@ -209,7 +211,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "building-dusk-glow",
     label: "Abendlicht",
     description:
-      "Warmes Licht in öffentlichen und gewerblichen Bauten zur Dämmerung",
+      "Warmes Licht in öffentlichen Bauten und Ladenfronten zur Dämmerung",
     group: "buildings",
     initial: 0.5,
     snapshotKey: "duskGlowPct",
@@ -249,7 +251,7 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     id: "ground-detail",
     label: "Bodendetail",
     description:
-      "Bordsteine, Rasenkanten, Stellplätze und Beläge (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap) aus der Nähe",
+      "Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen, Kleingartenbeete und Beläge (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap) aus der Nähe",
     group: "vegetation",
     initial: 0.7,
     snapshotKey: "groundDetailPct",
@@ -319,6 +321,29 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     group: "rendering",
     initial: 0.5,
     snapshotKey: "contactPct",
+  },
+  {
+    key: "skyView",
+    id: "sky-view",
+    label: "Himmelslicht",
+    description:
+      "Enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen (Himmelssichtfaktor aus Gelände und Gebäuden)",
+    group: "rendering",
+    // Conservative until judged on GPU plates (plan 033): half the
+    // physical darkening, so SSAO does not stack into dirt.
+    initial: 0.5,
+    snapshotKey: "skyViewPct",
+  },
+  {
+    key: "horizonShade",
+    id: "horizon-shade",
+    label: "Ferne Schatten",
+    description:
+      "Schatten jenseits der Schattenkarte: ferne Gebäude und Hänge bei tiefer Sonne, in der Ferne auch die Nachbarhäuser (gebackener Horizont)",
+    group: "rendering",
+    // Below full strength until judged on GPU plates (plan 033).
+    initial: 0.8,
+    snapshotKey: "horizonShadePct",
   },
   {
     key: "grain",

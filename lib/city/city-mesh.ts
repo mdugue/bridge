@@ -13,6 +13,53 @@ import type { FootprintPoly } from "./minimap";
 
 export type Rgb = [number, number, number];
 
+/**
+ * What OSM knows about a CityObject, keyed by its id
+ * (`pipeline/bake/osm_buildings.py` → `data/dlm/osmbuild_<tile>.json`).
+ */
+export type OsmBuildingLut = Record<
+  string,
+  { heritage?: number; shop?: number } | undefined
+>;
+
+/** A shop or a place to eat on the ground floor (column `flags`). */
+export const OBJECT_FLAG_SHOP = 1;
+/** A listed building, OSM `heritage=*` (column `flags`). */
+export const OBJECT_FLAG_HERITAGE = 2;
+
+/** The `flags` value of one object: its OSM facts summed as bits. */
+export function objectFlags(entry?: {
+  heritage?: number;
+  shop?: number;
+}): number {
+  return (
+    (entry?.shop ? OBJECT_FLAG_SHOP : 0) +
+    (entry?.heritage ? OBJECT_FLAG_HERITAGE : 0)
+  );
+}
+
+/**
+ * The `flags` of an object with its root Building's: the object's own facts
+ * or the root's. osm_buildings.py marks the root of every part it finds a
+ * shop or a listing on, and a Saxon LoD2 Building with parts has no
+ * geometry of its own — so its flags show only through its parts (like its
+ * attributes, `inheritedAttributes`).
+ */
+export function inheritedFlags(
+  own?: { heritage?: number; shop?: number },
+  root?: { heritage?: number; shop?: number }
+): number {
+  return objectFlags({
+    shop: (own?.shop ?? 0) + (root?.shop ?? 0),
+    heritage: (own?.heritage ?? 0) + (root?.heritage ?? 0),
+  });
+}
+
+/** Whether `flags` carries `bit` (one of the OBJECT_FLAG_* powers of two). */
+export function hasObjectFlag(flags: number, bit: number): boolean {
+  return Math.floor(flags / bit) % 2 === 1;
+}
+
 /** One CityJSON object as the bake describes it. */
 export interface CityObjectRow {
   /** lowest vertex elevation (m, data-frame Z) — the building's own base */
@@ -21,6 +68,8 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
+  /** OBJECT_FLAG_SHOP + OBJECT_FLAG_HERITAGE, from OSM (0 = neither) */
+  flags: number;
   /** GroundSurface footprints (EPSG), for the minimap */
   footprints: [number, number][][];
   /** 1 = warm dusk glow (commerce/public/special), 0 = housing */
@@ -33,11 +82,18 @@ export interface CityObjectRow {
   root: number;
   /** signed roughness jitter [-1, 1] */
   rough: number;
+  /** where the object comes from (column `source`): OBJECT_SOURCE_* */
+  source?: number;
   /** storey height (m) for the contour bands */
   storeyH: number;
   /** wall colour (linear RGB) */
   tint: Rgb;
 }
+
+/** An object of the LoD2 CityJSON (column `source`, the default). */
+export const OBJECT_SOURCE_LOD2 = 0;
+/** A small structure from the laser scan (pipeline/bake/small_buildings.py). */
+export const OBJECT_SOURCE_SCAN = 1;
 
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {
@@ -45,11 +101,13 @@ export interface CityObjectTable {
   building: Uint8Array;
   count: number;
   eaveH: Float32Array;
+  flags: Uint8Array;
   glow: Uint8Array;
   night: Uint8Array;
   roof: Float32Array;
   root: Uint32Array;
   rough: Float32Array;
+  source: Uint8Array;
   storeyH: Float32Array;
   tint: Float32Array;
 }
@@ -62,11 +120,13 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     baseZ: new Float32Array(count),
     building: new Uint8Array(count),
     eaveH: new Float32Array(count),
+    flags: new Uint8Array(count),
     glow: new Uint8Array(count),
     night: new Uint8Array(count),
     roof: new Float32Array(count * 3),
     root: new Uint32Array(count),
     rough: new Float32Array(count),
+    source: new Uint8Array(count),
     storeyH: new Float32Array(count),
     tint: new Float32Array(count * 3),
   };
@@ -74,11 +134,13 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
     table.baseZ[i] = r.baseZ;
     table.building[i] = r.building ? 1 : 0;
     table.eaveH[i] = r.eaveH;
+    table.flags[i] = r.flags;
     table.glow[i] = r.glow;
     table.night[i] = r.night;
     table.roof.set(r.roof, i * 3);
     table.root[i] = r.root;
     table.rough[i] = r.rough;
+    table.source[i] = r.source ?? OBJECT_SOURCE_LOD2;
     table.storeyH[i] = r.storeyH;
     table.tint.set(r.tint, i * 3);
   });
@@ -87,7 +149,11 @@ export function objectTable(rows: readonly CityObjectRow[]): CityObjectTable {
 
 /** Objects per texel row of the packed table (a WebGL2-safe edge). */
 export const OBJECT_TEXTURE_WIDTH = 1024;
-/** RGBA texels per object: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough, night). */
+/**
+ * RGBA texels per object: (tint, baseZ) (roof, eaveH) (storeyH, glow, rough,
+ * flags + 4·night) — the OSM flags in the low two bits, the night-light kind
+ * (building-tint.ts `NightLight`) above them.
+ */
 export const OBJECT_TEXEL_BANDS = 3;
 
 /** Rows of one band: the texture is `OBJECT_TEXTURE_WIDTH × bandRows·3`. */
@@ -112,7 +178,12 @@ export function packObjectTexels(table: CityObjectTable): Float32Array {
       band + at
     );
     out.set(
-      [table.storeyH[i], table.glow[i], table.rough[i], table.night[i]],
+      [
+        table.storeyH[i],
+        table.glow[i],
+        table.rough[i],
+        table.flags[i] + 4 * table.night[i],
+      ],
       2 * band + at
     );
   }
