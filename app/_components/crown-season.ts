@@ -18,7 +18,7 @@ import {
   SEASON_JITTER_DAYS,
   seasonAt,
 } from "@/lib/city/tree-season";
-import { disposeMaterial, sceneShared } from "./three-utils";
+import { sceneShared } from "./three-utils";
 
 /**
  * The year in the crowns (lib/city/tree-season.ts in the scene): per crown
@@ -276,8 +276,8 @@ export function crownWarmup(
     main: [stand(materials.bare), stand(materials.leafy)],
     depth: [stand(seasonal), stand(plain)],
     dispose: () => {
-      disposeMaterial(materials.bare);
-      disposeMaterial(materials.leafy);
+      materials.bare.dispose();
+      materials.leafy.dispose();
       plain.dispose();
       view.dispose();
       geometry.dispose();

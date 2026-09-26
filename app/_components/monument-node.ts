@@ -35,7 +35,11 @@ import {
   WATER_COLOR,
   WATER_GLOW,
 } from "./monument-layer";
-import { onNodeSceneEnd } from "./node-shared";
+import {
+  disposeSharedMaterial,
+  onNodeSceneEnd,
+  shareMaterial,
+} from "./node-shared";
 
 /**
  * SPIKE (plan 020): the fountain materials of monument-layer.ts in TSL, term
@@ -44,7 +48,7 @@ import { onNodeSceneEnd } from "./node-shared";
  * the basin water's crossing swells and glow (`animateWater`), the
  * sculpture's uplight from the basin (`uplight`). Clock and night factor are
  * the shared `FOUNTAIN_UNIFORMS` refs (`setFountainTime`/`setFountainNight`).
- * Height fog is the scene's fog node. Shared by every tile (userData.shared),
+ * Height fog is the scene's fog node. Shared by every tile (shareMaterial),
  * as the tree materials are, so no tile translates its own graphs.
  */
 
@@ -61,7 +65,7 @@ let sharedAlpha: Texture | null = null;
 onNodeSceneEnd(() => {
   if (shared) {
     for (const m of [shared.clay, shared.litClay, shared.water, shared.spray]) {
-      m.dispose();
+      disposeSharedMaterial(m);
     }
   }
   sharedAlpha?.dispose();
@@ -189,7 +193,7 @@ export function nodeMonumentMaterials(
       spray: sprayMaterial((sharedAlpha = makeAlpha())),
     };
     for (const m of [shared.clay, shared.litClay, shared.water, shared.spray]) {
-      m.userData.shared = true;
+      shareMaterial(m);
     }
   }
   return shared;

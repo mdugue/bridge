@@ -262,8 +262,8 @@ class raster where they name one file (phones) and one NDVI texture,
 through `shared-rasters.ts` like the sky view. The dressing plugin reports
 a terrain level's raster bytes and its dressing's geometry through
 `calculateBytesUsed` and recounts the tile when the dressing lands.
-Demolish writes the live triangles into the index it has (the tail
-degenerate), so no buffer waits for the GC on either renderer. On the node
+Demolish writes the live triangles into the index it has and ends the
+draw range with them, so no buffer waits for the GC on either renderer. On the node
 path the terrain's detail passes are an ordered table (`terrain-node.ts`
 `GROUND_PASSES`), and the crowns are one material per scene
 (`vegetation-node.ts`). Still open: the baked nodes' material spec rows

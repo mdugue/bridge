@@ -49,7 +49,11 @@ import {
   type NodeBuilder,
 } from "three/webgpu";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
-import { onNodeSceneEnd } from "./node-shared";
+import {
+  disposeSharedMaterial,
+  onNodeSceneEnd,
+  shareMaterial,
+} from "./node-shared";
 import {
   BARE_EPS,
   CROWN_BASE_COLOR,
@@ -95,9 +99,11 @@ const trunkShared = new Map<number, MeshStandardMaterial>();
 let hedgeShared: MeshStandardMaterial | null = null;
 onNodeSceneEnd(() => {
   for (const m of [...crownShared.values(), ...trunkShared.values()]) {
-    m.dispose();
+    disposeSharedMaterial(m);
   }
-  hedgeShared?.dispose();
+  if (hedgeShared) {
+    disposeSharedMaterial(hedgeShared);
+  }
   crownShared.clear();
   trunkShared.clear();
   hedgeShared = null;
@@ -262,8 +268,9 @@ export function createNodeCrownMaterial(
   if (cached) {
     return cached;
   }
-  const m = new CrownNodeMaterial({ color: CROWN_BASE_COLOR, roughness: 1 });
-  m.userData.shared = true;
+  const m = shareMaterial(
+    new CrownNodeMaterial({ color: CROWN_BASE_COLOR, roughness: 1 })
+  );
   const season = bare ? crownSeason() : null;
   const sunDir = uniform(new Vector3(0, 1, 0)).onRenderUpdate(() => sun ?? UP);
   const uTime = live((r) => r.uTime);
@@ -366,8 +373,9 @@ export function createNodeTrunkMaterial(
   if (cached) {
     return cached;
   }
-  const m = new MeshStandardNodeMaterial({ color: 0x8a_7c_68, roughness: 1 });
-  m.userData.shared = true;
+  const m = shareMaterial(
+    new MeshStandardNodeMaterial({ color: 0x8a_7c_68, roughness: 1 })
+  );
   const t = clamp(positionGeometry.y.div(trunkHeight), 0, 1);
   m.colorNode = materialColor.rgb.mul(mix(0.74, 1.05, smoothstep(0, 0.6, t)));
   // reason: spike — see createNodeCrownMaterial.
@@ -379,8 +387,9 @@ export function createNodeTrunkMaterial(
 /** The hedge material, shared like the crowns. */
 export function nodeHedgeMaterial(): MeshStandardMaterial {
   if (!hedgeShared) {
-    const m = new MeshStandardNodeMaterial({ color: 0x55_6b_3e, roughness: 1 });
-    m.userData.shared = true;
+    const m = shareMaterial(
+      new MeshStandardNodeMaterial({ color: 0x55_6b_3e, roughness: 1 })
+    );
     hedgeShared = m as unknown as MeshStandardMaterial;
   }
   return hedgeShared;

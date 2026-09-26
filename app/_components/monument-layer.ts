@@ -670,7 +670,7 @@ export function buildMonuments(
     group.children.map((c) => (c as Mesh).material as Material)
   );
   for (const m of [mat.clay, mat.litClay, mat.water, mat.spray]) {
-    if (!(used.has(m) || m.userData.shared)) {
+    if (!used.has(m)) {
       m.dispose();
     }
   }

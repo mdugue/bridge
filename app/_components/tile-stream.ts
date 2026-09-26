@@ -51,6 +51,7 @@ import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { nodeRenderer } from "./gpu-mode";
+import { isSharedMaterial } from "./node-shared";
 import { timed } from "./perf-mark";
 import { shareInstancing } from "./shared-instancing";
 import type { CompilePass } from "./post-stack";
@@ -944,15 +945,15 @@ export class DressingPlugin {
       textures?: Texture[] | null;
     };
   }): void {
-    // Runs before the renderer frees the tile's materials and textures: keep
-    // the shared ones (userData.shared) and their textures out of those
-    // lists, they serve every tile. (A dressing hung under the content
-    // before the renderer collected it would otherwise be in them.)
+    // Runs before the renderer frees the tile's materials and textures (a
+    // dressing hung under the content before the renderer collected it is
+    // in those lists). A scene-owned material ignores the dispose
+    // (node-shared.ts shareMaterial), but the textures it binds would go:
+    // keep them out of the list, they serve every tile.
     const data = tile.engineData;
-    if (data?.materials) {
-      const shared = data.materials.filter((m) => m.userData.shared);
-      data.materials = data.materials.filter((m) => !m.userData.shared);
-      if (shared.length > 0 && data.textures) {
+    if (data?.materials && data.textures) {
+      const shared = data.materials.filter(isSharedMaterial);
+      if (shared.length > 0) {
         const kept = new Set(shared.flatMap(materialTextures));
         data.textures = data.textures.filter((t) => !kept.has(t));
       }

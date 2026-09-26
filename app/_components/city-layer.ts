@@ -154,19 +154,21 @@ export function dressCity(
       return;
     }
     // In place: the index only ever shrinks, so the live triangles fit its
-    // own buffer and the rest becomes degenerate (vertex 0 thrice: nothing
-    // drawn, nothing hit). A new attribute per demolish left the old GPU
-    // buffer to the garbage collector on either renderer — three frees only
-    // a geometry's current index.
+    // own buffer; the draw range ends with them (the BVH and the census
+    // read it too), and the tail is zeroed, degenerate should anything read
+    // past it. A new attribute per demolish left the old GPU buffer to the
+    // garbage collector on either renderer — three frees only a geometry's
+    // current index.
+    const array = index.array as Uint16Array | Uint32Array;
     const live = liveTriangles(
-      index.array,
+      array.subarray(0, Math.min(array.length, geometry.drawRange.count)),
       featureIds.array,
       (i) => alive[i] === 1
     );
-    const array = index.array as Uint16Array | Uint32Array;
     array.set(live);
     array.fill(0, live.length);
     index.needsUpdate = true;
+    geometry.setDrawRange(0, live.length);
     geometry.disposeBoundsTree();
     // BVHs make per-frame collision rays (and demolish picks) cheap.
     geometry.computeBoundsTree();

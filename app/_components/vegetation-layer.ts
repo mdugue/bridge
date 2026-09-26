@@ -62,7 +62,6 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { isAbortError } from "./fetch-optional";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { disposeMaterial } from "./three-utils";
 
 /**
  * Veto on a row or canopy tree at EPSG (x, y) with its measured height `h`
@@ -1083,8 +1082,8 @@ function buildTrees(
   // which frees what its meshes wear) would miss it: free both when the
   // tile's first mesh goes. A second dispose of the same material is a no-op.
   meshes[0]?.addEventListener("dispose", () => {
-    disposeMaterial(crownMats.leafy);
-    disposeMaterial(crownMats.bare);
+    crownMats.leafy.dispose();
+    crownMats.bare.dispose();
   });
   return { chunks, meshes, seasons };
 }

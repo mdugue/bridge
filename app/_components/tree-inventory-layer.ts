@@ -51,7 +51,6 @@ import {
   type VegetationContext,
   type VegetationControl,
 } from "./vegetation-layer";
-import { disposeMaterial } from "./three-utils";
 
 /**
  * Tree inventory layer: the Dresden street-tree cadastre
@@ -559,8 +558,8 @@ export function buildTreeInventory(
     // As in the canopy (vegetation-layer.ts buildTrees): a crown material
     // may be on no mesh, so both go with the layer's first mesh.
     cells[0]?.cheap.addEventListener("dispose", () => {
-      disposeMaterial(crownMats?.leafy);
-      disposeMaterial(crownMats?.bare);
+      crownMats?.leafy.dispose();
+      crownMats?.bare.dispose();
     });
   }
 

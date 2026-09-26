@@ -253,9 +253,16 @@ where they read the same file and one NDVI texture, and the tile cache
 counts what it did not see before: the rasters bound as uniforms and the
 dressing. With those in the count the cache's phone budget (120–180 MB)
 bounds what lingers, which it did not while a fine tile's rasters alone
-could exceed it. The merge of main also silently removed the shared-
-material check from `disposeMaterial` (dead on main, live here): restored
-with its test.
+could exceed it.
+
+The merge of main also removed the `userData.shared` check from
+`disposeMaterial`, rightly for main, where nothing set the flag any more;
+this branch's scene-wide node materials relied on it, and no test failed.
+Rather than put the check back into a generic helper (and two more places
+that read the flag), the owner now guards them: `node-shared.ts`
+`shareMaterial` makes a scene-owned material's `dispose()` a no-op, so no
+tile teardown — ours or the tile renderer's own — frees it, and
+`disposeSharedMaterial` frees it for real when the last app goes.
 
 Also tried and dropped: one shared terrain / water / clay material with
 the per-tile textures bound per draw via `onObjectUpdate`. The per-object

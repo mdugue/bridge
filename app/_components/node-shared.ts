@@ -34,27 +34,61 @@ export function retainNodeScene(): () => void {
   };
 }
 
-const materials = new Map<string, { dispose: () => void; userData: object }>();
+/** The real `dispose` of each scene-owned material (shareMaterial). */
+const owned = new WeakMap<object, () => void>();
+
+/**
+ * Hands a material to the scene: its own `dispose()` becomes a no-op, so
+ * no tile's teardown frees what every tile wears — neither ours
+ * (three-utils.ts `disposeObject3D`) nor the tile renderer's, which frees
+ * a tile's materials itself. Disposing one would drop the render state of
+ * every object still wearing it, and they would all rebuild at once. Only
+ * `disposeSharedMaterial` frees it, when the last app goes.
+ */
+export function shareMaterial<T extends { dispose: () => void }>(
+  material: T
+): T {
+  if (!owned.has(material)) {
+    owned.set(material, material.dispose.bind(material));
+    material.dispose = () => undefined;
+  }
+  return material;
+}
+
+/** True for a material the scene owns (shareMaterial). */
+export function isSharedMaterial(material: object): boolean {
+  return owned.has(material);
+}
+
+/** Frees a scene-owned material for real (at the scene's end). */
+export function disposeSharedMaterial(material: { dispose: () => void }): void {
+  const dispose = owned.get(material);
+  owned.delete(material);
+  (dispose ?? material.dispose.bind(material))();
+}
+
+const materials = new Map<string, { dispose: () => void }>();
 onNodeSceneEnd(() => {
   for (const material of materials.values()) {
-    material.dispose();
+    disposeSharedMaterial(material);
   }
   materials.clear();
 });
 
 /**
- * A node material every tile shares, made on first use (`userData.shared`,
- * so no tile's dispose frees it), freed with the last app. For materials
+ * A node material every tile shares, made on first use and owned by the
+ * scene (shareMaterial: no tile's dispose frees it), freed with the last
+ * app. For materials
  * that carry no per-tile state: three keys a node graph by its nodes' ids,
  * so a copy per tile would be translated anew for each.
  */
-export function sharedNodeMaterial<
-  T extends { dispose: () => void; userData: Record<string, unknown> },
->(key: string, make: () => T): T {
+export function sharedNodeMaterial<T extends { dispose: () => void }>(
+  key: string,
+  make: () => T
+): T {
   let material = materials.get(key) as T | undefined;
   if (!material) {
-    material = make();
-    material.userData.shared = true;
+    material = shareMaterial(make());
     materials.set(key, material);
   }
   return material;

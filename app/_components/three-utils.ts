@@ -57,25 +57,14 @@ export function depthMaterialStandIns(root: Object3D): Group | null {
   return group.children.length > 0 ? group : null;
 }
 
-/**
- * Disposes a material unless it is shared (`userData.shared`: on the node
- * renderer the crowns, trunks, hedges and the other materials every tile
- * wears — node-shared.ts; the WebGL path sets it nowhere). Disposing a
- * shared node material would drop the render state of every object still
- * wearing it, and all of them would rebuild at once.
- */
-export function disposeMaterial(
-  material: Material | Material[] | undefined
-): void {
+function disposeMaterial(material: Material | Material[] | undefined): void {
   if (Array.isArray(material)) {
     for (const m of material) {
       disposeMaterial(m);
     }
     return;
   }
-  if (material && !material.userData.shared) {
-    material.dispose();
-  }
+  material?.dispose();
 }
 
 /**
