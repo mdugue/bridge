@@ -352,26 +352,6 @@ export interface RiversideFeature {
   } | null;
 }
 
-/** A label's class: a main road (trunk to tertiary), any other named way,
- *  a bridge (the DLM deck's name), a square. */
-export type NameClass = "bridge" | "main" | "minor" | "square";
-
-/**
- * Street names (pipeline/bake/names.py, OSM ODbL; bridge names Basis-DLM).
- * A `label` is the stretch of line one name is lettered along (straight
- * within 20°, as long as the name needs), with `name` and its class `c`;
- * a `way` is a named street's line cut at the tile edge — what the on-foot
- * caption looks up.
- */
-export interface NameFeature {
-  geometry: LineGeometry;
-  properties: {
-    c?: NameClass;
-    k: "label" | "way";
-    name: string;
-  } | null;
-}
-
 /** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
 export interface RailFeature {
   geometry: LineGeometry;

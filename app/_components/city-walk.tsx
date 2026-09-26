@@ -47,7 +47,6 @@ import {
   createCityWalkApp,
 } from "./create-app";
 import type { MovementMode } from "./fps-movement";
-import { StreetCaption } from "./street-caption";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { useLiveMode } from "./live-mode";
@@ -555,23 +554,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 last layer has landed and it has been readable for a moment. */}
             <StreamPill busy={streamingMore} stages={stages} />
 
-            {/* Under the pill, one column: the street's name, then a stream
-                error — stacked, so neither covers the other. */}
-            <div className="pointer-events-none absolute top-13 left-1/2 z-10 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-center gap-1">
-              <StreetCaption
-                handleRef={handleRef}
-                mode={mode}
-                subscribePose={subscribePose}
-              />
-              {streamError && (
-                <output
-                  aria-live="polite"
-                  className="rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
-                >
-                  Eine Schicht konnte nicht geladen werden: {streamError}
-                </output>
-              )}
-            </div>
+            {streamError && (
+              <output
+                aria-live="polite"
+                className="pointer-events-none absolute top-15 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
+              >
+                Eine Schicht konnte nicht geladen werden: {streamError}
+              </output>
+            )}
 
             <LocateMessage message={hud.message} />
 

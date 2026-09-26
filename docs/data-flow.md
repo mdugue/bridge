@@ -58,7 +58,6 @@ flowchart LR
     RAIL["Railway tracks"]
     TRAM["Trams<br/>tracks · masts · contact wire"]
     RIV["Elbe landing stages<br/>piers · pontoons · groynes · ferry lines"]
-    NAMES["Street names<br/>lettering from the air · caption on foot"]
     SND["Sound (hidden, opt-in)<br/>hour bells · footsteps · river · birds"]
     BRG["Bridges"]
     PLT["Station platforms"]
@@ -144,9 +143,6 @@ flowchart LR
   OSM ==>|"man_made=pier / groyne · route=ferry"| RIV
   DLM -. "water class → pontoon · ferry cut to the water" .-> RIV
   DGM -. "pier deck from the bank · pontoon on the drawn water" .-> RIV
-  OSM ==>|"highway name · named squares"| NAMES
-  DLM -. "bridge names" .-> NAMES
-  DGM -. "lettering on the ground" .-> NAMES
   OSM ==>|"churches · bell towers · paving · tram tracks"| SND
   CJ -. "tower tip + height" .-> SND
   DLM -. "water · green · roads" .-> SND
@@ -201,7 +197,6 @@ flowchart LR
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Trams** | OSM `railway=tram` (each track), `power=catenary_mast` (the masts within 15 m of a tram track), the OSM building outlines (facades for the rosette spans), `railway=tram_stop` + the platforms (the stop signs) | DLM class raster (street vs lawn vs ballast bed) · DOP NDVI (lawn bed) · DGM1 (drape) · the bridge decks (a track tagged `bridge` rides the deck) | `tram-layer.ts`, `lib/city/tram.ts` (wire stations and sag); baked by `pipeline/bake/tram.py` |
 | **Elbe landing stages** | OSM `man_made=pier` (fixed or `floating`), `man_made=groyne`, `route=ferry` | DLM water class (a pontoon and a ferry line cut to the water) · DGM1 (a pier's deck from the bank; a pontoon floats on the terrain the water sheet lies on) | `riverside-layer.ts`, `map-overlay.ts` (the ferry lines show from the air only); baked by `pipeline/bake/riverside.py` |
-| **Street names** | OSM `highway=*` `name` (merged per name; label windows + the named ways), named `place=square` / pedestrian areas | Basis-DLM bridge names (`NAM`, via the bridge file) · DGM1 (the ribbons lie on the ground) · the page's font (Canvas 2D, at runtime) | `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`, `map-overlay.ts`; baked by `pipeline/bake/names.py` |
 | **Sound** (hidden, opt-in: L or *Klang*) | OSM churches and bell towers at the tip and height the LoD2 measures (`soundmarks_<t>.geojson`) — the hour bells | Basis-DLM class raster (water, green, roads) · the sky-view factor · the OSM paving raster (footsteps) · OSM tram tracks · the fountains · the loaded trees · sun and date | `app/_components/soundscape/`, `soundscape-toggle.tsx`, `lib/city/soundscape.ts`; baked by `pipeline/bake/soundmarks.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment height + piers) **+** DOM1 (deck surface) · OSM `bridge:structure` (arches) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Station platforms** | OSM `railway=platform` (Geofabrik extract) | DGM1 (ground-clamp) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
@@ -264,7 +259,6 @@ flowchart LR
     bCULT["cultivated.py"]
     bTRAM["tram.py"]
     bRIV["riverside.py"]
-    bNAM["names.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -288,7 +282,6 @@ flowchart LR
     dCULT["cultivated GeoJSON + colony PNG"]
     dTRAM["tram"]
     dRIV["riverside"]
-    dNAM["names"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -350,9 +343,6 @@ flowchart LR
   dCLS ==>|water| bRIV
   iDGM -. "pier decks" .-> bRIV
   bRIV ==> dRIV
-  iOSM ==> bNAM
-  dRAIL -. "bridge names" .-> bNAM
-  bNAM ==> dNAM
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
@@ -373,7 +363,6 @@ flowchart LR
   dSPT -.-> tSIDE
   dTRAM -.-> tSIDE
   dRIV -.-> tSIDE
-  dNAM -.-> tSIDE
   dEDGE -. "kerb stones (L0)" .-> tTER
   dWALL -. "fences and gate leaves (L0)" .-> tTER
 ```

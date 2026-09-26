@@ -56,11 +56,6 @@ und Mauern an. Beim Fliegen gibt es keine Kollision; nur sinken kannst du
 nicht tiefer als bis auf Augenhöhe über dem Boden. Jede Eingabe bricht
 einen laufenden Gleitflug ab.
 
-Beim Gehen nennt eine kleine Beschriftung oben die Straße, auf der du
-bist (die nächste benannte Straße im Umkreis von 25 m); im Flug
-verschwindet sie — ab etwa 25 m Höhe stehen die Namen dann wie auf einer
-Karte auf dem Boden —, ebenso im immersiven Modus.
-
 Unten rechts liegt die **Werkzeugleiste**; jeder Knopf trägt seinen Namen
 unter dem Symbol. Mit dem ⌄ darunter klappst du sie zu einem kleinen Knopf
 ein, der Browser merkt sich das; ein grüner Punkt darauf zeigt, dass *Live*

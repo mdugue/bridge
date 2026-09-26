@@ -336,8 +336,7 @@ visual-variable codebook is in
   rather than inside the water shader (no line table; same look, one
   draw), and, the STOP's conservative fallback taken without a GPU plate,
   **only from the air**: it fades in with the camera's height over the
-  ground from 25 to 60 m (`map-overlay.ts`, shared with the street
-  lettering). The paddle steamers themselves are not drawn: no dataset
+  ground from 25 to 60 m (`map-overlay.ts`). The paddle steamers themselves are not drawn: no dataset
   has them. Look unverified on a real GPU.
 - **Streaming site (3D Tiles)** — `scripts/prepare-data.ts` bakes the site
   into an OGC 3D Tiles 1.1 tileset (`lib/city/tileset.ts`): per site tile the
@@ -1057,53 +1056,6 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   | 33412_5656 | 51 | 11.34 | 0.98 | 1.90 | 16 | 7 | 27 | 2 | 23 |
   | 33412_5658 | 9 | 5.66 | 0 | 1.19 | 0 | 0 | 17 | 0 | 11 |
 
-### Names
-- **Street lettering** (plan [032](./plans/032-street-names.md), phase
-  1) — OSM `highway=*` ways with a `name` (not `service`, not
-  `footway=sidewalk`; 2 920 named ways over the four first tiles) + the DLM
-  bridge names (`bridge_<tile>` `name`) + named `place=square` /
-  pedestrian areas (≥ 400 m²) (ODbL) → `pipeline/bake/names.py` →
-  `names_<tile>.geojson`. Every name with a way within 50 m of the tile is
-  merged whole, from all its ways in the extract (`line_merge`, unclipped:
-  clipped to the tile + 50 m, as first built, the windows moved with the
-  tile and 55 names were lettered on both sides of a seam < 200 m apart —
-  Paul-Scholze-Weg 3 m; none since 2026-09-26); anchors along its straightest
-  stretches — a window of `len(name) × 4.2 m + 20 m` turning less than 20°,
-  one per 450 m, the straightest nearest the middle of its share, none
-  within 200 m of the same name's last (the other carriageway, a fragment)
-  — each written by the tile owning its middle; a square's own streets are
-  not lettered again; bridges and squares get a straight label across
-  their long axis. Labels per tile: 122 / 126 / 116 / 94 (33412_5656,
-  33410_5656, 33410_5658, 33412_5658; 138 / 135 / 122 / 105 before the
-  whole-street merge), 1 489 over the fifteen tiles (1 640 before). Runtime `name-layer.ts`: no new
-  dependency — **Canvas 2D in the page's own font** (Inter, via
-  next/font's `--font-sans`, awaited with `document.fonts.load`), so
-  umlauts, ß and shaping come from the browser; one atlas per tile, 2048
-  wide and only as tall as its rows (32 px type, 44 px rows, shelf-packed;
-  WebGL 2 mips a non-power-of-two canvas), each name drawn once in the
-  contour lines' ink a shade deeper (rgb 122 130 145) with a soft pale
-  halo, at 0.8 opacity; the atlas texture is freed with the
-  tile (`NameLayer.dispose`, tracked in the GPU-memory counter). Each label
-  a ribbon lying on the ground along its line (4 m samples, 20 cm over the
-  TIN, turned to read west → east), letters 4 m tall (main roads and
-  squares 6 m, bridges 5 m); unlit, `depthWrite: false`, `polygonOffset`,
-  height fog, never casting; **opacity by the camera's height over the
-  ground** — none below 25 m, full from 60 m (`map-overlay.ts`, the one
-  uniform the ferry lines share). The plan's aliasing STOP could not be
-  judged without a GPU: the conservative end is built in — the minor
-  roads' names fade out between 200 and 250 m, leaving the main roads,
-  bridges and squares; an atlas that would outgrow 2048 × 2048 drops the
-  minor roads first (none does: see the plan's notes). Look unverified on
-  a real GPU (plates at 80, 200 and 500 m are open).
-- **Street caption** (phase 2) — the same file's `k: way` lines (every
-  named street cut at the tile edge, simplified to 1 m): on foot, the HUD
-  names the nearest named way within 25 m of the pose stream (10 Hz,
-  `lib/city/names.ts` `nearestName` over the loaded tiles,
-  `CityWalkHandle.streetNameAt`), as a small pill under the top edge
-  (`street-caption.tsx`, `aria-live="polite"`, changed only when the name
-  changes); hidden in fly mode and while the pointer is locked (immersive
-  mode). The street-name *signs* stay out: OSM maps almost none.
-
 ### Walls and fences
 - **Walls** (*Brühlsche Terrasse &c.*) — OSM `barrier=retaining_wall|city_wall|
   wall` + `man_made=embankment` + `natural=cliff` (kind `cliff`, default 3 m;
@@ -1470,12 +1422,13 @@ research that produced them):
     species and season (025 — built, GPU plates open), road markings (026), shop glow and
     heritage from OSM on the buildings (027: ✅ above; the era is 🗃️), allotments, orchards and
     vineyards (028), fences and gates (029: ✅ above), more street furniture (030),
-    Elbe landing stages, groynes and ferries (031), street names (032),
+    Elbe landing stages, groynes and ferries (031), street names (032 —
+    built, then removed: 🗃️ below),
     sky-view factor and a baked horizon map (033), small structures from
     DOM − LoD2 (034), a hidden soundscape (035). Built since (✅ above,
     looks unverified on a GPU): 024 (Trams), 026 (Road markings), 028
     (Cultivated land), 030 (Signs and fixtures), 031 (Landing stages,
-    groynes, ferries), 032 (Names), 033 (Sky-view factor, Horizon shade),
+    groynes, ferries), 033 (Sky-view factor, Horizon shade),
     034 (Small structures from the laser scan), 035 (Sound — unheard).
 
 ---
@@ -1484,6 +1437,7 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four first tiles, measured 2026-09-25 (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |

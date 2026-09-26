@@ -76,12 +76,12 @@ def owns(bounds: tuple[float, float, float, float], x: float, y: float) -> bool:
 
 def read_layer(
     path: Path,
-    bbox: tuple[float, float, float, float] | None,
+    bbox: tuple[float, float, float, float],
     where: str | None = None,
     columns: list[str] | None = None,
     layer: str | None = None,
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Features intersecting `bbox` (not clipped; None: all) as shapely geometries plus
+    """Features intersecting `bbox` (not clipped) as shapely geometries plus
     their attribute columns. Missing file → nothing."""
     if not path.exists():
         return np.array([], dtype=object), {}

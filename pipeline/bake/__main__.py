@@ -16,7 +16,6 @@ from . import (
     lowveg,
     markings,
     monuments,
-    names,
     ndvi,
     osm_buildings,
     rail,
@@ -42,8 +41,8 @@ STEPS = {
     "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,
     "osm-buildings": osm_buildings.run,
-    # Before the furniture (it keeps benches off the bridge decks), the tram
-    # and the names (the bridge names), lowveg and small-buildings (masks).
+    # Before the furniture (it keeps benches off the bridge decks), the tram,
+    # lowveg and small-buildings (masks).
     "rail": rail.run,
     "lamps": lamps.run,
     "monuments": monuments.run,
@@ -59,8 +58,6 @@ STEPS = {
     # that already has a shelter).
     "tram": tram.run,
     "riverside": riverside.run,
-    # After rail (the bridge names).
-    "names": names.run,
     # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
     "skyview": skyview.run,
     # OSM churches + the committed LoD2/DGM: the bell towers the hidden

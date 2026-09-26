@@ -54,11 +54,6 @@ buildings and walls. While flying there is no collision; only sinking
 stops at eye height above the ground. Any input cancels
 a glide that is in progress.
 
-While you walk, a small caption at the top names the street you are on
-(the nearest named street within 25 m); it hides while you fly — from
-about 25 m up the names appear on the ground instead, as on a map — and in
-immersive mode.
-
 Bottom right sits the **toolbar**; each button carries its name under the
 icon. The ⌄ below it folds it into one small button, which the browser
 remembers; a green dot on it says *Live* is still on.

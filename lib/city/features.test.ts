@@ -12,7 +12,6 @@ import type {
   LampFeature,
   LowVegFeature,
   MonumentFeature,
-  NameFeature,
   RailFeature,
   RiversideFeature,
   SoundmarkFeature,
@@ -505,23 +504,6 @@ test.each(cases)(
         if (p.bank) {
           expect(isPoint2(p.bank)).toBe(true);
         }
-      }
-    }
-  }
-);
-
-test.each(cases)(
-  "%s: street names are lettered labels and named ways",
-  (_, a) => {
-    for (const f of load<NameFeature>(a.names)) {
-      const p = f.properties;
-      expect(f.geometry.type).toBe("LineString");
-      expect(isLine(f.geometry.coordinates)).toBe(true);
-      expect(typeof p?.name).toBe("string");
-      expect((p?.name ?? "").length).toBeGreaterThan(0);
-      expect(["label", "way"]).toContain(p?.k ?? "");
-      if (p?.k === "label") {
-        expect(["bridge", "main", "minor", "square"]).toContain(p.c ?? "");
       }
     }
   }

@@ -119,8 +119,7 @@ config change.
     terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
     vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
     stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
-    lines), `name-layer.ts` (street names lettered on the ground) and
-    `map-overlay.ts` (fades those map marks in with height),
+    lines) and `map-overlay.ts` (fades the ferry lines in with height),
     `shader-chunks.ts` (data-frame positions from world space)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
     factor on the ambient light, the far horizon on the sun; its raster
@@ -141,8 +140,7 @@ config change.
     labelled group) and
     `device-orientation.ts` (the one orientation-event adapter both use);
     the math is `lib/city/geolocation.ts`
-  - HUD widgets: `minimap.tsx`, `street-caption.tsx` (on foot, the name
-    of the street underfoot); `three-utils.ts` (dispose helpers)
+  - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
   - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
     key; no AudioContext before it) and `soundscape/` (`engine.ts`,
     `hearing.ts`, `voices.ts`: loaded by dynamic import on the first
@@ -159,7 +157,7 @@ config change.
   (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
   per-building clay tint, storey height, roof palette), `small-buildings.ts`
   (the scan's sheds as boxes; the canopy points they veto), `markings.ts`,
-  `cultivated.ts`, `tram.ts`, `names.ts` and `skyview.ts` (the pure halves
+  `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
   of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
   mix and its boot-side half), `site.ts` (the
   site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
@@ -179,7 +177,7 @@ config change.
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
   `rail.py`, `surface.py`, `edges.py`, `sport.py`, `markings.py`,
   `cultivated.py`, `skyview.py`, `osm_buildings.py` (shops and heritage
-  per LoD2 object), `tram.py`, `riverside.py`, `names.py`, `soundmarks.py`
+  per LoD2 object), `tram.py`, `riverside.py`, `soundmarks.py`
   (the bell towers), `osm.py`; `ingest_sn.py` is Saxony's
   download adapter; tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
