@@ -1,6 +1,24 @@
 import type { Box3, Camera, Scene } from "three";
 import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
+import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
+import {
+  cameraPosition,
+  dot,
+  Fn,
+  float,
+  max,
+  min,
+  mix,
+  normalize,
+  positionWorld,
+  smoothstep,
+  uniform,
+  vec3,
+  vec4,
+} from "three/tsl";
+import type { Node } from "three/webgpu";
+import { nodeRenderer } from "./gpu-mode";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import {
   fitShadowRadius,
@@ -57,7 +75,74 @@ export interface SunRig {
 
 const SUN_INTENSITY = 2.4;
 
-function createSkyDome(scene: Scene): Sky {
+/** The two sky domes' shared surface: the GLSL `Sky` or (spike) the TSL `SkyMesh`. */
+interface SkyDome {
+  setHaze: (fog: Color | string | number) => void;
+  setSun: (x: number, y: number, z: number) => void;
+  setTime: (seconds: number) => void;
+}
+
+/**
+ * SPIKE (plan 020): the TSL twin of Sky.js, same knobs; its clouds read TSL
+ * `time`. The GLSL dome's horizon haze and tempering wrap SkyMesh's colour
+ * node here (the same terms as the fragment patch in createSkyDome). The one
+ * term not carried over is the clouds' raised horizon fade: it sits inside
+ * SkyMesh's colour Fn, out of reach without copying the whole node; the haze
+ * band covers most of the region it would clear.
+ */
+function createNodeSkyDome(scene: Scene): SkyDome {
+  const sky = new SkyMesh();
+  sky.scale.setScalar(4500);
+  // Travels with the camera, as createSkyDome's does (see there).
+  sky.frustumCulled = false;
+  sky.onBeforeRender = (_renderer, _scene, camera) => {
+    sky.position.setFromMatrixPosition(camera.matrixWorld);
+    sky.updateMatrixWorld();
+  };
+  sky.turbidity.value = 4.5;
+  sky.rayleigh.value = 1.6;
+  sky.mieCoefficient.value = 0.0025;
+  sky.mieDirectionalG.value = 0.82;
+  sky.cloudCoverage.value = 0.3;
+  sky.cloudDensity.value = 0.3;
+  sky.cloudSpeed.value = 0.0001;
+  const hazeColor = uniform(new Color(0xdf_e7_ee));
+  // reason: SkyMesh builds its colour node in the constructor.
+  const inner = sky.material.colorNode as Node<"vec4">;
+  sky.material.colorNode = Fn(() => {
+    const raw = inner.rgb;
+    const luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
+    const tempered = mix(vec3(luma), raw, 0.8).mul(0.7);
+    const l = luma.mul(0.7);
+    const over = max(l.sub(0.45), 0);
+    const shouldered = tempered.mul(
+      min(l, 0.45)
+        .add(over.div(over.mul(1.5).add(1)))
+        .div(max(l, 1e-4))
+    );
+    const direction = normalize(positionWorld.sub(cameraPosition));
+    const band = float(1).sub(smoothstep(-0.03, 0.28, direction.y));
+    const hazed = mix(
+      shouldered,
+      hazeColor,
+      band.mul(band).mul(float(3).sub(band.mul(2)))
+    );
+    return vec4(hazed, 1);
+  })();
+  scene.add(sky);
+  return {
+    setHaze: (fog) => {
+      hazeColor.value.set(fog);
+    },
+    setSun: (x, y, z) => sky.sunPosition.value.set(x, y, z),
+    setTime: () => undefined,
+  };
+}
+
+function createSkyDome(scene: Scene): SkyDome {
+  if (nodeRenderer()) {
+    return createNodeSkyDome(scene);
+  }
   const sky = new Sky();
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
@@ -126,7 +211,16 @@ function createSkyDome(scene: Scene): Sky {
 			gl_FragColor = vec4( texColor, 1.0 );`
     );
   scene.add(sky);
-  return sky;
+  return {
+    setHaze: (fog) => {
+      (u.uHazeColor.value as Color).set(fog);
+    },
+    setSun: (x, y, z) =>
+      (sky.material.uniforms.sunPosition.value as Vector3).set(x, y, z),
+    setTime: (seconds) => {
+      sky.material.uniforms.time.value = seconds;
+    },
+  };
 }
 
 /**
@@ -303,16 +397,12 @@ export function createSunRig(
       (0.45 + 0.6 * Math.max(dir.y, 0)) * (1 - 0.75 * nightFactor);
 
     // Sky dome follows the same sun; fog + fill colors follow the palette.
-    (sky.material.uniforms.sunPosition.value as Vector3).set(
-      dir.x,
-      dir.y,
-      dir.z
-    );
+    sky.setSun(dir.x, dir.y, dir.z);
     const palette = atmosphereAt(altitudeDeg);
     if (scene.fog instanceof Fog) {
       scene.fog.color.set(palette.fog);
     }
-    (sky.material.uniforms.uHazeColor.value as Color).set(palette.fog);
+    sky.setHaze(palette.fog);
     if (scene.background instanceof Color) {
       scene.background.set(palette.fog);
     }
@@ -323,7 +413,7 @@ export function createSunRig(
   };
 
   const setTime = (seconds: number) => {
-    sky.material.uniforms.time.value = seconds;
+    sky.setTime(seconds);
   };
 
   const invalidateShadow = () => {

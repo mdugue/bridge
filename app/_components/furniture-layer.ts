@@ -9,6 +9,7 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
+  InstancedBufferAttribute,
   InstancedMesh,
   Matrix4,
   Mesh,
@@ -37,6 +38,23 @@ import {
 } from "@/lib/city/furniture";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
+import {
+  attribute,
+  cos,
+  diffuseColor,
+  materialEmissive,
+  mod,
+  positionGeometry,
+  positionLocal,
+  select,
+  sin,
+  uniform,
+  vec2,
+  vec3,
+} from "three/tsl";
+import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
+import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 
 /**
@@ -671,6 +689,9 @@ const HAND_VERTEX = `
 `;
 
 function handMaterial(ctx: FurnitureContext): MeshBasicMaterial {
+  if (nodeRenderer()) {
+    return sharedNodeMaterial("clock-hands", nodeHandMaterial);
+  }
   const m = new MeshBasicMaterial({ color: new Color(INK), side: DoubleSide });
   const { heightFog } = ctx;
   m.onBeforeCompile = (sh) => {
@@ -687,17 +708,72 @@ ${sh.vertexShader.replace("#include <begin_vertex>", HAND_VERTEX)}`;
   return m;
 }
 
+/** The live clock and dusk, read by the node materials each render. */
+const clockMinutes = () =>
+  uniform(0).onRenderUpdate(() => FURNITURE_UNIFORMS.uClockMinutes.value);
+const furnitureNight = () =>
+  uniform(0).onRenderUpdate(() => FURNITURE_UNIFORMS.uFurnitureNight.value);
+
+/**
+ * SPIKE (plan 020): the hands of HAND_VERTEX as a node material. The GLSL
+ * turns the model-space `position` about its pivot before the instance
+ * matrix; a node material sees positions after it (positionLocal is
+ * instanced), so the turn is taken on `positionGeometry` and its offset
+ * carried into the instance's frame by the instance's yaw (`handYaw`, see
+ * addHandYaw) — the clocks' instances are a yaw and a translation only, so
+ * that is the same point. The height fog is the scene's fog node.
+ */
+function nodeHandMaterial(): MeshBasicMaterial {
+  const m = new MeshBasicNodeMaterial({ color: INK, side: DoubleSide });
+  const minutes = clockMinutes();
+  const kind = attribute<"float">("handKind", "float");
+  const side = attribute<"float">("faceSide", "float");
+  const pivot = attribute<"vec3">("handPivot", "vec3").xy;
+  const turn = select(
+    kind.lessThan(0.5),
+    minutes.div(720),
+    mod(minutes, 60).div(60)
+  ).mul(6.283_185_3);
+  // clockwise as seen from the face's own side
+  const a = turn.negate().mul(side);
+  const rel = positionGeometry.xy.sub(pivot);
+  const turned = pivot.add(
+    vec2(
+      cos(a).mul(rel.x).sub(sin(a).mul(rel.y)),
+      sin(a).mul(rel.x).add(cos(a).mul(rel.y))
+    )
+  );
+  const d = turned.sub(positionGeometry.xy);
+  // A +Y turn by the yaw: (x, y, 0) → (x cos, y, −x sin).
+  const yaw = attribute<"vec2">("handYaw", "vec2");
+  m.positionNode = positionLocal.add(
+    vec3(d.x.mul(yaw.x), d.y, d.x.mul(yaw.y).negate())
+  );
+  // reason: spike — the mesh only holds it; nothing reads its members.
+  return m as unknown as MeshBasicMaterial;
+}
+
+/** Each hand instance's yaw as (cos, sin), for nodeHandMaterial. */
+function addHandYaw(geometry: BufferGeometry, stood: Stood[]): void {
+  const data = new Float32Array(stood.length * 2);
+  for (let i = 0; i < stood.length; i++) {
+    data[i * 2] = Math.cos(stood[i].piece.yaw);
+    data[i * 2 + 1] = Math.sin(stood[i].piece.yaw);
+  }
+  geometry.setAttribute("handYaw", new InstancedBufferAttribute(data, 2));
+}
+
 /** The hands of every clock of one model, on the clocks' own instances. */
 function clockHands(
   model: "clock" | "wallClock",
   stood: Stood[],
   ctx: FurnitureContext
 ): InstancedMesh {
-  const mesh = new InstancedMesh(
-    handGeometry(model),
-    handMaterial(ctx),
-    stood.length
-  );
+  const geometry = handGeometry(model);
+  if (nodeRenderer()) {
+    addHandYaw(geometry, stood);
+  }
+  const mesh = new InstancedMesh(geometry, handMaterial(ctx), stood.length);
   const m = new Matrix4();
   const q = new Quaternion();
   const one = new Vector3(1, 1, 1);
@@ -872,6 +948,9 @@ function liftAt(areas: FurnitureArea[], x: number, y: number): number {
 
 /** The furniture material, glowing softly at dusk (the lit columns). */
 function glowMaterial(ctx: FurnitureContext): MeshStandardMaterial {
+  if (nodeRenderer()) {
+    return sharedNodeMaterial("furniture-glow", nodeGlowMaterial);
+  }
   const material = furnitureMaterial(ctx);
   const { heightFog } = ctx;
   material.onBeforeCompile = (sh) => {
@@ -886,6 +965,24 @@ ${sh.fragmentShader.replace(
     }
   };
   return material;
+}
+
+/**
+ * SPIKE (plan 020): glowMaterial as a node material — the same dusk glow,
+ * the diffuse colour (vertex colours in) × night × 0.55 added to the
+ * emissive. The height fog is the scene's fog node.
+ */
+function nodeGlowMaterial(): MeshStandardMaterial {
+  const material = new MeshStandardNodeMaterial({
+    vertexColors: true,
+    roughness: 0.92,
+    metalness: 0,
+  });
+  material.emissiveNode = materialEmissive.add(
+    diffuseColor.rgb.mul(furnitureNight()).mul(0.55)
+  );
+  // reason: spike — the mesh only holds it; nothing reads its members.
+  return material as unknown as MeshStandardMaterial;
 }
 
 function furnitureMaterial(

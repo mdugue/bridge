@@ -1,3 +1,6 @@
+import { smoothstep, uniform } from "three/tsl";
+import type { Node } from "three/webgpu";
+
 /**
  * The map's own marks in the scene — the ferry lines on the Elbe
  * (riverside-layer.ts) — show only from the air: faded in with the
@@ -25,3 +28,14 @@ float mapFade() {
 	return smoothstep( ${MAP_FADE_M.from.toFixed(1)}, ${MAP_FADE_M.to.toFixed(1)}, uMapAltitude );
 }
 `;
+
+/**
+ * TSL: the same fade for the node renderer (gpu-mode.ts) — a uniform that
+ * follows the shared altitude each render, through the same smoothstep.
+ */
+export function mapFadeNode(): Node<"float"> {
+  const altitude = uniform(0).onRenderUpdate(
+    () => MAP_OVERLAY_UNIFORMS.uMapAltitude.value
+  );
+  return smoothstep(MAP_FADE_M.from, MAP_FADE_M.to, altitude);
+}

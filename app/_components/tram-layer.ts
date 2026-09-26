@@ -34,7 +34,30 @@ import {
   wireDrop,
   wireStations,
 } from "@/lib/city/tram";
+import {
+  attribute,
+  cameraProjectionMatrix,
+  cameraWorldMatrix,
+  clamp,
+  cross,
+  float,
+  length,
+  materialOpacity,
+  max,
+  modelViewMatrix,
+  modelWorldMatrixInverse,
+  positionGeometry,
+  select,
+  smoothstep,
+  varying,
+  vec3,
+  vec4,
+  viewportSize,
+} from "three/tsl";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 import { buildFurniture } from "./furniture-layer";
+import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import {
   addRail,
@@ -212,6 +235,55 @@ ${sh.fragmentShader.replace(
   return m;
 }
 
+/**
+ * SPIKE (plan 020): wireMaterial as a node material, term for term
+ * WIRE_VERTEX: the centre and direction to view space, the across vector
+ * (normal to the wire and the view ray), metres per pixel at the depth from
+ * the projection's [1][1] and the target's height (`viewportSize`, what the
+ * GLSL's onBeforeRender reads from the current viewport), the width floor,
+ * the coverage alpha and the distance fade. `positionNode` is local, so the
+ * widened view-space point goes back through the camera's world matrix and
+ * the model's inverse — the same vertex, and positionView stays true for
+ * the scene's fog node (the height fog). The alpha is computed per vertex
+ * and interpolated, as `vWireAlpha` is.
+ */
+function nodeWireMaterial(): MeshBasicMaterial {
+  const m = new MeshBasicNodeMaterial({
+    color: WIRE_COLOR,
+    transparent: true,
+    depthWrite: false,
+  });
+  const dir = attribute<"vec3">("wireDir", "vec3");
+  const side = attribute<"float">("wireSide", "float");
+  const half = attribute<"float">("wireHalf", "float");
+  const centre = modelViewMatrix.mul(vec4(positionGeometry, 1)).xyz;
+  const dirV = modelViewMatrix.mul(vec4(dir, 0)).xyz;
+  const acrossRaw = cross(dirV, centre);
+  const len = length(acrossRaw);
+  const across = select(
+    len.greaterThan(1e-6),
+    acrossRaw.div(len),
+    vec3(1, 0, 0)
+  );
+  const depth = max(centre.z.negate(), 0.05);
+  // metres per pixel at this depth; projection [1][1] as its column 1's y
+  const p11 = cameraProjectionMatrix.mul(vec4(0, 1, 0, 0)).y;
+  const px = depth.mul(2).div(p11.mul(viewportSize.y));
+  const truePx = half.mul(2).div(px);
+  const drawnHalf = max(half, px.mul(0.5 * WIRE_MIN_PX));
+  const fade = smoothstep(WIRE_FADE.near, WIRE_FADE.far, depth);
+  const alpha = clamp(truePx.div(WIRE_MIN_PX), 0.2, 1)
+    .mul(WIRE_OPACITY)
+    .mul(float(1).sub(fade));
+  const widened = centre.add(across.mul(drawnHalf).mul(side));
+  m.positionNode = modelWorldMatrixInverse.mul(
+    cameraWorldMatrix.mul(vec4(widened, 1))
+  ).xyz;
+  m.opacityNode = materialOpacity.mul(varying(alpha));
+  // reason: spike — the mesh only holds it; nothing reads its members.
+  return m as unknown as MeshBasicMaterial;
+}
+
 const viewport = new Vector4();
 
 function wireMesh(w: Wires, heightFog?: HeightFogUniforms): Mesh | null {
@@ -230,10 +302,19 @@ function wireMesh(w: Wires, heightFog?: HeightFogUniforms): Mesh | null {
     uWireMinPx: { value: WIRE_MIN_PX },
     uWireFade: { value: [WIRE_FADE.near, WIRE_FADE.far] },
   };
-  const mesh = new Mesh(g, wireMaterial(uniforms, heightFog));
+  const node = nodeRenderer();
+  const mesh = new Mesh(
+    g,
+    node
+      ? sharedNodeMaterial("tram-wire", nodeWireMaterial)
+      : wireMaterial(uniforms, heightFog)
+  );
   mesh.name = "tram-wires";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
+  if (node) {
+    return mesh; // the target's height is a node (viewportSize)
+  }
   // The pixel floor needs the height of the target being drawn into (the
   // post stack's scene target, at the drawing-buffer size).
   mesh.onBeforeRender = (renderer: WebGLRenderer) => {

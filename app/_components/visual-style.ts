@@ -6,8 +6,14 @@ import {
   type LookValues,
 } from "@/lib/city/look-controls";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { nodeRenderer } from "./gpu-mode";
 import { DATA_POSITION } from "./shader-chunks";
 import { CLAY_SKY_AO, CLAY_SKY_DECL, openSkyTexture } from "./sky-light";
+import type { ClaySkyNodes } from "./sky-light-node";
+import {
+  createNodeClayMaterial,
+  createNodeClayUniforms,
+} from "./visual-style-node";
 
 /**
  * The city is rendered in one style: archviz clay — opaque, cheap, and the
@@ -299,19 +305,37 @@ export function createStyleResources(
   skyView?: { value: number }
 ): StyleResources {
   // Booted at the table defaults; applyCityLook retunes them live.
-  const clayDetail: ClayDetailUniforms = {
-    uAO: { value: LOOK_DEFAULTS.groundShade },
-    uBands: { value: LOOK_DEFAULTS.bands },
-    uRim: { value: LOOK_DEFAULTS.rim },
-    uTint: { value: LOOK_DEFAULTS.tint },
-    uRoofTint: { value: LOOK_DEFAULTS.roofTint },
-    uRoofVibrance: { value: LOOK_DEFAULTS.roofVibrance },
-    uEave: { value: LOOK_DEFAULTS.eave },
-    uDuskGlow: { value: LOOK_DEFAULTS.duskGlow },
-    uNight: night ?? { value: 0 },
-    uRough: { value: LOOK_DEFAULTS.roughness },
-    uSkyView: skyView ?? { value: LOOK_DEFAULTS.skyView },
-  };
+  const clayDetail: ClayDetailUniforms = nodeRenderer()
+    ? createNodeClayUniforms(
+        {
+          uAO: LOOK_DEFAULTS.groundShade,
+          uBands: LOOK_DEFAULTS.bands,
+          uDuskGlow: LOOK_DEFAULTS.duskGlow,
+          uEave: LOOK_DEFAULTS.eave,
+          uNight: 0,
+          uRim: LOOK_DEFAULTS.rim,
+          uRoofTint: LOOK_DEFAULTS.roofTint,
+          uRoofVibrance: LOOK_DEFAULTS.roofVibrance,
+          uRough: LOOK_DEFAULTS.roughness,
+          uSkyView: LOOK_DEFAULTS.skyView,
+          uTint: LOOK_DEFAULTS.tint,
+        },
+        night,
+        skyView
+      )
+    : {
+        uAO: { value: LOOK_DEFAULTS.groundShade },
+        uBands: { value: LOOK_DEFAULTS.bands },
+        uRim: { value: LOOK_DEFAULTS.rim },
+        uTint: { value: LOOK_DEFAULTS.tint },
+        uRoofTint: { value: LOOK_DEFAULTS.roofTint },
+        uRoofVibrance: { value: LOOK_DEFAULTS.roofVibrance },
+        uEave: { value: LOOK_DEFAULTS.eave },
+        uDuskGlow: { value: LOOK_DEFAULTS.duskGlow },
+        uNight: night ?? { value: 0 },
+        uRough: { value: LOOK_DEFAULTS.roughness },
+        uSkyView: skyView ?? { value: LOOK_DEFAULTS.skyView },
+      };
   return {
     clayDetail,
     heightFog,
@@ -328,18 +352,29 @@ export function createClayMaterial(
   resources: StyleResources,
   objects: { rows: number; texture: DataTexture }
 ): MeshStandardMaterial {
-  const clay = new MeshStandardMaterial({
-    color: 0xec_e7_df,
-    roughness: 1,
-    metalness: 0,
-  });
-  const sky: ClaySkyUniforms = {
-    uSvf: { value: openSkyTexture() },
-    uSvfOrigin: { value: [0, 0] },
-    uSvfSize: { value: [1, 1] },
-  };
-  clay.userData.sky = sky;
-  addClayDetail(clay, resources.clayDetail, objects, sky, resources.heightFog);
+  let clay: MeshStandardMaterial;
+  if (nodeRenderer()) {
+    clay = createNodeClayMaterial(resources, objects);
+  } else {
+    clay = new MeshStandardMaterial({
+      color: 0xec_e7_df,
+      roughness: 1,
+      metalness: 0,
+    });
+    const sky: ClaySkyUniforms = {
+      uSvf: { value: openSkyTexture() },
+      uSvfOrigin: { value: [0, 0] },
+      uSvfSize: { value: [1, 1] },
+    };
+    clay.userData.sky = sky;
+    addClayDetail(
+      clay,
+      resources.clayDetail,
+      objects,
+      sky,
+      resources.heightFog
+    );
+  }
   applyTransparency(clay, resources.transparency);
   resources.materials.add(clay);
   clay.addEventListener("dispose", () => resources.materials.delete(clay));
@@ -358,6 +393,11 @@ export function setClaySkyView(
   origin: [number, number],
   size: [number, number]
 ): void {
+  const nodes = clay.userData.skyNodes as ClaySkyNodes | undefined;
+  if (nodes) {
+    nodes.set(texture, origin, size);
+    return;
+  }
   const sky = clay.userData.sky as ClaySkyUniforms | undefined;
   if (!sky) {
     return;

@@ -13,6 +13,13 @@ import {
   Quaternion,
   Vector3,
 } from "three";
+import { nodeRenderer } from "./gpu-mode";
+import {
+  createNodeCrownMaterial,
+  createNodeTrunkMaterial,
+  nodeCrownRefs,
+  nodeHedgeMaterial,
+} from "./vegetation-node";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
@@ -575,6 +582,10 @@ export function buildCrownMaterial(
   heightFog?: HeightFogUniforms,
   bare = false
 ): MeshStandardMaterial {
+  if (nodeRenderer()) {
+    // The node crowns read the scene's shared refs (crownLookRefs).
+    return createNodeCrownMaterial(sunDirection, bare);
+  }
   const m = new MeshStandardMaterial({ color: CROWN_BASE_COLOR, roughness: 1 });
   // The closure branches on `heightFog` and `bare`; three keys programs on
   // the closure's text, so the branches have to be named (see
@@ -765,6 +776,9 @@ export function buildTrunkGeo(): BufferGeometry {
 export function buildTrunkMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
+  if (nodeRenderer()) {
+    return createNodeTrunkMaterial(TRUNK_H);
+  }
   const m = new MeshStandardMaterial({ color: 0x8a_7c_68, roughness: 1 });
   m.customProgramCacheKey = () => `trunk-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
@@ -957,6 +971,29 @@ function buildTreeCell(
 
 /** The crown's live uniforms (by reference), shared by every crown material
  *  of a tile. */
+/**
+ * A tile's crown look refs and wind clock (by reference: applyLook and
+ * setTime write them, the crown shader reads them). The clock is advanced
+ * once per frame by the render loop (same elapsed seconds as the water
+ * ripple). On the node renderer every tile shares one set
+ * (vegetation-node.ts `nodeCrownRefs`), as it shares the crown materials:
+ * a shared material cannot follow one tile's refs.
+ */
+export function crownLookRefs(): CrownLookRefs {
+  if (nodeRenderer()) {
+    return nodeCrownRefs();
+  }
+  return {
+    shimmer: { value: LOOK_DEFAULTS.shimmer },
+    translucency: { value: LOOK_DEFAULTS.translucency },
+    leafFlutter: { value: LOOK_DEFAULTS.leafFlutter },
+    leafBright: { value: LOOK_DEFAULTS.leafBright },
+    uTime: { value: 0 },
+  };
+}
+
+export type CrownLookRefs = Omit<CrownUniforms, "sunDirection">;
+
 export interface CrownUniforms {
   leafBright: { value: number };
   leafFlutter: { value: number };
@@ -1057,8 +1094,10 @@ function buildHedges(
 ): InstancedMesh[] {
   const geo = new BoxGeometry(HEDGE_W, HEDGE_H, HEDGE_W * 1.4);
   geo.translate(0, HEDGE_H / 2, 0);
-  const mat = new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
-  if (heightFog) {
+  const mat = nodeRenderer()
+    ? nodeHedgeMaterial()
+    : new MeshStandardMaterial({ color: 0x55_6b_3e, roughness: 1 });
+  if (heightFog && !nodeRenderer()) {
     mat.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
   }
   const meshes: InstancedMesh[] = [];
@@ -1156,10 +1195,8 @@ export function buildVegetation(
   group.name = "vegetation";
 
   // Booted at the table defaults; the caller applies the current look next.
-  const shimmer = { value: LOOK_DEFAULTS.shimmer };
-  const translucency = { value: LOOK_DEFAULTS.translucency };
-  const leafFlutter = { value: LOOK_DEFAULTS.leafFlutter };
-  const leafBright = { value: LOOK_DEFAULTS.leafBright };
+  const { shimmer, translucency, leafFlutter, leafBright, uTime } =
+    crownLookRefs();
   // The crown uniform each vegetation row drives — a Record over the keys, so
   // a row added to the table cannot go unapplied.
   const rowUniform: Record<VegetationLookKey, { value: number }> = {
@@ -1168,10 +1205,6 @@ export function buildVegetation(
     shimmer,
     translucency,
   };
-  // By-reference clock for the crown wind sway; advanced once per frame by the
-  // render loop (same elapsed seconds as the water ripple). One uniform write
-  // per tile per frame.
-  const uTime = { value: 0 };
   const sunDirection = ctx.sunDirection ?? new Vector3(0, 1, 0);
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   let chunks: VegetationChunk[] = [];

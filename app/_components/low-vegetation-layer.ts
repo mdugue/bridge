@@ -11,6 +11,24 @@ import {
 import type { LowVegFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import {
+  dot,
+  float,
+  floor,
+  fract,
+  materialColor,
+  mix,
+  positionGeometry,
+  positionWorld,
+  sin,
+  smoothstep,
+  varying,
+  vec2,
+  vec3,
+} from "three/tsl";
+import { MeshStandardNodeMaterial, type Node } from "three/webgpu";
+import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import { bucketByCell, hash } from "./vegetation-layer";
 import { clamp } from "@/lib/city/math";
@@ -156,6 +174,9 @@ export function buildHedgeGeo(): BufferGeometry {
 function buildHedgeMaterial(
   heightFog?: HeightFogUniforms
 ): MeshStandardMaterial {
+  if (nodeRenderer()) {
+    return sharedNodeMaterial("low-hedge", nodeHedgeMaterial);
+  }
   const m = new MeshStandardMaterial({ color: 0xff_ff_ff, roughness: 1 });
   m.customProgramCacheKey = () => `lowveg-hedge-${heightFog !== undefined}`;
   m.onBeforeCompile = (sh) => {
@@ -208,6 +229,48 @@ function buildHedgeMaterial(
     }
   };
   return m;
+}
+
+/** lvHash / lvNoise of the GLSL patch: smoothed value noise on a hash
+ *  lattice. */
+function lvNoise(p: Node<"vec2">): Node<"float"> {
+  const h = (q: Node<"vec2">) =>
+    fract(sin(dot(q, vec2(127.1, 311.7))).mul(43_758.5453));
+  const i = floor(p);
+  const f = fract(p);
+  const u = f.mul(f).mul(float(3).sub(f.mul(2)));
+  return mix(
+    mix(h(i), h(i.add(vec2(1, 0))), u.x),
+    mix(h(i.add(vec2(0, 1))), h(i.add(vec2(1, 1))), u.x),
+    u.y
+  );
+}
+
+/**
+ * SPIKE (plan 020): buildHedgeMaterial as a node material, term for term —
+ * the rooted base from the unit geometry's own Y (`positionGeometry`, before
+ * the instance scale, as the GLSL's `position.y`), the world-space foliage
+ * mottle and its yellow lean. three multiplies the instance tint in after
+ * `colorNode`, as the GLSL's colour pass does after the map chunk; every term
+ * here scales the colour, so the order does not matter. The height fog is
+ * the scene's fog node. Shared by every tile (sharedNodeMaterial).
+ */
+function nodeHedgeMaterial(): MeshStandardMaterial {
+  const m = new MeshStandardNodeMaterial({ color: 0xff_ff_ff, roughness: 1 });
+  const lowY = varying(positionGeometry.y);
+  let col: Node<"vec3"> = materialColor.rgb.mul(
+    mix(0.8, 1.05, smoothstep(0, 0.7, lowY))
+  );
+  const wp = positionWorld;
+  const lvUV = wp.xz.add(wp.y.mul(vec2(0.63, -0.41)));
+  const lvM = lvNoise(lvUV.mul(2.6))
+    .mul(0.6)
+    .add(lvNoise(lvUV.mul(0.75).add(7.1)).mul(0.4));
+  col = col.mul(lvM.mul(0.34).add(0.82));
+  col = mix(col, col.mul(vec3(1.08, 1.06, 0.86)), smoothstep(0.55, 0.9, lvM));
+  m.colorNode = col;
+  // reason: spike — the chunks only hold it; nothing reads its members.
+  return m as unknown as MeshStandardMaterial;
 }
 
 /** Hedges read a touch deeper and cooler than crowns. */

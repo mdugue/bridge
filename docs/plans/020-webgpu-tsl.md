@@ -170,6 +170,100 @@ that time is spread over every frame), and more, smaller tiles would add
 objects. Next steps for Phase 1: prime the shadow pass (compile against
 the shadow camera and map), or ask upstream.
 
+**First-visit stalls, found and fixed (2026-09-26).** The long stalls
+that came only on the first flight into unseen parts of the city (the
+same flight again was smooth) had three causes in three r186, all in the
+first frame that drew a new object — and the shadow pass above was where
+most of them landed:
+
+1. **Instanced WGSL depended on the instance count.** Under the uniform
+   buffer limit three reads an `InstancedMesh`'s matrices from a uniform
+   array whose length is written into the shader (`Instance.js`), so every
+   vegetation cell, lamp or monument group with a new instance count was a
+   new shader module and a new render pipeline, compiled blocking. A
+   headless probe (`?gpu=webgl2&scene=lite&block=1`, five hops) counted 82
+   new programs and 82 blocking pipelines on the first hop, 3 on the same
+   hop again.
+2. **Pipelines were created blocking** wherever `compileAsync` had not
+   reached — and it does not reach the shadow pass, nor anything hidden or
+   off screen when it ran (it culls like a frame).
+3. **Every instanced mesh is its own node build** (three keys the build by
+   the mesh's uuid), in the main pass and again in the shadow pass, so a
+   representative per material primed one mesh of hundreds.
+
+The fix is `app/_components/node-render-guard.ts`: a uniform buffer limit
+of 0 (instancing through instance attributes — the same code for any
+count, as on WebGL), every in-frame pipeline through the async API (an
+object waits, undrawn, until its pipeline is ready; the shadow map is
+redrawn then), and a 6 ms per-frame budget for in-frame node builds. Tiles
+and dressings compile ahead with every object exposed (not culled, not
+hidden), and the node renderer compiles every part of a dressing, not a
+representative. With the guard, the same probe counted 0 new programs and
+0 blocking pipelines on every hop (37 frames instead of 10 in the first
+hop's 45 s; SwiftShader frame times say little else). Plates and frame
+times on a real GPU are still to take. `app/_components/node-probe.ts` keeps the counters on
+`window.__gpuStats` for the next probe.
+
+**Precompiling never reached the frame, and panning rebuilt the scene
+(2026-09-26).** three keys a node build by its render context
+(`RenderObject.getMaterialCacheKey` adds `context.id`), and a context by
+its target *and the call depth* it is drawn at. The scene pass is drawn
+inside the post pipeline's other draws, at a depth that depends on which
+pass asks for it first — a different one in the DoF and the plain
+pipeline — and `compileAsync` always asks for depth 0. So nothing a tile
+precompiled was the build its frame looked up, and every switch between
+the two pipelines (DoF drops while the camera moves) built every object
+again inside frames: the old spike stalled for seconds while panning
+from the air, and with the render guard the scene went missing in
+patches instead. `post-stack-node.ts` now gives the scene pass's target
+and the shadow map one context at any depth (each is drawn once per
+frame, never inside itself). In a headless boot the in-frame builds of
+scene objects went from all of them to none; what is still built in
+frames is the post stack's own passes at boot and the shadow casters. On
+the node path a tile also waits up to 12 s (not 3 s) for its compile
+before it shows, so a finer terrain level never shows as a hole.
+
+**Hundreds of builds per tile, and iPhones gave up (2026-09-26).** On an
+iPhone the node path hung at "4/5" (the neighbour tiles), closed the tab,
+or reported a tile failing with "Maximum call stack size exceeded".
+three builds every `InstancedMesh` on its own (the render object's key
+carries the mesh's uuid, as its instancing node binds that mesh's matrix
+buffer), and a tile's dressing is hundreds of instanced meshes, each
+drawn twice (main and shadow pass): hundreds of identical WGSL
+translations and pipelines per tile. `shared-instancing.ts` hands a
+mesh's matrices and colours to the build as named geometry attributes
+(`iMat0`…`iMat3`, `iColor`, views of its own arrays) and takes the uuid
+out of the key, so every mesh with the same material and layout shares
+one build; the crown's sway reads the same attributes. A headless lite
+boot went from 255 to 31 node builds. The rasters' CPU bytes are now
+released after upload on the node path too (a re-upload counter in
+`node-probe.ts` counted none on either backend). The stack overflow did
+not reproduce: WebKit on Linux has no WebGPU, and its WebGL2 path boots
+under a much smaller stack. The toast now carries the first frames of
+the failing stack on the node path, for the next report.
+
+**What a tile keeps resident (2026-09-26, after the audit of PR #67).**
+The main branch's audit listed what the port should start from; the
+memory items are done here, as iPhones kept crashing while looking
+around. A tile's painted splat was the class raster's size on both
+levels: at 4096² RGBA with mipmaps that is ~89 MB for the fine level and
+~22 MB for the coarse one (phones: 22 MB each). The coarse level now
+paints at half the edge (~5.6 MB), the two levels share one class raster
+where they read the same file and one NDVI texture, and the tile cache
+counts what it did not see before: the rasters bound as uniforms and the
+dressing. With those in the count the cache's phone budget (120–180 MB)
+bounds what lingers, which it did not while a fine tile's rasters alone
+could exceed it.
+
+The merge of main also removed the `userData.shared` check from
+`disposeMaterial`, rightly for main, where nothing set the flag any more;
+this branch's scene-wide node materials relied on it, and no test failed.
+Rather than put the check back into a generic helper (and two more places
+that read the flag), the owner now guards them: `node-shared.ts`
+`shareMaterial` makes a scene-owned material's `dispose()` a no-op, so no
+tile teardown — ours or the tile renderer's own — frees it, and
+`disposeSharedMaterial` frees it for real when the last app goes.
+
 Also tried and dropped: one shared terrain / water / clay material with
 the per-tile textures bound per draw via `onObjectUpdate`. The per-object
 textures did not reach the draws (grey ground, untinted clay), and node

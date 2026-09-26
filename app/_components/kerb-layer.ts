@@ -1,10 +1,12 @@
 import { type Mesh, MeshStandardMaterial } from "three";
+import { nodeRenderer } from "./gpu-mode";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import {
   type GroundLight,
   groundLightKey,
   injectGroundLight,
 } from "./sky-light";
+import { groundLitNodeMaterial } from "./sky-light-node";
 
 const KERB_COLOR = 0xd9_d5_cc; // pale granite, a shade above the pavement
 
@@ -22,6 +24,22 @@ export function dressKerbs(
   heightFog?: HeightFogUniforms,
   light?: GroundLight
 ): void {
+  if (nodeRenderer()) {
+    // The scene's fog node covers the height fog; the ground light takes
+    // the node material's ao and shadow slots (sky-light-node.ts).
+    mesh.material = groundLitNodeMaterial(
+      {
+        color: KERB_COLOR,
+        roughness: 0.9,
+        metalness: 0,
+      },
+      light,
+      true
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
   const material = new MeshStandardMaterial({
     color: KERB_COLOR,
     roughness: 0.9,

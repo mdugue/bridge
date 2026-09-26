@@ -3,6 +3,7 @@ import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
   type Camera,
   Group,
+  type Material,
   Matrix4,
   type Mesh,
   type MeshStandardMaterial,
@@ -49,13 +50,20 @@ import type { HeightFogUniforms } from "./height-fog";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
+import { nodeRenderer } from "./gpu-mode";
+import { isSharedMaterial } from "./node-shared";
+import { timed } from "./perf-mark";
+import { shareInstancing } from "./shared-instancing";
 import type { CompilePass } from "./post-stack";
 import { buildRail } from "./rail-layer";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
+  type ClassRaster,
   dressTerrain,
   type GroundUniforms,
+  loadNdviTexture,
+  loadSplatTexture,
   type TerrainLayer,
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
@@ -63,7 +71,7 @@ import { dressKerbs } from "./kerb-layer";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
-import { disposeObject3D } from "./three-utils";
+import { disposeObject3D, estimateGeometryBytes } from "./three-utils";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -160,6 +168,8 @@ export interface TileStream {
 interface Dressed {
   /** aborts the dressing's fetches when the tile leaves before it lands */
   aborter?: AbortController;
+  /** the dressing's geometry bytes, once it has landed (calculateBytesUsed) */
+  dressingBytes?: number;
   city?: CityLayer;
   dressing?: TileDressing;
   /** the shared sky-view raster the city holds (its URL) */
@@ -269,11 +279,21 @@ function compileRepresentatives(roots: Object3D[]): Object3D[] {
 
 /** How long a tile may wait on its compile before it shows regardless. */
 const COMPILE_WAIT_MS = 3000;
+/**
+ * The same on the node renderer, longer: there a tile shown before its
+ * compile is done builds the rest inside frames, under the render guard's
+ * budget (node-render-guard.ts), and what waits on the budget is missing
+ * from the picture meanwhile — a hole in the ground where a finer terrain
+ * level replaced a coarser one. Held back, the coarser level (or nothing
+ * new) shows instead.
+ */
+const NODE_COMPILE_WAIT_MS = 12_000;
 
 function withinCompileWait(done: Promise<void>): Promise<void> {
+  const wait = nodeRenderer() ? NODE_COMPILE_WAIT_MS : COMPILE_WAIT_MS;
   return Promise.race([
     done,
-    new Promise<void>((resolve) => setTimeout(resolve, COMPILE_WAIT_MS)),
+    new Promise<void>((resolve) => setTimeout(resolve, wait)),
   ]);
 }
 
@@ -292,6 +312,13 @@ export function catchUp(
   d.vegetation?.applyLook(ctx.look.get());
   d.vegetation?.setSeason(ctx.season());
   d.lamps?.setNightFactor(ctx.night());
+}
+
+/** The textures a material binds (its texture-valued members). */
+function materialTextures(material: Material): Texture[] {
+  return Object.values(material).filter(
+    (v): v is Texture => (v as Texture | null)?.isTexture === true
+  );
 }
 
 function disposeDressing(d: TileDressing): void {
@@ -484,23 +511,25 @@ async function buildDressing(
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
-  const vegetation = buildTileVegetation(
-    {
-      rows,
-      // The laser-scan crowns outside the canopy mask join the canopy as
-      // ordinary trees (they carry the same measured `h`); the bake already
-      // dropped the ones a cadastre tree claims.
-      canopy: offMonuments([...canopy, ...scanTrees], monuments),
-      ndviAt: ndviAt ?? undefined,
-    },
-    // Orchard trees join the cadastre as its "small" archetype.
-    [...inventory, ...orchardTrees(cultivated)],
-    {
-      offset: ctx.offset,
-      heightAt: terrain.heightAt,
-      sunDirection: ctx.sunDirection,
-      heightFog: ctx.heightFog,
-    }
+  const vegetation = timed("vegetation", () =>
+    buildTileVegetation(
+      {
+        rows,
+        // The laser-scan crowns outside the canopy mask join the canopy as
+        // ordinary trees (they carry the same measured `h`); the bake
+        // already dropped the ones a cadastre tree claims.
+        canopy: offMonuments([...canopy, ...scanTrees], monuments),
+        ndviAt: ndviAt ?? undefined,
+      },
+      // Orchard trees join the cadastre as its "small" archetype.
+      [...inventory, ...orchardTrees(cultivated)],
+      {
+        offset: ctx.offset,
+        heightAt: terrain.heightAt,
+        sunDirection: ctx.sunDirection,
+        heightFog: ctx.heightFog,
+      }
+    )
   );
   // Born with the current look and season, not the defaults.
   vegetation.applyLook(ctx.look.get());
@@ -521,21 +550,21 @@ async function buildDressing(
         ownsPoint(extent, f.geometry.coordinates[0], f.geometry.coordinates[1])
       )
     : lamps;
-  const lampControl = buildLamps(ownLamps, {
-    ...ground,
-    heightAt: terrain.heightAt,
-  });
+  const lampControl = timed("lamps", () =>
+    buildLamps(ownLamps, { ...ground, heightAt: terrain.heightAt })
+  );
   lampControl.setNightFactor(ctx.night());
-  const rail = buildRail(
-    { rails, bridges, ballast, platforms },
-    { ...ground, heightFog: ctx.heightFog }
+  const rail = timed("rail", () =>
+    buildRail(
+      { rails, bridges, ballast, platforms },
+      { ...ground, heightFog: ctx.heightFog }
+    )
   );
   // The bake writes only the monuments a tile owns; a basin that reaches
   // past the seam samples the neighbour's ground.
-  const monumentLayer = buildMonuments(monuments, {
-    ...ground,
-    heightFog: ctx.heightFog,
-  });
+  const monumentLayer = timed("monuments", () =>
+    buildMonuments(monuments, { ...ground, heightFog: ctx.heightFog })
+  );
   // Owned by the bake (west/south edges in): stood on this tile's ground.
   const furnitureGroup = buildFurniture(furniture, {
     ...ground,
@@ -607,6 +636,19 @@ export class DressingPlugin {
     (url) => loadHorizonTexture(url),
     (texture) => texture.dispose()
   );
+  /** the class rasters a tile's two levels share where they name one file */
+  readonly classes: SharedRasters<ClassRaster> = createSharedRasters(
+    (url) => loadSplatTexture(url),
+    (raster) => raster.texture.dispose()
+  );
+  /** the NDVI rasters a tile's two terrain levels share */
+  readonly ndvi: SharedRasters<Texture> = createSharedRasters(
+    (url) => loadNdviTexture(url),
+    (texture) => texture.dispose()
+  );
+  /** the tile a content root belongs to (for recalculateBytesUsed) */
+  private readonly tileOf = new WeakMap<Object3D, object>();
+  private tiles: { recalculateBytesUsed: (tile: object) => void } | null = null;
 
   constructor(
     private readonly ctx: TileStreamContext,
@@ -627,6 +669,23 @@ export class DressingPlugin {
       });
   }
 
+  init(tiles: { recalculateBytesUsed: (tile: object) => void }): void {
+    this.tiles = tiles;
+  }
+
+  /**
+   * What a tile holds beyond the renderer's own estimate (its glTF geometry
+   * and the textures on standard material slots): the terrain's rasters,
+   * bound as shader uniforms, and the dressing built after the tile landed
+   * (reported again once it has — queueDressing). The tile cache's byte
+   * budget (scene-profile.ts `tileCacheBytesFor`) then bounds what a tile
+   * really keeps resident.
+   */
+  calculateBytesUsed(_tile: object, scene: Object3D | null): number {
+    const entry = scene ? this.dressed.get(scene) : undefined;
+    return (entry?.terrain?.textureBytes ?? 0) + (entry?.dressingBytes ?? 0);
+  }
+
   private url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
@@ -639,6 +698,7 @@ export class DressingPlugin {
       return;
     }
     this.sceneOf.set(tile, scene);
+    this.tileOf.set(scene, tile);
     if (extras.kind === "city") {
       this.dressCity(scene, mesh, extras);
     } else if (extras.kind === "terrain") {
@@ -657,11 +717,8 @@ export class DressingPlugin {
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
     const demolished = this.stream.demolished.get(extras.tileId) ?? new Set();
-    const city = dressCity(
-      mesh,
-      extras.tileId,
-      this.ctx.styleResources,
-      demolished
+    const city = timed("city", () =>
+      dressCity(mesh, extras.tileId, this.ctx.styleResources, demolished)
     );
     this.stream.cities.add(city);
     const entry: Dressed = { city };
@@ -717,6 +774,8 @@ export class DressingPlugin {
       sunDirection: this.ctx.sunDirection,
       skyView: this.skyView,
       horizon: this.horizon,
+      classes: this.classes,
+      ndvi: this.ndvi,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
@@ -768,10 +827,20 @@ export class DressingPlugin {
     }
     const warmup = buildCrownWarmup(this.ctx.heightFog);
     this.warmup = warmup;
+    if (nodeRenderer()) {
+      // the stand-ins then prime the very builds the crowns share
+      for (const mesh of warmup.main) {
+        shareInstancing(mesh);
+      }
+    }
     await withinCompileWait(
       Promise.all([
         ...warmup.main.map((mesh) => this.ctx.compile(mesh)),
-        ...warmup.depth.map((mesh) => this.ctx.compile(mesh, "shadow")),
+        // The node renderer has no depth materials: a crown's shadow is its
+        // own material with the scene's shadow override (vegetation-node.ts).
+        ...(nodeRenderer()
+          ? []
+          : warmup.depth.map((mesh) => this.ctx.compile(mesh, "shadow"))),
       ]).then(() => undefined)
     );
   }
@@ -793,6 +862,8 @@ export class DressingPlugin {
     }
     this.skyView.clear();
     this.horizon.clear();
+    this.classes.clear();
+    this.ndvi.clear();
   }
 
   private queueDressing(
@@ -818,10 +889,22 @@ export class DressingPlugin {
         );
         entry.aborter = undefined;
         const parts = dressingParts(dressing);
+        // On the node renderer the instanced meshes share their builds
+        // (shared-instancing.ts); every part is still compiled, as most of
+        // them are a cache hit and whatever is hidden now (a crown tier)
+        // would otherwise build inside the frame that first shows it.
+        if (nodeRenderer()) {
+          for (const part of parts) {
+            shareInstancing(part);
+          }
+        }
+        const toCompile = nodeRenderer()
+          ? parts
+          : compileRepresentatives(parts);
         await withinCompileWait(
-          Promise.all(
-            compileRepresentatives(parts).map((o) => this.ctx.compile(o))
-          ).then(() => undefined)
+          Promise.all(toCompile.map((o) => this.ctx.compile(o))).then(
+            () => undefined
+          )
         );
         if (this.dressed.get(scene) !== entry) {
           disposeDressing(dressing);
@@ -832,6 +915,14 @@ export class DressingPlugin {
         // hangs under it and leaves with its tile.
         scene.add(...parts);
         entry.dressing = dressing;
+        entry.dressingBytes = parts.reduce(
+          (sum, part) => sum + estimateGeometryBytes(part),
+          0
+        );
+        const tile = this.tileOf.get(scene);
+        if (tile) {
+          this.tiles?.recalculateBytesUsed(tile);
+        }
         this.stream.dressings.add(dressing);
         catchUp(dressing, this.ctx);
       })
@@ -847,7 +938,26 @@ export class DressingPlugin {
       });
   }
 
-  disposeTile(tile: { engineData?: { scene?: Object3D | null } }): void {
+  disposeTile(tile: {
+    engineData?: {
+      materials?: Material[] | null;
+      scene?: Object3D | null;
+      textures?: Texture[] | null;
+    };
+  }): void {
+    // Runs before the renderer frees the tile's materials and textures (a
+    // dressing hung under the content before the renderer collected it is
+    // in those lists). A scene-owned material ignores the dispose
+    // (node-shared.ts shareMaterial), but the textures it binds would go:
+    // keep them out of the list, they serve every tile.
+    const data = tile.engineData;
+    if (data?.materials && data.textures) {
+      const shared = data.materials.filter(isSharedMaterial);
+      if (shared.length > 0) {
+        const kept = new Set(shared.flatMap(materialTextures));
+        data.textures = data.textures.filter((t) => !kept.has(t));
+      }
+    }
     const scene = tile.engineData?.scene ?? this.sceneOf.get(tile);
     this.sceneOf.delete(tile);
     if (scene) {

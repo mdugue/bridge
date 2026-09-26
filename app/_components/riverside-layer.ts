@@ -14,10 +14,24 @@ import {
   Vector3,
 } from "three";
 import type { RiversideFeature } from "@/lib/city/features";
+import {
+  attribute,
+  float,
+  fract,
+  materialOpacity,
+  smoothstep,
+} from "three/tsl";
+import { MeshBasicNodeMaterial } from "three/webgpu";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { MAP_FADE_GLSL, MAP_OVERLAY_UNIFORMS } from "./map-overlay";
+import { nodeRenderer } from "./gpu-mode";
+import { sharedNodeMaterial } from "./node-shared";
+import {
+  MAP_FADE_GLSL,
+  MAP_OVERLAY_UNIFORMS,
+  mapFadeNode,
+} from "./map-overlay";
 import {
   addFootprint,
   addRibbon,
@@ -433,14 +447,32 @@ function ferryMesh(lines: Point2[][], ctx: RiversideContext): Mesh | null {
   geo.setAttribute("wakeAlong", new Float32BufferAttribute(along, 1));
   geo.setIndex(index);
   geo.computeBoundingSphere();
-  const material = new MeshBasicMaterial({
-    color: new Color(WAKE),
-    transparent: true,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -4,
-  });
+  const mesh = new Mesh(
+    geo,
+    nodeRenderer()
+      ? sharedNodeMaterial("ferry-wake", nodeWakeMaterial)
+      : wakeMaterial(ctx)
+  );
+  mesh.name = "riverside-ferry";
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.renderOrder = 3; // over the water sheet
+  return mesh;
+}
+
+/** The wake's settings, alike on both renderers. */
+const WAKE_PARAMS = {
+  color: WAKE,
+  transparent: true,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+  polygonOffsetUnits: -4,
+} as const;
+
+/** The wake ink: dashed by `wakeAlong`, faded in from the air. */
+function wakeMaterial(ctx: RiversideContext): MeshBasicMaterial {
+  const material = new MeshBasicMaterial(WAKE_PARAMS);
   const { heightFog } = ctx;
   material.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, MAP_OVERLAY_UNIFORMS);
@@ -462,12 +494,24 @@ ${sh.fragmentShader.replace(
       injectHeightFog(sh, heightFog);
     }
   };
-  const mesh = new Mesh(geo, material);
-  mesh.name = "riverside-ferry";
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
-  mesh.renderOrder = 3; // over the water sheet
-  return mesh;
+  return material;
+}
+
+/**
+ * SPIKE (plan 020): wakeMaterial as a node material — the same dashes along
+ * `wakeAlong` and the same fade from the air (mapFadeNode); the height fog
+ * is the scene's fog node.
+ */
+function nodeWakeMaterial(): MeshBasicMaterial {
+  const material = new MeshBasicNodeMaterial(WAKE_PARAMS);
+  const along = attribute<"float">("wakeAlong", "float");
+  const dash = float(1).sub(
+    smoothstep(0.5, 0.56, fract(along.div(FERRY_DASH_M)))
+  );
+  material.opacityNode = materialOpacity.mul(dash.mul(0.55).mul(mapFadeNode()));
+  // reason: spike — the mesh only holds it; nothing reads a basic material's
+  // own members.
+  return material as unknown as MeshBasicMaterial;
 }
 
 function instancedColumns(

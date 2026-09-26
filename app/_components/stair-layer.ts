@@ -1,10 +1,12 @@
 import { DoubleSide, type Mesh, MeshStandardMaterial } from "three";
+import { nodeRenderer } from "./gpu-mode";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import {
   type GroundLight,
   groundLightKey,
   injectGroundLight,
 } from "./sky-light";
+import { groundLitNodeMaterial } from "./sky-light-node";
 
 /**
  * Flights of steps from OSM (`pipeline/bake/stairs.py`), baked with the
@@ -21,6 +23,23 @@ export function dressStairs(
   heightFog?: HeightFogUniforms,
   light?: GroundLight
 ): void {
+  if (nodeRenderer()) {
+    // The scene's fog node covers the height fog; the ground light takes
+    // the node material's ao and shadow slots (sky-light-node.ts).
+    mesh.material = groundLitNodeMaterial(
+      {
+        vertexColors: true,
+        roughness: 0.92,
+        metalness: 0,
+        side: DoubleSide,
+      },
+      light,
+      true
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
   const material = new MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.92,
