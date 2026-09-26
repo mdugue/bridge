@@ -296,8 +296,14 @@ visual-variable codebook is in
   (`markings_low_<tile>.png`, 25–36 KB; a 1.45 m core so the rows still
   resolve — none loses paint): 4 MiB of GPU memory per fine tile instead
   of 16; its lane bits are coarser (≈90 % of the cycle-lane and
-  centre-line texels agree with the 2048² raster). **Not yet judged on a
-  GPU.**
+  centre-line texels agree with the 2048² raster). **Two carriageways
+  in line** (the other sites, 2026-09-26): on Leipzig's ring and Hamburg's
+  wide streets the crossings of both carriageways touch across the median
+  and merged into one row painted over it (44 m across on Leipzig's
+  ring); a merge that would reach further across than one carriageway
+  plus a metre (`MAX_MERGED_HALF_M`, 16 m half-length) now leaves them two
+  rows. Dresden's largest merged row is 15.18 m, so its files are
+  unchanged. **Not yet judged on a GPU.**
 - **Urban green** (*Stadtgrün*) — the DLM's built-up class (4) covers
   courtyards, front gardens and parks inside the settlement alike. Where
   the DOP NDVI (upsampled, blurred) passes 0.3 on classes 0 and 4 and OSM

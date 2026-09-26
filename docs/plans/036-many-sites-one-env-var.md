@@ -217,3 +217,15 @@ reviews after phases 1–3 and at the end.
   — look once with `bun run shots` on a real GPU.
 - **Brick cities** got a per-site wall palette afterwards
   (`Site.facades: "brick"`, Hamburg).
+- **Main's #63 (trams, road markings, fences and gates, cultivated land,
+  riverside, sky view and horizon, OSM building flags, small structures,
+  soundmarks)** writes per site through the `Tile` paths; three bakes that
+  named GeoSN now credit the provider. Baked for Leipzig, Grimma, Meißen,
+  Unna, Hamburg and München (the stand-in OSM extracts as before): trams
+  in Leipzig and München, 26 ferry lines and 106 pontoons in Hamburg's
+  harbour, 15 vineyards with 890 rows on Meißen's slopes, 1 109 road
+  markings in Hamburg on the OSM class raster. Small structures need a
+  laser scan, so only Dresden has them. The other sites exposed one bake
+  flaw: two carriageways' crossings merged across a median (fixed,
+  `MAX_MERGED_HALF_M`). München builds and loads headless with no console
+  error; its footer carries the Bavarian credit and the extended OSM line.
