@@ -294,6 +294,7 @@ export const SPORT_GROUND = /* glsl */ `
       vec3 ink = spSurf == ${SURF.sand} ? vec3( 0.2, 0.33, 0.55 ) : vec3( 0.86, 0.84, 0.78 );
       float fade = 1.0 - smoothstep( 0.6, 1.6, grFw );
       baseCol = mix( baseCol, ink, clamp( l, 0.0, 1.0 ) * spIn * fade * 0.9 );
+      paperInk = max( paperInk, clamp( l, 0.0, 1.0 ) * spIn * fade * 0.9 );
     }
   }
 `;

@@ -6,6 +6,8 @@
  * every consumer follows. No THREE, no DOM (the e2e harness imports this
  * file).
  */
+import { DEFAULT_RENDER_STYLE, type RenderStyle } from "./render-style";
+
 export type LookGroup = "atmosphere" | "buildings" | "rendering" | "vegetation";
 
 /** Rows the scene itself applies: fog, the valley haze, the ground, the river mist. */
@@ -31,7 +33,7 @@ export type ClayLookKey =
   | "tint"
   | "transparency";
 /** Rows the post stack applies (post-stack.ts). */
-export type PostLookKey = "contact" | "grading" | "grain";
+export type PostLookKey = "contact" | "grading" | "grain" | "ink";
 /** Rows every vegetation tile applies (vegetation-layer.ts). */
 export type VegetationLookKey =
   | "leafBright"
@@ -76,7 +78,7 @@ export interface LookControlDef {
 /**
  * Every look value the scene renders with, as the scene consumes it: the
  * table rows as 0..1 floats (percent is only how the HUD and the snapshot
- * show them) plus the four controls that are not percent sliders.
+ * show them) plus the five controls that are not percent sliders.
  */
 export interface LookValues extends Record<LookKey, number> {
   /** photographic depth of field with crosshair autofocus */
@@ -86,6 +88,8 @@ export interface LookValues extends Record<LookKey, number> {
   focusMode: FocusMode;
   /** rich multi-tuft crown near the camera (LOD); off = cheap crown everywhere */
   multiTuft: boolean;
+  /** the picture style (render-style.ts): pastel, comic, film noir, Sin City, Papier */
+  style: RenderStyle;
 }
 
 /** One row per slider, in the order the HUD renders them. */
@@ -331,6 +335,16 @@ export const LOOK_CONTROLS: readonly LookControlDef[] = [
     initial: 0.25,
     snapshotKey: "grainPct",
   },
+  {
+    key: "ink",
+    id: "ink-lines",
+    label: "Tuschelinien",
+    description:
+      "Stärke der Umrisslinien in den Stilen Comic, Film noir, Sin City und Papier",
+    group: "rendering",
+    initial: 0.7,
+    snapshotKey: "inkPct",
+  },
 ];
 
 export const LOOK_BY_KEY: Readonly<Record<LookKey, LookControlDef>> =
@@ -339,7 +353,7 @@ export const LOOK_BY_KEY: Readonly<Record<LookKey, LookControlDef>> =
     LookControlDef
   >;
 
-/** What the scene boots with: each row's `initial` plus the four flags. */
+/** What the scene boots with: each row's `initial` plus the five flags. */
 export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   ...(Object.fromEntries(
     LOOK_CONTROLS.map((def) => [def.key, def.initial])
@@ -348,6 +362,7 @@ export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   focusMode: "auto",
   focusDistanceM: 40,
   multiTuft: true,
+  style: DEFAULT_RENDER_STYLE,
 });
 
 /** A row's slider maximum as a 0..1 value. */

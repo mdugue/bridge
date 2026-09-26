@@ -240,6 +240,13 @@ export function buildLamps(
   const decals = buildDecals(places, sprite);
   group.add(posts, heads, glow, decals);
 
+  // For the picture styles' light cones (style-dressing.ts): a tag with the
+  // post height and the lit emissive (its share tells the night); the layer
+  // itself knows no style.
+  heads.userData.styleLampHeads = {
+    height: LAMP_H,
+    emissiveAtNight: HEAD_EMISSIVE,
+  };
   const headMat = heads.material as MeshStandardMaterial;
   const glowMat = glow.material as PointsMaterial;
   const decalMat = decals.material as MeshBasicMaterial;

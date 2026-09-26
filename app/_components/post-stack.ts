@@ -8,16 +8,31 @@ import {
   VignetteEffect,
 } from "postprocessing";
 import type { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from "three";
-import { HalfFloatType, Vector2, Vector3 } from "three";
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Group,
+  HalfFloatType,
+  Mesh,
+  Vector2,
+  Vector3,
+} from "three";
 import {
   type FocusMode,
   LOOK_DEFAULTS,
   type LookValues,
   type PostLookKey,
 } from "@/lib/city/look-controls";
+import {
+  RENDER_STYLE_BY_ID,
+  type RenderStyleDef,
+} from "@/lib/city/render-style";
 import { DepthGradingEffect } from "./depth-grading-effect";
 import { PaperGrainEffect } from "./paper-grain-effect";
+import { createPaperScene } from "./paper-scene";
+import { createStyleDressing } from "./style-dressing";
 import type { AoQuality } from "./scene-profile";
+import { StylizeEffect } from "./stylize-effect";
 import { depthMaterialStandIns } from "./three-utils";
 
 /** Initial focus distance before the first crosshair raycast lands. */
@@ -73,8 +88,9 @@ export interface PostStack {
    */
   compile: (object: Object3D, pass?: CompilePass) => Promise<void>;
   /**
-   * Pushes the rendering rows of the look — depth grading, contact shadows,
-   * paper grain, depth of field and its focus mode/distance — into the passes.
+   * Pushes the rendering rows of the look — the picture style, depth
+   * grading, contact shadows, paper grain, ink, depth of field and its focus
+   * mode/distance — into the passes.
    */
   applyLook: (look: LookValues) => void;
   dispose: () => void;
@@ -93,13 +109,30 @@ export interface PostStack {
    */
   setRegressed: (on: boolean) => void;
   setSize: (width: number, height: number) => void;
+  /** The sun's altitude in degrees (Film noir opens up at dusk). */
+  setSunAltitude: (altitudeDeg: number) => void;
+  /**
+   * Objects came, went or changed visibility: the styles' scene halves
+   * (the Papier swap, the style dressing) re-read the scene on their next
+   * frame instead of walking it every frame.
+   */
+  sceneChanged: () => void;
+  /**
+   * Compiles every picture style's programs off the frame — the style pass,
+   * the Papier material in each shape it draws, the noir lamp cones — so
+   * the first switch to a style does not stall on a synchronous compile.
+   * Idempotent; create-app calls it once the scene has loaded.
+   */
+  warmStyles: () => Promise<void>;
 }
 
 /**
  * postprocessing pipeline: render -> N8AO (soft contact shadows, half-res) ->
- * photographic DoF (toggleable, crosshair autofocus) -> SMAA + depth
- * grading + vignette + paper grain. The composer bypasses the renderer's
- * MSAA, so SMAA carries the antialiasing.
+ * photographic DoF (toggleable, crosshair autofocus) -> the picture style
+ * (ink + tone; off in the default pastel style) -> SMAA + depth grading +
+ * vignette + paper grain. The composer bypasses the renderer's MSAA, so SMAA
+ * carries the antialiasing — of the style's ink lines too, which is why the
+ * style pass sits before it.
  */
 export function createPostStack(
   renderer: WebGLRenderer,
@@ -160,27 +193,50 @@ export function createPostStack(
   // Only DoF is motion-gated. AO follows the slider alone: its contact
   // shadows are scene lighting, and lighting that blinks with every footstep
   // is worse than lighting that costs a little more.
+  //
+  // The picture style is a third layer of the same kind: a graphic style
+  // gates DoF off (RenderStyleDef.allowDof) without touching the switch.
   let aoWanted = LOOK_DEFAULTS.contact > AO_OFF_EPSILON;
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
+  let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
+  const stylize = new StylizeEffect(scene, camera);
+  const paperScene = createPaperScene(scene);
+  const styleDressing = createStyleDressing(scene);
+  const stylePass = new EffectPass(camera, stylize);
+  stylePass.enabled = false;
+  composer.addPass(stylePass);
   const applyPassGating = () => {
     ao.enabled = aoWanted;
-    dofPass.enabled = dofWanted && !regressed;
+    dofPass.enabled = dofWanted && style.allowDof && !regressed;
+    // Mode 0 is the default style: no pass at all, not a pass that copies.
+    stylePass.enabled = style.shaderMode > 0;
   };
 
   const grading = new DepthGradingEffect();
-  grading.setIntensity(LOOK_DEFAULTS.grading);
   const grain = new PaperGrainEffect();
-  grain.setIntensity(LOOK_DEFAULTS.grain);
+  const vignette = new VignetteEffect(style.vignette);
   composer.addPass(
-    new EffectPass(
-      camera,
-      new SMAAEffect(),
-      grading,
-      new VignetteEffect({ offset: 0.28, darkness: 0.5 }),
-      grain
-    )
+    new EffectPass(camera, new SMAAEffect(), grading, vignette, grain)
   );
+
+  // The sliders' raw values; the style weights them on the way in, so a
+  // style switch re-applies them without the store changing.
+  const raw = {
+    grading: LOOK_DEFAULTS.grading,
+    grain: LOOK_DEFAULTS.grain,
+    ink: LOOK_DEFAULTS.ink,
+  };
+  const applyStyleWeights = () => {
+    grading.setIntensity(raw.grading * style.gradingWeight);
+    grain.setIntensity(raw.grain * style.grainWeight);
+    grain.setFilm(style.grainAnimated);
+    stylize.setInk(raw.ink * style.inkWeight);
+    stylize.setMode(style.shaderMode);
+    vignette.offset = style.vignette.offset;
+    vignette.darkness = style.vignette.darkness;
+  };
+  applyStyleWeights();
 
   // One writer per rendering row — a Record over the keys, so a row added to
   // the table cannot go unapplied.
@@ -189,8 +245,15 @@ export function createPostStack(
       ao.configuration.intensity = strength * AO_INTENSITY_MAX;
       aoWanted = strength > AO_OFF_EPSILON;
     },
-    grading: (intensity) => grading.setIntensity(intensity),
-    grain: (intensity) => grain.setIntensity(intensity),
+    grading: (intensity) => {
+      raw.grading = intensity;
+    },
+    grain: (intensity) => {
+      raw.grain = intensity;
+    },
+    ink: (strength) => {
+      raw.ink = strength;
+    },
   };
 
   const setFocusMode = (mode: FocusMode) => {
@@ -212,6 +275,47 @@ export function createPostStack(
     if (focusMode === "manual") {
       dof.cocMaterial.focusDistance = manualDistance;
       dof.cocMaterial.focusRange = focusRangeFor(manualDistance);
+    }
+  };
+
+  // The style pass's material is built when the composer adds the pass
+  // (EffectPass.initialize), enabled or not; every style is one program
+  // (the mode is a uniform). The stand-ins are single triangles.
+  let stylesWarm: Promise<void> | null = null;
+  const compileStyles = (): Promise<void> => {
+    // Program keys hold more than the material: the scene's lights (lit
+    // material or not) and whether the geometry has normals. The pass draws
+    // a bare triangle in its own empty scene; the scene's materials draw
+    // meshes with normals under the scene's lights.
+    const bare = new BufferGeometry();
+    bare.setAttribute(
+      "position",
+      new Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3)
+    );
+    const triangle = bare.clone();
+    triangle.computeVertexNormals();
+    const pass = new Mesh(bare, stylePass.fullscreenMaterial);
+    const sceneProxies = new Group();
+    sceneProxies.add(
+      ...paperScene.proxies(triangle),
+      ...styleDressing.proxies(triangle)
+    );
+    const previous = renderer.getRenderTarget();
+    // The style pass draws into the composer's buffers, the scene materials
+    // into the scene pass's target: both are the same kind of target.
+    renderer.setRenderTarget(composer.inputBuffer);
+    try {
+      return Promise.all([
+        renderer.compileAsync(pass, camera),
+        renderer.compileAsync(sceneProxies, camera, scene),
+      ])
+        .then(() => undefined)
+        .finally(() => {
+          bare.dispose();
+          triangle.dispose();
+        });
+    } finally {
+      renderer.setRenderTarget(previous);
     }
   };
 
@@ -240,7 +344,33 @@ export function createPostStack(
         renderer.setRenderTarget(previous);
       }
     },
-    render: (deltaSeconds) => composer.render(deltaSeconds),
+    warmStyles: () => {
+      stylesWarm ??= compileStyles().catch(() => undefined);
+      return stylesWarm;
+    },
+    sceneChanged: () => {
+      paperScene.sceneChanged();
+      styleDressing.sceneChanged();
+    },
+    setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
+    render: (deltaSeconds) => {
+      // A style's scene dressing (its crowns, lamp cones) and the Papier
+      // material are swapped in for this frame only, and out right after.
+      const dressed =
+        style.crowns || style.lampCones
+          ? styleDressing.begin({
+              crowns: style.crowns,
+              lampCones: style.lampCones,
+            })
+          : null;
+      const restore = style.paperScene ? paperScene.begin() : null;
+      try {
+        composer.render(deltaSeconds);
+      } finally {
+        restore?.();
+        dressed?.();
+      }
+    },
     getFocusInfo: () => ({
       focusDistance: dof.cocMaterial.focusDistance,
       focusRange: dof.cocMaterial.focusRange,
@@ -251,6 +381,8 @@ export function createPostStack(
       for (const key of Object.keys(rows) as PostLookKey[]) {
         rows[key](look[key]);
       }
+      style = RENDER_STYLE_BY_ID[look.style];
+      applyStyleWeights();
       dofWanted = look.dof;
       applyPassGating();
       if (look.focusDistanceM !== manualDistance) {
@@ -284,6 +416,10 @@ export function createPostStack(
         camera.position.distanceTo(point)
       );
     },
-    dispose: () => composer.dispose(),
+    dispose: () => {
+      paperScene.dispose();
+      styleDressing.dispose();
+      composer.dispose();
+    },
   };
 }

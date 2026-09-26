@@ -120,6 +120,8 @@ export const ROAD_MARKINGS = /* glsl */ `
     float rmWear = 0.78 + 0.22 * gdNoise( vWorldXY * 0.37 + 3.0 );
     float rmFade = 1.0 - smoothstep( 0.5, 1.5, grFw );
     float rmOn = min( uGroundDetail / 0.7, 1.0 ) * 0.85;
-    baseCol = mix( baseCol, max( baseCol, vec3( 0.88, 0.87, 0.83 ) ), clamp( rmPaint, 0.0, 1.0 ) * rmRoad * rmWear * rmFade * rmOn );
+    float rmMark = clamp( rmPaint, 0.0, 1.0 ) * rmRoad * rmWear * rmFade * rmOn;
+    baseCol = mix( baseCol, max( baseCol, vec3( 0.88, 0.87, 0.83 ) ), rmMark );
+    paperInk = max( paperInk, rmMark );
   }
 `;
