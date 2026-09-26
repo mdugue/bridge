@@ -30,7 +30,7 @@ export default function RootLayout({
         inter.variable,
         spaceGroteskHeading.variable
       )}
-      lang="en"
+      lang="de"
     >
       <body className="flex min-h-full flex-col">
         <TooltipProvider>{children}</TooltipProvider>

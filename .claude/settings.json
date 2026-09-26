@@ -4,7 +4,6 @@
       "WebSearch",
       "WebFetch(domain:www.geodaten.sachsen.de)",
       "Bash(ogr2ogr --version)",
-      "Bash(bash scripts/extract-*.sh *)",
       "Read(//tmp/**)",
       "Bash(awk '{print $5}')",
       "Bash(grep -vE \"^\\\\s*$\")",
