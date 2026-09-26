@@ -22,6 +22,8 @@ export interface GpuStats {
   /** render pipelines created blocking / through the async API */
   syncPipelines: number;
   asyncPipelines: number;
+  /** in-frame builds by pass, material and object (the first word of each) */
+  syncByKind: Record<string, number>;
 }
 
 declare global {
@@ -65,6 +67,7 @@ export function probeNodeRenderer(renderer: WebGPURenderer): void {
     programs: 0,
     syncPipelines: 0,
     asyncPipelines: 0,
+    syncByKind: {},
   };
   window.__gpuStats = stats;
   const internals = renderer as unknown as ProbedInternals;
@@ -91,6 +94,12 @@ export function probeNodeRenderer(renderer: WebGPURenderer): void {
       return result.then(done);
     }
     if (fresh) {
+      const pass = (ro.material as { isShadowPassMaterial?: boolean })
+        .isShadowPassMaterial
+        ? "shadow"
+        : `ctx${(ro as unknown as { context: { id: number } }).context.id}`;
+      const kind = `${pass}:${ro.material.type}:${ro.object.name || ro.object.type}`;
+      stats.syncByKind[kind] = (stats.syncByKind[kind] ?? 0) + 1;
       stats.syncBuilds += 1;
       stats.syncBuildMs += performance.now() - start;
     }

@@ -204,6 +204,25 @@ hop's 45 s; SwiftShader frame times say little else). Plates and frame
 times on a real GPU are still to take. `app/_components/node-probe.ts` keeps the counters on
 `window.__gpuStats` for the next probe.
 
+**Precompiling never reached the frame, and panning rebuilt the scene
+(2026-09-26).** three keys a node build by its render context
+(`RenderObject.getMaterialCacheKey` adds `context.id`), and a context by
+its target *and the call depth* it is drawn at. The scene pass is drawn
+inside the post pipeline's other draws, at a depth that depends on which
+pass asks for it first — a different one in the DoF and the plain
+pipeline — and `compileAsync` always asks for depth 0. So nothing a tile
+precompiled was the build its frame looked up, and every switch between
+the two pipelines (DoF drops while the camera moves) built every object
+again inside frames: the old spike stalled for seconds while panning
+from the air, and with the render guard the scene went missing in
+patches instead. `post-stack-node.ts` now gives the scene pass's target
+and the shadow map one context at any depth (each is drawn once per
+frame, never inside itself). In a headless boot the in-frame builds of
+scene objects went from all of them to none; what is still built in
+frames is the post stack's own passes at boot and the shadow casters. On
+the node path a tile also waits up to 12 s (not 3 s) for its compile
+before it shows, so a finer terrain level never shows as a hole.
+
 Also tried and dropped: one shared terrain / water / clay material with
 the per-tile textures bound per draw via `onObjectUpdate`. The per-object
 textures did not reach the draws (grey ground, untinted clay), and node

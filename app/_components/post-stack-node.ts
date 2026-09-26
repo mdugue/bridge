@@ -66,6 +66,13 @@ function hash21(p: Node<"vec2">): Node<"float"> {
 
 type Drawable = Object3D & { geometry?: BufferGeometry };
 
+/** Drawables compiled side by side (PostStack.compile). */
+const COMPILE_LANES = 4;
+
+interface RenderContexts {
+  get: (renderTarget: unknown, mrt: unknown, callDepth?: number) => unknown;
+}
+
 /**
  * Every drawable under `root`, and a set that learns which of them lose
  * their geometry (a tile unloaded, a dressing thrown away) while the
@@ -232,6 +239,27 @@ export function createNodePostStack(
   // so a drawable whose tile left meanwhile is skipped — compiling it
   // would re-create the GPU buffers of a disposed geometry, and nothing
   // would free them again.
+  // three keys a node build by its render context too (RenderObject
+  // getMaterialCacheKey), and a context by its target and the call depth it
+  // is drawn at. The scene pass is drawn inside the pipeline's other draws,
+  // at a depth that depends on which pass asks for it first — not the same
+  // in the two pipelines — and compileAsync asks for depth 0. So what the
+  // compile built was never the build a frame looked up, and every switch
+  // between the pipelines (DoF drops while the camera moves) built the
+  // whole scene again inside frames: a long stall, or with the guard, the
+  // scene missing in patches. The scene pass's target is only ever drawn
+  // once per frame, never nested in itself, so one context serves it at
+  // every depth.
+  const contexts = (renderer as unknown as { _renderContexts: RenderContexts })
+    ._renderContexts;
+  const contextAt = contexts.get.bind(contexts);
+  // The same holds for the sun's shadow map, drawn inside the scene pass.
+  const oncePerFrame = (target: unknown) =>
+    target === scenePass.renderTarget ||
+    (target as { texture?: { name?: string } } | null)?.texture?.name ===
+      "ShadowMap";
+  contexts.get = (target, mrt, callDepth) =>
+    contextAt(target, mrt, oncePerFrame(target) ? 0 : callDepth);
   const compileOne = (object: Object3D): Promise<void> => {
     const target = renderer.getRenderTarget();
     const { visible, frustumCulled } = object;
@@ -252,8 +280,12 @@ export function createNodePostStack(
   return {
     compile: async (object) => {
       const { gone, list, stop } = drawables(object);
-      try {
-        for (const drawable of list) {
+      let next = 0;
+      // A few at a time: a dressing is hundreds of drawables, and each
+      // compile yields to the main thread between its steps.
+      const worker = async () => {
+        while (next < list.length) {
+          const drawable = list[next++];
           const { material } = drawable as Drawable & { material?: unknown };
           if (
             compiled.get(drawable) === material ||
@@ -264,6 +296,9 @@ export function createNodePostStack(
           compiled.set(drawable, material);
           await compileOne(drawable);
         }
+      };
+      try {
+        await Promise.all(Array.from({ length: COMPILE_LANES }, worker));
       } finally {
         stop();
       }

@@ -252,11 +252,21 @@ function compileRepresentatives(roots: Object3D[]): Object3D[] {
 
 /** How long a tile may wait on its compile before it shows regardless. */
 const COMPILE_WAIT_MS = 3000;
+/**
+ * The same on the node renderer, longer: there a tile shown before its
+ * compile is done builds the rest inside frames, under the render guard's
+ * budget (node-render-guard.ts), and what waits on the budget is missing
+ * from the picture meanwhile — a hole in the ground where a finer terrain
+ * level replaced a coarser one. Held back, the coarser level (or nothing
+ * new) shows instead.
+ */
+const NODE_COMPILE_WAIT_MS = 12_000;
 
 function withinCompileWait(done: Promise<void>): Promise<void> {
+  const wait = nodeRenderer() ? NODE_COMPILE_WAIT_MS : COMPILE_WAIT_MS;
   return Promise.race([
     done,
-    new Promise<void>((resolve) => setTimeout(resolve, COMPILE_WAIT_MS)),
+    new Promise<void>((resolve) => setTimeout(resolve, wait)),
   ]);
 }
 
