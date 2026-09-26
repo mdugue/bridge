@@ -511,6 +511,10 @@ test.describe("desktop viewer", () => {
     // The engine arrives by dynamic import and samples the pose stream;
     // a few frames let it run without spending many.
     await waitForFrames(page, 3);
+    // The switch lives in the Erweitert tab: opened here, not inherited
+    // from the test before (this one runs alone with -g soundscape).
+    await openSidebar(page);
+    await page.getByRole("tab", { name: "Erweitert" }).click();
     await expect(
       page.getByRole("switch", { name: "Klang (experimentell)" })
     ).toBeChecked();

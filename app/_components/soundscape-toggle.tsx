@@ -26,7 +26,24 @@ import type { Soundscape } from "./soundscape/engine";
 
 interface WebAudioWindow {
   AudioContext?: typeof AudioContext;
-  webkitAudioContext?: typeof AudioContext;
+}
+
+/**
+ * The AudioContext the engine can play on, or null: the voices pan with
+ * StereoPanner and drive their levels from a ConstantSource, which the
+ * prefixed `webkitAudioContext` of old Safari lacks — there the switch does
+ * not turn on at all, rather than on and silent.
+ */
+export function playableAudioContext(
+  w: WebAudioWindow
+): typeof AudioContext | null {
+  const Ctor = w.AudioContext;
+  const proto = Ctor?.prototype as Partial<BaseAudioContext> | undefined;
+  return Ctor &&
+    typeof proto?.createStereoPanner === "function" &&
+    typeof proto.createConstantSource === "function"
+    ? Ctor
+    : null;
 }
 
 /** Safari 16.4+: an ambient session mixes with the visitor's own audio and
@@ -68,8 +85,17 @@ export function useSoundscape({
   const readyRef = useRef(ready);
   const onRef = useRef(false);
 
+  // Never behind the loading screen, also while playing: a scene that
+  // reloads closes the master until it is back.
   useEffect(() => {
     readyRef.current = ready;
+    engineRef.current?.setAudible(
+      audible({
+        enabled: onRef.current,
+        hidden: document.hidden,
+        loading: !ready,
+      })
+    );
   }, [ready]);
 
   useEffect(() => {
@@ -83,7 +109,12 @@ export function useSoundscape({
     setOn(false);
     const engine = engineRef.current;
     engineRef.current = null;
-    void engine?.dispose().then(() => {
+    if (!engine) {
+      // Off before the engine arrived: nothing to fade, the context stops now.
+      void ctxRef.current?.suspend();
+      return;
+    }
+    void engine.dispose().then(() => {
       if (!onRef.current) {
         void ctxRef.current?.suspend();
       }
@@ -92,9 +123,7 @@ export function useSoundscape({
 
   const turnOn = useCallback(() => {
     const handle = handleRef.current;
-    const Ctor =
-      (window as WebAudioWindow).AudioContext ??
-      (window as WebAudioWindow).webkitAudioContext;
+    const Ctor = playableAudioContext(window);
     if (!(handle && Ctor)) {
       return;
     }
@@ -111,18 +140,30 @@ export function useSoundscape({
       offset: handle.offset,
       soundTiles: handle.soundTiles,
     };
-    void import("./soundscape/engine").then(({ startSoundscape }) => {
-      if (mine !== generation.current) {
-        return;
-      }
-      const engine = startSoundscape(ctx, source);
-      engine.setClock(clockRef.current.date, clockRef.current.nightFactor);
-      engine.setAudible(
-        audible({ enabled: true, hidden: document.hidden, loading: false })
-      );
-      engineRef.current = engine;
-    });
-  }, [handleRef]);
+    import("./soundscape/engine")
+      .then(({ startSoundscape }) => {
+        if (mine !== generation.current) {
+          return;
+        }
+        const engine = startSoundscape(ctx, source);
+        engine.setClock(clockRef.current.date, clockRef.current.nightFactor);
+        engine.setAudible(
+          audible({
+            enabled: true,
+            hidden: document.hidden,
+            loading: !readyRef.current,
+          })
+        );
+        engineRef.current = engine;
+      })
+      .catch(() => {
+        // The chunk did not load or the engine threw: off again (glyph
+        // gone, context suspended), not on and silent.
+        if (mine === generation.current) {
+          turnOff();
+        }
+      });
+  }, [handleRef, turnOff]);
 
   const toggle = useCallback(() => {
     if (onRef.current) {

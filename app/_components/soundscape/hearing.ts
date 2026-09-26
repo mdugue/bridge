@@ -92,12 +92,13 @@ function decimate(
   return out;
 }
 
-async function fetchPng(url: string, signal: AbortSignal) {
+/** `every`: keep one byte in that many per row (decodeGreyPng). */
+async function fetchPng(url: string, signal: AbortSignal, every = 1) {
   const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }
-  return decodeGreyPng(new Uint8Array(await res.arrayBuffer()));
+  return decodeGreyPng(new Uint8Array(await res.arrayBuffer()), every);
 }
 
 function towersOf(features: SoundmarkFeature[]): BellTower[] {
@@ -205,20 +206,20 @@ export function createHearing(tiles: readonly SoundTile[]): Hearing {
     }
   };
 
-  // The paving raster is RGBA packed 4× wide (surface.py); only R is kept.
+  // The paving raster is RGBA packed 4× wide (surface.py); only R is kept,
+  // picked while it is decoded (the other three bytes never allocated).
   const loadSurface = (ear: TileEar) => {
     const url = ear.tile.files.surface;
     ear.surfaceState = "loading";
     if (!url) {
       return;
     }
-    fetchPng(url, signal).then((png) => {
-      const size = png.height;
-      const data = new Uint8Array(size * size);
-      for (let i = 0; i < size * size; i++) {
-        data[i] = png.data[i * 4];
-      }
-      ear.surface = { bounds: ear.tile.bounds, size, data };
+    fetchPng(url, signal, 4).then((png) => {
+      ear.surface = {
+        bounds: ear.tile.bounds,
+        size: png.height,
+        data: png.data,
+      };
       ear.surfaceState = "loaded";
     }, quiet);
   };
