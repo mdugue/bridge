@@ -52,6 +52,8 @@ export function useLiveMode(
   const onRef = useRef(false);
   const lastReadingAt = useRef(0);
   const stopWatch = useRef<(() => void) | null>(null);
+  /** the "no compass after FIRST_READING_MS" check, cleared with the mode */
+  const firstReading = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Compass bearings are true; the scene's are grid. The meridian
   // convergence barely changes across a site, so it is taken once.
   const convergence = useMemo(
@@ -68,6 +70,10 @@ export function useLiveMode(
     setOn(false);
     stopWatch.current?.();
     stopWatch.current = null;
+    if (firstReading.current !== null) {
+      clearTimeout(firstReading.current);
+      firstReading.current = null;
+    }
   }, []);
   useEffect(() => release, [release]);
 
@@ -158,7 +164,8 @@ export function useLiveMode(
           return;
         }
         start();
-        setTimeout(() => {
+        firstReading.current = setTimeout(() => {
+          firstReading.current = null;
           if (lastReadingAt.current === 0) {
             stop();
             setRefused(true);

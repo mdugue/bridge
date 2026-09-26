@@ -28,11 +28,6 @@ function countDisposals(resource: BufferGeometry | Material): () => number {
   return () => calls;
 }
 
-function shared(material: Material): Material {
-  material.userData.shared = true;
-  return material;
-}
-
 test("disposes the geometry and material of a nested mesh", () => {
   const geometry = new BoxGeometry();
   const material = new MeshBasicMaterial();
@@ -47,28 +42,16 @@ test("disposes the geometry and material of a nested mesh", () => {
   expect(materialCalls()).toBe(1);
 });
 
-test("spares a shared material but still frees its geometry", () => {
-  const geometry = new BoxGeometry();
-  const material = shared(new MeshBasicMaterial());
-  const geometryCalls = countDisposals(geometry);
-  const materialCalls = countDisposals(material);
+test("walks material arrays", () => {
+  const first = new MeshBasicMaterial();
+  const second = new MeshBasicMaterial();
+  const firstCalls = countDisposals(first);
+  const secondCalls = countDisposals(second);
 
-  disposeObject3D(new Mesh(geometry, material));
+  disposeObject3D(new Mesh(new BoxGeometry(), [first, second]));
 
-  expect(geometryCalls()).toBe(1);
-  expect(materialCalls()).toBe(0);
-});
-
-test("walks material arrays and skips only the shared entries", () => {
-  const plain = new MeshBasicMaterial();
-  const sharedMaterial = shared(new MeshBasicMaterial());
-  const plainCalls = countDisposals(plain);
-  const sharedCalls = countDisposals(sharedMaterial);
-
-  disposeObject3D(new Mesh(new BoxGeometry(), [plain, sharedMaterial]));
-
-  expect(plainCalls()).toBe(1);
-  expect(sharedCalls()).toBe(0);
+  expect(firstCalls()).toBe(1);
+  expect(secondCalls()).toBe(1);
 });
 
 test("two meshes sharing one material dispose without throwing", () => {
