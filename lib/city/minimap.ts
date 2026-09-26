@@ -15,6 +15,46 @@ export interface FootprintRect {
   minY: number;
 }
 
+/** One site tile's layers on the minimap: the 512² class raster and the
+ *  bridge decks drawn over it (published URLs). */
+export interface MapTile {
+  bounds: TerrainBounds;
+  bridges?: string;
+  src: string;
+}
+
+/** A bridge deck on the minimap: its outline (EPSG) and what it carries. */
+export interface MapBridge {
+  kind: string;
+  pts: [number, number][];
+}
+
+/** The decks of a bridge file (pipeline/bake/rail.py): outer rings with
+ *  their kind; anything else in the file is skipped. */
+export function mapBridges(doc: unknown): MapBridge[] {
+  const features = (doc as { features?: unknown[] } | null)?.features;
+  if (!Array.isArray(features)) {
+    return [];
+  }
+  const out: MapBridge[] = [];
+  for (const f of features as {
+    geometry?: { coordinates?: unknown; type?: string } | null;
+    properties?: { kind?: string } | null;
+  }[]) {
+    const ring = (
+      f.geometry?.coordinates as [number, number][][] | undefined
+    )?.[0];
+    if (
+      f.geometry?.type === "Polygon" &&
+      Array.isArray(ring) &&
+      ring.length >= 3
+    ) {
+      out.push({ kind: f.properties?.kind ?? "other", pts: ring });
+    }
+  }
+  return out;
+}
+
 /** A building footprint as a projected-EPSG polygon ring ([x, y] pairs). */
 export interface FootprintPoly {
   pts: [number, number][];

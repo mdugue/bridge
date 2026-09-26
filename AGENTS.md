@@ -106,7 +106,9 @@ config change.
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
     grounds: surface and lines in the same pass), `sport-fixtures.ts`
-    (their goals, posts and nets), `rail-layer.ts`, `wall-layer.ts`,
+    (their goals, posts and nets), `rail-layer.ts` (rails, ballast,
+    platforms and the bridges: decks, the measured steel above them,
+    arches, pylons, piers — ADR 0033), `wall-layer.ts`,
     `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
     materials: walls, kerbs, stairs and fences are baked into the fine
     terrain glTF; a fence is one low band in a muted tone — no pattern),
@@ -167,7 +169,9 @@ config change.
   site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
-  (the per-object table: packing, demolish, footprints), `tile.ts` (each
+  (the per-object table: packing, demolish, footprints; the LoD2 bridge
+  slabs it leaves out), `bridge.ts` (ribs, pylons, the arch through a
+  measured rib, piers clear of the fairway), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
   units alongside
@@ -179,11 +183,13 @@ config change.
   (the sheds and garden houses LoD2 lacks, appended to the city mesh),
   `ndvi.py`, `roof_colour.py`,
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
-  `rail.py`, `surface.py`, `edges.py`, `sport.py`, `markings.py`,
+  `rail.py` + `bridge.py` (the deck and superstructure measured in DOM1,
+  the fairway clearance, Wikidata), `surface.py`, `edges.py`, `sport.py`,
+  `markings.py`,
   `cultivated.py`, `skyview.py`, `osm_buildings.py` (shops and heritage
   per LoD2 object), `tram.py`, `riverside.py`, `soundmarks.py`
   (the bell towers), `osm.py`; `ingest_sn.py` is Saxony's
-  download adapter; tests in `pipeline/tests/`), run by `bun run bake`
+  download adapter (it also fetches Wikidata's bridges); tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
