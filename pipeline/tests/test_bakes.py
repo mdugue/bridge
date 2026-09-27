@@ -874,10 +874,17 @@ def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp
             (25, 25, {"shop": "clothes", "level": "1"}),  # upstairs: dropped
             (100, 190, {"shop": "kiosk"}),  # on no building
             *heritage,
+            # two address points on `shop`, in no particular order
+            (145, 145, {"addr:street": "Prager Straße", "addr:housenumber": "11"}),
+            (155, 145, {"addr:street": "Prager Straße", "addr:housenumber": "3"}),
         ],
     )
     outline = "".join(f'<nd ref="{i}"/>' for i in (15, 16, 17, 18, 15))
-    tags = '<tag k="building" v="yes"/><tag k="heritage" v="4"/>'
+    tags = (
+        '<tag k="building" v="yes"/><tag k="heritage" v="4"/><tag k="name" v="Altes Haus"/>'
+        '<tag k="addr:street" v="Am Markt"/><tag k="addr:housenumber" v="2"/>'
+        '<tag k="building:levels" v="3"/>'
+    )
     way = f'<way id="9" version="1">{outline}{tags}</way>'
     tile = _osm_tile(tmp_path, monkeypatch, nodes + way)
     _lod2_city(
@@ -888,12 +895,28 @@ def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp
     doc = json.loads((tile.data / "dlm" / "osmbuild_t.json").read_text())
     assert doc["attribution"].startswith("©")
     assert doc["objects"] == {
-        "shop": {"shop": 1},
+        # the address points, numbers in natural order; never on the root
+        "shop": {"shop": 1, "addr": "Prager Straße 3, 11"},
         "shop-bldg": {"shop": 1},  # the part's root
         "other": {"shop": 1},
-        "old": {"heritage": 1},  # the outline covers all of it
+        # the outline covers all of it: listed, named, addressed, storeys
+        "old": {"heritage": 1, "name": "Altes Haus", "addr": "Am Markt 2", "levels": 3},
     }
     assert doc["meta"]["shop_points_placed"] == 2
+    assert doc["meta"]["objects_addressed"] == 2
+
+
+def test_address_lines_group_numbers_by_street_and_storeys_parse():
+    from bake.osm_buildings import address, address_line, levels_of
+
+    assert address('"addr:street"=>"Hauptstraße","addr:housenumber"=>"1a"') == ("Hauptstraße", "1a")
+    assert address('"addr:street"=>"Hauptstraße"') is None
+    line = address_line([("Hauptstraße", "10"), ("Am Markt", "2"), ("Hauptstraße", "9")])
+    assert line == "Hauptstraße 9, 10 · Am Markt 2"
+    assert levels_of('"building:levels"=>"4"') == 4
+    assert levels_of('"building:levels"=>"2,5"') == 2
+    assert levels_of('"building:levels"=>"many"') is None
+    assert levels_of(None) is None
 
 
 def test_only_ground_floor_levels_count_as_street_shops():

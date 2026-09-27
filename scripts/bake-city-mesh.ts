@@ -35,6 +35,7 @@ import type {
   SmallBuildingFeature,
 } from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
+import { inheritedOsm, lod2Facts, scanFacts } from "../lib/city/object-facts";
 import { recenterOffset } from "../lib/city/recenter";
 import {
   SMALL_BUILDING_SINK,
@@ -163,6 +164,7 @@ export function appendScanStructures(
     const index = baked.objects.length;
     const id = scanStructureId(tile, f);
     const eave = Math.min(...corners.map((c) => c.h));
+    const footprint = corners.map((c): [number, number] => [cm(c.x), cm(c.y)]);
     positions.push(...box.positions);
     isRoof.push(...box.isRoof);
     objectIds.push(...box.isRoof.map(() => index));
@@ -179,7 +181,8 @@ export function appendScanStructures(
       tint: rgb(buildingTint(id)),
       roof: rgb(roofTint(id, { roofType: "1000" })),
       source: OBJECT_SOURCE_SCAN,
-      footprints: [corners.map((c): [number, number] => [cm(c.x), cm(c.y)])],
+      footprints: [footprint],
+      facts: scanFacts({ id, footprint, height: f.properties?.h }),
     });
   }
   const v = baked.vertices;
@@ -296,6 +299,17 @@ export function bakeCityMesh(
         "expected ETRS89/UTM (EPSG:25832 or 25833)."
     );
   }
+  const keys = Object.keys(doc.CityObjects);
+  // Footprints first: the loader rewrites the document it parses (a
+  // Solid's semantic `values` come back flattened), after which a Solid's
+  // GroundSurface can no longer be found — every BuildingPart and most
+  // Buildings lost their minimap footprint that way.
+  const footprintsOf = keys.map((id) =>
+    buildingFootprintPolys({
+      ...doc,
+      CityObjects: { [id]: doc.CityObjects[id] },
+    }).map((p) => p.pts.map(([x, y]): [number, number] => [cm(x), cm(y)]))
+  );
   const loader = new CityJSONLoader(new CityJSONParser());
   if (sharedMatrix) {
     loader.matrix = sharedMatrix;
@@ -303,7 +317,6 @@ export function bakeCityMesh(
   loader.load(doc);
   const matrix = loader.matrix;
   const offset = recenterOffset(matrix);
-  const keys = Object.keys(doc.CityObjects);
   const v = withMeasuredRoofs(
     collectVertices(loader.scene),
     keys,
@@ -340,10 +353,7 @@ export function bakeCityMesh(
     const measured =
       typeof own.measuredHeight === "number" ? own.measuredHeight : total;
     const roofMin = roofMinZ.get(index);
-    const footprints = buildingFootprintPolys({
-      ...doc,
-      CityObjects: { [id]: o },
-    }).map((p) => p.pts.map(([x, y]): [number, number] => [cm(x), cm(y)]));
+    const footprints = footprintsOf[index];
     return {
       building: o.type === "Building",
       root,
@@ -356,6 +366,14 @@ export function bakeCityMesh(
       tint: rgb(buildingTint(id, attrs)),
       roof: rgb(roofColor(id, attrs, roofLut)),
       footprints,
+      facts: lod2Facts({
+        buildingId: keys[root],
+        own,
+        resolved: attrs,
+        osm: inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]),
+        fallbackHeight: total,
+        footprints,
+      }),
     };
   });
 

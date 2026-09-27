@@ -45,6 +45,11 @@ import type {
   SmallBuildingFeature,
 } from "../lib/city/features";
 import { cutWallGates } from "../lib/city/fences";
+import {
+  PROVENANCE_FILE,
+  type ProvenanceRecord,
+  siteProvenance,
+} from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
@@ -667,10 +672,23 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
 // --- 3. tilesets ------------------------------------------------------------------
 
+// Who publishes each source, and each tile's edition of it: the inquiry
+// card's "Quelle" lines (ADR 0035), from the hand-kept record.
+const provenanceFile = publish(
+  PROVENANCE_FILE,
+  utf8(
+    siteProvenance(
+      readJson<ProvenanceRecord>(at("data/provenance.json")),
+      baked.map((t) => t.id)
+    )
+  )
+);
+
 const extras: TilesetExtras = {
   site: SITE.id,
   epsg: frame.epsg,
   offset,
+  provenance: provenanceFile,
   tiles: baked.map((t) => ({
     id: t.id,
     bounds: t.bounds,

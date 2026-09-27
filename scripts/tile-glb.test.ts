@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { writeMeshGlb } from "./tile-glb";
+import { ENUM_NONE, enumColumn, writeMeshGlb } from "./tile-glb";
 
 /** The JSON chunk of a glb. */
 function gltfJson(glb: Uint8Array): Record<string, unknown> {
@@ -125,4 +125,142 @@ test("a feature table rides along as EXT_structural_metadata", async () => {
   expect(new DataView(glb.buffer, glb.byteOffset).getUint32(8, true)).toBe(
     glb.length
   );
+});
+
+/** The BIN chunk of a glb. */
+function gltfBin(glb: Uint8Array): Uint8Array {
+  const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
+  const binAt = 20 + view.getUint32(12, true);
+  return glb.subarray(binAt + 8, binAt + 8 + view.getUint32(binAt, true));
+}
+
+test("string columns carry UTF-8 values and byte offsets; noData reaches the schema", async () => {
+  const glb = await writeMeshGlb({
+    name: "city",
+    positions,
+    normals,
+    attributes: { _FEATURE_ID_0: new Float32Array([0, 0, 0, 1, 1, 1]) },
+    extras: { kind: "city", tileId: "t" },
+    table: {
+      className: "building",
+      count: 2,
+      properties: {
+        id: { type: "STRING", values: ["DESNATPU1000HJx5", ""] },
+        addr: { type: "STRING", values: ["Schloßstraße 1", "Äußere Neustadt"] },
+        height: {
+          type: "SCALAR",
+          componentType: "FLOAT32",
+          values: new Float32Array([18.5, -1]),
+          noData: -1,
+        },
+      },
+    },
+  });
+  const json = gltfJson(glb) as {
+    bufferViews: { byteLength: number; byteOffset: number }[];
+    extensions: {
+      EXT_structural_metadata: {
+        propertyTables: {
+          properties: Record<
+            string,
+            {
+              stringOffsetType?: string;
+              stringOffsets?: number;
+              values: number;
+            }
+          >;
+        }[];
+        schema: {
+          classes: Record<
+            string,
+            { properties: Record<string, { noData?: number; type: string }> }
+          >;
+        };
+      };
+    };
+  };
+  const meta = json.extensions.EXT_structural_metadata;
+  const schema = meta.schema.classes.building.properties;
+  expect(schema.id).toEqual({ type: "STRING" });
+  expect(schema.height).toMatchObject({ noData: -1, default: -1 });
+  const bin = gltfBin(glb);
+  const read = (name: string): string[] => {
+    const p = meta.propertyTables[0].properties[name];
+    expect(p.stringOffsetType).toBe("UINT32");
+    const values = json.bufferViews[p.values];
+    const offsetsView = json.bufferViews[p.stringOffsets ?? -1];
+    expect(values.byteOffset % 8).toBe(0);
+    const offsets = new Uint32Array(
+      bin.slice(
+        offsetsView.byteOffset,
+        offsetsView.byteOffset + offsetsView.byteLength
+      ).buffer
+    );
+    const bytes = bin.subarray(
+      values.byteOffset,
+      values.byteOffset + values.byteLength
+    );
+    return [0, 1].map((i) =>
+      new TextDecoder().decode(bytes.subarray(offsets[i], offsets[i + 1]))
+    );
+  };
+  expect(read("id")).toEqual(["DESNATPU1000HJx5", ""]);
+  expect(read("addr")).toEqual(["Schloßstraße 1", "Äußere Neustadt"]);
+  expect(new DataView(glb.buffer, glb.byteOffset).getUint32(8, true)).toBe(
+    glb.length
+  );
+});
+
+test("an enum column holds the codes the tile uses, NONE first for none", () => {
+  const { enumDef, indices } = enumColumn([
+    "31001_2000",
+    "",
+    "31001_1000",
+    "31001_2000",
+  ]);
+  expect(enumDef).toEqual({
+    valueType: "UINT16",
+    values: [
+      { name: ENUM_NONE, value: 0 },
+      { name: "31001_1000", value: 1 },
+      { name: "31001_2000", value: 2 },
+    ],
+  });
+  expect([...indices]).toEqual([2, 0, 1, 2]);
+});
+
+test("enum columns reach the schema as ENUM with NONE as noData", async () => {
+  const glb = await writeMeshGlb({
+    name: "city",
+    positions,
+    normals,
+    attributes: { _FEATURE_ID_0: new Float32Array([0, 0, 0, 1, 1, 1]) },
+    extras: { kind: "city", tileId: "t" },
+    table: {
+      className: "building",
+      count: 2,
+      properties: { roofType: { type: "ENUM", values: ["3100", ""] } },
+    },
+  });
+  const meta = (
+    gltfJson(glb) as {
+      extensions: {
+        EXT_structural_metadata: {
+          schema: {
+            classes: Record<string, { properties: Record<string, unknown> }>;
+            enums: Record<string, { values: { name: string }[] }>;
+          };
+        };
+      };
+    }
+  ).extensions.EXT_structural_metadata;
+  expect(meta.schema.classes.building.properties.roofType).toEqual({
+    type: "ENUM",
+    enumType: "roofType",
+    noData: ENUM_NONE,
+  });
+  expect(meta.schema.enums.roofType.values.map((v) => v.name)).toEqual([
+    ENUM_NONE,
+    "3100",
+  ]);
 });

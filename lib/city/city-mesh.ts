@@ -1,4 +1,5 @@
 import type { FootprintPoly } from "./minimap";
+import type { ObjectFacts, OsmBuildingFacts } from "./object-facts";
 import type { CityJsonDocument } from "./types";
 
 /**
@@ -18,15 +19,15 @@ export type Rgb = [number, number, number];
  * What OSM knows about a CityObject, keyed by its id
  * (`pipeline/bake/osm_buildings.py` → `data/dlm/osmbuild_<tile>.json`).
  */
-export type OsmBuildingLut = Record<
-  string,
-  { heritage?: number; shop?: number } | undefined
->;
+export type OsmBuildingLut = Record<string, OsmBuildingFacts | undefined>;
 
 /** A shop or a place to eat on the ground floor (column `flags`). */
 export const OBJECT_FLAG_SHOP = 1;
 /** A listed building, OSM `heritage=*` (column `flags`). */
 export const OBJECT_FLAG_HERITAGE = 2;
+/** The building someone is asking about (the inquiry card, ADR 0035): set
+ *  in the packed texture at runtime only, never baked. */
+export const OBJECT_FLAG_ASKED = 4;
 
 /** The `flags` value of one object: its OSM facts summed as bits. */
 export function objectFlags(entry?: {
@@ -69,6 +70,8 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
+  /** identity and semantics, the table's fact columns (ADR 0035) */
+  facts?: ObjectFacts;
   /** OBJECT_FLAG_SHOP + OBJECT_FLAG_HERITAGE, from OSM (0 = neither) */
   flags: number;
   /** GroundSurface footprints (EPSG), for the minimap */

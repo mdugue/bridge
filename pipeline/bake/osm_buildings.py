@@ -10,6 +10,13 @@ object table (like the DOP roof colours):
   floor (`level` without a 0) are left out.
 - `heritage`: an OSM building with `heritage=*` covering at least half
   the footprint.
+- `name`, `addr`, `levels` — for the inquiry card (ADR 0035): the `name`,
+  `addr:street` + `addr:housenumber` and `building:levels` of the OSM
+  building outline that covers most of the footprint (at least half);
+  where that outline has no address, the address points inside the
+  footprint (else on the nearest within `SNAP_M`), grouped by street
+  ("Hauptstraße 1, 3"). These stay on the object itself, never its root:
+  one LoD2 Building often spans several houses with an address each.
 
 A marked part marks its root Building too, and the building bake
 (`scripts/bake-city-mesh.ts`) hands a root's flags down to every part of it
@@ -39,6 +46,7 @@ AREA_WHERE = (
     + ",".join(f"'{a}'" for a in GASTRO)
     + ") OR other_tags LIKE '%\"heritage\"=>%')"
 )
+ADDR_WHERE = "other_tags LIKE '%\"addr:housenumber\"=>%'"
 SNAP_M = 3.0  # a point this close to a footprint's outline still marks it
 MIN_COVER = 0.5  # share of the LoD2 footprint an OSM outline must cover
 
@@ -154,6 +162,85 @@ def tagged_outlines(tile: Tile) -> tuple[list, list]:
     return shops, heritage
 
 
+def address(other_tags: str | None) -> tuple[str, str] | None:
+    """(street, house number) from an OSM feature's tags, or None."""
+    number = tag(other_tags, "addr:housenumber")
+    if not number:
+        return None
+    street = tag(other_tags, "addr:street") or tag(other_tags, "addr:place") or ""
+    return street.strip(), number.strip()
+
+
+def _number_key(number: str) -> tuple[int, str]:
+    digits = re.match(r"\d+", number)
+    return (int(digits.group(0)) if digits else 1 << 30, number)
+
+
+def address_line(addresses: list[tuple[str, str]]) -> str:
+    """Addresses as one line: numbers grouped by street in natural order,
+    streets in the order first seen ("Hauptstraße 1, 3 · Am Markt 2")."""
+    streets: dict[str, set[str]] = {}
+    for street, number in addresses:
+        streets.setdefault(street, set()).add(number)
+    return " · ".join(
+        f"{street} {', '.join(sorted(numbers, key=_number_key))}".strip()
+        for street, numbers in streets.items()
+    )
+
+
+def levels_of(other_tags: str | None) -> int | None:
+    """`building:levels` as a whole number, or None when unreadable."""
+    value = tag(other_tags, "building:levels")
+    try:
+        levels = round(float((value or "").replace(",", ".")))
+    except ValueError:
+        return None
+    return levels if 0 < levels < 200 else None
+
+
+def outlines(tile: Tile) -> tuple[list, list, list]:
+    """Every OSM building outline near the tile: geometries, names, tags."""
+    geoms, fields = read_osm(
+        tile, "multipolygons", "building IS NOT NULL", ["name", "other_tags"], margin=0.0005
+    )
+    return list(geoms), column(fields, "name", geoms), column(fields, "other_tags", geoms)
+
+
+def describe(objects: dict, ids: list[str], polys: list, tree: shapely.STRtree, tile: Tile) -> None:
+    """Name, address and storeys per object from the outline covering most
+    of its footprint, and the address points on it (see the module doc)."""
+    geoms, names, others = outlines(tile)
+    best: dict[int, tuple[float, int]] = {}
+    for j, g in enumerate(geoms):
+        g = shapely.make_valid(g)
+        for i in tree.query(g, predicate="intersects"):
+            i = int(i)
+            cover = shapely.intersection(polys[i], g).area / polys[i].area
+            if cover >= MIN_COVER and cover > best.get(i, (0.0, -1))[0]:
+                best[i] = (cover, j)
+    points, fields = read_osm(tile, "points", ADDR_WHERE, ["other_tags"], margin=0.0005)
+    on: dict[int, list[tuple[str, str]]] = {}
+    tags = column(fields, "other_tags", points)
+    for marks, other in zip(points_on(points, tree), tags, strict=True):
+        found = address(other)
+        for i in marks if found else []:
+            on.setdefault(i, []).append(found)
+    for i, oid in enumerate(ids):
+        facts: dict = {}
+        if i in best:
+            j = best[i][1]
+            if names[j]:
+                facts["name"] = str(names[j]).strip()
+            if (found := address(others[j])) is not None:
+                facts["addr"] = address_line([found])
+            if (levels := levels_of(others[j])) is not None:
+                facts["levels"] = levels
+        if "addr" not in facts and i in on:
+            facts["addr"] = address_line(on[i])
+        if facts:
+            objects.setdefault(oid, {}).update(facts)
+
+
 def run(tile: Tile) -> None:
     city_path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
     if not city_path.exists() or not has_extract(tile, "the OSM building flags"):
@@ -170,8 +257,10 @@ def run(tile: Tile) -> None:
         flag(objects, city, ids[i], "shop")
     for i in covered_by(heritage_areas, polys, tree):
         flag(objects, city, ids[i], "heritage")
+    describe(objects, ids, polys, tree, tile)
     counts = {
-        key: sum(1 for oid in ids if objects.get(oid, {}).get(key)) for key in ("shop", "heritage")
+        key: sum(1 for oid in ids if objects.get(oid, {}).get(key))
+        for key in ("shop", "heritage", "name", "addr", "levels")
     }
     doc = {
         "attribution": OSM_ATTRIBUTION,
@@ -183,11 +272,15 @@ def run(tile: Tile) -> None:
             "heritage_outlines": len(heritage_areas),
             "objects_shop": counts["shop"],
             "objects_heritage": counts["heritage"],
+            "objects_named": counts["name"],
+            "objects_addressed": counts["addr"],
+            "objects_levels": counts["levels"],
         },
         "objects": dict(sorted(objects.items())),
     }
     tile.out("dlm", f"osmbuild_{tile.id}.json").write_text(json.dumps(doc))
     print(
         f"{tile.id}: {counts['shop']} objects with a shop "
-        f"({placed} of {len(points)} points placed), {counts['heritage']} listed"
+        f"({placed} of {len(points)} points placed), {counts['heritage']} listed, "
+        f"{counts['addr']} addressed, {counts['name']} named, {counts['levels']} with storeys"
     )

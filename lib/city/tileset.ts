@@ -167,6 +167,9 @@ export interface TilesetExtras {
   epsg: number;
   /** recenter offset: data-frame x = epsgX − cx, y = epsgY − cy */
   offset: { cx: number; cy: number };
+  /** the provenance manifest (lib/city/provenance.ts), relative to the
+   *  tileset; absent in a tileset baked before it */
+  provenance?: string;
   site: string;
   /** the site's tiles, the spawn tile first */
   tiles: TilesetTileInfo[];

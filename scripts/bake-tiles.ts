@@ -11,6 +11,7 @@
 import { fromArrayBuffer } from "geotiff";
 import { BufferAttribute, BufferGeometry } from "three";
 import { objectTable } from "../lib/city/city-mesh";
+import { factColumns, NO_FACT } from "../lib/city/object-facts";
 import {
   axisMiddle,
   burnStairs,
@@ -49,7 +50,7 @@ import {
 import { tfwToBounds } from "../lib/city/tfw";
 import type { BakedCityMesh } from "./bake-city-mesh";
 import { tinFromGrid } from "./bake-terrain-tin";
-import type { MeshInput, PropertyTable } from "./tile-glb";
+import type { Column, MeshInput, PropertyTable } from "./tile-glb";
 
 /** True when getBoundingBox() returned pixel indices instead of map units. */
 function isPixelSpaceBounds(
@@ -446,6 +447,7 @@ export interface CityMesh {
 export function cityMesh(baked: BakedCityMesh): CityMesh {
   const v = baked.vertices;
   const t = objectTable(baked.objects);
+  const facts = factColumns(baked.objects.map((o) => o.facts));
   const table: PropertyTable = {
     className: "building",
     count: t.count,
@@ -461,6 +463,31 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
       tint: { type: "VEC3", componentType: "FLOAT32", values: t.tint },
+      // What the object is, for the inquiry card (ADR 0035): read one row
+      // at a time, only when asked — never packed for the shader.
+      ...Object.fromEntries(
+        Object.entries(facts.strings).map(([name, values]) => [
+          name,
+          { type: "STRING", values } satisfies Column,
+        ])
+      ),
+      ...Object.fromEntries(
+        Object.entries(facts.enums).map(([name, values]) => [
+          name,
+          { type: "ENUM", values } satisfies Column,
+        ])
+      ),
+      ...Object.fromEntries(
+        Object.entries(facts.numbers).map(([name, values]) => [
+          name,
+          {
+            type: "SCALAR",
+            componentType: "FLOAT32",
+            values,
+            noData: NO_FACT,
+          } satisfies Column,
+        ])
+      ),
     },
   };
   let maxElevation = Number.NEGATIVE_INFINITY;
