@@ -460,19 +460,26 @@ key `V`) are not material styles: they are one post pass over the finished
 frame (`stylize-effect.ts`, ADR 0034), off in the default pastel look.
 Papier additionally swaps every surface for one white paper material for
 its frames (`paper-scene.ts`, `scene.overrideMaterial`, restored after the
-render); `style-dressing.ts` likewise swaps in a style's crowns and lamp
-cones — layers only tag what may be dressed (`userData.styleCrown`,
-`userData.styleLampHeads`); both gather what they touch once per stream
-change (`PostStack.sceneChanged`), not every frame. The one sanctioned
-exception is the ground: the terrain material (`userData.paperOwn`) opts
-out of the override and draws Papier's paper, paint and water itself
-under the shared `PAPER_GROUND_ON` uniform. Give a new style a row in
-`lib/city/render-style.ts` and a mode in that pass — never a branch in a
-scene material — and any new style material a stand-in in
-`PostStack.warmStyles`, which compiles them all once the scene is idle. A
-stand-in must match the real draw in more than its material: three keys a
-program on the scene's lights (even for an unlit material) and on whether
-the geometry has normals — the pass's stand-in has neither.
+render; three carries each drawn material's `positionNode` over, so
+instanced sets stay put); `style-dressing.ts` likewise shows a style's
+crowns (sibling `Instances` on the originals' buffers and material — a
+visibility swap, one build) and lamp cones for its frames — layers only
+tag what may be dressed (`userData.styleCrown`, `userData.styleLampHeads`);
+both gather what they touch once per stream change
+(`PostStack.sceneChanged`), not every frame. The one sanctioned exception
+is the ground: the terrain material (`userData.paperOwn`) opts out of the
+override and draws Papier's paper, paint and water itself under the
+shared `paperGroundOn` uniform node. Give a new style a row in
+`lib/city/render-style.ts` and a mode in that node — never a branch in a
+scene material. `PostStack.warmStyles` prepares them all once the scene
+is idle: the styled pipelines build one per frame (a pipeline builds its
+graph and its SMAA passes on its first render), and the dressing and the
+scene's own objects are compiled under the Papier swap with
+`compileAsync` — no stand-ins: the override takes each source material's
+position node, so only the real objects match what a frame builds. The
+node's only branch is on the mode (a uniform); per pixel it selects, so
+derivatives and texture reads stay in uniform control flow (WGSL), and
+its uv runs from the top-left corner (three's quad), unlike the GLSL's.
 Its depth taps stay at
 integer texel radii (the buffer is read NEAREST; a fractional radius inks
 whole grazing streets).
