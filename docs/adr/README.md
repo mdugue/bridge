@@ -10,7 +10,7 @@ each data → look transformation does and its status.
 
 | # | Decision | Status |
 |---|---|---|
-| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024) |
+| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024); relaxed to "static where possible" 2026-09-27 |
 | [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber | accepted |
 | [0003](./0003-bake-heavy-inputs-at-build-time.md) | Bake heavy inputs at build time; the browser decodes no raster and parses no CityJSON | accepted |
 | [0004](./0004-commit-derived-artifacts-not-raw-data.md) | Commit small derived artifacts, not raw bulk data; the DGM1 GeoTIFF is the one exception; no Git-LFS | accepted |
@@ -46,6 +46,7 @@ each data → look transformation does and its status.
 | [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
 | [0035](./0035-parts-meet-the-ground.md) | Every part meets the ground by one set of rules (feet under, edges meeting the ground, decisions smoothed along the part) and reports where it does; one check holds them to it | accepted |
 | [0036](./0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md) | A LoD2 roof that misses DOM1 (the free-form roofs of complex buildings, 3 m placeholders of new ones) is rebuilt from it as stepped flat blocks inside its footprint, only where that fits the scan better | accepted |
+| [0037](./0037-inquiry-cards-on-demand-facts-in-the-tileset.md) | The twin answers on demand: identity, semantics and provenance ride in the tileset; text appears only in a card | accepted |
 
 ## Format
 

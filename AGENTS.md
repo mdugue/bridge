@@ -161,6 +161,12 @@ config change.
     the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
+  - the twin (ADR 0036): `inquiry-probe.ts` (the *Befragen* mode's pick
+    and the pencil-hatch mark, `I` / the toolbar) and `inquiry-card.tsx`
+    (the paper card — the only place the scene's facts become text); the
+    facts are `lib/city/object-facts.ts` (bake and read), the card's lines
+    `lib/city/inquiry.ts`, the sources `lib/city/provenance.ts`, the AdV
+    code lists `lib/city/adv-codes.ts`
   - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
     key; no AudioContext before it) and `soundscape/` (`engine.ts`,
     `hearing.ts`, `voices.ts`: loaded by dynamic import on the first
@@ -189,7 +195,8 @@ config change.
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
   (the per-object table: packing, demolish, footprints; the LoD2 bridge
-  slabs it leaves out), `bridge.ts` (ribs, pylons, the arch through a
+  slabs it leaves out), `object-facts.ts` (the table's fact columns: the
+  Building's `gml:id`, use, roof, height, OSM name/address/storeys), `bridge.ts` (ribs, pylons, the arch through a
   measured rib, piers clear of the fairway), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`

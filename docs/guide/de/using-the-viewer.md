@@ -40,6 +40,7 @@ lädt* oben im Bild (siehe
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
 | Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
+| `I` | *Befragen*: den Modus ein- oder ausschalten; dann ein Gebäude anklicken (immersiv: `I` fragt am Fadenkreuz) |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | immersiven Modus verlassen |
@@ -51,6 +52,7 @@ lädt* oben im Bild (siehe
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
 | *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
 | *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln (abheben / landen) |
+| *Befragen* (Werkzeugleiste) | den Fragemodus ein- oder ausschalten; dann ein Gebäude antippen |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
@@ -105,6 +107,35 @@ dem Höhenregler steigst oder sinkst du, ohne dass *Live* endet.
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
 *Steuerung* erreichbar.
+
+## Ein Gebäude befragen
+
+Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
+*Befragen* in der Werkzeugleiste (oder `I`) schaltet den Fragemodus ein —
+eine Zeile oben links sagt es —, und ein Klick oder Tippen auf ein Gebäude
+legt eine feine Bleistiftschraffur darüber und öffnet daneben eine
+Papierkarte. Die Karte sagt nur, was die Daten wissen:
+
+- den **Namen** des Gebäudes (aus OpenStreetMap) oder seine amtliche
+  **Nutzung** (die ALKIS-Gebäudefunktion des Stadtmodells; bei den meisten
+  Häusern ist sie als *nicht zu spezifizieren* erfasst, und genau das sagt
+  die Karte),
+- seine **Adresse** (OpenStreetMap),
+- **Höhe** (gemessen), Traufe, **Dach**form und -neigung, Grundfläche, die
+  **Geschosse**, wo OpenStreetMap sie kennt, aus wie vielen Teilen das
+  Modell es zusammensetzt, ob es ein Kulturdenkmal ist oder im Erdgeschoss
+  ein Laden liegt,
+- seine **Kennung** im amtlichen Stadtmodell (zum Kopieren — andere
+  Datensätze kennen das Gebäude unter ihr),
+- und je zitiertem Datensatz eine **Quellenzeile** mit Stand und Lizenz:
+  beim Stadtmodell das Modelljahr, das Jahr, in dem die Dächer gemessen,
+  und das, in dem die Grundrisse erfasst wurden.
+
+Ein Schuppen oder Gartenhaus, das der Laserscan gefunden hat, das
+Stadtmodell aber nicht kennt, sagt das. Esc oder × schließt die Karte und
+nimmt die Schraffur weg; der nächste Klick fragt das nächste Gebäude.
+Geschätzt wird nichts: Ein Gebäude ohne erfasste Geschosse hat einfach
+keine Geschosszeile.
 
 ## Das Feld
 

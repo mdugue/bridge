@@ -80,9 +80,19 @@ history. Decisions that came out of plans are written up as
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043 | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
 | 047 | Spike: "Problem melden" — the crash report with a destination, the view only on opt-in | **TODO** — spike; maintainer answers needed at its step 3 | [047-spike-report-a-problem.md](./047-spike-report-a-problem.md) |
 | 048 | Spike: a view as a `?snap=` link; committed QA views for plan 019 | **TODO** — spike + small build | [048-spike-view-links-and-qa-views.md](./048-spike-view-links-and-qa-views.md) |
+| 049 | A queryable twin: object ids and semantics in the tileset, the provenance manifest, the *Befragen* mode with its paper card | **PARTIAL** — 1–3 built (2026-09-27; ten fact columns, +3.5 % per building tile; OSM names, addresses, storeys re-baked on fifteen tiles; `I` / *Befragen*); the hatch unjudged on a GPU; 4–7 open (trees, bridges, a link, a Datenstand panel, ingest-written provenance) | [049-queryable-twin.md](./049-queryable-twin.md) |
+| 050 | Time and live sources: the day plays, weather sets the mood, the Elbe follows its gauge | **TODO** — static where possible (ADR 0001 amended); CORS of each source to verify first | [050-time-and-live-sources.md](./050-time-and-live-sources.md) |
+| 051 | Scenarios in the scene's own hand: flood, sun hours, sight lines, a planned building | **TODO** — shader phases with or after plan 020 | [051-scenarios.md](./051-scenarios.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
+
+**Direction since 2026-09-27: a digital twin with an aesthetic claim.**
+The maintainer set it and fixed two rules: the app stays **static where
+possible** (ADR 0001, amended), and **text appears only in a card, on
+demand** — the scene stays wordless (ADR 0036). Plans 036 (ask the city),
+037 (time and live sources) and 038 (scenarios) carry it; plan 019's GPU
+pass comes first for them too, since every new look is unjudged there.
 
 Ordered by leverage. Everything here is vetted against the code; effort
 S/M/L.
@@ -404,7 +414,9 @@ the port (2026-09-26) made of it:
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
 6. ~~**A provenance manifest per tile (S).**~~ Now plan 017 phase A step 3
    (the ingest adapter writes `data/<site>/<tile>.provenance.json` from the
-   values its checked downloads already know).
+   values its checked downloads already know). The client side is built:
+   the card's provenance manifest, derived from the hand-kept record at
+   build time (plan 049 phase 2).
 7. **Offline repeat visits: a service worker over the tileset (S–M).**
    [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)
    already makes every `/data/*` file immutable and content-hashed, with

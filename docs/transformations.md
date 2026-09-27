@@ -546,6 +546,61 @@ visual-variable codebook is in
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
+### The twin: identity, facts and provenance (asked on demand)
+
+The scene says nothing on its own; asked (the *Befragen* mode, key `I`),
+it answers in a paper card ([ADR 0036](./adr/0036-inquiry-cards-on-demand-facts-in-the-tileset.md),
+[plan 049](./plans/049-queryable-twin.md)).
+
+- **Object identity and semantics in the tileset** — CityJSON attributes →
+  ten columns of the building glTF's `EXT_structural_metadata` table
+  (`lib/city/object-facts.ts`, `scripts/bake-city-mesh.ts`): `buildingId`
+  (the Building's `gml:id`; a part carries its Building's — the Saxon parts'
+  `UUID_…` ids are dropped), `function` (ALKIS Gebäudefunktion, the root's
+  for a part), `roofType`, `created` (the object's export date, date only)
+  as ENUM columns of the codes a tile uses; `height` (`measuredHeight`,
+  else the model's top − base), `roofPitch` (`Dachneigung`), `area` (the
+  GroundSurface rings' area) as FLOAT32, noData −1. A scan structure
+  (plan 034) carries its key, height and area only. The code lists'
+  German labels: `lib/city/adv-codes.ts` (AdV CityGML profile). Spawn tile
+  +46 kB gzipped (+3.5 %). No look: read one row when asked. Found on the
+  way: the bake read the footprints after the CityJSON loader had
+  rewritten the document (a Solid's semantic values come back flattened),
+  so every Solid lost its GroundSurface — on the spawn tile 2 012 of 2 041
+  BuildingParts had no minimap footprint (and would have had no area);
+  the footprints are now read before the loader runs.
+- **Names, addresses and storeys** — OSM building outlines (`name`,
+  `addr:street` + `addr:housenumber`, `building:levels`) covering ≥ 50 %
+  of a LoD2 footprint (the one covering most), else the `addr:housenumber`
+  points on it (inside, or ≤ 3 m off the facade), grouped by street
+  (`pipeline/bake/osm_buildings.py` → `osmbuild_<tile>.json`, per object,
+  never handed to the root) → the `name`, `addr`, `levels` columns. Spawn
+  tile: 2 363 of 4 404 objects addressed, 444 named, 2 470 with storeys
+  (BBBike extract 2026-09-26). The card merges a building's parts.
+- **Provenance manifest** — `data/provenance.json` (hand-kept) →
+  `provenance.json` next to the tileset (`lib/city/provenance.ts`, at build
+  time): per source its label, credit and licence, per tile its edition
+  (LoD2 split into the model year and its inputs' years). The card's
+  source lines; fetched with the first question.
+- **The asked building** (no slider) — the picked object's building tree
+  (the set demolish takes) gets flag 4 in the packed object texture at
+  runtime; the clay lifts it 40 % towards the card's paper, adds a faint
+  paper light (brighter at night) and draws a pencil hatch: near, strokes
+  on the building every 0.9 m (up the facade at 45°, across the roof;
+  fwidth-constant); where those would crowd closer than a few pixels, 45°
+  strokes every 7 px in screen space instead, so the mark reads from the
+  air too. A first cut (0.45 m strokes, a flat graphite wash far off, a
+  35 % lift) was checked headless: the wash and the lift cancelled, and
+  from 100 m the building looked unchanged. Not in *Papier* (its override
+  material). **Not yet judged on a real GPU.**
+- **The inquiry card** — `lib/city/inquiry.ts` → `inquiry-card.tsx`: the
+  OSM name or the ALKIS use as the title, the address, then only the facts
+  that are known (height of the tallest part, eave, roof form and pitch,
+  ground area over all parts, mapped storeys, parts, *Kulturdenkmal*, a
+  shop on the ground floor), the `buildingId` to copy, and one source line
+  per source quoted, with edition and licence. Unspecified use (86 % of
+  the objects) is said as such, never guessed.
+
 ### Vegetation
 - **Cultivated land** (plan 028) — OSM `landuse=allotments|orchard|vineyard`
   (and `leisure=garden` plots inside a colony) → `pipeline/bake/cultivated.py`:
@@ -1634,6 +1689,13 @@ research that produced them):
     (Cultivated land), 030 (Signs and fixtures), 031 (Landing stages,
     groynes, ferries), 033 (Sky-view factor, Horizon shade),
     034 (Small structures from the laser scan), 035 (Sound — unheard).
+14. **The twin, next** — ask trees, bridges and monuments too, a link
+    to an asked building, a *Datenstand* panel, the ingest writing the
+    provenance ([plan 049](./plans/049-queryable-twin.md) phases 4–7); the
+    day playing, weather as mood, the Elbe at its gauge
+    ([plan 050](./plans/050-time-and-live-sources.md)); flood, sun hours,
+    sight lines and a planned building as scenarios
+    ([plan 051](./plans/051-scenarios.md)).
 
 ---
 
@@ -1641,7 +1703,8 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
-| **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
+| **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). Text now appears only on demand, in the inquiry card ([ADR 0036](./adr/0036-inquiry-cards-on-demand-facts-in-the-tileset.md)). |
+| **Every CityJSON attribute as a string column, part ids included** (plan 049's first cut) | +132 kB gzipped (+9.6 %) on the spawn tile's building glTF, 70 kB of it object ids: Saxon BuildingParts carry random `UUID_…` ids (41 bytes, incompressible) that no other dataset joins on. | The Building's `gml:id` for every object of its tree and ENUM columns for the code lists: +46 kB (+3.5 %) ([ADR 0036](./adr/0036-inquiry-cards-on-demand-facts-in-the-tileset.md)). The part UUIDs stay in the committed CityJSON. |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **A raised pavement behind the kerb** (plan 023's leftover: lift the pavement a kerb's height above the road) | The DGM1 has no such step to lift, and ADR 0035 makes every part meet the ground at the ground's own level: the kerb's back now runs down to the pavement (`meetGround`), which took its ground-join misses from 32 % to 2 % (2026-10-01 audit). | Only with a measured kerb height per street (none of the sources carries it) and a terrain cut that ADR 0035's join check accepts. |
 | **DGM1 micro-relief as a normal texture** (plan 023 phase 7: a 1 m normal map over the "2 m mesh") | The fine level is a ±0.15 m TIN of the native DGM (ADR 0030), not a 2 m grid, and `terrainNormal` (`terrain-layer.ts`) deliberately pulls near-flat normals up: the DGM's ruts, survey wobble and 8-bit normals read as dirty flecks under a low sun. Kerbs are real geometry now. | Revisit only if a real-GPU plate shows the ground too flat — and then as a softer calm threshold, not more relief. |

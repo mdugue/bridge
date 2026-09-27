@@ -38,6 +38,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
+| `I` | *Befragen* ("ask"): switch the mode on or off; then click a building (immersive: `I` asks at the crosshair) |
 | `R` | demolish the building under the crosshair |
 | `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | leave immersive mode |
@@ -49,6 +50,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
 | *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
 | *Fliegen* (toolbar) | switch between walking and flying (take off / land) |
+| *Befragen* (toolbar) | switch the ask mode on or off; then tap a building |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
@@ -99,6 +101,32 @@ altitude slider climbs or sinks without ending *Live*.
 A floating bar shows the four essential controls until you dismiss it with
 *Verstanden*; the full table stays available in the panel under
 *Steuerung*.
+
+## Asking a building
+
+The city itself carries no text. Ask it instead: *Befragen* in the
+toolbar (or `I`) switches the ask mode on — a line top left says so — and
+a click or tap on a building then draws a fine pencil hatch over it and
+opens a paper card beside it. The card says only what the data knows:
+
+- the building's **name** (from OpenStreetMap) or its official **use**
+  (the ALKIS building function of the city model; for most houses it is
+  recorded as *not specified*, and the card says exactly that),
+- its **address** (OpenStreetMap),
+- **height** (measured), eave, **roof** form and pitch, ground area, the
+  **storeys** where OpenStreetMap has them, how many parts the model
+  divides it into, whether it is a listed monument or has a shop on the
+  ground floor,
+- its **identifier** in the official city model (to copy — other datasets
+  know the building by it),
+- and one **source line** per dataset the card quotes, with its edition
+  and licence: for the city model the year of the model, the year its
+  roofs were measured and its footprints drawn.
+
+A shed or garden house the laser scan found but the city model lacks says
+so. Esc or × closes the card and removes the hatch; the next click asks
+the next building. Nothing is estimated: a building without mapped
+storeys simply has no storey line.
 
 ## The panel
 
