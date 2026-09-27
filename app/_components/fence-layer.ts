@@ -1,11 +1,28 @@
 import { Color, DoubleSide, type Mesh, MeshStandardMaterial } from "three";
 import { FENCE_CODE, FENCE_UV_CODES } from "@/lib/city/fences";
+import {
+  abs,
+  cameraViewMatrix,
+  color,
+  floor,
+  length,
+  mix,
+  normalize,
+  positionView,
+  select,
+  smoothstep,
+  uv,
+  vec4,
+} from "three/tsl";
+import type { MeshStandardNodeMaterial, Node } from "three/webgpu";
+import { nodeRenderer } from "./gpu-mode";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import {
   type GroundLight,
   groundLightKey,
   injectGroundLight,
 } from "./sky-light";
+import { groundLitNodeMaterial } from "./sky-light-node";
 
 /*
  * A fence is one calm band (lib/city/fences.ts), in a single muted tone close
@@ -90,6 +107,12 @@ export function dressFences(
   heightFog?: HeightFogUniforms,
   light?: GroundLight
 ): void {
+  if (nodeRenderer()) {
+    mesh.material = nodeFenceMaterial(light);
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    return;
+  }
   const material = new MeshStandardMaterial({
     color: 0xff_ff_ff,
     roughness: 1,
@@ -115,4 +138,41 @@ export function dressFences(
   mesh.material = material;
   mesh.castShadow = false;
   mesh.receiveShadow = true;
+}
+
+/**
+ * SPIKE (plan 020): the band of dressFences as a node material — the same
+ * tone by kind, top-edge lift, rooted foot, distance fade, the world-up
+ * normal and the self-light; the ground light takes its ao and shadow
+ * slots, the scene's fog node the height fog.
+ */
+function nodeFenceMaterial(light?: GroundLight): MeshStandardMaterial {
+  const material = groundLitNodeMaterial(
+    { color: 0xff_ff_ff, roughness: 1, metalness: 0, side: DoubleSide },
+    light,
+    true
+  ) as unknown as MeshStandardNodeMaterial;
+  const fenceUv = uv();
+  const code = floor(fenceUv.x.mul(FENCE_UV_CODES));
+  const is = (c: number) => abs(code.sub(c)).lessThan(0.5);
+  const tone = select(
+    is(FENCE_CODE.gate).or(is(FENCE_CODE.frame)),
+    color(LEAF),
+    select(is(FENCE_CODE.picket), color(WOOD), color(SAGE_STONE))
+  );
+  let col: Node<"vec3"> = mix(
+    tone,
+    color(TOP),
+    smoothstep(0.55, 1, fenceUv.y).mul(0.65)
+  );
+  col = col.mul(mix(0.93, 1, smoothstep(0, 0.4, fenceUv.y)));
+  col = mix(
+    col,
+    color(FAR),
+    smoothstep(FAR_START_M, FAR_END_M, length(positionView)).mul(0.7)
+  );
+  material.colorNode = col;
+  material.normalNode = normalize(cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz);
+  material.emissiveNode = col.mul(LIFT);
+  return material as unknown as MeshStandardMaterial;
 }

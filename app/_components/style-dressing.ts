@@ -5,12 +5,18 @@ import {
   Color,
   ConeGeometry,
   DoubleSide,
+  type BufferAttribute,
   InstancedBufferAttribute,
+  InstancedInterleavedBuffer,
   InstancedMesh,
+  type InterleavedBufferAttribute,
+  type Material,
   type MeshStandardMaterial,
   ShaderMaterial,
 } from "three";
 import type { CrownStyle } from "@/lib/city/render-style";
+import { nodeRenderer } from "./gpu-mode";
+import { type LampConeMaterial, nodeLampCone } from "./style-node";
 import { buildStyleCrownGeo } from "./vegetation-layer";
 
 /**
@@ -71,6 +77,43 @@ const coneFragment = /* glsl */ `
   }
 `;
 
+/** The GLSL cone: its material and its two live uniforms. */
+function glLampCone(): LampConeMaterial {
+  const material = new ShaderMaterial({
+    vertexShader: coneVertex,
+    fragmentShader: coneFragment,
+    uniforms: {
+      coneColor: { value: CONE_COLOR },
+      coneHeight: { value: 5 },
+      strength: { value: CONE_DAY },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+  return {
+    material: material as unknown as MeshStandardMaterial,
+    height: material.uniforms.coneHeight as { value: number },
+    strength: material.uniforms.strength as { value: number },
+  };
+}
+
+/**
+ * Per-instance data of a crown mesh: an instanced attribute, or a view of
+ * one (the node renderer's shared instancing hands the instance matrices to
+ * the build as views of an instanced buffer — shared-instancing.ts).
+ */
+function isPerInstance(
+  attr: BufferAttribute | InterleavedBufferAttribute
+): boolean {
+  return (
+    attr instanceof InstancedBufferAttribute ||
+    (attr as InterleavedBufferAttribute).data instanceof
+      InstancedInterleavedBuffer
+  );
+}
+
 function coneGeometry(height: number): BufferGeometry {
   const h = height - 0.15;
   // Open-ended; apex just under the lantern, the base on the ground.
@@ -120,8 +163,7 @@ export function createStyleDressing(scene: Scene): StyleDressing {
   ): BufferGeometry => {
     const style = crownGeo(kind, tier);
     const extras = Object.entries(original.attributes).filter(
-      ([name, attr]) =>
-        attr instanceof InstancedBufferAttribute && !(name in style.attributes)
+      ([name, attr]) => isPerInstance(attr) && !(name in style.attributes)
     );
     if (extras.length === 0) {
       return style;
@@ -157,19 +199,9 @@ export function createStyleDressing(scene: Scene): StyleDressing {
 
   // Lamp cones: one material for the scene, one geometry per post height,
   // one mesh per heads mesh (collected with it).
-  const coneMaterial = new ShaderMaterial({
-    vertexShader: coneVertex,
-    fragmentShader: coneFragment,
-    uniforms: {
-      coneColor: { value: CONE_COLOR },
-      coneHeight: { value: 5 },
-      strength: { value: CONE_DAY },
-    },
-    transparent: true,
-    depthWrite: false,
-    blending: AdditiveBlending,
-    side: DoubleSide,
-  });
+  // SPIKE (plan 020): the node renderer runs no ShaderMaterial.
+  const coneLook = nodeRenderer() ? nodeLampCone(CONE_COLOR) : glLampCone();
+  const coneMaterial: Material = coneLook.material;
   const coneGeos = new Map<number, BufferGeometry>();
   const cones = new WeakMap<InstancedMesh, InstancedMesh>();
   const coneFor = (heads: InstancedMesh, tag: LampHeadsTag): InstancedMesh => {
@@ -240,10 +272,10 @@ export function createStyleDressing(scene: Scene): StyleDressing {
           night,
           material.emissiveIntensity / tag.emissiveAtNight
         );
-        coneMaterial.uniforms.coneHeight.value = tag.height;
+        coneLook.height.value = tag.height;
         added.push({ cone: coneFor(heads, tag), parent: heads.parent });
       }
-      coneMaterial.uniforms.strength.value =
+      coneLook.strength.value =
         CONE_DAY + (CONE_NIGHT - CONE_DAY) * Math.min(Math.max(night, 0), 1);
       for (const { cone, parent } of added) {
         parent.add(cone);

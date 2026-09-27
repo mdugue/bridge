@@ -1,10 +1,12 @@
 import { DoubleSide, type Mesh, MeshStandardMaterial } from "three";
+import { nodeRenderer } from "./gpu-mode";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
 import {
   type GroundLight,
   groundLightKey,
   injectGroundLight,
 } from "./sky-light";
+import { groundLitNodeMaterial } from "./sky-light-node";
 
 const WALL_COLOR = 0xc9_bd_a4; // warm sandstone
 
@@ -25,6 +27,23 @@ export function dressWalls(
   heightFog?: HeightFogUniforms,
   light?: GroundLight
 ): void {
+  if (nodeRenderer()) {
+    // The scene's fog node covers the height fog; the ground light takes
+    // the node material's ao and shadow slots (sky-light-node.ts).
+    mesh.material = groundLitNodeMaterial(
+      {
+        color: WALL_COLOR,
+        roughness: 0.95,
+        metalness: 0,
+        side: DoubleSide,
+      },
+      light,
+      false
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return;
+  }
   const material = new MeshStandardMaterial({
     color: WALL_COLOR,
     roughness: 0.95,

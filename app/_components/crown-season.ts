@@ -53,9 +53,9 @@ export interface CrownSeasonKey {
  *  colour by it, so an autumn hue is divided by it to land as itself. */
 export const CROWN_BASE_COLOR = 0xa6_bf_92;
 /** Twig colour of a bare crown: the trunk's grey-brown, a little paler. */
-const TWIG_COLOR = 0x9a_8f_80;
+export const TWIG_COLOR = 0x9a_8f_80;
 /** Fraction of a bare crown's surface kept as twigs. */
-const TWIG_DENSITY = 0.25;
+export const TWIG_DENSITY = 0.25;
 /**
  * Size of the dither's cells in pixels. The pattern is a hashed alpha test
  * (Wyman & McGuire 2017, the method three's `alphaHash` implements): cells
@@ -66,9 +66,9 @@ const TWIG_DENSITY = 0.25;
  * a fixed size (the first cut) read as large flat shards up close and as
  * sparkle far away.
  */
-const HASH_PIXELS = 1.25;
+export const HASH_PIXELS = 1.25;
 /** Below this `aBare` a crown counts as in full leaf. */
-const BARE_EPS = 0.002;
+export const BARE_EPS = 0.002;
 
 const twigUniform = { value: new Color(TWIG_COLOR) };
 

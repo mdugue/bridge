@@ -21,6 +21,14 @@ test("counts meshes, instances and triangles (instanced × count)", () => {
   });
 });
 
+test("counts what the draw range draws", () => {
+  const geometry = new BoxGeometry(); // 36 indices
+  geometry.setDrawRange(0, 18);
+  const group = new Group();
+  group.add(new Mesh(geometry, new MeshBasicMaterial()));
+  expect(sceneCensus([group]).triangles).toBe(6);
+});
+
 test("an empty group is all zeros", () => {
   expect(sceneCensus([new Group()])).toEqual({
     meshes: 0,

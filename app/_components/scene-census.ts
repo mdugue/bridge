@@ -13,9 +13,12 @@ export interface SceneCensus {
 function triangleCount(mesh: Mesh): number {
   const geometry = mesh.geometry;
   const index = geometry.getIndex();
-  const vertices = index
+  const all = index
     ? index.count
     : (geometry.getAttribute("position")?.count ?? 0);
+  // what is drawn: a demolish ends the city's draw range early (city-layer.ts)
+  const { start, count } = geometry.drawRange;
+  const vertices = Math.max(0, Math.min(all, start + count) - start);
   return Math.floor(vertices / 3);
 }
 

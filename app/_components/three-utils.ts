@@ -187,6 +187,11 @@ export function untrackTexture(texture: Texture): void {
   trackedTextures.delete(texture);
 }
 
+/** A tracked texture's recorded bytes (0 when untracked or absent). */
+export function trackedBytesOf(texture: Texture | null | undefined): number {
+  return texture ? (trackedTextures.get(texture) ?? 0) : 0;
+}
+
 /** Bytes of every live tracked texture. */
 export function trackedTextureBytes(): number {
   let total = 0;

@@ -7,6 +7,8 @@ import {
   Mesh,
   MeshStandardMaterial,
 } from "three";
+import { nodeRenderer } from "./gpu-mode";
+import { paperNodeMaterial } from "./style-node";
 
 /**
  * The Papier style's scene half (lib/city/render-style.ts `paperScene`):
@@ -117,7 +119,8 @@ export interface PaperScene {
 }
 
 export function createPaperScene(scene: Scene): PaperScene {
-  const material = paperMaterial();
+  // SPIKE (plan 020): the node renderer runs no onBeforeCompile.
+  const material = nodeRenderer() ? paperNodeMaterial(PAPER) : paperMaterial();
   const background = PAPER_SKY.clone();
   const savedFog = new Color();
   const hidden: Object3D[] = [];
