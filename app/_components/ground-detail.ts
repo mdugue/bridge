@@ -396,6 +396,7 @@ export const GROUND_DETAIL = /* glsl */ `
     }
     float gdPaintFade = 1.0 - smoothstep( 0.06, 0.25, grFw );
     baseCol = mix( baseCol, max( baseCol, vec3( 0.86, 0.85, 0.82 ) ), gdPaint * gdPaintFade * gdOn * 0.8 );
+    paperInk = max( paperInk, gdPaint * gdPaintFade * gdOn * 0.8 );
   }
 `;
 

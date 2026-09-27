@@ -106,7 +106,9 @@ config change.
     `ground-detail.ts` (kerb band, lawn edges, paving, parking and urban
     green in the terrain's fragment pass), `sport-ground.ts` (sports
     grounds: surface and lines in the same pass), `sport-fixtures.ts`
-    (their goals, posts and nets), `rail-layer.ts`, `wall-layer.ts`,
+    (their goals, posts and nets), `rail-layer.ts` (rails, ballast,
+    platforms and the bridges: decks, the measured steel above them,
+    arches, pylons, piers — ADR 0033), `wall-layer.ts`,
     `kerb-layer.ts`, `stair-layer.ts` and `fence-layer.ts` (only their
     materials: walls, kerbs, stairs and fences are baked into the fine
     terrain glTF; a fence is one low band in a muted tone — no pattern),
@@ -125,7 +127,12 @@ config change.
     factor on the ambient light, the far horizon on the sun; its raster
     shared by a tile's terrain and buildings through `shared-rasters.ts`),
     `height-fog.ts`, `post-stack.ts`,
-    `depth-grading-effect.ts`, `paper-grain-effect.ts`, `visual-style.ts`
+    `depth-grading-effect.ts`, `paper-grain-effect.ts`,
+    `stylize-effect.ts` (the picture styles' one pass: ink lines + tone;
+    the table is `lib/city/render-style.ts`), `paper-scene.ts` (Papier's
+    render-time white material), `style-dressing.ts` (a style's own crowns
+    and noir's lamp cones, swapped in for its frames), `style-memory.ts`
+    (the last style, kept in local storage), `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
   - input/camera: `camera-pose.ts` (the one owner of where the player
@@ -167,7 +174,9 @@ config change.
   site type, tile ids and extents), `tileset.ts` (the 3D Tiles tree and its
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
-  (the per-object table: packing, demolish, footprints), `tile.ts` (each
+  (the per-object table: packing, demolish, footprints; the LoD2 bridge
+  slabs it leaves out), `bridge.ts` (ribs, pylons, the arch through a
+  measured rib, piers clear of the fairway), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
   units alongside
@@ -179,11 +188,13 @@ config change.
   (the sheds and garden houses LoD2 lacks, appended to the city mesh),
   `ndvi.py`, `roof_colour.py`,
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
-  `rail.py`, `surface.py`, `edges.py`, `sport.py`, `markings.py`,
+  `rail.py` + `bridge.py` (the deck and superstructure measured in DOM1,
+  the fairway clearance, Wikidata), `surface.py`, `edges.py`, `sport.py`,
+  `markings.py`,
   `cultivated.py`, `skyview.py`, `osm_buildings.py` (shops and heritage
   per LoD2 object), `tram.py`, `riverside.py`, `soundmarks.py`
   (the bell towers), `osm.py`; `ingest_sn.py` is Saxony's
-  download adapter; tests in `pipeline/tests/`), run by `bun run bake`
+  download adapter (it also fetches Wikidata's bridges); tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed
   artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
@@ -407,7 +418,28 @@ is off-screen.
 — archviz clay plus the facade-detail shader, with hash-dithered transparency).
 The earlier "ghost" (`MeshPhysicalMaterial.transmission`) and "standard" (the
 loader's raw LoD colours) styles were removed. Keep transmission out of the
-scene: it re-renders everything into a buffer each frame (~2× cost).
+scene: it re-renders everything into a buffer each frame (~2× cost). The
+*picture* styles (Comic, Film noir, Sin City, Papier; the HUD's *Bildstil*,
+key `V`) are not material styles: they are one post pass over the finished
+frame (`stylize-effect.ts`, ADR 0034), off in the default pastel look.
+Papier additionally swaps every surface for one white paper material for
+its frames (`paper-scene.ts`, `scene.overrideMaterial`, restored after the
+render); `style-dressing.ts` likewise swaps in a style's crowns and lamp
+cones — layers only tag what may be dressed (`userData.styleCrown`,
+`userData.styleLampHeads`); both gather what they touch once per stream
+change (`PostStack.sceneChanged`), not every frame. The one sanctioned
+exception is the ground: the terrain material (`userData.paperOwn`) opts
+out of the override and draws Papier's paper, paint and water itself
+under the shared `PAPER_GROUND_ON` uniform. Give a new style a row in
+`lib/city/render-style.ts` and a mode in that pass — never a branch in a
+scene material — and any new style material a stand-in in
+`PostStack.warmStyles`, which compiles them all once the scene is idle. A
+stand-in must match the real draw in more than its material: three keys a
+program on the scene's lights (even for an unlit material) and on whether
+the geometry has normals — the pass's stand-in has neither.
+Its depth taps stay at
+integer texel radii (the buffer is read NEAREST; a fractional radius inks
+whole grazing streets).
 
 **The boot has two phases.** `bootApp` returns (and the overlay drops) as
 soon as the spawn tile's buildings and any of its terrain levels are on
@@ -583,3 +615,13 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   plan 020 behind a spike on a real GPU; don't start the port before the
   maintainer has the spike's plates and numbers
 - Committing raw bulk geodata, or switching on Git-LFS
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

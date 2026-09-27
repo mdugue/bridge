@@ -436,7 +436,9 @@ export function sportGround(
   fd: Fields,
   m: MeadowVars,
   baseCol: Node<"vec3">,
-  sport: { raster: Texture; table: Texture }
+  sport: { raster: Texture; table: Texture },
+  /** the paint coverage for the Papier ground (a float var) */
+  ink: Node<"float">
 ): void {
   const [sw, sh] = texSize(sport.raster);
   const at = rasterReader(sport.raster);
@@ -474,14 +476,14 @@ export function sportGround(
     const w = max(fd.w, 0.004);
     const l = markings(best, codes, w, { baseCol, spIn });
     // Warm white chalk; on sand, the blue of beach-volleyball tape.
-    const ink = select(
+    const chalk = select(
       codes.surf.equal(SURF.sand),
       vec3(0.2, 0.33, 0.55),
       vec3(0.86, 0.84, 0.78)
     );
     const fade = float(1).sub(smoothstep(0.6, 1.6, m.fw));
-    baseCol.assign(
-      mix(baseCol, ink, clamp(l, 0, 1).mul(spIn).mul(fade).mul(0.9))
-    );
+    const lines = clamp(l, 0, 1).mul(spIn).mul(fade).mul(0.9);
+    baseCol.assign(mix(baseCol, chalk, lines));
+    ink.assign(max(ink, lines));
   });
 }

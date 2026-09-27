@@ -242,6 +242,34 @@ not reproduce: WebKit on Linux has no WebGPU, and its WebGL2 path boots
 under a much smaller stack. The toast now carries the first frames of
 the failing stack on the node path, for the next report.
 
+**The picture styles on the node path (2026-09-27, PR #65 merged).**
+Comic, Film noir, Sin City and Papier are TSL here: the style pass
+(`stylize-node.ts`, term for term `stylize-effect.ts`), the Papier
+material and the noir lamp cones (`style-node.ts`, which `paper-scene.ts`
+and `style-dressing.ts` pick on node pages), the Papier ground in
+`terrain-node.ts` with the paint coverage the ground passes now report,
+film grain and the style's vignette in the finish. Headless on the
+WebGL2 backend all four styles draw as the WebGL path does, except that
+Papier's crowns read lighter; on WebGPU they compile and run without a
+WGSL or pipeline error. What it took, for the port to know:
+
+- Each style is its own pipeline and graph (built on first use or by
+  `warmStyles`), its pen as constants. One pass holding all four behind a
+  uniform branch came to ~3300 lines of GLSL, and the headless GPU drew it
+  black without an error.
+- A TSL `If(…).ElseIf(…).ElseIf(…).Else(…)` chain lost its last branch
+  (Sin City drew black); with JS-level branches there is no chain.
+- The colour and the view distance go into one float target (alpha = the
+  distance) before the pass. Sampled side by side — the colour's render
+  target and the scene pass's depth (`PassTextureNode.sample`, or the depth
+  texture itself) — the WebGL2 backend read the colour for both.
+- `cameraNear`/`cameraFar` inside a post pipeline are the full-screen
+  quad's camera; view depth from a depth sample needs the scene camera's.
+- The style crowns are geometry views (`style-dressing.ts`): they now carry
+  the shared-instancing attributes (`iMat*`, interleaved) as well as the
+  instanced ones, or every crown mesh would share the first one's
+  matrices.
+
 **What a tile keeps resident (2026-09-26, after the audit of PR #67).**
 The main branch's audit listed what the port should start from; the
 memory items are done here, as iPhones kept crashing while looking

@@ -39,6 +39,16 @@ test("clampLook keeps percent rows inside [0, max] and the focus distance at 1 m
   ).toEqual({ dof: false, focusMode: "manual", multiTuft: false });
 });
 
+test("clampLook keeps a known style and drops an unknown one", () => {
+  expect(clampLook({ style: "noir" })).toEqual({ style: "noir" });
+  expect(
+    clampLook({ style: "ghost" } as unknown as Partial<LookValues>)
+  ).toEqual({});
+  const look = createLookState();
+  look.set({ style: "sincity" });
+  expect(look.get().style).toBe("sincity");
+});
+
 test("non-finite numbers and unknown keys are dropped", () => {
   const look = createLookState();
   look.set({ fogAmount: Number.NaN, focusDistanceM: Number.POSITIVE_INFINITY });

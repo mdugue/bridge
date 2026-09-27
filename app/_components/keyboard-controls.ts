@@ -1,10 +1,12 @@
 /**
  * The keyboard adapter: turns key events into camera-pose calls and the
- * one-shot actions (demolish, walk/fly, the numbered viewpoints). The event targets are injected so the adapter
+ * one-shot actions (demolish, walk/fly, the picture style, the numbered viewpoints). The event targets are injected so the adapter
  * runs against a fake document in unit tests.
  */
 
 export interface KeyboardActions {
+  /** V — the next picture style (pastel → comic → noir → Sin City) */
+  cycleStyle: () => void;
   /** R — demolish the building under the crosshair */
   demolish: () => void;
   press: (code: string) => void;
@@ -25,9 +27,10 @@ export interface KeyboardTargets {
   window: Pick<Window, "addEventListener" | "removeEventListener">;
 }
 
-const ONE_SHOTS = new Map<string, "demolish" | "toggleMode">([
+const ONE_SHOTS = new Map<string, "cycleStyle" | "demolish" | "toggleMode">([
   ["KeyR", "demolish"],
   ["KeyF", "toggleMode"],
+  ["KeyV", "cycleStyle"],
 ]);
 
 /** Digit1…Digit9 → 0…8; anything else → null. */
@@ -60,12 +63,17 @@ export function attachKeyboardControls(
       return;
     }
     actions.press(e.code);
+    // A chord belongs to the browser: Cmd/Ctrl+V pastes, Cmd+F finds, Cmd+R
+    // reloads — none of them may also switch the style, fly or demolish.
+    if (e.ctrlKey || e.metaKey || e.altKey) {
+      return;
+    }
     const shot = ONE_SHOTS.get(e.code);
     if (shot) {
       actions[shot]();
     }
     const view = viewpointIndexOf(e.code);
-    if (view !== null && !(e.ctrlKey || e.metaKey || e.altKey)) {
+    if (view !== null) {
       actions.viewpoint(view);
     }
   };

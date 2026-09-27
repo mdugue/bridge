@@ -52,6 +52,7 @@ import {
   urbanGreen,
 } from "./ground-detail-node";
 import { colonyGarden } from "./cultivated-node";
+import { PAPER_GROUND_ON, PAPER_HEX } from "./paper-scene";
 import { roadMarkings } from "./road-markings-node";
 import type { GroundLight } from "./sky-light";
 import { applyGroundLightNodes } from "./sky-light-node";
@@ -191,9 +192,21 @@ interface GroundPass {
   base: Node<"vec3">;
   fd: ReturnType<typeof groundFields>;
   g: ReturnType<typeof groundInputs>;
+  /** paint coverage, for the Papier ground (PAPER_GROUND) */
+  ink: Node<"float">;
   m: ReturnType<typeof meadowVars>;
   uv: Node<"vec2">;
 }
+
+/** On for Papier's frames (paper-scene.ts PAPER_GROUND_ON, by reference). */
+const paperGroundOn = () =>
+  uniform(0).onRenderUpdate(() => PAPER_GROUND_ON.value);
+/** Papier's tones (terrain-layer.ts PAPER_GROUND): the sheet, the water, the
+ *  pencil the paint is drawn in — darker than they look, the Papier pass
+ *  lifts everything sunlit to the paper itself. */
+const PAPER = color(PAPER_HEX);
+const PAPER_WATER = color(0x5a_61_6b);
+const PAPER_PAINT = color(0x60_60_66);
 
 /**
  * The passes over the ground's base colour, in terrain-layer.ts
@@ -208,9 +221,10 @@ const GROUND_PASSES: ((
 ) => ((p: GroundPass) => void) | undefined)[] = [
   ({ colonies }) =>
     colonies && ((p) => colonyGarden(p.g, p.fd, p.m, p.base, colonies)),
-  ({ sport }) => sport && ((p) => sportGround(p.g, p.fd, p.m, p.base, sport)),
+  ({ sport }) =>
+    sport && ((p) => sportGround(p.g, p.fd, p.m, p.base, sport, p.ink)),
   ({ markings }) =>
-    markings && ((p) => roadMarkings(p.g, p.fd, p.m, p.base, markings)),
+    markings && ((p) => roadMarkings(p.g, p.fd, p.m, p.base, markings, p.ink)),
   (splat) => {
     const ndvi = splat.ndviTexture;
     return ndvi && ((p) => meadowNdvi(splat, ndvi, p.uv, p.m.meadow, p.base));
@@ -240,11 +254,20 @@ function splatTerrain(
       .toVar();
     const fd = groundFields(g, m);
     const ugW = urbanGreen(g, fd, m, base);
-    tilt.assign(groundDetail(g, fd, ugW, base, m.fw));
-    const pass = { g, fd, m, base, uv };
+    const paperInk = float(0).toVar();
+    tilt.assign(groundDetail(g, fd, ugW, base, m.fw, paperInk));
+    const pass = { g, fd, m, base, ink: paperInk, uv };
     for (const layer of GROUND_PASSES) {
       layer(splat)?.(pass);
     }
+    // PAPER_GROUND (terrain-layer.ts): for Papier's frames the ground keeps
+    // its own material — the paint and the water's extent exist only here —
+    // and turns to paper, the water a cool deeper paper, the paint pencil.
+    const water = smoothstep(0.05, 0.5, texture(splat.colorTexture, uv).a);
+    const sheet = mix(PAPER, PAPER_WATER, water);
+    base.assign(
+      mix(base, mix(sheet, PAPER_PAINT, clamp(paperInk, 0, 1)), paperGroundOn())
+    );
     const run = max(length(fwidth(xy)), 1e-4);
     const slope = fwidth(elevation).div(run);
     const ink = clamp(
@@ -281,6 +304,8 @@ export function createNodeTerrainMaterial(
     color: 0xad_b2_9e,
     roughness: 1,
   });
+  // Papier draws the ground with this material (paper-scene.ts paperOwn).
+  material.userData.paperOwn = true;
   if (splat) {
     splatTerrain(material, splat);
     // The city's large-scale light (sky-light.ts): the sky view on the
@@ -296,7 +321,11 @@ export function createNodeTerrainMaterial(
     0,
     0.22
   );
-  material.colorNode = mix(color(0xad_b2_9e), INK, ink);
+  material.colorNode = mix(
+    mix(color(0xad_b2_9e), PAPER, paperGroundOn()),
+    INK,
+    ink
+  );
   material.normalNode = calmNormal();
   return material;
 }

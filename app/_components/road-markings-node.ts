@@ -207,7 +207,9 @@ export function roadMarkings(
   fd: Fields,
   m: MeadowVars,
   baseCol: Node<"vec3">,
-  markings: { raster: Texture; table: Texture }
+  markings: { raster: Texture; table: Texture },
+  /** the paint coverage for the Papier ground (a float var) */
+  ink: Node<"float">
 ): void {
   const on = uniform(g.groundDetail.value).onRenderUpdate(
     () => g.groundDetail.value
@@ -242,12 +244,13 @@ export function roadMarkings(
     const wear = noise(g.xy.mul(0.37).add(3)).mul(0.22).add(0.78);
     const fade = float(1).sub(smoothstep(0.5, 1.5, m.fw));
     const strength = min(on.div(0.7), 1).mul(0.85);
-    baseCol.assign(
-      mix(
-        baseCol,
-        max(baseCol, vec3(0.88, 0.87, 0.83)),
-        clamp(paint, 0, 1).mul(road).mul(wear).mul(fade).mul(strength)
-      )
-    );
+    const mark = clamp(paint, 0, 1)
+      .mul(road)
+      .mul(wear)
+      .mul(fade)
+      .mul(strength)
+      .toVar();
+    baseCol.assign(mix(baseCol, max(baseCol, vec3(0.88, 0.87, 0.83)), mark));
+    ink.assign(max(ink, mark));
   });
 }

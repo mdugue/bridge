@@ -12,6 +12,7 @@ import {
   type LookValues,
   maxValueOf,
 } from "./look-controls";
+import { isRenderStyle } from "./render-style";
 
 export type LookListener = (values: LookValues) => void;
 
@@ -29,8 +30,8 @@ export interface LookState {
 
 /**
  * The part of a patch the scene accepts: percent rows clamped to [0, max],
- * the focus distance to ≥ 1 m, the flags as they are. Non-finite numbers and
- * unknown keys are dropped.
+ * the focus distance to ≥ 1 m, the flags as they are, the style only when it
+ * names one. Non-finite numbers, unknown styles and unknown keys are dropped.
  */
 export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
   const out: Partial<LookValues> = {};
@@ -52,6 +53,9 @@ export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
   }
   if (patch.multiTuft !== undefined) {
     out.multiTuft = patch.multiTuft;
+  }
+  if (isRenderStyle(patch.style)) {
+    out.style = patch.style;
   }
   return out;
 }

@@ -560,7 +560,7 @@ function patterns(fd: Fields, xy: V2, q: V2, pave: F, baseCol: V3): void {
 }
 
 /** Bay lines laid out from the kerb, or across a car park. */
-function parking(fd: Fields, q: V2, on: F, baseCol: V3, fw: F): void {
+function parking(fd: Fields, q: V2, on: F, baseCol: V3, fw: F, ink: F): void {
   const line = 0.07;
   const paint = float(0).toVar();
   const lineAt = (period: number) => {
@@ -591,25 +591,24 @@ function parking(fd: Fields, q: V2, on: F, baseCol: V3, fw: F): void {
     If(fd.park.equal(parkingId("lot")), lot);
   }
   const fade = float(1).sub(smoothstep(0.06, 0.25, fw));
-  baseCol.assign(
-    mix(
-      baseCol,
-      max(baseCol, vec3(0.86, 0.85, 0.82)),
-      paint.mul(fade).mul(on).mul(0.8)
-    )
-  );
+  const painted = paint.mul(fade).mul(on).mul(0.8);
+  baseCol.assign(mix(baseCol, max(baseCol, vec3(0.86, 0.85, 0.82)), painted));
+  // the Papier ground draws the paint in pencil (terrain-node.ts)
+  ink.assign(max(ink, painted));
 }
 
 /**
  * GROUND_DETAIL: kerbs, lawn edges, paving and parking. Updates `baseCol`
- * and returns the accumulated view-space normal tilt (gdTilt).
+ * and the paint coverage `ink` (a float var, for the Papier ground) and
+ * returns the accumulated view-space normal tilt (gdTilt).
  */
 export function groundDetail(
   g: GroundInputs,
   fd: Fields,
   ugW: F,
   baseCol: V3,
-  fw: F
+  fw: F,
+  ink: F
 ): V3 {
   const on = live(g.groundDetail);
   kerb(g, fd, on, baseCol);
@@ -636,6 +635,6 @@ export function groundDetail(
     baseCol.assign(mix(baseCol, road, pave.mul(0.6)));
   });
   patterns(fd, g.xy, q, pave, baseCol);
-  parking(fd, q, on, baseCol, fw);
+  parking(fd, q, on, baseCol, fw, ink);
   return tilt;
 }

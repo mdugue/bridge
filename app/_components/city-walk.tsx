@@ -28,7 +28,7 @@ import {
 } from "@/lib/city/load-stages";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import {
   decodeLook,
@@ -57,6 +57,7 @@ import { SceneSidebar } from "./scene-sidebar";
 import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
+import { readStoredStyle, writeStoredStyle } from "./style-memory";
 import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./webgl-support";
@@ -248,8 +249,23 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
   // boots the new instance from it, so sliders and scene never disagree.
-  const [look] = useState(createLookState);
+  // The picture style starts as the viewer last left it (style-memory.ts).
+  const [look] = useState(() =>
+    createLookState({
+      ...LOOK_DEFAULTS,
+      style: readStoredStyle() ?? LOOK_DEFAULTS.style,
+    })
+  );
   const lookValues = useSyncExternalStore(look.subscribe, look.get, look.get);
+  useEffect(() => {
+    let remembered = look.get().style;
+    return look.subscribe((values) => {
+      if (values.style !== remembered) {
+        remembered = values.style;
+        writeStoredStyle(values.style);
+      }
+    });
+  }, [look]);
   const [mode, setMode] = useState<MovementMode>("walk");
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -263,9 +279,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   useEffect(() => {
     liveEnded.current = live.ended;
   }, [live.ended]);
-  const [landcoverTiles, setLandcoverTiles] = useState<
-    { bounds: TerrainBounds; src: string }[]
-  >([]);
+  const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
@@ -580,7 +594,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
           rememberedView={rememberedView}
-          resetLook={() => look.set(LOOK_DEFAULTS)}
+          // The sliders go back to their defaults; the picture style is a
+          // choice of its own, made above them, and stays.
+          resetLook={() =>
+            look.set({ ...LOOK_DEFAULTS, style: look.get().style })
+          }
           setRememberedView={setRememberedView}
           setSnapshotText={setSnapshotText}
           snapshotMsg={snapshotMsg}

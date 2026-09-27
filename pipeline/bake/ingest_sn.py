@@ -10,6 +10,7 @@ bakes read (bake/common.py `Tile`):
     <raw>/lsc/<tile>.laz             the GeoSN laser scan, layer 1 — only
                                      with --lsc (≈380 MB a tile), for the
                                      hedge heights and the scan trees
+    <raw>/wikidata/bridges_<tile>.json   the bridges Wikidata knows (bridge.py)
 
 Downloads are cached under <raw>/downloads/ and never fetched twice. The
 DGM1 and the CityJSON are committed under data/ (ADR 0004) and not touched.
@@ -33,6 +34,8 @@ import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
+
+from .bridge import fetch_wikidata
 
 SERVICE = (
     "https://geodienste.sachsen.de/ags-relay/ArcGISServer/guest/arcgis/rest/"
@@ -353,6 +356,8 @@ def main() -> None:
     ingest_trees(args.raw, args.tile, args.bounds)
     if args.lsc:
         ingest_lsc(args.raw, args.tile, args.bounds)
+    # Saxony's grid is EPSG:25833
+    fetch_wikidata(args.raw, args.tile, args.bounds, 25833)
 
 
 if __name__ == "__main__":

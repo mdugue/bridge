@@ -1,6 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   DataTexture,
   FloatType,
   LinearFilter,
@@ -43,6 +44,7 @@ import {
   urbanGreen,
 } from "./ground-detail";
 import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { PAPER_GROUND_ON, PAPER_HEX } from "./paper-scene";
 import { DATA_POSITION } from "./shader-chunks";
 import { SPORT_DECL, SPORT_GROUND, sportPalette } from "./sport-ground";
 import { COLONY_DECL, COLONY_GARDEN_GLSL } from "./cultivated-layer";
@@ -703,6 +705,18 @@ const NO_FRUSTUM = new Vector3(0, 0, 0);
 /** The sports surfaces' colours, linear (sport-ground.ts). */
 const SPORT_LINEAR = sportPalette();
 
+/** Papier's tones, linear GLSL literals (paper-scene.ts's sheet). */
+const glslLinear = (hex: number): string =>
+  new Color(hex)
+    .toArray()
+    .map((c) => c.toFixed(4))
+    .join(", ");
+const PAPER_LINEAR = glslLinear(PAPER_HEX);
+// Darker than they look: the Papier pass lifts everything sunlit above
+// mid-grey to the paper itself, so these land as a faint cool grey.
+const PAPER_WATER_LINEAR = glslLinear(0x5a_61_6b);
+const PAPER_PAINT_LINEAR = glslLinear(0x60_60_66);
+
 /** The road's palette colour, linear — sealed ground off the carriageway. */
 const ROAD_LINEAR = LANDCOVER_CLASSES[ROAD_CLASS].srgb.map(srgbToLinear);
 
@@ -740,6 +754,7 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
   return {
     decl: `varying vec2 vSplatUv;\nvarying vec2 vWorldXY;\nuniform sampler2D uSplat;\nuniform highp sampler2D uSplatClass;\n${ndviDecl}${groundDetailDecl(hasSurface, hasEdges)}${hasSport ? SPORT_DECL : ""}${hasMarkings ? MARKINGS_DECL : ""}${hasColonies ? COLONY_DECL : ""}${skyLightDecl(hasSvf, hasHorizon)}`,
     body: `vec3 baseCol = texture2D( uSplat, vSplatUv ).rgb;
+         float paperInk = 0.0;
          ${GRASS_MOTTLE}
          ${groundFields(hasSurface, hasEdges)}
          ${urbanGreen(hasNdvi, hasEdges)}
@@ -748,9 +763,26 @@ function splatFragment(splat: SplatLayer): { body: string; decl: string } {
          ${hasSport ? SPORT_GROUND : ""}
          ${hasMarkings ? ROAD_MARKINGS : ""}
          ${hasNdvi ? MEADOW_NDVI : ""}
+         ${PAPER_GROUND}
          ${skyLightBody(hasSvf, hasHorizon)}`,
   };
 }
+
+/**
+ * The Papier style's ground (paper-scene.ts): for its frames the terrain
+ * keeps its own shader instead of wearing the paper material, because the
+ * paint on it — road markings, parking bays, sports lines — and the water's
+ * extent exist only here. The ground turns to paper, the paint to a light
+ * pencil grey and the water to a cool, slightly deeper paper; light, sky
+ * view and contours stay the terrain's own.
+ */
+const PAPER_GROUND = /* glsl */ `
+  if ( uPaperGround > 0.5 ) {
+    float ppWater = smoothstep( 0.05, 0.5, texture2D( uSplat, vSplatUv ).a );
+    vec3 ppCol = mix( vec3( ${PAPER_LINEAR} ), vec3( ${PAPER_WATER_LINEAR} ), ppWater );
+    baseCol = mix( ppCol, vec3( ${PAPER_PAINT_LINEAR} ), clamp( paperInk, 0.0, 1.0 ) );
+  }
+`;
 
 function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
   const hasSplat = splat !== undefined;
@@ -759,11 +791,11 @@ function patchTerrainFragment(shader: TerrainShader, splat?: SplatLayer): void {
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
-      `#include <common>\n         varying float vElevation;\n         ${decl}`
+      `#include <common>\n         varying float vElevation;\n         uniform float uPaperGround;\n         ${decl}`
     )
     .replace(
       "vec4 diffuseColor = vec4( diffuse, opacity );",
-      `${parts?.body ?? "vec3 baseCol = diffuse;"}
+      `${parts?.body ?? `vec3 baseCol = uPaperGround > 0.5 ? vec3( ${PAPER_LINEAR} ) : diffuse;`}
          ${CONTOUR_INK}
          ${hasSplat ? CONTOUR_SPLAT_GATE : ""}
          vec4 diffuseColor = vec4( mix( baseCol, vec3( 0.30, 0.33, 0.38 ), ink ), opacity );`
@@ -806,7 +838,10 @@ function createTerrainMaterial(
   // unbound samplers). Neighbour tiles do load independently, so this happens.
   const cacheKey = `terrain-${splat !== undefined}-${splat?.ndviTexture !== undefined}-${splat?.surfaceTexture !== undefined}-${splat?.edgesTexture !== undefined}-${splat?.sport !== undefined}-${splat?.markings !== undefined}-${splat?.colonies !== undefined}-${splat?.svfTexture !== undefined}-${splat?.horizonTexture !== undefined}-${heightFog !== undefined}`;
   material.customProgramCacheKey = () => cacheKey;
+  // Papier draws the ground with this material (see PAPER_GROUND).
+  material.userData.paperOwn = true;
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.uPaperGround = PAPER_GROUND_ON;
     if (splat) {
       applyTerrainUniforms(shader, splat);
     }
