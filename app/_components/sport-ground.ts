@@ -501,8 +501,8 @@ export function sportGround(
       vec3(0.86, 0.84, 0.78)
     );
     const fade = float(1).sub(smoothstep(0.6, 1.6, inp.fw));
-    col.baseCol.assign(
-      mix(col.baseCol, ink, clamp(l, 0, 1).mul(inside).mul(fade).mul(0.9))
-    );
+    const line = clamp(l, 0, 1).mul(inside).mul(fade).mul(0.9).toVar();
+    col.baseCol.assign(mix(col.baseCol, ink, line));
+    col.paperInk.assign(max(col.paperInk, line));
   });
 }

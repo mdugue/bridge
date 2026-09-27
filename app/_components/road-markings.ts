@@ -198,12 +198,15 @@ export function roadMarkings(
     const wear = gdNoise(inp.xy.mul(0.37).add(3)).mul(0.22).add(0.78);
     const fade = float(1).sub(smoothstep(0.5, 1.5, inp.fw));
     const on = min(inp.groundDetail.div(0.7), 1).mul(0.85);
+    const mark = clamp(paint, 0, 1)
+      .mul(road)
+      .mul(wear)
+      .mul(fade)
+      .mul(on)
+      .toVar();
     col.baseCol.assign(
-      mix(
-        col.baseCol,
-        max(col.baseCol, vec3(0.88, 0.87, 0.83)),
-        clamp(paint, 0, 1).mul(road).mul(wear).mul(fade).mul(on)
-      )
+      mix(col.baseCol, max(col.baseCol, vec3(0.88, 0.87, 0.83)), mark)
     );
+    col.paperInk.assign(max(col.paperInk, mark));
   });
 }

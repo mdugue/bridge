@@ -10,6 +10,7 @@ import {
   LOOK_CONTROLS,
   type LookValues,
 } from "./look-controls";
+import { isRenderStyle, RENDER_STYLES, type RenderStyle } from "./render-style";
 
 export type MovementModeJson = "fly" | "walk";
 
@@ -30,6 +31,8 @@ export interface SnapshotLook {
   focusDistanceM?: number;
   focusMode?: FocusMode;
   multiTuft?: boolean;
+  /** the picture style; absent in older snapshots (they keep the current one) */
+  style?: RenderStyle;
   /**
    * Per-control percentages, keyed by LookControlDef.snapshotKey (all
    * optional: older snapshots omit newer controls).
@@ -121,6 +124,10 @@ function checkLookFlags(look: Record<string, unknown>): void {
   if (dist !== undefined && finite(dist, "look.focusDistanceM") < 1) {
     throw new SnapshotError("look.focusDistanceM must be at least 1");
   }
+  if (look.style !== undefined && !isRenderStyle(look.style)) {
+    const ids = RENDER_STYLES.map((def) => `"${def.id}"`).join(", ");
+    throw new SnapshotError(`look.style must be one of ${ids}`);
+  }
 }
 
 /** Percent keys must be finite numbers when present; range is clamped by the applier. */
@@ -138,7 +145,7 @@ function checkLook(v: unknown): SnapshotLook {
 
 /**
  * The persisted document for the live values: one `<snapshotKey>` percent per
- * table row, the four flags and the sun instant. What Copy writes.
+ * table row, the five flags and the sun instant. What Copy writes.
  */
 export function encodeSnapshot(
   look: LookValues,
@@ -150,6 +157,7 @@ export function encodeSnapshot(
     focusMode: look.focusMode,
     focusDistanceM: look.focusDistanceM,
     multiTuft: look.multiTuft,
+    style: look.style,
   };
   for (const def of LOOK_CONTROLS) {
     lookJson[def.snapshotKey] = Math.round(look[def.key] * 100);
@@ -165,7 +173,7 @@ export function encodeSnapshot(
 /**
  * The look values a parsed snapshot carries, as a store patch: every percent
  * key that is present (older snapshots omit newer controls, which keep their
- * current value) and each of the four flags when present. Ranges are clamped
+ * current value) and each of the five flags when present. Ranges are clamped
  * by the store on apply. What Apply reads.
  */
 export function decodeLook(
@@ -192,6 +200,9 @@ export function decodeLook(
   }
   if (look.multiTuft !== undefined) {
     patch.multiTuft = look.multiTuft;
+  }
+  if (look.style !== undefined) {
+    patch.style = look.style;
   }
   return patch;
 }

@@ -125,6 +125,11 @@ export interface GroundColour {
   detail: F;
   /** the meadow's value mottle (−1..1) */
   mottle: F;
+  /**
+   * How much of the ground is paint — parking bays, road markings, sports
+   * lines — for the Papier style's pencil grey (terrain-layer.ts).
+   */
+  paperInk: F;
 }
 
 /** The fields every later chunk reads (vars, or JS where the GLSL knew). */
@@ -743,13 +748,11 @@ function parking(
     If(isLot, lot);
   }
   const fade = float(1).sub(smoothstep(0.06, 0.25, inp.fw));
+  const amount = paint.mul(fade).mul(inp.groundDetail).mul(0.8).toVar();
   col.baseCol.assign(
-    mix(
-      col.baseCol,
-      max(col.baseCol, vec3(0.86, 0.85, 0.82)),
-      paint.mul(fade).mul(inp.groundDetail).mul(0.8)
-    )
+    mix(col.baseCol, max(col.baseCol, vec3(0.86, 0.85, 0.82)), amount)
   );
+  col.paperInk.assign(max(col.paperInk, amount));
 }
 
 /** Kerbs, lawn edges and the paving patterns (after `urbanGreen`). */

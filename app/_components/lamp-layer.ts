@@ -81,7 +81,7 @@ const LAMP_LIGHT = 0xff_d0_89;
  * born with it. The materials are then the scene's (`sceneMaterial`), one
  * node build for every tile.
  */
-const lampNight: Live = uniform(0);
+export const lampNight: Live = uniform(0);
 
 /**
  * The soft radial alpha of the halos and pools, from the quad's (or disc's)
@@ -278,6 +278,9 @@ export function buildLamps(
   const glow = buildGlow(headPositions);
   const decals = buildDecals(places);
   group.add(posts, heads, glow, decals);
+  // For the picture styles' light cones (style-dressing.ts): a tag with the
+  // post height; the layer itself knows no style.
+  heads.userData.styleLampHeads = { height: LAMP_H };
 
   return {
     group,

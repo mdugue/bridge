@@ -26,6 +26,7 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "1 – 9", action: "Aussichtspunkt" },
   { key: "Scroll", action: "zoomen" },
   { key: "R", action: "abreißen" },
+  { key: "V", action: "Bildstil wechseln" },
   { key: "Esc", action: "immersiv beenden" },
 ];
 

@@ -105,7 +105,20 @@ chip. Every tile change re-renders the shadow map. The layers:
   (tempered, with a horizon haze band), hemisphere fill, fog colour by time
   of day.
 - `post-stack.ts` — the scene pass into its own target and three's node
-  `RenderPipeline`: GTAO, DoF, SMAA, depth grading, vignette, paper grain.
+  `RenderPipeline`: GTAO, DoF, the picture style, SMAA, depth grading,
+  vignette, paper grain. The picture styles (Comic, Film noir, Sin City,
+  Papier; `lib/city/render-style.ts`) are one node, `stylize-effect.ts`
+  (ADR 0034), in a styled pipeline pair the default pastel never draws:
+  ink from the second difference of `1/z` (zero on planes; relative to `w`
+  = silhouette, relative to slope = fold), tone bands / monochrome curves
+  on the colour; the mode and the pen are uniforms. Read depth only at
+  integer texel radii around a texel centre. Papier (`paper-scene.ts`) is
+  the one style that touches the scene: a per-frame
+  `scene.overrideMaterial` (white, flat-shaded node material; three carries
+  each material's `positionNode` over) with sprites and see-through sheets
+  hidden, restored after the render. QA the styles on a handful of views
+  (aerial, roof sea, half-long building shot, street, river) — lite at
+  pixel ratio 0.5 hides the stroke widths, so judge them at ≥ 1.
 - `visual-style.ts` — the one building style: opaque archviz clay + facade
   detail (tint, Boden-Verlauf, Höhenlinien, Traufkante, Streiflicht, dusk
   glow) as a `MeshStandardNodeMaterial`, hash-dithered transparency

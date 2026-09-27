@@ -23,6 +23,7 @@ import {
   float,
   floor,
   fract,
+  min,
   mix,
   nodeObject,
   perspectiveDepthToViewZ,
@@ -33,6 +34,7 @@ import {
   screenUV,
   smoothstep,
   texture,
+  time,
   uniform,
   vec2,
   vec3,
@@ -44,7 +46,16 @@ import {
   type LookValues,
   type PostLookKey,
 } from "@/lib/city/look-controls";
-import type { F, V2, V4 } from "./shader-chunks";
+import {
+  RENDER_STYLE_BY_ID,
+  type RenderStyleDef,
+} from "@/lib/city/render-style";
+import type { SceneFog } from "./height-fog";
+import { createPaperScene } from "./paper-scene";
+import type { F, Live, V2, V3, V4 } from "./shader-chunks";
+import { compileRepresentatives } from "./three-utils";
+import { createStyleDressing } from "./style-dressing";
+import { createStylize } from "./stylize-effect";
 
 /** Initial focus distance before the first crosshair raycast lands. */
 const HYPERFOCAL_M = 600;
@@ -74,9 +85,6 @@ function focusRangeFor(distanceM: number): number {
 
 /** Depth grading reaches full strength at this view distance (m). */
 const GRADE_DISTANCE_M = 800;
-/** The vignette: offset and darkness of the classic smoothstep falloff. */
-const VIGNETTE_OFFSET = 0.28;
-const VIGNETTE_DARKNESS = 0.5;
 
 /** Live DoF state for QA/diagnostics. */
 export interface FocusInfo {
@@ -96,8 +104,9 @@ export interface PostStack {
    */
   compile: (object: Object3D) => Promise<void>;
   /**
-   * Pushes the rendering rows of the look — depth grading, contact shadows,
-   * paper grain, depth of field and its focus mode/distance — into the passes.
+   * Pushes the rendering rows of the look — the picture style, depth
+   * grading, contact shadows, paper grain, ink, depth of field and its
+   * focus mode/distance — into the passes.
    */
   applyLook: (look: LookValues) => void;
   dispose: () => void;
@@ -119,6 +128,22 @@ export interface PostStack {
   setRegressed: (on: boolean) => void;
   /** Follows the canvas (the scene target is drawing-buffer sized). */
   setSize: () => void;
+  /** The sun's altitude in degrees (Film noir opens up at dusk). */
+  setSunAltitude: (altitudeDeg: number) => void;
+  /**
+   * Objects came, went or changed visibility: the styles' scene halves
+   * (the Papier swap, the style dressing) re-read the scene on their next
+   * frame instead of walking it every frame.
+   */
+  sceneChanged: () => void;
+  /**
+   * Prepares every picture style off the frames that show it — the style
+   * dressing and the Papier programs of the scene's objects compiled
+   * ahead, the style pipelines built one per frame — so the first switch
+   * to a style does not stall. Idempotent; create-app calls it once the
+   * scene has loaded and the browser is idle.
+   */
+  warmStyles: () => Promise<void>;
 }
 
 /** A cheap 2D hash for the paper grain. */
@@ -128,15 +153,29 @@ function hash21(p: V2): F {
   return fract(r.x.mul(r.y));
 }
 
+/** The finish's live settings (the sliders times the style's weights). */
+interface Finish {
+  grading: Live;
+  grain: Live;
+  /** 1 = animated film grain (the monochrome styles), 0 = the paper */
+  film: Live;
+  vignetteOffset: Live;
+  vignetteDarkness: Live;
+}
+
 /**
  * Depth grading, vignette and paper grain on the antialiased image:
  * - painterly aerial perspective — a warm tint up close, cooler and gently
  *   desaturated with distance (the classic watercolour depth cue);
- * - the vignette's smoothstep falloff toward the corners;
+ * - the vignette's smoothstep falloff toward the corners (per style);
  * - a static, screen-anchored paper speckle plus faint row-correlated fibre
- *   banding — the sheet the scene is drawn on, not film grain.
+ *   banding — the sheet the scene is drawn on, not film grain. `film` 1
+ *   turns it into film grain for the monochrome styles: the speckle is
+ *   re-drawn 24 times a second and the fibres go (a film has none); like
+ *   silver grain it is strongest in the mid-tones.
  */
-function finish(input: V4, viewZ: F, grading: F, grain: F): V4 {
+function finish(input: V4, viewZ: F, f: Finish): V4 {
+  const { grading, grain, film } = f;
   const t = smoothstep(
     0.04,
     1,
@@ -149,17 +188,31 @@ function finish(input: V4, viewZ: F, grading: F, grain: F): V4 {
   const graded = mix(tinted, vec3(luma), t.mul(0.3));
   const vignette = smoothstep(
     0.8,
-    VIGNETTE_OFFSET * 0.799,
-    distance(screenUV, vec2(0.5)).mul(VIGNETTE_DARKNESS + VIGNETTE_OFFSET)
+    f.vignetteOffset.mul(0.799),
+    distance(screenUV, vec2(0.5)).mul(f.vignetteDarkness.add(f.vignetteOffset))
   );
   const cell = floor(screenCoordinate.xy.div(1.6));
-  const speckle = hash21(cell)
+  // A new sheet of grain per film frame; the static paper keeps seed 0.
+  const seed = vec2(floor(time.mul(24)).mul(7.31), 0).mul(film);
+  const speckle = hash21(cell.add(seed))
     .mul(0.65)
-    .add(hash21(cell.mul(0.31).add(17)).mul(0.35));
+    .add(hash21(cell.mul(0.31).add(17).add(seed)).mul(0.35));
   const fibre = hash21(vec2(cell.y.mul(0.713), 3.7))
     .sub(0.5)
-    .mul(0.045);
-  const paper = float(1).add(speckle.sub(0.5).mul(0.13).add(fibre).mul(grain));
+    .mul(0.045)
+    .mul(float(1).sub(film));
+  const lumaIn = dot(input.rgb, vec3(0.2126, 0.7152, 0.0722));
+  const midtones = mix(
+    1,
+    lumaIn
+      .mul(float(1).sub(min(lumaIn, 1)))
+      .mul(2.6)
+      .add(0.35),
+    film
+  );
+  const paper = float(1).add(
+    speckle.sub(0.5).mul(0.13).mul(midtones).add(fibre).mul(grain)
+  );
   return vec4(graded.mul(vignette).mul(paper), input.a);
 }
 
@@ -195,17 +248,21 @@ const COMPILE_LANES = 4;
  * pipeline would sit one level deeper than any compile) — then three's node
  * `RenderPipeline` from its colour and depth: GTAO (half resolution, normals
  * reconstructed from depth) × the contact slider → DoF (`DepthOfFieldNode`,
- * crosshair autofocus, dropped while moving) → SMAA → depth grading,
- * vignette and paper grain → sRGB. The scene target has no MSAA; SMAA
- * carries the antialiasing. There is no tone mapping: the look was tuned
- * without it.
+ * crosshair autofocus, dropped while moving) → the picture style (ink +
+ * tone; not in the default pastel style's pipelines at all) → SMAA → depth
+ * grading, vignette and paper grain → sRGB. The scene target has no MSAA;
+ * SMAA carries the antialiasing — of the style's ink lines too, which is
+ * why the style sits before it. There is no tone mapping: the look was
+ * tuned without it.
  */
 export function createPostStack(
   renderer: WebGPURenderer,
   scene: Scene,
   camera: PerspectiveCamera,
   /** GTAO samples (scene-profile.ts `aoSamplesFor`) */
-  aoSamples: number
+  aoSamples: number,
+  /** the scene's fog (height-fog.ts): the styles read and paper it */
+  fog: SceneFog
 ): PostStack {
   const size = renderer.getDrawingBufferSize(new Vector2());
   const depthTexture = new DepthTexture(size.x, size.y);
@@ -232,9 +289,15 @@ export function createPostStack(
   aoPass.resolutionScale = 0.5;
   aoPass.radius.value = AO_RADIUS_M;
   aoPass.samples.value = aoSamples;
+  const aoTexture = aoPass.getTextureNode();
   const contact = uniform(LOOK_DEFAULTS.contact * AO_INTENSITY_MAX);
-  const occlusion = pow(aoPass.getTextureNode().r, contact);
+  const occlusion = pow(aoTexture.r, contact);
   const lit = vec4(colour.rgb.mul(occlusion), colour.a);
+  // The same, at any uv: the styles read the frame's neighbourhood.
+  const litAt = (at: V2): V3 =>
+    texture(target.texture, at).rgb.mul(
+      pow(texture(aoTexture.value, at).r, contact)
+    );
 
   const focusDistance = uniform(HYPERFOCAL_M);
   const focusRange = uniform(focusRangeFor(HYPERFOCAL_M));
@@ -243,35 +306,79 @@ export function createPostStack(
     dof(lit, viewZ, focusDistance, focusRange, uniform(BOKEH_SCALE))
   ) as unknown as V4;
 
-  const grading = uniform(LOOK_DEFAULTS.grading);
-  const grain = uniform(LOOK_DEFAULTS.grain);
+  let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
+  const stylize = createStylize({ camera, depth: depthTexture, fog, litAt });
+  const paperScene = createPaperScene(scene, fog.color);
+  const styleDressing = createStyleDressing(scene);
+
+  const finishing: Finish = {
+    grading: uniform(LOOK_DEFAULTS.grading),
+    grain: uniform(LOOK_DEFAULTS.grain),
+    film: uniform(0),
+    vignetteOffset: uniform(style.vignette.offset),
+    vignetteDarkness: uniform(style.vignette.darkness),
+  };
   const output = (input: V4) =>
     renderOutput(
       finish(
         // reason: as above, SMAANode's vec4 output
         nodeObject(smaa(input)) as unknown as V4,
         viewZ,
-        grading,
-        grain
+        finishing
       ),
       NoToneMapping,
       SRGBColorSpace
     );
-  // Two pipelines, both built once: DoF drops while the camera moves, and
-  // swapping one pipeline's output node would re-translate the whole post
-  // graph on the main thread every time a flight starts or stops.
-  const withDof = new RenderPipeline(renderer, output(focused));
-  const plain = new RenderPipeline(renderer, output(lit));
-  withDof.outputColorTransform = false;
-  plain.outputColorTransform = false;
+  const pipelineOf = (node: V4) => {
+    const p = new RenderPipeline(renderer, output(node));
+    p.outputColorTransform = false;
+    return p;
+  };
+  // Four pipelines, each built once: DoF drops while the camera moves (and
+  // under a graphic style), and swapping one pipeline's output node would
+  // re-translate the whole post graph on the main thread every time a
+  // flight starts or stops. The pastel pair has no style node in it at all;
+  // every other style is the one styled pair (its mode is a uniform).
+  const pastel = { dof: pipelineOf(focused), plain: pipelineOf(lit) };
+  const styled = {
+    dof: pipelineOf(stylize.node(focused)),
+    plain: pipelineOf(stylize.node(lit)),
+  };
 
   // User intent vs. motion regression are two independent layers: the look
   // writes dofWanted, the render loop `regressed`, and only the choice below
-  // combines them — recovery never clobbers the user's choice.
+  // combines them — recovery never clobbers the user's choice. The picture
+  // style is a third layer of the same kind: a graphic style gates DoF off
+  // (RenderStyleDef.allowDof) without touching the switch.
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
-  let warm = false;
-  const pipeline = () => (dofWanted && !regressed ? withDof : plain);
+  const pipeline = () => {
+    const pair = style.shaderMode > 0 ? styled : pastel;
+    return dofWanted && style.allowDof && !regressed ? pair.dof : pair.plain;
+  };
+  // Pipelines that still have to build: a pipeline builds its graph on its
+  // first render, so each is rendered once, one per frame, before the one
+  // the frame shows (which draws over it). The pastel pair goes first —
+  // those frames are under the load screen.
+  const toWarm: RenderPipeline[] = [pastel.dof, pastel.plain];
+
+  // The sliders' raw values; the style weights them on the way in, so a
+  // style switch re-applies them without the store changing.
+  const raw = {
+    grading: LOOK_DEFAULTS.grading,
+    grain: LOOK_DEFAULTS.grain,
+    ink: LOOK_DEFAULTS.ink,
+  };
+  const applyStyleWeights = () => {
+    finishing.grading.value = raw.grading * style.gradingWeight;
+    finishing.grain.value = Math.min(raw.grain * style.grainWeight, 2);
+    finishing.film.value = style.grainAnimated ? 1 : 0;
+    finishing.vignetteOffset.value = style.vignette.offset;
+    finishing.vignetteDarkness.value = style.vignette.darkness;
+    stylize.setInk(raw.ink * style.inkWeight);
+    stylize.setStyle(style);
+  };
+  applyStyleWeights();
 
   let focusMode: FocusMode = LOOK_DEFAULTS.focusMode;
   let manualDistance = LOOK_DEFAULTS.focusDistanceM;
@@ -287,15 +394,20 @@ export function createPostStack(
     focusRange.value = focusRangeFor(d);
   };
 
+  // One writer per rendering row — a Record over the keys, so a row added
+  // to the table cannot go unapplied.
   const rows: Record<PostLookKey, (value: number) => void> = {
     contact: (strength) => {
       contact.value = Math.max(strength, 0) * AO_INTENSITY_MAX;
     },
     grading: (v) => {
-      grading.value = Math.min(Math.max(v, 0), 1);
+      raw.grading = Math.min(Math.max(v, 0), 1);
     },
     grain: (v) => {
-      grain.value = Math.min(Math.max(v, 0), 1);
+      raw.grain = Math.min(Math.max(v, 0), 1);
+    },
+    ink: (strength) => {
+      raw.ink = strength;
     },
   };
 
@@ -323,57 +435,121 @@ export function createPostStack(
       object.frustumCulled = frustumCulled;
     }
   };
+  // The Papier programs of one drawable: compiled under the swap, which
+  // lasts for the synchronous half of the call (the build) only.
+  const compilePaper = (object: Drawable): Promise<void> =>
+    paperScene.drawsAsPaper(object)
+      ? paperScene.swapped(() => compileOne(object))
+      : Promise.resolve();
   // Once is enough for a drawable and its material (a tile, then the whole
   // scene at boot, walks the same objects).
   const compiled = new WeakMap<Object3D, unknown>();
+  const compiledPaper = new WeakMap<Object3D, unknown>();
   const gone = new WeakSet<BufferGeometry>();
   const onGone = (event: { target: BufferGeometry }) => gone.add(event.target);
+  // Papier's programs are made once the styles are warmed (or Papier is
+  // on); before, a tile compiles for the scene's own look only.
+  let paperWanted = false;
+
+  const compileAll = async (
+    list: Drawable[],
+    step: (drawable: Drawable) => Promise<void>,
+    done: WeakMap<Object3D, unknown>
+  ) => {
+    const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
+    for (const g of geometries) {
+      g.addEventListener("dispose", onGone);
+    }
+    let next = 0;
+    // One at a time per lane: a drawable whose tile left meanwhile is
+    // skipped — compiling it would re-create the GPU buffers of a disposed
+    // geometry, and nothing would free them again.
+    const lane = async () => {
+      while (next < list.length) {
+        const drawable = list[next++];
+        if (
+          done.get(drawable) === drawable.material ||
+          gone.has(drawable.geometry as BufferGeometry)
+        ) {
+          continue;
+        }
+        done.set(drawable, drawable.material);
+        await step(drawable);
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: COMPILE_LANES }, lane));
+    } finally {
+      for (const g of geometries) {
+        g.removeEventListener("dispose", onGone);
+      }
+    }
+  };
+
+  let stylesWarm: Promise<void> | null = null;
+  const warmStyles = async () => {
+    toWarm.push(styled.plain, styled.dof);
+    paperWanted = true;
+    // Whatever the styles dress the scene with (their crowns share the
+    // scene crowns' builds; the lamp cones are new), then every drawable's
+    // Papier programs.
+    const dressed = [
+      ...styleDressing.prepare({ crowns: "comic", lampCones: true }),
+      ...styleDressing.prepare({ crowns: "paper", lampCones: false }),
+    ] as Drawable[];
+    await compileAll(dressed, compileOne, compiled);
+    await compileAll(
+      compileRepresentatives([scene]),
+      compilePaper,
+      compiledPaper
+    );
+  };
 
   return {
     compile: async (root) => {
       const list = drawablesOf(root);
-      const geometries = new Set(list.map((o) => o.geometry as BufferGeometry));
-      for (const g of geometries) {
-        g.addEventListener("dispose", onGone);
-      }
-      let next = 0;
-      // One at a time per lane: a drawable whose tile left meanwhile is
-      // skipped — compiling it would re-create the GPU buffers of a disposed
-      // geometry, and nothing would free them again.
-      const lane = async () => {
-        while (next < list.length) {
-          const drawable = list[next++];
-          if (
-            compiled.get(drawable) === drawable.material ||
-            gone.has(drawable.geometry as BufferGeometry)
-          ) {
-            continue;
-          }
-          compiled.set(drawable, drawable.material);
-          await compileOne(drawable);
-        }
-      };
-      try {
-        await Promise.all(Array.from({ length: COMPILE_LANES }, lane));
-      } finally {
-        for (const g of geometries) {
-          g.removeEventListener("dispose", onGone);
-        }
+      await compileAll(list, compileOne, compiled);
+      if (paperWanted || style.paperScene) {
+        await compileAll(list, compilePaper, compiledPaper);
       }
     },
+    warmStyles: () => {
+      stylesWarm ??= warmStyles().catch(() => undefined);
+      return stylesWarm;
+    },
+    sceneChanged: () => {
+      paperScene.sceneChanged();
+      styleDressing.sceneChanged();
+    },
+    setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
     render: () => {
       updateFocus();
+      stylize.update(renderer.getPixelRatio(), size);
       const previous = renderer.getRenderTarget();
       renderer.setRenderTarget(target);
-      renderer.render(scene, camera);
-      renderer.setRenderTarget(previous);
-      if (!warm) {
-        // Build both post graphs up front (the first frames are under the
-        // load screen), so the first toggle costs nothing.
-        warm = true;
-        (pipeline() === plain ? withDof : plain).render();
+      // A style's scene dressing (its crowns, lamp cones) and the Papier
+      // swap are on for the scene's render only, and off right after.
+      const dressed =
+        style.crowns || style.lampCones
+          ? styleDressing.begin({
+              crowns: style.crowns,
+              lampCones: style.lampCones,
+            })
+          : null;
+      const restore = style.paperScene ? paperScene.begin() : null;
+      try {
+        renderer.render(scene, camera);
+      } finally {
+        restore?.();
+        dressed?.();
+        renderer.setRenderTarget(previous);
       }
-      pipeline().render();
+      const shown = pipeline();
+      const warming = toWarm.shift();
+      if (warming && warming !== shown) {
+        warming.render();
+      }
+      shown.render();
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,
@@ -388,6 +564,8 @@ export function createPostStack(
       for (const key of Object.keys(rows) as PostLookKey[]) {
         rows[key](look[key]);
       }
+      style = RENDER_STYLE_BY_ID[look.style];
+      applyStyleWeights();
       dofWanted = look.dof;
       focusMode = look.focusMode;
       manualDistance = Math.max(1, look.focusDistanceM);
@@ -403,8 +581,11 @@ export function createPostStack(
       }
     },
     dispose: () => {
-      withDof.dispose();
-      plain.dispose();
+      for (const p of [pastel.dof, pastel.plain, styled.dof, styled.plain]) {
+        p.dispose();
+      }
+      paperScene.dispose();
+      styleDressing.dispose();
       target.dispose();
     },
   };

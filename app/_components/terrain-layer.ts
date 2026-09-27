@@ -1,7 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  type Color,
+  Color,
   DataTexture,
   FloatType,
   LinearFilter,
@@ -78,6 +78,7 @@ import {
   urbanGreen,
 } from "./ground-detail";
 import { type LandcoverSplat, paintLandcoverSplat } from "./landcover-splat";
+import { PAPER_HEX, paperGroundOn } from "./paper-scene";
 import { roadMarkings } from "./road-markings";
 import {
   dataXY,
@@ -587,6 +588,7 @@ function grassMottle(inp: GroundInputs, splat: SplatLayer): GroundColour {
     meadow,
     detail: meadow.mul(float(1).sub(smoothstep(0.5, 2.5, fw))).toVar(),
     mottle,
+    paperInk: float(0).toVar(),
   };
   col.baseCol.mulAssign(mottle.mul(0.035).mul(col.detail).add(1));
   return col;
@@ -712,17 +714,51 @@ function splatColour(splat: SplatLayer): V3 {
     if (splat.ndviTexture) {
       meadowNdvi(inp, col, splat.ndviTexture, splat.ground.meadowNdvi);
     }
+    const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
     grassDetail.assign(col.detail);
     groundTilt.assign(g.tilt);
     const elevation = positionWorld.y;
     const ink = contourInk(elevation).mul(contourGate(inp, elevation, splat));
-    return mix(col.baseCol, INK, ink);
+    return mix(baseCol, INK, ink);
   })();
+}
+
+/**
+ * The Papier style's ground (paper-scene.ts): for its frames the terrain
+ * keeps its own shader instead of wearing the paper material, because the
+ * paint on it — road markings, parking bays, sports lines — and the water's
+ * extent exist only here. The ground turns to paper, the paint to a light
+ * pencil grey and the water to a cool, slightly deeper paper; light, sky
+ * view and contours stay the terrain's own. One shared uniform switches it
+ * (`paperGroundOn`), so it is the same program in every style.
+ */
+function paperGround(col: GroundColour, waterCoverage: F): V3 {
+  const water = smoothstep(0.05, 0.5, waterCoverage);
+  const paper = mix(PAPER_LINEAR, PAPER_WATER_LINEAR, water);
+  const papered = mix(paper, PAPER_PAINT_LINEAR, clamp(col.paperInk, 0, 1));
+  return select(paperGroundOn.greaterThan(0.5), papered, col.baseCol);
+}
+
+/** Papier's tones, linear (paper-scene.ts's sheet). */
+const PAPER_LINEAR = linearVec3(PAPER_HEX);
+// Darker than they look: the Papier pass lifts everything sunlit above
+// mid-grey to the paper itself, so these land as a faint cool grey.
+const PAPER_WATER_LINEAR = linearVec3(0x5a_61_6b);
+const PAPER_PAINT_LINEAR = linearVec3(0x60_60_66);
+
+function linearVec3(hex: number): V3 {
+  const c = new Color(hex);
+  return vec3(c.r, c.g, c.b);
 }
 
 /** The flat sage ground with its contour ink (no class raster). */
 function plainColour(): V3 {
-  return mix(vec3(materialColor), INK, contourInk(positionWorld.y));
+  const ground = select(
+    paperGroundOn.greaterThan(0.5),
+    PAPER_LINEAR,
+    vec3(materialColor)
+  );
+  return mix(ground, INK, contourInk(positionWorld.y));
 }
 
 /**
@@ -775,6 +811,8 @@ export function createTerrainMaterial(
   material.colorNode = splat ? splatColour(splat) : plainColour();
   material.normalNode = terrainNormal(splat !== undefined);
   applyGroundLight(material, splat ? groundLightOf(splat) : undefined);
+  // Papier draws the ground with this material (see `paperGround`).
+  material.userData.paperOwn = true;
   return material;
 }
 

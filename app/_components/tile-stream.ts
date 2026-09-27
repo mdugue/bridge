@@ -1,7 +1,6 @@
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { GLTFExtensionsPlugin } from "3d-tiles-renderer/three/plugins";
 import {
-  type BufferGeometry,
   type Camera,
   type Color,
   Group,
@@ -64,7 +63,7 @@ import { dressKerbs } from "./kerb-layer";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
-import { disposeObject3D } from "./three-utils";
+import { compileRepresentatives, disposeObject3D } from "./three-utils";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -241,38 +240,6 @@ export const DRESSING_PART_NAMES = Object.keys(
 
 export function dressingParts(d: TileDressing): Object3D[] {
   return DRESSING_PART_NAMES.flatMap((name) => DRESSING_PARTS[name](d) ?? []);
-}
-
-/**
- * One object per distinct material, draw kind and attribute layout — what
- * three keys a node build by. A dressing is hundreds of objects (a
- * vegetation cell each, lamps, rails, walls) over a handful of scene-wide
- * materials, and instanced sets share their builds (instancing.ts);
- * compiling every one would queue the same build hundreds of times.
- */
-function compileRepresentatives(roots: Object3D[]): Object3D[] {
-  const seen = new Map<string, Object3D>();
-  for (const root of roots) {
-    root.traverse((object) => {
-      const { geometry, material } = object as Mesh;
-      if (!material) {
-        return;
-      }
-      const kind = `${object.type}:${layoutOf(geometry)}`;
-      for (const m of Array.isArray(material) ? material : [material]) {
-        const key = `${m.uuid}:${kind}`;
-        if (!seen.has(key)) {
-          seen.set(key, object);
-        }
-      }
-    });
-  }
-  return [...seen.values()];
-}
-
-/** A geometry's attribute names, the layout part of a build's key. */
-function layoutOf(geometry: BufferGeometry | undefined): string {
-  return geometry ? Object.keys(geometry.attributes).sort().join(",") : "";
 }
 
 /** How long a tile may wait on its compile before it shows regardless. */

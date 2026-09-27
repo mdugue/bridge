@@ -192,3 +192,38 @@ export function sceneMaterial<T extends Material>(
 
 /** An app's hold on the scene-wide materials; call the result on dispose. */
 export const retainSceneMaterials = materialsShared.retain;
+
+/**
+ * One object per distinct material, draw kind and attribute layout — what
+ * three keys a node build by. A dressing is hundreds of objects (a
+ * vegetation cell each, lamps, rails, walls) over a handful of scene-wide
+ * materials, and instanced sets share their builds (instancing.ts);
+ * compiling every one would queue the same build hundreds of times.
+ */
+export function compileRepresentatives(roots: Object3D[]): Object3D[] {
+  const seen = new Map<string, Object3D>();
+  for (const root of roots) {
+    root.traverse((object) => {
+      const { geometry, material } = object as Object3D & {
+        geometry?: BufferGeometry;
+        material?: Material | Material[];
+      };
+      if (!material) {
+        return;
+      }
+      const kind = `${object.type}:${layoutOf(geometry)}`;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        const key = `${m.uuid}:${kind}`;
+        if (!seen.has(key)) {
+          seen.set(key, object);
+        }
+      }
+    });
+  }
+  return [...seen.values()];
+}
+
+/** A geometry's attribute names, the layout part of a build's key. */
+export function layoutOf(geometry: BufferGeometry | undefined): string {
+  return geometry ? Object.keys(geometry.attributes).sort().join(",") : "";
+}
