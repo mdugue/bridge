@@ -1,0 +1,245 @@
+/**
+ * The inquiry card: what the viewer says about a building when someone asks
+ * (the "Befragen" mode, ADR 0035). The scene picks an object and hands over
+ * its building tree's facts (lib/city/object-facts.ts); this module turns
+ * them, with the provenance manifest, into the card's German lines — the
+ * title, the facts, the identity and a source line for every fact shown.
+ * Only measured or mapped facts appear, never an estimate: a building
+ * without a mapped storey count has no storey line. No THREE, no DOM.
+ */
+import { BUILDING_FUNCTION, ROOF_TYPE } from "./adv-codes";
+import {
+  OBJECT_FLAG_HERITAGE,
+  OBJECT_FLAG_SHOP,
+  OBJECT_SOURCE_SCAN,
+  hasObjectFlag,
+} from "./city-mesh";
+import { NO_FACT, type ObjectFacts } from "./object-facts";
+import { parseLod2Stand, type SiteProvenance } from "./provenance";
+
+/** One object of the asked building, as the scene read it. */
+export interface InquiryObject {
+  /** the Building itself (true) or one of its parts */
+  building: boolean;
+  /** eave height above the base (m) */
+  eaveH: number;
+  facts: ObjectFacts;
+  /** OBJECT_FLAG_* bits (shop, heritage) */
+  flags: number;
+  objectIndex: number;
+  /** OBJECT_SOURCE_* (LoD2 or the laser scan) */
+  source: number;
+}
+
+/** What the scene hands the card: the picked object and its whole tree. */
+export interface Inquiry {
+  picked: InquiryObject;
+  /** every object of the picked object's building tree, the picked one too */
+  tree: InquiryObject[];
+  tile: string;
+}
+
+export interface CardFact {
+  label: string;
+  value: string;
+}
+
+export interface InquiryCard {
+  /** the address line(s), "" when OSM knows none */
+  address: string;
+  facts: CardFact[];
+  /** the join key, shown so it can be copied */
+  id: string;
+  /** a small line above the title: what kind of thing this is */
+  kicker: string;
+  /** one line per source the card quotes, with its edition and licence */
+  sources: string[];
+  title: string;
+}
+
+/** The AdV code for "nach Quellenlage nicht zu spezifizieren". */
+const UNSPECIFIED = "31001_9998";
+
+const decimal = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
+const whole = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
+
+/** "18,1 m" (heights to the decimetre). */
+export function metres(value: number): string {
+  return `${decimal.format(value)} m`;
+}
+
+/** "1.234 m²" (areas to the square metre). */
+export function squareMetres(value: number): string {
+  return `${whole.format(value)} m²`;
+}
+
+/** Every ISO date in a text as a German date ("2024-11-30" → "30.11.2024"). */
+export function germanDates(text: string): string {
+  return text.replace(/(\d{4})-(\d{2})-(\d{2})/g, "$3.$2.$1");
+}
+
+/** A Gebäudefunktion as words; "" for none or the unspecified code. */
+export function functionLabel(code: string): string {
+  if (!code || code === UNSPECIFIED) {
+    return "";
+  }
+  return BUILDING_FUNCTION[code] ?? `Funktion ${code}`;
+}
+
+/** A Dachform with its pitch: "Satteldach, 38°". */
+export function roofLabel(code: string, pitch: number): string {
+  const form = code ? (ROOF_TYPE[code] ?? `Dachform ${code}`) : "";
+  const slope = pitch === NO_FACT ? "" : `${whole.format(pitch)}°`;
+  return [form, slope].filter(Boolean).join(", ");
+}
+
+const distinct = (values: readonly string[]): string[] => [
+  ...new Set(values.filter(Boolean)),
+];
+const known = (values: readonly number[]): number[] =>
+  values.filter((v) => v !== NO_FACT);
+
+/** The LoD2 source line: the model year, its inputs, the object's export. */
+function lod2Source(
+  provenance: SiteProvenance | null,
+  tile: string,
+  created: string
+): string {
+  const source = provenance?.sources.lod2;
+  const stand = provenance?.tiles[tile]?.lod2;
+  const parts = [source?.label ?? "3D-Stadtmodell LoD2"];
+  if (stand) {
+    const { model, inputs } = parseLod2Stand(stand);
+    parts.push(`Modell ${model}`);
+    if (inputs.LSC) {
+      parts.push(`Dach gemessen ${inputs.LSC}`);
+    }
+    if (inputs["Basis-DLM"]) {
+      parts.push(`Grundriss ${inputs["Basis-DLM"]}`);
+    }
+  }
+  if (created) {
+    parts.push(`Objekt exportiert ${germanDates(created)}`);
+  }
+  parts.push(source?.credit ?? "Quelle: GeoSN, dl-de/by-2-0");
+  return parts.join(" · ");
+}
+
+/** The laser scan's source line (a structure LoD2 lacks, plan 034). */
+function scanSource(provenance: SiteProvenance | null, tile: string): string {
+  const source = provenance?.sources.lsc;
+  const stand = provenance?.tiles[tile]?.lsc;
+  return [
+    source?.label ?? "Laserscan",
+    stand ? `Befliegung ${germanDates(stand)}` : "",
+    "nicht im amtlichen Stadtmodell",
+    source?.credit ?? "Quelle: GeoSN, dl-de/by-2-0",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The OSM source line, naming what the card took from OSM. */
+function osmSource(provenance: SiteProvenance | null, what: string[]): string {
+  const source = provenance?.sources.osm;
+  return [
+    `${what.join(", ")}: ${source?.label ?? "OpenStreetMap"}`,
+    source?.stand ? `Stand ${germanDates(source.stand)}` : "",
+    `${source?.credit ?? "© OpenStreetMap-Mitwirkende"}, ${source?.licence ?? "ODbL"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The facts of a building tree, merged: the picked part's roof, the
+ *  tree's highest part, the ground of all its parts. */
+function treeFacts(inquiry: Inquiry) {
+  const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
+  const facts = all.map((o) => o.facts);
+  const pick = inquiry.picked.facts;
+  const names = distinct([pick.name, ...facts.map((f) => f.name)]);
+  const heights = known(facts.map((f) => f.height));
+  const areas = known(facts.map((f) => f.area));
+  const levels = known(facts.map((f) => f.levels));
+  const flags = all.reduce((sum, o) => sum | o.flags, 0);
+  return {
+    address: distinct([pick.addr, ...facts.map((f) => f.addr)]).join(" · "),
+    created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
+    functionCode:
+      pick.function || distinct(facts.map((f) => f.function))[0] || "",
+    height: heights.length > 0 ? Math.max(...heights) : NO_FACT,
+    area: areas.reduce((s, a) => s + a, 0),
+    levels: levels.length > 0 ? Math.max(...levels) : NO_FACT,
+    name: names[0] ?? "",
+    parts: all.filter((o) => !o.building).length,
+    heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
+    shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
+  };
+}
+
+/**
+ * The fact lines in reading order; a line whose value is unknown is left
+ * out. The use already stands in the title or the kicker, so only its
+ * absence needs saying.
+ */
+function cardFacts(
+  t: ReturnType<typeof treeFacts>,
+  pick: InquiryObject,
+  scan: boolean,
+  use: string
+): CardFact[] {
+  const known = (v: number) => v !== NO_FACT && v > 0;
+  const lines: [string, string][] = [
+    ["Nutzung", scan || use ? "" : "nicht angegeben"],
+    ["Höhe", known(t.height) ? metres(t.height) : ""],
+    ["Traufe", !scan && pick.eaveH > 0 ? metres(pick.eaveH) : ""],
+    ["Dach", roofLabel(pick.facts.roofType, pick.facts.roofPitch)],
+    ["Grundfläche", t.area > 0 ? squareMetres(t.area) : ""],
+    ["Geschosse", known(t.levels) ? whole.format(t.levels) : ""],
+    ["Gebäudeteile", t.parts > 1 ? whole.format(t.parts) : ""],
+    ["Denkmal", t.heritage ? "Kulturdenkmal" : ""],
+    ["Erdgeschoss", t.shop ? "Laden oder Gastronomie" : ""],
+  ];
+  return lines
+    .filter(([, value]) => value !== "")
+    .map(([label, value]) => ({ label, value }));
+}
+
+/** The card for one inquiry; `provenance` null until the manifest arrived. */
+export function inquiryCard(
+  inquiry: Inquiry,
+  provenance: SiteProvenance | null
+): InquiryCard {
+  const pick = inquiry.picked;
+  const scan = pick.source === OBJECT_SOURCE_SCAN;
+  const t = treeFacts(inquiry);
+  const use = functionLabel(t.functionCode);
+  const kind = scan ? "Kleinbau" : "Gebäude";
+  const title = t.name || use || kind;
+  const kicker = t.name && use ? use : kind;
+
+  const facts = cardFacts(t, pick, scan, use);
+  const fromOsm = [
+    t.name ? "Name" : "",
+    t.address ? "Adresse" : "",
+    t.levels !== NO_FACT ? "Geschosse" : "",
+    t.heritage ? "Denkmal" : "",
+    t.shop ? "Erdgeschoss" : "",
+  ].filter(Boolean);
+  const sources = [
+    scan
+      ? scanSource(provenance, inquiry.tile)
+      : lod2Source(provenance, inquiry.tile, t.created),
+  ];
+  if (fromOsm.length > 0) {
+    sources.push(osmSource(provenance, fromOsm));
+  }
+  return {
+    kicker,
+    title,
+    address: t.address,
+    facts,
+    id: pick.facts.buildingId,
+    sources,
+  };
+}

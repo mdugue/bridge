@@ -6,6 +6,8 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
  *  - two-finger pinch: move forward (spread) or back (pinch) — touch only
  *  - mouse wheel / trackpad pinch: the same; with Alt, zoom (FOV)
  *  - double-tap / double-click: travel to the tapped spot
+ *  - a single tap / click: `onTap` (the inquiry mode asks what is there;
+ *    the first tap of a double one fires it too)
  *  - pointer lock (immersive mode, opt-in via `lockPointer`): mouse motion
  *    is mouse-look; Esc exits natively. Clicks/drags are ignored meanwhile.
  * The element must have `touch-action: none` so the browser doesn't consume
@@ -15,6 +17,8 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
 export interface TouchControlsCallbacks {
   /** ndc coordinates of the tap (-1..1, three.js raycaster convention) */
   onDoubleTap: (ndcX: number, ndcY: number) => void;
+  /** a single tap or click, in ndc (every tap, before any double) */
+  onTap?: (ndcX: number, ndcY: number) => void;
   /** drag delta in CSS pixels since the last event */
   onLook: (dxPx: number, dyPx: number) => void;
   /** pointer-locked mouse motion in CSS pixels */
@@ -165,13 +169,13 @@ export function attachTouchControls(
         x: e.clientX,
         y: e.clientY,
       };
+      const rect = element.getBoundingClientRect();
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      callbacks.onTap?.(ndcX, ndcY);
       if (isDoubleTap(lastTap, tap)) {
         lastTap = null;
-        const rect = element.getBoundingClientRect();
-        callbacks.onDoubleTap(
-          ((e.clientX - rect.left) / rect.width) * 2 - 1,
-          -(((e.clientY - rect.top) / rect.height) * 2 - 1)
-        );
+        callbacks.onDoubleTap(ndcX, ndcY);
       } else {
         lastTap = tap;
       }

@@ -227,6 +227,80 @@ test("city page serves the viewer shell", async ({ page }) => {
 });
 
 /**
+ * Hovers the camera over a mid-sized single-polygon building of the spawn
+ * tile and aims the crosshair down through its roof, then lets the pose
+ * reach a rendered frame (the crosshair ray is cast against the scene graph
+ * the render loop maintains).
+ */
+async function aimAtBuilding(page: Page): Promise<void> {
+  // The spawn tile's minimap footprints (one list of polygons per object,
+  // published next to its glTF): aim at a mid-sized single-polygon
+  // building whose bounding-box centre lies inside it — a perimeter block's
+  // centre is its courtyard, and the ray would hit the ground.
+  const footprints = (await (
+    await page.request.get(
+      await dataUrl(page, "footprints_33412_5656_2_sn.json")
+    )
+  ).json()) as [number, number][][][];
+  const inside = ([x, y]: number[], ring: [number, number][]) => {
+    let hit = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+        hit = !hit;
+      }
+    }
+    return hit;
+  };
+  const target = footprints
+    .filter((polys) => polys.length === 1)
+    .map(([ring]) => {
+      const xs = ring.map((p) => p[0]);
+      const ys = ring.map((p) => p[1]);
+      const [x0, y0, x1, y1] = [
+        Math.min(...xs),
+        Math.min(...ys),
+        Math.max(...xs),
+        Math.max(...ys),
+      ];
+      return {
+        ring,
+        centre: [(x0 + x1) / 2, (y0 + y1) / 2],
+        area: (x1 - x0) * (y1 - y0),
+      };
+    })
+    .find((b) => b.area > 300 && b.area < 3000 && inside(b.centre, b.ring));
+  expect(target).toBeDefined();
+  const [centreX, centreY] = target?.centre ?? [0, 0];
+  await page.evaluate(
+    ([easting, northing]) => {
+      const api = window.__poc?.handle;
+      if (!api) {
+        throw new Error("scene handle not published");
+      }
+      // Stand on the ground there to learn its height, then hover above.
+      api.teleportTo(easting, northing);
+      const ground = api.getCameraState().pos.y - 1.7;
+      // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
+      const x = easting - api.offset.cx;
+      const z = -(northing - api.offset.cy);
+      // Approach at an angle (not straight down: a view direction parallel
+      // to the camera's up vector makes lookAt degenerate) and aim the
+      // crosshair a few metres above the ground inside the footprint —
+      // through the roof.
+      api.flyTo({ x, y: ground + 150, z: z + 80 }, { x, y: ground + 4, z });
+    },
+    [centreX, centreY]
+  );
+  // Let the new pose reach a rendered frame before picking. flyTo refreshes
+  // the camera's own matrixWorld, but the crosshair ray is cast against the
+  // scene graph the render loop maintains; demolishing in the same tick as
+  // the fly has been seen to pick nothing on a loaded runner.
+  await waitForFrames(page, 1);
+}
+
+/**
  * The desktop viewer every test in the two desktop groups below reads: one
  * booted page per group. Booting is the single largest fixed cost in this
  * suite (~14 s at the full profile on four cores, ~4.5 s lite) and none of
@@ -698,52 +772,47 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expectNoErrors(errors);
   });
 
+  test("the inquiry card tells what the data knows, and where it comes from", async () => {
+    // Befragen (ADR 0035): the I key switches the mode; asking at the
+    // crosshair marks the building and opens the paper card with its
+    // identity, its facts and a source line per source. Before demolish,
+    // which takes a building of the same kind away.
+    await withFramesHeld(page, async () => {
+      await page.keyboard.press("i");
+      await expect(
+        page.getByText("Befragen: auf ein Gebäude tippen")
+      ).toBeVisible();
+    });
+    await aimAtBuilding(page);
+    const inquiry = await page.evaluate(() =>
+      window.__poc?.handle?.inquireAt()
+    );
+    // The LoD2 Building's gml:id — the key every other dataset joins on.
+    expect(inquiry?.picked.facts.buildingId).toMatch(/^DESNAT/);
+    expect(inquiry?.tree.length).toBeGreaterThan(0);
+    await withFramesHeld(page, async () => {
+      const card = page.getByTestId("inquiry-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText(inquiry?.picked.facts.buildingId ?? "");
+      await expect(card).toContainText("Quelle: GeoSN, dl-de/by-2-0");
+      // the provenance manifest arrives with the first card: the edition
+      await expect(card).toContainText(/Modell \d{4}/);
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+      await page.keyboard.press("i");
+      await expect(
+        page.getByText("Befragen: auf ein Gebäude tippen")
+      ).toBeHidden();
+    });
+    expectNoErrors(errors);
+  });
+
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
     // Runs after the read-only tests: a demolish rebuilds the tile's BVH and
     // the minimap's 2369 footprint polygons, and a main thread busy with that
     // makes Playwright's actionability checks on the minimap crawl.
-    // The spawn tile's minimap footprints (one list of polygons per object,
-    // published next to its glTF): aim at a mid-sized single-polygon
-    // building whose bounding-box centre lies inside it — a perimeter block's
-    // centre is its courtyard, and the ray would hit the ground.
-    const footprints = (await (
-      await page.request.get(
-        await dataUrl(page, "footprints_33412_5656_2_sn.json")
-      )
-    ).json()) as [number, number][][][];
-    const inside = ([x, y]: number[], ring: [number, number][]) => {
-      let hit = false;
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [xi, yi] = ring[i];
-        const [xj, yj] = ring[j];
-        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-          hit = !hit;
-        }
-      }
-      return hit;
-    };
-    const target = footprints
-      .filter((polys) => polys.length === 1)
-      .map(([ring]) => {
-        const xs = ring.map((p) => p[0]);
-        const ys = ring.map((p) => p[1]);
-        const [x0, y0, x1, y1] = [
-          Math.min(...xs),
-          Math.min(...ys),
-          Math.max(...xs),
-          Math.max(...ys),
-        ];
-        return {
-          ring,
-          centre: [(x0 + x1) / 2, (y0 + y1) / 2],
-          area: (x1 - x0) * (y1 - y0),
-        };
-      })
-      .find((b) => b.area > 300 && b.area < 3000 && inside(b.centre, b.ring));
-    expect(target).toBeDefined();
-    const [centreX, centreY] = target?.centre ?? [0, 0];
     const buildingsBefore = await page.evaluate(
       () => window.__poc?.stats?.buildingCount ?? 0
     );
@@ -751,31 +820,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const trianglesBefore = await page.evaluate(
       () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );
-    await page.evaluate(
-      ([easting, northing]) => {
-        const api = window.__poc?.handle;
-        if (!api) {
-          throw new Error("scene handle not published");
-        }
-        // Stand on the ground there to learn its height, then hover above.
-        api.teleportTo(easting, northing);
-        const ground = api.getCameraState().pos.y - 1.7;
-        // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
-        const x = easting - api.offset.cx;
-        const z = -(northing - api.offset.cy);
-        // Approach at an angle (not straight down: a view direction parallel
-        // to the camera's up vector makes lookAt degenerate) and aim the
-        // crosshair a few metres above the ground inside the footprint —
-        // through the roof.
-        api.flyTo({ x, y: ground + 150, z: z + 80 }, { x, y: ground + 4, z });
-      },
-      [centreX, centreY]
-    );
-    // Let the new pose reach a rendered frame before picking. flyTo refreshes
-    // the camera's own matrixWorld, but the crosshair ray is cast against the
-    // scene graph the render loop maintains; demolishing in the same tick as
-    // the fly has been seen to pick nothing on a loaded runner.
-    await waitForFrames(page, 1);
+    await aimAtBuilding(page);
     await page.evaluate(() => window.__poc?.handle?.demolishAtCrosshair());
     await page.waitForFunction(
       (before) => (window.__poc?.stats?.buildingCount ?? 0) < before,

@@ -40,6 +40,7 @@ function harness() {
     pinchStart: 0,
     pinch: [] as number[],
     doubleTap: [] as [number, number][],
+    tap: [] as [number, number][],
     wheel: [] as number[],
     zoom: [] as number[],
   };
@@ -53,6 +54,7 @@ function harness() {
     onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
     onWheelDolly: (amount) => calls.wheel.push(amount),
     onWheelZoom: (ratio) => calls.zoom.push(ratio),
+    onTap: (x, y) => calls.tap.push([x, y]),
   };
   const { detach } = attachTouchControls(element, callbacks);
   const fire = (type: string, e: FiredPointer) =>
@@ -144,6 +146,21 @@ test("two quick taps at the same spot fire one double tap in NDC", () => {
   const [ndcX, ndcY] = calls.doubleTap[0];
   expect(ndcX).toBeCloseTo(0, 10);
   expect(ndcY).toBeCloseTo(0, 10);
+  // each tap is a tap too (the inquiry mode asks on the first)
+  expect(calls.tap).toHaveLength(2);
+});
+
+test("a single tap reports its spot in NDC, y up", () => {
+  const { fire, calls } = harness();
+  fire("pointerdown", { pointerId: 1, clientX: 300, clientY: 200 });
+  fire("pointerup", {
+    pointerId: 1,
+    clientX: 300,
+    clientY: 200,
+    timeStamp: 10,
+  });
+  expect(calls.tap).toEqual([[0.5, 0.5]]);
+  expect(calls.doubleTap).toEqual([]);
 });
 
 test("a drag is never a tap, so it cannot start a double tap", () => {
@@ -164,6 +181,7 @@ test("a drag is never a tap, so it cannot start a double tap", () => {
     timeStamp: 210,
   });
   expect(calls.doubleTap).toEqual([]);
+  expect(calls.tap).toHaveLength(1);
 });
 
 test("the wheel moves like a pinch: up = forward, proportional, capped, and the page never scrolls", () => {

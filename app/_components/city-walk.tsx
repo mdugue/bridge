@@ -2,6 +2,7 @@
 
 import {
   LocateFixedIcon,
+  MessageCircleQuestionMarkIcon,
   NavigationIcon,
   PlaneIcon,
   SlidersHorizontalIcon,
@@ -16,6 +17,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { cn } from "cn";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
@@ -27,6 +29,7 @@ import {
   type SkippedStages,
   type StageFractions,
 } from "@/lib/city/load-stages";
+import type { Inquiry } from "@/lib/city/inquiry";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
@@ -52,6 +55,7 @@ import {
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { InquiryCard, InquiryHint } from "./inquiry-card";
 import { useLiveMode } from "./live-mode";
 import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
@@ -112,25 +116,40 @@ function SettingsToggle() {
 }
 
 /**
- * The tools the floating toolbar offers here: "take me to where I am"
+ * The tools the floating toolbar offers here: the inquiry mode (the I key's
+ * stand-in, ADR 0035), "take me to where I am"
  * wherever the browser can locate the player (locate-button.tsx), live mode
  * while a compass is reporting (live-mode.ts), and on a touch screen walk/
  * fly, the F key's stand-in.
  */
 function sceneTools({
   coarse,
+  inquiring,
   live,
   locate,
   mode,
+  onInquire,
   onToggleMode,
 }: {
   coarse: boolean;
+  inquiring: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
+  onInquire: () => void;
   onToggleMode: () => void;
 }): HudTool[] {
-  const tools: HudTool[] = [];
+  const tools: HudTool[] = [
+    {
+      id: "inquire",
+      label: "Befragen",
+      icon: MessageCircleQuestionMarkIcon,
+      pressed: inquiring,
+      onClick: onInquire,
+      title:
+        "Befragen (I): auf ein Gebäude tippen — was die Daten darüber wissen",
+    },
+  ];
   if (locate.available) {
     tools.push({
       id: "locate",
@@ -175,18 +194,22 @@ function sceneTools({
  */
 function SceneOverlays({
   coarse,
+  inquiring,
   live,
   locate,
   mode,
   onClimb,
+  onInquire,
   onMove,
   onToggleMode,
 }: {
   coarse: boolean;
+  inquiring: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
   onClimb: (v: number) => void;
+  onInquire: () => void;
   onMove: (x: number, y: number) => void;
   onToggleMode: () => void;
 }) {
@@ -207,7 +230,15 @@ function SceneOverlays({
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
         {flying && <AltitudeStick onChange={onClimb} />}
         <HudToolbar
-          tools={sceneTools({ coarse, live, locate, mode, onToggleMode })}
+          tools={sceneTools({
+            coarse,
+            inquiring,
+            live,
+            locate,
+            mode,
+            onInquire,
+            onToggleMode,
+          })}
         />
       </div>
     </>
@@ -303,6 +334,16 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     });
   }, [look]);
   const [mode, setMode] = useState<MovementMode>("walk");
+  // Befragen (ADR 0035): the mode and the building last asked about.
+  const [inquiry, setInquiry] = useState<{
+    active: boolean;
+    inquiry: Inquiry | null;
+  }>({ active: false, inquiry: null });
+  const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
+  const closeInquiry = useCallback(() => {
+    handleRef.current?.clearInquiry();
+    setInquiry((prev) => ({ ...prev, inquiry: null }));
+  }, []);
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
@@ -453,6 +494,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           setMode(m);
         }
       },
+      onInquiry: (state) => {
+        if (!cancelled) {
+          setInquiry(state);
+        }
+      },
       onPose: (pose) => {
         if (cancelled) {
           return;
@@ -479,6 +525,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         syncTime();
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
+        setProvenanceUrl(h.provenanceUrl);
         setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
         updatePocDebug({ handle: h, look, firstFrame: true });
@@ -595,7 +642,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
-        <div className="absolute inset-0" ref={mountRef} />
+        <div
+          className={cn(
+            "absolute inset-0",
+            inquiry.active && "[&_canvas]:cursor-help"
+          )}
+          ref={mountRef}
+        />
 
         {veilUp && (
           <LoadScreen
@@ -645,13 +698,24 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             />
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
+            {inquiry.inquiry ? (
+              <InquiryCard
+                inquiry={inquiry.inquiry}
+                onClose={closeInquiry}
+                provenanceUrl={provenanceUrl}
+              />
+            ) : (
+              inquiry.active && <InquiryHint />
+            )}
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              inquiring={inquiry.active}
               live={live}
               locate={locate}
               mode={mode}
               onClimb={(v) => handleRef.current?.setClimbInput(v)}
+              onInquire={() => handleRef.current?.setInquiring(!inquiry.active)}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
               onToggleMode={() =>
                 handleRef.current?.setMovementMode(

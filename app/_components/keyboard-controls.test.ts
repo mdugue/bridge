@@ -42,6 +42,7 @@ function harness() {
     releaseAll: () => calls.push("releaseAll"),
     cycleStyle: () => calls.push("cycleStyle"),
     demolish: () => calls.push("demolish"),
+    inquire: () => calls.push("inquire"),
     toggleMode: () => calls.push("toggleMode"),
     viewpoint: (index) => calls.push(`viewpoint:${index}`),
   };
@@ -58,6 +59,7 @@ test("a movement key presses and releases; one-shots fire on their key", () => {
   fire("keydown", { code: "KeyR" });
   fire("keydown", { code: "KeyF" });
   fire("keydown", { code: "KeyV" });
+  fire("keydown", { code: "KeyI" });
   expect(calls).toEqual([
     "press:KeyW",
     "release:KeyW",
@@ -67,6 +69,8 @@ test("a movement key presses and releases; one-shots fire on their key", () => {
     "toggleMode",
     "press:KeyV",
     "cycleStyle",
+    "press:KeyI",
+    "inquire",
   ]);
 });
 

@@ -37,9 +37,11 @@ import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
+import type { Inquiry } from "@/lib/city/inquiry";
 import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
+import { createInquiryProbe } from "./inquiry-probe";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -253,6 +255,11 @@ export interface CityWalkOptions {
   onBusy?: (busy: boolean) => void;
   /** a manual look or move ended live mode (camera-pose.ts) */
   onFollowEnd?: () => void;
+  /**
+   * The inquiry mode ("Befragen", ADR 0035): whether it is on, and the
+   * building last asked about (null: nothing there, or the mark cleared).
+   */
+  onInquiry?: (state: { active: boolean; inquiry: Inquiry | null }) => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -283,8 +290,20 @@ export interface CityWalkOptions {
 export interface CityWalkHandle {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
+  /** Removes the inquiry mark (the card was closed). */
+  clearInquiry: () => void;
   demolishAtCrosshair: () => void;
   dispose: () => void;
+  /**
+   * Asks what stands at a screen point (NDC; the crosshair when omitted),
+   * marks it and reports it through `onInquiry`; tests and QA call it.
+   */
+  inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** The provenance manifest (lib/city/provenance.ts), when the tileset
+   *  names one: the inquiry card's source lines. */
+  provenanceUrl: string | null;
+  /** Switches the inquiry mode: a tap or click then asks what is there. */
+  setInquiring: (on: boolean) => void;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
   /**
@@ -959,7 +978,32 @@ async function bootApp(
   };
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
+  // Befragen (ADR 0035): off until the I key or the toolbar; while on, a
+  // tap asks the building under it and the card shows what the data says.
+  const probe = createInquiryProbe({
+    camera,
+    cities: () => stream.visibleCities(),
+    groundAlong,
+  });
+  let inquiring = false;
+  const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
+    const inquiry = probe.ask(ndc);
+    opts.onInquiry?.({ active: inquiring, inquiry });
+    return inquiry;
+  };
+  const setInquiring = (on: boolean) => {
+    inquiring = on;
+    if (!on) {
+      probe.clear();
+    }
+    opts.onInquiry?.({ active: on, inquiry: null });
+  };
   const canvasControls = attachTouchControls(renderer.domElement, {
+    onTap: (ndcX, ndcY) => {
+      if (inquiring) {
+        inquireAt({ x: ndcX, y: ndcY });
+      }
+    },
     onLook: pose.turn,
     onMouseLook: pose.look,
     onPinchStart: pose.beginPinch,
@@ -1095,6 +1139,16 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
+        // Immersive (pointer lock): there is no pointer to tap with, so I
+        // asks at the crosshair. Otherwise it switches the mode.
+        inquire: () => {
+          if (document.pointerLockElement === renderer.domElement) {
+            setInquiring(true);
+            inquireAt();
+          } else {
+            setInquiring(!inquiring);
+          }
+        },
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
         viewpoint: (index) => {
@@ -1510,7 +1564,13 @@ async function bootApp(
 
   return {
     setSun,
+    clearInquiry: probe.clear,
     demolishAtCrosshair,
+    inquireAt,
+    provenanceUrl: extras.provenance
+      ? new URL(extras.provenance, tilesetUrl).href
+      : null,
+    setInquiring,
     enterImmersive: canvasControls.lockPointer,
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,
