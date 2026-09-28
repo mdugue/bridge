@@ -1221,15 +1221,24 @@ async function bootApp(
   // The crash trail's heartbeat: what a killed page was doing last.
   const trail = opts.trail;
   if (trail) {
+    // The rate is counted between beats: the loop's own `fps` is smoothed
+    // over a clamped frame time (≥ 20 fps by construction), which hid a
+    // phone's real 7 fps.
+    let beatFrames = 0;
+    let beatAt = performance.now();
     const beat = setInterval(() => {
       const heap = (
         performance as Performance & {
           memory?: { usedJSHeapSize: number };
         }
       ).memory;
+      const now = performance.now();
+      const rate = ((frames - beatFrames) * 1000) / Math.max(now - beatAt, 1);
+      beatFrames = frames;
+      beatAt = now;
       trail.beat({
         frames,
-        fps,
+        fps: rate,
         gpuMB: gpuBytes() / 1_048_576,
         calls: renderer.info.render.drawCalls,
         triangles: renderer.info.render.triangles,

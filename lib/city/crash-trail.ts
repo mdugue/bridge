@@ -27,6 +27,7 @@ export interface TrailBeat {
   /** seconds since the record started */
   t: number;
   frames: number;
+  /** frames rendered per second since the previous beat */
   fps: number;
   /** the scene's GPU estimate (geometry, textures, shadow map), MB */
   gpuMB: number;
