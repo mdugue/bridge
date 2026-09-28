@@ -38,6 +38,7 @@ declare global {
 const PREVIOUS_KEY = "crash-trail.previous";
 
 let rotated = false;
+let announced = false;
 /** Moves the last page's record aside, once per page load. */
 function rotate(): void {
   if (rotated) {
@@ -118,7 +119,9 @@ export function startCrashTrail(): CrashTrail {
     console.info(TAG, formatEvent(event));
   };
   const previous = previousTrail();
-  if (endedInCrash(previous)) {
+  // Once per page load (StrictMode mounts the viewer twice in development).
+  if (endedInCrash(previous) && !announced) {
+    announced = true;
     console.warn(
       `${TAG} the previous page ended unexpectedly:\n${formatTrail(previous)}`
     );

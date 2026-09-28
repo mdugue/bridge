@@ -943,9 +943,18 @@ async function bootApp(
 
   // Everything that follows from the tile set changing: the ground, the
   // lamp heads, the fog floor, the shadows, the stats.
+  let dressingsNoted = 0;
   onChange = () => {
     if (disposed) {
       return;
+    }
+    // The crash trail: each dressing as it lands (the heaviest builds).
+    if (stream.dressings.size !== dressingsNoted) {
+      dressingsNoted = stream.dressings.size;
+      opts.trail?.note(
+        "dressings",
+        `${dressingsNoted} built, ${stream.pendingDressings()} pending`
+      );
     }
     terrains = stream.visibleTerrains();
     siteGround.setSources(terrains);
@@ -1114,6 +1123,16 @@ async function bootApp(
   let tickDue = 0;
   let fpsDue = 0;
   let frames = 0;
+  const stopOnGpuFailure = (error: unknown) => {
+    void renderer.setAnimationLoop(null);
+    const message = error instanceof Error ? error.message : String(error);
+    opts.trail?.note("render failed", message);
+    if (!disposed) {
+      opts.onError?.(
+        `Die Grafik ist ausgefallen (${message}). Bitte neu laden.`
+      );
+    }
+  };
   // (It resolves once the loop is installed: nothing to wait for.)
   void renderer.setAnimationLoop((time) => {
     // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
@@ -1164,7 +1183,15 @@ async function bootApp(
     // The counters cover this frame's passes only (autoReset is off: the
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
-    postStack.render();
+    try {
+      postStack.render();
+    } catch (error) {
+      // The GPU is gone (iOS reclaims the GPU process under memory
+      // pressure, and WebKit may throw before any device-lost arrives):
+      // every further frame would throw the same. Stop once, and say so.
+      stopOnGpuFailure(error);
+      return;
+    }
     frames++;
     tickPocFrame(shadowRendered);
   });
