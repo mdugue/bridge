@@ -1,6 +1,9 @@
 import {
   createTrail,
   endedInCrash,
+  formatBeat,
+  formatEvent,
+  formatTrail,
   parseTrail,
   pushBeat,
   pushEvent,
@@ -16,9 +19,22 @@ import {
  * previous page is moved aside once per page load, before the new one
  * overwrites it, so the HUD can offer it. Storage can be missing or throw
  * (private mode, a full quota); then there is simply no trail.
+ *
+ * It also speaks to the console, for reading it from a computer (Safari's
+ * Web Inspector on a cabled iPhone): every event as `info`, every
+ * heartbeat as `debug`, a crashed previous page in full as `warn` — and
+ * `crashTrail.current()` / `crashTrail.previous()` return the report text.
  */
 
 const CURRENT_KEY = "crash-trail";
+const TAG = "[crash-trail]";
+
+declare global {
+  interface Window {
+    /** The reports as text, for the console (see above). */
+    crashTrail?: { current: () => string; previous: () => string };
+  }
+}
 const PREVIOUS_KEY = "crash-trail.previous";
 
 let rotated = false;
@@ -96,8 +112,23 @@ export function startCrashTrail(): CrashTrail {
     }
   };
   const note = (kind: string, detail?: string) => {
-    pushEvent(trail, { t: seconds(), kind, detail: detail?.slice(0, 300) });
+    const event = { t: seconds(), kind, detail: detail?.slice(0, 300) };
+    pushEvent(trail, event);
     write();
+    console.info(TAG, formatEvent(event));
+  };
+  const previous = previousTrail();
+  if (endedInCrash(previous)) {
+    console.warn(
+      `${TAG} the previous page ended unexpectedly:\n${formatTrail(previous)}`
+    );
+  }
+  window.crashTrail = {
+    current: () => formatTrail(trail),
+    previous: () => {
+      const last = previousTrail();
+      return last ? formatTrail(last) : "(no previous record)";
+    },
   };
 
   const onError = (event: ErrorEvent) =>
@@ -136,12 +167,15 @@ export function startCrashTrail(): CrashTrail {
   return {
     note,
     beat: (beat) => {
-      pushBeat(trail, { t: seconds(), ...beat });
+      const entry = { t: seconds(), ...beat };
+      pushBeat(trail, entry);
       write();
+      console.debug(TAG, formatBeat(entry));
     },
     set: (patch) => {
       Object.assign(trail, patch);
       write();
+      console.info(TAG, JSON.stringify(patch));
     },
     end: () => {
       trail.state = "clean";

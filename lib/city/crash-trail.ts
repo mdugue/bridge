@@ -130,13 +130,19 @@ const round = (n: number, digits = 0) => {
   return Math.round(n * f) / f;
 };
 
-function formatBeat(b: TrailBeat): string {
+/** One heartbeat as a line of the report (and of the console). */
+export function formatBeat(b: TrailBeat): string {
   const heap = b.heapMB === undefined ? "" : ` heap ${round(b.heapMB)}MB`;
   return (
     `${round(b.t, 1)}s  f${b.frames} ${round(b.fps)}fps  gpu ${round(b.gpuMB)}MB${heap}` +
     `  ${b.calls}dc ${round(b.triangles / 1000)}k▲  tiles ${b.cities}/${b.dressings}` +
     `  ${b.style} ${b.mode} ${round(b.heightM)}m`
   );
+}
+
+/** One event as a line of the report (and of the console). */
+export function formatEvent(e: TrailEvent): string {
+  return `${round(e.t, 1)}s  ${e.kind}${e.detail ? `  ${e.detail}` : ""}`;
 }
 
 /** The record as the plain text the HUD offers to copy. */
@@ -153,9 +159,7 @@ export function formatTrail(trail: Trail): string {
         : ` · mem ${trail.deviceMemoryGB}GB`),
     "",
     "events:",
-    ...trail.events.map(
-      (e) => `${round(e.t, 1)}s  ${e.kind}${e.detail ? `  ${e.detail}` : ""}`
-    ),
+    ...trail.events.map(formatEvent),
     "",
     "beats:",
     ...trail.beats.map(formatBeat),
