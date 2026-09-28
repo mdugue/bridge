@@ -135,6 +135,61 @@ export interface CityWalkStats {
   terrainVertexCount: number;
 }
 
+/** `CityWalkHandle.getGpuDebug`'s report. */
+export interface GpuDebug {
+  drawables: number;
+  /** distinct index / vertex buffers under the scene, and their bytes */
+  sceneIndices: number;
+  sceneIndexBytes: number;
+  sceneBuffers: number;
+  sceneBufferBytes: number;
+  /** three's `info.memory` */
+  held: Readonly<Record<string, number>>;
+}
+
+/** Counts the distinct buffers under a scene (shared ones once). */
+function sceneBuffers(scene: Object3D): Omit<GpuDebug, "held"> {
+  const indices = new Map<object, number>();
+  const buffers = new Map<object, number>();
+  let drawables = 0;
+  scene.traverse((object) => {
+    const geometry = (
+      object as Object3D & {
+        geometry?: {
+          attributes: Record<
+            string,
+            {
+              array: ArrayLike<number> & { byteLength: number };
+              data?: { array: { byteLength: number } };
+            }
+          >;
+          index: { array: { byteLength: number } } | null;
+        };
+      }
+    ).geometry;
+    if (!geometry) {
+      return;
+    }
+    drawables++;
+    if (geometry.index) {
+      indices.set(geometry.index, geometry.index.array.byteLength);
+    }
+    for (const attribute of Object.values(geometry.attributes)) {
+      const owner = attribute.data ?? attribute;
+      buffers.set(owner, owner.array.byteLength);
+    }
+  });
+  const sum = (m: Map<object, number>) =>
+    [...m.values()].reduce((a, b) => a + b, 0);
+  return {
+    drawables,
+    sceneIndices: indices.size,
+    sceneIndexBytes: sum(indices),
+    sceneBuffers: buffers.size,
+    sceneBufferBytes: sum(buffers),
+  };
+}
+
 export interface CityWalkOptions {
   /**
    * The render budget (profile, device tier, whether the neighbour tiles
@@ -223,6 +278,12 @@ export interface CityWalkHandle {
   captureViewpoint: () => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
+  /**
+   * What the scene still holds against what the renderer keeps on the GPU
+   * (QA/diagnostics): buffers the renderer holds beyond the scene's own
+   * are a leak.
+   */
+  getGpuDebug: () => GpuDebug;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
   getFocusDebug: () => {
     bokehScale: number;
@@ -1397,6 +1458,10 @@ async function bootApp(
       triangles: renderer.info.render.triangles,
       gpuBytes: gpuBytes(),
       memory: { ...renderer.info.memory },
+    }),
+    getGpuDebug: () => ({
+      ...sceneBuffers(scene),
+      held: { ...renderer.info.memory },
     }),
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),

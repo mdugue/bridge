@@ -441,6 +441,19 @@ Before a tile or its dressing shows, its node materials are built and
 compiled with `compileAsync` against the scene pass's target
 (`PostStack.compile`, each drawable shown and unculled for the call) — add
 new per-tile objects inside that path, or they build inside a frame.
+**Freeing is on us, not on three or the tile renderer** (WebGPU keeps GPU
+state per drawable that WebGL never had). WebGPURenderer frees a
+drawable's render objects — its uniform buffers and bind groups — only on
+its material's `dispose` or its own `dispose` event, and a scene-wide
+material is never disposed; 3DTilesRenderer frees only the glTF's own
+materials (not the per-tile ones the dressing put on), and on a load it
+aborts after `processTileModel` it frees the textures alone — geometry a
+compile already uploaded would stay. So a tile's release runs
+`disposeObject3D` over its content (`releaseRenderState` dispatches the
+event), a released or aborted tile is freed by the plugin itself, and
+nothing released is compiled. Leak hunts: `handle.getGpuDebug()` sets the
+scene's buffers against three's `info.memory` (a gap that grows per visit
+to the same place is a leak; a steady one is the tile cache).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the

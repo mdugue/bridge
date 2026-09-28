@@ -63,11 +63,7 @@ import { dressKerbs } from "./kerb-layer";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
-import {
-  compileRepresentatives,
-  disposeObject3D,
-  releaseRenderState,
-} from "./three-utils";
+import { compileRepresentatives, disposeObject3D } from "./three-utils";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -566,6 +562,8 @@ export class DressingPlugin {
   /** content roots whose tile was disposed; whatever lands for them later
    *  is released on the spot */
   private readonly released = new WeakSet<Object3D>();
+  /** Content roots whose geometries and materials are already freed. */
+  private readonly freed = new WeakSet<Object3D>();
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
@@ -617,14 +615,35 @@ export class DressingPlugin {
       await this.dressTerrain(scene, mesh, extras);
     }
     // The renderer shows the tile once this resolves: its programs are
-    // ready by then instead of compiling inside a frame.
-    await withinCompileWait(this.ctx.compile(scene));
+    // ready by then instead of compiling inside a frame. (A tile that left
+    // meanwhile is not compiled: that would upload what nothing shows.)
+    if (!this.released.has(scene)) {
+      await withinCompileWait(this.ctx.compile(scene));
+    }
     // Disposed while it was being dressed: the renderer drops an aborted
     // load without ever recording the scene, so nothing else frees it. The
     // same once the stream is gone (its plugins are unregistered first).
     if (this.disposed || this.released.has(scene)) {
       this.release(scene);
+      return;
     }
+    // A load the renderer aborts while this ran (a flight outruns it) is
+    // dropped right after this resolves, and then it frees the content's
+    // textures only (TilesRenderer.parseTile) — the geometry the compile
+    // above uploaded would stay on the GPU. Whether it kept the scene is
+    // settled by the next task.
+    setTimeout(() => {
+      const kept = (tile as { engineData?: { scene?: Object3D | null } })
+        .engineData?.scene;
+      if (kept === scene || this.released.has(scene)) {
+        return;
+      }
+      if (this.sceneOf.get(tile) === scene) {
+        this.sceneOf.delete(tile);
+      }
+      this.released.add(scene);
+      this.release(scene);
+    }, 0);
   }
 
   private dressCity(scene: Object3D, mesh: Mesh, extras: CityExtras): void {
@@ -831,9 +850,26 @@ export class DressingPlugin {
   /** Frees everything dressed onto one content root. */
   private release(scene: Object3D): void {
     const dressed = this.dressed.get(scene);
-    if (!dressed) {
-      return;
+    if (dressed) {
+      this.releaseDressed(scene, dressed);
     }
+    // The content itself, once — buildings, ground, and the walls, stairs,
+    // kerbs and fences baked into it: its geometries, the per-tile
+    // materials the dressing put on it (the renderer frees only the glTF's
+    // own, which those replaced) and the render objects of everything in
+    // it, which a scene-wide material never frees. On a normal unload the
+    // renderer disposes the geometries again (a no-op); on an aborted load
+    // it never does, and a compile has uploaded them by then.
+    if (!this.freed.has(scene)) {
+      this.freed.add(scene);
+      disposeObject3D(scene);
+    }
+    if (dressed && !this.disposed) {
+      this.ctx.onChange();
+    }
+  }
+
+  private releaseDressed(scene: Object3D, dressed: Dressed): void {
     this.dressed.delete(scene);
     dressed.aborter?.abort();
     if (dressed.city) {
@@ -850,14 +886,6 @@ export class DressingPlugin {
     if (dressed.dressing) {
       this.stream.dressings.delete(dressed.dressing);
       disposeDressing(dressed.dressing);
-    }
-    // The content itself (buildings, ground, and the walls, stairs, kerbs
-    // and fences baked into it, which wear scene-wide materials): the tile
-    // renderer frees its geometries and the glTF's own materials, but only
-    // this event frees their render objects.
-    releaseRenderState(scene);
-    if (!this.disposed) {
-      this.ctx.onChange();
     }
   }
 }
