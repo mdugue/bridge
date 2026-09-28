@@ -39,6 +39,8 @@ import {
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { AltitudeStick } from "./altitude-stick";
 import { ControlHintBar } from "./control-hints";
+import { CrashReport } from "./crash-report";
+import { startCrashTrail } from "./crash-trail";
 import { VEIL_HOLD_MS } from "./handover";
 import {
   type CityWalkHandle,
@@ -310,6 +312,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
     const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
+    // This page's crash trail, from before the renderer exists: a page the
+    // browser kills leaves its last steps for the next load (crash-trail.ts).
+    const trail = startCrashTrail();
 
     createCityWalkApp({
       container,
@@ -318,6 +323,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       tilesetUrl,
       initialDate: timeNow(),
       signal: aborter.signal,
+      trail,
       onStage: ({ id, fraction, skipped: isSkipped }) => {
         if (cancelled) {
           return;
@@ -399,6 +405,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         }
         handle = h;
         handleRef.current = h;
+        trail.note("first frame");
         syncTime();
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
@@ -425,6 +432,10 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         const aborted =
           err instanceof DOMException && err.name === "AbortError";
         if (!(cancelled || aborted)) {
+          trail.note(
+            "boot failed",
+            err instanceof Error ? err.message : String(err)
+          );
           setStatus({
             phase: "error",
             message: err instanceof Error ? err.message : String(err),
@@ -435,6 +446,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     return () => {
       cancelled = true;
       aborter.abort();
+      trail.end();
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
@@ -522,6 +534,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             stages={stages}
           />
         )}
+
+        <CrashReport />
 
         {status.phase === "error" && (
           <Alert className="absolute inset-x-8 top-8" variant="destructive">

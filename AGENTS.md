@@ -100,7 +100,11 @@ config change.
     (`?scene=lite`, `?gpu=webgl2`), `gpu-support.ts` (the WebGPU-or-WebGL2
     preflight), `instancing.ts` (`Instances`: instanced sets that share one
     node build),
-    `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
+    `fetch-optional.ts` (the one optional-artifact fetch/abort policy),
+    `crash-trail.ts` + `crash-report.tsx` (a page the browser kills leaves
+    its boot stages, errors, lost device and heartbeats in local storage;
+    the next load offers them as text to copy, `?trail=1` always — the
+    core is `lib/city/crash-trail.ts`)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,

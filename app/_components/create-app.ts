@@ -38,6 +38,7 @@ import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
+import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
 import { fetchOptionalJson, fetchRequiredJson } from "./fetch-optional";
 import type { MovementMode } from "./fps-movement";
@@ -96,6 +97,8 @@ const DEFAULT_FOV = 55;
  *  plus a margin, so tiles still loading read as haze, not as an edge. */
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
+/** How often the crash trail takes a heartbeat (crash-trail.ts). */
+const TRAIL_BEAT_MS = 2000;
 
 /** The HUD census's layers: the content's own, and a dressing's parts
  *  (tile-stream.ts DRESSING_PARTS). */
@@ -153,6 +156,12 @@ export interface CityWalkOptions {
   onError?: (message: string) => void;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
   onFps?: (fps: number) => void;
+  /**
+   * The page's crash trail (crash-trail.ts): the scene notes its boot
+   * stages, style switches and GPU trouble there and beats every couple of
+   * seconds, so a page the browser kills leaves a trace.
+   */
+  trail?: CrashTrail;
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
   /**
@@ -338,6 +347,35 @@ async function createRenderer(
   return renderer;
 }
 
+/**
+ * Tells the crash trail what the renderer runs on, and chains its public
+ * device-lost and GPU-error callbacks through it (three's own handlers
+ * still run: they log and stop the renderer).
+ */
+function traceRenderer(renderer: WebGPURenderer, trail: CrashTrail): void {
+  const backend = renderer.backend as { isWebGPUBackend?: boolean };
+  trail.set({
+    backend: backend.isWebGPUBackend ? "WebGPU" : "WebGL2",
+    pixelRatio: renderer.getPixelRatio(),
+  });
+  const onLost = renderer.onDeviceLost.bind(renderer);
+  renderer.onDeviceLost = (info) => {
+    trail.note("device-lost", `${info.reason ?? ""} ${info.message}`);
+    onLost(info);
+  };
+  const onError = renderer.onError.bind(renderer);
+  // reason: typed as a string; the WebGPU backend passes { type, message }.
+  renderer.onError = (info: string | { type?: string; message?: string }) => {
+    trail.note(
+      "gpu-error",
+      typeof info === "string"
+        ? info
+        : `${info.type ?? ""} ${info.message ?? ""}`
+    );
+    onError(info as string);
+  };
+}
+
 /** Reprojects the recenter point (the spawn tile's centre) for SunCalc. */
 function siteLatLng(
   epsg: number,
@@ -352,6 +390,9 @@ export async function createCityWalkApp(
   opts: CityWalkOptions
 ): Promise<CityWalkHandle> {
   const renderer = await createRenderer(opts.container, opts.budget);
+  if (opts.trail) {
+    traceRenderer(renderer, opts.trail);
+  }
   const scene = new Scene();
   scene.background = new Color(SKY_COLOR);
 
@@ -453,8 +494,14 @@ async function bootApp(
   };
 
   /** One stage report for the HUD (lib/city/load-stages.ts). */
-  const stage = (id: LoadStageId, fraction: number, skipped?: boolean) =>
+  const stagesDone = new Set<LoadStageId>();
+  const stage = (id: LoadStageId, fraction: number, skipped?: boolean) => {
+    if ((fraction >= 1 || skipped) && !stagesDone.has(id)) {
+      stagesDone.add(id);
+      opts.trail?.note(`stage ${id}`, skipped ? "skipped" : undefined);
+    }
     opts.onStage?.({ id, fraction, skipped });
+  };
 
   stage("buildings", 0);
   // What the viewer needs before any content: the frame and the tile list.
@@ -659,6 +706,7 @@ async function bootApp(
       url?: unknown;
     };
     const failure = error instanceof Error ? error : new Error(String(error));
+    opts.trail?.note("load-error", `${String(url)} ${failure.message}`);
     if (!firstFrameShown && (tile === null || String(url).includes(spawn.id))) {
       bootFailure ??= failure;
       return;
@@ -753,6 +801,7 @@ async function bootApp(
   const applyLook = (look: LookValues) => {
     if (look.style !== lastStyle) {
       lastStyle = look.style;
+      opts.trail?.note("style", look.style);
       // A picture style may draw its own crowns (style-dressing.ts), and the
       // crowns cast: the shadow map is redrawn with the new ones.
       invalidateShadows();
@@ -1064,6 +1113,7 @@ async function bootApp(
 
   let tickDue = 0;
   let fpsDue = 0;
+  let frames = 0;
   // (It resolves once the loop is installed: nothing to wait for.)
   void renderer.setAnimationLoop((time) => {
     // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
@@ -1115,9 +1165,35 @@ async function bootApp(
     // loop's own reset also ran on held frames, which read back as zero).
     renderer.info.reset();
     postStack.render();
+    frames++;
     tickPocFrame(shadowRendered);
   });
   cleanups.push(() => void renderer.setAnimationLoop(null));
+  // The crash trail's heartbeat: what a killed page was doing last.
+  const trail = opts.trail;
+  if (trail) {
+    const beat = setInterval(() => {
+      const heap = (
+        performance as Performance & {
+          memory?: { usedJSHeapSize: number };
+        }
+      ).memory;
+      trail.beat({
+        frames,
+        fps,
+        gpuMB: gpuBytes() / 1_048_576,
+        calls: renderer.info.render.drawCalls,
+        triangles: renderer.info.render.triangles,
+        heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
+        cities: stream.visibleCities().length,
+        dressings: stream.dressings.size,
+        style: lastStyle,
+        mode: pose.getMode(),
+        heightM: camera.position.y - groundUnderCamera(),
+      });
+    }, TRAIL_BEAT_MS);
+    cleanups.push(() => clearInterval(beat));
+  }
 
   // The load after the first frame (lib/city/boot-phases.ts): declared
   // before the first await, since tile events call checkLoaded from then on.
@@ -1181,7 +1257,8 @@ async function bootApp(
     stylesWarming = true;
     const warm = () => {
       if (!disposed) {
-        void postStack.warmStyles();
+        opts.trail?.note("styles warming");
+        void postStack.warmStyles().then(() => opts.trail?.note("styles warm"));
       }
     };
     if (typeof requestIdleCallback === "function") {
@@ -1210,6 +1287,7 @@ async function bootApp(
       stage(id, fraction, skipped);
     }
     if (step.loaded) {
+      opts.trail?.note("loaded");
       worldPartial = false;
       applyFog();
       opts.onLoaded?.();
