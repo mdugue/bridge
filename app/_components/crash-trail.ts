@@ -134,8 +134,14 @@ export function startCrashTrail(): CrashTrail {
     },
   };
 
-  const onError = (event: ErrorEvent) =>
-    note("error", `${event.message} @${event.filename}:${event.lineno}`);
+  const onError = (event: ErrorEvent) => {
+    const error = event.error as unknown;
+    const stack =
+      error instanceof Error
+        ? (error.stack ?? "").split("\n").slice(1, 4).join(" | ")
+        : `@${event.filename}:${event.lineno}`;
+    note("error", `${event.message} ${stack}`);
+  };
   const onRejection = (event: PromiseRejectionEvent) =>
     note(
       "rejection",

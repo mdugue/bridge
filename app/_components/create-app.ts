@@ -1125,10 +1125,32 @@ async function bootApp(
   let tickDue = 0;
   let fpsDue = 0;
   let frames = 0;
-  const stopOnGpuFailure = (error: unknown) => {
-    void renderer.setAnimationLoop(null);
+  // A frame that throws. A lost GPU (iOS reclaims the GPU process under
+  // memory pressure; WebKit throws InvalidStateError before any
+  // device-lost arrives) fails every frame after it: stop once and say so.
+  // Anything else is noted once (with where it came from) and the loop
+  // carries on, as it did before this guard; only a failure that repeats
+  // for a whole second of frames stops it too.
+  let failedFrames = 0;
+  const failures = new Set<string>();
+  const onFrameFailed = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    opts.trail?.note("render failed", message);
+    if (!failures.has(message)) {
+      failures.add(message);
+      const where =
+        error instanceof Error
+          ? (error.stack ?? "").split("\n").slice(0, 4).join(" | ")
+          : "";
+      opts.trail?.note("frame failed", `${message} ${where}`);
+    }
+    failedFrames++;
+    const deviceGone =
+      error instanceof DOMException && error.name === "InvalidStateError";
+    if (!(deviceGone || failedFrames >= 60)) {
+      return;
+    }
+    void renderer.setAnimationLoop(null);
+    opts.trail?.note("render stopped", message);
     if (!disposed) {
       opts.onError?.(
         `Die Grafik ist ausgefallen (${message}). Bitte neu laden.`
@@ -1188,12 +1210,10 @@ async function bootApp(
     try {
       postStack.render();
     } catch (error) {
-      // The GPU is gone (iOS reclaims the GPU process under memory
-      // pressure, and WebKit may throw before any device-lost arrives):
-      // every further frame would throw the same. Stop once, and say so.
-      stopOnGpuFailure(error);
+      onFrameFailed(error);
       return;
     }
+    failedFrames = 0;
     frames++;
     tickPocFrame(shadowRendered);
   });
