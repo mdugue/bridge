@@ -1,4 +1,4 @@
-import type { Texture, Vector2 } from "three/webgpu";
+import type { Texture, TextureNode, Vector2 } from "three/webgpu";
 import { positionWorld, vec2, vec3 } from "three/tsl";
 import type { Node, UniformNode } from "three/webgpu";
 
@@ -46,3 +46,10 @@ export const texSize = (t: Texture): [number, number] => {
   const img = t.image as { height: number; width: number };
   return [img.width, img.height];
 };
+
+/**
+ * A texture a chunk samples: the texture itself, or a node standing for it
+ * (a slot of a graph shared by every tile, material-slots.ts) — TSL's
+ * `texture()` and `textureLoad()` take either.
+ */
+export type Tex = Texture | TextureNode;

@@ -85,10 +85,17 @@ import {
   type F,
   type Live,
   rasterUv,
+  type Tex,
   type V2,
   type V3,
 } from "./shader-chunks";
 import type { SharedRasters } from "./shared-rasters";
+import {
+  type Slots,
+  setSlots,
+  slotTexture,
+  slotUniform,
+} from "./material-slots";
 import { applyGroundLight, type GroundLight } from "./sky-light";
 import { sportGround } from "./sport-ground";
 import { textureBytes, trackTexture } from "./three-utils";
@@ -543,6 +550,97 @@ export function splatUv(splat: SplatLayer): V2 {
   return rasterUv(dataXY(), origin, splatSize(splat));
 }
 
+/**
+ * What a terrain variant's shared graph reads (material-slots.ts): the
+ * tile's rasters and corner as slots, the look's rows as they are (every
+ * tile shares those anyway). A tile's own values are `splatSlots`.
+ */
+interface SplatNodes {
+  size: [number, number];
+  origin: UniformNode<"vec2", Vector2>;
+  classTexture: Tex;
+  colorTexture: Tex;
+  ndvi?: Tex;
+  surface?: Tex;
+  edges?: Tex;
+  sport?: { raster: Tex; table: Tex };
+  markings?: { raster: Tex; table: Tex };
+  colonies?: { rect: UniformNode<"vec4", Vector4>; texture: Tex };
+  ground: GroundUniforms;
+}
+
+/** The tile's corner (recentered, data frame): the uv's origin. */
+const splatOrigin = (splat: SplatLayer): Vector2 => {
+  const [minX, , , maxY] = splat.bounds;
+  return new Vector2(minX - splat.offset.cx, maxY - splat.offset.cy);
+};
+
+/** A variant: which optional rasters it reads, and the tile's size. */
+const splatVariant = (splat: SplatLayer): string =>
+  [
+    splat.ndviTexture ? "ndvi" : "",
+    splat.surfaceTexture ? "surface" : "",
+    splat.edgesTexture ? "edges" : "",
+    splat.sport ? "sport" : "",
+    splat.markings ? "markings" : "",
+    splat.colonies ? "colonies" : "",
+    splat.svfTexture ? "svf" : "",
+    splat.horizonTexture ? "horizon" : "",
+    ...splatSize(splat),
+  ].join("|");
+
+/** The slots of a variant's graph, made from one of its tiles. */
+function splatNodes(splat: SplatLayer): SplatNodes {
+  return {
+    size: splatSize(splat),
+    // reason: a Vector2 slot is a vec2 uniform; slotUniform types it loosely.
+    origin: slotUniform("origin", splatOrigin(splat)) as unknown as UniformNode<
+      "vec2",
+      Vector2
+    >,
+    classTexture: slotTexture("class", splat.texture),
+    colorTexture: slotTexture("color", splat.colorTexture),
+    ndvi: splat.ndviTexture && slotTexture("ndvi", splat.ndviTexture),
+    surface:
+      splat.surfaceTexture && slotTexture("surface", splat.surfaceTexture),
+    edges: splat.edgesTexture && slotTexture("edges", splat.edgesTexture),
+    sport: splat.sport && {
+      raster: slotTexture("sportRaster", splat.sport.raster),
+      table: slotTexture("sportTable", splat.sport.table),
+    },
+    markings: splat.markings && {
+      raster: slotTexture("markingsRaster", splat.markings.raster),
+      table: slotTexture("markingsTable", splat.markings.table),
+    },
+    colonies: splat.colonies && {
+      rect: slotUniform(
+        "colonyRect",
+        new Vector4(...splat.colonies.rect)
+      ) as unknown as UniformNode<"vec4", Vector4>,
+      texture: slotTexture("colonies", splat.colonies.texture),
+    },
+    ground: splat.ground,
+  };
+}
+
+/** A tile's values for its variant's slots. */
+function splatSlots(splat: SplatLayer): Slots {
+  return {
+    origin: splatOrigin(splat),
+    class: splat.texture,
+    color: splat.colorTexture,
+    ndvi: splat.ndviTexture,
+    surface: splat.surfaceTexture,
+    edges: splat.edgesTexture,
+    sportRaster: splat.sport?.raster,
+    sportTable: splat.sport?.table,
+    markingsRaster: splat.markings?.raster,
+    markingsTable: splat.markings?.table,
+    colonies: splat.colonies?.texture,
+    colonyRect: splat.colonies && new Vector4(...splat.colonies.rect),
+  };
+}
+
 /** The meadow's palette colour, linear — the urban green and grass pavers. */
 const MEADOW_LINEAR = LANDCOVER_CLASSES[MEADOW_CLASS].srgb.map(srgbToLinear);
 
@@ -569,7 +667,7 @@ const groundTilt = property("vec3", "terrainGroundTilt", vec3(0));
  * aliases/shimmers in the far field (the failure mode that got plain
  * foliage translucency rejected as "noise").
  */
-function grassMottle(inp: GroundInputs, splat: SplatLayer): GroundColour {
+function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
   const { xy, cls, fw } = inp;
   const meadow = float(1)
     .sub(step(0.5, abs(cls.sub(MEADOW_CLASS))))
@@ -584,7 +682,7 @@ function grassMottle(inp: GroundInputs, splat: SplatLayer): GroundColour {
     )
     .toVar();
   const col: GroundColour = {
-    baseCol: texture(splat.colorTexture, inp.uv).rgb.toVar(),
+    baseCol: texture(colorTexture, inp.uv).rgb.toVar(),
     meadow,
     detail: meadow.mul(float(1).sub(smoothstep(0.5, 2.5, fw))).toVar(),
     mottle,
@@ -605,7 +703,7 @@ function grassMottle(inp: GroundInputs, splat: SplatLayer): GroundColour {
 function meadowNdvi(
   inp: GroundInputs,
   col: GroundColour,
-  ndvi: Texture,
+  ndvi: Tex,
   strength: Live
 ): void {
   // Read from a coarser mip (a bias of 2.5): the 2 m raster carries every
@@ -657,10 +755,10 @@ function contourInk(elevation: F): F {
  * footprint. Under water the ink is gone too (the sheet is translucent, it
  * showed).
  */
-function contourGate(inp: GroundInputs, elevation: F, splat: SplatLayer): F {
+function contourGate(inp: GroundInputs, elevation: F, colorTexture: Tex): F {
   const run = max(length(fwidth(inp.xy)), 1e-4);
   const slope = fwidth(elevation).div(run);
-  const water = texture(splat.colorTexture, inp.uv).a;
+  const water = texture(colorTexture, inp.uv).a;
   return smoothstep(0.025, 0.09, slope).mul(
     float(1).sub(smoothstep(0.05, 0.4, water))
   );
@@ -675,35 +773,31 @@ const INK = vec3(0.3, 0.33, 0.38);
  * urban green, the ground detail, the allotment gardens, the sports
  * grounds, the road markings, the NDVI tint, and the gated contour ink on
  * top. The optional rasters that did not load leave their term out (a
- * different node graph, so three builds it apart).
+ * different variant, built apart; `terrainGraph`).
  */
-function splatColour(splat: SplatLayer): V3 {
+function splatColour(splat: SplatNodes): V3 {
   return Fn(() => {
-    const uv = splatUv(splat).toVar();
+    const uv = rasterUv(dataXY(), splat.origin, splat.size).toVar();
     const xy = dataXY().toVar();
     const inp: GroundInputs = {
       uv,
       xy,
-      size: splatSize(splat),
-      classTexture: splat.texture,
+      size: splat.size,
+      classTexture: splat.classTexture,
       fw: max(fwidth(xy.x), fwidth(xy.y)).toVar(),
-      cls: floor(texture(splat.texture, uv).r.mul(255).add(0.5)).toVar(),
+      cls: floor(texture(splat.classTexture, uv).r.mul(255).add(0.5)).toVar(),
       groundDetail: splat.ground.groundDetail,
       urbanGreen: splat.ground.urbanGreen,
       sunDirection: splat.ground.sunDirection,
       meadowColor: vec3(MEADOW_LINEAR[0], MEADOW_LINEAR[1], MEADOW_LINEAR[2]),
       roadColor: vec3(ROAD_LINEAR[0], ROAD_LINEAR[1], ROAD_LINEAR[2]),
     };
-    const col = grassMottle(inp, splat);
-    const g = groundFields(inp, splat.surfaceTexture, splat.edgesTexture);
-    const ugW = urbanGreen(inp, col, g, splat.ndviTexture);
+    const col = grassMottle(inp, splat.colorTexture);
+    const g = groundFields(inp, splat.surface, splat.edges);
+    const ugW = urbanGreen(inp, col, g, splat.ndvi);
     groundDetail(inp, col, g, ugW);
     if (splat.colonies) {
-      const { rect, texture: raster } = splat.colonies;
-      colonyGarden(inp, col, g, {
-        rect: uniform(new Vector4(...rect)),
-        texture: raster,
-      });
+      colonyGarden(inp, col, g, splat.colonies);
     }
     if (splat.sport) {
       sportGround(inp, col, g, splat.sport);
@@ -711,14 +805,16 @@ function splatColour(splat: SplatLayer): V3 {
     if (splat.markings) {
       roadMarkings(inp, col, g, splat.markings);
     }
-    if (splat.ndviTexture) {
-      meadowNdvi(inp, col, splat.ndviTexture, splat.ground.meadowNdvi);
+    if (splat.ndvi) {
+      meadowNdvi(inp, col, splat.ndvi, splat.ground.meadowNdvi);
     }
     const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
     grassDetail.assign(col.detail);
     groundTilt.assign(g.tilt);
     const elevation = positionWorld.y;
-    const ink = contourInk(elevation).mul(contourGate(inp, elevation, splat));
+    const ink = contourInk(elevation).mul(
+      contourGate(inp, elevation, splat.colorTexture)
+    );
     return mix(baseCol, INK, ink);
   })();
 }
@@ -792,6 +888,42 @@ function terrainNormal(withDetail: boolean): V3 {
   })();
 }
 
+/** A terrain variant's shared colour and normal nodes. */
+interface TerrainGraph {
+  color: V3;
+  normal: V3;
+}
+
+/**
+ * The terrain's graphs, one per variant (`splatVariant`; the plain ground
+ * without a class raster is one more), per app — keyed by the look's
+ * uniforms, which every tile of an app shares (material-slots.ts).
+ */
+const terrainGraphs = new WeakMap<object, Map<string, TerrainGraph>>();
+let plainGraph: TerrainGraph | null = null;
+
+function terrainGraph(splat: SplatLayer | undefined): TerrainGraph {
+  if (!splat) {
+    plainGraph ??= { color: plainColour(), normal: terrainNormal(false) };
+    return plainGraph;
+  }
+  let graphs = terrainGraphs.get(splat.ground);
+  if (!graphs) {
+    graphs = new Map();
+    terrainGraphs.set(splat.ground, graphs);
+  }
+  const key = splatVariant(splat);
+  let graph = graphs.get(key);
+  if (!graph) {
+    graph = {
+      color: splatColour(splatNodes(splat)),
+      normal: terrainNormal(true),
+    };
+    graphs.set(key, graph);
+  }
+  return graph;
+}
+
 /**
  * Light paper-sage ground with sketch-style contour lines (2 m minor / 10 m
  * major), on the data-frame elevation derived from world space. When a
@@ -809,8 +941,14 @@ export function createTerrainMaterial(
     roughness: 1,
   });
   material.name = "terrain";
-  material.colorNode = splat ? splatColour(splat) : plainColour();
-  material.normalNode = terrainNormal(splat !== undefined);
+  // The variant's graph, shared by every tile of it: a tile that arrives
+  // builds no shader; its own rasters go into the slots.
+  const graph = terrainGraph(splat);
+  material.colorNode = graph.color;
+  material.normalNode = graph.normal;
+  if (splat) {
+    setSlots(material, splatSlots(splat));
+  }
   applyGroundLight(material, splat ? groundLightOf(splat) : undefined);
   // Papier draws the ground with this material (see `paperGround`).
   material.userData.paperOwn = true;

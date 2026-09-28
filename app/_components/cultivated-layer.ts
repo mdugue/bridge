@@ -5,7 +5,6 @@ import {
   MeshStandardNodeMaterial,
   type Node,
   Object3D,
-  type Texture,
   type UniformNode,
   type Vector4,
 } from "three/webgpu";
@@ -55,7 +54,7 @@ import {
 import { instancePosition, Instances, instanceTint } from "./instancing";
 import { hedgePieces } from "./low-vegetation-layer";
 import { rmStripes } from "./road-markings";
-import type { F, V2, V3 } from "./shader-chunks";
+import type { F, Tex, V2, V3 } from "./shader-chunks";
 import { spLine } from "./sport-ground";
 import { sceneMaterial } from "./three-utils";
 import { bucketByCell, hash } from "./vegetation-layer";
@@ -205,7 +204,7 @@ function plotGarden(
 /** Inside the colony: plots, their gardens, the paths and the rim hedge. */
 function colonyPlots(
   inp: GroundInputs,
-  colony: { texture: Texture; uv: V2 },
+  colony: { texture: Tex; uv: V2 },
   edge: F,
   w: F
 ): V3 {
@@ -263,7 +262,7 @@ export function colonyGarden(
   inp: GroundInputs,
   col: GroundColour,
   g: GroundFields,
-  colonies: { rect: UniformNode<"vec4", Vector4>; texture: Texture }
+  colonies: { rect: UniformNode<"vec4", Vector4>; texture: Tex }
 ): void {
   const { rect } = colonies;
   const uv = inp.uv.sub(rect.xy).div(rect.zw).toVar();

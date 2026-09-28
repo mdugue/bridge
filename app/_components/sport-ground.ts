@@ -1,4 +1,4 @@
-import type { Node, Texture } from "three/webgpu";
+import type { Node } from "three/webgpu";
 import {
   abs,
   and,
@@ -31,7 +31,7 @@ import {
   sportShapeId,
   sportSurfaceId,
 } from "@/lib/city/sport";
-import type { F, V2, V3, V4 } from "./shader-chunks";
+import type { F, Tex, V2, V3, V4 } from "./shader-chunks";
 import {
   byteOf,
   floorMod,
@@ -267,7 +267,7 @@ function spBoard(q: V2, f: V2, w: F): F {
 
 /** The raster at a texel: the row (R, 1-based, 0 none), the second row
  *  (G) and the exact bit (B). */
-function spAt(raster: Texture, p: Node<"ivec2">, size: Node<"ivec2">): V3 {
+function spAt(raster: Tex, p: Node<"ivec2">, size: Node<"ivec2">): V3 {
   const t = texelAt(raster, p, size);
   return vec3(byteOf(t.r), byteOf(t.g), t.b);
 }
@@ -283,13 +283,7 @@ interface Nearest {
  *  deepest inside: a loop over the eight row slots (the first rows, then
  *  the second), a slot skipped when empty or when it repeats the one
  *  before it. */
-function nearestGround(
-  table: Texture,
-  t: V3[],
-  f: V2,
-  mpt: F,
-  local: V2
-): Nearest {
+function nearestGround(table: Tex, t: V3[], f: V2, mpt: F, local: V2): Nearest {
   const best: Nearest = {
     sd: float(1e3).toVar(),
     q: vec2(0).toVar(),
@@ -459,7 +453,7 @@ export function sportGround(
   inp: GroundInputs,
   col: GroundColour,
   g: GroundFields,
-  sport: { raster: Texture; table: Texture }
+  sport: { raster: Tex; table: Tex }
 ): void {
   const size = texelSize(sport.raster, inp.uv).toVar();
   const s = vec2(size).toVar();

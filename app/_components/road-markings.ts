@@ -1,4 +1,4 @@
-import type { Node, Texture } from "three/webgpu";
+import type { Node } from "three/webgpu";
 import {
   abs,
   and,
@@ -26,7 +26,7 @@ import {
   MARKING_PATTERN as P,
   markingKindId,
 } from "@/lib/city/markings";
-import type { F, V2, V3 } from "./shader-chunks";
+import type { F, Tex, V2, V3 } from "./shader-chunks";
 import {
   gdNoise,
   type GroundColour,
@@ -84,14 +84,14 @@ export const rmStripes = Fn(
 );
 
 /** The raster's bytes at a texel: row (R + 256 A, 1-based), bits, offset. */
-function rmAt(raster: Texture, p: Node<"ivec2">, size: Node<"ivec2">): V3 {
+function rmAt(raster: Tex, p: Node<"ivec2">, size: Node<"ivec2">): V3 {
   const t = floor(texelAt(raster, p, size).mul(255).add(0.5));
   return vec3(t.x.add(t.w.mul(256)), t.y, t.z);
 }
 
 /** One table row's paint at the local position (m from the tile's NW
  *  corner). */
-function rmRow(table: Texture, row: F, local: V2, w: F): F {
+function rmRow(table: Tex, row: F, local: V2, w: F): F {
   const at = int(row).sub(1);
   const a = loadTexel(table, ivec2(at, 0));
   const b = loadTexel(table, ivec2(at, 1));
@@ -164,7 +164,7 @@ export function roadMarkings(
   inp: GroundInputs,
   col: GroundColour,
   g: GroundFields,
-  markings: { raster: Texture; table: Texture }
+  markings: { raster: Tex; table: Tex }
 ): void {
   If(and(inp.groundDetail.greaterThan(0), inp.fw.lessThan(1.5)), () => {
     const size = texelSize(markings.raster, inp.uv).toVar();

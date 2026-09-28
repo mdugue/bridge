@@ -7,10 +7,12 @@ import {
   MeshStandardNodeMaterial,
   type Node,
   TextureNode,
+  type Vector2,
   Vector3,
 } from "three/webgpu";
 import { float, uniform } from "three/tsl";
 import { dressFences } from "./fence-layer";
+import { slotsOf } from "./material-slots";
 import { dressKerbs } from "./kerb-layer";
 import {
   applyGroundLight,
@@ -67,9 +69,36 @@ test("the sky view scales the ambient through aoNode, by the shared row", () => 
   const ao = reachable(material.aoNode as Node);
   // the row by reference: the slider reaches it without a rebuild
   expect(ao.has(light.skyView)).toBe(true);
-  expect(texturesOf(material.aoNode as Node)).toContain(light.svf);
+  // the tile's raster goes in by slot, not into the shared graph
+  expect(texturesOf(material.aoNode as Node)).not.toContain(light.svf);
+  expect(slotsOf(material).lightSvf).toBe(light.svf);
   // no horizon, no change to the sun's shadow
   expect(material.receivedShadowNode).toBeNull();
+});
+
+test("tiles of one variant share the light's nodes, each with its own slots", () => {
+  const light = groundLight({ horizon: true, svf: true });
+  const other: GroundLight = {
+    ...light,
+    svf: new DataTexture(),
+    horizon: new DataArrayTexture(),
+    origin: [1010, 20],
+  };
+  const a = new MeshStandardNodeMaterial();
+  const b = new MeshStandardNodeMaterial();
+  applyGroundLight(a, light);
+  applyGroundLight(b, other);
+  // one graph, one shader build for both tiles
+  expect(a.aoNode).toBe(b.aoNode);
+  expect(a.receivedShadowNode).toBe(b.receivedShadowNode);
+  expect(slotsOf(a).lightSvf).toBe(light.svf);
+  expect(slotsOf(b).lightSvf).toBe(other.svf);
+  expect(slotsOf(b).lightHorizon).toBe(other.horizon);
+  expect((slotsOf(b).lightOrigin as Vector2).x).toBe(1010);
+  // a tile without the far horizon is another variant
+  const c = new MeshStandardNodeMaterial();
+  applyGroundLight(c, { ...light, horizon: undefined });
+  expect(c.aoNode).not.toBe(a.aoNode);
 });
 
 test("the far horizon joins the sun's shadow by min, never a product", () => {

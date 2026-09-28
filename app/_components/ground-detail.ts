@@ -1,4 +1,4 @@
-import type { Node, Texture, UniformNode, Vector3 } from "three/webgpu";
+import type { Node, UniformNode, Vector3 } from "three/webgpu";
 import {
   abs,
   and,
@@ -43,7 +43,7 @@ import {
   surfaceId,
 } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
-import type { F, Live, V2, V3, V4 } from "./shader-chunks";
+import type { F, Live, Tex, V2, V3, V4 } from "./shader-chunks";
 
 /**
  * Ground detail in the terrain's colour node, next to the meadow mottle
@@ -101,7 +101,7 @@ export interface GroundInputs {
   /** the tile's size (m) */
   size: [number, number];
   /** the NEAREST class-id raster */
-  classTexture: Texture;
+  classTexture: Tex;
   /** metres per pixel (the larger fwidth of `xy`), a var */
   fw: F;
   /** the class id at the fragment (float), a var */
@@ -180,7 +180,7 @@ export const floorMod = (x: F, y: F | number): F =>
   x.sub(floor(x.div(y)).mul(y));
 
 /** A raster's size in texels (level 0). */
-export const texelSize = (t: Texture, uv: V2): I2 =>
+export const texelSize = (t: Tex, uv: V2): I2 =>
   // reason: TextureSizeNode is typed as a bare Node; it is a uvec2.
   ivec2(textureSize(texture(t, uv), int(0)) as unknown as Node<"uvec2">);
 
@@ -189,11 +189,11 @@ export const texelSize = (t: Texture, uv: V2): I2 =>
 const clampI2 = clamp as unknown as (x: I2, lo: I2, hi: I2) => I2;
 
 /** The texel at `p`, clamped into the raster (`size` from `texelSize`). */
-export const texelAt = (t: Texture, p: I2, size: I2): V4 =>
+export const texelAt = (t: Tex, p: I2, size: I2): V4 =>
   textureLoad(t, clampI2(p, ivec2(0, 0), size.sub(ivec2(1, 1))));
 
 /** The texel at `p` of a table texture (the row lookups: always inside). */
-export const loadTexel = (t: Texture, p: I2): V4 => textureLoad(t, p);
+export const loadTexel = (t: Tex, p: I2): V4 => textureLoad(t, p);
 
 /** A byte of a UNORM8 channel as a float 0..255 (rounded). */
 export const byteOf = (v: F): F => floor(v.mul(255).add(0.5));
@@ -326,12 +326,12 @@ function gdJoint(q: V2, size: V2, jw: number, w: F): F {
 // --- the fields ----------------------------------------------------------------
 
 /** The baked, smoothed distance fields (edges.py): signed metres. */
-const edgeAt = (edges: Texture, uv: V2): V2 =>
+const edgeAt = (edges: Tex, uv: V2): V2 =>
   texture(edges, uv).level(float(0)).rg.mul(255).sub(128).div(EDGE_SCALE);
 
 /** The baked distances: valid out to ±6 m, straight along a diagonal kerb,
  *  with their gradient (central differences, uv grows south). */
-function bakedDistances(inp: GroundInputs, edges: Texture, g: GroundFields) {
+function bakedDistances(inp: GroundInputs, edges: Tex, g: GroundFields) {
   const et = vec2(1)
     .div(vec2(texelSize(edges, inp.uv)))
     .toVar();
@@ -373,7 +373,7 @@ function classDistances(
 /** The paving raster (surface.py): the kinds, the parking and the street's
  *  frame — along = offset + (position from the tile's north-west corner) · d,
  *  exactly as the bake defines it. */
-function pavingFields(inp: GroundInputs, surface: Texture, g: GroundFields) {
+function pavingFields(inp: GroundInputs, surface: Tex, g: GroundFields) {
   const ss = texelSize(surface, inp.uv).toVar();
   const s = texelAt(surface, ivec2(inp.uv.mul(vec2(ss))), ss).toVar();
   const byte = int(byteOf(s.r)).toVar();
@@ -430,8 +430,8 @@ function pavingKind(g: GroundFields, cls: I): void {
  */
 export function groundFields(
   inp: GroundInputs,
-  surface?: Texture,
-  edges?: Texture
+  surface?: Tex,
+  edges?: Tex
 ): GroundFields {
   const size = texelSize(inp.classTexture, inp.uv).toVar();
   const texels = vec2(size).toVar();
@@ -517,7 +517,7 @@ export function urbanGreen(
   inp: GroundInputs,
   col: GroundColour,
   g: GroundFields,
-  ndvi?: Texture
+  ndvi?: Tex
 ): F {
   const cls = int(inp.cls);
   const built = select(or(cls.equal(BUILTUP_CLASS), cls.equal(0)), 1, 0);

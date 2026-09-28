@@ -52,10 +52,17 @@ import {
 } from "@/lib/city/skyview";
 import { isAbortError } from "./fetch-optional";
 import {
+  type Slots,
+  setSlots,
+  slotTexture,
+  slotUniform,
+} from "./material-slots";
+import {
   dataXY,
   type F,
   type Live,
   rasterUv,
+  type Tex,
   type V2,
   type V3,
 } from "./shader-chunks";
@@ -125,13 +132,7 @@ const clears = (h: F, el: F): F => smoothstep(h.sub(SOFT), h.add(SOFT), el);
  * array has no mips, and the near band's read sits in a branch (no
  * implicit derivative may be taken there).
  */
-function hzAngle(
-  horizon: Texture,
-  uv: V2,
-  k: F,
-  base: number,
-  maxDeg: number
-): F {
+function hzAngle(horizon: Tex, uv: V2, k: F, base: number, maxDeg: number): F {
   // one read, four channels to choose from
   const v = texture(horizon, uv)
     .depth(floor(k.div(4)).add(base))
@@ -153,7 +154,7 @@ function hzAngle(
  * (lib/city/skyview.ts nearBandWeight) — skipped where it is 0, which is
  * most of what is on screen.
  */
-function hzSunVisible(light: GroundLight, horizon: Texture, uv: V2): F {
+function hzSunVisible(light: GroundLight, horizon: Tex, uv: V2): F {
   const sun = light.sunDirection;
   const reach = light.shadowReach;
   return Fn(() => {
@@ -195,12 +196,75 @@ function hzSunVisible(light: GroundLight, horizon: Texture, uv: V2): F {
   })();
 }
 
+/** A light variant's shared nodes (see `applyGroundLight`). */
+interface GroundLightGraph {
+  ao?: F;
+  receivedShadow?: (shadow?: Node) => Node;
+}
+
+/**
+ * The light's graphs, one per variant (which rasters it has, and the
+ * tile's size), per app — keyed by its sun uniform, which every tile of an
+ * app shares — so a tile that arrives builds no shader (material-slots.ts).
+ */
+const lightGraphs = new WeakMap<object, Map<string, GroundLightGraph>>();
+
+function lightGraph(
+  light: GroundLight,
+  svf: Texture | undefined,
+  horizon: Texture | undefined
+): GroundLightGraph {
+  let graphs = lightGraphs.get(light.sunDirection);
+  if (!graphs) {
+    graphs = new Map();
+    lightGraphs.set(light.sunDirection, graphs);
+  }
+  const key = [svf ? "svf" : "", horizon ? "horizon" : "", ...light.size].join(
+    "|"
+  );
+  let graph = graphs.get(key);
+  if (graph) {
+    return graph;
+  }
+  // The tile's corner and rasters are slots: every tile reads its own.
+  const origin = slotUniform(
+    "lightOrigin",
+    new Vector2(...light.origin)
+  ) as unknown as UniformNode<"vec2", Vector2>;
+  const uv = rasterUv(dataXY(), origin, light.size);
+  graph = {};
+  if (svf) {
+    graph.ao = mix(
+      1,
+      texture(slotTexture("lightSvf", svf), uv).r,
+      light.skyView
+    );
+  }
+  if (horizon) {
+    const lit = mix(
+      1,
+      hzSunVisible(light, slotTexture("lightHorizon", horizon), uv),
+      light.horizonShade
+    );
+    // three's ShadowNode calls this with the light's shadow term (the
+    // filtered shadow map, 1 outside its frustum) and multiplies the light
+    // colour by what it returns. The @types declare it without the
+    // argument, hence the optional parameter; the term is a float (a vec3
+    // only with coloured, transmitted shadows, which the scene does not use).
+    graph.receivedShadow = (shadow?: Node) =>
+      shadow ? min(shadow as F, lit) : lit;
+  }
+  graphs.set(key, graph);
+  return graph;
+}
+
 /**
  * Folds a tile's sky view (`skyView`: the ambient term, → `aoNode`) and far
  * horizon (the sun, → `receivedShadowNode`) into a node material, as the
  * ground has them — the same terms, read at the fragment's own ground
  * position. A few texture reads on a few pixels; nothing when the tile has
- * neither raster.
+ * neither raster. The nodes are the variant's shared ones; the tile's
+ * rasters and corner go into the material's slots.
  */
 export function applyGroundLight(
   material: MeshStandardNodeMaterial,
@@ -212,25 +276,19 @@ export function applyGroundLight(
   if (!(light && (svf || horizon))) {
     return;
   }
-  // The corner is a uniform: every tile then builds the same shader.
-  const uv = rasterUv(
-    dataXY(),
-    uniform(new Vector2(...light.origin)),
-    light.size
-  );
-  if (svf) {
-    material.aoNode = mix(1, texture(svf, uv).r, light.skyView);
+  const graph = lightGraph(light, svf, horizon);
+  if (graph.ao) {
+    material.aoNode = graph.ao;
   }
-  if (horizon) {
-    const lit = mix(1, hzSunVisible(light, horizon, uv), light.horizonShade);
-    // three's ShadowNode calls this with the light's shadow term (the
-    // filtered shadow map, 1 outside its frustum) and multiplies the light
-    // colour by what it returns. The @types declare it without the
-    // argument, hence the optional parameter; the term is a float (a vec3
-    // only with coloured, transmitted shadows, which the scene does not use).
-    material.receivedShadowNode = (shadow?: Node) =>
-      shadow ? min(shadow as F, lit) : lit;
+  if (graph.receivedShadow) {
+    material.receivedShadowNode = graph.receivedShadow;
   }
+  setSlots(material, {
+    ...(material.userData.slots as Slots | undefined),
+    lightOrigin: new Vector2(...light.origin),
+    lightSvf: svf,
+    lightHorizon: horizon,
+  });
 }
 
 /** A standard node material lit by the tile's baked light. */
