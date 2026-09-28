@@ -145,10 +145,20 @@ export interface GpuDebug {
   sceneBufferBytes: number;
   /** three's `info.memory` */
   held: Readonly<Record<string, number>>;
+  /** the tile cache: bytes it counts against its budget, tiles in it, in use */
+  tileCache: {
+    bytes: number;
+    maxBytes: number;
+    items: number;
+    used: number;
+    loaded: number;
+    /** each tile's MB as the cache counts it, "u" when in use */
+    sizes: string[];
+  };
 }
 
 /** Counts the distinct buffers under a scene (shared ones once). */
-function sceneBuffers(scene: Object3D): Omit<GpuDebug, "held"> {
+function sceneBuffers(scene: Object3D): Omit<GpuDebug, "held" | "tileCache"> {
   const indices = new Map<object, number>();
   const buffers = new Map<object, number>();
   let drawables = 0;
@@ -1459,10 +1469,31 @@ async function bootApp(
       gpuBytes: gpuBytes(),
       memory: { ...renderer.info.memory },
     }),
-    getGpuDebug: () => ({
-      ...sceneBuffers(scene),
-      held: { ...renderer.info.memory },
-    }),
+    getGpuDebug: () => {
+      const cache = stream.tiles.lruCache as unknown as {
+        cachedBytes: number;
+        maxBytesSize: number;
+        itemSet: Map<unknown, unknown>;
+        usedSet: Set<unknown>;
+        loadedSet: Set<unknown>;
+        bytesMap: Map<unknown, number>;
+      };
+      return {
+        ...sceneBuffers(scene),
+        held: { ...renderer.info.memory },
+        tileCache: {
+          bytes: cache.cachedBytes,
+          maxBytes: cache.maxBytesSize,
+          items: cache.itemSet.size,
+          used: cache.usedSet.size,
+          loaded: cache.loadedSet.size,
+          sizes: [...cache.itemSet.keys()].map(
+            (item) =>
+              `${Math.round((cache.bytesMap.get(item) ?? 0) / 1_048_576)}${cache.usedSet.has(item) ? "u" : ""}`
+          ),
+        },
+      };
+    },
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),
       hitDist: lastFocusHit?.dist ?? null,

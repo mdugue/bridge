@@ -146,6 +146,13 @@ const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
 /**
+ * The largest tile as the tile renderer's cache weighs it (its content's
+ * geometry at load): a fine terrain tile, 62 MB at the start tile, with
+ * some headroom. See `tileCacheBytesFor`.
+ */
+export const LARGEST_TILE_BYTES = 80 * MB;
+
+/**
  * How much tile content (decoded geometry and textures) the tile renderer
  * keeps around, in bytes: it starts unloading tiles no longer in use past
  * `max` and stops at `min`. Tiles in use are never unloaded, so this bounds
@@ -155,13 +162,19 @@ const GB = 1024 * MB;
  * what Safari allows: jumping from the start straight into the Dresdner
  * Heide by the minimap kept the whole start area loaded while two forest
  * tiles arrived, and the page died.
+ *
+ * `max − min` must exceed the largest tile. The cache never unloads a tile
+ * that would take it below `min`, and asks for no new tile while it is at
+ * or above `max`: at 120–180 MB a phone that flew to the Alaunpark sat at
+ * 181 MB with a 62 MB tile first in line to go — unloading it would have
+ * left 119 MB — and never loaded the ground there.
  */
 export function tileCacheBytesFor(tier: DeviceTier): {
   max: number;
   min: number;
 } {
   return tier === "mobile"
-    ? { min: 120 * MB, max: 180 * MB }
+    ? { min: 60 * MB, max: 180 * MB }
     : { min: 0.3 * GB, max: 0.4 * GB };
 }
 
