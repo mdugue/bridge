@@ -113,8 +113,10 @@ asks — a line top left says so. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
 the bottom: folded it says what the building is and where; swipe it up
-(or tap its grip) for the rest, swipe it down to fold or close it — the
-joystick and the toolbar step aside while it is open. The card says only
+(or tap *Angaben und Quellen*) for the rest, swipe it down to fold or
+close it — the joystick and the toolbar step aside while it is open, and
+the city stays live behind it. A long press never selects text on the
+page. The card says only
 what the data knows:
 
 - the building's **name** (from OpenStreetMap) or its official **use**

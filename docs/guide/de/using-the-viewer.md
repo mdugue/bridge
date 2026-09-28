@@ -120,9 +120,11 @@ Tipp fragt — eine Zeile oben links sagt es. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
 die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude
-ist und wo; nach oben wischen (oder den Griff antippen) zeigt den Rest,
-nach unten wischen klappt es ein oder schließt es — Joystick und
-Werkzeugleiste treten so lange zur Seite. Die Karte sagt nur, was die
+ist und wo; nach oben wischen (oder *Angaben und Quellen* antippen)
+zeigt den Rest, nach unten wischen klappt es ein oder schließt es —
+Joystick und Werkzeugleiste treten so lange zur Seite, und die Stadt
+dahinter bleibt bedienbar. Langes Drücken markiert nie Text auf der
+Seite. Die Karte sagt nur, was die
 Daten wissen:
 
 - den **Namen** des Gebäudes (aus OpenStreetMap) oder seine amtliche

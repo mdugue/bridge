@@ -76,10 +76,15 @@ asks; `I` toggles a mode in which a plain tap asks too (in pointer lock
 stand-in. A tap off target still finds its building: when the ray under
 the finger meets nothing, two rings of rays (11 and 22 px) vote and the
 tree most of them hit wins (`chooseSample`). On touch screens the card is
-a **bottom sheet** (folded: kicker, title, address; swipe up or the grip
-for facts, id and sources; swipe down folds, then closes); the joystick
-and the toolbar step aside while it is open. Added 2026-09-28 after the
-maintainer asked which pattern suits a phone.
+a **bottom sheet**, the shadcn Drawer (Base UI) — non-modal
+(`modal={false}`, `disablePointerDismissal`), two snap points (8.25 rem
+folded: kicker, title, address; 75 % unfolded: facts, id, sources),
+retinted to the paper through the popover tokens; swipe up or
+*Angaben und Quellen* unfolds, swipe down folds, then closes. The
+joystick and the toolbar step aside while it is open. The scene
+suppresses text selection and the iOS callout (`select-none`,
+`-webkit-touch-callout: none`), so a long press never marks the page's
+text. Added 2026-09-28 at the maintainer's request.
 E2E: `the inquiry card tells what the data knows…` in the
 `@desktop-render` group; the long press and the sheet in the `@phone`
 spec.

@@ -645,7 +645,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     >
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
-      <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
+      {/* No text selection or callout over the scene: a long press asks a
+          building (ADR 0036), it must not also mark the HUD's text. */}
+      <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
         <div
           className={cn(
             "absolute inset-0",

@@ -2,19 +2,28 @@
 
 import { CheckIcon, CopyIcon, XIcon } from "lucide-react";
 import {
-  type PointerEvent as ReactPointerEvent,
+  type ElementType,
+  type ReactNode,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   type Inquiry,
   type InquiryCard as InquiryCardModel,
   inquiryCard,
 } from "@/lib/city/inquiry";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
+import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { isTextEntry } from "./keyboard-controls";
+
+type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
 
 /** One fetch per manifest URL for the page's life (the file is
  *  content-hashed and immutable, ADR 0007). */
@@ -100,7 +109,7 @@ export function InquiryCard({
   return (
     <aside
       aria-labelledby="inquiry-title"
-      className="absolute top-4 left-4 z-20 w-[min(22rem,calc(100%-2rem))] rounded-sm border border-paper-rule bg-paper/95 p-4 text-paper-ink shadow-[0_10px_30px_-12px_rgba(40,30,20,0.55)] backdrop-blur-sm"
+      className="absolute top-4 left-4 z-20 w-[min(22rem,calc(100%-2rem))] rounded-sm border border-paper-rule bg-paper/95 p-4 text-paper-ink shadow-[0_10px_30px_-12px_rgba(40,30,20,0.55)] backdrop-blur-sm select-text"
       data-testid="inquiry-card"
       data-variant="card"
     >
@@ -110,15 +119,18 @@ export function InquiryCard({
   );
 }
 
-/** Pixels a swipe must travel to count (and not be a tap). */
-const SWIPE_PX = 24;
+/** Folded: what and where; unfolded: three quarters of the screen. */
+const SHEET_SNAP_POINTS: DrawerSnapPoint[] = ["8.25rem", 0.75];
 
 /**
- * The card as a bottom sheet, for thumbs: folded, it shows what the thing
- * is and where (the building stays in view above it); a swipe up — or a
- * tap on the grip — unfolds the facts, the id and the sources; a swipe
- * down folds it, and closes it once folded. The scene's joystick and
- * toolbar step aside while it is open (city-walk.tsx).
+ * The card as a bottom sheet for thumbs — the shadcn Drawer (Base UI),
+ * non-modal so the city stays live behind it and the next long press asks
+ * the next building. Folded, it shows what the thing is and where (the
+ * building stays in view above it); a swipe up — or "Angaben und Quellen"
+ * — unfolds the facts, the id and the sources; a swipe down folds it, and
+ * closes it from the fold. The scene's joystick and toolbar step aside
+ * while it is open (city-walk.tsx). Retinted to the card's paper through
+ * the popover tokens (and the grip through the muted one).
  */
 function InquirySheet({
   card,
@@ -127,80 +139,79 @@ function InquirySheet({
   card: InquiryCardModel;
   onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const start = useRef<number | null>(null);
-  // A swipe that ends on the grip must not also count as its click.
-  const swiped = useRef(false);
-  const onPointerDown = (e: ReactPointerEvent) => {
-    start.current = e.clientY;
-  };
-  const onPointerUp = (e: ReactPointerEvent) => {
-    const from = start.current;
-    start.current = null;
-    if (from === null) {
-      return;
-    }
-    const dy = e.clientY - from;
-    swiped.current = Math.abs(dy) > SWIPE_PX;
-    if (dy < -SWIPE_PX) {
-      setOpen(true);
-    } else if (dy > SWIPE_PX) {
-      if (open) {
-        setOpen(false);
-      } else {
-        onClose();
-      }
-    }
-  };
+  const [open, setOpen] = useState(true);
+  const [snap, setSnap] = useState<DrawerSnapPoint | null>(
+    SHEET_SNAP_POINTS[0]
+  );
+  const unfolded = snap === SHEET_SNAP_POINTS[1];
   return (
-    <aside
-      aria-labelledby="inquiry-title"
-      className="absolute inset-x-0 bottom-0 z-30 max-h-[75dvh] overflow-y-auto rounded-t-2xl border-t border-paper-rule bg-paper/95 px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)] text-paper-ink shadow-[0_-10px_30px_-12px_rgba(40,30,20,0.55)] backdrop-blur-sm"
-      data-testid="inquiry-card"
-      data-variant="sheet"
+    <Drawer
+      disablePointerDismissal
+      modal={false}
+      onOpenChange={setOpen}
+      onOpenChangeComplete={(isOpen) => {
+        if (!isOpen) {
+          onClose();
+        }
+      }}
+      onSnapPointChange={setSnap}
+      open={open}
+      showSwipeHandle
+      snapPoint={snap}
+      snapPoints={SHEET_SNAP_POINTS}
     >
-      <div
-        className="touch-none"
-        onPointerCancel={() => {
-          start.current = null;
-        }}
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
+      <DrawerContent
+        className="[--muted:var(--paper-rule)] [--popover-foreground:var(--paper-ink)] [--popover:var(--paper)]"
+        data-testid="inquiry-card"
+        data-variant="sheet"
       >
-        <button
-          aria-expanded={open}
-          aria-label={open ? "Angaben einklappen" : "Angaben zeigen"}
-          className="mx-auto flex h-6 w-16 items-center justify-center"
-          onClick={() => {
-            if (swiped.current) {
-              swiped.current = false;
-              return;
-            }
-            setOpen((o) => !o);
-          }}
-          type="button"
-        >
-          <span className="block h-1 w-10 rounded-full bg-paper-rule" />
-        </button>
-        <CardHeader card={card} onClose={onClose} />
-        {!open && (card.facts.length > 0 || card.sources.length > 0) && (
-          <p className="mt-1 text-[11px] text-paper-muted">
-            Nach oben wischen: Angaben und Quellen
-          </p>
-        )}
-      </div>
-      {open && <CardDetails card={card} />}
-    </aside>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
+          <CardHeader
+            card={card}
+            closeSlot={<SheetClose />}
+            titleAs={DrawerTitle}
+          />
+          <button
+            aria-expanded={unfolded}
+            className="mt-1 self-start text-[11px] text-paper-muted underline decoration-dotted underline-offset-2"
+            onClick={() => setSnap(SHEET_SNAP_POINTS[unfolded ? 0 : 1] ?? null)}
+            type="button"
+          >
+            {unfolded ? "Angaben einklappen" : "Angaben und Quellen"}
+          </button>
+          <CardDetails card={card} />
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+/** The sheet's ×: the drawer's own close, so it slides away first. */
+function SheetClose() {
+  return (
+    <DrawerClose
+      aria-label="Karte schließen"
+      className="-mt-1 -mr-1 rounded-full p-1.5 text-paper-muted hover:bg-paper-rule/60 hover:text-paper-ink"
+      title="Schließen"
+    >
+      <XIcon className="size-4" />
+    </DrawerClose>
   );
 }
 
 /** What the thing is: the kicker, the title, the address, and ×. */
 function CardHeader({
   card,
+  closeSlot,
   onClose,
+  titleAs: Title = "h2",
 }: {
   card: InquiryCardModel;
-  onClose: () => void;
+  /** the close control, when the container brings its own */
+  closeSlot?: ReactNode;
+  onClose?: () => void;
+  /** the title element (the drawer's own title in the sheet) */
+  titleAs?: ElementType;
 }) {
   return (
     <div className="flex items-start gap-2">
@@ -208,26 +219,28 @@ function CardHeader({
         <p className="text-[10px] font-medium tracking-[0.14em] text-paper-muted uppercase">
           {card.kicker}
         </p>
-        <h2
+        <Title
           aria-live="polite"
-          className="font-heading text-lg leading-tight text-balance"
+          className="font-heading text-lg leading-tight font-normal text-balance text-paper-ink"
           id="inquiry-title"
         >
           {card.title}
-        </h2>
+        </Title>
         {card.address && (
           <p className="mt-0.5 text-[13px] text-paper-ink/80">{card.address}</p>
         )}
       </div>
-      <button
-        aria-label="Karte schließen"
-        className="-mt-1 -mr-1 rounded-full p-1.5 text-paper-muted hover:bg-paper-rule/60 hover:text-paper-ink"
-        onClick={onClose}
-        title="Schließen (Esc)"
-        type="button"
-      >
-        <XIcon className="size-4" />
-      </button>
+      {closeSlot ?? (
+        <button
+          aria-label="Karte schließen"
+          className="-mt-1 -mr-1 rounded-full p-1.5 text-paper-muted hover:bg-paper-rule/60 hover:text-paper-ink"
+          onClick={onClose}
+          title="Schließen (Esc)"
+          type="button"
+        >
+          <XIcon className="size-4" />
+        </button>
+      )}
     </div>
   );
 }

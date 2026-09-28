@@ -1110,13 +1110,19 @@ test.describe("mobile", { tag: "@phone" }, () => {
     await hold("pointerup");
     await withFramesHeld(page, async () => {
       await expect(page.getByTestId("joystick")).toHaveCount(0);
-      // Folded: what it is; the grip unfolds the id and the sources.
-      await expect(sheet).not.toContainText("Kennung");
-      await page.getByRole("button", { name: "Angaben zeigen" }).tap();
+      // Folded: what it is; "Angaben und Quellen" unfolds the rest (the
+      // drawer's snap point, as a swipe up would).
+      const unfold = page.getByRole("button", { name: "Angaben und Quellen" });
+      await expect(unfold).toHaveAttribute("aria-expanded", "false");
+      await unfold.tap();
+      await expect(
+        page.getByRole("button", { name: "Angaben einklappen" })
+      ).toHaveAttribute("aria-expanded", "true");
       await expect(sheet).toContainText("Kennung");
       await expect(sheet).toContainText("Quelle: GeoSN");
+      // The drawer's own close: it slides away, then the card is gone.
       await page.getByRole("button", { name: "Karte schließen" }).tap();
-      await expect(sheet).toHaveCount(0);
+      await expect(sheet).toHaveCount(0, { timeout: slow(10_000) });
       await expect(page.getByTestId("joystick")).toBeVisible();
     });
 
