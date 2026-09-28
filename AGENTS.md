@@ -479,7 +479,8 @@ scene material. `PostStack.warmStyles` prepares them all once the scene
 is idle: the styled pipelines build one per frame (a pipeline builds its
 graph and its SMAA passes on its first render), and the dressing and the
 scene's own objects are compiled under the Papier swap with
-`compileAsync` — no stand-ins: the override takes each source material's
+`compileAsync` (not on phones: `warmPaperFor` — the extra pipelines cost
+an iPhone tab its memory) — no stand-ins: the override takes each source material's
 position node, so only the real objects match what a frame builds. The
 node's only branch is on the mode (a uniform); per pixel it selects, so
 derivatives and texture reads stay in uniform control flow (WGSL), and

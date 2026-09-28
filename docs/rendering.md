@@ -273,8 +273,12 @@ nothing. Once the scene has loaded and the browser is idle
 (three builds a pipeline's graph and its SMAA passes on its first render),
 and the style dressing and the Papier programs of the scene's objects are
 compiled ahead with `compileAsync` under the swap itself; afterwards a
-tile that lands compiles its Papier programs with its own. So the first
-switch does not hitch; the viewer's last style is kept in local storage
+tile that lands compiles its Papier programs with its own (one drawable
+per material and layout — the override's build key). So the first switch
+does not hitch. **Not on a phone** (`warmPaperFor`): the Papier programs
+double the pipelines the GPU process holds and took half a minute of main
+thread on an iPhone, whose tab died of memory on a flight afterwards;
+there the first Papier frame builds what it draws. The viewer's last style is kept in local storage
 (`style-memory.ts`). The table is `lib/city/render-style.ts`; per style it
 sets the node's mode, a weight on the *Tuschelinien*, *Tiefenfärbung* and
 *Papierkorn* sliders, the vignette, animated film grain and whether depth

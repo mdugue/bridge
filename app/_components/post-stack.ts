@@ -262,7 +262,16 @@ export function createPostStack(
   /** GTAO samples (scene-profile.ts `aoSamplesFor`) */
   aoSamples: number,
   /** the scene's fog (height-fog.ts): the styles read and paper it */
-  fog: SceneFog
+  fog: SceneFog,
+  /**
+   * Whether the idle warm-up compiles Papier's programs for the whole
+   * scene (and each landing tile then compiles its own). Off on phones:
+   * it doubles the pipelines the GPU process holds and took half a minute
+   * of main thread on an iPhone, for a style most never pick — there the
+   * first Papier frame builds what it draws instead (scene-profile.ts
+   * `warmPaperFor`).
+   */
+  warmPaper: boolean
 ): PostStack {
   const size = renderer.getDrawingBufferSize(new Vector2());
   const depthTexture = new DepthTexture(size.x, size.y);
@@ -447,8 +456,9 @@ export function createPostStack(
   const compiledPaper = new WeakMap<Object3D, unknown>();
   const gone = new WeakSet<BufferGeometry>();
   const onGone = (event: { target: BufferGeometry }) => gone.add(event.target);
-  // Papier's programs are made once the styles are warmed (or Papier is
-  // on); before, a tile compiles for the scene's own look only.
+  // Papier's programs are made once the styles are warmed (where
+  // `warmPaper` allows) or while Papier is on; otherwise a tile compiles
+  // for the scene's own look only.
   let paperWanted = false;
 
   const compileAll = async (
@@ -489,15 +499,18 @@ export function createPostStack(
   let stylesWarm: Promise<void> | null = null;
   const warmStyles = async () => {
     toWarm.push(styled.plain, styled.dof);
-    paperWanted = true;
     // Whatever the styles dress the scene with (their crowns share the
-    // scene crowns' builds; the lamp cones are new), then every drawable's
-    // Papier programs.
+    // scene crowns' builds; the lamp cones are new), then — where it is
+    // worth it — the Papier programs of every material and layout.
     const dressed = [
       ...styleDressing.prepare({ crowns: "comic", lampCones: true }),
       ...styleDressing.prepare({ crowns: "paper", lampCones: false }),
     ] as Drawable[];
     await compileAll(dressed, compileOne, compiled);
+    if (!warmPaper) {
+      return;
+    }
+    paperWanted = true;
     await compileAll(
       compileRepresentatives([scene]),
       compilePaper,
@@ -507,10 +520,15 @@ export function createPostStack(
 
   return {
     compile: async (root) => {
-      const list = drawablesOf(root);
-      await compileAll(list, compileOne, compiled);
+      await compileAll(drawablesOf(root), compileOne, compiled);
+      // The override's build is keyed by the source's material and layout,
+      // so one drawable of each is all Papier needs.
       if (paperWanted || style.paperScene) {
-        await compileAll(list, compilePaper, compiledPaper);
+        await compileAll(
+          compileRepresentatives([root]),
+          compilePaper,
+          compiledPaper
+        );
       }
     },
     warmStyles: () => {

@@ -175,3 +175,13 @@ export function tileCacheBytesFor(tier: DeviceTier): {
 export function aoSamplesFor(profile: SceneProfile): number {
   return profile === "lite" ? 8 : 16;
 }
+
+/**
+ * Whether the picture styles' idle warm-up also compiles Papier's programs
+ * for the whole scene (post-stack.ts). Not on a phone: those pipelines
+ * double what the GPU process holds, and an iPhone tab dies of memory well
+ * before a desktop one — there the first Papier frame builds what it draws.
+ */
+export function warmPaperFor(tier: DeviceTier): boolean {
+  return tier !== "mobile";
+}

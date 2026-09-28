@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   aoSamplesFor,
+  warmPaperFor,
   deviceTierFromMedia,
   liteKeepsBlockFromSearch,
   pixelRatioFor,
@@ -95,4 +96,9 @@ test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
   expect(phone.max).toBeLessThan(desktop.min);
   // The desktop keeps 3DTilesRendererJS's own default.
   expect(desktop).toEqual({ min: 0.3 * 1024 ** 3, max: 0.4 * 1024 ** 3 });
+});
+
+test("warmPaperFor leaves the Papier warm-up to the desktop", () => {
+  expect(warmPaperFor("desktop")).toBe(true);
+  expect(warmPaperFor("mobile")).toBe(false);
 });
