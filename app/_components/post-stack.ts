@@ -52,6 +52,7 @@ import {
 } from "@/lib/city/render-style";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
+import { createPipelineAnchors } from "./pipeline-anchors";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
@@ -128,6 +129,8 @@ export interface PostStack {
   setRegressed: (on: boolean) => void;
   /** Follows the canvas (the scene target is drawing-buffer sized). */
   setSize: () => void;
+  /** How many pipeline anchors hold scene-wide pipelines (diagnostics). */
+  anchorCount: () => number;
   /** The sun's altitude in degrees (Film noir opens up at dusk). */
   setSunAltitude: (altitudeDeg: number) => void;
   /**
@@ -444,6 +447,13 @@ export function createPostStack(
       object.frustumCulled = frustumCulled;
     }
   };
+  // A scene-wide material's pipelines outlive the tiles that brought them
+  // (pipeline-anchors.ts): flying back compiles nothing.
+  const anchors = createPipelineAnchors(compileOne);
+  const compileAnchored = async (object: Drawable): Promise<void> => {
+    await compileOne(object);
+    await anchors.anchor(object);
+  };
   // The Papier programs of one drawable: compiled under the swap, which
   // lasts for the synchronous half of the call (the build) only.
   const compilePaper = (object: Drawable): Promise<void> =>
@@ -520,7 +530,7 @@ export function createPostStack(
 
   return {
     compile: async (root) => {
-      await compileAll(drawablesOf(root), compileOne, compiled);
+      await compileAll(drawablesOf(root), compileAnchored, compiled);
       // The override's build is keyed by the source's material and layout,
       // so one drawable of each is all Papier needs.
       if (paperWanted || style.paperScene) {
@@ -531,6 +541,7 @@ export function createPostStack(
         );
       }
     },
+    anchorCount: () => anchors.count(),
     warmStyles: () => {
       stylesWarm ??= warmStyles().catch(() => undefined);
       return stylesWarm;
@@ -604,6 +615,7 @@ export function createPostStack(
       }
       paperScene.dispose();
       styleDressing.dispose();
+      anchors.dispose();
       target.dispose();
     },
   };

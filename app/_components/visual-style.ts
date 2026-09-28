@@ -348,6 +348,7 @@ export function createClayMaterial(
   objects: { rows: number; texture: DataTexture }
 ): MeshStandardNodeMaterial {
   const clay = clayMaterial(resources.clayDetail, objects);
+  clay.name = "clay";
   applyTransparency(clay, resources.transparency);
   resources.materials.add(clay);
   clay.addEventListener("dispose", () => resources.materials.delete(clay));

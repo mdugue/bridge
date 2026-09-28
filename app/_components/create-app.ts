@@ -145,6 +145,8 @@ export interface GpuDebug {
   sceneBufferBytes: number;
   /** three's `info.memory` */
   held: Readonly<Record<string, number>>;
+  /** pipeline anchors holding scene-wide pipelines (pipeline-anchors.ts) */
+  anchors: number;
   /** the tile cache: bytes it counts against its budget, tiles in it, in use */
   tileCache: {
     bytes: number;
@@ -158,7 +160,9 @@ export interface GpuDebug {
 }
 
 /** Counts the distinct buffers under a scene (shared ones once). */
-function sceneBuffers(scene: Object3D): Omit<GpuDebug, "held" | "tileCache"> {
+function sceneBuffers(
+  scene: Object3D
+): Omit<GpuDebug, "held" | "tileCache" | "anchors"> {
   const indices = new Map<object, number>();
   const buffers = new Map<object, number>();
   let drawables = 0;
@@ -1481,6 +1485,7 @@ async function bootApp(
       return {
         ...sceneBuffers(scene),
         held: { ...renderer.info.memory },
+        anchors: postStack.anchorCount(),
         tileCache: {
           bytes: cache.cachedBytes,
           maxBytes: cache.maxBytesSize,

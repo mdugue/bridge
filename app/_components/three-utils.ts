@@ -216,6 +216,8 @@ export function sceneMaterial<T extends Material>(
   if (!material) {
     material = make();
     material.userData.shared = true;
+    // The key names the render pipelines three builds for it (diagnostics).
+    material.name ||= key;
     sceneMaterials.set(key, material);
   }
   return material;
@@ -225,11 +227,13 @@ export function sceneMaterial<T extends Material>(
 export const retainSceneMaterials = materialsShared.retain;
 
 /**
- * One object per distinct material, draw kind and attribute layout — what
- * three keys a node build by. A dressing is hundreds of objects (a
- * vegetation cell each, lamps, rails, walls) over a handful of scene-wide
- * materials, and instanced sets share their builds (instancing.ts);
- * compiling every one would queue the same build hundreds of times.
+ * One object per distinct material, draw kind, attribute layout and
+ * shadow receipt — what three keys a node build and its pipeline by
+ * (`receiveShadow` changes the shader: a lit material sampled in both ways
+ * is two builds). A dressing is hundreds of objects (a vegetation cell
+ * each, lamps, rails, walls) over a handful of scene-wide materials, and
+ * instanced sets share their builds (instancing.ts); compiling every one
+ * would queue the same build hundreds of times.
  */
 export function compileRepresentatives(roots: Object3D[]): Object3D[] {
   const seen = new Map<string, Object3D>();
@@ -242,7 +246,7 @@ export function compileRepresentatives(roots: Object3D[]): Object3D[] {
       if (!material) {
         return;
       }
-      const kind = `${object.type}:${layoutOf(geometry)}`;
+      const kind = `${object.type}:${layoutOf(geometry)}:${object.receiveShadow}`;
       for (const m of Array.isArray(material) ? material : [material]) {
         const key = `${m.uuid}:${kind}`;
         if (!seen.has(key)) {

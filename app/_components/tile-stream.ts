@@ -564,6 +564,16 @@ export class DressingPlugin {
   private readonly released = new WeakSet<Object3D>();
   /** Content roots whose geometries and materials are already freed. */
   private readonly freed = new WeakSet<Object3D>();
+  /**
+   * Settles once the renderer is done with a content root's load: it
+   * records every material in the content right after `processTileModel`
+   * (and disposes them all when it unloads the tile), so nothing wearing a
+   * scene-wide material may hang there before — a dressing that landed
+   * while the tile still compiled had its crowns', hedges' and lamps'
+   * materials disposed for the whole scene when the tile left, and every
+   * tile rebuilt their shaders inside the frames of a flight.
+   */
+  private readonly loaded = new WeakMap<Object3D, Promise<void>>();
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
@@ -601,6 +611,23 @@ export class DressingPlugin {
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
+    let settle = (): void => undefined;
+    this.loaded.set(
+      scene,
+      new Promise<void>((resolve) => {
+        settle = resolve;
+      })
+    );
+    try {
+      await this.dressContent(scene, tile);
+    } finally {
+      // The renderer records the content in the continuation of this call;
+      // by the next task it has.
+      setTimeout(settle, 0);
+    }
+  }
+
+  private async dressContent(scene: Object3D, tile: object): Promise<void> {
     const extras = scene.userData as ContentExtras;
     // The content's own mesh by its node name ("terrain", "city"); the fine
     // terrain also carries a "stairs" node.
@@ -808,7 +835,27 @@ export class DressingPlugin {
           entry.aborter.signal
         );
         entry.aborter = undefined;
+        // Not before the renderer has recorded the tile's own content (see
+        // `loaded`): the dressing's materials are the scene's.
+        await this.loaded.get(scene);
+        if (this.dressed.get(scene) !== entry) {
+          disposeDressing(dressing);
+          return;
+        }
         const parts = dressingParts(dressing);
+        // Compiled as the frames will draw it: in its season and at the
+        // hour (which swap crown materials), hanging where it will hang —
+        // but hidden until then. A build three keys differently from what
+        // a frame asks for compiles inside that frame.
+        catchUp(dressing, this.ctx);
+        const shown = parts.map((part) => part.visible);
+        for (const part of parts) {
+          part.visible = false;
+        }
+        // The content root is the viewer's Y-up scene frame (the renderer's
+        // up-axis turn cancels the world group's), so the Y-up dressing
+        // hangs under it and leaves with its tile.
+        scene.add(...parts);
         await withinCompileWait(
           Promise.all(
             compileRepresentatives(parts).map((o) => this.ctx.compile(o))
@@ -818,12 +865,12 @@ export class DressingPlugin {
           disposeDressing(dressing);
           return;
         }
-        // The content root is the viewer's Y-up scene frame (the renderer's
-        // up-axis turn cancels the world group's), so the Y-up dressing
-        // hangs under it and leaves with its tile.
-        scene.add(...parts);
+        parts.forEach((part, i) => {
+          part.visible = shown[i] ?? true;
+        });
         entry.dressing = dressing;
         this.stream.dressings.add(dressing);
+        // Whatever changed while it compiled (the hour moves on).
         catchUp(dressing, this.ctx);
       })
       .catch(() => {

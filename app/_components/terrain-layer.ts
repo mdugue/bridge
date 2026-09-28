@@ -808,6 +808,7 @@ export function createTerrainMaterial(
     color: 0xad_b2_9e,
     roughness: 1,
   });
+  material.name = "terrain";
   material.colorNode = splat ? splatColour(splat) : plainColour();
   material.normalNode = terrainNormal(splat !== undefined);
   applyGroundLight(material, splat ? groundLightOf(splat) : undefined);

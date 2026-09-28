@@ -240,6 +240,7 @@ export function groundLitMaterial(
   skyView: boolean
 ): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial(params);
+  material.name = "ground-lit";
   applyGroundLight(material, light, skyView);
   return material;
 }
