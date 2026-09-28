@@ -63,7 +63,11 @@ import { dressKerbs } from "./kerb-layer";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
-import { compileRepresentatives, disposeObject3D } from "./three-utils";
+import {
+  compileRepresentatives,
+  disposeObject3D,
+  releaseRenderState,
+} from "./three-utils";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -847,6 +851,11 @@ export class DressingPlugin {
       this.stream.dressings.delete(dressed.dressing);
       disposeDressing(dressed.dressing);
     }
+    // The content itself (buildings, ground, and the walls, stairs, kerbs
+    // and fences baked into it, which wear scene-wide materials): the tile
+    // renderer frees its geometries and the glTF's own materials, but only
+    // this event frees their render objects.
+    releaseRenderState(scene);
     if (!this.disposed) {
       this.ctx.onChange();
     }

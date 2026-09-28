@@ -242,6 +242,12 @@ export interface CityWalkHandle {
     calls: number;
     /** estimated GPU bytes of geometry + textures + shadow map */
     gpuBytes: number;
+    /**
+     * What the renderer itself holds on the GPU (three's `info.memory`):
+     * counts and bytes of attributes, textures, programs, uniform buffers
+     * and render targets — the counters to watch for a leak.
+     */
+    memory: Readonly<Record<string, number>>;
     triangles: number;
   };
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
@@ -1240,6 +1246,8 @@ async function bootApp(
         frames,
         fps: rate,
         gpuMB: gpuBytes() / 1_048_576,
+        heldMB: renderer.info.memory.total / 1_048_576,
+        held: `${renderer.info.memory.attributes}a ${renderer.info.memory.textures}t ${renderer.info.memory.programs}p ${renderer.info.memory.uniformBuffers}u`,
         calls: renderer.info.render.drawCalls,
         triangles: renderer.info.render.triangles,
         heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
@@ -1388,6 +1396,7 @@ async function bootApp(
       calls: renderer.info.render.drawCalls,
       triangles: renderer.info.render.triangles,
       gpuBytes: gpuBytes(),
+      memory: { ...renderer.info.memory },
     }),
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),

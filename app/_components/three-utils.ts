@@ -1,4 +1,10 @@
-import type { BufferGeometry, Material, Object3D, Texture } from "three/webgpu";
+import type {
+  BufferGeometry,
+  EventDispatcher,
+  Material,
+  Object3D,
+  Texture,
+} from "three/webgpu";
 
 /**
  * Disposes a material unless it is scene-wide (`userData.shared`,
@@ -20,7 +26,31 @@ export function disposeMaterial(
 }
 
 /**
- * Frees the geometries and materials of a subtree. Demolish rebuilds the
+ * Tells the renderer the drawables of a subtree are gone for good.
+ * WebGPURenderer keeps a render object per drawable and pass — its
+ * bindings, i.e. uniform buffers and bind groups in the GPU process — until
+ * the drawable's material is disposed or the drawable itself dispatches
+ * `dispose` (as `InstancedMesh.dispose()` does). A scene-wide material
+ * (`sceneMaterial`) is never disposed, and disposing a geometry only clears
+ * the attribute cache: without this event every drawable of every unloaded
+ * tile kept its bindings, and the GPU process grew with each flight until
+ * iOS ended it.
+ */
+export function releaseRenderState(root: Object3D): void {
+  root.traverse((obj) => {
+    if ((obj as { geometry?: unknown }).geometry) {
+      // reason: `dispose` is not in Object3D's typed event map; it is the
+      // event three's renderer listens for on every drawable.
+      (obj as unknown as EventDispatcher<{ dispose: object }>).dispatchEvent({
+        type: "dispose",
+      });
+    }
+  });
+}
+
+/**
+ * Frees the geometries and materials of a subtree, and its render state
+ * (`releaseRenderState`). Demolish rebuilds the
  * tile's building mesh from the filtered vertex stream and drops the old one
  * (city-layer.ts); without this every demolish would leak its buffers, and
  * dispose() runs it over the whole scene at teardown. Textures are NOT
@@ -38,6 +68,7 @@ export function disposeObject3D(root: Object3D): void {
     resource.geometry?.dispose();
     disposeMaterial(resource.material);
   });
+  releaseRenderState(root);
 }
 
 /**

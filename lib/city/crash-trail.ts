@@ -31,6 +31,13 @@ export interface TrailBeat {
   fps: number;
   /** the scene's GPU estimate (geometry, textures, shadow map), MB */
   gpuMB: number;
+  /**
+   * What the renderer holds on the GPU (three's own count), MB, and its
+   * attributes/textures/programs/uniform buffers — optional: older records
+   * lack it.
+   */
+  heldMB?: number;
+  held?: string;
   calls: number;
   triangles: number;
   /** the JS heap, MB (Chromium only) */
@@ -134,8 +141,10 @@ const round = (n: number, digits = 0) => {
 /** One heartbeat as a line of the report (and of the console). */
 export function formatBeat(b: TrailBeat): string {
   const heap = b.heapMB === undefined ? "" : ` heap ${round(b.heapMB)}MB`;
+  const held =
+    b.heldMB === undefined ? "" : ` held ${round(b.heldMB)}MB ${b.held ?? ""}`;
   return (
-    `${round(b.t, 1)}s  f${b.frames} ${round(b.fps)}fps  gpu ${round(b.gpuMB)}MB${heap}` +
+    `${round(b.t, 1)}s  f${b.frames} ${round(b.fps)}fps  gpu ${round(b.gpuMB)}MB${held}${heap}` +
     `  ${b.calls}dc ${round(b.triangles / 1000)}k▲  tiles ${b.cities}/${b.dressings}` +
     `  ${b.style} ${b.mode} ${round(b.heightM)}m`
   );

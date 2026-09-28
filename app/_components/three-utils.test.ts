@@ -10,6 +10,7 @@ import {
 import {
   disposeObject3D,
   estimateGeometryBytes,
+  releaseRenderState,
   retainSceneMaterials,
   sceneMaterial,
   sceneShared,
@@ -146,4 +147,31 @@ test("a scene-shared resource is disposed with the last app that holds it", () =
   const releaseC = share.retain();
   expect(share.get()).not.toBe(first);
   releaseC();
+});
+
+test("a released drawable dispatches dispose, even on a scene-wide material", () => {
+  // WebGPURenderer frees a drawable's render objects on this event only
+  // (or on its material's dispose, which a scene-wide material never gets).
+  const release = retainSceneMaterials();
+  const shared = sceneMaterial(
+    "test-release",
+    () => new MeshBasicNodeMaterial()
+  );
+  const root = new Object3D();
+  const drawable = new Mesh(new BoxGeometry(), shared);
+  const group = new Object3D();
+  root.add(drawable, group);
+  const seen: string[] = [];
+  const listen = (o: Object3D, name: string) =>
+    (
+      o as unknown as { addEventListener: (t: string, f: () => void) => void }
+    ).addEventListener("dispose", () => seen.push(name));
+  listen(drawable, "drawable");
+  listen(group, "group");
+  releaseRenderState(root);
+  expect(seen).toEqual(["drawable"]);
+  seen.length = 0;
+  disposeObject3D(root);
+  expect(seen).toEqual(["drawable"]);
+  release();
 });
