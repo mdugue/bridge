@@ -8,6 +8,8 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
  *  - double-tap / double-click: travel to the tapped spot
  *  - a single tap / click: `onTap` (the inquiry mode asks what is there;
  *    the first tap of a double one fires it too)
+ *  - a long press (one pointer held still for LONG_PRESS_MS): `onLongPress`
+ *    — asks what is there without the mode; the release after it is no tap
  *  - pointer lock (immersive mode, opt-in via `lockPointer`): mouse motion
  *    is mouse-look; Esc exits natively. Clicks/drags are ignored meanwhile.
  * The element must have `touch-action: none` so the browser doesn't consume
@@ -17,6 +19,8 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
 export interface TouchControlsCallbacks {
   /** ndc coordinates of the tap (-1..1, three.js raycaster convention) */
   onDoubleTap: (ndcX: number, ndcY: number) => void;
+  /** one pointer held still for LONG_PRESS_MS, in ndc */
+  onLongPress?: (ndcX: number, ndcY: number) => void;
   /** a single tap or click, in ndc (every tap, before any double) */
   onTap?: (ndcX: number, ndcY: number) => void;
   /** drag delta in CSS pixels since the last event */
@@ -56,6 +60,19 @@ const PAGE_PX = 800;
 /** Drags beyond this no longer count as a tap. */
 const TAP_SLOP_PX = 12;
 const TAP_MAX_DURATION_MS = 350;
+/** A press held this long without moving past the slop is a long press. */
+export const LONG_PRESS_MS = 450;
+
+/** The timer the long press waits on; injected by the unit tests. */
+export interface PressTimer {
+  clear: (handle: unknown) => void;
+  set: (fn: () => void, ms: number) => unknown;
+}
+
+const WINDOW_TIMER: PressTimer = {
+  set: (fn, ms) => setTimeout(fn, ms),
+  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
 
 interface PointerState {
   startTime: number;
@@ -73,12 +90,45 @@ export interface TouchControls {
 
 export function attachTouchControls(
   element: HTMLElement,
-  callbacks: TouchControlsCallbacks
+  callbacks: TouchControlsCallbacks,
+  timer: PressTimer = WINDOW_TIMER
 ): TouchControls {
   const pointers = new Map<number, PointerState>();
   let pinchStartDistance = 0;
   let dragged = false;
   let lastTap: TapSample | null = null;
+  let pressTimer: unknown = null;
+  // The release that ends a long press is not a tap.
+  let longPressed = false;
+
+  const ndcOf = (clientX: number, clientY: number): [number, number] => {
+    const rect = element.getBoundingClientRect();
+    return [
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -(((clientY - rect.top) / rect.height) * 2 - 1),
+    ];
+  };
+
+  const cancelPress = () => {
+    if (pressTimer !== null) {
+      timer.clear(pressTimer);
+      pressTimer = null;
+    }
+  };
+
+  const armPress = (state: PointerState) => {
+    cancelPress();
+    if (!callbacks.onLongPress) {
+      return;
+    }
+    pressTimer = timer.set(() => {
+      pressTimer = null;
+      if (pointers.size === 1 && !dragged) {
+        longPressed = true;
+        callbacks.onLongPress?.(...ndcOf(state.startX, state.startY));
+      }
+    }, LONG_PRESS_MS);
+  };
 
   const locked = () => element.ownerDocument.pointerLockElement === element;
 
@@ -128,6 +178,12 @@ export function attachTouchControls(
     });
     dragged = pointers.size > 1 ? true : dragged;
     syncPinchBaseline();
+    if (pointers.size === 1) {
+      longPressed = false;
+      armPress(pointers.get(e.pointerId) as PointerState);
+    } else {
+      cancelPress();
+    }
   };
 
   const onPointerMove = (e: PointerEvent) => {
@@ -144,6 +200,7 @@ export function attachTouchControls(
       TAP_SLOP_PX
     ) {
       dragged = true;
+      cancelPress();
     }
     if (pointers.size === 1) {
       callbacks.onLook(dx, dy);
@@ -159,8 +216,9 @@ export function attachTouchControls(
     }
     pointers.delete(e.pointerId);
     syncPinchBaseline();
+    cancelPress();
     const isTap =
-      !dragged &&
+      !(dragged || longPressed) &&
       pointers.size === 0 &&
       e.timeStamp - state.startTime <= TAP_MAX_DURATION_MS;
     if (isTap) {
@@ -169,9 +227,7 @@ export function attachTouchControls(
         x: e.clientX,
         y: e.clientY,
       };
-      const rect = element.getBoundingClientRect();
-      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+      const [ndcX, ndcY] = ndcOf(e.clientX, e.clientY);
       callbacks.onTap?.(ndcX, ndcY);
       if (isDoubleTap(lastTap, tap)) {
         lastTap = null;
@@ -214,7 +270,16 @@ export function attachTouchControls(
     }
   };
 
+  // A held finger opens the browser's context menu (Android) or callout
+  // (iOS) on the canvas: the long press owns that gesture.
+  const onContextMenu = (e: Event) => {
+    if (pointers.size > 0 || longPressed) {
+      e.preventDefault();
+    }
+  };
+
   element.addEventListener("pointerdown", onPointerDown);
+  element.addEventListener("contextmenu", onContextMenu);
   element.addEventListener("pointermove", onPointerMove);
   element.addEventListener("pointerup", onPointerEnd);
   element.addEventListener("pointercancel", onPointerEnd);
@@ -228,7 +293,9 @@ export function attachTouchControls(
       element.requestPointerLock()?.catch(() => undefined);
     },
     detach: () => {
+      cancelPress();
       element.removeEventListener("pointerdown", onPointerDown);
+      element.removeEventListener("contextmenu", onContextMenu);
       element.removeEventListener("pointermove", onPointerMove);
       element.removeEventListener("pointerup", onPointerEnd);
       element.removeEventListener("pointercancel", onPointerEnd);

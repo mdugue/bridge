@@ -50,7 +50,8 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
 | *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
 | *Fliegen* (toolbar) | switch between walking and flying (take off / land) |
-| *Befragen* (toolbar) | switch the ask mode on or off; then tap a building |
+| Long press on a building | ask it (no mode needed) |
+| *Befragen* (toolbar) | switch the ask mode on or off; then a plain tap asks |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
@@ -104,10 +105,17 @@ A floating bar shows the four essential controls until you dismiss it with
 
 ## Asking a building
 
-The city itself carries no text. Ask it instead: *Befragen* in the
-toolbar (or `I`) switches the ask mode on — a line top left says so — and
-a click or tap on a building then draws a fine pencil hatch over it and
-opens a paper card beside it. The card says only what the data knows:
+The city itself carries no text. Ask it instead: a **long press** on a
+building (hold a finger or the mouse button still for half a second)
+draws a fine pencil hatch over it and opens a paper card. *Befragen* in
+the toolbar (or `I`) switches on an ask mode in which a plain click or tap
+asks — a line top left says so. You need not hit a small house exactly:
+when nothing stands right under your finger, the building most of the
+ground around it belongs to answers. On a phone the card is a sheet at
+the bottom: folded it says what the building is and where; swipe it up
+(or tap its grip) for the rest, swipe it down to fold or close it — the
+joystick and the toolbar step aside while it is open. The card says only
+what the data knows:
 
 - the building's **name** (from OpenStreetMap) or its official **use**
   (the ALKIS building function of the city model; for most houses it is
@@ -124,8 +132,8 @@ opens a paper card beside it. The card says only what the data knows:
   roofs were measured and its footprints drawn.
 
 A shed or garden house the laser scan found but the city model lacks says
-so. Esc or × closes the card and removes the hatch; the next click asks
-the next building. Nothing is estimated: a building without mapped
+so. Esc, × or a swipe down closes the card and removes the hatch; the
+next question asks the next building. Nothing is estimated: a building without mapped
 storeys simply has no storey line.
 
 ## The panel

@@ -52,7 +52,8 @@ lädt* oben im Bild (siehe
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
 | *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
 | *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln (abheben / landen) |
-| *Befragen* (Werkzeugleiste) | den Fragemodus ein- oder ausschalten; dann ein Gebäude antippen |
+| Lange auf ein Gebäude drücken | es befragen (ohne Modus) |
+| *Befragen* (Werkzeugleiste) | den Fragemodus ein- oder ausschalten; dann fragt schon ein einfaches Antippen |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
@@ -111,10 +112,18 @@ mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
 ## Ein Gebäude befragen
 
 Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
-*Befragen* in der Werkzeugleiste (oder `I`) schaltet den Fragemodus ein —
-eine Zeile oben links sagt es —, und ein Klick oder Tippen auf ein Gebäude
-legt eine feine Bleistiftschraffur darüber und öffnet daneben eine
-Papierkarte. Die Karte sagt nur, was die Daten wissen:
+**Lange drücken** auf ein Gebäude (Finger oder Maustaste eine halbe
+Sekunde ruhig halten) legt eine feine Bleistiftschraffur darüber und
+öffnet eine Papierkarte. *Befragen* in der Werkzeugleiste (oder `I`)
+schaltet einen Fragemodus ein, in dem schon ein einfacher Klick oder
+Tipp fragt — eine Zeile oben links sagt es. Ein kleines Haus musst du
+nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
+Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
+die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude
+ist und wo; nach oben wischen (oder den Griff antippen) zeigt den Rest,
+nach unten wischen klappt es ein oder schließt es — Joystick und
+Werkzeugleiste treten so lange zur Seite. Die Karte sagt nur, was die
+Daten wissen:
 
 - den **Namen** des Gebäudes (aus OpenStreetMap) oder seine amtliche
   **Nutzung** (die ALKIS-Gebäudefunktion des Stadtmodells; bei den meisten
@@ -132,8 +141,9 @@ Papierkarte. Die Karte sagt nur, was die Daten wissen:
   und das, in dem die Grundrisse erfasst wurden.
 
 Ein Schuppen oder Gartenhaus, das der Laserscan gefunden hat, das
-Stadtmodell aber nicht kennt, sagt das. Esc oder × schließt die Karte und
-nimmt die Schraffur weg; der nächste Klick fragt das nächste Gebäude.
+Stadtmodell aber nicht kennt, sagt das. Esc, × oder nach unten Wischen
+schließt die Karte und nimmt die Schraffur weg; die nächste Frage gilt dem
+nächsten Gebäude.
 Geschätzt wird nichts: Ein Gebäude ohne erfasste Geschosse hat einfach
 keine Geschosszeile.
 

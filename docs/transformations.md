@@ -593,7 +593,10 @@ it answers in a paper card ([ADR 0036](./adr/0036-inquiry-cards-on-demand-facts-
   35 % lift) was checked headless: the wash and the lift cancelled, and
   from 100 m the building looked unchanged. Not in *Papier* (its override
   material). **Not yet judged on a real GPU.**
-- **The inquiry card** — `lib/city/inquiry.ts` → `inquiry-card.tsx`: the
+- **The inquiry card** (asked by a long press, or a tap in the *Befragen*
+  mode; a tap slightly off a small house still finds it — two rings of
+  rays vote; a bottom sheet on touch screens) — `lib/city/inquiry.ts` →
+  `inquiry-card.tsx`: the
   OSM name or the ALKIS use as the title, the address, then only the facts
   that are known (height of the tallest part, eave, roof form and pitch,
   ground area over all parts, mapped storeys, parts, *Kulturdenkmal*, a

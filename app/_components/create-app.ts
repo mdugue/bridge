@@ -978,12 +978,16 @@ async function bootApp(
   };
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
-  // Befragen (ADR 0035): off until the I key or the toolbar; while on, a
-  // tap asks the building under it and the card shows what the data says.
+  // Befragen (ADR 0036): a long press always asks; the I key or the
+  // toolbar turn on the mode in which a plain tap asks too.
   const probe = createInquiryProbe({
     camera,
     cities: () => stream.visibleCities(),
     groundAlong,
+    viewport: () => ({
+      width: renderer.domElement.clientWidth || 1,
+      height: renderer.domElement.clientHeight || 1,
+    }),
   });
   let inquiring = false;
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
@@ -1003,6 +1007,10 @@ async function bootApp(
       if (inquiring) {
         inquireAt({ x: ndcX, y: ndcY });
       }
+    },
+    // A long press asks without the mode (the phone's way to ask, ADR 0036).
+    onLongPress: (ndcX, ndcY) => {
+      inquireAt({ x: ndcX, y: ndcY });
     },
     onLook: pose.turn,
     onMouseLook: pose.look,

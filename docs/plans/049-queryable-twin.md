@@ -70,10 +70,19 @@ in front of a building wins, the tree marked), `city-layer.ts` (`facts`,
 pencil hatch every 0.9 m on the building, 45° screen-space strokes every
 7 px where those crowd), `inquiry-card.tsx` (a
 non-modal `<aside>`, Esc and × close it), `lib/city/inquiry.ts` (the German
-lines). `I` toggles the mode (in pointer lock it asks at the crosshair),
-the toolbar's *Befragen* is its touch stand-in; a tap asks.
+lines). A **long press** (450 ms held still, `touch-controls.ts`) always
+asks; `I` toggles a mode in which a plain tap asks too (in pointer lock
+`I` asks at the crosshair), the toolbar's *Befragen* is its touch
+stand-in. A tap off target still finds its building: when the ray under
+the finger meets nothing, two rings of rays (11 and 22 px) vote and the
+tree most of them hit wins (`chooseSample`). On touch screens the card is
+a **bottom sheet** (folded: kicker, title, address; swipe up or the grip
+for facts, id and sources; swipe down folds, then closes); the joystick
+and the toolbar step aside while it is open. Added 2026-09-28 after the
+maintainer asked which pattern suits a phone.
 E2E: `the inquiry card tells what the data knows…` in the
-`@desktop-render` group.
+`@desktop-render` group; the long press and the sheet in the `@phone`
+spec.
 
 **Open in this phase**: plates on a real GPU (`bun run shots`, headed) of
 the hatch at walking height and from 150 m, day and dusk; whether the
@@ -101,6 +110,14 @@ already has:
 Each gets its own source line. Picking instanced meshes needs
 `instanceId` from the raycast; keep the pick order: the nearest hit wins,
 the ground in front of it cancels.
+
+### 4b. Aim and ask in live mode (S–M)
+
+With live mode on (the phone's compass and GPS steer the view), a tap
+anywhere asks what stands under the crosshair: point the phone at a real
+house, learn what it is. GPS is often 5–20 m off and a compass a few
+degrees: below a stated accuracy the card should say "vermutlich". Needs
+testing on site.
 
 ### 5. A link to an asked building (S)
 

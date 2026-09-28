@@ -188,12 +188,14 @@ function sceneTools({
  * The overlays that belong to the scene, not to the panel: the key hints, the
  * joystick and, opposite it, the toolbar (sceneTools) with — in fly mode —
  * the altitude stick above it. All of it
- * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
+ * steps aside while the inquiry sheet covers the bottom (touch) and while
+ * the sidebar is open — on a phone the sidebar is a sheet,
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
 function SceneOverlays({
   coarse,
+  covered,
   inquiring,
   live,
   locate,
@@ -204,6 +206,8 @@ function SceneOverlays({
   onToggleMode,
 }: {
   coarse: boolean;
+  /** the inquiry sheet covers the bottom of the screen (touch) */
+  covered: boolean;
   inquiring: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
@@ -214,7 +218,7 @@ function SceneOverlays({
   onToggleMode: () => void;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
-  if (isMobile ? openMobile : state === "expanded") {
+  if (covered || (isMobile ? openMobile : state === "expanded")) {
     return null;
   }
   const flying = mode === "fly";
@@ -703,13 +707,15 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 inquiry={inquiry.inquiry}
                 onClose={closeInquiry}
                 provenanceUrl={provenanceUrl}
+                sheet={coarse}
               />
             ) : (
-              inquiry.active && <InquiryHint />
+              inquiry.active && <InquiryHint coarse={coarse} />
             )}
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              covered={coarse && inquiry.inquiry !== null}
               inquiring={inquiry.active}
               live={live}
               locate={locate}

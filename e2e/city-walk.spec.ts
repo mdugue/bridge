@@ -780,7 +780,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     await withFramesHeld(page, async () => {
       await page.keyboard.press("i");
       await expect(
-        page.getByText("Befragen: auf ein Gebäude tippen")
+        page.getByText("Befragen: auf ein Gebäude klicken")
       ).toBeVisible();
     });
     await aimAtBuilding(page);
@@ -801,7 +801,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card).toBeHidden();
       await page.keyboard.press("i");
       await expect(
-        page.getByText("Befragen: auf ein Gebäude tippen")
+        page.getByText("Befragen: auf ein Gebäude klicken")
       ).toBeHidden();
     });
     expectNoErrors(errors);
@@ -952,7 +952,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     isMobile: true,
   });
 
-  test("touch UI: joystick, drawer, drag-look, double-tap travel", async ({
+  test("touch UI: joystick, drawer, drag-look, double-tap travel, long-press ask", async ({
     page,
   }) => {
     const errors = watchErrors(page);
@@ -1077,6 +1077,48 @@ test.describe("mobile", { tag: "@phone" }, () => {
       poseBefore,
       { timeout: slow(15_000) }
     );
+
+    // A long press asks the building under the finger, no mode needed
+    // (ADR 0036): aim the screen centre at a roof, hold a touch there until
+    // the answer comes — under software rendering the press timer fires
+    // late, so the release waits for it — and the answer is a bottom sheet
+    // that folds the joystick away.
+    await aimAtBuilding(page);
+    const hold = (type: "pointerdown" | "pointerup") =>
+      page.evaluate((event) => {
+        const canvas = document.querySelector("canvas[data-engine]");
+        if (!canvas) {
+          throw new Error("no WebGL canvas");
+        }
+        const rect = canvas.getBoundingClientRect();
+        canvas.dispatchEvent(
+          new PointerEvent(event, {
+            pointerId: 60,
+            pointerType: "touch",
+            isPrimary: true,
+            bubbles: true,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+          })
+        );
+      }, type);
+    await hold("pointerdown");
+    const sheet = page.getByTestId("inquiry-card");
+    await expect(sheet).toHaveAttribute("data-variant", "sheet", {
+      timeout: slow(30_000),
+    });
+    await hold("pointerup");
+    await withFramesHeld(page, async () => {
+      await expect(page.getByTestId("joystick")).toHaveCount(0);
+      // Folded: what it is; the grip unfolds the id and the sources.
+      await expect(sheet).not.toContainText("Kennung");
+      await page.getByRole("button", { name: "Angaben zeigen" }).tap();
+      await expect(sheet).toContainText("Kennung");
+      await expect(sheet).toContainText("Quelle: GeoSN");
+      await page.getByRole("button", { name: "Karte schließen" }).tap();
+      await expect(sheet).toHaveCount(0);
+      await expect(page.getByTestId("joystick")).toBeVisible();
+    });
 
     // Drawer opens with the scene settings.
     await withFramesHeld(page, async () => {

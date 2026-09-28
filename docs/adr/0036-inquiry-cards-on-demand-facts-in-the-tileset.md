@@ -47,10 +47,11 @@ the style columns column by column at load and a fact row only when asked.
 credit and licence; per tile its edition. The tileset's extras name it; the
 card fetches it with its first question, never at boot.
 
-**Text appears only on demand, in one place.** The *Befragen* mode (key
-`I`, the toolbar's *Befragen*) makes a tap ask the building under it; the
-answer is a non-modal paper card in the HUD (`inquiry-card.tsx`, the model
-in `lib/city/inquiry.ts`). The scene itself stays wordless: the asked
+**Text appears only on demand, in one place.** A long press asks the
+building under the finger; the *Befragen* mode (key `I`, the toolbar's
+*Befragen*) makes a plain tap ask too. The answer is a non-modal paper
+card in the HUD — a bottom sheet on touch screens (`inquiry-card.tsx`,
+the model in `lib/city/inquiry.ts`). The scene itself stays wordless: the asked
 building is marked by a pencil hatch in the clay (flag 4 in the packed
 object texture, set at runtime), not by a label. The card shows only
 measured or mapped facts — no estimate (a building without a mapped storey
