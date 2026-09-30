@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import {
   type CSSProperties,
+  type RefObject,
   startTransition,
   useCallback,
   useEffect,
@@ -50,6 +51,7 @@ import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { useLiveMode } from "./live-mode";
 import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
+import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -209,6 +211,37 @@ function SceneOverlays({
   );
 }
 
+/**
+ * The off-site dialog, wired to the scene and the sidebar: a vantage flies
+ * there, "Auf der Karte wählen" opens the sidebar on the minimap.
+ */
+function OffsiteDialog({
+  handleRef,
+  locate,
+  onTab,
+}: {
+  handleRef: RefObject<CityWalkHandle | null>;
+  locate: ReturnType<typeof useLocateMe>;
+  onTab: (tab: SceneTabId) => void;
+}) {
+  const { isMobile, setOpen, setOpenMobile } = useSidebar();
+  return (
+    <LocateOffsiteDialog
+      offsite={locate.offsite}
+      onClose={locate.dismissOffsite}
+      onShowMap={() => {
+        onTab("erkunden");
+        if (isMobile) {
+          setOpenMobile(true);
+        } else {
+          setOpen(true);
+        }
+      }}
+      onTravel={(view) => handleRef.current?.flyToViewpoint(view)}
+    />
+  );
+}
+
 export default function CityWalk({ budget, tilesetUrl }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
@@ -219,7 +252,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
   const hud = useHudMessage();
-  const locate = useLocateMe(handleRef, hud.say);
+  const locate = useLocateMe(handleRef, hud);
 
   // Probed once, before the renderer is created: three's raw "Error creating
   // WebGL context" (or a tile's bare ReferenceError) is replaced by a
@@ -554,6 +587,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             )}
 
             <LocateMessage message={hud.message} />
+            <OffsiteDialog
+              handleRef={handleRef}
+              locate={locate}
+              onTab={setTab}
+            />
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
             <SettingsToggle />

@@ -210,3 +210,25 @@ export function describePlacement(
       return "Dein Standort lässt sich nicht auf diese Karte übertragen";
   }
 }
+
+/** A placement the player cannot be put down at: off the site, or unmappable. */
+export type Offsite = Exclude<Placement, { kind: "inside" }>;
+
+/**
+ * The off-site dialog's words (locate-offsite-dialog.tsx): what happened,
+ * and that the tiles end there — the dialog then offers where to go instead.
+ */
+export function describeOffsite(
+  placement: Offsite,
+  siteLabel: string
+): { body: string; title: string } {
+  return placement.kind === "outside"
+    ? {
+        title: `Du bist nicht in ${siteLabel}`,
+        body: `Dein Standort liegt ${formatDistance(placement.distanceM)} außerhalb des Kartenausschnitts — dort gibt es noch keine Stadt. Wohin stattdessen?`,
+      }
+    : {
+        title: "Standort nicht auf der Karte",
+        body: `Dein Standort lässt sich nicht auf die Karte von ${siteLabel} übertragen. Wohin stattdessen?`,
+      };
+}

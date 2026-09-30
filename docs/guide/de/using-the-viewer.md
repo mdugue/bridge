@@ -72,8 +72,9 @@ Telefon mit Kompass schaust du danach in die Richtung, in die die Rückseite
 des Telefons zeigt (liegt es flach, die Oberkante); ohne Kompass bleibt die
 Blickrichtung, wie sie war. Die Genauigkeit meldet eine kurze Zeile oben —
 GPS liegt in der Stadt oft 5–20 m daneben, ein Handykompass einige Grad.
-Stehst du außerhalb des Gebiets, sagt dieselbe Zeile, wie weit, und du
-bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
+Stehst du außerhalb des Gebiets, sagt ein kleines Fenster, wie weit, und
+bietet an, wohin es stattdessen gehen kann: zu einem der Aussichtspunkte, zu
+einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
 Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
 dem er geschickt würde.
 
