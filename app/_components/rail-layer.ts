@@ -198,9 +198,54 @@ function pushTri(
 
 export type P3 = [number, number, number];
 
+/**
+ * Two triangles p0 p1 p2, p0 p2 p3 facing `n`. Indexed, not spread: WebKit
+ * runs a spread in a call through the iterator protocol, and a tile's tram
+ * tracks are ~10⁵ quads — on an iPhone the spreads alone held a frame for
+ * a quarter of a second.
+ */
 export function quad(acc: Mesh3, p0: P3, p1: P3, p2: P3, p3: P3, n: P3): void {
-  pushTri(acc, ...p0, ...p1, ...p2, ...n);
-  pushTri(acc, ...p0, ...p2, ...p3, ...n);
+  quadXYZ(
+    acc,
+    p0[0],
+    p0[1],
+    p0[2],
+    p1[0],
+    p1[1],
+    p1[2],
+    p2[0],
+    p2[1],
+    p2[2],
+    p3[0],
+    p3[1],
+    p3[2],
+    n[0],
+    n[1],
+    n[2]
+  );
+}
+
+/** `quad` on plain numbers: nothing allocated per quad. */
+function quadXYZ(
+  acc: Mesh3,
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  dx: number,
+  dy: number,
+  dz: number,
+  nx: number,
+  ny: number,
+  nz: number
+): void {
+  pushTri(acc, ax, ay, az, bx, by, bz, cx, cy, cz, nx, ny, nz);
+  pushTri(acc, ax, ay, az, cx, cy, cz, dx, dy, dz, nx, ny, nz);
 }
 
 function finishGeo(acc: Mesh3): BufferGeometry | null {
@@ -697,14 +742,28 @@ export function addRibbon(
   const left = side(1);
   const right = side(-1);
   for (let i = 0; i < pts.length - 1; i++) {
+    const l0 = left[i];
+    const l1 = left[i + 1];
+    const r0 = right[i];
+    const r1 = right[i + 1];
     // top
-    quad(
+    quadXYZ(
       acc,
-      [left[i].x, left[i].y, left[i].z],
-      [right[i].x, right[i].y, right[i].z],
-      [right[i + 1].x, right[i + 1].y, right[i + 1].z],
-      [left[i + 1].x, left[i + 1].y, left[i + 1].z],
-      [0, 1, 0]
+      l0.x,
+      l0.y,
+      l0.z,
+      r0.x,
+      r0.y,
+      r0.z,
+      r1.x,
+      r1.y,
+      r1.z,
+      l1.x,
+      l1.y,
+      l1.z,
+      0,
+      1,
+      0
     );
     if (web <= 0) {
       continue;
@@ -712,21 +771,41 @@ export function addRibbon(
     // web on each side (outward normal via the tangent perpendicular)
     const nx = -tan[i].y;
     const nz = tan[i].x;
-    quad(
+    quadXYZ(
       acc,
-      [left[i].x, left[i].y, left[i].z],
-      [left[i + 1].x, left[i + 1].y, left[i + 1].z],
-      [left[i + 1].x, left[i + 1].y - web, left[i + 1].z],
-      [left[i].x, left[i].y - web, left[i].z],
-      [nx, 0, nz]
+      l0.x,
+      l0.y,
+      l0.z,
+      l1.x,
+      l1.y,
+      l1.z,
+      l1.x,
+      l1.y - web,
+      l1.z,
+      l0.x,
+      l0.y - web,
+      l0.z,
+      nx,
+      0,
+      nz
     );
-    quad(
+    quadXYZ(
       acc,
-      [right[i].x, right[i].y, right[i].z],
-      [right[i + 1].x, right[i + 1].y, right[i + 1].z],
-      [right[i + 1].x, right[i + 1].y - web, right[i + 1].z],
-      [right[i].x, right[i].y - web, right[i].z],
-      [-nx, 0, -nz]
+      r0.x,
+      r0.y,
+      r0.z,
+      r1.x,
+      r1.y,
+      r1.z,
+      r1.x,
+      r1.y - web,
+      r1.z,
+      r0.x,
+      r0.y - web,
+      r0.z,
+      -nx,
+      0,
+      -nz
     );
   }
 }
