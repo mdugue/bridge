@@ -70,8 +70,9 @@ are and puts you down there at eye height, on foot. On a phone with a
 compass you then look the way the back of the phone points (its top edge
 when it lies flat); without one the view keeps its direction. A short line
 at the top reports the precision — GPS in a city is often 5–20 m off, a
-phone compass a few degrees. If you stand outside the area, the same line
-says how far, and you stay where you are. Browsers ask for permission first
+phone compass a few degrees. If you stand outside the area, a small window
+says how far and offers where to go instead: one of the vantage points, a
+spot you pick on the map, or staying where you are. Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — there
 is no server to send it to.
 

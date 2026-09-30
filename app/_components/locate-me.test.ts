@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   describeFailure,
+  describeOffsite,
   describePlacement,
   formatDistance,
   LocateError,
@@ -39,5 +40,18 @@ test("describeFailure words each reason, and anything else", () => {
   );
   expect(describeFailure(new Error("boom"))).toBe(
     "Standort konnte nicht bestimmt werden"
+  );
+});
+
+test("describeOffsite names the site and the distance, and asks where to", () => {
+  const outside = describeOffsite(
+    { kind: "outside", distanceM: 160_000 },
+    "Dresden"
+  );
+  expect(outside.title).toBe("Du bist nicht in Dresden");
+  expect(outside.body).toContain("160 km außerhalb");
+  expect(outside.body).toEndWith("Wohin stattdessen?");
+  expect(describeOffsite({ kind: "unsupported" }, "Dresden").body).toContain(
+    "Karte von Dresden"
   );
 });

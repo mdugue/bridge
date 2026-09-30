@@ -16,6 +16,7 @@ import {
   describeFailure,
   describePlacement,
   locateMe,
+  type Offsite,
 } from "./locate-me";
 
 /** How long the result line stays up (ms). */
@@ -29,7 +30,11 @@ export type Say = (text: string, sticky?: boolean) => void;
  * in a button, so an answer still shows when the overlays step aside for the
  * sidebar mid-fix.
  */
-export function useHudMessage(): { message: string | null; say: Say } {
+export function useHudMessage(): {
+  clear: () => void;
+  message: string | null;
+  say: Say;
+} {
   const [message, setMessage] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -40,21 +45,29 @@ export function useHudMessage(): { message: string | null; say: Say } {
       timer.current = setTimeout(() => setMessage(null), MESSAGE_MS);
     }
   }, []);
-  return { message, say };
+  const clear = useCallback(() => {
+    clearTimeout(timer.current);
+    setMessage(null);
+  }, []);
+  return { clear, message, say };
 }
 
 /**
  * "Locate me": finds the player in the real world and drops them there,
  * standing on the ground and facing the way the phone points. `say` reports
- * how it went — how precise the fix is, or how far off the site the player
- * stands.
+ * how it went — how precise the fix is, or why it failed. A fix off the site
+ * gets more than a line: it sets `offsite`, which opens a dialog offering
+ * where to go instead (locate-offsite-dialog.tsx), and clears the line.
  */
 export function useLocateMe(
   handleRef: RefObject<CityWalkHandle | null>,
-  say: Say
+  hud: { clear: () => void; say: Say }
 ) {
+  const { clear, say } = hud;
   const [available] = useState(canLocate);
   const [locating, setLocating] = useState(false);
+  const [offsite, setOffsite] = useState<Offsite | null>(null);
+  const dismissOffsite = useCallback(() => setOffsite(null), []);
 
   const locate = useCallback(() => {
     if (locating) {
@@ -72,24 +85,27 @@ export function useLocateMe(
         }
         const site = currentSite();
         const placement = placementOf(fix, site.epsg, h.terrainBounds);
-        if (placement.kind === "inside") {
-          const now = h.getCameraState();
-          h.placeAt({
-            epsg: { x: placement.epsgX, y: placement.epsgY },
-            aboveGround: EYE_HEIGHT,
-            headingDeg: placement.headingDeg ?? now.headingDeg,
-            pitchDeg: 0,
-            fov: now.fov,
-            mode: "walk",
-          });
+        if (placement.kind !== "inside") {
+          clear();
+          setOffsite(placement);
+          return;
         }
+        const now = h.getCameraState();
+        h.placeAt({
+          epsg: { x: placement.epsgX, y: placement.epsgY },
+          aboveGround: EYE_HEIGHT,
+          headingDeg: placement.headingDeg ?? now.headingDeg,
+          pitchDeg: 0,
+          fov: now.fov,
+          mode: "walk",
+        });
         say(describePlacement(placement, site.label));
       })
       .catch((err: unknown) => say(describeFailure(err)))
       .finally(() => setLocating(false));
-  }, [handleRef, locating, say]);
+  }, [clear, handleRef, locating, say]);
 
-  return { available, locate, locating };
+  return { available, dismissOffsite, locate, locating, offsite };
 }
 
 /** The one-line result under the top edge. */
