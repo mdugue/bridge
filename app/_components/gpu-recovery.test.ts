@@ -59,3 +59,25 @@ test("without storage it gives up rather than reloading blind", () => {
   ).toBe(false);
   expect(reloads).toBe(0);
 });
+
+test("with site data blocked, reading session storage throws: all three give up quietly", () => {
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get: () => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    },
+  });
+  try {
+    let reloads = 0;
+    expect(
+      recoverFromGpuLoss("{}", undefined, () => {
+        reloads++;
+      })
+    ).toBe(false);
+    expect(reloads).toBe(0);
+    expect(recentlyRecovered()).toBe(false);
+    expect(takeRecoverySnapshot()).toBeNull();
+  } finally {
+    Reflect.deleteProperty(globalThis, "sessionStorage");
+  }
+});

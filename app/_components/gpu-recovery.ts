@@ -14,6 +14,19 @@ const TRIES = 2;
 
 type Store = Pick<Storage, "getItem" | "setItem">;
 
+/**
+ * Session storage, or null where the browser refuses it: with site data
+ * blocked, merely reading `sessionStorage` throws (a default parameter
+ * reading it would throw before any `try` — out of the HUD's render).
+ */
+function session(): Store | null {
+  try {
+    return sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 interface Stored {
   /** the snapshot to put back on the next load */
   snapshot?: string;
@@ -37,10 +50,13 @@ function read(store: Store): Stored {
  */
 export function recoverFromGpuLoss(
   snapshot: string | null,
-  store: Store = sessionStorage,
+  store: Store | null = session(),
   reload: () => void = () => location.reload(),
   now = Date.now()
 ): boolean {
+  if (!store) {
+    return false;
+  }
   try {
     const tries = read(store).tries.filter((t) => now - t < WINDOW_MS);
     if (tries.length >= TRIES) {
@@ -65,9 +81,12 @@ export function recoverFromGpuLoss(
  * its start (crash-report.tsx does not offer that one).
  */
 export function recentlyRecovered(
-  store: Store = sessionStorage,
+  store: Store | null = session(),
   now = Date.now()
 ): boolean {
+  if (!store) {
+    return false;
+  }
   try {
     return read(store).tries.some((t) => now - t < WINDOW_MS);
   } catch {
@@ -77,8 +96,11 @@ export function recentlyRecovered(
 
 /** The snapshot a recovery left for this load, once (the tries stay). */
 export function takeRecoverySnapshot(
-  store: Store = sessionStorage
+  store: Store | null = session()
 ): string | null {
+  if (!store) {
+    return null;
+  }
   try {
     const stored = read(store);
     if (!stored.snapshot) {
