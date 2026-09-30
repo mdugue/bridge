@@ -87,3 +87,25 @@ test("a clear frees every held raster, pending ones when they land", async () =>
   await tick();
   expect(freed).toEqual(["tex:a", "tex:late"]);
 });
+
+test("a load every reader left before it landed is aborted", async () => {
+  let seen: AbortSignal | null = null;
+  const share = createSharedRasters(
+    (_key, signal) => {
+      seen = signal;
+      return new Promise<string>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    },
+    () => undefined
+  );
+  const pending = share.acquire("class");
+  const second = share.acquire("class");
+  share.release("class");
+  expect((seen as AbortSignal | null)?.aborted).toBe(false);
+  share.release("class");
+  expect((seen as AbortSignal | null)?.aborted).toBe(true);
+  // the reader sees no raster, never a rejection
+  expect(await pending).toBeNull();
+  expect(await second).toBeNull();
+});

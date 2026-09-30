@@ -8,13 +8,15 @@ raster, and trees from DLM hedge/tree rows plus a **DOM1**-derived canopy. The
 build turns it into an [OGC 3D Tiles](https://www.ogc.org/standard/3dtiles/)
 tileset of glTF, which the browser streams with
 [3DTilesRendererJS](https://github.com/NASA-AMMOS/3DTilesRendererJS) and renders
-with [three.js](https://threejs.org) — one route, no backend, no database, no
-accounts, nothing persisted.
+with [three.js](https://threejs.org) (`WebGPURenderer` and TSL node
+materials) — one route, no backend, no database, no accounts, nothing
+persisted.
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) 1.4+ (the version in `package.json` `packageManager`)
-- A WebGL2-capable browser
+- A browser with WebGPU, or WebGL2 as the fallback (three's
+  `WebGPURenderer` picks its WebGL2 backend; `?gpu=webgl2` forces it)
 - Only to re-run the offline bakes: [uv](https://docs.astral.sh/uv/) (it
   installs the Python and the geo libraries in `pipeline/`)
 
@@ -114,7 +116,8 @@ A React shell owns the HUD; three.js owns the canvas.
 `createCityWalkApp` ([`create-app.ts`](app/_components/create-app.ts)), which
 builds the scene imperatively and returns a **handle of setters** — every HUD
 slider calls one. Pure, three-free, unit-tested math lives in
-[`lib/city/`](lib/city); the WebGL glue lives in `app/_components/`.
+[`lib/city/`](lib/city); the renderer, the TSL node materials and the
+post pipeline live in `app/_components/`.
 
 Coordinate frames matter here. Source data is EPSG:25833, Z-up; a parent
 `world` group is rotated −90° about X so data-Z (elevation) becomes scene-Y

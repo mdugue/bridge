@@ -103,7 +103,8 @@ Three things are still missing:
 - **Bare crowns** by `leaf`: hash-dithered discard of crown fragments (the
   clay already uses hash-dithered transparency) down to a sparse twig
   density (~25 %) tinted grey-brown, plus a `customDepthMaterial` with the
-  same discard so the winter shadow thins with it. Trunks stay.
+  same discard so the winter shadow thins with it (since plan 020 the
+  crown's `maskNode`, which the shadow pass honours). Trunks stay.
 - The snapshot codec already carries the date (`lib/city/snapshot.ts`), so
   seasons round-trip with no format change.
 
@@ -219,6 +220,15 @@ Re-baked on all fifteen tiles: see `docs/data-pipeline.md` (`trees`).
 crowns, CPU of the container): a date change costs 4–7 ms median (July →
 20 October 6.4 ms, → 10 January 3.6 ms, first-run JIT outlier 24–34 ms) —
 under the 16 ms bar, throttled anyway.
+
+**Since the WebGPU/TSL port (plan 020, 2026-09-26).** The crowns are one
+pair of scene-wide node materials (`sceneCrowns`, a `sceneMaterial`) on
+`Instances` sets: the season's tint is the sets' `instanceTints`, `aBare`
+an instance attribute read with `instanceFloat`. The hashed test is the
+bare crown's `maskNode`, which three's shadow pass honours, so there is
+no depth material and no depth program to warm: `crownWarmup` compiles
+the two crown variants only. The review's program counts above are
+GLSL-era numbers.
 
 **Open.** The GPU plates of every phase (Zwinger courtyard for OSM
 duplicates; 15 Oct / 1 Nov at the Königsufer and a lime avenue; 10 Jan at

@@ -1,11 +1,18 @@
 import { expect, test } from "bun:test";
-import type { BufferGeometry, InstancedMesh, Mesh } from "three";
+import type {
+  BufferGeometry,
+  Mesh,
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
+} from "three/webgpu";
 import type { BridgeFeature, TramFeature } from "@/lib/city/features";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { CONTACT_WIRE_M, RAIL_TOP_M } from "@/lib/city/tram";
+import type { Instances } from "./instancing";
 import { buildDeckTable, deckLift } from "./rail-layer";
-import { buildTram, type TramContext } from "./tram-layer";
+import { buildTram } from "./tram-layer";
 
-const ctx: TramContext = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
+const ctx: GroundContext = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 
 const track = (
   bed: "ballast" | "grass" | "street",
@@ -51,6 +58,23 @@ test("a street track is flush rails with its wire 5.6 m up", () => {
   );
 });
 
+test("the wires are one scene-wide ribbon material: transparent, no depth", () => {
+  const a = named(buildTram([track("street")], [], ctx), "tram-wires")[0];
+  const b = named(buildTram([track("grass")], [], ctx), "tram-wires")[0];
+  const material = a.material as MeshBasicNodeMaterial;
+  expect(material.isNodeMaterial).toBe(true);
+  expect(b.material).toBe(material);
+  expect(material.userData.shared).toBe(true);
+  expect(material.transparent).toBe(true);
+  expect(material.depthWrite).toBe(false);
+  // the ribbon is widened in the position slot, its coverage in opacity
+  expect(material.positionNode).not.toBeNull();
+  expect(material.opacityNode).not.toBeNull();
+  for (const name of ["wireDir", "wireSide", "wireHalf"]) {
+    expect(a.geometry.hasAttribute(name)).toBe(true);
+  }
+});
+
 test("a lawn track has rails and a meadow strip under them", () => {
   const group = buildTram([track("grass")], [], ctx);
   expect(named(group, "tram-track").length).toBe(2); // rails + lawn
@@ -78,9 +102,12 @@ test("masts stand instanced and cast; a span hangs over the wire it crosses", ()
   );
   const [masts] = group.children.filter(
     (c) => c.name === "tram-masts"
-  ) as InstancedMesh[];
-  expect(masts.count).toBe(2);
+  ) as Instances<MeshStandardNodeMaterial>[];
+  expect(masts.isInstances).toBe(true);
+  expect(masts.drawCount).toBe(2);
   expect(masts.castShadow).toBe(true);
+  // the set applies its instance transform in the position slot
+  expect(masts.material.positionNode).not.toBeNull();
   const [wires] = named(group, "tram-wires");
   // the span's anchors are 7 m up the masts
   expect(maxY(wires.geometry)).toBeCloseTo(107, 5);
@@ -121,7 +148,7 @@ test("a tram stop stands the furniture layer's stop sign", () => {
   };
   const group = buildTram([track("street"), stop], [], ctx);
   const stops = group.children.find((c) => c.name === "tram-stops");
-  const [sign] = (stops?.children ?? []) as InstancedMesh[];
+  const [sign] = (stops?.children ?? []) as Instances[];
   expect(sign.name).toBe("furniture-stop");
-  expect(sign.count).toBe(1);
+  expect(sign.drawCount).toBe(1);
 });

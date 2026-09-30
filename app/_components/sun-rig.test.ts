@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import {
   Box3,
+  Color,
   DirectionalLight,
+  type RenderTarget,
   Scene,
   Vector3,
-  type WebGLRenderTarget,
-} from "three";
+} from "three/webgpu";
+import { uniform } from "three/tsl";
 import { SHADOW_BASE_RADIUS, SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
 import { shadowMapSizeFor } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
@@ -19,11 +21,19 @@ function rig(shadowMapSize = shadowMapSizeFor("full")) {
     new Vector3(-1000, 0, -1000),
     new Vector3(1000, 300, 1000)
   );
-  const sunRig = createSunRig(scene, bounds, DRESDEN, shadowMapSize);
+  const fogColor = uniform(new Color());
+  const sunRig = createSunRig(
+    scene,
+    bounds,
+    DRESDEN,
+    shadowMapSize,
+    undefined,
+    fogColor
+  );
   const sun = scene.children.find(
     (o) => o instanceof DirectionalLight
   ) as DirectionalLight;
-  return { sunRig, sun };
+  return { sunRig, sun, fogColor };
 }
 
 /** Looking due north and level — the horizontal part of a world direction. */
@@ -151,7 +161,7 @@ test("dispose frees the shadow map and is safe before any render", () => {
     dispose: () => {
       calls += 1;
     },
-  } as unknown as WebGLRenderTarget;
+  } as unknown as RenderTarget;
   sunRig.dispose();
   expect(calls).toBe(1);
 });
@@ -165,4 +175,10 @@ test("nightFactor ramps across civil dusk", () => {
   const night = sunRig.update(new Date("2026-06-21T23:30:00Z"));
   expect(night.nightFactor).toBe(1);
   expect(night.aboveHorizon).toBe(false);
+});
+
+test("the palette's fog colour lands in the scene fog's uniform", () => {
+  const { sunRig, fogColor } = rig();
+  sunRig.update(new Date("2026-06-21T10:00:00Z"));
+  expect(fogColor.value.getHex()).not.toBe(0);
 });

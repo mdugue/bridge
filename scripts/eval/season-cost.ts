@@ -18,7 +18,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { InstancedMesh } from "three";
+import { isInstances } from "../../app/_components/instancing";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
 import {
   buildVegetation,
@@ -72,13 +72,8 @@ for (const tile of tileIds(currentSite())) {
     // A seasonal crown carries `aBare`; count the cheap LOD (visible at
     // build), the rich one shares its buffers.
     group.traverse((o) => {
-      const mesh = o as InstancedMesh;
-      if (
-        mesh.isInstancedMesh &&
-        mesh.visible &&
-        mesh.geometry.getAttribute("aBare")
-      ) {
-        crowns += mesh.count;
+      if (isInstances(o) && o.visible && o.geometry.getAttribute("aBare")) {
+        crowns += o.drawCount;
       }
     });
   }

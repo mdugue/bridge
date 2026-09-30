@@ -1,25 +1,20 @@
 import { expect, test } from "bun:test";
 import {
-  BackSide,
   Color,
   IcosahedronGeometry,
-  InstancedMesh,
   type Material,
-  MeshBasicMaterial,
-  MeshDepthMaterial,
-  ShaderLib,
-  type WebGLProgramParametersWithUniforms,
-} from "three";
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
+} from "three/webgpu";
 import { TREE_GENERA } from "@/lib/city/tree-season";
 import {
   createSeasonClock,
-  crownDepthMaterial,
   type CrownSeasonKey,
   crownWarmup,
-  injectCrownSeason,
   seasonCrowns,
 } from "./crown-season";
-import { buildVegetation } from "./vegetation-layer";
+import { Instances, isInstances } from "./instancing";
+import { buildVegetation, sceneCrowns } from "./vegetation-layer";
 
 const LIME = TREE_GENERA.indexOf("Tilia");
 const JAN_10 = 9;
@@ -28,10 +23,10 @@ const OCT_20 = 292;
 
 function crowns(keys: CrownSeasonKey[]) {
   const geo = new IcosahedronGeometry(1, 1);
-  const leafy = new MeshBasicMaterial();
-  const bare = new MeshBasicMaterial();
-  const cheap = new InstancedMesh(geo, leafy, keys.length);
-  const rich = new InstancedMesh(geo, leafy, keys.length);
+  const leafy = new MeshBasicNodeMaterial();
+  const bare = new MeshBasicNodeMaterial();
+  const cheap = new Instances(geo, leafy, keys.length);
+  const rich = new Instances(geo, leafy, keys.length);
   const green = new Color(0.4, 0.6, 0.3);
   for (const mesh of [cheap, rich]) {
     keys.forEach((_, i) => mesh.setColorAt(i, green));
@@ -43,9 +38,9 @@ function crowns(keys: CrownSeasonKey[]) {
 const lime: CrownSeasonKey = { genus: LIME, evergreen: false, jitter: 0 };
 const pine: CrownSeasonKey = { genus: 0, evergreen: true, jitter: 0 };
 
-test("both LOD meshes share one colour buffer and one leaf cover over the crown's own buffers", () => {
+test("both LOD sets share one tint buffer and one leaf cover over the crown's own buffers", () => {
   const { cheap, rich, geo } = crowns([lime, pine]);
-  expect(rich.instanceColor).toBe(cheap.instanceColor);
+  expect(rich.instanceTints).toBe(cheap.instanceTints);
   expect(cheap.geometry.getAttribute("aBare")).toBe(
     rich.geometry.getAttribute("aBare")
   );
@@ -64,21 +59,19 @@ test("summer changes nothing; winter bares the deciduous crowns and thins their 
   expect(cover[1]).toBe(0); // the evergreen stays in leaf
   for (const mesh of [cheap, rich]) {
     expect(mesh.material as Material).toBe(bare);
-    expect(mesh.customDepthMaterial).toBe(crownDepthMaterial());
   }
   // Same day again: nothing to write, no shadow redraw.
   expect(season.apply(JAN_10)).toBe(false);
-  // Back to summer: the plain material, no depth override.
+  // Back to summer: the plain material.
   expect(season.apply(JUL_10)).toBe(true);
   expect(cheap.material).toBe(leafy);
-  expect(cheap.customDepthMaterial).toBeUndefined();
 });
 
 test("autumn moves a lime's colour off its summer green; an evergreen keeps it", () => {
   const { cheap, season } = crowns([lime, pine]);
-  const summer = Float32Array.from(cheap.instanceColor?.array ?? []);
+  const summer = Float32Array.from(cheap.instanceTints?.array ?? []);
   season.apply(OCT_20);
-  const now = cheap.instanceColor?.array ?? [];
+  const now = cheap.instanceTints?.array ?? [];
   const moved = (i: number) =>
     Math.hypot(
       now[i * 3] - summer[i * 3],
@@ -89,7 +82,7 @@ test("autumn moves a lime's colour off its summer green; an evergreen keeps it",
   expect(moved(1)).toBe(0);
   // Back to July restores the summer colour exactly.
   season.apply(JUL_10);
-  expect(Array.from(cheap.instanceColor?.array ?? [])).toEqual(
+  expect(Array.from(cheap.instanceTints?.array ?? [])).toEqual(
     Array.from(summer)
   );
 });
@@ -107,8 +100,9 @@ test("the canopy's crowns follow the season through the vegetation control", () 
   );
   expect(veg.setSeason(JUL_10)).toBe(false);
   expect(veg.setSeason(JAN_10)).toBe(true);
+  const { bare } = sceneCrowns();
   const crownsNow = veg.group.children.filter(
-    (c) => (c as InstancedMesh).customDepthMaterial !== undefined
+    (c) => isInstances(c) && c.material === bare
   );
   expect(crownsNow).toHaveLength(3); // the mid, rich and far crowns
 });
@@ -133,47 +127,45 @@ test("the clock re-seasons on a new calendar day only, throttled, the last day w
   clock.dispose();
 });
 
-test("the warm-up stands in for both crown variants and the crowns' shadow pass", () => {
+test("the warm-up stands in for both crown variants, laid out as a crown", () => {
   const geo = new IcosahedronGeometry(1, 1);
-  const leafy = new MeshBasicMaterial();
-  const bare = new MeshBasicMaterial();
+  const leafy = new MeshBasicNodeMaterial();
+  const bare = new MeshBasicNodeMaterial();
   const warm = crownWarmup(geo, { leafy, bare });
   expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);
-  const [seasonal, plain] = warm.depth.map((m) => m.material as Material);
-  expect(seasonal).toBe(crownDepthMaterial());
-  expect(plain).toBeInstanceOf(MeshDepthMaterial); // as three's own
-  // As a crown: instanced, with instance colours and its leaf cover.
-  for (const mesh of [...warm.main, ...warm.depth]) {
-    expect(mesh.instanceColor).not.toBeNull();
+  // As a crown: instanced, with instance tints and its leaf cover (the same
+  // attribute layout, so the same build).
+  for (const mesh of warm.main) {
+    expect(mesh.instanceTints).not.toBeNull();
     expect(mesh.geometry.getAttribute("aBare")).toBeDefined();
+    expect(mesh.castShadow).toBe(true);
   }
-  // The side three's shadow pass gives a front-sided caster's depth
-  // material: part of the program's key.
-  expect(seasonal.side).toBe(BackSide);
-  expect(plain.side).toBe(BackSide);
   let freed = 0;
-  for (const m of [leafy, bare, plain]) {
+  for (const m of [leafy, bare]) {
     m.addEventListener("dispose", () => freed++);
   }
-  let depthFreed = false;
-  crownDepthMaterial().addEventListener("dispose", () => {
-    depthFreed = true;
+  let geoFreed = false;
+  geo.addEventListener("dispose", () => {
+    geoFreed = true;
   });
   warm.dispose();
-  expect(freed).toBe(3);
-  expect(depthFreed).toBe(false); // the scene's one depth material stays
+  expect(geoFreed).toBe(true);
+  expect(freed).toBe(0); // the materials are the scene's, not the warm-up's
 });
 
-test("the dither's per-crown seed joins the integer cell, not the position", () => {
-  // Added to the position, the seed was scaled by the pixel scale too and
-  // the hash's sin() saw arguments near 1e6 up close.
-  const sh = {
-    vertexShader: ShaderLib.depth.vertexShader,
-    fragmentShader: ShaderLib.depth.fragmentShader,
-    uniforms: {},
-  } as unknown as WebGLProgramParametersWithUniforms;
-  injectCrownSeason(sh, false);
-  expect(sh.vertexShader).toContain("vCrownCell = crownTurn * position;");
-  expect(sh.fragmentShader).toContain("floor(pixScales.x * p) + seed");
-  expect(sh.fragmentShader).toContain("floor(pixScales.y * p) + seed");
+test("only the seasonal crown masks (the shadow pass honours it), and twigs lose the glow", () => {
+  const { leafy, bare } = sceneCrowns();
+  expect(leafy).toBeInstanceOf(MeshStandardNodeMaterial);
+  expect(bare).toBeInstanceOf(MeshStandardNodeMaterial);
+  const plain = leafy as MeshStandardNodeMaterial;
+  const seasonal = bare as MeshStandardNodeMaterial;
+  expect(plain.maskNode).toBeNull();
+  expect(seasonal.maskNode).not.toBeNull();
+  for (const m of [plain, seasonal]) {
+    expect(m.positionNode).not.toBeNull();
+    // the cast shadow stays rigid: no sway in the shadow pass
+    expect(m.castShadowPositionNode).not.toBeNull();
+    expect(m.castShadowPositionNode).not.toBe(m.positionNode);
+  }
+  expect(seasonal.emissiveNode).not.toBe(plain.emissiveNode);
 });

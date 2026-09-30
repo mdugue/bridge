@@ -3,19 +3,19 @@ import {
   type BufferGeometry,
   Color,
   Group,
-  InstancedMesh,
   LatheGeometry,
   Matrix4,
   Quaternion,
   Vector2,
   Vector3,
-} from "three";
+} from "three/webgpu";
 import type { TreeFeature } from "@/lib/city/features";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import {
   LOOK_DEFAULTS,
   type VegetationLookKey,
 } from "@/lib/city/look-controls";
+import type { Live } from "./shader-chunks";
 import {
   ARCHETYPE_SHAPE,
   archetypeOf,
@@ -34,15 +34,16 @@ import {
   type SeasonalCrowns,
   seasonCrowns,
 } from "./crown-season";
+import { Instances } from "./instancing";
 import {
   applySeasons,
   buildCrownGeo,
   buildCrownGeoRich,
-  buildCrownMaterials,
   bucketByCell,
   type CellLod,
   crownColor,
   hash,
+  sceneCrowns,
   swapCrownLod,
   TRUNK_H,
   type TreeInstance,
@@ -58,8 +59,9 @@ import {
  * (lib/city/tree-inventory.ts).
  *
  * It reuses everything the canopy trees are made of — the lobed crown and the
- * multi-tuft rich crown, the crown material (sway, shimmer, translucency,
- * flutter), the trunk, the 250 m chunks and the distance LOD swap — and adds
+ * multi-tuft rich crown, the scene's crown materials (sway, shimmer,
+ * translucency, flutter; the same builds as the canopy's), the trunk, the
+ * 250 m chunks and the distance LOD swap — and adds
  * only what a per-instance scale cannot express: two reshaped variants of
  * the SAME two crown geometries (a flame for fastigiate cultivars, a
  * curtained dome for weeping trees) and a tiered lathe cone for conifers,
@@ -71,7 +73,7 @@ import {
  * meshes of this layer at all — they are handed to the canopy
  * (`instances`, vegetation-layer.ts TreeInstance) and ride in its chunk
  * meshes, so they cost instances, not draw calls. Only the three reshaped
- * silhouettes get meshes here: per 250 m chunk one per shape present (flame
+ * silhouettes get sets here: per 250 m chunk one per shape present (flame
  * often, cone and dome rarely), each doubled by the invisible other LOD.
  */
 
@@ -150,7 +152,8 @@ const RELIEF = 0.8;
  * vertex's direction from the crown centre (in the box's ellipsoid space)
  * picks its place on the new silhouette, its distance the bump on top. The
  * local height range is kept on purpose — the crown material's wind sway
- * reads local Y, so a reshaped crown bends exactly like the original.
+ * reads the geometry's own Y, so a reshaped crown bends exactly like the
+ * original.
  */
 function reshapeCrown(
   source: BufferGeometry,
@@ -341,7 +344,7 @@ const Y_AXIS = new Vector3(0, 1, 0);
 
 /** Crown matrices: the geometry's local box fitted to the tree's crown. */
 function writeCrowns(
-  mesh: InstancedMesh,
+  mesh: Instances,
   items: InventoryTree[],
   fit: FittedGeo
 ): void {
@@ -421,14 +424,14 @@ function inventoryColor(col: Color, t: InventoryTree, v: number): void {
   }
 }
 
-function paint(mesh: InstancedMesh, items: InventoryTree[]): void {
+function paint(mesh: Instances, items: InventoryTree[]): void {
   const col = new Color();
   items.forEach((t, i) => {
     inventoryColor(col, t, hash(t.x * 0.3 + t.z * 0.7) - 0.5);
     mesh.setColorAt(i, col);
   });
-  if (mesh.instanceColor) {
-    mesh.instanceColor.needsUpdate = true;
+  if (mesh.instanceTints) {
+    mesh.instanceTints.needsUpdate = true;
   }
 }
 
@@ -437,12 +440,8 @@ function crownPair(
   geos: ShapeGeos[CrownShape],
   materials: CrownMaterials
 ): { lod: CellLod; season: SeasonalCrowns } {
-  const cheap = new InstancedMesh(
-    geos.cheap.geo,
-    materials.leafy,
-    items.length
-  );
-  const rich = new InstancedMesh(geos.rich.geo, materials.leafy, items.length);
+  const cheap = new Instances(geos.cheap.geo, materials.leafy, items.length);
+  const rich = new Instances(geos.rich.geo, materials.leafy, items.length);
   for (const [mesh, fit] of [
     [cheap, geos.cheap],
     [rich, geos.rich],
@@ -453,7 +452,7 @@ function crownPair(
     paint(mesh, items);
   }
   rich.visible = false;
-  // the cheap tier is the season's "mid": the pair shares one colour buffer
+  // the cheap tier is the season's "mid": the pair shares one tint buffer
   const season = seasonCrowns(
     { mid: cheap, rich },
     items.map((t) => t.season),
@@ -463,7 +462,7 @@ function crownPair(
 }
 
 export interface TreeInventory {
-  /** the reshaped silhouettes (flame, cone, dome) — this layer's own meshes */
+  /** the reshaped silhouettes (flame, cone, dome) — this layer's own sets */
   control: VegetationControl;
   /** per-tile census of what was built, for the cost report */
   counts: Record<CrownShape, number>;
@@ -488,17 +487,15 @@ export function buildTreeInventory(
 ): TreeInventory {
   const group = new Group();
   group.name = "tree-inventory";
-  const shimmer = { value: LOOK_DEFAULTS.shimmer };
-  const translucency = { value: LOOK_DEFAULTS.translucency };
-  const leafFlutter = { value: LOOK_DEFAULTS.leafFlutter };
-  const leafBright = { value: LOOK_DEFAULTS.leafBright };
-  const rowUniform: Record<VegetationLookKey, { value: number }> = {
-    leafBright,
-    leafFlutter,
-    shimmer,
-    translucency,
+  // The scene's crown materials and uniforms, as the canopy's (sceneCrowns).
+  const crownMats = sceneCrowns(ctx.sunDirection);
+  const u = crownMats.uniforms;
+  const rowUniform: Record<VegetationLookKey, Live> = {
+    leafBright: u.leafBright,
+    leafFlutter: u.leafFlutter,
+    shimmer: u.shimmer,
+    translucency: u.translucency,
   };
-  const uTime = { value: 0 };
   let multiTuft = LOOK_DEFAULTS.multiTuft;
   const counts = { broad: 0, spindle: 0, cone: 0, weep: 0 };
 
@@ -528,24 +525,10 @@ export function buildTreeInventory(
     instances = canopyInstances(trees, geos.broad);
     counts.broad = trees.filter((t) => t.shape === "broad").length;
     const reshaped = trees.filter((t) => t.shape !== "broad");
-    const crownMats =
-      reshaped.length > 0
-        ? buildCrownMaterials(
-            {
-              sunDirection: ctx.sunDirection ?? new Vector3(0, 1, 0),
-              shimmer,
-              uTime,
-              translucency,
-              leafFlutter,
-              leafBright,
-            },
-            ctx.heightFog
-          )
-        : null;
-    for (const cell of crownMats ? bucketByCell(reshaped) : []) {
+    for (const cell of bucketByCell(reshaped)) {
       for (const shape of CROWN_SHAPES) {
         const items = cell.filter((t) => t.shape === shape);
-        if (items.length === 0 || !crownMats) {
+        if (items.length === 0) {
           continue;
         }
         counts[shape] += items.length;
@@ -557,12 +540,6 @@ export function buildTreeInventory(
         seasons.push(season);
       }
     }
-    // As in the canopy (vegetation-layer.ts buildTrees): a crown material
-    // may be on no mesh, so both go with the layer's first mesh.
-    cells[0]?.cheap.addEventListener("dispose", () => {
-      crownMats?.leafy.dispose();
-      crownMats?.bare.dispose();
-    });
   }
 
   return {
@@ -582,7 +559,7 @@ export function buildTreeInventory(
         multiTuft = look.multiTuft;
       },
       setTime: (seconds) => {
-        uTime.value = seconds;
+        u.time.value = seconds;
       },
       setSeason: (day) => applySeasons(seasons, day),
       // Same rule as the canopy (vegetation-layer.ts swapCrownLod).

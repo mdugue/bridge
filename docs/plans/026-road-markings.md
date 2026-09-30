@@ -105,7 +105,9 @@ only in `TerrainExtras` (`lib/city/tileset.ts`), `bakeTerrain`'s
 Patched into the terrain fragment after `SPORT_GROUND`; its has-flag
 joins the `customProgramCacheKey` (`terrain-layer.ts:613`) — a new
 optional raster that is missing from the key recompiles into the wrong
-program.
+program. *Since plan 020 (2026-09-26):* `roadMarkings` is a node function
+the terrain's node material calls after `sportGround`, only where the
+tile has the raster; there is no cache key to keep.
 
 - Zebra: 0.5 m bars / 0.5 m gaps along the crossing's width axis; furt:
   two 0.12 m broken lines (0.5 m dash, 0.2 m gap) at the long edges; stop

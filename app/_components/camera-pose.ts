@@ -1,4 +1,4 @@
-import { Euler, type PerspectiveCamera, Vector3 } from "three";
+import { Euler, type PerspectiveCamera, Vector3 } from "three/webgpu";
 import {
   epsgToWorld,
   type RecenterOffset,

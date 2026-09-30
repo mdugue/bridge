@@ -4,14 +4,31 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
-  InstancedMesh,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  Vector4,
-  type WebGLRenderer,
-} from "three";
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
+} from "three/webgpu";
+import {
+  attribute,
+  cameraProjectionMatrix,
+  cameraWorldMatrix,
+  clamp,
+  cross,
+  float,
+  length,
+  materialOpacity,
+  max,
+  modelViewMatrix,
+  modelWorldMatrixInverse,
+  positionGeometry,
+  select,
+  smoothstep,
+  varying,
+  vec3,
+  vec4,
+  viewportSize,
+} from "three/tsl";
 import type {
   BridgeFeature,
   FurnitureFeature,
@@ -35,7 +52,7 @@ import {
   wireStations,
 } from "@/lib/city/tram";
 import { buildFurniture } from "./furniture-layer";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { Instances, instancePosition } from "./instancing";
 import {
   addRail,
   addRibbon,
@@ -48,6 +65,8 @@ import {
   mesh3,
   type Pt,
 } from "./rail-layer";
+import type { F, V3 } from "./shader-chunks";
+import { sceneMaterial } from "./three-utils";
 
 /**
  * Trams (pipeline/bake/tram.py, OSM, ODbL): the tracks in their bed and the
@@ -70,17 +89,13 @@ import {
  *   under two-thirds opacity, like a pencil line on the watercolour, not
  *   ink. Wires never cast (the shadow map stays as it was); only the masts
  *   do.
- * - Masts: a pale green-grey pole each, instanced.
+ * - Masts: a pale green-grey pole each, instanced (`Instances`).
  * - Stops: the bus stop's "H" sign (furniture-layer.ts, plan 030) on the
  *   platform of each tram stop the bake found one for.
  *
  * Built per fine terrain tile in the Y-up frame on the cross-tile ground
  * (tracks and spans reach past the tile edge); freed with the tile.
  */
-
-export interface TramContext extends GroundContext {
-  heightFog?: HeightFogUniforms;
-}
 
 const SAMPLE_M = 2; // rails follow the TIN closely
 const WIRE_SAMPLE_M = 4;
@@ -156,65 +171,72 @@ function addWire(w: Wires, pts: Pt[], half: number): void {
   }
 }
 
-const WIRE_VERTEX = `
-	vec4 wireCentre = modelViewMatrix * vec4( transformed, 1.0 );
-	vec3 wireDirV = ( modelViewMatrix * vec4( wireDir, 0.0 ) ).xyz;
-	vec3 wireAcross = cross( wireDirV, wireCentre.xyz );
-	float wireLen = length( wireAcross );
-	wireAcross = wireLen > 1e-6 ? wireAcross / wireLen : vec3( 1.0, 0.0, 0.0 );
-	float wireDepth = max( - wireCentre.z, 0.05 );
-	// metres per pixel at this depth
-	float wirePx = 2.0 * wireDepth / ( projectionMatrix[ 1 ][ 1 ] * uWireViewport );
-	float wireTruePx = 2.0 * wireHalf / wirePx;
-	float wireDrawnHalf = max( wireHalf, 0.5 * uWireMinPx * wirePx );
-	float wireFade = smoothstep( uWireFade.x, uWireFade.y, wireDepth );
-	vWireAlpha = ${WIRE_OPACITY.toFixed(2)} * clamp( wireTruePx / uWireMinPx, 0.2, 1.0 ) * ( 1.0 - wireFade );
-	wireCentre.xyz += wireAcross * wireDrawnHalf * wireSide;
-	vec4 mvPosition = wireCentre;
-	gl_Position = projectionMatrix * mvPosition;
-`;
-
-interface WireUniforms {
-  uWireFade: { value: [number, number] };
-  uWireMinPx: { value: number };
-  uWireViewport: { value: number };
+/**
+ * The wire's frame at this vertex, all in view space from the vertex's
+ * own centre point (`positionGeometry`, so the drawn offset never feeds
+ * back into it): the direction across the wire and the view ray, the
+ * depth, the metres a pixel spans there, the true and the drawn half-width
+ * and the distance fade. The pixel size needs the height of the target
+ * being drawn into — the post stack's scene target, at the drawing-buffer
+ * size, not the canvas — which `viewportSize` reads from the render target
+ * current at draw time.
+ */
+function wireFrame() {
+  const half = attribute("wireHalf", "float") as F;
+  const centre = modelViewMatrix.mul(vec4(positionGeometry, 1)).xyz as V3;
+  const dirV = modelViewMatrix.mul(vec4(attribute("wireDir", "vec3"), 0))
+    .xyz as V3;
+  const acrossRaw = cross(dirV, centre);
+  const acrossLen = length(acrossRaw);
+  const across = select(
+    acrossLen.greaterThan(1e-6),
+    acrossRaw.div(acrossLen),
+    vec3(1, 0, 0)
+  ) as V3;
+  const depth = max(centre.z.negate(), 0.05) as F;
+  // metres per pixel at this depth; projection[1][1] is the y row of the
+  // projection's second column
+  const focalY = cameraProjectionMatrix.mul(vec4(0, 1, 0, 0)).y;
+  const px = depth.mul(2).div(focalY.mul(viewportSize.y)) as F;
+  const truePx = half.mul(2).div(px);
+  const drawnHalf = max(half, px.mul(0.5 * WIRE_MIN_PX)) as F;
+  const fade = smoothstep(WIRE_FADE.near, WIRE_FADE.far, depth);
+  return { across, centre, drawnHalf, fade, truePx };
 }
 
-/** The unlit wire ink: near-black, fogged, alpha = coverage × distance fade. */
-function wireMaterial(
-  uniforms: WireUniforms,
-  heightFog?: HeightFogUniforms
-): MeshBasicMaterial {
-  const m = new MeshBasicMaterial({
-    color: new Color(WIRE_COLOR),
-    transparent: true,
-    depthWrite: false,
+/**
+ * The unlit wire ink, fogged like everything else (the scene's fog node).
+ * The vertex is pushed across the wire and the view ray by its drawn
+ * half-width — never under half the pixel floor — in view space, and handed
+ * back to the position slot in the mesh's local frame (the camera's world
+ * matrix, then the model's inverse), so the regular projection lands it
+ * exactly where the view-space ribbon puts it. The alpha carries the true
+ * coverage (true width over the floor, at least a fifth) times the
+ * distance fade, at the ink's own faint opacity; it is worked out per
+ * vertex and interpolated, as a varying.
+ */
+function wireMaterial(): MeshBasicNodeMaterial {
+  return sceneMaterial("tram-wire", () => {
+    const m = new MeshBasicNodeMaterial({
+      color: new Color(WIRE_COLOR),
+      transparent: true,
+      depthWrite: false,
+    });
+    const { across, centre, drawnHalf, fade, truePx } = wireFrame();
+    const side = attribute("wireSide", "float") as F;
+    const drawn = centre.add(across.mul(drawnHalf).mul(side));
+    m.positionNode = modelWorldMatrixInverse
+      .mul(cameraWorldMatrix)
+      .mul(vec4(drawn, 1)).xyz;
+    const alpha = float(WIRE_OPACITY)
+      .mul(clamp(truePx.div(WIRE_MIN_PX), 0.2, 1))
+      .mul(float(1).sub(fade));
+    m.opacityNode = materialOpacity.mul(varying(alpha));
+    return m;
   });
-  m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, uniforms);
-    sh.vertexShader = `attribute vec3 wireDir;
-attribute float wireSide;
-attribute float wireHalf;
-uniform float uWireViewport;
-uniform float uWireMinPx;
-uniform vec2 uWireFade;
-varying float vWireAlpha;
-${sh.vertexShader.replace("#include <project_vertex>", WIRE_VERTEX)}`;
-    sh.fragmentShader = `varying float vWireAlpha;
-${sh.fragmentShader.replace(
-  "#include <color_fragment>",
-  "#include <color_fragment>\n\tdiffuseColor.a *= vWireAlpha;"
-)}`;
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  return m;
 }
 
-const viewport = new Vector4();
-
-function wireMesh(w: Wires, heightFog?: HeightFogUniforms): Mesh | null {
+function wireMesh(w: Wires): Mesh | null {
   if (w.index.length === 0) {
     return null;
   }
@@ -225,21 +247,10 @@ function wireMesh(w: Wires, heightFog?: HeightFogUniforms): Mesh | null {
   g.setAttribute("wireHalf", new Float32BufferAttribute(w.half, 1));
   g.setIndex(w.index);
   g.computeBoundingSphere();
-  const uniforms: WireUniforms = {
-    uWireViewport: { value: 1080 },
-    uWireMinPx: { value: WIRE_MIN_PX },
-    uWireFade: { value: [WIRE_FADE.near, WIRE_FADE.far] },
-  };
-  const mesh = new Mesh(g, wireMaterial(uniforms, heightFog));
+  const mesh = new Mesh(g, wireMaterial());
   mesh.name = "tram-wires";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  // The pixel floor needs the height of the target being drawn into (the
-  // post stack's scene target, at the drawing-buffer size).
-  mesh.onBeforeRender = (renderer: WebGLRenderer) => {
-    renderer.getCurrentViewport(viewport);
-    uniforms.uWireViewport.value = Math.max(viewport.w, 1);
-  };
   return mesh;
 }
 
@@ -257,7 +268,7 @@ function trackRuns(
   bed: TramBed,
   onBridge: boolean,
   decks: DeckPoly[],
-  ctx: TramContext,
+  ctx: GroundContext,
   spacing: number
 ): TrackRun[] {
   const runs: TrackRun[] = [];
@@ -335,7 +346,7 @@ function addContactWire(
   held: WirePoint[],
   run: TrackRun,
   stations: number[],
-  ctx: TramContext
+  ctx: GroundContext
 ): void {
   const wire = run.pts.map((p, i) => ({
     x: p.x,
@@ -367,7 +378,7 @@ function heldAt(held: WirePoint[], x: number, y: number): number | null {
   return best;
 }
 
-function worldPt(x: number, y: number, h: number, ctx: TramContext): Pt {
+function worldPt(x: number, y: number, h: number, ctx: GroundContext): Pt {
   const w = epsgToWorld(x, y, ctx.offset);
   return { x: w.x, y: h, z: w.z };
 }
@@ -378,7 +389,7 @@ function addSpan(
   w: Wires,
   f: TramFeature,
   held: WirePoint[],
-  ctx: TramContext
+  ctx: GroundContext
 ): void {
   if (f.geometry.type !== "LineString" || f.geometry.coordinates.length < 2) {
     return;
@@ -432,7 +443,7 @@ function addArm(
   w: Wires,
   f: TramFeature,
   held: WirePoint[],
-  ctx: TramContext
+  ctx: GroundContext
 ): void {
   if (f.geometry.type !== "LineString" || f.geometry.coordinates.length < 2) {
     return;
@@ -467,7 +478,7 @@ function addArm(
   );
 }
 
-function buildMasts(masts: Point2[], ctx: TramContext): InstancedMesh | null {
+function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
   const stood: Matrix4[] = [];
   for (const [x, y] of masts) {
     const ground = ctx.heightAt(x, y);
@@ -482,16 +493,16 @@ function buildMasts(masts: Point2[], ctx: TramContext): InstancedMesh | null {
   }
   const geo = new CylinderGeometry(0.1, 0.14, MAST_HEIGHT_M + 0.2, 8);
   geo.translate(0, (MAST_HEIGHT_M + 0.2) / 2, 0);
-  const material = new MeshStandardMaterial({
-    color: new Color(MAST_COLOR),
-    roughness: 0.7,
-    metalness: 0.2,
+  const material = sceneMaterial("tram-mast", () => {
+    const m = new MeshStandardNodeMaterial({
+      color: new Color(MAST_COLOR),
+      roughness: 0.7,
+      metalness: 0.2,
+    });
+    m.positionNode = instancePosition();
+    return m;
   });
-  const { heightFog } = ctx;
-  if (heightFog) {
-    material.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
-  }
-  const mesh = new InstancedMesh(geo, material, stood.length);
+  const mesh = new Instances(geo, material, stood.length);
   for (let i = 0; i < stood.length; i++) {
     mesh.setMatrixAt(i, stood[i]);
   }
@@ -506,7 +517,7 @@ function buildMasts(masts: Point2[], ctx: TramContext): InstancedMesh | null {
 function buildTracks(
   tracks: TramFeature[],
   decks: DeckPoly[],
-  ctx: TramContext,
+  ctx: GroundContext,
   w: Wires,
   held: WirePoint[]
 ): Mesh[] {
@@ -545,7 +556,6 @@ function buildTracks(
       addContactWire(w, held, run, stations, ctx);
     }
   }
-  const { heightFog } = ctx;
   const parts: [Mesh3, number, number][] = [
     [acc.rail, TRAM_RAIL, -1],
     [acc.streetRail, TRAM_RAIL, -2],
@@ -554,7 +564,7 @@ function buildTracks(
   ];
   const meshes: Mesh[] = [];
   for (const [part, color, offsetUnits] of parts) {
-    const m = meshFrom(part, color, heightFog, {
+    const m = meshFrom(part, color, {
       cast: false,
       offsetUnits,
       roughness: 0.9,
@@ -568,7 +578,7 @@ function buildTracks(
 }
 
 /** The tram stops' signs: the furniture layer's stop model and instancing. */
-function buildStops(stops: TramFeature[], ctx: TramContext): Group | null {
+function buildStops(stops: TramFeature[], ctx: GroundContext): Group | null {
   const signs: FurnitureFeature[] = stops.flatMap((f) =>
     f.geometry.type === "Point"
       ? [
@@ -593,7 +603,7 @@ function buildStops(stops: TramFeature[], ctx: TramContext): Group | null {
 export function buildTram(
   features: TramFeature[],
   bridges: BridgeFeature[],
-  ctx: TramContext
+  ctx: GroundContext
 ): Group {
   const group = new Group();
   group.name = "tram";
@@ -605,7 +615,7 @@ export function buildTram(
   const decks = buildDeckTable(bridges, ctx.offset);
   const w = wires();
   const held: WirePoint[] = [];
-  const parts: (Group | Mesh | InstancedMesh | null)[] = buildTracks(
+  const parts: (Group | Mesh | null)[] = buildTracks(
     tracks,
     decks,
     ctx,
@@ -625,7 +635,7 @@ export function buildTram(
       ),
       ctx
     ),
-    wireMesh(w, ctx.heightFog),
+    wireMesh(w),
     buildStops(byKind("stop"), ctx)
   );
   for (const part of parts) {

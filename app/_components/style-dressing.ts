@@ -1,34 +1,52 @@
-import type { Object3D, Scene } from "three";
 import {
   AdditiveBlending,
-  BufferGeometry,
+  type BufferAttribute,
+  type BufferGeometry,
   Color,
   ConeGeometry,
   DoubleSide,
-  InstancedBufferAttribute,
-  InstancedMesh,
-  type MeshStandardMaterial,
-  ShaderMaterial,
-} from "three";
+  type InterleavedBufferAttribute,
+  MeshBasicNodeMaterial,
+  type Object3D,
+  type Scene,
+} from "three/webgpu";
+import {
+  abs,
+  clamp,
+  color,
+  dot,
+  mix,
+  normalize,
+  normalView,
+  positionGeometry,
+  positionView,
+  pow,
+} from "three/tsl";
 import type { CrownStyle } from "@/lib/city/render-style";
+import { Instances, instancePosition, isInstances } from "./instancing";
+import { lampNight } from "./lamp-layer";
 import { buildStyleCrownGeo } from "./vegetation-layer";
 
 /**
  * The picture styles' scene dressing (lib/city/render-style.ts): geometry a
- * style draws with for its frames only, swapped in before the render and
- * restored right after, like the Papier material (paper-scene.ts). Nothing a
- * tile builds knows a style; the layers only tag what may be dressed
- * (`userData.styleCrown` on the crown meshes, `userData.styleLampHeads` on
+ * style draws with for its frames only, shown before the render and hidden
+ * right after, like the Papier swap (paper-scene.ts). Nothing a tile builds
+ * knows a style; the layers only tag what may be dressed
+ * (`userData.styleCrown` on the crown sets, `userData.styleLampHeads` on
  * the lamp heads).
  *
- * - Crowns: every tagged crown mesh wears the style's crown for the frame
- *   (vegetation-layer.ts `buildStyleCrownGeo`) — Comic's cloud of balls,
- *   Papier's folded card. A seasonal crown's per-chunk attribute (`aBare`)
- *   rides along on a view of the style geometry.
+ * - Crowns: every tagged crown set gets a sibling set wearing the style's
+ *   crown (vegetation-layer.ts `buildStyleCrownGeo`) — Comic's cloud of
+ *   balls, Papier's folded card — on the same instance buffers and the same
+ *   material, including the per-chunk season attribute (`aBare`). For a
+ *   styled frame the sibling takes the original's visibility and the
+ *   original hides. A visibility swap, never a geometry swap: the sibling's
+ *   material and attribute layout are the original's, so it shares the
+ *   original's node build and nothing compiles when a style switches.
  * - Lamp cones (Film noir): a soft light cone under every lamp head, one
- *   instanced mesh per heads mesh sharing its instance matrices. They glow
- *   faintly by day — the street lamps of a noir set are always on — and fill
- *   in as the lamps light (read from the heads' emissive).
+ *   set per heads set sharing its instance matrices. They glow faintly by
+ *   day — the street lamps of a noir set are always on — and fill in as the
+ *   lamps light: the strength reads the lamps' own night uniform.
  */
 
 /** Light-cone strength by day, and at full night. */
@@ -38,38 +56,10 @@ const CONE_RADIUS = 3.4;
 const CONE_COLOR = new Color(0xff_e2_b0);
 
 interface LampHeadsTag {
-  emissiveAtNight: number;
   height: number;
 }
 
-const coneVertex = /* glsl */ `
-  uniform float coneHeight;
-  varying float vHeight;
-  varying float vFacing;
-  void main() {
-    vec4 local = instanceMatrix * vec4(position, 1.0);
-    vec4 mv = modelViewMatrix * local;
-    vec3 n = normalize(normalMatrix * mat3(instanceMatrix) * normal);
-    vFacing = abs(dot(n, normalize(-mv.xyz)));
-    vHeight = clamp(position.y / coneHeight, 0.0, 1.0);
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const coneFragment = /* glsl */ `
-  uniform vec3 coneColor;
-  uniform float strength;
-  varying float vHeight;
-  varying float vFacing;
-  void main() {
-    // Brightest through the cone's core and near the lantern, fading to the
-    // ground: a shaft of light in the smoke, not a lampshade.
-    float core = pow(vFacing, 1.6);
-    float fall = mix(0.12, 1.0, pow(vHeight, 1.4));
-    float a = core * fall * strength * 0.55;
-    gl_FragColor = vec4(coneColor * a, 1.0);
-  }
-`;
+type Tier = "far" | "mid" | "rich";
 
 function coneGeometry(height: number): BufferGeometry {
   const h = height - 0.15;
@@ -77,6 +67,50 @@ function coneGeometry(height: number): BufferGeometry {
   const g = new ConeGeometry(CONE_RADIUS, h, 28, 1, true);
   g.translate(0, h / 2, 0);
   return g;
+}
+
+/**
+ * The cones' material for one post height: brightest through the cone's
+ * core and near the lantern, fading to the ground — a shaft of light in
+ * the smoke, not a lampshade. Fog-free, as the smoke it stands in is.
+ */
+function coneMaterial(height: number): MeshBasicNodeMaterial {
+  const material = new MeshBasicNodeMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+  // Every tile's cones wear it: a tile's release must not free it (the
+  // dressing does, with the app).
+  material.userData.shared = true;
+  material.fog = false;
+  material.positionNode = instancePosition();
+  const facing = abs(
+    dot(normalize(normalView), normalize(positionView.negate()))
+  );
+  const along = clamp(positionGeometry.y.div(height - 0.15), 0, 1);
+  const core = pow(facing, 1.6);
+  const fall = mix(0.12, 1, pow(along, 1.4));
+  const strength = mix(CONE_DAY, CONE_NIGHT, clamp(lampNight, 0, 1));
+  material.colorNode = color(CONE_COLOR).mul(
+    core.mul(fall).mul(strength).mul(0.55)
+  );
+  return material;
+}
+
+/** An attribute that steps per instance (matrices, tints, the season). */
+function isPerInstance(
+  attribute: BufferAttribute | InterleavedBufferAttribute
+): boolean {
+  const a = attribute as {
+    data?: { isInstancedInterleavedBuffer?: boolean };
+    isInstancedBufferAttribute?: boolean;
+  };
+  return (
+    a.isInstancedBufferAttribute === true ||
+    a.data?.isInstancedInterleavedBuffer === true
+  );
 }
 
 export interface StyleDressingOptions {
@@ -89,180 +123,189 @@ export interface StyleDressing {
   begin: (options: StyleDressingOptions) => () => void;
   dispose: () => void;
   /**
-   * A stand-in wearing the lamp cones' material, for compiling its program
-   * ahead of the first noir frame; shares the caller's geometry.
+   * Builds (hidden) whatever a style dresses the current scene with and
+   * returns what was new, for compiling its programs ahead of the style's
+   * first frame.
    */
-  proxies: (geometry: BufferGeometry) => Object3D[];
+  prepare: (options: StyleDressingOptions) => Object3D[];
   /** The scene's objects changed: the next frame re-reads what to dress. */
   sceneChanged: () => void;
 }
 
 export function createStyleDressing(scene: Scene): StyleDressing {
-  // Style crowns: built on first use, shared by every tile.
+  // Style crown geometry: built on first use, shared by every tile.
   const crownGeos = new Map<string, BufferGeometry>();
-  const crownGeo = (kind: CrownStyle, tier: string): BufferGeometry => {
+  const crownGeo = (kind: CrownStyle, tier: Tier): BufferGeometry => {
     const key = `${kind}:${tier}`;
     let g = crownGeos.get(key);
     if (!g) {
-      g = buildStyleCrownGeo(kind, tier as "far" | "mid" | "rich");
+      g = buildStyleCrownGeo(kind, tier);
       g.computeBoundingSphere();
       crownGeos.set(key, g);
     }
     return g;
   };
-  // A view of a style crown carrying the original's per-chunk instanced
-  // attributes (the season's aBare); freed with the original.
-  const views = new WeakMap<BufferGeometry, Map<string, BufferGeometry>>();
+  // Each crown set's styled siblings, made on first use and freed with the
+  // tile (they are its children).
+  const siblings = new WeakMap<Instances, Map<CrownStyle, Instances>>();
+  // What a `prepare` made, for its caller only: kept past it, the list
+  // would hold every released tile's vegetation and lamps (a sibling's
+  // parent is its tile's group).
+  let made: Object3D[] | null = null;
   const styledFor = (
-    original: BufferGeometry,
+    mesh: Instances,
     kind: CrownStyle,
-    tier: string
-  ): BufferGeometry => {
-    const style = crownGeo(kind, tier);
-    const extras = Object.entries(original.attributes).filter(
-      ([name, attr]) =>
-        attr instanceof InstancedBufferAttribute && !(name in style.attributes)
+    tier: Tier
+  ): Instances | null => {
+    let byKind = siblings.get(mesh);
+    let styled = byKind?.get(kind);
+    if (styled) {
+      return styled;
+    }
+    if (!mesh.parent) {
+      return null;
+    }
+    styled = new Instances(
+      crownGeo(kind, tier),
+      mesh.material,
+      mesh.capacity,
+      mesh.instanceMatrix
     );
-    if (extras.length === 0) {
-      return style;
-    }
-    let byKey = views.get(original);
-    if (!byKey) {
-      byKey = new Map();
-      views.set(original, byKey);
-      const own = byKey;
-      original.addEventListener("dispose", () => {
-        for (const view of own.values()) {
-          view.dispose();
-        }
-        own.clear();
-      });
-    }
-    const key = `${kind}:${tier}`;
-    let view = byKey.get(key);
-    if (!view) {
-      view = new BufferGeometry();
-      view.setIndex(style.index);
-      for (const [name, attr] of Object.entries(style.attributes)) {
-        view.setAttribute(name, attr);
+    for (const [name, attribute] of Object.entries(mesh.geometry.attributes)) {
+      if (!styled.geometry.hasAttribute(name) && isPerInstance(attribute)) {
+        styled.geometry.setAttribute(name, attribute);
       }
-      for (const [name, attr] of extras) {
-        view.setAttribute(name, attr);
-      }
-      view.boundingSphere = style.boundingSphere;
-      byKey.set(key, view);
     }
-    return view;
+    styled.name = `${mesh.name}-${kind}`;
+    styled.castShadow = mesh.castShadow;
+    styled.receiveShadow = mesh.receiveShadow;
+    styled.visible = false;
+    mesh.parent.add(styled);
+    if (!byKind) {
+      byKind = new Map();
+      siblings.set(mesh, byKind);
+    }
+    byKind.set(kind, styled);
+    made?.push(styled);
+    return styled;
   };
 
-  // Lamp cones: one material for the scene, one geometry per post height,
-  // one mesh per heads mesh (collected with it).
-  const coneMaterial = new ShaderMaterial({
-    vertexShader: coneVertex,
-    fragmentShader: coneFragment,
-    uniforms: {
-      coneColor: { value: CONE_COLOR },
-      coneHeight: { value: 5 },
-      strength: { value: CONE_DAY },
-    },
-    transparent: true,
-    depthWrite: false,
-    blending: AdditiveBlending,
-    side: DoubleSide,
-  });
+  // Lamp cones: one material per post height, one set per heads set.
   const coneGeos = new Map<number, BufferGeometry>();
-  const cones = new WeakMap<InstancedMesh, InstancedMesh>();
-  const coneFor = (heads: InstancedMesh, tag: LampHeadsTag): InstancedMesh => {
+  const coneMats = new Map<number, MeshBasicNodeMaterial>();
+  const cones = new WeakMap<Instances, Instances>();
+  const coneFor = (heads: Instances, tag: LampHeadsTag): Instances | null => {
     let cone = cones.get(heads);
-    if (!cone) {
-      let geo = coneGeos.get(tag.height);
-      if (!geo) {
-        geo = coneGeometry(tag.height);
-        coneGeos.set(tag.height, geo);
-      }
-      cone = new InstancedMesh(geo, coneMaterial, heads.count);
-      cone.instanceMatrix = heads.instanceMatrix;
-      cone.castShadow = false;
-      cone.receiveShadow = false;
-      cone.name = "style-lamp-cones";
-      cone.computeBoundingSphere();
-      cones.set(heads, cone);
+    if (cone) {
+      return cone;
     }
-    cone.count = heads.count;
+    if (!heads.parent) {
+      return null;
+    }
+    let geo = coneGeos.get(tag.height);
+    let material = coneMats.get(tag.height);
+    if (!(geo && material)) {
+      geo = coneGeometry(tag.height);
+      material = coneMaterial(tag.height);
+      coneGeos.set(tag.height, geo);
+      coneMats.set(tag.height, material);
+    }
+    cone = new Instances(geo, material, heads.capacity, heads.instanceMatrix);
+    cone.drawCount = heads.drawCount;
+    cone.computeBoundingSphere();
+    cone.castShadow = false;
+    cone.receiveShadow = false;
+    cone.name = "style-lamp-cones";
+    cone.visible = false;
+    heads.parent.add(cone);
+    cones.set(heads, cone);
+    made?.push(cone);
     return cone;
   };
 
-  const crowns: { geometry: BufferGeometry; mesh: InstancedMesh }[] = [];
-  const added: { cone: InstancedMesh; parent: Object3D }[] = [];
-  // The tagged meshes, gathered once per scene change rather than walked
-  // for every frame. A crown hidden by its level of detail may wear the
-  // style's geometry unseen; a lamp's own visibility is read per frame.
+  // The tagged sets, gathered once per scene change rather than walked for
+  // every frame.
   let tagged: {
-    crowns: { mesh: InstancedMesh; tier: string }[];
-    lamps: { heads: InstancedMesh; tag: LampHeadsTag }[];
+    crowns: { mesh: Instances; tier: Tier }[];
+    lamps: { heads: Instances; tag: LampHeadsTag }[];
   } | null = null;
   const gather = () => {
     const found: NonNullable<typeof tagged> = { crowns: [], lamps: [] };
     scene.traverse((node) => {
-      if (!(node instanceof InstancedMesh)) {
+      if (!isInstances(node)) {
         return;
       }
-      const mesh = node as InstancedMesh;
-      const tier = mesh.userData.styleCrown as string | undefined;
-      const lamp = mesh.userData.styleLampHeads as LampHeadsTag | undefined;
+      const tier = node.userData.styleCrown as Tier | undefined;
+      const lamp = node.userData.styleLampHeads as LampHeadsTag | undefined;
       if (tier) {
-        found.crowns.push({ mesh, tier });
+        found.crowns.push({ mesh: node, tier });
       } else if (lamp) {
-        found.lamps.push({ heads: mesh, tag: lamp });
+        found.lamps.push({ heads: node, tag: lamp });
       }
     });
+    tagged = found;
     return found;
   };
 
-  return {
-    begin: ({ crowns: crownStyle, lampCones }) => {
-      crowns.length = 0;
-      added.length = 0;
-      tagged ??= gather();
-      let night = 0;
-      if (crownStyle) {
-        for (const { mesh, tier } of tagged.crowns) {
-          crowns.push({ mesh, geometry: mesh.geometry });
-          mesh.geometry = styledFor(mesh.geometry, crownStyle, tier);
-        }
-      }
-      for (const { heads, tag } of lampCones ? tagged.lamps : []) {
-        if (!(heads.visible && heads.parent)) {
+  const shown: Object3D[] = [];
+  const hidden: Object3D[] = [];
+  const dress = ({ crowns: kind, lampCones }: StyleDressingOptions) => {
+    const list = tagged ?? gather();
+    if (kind) {
+      for (const { mesh, tier } of list.crowns) {
+        const styled = styledFor(mesh, kind, tier);
+        if (!(styled && mesh.visible)) {
           continue;
         }
-        const material = heads.material as MeshStandardMaterial;
-        night = Math.max(
-          night,
-          material.emissiveIntensity / tag.emissiveAtNight
-        );
-        coneMaterial.uniforms.coneHeight.value = tag.height;
-        added.push({ cone: coneFor(heads, tag), parent: heads.parent });
+        // Follows the original: the season may have swapped its material,
+        // the level of detail its count.
+        styled.material = mesh.material;
+        styled.drawCount = mesh.drawCount;
+        styled.geometry.boundingSphere = mesh.geometry.boundingSphere;
+        styled.visible = true;
+        mesh.visible = false;
+        shown.push(styled);
+        hidden.push(mesh);
       }
-      coneMaterial.uniforms.strength.value =
-        CONE_DAY + (CONE_NIGHT - CONE_DAY) * Math.min(Math.max(night, 0), 1);
-      for (const { cone, parent } of added) {
-        parent.add(cone);
+    }
+    for (const { heads, tag } of lampCones ? list.lamps : []) {
+      const cone = coneFor(heads, tag);
+      if (cone && heads.visible) {
+        cone.visible = true;
+        shown.push(cone);
       }
-      return () => {
-        for (const { mesh, geometry } of crowns) {
-          mesh.geometry = geometry;
-        }
-        for (const { cone, parent } of added) {
-          parent.remove(cone);
-        }
-        crowns.length = 0;
-        added.length = 0;
-      };
+    }
+  };
+  const undress = () => {
+    for (const object of shown) {
+      object.visible = false;
+    }
+    for (const object of hidden) {
+      object.visible = true;
+    }
+    shown.length = 0;
+    hidden.length = 0;
+  };
+
+  return {
+    begin: (options) => {
+      dress(options);
+      return undress;
+    },
+    prepare: (options) => {
+      const list: Object3D[] = [];
+      made = list;
+      try {
+        dress(options);
+        undress();
+      } finally {
+        made = null;
+      }
+      return list;
     },
     sceneChanged: () => {
       tagged = null;
     },
-    proxies: (geometry) => [new InstancedMesh(geometry, coneMaterial, 1)],
     dispose: () => {
       for (const g of crownGeos.values()) {
         g.dispose();
@@ -270,7 +313,9 @@ export function createStyleDressing(scene: Scene): StyleDressing {
       for (const g of coneGeos.values()) {
         g.dispose();
       }
-      coneMaterial.dispose();
+      for (const m of coneMats.values()) {
+        m.dispose();
+      }
     },
   };
 }

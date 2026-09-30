@@ -3,10 +3,13 @@
 *English: [Using the viewer](../en/using-the-viewer.md)*
 
 Diese Seite geht das Einstellungsfeld Beschriftung für Beschriftung
-durch. Du brauchst einen Browser mit **WebGL2** (jeder aktuelle Desktop-
-und Mobilbrowser hat es) und für ein flüssiges Bild eine halbwegs aktuelle
-Grafikkarte. Handys werden unterstützt: Sie bekommen automatisch ein
-leichteres Render-Budget.
+durch. Du brauchst einen Browser mit **WebGPU** (die neuere
+Grafikschnittstelle, die die meisten aktuellen Browser bieten) oder, wo
+das fehlt, **WebGL2** (jeder aktuelle Desktop- und Mobilbrowser hat es;
+das Bild ist dasselbe, nur kann die Ansicht kurz stocken, während neue
+Gegenden erscheinen) und für ein flüssiges Bild eine halbwegs aktuelle
+Grafikkarte. Handys werden unterstützt: Sie bekommen
+automatisch ein leichteres Render-Budget.
 
 ## Laden
 

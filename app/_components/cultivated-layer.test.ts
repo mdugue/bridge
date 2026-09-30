@@ -1,11 +1,8 @@
 import { expect, test } from "bun:test";
-import { InstancedMesh } from "three";
-import {
-  buildVineyards,
-  COLONY_GARDEN_GLSL,
-  vineInstances,
-} from "./cultivated-layer";
-import { disposeObject3D } from "./three-utils";
+import { MeshStandardNodeMaterial } from "three/webgpu";
+import { buildVineyards, vineInstances } from "./cultivated-layer";
+import { Instances } from "./instancing";
+import { disposeObject3D, retainSceneMaterials } from "./three-utils";
 
 const flat = { offset: { cx: 100, cy: 200 }, heightAt: () => 110 };
 
@@ -45,30 +42,50 @@ test("rows off the terrain are skipped; no rows, an empty group", () => {
   expect(buildVineyards([], flat).children).toHaveLength(0);
 });
 
-test("vine rows are chunked instanced meshes that cast shadows", () => {
-  const group = buildVineyards(
-    [
-      [
-        [100, 200],
-        [110, 200],
-      ],
-      [
-        [900, 200],
-        [905, 200],
-      ],
-    ],
-    flat
-  );
-  const meshes = group.children as InstancedMesh[];
-  expect(meshes.length).toBe(2); // two 250 m cells
-  expect(meshes.every((m) => m instanceof InstancedMesh && m.castShadow)).toBe(
-    true
-  );
+const twoRows = [
+  [
+    [100, 200],
+    [110, 200],
+  ],
+  [
+    [900, 200],
+    [905, 200],
+  ],
+] as [number, number][][];
+
+test("vine rows are chunked instance sets that cast shadows", () => {
+  const release = retainSceneMaterials();
+  const group = buildVineyards(twoRows, flat);
+  const sets = group.children as Instances[];
+  expect(sets.length).toBe(2); // two 250 m cells
+  expect(sets.every((m) => m instanceof Instances && m.castShadow)).toBe(true);
+  // 10 m → 4 boxes, 5 m → 2, each tinted
+  expect(sets.map((m) => m.drawCount).toSorted((a, b) => a - b)).toEqual([
+    2, 4,
+  ]);
+  expect(sets.every((m) => m.instanceTints !== null)).toBe(true);
+  expect(sets.every((m) => m.geometry.boundingSphere !== null)).toBe(true);
   disposeObject3D(group);
+  release();
 });
 
-test("the garden raster is read at an explicit LOD inside its branch", () => {
-  // implicit derivatives are undefined in non-uniform control flow
-  expect(COLONY_GARDEN_GLSL).not.toMatch(/[^D]texture\( uCultivated/u);
-  expect(COLONY_GARDEN_GLSL).toContain("textureLod( uCultivated, ctUv, 0.0 )");
+test("every tile's vines wear one scene material with the instance nodes", () => {
+  const release = retainSceneMaterials();
+  const a = buildVineyards(twoRows, flat).children[0] as Instances;
+  const b = buildVineyards(twoRows, flat).children[1] as Instances;
+  const material = a.material as MeshStandardNodeMaterial;
+  expect(material).toBeInstanceOf(MeshStandardNodeMaterial);
+  expect(b.material).toBe(material);
+  expect(material.userData.shared).toBe(true);
+  // the instance transform and tint are applied in the node
+  expect(material.positionNode).not.toBeNull();
+  expect(material.colorNode).not.toBeNull();
+  // disposing a tile keeps the shared material
+  let disposed = false;
+  material.addEventListener("dispose", () => {
+    disposed = true;
+  });
+  disposeObject3D(a);
+  expect(disposed).toBe(false);
+  release();
 });

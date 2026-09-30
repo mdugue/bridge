@@ -3,13 +3,13 @@
  * expensive each frame is allowed to be.
  *
  * `full` is the product: the whole site streams (lib/city/tileset.ts), a
- * 3072² shadow map and Medium-quality SSAO. `lite` exists for the headless
- * e2e suite, where every frame is rasterized on the CPU by SwiftShader: it
- * streams the spawn tile only, shrinks the shadow map, halves the render
- * scale and runs N8AO in its Performance mode — the four knobs that actually
- * cost seconds a frame there. Everything a test asserts on — the loaders, the
- * layer construction, the shader programs of every style, the HUD wiring —
- * is identical in both profiles. Measured on two cores: a clay frame drops
+ * 3072² shadow map and 16-sample contact shadows (GTAO). `lite` exists for
+ * the headless e2e suite, where every frame is rasterized on the CPU by
+ * SwiftShader: it streams the spawn tile only, shrinks the shadow map, halves
+ * the render scale and halves the GTAO samples — the four knobs that
+ * actually cost seconds a frame there. Everything a test asserts on — the
+ * loaders, the layer construction, the node materials of every layer, the
+ * HUD wiring — is identical in both profiles. Measured on two cores: a clay frame drops
  * from ~4 s to well under one, and boot from ~14 s to ~5 s.
  *
  * Opt in with `?scene=lite`. The default is always `full`, so nothing about a
@@ -33,10 +33,13 @@ export type SceneProfile = "full" | "lite";
 
 export type DeviceTier = "desktop" | "mobile";
 
-/** The N8AO quality modes this scene uses (the pass also knows Low/High/Ultra). */
-export type AoQuality = "Medium" | "Performance";
-
 export interface SceneBudget {
+  /**
+   * `?gpu=webgl2`: WebGPURenderer on its WebGL2 backend even where WebGPU
+   * is available — what a browser without WebGPU gets, for QA and for
+   * comparing the two backends on one machine. Off by default.
+   */
+  forceWebGL: boolean;
   /** phones take the 2048² land-cover rasters (lib/city/tile.ts, MOBILE_RASTER_PX) */
   lowRasters: boolean;
   /** whether the rest of the site streams: always in `full`, in `lite` only with `?block=1` */
@@ -48,6 +51,11 @@ export interface SceneBudget {
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
 export function sceneProfileFromSearch(search: string): SceneProfile {
   return new URLSearchParams(search).get("scene") === "lite" ? "lite" : "full";
+}
+
+/** `?gpu=webgl2` forces the renderer's WebGL2 backend. Pure. */
+export function forceWebGLFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("gpu") === "webgl2";
 }
 
 /**
@@ -75,6 +83,7 @@ export function sceneBudgetFor(
   const profile = sceneProfileFromSearch(search);
   const tier = deviceTierFromMedia(coarseNoHover);
   return {
+    forceWebGL: forceWebGLFromSearch(search),
     profile,
     tier,
     neighbourTiles: profile === "full" || liteKeepsBlockFromSearch(search),
@@ -120,7 +129,7 @@ export function shadowMapSizeFor(
  * resolution (a quarter of the pixels) and lets the browser upscale — the
  * only honest way to cut fill-rate in the headless suite, where every pixel
  * is shaded on the CPU. A phone is capped at 1.5 (its 3x panel would
- * otherwise push the post stack's half-float buffers past what fits).
+ * otherwise push the post stack's screen buffers past what fits).
  */
 export function pixelRatioFor(
   profile: SceneProfile,
@@ -137,31 +146,60 @@ const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
 /**
- * How much tile content (decoded geometry and textures) the tile renderer
- * keeps around, in bytes: it starts unloading tiles no longer in use past
- * `max` and stops at `min`. Tiles in use are never unloaded, so this bounds
- * only what lingers after the camera moves on. 3DTilesRendererJS's default,
- * 0.3–0.4 GB, is kept on the desktop. On a phone that much lingering
- * content, plus the dressing of the tiles still in view, took the tab past
- * what Safari allows: jumping from the start straight into the Dresdner
- * Heide by the minimap kept the whole start area loaded while two forest
- * tiles arrived, and the page died.
+ * The largest tile as the tile renderer's cache weighs it: a fine terrain
+ * tile on the desktop — its glTF (62 MB at the start tile) plus the rasters
+ * its terrain holds (the 4096² class raster and the splat painted from it,
+ * the 8192-wide surface, sports and markings rasters: ~160 MB) and its
+ * dressing, with some headroom. On a phone the same tile weighs ~150 MB.
+ * See `tileCacheBytesFor`.
+ */
+export const LARGEST_TILE_BYTES = 260 * MB;
+
+/**
+ * How much tile content the tile renderer keeps, in bytes, weighed as the
+ * GPU holds it: the glTF, and the rasters and dressing the tile stream
+ * adds (tile-stream.ts `calculateBytesUsed`). Past `max` it unloads tiles
+ * no longer in use, down to `min`, and it asks for no new tile while at or
+ * above `max` — so `max` bounds the GPU memory of the tiles, give or take
+ * those in flight. Before the rasters counted, a phone's cache sat at
+ * 173 MB of its 180 while the GPU held 865 MB, and Safari's next buffer
+ * failed to allocate (the render stopped); flying to the Dresdner Heide
+ * by the minimap had killed the page the same way. The phone's `max`
+ * leaves ~250 MB for everything else (post targets, shadow map, scene-wide
+ * sets); the desktop keeps about what it kept when only the glTF counted.
+ *
+ * `max − min` must exceed the largest tile. The cache never unloads a tile
+ * that would take it below `min`, and asks for no new tile while it is at
+ * or above `max`: at 120–180 MB a phone that flew to the Alaunpark sat at
+ * 181 MB with a 62 MB tile first in line to go — unloading it would have
+ * left 119 MB — and never loaded the ground there.
  */
 export function tileCacheBytesFor(tier: DeviceTier): {
   max: number;
   min: number;
 } {
   return tier === "mobile"
-    ? { min: 120 * MB, max: 180 * MB }
-    : { min: 0.3 * GB, max: 0.4 * GB };
+    ? { min: 320 * MB, max: 600 * MB }
+    : { min: 1.2 * GB, max: 1.6 * GB };
 }
 
 /**
- * SSAO quality for a profile: headless SwiftShader cannot afford the product's
- * sample count. Keyed on the profile, not `navigator.webdriver` — Playwright
- * sets that flag in the `--headed` shot harness too, which must render the
- * product's AO.
+ * GTAO samples for a profile: headless SwiftShader cannot afford the
+ * product's sample count. Keyed on the profile, not `navigator.webdriver` —
+ * Playwright sets that flag in the `--headed` shot harness too, which must
+ * render the product's AO. A construction-time setting: a change of the
+ * count rebuilds the pass's material.
  */
-export function aoQualityFor(profile: SceneProfile): AoQuality {
-  return profile === "lite" ? "Performance" : "Medium";
+export function aoSamplesFor(profile: SceneProfile): number {
+  return profile === "lite" ? 8 : 16;
+}
+
+/**
+ * Whether the picture styles' idle warm-up also compiles Papier's programs
+ * for the whole scene (post-stack.ts). Not on a phone: those pipelines
+ * double what the GPU process holds, and an iPhone tab dies of memory well
+ * before a desktop one — there the first Papier frame builds what it draws.
+ */
+export function warmPaperFor(tier: DeviceTier): boolean {
+  return tier !== "mobile";
 }

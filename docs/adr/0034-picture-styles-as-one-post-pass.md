@@ -16,18 +16,19 @@ on every demolish) and Sobel outlines *in the default look*.
 
 Everything these styles change is a property of the finished picture:
 where the edges are, how many tones a colour gets, whether there is colour
-at all. The depth buffer the composer already shares with N8AO and DoF
+at all. The depth buffer the post pipeline already shares with GTAO and DoF
 carries the edges; the colour buffer carries the rest.
 
 ## Decision
 
-A picture style is one `EffectPass` (`stylize-effect.ts`) between depth of
-field and the SMAA pass, driven by a table (`lib/city/render-style.ts`)
+A picture style is one node over the frame (`stylize-effect.ts`) between
+depth of field and SMAA, driven by a table (`lib/city/render-style.ts`)
 and one look-store value, `style` (persisted in the Snapshot, cycled with
-`V`). The default *Pastell* has shader mode 0, which disables the pass: the
-default frame is the one from before styles existed. No scene material
-knows the style. The other styles share one program; the mode is a
-uniform. Per style the table also weights the existing *Tiefenfärbung*,
+`V`). The default *Pastell* has shader mode 0 and draws a pipeline pair
+without the node: the default frame is the one from before styles
+existed. No scene material knows the style. The other styles share one
+styled pipeline pair (with and without DoF); the mode and the pen are
+uniforms. Per style the table also weights the existing *Tiefenfärbung*,
 *Papierkorn* and new *Tuschelinien* sliders, sets the vignette, switches
 the grain to animated film grain and may gate depth of field (a gate, like
 the motion regression, never a write to the user's switch).
@@ -64,9 +65,12 @@ gathered once per scene change — the tile stream's change event — not
 walked every frame.
 
 The styles cost nothing until they are used and never stall the switch:
-once the scene has loaded and the browser is idle, the post stack compiles
-the style pass and the Papier and lamp-cone materials against stand-ins
-(`warmStyles`). The viewer's last style is remembered in the browser's
+once the scene has loaded and the browser is idle, the post stack builds
+the styled pipelines (one per frame — three builds a pipeline's graph and
+its SMAA passes on its first render, and has no public way to do that off
+the frame) and compiles the style dressing and the Papier programs of the
+scene's objects with `compileAsync` under the swap itself (`warmStyles`);
+from then on a tile that lands compiles its Papier programs with its own. The viewer's last style is remembered in the browser's
 local storage (`style-memory.ts`) — the style only; the sliders stay a
 session's tuning.
 
@@ -86,11 +90,15 @@ stroke weight.
   compile; the e2e control walk draws frames through it. About 16 KB
   (gzip) of code is in the viewer bundle either way; the style geometry
   (~100 KB) is built on first use.
-- A non-default style adds one full-screen pass of ~17 depth taps — fill
-  rate, the scene's bottleneck, but only when chosen. Sin City adds nine
-  colour taps (a blur before its threshold, so it draws masses, not
-  stipple) and four depth taps for the skyline; the pass is therefore
-  marked CONVOLUTION, which is free while it holds this effect alone.
+- A non-default style adds ~17 depth taps per pixel to the post graph —
+  fill rate, the scene's bottleneck, but only when chosen. Sin City adds
+  nine colour taps (a blur before its threshold, so it draws masses, not
+  stipple), eight for the neighbourhood's brightness and four depth taps
+  for the skyline. The node branches only on the mode (a uniform) and
+  selects per pixel, so every derivative and texture read stays in
+  uniform control flow, as WGSL requires.
+- The styled pipelines build on a frame each during the idle warm-up: a
+  short hitch while nothing moves, never on a switch.
 - The pass knows a surface's slope (a normal rebuilt from the depth
   buffer's derivatives against world up), which is how Sin City keeps its
   red to pitched roofs: a post pass can tell a roof from the ground by
@@ -109,12 +117,18 @@ stroke weight.
 - A layer that wants its geometry dressed by a style tags it; it never
   reads the style. A style crown must keep the scene crown's anchor and
   size, so every instance matrix fits (`buildStyleCrownGeo`).
-- Papier costs the scene render its specialised shaders (wind sway, water
-  wobble): the white model is static and plain by design. The override
-  material has a few programs (instanced, vertex-coloured, plain, with and
-  without received shadows), compiled by the warm-up. The ground keeps its
-  shader; a material that should do the same sets `userData.paperOwn` and
-  reads the shared uniform — the exception, for paint only it knows.
+- Papier costs the scene render its specialised colours (water wobble,
+  the clay's facade detail): the white model is plain by design. three
+  carries each drawn material's `positionNode` over to the override, so
+  instanced sets stay put and crowns keep their sway; the override has one
+  program per distinct position node and layout, compiled by the warm-up
+  against the scene's own objects (a stand-in could not match them). The
+  ground keeps its shader; a material that should do the same sets
+  `userData.paperOwn` and reads the shared uniform — the exception, for
+  paint only it knows.
+- The style crowns are sibling sets on the originals' instance buffers and
+  material, shown in their place for a styled frame — a visibility swap,
+  not a geometry swap, so they share the originals' node build.
 
 ## Alternatives
 
@@ -135,6 +149,8 @@ stroke weight.
 ## References
 
 - `lib/city/render-style.ts`, `app/_components/stylize-effect.ts`,
-  `app/_components/post-stack.ts`, `app/_components/paper-grain-effect.ts`
-- ADR 0010 (clay only), ADR 0017 (look table and snapshot contract)
+  `app/_components/post-stack.ts`, `app/_components/paper-scene.ts`,
+  `app/_components/style-dressing.ts`
+- ADR 0010 (clay only), ADR 0017 (look table and snapshot contract),
+  ADR 0027 (node materials, public API only)
 - `docs/rendering.md` "Post-processing"

@@ -2,18 +2,20 @@ import { expect, test } from "bun:test";
 import {
   BoxGeometry,
   Group,
-  InstancedMesh,
   Mesh,
-  MeshBasicMaterial,
+  MeshBasicNodeMaterial,
   Points,
-} from "three";
+} from "three/webgpu";
+import { Instances } from "./instancing";
 import { sceneCensus } from "./scene-census";
 
-test("counts meshes, instances and triangles (instanced × count)", () => {
+test("counts meshes, instances and triangles (instanced × drawCount)", () => {
   const group = new Group();
-  const material = new MeshBasicMaterial();
+  const material = new MeshBasicNodeMaterial();
   group.add(new Mesh(new BoxGeometry(), material)); // 12 triangles
-  group.add(new InstancedMesh(new BoxGeometry(), material, 5)); // 5 × 12
+  const set = new Instances(new BoxGeometry(), material, 8);
+  set.drawCount = 5; // 5 × 12: what is drawn, not the capacity
+  group.add(set);
   expect(sceneCensus([group])).toEqual({
     meshes: 2,
     instances: 5,

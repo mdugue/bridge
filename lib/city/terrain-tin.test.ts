@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { SKIRT_DEPTH } from "./terrain-geometry";
 import {
   buildTinGeometryData,
+  planTriangles,
   type TerrainTin,
   TinIndex,
   tinFromMesher,
@@ -152,4 +153,36 @@ test("heightAt skips the vertical skirt triangles it is handed", () => {
   // surface one; the surface wins, never the skirt's lowered floor.
   expect(index.heightAt(15, 30)).toBeCloseTo(101, 2);
   expect(index.heightAt(30, 15)).toBeCloseTo(105, 2);
+});
+
+test("planTriangles keeps the surface and drops the skirt, quantised or not", () => {
+  const tin = roundTrip();
+  const { positions, indices } = buildTinGeometryData(tin, { cx: 0, cy: 0 });
+  const count = positions.length / 3;
+  // the glTF's Y-up layout, one spare number per vertex (interleaved)
+  const yUp = new Float32Array(count * 4);
+  const quantised = new Int16Array(count * 4);
+  for (let i = 0; i < count; i++) {
+    const [x, y, z] = [0, 1, 2].map((k) => positions[3 * i + k]);
+    yUp.set([x, z, -y, 0], 4 * i);
+    // a per-axis scale and offset, as meshopt quantises
+    quantised.set(
+      [
+        Math.round(x * 1000 - 15_000),
+        Math.round(z * 100),
+        Math.round(-y * 1000),
+        0,
+      ],
+      4 * i
+    );
+  }
+  const index = Uint32Array.from(indices);
+  const kept = planTriangles(index, yUp, 4);
+  expect(kept).toBeInstanceOf(Uint32Array);
+  expect(kept.length).toBe(tin.triangles.length);
+  expect([...planTriangles(index, quantised, 4)]).toEqual([...kept]);
+  // the index type is kept (a 16-bit index stays 16-bit)
+  expect(planTriangles(Uint16Array.from(indices), yUp, 4)).toBeInstanceOf(
+    Uint16Array
+  );
 });

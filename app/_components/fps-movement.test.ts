@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PerspectiveCamera, Vector3 } from "three";
+import { PerspectiveCamera, Vector3 } from "three/webgpu";
 import { createFpsMovement, type FpsMovementOptions } from "./fps-movement";
 
 const EYE = 1.7;

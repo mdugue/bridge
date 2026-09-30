@@ -1,24 +1,35 @@
 import { expect, test } from "bun:test";
 import {
   Color,
-  type InstancedMesh,
-  type Material,
   Matrix4,
+  MeshStandardNodeMaterial,
+  type Object3D,
   Vector3,
-} from "three";
+} from "three/webgpu";
 import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { TRUNK_ROWS, trunkRadiusAt } from "@/lib/city/tree-inventory";
-import { createHeightFogUniforms } from "./height-fog";
-import { sceneCensus } from "./scene-census";
+import { isInstances } from "./instancing";
 import {
   buildCrownWarmup,
   buildTrunkGeo,
   buildVegetation,
+  sceneCrowns,
   TRUNK_H,
   updateVegetationLod,
   type VegetationContext,
 } from "./vegetation-layer";
+
+/** Instances drawn under a root (each set's `drawCount`). */
+function instancesIn(root: Object3D): number {
+  let n = 0;
+  root.traverse((o) => {
+    if (isInstances(o)) {
+      n += o.drawCount;
+    }
+  });
+  return n;
+}
 
 const ctx: VegetationContext = {
   offset: { cx: 0, cy: 0 },
@@ -43,8 +54,8 @@ const canopy = (x: number, h: number, y = 0): CanopyFeature => ({
 
 test("a hedge is one instance per 1.1 m, a tree row one tree per 9 m", () => {
   const hedges = buildVegetation({ rows: [row("hedge", 10)], canopy: [] }, ctx);
-  // samplePolyline: 0, 1.1, …, 9.9 → 10 samples, one InstancedMesh.
-  expect(sceneCensus([hedges.group]).instances).toBe(10);
+  // samplePolyline: 0, 1.1, …, 9.9 → 10 samples, one Instances set.
+  expect(instancesIn(hedges.group)).toBe(10);
 
   const trees = buildVegetation(
     { rows: [row("treerow", 20)], canopy: [] },
@@ -52,7 +63,7 @@ test("a hedge is one instance per 1.1 m, a tree row one tree per 9 m", () => {
   );
   // 0, 9, 18 → 3 trees; each is a trunk + a mid, a rich and a far crown
   // instance (a sparse chunk keeps every tree in the far tier).
-  expect(sceneCensus([trees.group]).instances).toBe(3 * 4);
+  expect(instancesIn(trees.group)).toBe(3 * 4);
 });
 
 test("canopy points become trees; off-terrain points are skipped", () => {
@@ -60,7 +71,7 @@ test("canopy points become trees; off-terrain points are skipped", () => {
     { rows: [], canopy: [canopy(5, 12), canopy(50, 8)], ndviAt: () => 0.7 },
     ctx
   );
-  expect(sceneCensus([built.group]).instances).toBe(2 * 4);
+  expect(instancesIn(built.group)).toBe(2 * 4);
   const off = buildVegetation(
     { rows: [], canopy: [canopy(5, 12)] },
     { ...ctx, heightAt: () => null }
@@ -100,7 +111,7 @@ test("a dense chunk's far tier keeps every other tree", () => {
   const built = buildVegetation({ rows: [], canopy: forest }, ctx);
   const [chunk] = built.chunks;
   expect(chunk.trees).toBe(800);
-  expect(chunk.far.count).toBe(400);
+  expect(chunk.far.drawCount).toBe(400);
 });
 
 test("trunks and the near crowns share one instance buffer", () => {
@@ -108,10 +119,13 @@ test("trunks and the near crowns share one instance buffer", () => {
   const [chunk] = built.chunks;
   expect(chunk.trunks.instanceMatrix).toBe(chunk.mid.instanceMatrix);
   expect(chunk.rich.instanceMatrix).toBe(chunk.mid.instanceMatrix);
-  expect(chunk.rich.instanceColor).toBe(chunk.mid.instanceColor);
+  expect(chunk.rich.instanceTints).toBe(chunk.mid.instanceTints);
   // Each still culls against a sphere of its own geometry.
-  expect(chunk.rich.boundingSphere).not.toBeNull();
-  expect(chunk.trunks.boundingSphere).not.toBeNull();
+  expect(chunk.rich.geometry.boundingSphere).not.toBeNull();
+  expect(chunk.trunks.geometry.boundingSphere).not.toBeNull();
+  expect(chunk.trunks.geometry.boundingSphere?.radius).toBeLessThan(
+    chunk.rich.geometry.boundingSphere?.radius ?? 0
+  );
 });
 
 test("a chunk with precomputed trees keeps its own matrices per mesh", () => {
@@ -134,31 +148,42 @@ test("a chunk with precomputed trees keeps its own matrices per mesh", () => {
   // The cadastre tree's trunk and crowns differ, so nothing is shared.
   expect(chunk.trunks.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
   expect(chunk.rich.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
-  expect(chunk.far.count).toBe(2);
+  expect(chunk.far.drawCount).toBe(2);
 });
 
-test("the crown warm-up carries the program keys a tile's crowns switch between", () => {
-  const heightFog = createHeightFogUniforms();
-  const veg = buildVegetation(
+test("every tile wears the scene's crown and trunk materials; the warm-up carries both crowns", () => {
+  const sun = new Vector3(0.3, 0.8, 0.1);
+  const a = buildVegetation(
     { rows: [], canopy: [canopy(0, 12), canopy(20, 14)] },
-    { ...ctx, heightFog }
+    { ...ctx, sunDirection: sun }
   );
-  const keyOf = (m: Material | Material[]) =>
-    (m as Material).customProgramCacheKey();
-  const worn = new Set<string>();
-  veg.group.traverse((o) => {
-    const mesh = o as InstancedMesh;
-    if (mesh.isInstancedMesh && keyOf(mesh.material).startsWith("crown-")) {
-      worn.add(keyOf(mesh.material));
-    }
-  });
-  expect([...worn]).toEqual(["crown-true-leafy"]); // before any season: the plain crown
-  const warm = buildCrownWarmup(heightFog);
-  expect(warm.main.map((m) => keyOf(m.material))).toEqual([
-    "crown-true-bare",
-    "crown-true-leafy",
-  ]);
-  expect(warm.depth[0].geometry.getAttribute("normal")).toBeDefined();
+  const b = buildVegetation({ rows: [], canopy: [canopy(900, 12)] }, ctx);
+  const [ca] = a.chunks;
+  const [cb] = b.chunks;
+  const { leafy, bare, uniforms } = sceneCrowns();
+  // one material per part for the whole scene: one build, one pipeline
+  for (const chunk of [ca, cb]) {
+    expect([chunk.mid, chunk.rich, chunk.far].map((m) => m.material)).toEqual([
+      leafy,
+      leafy,
+      leafy,
+    ]); // before any season: the plain crown
+  }
+  expect(ca.trunks.material).toBe(cb.trunks.material);
+  expect(ca.trunks.material).toBeInstanceOf(MeshStandardNodeMaterial);
+  expect(ca.trunks.material.userData.shared).toBe(true);
+  expect(leafy.userData.shared).toBe(true);
+  // the sun uniform holds the rig's vector by reference
+  expect(uniforms.sunDirection.value).toBe(sun);
+  // the look and the clock write the shared uniforms
+  a.applyLook({ ...LOOK_DEFAULTS, shimmer: 0.42 });
+  expect(uniforms.shimmer.value).toBe(0.42);
+  b.setTime(12.5);
+  expect(uniforms.time.value).toBe(12.5);
+  a.applyLook(LOOK_DEFAULTS);
+  const warm = buildCrownWarmup();
+  expect(warm.main.map((m) => m.material)).toEqual([bare, leafy]);
+  expect(warm.main[0].geometry.getAttribute("normal")).toBeDefined();
   warm.dispose();
 });
 

@@ -1,6 +1,29 @@
-import type { Box3, Camera, Scene } from "three";
-import { Color, DirectionalLight, Fog, HemisphereLight, Vector3 } from "three";
-import { Sky } from "three/examples/jsm/objects/Sky.js";
+import {
+  type Box3,
+  type Camera,
+  Color,
+  DirectionalLight,
+  HemisphereLight,
+  type Scene,
+  Vector3,
+} from "three/webgpu";
+import { SkyMesh } from "three/addons/objects/SkyMesh.js";
+import {
+  cameraPosition,
+  dot,
+  float,
+  Fn,
+  max,
+  min,
+  mix,
+  normalize,
+  positionWorld,
+  smoothstep,
+  uniform,
+  vec3,
+  vec4,
+} from "three/tsl";
+import type { UniformNode } from "three/webgpu";
 import { atmosphereAt } from "@/lib/city/atmosphere";
 import {
   fitShadowRadius,
@@ -9,6 +32,7 @@ import {
   shadowFocusAhead,
 } from "@/lib/city/shadow-fit";
 import { sunDirectionWorld } from "@/lib/city/sun";
+import type { V3, V4 } from "./shader-chunks";
 
 export interface SunState {
   aboveHorizon: boolean;
@@ -38,12 +62,10 @@ export interface SunRig {
    * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
    * (demolish, a tile landing or leaving) must call this or stale shadows linger. */
   invalidateShadow: () => void;
-  /** Advances the sky dome's drifting clouds (call per frame with elapsed s). */
-  setTime: (seconds: number) => void;
   /** The sun's shadow camera: the tile stream loads what it sees too, so a
    *  building behind the player still casts into the view. */
   shadowCamera: Camera;
-  /** GPU bytes of the shadow map (RGBA8 depth-packed, no mipmaps). */
+  /** GPU bytes of the shadow map (a 32-bit depth texture, no mipmaps). */
   shadowMapBytes: number;
   /** The shadow frustum on the ground, kept current: its centre in the data
    *  frame (x east, y north: world x, −z) and its half-size (z, m). The
@@ -57,14 +79,20 @@ export interface SunRig {
 
 const SUN_INTENSITY = 2.4;
 
-function createSkyDome(scene: Scene): Sky {
-  const sky = new Sky();
+/** What the rig drives on the sky dome. */
+interface SkyDome {
+  setHaze: (colour: string) => void;
+  setSun: (direction: Vector3) => void;
+}
+
+function createSkyDome(scene: Scene): SkyDome {
+  const sky = new SkyMesh();
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
   // The dome is a box ±2250 m around its centre, so it has to travel with
   // the camera: anchored at the origin (the spawn tile), a camera on the
   // far tiles (the Blaues Wunder is ~3 km out) stood outside it and saw the
-  // bare clear colour where the sky should be. The shader only reads the
+  // bare clear colour where the sky should be. Its colour only reads the
   // direction from the camera, so re-centring changes nothing else. This
   // runs after culling (hence no culling) and before the model-view
   // matrix is taken from `matrixWorld`.
@@ -73,60 +101,67 @@ function createSkyDome(scene: Scene): Sky {
     sky.position.setFromMatrixPosition(camera.matrixWorld);
     sky.updateMatrixWorld();
   };
-  const u = sky.material.uniforms;
   // Moderate haze and a small Mie lobe: more of either blows the sky around
   // the sun (and with it half the horizon) out to flat white.
-  u.turbidity.value = 4.5;
-  u.rayleigh.value = 1.6;
-  u.mieCoefficient.value = 0.0025;
+  sky.turbidity.value = 4.5;
+  sky.rayleigh.value = 1.6;
+  sky.mieCoefficient.value = 0.0025;
   // A tighter forward lobe: the glow stays around the sun instead of
   // whitening a quarter of the sky.
-  u.mieDirectionalG.value = 0.82;
-  // Sky.js (r184) already ships a procedural drifting-cloud system (multi-octave
-  // fbm, sun-tinted) but nothing advances its `time`, so the clouds were frozen.
-  // Soften the defaults toward pale watercolor washes (not cotton balls) and let
-  // the render loop drive `time` for a gentle Dresden breeze. Effectively free:
-  // the fbm only runs on sky pixels (direction.y > 0).
-  u.cloudCoverage.value = 0.3;
-  u.cloudDensity.value = 0.3;
-  // Slow drift — a barely-moving Dresden sky, not racing clouds.
-  u.cloudSpeed.value = 0.0001;
+  sky.mieDirectionalG.value = 0.82;
+  // SkyMesh's procedural clouds (multi-octave fbm, sun-tinted) drift on TSL
+  // `time`. Softened toward pale watercolour washes (not cotton balls), and
+  // slow — a barely-moving Dresden sky. Effectively free: the fbm only runs
+  // on sky pixels (direction.y > 0).
+  sky.cloudCoverage.value = 0.3;
+  sky.cloudDensity.value = 0.3;
+  sky.cloudSpeed.value = 0.0001;
   // Horizon haze. The physical sky knows no ground: below the horizon it
   // repeats its brightest horizon white, so past the site's last tile the
-  // view ended on a hard cut from fogged terrain to near-white. Blend the
-  // dome into the scene's fog colour instead — fully below the horizon (the
-  // "ground" beyond the data is haze), feathered a few degrees above it — so
-  // the fogged terrain, the edge haze (height-fog.ts) and the sky meet in one
-  // soft band. The colour is fed per update from the time-of-day palette.
-  u.uHazeColor = { value: new Color(0xdf_e7_ee) };
-  sky.material.fragmentShader = sky.material.fragmentShader
-    .replace("void main() {", "uniform vec3 uHazeColor;\n\t\tvoid main() {")
-    // Clouds only from a few degrees up. Near the horizon the cloud plane's
-    // projection crowds the fbm into one sunlit sheet, which read as a
-    // blown-out white band across the lower sky.
-    .replace(
-      "float horizonFade = smoothstep( 0.0, 0.03 + 0.06 * cloudElevation, direction.y );",
-      "float horizonFade = smoothstep( 0.03, 0.4, direction.y );"
-    )
-    .replace(
-      "gl_FragColor = vec4( texColor, 1.0 );",
-      `// Temper the dome first: untouched, its lower third tone-maps to
-			// flat paper white and its zenith to a synthetic cyan. A little less
-			// radiance and chroma keeps it a pale watercolour wash.
-			float skyLuma = dot( texColor, vec3( 0.2126, 0.7152, 0.0722 ) );
-			texColor = mix( vec3( skyLuma ), texColor, 0.8 ) * 0.7;
-			// Soft shoulder on the bright part (the glow around the sun), by
-			// luminance so the hue survives: past the knee it rolls off instead
-			// of clipping to white under the tone mapper.
-			float skyL = skyLuma * 0.7;
-			float skyOver = max( skyL - 0.45, 0.0 );
-			texColor *= ( min( skyL, 0.45 ) + skyOver / ( 1.0 + 1.5 * skyOver ) ) / max( skyL, 1e-4 );
-			float hazeBand = 1.0 - smoothstep( -0.03, 0.28, direction.y );
-			texColor = mix( texColor, uHazeColor, hazeBand * hazeBand * ( 3.0 - 2.0 * hazeBand ) );
-			gl_FragColor = vec4( texColor, 1.0 );`
+  // view ended on a hard cut from fogged terrain to near-white. The dome
+  // blends into the scene's fog colour instead — fully below the horizon
+  // (the "ground" beyond the data is haze), feathered a few degrees above
+  // it — so the fogged terrain, the edge haze (height-fog.ts) and the sky
+  // meet in one soft band. The colour is fed per update from the palette.
+  // The band also covers the low sky where the cloud plane's projection
+  // crowds the fbm into one sunlit sheet (SkyMesh's own cloud fade sits
+  // inside its colour node, out of reach).
+  const haze = uniform(new Color(0xdf_e7_ee));
+  // reason: SkyMesh builds its colour node in the constructor.
+  const inner = sky.material.colorNode as V4;
+  sky.material.colorNode = Fn(() => {
+    // Temper the dome first: untouched, its lower third reads as flat paper
+    // white and its zenith as a synthetic cyan. A little less radiance and
+    // chroma keeps it a pale watercolour wash.
+    const raw = inner.rgb;
+    const luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
+    const tempered = mix(vec3(luma), raw, 0.8).mul(0.7);
+    // Soft shoulder on the bright part (the glow around the sun), by
+    // luminance so the hue survives: past the knee it rolls off instead of
+    // clipping to white.
+    const l = luma.mul(0.7);
+    const over = max(l.sub(0.45), 0);
+    const shouldered = tempered.mul(
+      min(l, 0.45)
+        .add(over.div(over.mul(1.5).add(1)))
+        .div(max(l, 1e-4))
     );
+    const direction = normalize(positionWorld.sub(cameraPosition));
+    const band = float(1).sub(smoothstep(-0.03, 0.28, direction.y));
+    const hazed: V3 = mix(
+      shouldered,
+      haze,
+      band.mul(band).mul(float(3).sub(band.mul(2)))
+    );
+    return vec4(hazed, 1);
+  })();
   scene.add(sky);
-  return sky;
+  return {
+    setHaze: (colour) => {
+      haze.value.set(colour);
+    },
+    setSun: (d) => sky.sunPosition.value.copy(d),
+  };
 }
 
 /**
@@ -152,7 +187,9 @@ export function createSunRig(
   shadowMapSize: number,
   /** Optional shared vector the rig keeps in sync with the world sun direction
    * (surface→sun) so other materials (e.g. the crown shimmer) can read it. */
-  sunDirectionOut?: Vector3
+  sunDirectionOut: Vector3 | undefined,
+  /** The scene fog's colour (height-fog.ts): it follows the palette. */
+  fogColor: UniformNode<"color", Color>
 ): SunRig {
   const center = worldBounds.getCenter(new Vector3());
   // The frustum half-size is not fixed: it starts at the base radius (eye
@@ -211,9 +248,10 @@ export function createSunRig(
   // their lit front faces never self-acne.
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0;
-  // r182+ PCFShadowMap is soft: it spreads a 5-tap Vogel disk by radius*texel
-  // (shadowmap_pars_fragment.glsl). Default radius 1 ≈ hard; bump it so edges
-  // are a soft penumbra that hides the texel staircase — without VSM's grid.
+  // PCFShadowMap is soft: three's ShadowFilterNode (PCFShadowFilter) spreads
+  // a 5-tap Vogel disk by radius*texel. Default radius 1 ≈ hard; bump it so
+  // edges are a soft penumbra that hides the texel staircase — without VSM's
+  // grid.
   sun.shadow.radius = 5;
   scene.add(sun, sun.target);
 
@@ -303,16 +341,10 @@ export function createSunRig(
       (0.45 + 0.6 * Math.max(dir.y, 0)) * (1 - 0.75 * nightFactor);
 
     // Sky dome follows the same sun; fog + fill colors follow the palette.
-    (sky.material.uniforms.sunPosition.value as Vector3).set(
-      dir.x,
-      dir.y,
-      dir.z
-    );
+    sky.setSun(dir);
     const palette = atmosphereAt(altitudeDeg);
-    if (scene.fog instanceof Fog) {
-      scene.fog.color.set(palette.fog);
-    }
-    (sky.material.uniforms.uHazeColor.value as Color).set(palette.fog);
+    fogColor.value.set(palette.fog);
+    sky.setHaze(palette.fog);
     if (scene.background instanceof Color) {
       scene.background.set(palette.fog);
     }
@@ -322,10 +354,6 @@ export function createSunRig(
     return { altitudeDeg, aboveHorizon, nightFactor };
   };
 
-  const setTime = (seconds: number) => {
-    sky.material.uniforms.time.value = seconds;
-  };
-
   const invalidateShadow = () => {
     sun.shadow.needsUpdate = true;
   };
@@ -333,7 +361,6 @@ export function createSunRig(
   return {
     update,
     follow,
-    setTime,
     invalidateShadow,
     // three only draws the map for a VISIBLE light: below the horizon the
     // flag stays raised (and is consumed at sunrise), so it is not "pending".

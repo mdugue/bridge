@@ -11,7 +11,7 @@
  *     meshes, instances, triangles — both crown LODs included)
  *   - per view (the shots/kat-*.json poses): after the distance LOD swap,
  *     the draw calls and triangles three would issue for the vegetation in
- *     the main pass (per-object frustum test on each InstancedMesh's bounding
+ *     the main pass (per-object frustum test on each instanced set's bounding
  *     sphere, exactly what three culls on) and in one shadow-map render
  *     (casters within the fitted shadow frustum's half-size of its focus —
  *     lib/city/shadow-fit.ts; the map only re-renders on a move/invalidate)
@@ -24,13 +24,13 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   Frustum,
-  InstancedMesh,
   Matrix4,
   type Mesh,
   type Object3D,
   PerspectiveCamera,
   Vector3,
-} from "three";
+} from "three/webgpu";
+import { type Instances, isInstances } from "../../app/_components/instancing";
 import { sceneCensus } from "../../app/_components/scene-census";
 import { buildLowVegetation } from "../../app/_components/low-vegetation-layer";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
@@ -177,12 +177,12 @@ function trisOf(mesh: Mesh): number {
 }
 
 /** Every visible instanced mesh under the roots (all vegetation is one). */
-function meshesOf(roots: Object3D[]): InstancedMesh[] {
-  const out: InstancedMesh[] = [];
+function meshesOf(roots: Object3D[]): Instances[] {
+  const out: Instances[] = [];
   for (const r of roots) {
     r.traverse((o) => {
-      if ((o as InstancedMesh).isInstancedMesh && o.visible) {
-        out.push(o as InstancedMesh);
+      if (isInstances(o) && o.visible) {
+        out.push(o);
       }
     });
   }
@@ -190,16 +190,16 @@ function meshesOf(roots: Object3D[]): InstancedMesh[] {
 }
 
 function passCost(
-  meshes: InstancedMesh[],
-  test: (m: InstancedMesh) => boolean
+  meshes: Instances[],
+  test: (m: Instances) => boolean
 ): PassCost {
   const cost = { calls: 0, triangles: 0 };
   for (const m of meshes) {
-    if (!m.boundingSphere || !test(m)) {
+    if (!m.geometry.boundingSphere || !test(m)) {
       continue;
     }
     cost.calls += 1;
-    cost.triangles += trisOf(m) * m.count;
+    cost.triangles += trisOf(m) * m.drawCount;
   }
   return cost;
 }
@@ -257,10 +257,10 @@ for (const file of shots) {
     const meshes = meshesOf(controls[mode].map((c) => c.group));
     entry[mode] = {
       main: passCost(meshes, (m) =>
-        frustum.intersectsSphere(m.boundingSphere as never)
+        frustum.intersectsSphere(m.geometry.boundingSphere as never)
       ),
       shadow: passCost(meshes, (m) => {
-        const s = m.boundingSphere;
+        const s = m.geometry.boundingSphere;
         if (!(m.castShadow && s)) {
           return false;
         }

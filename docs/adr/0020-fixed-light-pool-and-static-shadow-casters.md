@@ -48,6 +48,22 @@ demand and would be forced every frame by anything that moves and casts.
 - **Cloud shadows / per-frame shadow updates for sway:** rejected — the
   on-demand shadow map is the project's largest perf decision.
 
+## Update (2026-09, ADR 0027)
+
+The pool stays, for the same reason in node form: three's lights node
+hashes every light (its id and whether it casts) into the cache key of
+every lit node build, so adding or removing a light rebuilds every lit
+material. The GLSL-specific lines are history — there are no chunk
+`.replace`s, no `#define`s and no `directionalLightShadows[0]` any more
+(the crown shimmer no longer reads the shadow map; its gate is the sun's
+daylight ramp). Look values are uniform nodes shared by every tile.
+Animation still never reaches the shadow map: a crown sways in its
+`positionNode` and casts through a rigid `castShadowPositionNode`. The
+scene has no tone mapping (it never had: the old composer rendered to a
+target, so the renderer's ACES setting was inert), so additive terms no
+longer fight ACES. Clustered lighting is available on `WebGPURenderer`,
+still its own decision.
+
 ## References
 
 - [plans/completed.md](../plans/completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes)

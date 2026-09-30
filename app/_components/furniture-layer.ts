@@ -9,11 +9,11 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
-  InstancedMesh,
+  type Material,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
   Quaternion,
   Shape,
   ShapeUtils,
@@ -22,9 +22,22 @@ import {
   TubeGeometry,
   Vector2,
   Vector3,
-} from "three";
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+} from "three/webgpu";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import {
+  attribute,
+  cos,
+  diffuseColor,
+  materialEmissive,
+  mod,
+  positionLocal,
+  select,
+  sin,
+  uniform,
+  vec2,
+  vec3,
+} from "three/tsl";
 import type { FurnitureFeature } from "@/lib/city/features";
 import {
   type FurnitureArea,
@@ -37,7 +50,9 @@ import {
 } from "@/lib/city/furniture";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { Instances, instancePosition } from "./instancing";
+import type { Live } from "./shader-chunks";
+import { sceneMaterial } from "./three-utils";
 
 /**
  * Street furniture (`pipeline/bake/furniture.py`: OSM benches, picnic
@@ -66,13 +81,12 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  * show the scene's time, the drinking fountain and the bus stop's "H".
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
- * the Y-up frame, stood on that tile's ground. Non-fatal: missing or empty
- * input yields an empty group.
+ * the Y-up frame, stood on that tile's ground. The four materials (matte,
+ * glowing, the flush slab's, the hands') carry nothing of a tile — the
+ * clock and the dusk are module uniforms — so every tile wears the same
+ * ones (`sceneMaterial`). Non-fatal: missing or empty input yields an
+ * empty group.
  */
-
-export interface FurnitureContext extends GroundContext {
-  heightFog?: HeightFogUniforms;
-}
 
 /*
  * The palette: the scene's own — the pale clay of the buildings (0xece7df)
@@ -584,18 +598,16 @@ const MODEL_PARTS: Record<FurnitureModel, () => BufferGeometry[]> = {
 };
 
 /*
- * The shared clock and dusk: one set of uniforms every tile's furniture
- * reads (set from create-app's setSun), like the fountains'.
+ * The shared clock and dusk: uniform nodes every tile's furniture reads
+ * (set from create-app's setSun), like the fountains'.
  */
-const FURNITURE_UNIFORMS = {
-  uFurnitureNight: { value: 0 },
-  /** minutes past 12 o'clock, 0–720 */
-  uClockMinutes: { value: 0 },
-};
+const furnitureNight: Live = uniform(0);
+/** minutes past 12 o'clock, 0–720 */
+const clockMinutes: Live = uniform(0);
 
 /** 0 by day → 1 at night: the lit advertising columns glow with the lamps. */
 export function setFurnitureNight(t: number): void {
-  FURNITURE_UNIFORMS.uFurnitureNight.value = Math.min(Math.max(t, 0), 1);
+  furnitureNight.value = Math.min(Math.max(t, 0), 1);
 }
 
 /**
@@ -605,10 +617,10 @@ export function setFurnitureNight(t: number): void {
  */
 export function setClockTime(date: Date): boolean {
   const minutes = (date.getHours() % 12) * 60 + date.getMinutes();
-  if (FURNITURE_UNIFORMS.uClockMinutes.value === minutes) {
+  if (clockMinutes.value === minutes) {
     return false;
   }
-  FURNITURE_UNIFORMS.uClockMinutes.value = minutes;
+  clockMinutes.value = minutes;
   return true;
 }
 
@@ -659,43 +671,39 @@ function handGeometry(model: "clock" | "wallClock"): BufferGeometry {
   return geo;
 }
 
-const HAND_VERTEX = `
-	vec3 transformed = vec3( position );
-	float handTurn = ( handKind < 0.5 ? uClockMinutes / 720.0 : mod( uClockMinutes, 60.0 ) / 60.0 ) * 6.2831853;
-	// clockwise as seen from the face's own side
-	float handA = - handTurn * faceSide;
-	vec2 handRel = transformed.xy - handPivot.xy;
-	transformed.xy = handPivot.xy + vec2(
-		cos( handA ) * handRel.x - sin( handA ) * handRel.y,
-		sin( handA ) * handRel.x + cos( handA ) * handRel.y );
-`;
-
-function handMaterial(ctx: FurnitureContext): MeshBasicMaterial {
-  const m = new MeshBasicMaterial({ color: new Color(INK), side: DoubleSide });
-  const { heightFog } = ctx;
-  m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, FURNITURE_UNIFORMS);
-    sh.vertexShader = `attribute float handKind;
-attribute float faceSide;
-attribute vec3 handPivot;
-uniform float uClockMinutes;
-${sh.vertexShader.replace("#include <begin_vertex>", HAND_VERTEX)}`;
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
+/**
+ * The hands' ink, turned on the vertex before the clock's instance
+ * transform: the hour hand (`handKind` 0) a turn per 720 minutes, the
+ * minute hand a turn per hour, each about its face's pivot in the face's
+ * plane — clockwise as seen from the face's own side (`faceSide`).
+ */
+function handMaterial(): MeshBasicNodeMaterial {
+  const m = new MeshBasicNodeMaterial({ color: INK, side: DoubleSide });
+  const kind = attribute("handKind", "float");
+  const side = attribute("faceSide", "float");
+  const pivot = attribute("handPivot", "vec3");
+  const turn = select(
+    kind.lessThan(0.5),
+    clockMinutes.div(720),
+    mod(clockMinutes, 60).div(60)
+  ).mul(6.2831853);
+  const angle = turn.negate().mul(side);
+  const rel = positionLocal.xy.sub(pivot.xy);
+  const turned = pivot.xy.add(
+    vec2(
+      cos(angle).mul(rel.x).sub(sin(angle).mul(rel.y)),
+      sin(angle).mul(rel.x).add(cos(angle).mul(rel.y))
+    )
+  );
+  m.positionNode = instancePosition(vec3(turned, positionLocal.z));
   return m;
 }
 
 /** The hands of every clock of one model, on the clocks' own instances. */
-function clockHands(
-  model: "clock" | "wallClock",
-  stood: Stood[],
-  ctx: FurnitureContext
-): InstancedMesh {
-  const mesh = new InstancedMesh(
+function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
+  const mesh = new Instances(
     handGeometry(model),
-    handMaterial(ctx),
+    sceneMaterial("furniture-hands", handMaterial),
     stood.length
   );
   const m = new Matrix4();
@@ -731,13 +739,13 @@ interface Stood {
 function instanced(
   model: FurnitureModel,
   stood: Stood[],
-  material: MeshStandardMaterial
-): InstancedMesh | null {
+  material: Material
+): Instances | null {
   const geo = modelGeometry(model);
   if (!geo) {
     return null;
   }
-  const mesh = new InstancedMesh(geo, material, stood.length);
+  const mesh = new Instances(geo, material, stood.length);
   const m = new Matrix4();
   const q = new Quaternion();
   const s = new Vector3();
@@ -777,7 +785,7 @@ function addSlab(
   area: FurnitureArea,
   lift: number,
   hex: number,
-  ctx: FurnitureContext
+  ctx: GroundContext
 ): void {
   const closed = [...area.ring, area.ring[0]];
   const ring = subdividePolyline(closed, PATCH_STEP).slice(0, -1);
@@ -827,8 +835,8 @@ function addSlab(
 
 function buildPatches(
   areas: FurnitureArea[],
-  material: MeshStandardMaterial,
-  ctx: FurnitureContext
+  material: Material,
+  ctx: GroundContext
 ): Mesh | null {
   const t: Tris = { positions: [], normals: [], colors: [] };
   for (const area of areas) {
@@ -870,51 +878,54 @@ function liftAt(areas: FurnitureArea[], x: number, y: number): number {
   return lift;
 }
 
-/** The furniture material, glowing softly at dusk (the lit columns). */
-function glowMaterial(ctx: FurnitureContext): MeshStandardMaterial {
-  const material = furnitureMaterial(ctx);
-  const { heightFog } = ctx;
-  material.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, FURNITURE_UNIFORMS);
-    sh.fragmentShader = `uniform float uFurnitureNight;
-${sh.fragmentShader.replace(
-  "#include <emissivemap_fragment>",
-  "#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * uFurnitureNight * 0.55;"
-)}`;
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  return material;
-}
-
-function furnitureMaterial(
-  ctx: FurnitureContext,
-  flush = false
-): MeshStandardMaterial {
-  const material = new MeshStandardMaterial({
+/** The matte furniture material (vertex colours; the instance transform
+ *  on the vertex — the plain vertex off a set). */
+function matteMaterial(): MeshStandardNodeMaterial {
+  const material = new MeshStandardNodeMaterial({
     vertexColors: true,
     // The buildings' matte clay, not a plastic sheen.
     roughness: 0.92,
     metalness: 0,
   });
-  if (flush) {
-    // The slab lies a hand's width over the ground: keep it off the terrain.
-    material.polygonOffset = true;
-    material.polygonOffsetFactor = -1;
-    material.polygonOffsetUnits = -2;
-  }
-  const { heightFog } = ctx;
-  if (heightFog) {
-    material.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
-  }
+  material.positionNode = instancePosition();
   return material;
 }
+
+/** The furniture material, glowing softly at dusk (the lit columns): the
+ *  surface's own colour, vertex colour included, as emissive. */
+function glowMaterial(): MeshStandardNodeMaterial {
+  const material = matteMaterial();
+  material.emissiveNode = materialEmissive.add(
+    diffuseColor.rgb.mul(furnitureNight).mul(0.55)
+  );
+  return material;
+}
+
+/** The playground slab's: it lies a hand's width over the ground, so a
+ *  polygon offset keeps it off the terrain. */
+function flushMaterial(): MeshStandardNodeMaterial {
+  const material = new MeshStandardNodeMaterial({
+    vertexColors: true,
+    roughness: 0.92,
+    metalness: 0,
+  });
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -1;
+  material.polygonOffsetUnits = -2;
+  return material;
+}
+
+/** The furniture's materials, one each for the whole scene. */
+const materials = {
+  matte: () => sceneMaterial("furniture-matte", matteMaterial),
+  glow: () => sceneMaterial("furniture-glow", glowMaterial),
+  flush: () => sceneMaterial("furniture-flush", flushMaterial),
+};
 
 /** One tile's street furniture as instanced models on its ground. */
 export function buildFurniture(
   features: FurnitureFeature[],
-  ctx: FurnitureContext
+  ctx: GroundContext
 ): Group {
   const group = new Group();
   group.name = "furniture";
@@ -934,24 +945,23 @@ export function buildFurniture(
   if (byModel.size === 0 && areas.length === 0) {
     return group;
   }
-  const material = furnitureMaterial(ctx);
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const mesh = stood
       ? instanced(
           model,
           stood,
-          model === "columnLit" ? glowMaterial(ctx) : material
+          model === "columnLit" ? materials.glow() : materials.matte()
         )
       : null;
     if (mesh) {
       group.add(mesh);
     }
     if (stood && (model === "clock" || model === "wallClock")) {
-      group.add(clockHands(model, stood, ctx));
+      group.add(clockHands(model, stood));
     }
   }
-  const patches = buildPatches(areas, furnitureMaterial(ctx, true), ctx);
+  const patches = buildPatches(areas, materials.flush(), ctx);
   if (patches) {
     group.add(patches);
   }

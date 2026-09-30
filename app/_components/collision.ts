@@ -1,4 +1,4 @@
-import type { Object3D } from "three";
+import type { Object3D } from "three/webgpu";
 import {
   Box3,
   BufferGeometry,
@@ -9,7 +9,7 @@ import {
   Ray,
   Raycaster,
   Vector3,
-} from "three";
+} from "three/webgpu";
 import {
   acceleratedRaycast,
   computeBoundsTree,

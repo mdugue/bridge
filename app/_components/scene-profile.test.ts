@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
 import {
-  aoQualityFor,
+  aoSamplesFor,
+  warmPaperFor,
   deviceTierFromMedia,
   liteKeepsBlockFromSearch,
   pixelRatioFor,
   sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapSizeFor,
+  LARGEST_TILE_BYTES,
   tileCacheBytesFor,
 } from "./scene-profile";
 
@@ -59,12 +61,14 @@ test("deviceTierFromMedia maps the coarse-pointer query", () => {
 
 test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters in one go", () => {
   expect(sceneBudgetFor("", false)).toEqual({
+    forceWebGL: false,
     profile: "full",
     tier: "desktop",
     neighbourTiles: true,
     lowRasters: false,
   });
   expect(sceneBudgetFor("?scene=lite", true)).toEqual({
+    forceWebGL: false,
     profile: "lite",
     tier: "mobile",
     neighbourTiles: false,
@@ -75,11 +79,14 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     true
   );
   expect(sceneBudgetFor("?block=1", false).neighbourTiles).toBe(true);
+  // WebGPU where available; the WebGL2 backend only on request.
+  expect(sceneBudgetFor("?gpu=webgl2", false).forceWebGL).toBe(true);
+  expect(sceneBudgetFor("?gpu=webgpu", false).forceWebGL).toBe(false);
 });
 
-test("aoQualityFor drops to Performance only in the lite profile", () => {
-  expect(aoQualityFor("full")).toBe("Medium");
-  expect(aoQualityFor("lite")).toBe("Performance");
+test("aoSamplesFor halves the GTAO samples only in the lite profile", () => {
+  expect(aoSamplesFor("full")).toBe(16);
+  expect(aoSamplesFor("lite")).toBe(8);
 });
 
 test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
@@ -88,6 +95,22 @@ test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
   expect(phone.min).toBeLessThan(phone.max);
   expect(desktop.min).toBeLessThan(desktop.max);
   expect(phone.max).toBeLessThan(desktop.min);
-  // The desktop keeps 3DTilesRendererJS's own default.
-  expect(desktop).toEqual({ min: 0.3 * 1024 ** 3, max: 0.4 * 1024 ** 3 });
+  // A phone's tiles stay well under the ~850 MB its Safari lets the GPU
+  // hold, with room for the post targets and the shadow map.
+  expect(phone.max).toBeLessThanOrEqual(600 * 1024 ** 2);
+});
+
+test("tileCacheBytesFor can always unload the largest tile", () => {
+  // The cache keeps a tile whose unloading would take it below `min`, and
+  // loads nothing while at `max`: with a narrower gap one big unused tile
+  // can hold it just over `max` forever (the Alaunpark never loaded).
+  for (const tier of ["mobile", "desktop"] as const) {
+    const { min, max } = tileCacheBytesFor(tier);
+    expect(max - min).toBeGreaterThan(LARGEST_TILE_BYTES);
+  }
+});
+
+test("warmPaperFor leaves the Papier warm-up to the desktop", () => {
+  expect(warmPaperFor("desktop")).toBe(true);
+  expect(warmPaperFor("mobile")).toBe(false);
 });

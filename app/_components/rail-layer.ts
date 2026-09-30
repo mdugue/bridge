@@ -4,10 +4,10 @@ import {
   Float32BufferAttribute,
   Group,
   Mesh,
-  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
   ShapeUtils,
   Vector2,
-} from "three";
+} from "three/webgpu";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -34,7 +34,7 @@ import {
 } from "@/lib/city/bridge";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
+import { sceneMaterial } from "./three-utils";
 
 /**
  * Railway + bridge layer. The railway corridor and bridges used to exist only as
@@ -56,6 +56,9 @@ import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
  *
  * All geometry is hand-wound to match its supplied normal (see pushTri), so every
  * material is FrontSide. Authored in Y-up world coords → added to `scene`.
+ * The materials are plain lit node materials, one per colour/finish for the
+ * whole scene (`sceneMaterial`): they carry no per-tile data, and the
+ * scene's fog node reaches them like every other material.
  * Non-fatal: missing/empty inputs yield an empty group.
  */
 
@@ -76,7 +79,6 @@ function outerRings(
 }
 
 export interface RailContext extends GroundContext {
-  heightFog?: HeightFogUniforms;
   /**
    * Whether this tile draws a bridge whose deck centre is at (x, y) (EPSG).
    * A deck across a seam is in both tiles' files — the same, from the
@@ -196,9 +198,54 @@ function pushTri(
 
 export type P3 = [number, number, number];
 
+/**
+ * Two triangles p0 p1 p2, p0 p2 p3 facing `n`. Indexed, not spread: WebKit
+ * runs a spread in a call through the iterator protocol, and a tile's tram
+ * tracks are ~10⁵ quads — on an iPhone the spreads alone held a frame for
+ * a quarter of a second.
+ */
 export function quad(acc: Mesh3, p0: P3, p1: P3, p2: P3, p3: P3, n: P3): void {
-  pushTri(acc, ...p0, ...p1, ...p2, ...n);
-  pushTri(acc, ...p0, ...p2, ...p3, ...n);
+  quadXYZ(
+    acc,
+    p0[0],
+    p0[1],
+    p0[2],
+    p1[0],
+    p1[1],
+    p1[2],
+    p2[0],
+    p2[1],
+    p2[2],
+    p3[0],
+    p3[1],
+    p3[2],
+    n[0],
+    n[1],
+    n[2]
+  );
+}
+
+/** `quad` on plain numbers: nothing allocated per quad. */
+function quadXYZ(
+  acc: Mesh3,
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  dx: number,
+  dy: number,
+  dz: number,
+  nx: number,
+  ny: number,
+  nz: number
+): void {
+  pushTri(acc, ax, ay, az, bx, by, bz, cx, cy, cz, nx, ny, nz);
+  pushTri(acc, ax, ay, az, cx, cy, cz, dx, dy, dz, nx, ny, nz);
 }
 
 function finishGeo(acc: Mesh3): BufferGeometry | null {
@@ -217,24 +264,28 @@ interface MatOpts {
   roughness?: number;
 }
 
-function material(
-  color: number,
-  heightFog?: HeightFogUniforms,
-  opts: MatOpts = {}
-): MeshStandardMaterial {
-  const m = new MeshStandardMaterial({
-    color: new Color(color),
-    roughness: opts.roughness ?? 0.95,
+/**
+ * The scene-wide lit material of one colour and finish (the key holds every
+ * setting, so two layers asking for the same look share one build). The
+ * polygon offset pulls a surface lying on the ground (ballast, rails, a
+ * track bed) in front of the terrain it covers.
+ */
+function material(color: number, opts: MatOpts = {}): MeshStandardNodeMaterial {
+  const roughness = opts.roughness ?? 0.95;
+  const offsetUnits = opts.offsetUnits ?? 0;
+  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}`;
+  return sceneMaterial(key, () => {
+    const m = new MeshStandardNodeMaterial({
+      color: new Color(color),
+      roughness,
+    });
+    if (offsetUnits) {
+      m.polygonOffset = true;
+      m.polygonOffsetFactor = -1;
+      m.polygonOffsetUnits = offsetUnits;
+    }
+    return m;
   });
-  if (opts.offsetUnits) {
-    m.polygonOffset = true;
-    m.polygonOffsetFactor = -1;
-    m.polygonOffsetUnits = opts.offsetUnits;
-  }
-  if (heightFog) {
-    m.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
-  }
-  return m;
 }
 
 export interface Ring2 {
@@ -691,14 +742,28 @@ export function addRibbon(
   const left = side(1);
   const right = side(-1);
   for (let i = 0; i < pts.length - 1; i++) {
+    const l0 = left[i];
+    const l1 = left[i + 1];
+    const r0 = right[i];
+    const r1 = right[i + 1];
     // top
-    quad(
+    quadXYZ(
       acc,
-      [left[i].x, left[i].y, left[i].z],
-      [right[i].x, right[i].y, right[i].z],
-      [right[i + 1].x, right[i + 1].y, right[i + 1].z],
-      [left[i + 1].x, left[i + 1].y, left[i + 1].z],
-      [0, 1, 0]
+      l0.x,
+      l0.y,
+      l0.z,
+      r0.x,
+      r0.y,
+      r0.z,
+      r1.x,
+      r1.y,
+      r1.z,
+      l1.x,
+      l1.y,
+      l1.z,
+      0,
+      1,
+      0
     );
     if (web <= 0) {
       continue;
@@ -706,21 +771,41 @@ export function addRibbon(
     // web on each side (outward normal via the tangent perpendicular)
     const nx = -tan[i].y;
     const nz = tan[i].x;
-    quad(
+    quadXYZ(
       acc,
-      [left[i].x, left[i].y, left[i].z],
-      [left[i + 1].x, left[i + 1].y, left[i + 1].z],
-      [left[i + 1].x, left[i + 1].y - web, left[i + 1].z],
-      [left[i].x, left[i].y - web, left[i].z],
-      [nx, 0, nz]
+      l0.x,
+      l0.y,
+      l0.z,
+      l1.x,
+      l1.y,
+      l1.z,
+      l1.x,
+      l1.y - web,
+      l1.z,
+      l0.x,
+      l0.y - web,
+      l0.z,
+      nx,
+      0,
+      nz
     );
-    quad(
+    quadXYZ(
       acc,
-      [right[i].x, right[i].y, right[i].z],
-      [right[i + 1].x, right[i + 1].y, right[i + 1].z],
-      [right[i + 1].x, right[i + 1].y - web, right[i + 1].z],
-      [right[i].x, right[i].y - web, right[i].z],
-      [-nx, 0, -nz]
+      r0.x,
+      r0.y,
+      r0.z,
+      r1.x,
+      r1.y,
+      r1.z,
+      r1.x,
+      r1.y - web,
+      r1.z,
+      r0.x,
+      r0.y - web,
+      r0.z,
+      -nx,
+      0,
+      -nz
     );
   }
 }
@@ -728,7 +813,6 @@ export function addRibbon(
 export function meshFrom(
   acc: Mesh3,
   color: number,
-  heightFog: HeightFogUniforms | undefined,
   opts: { cast: boolean; offsetUnits?: number; roughness?: number }
 ): Mesh | null {
   const geo = finishGeo(acc);
@@ -737,7 +821,7 @@ export function meshFrom(
   }
   const m = new Mesh(
     geo,
-    material(color, heightFog, {
+    material(color, {
       offsetUnits: opts.offsetUnits,
       roughness: opts.roughness,
     })
@@ -874,20 +958,20 @@ function buildBridges(features: BridgeFeature[], ctx: RailContext): Mesh[] {
     other: COLORS.deckStone,
   };
   for (const kind of Object.keys(out.tops)) {
-    const m = meshFrom(out.tops[kind], topColor[kind], ctx.heightFog, {
+    const m = meshFrom(out.tops[kind], topColor[kind], {
       cast: true,
     });
     if (m) {
       meshes.push(m);
     }
   }
-  const stoneMesh = meshFrom(out.stone, COLORS.deckStone, ctx.heightFog, {
+  const stoneMesh = meshFrom(out.stone, COLORS.deckStone, {
     cast: true,
   });
   if (stoneMesh) {
     meshes.push(stoneMesh);
   }
-  const steelMesh = meshFrom(out.steel, COLORS.steel, ctx.heightFog, {
+  const steelMesh = meshFrom(out.steel, COLORS.steel, {
     cast: true,
   });
   if (steelMesh) {
@@ -1629,7 +1713,7 @@ export function buildBallast(
       }
     }
   }
-  return meshFrom(acc, COLORS.ballast, ctx.heightFog, {
+  return meshFrom(acc, COLORS.ballast, {
     cast: false,
     offsetUnits: -2,
     roughness: 1,
@@ -1675,7 +1759,7 @@ function buildRails(
     }
     flush();
   }
-  return meshFrom(acc, COLORS.rail, ctx.heightFog, {
+  return meshFrom(acc, COLORS.rail, {
     cast: false,
     offsetUnits: -1,
     roughness: 0.5,
@@ -1710,7 +1794,7 @@ function buildPlatforms(
       addRail(acc, run, 0); // a thin slab ribbon for line-mapped platforms
     }
   }
-  return meshFrom(acc, COLORS.platform, ctx.heightFog, { cast: true });
+  return meshFrom(acc, COLORS.platform, { cast: true });
 }
 
 /**

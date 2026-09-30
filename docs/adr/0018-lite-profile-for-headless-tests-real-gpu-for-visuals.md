@@ -59,6 +59,16 @@ nothing like a GPU.
 - **Pixel-diff screenshots in CI:** SwiftShader output is not the
   product; rejected.
 
+## Update (2026-09, ADR 0027)
+
+Headless Chromium offers no WebGPU adapter, so the e2e runs on
+`WebGPURenderer`'s WebGL2 backend over SwiftShader: the same node
+materials as on a GPU, compiled synchronously. The lite profile's fourth
+knob is now GTAO at 8 samples instead of 16 (`aoSamplesFor`; N8AO's
+Performance mode is gone with N8AO), still keyed on the profile. The
+preflight is `gpu-support.ts` (WebGPU or WebGL2). The open shader-anchor
+tests are moot: there are no `onBeforeCompile` chunk names left to pin.
+
 ## References
 
 - plans 001, 008; AGENTS.md "QA: self-verify"; the skill's "The `lite`

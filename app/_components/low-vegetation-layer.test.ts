@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { Mesh } from "three";
+import { Mesh, MeshStandardNodeMaterial } from "three/webgpu";
 import type { LowVegFeature } from "@/lib/city/features";
 import {
   buildHedgeGeo,
   buildLowVegetation,
   hedgePieces,
 } from "./low-vegetation-layer";
+import { isInstances } from "./instancing";
 import { sceneCensus } from "./scene-census";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
@@ -39,7 +40,18 @@ test("hedges become instances; off-terrain ones are skipped", () => {
     [0, 0],
     [5, 0],
   ]);
-  expect(sceneCensus([buildLowVegetation([line], ctx)]).instances).toBe(2);
+  const group = buildLowVegetation([line], ctx);
+  const sets = group.children.filter(isInstances);
+  expect(sets).toHaveLength(1);
+  expect(sets[0].drawCount).toBe(2);
+  // the moss is one scene-wide node material, tinted per instance
+  expect(sets[0].material).toBeInstanceOf(MeshStandardNodeMaterial);
+  expect(sets[0].material.userData.shared).toBe(true);
+  expect(sets[0].instanceTints).not.toBeNull();
+  expect(buildLowVegetation([line], ctx).children[0]).toHaveProperty(
+    "material",
+    sets[0].material
+  );
   const off = buildLowVegetation([line], { ...ctx, heightAt: () => null });
   expect(off.children).toHaveLength(0);
 });

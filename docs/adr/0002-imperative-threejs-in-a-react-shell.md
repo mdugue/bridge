@@ -40,6 +40,14 @@ WebGL glue lives in `app/_components/`. r3f is not used.
 - **Render-on-demand loop:** rejected — continuous input needs continuous
   frames, and it would break the frame-counted e2e waits (ADR 0018).
 
+## Update (2026-09, ADR 0027)
+
+The scene has no `onBeforeCompile` patches any more: every look is a TSL
+node material on `WebGPURenderer`, and `app/_components/` holds the
+renderer and node glue. The decision stands; r3f's escape-hatch argument
+is weaker (node materials would fit r3f), its frame-loop and `__poc`
+arguments are unchanged.
+
 ## References
 
 - [plans/README.md](../plans/README.md#history) (plan 007 feasibility

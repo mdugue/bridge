@@ -279,6 +279,45 @@ const INDEX_CELL_M = 8;
  *  float noise of dequantising and turning the streamed positions. */
 const MIN_PLAN_AREA = 1e-6;
 
+type IndexArray = Uint8Array | Uint16Array | Uint32Array;
+
+/**
+ * The triangles of `index` that have area in plan: (x, z) of a Y-up glTF's
+ * positions (`stride` numbers per vertex, x at `offset`, z two after it).
+ * A skirt triangle is vertical — two of its corners share a plan position —
+ * and a zero cross product stays zero under the per-axis scale of
+ * quantisation, so the quantised numbers are read as they are: no
+ * dequantising, no per-vertex objects (the water's index, built per
+ * streamed terrain tile).
+ */
+export function planTriangles<T extends IndexArray>(
+  index: T,
+  positions: ArrayLike<number>,
+  stride: number,
+  offset = 0
+): T {
+  const kept = new (index.constructor as new (length: number) => T)(
+    index.length
+  );
+  let n = 0;
+  for (let t = 0; t + 2 < index.length; t += 3) {
+    const a = index[t] * stride + offset;
+    const b = index[t + 1] * stride + offset;
+    const c = index[t + 2] * stride + offset;
+    const ax = positions[a];
+    const az = positions[a + 2];
+    const cross =
+      (positions[b] - ax) * (positions[c + 2] - az) -
+      (positions[b + 2] - az) * (positions[c] - ax);
+    if (cross !== 0) {
+      kept[n++] = index[t];
+      kept[n++] = index[t + 1];
+      kept[n++] = index[t + 2];
+    }
+  }
+  return kept.slice(0, n) as T;
+}
+
 /** What `TinIndex` needs: projected vertex positions, their elevations and
  *  the surface triangles (no skirt). */
 export interface TinSurface {
@@ -322,8 +361,12 @@ export class TinIndex {
     this.cell = cell;
     this.cols = Math.max(1, Math.ceil((maxX - minX) / cell));
     this.rows = Math.max(1, Math.ceil((maxY - minY) / cell));
+    // Each triangle's bucket rectangle once, then count and fill from it —
+    // flat loops over typed arrays: a phone builds this for every terrain
+    // tile a flight streams in.
+    const ranges = this.bucketRanges();
     const counts = new Uint32Array(this.cols * this.rows + 1);
-    this.forEachBucket((b) => {
+    this.eachBucket(ranges, (b) => {
       counts[b + 1]++;
     });
     for (let b = 1; b < counts.length; b++) {
@@ -332,39 +375,46 @@ export class TinIndex {
     this.start = counts;
     this.items = new Uint32Array(counts[counts.length - 1]);
     const fill = counts.slice(0, -1);
-    this.forEachBucket((b, t) => {
-      this.items[fill[b]++] = t;
+    const { items } = this;
+    this.eachBucket(ranges, (b, t) => {
+      items[fill[b]++] = t;
     });
   }
 
-  private bucketRange(x0: number, x1: number, lo: number, cells: number) {
-    const a = Math.max(0, Math.floor((x0 - lo) / this.cell));
-    const b = Math.min(cells - 1, Math.floor((x1 - lo) / this.cell));
-    return [a, b] as const;
-  }
-
-  private forEachBucket(visit: (bucket: number, tri: number) => void): void {
+  /** Per triangle its first and last bucket column and row (4 per triangle). */
+  private bucketRanges(): Int32Array {
     const { triangles, xy } = this.surface;
     const [minX, minY] = this.surface.bounds;
-    for (let t = 0; t < triangles.length / 3; t++) {
-      const a = triangles[3 * t];
-      const b = triangles[3 * t + 1];
-      const c = triangles[3 * t + 2];
-      const [c0, c1] = this.bucketRange(
-        Math.min(xy[2 * a], xy[2 * b], xy[2 * c]),
-        Math.max(xy[2 * a], xy[2 * b], xy[2 * c]),
-        minX,
-        this.cols
-      );
-      const [r0, r1] = this.bucketRange(
-        Math.min(xy[2 * a + 1], xy[2 * b + 1], xy[2 * c + 1]),
-        Math.max(xy[2 * a + 1], xy[2 * b + 1], xy[2 * c + 1]),
-        minY,
-        this.rows
-      );
-      for (let r = r0; r <= r1; r++) {
+    const { cell, cols, rows } = this;
+    const count = Math.floor(triangles.length / 3);
+    const ranges = new Int32Array(count * 4);
+    for (let t = 0; t < count; t++) {
+      const a = 2 * triangles[3 * t];
+      const b = 2 * triangles[3 * t + 1];
+      const c = 2 * triangles[3 * t + 2];
+      const x0 = Math.min(xy[a], xy[b], xy[c]);
+      const x1 = Math.max(xy[a], xy[b], xy[c]);
+      const y0 = Math.min(xy[a + 1], xy[b + 1], xy[c + 1]);
+      const y1 = Math.max(xy[a + 1], xy[b + 1], xy[c + 1]);
+      ranges[4 * t] = Math.max(0, Math.floor((x0 - minX) / cell));
+      ranges[4 * t + 1] = Math.min(cols - 1, Math.floor((x1 - minX) / cell));
+      ranges[4 * t + 2] = Math.max(0, Math.floor((y0 - minY) / cell));
+      ranges[4 * t + 3] = Math.min(rows - 1, Math.floor((y1 - minY) / cell));
+    }
+    return ranges;
+  }
+
+  private eachBucket(
+    ranges: Int32Array,
+    visit: (bucket: number, tri: number) => void
+  ): void {
+    const { cols } = this;
+    for (let t = 0; t < ranges.length / 4; t++) {
+      const c0 = ranges[4 * t];
+      const c1 = ranges[4 * t + 1];
+      for (let r = ranges[4 * t + 2]; r <= ranges[4 * t + 3]; r++) {
         for (let col = c0; col <= c1; col++) {
-          visit(r * this.cols + col, t);
+          visit(r * cols + col, t);
         }
       }
     }

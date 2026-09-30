@@ -21,9 +21,12 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 ## Tech stack
 
 - Next.js (App Router) + TypeScript (strict) + Tailwind v4, run with **bun**
-- **three.js r186** (`three`), **`3d-tiles-renderer`** (3DTilesRendererJS —
-  streaming, LOD, LRU, glTF metadata), `three-mesh-bvh` (collision/picking),
-  `postprocessing` (pmndrs — SSAO, DoF, SMAA, grading, grain, vignette)
+- **three.js r186 on `WebGPURenderer`** (`three/webgpu`: WebGPU, its WebGL2
+  backend where WebGPU is missing) with **TSL node materials** (`three/tsl`)
+  and three's node post pipeline (GTAO, DoF, SMAA; grading, grain and
+  vignette in the output node) — no GLSL anywhere (ADR 0027);
+  **`3d-tiles-renderer`** (3DTilesRendererJS — streaming, LOD, LRU, glTF
+  metadata), `three-mesh-bvh` (collision/picking)
 - Build step only: `cityjson-threejs-loader`, `geotiff`, `@gltf-transform/*`
   and `meshoptimizer` (the client decodes neither CityJSON nor GeoTIFF; it
   gets glTF)
@@ -94,8 +97,14 @@ config change.
     `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount +
     which tileset to stream),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
-    (`?scene=lite`), `webgl-support.ts` (the WebGL2 preflight),
-    `fetch-optional.ts` (the one optional-artifact fetch/abort policy)
+    (`?scene=lite`, `?gpu=webgl2`), `gpu-support.ts` (the WebGPU-or-WebGL2
+    preflight), `instancing.ts` (`Instances`: instanced sets that share one
+    node build),
+    `fetch-optional.ts` (the one optional-artifact fetch/abort policy),
+    `crash-trail.ts` + `crash-report.tsx` (a page the browser kills leaves
+    its boot stages, errors, lost device and heartbeats in local storage;
+    the next load offers them as text to copy, `?trail=1` always — the
+    core is `lib/city/crash-trail.ts`)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
@@ -122,16 +131,17 @@ config change.
     vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
     stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
     lines) and `map-overlay.ts` (fades the ferry lines in with height),
-    `shader-chunks.ts` (data-frame positions from world space)
+    `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
+    world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
     factor on the ambient light, the far horizon on the sun; its raster
     shared by a tile's terrain and buildings through `shared-rasters.ts`),
-    `height-fog.ts`, `post-stack.ts`,
-    `depth-grading-effect.ts`, `paper-grain-effect.ts`,
-    `stylize-effect.ts` (the picture styles' one pass: ink lines + tone;
+    `height-fog.ts` (the one `scene.fogNode`), `post-stack.ts` (the scene
+    pass and the node `RenderPipeline`),
+    `stylize-effect.ts` (the picture styles' one node: ink lines + tone;
     the table is `lib/city/render-style.ts`), `paper-scene.ts` (Papier's
     render-time white material), `style-dressing.ts` (a style's own crowns
-    and noir's lamp cones, swapped in for its frames), `style-memory.ts`
+    and noir's lamp cones, shown for its frames), `style-memory.ts`
     (the last style, kept in local storage), `visual-style.ts`
     (the look table with its defaults is `lib/city/look-controls.ts`; the
     store the HUD owns and the scene subscribes to is `lib/city/look-state.ts`)
@@ -148,7 +158,8 @@ config change.
     labelled group) and
     `device-orientation.ts` (the one orientation-event adapter both use);
     the math is `lib/city/geolocation.ts`
-  - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers)
+  - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
+    `sceneMaterial` for the scene-wide shared node materials)
   - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
     key; no AudioContext before it) and `soundscape/` (`engine.ts`,
     `hearing.ts`, `voices.ts`: loaded by dynamic import on the first
@@ -340,11 +351,42 @@ the DGM. No Git-LFS. Only small derived per-tile artifacts
 
 ## Rendering gotchas (hard-won — don't relearn these)
 
-**Shadows.** three **r182 deprecated `PCFSoftShadowMap`** — `WebGLShadowMap`
-silently downgrades it to `PCFShadowMap`, which is **now itself soft**: it
-spreads a 5-tap Vogel disk by `light.shadow.radius * texel`
-(`shadowmap_pars_fragment.glsl`). Default `radius` is 1 ≈ hard, so soft shadows
-require **explicitly raising `shadow.radius`**. The working recipe (see
+**Everything is a node material, on public API** (ADR 0027). No GLSL,
+`onBeforeCompile`, `ShaderMaterial` or custom depth material, and no patching
+of three's internals (no prototype patches, no private `_` members): a look
+term is a TSL node (`colorNode`, `normalNode`, `emissiveNode`, `aoNode`,
+`receivedShadowNode`, `maskNode`, `positionNode`, `castShadowPositionNode`),
+a slider is a shared uniform node's `.value` (no rebuild), fog is
+`scene.fogNode` (`height-fog.ts`; never per material — opt out with
+`material.fog = false`). Import from `three/webgpu` (the core re-exported with
+the node materials), `three/tsl` and `three/addons`, never plain `three` in
+the viewer (lib/ keeps `three` for math). What keeps node builds (TSL → WGSL,
+main thread) out of the frames:
+- **Never `InstancedMesh`** — three builds every one separately (its uuid is
+  in the build key). Use `Instances` (`instancing.ts`): a plain `Mesh` over an
+  `InstancedBufferGeometry`, matrices and colours as named attributes, so
+  every set with the same material and layout shares one build. The material
+  applies the transform (`positionNode = instancePosition()`) and the colour
+  (`instanceTint()`); `drawCount` replaces `count` (a `count` above 1 puts the
+  uuid back), `instanceTints` replaces `instanceColor` (three multiplies any
+  object with an `instanceColor` by an InstancedMesh-only varying).
+- **A material without per-tile data is a `sceneMaterial`** (`three-utils.ts`,
+  `userData.shared`): one build for the site. `disposeMaterial` skips it.
+- **The scene renders top-level into its own target** (`post-stack.ts`) and
+  the post pipeline reads it: three keys a build by render context, and a
+  context by target *and call depth* — a scene `pass()` nested inside the
+  pipeline would never match what `compileAsync` prepared.
+- **Tiles and dressings compile before they show** (`PostStack.compile`, one
+  drawable per material and attribute layout). The shadow pass's pipelines
+  for new casters still compile in the frame that first draws them, and the
+  WebGL2 backend compiles synchronously — measure before adding machinery.
+- WebGPU has no 1-component 8/16-bit vertex formats (the feature id and roof
+  flag are baked as FLOAT), and draws points 1 px wide (the lamp halos are
+  sprites).
+
+**Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
+5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈
+hard, so soft shadows require **explicitly raising `shadow.radius`**. The working recipe (see
 `sun-rig.ts`): `PCFShadowMap` + a raised `shadow.radius`; terrain
 **`castShadow = false`** (it only receives — a casting terrain self-shadows
 into triangle/staircase acne at grazing sun); `normalBias = 0` (it offsets the
@@ -368,14 +410,21 @@ old one — in particular turning on the spot still never moves the frustum.
 Per-render cost is unchanged (same map size, same PCF); only the caster set
 grows. This is the cheap 90% of CSM, not a replacement for it.
 
-**Contact shadows (SSAO) are never motion-gated.** Skipping the N8AO pass while
+**Contact shadows (GTAO) are smoothed and never motion-gated.** GTAO
+leaves its 5×5 rotation noise to a denoiser: drawn raw it speckled every
+contact shadow and the whole horizon, so `aoSmoothed` (post-stack.ts)
+averages it out with a depth-aware 5×5 box at the AO's resolution — not
+three's DenoiseNode, which rebuilds normals per tap at full resolution. A
+0.15 m thickness keeps a leg or post from darkening the ground behind it.
+ Skipping the AO pass while
 the camera moves made them blink on every footstep, which reads as a bug. The
-pass now runs at `configuration.halfRes` with n8ao's depth-aware upsampling —
-roughly what the skip used to save, paid every frame instead. `halfRes`,
-`aoSamples` and `denoiseSamples` all rebuild the pass's materials (see its
-configuration Proxy), so they are **construction-time settings**: a motion-keyed
-quality switch there trades a flicker for a shader-recompile hitch. DoF is still
-dropped while moving — motion has already destroyed the bokeh.
+pass runs at half resolution (normals reconstructed from depth) — roughly
+what the skip used to save, paid every frame instead. Its sample count
+rebuilds the pass's material, so it is a **construction-time setting**
+(`aoSamplesFor`): a motion-keyed quality switch there trades a flicker for a
+rebuild hitch. DoF is still dropped while moving — motion has already
+destroyed the bokeh — by switching between two prebuilt pipelines, never by
+swapping one pipeline's output node (that re-translates the whole graph).
 
 **Buildings are already batched.** Each tile's buildings are ONE glTF mesh
 (`scripts/bake-city-mesh.ts` runs `cityjson-threejs-loader` at build time,
@@ -394,13 +443,27 @@ the coarse one's geometric error is `COARSE_TERRAIN_ERROR` in
 `lib/city/tileset.ts`). Everything a tile brings (dressing, BVH, materials,
 textures) is built in the dressing plugin's `processTileModel` and freed in
 its `disposeTile` — never in `bootApp`, or it leaks when the tile unloads.
-Before a tile or its dressing shows, its shaders are compiled with
-`compileAsync` against the scene pass's target (`PostStack.compile`) —
-add new per-tile objects inside that path, or they compile inside a frame.
-`compileAsync` never reaches a mesh's `customDepthMaterial` (three r186
-compiles `object.material` only); `PostStack.compile` compiles those
-through stand-ins (`depthMaterialStandIns` in `three-utils.ts`) set up as
-the shadow pass sets them, so the shadow pass finds the program cached.
+Before a tile or its dressing shows, its node materials are built and
+compiled with `compileAsync` against the scene pass's target
+(`PostStack.compile`, each drawable shown and unculled for the call) — add
+new per-tile objects inside that path, or they build inside a frame.
+**Freeing is on us, not on three or the tile renderer** (WebGPU keeps GPU
+state per drawable that WebGL never had). WebGPURenderer frees a
+drawable's render objects — its uniform buffers and bind groups — only on
+its material's `dispose` or its own `dispose` event, and a scene-wide
+material is never disposed; 3DTilesRenderer frees only the glTF's own
+materials (not the per-tile ones the dressing put on), and on a load it
+aborts after `processTileModel` it frees the textures alone — geometry a
+compile already uploaded would stay. So a tile's release runs
+`disposeObject3D` over its content (`releaseRenderState` dispatches the
+event), a released or aborted tile is freed by the plugin itself, and
+nothing released is compiled. Leak hunts: `handle.getGpuDebug()` sets the
+scene's buffers against three's `info.memory` (a gap that grows per visit
+to the same place is a leak; a steady one is the tile cache). What a
+tile adds beyond its glTF must reach the cache's weighing
+(`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
+by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
+a phone". A lost GPU reloads where the player stood (`gpu-recovery.ts`).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
@@ -408,7 +471,7 @@ renderer writes `userData.tile` itself and would overwrite ours. The sun's shado
 streaming camera, so tiles that cast into the view stay loaded;
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 
-**Vegetation** is chunked into 250 m cells (one InstancedMesh per cell) so
+**Vegetation** is chunked into 250 m cells (one `Instances` set per cell) so
 off-screen chunks frustum-cull out of both the main and shadow pass. After
 `setMatrixAt`, you **must** call `instanceMatrix.needsUpdate = true` and
 `computeBoundingSphere()` or the whole cloud gets wrongly culled when the origin
@@ -424,19 +487,27 @@ key `V`) are not material styles: they are one post pass over the finished
 frame (`stylize-effect.ts`, ADR 0034), off in the default pastel look.
 Papier additionally swaps every surface for one white paper material for
 its frames (`paper-scene.ts`, `scene.overrideMaterial`, restored after the
-render); `style-dressing.ts` likewise swaps in a style's crowns and lamp
-cones — layers only tag what may be dressed (`userData.styleCrown`,
-`userData.styleLampHeads`); both gather what they touch once per stream
-change (`PostStack.sceneChanged`), not every frame. The one sanctioned
-exception is the ground: the terrain material (`userData.paperOwn`) opts
-out of the override and draws Papier's paper, paint and water itself
-under the shared `PAPER_GROUND_ON` uniform. Give a new style a row in
-`lib/city/render-style.ts` and a mode in that pass — never a branch in a
-scene material — and any new style material a stand-in in
-`PostStack.warmStyles`, which compiles them all once the scene is idle. A
-stand-in must match the real draw in more than its material: three keys a
-program on the scene's lights (even for an unlit material) and on whether
-the geometry has normals — the pass's stand-in has neither.
+render; three carries each drawn material's `positionNode` over, so
+instanced sets stay put); `style-dressing.ts` likewise shows a style's
+crowns (sibling `Instances` on the originals' buffers and material — a
+visibility swap, one build) and lamp cones for its frames — layers only
+tag what may be dressed (`userData.styleCrown`, `userData.styleLampHeads`);
+both gather what they touch once per stream change
+(`PostStack.sceneChanged`), not every frame. The one sanctioned exception
+is the ground: the terrain material (`userData.paperOwn`) opts out of the
+override and draws Papier's paper, paint and water itself under the
+shared `paperGroundOn` uniform node. Give a new style a row in
+`lib/city/render-style.ts` and a mode in that node — never a branch in a
+scene material. `PostStack.warmStyles` prepares them all once the scene
+is idle: the styled pipelines build one per frame (a pipeline builds its
+graph and its SMAA passes on its first render), and the dressing and the
+scene's own objects are compiled under the Papier swap with
+`compileAsync` (not on phones: `warmPaperFor` — the extra pipelines cost
+an iPhone tab its memory) — no stand-ins: the override takes each source material's
+position node, so only the real objects match what a frame builds. The
+node's only branch is on the mode (a uniform); per pixel it selects, so
+derivatives and texture reads stay in uniform control flow (WGSL), and
+its uv runs from the top-left corner (three's quad), unlike the GLSL's.
 Its depth taps stay at
 integer texel radii (the buffer is read NEAREST; a fractional radius inks
 whole grazing streets).
@@ -472,7 +543,8 @@ bun run shots
 
 It writes a clean canvas plate (HUD hidden) to `shots/<name>.png` — read it and
 iterate yourself. `shots/` is gitignored. The default headless e2e uses
-SwiftShader, which renders shadows/AA nothing like a real GPU, so use `--headed`
+SwiftShader through the renderer's WebGL2 backend (headless Chromium offers
+no WebGPU adapter), which renders shadows/AA nothing like a real GPU, so use `--headed`
 for any lighting/shadow work.
 
 **Budget the e2e specs in frames, not seconds.** Under SwiftShader every pixel
@@ -493,9 +565,9 @@ keep the shards within a minute of each other.
 [`app/_components/scene-profile.ts`](app/_components/scene-profile.ts). It streams
 the **spawn tile only** (`tileset-spawn.json`; the full-site boot was
 14 s → 4.4 s, 74 MB → 18 MB when this was measured), shadow-maps at
-**512²** instead of 3072², renders at **`pixelRatio` 0.5**, and runs the SSAO
-pass in its cheaper Performance mode. Same loaders,
-same layers, same shader programs — a quarter
+**512²** instead of 3072², renders at **`pixelRatio` 0.5**, and runs GTAO
+at half the samples. Same loaders,
+same layers, same node materials — a quarter
 of the world and a quarter of the pixels. The knobs it does *not* touch are the
 ones a test asserts on. Two rules when you add a spec:
 
@@ -529,8 +601,7 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 
 - TypeScript strict. No `any` without a `// reason:` comment.
 - Version pins: exact for the three.js stack (`three`, `@types/three`,
-  `postprocessing`, `n8ao`, `three-mesh-bvh`, `cityjson-threejs-loader`,
-  `3d-tiles-renderer`) and the glTF build tools (`@gltf-transform/*`,
+  `three-mesh-bvh`, `cityjson-threejs-loader`, `3d-tiles-renderer`) and the glTF build tools (`@gltf-transform/*`,
   `meshoptimizer`), the
   framework trio and the lint/format tools (`oxlint`, `oxlint-tsgolint`,
   `oxfmt` — oxlint declares a `>=` peer range on tsgolint, so bump them
@@ -571,10 +642,9 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   `react/no-unescaped-entities`, `react/jsx-no-comment-textnodes` and
   `import/no-anonymous-default-export` explicitly. Do not re-add ESLint to
   recover a rule without first checking the full catalogue.
-- `types/n8ao.d.ts` is a hand-written shim because `n8ao` ships no types. Do
-  not add one for `three-mesh-bvh`: the package declares its own `three`
-  augmentation (`BufferGeometry.boundsTree`, `Raycaster.firstHitOnly`, and
-  `BatchedMesh` on top).
+- Do not add a type shim for `three-mesh-bvh`: the package declares its own
+  `three` augmentation (`BufferGeometry.boundsTree`, `Raycaster.firstHitOnly`,
+  and `BatchedMesh` on top).
 - `tsconfig.json`'s `allowJs: true` is **not** removable — `next build`
   rewrites the file to put it back, which would dirty the tree on every build.
 - **Markdown is excluded from oxfmt** (`.oxfmtrc.json`). It rewrites `*em*` to
@@ -611,9 +681,8 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 
 - Introducing a backend / stateful API route
 - Adding a heavy dependency (map/tiling library, a second renderer)
-- Migrating to WebGPURenderer + TSL: proposed in ADR 0027 and staged in
-  plan 020 behind a spike on a real GPU; don't start the port before the
-  maintainer has the spike's plates and numbers
+- Bringing back a second render path (WebGLRenderer, GLSL), or patching
+  three's renderer internals: ADR 0027 decided against both
 - Committing raw bulk geodata, or switching on Git-LFS
 
 <!-- BEGIN:nextjs-agent-rules -->

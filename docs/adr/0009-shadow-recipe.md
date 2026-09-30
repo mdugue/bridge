@@ -54,6 +54,21 @@ the working recipe; the dead ends are as valuable as the result.
 - **A camera-centred (not ground-anchored) frustum when airborne:** the
   tight depth range sits hundreds of metres above the terrain.
 
+## Update (2026-09, ADR 0027)
+
+The recipe and its numbers survived the move to `WebGPURenderer`
+unchanged; the mechanisms under them are three's node shadows now.
+`PCFShadowMap` is soft through `ShadowFilterNode` (its PCF filter spreads
+the same 5-tap Vogel disk by `shadow.radius × texel`); `WebGLShadowMap` and
+its chunks are gone. There are no custom depth materials: the shadow pass
+draws a material's `castShadowPositionNode ?? positionNode` and honours its
+`maskNode`, so a bare crown thins its shadow through its mask and a
+swaying crown casts rigidly through `castShadowPositionNode`. The shadow
+pass's pipelines for newly landed casters still build in the frame that
+first draws them (`compileAsync` primes the main pass only). The far
+field's shapes are still a CSM job; `CSMShadowNode` is now in reach, as its
+own decision.
+
 ## References
 
 - AGENTS.md "Shadows", "The shadow frustum is not fixed"; the city-walker

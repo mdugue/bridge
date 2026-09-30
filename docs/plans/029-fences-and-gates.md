@@ -170,6 +170,11 @@ Only its material, like `wall-layer.ts`: dark iron/grey tones from the
 furniture palette, `alphaTest`, `side: DoubleSide`, cast shadows with a
 `customDepthMaterial` that honours the alpha (see the skill on the
 `WebGLShadowMap` alphaMap-override gotcha before touching this).
+*Superseded:* the restyle (Status) made the fence one opaque band that
+casts no shadow, and since plan 020 (2026-09-26) its material is a TSL node
+material; there is no depth material, and the alphaMap gotcha left with
+`WebGLShadowMap`. A dithered shadow, if it returns, would be the
+material's `maskNode`, which the shadow pass honours.
 
 ### Docs
 

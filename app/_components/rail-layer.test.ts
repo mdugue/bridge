@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Box3, type Mesh } from "three";
+import { Box3, type Mesh, MeshStandardNodeMaterial } from "three/webgpu";
 import type {
   AreaFeature,
   BridgeFeature,
@@ -96,6 +96,20 @@ test("a null geometry is skipped, not thrown", () => {
   const feature: AreaFeature = { geometry: null, properties: null };
   expect(buildBallast([feature, polygon], ctx)).not.toBeNull();
   expect(buildBallast([feature], ctx)).toBeNull();
+});
+
+test("the materials are scene-wide lit node materials, one per look", () => {
+  const a = buildBallast([polygon], ctx);
+  const b = buildBallast([multiPolygon], ctx);
+  expect(a?.material).toBeInstanceOf(MeshStandardNodeMaterial);
+  // the same colour and finish on two builds is one shared material
+  expect(a?.material).toBe(b?.material as MeshStandardNodeMaterial);
+  const material = a?.material as MeshStandardNodeMaterial;
+  expect(material.userData.shared).toBe(true);
+  expect(material.polygonOffset).toBe(true);
+  expect(material.polygonOffsetUnits).toBe(-2);
+  expect(material.fog).toBe(true);
+  expect(a?.castShadow).toBe(false);
 });
 
 /** A 200 m road deck along x at 120 m over ground at 100 m. */

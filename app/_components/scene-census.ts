@@ -1,10 +1,11 @@
-import { InstancedMesh, type Mesh, type Object3D } from "three";
+import type { Mesh, Object3D } from "three/webgpu";
+import { isInstances } from "./instancing";
 
 /** Counts of what a set of scene roots actually contain (built, not rendered). */
 export interface SceneCensus {
-  /** InstancedMesh instances (sum of `count`) */
+  /** instances of every instanced set (sum of its `drawCount`) */
   instances: number;
-  /** Mesh + InstancedMesh objects */
+  /** Mesh objects, instanced sets included */
   meshes: number;
   /** triangles, with instanced geometry multiplied by its instance count */
   triangles: number;
@@ -20,7 +21,7 @@ function triangleCount(mesh: Mesh): number {
 }
 
 /**
- * Walks the given roots and tallies every Mesh/InstancedMesh. The e2e suite
+ * Walks the given roots and tallies every mesh and instanced set. The e2e suite
  * asserts on these per layer: a loader that swallowed a 404 or a renamed
  * property into an empty group shows up as zeros here instead of passing.
  */
@@ -34,9 +35,9 @@ export function sceneCensus(roots: Object3D[]): SceneCensus {
       }
       census.meshes += 1;
       const tris = triangleCount(mesh);
-      if (obj instanceof InstancedMesh) {
-        census.instances += obj.count;
-        census.triangles += tris * obj.count;
+      if (isInstances(obj)) {
+        census.instances += obj.drawCount;
+        census.triangles += tris * obj.drawCount;
       } else {
         census.triangles += tris;
       }

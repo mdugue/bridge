@@ -39,6 +39,9 @@ import {
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { AltitudeStick } from "./altitude-stick";
 import { ControlHintBar } from "./control-hints";
+import { CrashReport } from "./crash-report";
+import { startCrashTrail } from "./crash-trail";
+import { recoverFromGpuLoss, takeRecoverySnapshot } from "./gpu-recovery";
 import { VEIL_HOLD_MS } from "./handover";
 import {
   type CityWalkHandle,
@@ -60,7 +63,7 @@ import { StreamPill } from "./stream-pill";
 import { readStoredStyle, writeStoredStyle } from "./style-memory";
 import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { VirtualJoystick } from "./virtual-joystick";
-import { missingPrerequisite } from "./webgl-support";
+import { missingPrerequisite } from "./gpu-support";
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
@@ -221,9 +224,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const hud = useHudMessage();
   const locate = useLocateMe(handleRef, hud.say);
 
-  // Probed once, before the renderer is created: three's raw "Error creating
-  // WebGL context" (or a tile's bare ReferenceError) is replaced by a
-  // sentence naming the missing prerequisite.
+  // Probed once, before the renderer is created: three's raw backend error
+  // (or a tile's bare ReferenceError) is replaced by a sentence naming the
+  // missing prerequisite.
   const [missing] = useState(missingPrerequisite);
   const supported = missing === null;
   const [status, setStatus] = useState<Status>(() =>
@@ -279,6 +282,34 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   useEffect(() => {
     liveEnded.current = live.ended;
   }, [live.ended]);
+  // What a lost GPU keeps for the next page and puts back there
+  // (gpu-recovery.ts): the boot effect reads this render's time and look
+  // through a ref, as it does live mode.
+  const recovery = useRef<{
+    capture: () => string | null;
+    restore: (h: CityWalkHandle, text: string) => void;
+  } | null>(null);
+  useEffect(() => {
+    recovery.current = {
+      capture: () => {
+        const h = handleRef.current;
+        return h
+          ? JSON.stringify(
+              encodeSnapshot(look.get(), h.getCameraState(), time.date)
+            )
+          : null;
+      },
+      restore: (h, text) => {
+        const parsed = parseSnapshot(text);
+        if (!parsed.ok) {
+          return;
+        }
+        h.applyCameraState(parsed.snapshot.camera);
+        time.setInstant(snapshotInstant(parsed.snapshot));
+        look.set(decodeLook(parsed.snapshot.look));
+      },
+    };
+  });
   const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
@@ -299,7 +330,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     if (!container) {
       return;
     }
-    // The WebGL2 preflight already failed (see the status initializer): no
+    // The GPU preflight already failed (see the status initializer): no
     // renderer, no handle, nothing to clean up.
     if (!supported) {
       return;
@@ -310,6 +341,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
     const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
+    // This page's crash trail, from before the renderer exists: a page the
+    // browser kills leaves its last steps for the next load (crash-trail.ts).
+    const trail = startCrashTrail();
 
     createCityWalkApp({
       container,
@@ -318,6 +352,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       tilesetUrl,
       initialDate: timeNow(),
       signal: aborter.signal,
+      trail,
       onStage: ({ id, fraction, skipped: isSkipped }) => {
         if (cancelled) {
           return;
@@ -343,6 +378,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           startTransition(() => setStreamingMore(isBusy));
         }
       },
+      onGpuLost: () =>
+        !cancelled && recoverFromGpuLoss(recovery.current?.capture() ?? null),
       onError: (message) => {
         if (cancelled) {
           return;
@@ -399,6 +436,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         }
         handle = h;
         handleRef.current = h;
+        trail.note("first frame");
+        // Back where the player stood before the GPU was lost (gpu-recovery.ts).
+        const recovered = takeRecoverySnapshot();
+        if (recovered) {
+          recovery.current?.restore(h, recovered);
+          trail.note("recovered", "after a lost GPU");
+        }
         syncTime();
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
@@ -425,6 +469,10 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         const aborted =
           err instanceof DOMException && err.name === "AbortError";
         if (!(cancelled || aborted)) {
+          trail.note(
+            "boot failed",
+            err instanceof Error ? err.message : String(err)
+          );
           setStatus({
             phase: "error",
             message: err instanceof Error ? err.message : String(err),
@@ -435,6 +483,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     return () => {
       cancelled = true;
       aborter.abort();
+      trail.end();
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
@@ -511,7 +560,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       style={{ "--sidebar-width": "21.25rem" } as CSSProperties}
     >
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
-          it), so toggling the panel can't flash the WebGL canvas. */}
+          it), so toggling the panel can't flash the canvas. */}
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
         <div className="absolute inset-0" ref={mountRef} />
 
@@ -522,6 +571,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             stages={stages}
           />
         )}
+
+        <CrashReport />
 
         {status.phase === "error" && (
           <Alert className="absolute inset-x-8 top-8" variant="destructive">

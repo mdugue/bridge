@@ -3,9 +3,12 @@
 *Deutsch: [Bedienung](../de/using-the-viewer.md)*
 
 The interface is in German. This page walks through it label by label. You
-need a browser with **WebGL2** (every current desktop and mobile browser
-has it) and, for a smooth picture, a reasonably recent graphics card. Phones
-are supported: they automatically get a lighter render budget.
+need a browser with **WebGPU** (the newer graphics interface most current
+browsers offer) or, where that is missing, **WebGL2** (every current
+desktop and mobile browser has it; the picture is the same, but the view
+may stutter briefly while new areas appear), and, for a smooth picture, a
+reasonably recent graphics card. Phones are supported: they automatically
+get a lighter render budget.
 
 ## Loading
 

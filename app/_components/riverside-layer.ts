@@ -5,19 +5,25 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
-  InstancedMesh,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
   Quaternion,
   Vector3,
-} from "three";
+} from "three/webgpu";
+import {
+  attribute,
+  float,
+  fract,
+  materialOpacity,
+  smoothstep,
+} from "three/tsl";
 import type { RiversideFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
-import { type HeightFogUniforms, injectHeightFog } from "./height-fog";
-import { MAP_FADE_GLSL, MAP_OVERLAY_UNIFORMS } from "./map-overlay";
+import { Instances, instancePosition } from "./instancing";
+import { mapFadeNode } from "./map-overlay";
 import {
   addFootprint,
   addRibbon,
@@ -29,6 +35,8 @@ import {
   type Ring2,
   ringToWorld,
 } from "./rail-layer";
+import type { F } from "./shader-chunks";
+import { sceneMaterial } from "./three-utils";
 
 /**
  * The Elbe's landing stages, groynes and ferry lines (plan 031;
@@ -51,10 +59,6 @@ import {
  * Built per fine terrain tile in the Y-up frame on the cross-tile ground;
  * freed with the tile.
  */
-
-export interface RiversideContext extends GroundContext {
-  heightFog?: HeightFogUniforms;
-}
 
 const PIER_DEPTH = 0.3;
 const PILE_EVERY_M = 4;
@@ -120,7 +124,7 @@ function addPier(
   parts: Parts,
   coords: Point2[],
   deck: number,
-  ctx: RiversideContext
+  ctx: GroundContext
 ): void {
   const ring = ringToWorld(coords, ctx.offset);
   addFootprint(
@@ -175,7 +179,7 @@ function addPier(
 
 /** The drawn water's level under a pontoon: the lowest ground the water
  *  sheet lies on there (the bank, where the hull reaches it, is higher). */
-function waterLevel(coords: Point2[], ctx: RiversideContext): number | null {
+function waterLevel(coords: Point2[], ctx: GroundContext): number | null {
   let level = Number.POSITIVE_INFINITY;
   for (const [x, y] of subdividePolyline(coords, 2)) {
     const g = ctx.heightAt(x, y);
@@ -266,7 +270,7 @@ function addGangway(
   ring: Ring2,
   deckY: number,
   bank: Point2,
-  ctx: RiversideContext
+  ctx: GroundContext
 ): void {
   const gb = ctx.heightAt(bank[0], bank[1]);
   if (gb === null) {
@@ -301,7 +305,7 @@ function addPontoon(
   parts: Parts,
   f: RiversideFeature,
   coords: Point2[],
-  ctx: RiversideContext
+  ctx: GroundContext
 ): void {
   const water = waterLevel(coords, ctx);
   if (water === null) {
@@ -340,11 +344,7 @@ function addPontoon(
 
 /** A low stone ridge along the groyne: crest over the ground, flanks
  *  running down into it. */
-function addGroyne(
-  parts: Parts,
-  coords: Point2[],
-  ctx: RiversideContext
-): void {
+function addGroyne(parts: Parts, coords: Point2[], ctx: GroundContext): void {
   const pts: Pt[] = [];
   for (const [ex, ey] of subdividePolyline(coords, 2)) {
     const g = ctx.heightAt(ex, ey);
@@ -380,9 +380,35 @@ function addGroyne(
   }
 }
 
+/**
+ * The wake's ink, one for the scene: unlit, fogged, never writing depth,
+ * pulled in front of the water sheet. Its alpha is a dash every
+ * `FERRY_DASH_M` along the route (the `wakeAlong` arc length, soft at the
+ * dash's trailing end) at a faint 0.55, times the map fade — nothing on
+ * foot, full from the air.
+ */
+function wakeMaterial(): MeshBasicNodeMaterial {
+  return sceneMaterial("riverside-wake", () => {
+    const m = new MeshBasicNodeMaterial({
+      color: new Color(WAKE),
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -4,
+    });
+    const along = attribute("wakeAlong", "float") as F;
+    const dash = float(1).sub(
+      smoothstep(0.5, 0.56, fract(along.div(FERRY_DASH_M)))
+    );
+    m.opacityNode = materialOpacity.mul(0.55).mul(dash).mul(mapFadeNode());
+    return m;
+  });
+}
+
 /** The dashed wake: a flat ribbon on the water, dashes from the arc
  *  length, faded in only from the air. */
-function ferryMesh(lines: Point2[][], ctx: RiversideContext): Mesh | null {
+function ferryMesh(lines: Point2[][], ctx: GroundContext): Mesh | null {
   const pos: number[] = [];
   const along: number[] = [];
   const index: number[] = [];
@@ -433,36 +459,7 @@ function ferryMesh(lines: Point2[][], ctx: RiversideContext): Mesh | null {
   geo.setAttribute("wakeAlong", new Float32BufferAttribute(along, 1));
   geo.setIndex(index);
   geo.computeBoundingSphere();
-  const material = new MeshBasicMaterial({
-    color: new Color(WAKE),
-    transparent: true,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -4,
-  });
-  const { heightFog } = ctx;
-  material.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, MAP_OVERLAY_UNIFORMS);
-    sh.vertexShader = `attribute float wakeAlong;
-varying float vWakeAlong;
-${sh.vertexShader.replace(
-  "#include <begin_vertex>",
-  "#include <begin_vertex>\n\tvWakeAlong = wakeAlong;"
-)}`;
-    sh.fragmentShader = `varying float vWakeAlong;
-${MAP_FADE_GLSL}
-${sh.fragmentShader.replace(
-  "#include <color_fragment>",
-  `#include <color_fragment>
-	float wakeDash = 1.0 - smoothstep( 0.5, 0.56, fract( vWakeAlong / ${FERRY_DASH_M.toFixed(1)} ) );
-	diffuseColor.a *= 0.55 * wakeDash * mapFade();`
-)}`;
-    if (heightFog) {
-      injectHeightFog(sh, heightFog);
-    }
-  };
-  const mesh = new Mesh(geo, material);
+  const mesh = new Mesh(geo, wakeMaterial());
   mesh.name = "riverside-ferry";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
@@ -470,26 +467,30 @@ ${sh.fragmentShader.replace(
   return mesh;
 }
 
+/** A set of columns (piles, posts) sharing one unit geometry, in the
+ *  scene-wide lit material of their colour. */
 function instancedColumns(
   mats: Matrix4[],
   unit: BufferGeometry,
   color: number,
-  name: string,
-  ctx: RiversideContext
-): InstancedMesh | null {
+  name: string
+): Instances | null {
   if (mats.length === 0) {
     unit.dispose();
     return null;
   }
-  const material = new MeshStandardMaterial({
-    color: new Color(color),
-    roughness: 0.9,
-  });
-  const { heightFog } = ctx;
-  if (heightFog) {
-    material.onBeforeCompile = (sh) => injectHeightFog(sh, heightFog);
-  }
-  const mesh = new InstancedMesh(unit, material, mats.length);
+  const material = sceneMaterial(
+    `riverside-column:${color.toString(16)}`,
+    () => {
+      const m = new MeshStandardNodeMaterial({
+        color: new Color(color),
+        roughness: 0.9,
+      });
+      m.positionNode = instancePosition();
+      return m;
+    }
+  );
+  const mesh = new Instances(unit, material, mats.length);
   for (let i = 0; i < mats.length; i++) {
     mesh.setMatrixAt(i, mats[i]);
   }
@@ -505,7 +506,7 @@ function instancedColumns(
  *  an empty group; freed with the tile (disposeObject3D). */
 export function buildRiverside(
   features: RiversideFeature[],
-  ctx: RiversideContext
+  ctx: GroundContext
 ): Group {
   const group = new Group();
   group.name = "riverside";
@@ -535,7 +536,6 @@ export function buildRiverside(
       ferries.push(f.geometry.coordinates);
     }
   }
-  const { heightFog } = ctx;
   const solid: [Mesh3, number, string][] = [
     [parts.deck, TIMBER, "riverside-pier"],
     [parts.hull, HULL, "riverside-pontoon"],
@@ -547,7 +547,7 @@ export function buildRiverside(
     [parts.groyne, GROYNE_STONE, "riverside-groyne"],
   ];
   for (const [acc, color, name] of solid) {
-    const mesh = meshFrom(acc, color, heightFog, { cast: true });
+    const mesh = meshFrom(acc, color, { cast: true });
     if (mesh) {
       mesh.name = name;
       group.add(mesh);
@@ -556,8 +556,8 @@ export function buildRiverside(
   const pileUnit = new CylinderGeometry(0.14, 0.14, 1, 8);
   const postUnit = new BoxGeometry(0.06, 1, 0.06);
   for (const mesh of [
-    instancedColumns(parts.piles, pileUnit, PILE, "riverside-piles", ctx),
-    instancedColumns(parts.posts, postUnit, RAILING, "riverside-posts", ctx),
+    instancedColumns(parts.piles, pileUnit, PILE, "riverside-piles"),
+    instancedColumns(parts.posts, postUnit, RAILING, "riverside-posts"),
     ferryMesh(ferries, ctx),
   ]) {
     if (mesh) {

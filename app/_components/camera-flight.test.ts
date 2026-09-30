@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PerspectiveCamera } from "three";
+import { PerspectiveCamera } from "three/webgpu";
 import { createCameraFlight } from "./camera-flight";
 
 const makeCamera = () => new PerspectiveCamera(55, 1, 0.3, 6000);

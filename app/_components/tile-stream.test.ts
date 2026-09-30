@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { createLookState } from "@/lib/city/look-state";
-import { Object3D } from "three";
+import {
+  BoxGeometry,
+  Mesh,
+  MeshBasicNodeMaterial,
+  Object3D,
+} from "three/webgpu";
 import type { CityLayer } from "./city-layer";
 import type { LampControl } from "./lamp-layer";
 import type { TerrainLayer } from "./terrain-layer";
@@ -55,6 +60,7 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
   );
   const freed: string[] = [];
   const terrain = {
+    rasters: [],
     dispose: () => freed.push("terrain"),
   } as unknown as TerrainLayer;
   const city = { dispose: () => freed.push("city") } as unknown as CityLayer;
@@ -96,4 +102,40 @@ test("every part of a dressing is in the part table, so disposal and the census 
   expect([...DRESSING_PART_NAMES].sort() as string[]).toEqual(fields.sort());
   expect(dressingParts(full)).toHaveLength(fields.length);
   expect(dressingParts({ tile: "t" })).toEqual([]);
+});
+
+test("a tile that leaves while its compile runs is freed once the compile ends", async () => {
+  let finish = (): void => undefined;
+  const compiling = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const plugin = new DressingPlugin(
+    {
+      dressingGate: new Promise<void>(() => undefined),
+      compile: () => compiling,
+      onChange: () => undefined,
+    } as unknown as TileStreamContext,
+    {
+      cities: new Set(),
+      terrains: new Set(),
+      dressings: new Set(),
+      demolished: new Map(),
+    }
+  );
+  const scene = new Object3D();
+  const mesh = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+  scene.add(mesh);
+  let freed = false;
+  mesh.geometry.addEventListener("dispose", () => {
+    freed = true;
+  });
+  const tile = {};
+  const loading = plugin.processTileModel(scene, tile);
+  // the renderer unloads the tile before its compile is through: three
+  // cannot stop that compile, and it would upload the freed geometry again
+  plugin.disposeTile(tile);
+  expect(freed).toBe(false);
+  finish();
+  await loading;
+  expect(freed).toBe(true);
 });
