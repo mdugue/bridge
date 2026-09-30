@@ -8,7 +8,7 @@ import {
   type TextureNode,
   type UniformNode,
 } from "three/webgpu";
-import { texture, uniform } from "three/tsl";
+import { NodeUpdateType, texture, uniform } from "three/tsl";
 
 /**
  * A shader shared by every tile, fed per tile. three keys a node material's
@@ -23,12 +23,28 @@ import { texture, uniform } from "three/tsl";
  * `userData.slots` (TSL's `onObjectUpdate`). The values land in the object
  * bind group, which three keeps per render object, so every tile draws its
  * own.
+ *
+ * Between objects a texture slot holds its stub again. three makes a new
+ * render object's bind group from bindings it copied when the build was
+ * made, holding the textures the slots had at that moment, and uploads
+ * those first: a build that saw a tile's raster handed that raster to every
+ * later render object of it — long after the tile had freed it (its CPU
+ * bytes gone, `writeTexture` threw inside a frame, and three's render state
+ * never unwound: every compile after it missed its frame). A copy can still
+ * catch a raster (a compile's build may run while another compile holds its
+ * slots), so a slot texture shrinks to a texel of its kind once it is freed:
+ * made again, it costs a texel, never 16 MB, and never throws.
  */
 export type Slots = Readonly<Record<string, unknown>>;
 
 /** Hands a material the values its shared graph's slots read. */
 export function setSlots(material: Material, slots: Slots): void {
   material.userData.slots = slots;
+  for (const value of Object.values(slots)) {
+    if ((value as Partial<Texture> | undefined)?.isTexture === true) {
+      shrinkOnDispose(value as Texture);
+    }
+  }
 }
 
 /** The values a material hands its shared graph's slots. */
@@ -36,6 +52,12 @@ export const slotsOf = (material: Material | null): Slots =>
   (material?.userData.slots ?? {}) as Slots;
 
 type ArrayOf = new (length: number) => ArrayBufferView;
+
+type Layered = Texture & {
+  image: { data?: ArrayBufferView | null; depth?: number } | null;
+  isDataArrayTexture?: boolean;
+  isRenderTargetTexture?: boolean;
+};
 
 const arrayFor = (type: number): ArrayOf => {
   if (type === FloatType) {
@@ -47,6 +69,16 @@ const arrayFor = (type: number): ArrayOf => {
   return Uint8Array;
 };
 
+/** A 1×1 image of `like`'s element type (and layer count, for an array). */
+function texelImage(like: Texture) {
+  const source = like as Layered;
+  const make =
+    (source.image?.data?.constructor as ArrayOf | undefined) ??
+    arrayFor(like.type);
+  const depth = source.isDataArrayTexture ? (source.image?.depth ?? 1) : 1;
+  return { data: new make(4 * depth), width: 1, height: 1, depth };
+}
+
 /**
  * A 1×1 stand-in of `like`'s kind — its class (a layered array or not),
  * format, type, colour space and filtering, which is what the shader and
@@ -55,17 +87,10 @@ const arrayFor = (type: number): ArrayOf => {
  * own before any binding is made.
  */
 export function stubLike(like: Texture): Texture {
-  const source = like as Texture & {
-    image: { data?: ArrayBufferView; depth?: number } | null;
-    isDataArrayTexture?: boolean;
-  };
-  const make =
-    (source.image?.data?.constructor as ArrayOf | undefined) ??
-    arrayFor(like.type);
-  const depth = source.image?.depth ?? 1;
-  const stub = source.isDataArrayTexture
-    ? new DataArrayTexture(new make(4 * depth) as never, 1, 1, depth)
-    : new DataTexture(new make(4) as never, 1, 1);
+  const { data, depth } = texelImage(like);
+  const stub = (like as Layered).isDataArrayTexture
+    ? new DataArrayTexture(data as never, 1, 1, depth)
+    : new DataTexture(data as never, 1, 1);
   stub.format = like.format;
   stub.type = like.type;
   stub.colorSpace = like.colorSpace;
@@ -80,6 +105,25 @@ export function stubLike(like: Texture): Texture {
   return stub;
 }
 
+const shrinking = new WeakSet<Texture>();
+
+/**
+ * Once freed, the texture's image is a texel of its kind (see `Slots`). A
+ * render target's texture is its owner's to shrink (landcover-splat.ts):
+ * it dispatches no dispose of its own.
+ */
+function shrinkOnDispose(tex: Texture): void {
+  if (shrinking.has(tex) || (tex as Layered).isRenderTargetTexture === true) {
+    return;
+  }
+  shrinking.add(tex);
+  const onDispose = () => {
+    tex.removeEventListener("dispose", onDispose);
+    tex.image = texelImage(tex);
+  };
+  tex.addEventListener("dispose", onDispose);
+}
+
 /**
  * A texture slot: `like` is any tile's texture of this kind (it is copied
  * as a stub, not kept). Sample it with `texture(slot, uv)`; the clone
@@ -87,9 +131,17 @@ export function stubLike(like: Texture): Texture {
  */
 export function slotTexture(name: string, like: Texture): TextureNode {
   const stub = stubLike(like);
-  return texture(stub).onObjectUpdate(
+  const node = texture(stub).onObjectUpdate(
     ({ material }) => (slotsOf(material)[name] as Texture | undefined) ?? stub
   );
+  // Back to the stub once the object is drawn: a build made before the
+  // next object's update copies the stub (see `Slots`).
+  node.updateAfterType = NodeUpdateType.OBJECT;
+  node.updateAfter = () => {
+    node.value = stub;
+    return undefined;
+  };
+  return node;
 }
 
 /** A uniform slot; `initial` gives its type (and the value off a tile). */

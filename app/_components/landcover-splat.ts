@@ -198,6 +198,9 @@ export function paintLandcoverSplat(
     dispose: () => {
       untrackTexture(target.texture);
       target.dispose();
+      // A terrain graph's binding copied at build time may still hold this
+      // texture (material-slots.ts): made again, it gets a texel.
+      target.texture.image = { width: 1, height: 1, depth: 1 };
     },
   };
 }

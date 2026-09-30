@@ -4,6 +4,7 @@ import {
   Color,
   DataTexture,
   FloatType,
+  type InterleavedBufferAttribute,
   LinearFilter,
   LinearMipmapLinearFilter,
   Matrix4,
@@ -65,7 +66,7 @@ import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
 import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
 import { packSportTable, type SportTable } from "@/lib/city/sport";
-import { TinIndex } from "@/lib/city/terrain-tin";
+import { planTriangles, TinIndex } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
 import { colonyGarden } from "./cultivated-layer";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
@@ -1038,17 +1039,21 @@ function waterGeometryOf(
     water.setAttribute("normal", geometry.getAttribute("normal"));
   }
   if (index) {
-    const kept: number[] = [];
-    const plan = (i: number) => [position.getX(i), position.getZ(i)] as const;
-    for (let t = 0; t < index.count; t += 3) {
-      const [ax, az] = plan(index.getX(t));
-      const [bx, bz] = plan(index.getX(t + 1));
-      const [cx, cz] = plan(index.getX(t + 2));
-      if ((bx - ax) * (cz - az) - (bz - az) * (cx - ax) !== 0) {
-        kept.push(index.getX(t), index.getX(t + 1), index.getX(t + 2));
-      }
-    }
-    water.setIndex(kept);
+    // The quantised numbers as they are (lib/city/terrain-tin.ts).
+    const raw = position;
+    const interleaved =
+      (raw as InterleavedBufferAttribute).isInterleavedBufferAttribute === true;
+    const kept = planTriangles(
+      index.array as Uint16Array | Uint32Array,
+      interleaved
+        ? (raw as InterleavedBufferAttribute).data.array
+        : (raw as BufferAttribute).array,
+      interleaved
+        ? (raw as InterleavedBufferAttribute).data.stride
+        : raw.itemSize,
+      interleaved ? (raw as InterleavedBufferAttribute).offset : 0
+    );
+    water.setIndex(new BufferAttribute(kept, 1));
   }
   water.boundingBox = geometry.boundingBox?.clone() ?? null;
   water.boundingSphere = geometry.boundingSphere?.clone() ?? null;

@@ -391,6 +391,17 @@ async function allNamed<T extends Record<string, Promise<unknown>>>(
   };
 }
 
+/**
+ * The next builder in a later task: each is a long task of its own on a
+ * phone (the trees alone ~50 ms on a laptop), and a frame gets in between.
+ * A tile that leaves meanwhile still gets its dressing whole — the caller
+ * frees it.
+ */
+const nextTask = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
 async function buildDressing(
   terrain: TerrainLayer,
   extras: TerrainExtras,
@@ -455,6 +466,7 @@ async function buildDressing(
     river: get<RiversideFeature>("riverside"),
   });
   const sport = buildSport(terrain, sportTable, ctx);
+  await nextTask();
   // Rails may run past the tile edge: they sample the ground over
   // every loaded terrain, not this tile's alone.
   const ground = { offset: ctx.offset, heightAt: ctx.heightAt };
@@ -478,6 +490,7 @@ async function buildDressing(
   // Born with the current look and season, not the defaults.
   vegetation.applyLook(ctx.look.get());
   vegetation.setSeason(ctx.season());
+  await nextTask();
   const lowVegetation =
     hedges.length > 0
       ? buildLowVegetation(hedges, {
@@ -498,6 +511,7 @@ async function buildDressing(
     heightAt: terrain.heightAt,
   });
   lampControl.setNightFactor(ctx.night());
+  await nextTask();
   const rail = buildRail(
     { rails, bridges, ballast, platforms },
     {
@@ -506,6 +520,7 @@ async function buildDressing(
       owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
     }
   );
+  await nextTask();
   // The bake writes only the monuments a tile owns; a basin that reaches
   // past the seam samples the neighbour's ground.
   const monumentLayer = buildMonuments(monuments, {
@@ -516,6 +531,7 @@ async function buildDressing(
     ...ground,
     heightAt: terrain.heightAt,
   });
+  await nextTask();
   const vines = vineRows(cultivated);
   const vineyards =
     vines.length > 0
@@ -526,6 +542,7 @@ async function buildDressing(
       : undefined;
   // Tracks are cut at the tile edge by the bake; they and the span wires
   // sample the ground over every loaded terrain, like the rails.
+  await nextTask();
   const tram = trams.length > 0 ? buildTram(trams, bridges, ground) : undefined;
   // Piers and pontoons are the tile's own; a ferry line or groyne cut at
   // the seam samples the neighbour's ground past it.

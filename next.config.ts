@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  allowedDevOrigins: ["192.168.178.130"],
   // The site this build renders (sites/index.ts); the bake scripts read the
   // same SITE, so the data and the HUD always describe one place.
   env: { NEXT_PUBLIC_SITE: process.env.SITE ?? "dresden" },
