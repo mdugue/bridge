@@ -7,6 +7,7 @@ import {
   Points,
 } from "three/webgpu";
 import { Instances } from "./instancing";
+import { graphOf, setGraph, setSlots } from "./material-slots";
 import { createPipelineAnchors, layoutStub } from "./pipeline-anchors";
 import { sceneMaterial, retainSceneMaterials } from "./three-utils";
 
@@ -73,4 +74,27 @@ test("only scene-wide materials are anchored, once per layout and receipt", asyn
   anchors.dispose();
   expect(anchors.count()).toBe(0);
   release();
+});
+
+test("a shared build is anchored once, through a stand-in without the tile's slots", async () => {
+  const compiled: Object3D[] = [];
+  const anchors = createPipelineAnchors((o) => {
+    compiled.push(o);
+    return Promise.resolve();
+  });
+  const tile = (raster: object) => {
+    const material = new MeshBasicNodeMaterial();
+    setSlots(material, { class: raster });
+    setGraph(material, "terrain|fine");
+    return new Mesh(new BoxGeometry(), material);
+  };
+  const raster = {};
+  await anchors.anchor(tile(raster));
+  await anchors.anchor(tile({}));
+  expect(anchors.count()).toBe(1);
+  const standIn = (compiled[0] as Mesh).material as MeshBasicNodeMaterial;
+  // it builds as the tiles do and holds none of their rasters
+  expect(graphOf(standIn)).toBe("terrain|fine");
+  expect(standIn.userData.slots).toBeUndefined();
+  anchors.dispose();
 });

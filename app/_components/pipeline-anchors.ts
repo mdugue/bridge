@@ -13,6 +13,7 @@ import {
   type Object3D,
   Points,
 } from "three/webgpu";
+import { graphOf } from "./material-slots";
 import { releaseRenderState } from "./three-utils";
 
 /**
@@ -28,7 +29,11 @@ import { releaseRenderState } from "./three-utils";
  * (the geometry's part of the key is structural: attribute names, strides,
  * offsets, item sizes; see RenderObject.getGeometryCacheKey). It is
  * compiled once, never added to the scene and never drawn: its render
- * object holds the pipeline. Only scene-wide materials are anchored; a
+ * object holds the pipeline. Scene-wide materials are anchored as they are.
+ * A per-tile material that is one user of a shared build (material-slots.ts
+ * `setGraph`: the ground's variants, the ground-lit walls) is anchored
+ * through a stand-in: a copy without the tile's slots, one per build, so
+ * the anchor keeps the build and none of the tile's rasters. Any other
  * per-tile material leaves with its tile and compiles off the frame when it
  * comes back.
  */
@@ -119,6 +124,24 @@ export function layoutStub(geometry: BufferGeometry): BufferGeometry {
   return stub;
 }
 
+/**
+ * A copy of `material` that builds as it does and holds none of its tile's
+ * values: its slots read their stubs.
+ */
+function slotless(material: Material): Material {
+  const { userData } = material;
+  const rest: Record<string, unknown> = { ...userData };
+  delete rest.slots;
+  material.userData = rest;
+  try {
+    const copy = material.clone();
+    copy.name = `${material.name} (anchor)`;
+    return copy;
+  } finally {
+    material.userData = userData;
+  }
+}
+
 /** The anchor's key: what a build and its pipeline are keyed by. */
 function anchorKey(drawable: Drawable, material: Material): string {
   const geometry = drawable.geometry as BufferGeometry;
@@ -172,14 +195,35 @@ export function createPipelineAnchors(
   compile: (object: Object3D) => Promise<void>
 ): PipelineAnchors {
   const anchors = new Map<string, Object3D>();
+  // the slot-less stand-ins, one per shared build
+  const standIns = new Map<string, Material>();
+  const anchorMaterial = (material: Material): Material | null => {
+    if (material.userData.shared === true) {
+      return material;
+    }
+    const graph = graphOf(material);
+    if (graph === undefined) {
+      return null;
+    }
+    let stand = standIns.get(graph);
+    if (!stand) {
+      stand = slotless(material);
+      standIns.set(graph, stand);
+    }
+    return stand;
+  };
   return {
     anchor: async (object) => {
       const drawable = object as Drawable;
-      const { geometry, material } = drawable;
-      if (!(geometry && material) || Array.isArray(material)) {
+      const { geometry } = drawable;
+      if (
+        !(geometry && drawable.material) ||
+        Array.isArray(drawable.material)
+      ) {
         return;
       }
-      if (material.userData.shared !== true) {
+      const material = anchorMaterial(drawable.material);
+      if (!material) {
         return;
       }
       const key = anchorKey(drawable, material);
@@ -200,6 +244,10 @@ export function createPipelineAnchors(
         releaseRenderState(anchor);
       }
       anchors.clear();
+      for (const material of standIns.values()) {
+        material.dispose();
+      }
+      standIns.clear();
     },
   };
 }

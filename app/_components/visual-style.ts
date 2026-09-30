@@ -49,7 +49,29 @@ import {
   type V3,
   type V4,
 } from "./shader-chunks";
-import { type ClaySky, createClaySky } from "./sky-light";
+import {
+  setGraph,
+  setSlots,
+  slotsOf,
+  slotTexture,
+  slotUniform,
+} from "./material-slots";
+import { claySkySlots, createClaySky, openSkySlots } from "./sky-light";
+
+/** A building tile's object table (lib/city/city-mesh.ts). */
+interface ObjectTable {
+  rows: number;
+  texture: DataTexture;
+}
+
+/** The clay's nodes, one set per app for every building tile. */
+interface ClayGraph {
+  ao: F;
+  colour: V3;
+  emissive: V3;
+  normal: V3;
+  roughness: F;
+}
 
 /**
  * The city is rendered in one style: archviz clay — opaque, cheap, and the
@@ -99,9 +121,6 @@ export interface StyleResources {
   transparency: number;
 }
 
-/** A tile's clay as the tile stream hands it its sky view. */
-const CLAY_SKY = "claySky";
-
 /**
  * Procedural facade detail on the opaque clay node material, keyed to each
  * building's OWN base (its row of the object table, lib/city/city-mesh.ts —
@@ -132,23 +151,19 @@ const CLAY_SKY = "claySky";
  * Heights come from world space (world Y is elevation). The uniforms are
  * shared nodes, so a slider retunes every tile live.
  */
-function clayMaterial(
-  d: ClayDetailUniforms,
-  objects: { rows: number; texture: DataTexture }
-): MeshStandardNodeMaterial {
-  const material = new MeshStandardNodeMaterial({
-    color: 0xec_e7_df,
-    roughness: 1,
-    metalness: 0,
-  });
-
+function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
+  // The tile's object table and its row count are slots: every tile's
+  // clay shares this graph (material-slots.ts).
+  const table = slotTexture("clayObjects", objects.texture);
+  // reason: slotUniform types its node loosely; the row count is a float.
+  const rows = slotUniform("clayRows", objects.rows) as unknown as F;
   // --- per vertex: the object's three texels (lib/city/city-mesh.ts
   // packObjectTexels): A (tint rgb, baseZ), B (roof rgb, eaveH),
   // C (storeyH, glow, rough, flags) ------------------------------------------
   const id = int(attribute("featureId", "float").add(0.5));
   const at = ivec2(id.mod(OBJECT_TEXTURE_WIDTH), id.div(OBJECT_TEXTURE_WIDTH));
   const band = (k: number) =>
-    textureLoad(objects.texture, at.add(ivec2(0, objects.rows * k)));
+    textureLoad(table, at.add(ivec2(0, int(rows).mul(k))));
   const a = band(0);
   const b = band(1);
   const c = band(2);
@@ -165,25 +180,19 @@ function clayMaterial(
   // do for a sliver that thin.
   const raw = attribute("normal", "vec3");
   const safe = select(dot(raw, raw).lessThan(1e-8), vec3(0, 1, 0), raw);
-  material.normalNode = normalize(varying(transformNormalToView(safe)));
   const wn = normalize(varying(modelWorldMatrix.mul(vec4(safe, 0)).xyz));
-
-  // --- per fragment --------------------------------------------------------
-  // Materialstreuung: nudge roughness per building so the matte sheen varies
-  // house-to-house (clamped to stay matte, no shiny clay).
-  material.roughnessNode = clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1);
-
   const h = max(localH, 0);
   const wall = float(1).sub(smoothstep(0.5, 0.7, abs(wn.y)));
-  material.colorNode = clayColour(d, tint, build, h, wall, flags);
-
-  // Himmelslicht: the courtyard's ground floor gets less of the sky.
-  const sky = createClaySky();
-  material.userData[CLAY_SKY] = sky;
-  material.aoNode = sky.ao(h, build.z, d.uSkyView);
-
-  material.emissiveNode = clayGlow(d, build, h, wall, flags, wn);
-  return material;
+  return {
+    normal: normalize(varying(transformNormalToView(safe))),
+    // Materialstreuung: nudge roughness per building so the matte sheen
+    // varies house-to-house (clamped to stay matte, no shiny clay).
+    roughness: clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
+    colour: clayColour(d, tint, build, h, wall, flags),
+    // Himmelslicht: the courtyard's ground floor gets less of the sky.
+    ao: createClaySky().ao(h, build.z, d.uSkyView),
+    emissive: clayGlow(d, build, h, wall, flags, wn),
+  };
 }
 
 /**
@@ -339,15 +348,39 @@ export function createStyleResources(
   };
 }
 
+/** The clay graph per app (keyed by its facade uniforms). */
+const clayGraphs = new WeakMap<ClayDetailUniforms, ClayGraph>();
+
 /**
- * One tile's clay material, reading that tile's object table. Registered in
- * `resources.materials` until the tile disposes it.
+ * One tile's clay material: the app's one clay graph, reading that tile's
+ * object table and (once it lands) sky view through its slots. Registered
+ * in `resources.materials` until the tile disposes it.
  */
 export function createClayMaterial(
   resources: StyleResources,
-  objects: { rows: number; texture: DataTexture }
+  objects: ObjectTable
 ): MeshStandardNodeMaterial {
-  const clay = clayMaterial(resources.clayDetail, objects);
+  const d = resources.clayDetail;
+  let graph = clayGraphs.get(d);
+  if (!graph) {
+    graph = clayGraph(d, objects);
+    clayGraphs.set(d, graph);
+  }
+  const clay = new MeshStandardNodeMaterial({
+    color: 0xec_e7_df,
+    roughness: 1,
+    metalness: 0,
+  });
+  clay.normalNode = graph.normal;
+  clay.roughnessNode = graph.roughness;
+  clay.colorNode = graph.colour;
+  clay.aoNode = graph.ao;
+  clay.emissiveNode = graph.emissive;
+  setSlots(clay, {
+    clayObjects: objects.texture,
+    clayRows: objects.rows,
+    ...openSkySlots(),
+  });
   clay.name = "clay";
   applyTransparency(clay, resources.transparency);
   resources.materials.add(clay);
@@ -367,7 +400,7 @@ export function setClaySkyView(
   origin: [number, number],
   size: [number, number]
 ): void {
-  (clay.userData[CLAY_SKY] as ClaySky | undefined)?.set(texture, origin, size);
+  setSlots(clay, { ...slotsOf(clay), ...claySkySlots(texture, origin, size) });
 }
 
 /**
@@ -387,6 +420,8 @@ function applyTransparency(clay: MeshStandardNodeMaterial, t: number): void {
   clay.opacity = 1 - t;
   clay.alphaHash = t > 0;
   clay.transparent = false;
+  // The two builds of the one graph (material-slots.ts).
+  setGraph(clay, clay.alphaHash ? "clay|hashed" : "clay|solid");
   if (clay.alphaHash !== wasHashed) {
     clay.needsUpdate = true;
   }

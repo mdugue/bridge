@@ -51,6 +51,22 @@ export function setSlots(material: Material, slots: Slots): void {
 export const slotsOf = (material: Material | null): Slots =>
   (material?.userData.slots ?? {}) as Slots;
 
+/**
+ * Names the shared build a material is one user of: `key` stands for its
+ * graph and whatever else three builds it by (its parameters), so any two
+ * materials under one key build alike. pipeline-anchors.ts keeps that
+ * build alive under the key: three drops a build with its last render
+ * object, and every tile of a variant leaving was a rebuild on return —
+ * 1.5 s of main thread for the ground's on an iPhone.
+ */
+export function setGraph(material: Material, key: string): void {
+  material.userData.graph = key;
+}
+
+/** The shared build a material names (`setGraph`), if any. */
+export const graphOf = (material: Material): string | undefined =>
+  material.userData.graph as string | undefined;
+
 type ArrayOf = new (length: number) => ArrayBufferView;
 
 type Layered = Texture & {

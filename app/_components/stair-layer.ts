@@ -13,6 +13,7 @@ import { type GroundLight, groundLitMaterial } from "./sky-light";
  */
 export function dressStairs(mesh: Mesh, light?: GroundLight): void {
   mesh.material = groundLitMaterial(
+    "stairs",
     { vertexColors: true, roughness: 0.92, metalness: 0, side: DoubleSide },
     light,
     true

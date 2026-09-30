@@ -14,6 +14,7 @@ const KERB_COLOR = 0xd9_d5_cc; // pale granite, a shade above the pavement
  */
 export function dressKerbs(mesh: Mesh, light?: GroundLight): void {
   mesh.material = groundLitMaterial(
+    "kerbs",
     { color: KERB_COLOR, roughness: 0.9, metalness: 0 },
     light,
     true

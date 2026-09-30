@@ -2,11 +2,14 @@ import { expect, test } from "bun:test";
 import { DataTexture, MeshStandardNodeMaterial } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import { graphOf, slotsOf } from "./material-slots";
+import { openSkyTexture } from "./sky-light";
 import {
   applyCityLook,
   createClayMaterial,
   createStyleResources,
   setCityTransparency,
+  setClaySkyView,
 } from "./visual-style";
 
 // The alpha-hash test is part of the built node graph, so these tests watch
@@ -86,4 +89,28 @@ test("a tile's clay is a node material with the facade detail wired", () => {
   expect(clay.roughnessNode).not.toBeNull();
   expect(clay.emissiveNode).not.toBeNull();
   expect(clay.aoNode).not.toBeNull();
+});
+
+test("every building tile's clay shares one graph and reads its own table", () => {
+  const resources = resourcesAt();
+  const a = objects();
+  const b = { rows: 7, texture: new DataTexture() };
+  const clayA = createClayMaterial(resources, a);
+  const clayB = createClayMaterial(resources, b);
+  // one set of nodes: one build for every tile
+  expect(clayB.colorNode).toBe(clayA.colorNode);
+  expect(clayB.aoNode).toBe(clayA.aoNode);
+  expect(slotsOf(clayB).clayObjects).toBe(b.texture);
+  expect(slotsOf(clayB).clayRows).toBe(7);
+  expect(graphOf(clayB)).toBe("clay|solid");
+  // the open sky until the tile's raster lands, then a swap of values
+  expect(slotsOf(clayA).claySvf).toBe(openSkyTexture());
+  const before = clayA.version;
+  const raster = new DataTexture();
+  setClaySkyView(clayA, raster, [0, 0], [2000, 2000]);
+  expect(slotsOf(clayA).claySvf).toBe(raster);
+  expect(slotsOf(clayA).clayObjects).toBe(a.texture);
+  expect(clayA.version).toBe(before);
+  setCityTransparency(resources, 0.5);
+  expect(graphOf(clayA)).toBe("clay|hashed");
 });

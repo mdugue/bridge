@@ -17,6 +17,7 @@ const WALL_COLOR = 0xc9_bd_a4; // warm sandstone
  */
 export function dressWalls(mesh: Mesh, light?: GroundLight): void {
   mesh.material = groundLitMaterial(
+    "walls",
     { color: WALL_COLOR, roughness: 0.95, metalness: 0, side: DoubleSide },
     light,
     false

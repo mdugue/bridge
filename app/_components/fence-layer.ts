@@ -73,6 +73,28 @@ function fenceColour(): V3 {
   return mix(rooted, tone(FAR), fade);
 }
 
+/** The band's nodes: constants, so one set for every tile (one build). */
+let shared: { colour: V3; emissive: V3; normal: V3 } | null = null;
+
+function fenceNodes() {
+  if (!shared) {
+    const colour = fenceColour();
+    shared = {
+      colour,
+      // The band is lit as the ground it stands on: its normal is the
+      // world's up (in view space, as the slot takes it), so both faces
+      // take the ground's light whatever the sun's side — a vertical quad
+      // lit as one was a dark grey sheet against the pale ground on the
+      // side away from the sun. Shadows it receives still fall on it.
+      normal: cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz.normalize(),
+      // Lifts the band a touch toward its tone (see LIFT; the material
+      // colour is white, so the tone is the diffuse colour).
+      emissive: colour.mul(LIFT),
+    };
+  }
+  return shared;
+}
+
 /**
  * Fences, railings and gates from OSM, baked with the terrain: the fine
  * terrain glTF carries a `fences` node (lib/city/fences.ts, written by
@@ -85,21 +107,15 @@ function fenceColour(): V3 {
  */
 export function dressFences(mesh: Mesh, light?: GroundLight): void {
   const material = groundLitMaterial(
+    "fences",
     { color: 0xff_ff_ff, roughness: 1, metalness: 0, side: DoubleSide },
     light,
     true
   );
-  const colour = fenceColour();
-  material.colorNode = colour;
-  // The band is lit as the ground it stands on: its normal is the world's
-  // up (in view space, as the slot takes it), so both faces take the
-  // ground's light whatever the sun's side — a vertical quad lit as one was
-  // a dark grey sheet against the pale ground on the side away from the
-  // sun. Shadows it receives still fall on it.
-  material.normalNode = cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz.normalize();
-  // Lifts the band a touch toward its tone (see LIFT; the material colour
-  // is white, so the tone is the diffuse colour).
-  material.emissiveNode = colour.mul(LIFT);
+  const nodes = fenceNodes();
+  material.colorNode = nodes.colour;
+  material.normalNode = nodes.normal;
+  material.emissiveNode = nodes.emissive;
   mesh.material = material;
   mesh.castShadow = false;
   mesh.receiveShadow = true;

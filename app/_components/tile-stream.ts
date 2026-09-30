@@ -55,7 +55,14 @@ import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
   dressTerrain,
+  freeSplatRasters,
+  freeSport,
   type GroundUniforms,
+  loadNdviTexture,
+  loadSplatRasters,
+  loadSportKey,
+  type SplatRasters,
+  type SportRasters,
   type TerrainLayer,
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
@@ -63,7 +70,11 @@ import { dressKerbs } from "./kerb-layer";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
-import { compileRepresentatives, disposeObject3D } from "./three-utils";
+import {
+  compileRepresentatives,
+  disposeObject3D,
+  estimateGeometryBytes,
+} from "./three-utils";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -163,6 +174,8 @@ interface Dressed {
   aborter?: AbortController;
   city?: CityLayer;
   dressing?: TileDressing;
+  /** the dressing's geometry bytes, once it hangs on the tile */
+  dressingBytes?: number;
   /** the shared sky-view raster the city holds (its URL) */
   svf?: string;
   terrain?: TerrainLayer;
@@ -594,6 +607,7 @@ export class DressingPlugin {
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
+  private tiles: { recalculateBytesUsed: () => void } | null = null;
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
     (url) => loadSkyViewTexture(url),
@@ -603,6 +617,21 @@ export class DressingPlugin {
   readonly horizon: SharedRasters<Texture> = createSharedRasters(
     (url) => loadHorizonTexture(url),
     (texture) => texture.dispose()
+  );
+  /** the class rasters (and their painted splats), NDVI and sports grounds
+   *  a tile's two terrain levels share — on a phone both levels name the
+   *  same files, ~43 MB of GPU memory per tile loaded twice */
+  readonly splats: SharedRasters<SplatRasters> = createSharedRasters(
+    (url, signal) => loadSplatRasters(url, this.ctx.renderer, signal),
+    freeSplatRasters
+  );
+  readonly ndvis: SharedRasters<Texture> = createSharedRasters(
+    (url, signal) => loadNdviTexture(url, signal),
+    (texture) => texture.dispose()
+  );
+  readonly sports: SharedRasters<SportRasters> = createSharedRasters(
+    (key, signal) => loadSportKey(key, signal),
+    freeSport
   );
 
   constructor(
@@ -622,6 +651,23 @@ export class DressingPlugin {
         // Without the warm-up a date change compiles in a frame; the
         // stream goes on.
       });
+  }
+
+  init(tiles: { recalculateBytesUsed: () => void }): void {
+    this.tiles = tiles;
+  }
+
+  /**
+   * What the tile cache weighs a tile by on top of its glTF (the renderer
+   * counts that one and sums every plugin's): the rasters its terrain
+   * holds and its dressing's geometry, which the renderer cannot see — it
+   * reads textures off the glTF's materials. Without them an iPhone's
+   * cache sat at 173 MB of its 180 while the GPU held 865 MB, and the next
+   * buffer failed to allocate.
+   */
+  calculateBytesUsed(_tile: object, scene: Object3D | null): number {
+    const dressed = scene ? this.dressed.get(scene) : undefined;
+    return (dressed?.terrain?.bytes ?? 0) + (dressed?.dressingBytes ?? 0);
   }
 
   private url = (file: string): string =>
@@ -751,6 +797,9 @@ export class DressingPlugin {
       renderer: this.ctx.renderer,
       skyView: this.skyView,
       horizon: this.horizon,
+      splats: this.splats,
+      ndvis: this.ndvis,
+      sports: this.sports,
     });
     terrain.water?.setMist(this.ctx.look.get().waterMist);
     // The fine level's baked stairs, walls, kerbs and fences: only their
@@ -828,6 +877,9 @@ export class DressingPlugin {
     }
     this.skyView.clear();
     this.horizon.clear();
+    this.splats.clear();
+    this.ndvis.clear();
+    this.sports.clear();
   }
 
   private queueDressing(
@@ -886,6 +938,11 @@ export class DressingPlugin {
           part.visible = shown[i] ?? true;
         });
         entry.dressing = dressing;
+        entry.dressingBytes = parts.reduce(
+          (sum, part) => sum + estimateGeometryBytes(part),
+          0
+        );
+        this.tiles?.recalculateBytesUsed();
         this.stream.dressings.add(dressing);
         // Whatever changed while it compiled (the hour moves on).
         catchUp(dressing, this.ctx);

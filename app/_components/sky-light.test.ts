@@ -16,9 +16,11 @@ import { slotsOf } from "./material-slots";
 import { dressKerbs } from "./kerb-layer";
 import {
   applyGroundLight,
+  claySkySlots,
   createClaySky,
   type GroundLight,
   groundLitMaterial,
+  openSkySlots,
   openSkyTexture,
 } from "./sky-light";
 import { dressStairs } from "./stair-layer";
@@ -63,7 +65,7 @@ function received(material: MeshStandardNodeMaterial, shadow: Node): Node {
 
 test("the sky view scales the ambient through aoNode, by the shared row", () => {
   const light = groundLight({ horizon: false, svf: true });
-  const material = groundLitMaterial({ roughness: 1 }, light, true);
+  const material = groundLitMaterial("test", { roughness: 1 }, light, true);
   expect(material).toBeInstanceOf(MeshStandardNodeMaterial);
   expect(material.aoNode).not.toBeNull();
   const ao = reachable(material.aoNode as Node);
@@ -161,14 +163,16 @@ test("a tile without the rasters leaves the material as it was", () => {
   expect(material.receivedShadowNode).toBeNull();
 });
 
-test("the clay's sky view swaps its raster in without a new node", () => {
+test("the clay's sky view is slots: the open sky until the raster lands", () => {
   const sky = createClaySky();
   const ao = sky.ao(float(2), float(9), float(1));
-  const [tex] = texturesOf(ao);
-  expect(tex).toBe(openSkyTexture());
+  // the graph holds stand-ins, never a tile's raster
+  expect(texturesOf(ao)).not.toContain(openSkyTexture());
+  expect(openSkySlots().claySvf).toBe(openSkyTexture());
   const raster = new DataTexture();
-  sky.set(raster, [100, 200], [1000, 1000]);
-  expect(texturesOf(ao)).toContain(raster);
+  const slots = claySkySlots(raster, [100, 200], [1000, 1000]);
+  expect(slots.claySvf).toBe(raster);
+  expect((slots.clayOrigin as Vector2).toArray()).toEqual([100, 200]);
 });
 
 test("the open-sky texel samples as the rasters that replace it (LINEAR)", () => {

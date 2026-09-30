@@ -34,7 +34,6 @@ import {
   select,
   smoothstep,
   texture,
-  uniform,
   vec2,
 } from "three/tsl";
 import type { Node, UniformNode } from "three/webgpu";
@@ -53,6 +52,7 @@ import {
 import { isAbortError } from "./fetch-optional";
 import {
   type Slots,
+  setGraph,
   setSlots,
   slotTexture,
   slotUniform,
@@ -209,6 +209,29 @@ interface GroundLightGraph {
  */
 const lightGraphs = new WeakMap<object, Map<string, GroundLightGraph>>();
 
+/** A light variant's key: which rasters it reads, and the tile's size. */
+const lightVariant = (
+  light: GroundLight,
+  svf: Texture | undefined,
+  horizon: Texture | undefined
+): string =>
+  [svf ? "svf" : "", horizon ? "horizon" : "", ...light.size].join("|");
+
+/**
+ * The key of the ground light a material takes (`applyGroundLight`): the
+ * part of its build the light decides (material-slots.ts `setGraph`).
+ */
+export function groundLightKey(
+  light: GroundLight | undefined,
+  skyView = true
+): string {
+  const svf = skyView ? light?.svf : undefined;
+  const horizon = light?.horizon;
+  return light && (svf || horizon)
+    ? lightVariant(light, svf, horizon)
+    : "unlit";
+}
+
 function lightGraph(
   light: GroundLight,
   svf: Texture | undefined,
@@ -219,9 +242,7 @@ function lightGraph(
     graphs = new Map();
     lightGraphs.set(light.sunDirection, graphs);
   }
-  const key = [svf ? "svf" : "", horizon ? "horizon" : "", ...light.size].join(
-    "|"
-  );
+  const key = lightVariant(light, svf, horizon);
   let graph = graphs.get(key);
   if (graph) {
     return graph;
@@ -291,8 +312,13 @@ export function applyGroundLight(
   });
 }
 
-/** A standard node material lit by the tile's baked light. */
+/**
+ * A standard node material lit by the tile's baked light. `kind` names
+ * what else its build depends on (the caller's parameters and nodes, the
+ * same for every tile): the build is shared under it (`setGraph`).
+ */
 export function groundLitMaterial(
+  kind: string,
   params: MeshStandardNodeMaterialParameters,
   light: GroundLight | undefined,
   skyView: boolean
@@ -300,12 +326,13 @@ export function groundLitMaterial(
   const material = new MeshStandardNodeMaterial(params);
   material.name = "ground-lit";
   applyGroundLight(material, light, skyView);
+  setGraph(material, `${kind}|${groundLightKey(light, skyView)}`);
   return material;
 }
 
 // --- the clay facades --------------------------------------------------------------
 
-/** One building tile's sky view as its clay reads it. */
+/** The clay's sky view, read through slots (material-slots.ts). */
 export interface ClaySky {
   /**
    * The facade's ambient scale (the clay's `aoNode` factor): the ground's
@@ -319,26 +346,26 @@ export interface ClaySky {
    * `facadeSkyView` is the same curve.
    */
   ao: (localH: F, eaveH: F, skyView: F, normal?: V3) => F;
-  /** Binds the tile's raster once it lands: a texture swap and two uniform
-   *  writes, never a rebuild. */
-  set: (
-    texture: Texture,
-    origin: [number, number],
-    size: [number, number]
-  ) => void;
 }
 
-/** The clay's sky view: the open-sky texel until the tile's raster lands. */
+/**
+ * The clay's sky view for the graph every building tile shares: its raster,
+ * corner and extent are slots, which a tile's clay fills with the open sky
+ * (`openSkySlots`) until its raster lands (`claySkySlots`) — a swap of
+ * values, never a rebuild.
+ */
 export function createClaySky(): ClaySky {
-  const svf = texture(openSkyTexture());
-  const origin = uniform(new Vector2(0, 0));
-  const size = uniform(new Vector2(1, 1));
+  const svf = slotTexture("claySvf", openSkyTexture());
+  // reason: a Vector2 slot is a vec2 uniform; slotUniform types it loosely.
+  const origin = slotUniform(
+    "clayOrigin",
+    new Vector2(0, 0)
+  ) as unknown as UniformNode<"vec2", Vector2>;
+  const size = slotUniform(
+    "claySize",
+    new Vector2(1, 1)
+  ) as unknown as UniformNode<"vec2", Vector2>;
   return {
-    set: (tex, o, s) => {
-      svf.value = tex;
-      origin.value.set(o[0], o[1]);
-      size.value.set(s[0], s[1]);
-    },
     ao: (localH, eaveH, skyView, normal = normalWorldGeometry) => {
       const n = vec2(normal.x, normal.z.negate());
       const l = length(n);
@@ -354,6 +381,26 @@ export function createClaySky(): ClaySky {
     },
   };
 }
+
+/**
+ * A tile's sky view as its clay's slots: the raster, its north-west corner
+ * in the recentered data frame and its extent (m).
+ */
+export function claySkySlots(
+  raster: Texture,
+  origin: [number, number],
+  size: [number, number]
+): Slots {
+  return {
+    claySvf: raster,
+    clayOrigin: new Vector2(...origin),
+    claySize: new Vector2(...size),
+  };
+}
+
+/** The open sky: a clay's sky view until its tile's raster lands. */
+export const openSkySlots = (): Slots =>
+  claySkySlots(openSkyTexture(), [0, 0], [1, 1]);
 
 const white = sceneShared(() => {
   const tex = new DataTexture(

@@ -146,22 +146,27 @@ const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
 /**
- * The largest tile as the tile renderer's cache weighs it (its content's
- * geometry at load): a fine terrain tile, 62 MB at the start tile, with
- * some headroom. See `tileCacheBytesFor`.
+ * The largest tile as the tile renderer's cache weighs it: a fine terrain
+ * tile on the desktop — its glTF (62 MB at the start tile) plus the rasters
+ * its terrain holds (the 4096² class raster and the splat painted from it,
+ * the 8192-wide surface, sports and markings rasters: ~160 MB) and its
+ * dressing, with some headroom. On a phone the same tile weighs ~150 MB.
+ * See `tileCacheBytesFor`.
  */
-export const LARGEST_TILE_BYTES = 80 * MB;
+export const LARGEST_TILE_BYTES = 260 * MB;
 
 /**
- * How much tile content (decoded geometry and textures) the tile renderer
- * keeps around, in bytes: it starts unloading tiles no longer in use past
- * `max` and stops at `min`. Tiles in use are never unloaded, so this bounds
- * only what lingers after the camera moves on. 3DTilesRendererJS's default,
- * 0.3–0.4 GB, is kept on the desktop. On a phone that much lingering
- * content, plus the dressing of the tiles still in view, took the tab past
- * what Safari allows: jumping from the start straight into the Dresdner
- * Heide by the minimap kept the whole start area loaded while two forest
- * tiles arrived, and the page died.
+ * How much tile content the tile renderer keeps, in bytes, weighed as the
+ * GPU holds it: the glTF, and the rasters and dressing the tile stream
+ * adds (tile-stream.ts `calculateBytesUsed`). Past `max` it unloads tiles
+ * no longer in use, down to `min`, and it asks for no new tile while at or
+ * above `max` — so `max` bounds the GPU memory of the tiles, give or take
+ * those in flight. Before the rasters counted, a phone's cache sat at
+ * 173 MB of its 180 while the GPU held 865 MB, and Safari's next buffer
+ * failed to allocate (the render stopped); flying to the Dresdner Heide
+ * by the minimap had killed the page the same way. The phone's `max`
+ * leaves ~250 MB for everything else (post targets, shadow map, scene-wide
+ * sets); the desktop keeps about what it kept when only the glTF counted.
  *
  * `max − min` must exceed the largest tile. The cache never unloads a tile
  * that would take it below `min`, and asks for no new tile while it is at
@@ -174,8 +179,8 @@ export function tileCacheBytesFor(tier: DeviceTier): {
   min: number;
 } {
   return tier === "mobile"
-    ? { min: 60 * MB, max: 180 * MB }
-    : { min: 0.3 * GB, max: 0.4 * GB };
+    ? { min: 320 * MB, max: 600 * MB }
+    : { min: 1.2 * GB, max: 1.6 * GB };
 }
 
 /**

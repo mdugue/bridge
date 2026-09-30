@@ -95,8 +95,9 @@ test("tileCacheBytesFor keeps less out-of-view content on a phone", () => {
   expect(phone.min).toBeLessThan(phone.max);
   expect(desktop.min).toBeLessThan(desktop.max);
   expect(phone.max).toBeLessThan(desktop.min);
-  // The desktop keeps 3DTilesRendererJS's own default.
-  expect(desktop).toEqual({ min: 0.3 * 1024 ** 3, max: 0.4 * 1024 ** 3 });
+  // A phone's tiles stay well under the ~850 MB its Safari lets the GPU
+  // hold, with room for the post targets and the shadow map.
+  expect(phone.max).toBeLessThanOrEqual(600 * 1024 ** 2);
 });
 
 test("tileCacheBytesFor can always unload the largest tile", () => {
