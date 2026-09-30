@@ -393,19 +393,34 @@ export function createPostStack(
     vignetteOffset: uniform(style.vignette.offset),
     vignetteDarkness: uniform(style.vignette.darkness),
   };
-  const output = (input: V4) =>
+  // The frame before its antialiasing, whichever pipeline drew it: one
+  // target and one SMAA for all four. SMAA reads a texture, and each
+  // pipeline carrying its own made a copy of its input and three targets
+  // of its own — sixteen at full resolution, all resident once the styles
+  // were warmed, ~95 MB on an iPhone.
+  const beforeAa = new RenderTarget(size.x, size.y, {
+    type: HalfFloatType,
+    depthBuffer: false,
+  });
+  beforeAa.texture.name = "BeforeAA";
+  const antialiased = smaa(texture(beforeAa.texture));
+  const finished = new RenderPipeline(
+    renderer,
     renderOutput(
       finish(
         // reason: as above, SMAANode's vec4 output
-        nodeObject(smaa(input)) as unknown as V4,
+        nodeObject(antialiased) as unknown as V4,
         viewZ,
         finishing
       ),
       NoToneMapping,
       SRGBColorSpace
-    );
+    )
+  );
+  finished.outputColorTransform = false;
+  // A pipeline renders into the current target: these into `beforeAa`.
   const pipelineOf = (node: V4) => {
-    const p = new RenderPipeline(renderer, output(node));
+    const p = new RenderPipeline(renderer, node);
     p.outputColorTransform = false;
     return p;
   };
@@ -639,10 +654,16 @@ export function createPostStack(
       }
       const shown = pipeline();
       const warming = toWarm.shift();
-      if (warming && warming !== shown) {
-        warming.render();
+      renderer.setRenderTarget(beforeAa);
+      try {
+        if (warming && warming !== shown) {
+          warming.render();
+        }
+        shown.render();
+      } finally {
+        renderer.setRenderTarget(previous);
       }
-      shown.render();
+      finished.render();
     },
     getFocusInfo: () => ({
       focusDistance: focusDistance.value,
@@ -652,6 +673,7 @@ export function createPostStack(
     setSize: () => {
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
+      beforeAa.setSize(size.x, size.y);
     },
     applyLook: (look) => {
       for (const key of Object.keys(rows) as PostLookKey[]) {
@@ -674,9 +696,17 @@ export function createPostStack(
       }
     },
     dispose: () => {
-      for (const p of [pastel.dof, pastel.plain, styled.dof, styled.plain]) {
+      for (const p of [
+        pastel.dof,
+        pastel.plain,
+        styled.dof,
+        styled.plain,
+        finished,
+      ]) {
         p.dispose();
       }
+      antialiased.dispose();
+      beforeAa.dispose();
       paperScene.dispose();
       styleDressing.dispose();
       anchors.dispose();

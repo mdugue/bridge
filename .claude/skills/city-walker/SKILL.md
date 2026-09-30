@@ -541,7 +541,8 @@ construction-time setting. DoF is dropped by switching between **two
 prebuilt `RenderPipeline`s** (with and without `DepthOfFieldNode`, both
 built under the load screen), never by swapping one pipeline's output node,
 which re-translates the whole post graph on the main thread. SMAA carries
-the anti-aliasing (the canvas and the scene target have no MSAA). Buildings
+the anti-aliasing (the canvas and the scene target have no MSAA) — once, in
+a last pipeline over the target every pipeline draws into. Buildings
 are opaque clay only; `MeshPhysicalMaterial.transmission` ≈ doubles scene
 cost, so the frosted "ghost" style was dropped rather than kept as an
 option. `handle.getRenderInfo()` exposes `renderer.info` of the last frame

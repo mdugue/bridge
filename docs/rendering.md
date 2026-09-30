@@ -258,7 +258,10 @@ call depth). The target has no MSAA (`antialias: false`); SMAA carries the
 anti-aliasing. There is no tone mapping: the look was tuned without it. Two
 pipelines, with and without DoF, are built once — swapping one pipeline's
 output node would re-translate the whole post graph every time a flight
-starts or stops. The GTAO sample count is a construction-time setting (16;
+starts or stops. Each draws into one shared half-float target, and a last
+pipeline antialiases and finishes it: one SMAA for every pipeline, not a
+copy of its input and three targets per pipeline (sixteen full-resolution
+targets, ~95 MB on an iPhone, once the styles were warmed). The GTAO sample count is a construction-time setting (16;
 8 in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
 
@@ -270,7 +273,7 @@ second pipeline pair — the default pastel draws the pair without it — and
 its mode and pen are uniforms, so a switch between styles rebuilds
 nothing. Once the scene has loaded and the browser is idle
 (`PostStack.warmStyles`) the styled pipelines are built, one per frame
-(three builds a pipeline's graph and its SMAA passes on its first render),
+(three builds a pipeline's graph on its first render),
 and the style dressing and the Papier programs of the scene's objects are
 compiled ahead with `compileAsync` under the swap itself; afterwards a
 tile that lands compiles its Papier programs with its own (one drawable
