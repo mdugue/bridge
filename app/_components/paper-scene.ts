@@ -2,6 +2,7 @@ import {
   Color,
   type Material,
   MeshStandardNodeMaterial,
+  type Node,
   type Object3D,
   type Scene,
   type NodeBuilder,
@@ -118,6 +119,19 @@ function hiddenInPaper(object: Object3D): boolean {
   return materials.every((m) => m.transparent);
 }
 
+/**
+ * The position node three carries from `object`'s material over to the
+ * override (its first material's, for a multi-material mesh).
+ */
+function positionNodeOf(object: Object3D): Node | null {
+  const material = (object as Object3D & { material?: Material | Material[] })
+    .material;
+  const first = Array.isArray(material) ? material[0] : material;
+  const node = (first as { positionNode?: Node | null } | undefined)
+    ?.positionNode;
+  return node?.isNode === true ? node : null;
+}
+
 /** A mesh's materials that draw themselves as paper (`userData.paperOwn`). */
 function paperOwnMaterials(object: Object3D): Material[] {
   const material = (object as Object3D & { material?: Material | Material[] })
@@ -134,13 +148,18 @@ export interface PaperScene {
   begin: () => () => void;
   dispose: () => void;
   /**
-   * Runs `during` with the scene swapped to paper, then restores it — for
-   * compiling the paper programs of the scene's own objects ahead of the
-   * first Papier frame (`PostStack.warmStyles`): three carries each drawn
-   * material's position node over to the override, so no stand-in could
-   * match what a frame builds.
+   * Runs `during` with the scene swapped to paper as `object` draws it,
+   * then restores it — for compiling the paper programs of the scene's own
+   * objects ahead of the first Papier frame (`PostStack.warmStyles`):
+   * three carries each drawn material's position node over to the
+   * override, so no stand-in could match what a frame builds. The paper
+   * material holds `object`'s position node for all of `during`: three
+   * carries it over for the draw call only and puts it back before
+   * `compileAsync` makes the render object and starts its build (in the
+   * call's synchronous half), which then saw no position node — an
+   * instanced set built so drew every instance at its origin in Papier.
    */
-  swapped: <T>(during: () => T) => T;
+  swapped: <T>(object: Object3D, during: () => T) => T;
   /**
    * Whether the swap draws `object` with the paper material (not hidden
    * for the frame, and not a material that papers itself).
@@ -214,11 +233,17 @@ export function createPaperScene(
   };
   return {
     begin,
-    swapped: (during) => {
+    swapped: (object, during) => {
       const restore = begin();
+      const own = positionNodeOf(object);
+      const previous = material.positionNode;
+      if (own) {
+        material.positionNode = own;
+      }
       try {
         return during();
       } finally {
+        material.positionNode = previous;
         restore();
       }
     },

@@ -518,10 +518,11 @@ export function createPostStack(
     await anchors.anchor(object);
   };
   // The Papier programs of one drawable: compiled under the swap, which
-  // lasts for the synchronous half of the call (the build) only.
+  // lasts for the synchronous half of the call only — where three makes
+  // the render object and reads the override's position node for its build.
   const compilePaper = (object: Drawable): Promise<void> =>
     paperScene.drawsAsPaper(object)
-      ? paperScene.swapped(() => compileOne(object))
+      ? paperScene.swapped(object, () => compileOne(object))
       : Promise.resolve();
   // Once is enough for a drawable and its material (a tile, then the whole
   // scene at boot, walks the same objects).

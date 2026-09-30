@@ -9,7 +9,7 @@ import {
   PointsNodeMaterial,
   Scene,
 } from "three/webgpu";
-import { uniform } from "three/tsl";
+import { positionLocal, uniform, vec3 } from "three/tsl";
 import { createPaperScene, paperGroundOn } from "./paper-scene";
 
 function world() {
@@ -66,9 +66,30 @@ test("an object hidden before the frame stays hidden after it", () => {
 test("swapped runs its callback under the swap and restores after", () => {
   const w = world();
   const paper = createPaperScene(w.scene, w.fog);
-  const seen = paper.swapped(() => w.scene.overrideMaterial !== null);
+  const seen = paper.swapped(w.solid, () => w.scene.overrideMaterial !== null);
   expect(seen).toBe(true);
   expect(w.scene.overrideMaterial).toBeNull();
+});
+
+test("swapped holds the object's position node on the paper throughout", () => {
+  // compileAsync makes the render object and starts its build after three
+  // has put the override's own position node back: an instanced set built
+  // without its node drew every instance at its origin in Papier.
+  const w = world();
+  const placed = positionLocal.add(vec3(100, 0, 0));
+  w.solid.material.positionNode = placed;
+  const paper = createPaperScene(w.scene, w.fog);
+  const during = paper.swapped(
+    w.solid,
+    () => (w.scene.overrideMaterial as MeshStandardNodeMaterial).positionNode
+  );
+  expect(during).toBe(placed);
+  // the next Papier frame starts from the paper's own (none)
+  const restore = paper.begin();
+  expect(
+    (w.scene.overrideMaterial as MeshStandardNodeMaterial).positionNode
+  ).toBeNull();
+  restore();
 });
 
 test("only what wears the paper material is compiled for it", () => {
