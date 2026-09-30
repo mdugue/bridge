@@ -604,3 +604,56 @@ export function intradosAt(span: MasonrySpan, s: number): number | null {
     span.spring + (span.crown - span.spring) * Math.sqrt(Math.max(0, 1 - u * u))
   );
 }
+
+/** A deck end this close above the ground meets it already (m). */
+export const APPROACH_FLUSH_M = 0.05;
+/** How far past a deck end its approach may run to reach the ground (m). */
+export const APPROACH_REACH_M = 40;
+/** The approach is searched in steps this long (m). */
+const APPROACH_STEP_M = 0.5;
+/** The steepest approach by deck kind (rise over run): a road or path ramp
+ *  as steep as a street climbs, a railway's no steeper than its line. */
+export const APPROACH_GRADE: Readonly<Record<string, number>> = {
+  road: 0.08,
+  path: 0.1,
+  rail: 0.03,
+  other: 0.08,
+};
+
+/**
+ * Where the approach leaving a deck end at height `top` meets the ground:
+ * the first distance (m) out from the end at which a ramp falling at
+ * `grade` reaches `groundAt(d)` (the ground that far out along the
+ * approach). 0 when the end is flush with the ground already (or below
+ * it); null when no ground within APPROACH_REACH_M comes up to the ramp
+ * (a deck ending in the air, over a street, onto the next deck) or the
+ * ground is unknown on the way.
+ *
+ * The bake measures a deck's ends in DOM1 (the roadway), the terrain is
+ * the bare-earth DGM, which runs on under a bridge's approach as the
+ * ground it was built on: without an approach every deck end stood as a
+ * slab edge a metre or more above the road running up to it.
+ */
+export function approachLanding(
+  groundAt: (d: number) => number | null,
+  top: number,
+  grade: number
+): number | null {
+  const g0 = groundAt(0);
+  if (g0 === null) {
+    return null;
+  }
+  if (g0 >= top - APPROACH_FLUSH_M) {
+    return 0;
+  }
+  for (let d = APPROACH_STEP_M; d <= APPROACH_REACH_M; d += APPROACH_STEP_M) {
+    const g = groundAt(d);
+    if (g === null) {
+      return null;
+    }
+    if (g >= top - grade * d - APPROACH_FLUSH_M) {
+      return d;
+    }
+  }
+  return null;
+}

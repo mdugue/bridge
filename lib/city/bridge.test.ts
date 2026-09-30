@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  approachLanding,
   archFits,
   archSpringing,
   axisFrame,
@@ -215,4 +216,19 @@ test("masonryArches: arches between real piers, not at the banks", () => {
   expect(intradosAt(first, mid)).toBeCloseTo(117.4, 6);
   expect(intradosAt(first, first.from)).toBeCloseTo(104.5, 6);
   expect(intradosAt(first, first.to + 1)).toBeNull();
+});
+
+test("a deck end's approach lands where its ramp meets the ground", () => {
+  // the end 1 m above flat ground: at 8 % the ramp lands 12.5 m out
+  // (within the flush tolerance a step earlier)
+  expect(approachLanding(() => 100, 101, 0.08)).toBe(12);
+  // flush (or buried) ends need none
+  expect(approachLanding(() => 100.98, 101, 0.08)).toBe(0);
+  expect(approachLanding(() => 102, 101, 0.08)).toBe(0);
+  // an embankment rising to the deck 4 m out ends it there
+  expect(approachLanding((d) => (d >= 4 ? 101 : 99), 101, 0.08)).toBe(4);
+  // a deck ending high over a street finds no ground in reach
+  expect(approachLanding(() => 90, 101, 0.08)).toBeNull();
+  // unknown ground on the way: no approach
+  expect(approachLanding((d) => (d > 2 ? null : 100), 101, 0.08)).toBeNull();
 });

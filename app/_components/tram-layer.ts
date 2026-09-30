@@ -263,6 +263,23 @@ interface TrackRun {
   pts: Pt[];
 }
 
+/** A track OSM does not put on the bridge still rides the approach up to
+ *  its deck — not one passing under it, far below. */
+const APPROACH_RIDE_M = 1.5;
+
+/** The approach a track off the bridge rides at (x, z), or null. */
+function approachLift(
+  decks: DeckPoly[],
+  x: number,
+  z: number,
+  ground: number | null
+): number | null {
+  const lift = deckLift(decks, x, z, undefined, "ramps");
+  return lift !== null && ground !== null && lift - ground < APPROACH_RIDE_M
+    ? Math.max(lift, ground)
+    : null;
+}
+
 function trackRuns(
   coords: Point2[],
   bed: TramBed,
@@ -281,7 +298,9 @@ function trackRuns(
     }
     prev = p;
     const w = epsgToWorld(p[0], p[1], ctx.offset);
-    const lift = onBridge ? deckLift(decks, w.x, w.z) : null;
+    const lift = onBridge
+      ? deckLift(decks, w.x, w.z)
+      : approachLift(decks, w.x, w.z, ctx.heightAt(p[0], p[1]));
     const ground = lift === null ? ctx.heightAt(p[0], p[1]) : null;
     if (lift !== null) {
       run.pts.push({ x: w.x, y: lift + RAIL_TOP_ON_DECK_M, z: w.z });
@@ -612,7 +631,7 @@ export function buildTram(
   if (features.length === 0) {
     return group;
   }
-  const decks = buildDeckTable(bridges, ctx.offset);
+  const decks = buildDeckTable(bridges, ctx);
   const w = wires();
   const held: WirePoint[] = [];
   const parts: (Group | Mesh | null)[] = buildTracks(
