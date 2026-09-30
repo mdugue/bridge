@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Viewpoint } from "@/lib/city/site";
-import { currentSite } from "@/sites";
+import { useSite } from "./site-context";
 import { describeOffsite, type Offsite } from "./locate-me";
 
 /**
@@ -41,7 +41,7 @@ export function LocateOffsiteDialog({
   onShowMap: () => void;
   onTravel: (view: Viewpoint) => void;
 }) {
-  const site = currentSite();
+  const site = useSite();
   // The last placement is kept while the dialog animates out, so the text
   // doesn't blank mid-fade (state set during render, React's own pattern).
   const [shown, setShown] = useState(offsite);

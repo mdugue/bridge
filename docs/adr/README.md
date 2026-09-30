@@ -10,7 +10,7 @@ each data → look transformation does and its status.
 
 | # | Decision | Status |
 |---|---|---|
-| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024) |
+| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024; a prerendered route per site: 0035) |
 | [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber | accepted |
 | [0003](./0003-bake-heavy-inputs-at-build-time.md) | Bake heavy inputs at build time; the browser decodes no raster and parses no CityJSON | accepted |
 | [0004](./0004-commit-derived-artifacts-not-raw-data.md) | Commit small derived artifacts, not raw bulk data; the DGM1 GeoTIFF is the one exception; no Git-LFS | accepted |
@@ -35,7 +35,7 @@ each data → look transformation does and its status.
 | [0023](./0023-land-cover-colours-painted-at-runtime.md) | Land-cover colours are painted at runtime from one palette | accepted |
 | [0024](./0024-site-streams-as-3d-tiles.md) | The site streams as OGC 3D Tiles with glTF content through 3DTilesRendererJS | accepted |
 | [0025](./0025-bakes-are-one-python-package.md) | The bakes are one Python package in a uv environment; OSM comes only from a local extract | accepted |
-| [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted |
+| [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted; one site per build superseded by 0035 (a route per site) |
 | [0027](./0027-webgpu-renderer-and-tsl.md) | WebGPURenderer and TSL node materials, one path, public API only | accepted (2026-09-26) |
 | [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
 | [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
@@ -44,6 +44,7 @@ each data → look transformation does and its status.
 | [0032](./0032-camera-never-inside-a-building.md) | The camera is never below the ground or inside a building | accepted |
 | [0033](./0033-bridges-measured-in-the-surface-model.md) | Bridges are measured in the surface model, typed by Wikidata | accepted |
 | [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
+| [0035](./0035-sites-providers-and-per-site-data.md) | Sites pick a provider; data per site, downloads per provider; fetch → bake → build | accepted |
 
 ## Format
 

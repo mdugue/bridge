@@ -563,6 +563,8 @@ bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
 # Before/after pairs: SHOTS_QUERY=scene=lite SHOTS_TAG=x bun run shots
 # appends the query to the page URL and writes shots/<name>.x.png.
+# The shots are taken at /dresden; SHOTS_SITE=leipzig takes them in another
+# built city.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
@@ -606,25 +608,33 @@ because boot is the largest fixed cost left once frames are cheap. The
 
 ## Data pipeline
 
+Every script takes the site as its first argument (`bun run fetch leipzig`,
+ADR 0035); its data is `data/<site>/`. One deployment serves every site
+whose data is ready, each at `/<site>`; `/` is the start page.
 Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
-`data/_raw/<site>/{dom1,dop,dlm,osm,trees,lsc,downloads}`; no Git-LFS. Committed by
-design: the small derived per-tile artifacts in `data/dlm/` and `data/dop/`,
-the CityJSON, **and the DGM1 GeoTIFF + `.tfw` per tile in `data/dgm/`**
-(~13–15 MB each), because `prepare-data.ts` bakes the terrain from it at
-build time and the canopy/rail bakes read it.
+`data/_raw/<provider>/{dom1,dop,dlm,osm,trees,lsc,downloads}`, shared by the
+provider's sites; no Git-LFS. The build sources are the CityJSON **and the
+DGM1 GeoTIFF per tile in `data/<site>/{cityjson,dgm}/`** — `prepare-data.ts`
+bakes the terrain from it at build time and the canopy/rail bakes read it —
+next to the small derived artifacts in `data/<site>/{dlm,dop}/`. Dresden,
+Grimma, Hamburg, Leipzig, Meißen, München and Unna are committed; a new
+site's folder is a maintainer decision. `bun run fetch <site>` downloads everything through the
+provider's adapter (`pipeline/bake/providers/<id>.py`) and converts the LoD2
+CityGML itself (`citygml.py`); `bun run site <site>` says what is missing.
 
 **Stage 1, the offline bakes** (ADR 0025): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
 Pillow, scipy, scikit-image; GDAL inside the wheels, with the OSM driver;
 laspy for the laser scan — no PDAL). If a tool is missing,
 fix the environment (`pipeline/pyproject.toml`), don't bend the code.
-`bun run bake` runs every step for every tile of the site with its extent and
+`bun run bake <site>` runs every step for every tile of the site with its extent and
 CRS, land cover first:
 
 ```bash
-bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
-bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
+bun run fetch dresden                  # download what the site needs (its provider's adapter)
+bun run bake dresden                   # every tile, every step
+bun run bake dresden 33412_5656_2_sn   # one tile, all steps
+bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands canopy trees ndvi roof-colour osm-buildings
                                        #   rail lamps monuments furniture walls stairs surface edges
                                        #   markings sport tram riverside skyview soundmarks
@@ -647,11 +657,13 @@ takes a vineyard's slope from every DGM it touches, tram and small-buildings
 read the neighbours' furniture / scan — so bake those steps on every tile. All OSM layers come
 from the Geofabrik extract — no Overpass.
 
-**Stage 2, the build step** (`bun dev` / `bun run build` → `prepare-data.ts`):
-the tileset (`tileset.json`, `tileset-spawn.json`), per tile
+**Stage 2, the build step** (`bun dev` / `bun run build` →
+`prepare-sites.ts` → `prepare-data.ts <site>` for every ready site, then the
+index `public/data/sites.json` the start page and `app/[site]` read): per
+site the tileset (`tileset.json`, `tileset-spawn.json`), per tile
 `city_<tile>.glb.gz`, `terrain_<tile>_l0|l1.glb.gz`, `footprints_<tile>.json`
-and the side files, all content-hashed under `public/data/` with
-`manifest.json` as the one no-cache entry. `scripts/tile-glb.ts` owns the
+and the side files, all content-hashed under `public/data/<site>/` with its
+`manifest.json` (and the shared `sites.json`) as the no-cache entries. `scripts/tile-glb.ts` owns the
 glTF writing (meshopt, quantisation, the feature table); the `.tif` and the
 CityJSON are never served. It caches by content in `.cache/prepare-data`.
 

@@ -1,5 +1,5 @@
 """What OSM knows about the LoD2 buildings → flags per CityObject id,
-`data/dlm/osmbuild_<tile>.json`, which the building bake folds into the
+`data/<site>/dlm/osmbuild_<tile>.json`, which the building bake folds into the
 object table (like the DOP roof colours):
 
 - `shop`: a shop or a place to eat and drink on the ground floor — an OSM

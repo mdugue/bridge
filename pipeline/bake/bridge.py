@@ -14,7 +14,7 @@ ADR 0033):
   inland-waterway data (`seamark:type=bridge`, ODbL), over the DGM's water
   surface: the soffit height, hence the deck's structural depth there;
 - **Wikidata** (CC0) — the structural type and the main span of a named
-  bridge, from a file the ingest fetched (`<raw>/wikidata/`).
+  bridge, from a file `bun run fetch` fetched (`<raw>/wikidata/`).
 
 Everything here is optional: without DOM1 there are no ribs, without OSM no
 clearance, without the Wikidata file the OSM `bridge:structure` stays.
@@ -430,7 +430,7 @@ def structure_of(types: list[str]) -> str:
 
 def fetch_wikidata(raw: Path, tile_id: str, bounds, epsg: int, margin: float = 500.0) -> None:
     """The bridges Wikidata knows around a tile → `<raw>/wikidata/bridges_<tile>.json`
-    (ingest time only; the bake reads the file, never the network)."""
+    (fetch time only, `bun run fetch`; the bake reads the file, never the network)."""
     dest = raw / "wikidata" / f"bridges_{tile_id}.json"
     if dest.exists():
         return

@@ -1,6 +1,6 @@
-"""The GeoSN laser scan (LAZ) → the 0.5 m rasters the low-vegetation bake
-reads, in numpy through laspy (lazrs decompresses the LAZ; both are wheels in
-the uv environment, so no PDAL). The rules are PDAL's `writers.gdal` with
+"""The provider's laser scan (LAZ; GeoSN's so far) → the 0.5 m rasters the
+low-vegetation bake reads, in numpy through laspy (lazrs decompresses the
+LAZ; both are wheels in the uv environment, so no PDAL). The rules are PDAL's `writers.gdal` with
 `binmode`, which made the committed files:
 
 - a point lands in the one cell that contains it (origin at the tile's

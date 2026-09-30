@@ -19,6 +19,13 @@ startest tief über der Elbe nahe der Carolabrücke, mit Blick auf die
 Altstadt-Silhouette, und kannst auf Straßenniveau gehen oder über die
 Dächer fliegen.
 
+Dresden ist die Referenzstadt, die diese Seiten beschreiben. Derselbe
+Viewer kann andere deutsche Städte zeigen, deren Vermessungsämter die Daten
+veröffentlichen (Leipzig, Meißen, Grimma, Hamburg, München, Berlin, Unna
+sind vorbereitet); die Startseite listet jede Stadt, mit der eine
+Bereitstellung gebaut wurde, jede unter ihrer eigenen Adresse (`/dresden`,
+`/leipzig`, …).
+
 Nichts wird installiert, nichts über dich gespeichert, und kein Server
 berechnet das Bild. Dein Browser lädt vorbereitete Dateien, während du dich
 bewegst — etwa 4 MB für die Kachel, auf der du startest, bis zu etwa 17 MB,

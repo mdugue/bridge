@@ -8,7 +8,7 @@ test.describe("/wissen", () => {
   test("the entry lists the guide and the developer docs", async ({ page }) => {
     await page.goto("/wissen");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "begehbares Dresden"
+      "begehbare Stadt"
     );
     // The cards are the German guide in its index order, each with its twin.
     await expect(

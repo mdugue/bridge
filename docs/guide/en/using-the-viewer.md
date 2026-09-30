@@ -10,6 +10,17 @@ may stutter briefly while new areas appear), and, for a smooth picture, a
 reasonably recent graphics card. Phones are supported: they automatically
 get a lighter render budget.
 
+## Choosing a city
+
+The start page (`/`) shows one card for every city this deployment was
+built with: the city's map in the viewer's ground colours, its Land, the
+area it covers and how many viewpoints it has. A card opens that city's
+viewer, which has an address of its own — `/dresden`, `/leipzig`, … — so a
+link or bookmark leads straight into it. Inside the viewer, *Andere Stadt
+wählen* ("choose another city") under the city's name at the top of the
+panel leads back to the start page. The start page also links to the
+knowledge base (`/wissen`).
+
 ## Loading
 
 The loading screen lists five stages and a bar. The first three
@@ -196,12 +207,13 @@ cannot resolve it in motion) and comes back when you stop.
 - **Statistik** — number of buildings and terrain points currently in
   view, estimated graphics memory and the frame rate.
 
-The footer credits the data sources: the Saxon survey office for the
-official datasets and OpenStreetMap contributors for, among others, lamps,
-walls and fences, platforms, bridge structures, shops and listed buildings.
-Next to it, *Unterstützen* (support)
-leads to the project's Ko-fi page; it is a plain link that loads nothing
-from Ko-fi until it is clicked.
+The footer credits the data sources: the Land's survey office (in
+Dresden the Saxon one) for the official datasets and OpenStreetMap
+contributors for, among others, lamps, walls and fences, platforms, bridge
+structures, shops and listed buildings (and the land cover where the Land
+publishes no Basis-DLM). Next to it, *Unterstützen* (support) leads to the
+project's Ko-fi page; it is a plain link that loads nothing from Ko-fi
+until it is clicked.
 
 ## Tips
 
@@ -211,9 +223,9 @@ from Ko-fi until it is clicked.
   degrees below) give the richest colours; try 07:00 or 20:00 in summer.
 - On a laptop without a discrete graphics card, lower *Kontaktschatten*
   and switch off *Tiefenschärfe* for a higher frame rate.
-- `?scene=lite` in the address bar streams only the start tile, with
-  coarse shadows. It exists for automated tests and is not how the scene
-  is meant to look.
+- `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
+  only the start tile, with coarse shadows. It exists for automated tests
+  and is not how the scene is meant to look.
 
 ## Small things
 

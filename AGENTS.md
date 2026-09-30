@@ -5,7 +5,12 @@ Entrypoint for coding agents working on this repo.
 ## What this project is
 
 A client-side, stylized **3D city walker**: you spawn into a pastel, poetic
-rendering of Dresden built from Saxon open geodata and walk (or fly) through it.
+rendering of a German city built from open geodata and walk (or fly) through
+it. Dresden is the reference site; Leipzig, Meißen, Grimma, Hamburg, München,
+Berlin and Unna are configured too. **One deployment serves every site
+whose data is on disk at build time, each under its own route** (`/dresden`,
+`/leipzig`, …); `/` is a start page that lists the built cities (ADR 0035,
+which superseded the one-site-per-build of ADR 0026).
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
 rasters (the walked-on level an error-bounded TIN), surfaces
 (roads/water/meadow/…) from an **ATKIS Basis-DLM** land-cover class raster
@@ -40,15 +45,23 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
 
 ```bash
 bun install
-bun dev            # prepare-data.ts (geodata -> public/data) then next dev
-bun build
+bun dev            # prepare-sites.ts (every ready site's geodata ->
+                   # public/data/<site>/, + public/data/sites.json) then
+                   # next dev
+bun build          # the same, then next build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
 bun test           # unit tests in lib/, app/_components/ and scripts/
-bun run bake       # offline bakes (pipeline/, Python via uv): raw → data/
-                   # [tile] [--ingest] [--step X]; --ingest downloads first
+bun run site <site>   # where the site stands, tile by tile (--all: every
+                   # site, with its size on disk)
+bun run fetch <site>  # download the site's data through its provider's
+                   # adapter (pipeline/bake/providers/): → data/_raw/<provider>/
+                   # and the build sources → data/<site>/{dgm,cityjson}
+                   # [tile…] [--lsc]
+bun run bake <site>   # offline bakes (pipeline/, Python via uv): raw → derived
+                   # data/<site>/{dlm,dop} [tile…] [--step X]
 bun run test:pipeline   # pytest + ruff for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
                    # (Bun.WebView + Chrome; commit the SVGs with the change)
@@ -94,8 +107,9 @@ config change.
   - spine: `create-app.ts` (scene/loop/handle), `tile-stream.ts` (the
     3DTilesRendererJS setup: gzip + glTF-metadata plugins and the dressing
     plugin that builds and disposes everything a tile carries),
-    `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount +
-    which tileset to stream),
+    `city-walk.tsx` (HUD), `city-walk-client.tsx` (the `ssr: false` mount,
+    given the site id; which tileset to stream), `site-context.tsx`
+    (`SiteProvider`/`useSite`: the site the HUD describes),
     `poc-debug.ts` (the `window.__poc` test/QA hook), `scene-profile.ts`
     (`?scene=lite`, `?gpu=webgl2`), `gpu-support.ts` (the WebGPU-or-WebGL2
     preflight), `instancing.ts` (`Instances`: instanced sets that share one
@@ -191,24 +205,42 @@ config change.
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
   units alongside
-- `sites/` — one config per place (`dresden.ts`: tiles, CRS, labels,
-  attribution, viewpoints); `SITE` picks it at build time (ADR 0026)
-- `pipeline/` — the offline bakes, one Python package in a uv environment
-  (`bake/landcover.py`, `canopy.py`, `trees.py` (+ `tree_archetypes.py`),
-  `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `small_buildings.py`
-  (the sheds and garden houses LoD2 lacks, appended to the city mesh),
-  `ndvi.py`, `roof_colour.py`,
-  `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
-  `rail.py` + `bridge.py` (the deck and superstructure measured in DOM1,
-  the fairway clearance, Wikidata), `surface.py`, `edges.py`, `sport.py`,
-  `markings.py`,
-  `cultivated.py`, `skyview.py`, `osm_buildings.py` (shops and heritage
-  per LoD2 object), `tram.py`, `riverside.py`, `soundmarks.py`
-  (the bell towers), `osm.py`; `ingest_sn.py` is Saxony's
-  download adapter (it also fetches Wikidata's bridges); tests in `pipeline/tests/`), run by `bun run bake`
-  (`scripts/bake.ts`) — see ADR 0025
-- `scripts/` — the build step: `prepare-data.ts` bakes the committed
-  artifacts into `public/data` as a **3D Tiles tileset** (`tileset.json`,
+- `sites/` — one config per place (`dresden.ts`, `leipzig.ts`, …: name,
+  label, tiles, viewpoints, the provider) registered in `index.ts`, and
+  `providers.ts` — one entry per Land (CRS, licence + credit, open products,
+  OSM extract, the `land` the start page names). `REFERENCE_SITE`
+  (`dresden`: its data is committed, `/wissen` describes it, the checks
+  measure it), `siteById`, `isSiteId` and `siteFromArgs` (the CLI's first
+  argument) live in `index.ts` (ADR 0026, 0035)
+- `app/page.tsx` — the start page: a card per built city (its land-cover
+  map, Land, area, viewpoints) and the way to `/wissen`;
+  `app/[site]/page.tsx` — the viewer route, one per built site
+  (`generateStaticParams`; an unknown or unbuilt site is a 404; `/city`
+  redirects to `/dresden`); `app/_lib/built-sites.ts` reads
+  `public/data/sites.json` at build time (falling back to the reference
+  site); the index's shape is `lib/city/site-index.ts`
+- `pipeline/` — the offline pipeline, one Python package in a uv environment:
+  the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
+  per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
+  converts LoD2 CityGML → CityJSON, `net.py` downloads incl. single members
+  of remote ZIPs) and the bakes (`landcover.py` + `landcover_osm.py`,
+  `canopy.py`, `trees.py` (+ `tree_archetypes.py`, `cadastre.py` for the
+  street-tree register), `lowveg.py` (+ `lsc.py`, the laser scan's rasters),
+  `small_buildings.py` (the sheds and garden houses LoD2 lacks, appended
+  to the city mesh), `ndvi.py`, `roof_colour.py`, `lamps.py`,
+  `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py` +
+  `bridge.py` (the deck and superstructure measured in the surface model,
+  the fairway clearance, Wikidata), `surface.py`, `edges.py`, `sport.py`, `markings.py`, `cultivated.py`,
+  `skyview.py`, `osm_buildings.py` (shops and heritage per LoD2 object),
+  `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers), `osm.py`);
+  tests in `pipeline/tests/`. Run by
+  `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
+  Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0035
+- `scripts/` — the build step: `prepare-sites.ts` runs `prepare-data.ts
+  <site>` for every site whose data is ready (or only the ids it is given),
+  writes the index `public/data/sites.json` and prunes the folders of sites
+  no longer built; `prepare-data.ts` bakes one site's committed
+  artifacts into `public/data/<site>/` as a **3D Tiles tileset** (`tileset.json`,
   `tileset-spawn.json`) with glTF content under content-hashed names +
   `manifest.json` — per tile the buildings (`bake-city-mesh.ts` runs the
   CityJSON loader, `bake-tiles.ts` turns it into glTF with a per-object
@@ -217,10 +249,19 @@ config change.
   measured steps; coarse: the DGM resampled to 512², the wall breaklines
   burned in), written by `tile-glb.ts` (meshopt, quantised,
   `EXT_mesh_features` + `EXT_structural_metadata`), pre-gzipped; plus
-  `bake.ts` (the pipeline runner), `downsample-raster.ts` (the 2048² and
-  512² class rasters), `bake-wissen-hero.ts`, `render-diagrams.ts`
-- `data/` — committed *derived* geodata; `data/_raw/<site>/` is
-  **gitignored** bulk source. `public/data/` is generated, gitignored.
+  `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
+  `downsample-raster.ts` (the 2048² and 512² class rasters), `bake-wissen-hero.ts`
+  (the site's land-cover map, `site-map.webp`),
+  `render-diagrams.ts`
+- `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
+  `dlm/`, `dop/` (derived), `provenance.json`. Dresden, Grimma, Hamburg,
+  Leipzig, Meißen, München and Unna are committed (each un-ignored by name
+  in `.gitignore`); a new site's folder stays ignored until the maintainer
+  un-ignores it (ADR 0035). No file is near GitHub's limits (the largest,
+  a LoD2 tile, is 16 MB), so no Git-LFS. `data/_raw/<provider>/` is
+  **gitignored** bulk downloads, shared by the provider's sites.
+  `public/data/` is generated, gitignored. A deployment serves exactly the
+  sites whose `data/<site>/` is present where it builds.
 - `app/wissen/` — the knowledge base on the site: `docs/` prerendered as
   pages (`[[...slug]]/page.tsx`, the entry in `_components/landing.tsx`,
   Markdown pipeline in `_lib/markdown.tsx`, the zoom dialog in
@@ -229,8 +270,9 @@ config change.
   `app/typeset.css`); `lib/docs/` is its pure core (file → route, link
   rewriting, menu order, diagram keys and theming),
   `scripts/render-diagrams.ts` renders the Mermaid blocks to
-  `docs/diagrams/`, and `scripts/bake-wissen-hero.ts` bakes the pages' map
-  picture inside `prepare-data.ts` — see ADR 0021
+  `docs/diagrams/`, and `scripts/bake-wissen-hero.ts` bakes each site's map
+  picture (`site-map.webp`; the pages show the reference site's) inside
+  `prepare-data.ts` — see ADR 0021
 - `e2e/` — `city-walk.spec.ts` (smoke), `wissen.spec.ts` (the docs pages)
   and `snapshot-shot.spec.ts` (QA harness)
 
@@ -270,8 +312,8 @@ source of truth.
 
 ## Coordinate system (read before touching geometry)
 
-Source data is **EPSG:25833** for Dresden (ETRS89/UTM33; the site config
-allows 25832 too), Z-up. A parent `world` group is rotated −90° about X so
+Source data is ETRS89/UTM — **EPSG:25833** for Saxony and Berlin, **25832**
+for Hamburg, Bavaria and NRW (the provider sets it) — Z-up. A parent `world` group is rotated −90° about X so
 data-Z (elevation) becomes scene-Y (up). Mapping: `x = epsgX − cx`,
 `z = −(epsgY − cy)`, `y = elevation`, where `(cx, cy)` is the shared recenter
 offset (captured at bake time from the spawn tile's CityJSON, carried in the
@@ -282,40 +324,48 @@ Y-up frame, never inside the rotated `world` group itself** — adding Y-up
 coords into the rotated group applies the transform twice (trees shoot
 skyward). Positions in the glTF are quantised (not metres): shaders that need
 data-frame coordinates derive them from world space (`shader-chunks.ts`,
-world (x, y, z) = data (x, −z, y)). Tiles are named `33EEE_NNNN_2_sn` (the
-site's `tileSuffix`); `33412_5656_2_sn` is the spawn tile. The viewer streams
+world (x, y, z) = data (x, −z, y)). Tiles are 2 km and named
+`<zone><EEE>_<NNNN>_2<suffix>` (the provider's `tileSuffix`, e.g. `_sn`);
+Dresden's spawn tile is `33412_5656_2_sn`. The viewer streams
 every tile of the site around the camera; collision, demolish and picking
 work on every loaded tile.
 
 ## Data pipeline
 
 Bulk raw downloads (DLM ~5 GB, DOM1, DOP, OSM `.osm.pbf`) **must not be
-committed** — keep them in `data/_raw/<site>/{dom1,dop,dlm,osm,downloads}`
-(gitignored; `bun run bake --ingest` fills it through the site's ingest
-adapter). The exception is the **DGM1 GeoTIFF + `.tfw` per tile (~13–15 MB,
-`data/dgm/`)** and the CityJSON: committed because `prepare-data.ts` bakes the
-terrain and buildings from them at build time and the canopy/rail bakes read
-the DGM. No Git-LFS. Only small derived per-tile artifacts
-(`data/dlm/*.png|json|geojson`, `data/dop/*.json`) are committed otherwise;
-`prepare-data.ts` publishes them to `public/data/` at build. Pipeline notes:
+committed** — they live in `data/_raw/<provider>/{dom1,dop,dlm,osm,downloads}`
+(gitignored; `bun run fetch <site>` fills it through the provider's adapter).
+The build sources are the **DGM1 GeoTIFF per tile** and the **CityJSON**
+under `data/<site>/{dgm,cityjson}`: `prepare-data.ts` bakes terrain and
+buildings from them and the canopy/rail bakes read the DGM. Dresden's are
+committed (13–15 MB DGM per tile, as downloaded); the fetch step writes new
+ones compact (~6 MB). Committing another site's folder is the maintainer's
+call (ADR 0035). No Git-LFS. Derived per-tile artifacts
+(`data/<site>/dlm/*.png|json|geojson`, `data/<site>/dop/*.json`) are small;
+`prepare-data.ts` publishes them to `public/data/<site>/` at build. Pipeline notes:
 
 - **The bakes are Python, in their own uv environment** (`pipeline/`,
   `uv.lock`; ADR 0025). numpy, rasterio, pyogrio and shapely are there, and
   GDAL comes inside the wheels (with the OSM driver): fix the environment,
-  don't bend the code around a missing tool. `bun run bake` passes each
+  don't bend the code around a missing tool. `bun run bake <site>` passes each
   tile's extent and CRS from the site config; the steps run land cover
   first (the canopy, lamps and street furniture are gated on it). `bun run test:pipeline` and
   CI's `pipeline` job run pytest + ruff.
+- A provider without an open Basis-DLM (Hamburg, Berlin) gets the same class
+  raster, legend and veg rows from OSM (`landcover_osm.py`); rails and
+  bridge decks are then off. `Provider.products` decides which steps run.
 - `landcover.py` bakes **only class ids** (4096² 8-bit PNG + legend); the
   colours are `lib/city/landcover.ts`, painted on the GPU at runtime
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
-- `trees.py` bakes Dresden's street-tree cadastre (the ingest adapter
-  caches the city's WFS per tile); `lowveg.py` the OSM hedges at their
-  laser-scan height and the scan's trees outside the canopy mask, thinned
-  against the cadastre. The laser scan (`<raw>/lsc/<tile>.laz`) is placed
-  there by `bun run bake --ingest --lsc` (or by hand) and rasterised in
+- `trees.py` bakes the site's street-tree cadastre (`Site.treeCadastre`,
+  Dresden's so far; `bun run fetch <site>` caches the city's WFS per tile through
+  `cadastre.py`); `lowveg.py` the OSM hedges at their laser-scan height and
+  the scan's trees outside the canopy mask, thinned against the cadastre.
+  The laser scan (`data/_raw/<provider>/lsc/<tile>.laz`) is fetched by
+  `bun run fetch <site> --lsc` where the provider's adapter reads one
+  (`products.lsc`, Saxony so far) or put there by hand, and rasterised in
   Python (`lsc.py`, laspy — no PDAL); without it the step is OSM only.
 - `monuments.py` takes the monuments (statues, stones, columns, named
   fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
@@ -542,7 +592,8 @@ bun run shots
 ```
 
 It writes a clean canvas plate (HUD hidden) to `shots/<name>.png` — read it and
-iterate yourself. `shots/` is gitignored. The default headless e2e uses
+iterate yourself. The shots are taken at `/dresden`; `SHOTS_SITE=<id>` takes
+them in another built city. `shots/` is gitignored. The default headless e2e uses
 SwiftShader through the renderer's WebGL2 backend (headless Chromium offers
 no WebGPU adapter), which renders shadows/AA nothing like a real GPU, so use `--headed`
 for any lighting/shadow work.
@@ -571,8 +622,9 @@ same layers, same node materials — a quarter
 of the world and a quarter of the pixels. The knobs it does *not* touch are the
 ones a test asserts on. Two rules when you add a spec:
 
-- Drive the viewer at `/?scene=lite`; only the "serves the viewer shell" spec
-  uses the bare route, and it never waits for the scene to load.
+- Drive the viewer at `/dresden?scene=lite`; only the "serves the viewer
+  shell" spec uses the bare route `/dresden`, and it never waits for the
+  scene to load.
 - Share a booted page across assertions (`test.describe.configure({ mode:
   "serial" })` + a `beforeAll` context) rather than booting per test — the boot
   is the single largest fixed cost left.
@@ -683,7 +735,8 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - Adding a heavy dependency (map/tiling library, a second renderer)
 - Bringing back a second render path (WebGLRenderer, GLSL), or patching
   three's renderer internals: ADR 0027 decided against both
-- Committing raw bulk geodata, or switching on Git-LFS
+- Committing raw bulk geodata, or switching on Git-LFS; committing another
+  site's `data/<site>/` (a size decision, ADR 0035)
 
 <!-- BEGIN:nextjs-agent-rules -->
 

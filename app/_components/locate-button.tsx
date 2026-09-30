@@ -9,7 +9,7 @@ import {
 } from "react";
 import { placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
-import { currentSite } from "@/sites";
+import { useSite } from "./site-context";
 import type { CityWalkHandle } from "./create-app";
 import {
   canLocate,
@@ -68,6 +68,8 @@ export function useLocateMe(
   const [locating, setLocating] = useState(false);
   const [offsite, setOffsite] = useState<Offsite | null>(null);
   const dismissOffsite = useCallback(() => setOffsite(null), []);
+  const site = useSite();
+  const { epsg } = site.provider;
 
   const locate = useCallback(() => {
     if (locating) {
@@ -83,8 +85,7 @@ export function useLocateMe(
         if (!h) {
           return;
         }
-        const site = currentSite();
-        const placement = placementOf(fix, site.epsg, h.terrainBounds);
+        const placement = placementOf(fix, epsg, h.terrainBounds);
         if (placement.kind !== "inside") {
           clear();
           setOffsite(placement);
@@ -103,7 +104,7 @@ export function useLocateMe(
       })
       .catch((err: unknown) => say(describeFailure(err)))
       .finally(() => setLocating(false));
-  }, [clear, handleRef, locating, say]);
+  }, [clear, epsg, handleRef, locating, say, site.label]);
 
   return { available, dismissOffsite, locate, locating, offsite };
 }

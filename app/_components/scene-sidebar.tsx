@@ -83,8 +83,8 @@ import { CONTROL_HINTS, TOUCH_HINTS } from "./control-hints";
 import type { SoundscapeControl } from "./soundscape-toggle";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
-import type { ViewpointGeometry } from "@/lib/city/site";
-import { currentSite } from "@/sites";
+import { siteAttribution, type ViewpointGeometry } from "@/lib/city/site";
+import { useSite } from "./site-context";
 
 /**
  * The scene sidebar, structured by what you came to do rather than by which
@@ -468,11 +468,12 @@ function Viewpoints({
   /** show each card's 1–9 shortcut (keyboard devices) */
   showKeys: boolean;
 }) {
+  const site = useSite();
   return (
     <div className="flex flex-col gap-2 px-3 pt-1 pb-3.5">
       <span className={`${SECTION_LABEL} px-1`}>Aussichtspunkte</span>
       <div className="grid grid-cols-2 gap-2">
-        {currentSite().viewpoints.map((view, index) => (
+        {site.viewpoints.map((view, index) => (
           <button
             className="flex min-h-16.5 flex-col gap-2 rounded-lg border bg-background p-2.5 text-left hover:border-ring"
             key={view.id}
@@ -727,6 +728,7 @@ export interface SceneSidebarProps {
 export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
   const { handleRef, look, onLook } = props;
+  const site = useSite();
   return (
     <Sidebar
       className="p-3 [&>[data-slot=sidebar-inner]]:rounded-xl [&>[data-slot=sidebar-inner]]:shadow-xl"
@@ -735,7 +737,15 @@ export function SceneSidebar(props: SceneSidebarProps) {
       variant="floating"
     >
       <SidebarHeader className="flex-row items-center justify-between gap-2 py-3 pr-2 pl-4">
-        <span className="font-semibold text-sm">{currentSite().label}</span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="font-semibold text-sm">{site.label}</span>
+          <Link
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            href="/"
+          >
+            Andere Stadt wählen
+          </Link>
+        </div>
         <Button
           aria-label="Seitenleiste schließen"
           onClick={toggleSidebar}
@@ -777,7 +787,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 }
               }}
               onTravel={(id) => {
-                const view = currentSite().viewpoints.find((v) => v.id === id);
+                const view = site.viewpoints.find((v) => v.id === id);
                 if (view) {
                   handleRef.current?.flyToViewpoint(view);
                 }
@@ -1002,7 +1012,7 @@ export function SceneSidebar(props: SceneSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t px-4 pt-2.5 pb-3 text-[10px] text-muted-foreground leading-snug">
-        <p>{currentSite().attribution.join(" · ")}</p>
+        <p>{siteAttribution(site).join(" · ")}</p>
         <div className="mt-1.5 flex items-center gap-3">
           <Link
             className="underline underline-offset-2 hover:text-foreground"

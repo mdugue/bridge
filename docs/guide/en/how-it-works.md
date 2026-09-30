@@ -18,6 +18,12 @@ Waldschlößchenbrücke to Blasewitz, Loschwitz and the Blaues Wunder. You
 start low over the Elbe near the Carolabrücke, looking at the Altstadt
 skyline, and can walk at street level or fly above the roofs.
 
+Dresden is the reference city, the one these pages describe. The same
+viewer can show other German cities whose survey offices publish the data
+(Leipzig, Meißen, Grimma, Hamburg, München, Berlin, Unna are prepared);
+the start page lists every city a deployment was built with, each at its
+own address (`/dresden`, `/leipzig`, …).
+
 Nothing is installed, nothing is stored about you, and no server computes
 the picture. Your browser downloads prepared files as you move — about
 4 MB for the tile you start on, up to about 17 MB if you visit every

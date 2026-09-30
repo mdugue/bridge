@@ -13,6 +13,7 @@ import type { BufferGeometry, Matrix4, Mesh } from "three";
 import {
   buildingGlows,
   buildingTint,
+  type FacadeMaterial,
   inheritedAttributes,
   type RoofColorLut,
   roofColor,
@@ -206,7 +207,8 @@ function concat(
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
  * `osmLut` holds what OSM knows per object (shops, heritage), when baked;
- * a part carries its own flags and its root Building's.
+ * a part carries its own flags and its root Building's. `facades` is the
+ * site's wall material (the tint palette).
  */
 export function bakeCityMesh(
   tile: string,
@@ -214,7 +216,8 @@ export function bakeCityMesh(
   roofLut: RoofColorLut | undefined,
   sharedMatrix: Matrix4 | null,
   osmLut?: OsmBuildingLut,
-  scan?: readonly SmallBuildingFeature[]
+  scan?: readonly SmallBuildingFeature[],
+  facades: FacadeMaterial = "render"
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
   const doc = withoutTrafficStructures(source);
@@ -277,7 +280,7 @@ export function bakeCityMesh(
       storeyH: cm(storeyHeight(measured)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
-      tint: rgb(buildingTint(id, attrs)),
+      tint: rgb(buildingTint(id, attrs, facades)),
       roof: rgb(roofColor(id, attrs, roofLut)),
       footprints,
     };

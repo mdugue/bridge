@@ -1,15 +1,19 @@
-# City Walk — Dresden
+# City Walk
 
-A client-side, stylized **3D city walker**: spawn into a pastel rendering of
-Dresden built from Saxon open geodata and walk (or fly) through it. Buildings
-come from LoD2 **CityJSON**, the ground from **DGM1** elevation rasters,
-surfaces (roads, water, meadow, …) from an **ATKIS Basis-DLM** land-cover
-raster, and trees from DLM hedge/tree rows plus a **DOM1**-derived canopy. The
-build turns it into an [OGC 3D Tiles](https://www.ogc.org/standard/3dtiles/)
-tileset of glTF, which the browser streams with
+A client-side, stylized **3D city walker**: spawn into a pastel rendering of a
+German city built from open geodata and walk (or fly) through it — Dresden
+first, and any place whose Land publishes the data: Leipzig, Meißen, Grimma,
+Hamburg, München, Berlin and Unna are configured. Buildings come from LoD2
+**CityGML/CityJSON**, the ground from **DGM1** elevation rasters, surfaces
+(roads, water, meadow, …) from the **ATKIS Basis-DLM** (or OpenStreetMap where
+the Land does not publish it openly), and trees from hedge/tree rows plus a
+canopy derived from the surface model. The build turns it into an
+[OGC 3D Tiles](https://www.ogc.org/standard/3dtiles/) tileset of glTF, which
+the browser streams with
 [3DTilesRendererJS](https://github.com/NASA-AMMOS/3DTilesRendererJS) and renders
 with [three.js](https://threejs.org) (`WebGPURenderer` and TSL node
-materials) — one route, no backend, no database, no accounts, nothing
+materials) — a start page and one route per city (`/dresden`, `/leipzig`,
+…), no backend, no database, no accounts, nothing
 persisted.
 
 ## Prerequisites
@@ -17,43 +21,85 @@ persisted.
 - [Bun](https://bun.sh) 1.4+ (the version in `package.json` `packageManager`)
 - A browser with WebGPU, or WebGL2 as the fallback (three's
   `WebGPURenderer` picks its WebGL2 backend; `?gpu=webgl2` forces it)
-- Only to re-run the offline bakes: [uv](https://docs.astral.sh/uv/) (it
-  installs the Python and the geo libraries in `pipeline/`)
+- For any site other than Dresden, or to re-run the bakes:
+  [uv](https://docs.astral.sh/uv/) (it installs the Python and the geo
+  libraries in `pipeline/`)
 
-## Quickstart
+## Quickstart (Dresden)
 
 ```bash
 bun install
 bun dev     # prepares public/data, then serves http://localhost:3000
 ```
 
-`bun dev` runs `scripts/prepare-data.ts` first; it bakes the committed
-per-tile artifacts into a 3D Tiles tileset in `public/data/` — terrain meshes
-at two levels of detail from the DGM GeoTIFFs, building meshes with a
-per-building attribute table from the CityJSON — and publishes everything
-under content-hashed names with a `manifest.json` (about 20 s on the first
-run, nothing on later ones; the bake cache lives in `.cache/`).
+The data of seven cities is committed, so that is all: the start page at
+`/` lists Dresden, Grimma, Hamburg, Leipzig, Meißen, München and Unna,
+and each viewer runs at its own route (`/dresden`, …). `bun dev` runs
+`scripts/prepare-sites.ts` first, which runs `scripts/prepare-data.ts` for
+every site whose data is ready; that bakes the site's data into a 3D Tiles
+tileset in `public/data/<site>/` — terrain meshes at two levels of detail
+from the DGM GeoTIFFs, building meshes with a per-building attribute table
+from the CityJSON — and publishes everything under content-hashed names with
+a `manifest.json` (about 20 s on the first run, nothing on later ones; the
+bake cache lives in `.cache/`). The index of the built sites,
+`public/data/sites.json`, is what the start page lists.
 
-Add `?scene=lite` to stream the spawn tile alone with a small shadow map —
+Add `?scene=lite` (`/dresden?scene=lite`) to stream the spawn tile alone with a small shadow map —
 that is what the headless e2e suite uses; it is not how the scene is meant to
 look.
+
+## Another place
+
+```bash
+bun run fetch leipzig        # downloads the site's data (once; minutes to
+                             # an hour — statewide packages are GBs)
+bun run bake leipzig         # derives land cover, trees, lamps, … (minutes)
+bun run site leipzig         # where the site stands, tile by tile
+bun dev                      # or: bun run build — now also /leipzig
+```
+
+The site is the first argument of every script (`leipzig`, `meissen`,
+`grimma`, `hamburg`, `muenchen`, `berlin`, `unna`, `dresden`); a wrong or
+missing one stops with the list. The build serves every site whose data is
+ready, each under its own route, and the start page gains a card for it
+(`bun scripts/prepare-sites.ts leipzig unna` prepares only those). Each site
+is one file in
+[`sites/`](sites/) — its tiles (2 km cells, the first is the spawn),
+curated viewpoints, and the data **provider** it draws on
+([`sites/providers.ts`](sites/providers.ts): CRS, licence and credit, which
+products are open). `bun run site --all` lists every site and how much of it
+is on disk. Adding a place in a covered Land is one file plus one line in
+[`sites/index.ts`](sites/index.ts); see [portability](docs/portability.md).
+
+**Deploying more cities** needs no configuration: one deployment serves
+every site whose `data/<id>/` is present where it builds, at `/<id>`. A host
+that builds from git sees only what is committed — the seven cities above
+(`.gitignore` un-ignores each by name); un-ignore a new site's folder once
+you decide to ship it — it is roughly 20–90 MB per site, plain git, no LFS ([ADR 0035](docs/adr/0035-sites-providers-and-per-site-data.md)).
 
 ## Data
 
 ```
-provider downloads (data/_raw/, gitignored)
-   → bun run bake (pipeline/, Python)       → data/**  (committed, small, derived)
-   → scripts/prepare-data.ts (bun dev/build) → public/data/  (3D Tiles, gitignored)
+provider portals ── bun run fetch <site> ──→ data/_raw/<provider>/   (downloads, gitignored)
+                                         └─→ data/<site>/dgm, cityjson  (build sources)
+data/_raw + data/<site> ── bun run bake <site> ──→ data/<site>/dlm, dop  (derived, small)
+data/<site>/ ── scripts/prepare-sites.ts (bun dev/build) ──→ public/data/<site>/  (3D Tiles)
+                                                       └─→ public/data/sites.json (the index)
 ```
 
-The place is one **site config**, [`sites/dresden.ts`](sites/dresden.ts):
-fifteen 2 km tiles, the CRS, labels, attribution and viewpoints; `SITE` picks it
-at build time. You spawn on `33412_5656_2_sn`; the viewer streams every tile
-of the site around the camera — detailed near, coarse far, unloaded when out
-of view — and walking, collision and demolish work on every loaded tile.
+The fetch step is one adapter per Land in `pipeline/bake/providers/`
+(Saxony, NRW, Bavaria, Hamburg, Berlin): it mosaics and clips each
+provider's grid to our 2 km tiles, writes the DGM compactly and converts the
+LoD2 CityGML to CityJSON with its own converter (no Java, no extra tools).
+The bulky downloads — surface model, orthophotos, the statewide Basis-DLM,
+the OSM extract — are kept per provider, so sites in one Land share them;
+a tile's DGM and LoD2 go straight into `data/<site>/`.
 
-Tile id scheme: `<UTM zone 33><easting km>_<northing km>_<edge km>_sn`. The
-spawn tile spans 412000–414000 E / 5656000–5658000 N in **EPSG:25833**.
+Tile id scheme: `<UTM zone><easting km>_<northing km>_2_<provider>` — Dresden
+spawns on `33412_5656_2_sn`, spanning 412000–414000 E / 5656000–5658000 N in
+**EPSG:25833**. The viewer streams every tile of the site around the camera —
+detailed near, coarse far, unloaded when out of view — and walking, collision
+and demolish work on every loaded tile.
 
 Neither the DGM1 GeoTIFF nor the CityJSON is served. `prepare-data.ts`
 resamples the DGM into terrain meshes (1024² and 512² grids, with retaining
@@ -61,33 +107,18 @@ walls burned in as breaklines) and runs the CityJSON parser once at build
 time; both are written as standard glTF (meshopt-compressed, quantised,
 buildings with an `EXT_mesh_features` / `EXT_structural_metadata` table) into
 a tileset ([`lib/city/tileset.ts`](lib/city/tileset.ts)). Every `/data` file
-is published under a content-hashed name and cached as immutable;
-`manifest.json` maps the logical names and is the one file that revalidates.
-The DGM1 GeoTIFFs and the CityJSON are committed under `data/` (they are the
-build input); every other raw source stays in the gitignored `data/_raw/`.
+is published under a content-hashed name and cached as immutable; each
+site's `manifest.json` maps the logical names and, with `sites.json`, is
+what revalidates.
 
-Requirements for new data:
-
-- CityJSON must declare EPSG:25832 or 25833 in `metadata.referenceSystem`
-  ([`lib/city/crs.ts`](lib/city/crs.ts)). Reproject with
-  `cjio in.city.json reproject 25833 save out.city.json`.
-- The DGM GeoTIFF needs embedded georeferencing or a `.tfw` sidecar. Embed it
-  with `gdal_translate -a_srs EPSG:25833 in.tif out.tif`.
-
-Raw bulk downloads (DLM, DOM1, DOP, the OSM extract — gigabytes) stay in
-`data/_raw/<site>/`, which is gitignored; there is no Git-LFS. The offline
-bakes regenerate the committed artifacts from them — one Python package in
-`pipeline/`, run with `bun run bake` (`--ingest` downloads the inputs first;
-see [data-pipeline](docs/data-pipeline.md)).
-
-**Provenance.** Sources are the
-[Saxon open-geodata portal](https://www.geodaten.sachsen.de/) of GeoSN
-(*Datenlizenz Deutschland – Namensnennung 2.0*, credit "Quelle: GeoSN,
+**Provenance.** Each provider's licence and credit line is in
+[`sites/providers.ts`](sites/providers.ts) and shows in the HUD footer. For
+Dresden: the [Saxon open-geodata portal](https://www.geodaten.sachsen.de/) of
+GeoSN (*Datenlizenz Deutschland – Namensnennung 2.0*, "Quelle: GeoSN,
 dl-de/by-2-0") plus OpenStreetMap for street lamps, retaining walls, station
 platforms and bridge structure (ODbL, "© OpenStreetMap contributors"). Every
-dataset — download route, strengths and weaknesses, the editions in use and
-what is still unrecorded — is described in the guide
-[Where the data comes from](docs/guide/en/data-sources.md)
+dataset — download route, strengths and weaknesses, the editions in use — is
+described in the guide [Where the data comes from](docs/guide/en/data-sources.md)
 ([deutsch](docs/guide/de/data-sources.md)).
 
 ## Controls
@@ -142,7 +173,7 @@ bun run build
 bun run test:e2e # Playwright, against a production build
 bun run fix      # oxfmt + oxlint --fix
 bun run shots    # real-GPU screenshot plates from shots/*.json (headed)
-bun run bake     # offline bakes (needs uv): raw downloads → data/
+bun run bake dresden  # offline bakes (needs uv): raw downloads → data/
 bun run test:pipeline  # pytest + ruff for pipeline/
 ```
 

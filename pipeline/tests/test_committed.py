@@ -13,29 +13,37 @@ from bake.cultivated import unclaimed
 from bake.lowveg import cadastre_filter
 from bake.walls import on_written_lines
 
-DLM = Path(__file__).resolve().parents[2] / "data" / "dlm"
+# Every site whose data is on disk (Dresden's is committed; another site's
+# is there once it is fetched and baked).
+DLMS = sorted(p for p in (Path(__file__).resolve().parents[2] / "data").glob("*/dlm"))
+
+
+def _glob(pattern: str) -> list[Path]:
+    return sorted(p for dlm in DLMS for p in dlm.glob(pattern))
 
 
 def _tile(path: Path, kind: str) -> str:
     return path.name.removeprefix(f"{kind}_").removesuffix(".geojson")
 
 
+def _id(path: Path, kind: str) -> str:
+    return f"{path.parent.parent.name}/{_tile(path, kind)}"
+
+
 def _features(path: Path) -> list[dict]:
     return json.loads(path.read_text())["features"] if path.exists() else []
 
 
-@pytest.mark.parametrize(
-    "canopyx", sorted(DLM.glob("canopyx_*.geojson")), ids=lambda p: _tile(p, "canopyx")
-)
+@pytest.mark.parametrize("canopyx", _glob("canopyx_*.geojson"), ids=lambda p: _id(p, "canopyx"))
 def test_no_committed_scan_tree_stands_on_a_cadastre_or_osm_tree(canopyx):
     extra = _features(canopyx)
-    kept, dropped = cadastre_filter(extra, DLM / f"trees_{_tile(canopyx, 'canopyx')}.geojson")
+    kept, dropped = cadastre_filter(
+        extra, canopyx.parent / f"trees_{_tile(canopyx, 'canopyx')}.geojson"
+    )
     assert dropped == 0, f"re-bake lowveg: {dropped} of {len(extra)} scan trees are claimed"
 
 
-@pytest.mark.parametrize(
-    "walls", sorted(DLM.glob("walls_*.geojson")), ids=lambda p: _tile(p, "walls")
-)
+@pytest.mark.parametrize("walls", _glob("walls_*.geojson"), ids=lambda p: _id(p, "walls"))
 def test_every_committed_gate_stands_on_a_line_of_its_kind(walls):
     features = _features(walls)
     kept = on_written_lines(features)
@@ -43,10 +51,10 @@ def test_every_committed_gate_stands_on_a_line_of_its_kind(walls):
     assert lost == []
 
 
-def _measured(tile: str) -> tuple[np.ndarray, np.ndarray]:
+def _measured(dlm: Path, tile: str) -> tuple[np.ndarray, np.ndarray]:
     xy, r = [], []
     for kind in ("canopy", "canopyx", "trees"):
-        for f in _features(DLM / f"{kind}_{tile}.geojson"):
+        for f in _features(dlm / f"{kind}_{tile}.geojson"):
             if f.get("geometry"):
                 xy.append(f["geometry"]["coordinates"][:2])
                 p = f.get("properties") or {}
@@ -56,8 +64,8 @@ def _measured(tile: str) -> tuple[np.ndarray, np.ndarray]:
 
 @pytest.mark.parametrize(
     "cultivated",
-    sorted(DLM.glob("cultivated_*.geojson")),
-    ids=lambda p: _tile(p, "cultivated"),
+    _glob("cultivated_*.geojson"),
+    ids=lambda p: _id(p, "cultivated"),
 )
 def test_no_committed_orchard_tree_stands_by_a_measured_tree(cultivated):
     trees = [
@@ -68,4 +76,4 @@ def test_no_committed_orchard_tree_stands_by_a_measured_tree(cultivated):
     if not trees:
         return
     # the tile's own measured trees (the bake reads the neighbours' too)
-    assert unclaimed(trees, _measured(_tile(cultivated, "cultivated"))) == trees
+    assert unclaimed(trees, _measured(cultivated.parent, _tile(cultivated, "cultivated"))) == trees

@@ -35,10 +35,13 @@ import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
-import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
+import {
+  type Site,
+  spawnViewpoint,
+  type ViewpointGeometry,
+} from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
-import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
@@ -272,6 +275,8 @@ export interface CityWalkOptions {
    * tile data and leave a second canvas around until then).
    */
   signal?: AbortSignal;
+  /** the site the route renders: its spawn, viewpoints and fallback place */
+  site: Site;
   /** the 3D Tiles tileset to stream (lib/city/tileset.ts), a served URL */
   tilesetUrl: string;
 }
@@ -473,12 +478,11 @@ function traceRenderer(renderer: WebGPURenderer, trail: CrashTrail): void {
 
 /** Reprojects the recenter point (the spawn tile's centre) for SunCalc. */
 function siteLatLng(
+  site: Site,
   epsg: number,
   offset: { cx: number; cy: number }
 ): { lat: number; lng: number } {
-  return (
-    utmToLatLng(epsg, offset.cx, offset.cy) ?? currentSite().fallbackLatLng
-  );
+  return utmToLatLng(epsg, offset.cx, offset.cy) ?? site.fallbackLatLng;
 }
 
 export async function createCityWalkApp(
@@ -661,7 +665,7 @@ async function bootApp(
   );
   // Where the site sits on the globe: the sun rig needs it, and so does the
   // HUD's sunrise/sunset readout.
-  const latLng = siteLatLng(extras.epsg, offset);
+  const latLng = siteLatLng(opts.site, extras.epsg, offset);
   const sunRig = createSunRig(
     scene,
     worldBounds,
@@ -939,7 +943,7 @@ async function bootApp(
   // Spawn at the site's start vantage (on the spawn tile, so the boot's
   // wait for that tile holds); placed again once its terrain has landed
   // (below) — the height is above the ground, which is not there yet.
-  const spawnView = spawnViewpoint(currentSite());
+  const spawnView = spawnViewpoint(opts.site);
   pose.placeAt(spawnView);
 
   // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
@@ -1094,7 +1098,7 @@ async function bootApp(
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
         viewpoint: (index) => {
-          const view = currentSite().viewpoints[index];
+          const view = opts.site.viewpoints[index];
           if (view) {
             pose.flyToViewpoint(view);
           }

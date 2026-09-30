@@ -1,0 +1,40 @@
+{
+  "$comment": "Where this site’s committed data came from. Written when the folder was first committed; `bun run fetch hamburg` and `bun run bake hamburg` regenerate everything from the sources named here (raw downloads live in data/_raw/hh/, never committed).",
+  "version": 1,
+  "site": "hamburg",
+  "retrieved": "2026-09-24 (provider products); Wikidata and the re-bake of the bridge steps 2026-09-27",
+  "tiles": [
+    "32564_5934_2_hh",
+    "32564_5932_2_hh",
+    "32566_5932_2_hh",
+    "32566_5934_2_hh"
+  ],
+  "provider": {
+    "id": "hh",
+    "name": "Landesbetrieb Geoinformation und Vermessung Hamburg (LGV)",
+    "portal": "https://www.hamburg.de/bsw/landesbetrieb-geoinformation-und-vermessung/",
+    "licence": "dl-de/by-2-0",
+    "credit": "Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und Vermessung (LGV), dl-de/by-2-0",
+    "products": [
+      "DGM1 (terrain)",
+      "LoD2 (buildings, CityGML → CityJSON)",
+      "DOM1 (surface model: canopy, bridges, monuments)",
+      "DOP (orthophoto, RGBI: NDVI, roof colours)"
+    ]
+  },
+  "committed": {
+    "data/hamburg/dgm/": "DGM1 per tile, clipped to the 2 km grid and written compact (DEFLATE, float predictor, centimetres) by `bun run fetch`",
+    "data/hamburg/cityjson/": "LoD2 per tile, converted from the provider’s CityGML by pipeline/bake/citygml.py",
+    "data/hamburg/dlm/": "the derived per-tile artifacts of `bun run bake` (class raster, canopy, vegetation, OSM layers, …)",
+    "data/hamburg/dop/": "per-tile values derived from the orthophoto (roof colours)"
+  },
+  "openstreetmap": {
+    "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
+    "extract": "data/_raw/hh/osm/hamburg-latest.osm.pbf (Geofabrik extract), retrieved 2026-09-24",
+    "usedFor": "land cover (no open Basis-DLM) and every OSM layer"
+  },
+  "wikidata": {
+    "licence": "CC0",
+    "usedFor": "bridge names and types, cached per tile under data/_raw/hh/wikidata/"
+  }
+}

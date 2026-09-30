@@ -48,7 +48,7 @@ history. Decisions that came out of plans are written up as
 | 014 | Bring AGENTS.md, the skill, `docs/`, comments and the OSM attribution in line with the code | DONE | [completed.md](./completed.md#014--knowledge-base-currency--done) |
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0023 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
-| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **PARTIAL** — phases 1–2 done for Saxony (site config in TS, Python bakes, `ingest_sn`); 3 half; 4 (OSM land cover), NRW, 5 (rest) open | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
+| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **PARTIAL** — phases 1, 2, 4 and 5 done through plan 037 (providers for SN, NW, BY, HH, BE; OSM land cover; `bun run site`); open: NAS input (phase 3), OSM rails/bridges without a DLM | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
 | 019 | Verify and tune the 3D Tiles branch on a real GPU (palette, quantisation, LOD, seams, shadows, frame time, phones, deploy host) | **TODO** — needs a GPU | [019-gpu-verification.md](./019-gpu-verification.md) |
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | DONE (2026-09-26) — the whole port, one path (WebGPU, its WebGL2 backend as the fallback), public API only; the spike's internal patches rejected for a top-level scene pass, `Instances` and `sceneMaterial`; look unjudged on a real GPU | [completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26) |
@@ -68,6 +68,7 @@ history. Decisions that came out of plans are written up as
 | 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | **DONE** (2026-09-26) — gate passed with a per-cell echo rule (213 on the spawn tile, 16 of 20 sampled are structures; the plan's blob-wide rule found 4); 6 625 on fifteen tiles (6 783 before the review's seam, ground and overlap fixes), the Christmas markets excluded via OSM, +3.3 % city glTF; look unverified on a real GPU | [034-dom-minus-lod2.md](./034-dom-minus-lod2.md) |
 | 035 | A hidden, opt-in soundscape synthesised from the scene's data | **BUILT, UNHEARD** — all phases (L / *Klang* switch, engine by dynamic import, beds, birds, crickets, footsteps by paving, hour bells from the new soundmarks bake, tram bell); no listening pass yet | [035-soundscape.md](./035-soundscape.md) |
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **TODO** — survey done 2026-09-27, no item picked | [036-data-stream-potential.md](./036-data-stream-potential.md) |
+| 037 | Many sites: providers, per-site data, `bun run fetch <site>` → `bake` → build, eight sites with viewpoints; one deployment with a route per site (`/dresden`) and a start page to pick the city | **DONE** (this branch) — Berlin's adapter untested; committing sites other than Dresden is the maintainer's call | [037-many-sites-one-env-var.md](./037-many-sites-one-env-var.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -82,10 +83,10 @@ S/M/L.
    5–8 follow on their own. Take the WebGPU port along too: plates against
    the spike's, GTAO's contact shadows re-tuned by eye, the flight probe
    on both backends (completed.md, plan 020).
-2. **Plan 017, the rest (M).** OSM land cover as a DLM substitute (now a
-   class raster only), the NRW adapter and a second site, `site:check`.
-   Run the OSM bakes once against a Geofabrik extract (unreachable from
-   the environment that ported them).
+2. **Plan 017, the rest (S–M).** OSM rails and bridge decks for providers
+   without a DLM (Hamburg, Berlin), a NAS reader for Hamburg's open
+   Basis-DLM, and a first run of Berlin's adapter. Decide which sites to
+   commit and deploy (plan 037, ADR 0035).
 3. ~~**Plan 020 (L, GPU-gated).**~~ Done 2026-09-26: WebGPU + TSL, every
    `onBeforeCompile` patch and both post libraries gone
    ([completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26)).
@@ -333,12 +334,12 @@ independence:
 5. **A user-facing quality tier (S–M).** The device tier already halves
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
-6. **A provenance manifest per tile (S).** `bun run bake [tile]
-   [--ingest]` exists (plan 017 phase 2); what is left is writing
+6. **A provenance manifest per tile (S).** `bun run fetch [tile]`
+   exists (plan 037); what is left is writing
    `data/<site>/<tile>.provenance.json` (dataset, edition, download date,
-   licence) from the ingest adapter, for the HUD footer to read. The guide's
-   dataset table and `data/provenance.json` are the hand-kept version.
-   Since 2026-09-26 the ingest adapter checks each download (length, ZIP
+   licence) from the provider's adapter, for the HUD footer to read. The guide's
+   dataset table and `data/<site>/provenance.json` are the hand-kept version.
+   Since 2026-09-26 the fetch checks each download (length, ZIP
    CRCs, the Geofabrik md5); those are the values to record.
 7. **Offline repeat visits: a service worker over the tileset (S–M).**
    [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)

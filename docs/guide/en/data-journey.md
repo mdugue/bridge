@@ -14,9 +14,9 @@ changes**. Abbreviations are in the [glossary](./glossary.md).
 flowchart TB
   S1["<b>1 · Provider portals</b><br/>geodaten.sachsen.de · OpenStreetMap<br/><i>the source of truth for the world</i>"]
   S2["<b>2 · Raw downloads</b> — data/_raw/<br/>gigabytes · on the maintainer's disk only<br/>never in the repository"]
-  S3["<b>3 · Bakes</b> — pipeline/ · bun run bake<br/>run by hand per tile · one Python package<br/>clip, classify, sample, simplify"]
+  S3["<b>3 · Bakes</b> — pipeline/ · bun run bake &lt;site&gt;<br/>run by hand per tile · one Python package<br/>clip, classify, sample, simplify"]
   S4["<b>4 · Committed derivatives</b> — data/<br/>small per-tile files in the repository<br/><i>the source of truth for what the app shows</i>"]
-  S5["<b>5 · Build step</b> — scripts/prepare-data.ts<br/>runs before every dev server and build<br/>bakes a 3D Tiles tileset into public/data/"]
+  S5["<b>5 · Build step</b> — scripts/prepare-data.ts<br/>runs before every dev server and build<br/>bakes a 3D Tiles tileset per city into public/data/"]
   S6["<b>6 · Browser</b><br/>streams the tiles the camera sees<br/>draws everything on the graphics card"]
   S1 -->|"download (manual or scripted)"| S2
   S2 -->|"bake (manual)"| S3
@@ -40,10 +40,10 @@ snapshot is.
 The bulk downloads are large: the statewide landscape model is several
 gigabytes, an aerial-photo tile is hundreds of megabytes, the OpenStreetMap
 extract for Saxony is about 250 MB. They live in a folder the version
-control system ignores, one subfolder per site and source
-(`data/_raw/dresden/dom1`, `…/dop`, `…/dlm`, `…/osm`). Anyone can
-re-download them — `bun run bake --ingest` does it in one go — and nobody
-needs them to run the viewer.
+control system ignores, one subfolder per data provider and source
+(`data/_raw/sn/dom1`, `…/dop`, `…/dlm`, `…/osm` for Saxony — every Saxon
+place shares them). Anyone can re-download them — `bun run fetch dresden`
+does it in one go — and nobody needs them to run the viewer.
 
 **The one exception** is the terrain model: its GeoTIFF is committed
 (13.6 MB per tile) because the build step in station 5 reads it directly
@@ -54,13 +54,15 @@ and two bakes need it as well. This is a deliberate decision
 
 One Python package, `pipeline/bake/`, turns the raw downloads into small,
 tile-sized files. It runs on the maintainer's machine with one command,
-`bun run bake`, which reads the **site config** (`sites/dresden.ts`: which
+`bun run bake dresden`, which reads the **site config** (`sites/dresden.ts`: which
 tiles, where they lie, which coordinate system) and runs seven steps per
 tile. The Python environment is pinned, and its geodata libraries bring
-GDAL with them, so nothing else has to be installed. With `--ingest` it
-first fetches the downloads itself: the surface model and the aerial photo
-of each tile from the survey office's download service, the statewide
-landscape model, and the OpenStreetMap extract for Saxony from Geofabrik.
+GDAL with them, so nothing else has to be installed. Before it, `bun run
+fetch dresden` fetches the downloads themselves: every product of each tile from
+the survey office (the building model converted to CityJSON on the way),
+the statewide landscape model, and the OpenStreetMap extract from
+Geofabrik. Which place — and so which survey office — is the first word
+after the command: `dresden`, `leipzig`, `unna`, …
 
 The steps run in a fixed order, because some read the output of an
 earlier one:
@@ -92,9 +94,9 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 
 | Folder | Files | What they are | Size per tile |
 |---|---|---|---|
-| `data/dgm/` | `dgm1_<tile>.tif` + `.tfw` + `_akt.csv` | the terrain model as downloaded (the exception above) | 13.6 MB |
-| `data/cityjson/` | `lod2_<tile>.city.json` | the building model, converted to CityJSON | 8–11 MB |
-| `data/dlm/` | `landcover_<tile>.png` + `.json` | land-use class per half-metre pixel (4096²), with a legend; the file holds class numbers only, the colours are added in the browser | 0.2 MB |
+| `data/dresden/dgm/` | `dgm1_<tile>.tif` + `.tfw` + `_akt.csv` | the terrain model as downloaded (the exception above) | 13.6 MB |
+| `data/dresden/cityjson/` | `lod2_<tile>.city.json` | the building model, converted to CityJSON | 8–11 MB |
+| `data/dresden/dlm/` | `landcover_<tile>.png` + `.json` | land-use class per half-metre pixel (4096²), with a legend; the file holds class numbers only, the colours are added in the browser | 0.2 MB |
 | | `ndvi_<tile>.png` | greenness index from the aerial photo, 1024² | 0.3–0.5 MB |
 | | `vegrows_<tile>.geojson` | hedge and tree-row lines | a few kB |
 | | `canopy_<tile>.geojson` | one point per tree with its height (5,000–16,000 per tile) | 0.6–1.8 MB |
@@ -108,7 +110,7 @@ viewer shows is either in it or is computed from it. It holds, per tile:
 | | `bridge_<tile>.geojson` | bridge deck outlines with a height per corner, kind and structure | a few kB |
 | | `platform_<tile>.geojson` | station platforms | a few kB |
 | | `osmbuild_<tile>.json` | per building: a shop or café on the ground floor, listed | 15–40 kB |
-| `data/dop/` | `roofcolor_<tile>.json` | one colour per building, sampled from the aerial photo | 0.2 MB |
+| `data/dresden/dop/` | `roofcolor_<tile>.json` | one colour per building, sampled from the aerial photo | 0.2 MB |
 
 In total the repository carries about 400 MB of data for the fifteen tiles.
 
@@ -130,8 +132,10 @@ In total the repository carries about 400 MB of data for the fifteen tiles.
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
 
-Every `bun dev` and `bun build` starts by running this script. It does
-three things:
+Every `bun dev` and `bun build` starts by running it — once for every city
+whose data is on disk (`scripts/prepare-sites.ts` decides which), and it
+writes each city into a folder of its own, `public/data/dresden/`,
+`public/data/leipzig/`, … For each city it does three things:
 
 1. **Bakes the heavy inputs into a tileset.** For every tile, the terrain
    GeoTIFF becomes two ready-made terrain meshes: a detailed one on a
@@ -150,7 +154,7 @@ three things:
    levels, and says from how close the detailed level replaces the coarse
    one. The land-use class PNG gets a 2048² and a 512² copy. Results are cached in
    `.cache/` and only redone when an input or the bake code changed.
-2. **Publishes** every file into `public/data/` under a name that contains
+2. **Publishes** every file into the city's folder under a name that contains
    a fingerprint of its content (for example
    `canopy_33412_5656_2_sn.55a26a2d.geojson`), and writes a
    `manifest.json` that maps the plain names to the fingerprinted ones.
@@ -161,9 +165,16 @@ The fingerprinted names allow the browser to cache every data file
 forever; only the tiny manifest is re-checked on each visit. A re-bake
 changes fingerprints, and the new manifest points at the new files.
 
+Last, a short list of the cities that were built, `public/data/sites.json`,
+is written next to their folders. The start page shows one card per entry
+(with the city's land-cover map, painted from the same colours as the
+ground), and every entry gets its own address: `/dresden`, `/leipzig`, …
+A city whose data is not on the machine that builds is simply not listed.
+
 ### Station 6 — the browser
 
-The browser fetches the manifest and the tileset, then **streams**: a
+The address says which city: at `/dresden` the browser fetches Dresden's
+manifest (`/data/dresden/manifest.json`) and its tileset, then **streams**: a
 library called 3DTilesRendererJS decides, from where the camera stands and
 where it looks, which files to fetch. The first picture waits only for the
 buildings and the terrain of the tile you start on. Tiles near the camera
@@ -215,13 +226,13 @@ post-processing look.
 
 | Change | Manual steps | Automatic |
 |---|---|---|
-| New terrain edition | replace the GeoTIFF in `data/dgm/`; re-run the `canopy` and `rail` bakes (they read it) | the terrain meshes, walls included, are re-baked on the next build |
-| New building model | convert to CityJSON, replace in `data/cityjson/`; re-run the `roof-colour` bake | the building mesh is re-baked on the next build |
+| New terrain edition | replace the GeoTIFF in `data/<site>/dgm/` (or delete it and `bun run fetch <site>`); re-run the `canopy` and `rail` bakes (they read it) | the terrain meshes, walls included, are re-baked on the next build |
+| New building model | delete the CityJSON in `data/<site>/cityjson/` and `bun run fetch <site>` (it converts the new CityGML); re-run the `roof-colour` bake | the building mesh is re-baked on the next build |
 | New land-use edition | fetch the new package, re-run the `landcover` bake, then `canopy`, `lamps`, `furniture`, `rail` and `tram` (they read the class raster) | the 2048² and 512² copies are re-baked |
 | New aerial photos | re-run the `ndvi` and `roof-colour` bakes | the roof colours are folded into the mesh on the next build |
 | New OpenStreetMap data | download a fresh Geofabrik extract and re-run the `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs`, `rail` and `tram` bakes | — |
 | Different ground colours | edit the one palette in the code | nothing to re-bake: the browser paints the colours |
-| A new tile | download its terrain and building model by hand (the building model converted to CityJSON) and commit both; add the tile to the site config `sites/dresden.ts`; `bun run bake --ingest` fetches the rest and runs all seven bakes | the build adds it to the tileset and publishes it |
+| A new tile | add it to the site config (`sites/dresden.ts`); `bun run fetch <site>` downloads everything for it, the building model converted to CityJSON on the way; `bun run bake <site>` runs all seven bakes | the build adds it to the tileset and publishes it |
 
 ## Why it is built this way
 

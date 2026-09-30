@@ -65,7 +65,6 @@ from .common import Tile, column, feature, geometry_json, overlaps, owns, write_
 from .lowveg import Grid, building_mask, dgm_on, disk, lsc_rasters
 from .osm import has_extract, read_osm, tag
 
-GEOSN_ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0 (laser scan, LoD2)"
 RES = 0.5
 BAND = (2.0, 6.5)  # height above ground (m)
 BLOCKED = (5, 7, 8)  # railway, road, water: parked vans, trains, boats
@@ -458,7 +457,9 @@ def run(tile: Tile) -> None:
     kept = owned(tile, without_overlaps(kept))
     # Stable order: the committed file diffs by feature, not by label order.
     kept.sort(key=lambda s: (round(s.ring[0][0], 1), round(s.ring[0][1], 1)))
-    write_geojson(out, [structure_feature(s) for s in kept], tile.epsg, GEOSN_ATTRIBUTION)
+    write_geojson(
+        out, [structure_feature(s) for s in kept], tile.epsg, f"{tile.credit} (laser scan, LoD2)"
+    )
     pent = sum(s.corners is not None for s in kept)
     print(
         f"{tile.id}: {len(kept)} small structures ({pent} pent roofs) "

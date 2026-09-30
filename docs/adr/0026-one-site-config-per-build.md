@@ -1,6 +1,10 @@
 # ADR 0026: One site config per build, with an ingest adapter per data provider
 
-- **Status:** accepted
+- **Status:** accepted; the one site per build (`SITE=<id>`, inlined for
+  the client) superseded by [ADR 0035](./0035-sites-providers-and-per-site-data.md):
+  one deployment serves every built site under its own route (`/dresden`),
+  and the scripts take the site as their first argument. The site config
+  itself stands.
 - **Date:** 2026-09
 
 ## Context

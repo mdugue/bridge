@@ -23,7 +23,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 TILE = "33412_5656_2_sn"
-DGM = ROOT / "data" / "dgm" / f"dgm1_{TILE}_tiff" / f"dgm1_{TILE}.tif"
+DGM = ROOT / "data" / "dresden" / "dgm" / f"dgm1_{TILE}_tiff" / f"dgm1_{TILE}.tif"
 EYE = 1.7
 DATE = "2026-06-15T15:30:00.000Z"  # 17:30 CEST: warm, oblique afternoon sun
 

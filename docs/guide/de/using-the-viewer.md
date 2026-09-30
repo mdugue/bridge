@@ -11,6 +11,17 @@ Gegenden erscheinen) und für ein flüssiges Bild eine halbwegs aktuelle
 Grafikkarte. Handys werden unterstützt: Sie bekommen
 automatisch ein leichteres Render-Budget.
 
+## Eine Stadt wählen
+
+Die Startseite (`/`) zeigt eine Karte für jede Stadt, mit der diese
+Bereitstellung gebaut wurde: die Karte der Stadt in den Bodenfarben des
+Viewers, ihr Bundesland, die Fläche, die sie abdeckt, und wie viele
+Aussichtspunkte sie hat. Eine Karte öffnet den Viewer dieser Stadt, der
+eine eigene Adresse hat — `/dresden`, `/leipzig`, … —, sodass ein Link oder
+Lesezeichen direkt hineinführt. Im Viewer führt *Andere Stadt wählen*
+unter dem Namen der Stadt oben im Feld zurück zur Startseite. Die
+Startseite verlinkt außerdem die Wissensseiten (`/wissen`).
+
 ## Laden
 
 Der Ladebildschirm listet fünf Stufen und einen Balken. Die ersten drei
@@ -205,12 +216,13 @@ zurück, sobald du stehst.
 - **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
-Die Fußzeile nennt die Datenquellen: die sächsische Landesvermessung für
-die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden unter anderem
-für Lampen, Mauern und Zäune, Bahnsteige, Brückentragwerke, Läden und
-Baudenkmale. Daneben führt *Unterstützen* zur
-Ko-fi-Seite des Projekts; es ist ein einfacher Link, der erst beim Klick
-etwas von Ko-fi lädt.
+Die Fußzeile nennt die Datenquellen: die Landesvermessung (in Dresden
+die sächsische) für die amtlichen Datensätze und die
+OpenStreetMap-Mitwirkenden unter anderem für Lampen, Mauern und Zäune,
+Bahnsteige, Brückentragwerke, Läden und Baudenkmale (und die
+Landbedeckung, wo das Land kein Basis-DLM veröffentlicht). Daneben führt
+*Unterstützen* zur Ko-fi-Seite des Projekts; es ist ein einfacher Link,
+der erst beim Klick etwas von Ko-fi lädt.
 
 ## Tipps
 
@@ -221,8 +233,8 @@ etwas von Ko-fi lädt.
   20:00 im Sommer.
 - Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten* und
   schalte *Tiefenschärfe* aus, um mehr Bilder pro Sekunde zu bekommen.
-- `?scene=lite` in der Adresszeile streamt nur die Startkachel, mit
-  groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
+- `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
+  streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
 
 ## Kleinigkeiten

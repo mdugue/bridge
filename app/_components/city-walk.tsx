@@ -64,6 +64,7 @@ import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import { readStoredStyle, writeStoredStyle } from "./style-memory";
 import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
+import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
 
@@ -246,6 +247,7 @@ function OffsiteDialog({
 }
 
 export default function CityWalk({ budget, tilesetUrl }: Props) {
+  const site = useSite();
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const applySceneTime = useCallback(
@@ -382,6 +384,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       container,
       budget,
       look,
+      site,
       tilesetUrl,
       initialDate: timeNow(),
       signal: aborter.signal,
@@ -530,7 +533,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         look: undefined,
       });
     };
-  }, [budget, look, tilesetUrl, supported, timeNow, syncTime]);
+  }, [budget, look, site, tilesetUrl, supported, timeNow, syncTime]);
 
   const copySnapshot = () => {
     const h = handleRef.current;

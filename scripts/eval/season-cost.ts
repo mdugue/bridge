@@ -31,16 +31,21 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "../../lib/city/features";
-import { tileIds } from "../../lib/city/tile";
-import { currentSite } from "../../sites";
+import { sideFileSource, tileIds } from "../../lib/city/tile";
+import { REFERENCE_SITE, SITES, siteFromArgs } from "../../sites";
 
 const ROOT = join(import.meta.dir, "..", "..");
+// The site named first on the command line, else the reference site.
+const site =
+  process.argv.length > 2
+    ? siteFromArgs(process.argv.slice(2)).site
+    : SITES[REFERENCE_SITE];
 const features = <F>(file: string): F[] => {
   try {
     return (
       (
         JSON.parse(
-          readFileSync(join(ROOT, "data", "dlm", file), "utf8")
+          readFileSync(join(ROOT, sideFileSource(site, file)), "utf8")
         ) as FeatureCollection<F>
       ).features ?? []
     );
@@ -52,7 +57,7 @@ const features = <F>(file: string): F[] => {
 const ctx = { offset: { cx: 412_000, cy: 5_657_000 }, heightAt: () => 100 };
 const controls: VegetationControl[] = [];
 let crowns = 0;
-for (const tile of tileIds(currentSite())) {
+for (const tile of tileIds(site)) {
   const rows = features<VegRowFeature>(`vegrows_${tile}.geojson`);
   const canopy = features<CanopyFeature>(`canopy_${tile}.geojson`);
   const scan = features<CanopyExtraFeature>(`canopyx_${tile}.geojson`);
