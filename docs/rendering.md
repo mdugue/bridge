@@ -411,7 +411,9 @@ was gone for good. Three things keep a phone under that line:
   its 180 sat on 865 MB of GPU memory;
 - a tile's two terrain levels share what they name alike (class raster and
   its painted splat, NDVI, sports grounds: `shared-rasters.ts`), ~43 MB a
-  tile on a phone;
+  tile on a phone — and the cache weighs such a raster half by each level,
+  not whole by both (counted twice, a phone's cache was full at a fraction
+  of what the GPU held);
 - the memory governor watches what the renderer holds and, past each line,
   raises the tiles' error target (×2, ×4: coarser tiles in view) and lowers
   the cache's lower bound (tiles no longer in view leave sooner) — never its

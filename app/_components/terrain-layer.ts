@@ -100,7 +100,7 @@ import {
 } from "./material-slots";
 import { applyGroundLight, type GroundLight } from "./sky-light";
 import { sportGround } from "./sport-ground";
-import { textureBytes, trackedBytesOf, trackTexture } from "./three-utils";
+import { textureBytes, trackTexture } from "./three-utils";
 import { createWaterLayer, type WaterLayer } from "./water-layer";
 
 /**
@@ -113,12 +113,12 @@ export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
   bounds: TerrainBounds;
   /**
-   * GPU bytes this level holds beyond its glTF — its rasters (a shared one
-   * counted by each level holding it) and the water's own index and
-   * normals: what the tile cache weighs the tile by, next to the glTF
-   * (tile-stream.ts `calculateBytesUsed`).
+   * The rasters this level reads, each once — what the tile cache weighs it
+   * by beyond its glTF (tile-stream.ts `calculateBytesUsed`, which weighs a
+   * raster both levels share half by each). The water sheets hang in the
+   * content: the renderer weighs them with it.
    */
-  bytes: number;
+  rasters: Texture[];
   /** Frees the rasters (the tile's geometry and materials go with it). */
   dispose: () => void;
   /** bilinear elevation lookup at projected (not recentered) coordinates */
@@ -1298,8 +1298,8 @@ async function loadDetailRasters(
   };
 }
 
-/** GPU bytes of the rasters a splat reads (trackTexture's record). */
-function splatBytes(splat: SplatLayer): number {
+/** The rasters a splat reads, each once. */
+function splatRasters(splat: SplatLayer): Texture[] {
   const textures = new Set<Texture | undefined>([
     splat.texture,
     splat.colorTexture,
@@ -1314,20 +1314,7 @@ function splatBytes(splat: SplatLayer): number {
     splat.svfTexture,
     splat.horizonTexture,
   ]);
-  let bytes = 0;
-  for (const texture of textures) {
-    bytes += texture ? trackedBytesOf(texture) : 0;
-  }
-  return bytes;
-}
-
-/** The water's own arrays: its index, and its normals when they are its own
- *  (it shares the terrain's positions). */
-function ownBytes(water: BufferGeometry): number {
-  const normal = water.getAttribute("normal") as BufferAttribute | undefined;
-  return (
-    (water.getIndex()?.array.byteLength ?? 0) + (normal?.array.byteLength ?? 0)
-  );
+  return [...textures].filter((t): t is Texture => t !== undefined);
 }
 
 /** The splat's baked light as the fine level's kerbs, fences, stairs and
@@ -1414,7 +1401,7 @@ export async function dressTerrain(
 
   return {
     mesh,
-    bytes: (splat ? splatBytes(splat) : 0) + ownBytes(waterGeometry),
+    rasters: splat ? splatRasters(splat) : [],
     light: splat ? groundLightOf(splat) : undefined,
     tile: extras.tileId,
     level: extras.level,

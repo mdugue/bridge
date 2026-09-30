@@ -60,6 +60,7 @@ test("the stream's dispose releases every dressed tile, quietly", () => {
   );
   const freed: string[] = [];
   const terrain = {
+    rasters: [],
     dispose: () => freed.push("terrain"),
   } as unknown as TerrainLayer;
   const city = { dispose: () => freed.push("city") } as unknown as CityLayer;

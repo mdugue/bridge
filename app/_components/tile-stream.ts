@@ -74,6 +74,7 @@ import {
   compileRepresentatives,
   disposeObject3D,
   estimateGeometryBytes,
+  trackedBytesOf,
 } from "./three-utils";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
@@ -616,7 +617,19 @@ export class DressingPlugin {
   /** tiles whose dressing was tried (see TileStream.dressingSettled) */
   readonly settled = new Set<string>();
   private readonly toData = new Matrix4();
-  private tiles: { recalculateBytesUsed: () => void } | null = null;
+  private tiles: {
+    recalculateBytesUsed: (tile?: object | null) => void;
+  } | null = null;
+  /**
+   * The content roots whose terrain reads each raster: the two levels of a
+   * tile name the same class raster, splat, NDVI, sports grounds and light
+   * (shared-rasters.ts), and the cache weighs such a raster half by each —
+   * counted whole by both, a phone's cache was full at a fraction of what
+   * the GPU held.
+   */
+  private readonly rasterHolders = new Map<Texture, Set<Object3D>>();
+  /** the tile a content root was loaded for (to reweigh it) */
+  private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
   readonly skyView: SharedRasters<Texture> = createSharedRasters(
     (url) => loadSkyViewTexture(url),
@@ -662,7 +675,7 @@ export class DressingPlugin {
       });
   }
 
-  init(tiles: { recalculateBytesUsed: () => void }): void {
+  init(tiles: { recalculateBytesUsed: (tile?: object | null) => void }): void {
     this.tiles = tiles;
   }
 
@@ -676,13 +689,51 @@ export class DressingPlugin {
    */
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
     const dressed = scene ? this.dressed.get(scene) : undefined;
-    return (dressed?.terrain?.bytes ?? 0) + (dressed?.dressingBytes ?? 0);
+    let rasters = 0;
+    for (const texture of dressed?.terrain?.rasters ?? []) {
+      const holders = this.rasterHolders.get(texture)?.size ?? 1;
+      rasters += trackedBytesOf(texture) / Math.max(holders, 1);
+    }
+    return rasters + (dressed?.dressingBytes ?? 0);
+  }
+
+  /** `scene`'s terrain takes up (or lets go of) its rasters; the other
+   *  levels reading one of them now weigh a different share of it. */
+  private holdRasters(scene: Object3D, rasters: Texture[], hold: boolean) {
+    const others = new Set<Object3D>();
+    for (const texture of rasters) {
+      let holders = this.rasterHolders.get(texture);
+      if (!holders) {
+        holders = new Set();
+        this.rasterHolders.set(texture, holders);
+      }
+      if (hold) {
+        holders.add(scene);
+      } else {
+        holders.delete(scene);
+      }
+      for (const other of holders) {
+        if (other !== scene) {
+          others.add(other);
+        }
+      }
+      if (holders.size === 0) {
+        this.rasterHolders.delete(texture);
+      }
+    }
+    for (const other of others) {
+      const tile = this.tileOf.get(other);
+      if (tile) {
+        this.tiles?.recalculateBytesUsed(tile);
+      }
+    }
   }
 
   private url = (file: string): string =>
     new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
+    this.tileOf.set(scene, tile);
     let settle = (): void => undefined;
     this.loaded.set(
       scene,
@@ -835,6 +886,7 @@ export class DressingPlugin {
     }
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });
+    this.holdRasters(scene, terrain.rasters, true);
     if (extras.dressing) {
       this.queueDressing(scene, terrain, extras);
     }
@@ -1035,6 +1087,7 @@ export class DressingPlugin {
     }
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);
+      this.holdRasters(scene, dressed.terrain.rasters, false);
       dressed.terrain.dispose();
     }
     if (dressed.dressing) {
