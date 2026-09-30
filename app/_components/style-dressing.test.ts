@@ -10,6 +10,7 @@ import {
 } from "three/webgpu";
 import { Instances, isInstances } from "./instancing";
 import { createStyleDressing } from "./style-dressing";
+import { disposeObject3D } from "./three-utils";
 
 function world() {
   const scene = new Scene();
@@ -89,4 +90,29 @@ test("prepare builds the dressing hidden, once", () => {
   expect(dressing.prepare({ crowns: "paper", lampCones: true })).toHaveLength(
     0
   );
+});
+
+test("a tile's release leaves the cones' material to the other tiles", () => {
+  const w = world();
+  const other = new Group();
+  const heads = new Instances(
+    new BoxGeometry(),
+    new MeshBasicNodeMaterial(),
+    3
+  );
+  heads.userData.styleLampHeads = { height: 5 };
+  other.add(heads);
+  w.scene.add(other);
+  const dressing = createStyleDressing(w.scene);
+  dressing.prepare({ crowns: null, lampCones: true });
+  const cone = styledOf(w.tile, "style-lamp-cones");
+  const material = cone?.material as MeshBasicNodeMaterial;
+  expect(styledOf(other, "style-lamp-cones")?.material).toBe(material);
+  let disposed = false;
+  material.addEventListener("dispose", () => {
+    disposed = true;
+  });
+  // what the dressing plugin does with a released tile
+  disposeObject3D(w.tile);
+  expect(disposed).toBe(false);
 });

@@ -81,6 +81,9 @@ function coneMaterial(height: number): MeshBasicNodeMaterial {
     blending: AdditiveBlending,
     side: DoubleSide,
   });
+  // Every tile's cones wear it: a tile's release must not free it (the
+  // dressing does, with the app).
+  material.userData.shared = true;
   material.fog = false;
   material.positionNode = instancePosition();
   const facing = abs(
@@ -145,7 +148,10 @@ export function createStyleDressing(scene: Scene): StyleDressing {
   // Each crown set's styled siblings, made on first use and freed with the
   // tile (they are its children).
   const siblings = new WeakMap<Instances, Map<CrownStyle, Instances>>();
-  let made: Object3D[] = [];
+  // What a `prepare` made, for its caller only: kept past it, the list
+  // would hold every released tile's vegetation and lamps (a sibling's
+  // parent is its tile's group).
+  let made: Object3D[] | null = null;
   const styledFor = (
     mesh: Instances,
     kind: CrownStyle,
@@ -180,7 +186,7 @@ export function createStyleDressing(scene: Scene): StyleDressing {
       siblings.set(mesh, byKind);
     }
     byKind.set(kind, styled);
-    made.push(styled);
+    made?.push(styled);
     return styled;
   };
 
@@ -213,7 +219,7 @@ export function createStyleDressing(scene: Scene): StyleDressing {
     cone.visible = false;
     heads.parent.add(cone);
     cones.set(heads, cone);
-    made.push(cone);
+    made?.push(cone);
     return cone;
   };
 
@@ -287,10 +293,15 @@ export function createStyleDressing(scene: Scene): StyleDressing {
       return undress;
     },
     prepare: (options) => {
-      made = [];
-      dress(options);
-      undress();
-      return made;
+      const list: Object3D[] = [];
+      made = list;
+      try {
+        dress(options);
+        undress();
+      } finally {
+        made = null;
+      }
+      return list;
     },
     sceneChanged: () => {
       tagged = null;
