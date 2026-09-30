@@ -417,7 +417,10 @@ was gone for good. Three things keep a phone under that line:
 
 If the GPU is lost anyway, the page reloads where the player stood
 (`gpu-recovery.ts`: the snapshot in session storage; at most twice in two
-minutes, then the message) instead of freezing.
+minutes, then the message) instead of freezing. So does a frame that
+throws: three's render does not unwind (its call depth stays a level deep,
+or the shadow pass's override stays on), and no later frame draws right.
+Before the first frame the message fails the boot instead.
 
 While the camera moves, DoF is dropped and restored after 250 ms of
 stillness (`lib/city/regression.ts`); the contact shadows stay on because

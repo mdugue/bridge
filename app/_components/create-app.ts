@@ -231,9 +231,10 @@ export interface CityWalkOptions {
    */
   onError?: (message: string) => void;
   /**
-   * The GPU is gone for good (the render stopped): true when the page
-   * recovers by itself (gpu-recovery.ts, a reload where the player stood);
-   * otherwise the HUD says the graphics failed.
+   * The GPU is gone for good, or a frame threw and left three's renderer
+   * in a state no later frame draws right (the render stopped): true when
+   * the page recovers by itself (gpu-recovery.ts, a reload where the player
+   * stood); otherwise the HUD says the graphics failed.
    */
   onGpuLost?: () => boolean;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
@@ -1218,16 +1219,10 @@ async function bootApp(
   let tickDue = 0;
   let fpsDue = 0;
   let frames = 0;
-  // A frame that throws. A lost GPU (iOS reclaims the GPU process under
-  // memory pressure; WebKit throws InvalidStateError before any
-  // device-lost arrives) fails every frame after it: stop once and say so.
-  // Anything else is noted once (with where it came from) and the loop
-  // carries on, as it did before this guard; only a failure that repeats
-  // for a whole second of frames stops it too.
-  let failedFrames = 0;
-  const failures = new Set<string>();
-  // The GPU is gone for good: stop once, then recover (a reload where the
-  // player stood, gpu-recovery.ts) or say so.
+  // The render cannot go on: stop once, then recover (a reload where the
+  // player stood, gpu-recovery.ts) or say so — before the first frame by
+  // failing the boot, since the HUD shows `onError` only once booted and
+  // the stopped loop no longer streams the tiles the boot waits for.
   let stopped = false;
   const stopRendering = (message: string) => {
     if (stopped) {
@@ -1243,7 +1238,12 @@ async function bootApp(
       opts.trail?.note("reloading", "to recover the GPU");
       return;
     }
-    opts.onError?.(`Die Grafik ist ausgefallen (${message}). Bitte neu laden.`);
+    const failed = `Die Grafik ist ausgefallen (${message}). Bitte neu laden.`;
+    if (!firstFrameShown) {
+      bootFailure ??= new Error(failed);
+      return;
+    }
+    opts.onError?.(failed);
   };
   // A device the browser reports lost: three only stops drawing (silently,
   // every frame after it returns early), so the loop stops here too.
@@ -1252,22 +1252,21 @@ async function bootApp(
     onDeviceLost(info);
     stopRendering(info.message);
   };
+  // A frame that throws stops the render. A lost GPU (iOS reclaims the GPU
+  // process under memory pressure; WebKit throws InvalidStateError before
+  // any device-lost arrives) fails every frame after it. Anything else
+  // thrown inside three's render leaves it unwound: its render call depth
+  // one level deep (no compile matches a frame again), or the shadow pass's
+  // override and object function installed (every later frame draws only
+  // the casters, and returns normally). Carrying on is never a recovery.
   const onFrameFailed = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    if (!failures.has(message)) {
-      failures.add(message);
-      const where =
-        error instanceof Error
-          ? (error.stack ?? "").split("\n").slice(0, 4).join(" | ")
-          : "";
-      opts.trail?.note("frame failed", `${message} ${where}`);
-    }
-    failedFrames++;
-    const deviceGone =
-      error instanceof DOMException && error.name === "InvalidStateError";
-    if (deviceGone || failedFrames >= 60) {
-      stopRendering(message);
-    }
+    const where =
+      error instanceof Error
+        ? (error.stack ?? "").split("\n").slice(0, 4).join(" | ")
+        : "";
+    opts.trail?.note("frame failed", `${message} ${where}`);
+    stopRendering(message);
   };
   // (It resolves once the loop is installed: nothing to wait for.)
   void renderer.setAnimationLoop((time) => {
@@ -1325,7 +1324,6 @@ async function bootApp(
       onFrameFailed(error);
       return;
     }
-    failedFrames = 0;
     frames++;
     tickPocFrame(shadowRendered);
   });
