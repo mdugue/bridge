@@ -9,6 +9,7 @@ import {
   RenderTarget,
   Vector2,
 } from "three/webgpu";
+import { texture, uv } from "three/tsl";
 import { setSlots, slotTexture, slotUniform, stubLike } from "./material-slots";
 
 interface Image {
@@ -34,16 +35,29 @@ test("a texture slot reads the drawn material's raster, then holds its stub agai
   const mb = new MeshStandardNodeMaterial();
   setSlots(ma, { class: a });
   setSlots(mb, { class: b });
-  slot.update(frameFor(ma));
+  slot.updateBefore(frameFor(ma));
   expect(slot.value).toBe(a);
   // after the object is drawn: a build in between copies the stub
   slot.updateAfter(frameFor(ma));
   expect(slot.value).toBe(stub);
-  slot.update(frameFor(mb));
+  slot.updateBefore(frameFor(mb));
   expect(slot.value).toBe(b);
   // a material without the slot draws the stub
-  slot.update(frameFor(new MeshStandardNodeMaterial()));
+  slot.updateBefore(frameFor(new MeshStandardNodeMaterial()));
   expect(slot.value).toBe(stub);
+});
+
+test("a sampling clone sees the drawn tile's texture in its own update", () => {
+  // On WebGL a clone decides in its update whether to flip a render
+  // target's rows, and three may update it before the slot it samples.
+  const target = new RenderTarget(4, 4);
+  const slot = slotTexture("color", target.texture);
+  const clone = texture(slot, uv());
+  const material = new MeshStandardNodeMaterial();
+  setSlots(material, { color: target.texture });
+  // three's order for one object: every updateBefore, then every update
+  slot.updateBefore(frameFor(material));
+  expect(clone.value).toBe(target.texture);
 });
 
 test("a uniform slot reads the drawn material's value", () => {

@@ -147,9 +147,16 @@ function shrinkOnDispose(tex: Texture): void {
  */
 export function slotTexture(name: string, like: Texture): TextureNode {
   const stub = stubLike(like);
-  const node = texture(stub).onObjectUpdate(
-    ({ material }) => (slotsOf(material)[name] as Texture | undefined) ?? stub
-  );
+  const node = texture(stub);
+  // The drawn tile's texture goes in before any node's update, not in the
+  // slot's own: a sampling clone reads the slot's value in its update (on
+  // WebGL, whether to flip a render target's rows), and three may update
+  // that clone first — the splat, read as the stub, came out mirrored.
+  node.updateBeforeType = NodeUpdateType.OBJECT;
+  node.updateBefore = ({ material }) => {
+    node.value = (slotsOf(material)[name] as Texture | undefined) ?? stub;
+    return undefined;
+  };
   // Back to the stub once the object is drawn: a build made before the
   // next object's update copies the stub (see `Slots`).
   node.updateAfterType = NodeUpdateType.OBJECT;
