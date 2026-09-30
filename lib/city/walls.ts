@@ -99,20 +99,61 @@ function columnAt(
   return { wx: w.x, wz: w.z, base, top };
 }
 
+/** How far behind the face the coping cap may reach to find the high
+ *  shelf (m), how close to the shelf the ground must come there (m), and
+ *  how far past that point the cap runs on (m). */
+const CAP_REACH_M = 5;
+const CAP_TOLERANCE_M = 0.08;
+const CAP_OVERLAP_M = 0.3;
+const CAP_SCAN_M = 0.25;
+
+/**
+ * Where this column's cap ends (offset along +perp): where the ground
+ * behind the face first comes within CAP_TOLERANCE_M of the cap's level,
+ * plus CAP_OVERLAP_M. The smoothed crest is a median along the wall, but
+ * the measured ramp is wider at one vertex than at the next: a cap ending
+ * at the median left the DGM's steep ramp showing behind it wherever the
+ * ramp ran on, as a row of dark, jagged facets along the wall's top. Past
+ * CAP_REACH_M (a flight of steps down, a slope, not a ramp) it stays at the
+ * smoothed crest.
+ */
+function capEnd(
+  heightAt: HeightAt,
+  e: Point2,
+  p: Point2,
+  step: StepSnap,
+  faceAt: number
+): number {
+  const [ex, ey] = e;
+  const [px, py] = p;
+  const level = step.hi - CAP_TOLERANCE_M;
+  const n = Math.round(CAP_REACH_M / CAP_SCAN_M);
+  for (let k = 1; k <= n; k++) {
+    const o = faceAt + step.up * k * CAP_SCAN_M;
+    const g = heightAt(ex + px * o, ey + py * o);
+    if (g !== null && g >= level) {
+      return o + step.up * CAP_OVERLAP_M;
+    }
+  }
+  return step.crest;
+}
+
 /** The column at a (smoothed) measured step: face just in front of the
- *  ramp's foot, cap back to its crest. */
+ *  ramp's foot, cap back to where the ground reaches its level. */
 function snappedColumn(
   e: Point2,
   p: Point2,
   h: number,
   step: StepSnap,
-  offset: RecenterOffset
+  offset: RecenterOffset,
+  heightAt: HeightAt
 ): WallCol {
   const [ex, ey] = e;
   const [px, py] = p;
   const faceAt = step.foot - step.up * FACE_MARGIN_M;
   const face = epsgToWorld(ex + px * faceAt, ey + py * faceAt, offset);
-  const back = epsgToWorld(ex + px * step.crest, ey + py * step.crest, offset);
+  const backAt = capEnd(heightAt, e, p, step, faceAt);
+  const back = epsgToWorld(ex + px * backAt, ey + py * backAt, offset);
   const base = Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - 0.4;
   return {
     wx: face.x,
@@ -232,7 +273,7 @@ function columnsOf(
     // smoothSnaps fills gaps from the neighbours; a vertex off every tile
     // must still break the ribbon (columnAt's rule), not get a filled column.
     return step && heightAt(p[0], p[1]) !== null
-      ? snappedColumn(p, perps[i], h, step, offset)
+      ? snappedColumn(p, perps[i], h, step, offset, heightAt)
       : columnAt(p, perps[i], h, heightAt, offset);
   });
 }
