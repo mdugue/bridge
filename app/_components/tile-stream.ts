@@ -595,6 +595,15 @@ export class DressingPlugin {
   /** Content roots whose geometries and materials are already freed. */
   private readonly freed = new WeakSet<Object3D>();
   /**
+   * The compiles still running on a content root (its own, its
+   * dressing's), which may outlast the wait a tile gives them. A root is
+   * freed only once they end: three cannot stop a compile, and one that
+   * resumes on a drawable freed meanwhile uploads its geometry again and
+   * makes bindings for a render object already dropped — nothing would
+   * free those again.
+   */
+  private readonly compiles = new Map<Object3D, number>();
+  /**
    * Settles once the renderer is done with a content root's load: it
    * records every material in the content right after `processTileModel`
    * (and disposes them all when it unloads the tile), so nothing wearing a
@@ -708,7 +717,7 @@ export class DressingPlugin {
     // ready by then instead of compiling inside a frame. (A tile that left
     // meanwhile is not compiled: that would upload what nothing shows.)
     if (!this.released.has(scene)) {
-      await withinCompileWait(this.ctx.compile(scene));
+      await withinCompileWait(this.compileUnder(scene, [scene]));
     }
     // Disposed while it was being dressed: the renderer drops an aborted
     // load without ever recording the scene, so nothing else frees it. The
@@ -926,9 +935,7 @@ export class DressingPlugin {
         // hangs under it and leaves with its tile.
         scene.add(...parts);
         await withinCompileWait(
-          Promise.all(
-            compileRepresentatives(parts).map((o) => this.ctx.compile(o))
-          ).then(() => undefined)
+          this.compileUnder(scene, compileRepresentatives(parts))
         );
         if (this.dressed.get(scene) !== entry) {
           disposeDressing(dressing);
@@ -968,8 +975,34 @@ export class DressingPlugin {
     }
   }
 
-  /** Frees everything dressed onto one content root. */
+  /** Compiles `objects` (the root or what hangs under it), counted on
+   *  `scene` until they end (see `compiles`). */
+  private compileUnder(scene: Object3D, objects: Object3D[]): Promise<void> {
+    this.compiles.set(scene, (this.compiles.get(scene) ?? 0) + 1);
+    const done = Promise.all(objects.map((o) => this.ctx.compile(o))).then(
+      () => undefined
+    );
+    const settle = () => {
+      const left = (this.compiles.get(scene) ?? 1) - 1;
+      if (left > 0) {
+        this.compiles.set(scene, left);
+        return;
+      }
+      this.compiles.delete(scene);
+      if (this.released.has(scene)) {
+        this.release(scene);
+      }
+    };
+    done.then(settle, settle);
+    return done;
+  }
+
+  /** Frees everything dressed onto one content root — once its compiles
+   *  have ended (see `compiles`; the last one to end calls this again). */
   private release(scene: Object3D): void {
+    if (this.compiles.has(scene)) {
+      return;
+    }
     const dressed = this.dressed.get(scene);
     if (dressed) {
       this.releaseDressed(scene, dressed);
