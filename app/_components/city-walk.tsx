@@ -41,6 +41,7 @@ import { AltitudeStick } from "./altitude-stick";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashTrail } from "./crash-trail";
+import { recoverFromGpuLoss, takeRecoverySnapshot } from "./gpu-recovery";
 import { VEIL_HOLD_MS } from "./handover";
 import {
   type CityWalkHandle,
@@ -281,6 +282,34 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   useEffect(() => {
     liveEnded.current = live.ended;
   }, [live.ended]);
+  // What a lost GPU keeps for the next page and puts back there
+  // (gpu-recovery.ts): the boot effect reads this render's time and look
+  // through a ref, as it does live mode.
+  const recovery = useRef<{
+    capture: () => string | null;
+    restore: (h: CityWalkHandle, text: string) => void;
+  } | null>(null);
+  useEffect(() => {
+    recovery.current = {
+      capture: () => {
+        const h = handleRef.current;
+        return h
+          ? JSON.stringify(
+              encodeSnapshot(look.get(), h.getCameraState(), time.date)
+            )
+          : null;
+      },
+      restore: (h, text) => {
+        const parsed = parseSnapshot(text);
+        if (!parsed.ok) {
+          return;
+        }
+        h.applyCameraState(parsed.snapshot.camera);
+        time.setInstant(snapshotInstant(parsed.snapshot));
+        look.set(decodeLook(parsed.snapshot.look));
+      },
+    };
+  });
   const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
@@ -349,6 +378,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           startTransition(() => setStreamingMore(isBusy));
         }
       },
+      onGpuLost: () =>
+        !cancelled && recoverFromGpuLoss(recovery.current?.capture() ?? null),
       onError: (message) => {
         if (cancelled) {
           return;
@@ -406,6 +437,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         handle = h;
         handleRef.current = h;
         trail.note("first frame");
+        // Back where the player stood before the GPU was lost (gpu-recovery.ts).
+        const recovered = takeRecoverySnapshot();
+        if (recovered) {
+          recovery.current?.restore(h, recovered);
+          trail.note("recovered", "after a lost GPU");
+        }
         syncTime();
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);

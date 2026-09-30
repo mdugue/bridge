@@ -18,6 +18,10 @@ import { utmToLatLng } from "@/lib/city/crs";
 import { worldToEpsg } from "@/lib/city/ground-clamp";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
+import {
+  createMemoryGovernor,
+  memoryLimitsFor,
+} from "@/lib/city/memory-governor";
 import { createGround } from "@/lib/city/ground";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
@@ -100,6 +104,8 @@ const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
+/** How often the memory governor looks at the GPU memory held. */
+const GOVERN_MS = 1000;
 
 /** The HUD census's layers: the content's own, and a dressing's parts
  *  (tile-stream.ts DRESSING_PARTS). */
@@ -224,6 +230,12 @@ export interface CityWalkOptions {
    * scene keeps running; the HUD shows the message.
    */
   onError?: (message: string) => void;
+  /**
+   * The GPU is gone for good (the render stopped): true when the page
+   * recovers by itself (gpu-recovery.ts, a reload where the player stood);
+   * otherwise the HUD says the graphics failed.
+   */
+  onGpuLost?: () => boolean;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
   onFps?: (fps: number) => void;
   /**
@@ -1214,6 +1226,32 @@ async function bootApp(
   // for a whole second of frames stops it too.
   let failedFrames = 0;
   const failures = new Set<string>();
+  // The GPU is gone for good: stop once, then recover (a reload where the
+  // player stood, gpu-recovery.ts) or say so.
+  let stopped = false;
+  const stopRendering = (message: string) => {
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    void renderer.setAnimationLoop(null);
+    opts.trail?.note("render stopped", message);
+    if (disposed) {
+      return;
+    }
+    if (opts.onGpuLost?.()) {
+      opts.trail?.note("reloading", "to recover the GPU");
+      return;
+    }
+    opts.onError?.(`Die Grafik ist ausgefallen (${message}). Bitte neu laden.`);
+  };
+  // A device the browser reports lost: three only stops drawing (silently,
+  // every frame after it returns early), so the loop stops here too.
+  const onDeviceLost = renderer.onDeviceLost.bind(renderer);
+  renderer.onDeviceLost = (info) => {
+    onDeviceLost(info);
+    stopRendering(info.message);
+  };
   const onFrameFailed = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     if (!failures.has(message)) {
@@ -1227,15 +1265,8 @@ async function bootApp(
     failedFrames++;
     const deviceGone =
       error instanceof DOMException && error.name === "InvalidStateError";
-    if (!(deviceGone || failedFrames >= 60)) {
-      return;
-    }
-    void renderer.setAnimationLoop(null);
-    opts.trail?.note("render stopped", message);
-    if (!disposed) {
-      opts.onError?.(
-        `Die Grafik ist ausgefallen (${message}). Bitte neu laden.`
-      );
+    if (deviceGone || failedFrames >= 60) {
+      stopRendering(message);
     }
   };
   // (It resolves once the loop is installed: nothing to wait for.)
@@ -1335,6 +1366,26 @@ async function bootApp(
     }, TRAIL_BEAT_MS);
     cleanups.push(() => clearInterval(beat));
   }
+  // Coarser tiles in view before the browser takes the GPU away
+  // (lib/city/memory-governor.ts): the error target and the cache's lower
+  // bound follow what the renderer holds.
+  const governor = createMemoryGovernor(memoryLimitsFor(budget.tier));
+  const baseError = stream.tiles.errorTarget;
+  const baseMin = stream.tiles.lruCache.minBytesSize;
+  const govern = setInterval(() => {
+    const held = renderer.info.memory.total;
+    const step = governor.update(held, performance.now());
+    if (!step) {
+      return;
+    }
+    stream.tiles.errorTarget = baseError * step.errorScale;
+    stream.tiles.lruCache.minBytesSize = baseMin * step.minScale;
+    opts.trail?.note(
+      "memory",
+      `level ${step.level} at ${Math.round(held / 1_048_576)} MB`
+    );
+  }, GOVERN_MS);
+  cleanups.push(() => clearInterval(govern));
 
   // The load after the first frame (lib/city/boot-phases.ts): declared
   // before the first await, since tile events call checkLoaded from then on.

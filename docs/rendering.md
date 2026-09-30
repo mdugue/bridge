@@ -371,7 +371,8 @@ renderer decides how much of the site is loaded (screen-space error target
 | Pixel ratio | ≤ 2 | ≤ 1.5 | 0.5 |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere | L0 4096², L1 2048² |
 | GTAO samples | 16 | 16 | 8 |
-| Tile cache (content no longer in use) | 0.3–0.4 GB (the library default) | 120–180 MB | 0.3–0.4 GB |
+| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB | 320–600 MB | 1.2–1.6 GB |
+| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB | steps at 480 / 560 MB | as desktop |
 
 What one site tile costs (Dresden, as published; the `.glb.gz` are
 pre-gzipped glTF with meshopt compression and quantised positions):
@@ -396,6 +397,27 @@ the price of a standard format
 ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)). The terrain is the
 triangle-heavy layer, but it never casts, so it stays out of the shadow
 depth pass.
+
+**GPU memory on a phone.** Safari's GPU process on an iPhone failed to
+allocate at ~720 MB (three's `info.memory.total`), and the page's device
+was gone for good. Three things keep a phone under that line:
+
+- the tile cache weighs a tile as the GPU holds it — the renderer counts
+  the glTF, the dressing plugin adds its terrain's rasters and its
+  dressing's geometry (`calculateBytesUsed`); before, a cache at 173 MB of
+  its 180 sat on 865 MB of GPU memory;
+- a tile's two terrain levels share what they name alike (class raster and
+  its painted splat, NDVI, sports grounds: `shared-rasters.ts`), ~43 MB a
+  tile on a phone;
+- the memory governor watches what the renderer holds and, past each line,
+  raises the tiles' error target (×2, ×4: coarser tiles in view) and lowers
+  the cache's lower bound (tiles no longer in view leave sooner) — never its
+  upper bound, at which the cache loads nothing, not even the coarser tiles
+  it now wants. It steps back only well below the line, after 10 s.
+
+If the GPU is lost anyway, the page reloads where the player stood
+(`gpu-recovery.ts`: the snapshot in session storage; at most twice in two
+minutes, then the message) instead of freezing.
 
 While the camera moves, DoF is dropped and restored after 250 ms of
 stillness (`lib/city/regression.ts`); the contact shadows stay on because

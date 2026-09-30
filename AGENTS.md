@@ -453,7 +453,11 @@ compile already uploaded would stay. So a tile's release runs
 event), a released or aborted tile is freed by the plugin itself, and
 nothing released is compiled. Leak hunts: `handle.getGpuDebug()` sets the
 scene's buffers against three's `info.memory` (a gap that grows per visit
-to the same place is a leak; a steady one is the tile cache).
+to the same place is a leak; a steady one is the tile cache). What a
+tile adds beyond its glTF must reach the cache's weighing
+(`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
+by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
+a phone". A lost GPU reloads where the player stood (`gpu-recovery.ts`).
 The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
