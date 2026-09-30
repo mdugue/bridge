@@ -13,7 +13,18 @@
  * the cache loads nothing, and the coarser tiles it now wants would never
  * arrive. It steps back up only once the memory is well below the line
  * again and some time has passed, so a step down does not undo itself the
- * moment it worked. Pure: the caller feeds it bytes and times.
+ * moment it worked — and not while the memory would cross the line again
+ * with what the step freed back: a camera standing still otherwise gave
+ * its fine tiles up, streamed them back in and gave them up again, every
+ * hold. Pure: the caller feeds it bytes and times.
+ *
+ * The bytes are three's own count, and they run high on purpose: three
+ * charges an interleaved buffer once per attribute view, so an instanced
+ * set's matrices (instancing.ts: four column views) count four times, and
+ * again for every set that shares them — the vegetation weighs several
+ * times what the GPU holds. The phone's lines were set against that count
+ * on the phone itself; counted true, they would have to be measured again,
+ * so the count stays as a cautious measure rather than a corrected one.
  */
 
 export interface MemoryLimits {
@@ -25,6 +36,11 @@ export interface MemoryLimits {
   margin: number;
   /** the least time (ms) a step holds before it is undone */
   holdMs: number;
+  /**
+   * How long (ms) what a step freed counts against undoing it: after that
+   * the camera has likely moved on, and a step up is tried again.
+   */
+  retryMs: number;
 }
 
 export interface MemoryStep {
@@ -49,8 +65,20 @@ const MB = 1024 * 1024;
  */
 export function memoryLimitsFor(tier: "desktop" | "mobile"): MemoryLimits {
   return tier === "mobile"
-    ? { soft: 480 * MB, hard: 560 * MB, margin: 60 * MB, holdMs: 10_000 }
-    : { soft: 2048 * MB, hard: 2560 * MB, margin: 256 * MB, holdMs: 10_000 };
+    ? {
+        soft: 480 * MB,
+        hard: 560 * MB,
+        margin: 60 * MB,
+        holdMs: 10_000,
+        retryMs: 120_000,
+      }
+    : {
+        soft: 2048 * MB,
+        hard: 2560 * MB,
+        margin: 256 * MB,
+        holdMs: 10_000,
+        retryMs: 120_000,
+      };
 }
 
 export interface MemoryGovernor {
@@ -60,11 +88,21 @@ export interface MemoryGovernor {
   update: (held: number, now: number) => MemoryStep | null;
 }
 
+type Level = 0 | 1 | 2;
+
 export function createMemoryGovernor(limits: MemoryLimits): MemoryGovernor {
-  let level: 0 | 1 | 2 = 0;
+  let level: Level = 0;
   let since = Number.NEGATIVE_INFINITY;
+  // Per level stepped down to: the memory held when the step was taken,
+  // the least held while it settled (its hold), and when. Their difference
+  // is what the step freed — what undoing it would bring back.
+  const taken = [0, 0, 0];
+  const settled = [0, 0, 0];
+  const takenAt = [0, 0, 0].map(() => Number.NEGATIVE_INFINITY);
+  const freedBy = (l: Level, now: number) =>
+    now - takenAt[l] < limits.retryMs ? Math.max(0, taken[l] - settled[l]) : 0;
   const lineOf = (l: 1 | 2) => (l === 2 ? limits.hard : limits.soft);
-  const target = (held: number, now: number): 0 | 1 | 2 => {
+  const target = (held: number, now: number): Level => {
     if (held >= limits.hard) {
       return 2;
     }
@@ -74,7 +112,7 @@ export function createMemoryGovernor(limits: MemoryLimits): MemoryGovernor {
     if (level === 0 || now - since < limits.holdMs) {
       return level;
     }
-    if (held < lineOf(level) - limits.margin) {
+    if (held + freedBy(level, now) < lineOf(level) - limits.margin) {
       return level === 2 ? 1 : 0;
     }
     return level;
@@ -82,9 +120,19 @@ export function createMemoryGovernor(limits: MemoryLimits): MemoryGovernor {
   return {
     step: () => MEMORY_STEPS[level],
     update: (held, now) => {
+      for (let l = 1; l <= level; l++) {
+        if (now - takenAt[l] < limits.holdMs) {
+          settled[l] = Math.min(settled[l], held);
+        }
+      }
       const next = target(held, now);
       if (next === level) {
         return null;
+      }
+      for (let l = level + 1; l <= next; l++) {
+        taken[l] = held;
+        settled[l] = held;
+        takenAt[l] = now;
       }
       level = next;
       since = now;

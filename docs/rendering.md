@@ -403,7 +403,12 @@ depth pass.
 
 **GPU memory on a phone.** Safari's GPU process on an iPhone failed to
 allocate at ~720 MB (three's `info.memory.total`), and the page's device
-was gone for good. Three things keep a phone under that line:
+was gone for good. That count runs high: three charges an interleaved
+buffer once per attribute view, so an instanced set's matrices count four
+times, and again for every set sharing them. The governor's lines below
+were set against it on the phone, so it stays the measure — a cautious
+one; counting true would mean measuring the lines again. Three things keep
+a phone under that line:
 
 - the tile cache weighs a tile as the GPU holds it — the renderer counts
   the glTF, the dressing plugin adds its terrain's rasters and its
@@ -418,7 +423,11 @@ was gone for good. Three things keep a phone under that line:
   raises the tiles' error target (×2, ×4: coarser tiles in view) and lowers
   the cache's lower bound (tiles no longer in view leave sooner) — never its
   upper bound, at which the cache loads nothing, not even the coarser tiles
-  it now wants. It steps back only well below the line, after 10 s.
+  it now wants. It steps back only well below the line, after 10 s, and
+  not while the memory would cross the line again with what the step freed
+  back (measured while it held; forgotten after two minutes) — a camera
+  standing still used to give its fine tiles up and stream them back in
+  every ten seconds.
 
 If the GPU is lost anyway, the page reloads where the player stood
 (`gpu-recovery.ts`: the snapshot in session storage; at most twice in two

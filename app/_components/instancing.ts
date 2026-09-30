@@ -45,7 +45,10 @@ import type { F, V3, V4 } from "./shader-chunks";
  * matrix or colour buffer between sets, `computeBoundingSphere`), with
  * `drawCount` in place of `count` — a `count` above one would put the uuid
  * back into the key — and `instanceTints` in place of `instanceColor`. Freeing it is freeing its geometry (the view, with the
- * instance buffers; disposeObject3D does that).
+ * instance buffers; disposeObject3D does that). three's `info.memory`
+ * charges the matrix buffer once per column view and per set sharing it;
+ * the memory governor's lines were measured on that count
+ * (lib/city/memory-governor.ts).
  */
 export class Instances<M extends Material = Material> extends Mesh<
   InstancedBufferGeometry,
