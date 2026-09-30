@@ -395,7 +395,7 @@ function lines(
   inside: F
 ): F {
   const h = float(0.06);
-  const hs = h.mul(0.85);
+  const hs = h.mul(0.85).toVar();
   const { q, prm } = n;
   const f = prm.xy.sub(vec2(clamp(prm.y.mul(0.03), 0.3, 1.5))).toVar();
   const l = float(0).toVar();

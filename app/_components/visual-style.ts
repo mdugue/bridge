@@ -169,7 +169,10 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   const c = band(2);
   const roof = attribute("roof", "float");
   const localH = varying(dataPosition().z.sub(a.w));
-  const tint = varying(select(roof.greaterThan(0.5), b.rgb, a.rgb));
+  // A mix, not a select: three emits a select as if/else, and the texel
+  // reads first built inside one arm would be assigned in that arm only —
+  // every other varying here reads them too.
+  const tint = varying(mix(a.rgb, b.rgb, step(0.5, roof)));
   const build = varying(vec4(roof, c.x, b.w, c.y));
   const rough = varying(c.z);
   const flags = varying(c.w);
