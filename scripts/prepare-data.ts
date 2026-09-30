@@ -616,8 +616,11 @@ async function fineChildren(
   tile: string,
   bounds: TerrainExtras["bounds"]
 ): Promise<NonNullable<Parameters<typeof writeMeshGlb>[0]["children"]>> {
-  const stairs = stairMesh(stairLines(tile), offset, bounds);
   const ground = await siteGround();
+  const stairs = stairMesh(stairLines(tile), offset, bounds, {
+    groundAt: ground.heightAt,
+    walls: wallLines(tile).map((w) => w.coords),
+  });
   const gates = gatePoints(tile);
   const cut = cutWallGates(wallLines(tile), gates);
   const walls = wallMesh(cut.walls, ground.heightAt, offset, {
