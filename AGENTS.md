@@ -192,7 +192,10 @@ config change.
   `tree-inventory.ts` (the cadastre's archetypes and veto), `tree-season.ts`
   (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
   per-building clay tint, storey height, roof palette), `small-buildings.ts`
-  (the scan's sheds as boxes; the canopy points they veto), `markings.ts`,
+  (the scan's sheds as boxes; the canopy points they veto),
+  `structures.ts` (the columns, missing buildings and roof-relief slabs
+  DOM1 shows beyond LoD2, as meshes), `landmarks.ts` (the site's
+  Wikidata landmarks for the HUD and the vantage it glides to), `markings.ts`,
   `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
   of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
   mix and its boot-side half), `site.ts` (the
@@ -227,11 +230,15 @@ config change.
   `canopy.py`, `trees.py` (+ `tree_archetypes.py`, `cadastre.py` for the
   street-tree register), `lowveg.py` (+ `lsc.py`, the laser scan's rasters),
   `small_buildings.py` (the sheds and garden houses LoD2 lacks, appended
-  to the city mesh), `ndvi.py`, `roof_colour.py`, `lamps.py`,
+  to the city mesh), `structures.py` (DOM1 − max(DGM, LoD2 roof) where
+  OSM names it: chimneys, towers, masts, missing buildings, a landmark's
+  roof relief), `landmarks.py` (Wikidata's notable buildings matched to
+  LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`, `lamps.py`,
   `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py` +
   `bridge.py` (the deck and superstructure measured in the surface model,
   the fairway clearance, Wikidata), `surface.py`, `edges.py`, `sport.py`, `markings.py`, `cultivated.py`,
-  `skyview.py`, `osm_buildings.py` (shops and heritage per LoD2 object),
+  `skyview.py`, `osm_buildings.py` (shops, heritage, material and
+  colours per LoD2 object),
   `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers), `osm.py`);
   tests in `pipeline/tests/`. Run by
   `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
@@ -259,7 +266,8 @@ config change.
   in `.gitignore`); a new site's folder stays ignored until the maintainer
   un-ignores it (ADR 0035). No file is near GitHub's limits (the largest,
   a LoD2 tile, is 16 MB), so no Git-LFS. `data/_raw/<provider>/` is
-  **gitignored** bulk downloads, shared by the provider's sites.
+  **gitignored** bulk downloads, shared by the provider's sites (the
+  Wikidata answers too: `wikidata/{bridges,landmarks}_<tile>.json`).
   `public/data/` is generated, gitignored. A deployment serves exactly the
   sites whose `data/<site>/` is present where it builds.
 - `app/wissen/` — the knowledge base on the site: `docs/` prerendered as

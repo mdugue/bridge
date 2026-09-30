@@ -142,6 +142,21 @@ chip. Every tile change re-renders the shadow map. The layers:
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
   the canopy points they veto at build time).
+- Beyond LoD2 (plan 038, ADR 0036): geometry is added only where DOM1
+  measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
+  names it — never from the surface model alone (cranes). `structures.py`
+  → `lib/city/structures.ts` lathes chimneys/towers/masts and extrudes
+  missing buildings and relief slabs; `appendGapStructures` puts them in
+  the city mesh with `source` = 2 (a relief slab copies its host's row, so
+  demolish takes it along). OSM `building:material` / `building:colour` /
+  `roof:colour` reach the clay only through `osmColourTint` (hue kept,
+  saturation ≤ 0.45, lightness clamped) and the palette families; glass
+  (flag 4) and metal (8) are a cool tint, lower roughness and, on glass, a
+  Fresnel sky sheen (`visual-style.ts`: `osmColour`, `clayGlow`) — no
+  panes, no textures (the window grid is vetoed). Landmarks (flag 16) come from Wikidata
+  (`landmarks.py`, cached at fetch time), the site's twelve in the
+  tileset's `extras.landmarks` → the HUD's *Wahrzeichen* chips →
+  `landmarkVantage`.
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
   `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
@@ -639,16 +654,19 @@ bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main
                                        #   rail lamps monuments furniture walls stairs surface edges
                                        #   markings sport tram riverside skyview soundmarks
                                        #   lowveg cultivated small-buildings
+                                       #   landmarks structures
 bun run test:pipeline                  # pytest + ruff
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
 runtime falls back); rail decks fall back to the DGM ramp.
 
-The later modules, one step each: `osm_buildings.py` (shops and heritage
-per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
+The later modules, one step each: `osm_buildings.py` (shops, heritage,
+material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
 `riverside.py`, `skyview.py` (DGM + LoD2 only),
-`soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
+`soundmarks.py` (bell towers), `small_buildings.py` (plan 034),
+`landmarks.py` and `structures.py` (plan 038; landmarks first, the relief
+is measured on their objects). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the
 neighbours through `Tile.neighbours` (the committed DGMs): markings
 measure on the neighbours' class rasters and paint a neighbour's crossing

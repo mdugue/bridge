@@ -129,6 +129,15 @@ The button in the corner opens a panel with three tabs.
   yet. The last card, *Aktuelle Sicht merken*, remembers where you stand;
   it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
   forget it.
+- **Wahrzeichen** ("landmarks") — the city's best-known buildings and
+  structures, up to twelve, as small chips under the viewpoints: the
+  Frauenkirche in Dresden, the Elbphilharmonie, the Chilehaus and St.
+  Michaelis in Hamburg, the Lindenbrauerei in Unna. The list is not
+  hand-picked: it comes from
+  Wikidata (the buildings with the most Wikipedia articles, matched to
+  the buildings the viewer draws), so every city gets its own. A click
+  glides up to a view from the south-south-west, a little above the
+  landmark and higher the taller it is.
 - **Steuerung** — the full controls table.
 
 ### Szene ("Scene")

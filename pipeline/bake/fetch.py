@@ -13,6 +13,7 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/osm/<extract>.osm.pbf           the OSM extract
     data/_raw/<provider>/trees/<tile>.geojson            the site's tree cadastre
     data/_raw/<provider>/wikidata/bridges_<tile>.json    the bridges Wikidata knows
+    data/_raw/<provider>/wikidata/landmarks_<tile>.json  its notable buildings and structures
     data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
 
 Statewide packages are cached under data/_raw/<provider>/downloads/; a
@@ -32,7 +33,7 @@ from typing import Protocol
 
 from rasterio.enums import Resampling
 
-from . import bridge, cadastre
+from . import bridge, cadastre, landmarks
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .net import download
@@ -162,6 +163,7 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> No
             _step("laser scan", tile, laz, lambda: _place_laz(source.lsc(ctx, tile), laz))
     cadastre.fetch(tile)
     bridge.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
+    landmarks.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
 
 
 def fetch_osm(spec: Spec) -> None:

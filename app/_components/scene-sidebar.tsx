@@ -13,6 +13,7 @@ import {
   FootprintsIcon,
   FullscreenIcon,
   HammerIcon,
+  LandmarkIcon,
   type LucideIcon,
   PlaneIcon,
   SparklesIcon,
@@ -67,6 +68,7 @@ import {
   lookPatch,
   type LookValues,
 } from "@/lib/city/look-controls";
+import { type Landmark, landmarkVantage } from "@/lib/city/landmarks";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import {
   RENDER_STYLE_BY_ID,
@@ -540,6 +542,43 @@ function Viewpoints({
 }
 
 /**
+ * The city's landmarks: what Wikidata knows as its most notable buildings
+ * and structures, matched to what the scene draws (plan 038). A quiet list
+ * under the authored vantages — one click glides up to an overlook on it.
+ * Built from the data for every city, so a new one gets its list for free.
+ */
+function Landmarks({
+  landmarks,
+  onTravel,
+}: {
+  landmarks: Landmark[];
+  onTravel: (lm: Landmark) => void;
+}) {
+  if (landmarks.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-2 px-3 pb-3.5">
+      <span className={`${SECTION_LABEL} px-1`}>Wahrzeichen</span>
+      <div className="flex flex-wrap gap-1.5">
+        {landmarks.map((lm) => (
+          <button
+            className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-left text-[11px] leading-tight hover:border-ring"
+            key={lm.id}
+            onClick={() => onTravel(lm)}
+            title={`Zu ${lm.name} fliegen`}
+            type="button"
+          >
+            <LandmarkIcon className="size-3 shrink-0 text-muted-foreground" />
+            <span className="truncate">{lm.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The key/action table — the full list the floating bar only shows the first
  * four of. Touch devices get the gestures instead: a phone has no W A S D.
  */
@@ -702,6 +741,8 @@ export interface SceneSidebarProps {
   fps: number | null;
   handleRef: RefObject<CityWalkHandle | null>;
   landcoverTiles: MapTile[];
+  /** the site's landmarks (Wikidata), most notable first */
+  landmarks: Landmark[];
   latLng: { lat: number; lng: number } | null;
   look: LookValues;
   minutes: number;
@@ -794,6 +835,12 @@ export function SceneSidebar(props: SceneSidebarProps) {
               }}
               remembered={props.rememberedView !== null}
               showKeys={!props.coarse}
+            />
+            <Landmarks
+              landmarks={props.landmarks}
+              onTravel={(lm) =>
+                handleRef.current?.flyToViewpoint(landmarkVantage(lm))
+              }
             />
             {/* Below the vantages, and quiet: one-click travel is the reason
                 to open this tab, while walk/fly is a mode you set once. Same

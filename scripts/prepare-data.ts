@@ -39,13 +39,15 @@ import {
 import { basename, join } from "node:path";
 import type { Matrix4 } from "three";
 import type { RoofColorLut } from "../lib/city/building-tint";
-import type { OsmBuildingLut } from "../lib/city/city-mesh";
+import type { OsmBuildingLut, WallMaterial } from "../lib/city/city-mesh";
+import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
   FeatureCollection,
   KerbFeature,
   SmallBuildingFeature,
   StairFeature,
+  StructureFeature,
   GateFeature,
   TerraceFeature,
   WallFileFeature,
@@ -350,6 +352,38 @@ for (const tile of TILES) {
 
 // --- 2. content -----------------------------------------------------------------
 
+/** A tile's landmarks (pipeline/bake/landmarks.py), or none. */
+function landmarkFile(tile: string): LandmarkFile | undefined {
+  const path = at(cityMeshSourceFiles(SITE, tile).landmarks);
+  return existsSync(path) ? readJson<LandmarkFile>(path) : undefined;
+}
+
+/**
+ * The OSM facts per object with the tile's landmarks folded in: each of a
+ * landmark's objects is marked, and takes the wall material Wikidata names
+ * where OSM names none.
+ */
+function withLandmarks(
+  lut: OsmBuildingLut | undefined,
+  file: LandmarkFile | undefined
+): OsmBuildingLut | undefined {
+  if (!file?.landmarks.length) {
+    return lut;
+  }
+  const out: OsmBuildingLut = { ...lut };
+  for (const lm of file.landmarks) {
+    for (const id of lm.objects) {
+      const own = out[id];
+      out[id] = {
+        ...own,
+        landmark: 1,
+        material: own?.material ?? (lm.material as WallMaterial | undefined),
+      };
+    }
+  }
+  return out;
+}
+
 /**
  * Every tile is recentered on one offset: the spawn tile's CityJSON loader
  * matrix, reused for the rest (the frame snapshots are recorded in).
@@ -368,12 +402,18 @@ function parseCity(tile: string): BakedCityMesh {
   const roofLut = existsSync(at(src.roofColor))
     ? readJson<{ roofs?: RoofColorLut }>(at(src.roofColor)).roofs
     : undefined;
-  const osmLut = existsSync(at(src.osmBuild))
-    ? readJson<{ objects?: OsmBuildingLut }>(at(src.osmBuild)).objects
-    : undefined;
+  const osmLut = withLandmarks(
+    existsSync(at(src.osmBuild))
+      ? readJson<{ objects?: OsmBuildingLut }>(at(src.osmBuild)).objects
+      : undefined,
+    landmarkFile(tile)
+  );
   const scan = existsSync(at(src.smallBuild))
     ? readJson<FeatureCollection<SmallBuildingFeature>>(at(src.smallBuild))
         .features
+    : undefined;
+  const gaps = existsSync(at(src.structures))
+    ? readJson<FeatureCollection<StructureFeature>>(at(src.structures)).features
     : undefined;
   const baked = bakeCityMesh(
     tile,
@@ -382,7 +422,8 @@ function parseCity(tile: string): BakedCityMesh {
     sharedMatrix,
     osmLut,
     scan,
-    FACADES
+    FACADES,
+    gaps
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -420,6 +461,8 @@ async function bakeCity(
     at(src.roofColor),
     at(src.osmBuild),
     at(src.smallBuild),
+    at(src.structures),
+    at(src.landmarks),
   ];
   const key = cacheKey(inputs, offset, FACADES);
   let mesh: ReturnType<typeof cityMesh> | null = null;
@@ -787,6 +830,9 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
 const extras: TilesetExtras = {
   site: SITE.id,
+  landmarks: siteLandmarks(
+    TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
+  ),
   epsg: frame.epsg,
   offset,
   tiles: baked.map((t) => ({

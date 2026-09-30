@@ -35,7 +35,7 @@ flowchart LR
     DLM["Basis-DLM (ATKIS)<br/>land cover + veg rows"]
     OSM["OpenStreetMap<br/>(Geofabrik .osm.pbf extract)"]
     DOP["DOP orthophoto<br/>RGB + near-IR"]
-    WD["Wikidata<br/>(bridge class · main span)"]
+    WD["Wikidata<br/>(bridge class · main span ·<br/>landmarks: sitelinks · material)"]
     LSC["Laser scan (LAZ)<br/>every tile"]
     KAT["Stadtbaumkataster<br/>(Dresden street trees)"]
   end
@@ -50,7 +50,8 @@ flowchart LR
     PAVE["Kerbs, paving &amp; parking<br/>kerb stones · lawn edge · sett · slabs · bays"]
     WAT["Water (Elbe)"]
     BLD["Buildings<br/>(geometry)"]
-    DET["Building detailing<br/>tint · roof · eave · glow · shop fronts"]
+    DET["Building detailing<br/>tint · roof · eave · glow · shop fronts<br/>mapped colour · glass/metal sheen"]
+    LMK["Landmarks<br/>HUD list · glide to a vantage"]
     VEG["Trees &amp; hedges"]
     LOW["OSM hedges"]
     LAMP["Street lamps"]
@@ -94,10 +95,16 @@ flowchart LR
   CJ ==>|"glTF mesh + EXT_mesh_features ids"| BLD
   LSC ==>|"small structures LoD2 lacks<br/>(2–6.5 m, single-echo, flat) → boxes"| BLD
   OSM -. "markets · building sites · car parks: not taken" .-> BLD
+  DOM -. "DOM1 − max(DGM1, LoD2 roof), only where OSM names it:<br/>chimneys · towers · masts · missing buildings" .-> BLD
+  OSM -. "man_made=chimney/tower/mast/… · building outlines LoD2 lacks" .-> BLD
+  DOM -. "a landmark's roof above its LoD2 roof → relief slabs" .-> BLD
   CJ ==>|"function · roofType · height · surfacetype<br/>(property table)"| DET
   HASH -.->|"per-building variation<br/>(carries the look when attrs are sparse)"| DET
   DOP -. "real roof colour<br/>(83% coverage, else synth)" .-> DET
-  OSM -. "shop / café on the ground floor · heritage=*<br/>(joined to the LoD2 footprints)" .-> DET
+  OSM -. "shop / café on the ground floor · heritage=*<br/>building:material · building:colour · roof:colour → clay palette<br/>(joined to the LoD2 footprints)" .-> DET
+  WD -. "landmark flag · material where OSM has none" .-> DET
+  WD ==>|"notable buildings and structures (sitelinks),<br/>matched to LoD2 objects → the site's 12"| LMK
+  OSM -. "wikidata= outlines → which objects" .-> LMK
 
   %% vegetation (multi-source + gated)
   DLM ==>|"hedge / tree rows"| VEG
@@ -187,8 +194,9 @@ flowchart LR
 | **Sports grounds** | OSM `leisure=pitch` / `track` (playgrounds are street furniture): per ground its frame, surface and line scheme (`sport_<t>.json`) and a 2048² index raster (`sport_<t>.png`) | the sport's usual surface when untagged · DGM1 (the goals, posts and nets stand on the ground) | `sport-ground.ts` (in the terrain fragment pass), `sport-fixtures.ts` (dressing), `lib/city/sport.ts`; baked by `pipeline/bake/sport.py` |
 | **Road markings** | OSM `highway=crossing` (marked kinds), directed `highway=traffic_signals`, `cycleway*=lane`, `lanes` + `oneway`: a table of crossings and stop lines (`markings_<t>.json`) and a 2048² raster of rows, lane bits and the centre offset (`markings_<t>.png`) | Basis-DLM class raster (the carriageway's width across each crossing; the kerb distance the cycle lane keeps) | `road-markings.ts` (in the terrain fragment pass), `lib/city/markings.ts`; baked by `pipeline/bake/markings.py` |
 | **Water (Elbe)** | Basis-DLM class 8 (water coverage from the painted splat) **+** DGM1 (the terrain geometry it drapes on) | — | `water-layer.ts`, `landcover-splat.ts` |
-| **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`); plus the small structures the laser scan saw and LoD2 lacks (sheds, garden houses, container buildings), appended as boxes with `source` = 1 | DGM1 (ground-clamp) · LSC (the structures' footprint, ground and top) · OSM (pedestrian areas, squares, marketplaces, building sites and car parks — the Christmas markets of the flight — are not taken) · DOP NDVI (a clipped evergreen is not a roof) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`, `appendScanStructures`, `lib/city/small-buildings.ts`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts`; the structures by `pipeline/bake/small_buildings.py` |
-| **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) · OSM shops on the ground floor and `heritage=*` (the `flags` column) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py`, the OSM flags by `osm_buildings.py` |
+| **Buildings (geometry)** | CityJSON LoD2 → glTF per tile (`_FEATURE_ID_0` per vertex, `EXT_mesh_features`); plus the small structures the laser scan saw and LoD2 lacks (sheds, garden houses, container buildings), appended as boxes with `source` = 1; plus what DOM1 shows above LoD2 where OSM names it (chimneys, towers, masts, water towers, lighthouses as lathed columns; buildings LoD2 does not carry yet, extruded; a landmark's roof relief as stacked slabs), appended with `source` = 2 | DGM1 (ground-clamp) · LSC (the structures' footprint, ground and top) · OSM (pedestrian areas, squares, marketplaces, building sites and car parks — the Christmas markets of the flight — are not taken) · DOP NDVI (a clipped evergreen is not a roof) · DOM1 − max(DGM1, LoD2 roof) with OSM `man_made=*` and building outlines (nothing from DOM alone: the cranes) · the landmarks (relief only on them) | baked by `scripts/bake-city-mesh.ts` (`cityjson-threejs-loader`, `appendScanStructures`, `appendGapStructures`, `lib/city/small-buildings.ts`, `lib/city/structures.ts`) → `scripts/bake-tiles.ts` `cityMesh` → `scripts/tile-glb.ts`; `city-layer.ts`; the structures by `pipeline/bake/small_buildings.py` and `structures.py` |
+| **Building detailing** | CityJSON attrs + `surfacetype`, baked per object into an `EXT_structural_metadata` property table | DOP roof colour (real, ~83%) · hash (fallback) · sun (dusk gate) · OSM shops on the ground floor and `heritage=*` (the `flags` column) · OSM `building:colour` / `roof:colour` (in the clay's register) and `building:material` (palette family; glass and metal as flags with a sheen) · Wikidata (landmark flag; its material where OSM has none) | `bake-city-mesh.ts` (per-object table), `lib/city/city-mesh.ts` (`objectTable`, `packObjectTexels`), `visual-style.ts`, `lib/city/building-tint.ts`; roof colour baked by `pipeline/bake/roof_colour.py`, the OSM flags by `osm_buildings.py` |
+| **Landmarks** (HUD, *Erkunden*) | Wikidata (CC0): per tile the buildings and structures with ≥ 2 sitelinks (`bun run fetch`, cached), matched to the LoD2 objects that draw them; ≤ 12 per tile, ranked by sitelinks; the site's 12 most notable in the tileset's `extras.landmarks` | OSM outlines tagged `wikidata=` (which objects), else the LoD2 building under the point · LoD2 heights (the vantage's altitude) | `scene-sidebar.tsx` (*Wahrzeichen* chips), `lib/city/landmarks.ts` (`siteLandmarks`, `landmarkVantage`), `scripts/prepare-data.ts` (`withLandmarks`); baked by `pipeline/bake/landmarks.py` |
 | **Inventory trees** | Stadtbaumkataster Dresden (WFS `cls:L1261`): position, height, crown diameter, trunk diameter, taxon → genus **+** OSM `natural=tree` more than 3 m from every cadastre tree (a taxon naming a known genus, or `leaf_type`, else dropped) | DGM1 (ground-clamp) · DOP NDVI (deciduous crown colour) · vetoes the rows/canopy trees inside each crown, except in DLM forest/copse · trunks + broadleaf crowns drawn in the canopy's meshes · the scene date → per-genus autumn colour and bare crowns (`lib/city/tree-season.ts`) | `tree-inventory-layer.ts`, `crown-season.ts`, `lib/city/tree-inventory.ts`, `lib/city/tree-season.ts`, `tile-stream.ts`; baked by `pipeline/bake/trees.py` (+ `tree_archetypes.py`) |
 | **Trees & hedges** | Basis-DLM rows **+** DOM1−DGM1 canopy **+** LSC crown peaks outside the mask (every tile, thinned against the cadastre and the OSM trees) | DLM class raster *(gates)* · the LSC small structures (a canopy or scan point in or within 0.5 m of one is its roof, dropped at build time by `scripts/prepare-data.ts`) · DOP NDVI (crown colour) · the scene date (a generic deciduous year: autumn colour, bare crowns; hedges stay green) | `vegetation-layer.ts`, `crown-season.ts`; baked by `pipeline/bake/landcover.py` + `canopy.py` + `ndvi.py` + `lowveg.py` |
 | **Cultivated land** | OSM `landuse=allotments` (+ `leisure=garden` plots), `orchard`, `vineyard` | the colony raster (beds in the terrain pass) · OSM `natural=tree` in an orchard, else an 8 m grid, less the spots a canopy, scan or inventory tree already fills · DGM1 (a vineyard's rows along the contour, over the whole vineyard from every tile's DGM; ground-clamp) | `cultivated-layer.ts`, `lib/city/cultivated.ts`, `tile-stream.ts`; baked by `pipeline/bake/cultivated.py` |
@@ -238,7 +246,7 @@ flowchart LR
     iOSM["OSM extract<br/>osm/*.osm.pbf"]
     iDGM["DGM1 GeoTIFF<br/>data/&lt;site&gt;/dgm"]
     iCJ["LoD2 CityJSON<br/>data/&lt;site&gt;/cityjson"]
-    iWD["Wikidata bridges<br/>wikidata/*.json"]
+    iWD["Wikidata bridges · landmarks<br/>wikidata/*.json"]
   end
 
   subgraph PY["pipeline/bake — Python (uv)"]
@@ -262,6 +270,8 @@ flowchart LR
     bCULT["cultivated.py"]
     bTRAM["tram.py"]
     bRIV["riverside.py"]
+    bLMK["landmarks.py"]
+    bGAP["structures.py"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -285,6 +295,8 @@ flowchart LR
     dCULT["cultivated GeoJSON + colony PNG"]
     dTRAM["tram"]
     dRIV["riverside"]
+    dLMK["landmarks JSON"]
+    dGAP["structures GeoJSON"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -347,13 +359,25 @@ flowchart LR
   dCLS ==>|water| bRIV
   iDGM -. "pier decks" .-> bRIV
   bRIV ==> dRIV
+  iWD ==> bLMK
+  iCJ ==> bLMK
+  iOSM -. "wikidata= outlines" .-> bLMK
+  bLMK ==> dLMK
+  iDOM ==> bGAP
+  iDGM ==> bGAP
+  iCJ ==> bGAP
+  iOSM ==>|"names what the gap is"| bGAP
+  dLMK -. "roof relief" .-> bGAP
+  bGAP ==> dGAP
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
   dSTR -. "lowered ground · lifted terraces · the steps (L0)" .-> tTER
   iCJ ==> tCITY
   dROOF -. "roof colour" .-> tCITY
-  dOSMB -. "shop · heritage flags" .-> tCITY
+  dOSMB -. "shop · heritage flags · material · colours" .-> tCITY
+  dGAP -. "columns · buildings · relief slabs" .-> tCITY
+  dLMK -. "landmark flag · material · extras.landmarks" .-> tCITY
   dCLS ==> tSIDE
   dCAN ==> tSIDE
   dNDVI -.-> tSIDE

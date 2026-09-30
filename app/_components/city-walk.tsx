@@ -28,6 +28,7 @@ import {
   type StageFractions,
 } from "@/lib/city/load-stages";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { Landmark } from "@/lib/city/landmarks";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
@@ -346,6 +347,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     };
   });
   const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
+  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
@@ -484,6 +486,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         setBounds(h.terrainBounds);
         setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
+        setLandmarks(h.landmarks);
         updatePocDebug({ handle: h, look, firstFrame: true });
         // The frame the scene goes live in. The loading screen stays up and
         // stops taking input: the city is now rendering behind its glass, and
@@ -677,6 +680,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           fps={fps}
           handleRef={handleRef}
           landcoverTiles={landcoverTiles}
+          landmarks={landmarks}
           latLng={latLng}
           look={lookValues}
           minutes={time.minutes}

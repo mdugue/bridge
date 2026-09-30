@@ -16,6 +16,7 @@ import type {
   RiversideFeature,
   SoundmarkFeature,
   SmallBuildingFeature,
+  StructureFeature,
   StairFeature,
   TerraceFeature,
   TramFeature,
@@ -25,6 +26,7 @@ import type {
   KerbFeature,
 } from "./features";
 import { SITES } from "../../sites";
+import { STRUCTURE_KINDS } from "./features";
 import { type Site, tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
@@ -227,6 +229,34 @@ test.each(tiles)(
       if (p?.hc !== undefined) {
         expect(p.hc.length).toBe(4);
         expect(p.hc.every((h) => h > 1 && h < 12)).toBe(true);
+      }
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: structures beyond LoD2 are columns (points), buildings or relief slabs (outlines) of a measured height",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).structures;
+    for (const f of loadSource<StructureFeature>(src)) {
+      const p = f.properties;
+      expect(STRUCTURE_KINDS as readonly string[]).toContain(p?.kind ?? "none");
+      expect(Number.isFinite(p?.z)).toBe(true);
+      expect(p?.h ?? 0).toBeGreaterThanOrEqual(2);
+      expect(p?.h ?? 999).toBeLessThan(400);
+      if (p?.kind === "relief") {
+        // a slab of a landmark's roof: on the LoD2 object it sits on
+        expect(p.of ?? "").not.toBe("");
+      }
+      if (p?.kind === "building" || p?.kind === "relief") {
+        expect(f.geometry.type).toBe("Polygon");
+        if (f.geometry.type === "Polygon") {
+          expect(isRing(f.geometry.coordinates[0])).toBe(true);
+        }
+      } else {
+        expect(f.geometry.type).toBe("Point");
+        expect(p?.r ?? 0).toBeGreaterThan(0);
+        expect(p?.rt ?? 0).toBeGreaterThan(0);
       }
     }
   }

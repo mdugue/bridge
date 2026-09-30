@@ -444,6 +444,56 @@ visual-variable codebook is in
   now ruled out, and a shadow). Unverified on a real GPU. Remaining
   temporaries: 3 probable stalls on the Schloßstraße pavement (a living
   street), container stacks in the Alberthafen.
+- **Structures beyond LoD2: columns** (plan 038,
+  [ADR 0036](./adr/0036-measured-and-named-additions.md)) — the chimneys,
+  towers, masts, water towers, communications towers and lighthouses the
+  LoD2 leaves out. `pipeline/bake/structures.py` reads DOM1, DGM1 and the
+  burned LoD2 roofs over the tile and a 60 m margin at 1 m and takes
+  `gap = DOM − max(DGM, LoD2 roof)`; an OSM `man_made=*` of those kinds
+  (point or outline) is kept where the gap within 6 m (2 m of an outline)
+  reaches 5 m and the structure 8 m. Axis at the gap's peak, foot at the
+  lowest ground there, height the DOM's — OSM's `height` where the DOM
+  undershoots it by more than a quarter (a lattice mast); radius from the
+  outline, OSM `diameter` or the gap blob low down, a chimney at least
+  h/24 (a 1 m surface model sees a slim shaft too thin: Unna's 48 m
+  Lindenbrauerei chimney, the "Fibonacci-Reihe", measured 1.7 m), clamped
+  per kind, tapered per kind. **Nothing is added from the surface model
+  alone** (🗃️ below). `lib/city/structures.ts` lathes each from its
+  kind's ring profile (16 sides: a chimney's head band, a TV tower's
+  cabin and antenna, a water tower's tank on a slim shaft, a lighthouse's
+  lantern); `bakeCityMesh` appends it (`appendGapStructures`) as an object
+  of its own, `source` = 2, not a `Building` (the HUD's count stays
+  houses), chimneys, towers and lighthouses in the brick palette, the head
+  in the wall's tint (no terracotta cap); clay, shadows, picking,
+  collision, demolish and the minimap as for any building. 386 on the
+  seven committed sites (2026-09-28; Dresden 180, mostly masts and
+  chimneys). → `data/<site>/dlm/structures_<tile>.geojson` (ODbL); a site
+  without a surface model writes an empty file. Look unverified on a real
+  GPU.
+- **Structures beyond LoD2: missing buildings** (plan 038) — the
+  buildings OSM maps and LoD2 does not carry yet (LoD2 is a year or more
+  behind; the newest buildings of a city are the usual case): an OSM
+  building outline ≥ 40 m² (not `roof`, `carport`, `construction`,
+  `ruins`, underground or on a negative `layer`) that LoD2 covers < 20 %
+  and whose cells stand ≥ 2.5 m above ground on ≥ 60 % of it, extruded
+  from its lowest ground to the 60th percentile of the measured height
+  (the mass, not its antenna), flat roof in the slate palette, storey
+  bands from that height, `source` = 2, `building` true. Same bake and
+  build as the columns. 920 on the seven committed sites (Dresden 370).
+- **Landmark roof relief** (plan 038) — a landmark's roof form that LoD2
+  flattens: on the LoD2 objects of a Wikidata landmark (below) only,
+  where DOM1 stands ≥ 3 m above the object's highest LoD2 roof on ≥ 60 m²
+  (and ≥ 2 % of its footprint), the excess as stacked slabs, one per band
+  of ≥ 2 m (at most 8), each the smoothed outline where the surface
+  reaches that band (parts ≥ 6 m²) — a contour model of the measured roof,
+  not an invented shape. The Elbphilharmonie is LoD2's flat 96.3 m block;
+  the DOM reaches ≈ 109 m over its waves. A slab (`kind: relief`, `of`:
+  the host object) copies its host's row — tint, roof, flags, root — so it
+  wears the building's look and demolish takes it along; no footprint of
+  its own. Not on ordinary roofs: there the excess is antennas, dormers,
+  lift housings and trees. Thresholds tuned on synthetic tests and the
+  Elbphilharmonie only; a site whose `landmarks` step has not run has no
+  relief (run `landmarks` before `structures`).
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
@@ -523,6 +573,63 @@ visual-variable codebook is in
   *Kulturdenkmale_Flaeche*) is reachable only as a WMS here: a possible
   second source. Not yet judged on a real GPU — off if it reads as
   highlighting. Plan 027 phase 2.
+- **Mapped wall and roof colour, wall material** (*Farbvariation*,
+  *Dachfarbe*; plan 038) — OSM `building:colour`, `roof:colour` (a CSS name
+  or hex) and `building:material` / `building:facade:material` /
+  `facade:material` (normalised to glass, metal, brick, stone, concrete,
+  wood, plaster) on the building and `building:part` outlines covering an
+  LoD2 object ≥ 50 % (`osm_buildings.py`; buildings first, then parts, so
+  a part's own tags win; a part without its own inherits its root's,
+  `inheritedLook`). **Colours are brought into the clay's register, never
+  used raw** (`osmColourTint` in `lib/city/building-tint.ts`): hue kept,
+  saturation ≤ 0.45, lightness held in [0.45, 0.9] for walls and [0.3,
+  0.8] for roofs, plus the palette's per-building jitter — a red wall is a
+  dusty terracotta, not a signal red. Walls: OSM colour > the material's
+  palette family (brick → brick, stone / glass / metal → cool, concrete →
+  neutral, wood / plaster → warm) > the use family (`function`). Roofs:
+  DOP colour > OSM `roof:colour` > palette. For a landmark Wikidata's
+  material (P186) fills in where OSM names none. Counts per tile in
+  `osmbuild_<tile>.json` (`meta.objects_look`).
+- **Glass and metal facades** (*Streiflicht*; plan 038) — the material's
+  glass and metal set object flags (4, 8; a part takes its root's): the
+  clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
+  smoother (roughness 0.42 glass, 0.5 metal), and glass catches a pale sky
+  sheen at grazing angles (Fresnel³ on the rim slider, dimmed 70 % at
+  night). No panes, no mullions, no texture — the window-grid veto holds
+  (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
+  not yet judged on a real GPU.
+- **Landmarks from Wikidata** (HUD *Erkunden* → *Wahrzeichen*; plan 038)
+  — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
+  subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;
+  height P2048, material P186, building = subclass of Q41176; a box that
+  times out is asked again in quarters) → `data/_raw/<provider>/wikidata/
+  landmarks_<tile>.json` (CC0). `pipeline/bake/landmarks.py` matches each
+  item to the LoD2 objects that draw it — OSM outlines tagged
+  `wikidata=<Q>` covering objects by half, else, for a building, the LoD2
+  building under its point (root and parts) — drops what matches nothing
+  drawn (districts, streets, harbours) and keeps ≤ 12 per tile, ranked by
+  sitelinks: a **relative** ranking per tile, so Unna gets its own
+  (its churches have two sitelinks each; an absolute floor gave it one,
+  🗃️ below). → `data/<site>/dlm/landmarks_<tile>.json`. The build flags the
+  objects (`OBJECT_FLAG_LANDMARK` = 16; no look of its own), gives them
+  the Wikidata material where OSM names none (`withLandmarks` in
+  `prepare-data.ts`), and writes the site's twelve most notable into the
+  tileset's `extras.landmarks` (`siteLandmarks`); the HUD lists them as
+  chips under the viewpoints, and a click glides to an aerial vantage from
+  the south-south-west (`landmarkVantage`: altitude clamp(h + 50, 60,
+  300) m, pitch −22°, fov 55°). Examples: the Elbphilharmonie (41
+  sitelinks, material glass), the Chilehaus (35) and St. Michaelis (27,
+  brick) in Hamburg, the Frauenkirche in Dresden, the Lindenbrauerei and
+  the Zentrum für Internationale Lichtkunst in it in Unna (Wikidata's
+  point lies beside the building: matched to the nearest within 25 m).
+  Districts are kept out by matching only OSM outlines of buildings,
+  building parts and `man_made` structures (HafenCity, Wachwitz got in
+  through their place outlines before). On a dense tile the 12 are the
+  most notable: Dresden's Congress Center does not make the Altstadt
+  tile's list (Frauenkirche, Zwinger, Semperoper, …).
+  Coverage follows Wikidata's, which varies by city; a site fetched before
+  the query existed needs `bun run fetch <site>` again (it only adds what
+  is missing) before `bun run bake <site> --step landmarks`.
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
@@ -1580,7 +1687,11 @@ research that produced them):
 |---|---|---|
 | **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 038: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. |
+| **Structures from the surface model alone** (plan 038: every tall gap between DOM1 and `max(DGM1, LoD2 roof)` as a column or block) | The gap is mostly not buildings: tree crowns, power pylons, and on the flight day the construction cranes — Leipzig's centre showed dozens of 50–95 m spikes with no mapped structure, Hamburg 90–98 m ones beside a 2023 building. | Only where OSM names the structure (`man_made=*`, a building outline) does the surface model measure it; a landmark's roof relief is the one gap drawn without a mapped outline, and only over its own LoD2 roof. |
+| **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0036](./adr/0036-measured-and-named-additions.md)). |
+| **Absolute notability floor for landmarks** (a fixed sitelink threshold) | Set where a metropolis's landmarks stand out, it left Unna with one. | A low floor (≥ 2 sitelinks), then the most notable twelve per tile, ranked relatively. |
+| **Raw OSM colours on facades** (`building:colour` used as given) | A mapped `red` or `#ff0000` is a signal colour in a pastel city. | Hue kept, saturation and lightness clamped into the clay's register. |
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four first tiles, measured 2026-09-25 (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |
 | **Orthophoto for facade colour** | Nadir DOP only sees roofs — no facade data. | DOP for **roofs** is fine and is now the 🧪 entry above. |

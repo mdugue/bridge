@@ -190,7 +190,10 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     normal: normalize(varying(transformNormalToView(safe))),
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
-    roughness: clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
+    roughness: facadeRoughness(
+      clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
+      facadeMaterial(flags, wall)
+    ),
     colour: clayColour(d, tint, build, h, wall, flags),
     // Himmelslicht: the courtyard's ground floor gets less of the sky.
     ao: createClaySky().ao(h, build.z, d.uSkyView),
@@ -249,9 +252,24 @@ function clayColour(
   return osmColour(d, col, build, h, wall, flags);
 }
 
+/** A facade's mapped material from the object's flags (lib/city/
+ *  city-mesh.ts: glass 4, metal 8), walls only. */
+function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
+  const f = floor(flags.add(0.5));
+  return {
+    glass: mod(floor(f.div(4)), 2).mul(wall),
+    metal: mod(floor(f.div(8)), 2).mul(wall),
+  };
+}
+
+/** Glass and metal cladding read a little smoother than the clay. */
+function facadeRoughness(r: F, m: { glass: F; metal: F }): F {
+  return mix(mix(r, 0.42, m.glass), 0.5, m.metal);
+}
+
 /**
  * What OSM knows about a building (the `flags` float of its third texel,
- * lib/city/city-mesh.ts: shop 1, heritage 2), layered onto the clay's
+ * lib/city/city-mesh.ts: shop 1, heritage 2, glass 4, metal 8), layered onto the clay's
  * colour and glow on the same sliders — it adds none:
  *  - Ladenlicht: a warm wash on a shop's ground floor at dusk, under the
  *    first storey line with a soft top edge, walls only, on the dusk-glow
@@ -261,6 +279,12 @@ function clayColour(
  *  - Denkmal: a barely-there warm lift of a listed facade (on the
  *    Farbvariation slider) and a finer second cornice line under the eave
  *    (on the Traufkante slider).
+ *  - Glas (flag 4): a glass facade (OSM `building:material=glass`) keeps
+ *    its clay but turns a little cooler and smoother, and its grazing
+ *    angle catches a pale sky sheen (on the Streiflicht slider, dimmed at
+ *    night). No panes, no mullions — the window-grid veto holds.
+ *  - Metall (flag 8): metal cladding, cooler and a little smoother, no
+ *    sheen.
  * Strengths are conservative defaults, not yet judged on a real GPU.
  */
 function osmColour(
@@ -279,18 +303,32 @@ function osmColour(
   const cornice = float(1).sub(
     min(abs(h.sub(build.z.sub(0.45))).div(max(fwidth(h), 1e-4)), 1)
   );
-  return lifted.mul(
-    float(1).sub(
-      cornice.mul(listed).mul(step(2, build.z)).mul(d.uEave).mul(wall).mul(0.35)
-    )
+  const m = facadeMaterial(flags, wall);
+  const cool = mix(
+    vec3(1),
+    vec3(0.93, 0.99, 1.07),
+    max(m.glass, m.metal.mul(0.6))
   );
+  return lifted
+    .mul(
+      float(1).sub(
+        cornice
+          .mul(listed)
+          .mul(step(2, build.z))
+          .mul(d.uEave)
+          .mul(wall)
+          .mul(0.35)
+      )
+    )
+    .mul(cool);
 }
 
 /**
- * What the clay emits: Streiflicht (a squared Fresnel rim, warm), Abendlicht
- * (build.w = 1: commercial/public, walls only, × night) and Ladenlicht (a
- * shop's ground floor under the first storey line with a soft top edge,
- * broken along the facade by a low-frequency hash in ≈ 3.5 m cells).
+ * What the clay emits: Streiflicht (a squared Fresnel rim, warm; on glass a
+ * pale sky sheen as well), Abendlicht (build.w = 1: commercial/public,
+ * walls only, × night) and Ladenlicht (a shop's ground floor under the
+ * first storey line with a soft top edge, broken along the facade by a
+ * low-frequency hash in ≈ 3.5 m cells).
  */
 function clayGlow(
   d: ClayDetailUniforms,
@@ -319,7 +357,15 @@ function clayGlow(
     .mul(lit)
     .mul(d.uDuskGlow)
     .mul(d.uNight);
-  return rim.add(glow).add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)));
+  // Glas: the grazing angle catches a pale sky sheen, dimmed at night
+  const sheen = facadeMaterial(flags, wall)
+    .glass.mul(fres.mul(fres).mul(fres))
+    .mul(d.uRim)
+    .mul(float(1).sub(d.uNight.mul(0.7)));
+  return rim
+    .add(glow)
+    .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
+    .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)));
 }
 
 /**

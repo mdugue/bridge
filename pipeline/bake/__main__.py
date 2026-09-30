@@ -15,6 +15,7 @@ from . import (
     furniture,
     lamps,
     landcover,
+    landmarks,
     lowveg,
     markings,
     monuments,
@@ -28,6 +29,7 @@ from . import (
     soundmarks,
     sport,
     stairs,
+    structures,
     surface,
     tram,
     trees,
@@ -75,6 +77,13 @@ STEPS = {
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.
     "small-buildings": small_buildings.run,
+    # Wikidata's notable buildings (fetched by `bun run fetch`), matched to
+    # the LoD2 objects that draw them: marked, named, listed in the HUD.
+    "landmarks": landmarks.run,
+    # After landmarks (their roofs' relief): DOM1 against LoD2, confirmed by
+    # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
+    # does not carry yet, and a landmark's roof form it flattens (plan 038).
+    "structures": structures.run,
 }
 
 

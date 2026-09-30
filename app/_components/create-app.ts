@@ -23,6 +23,7 @@ import {
   memoryLimitsFor,
 } from "@/lib/city/memory-governor";
 import { createGround } from "@/lib/city/ground";
+import type { Landmark } from "@/lib/city/landmarks";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
   LOOK_DEFAULTS,
@@ -343,6 +344,8 @@ export interface CityWalkHandle {
     memory: Readonly<Record<string, number>>;
     triangles: number;
   };
+  /** the site's most notable landmarks (Wikidata), for the HUD's list */
+  landmarks: Landmark[];
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
   landcoverTiles: MapTile[];
   /** the scene's geographic position — the HUD's sunrise/sunset times */
@@ -1568,6 +1571,7 @@ async function bootApp(
         const gone = stream.demolished.get(tile);
         return footprintPolys(polys, (i) => !gone?.has(i));
       }),
+    landmarks: extras.landmarks ?? [],
     landcoverTiles: extras.tiles.map((t) => ({
       src: new URL(t.minimap, tilesetUrl).href,
       bounds: t.bounds,

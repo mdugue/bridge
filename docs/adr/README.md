@@ -45,6 +45,7 @@ each data → look transformation does and its status.
 | [0033](./0033-bridges-measured-in-the-surface-model.md) | Bridges are measured in the surface model, typed by Wikidata | accepted |
 | [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
 | [0035](./0035-sites-providers-and-per-site-data.md) | Sites pick a provider; data per site, downloads per provider; fetch → bake → build | accepted |
+| [0036](./0036-measured-and-named-additions.md) | Geometry beyond LoD2 only where a measurement (DOM1) and a name (OSM, Wikidata) agree; mapped attributes tint within the clay palette, never textures; landmarks from Wikidata, ranked per tile | accepted |
 
 ## Format
 

@@ -135,6 +135,15 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
   sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
   zurückspringt, mit einem ✕ zum Vergessen.
+- **Wahrzeichen** — die bekanntesten Bauwerke der Stadt, bis zu zwölf,
+  als kleine Chips unter den Aussichtspunkten: die Frauenkirche in
+  Dresden, die Elbphilharmonie, das Chilehaus und St. Michaelis in
+  Hamburg, die Lindenbrauerei in Unna. Die Liste ist nicht von Hand
+  gewählt: Sie kommt aus
+  Wikidata (die Bauwerke mit den meisten Wikipedia-Artikeln, zugeordnet
+  zu den Gebäuden, die der Viewer zeichnet), so bekommt jede Stadt ihre
+  eigene. Ein Klick gleitet zu einem Blick aus Süd-Südwest, etwas über
+  dem Wahrzeichen und umso höher, je höher es ist.
 - **Steuerung** — die vollständige Tastentabelle.
 
 ### Szene

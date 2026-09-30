@@ -224,6 +224,37 @@ export interface SmallBuildingFeature {
   properties: { h: number; hc?: number[]; z: number } | null;
 }
 
+/** What the surface model shows and LoD2 lacks, confirmed by OSM
+ *  (pipeline/bake/structures.py, ODbL): a column (chimney, tower, mast,
+ *  water tower, communications tower, lighthouse) as its axis point with
+ *  foot radius `r` and top radius `rt`, or a whole building as its outline;
+ *  `z` the lowest ground, `h` the measured height above it. */
+export interface StructureFeature {
+  geometry: PointGeometry | PolygonGeometry;
+  properties: {
+    h: number;
+    kind: StructureKind;
+    name?: string;
+    /** a relief slab: the LoD2 object it sits on (and whose look it wears) */
+    of?: string;
+    r?: number;
+    rt?: number;
+    z: number;
+  } | null;
+}
+
+export const STRUCTURE_KINDS = [
+  "chimney",
+  "tower",
+  "mast",
+  "communications_tower",
+  "water_tower",
+  "lighthouse",
+  "building",
+  "relief",
+] as const;
+export type StructureKind = (typeof STRUCTURE_KINDS)[number];
+
 /** OSM retaining/city walls and cliffs (pipeline/bake/walls.py, ODbL): the
  *  barrier/man_made kind or "cliff" (only retaining kinds and cliffs reshape
  *  the terrain) and the height in metres. */
