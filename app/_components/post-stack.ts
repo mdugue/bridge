@@ -2,6 +2,7 @@ import {
   type BufferGeometry,
   DepthTexture,
   HalfFloatType,
+  type Node,
   NoToneMapping,
   type Object3D,
   type PerspectiveCamera,
@@ -23,6 +24,8 @@ import {
   float,
   floor,
   fract,
+  int,
+  max,
   min,
   mix,
   nodeObject,
@@ -30,12 +33,15 @@ import {
   pow,
   reference,
   renderOutput,
+  rtt,
   screenCoordinate,
   screenUV,
   smoothstep,
   texture,
+  textureSize,
   time,
   uniform,
+  uv,
   vec2,
   vec3,
   vec4,
@@ -60,8 +66,64 @@ import { createStylize } from "./stylize-effect";
 
 /** Initial focus distance before the first crosshair raycast lands. */
 const HYPERFOCAL_M = 600;
-/** GTAO radius in metres (view space). */
-const AO_RADIUS_M = 6;
+
+/**
+ * The contact shadows, their noise taken out. GTAO rotates its horizon
+ * search per pixel by a 5×5 tile of noise and leaves the averaging to a
+ * denoiser; drawn raw, every contact shadow — and every sliver of distant
+ * city at the horizon — was a speckle (main's N8AO denoised its own). A 5×5
+ * box at the AO's resolution holds each rotation of the tile once, so it
+ * averages the pattern away exactly; its taps are weighed by depth, so the
+ * shadow at a wall's foot does not bleed onto the street in front. Its own
+ * half-resolution pass: 50 reads a texel, a quarter of the pixels. (three's
+ * DenoiseNode rebuilds a normal from depth for each of its 16 taps, at
+ * full resolution — too much for a phone.)
+ */
+function aoSmoothed(
+  raw: ReturnType<ReturnType<typeof ao>["getTextureNode"]>,
+  depthTexture: DepthTexture,
+  camera: PerspectiveCamera
+) {
+  const near = reference("near", "float", camera);
+  const far = reference("far", "float", camera);
+  const at = uv();
+  // reason: textureSize's node type is not in the @types' vec2 overloads.
+  const size = textureSize(raw, int(0)) as unknown as Node<"uvec2">;
+  const texel = vec2(1).div(vec2(size));
+  const viewZ = (p: V2): F =>
+    perspectiveDepthToViewZ(texture(depthTexture, p).r, near, far).negate();
+  const z0 = viewZ(at).toVar();
+  // what counts as the same surface: a few percent of the distance
+  const tolerance = z0.mul(0.04).add(0.15);
+  let sum: F = float(0);
+  let weights: F = float(0);
+  for (let y = -2; y <= 2; y++) {
+    for (let x = -2; x <= 2; x++) {
+      const p = at.add(texel.mul(vec2(x, y)));
+      const w = clamp(
+        float(1).sub(viewZ(p).sub(z0).abs().div(tolerance)),
+        0,
+        1
+      );
+      sum = sum.add(texture(raw.value, p).r.mul(w));
+      weights = weights.add(w);
+    }
+  }
+  const smoothed = vec4(vec3(sum.div(max(weights, 1e-4))), 1);
+  return rtt(smoothed, null, null, { resolutionScale: 0.5 });
+}
+
+/**
+ * GTAO's reach and what it takes for an occluder, in metres (view space).
+ * Contact, as main's N8AO drew it: a 6 m radius and three's 1 m thickness
+ * counted a bench leg standing half a metre in front of the ground behind
+ * it as that ground's occluder — a smoky halo on the far side of every
+ * post, leg and pillar, and blotches along wall feet. 2 m and 0.15 m keep
+ * the dark where things meet (wall feet, kerbs, legs) and nothing behind
+ * them (compared against main from the same snapshots).
+ */
+const AO_RADIUS_M = 2;
+const AO_THICKNESS_M = 0.15;
 /** The AO's exponent at contact-shadows slider = 1 (occlusion^k). */
 const AO_INTENSITY_MAX = 3;
 
@@ -300,8 +362,9 @@ export function createPostStack(
   const aoPass = ao(depth, null as never, camera);
   aoPass.resolutionScale = 0.5;
   aoPass.radius.value = AO_RADIUS_M;
+  aoPass.thickness.value = AO_THICKNESS_M;
   aoPass.samples.value = aoSamples;
-  const aoTexture = aoPass.getTextureNode();
+  const aoTexture = aoSmoothed(aoPass.getTextureNode(), depthTexture, camera);
   const contact = uniform(LOOK_DEFAULTS.contact * AO_INTENSITY_MAX);
   const occlusion = pow(aoTexture.r, contact);
   const lit = vec4(colour.rgb.mul(occlusion), colour.a);

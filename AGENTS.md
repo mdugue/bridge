@@ -410,7 +410,13 @@ old one — in particular turning on the spot still never moves the frustum.
 Per-render cost is unchanged (same map size, same PCF); only the caster set
 grows. This is the cheap 90% of CSM, not a replacement for it.
 
-**Contact shadows (GTAO) are never motion-gated.** Skipping the AO pass while
+**Contact shadows (GTAO) are smoothed and never motion-gated.** GTAO
+leaves its 5×5 rotation noise to a denoiser: drawn raw it speckled every
+contact shadow and the whole horizon, so `aoSmoothed` (post-stack.ts)
+averages it out with a depth-aware 5×5 box at the AO's resolution — not
+three's DenoiseNode, which rebuilds normals per tap at full resolution. A
+0.15 m thickness keeps a leg or post from darkening the ground behind it.
+ Skipping the AO pass while
 the camera moves made them blink on every footstep, which reads as a bug. The
 pass runs at half resolution (normals reconstructed from depth) — roughly
 what the skip used to save, paid every frame instead. Its sample count
