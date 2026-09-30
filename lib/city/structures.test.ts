@@ -5,6 +5,7 @@ import type { StructureMesh } from "./small-buildings";
 import {
   buildingMesh,
   columnMesh,
+  reliefMesh,
   STRUCTURE_SINK,
   structureFootprint,
 } from "./structures";
@@ -115,4 +116,46 @@ test("a feature of the wrong shape builds nothing", () => {
   expect(
     buildingMesh(chimney, { cx: 0, cy: 0 }, triangulate).positions
   ).toHaveLength(0);
+});
+
+test("a relief is its height field over the patch, with walls down to the roof", () => {
+  const relief: StructureFeature = {
+    geometry: { type: "Polygon", coordinates: [] },
+    properties: {
+      kind: "relief",
+      of: "host",
+      z: 100,
+      h: 6,
+      grid: {
+        x: 10,
+        y: 20,
+        res: 1,
+        cols: 3,
+        rows: 2,
+        // a 2 × 2 patch and one cell outside it
+        z: [4, 6, -1, 4, 4, -1],
+      },
+    },
+  };
+  const m = reliefMesh(relief, { cx: 0, cy: 0 });
+  const tris = m.positions.length / 9;
+  // 4 cells × 2 top triangles, 8 edge walls × 2
+  expect(tris).toBe(8 + 16);
+  expect(m.isRoof.filter((r) => r === 1).length).toBe(8 * 3);
+  const zs = m.positions.filter((_, i) => i % 3 === 2);
+  expect(Math.min(...zs)).toBe(100);
+  // the corner the four cells share averages them
+  expect(Math.max(...zs)).toBeCloseTo(106, 5);
+  const xs = m.positions.filter((_, i) => i % 3 === 0);
+  const ys = m.positions.filter((_, i) => i % 3 === 1);
+  expect([Math.min(...xs), Math.max(...xs)]).toEqual([10, 12]);
+  expect([Math.min(...ys), Math.max(...ys)]).toEqual([18, 20]);
+  // every top triangle faces up
+  for (let i = 0; i < m.positions.length; i += 9) {
+    if (m.isRoof[i / 3] !== 1) {
+      continue;
+    }
+    const [ax, ay, , bx, by, , cx, cy] = m.positions.slice(i, i + 9);
+    expect((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)).toBeGreaterThan(0);
+  }
 });

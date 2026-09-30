@@ -55,7 +55,7 @@ from .common import (
     value_at,
     write_geojson,
 )
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, in_tunnel, read_osm, tag
 from .rail import merge_lines
 
 MARGIN_M = 30.0  # tracks and masts around the tile the supports are decided on
@@ -64,6 +64,10 @@ STREET_SHARE = 0.7
 GRASS_SHARE = 0.5
 GRASS_NDVI = 0.3
 ROAD, MEADOW = 7, 1  # class ids (landcover.py CLASSES)
+# Where a track runs through pavement, it is set into it: a street, and
+# equally a pedestrian zone or a square (path, built-up). A gravel bed there
+# read as broken track (Munich's Theatinerstraße, by the Marienplatz).
+PAVED = {ROAD, 6, 4}
 SPAN_MAX_M = 28.0
 ARM_MAX_M = 10.0
 MAST_NEAR_M = 15.0  # a mast further from every tram track is the railway's
@@ -100,7 +104,7 @@ class Beds:
         return value_at(raster, self.bounds, x, y)
 
     def bed(self, line: shapely.LineString) -> str | None:
-        """street / grass / ballast by the share of 2 m samples; None when no
+        """street (paved) / grass / ballast by the share of 2 m samples; None when no
         sample lies on the tile (a way seen only through the margin)."""
         n = max(int(line.length / SAMPLE_M), 1)
         road = green = seen = 0
@@ -111,7 +115,7 @@ class Beds:
                 continue
             seen += 1
             v = self._at(self.ndvi, p.x, p.y) if self.ndvi is not None else None
-            if c == ROAD:
+            if c in PAVED:
                 road += 1
             if c == MEADOW or (v is not None and v > GRASS_NDVI * 255):
                 green += 1
@@ -139,6 +143,8 @@ def tracks(tile: Tile, beds: Beds) -> list[tuple[shapely.LineString, dict]]:
     groups: dict[tuple, list] = defaultdict(list)
     fallback: dict[tuple, list] = defaultdict(list)
     for g, other in zip(geoms, column(fields, "other_tags", geoms), strict=True):
+        if in_tunnel(other):
+            continue  # a tram tunnel is not drawn at street level
         for part in shapely.get_parts(g):
             if part.geom_type != "LineString" or part.length < 0.5:
                 continue

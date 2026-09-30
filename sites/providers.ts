@@ -34,7 +34,7 @@ export const NRW: Provider = {
   credit: "Geobasis NRW, dl-de/zero-2-0",
   portal: "https://www.opengeodata.nrw.de/produkte/geobasis/",
   osm: "europe/germany/nordrhein-westfalen",
-  products: { dom: true, dop: "rgbi", dlm: true, lsc: false },
+  products: { dom: true, dop: "rgbi", dlm: true, lsc: true },
   tileSuffix: "_nw",
 };
 

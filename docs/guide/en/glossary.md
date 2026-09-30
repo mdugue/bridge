@@ -113,7 +113,9 @@ its inputs (here: 2016 laser scan, 2021/2022 footprints).
 [Fact sheet](./data-sources.md#lod2--the-3d-building-model).
 
 **LSC** — *Laserscandaten*, the classified laser point cloud itself (LAZ
-files), the raw material of the height models; not used by the viewer yet.
+files), the raw material of the height models. Read offline, where a
+survey office offers it (Saxony, North Rhine-Westphalia), for hedge
+heights, garden trees and the sheds the 3D building model lacks.
 [Fact sheet](./data-sources.md#lsc--the-laser-scan-point-cloud).
 
 **nDOM** — *normalisiertes DOM*: surface model minus terrain model, i.e. the

@@ -122,8 +122,10 @@ ist der ihrer Eingaben (hier: Laserscan 2016, Grundrisse 2021/2022).
 [Steckbrief](./data-sources.md#lod2--das-3d-gebäudemodell).
 
 **LSC** — *Laserscandaten*, die klassifizierte Laser-Punktwolke selbst
-(LAZ-Dateien), das Rohmaterial der Höhenmodelle; vom Viewer noch nicht
-genutzt. [Steckbrief](./data-sources.md#lsc--die-laserscan-punktwolke).
+(LAZ-Dateien), das Rohmaterial der Höhenmodelle. Offline gelesen, wo ein
+Vermessungsamt sie anbietet (Sachsen, Nordrhein-Westfalen), für
+Heckenhöhen, Gartenbäume und die Schuppen, die dem 3D-Gebäudemodell
+fehlen. [Steckbrief](./data-sources.md#lsc--die-laserscan-punktwolke).
 
 **nDOM** — *normalisiertes DOM*: Oberflächenmodell minus Geländemodell,
 also die Höhe dessen, was auf dem Boden steht. Vom Projekt aus DOM1 und

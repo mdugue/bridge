@@ -213,3 +213,36 @@ def rasterise(laz: Path, out: Path, bounds, epsg: int, res: float = 0.5) -> None
         {"mean": low.band("mean"), "count": low.band("count")},
         epsg,
     )
+
+
+# The dimensions the rasters read; a merged scan keeps these.
+MERGED_DIMS = ("intensity", "return_number", "number_of_returns", "classification")
+
+
+def merge_laz(sources: list[Path], dest: Path, intensity_scale: float = 1.0) -> Path:
+    """Several LAZ files (a provider's 1 km tiles) as the one scan per 2 km
+    tile the rasters read, in the first file's point format and scale. Only
+    what the rasters need is carried: x, y, z and `MERGED_DIMS`.
+    `intensity_scale` brings a provider's intensities to GeoSN's range, which
+    the low-vegetation thresholds were measured on (NRW records 16 bit)."""
+    if not sources:
+        raise ValueError(f"no laser scan files for {dest.name}")
+    with laspy.open(sources[0]) as first:
+        header = laspy.LasHeader(point_format=first.header.point_format.id, version="1.4")
+        header.scales = first.header.scales
+        header.offsets = first.header.offsets
+    tmp = dest.with_name(dest.name + ".part")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with laspy.open(tmp, mode="w", header=header, do_compress=True) as out:
+        for src in sources:
+            for pts in _chunks(src):
+                rec = laspy.ScaleAwarePointRecord.zeros(len(pts), header=header)
+                rec.x, rec.y, rec.z = pts.x, pts.y, pts.z
+                for dim in MERGED_DIMS:
+                    rec[dim] = pts[dim]
+                if intensity_scale != 1.0:
+                    scaled = np.asarray(pts.intensity, np.float64) * intensity_scale
+                    rec.intensity = np.clip(np.round(scaled), 0, 65535).astype(np.uint16)
+                out.write_points(rec)
+    tmp.replace(dest)
+    return dest

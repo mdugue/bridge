@@ -96,26 +96,40 @@ def test_a_chimney_beside_a_hall_is_measured():
     assert structures.column(s, shapely.Point(X0 + 50, Y0 + 50), "chimney", None) is None
 
 
-def test_a_landmarks_measured_roof_becomes_slabs():
+def test_a_landmarks_measured_roof_becomes_a_height_field():
     roof = np.full((N, N), np.nan)
     roof[20:80, 20:80] = GROUND + 30  # LoD2: a flat block
     dom = np.where(np.isfinite(roof), roof, GROUND)
     dom[30:60, 25:75] = GROUND + 36  # the wave the block flattens
     dom[35:50, 35:60] = GROUND + 40
     s = surfaces(dom, roof)
-    outline = cell_box(20, 20, 60, 60)
-    slabs = structures.relief(s, outline, "DEBY_obj")
-    assert slabs
-    assert {f["properties"]["kind"] for f in slabs} == {"relief"}
-    assert {f["properties"]["of"] for f in slabs} == {"DEBY_obj"}
-    tops = [f["properties"]["z"] + f["properties"]["h"] for f in slabs]
-    bases = [f["properties"]["z"] for f in slabs]
-    assert min(bases) >= GROUND + 30 - 1e-6
-    assert max(tops) <= GROUND + 40 + 1e-6
-    assert max(tops) >= GROUND + 38
-    # the highest slabs are the smaller crest
-    top = max(slabs, key=lambda f: f["properties"]["z"])
-    assert shapely.geometry.shape(top["geometry"]).area < 25 * 15 * 1.3
+    (f,) = structures.relief(s, cell_box(20, 20, 60, 60), "DEBY_obj")
+    p = f["properties"]
+    assert p["kind"] == "relief"
+    assert p["of"] == "DEBY_obj"
+    assert p["z"] == GROUND + 30  # on the object's highest roof
+    grid = p["grid"]
+    z = np.array(grid["z"]).reshape(grid["rows"], grid["cols"])
+    assert grid["rows"] == 30 and grid["cols"] == 50  # the patch's window
+    assert (z >= 0).sum() >= 30 * 50 - 4  # the opening rounds the corners
+    # the crest keeps (nearly) its measured height, the shoulder its own
+    assert 9 <= z.max() <= 10
+    assert 5.5 <= z[2, 2] <= 6.5
+    assert p["h"] == z.max()
+    # the grid sits where the patch is: its north-west corner
+    assert grid["x"] == X0 + 25 and grid["y"] == Y0 + N - 30
+
+
+def test_a_spire_keeps_its_tip():
+    roof = np.full((N, N), np.nan)
+    roof[40:60, 40:60] = GROUND + 30  # LoD2 cut the tower at its eaves
+    dom = np.where(np.isfinite(roof), roof, GROUND)
+    for r in range(8):  # a stepped cone, 40 m above the eaves at its tip
+        dom[42 + r : 58 - r, 42 + r : 58 - r] = GROUND + 30 + 5 * (r + 1)
+    s = surfaces(dom, roof)
+    (f,) = structures.relief(s, cell_box(40, 40, 20, 20), "tower")
+    z = np.array(f["properties"]["grid"]["z"])
+    assert z.max() >= 32  # most of the 40 m survives the smoothing
 
 
 def test_an_ordinary_roofs_antennas_make_no_relief():
@@ -148,3 +162,46 @@ def test_courtyard_trees_under_the_top_make_no_relief():
     dom[38:62, 38:62] = GROUND + 26  # its trees, over a third of it
     s = surfaces(dom, roof)
     assert structures.relief(s, cell_box(20, 20, 60, 60), "x") == []
+
+
+def test_two_scans_merge_into_one_with_their_classes_and_scaled_intensity(tmp_path):
+    import laspy
+
+    from bake.lsc import merge_laz
+
+    def scan(path, x0, offset):
+        header = laspy.LasHeader(point_format=1, version="1.2")
+        header.scales = [0.01, 0.01, 0.01]
+        header.offsets = [offset, 5_000_000, 0]
+        las = laspy.LasData(header)
+        las.x = np.array([x0, x0 + 1.5])
+        las.y = np.array([5_710_000.0, 5_710_001.0])
+        las.z = np.array([100.0, 112.5])
+        las.intensity = np.array([32_000, 48_000], np.uint16)
+        las.classification = np.array([2, 20], np.uint8)
+        las.return_number = np.array([1, 1], np.uint8)
+        las.number_of_returns = np.array([1, 2], np.uint8)
+        las.write(path)
+        return path
+
+    a = scan(tmp_path / "a.laz", 408_000.0, 400_000)
+    b = scan(tmp_path / "b.laz", 409_000.0, 409_000)
+    out = merge_laz([a, b], tmp_path / "m.laz", intensity_scale=1 / 16)
+    las = laspy.read(out)
+    assert len(las.points) == 4
+    assert sorted(np.round(las.x, 2)) == [408_000, 408_001.5, 409_000, 409_001.5]
+    assert list(las.classification) == [2, 20, 2, 20]
+    assert list(las.intensity) == [2000, 3000, 2000, 3000]
+    assert list(las.number_of_returns) == [1, 2, 1, 2]
+
+
+def test_a_foot_under_a_lod2_roof_is_told_from_one_in_the_open():
+    roof = np.full((N, N), np.nan)
+    roof[40:60, 40:60] = GROUND + 30  # a church, its tower in LoD2
+    dom = np.where(np.isfinite(roof), roof, GROUND)
+    dom[49:51, 49:51] = GROUND + 45  # the spire's tip above it
+    s = surfaces(dom, roof)
+    foot = shapely.Point(X0 + 50, Y0 + N - 50)
+    assert s.under_roof(foot)
+    assert not s.under_roof(shapely.Point(X0 + 10, Y0 + 10))
+    assert not s.under_roof(shapely.Point(X0 - 500, Y0))  # off the field

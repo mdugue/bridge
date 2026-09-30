@@ -18,7 +18,9 @@ alone; OSM names the structure, the surface model measures it:
    its height the surface model's (`dom − ground`) — or OSM's `height`
    where the model undershoots a lattice mast by more than a quarter. Its
    radius is the outline's, OSM's `diameter`, or the gap blob's low down
-   (the foot), clamped per kind; its taper is the kind's.
+   (the foot), clamped per kind; its taper is the kind's. A tower,
+   lighthouse or water tower whose foot is under a LoD2 roof is LoD2's
+   own (`BUILT_TOWERS`).
 2. **Buildings** — an OSM building outline (≥ `MIN_BUILDING_M2`, not a
    roof, carport, ruin, construction site or underground) that LoD2 barely
    covers (< `MAX_LOD2_SHARE`) and the surface model fills (≥
@@ -29,13 +31,13 @@ alone; OSM names the structure, the surface model measures it:
 
 3. **Roof relief** — only for a landmark (`landmarks_<tile>.json`, the
    step before): where the surface model rises above the object's highest
-   LoD2 roof, by ≥ `RELIEF_MIN_M` on ≥ `RELIEF_SHARE` of its footprint
-   (the Elbphilharmonie's waves over a flat 96 m block), that excess as
-   stacked slabs, a contour model of the measured top (`kind: relief`,
-   `of`: the LoD2 object it sits on, whose look it wears). Measured against
-   the highest roof, so courtyard trees and roof steps a metre off stay
-   out; and not for every building — on ordinary roofs the excess is
-   antennas, dormers and trees.
+   LoD2 roof, by ≥ `RELIEF_MIN_M` on ≥ `RELIEF_MIN_M2` (and
+   `RELIEF_SHARE` of its footprint; the Elbphilharmonie's crests over its
+   96 m block, a spire LoD2 cut short), that excess as a height field on
+   the 1 m grid, lightly smoothed (`kind: relief`, `of`: the LoD2 object
+   it sits on, whose look it wears). Measured against the highest roof, so
+   courtyard trees and roof steps a metre off stay out; and not for every
+   building — on ordinary roofs the excess is antennas, dormers and trees.
 
 Across a seam: rasters are read over the tile and `MARGIN_M` around it
 (the neighbours' DGM, LoD2 and DOM), and a structure is written by the tile
@@ -79,6 +81,12 @@ COLUMN_KINDS: dict[str, tuple[float, float, float]] = {
     "lighthouse": (1.5, 8.0, 0.7),
 }
 
+# Towers that are buildings: where LoD2 has a roof over the mapped foot, it
+# draws the tower itself (a church's, a castle's), and a lathed column
+# inside it only doubled it — Meißen's cathedral towers, Grimma's churches.
+# A mast or chimney on a roof is not in LoD2 and stays.
+BUILT_TOWERS = {"tower", "lighthouse", "water_tower"}
+
 MIN_BUILDING_M2 = 40.0
 MAX_LOD2_SHARE = 0.2
 MIN_DOM_SHARE = 0.6
@@ -88,9 +96,9 @@ MIN_BUILDING_H = 2.5
 RELIEF_MIN_M = 3.0
 RELIEF_SHARE = 0.02
 RELIEF_MIN_M2 = 60.0
-RELIEF_MAX_SLABS = 8
-RELIEF_STEP_M = 2.0
 RELIEF_MIN_PART_M2 = 6.0
+# How far a relief's heights are smoothed (cells, Gaussian sigma).
+RELIEF_SMOOTH = 1.0
 
 NOT_BUILDINGS = {
     "roof",
@@ -153,6 +161,15 @@ class Surfaces:
         if c1 <= c0 or r1 <= r0:
             return None
         return slice(r0, r1), slice(c0, c1)
+
+    def under_roof(self, p: shapely.Point) -> bool:
+        """Whether a LoD2 roof covers the point."""
+        f = self.field
+        col = int((p.x - f.xmin) / f.res)
+        row = int((f.ymax - p.y) / f.res)
+        if not (0 <= row < f.rows and 0 <= col < f.cols):
+            return False
+        return bool(np.isfinite(self.roof[row, col]))
 
     def cell_xy(self, row: int, col: int) -> tuple[float, float]:
         f = self.field
@@ -259,11 +276,12 @@ def building(s: Surfaces, geom: shapely.Geometry, name: str | None) -> dict | No
 
 
 def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
-    """A landmark's measured form above its LoD2 top, as slabs: one per
-    `RELIEF_STEP_M` band, each the (smoothed) outline where the surface
-    model reaches that band. Measured against the object's highest roof,
-    not cell by cell: a tree in a courtyard or a roof step a metre off
-    stays below it. Empty when LoD2 draws the top well enough."""
+    """A landmark's measured form above its LoD2 top, as a height field:
+    one feature per connected patch, its outline and a 1 m grid of the
+    surface model's heights above the object's highest roof (lightly
+    smoothed; -1 outside the patch). Measured against the highest roof, not
+    cell by cell: a tree in a courtyard or a roof step a metre off stays
+    below it. Empty when LoD2 draws the top well enough."""
     win = s.window(geom, 0.0)
     if win is None:
         return []
@@ -282,35 +300,55 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
     raised = ndi.binary_opening(excess >= 1.0, iterations=1)
     if not raised.any():
         return []
-    lo = top
-    hi = float(np.nanpercentile(dom[raised], 99))
-    step = max(RELIEF_STEP_M, (hi - lo) / RELIEF_MAX_SLABS)
+    height = relief_heights(np.where(raised, excess, 0.0), raised)
     f = s.field
-    transform = rasterio.transform.from_origin(
-        f.xmin + win[1].start * f.res, f.ymax - win[0].start * f.res, f.res, f.res
-    )
+    labels, n = ndi.label(raised)
     out = []
-    level = lo + step
-    while level <= hi + 1e-6:
-        band = ndi.binary_closing(raised & (excess + top >= level), iterations=1)
-        polys = [
-            shapely.geometry.shape(g)
-            for g, v in rasterio.features.shapes(band.astype(np.uint8), band, transform=transform)
-            if v
-        ]
-        for part in polys:
-            part = part.simplify(0.5).buffer(0)
-            for p in shapely.get_parts(part):
-                if p.area >= RELIEF_MIN_PART_M2:
-                    props = {
-                        "kind": "relief",
-                        "z": round(level - step, 2),
-                        "h": round(step, 2),
-                        "of": of,
-                    }
-                    out.append(feature(geometry_json(p), props))
-        level += step
+    for k, sl in enumerate(ndi.find_objects(labels), start=1):
+        patch = labels[sl] == k
+        if patch.sum() * cells < RELIEF_MIN_PART_M2:
+            continue
+        r0, c0 = win[0].start + sl[0].start, win[1].start + sl[1].start
+        x0, y0 = f.xmin + c0 * f.res, f.ymax - r0 * f.res
+        transform = rasterio.transform.from_origin(x0, y0, f.res, f.res)
+        outline = shapely.union_all(
+            [
+                shapely.geometry.shape(g)
+                for g, v in rasterio.features.shapes(
+                    patch.astype(np.uint8), patch, transform=transform
+                )
+                if v
+            ]
+        )
+        grid = np.where(patch, np.round(height[sl], 1), -1.0)
+        props = {
+            "kind": "relief",
+            "z": round(top, 2),
+            "h": round(float(grid.max()), 1),
+            "of": of,
+            "grid": {
+                "x": round(x0, 2),
+                "y": round(y0, 2),
+                "res": f.res,
+                "cols": int(grid.shape[1]),
+                "rows": int(grid.shape[0]),
+                "z": [float(v) for v in grid.ravel()],
+            },
+        }
+        out.append(feature(geometry_json(outline.simplify(0.5)), props))
     return out
+
+
+def relief_heights(excess: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """The heights a relief is drawn with: half the measured cell, half its
+    neighbourhood (a normalised Gaussian over the patch only), so a spire
+    keeps its tip and a wave its crest while the 1 m cells stop reading as
+    steps."""
+    w = mask.astype(np.float64)
+    blur = ndi.gaussian_filter(excess * w, RELIEF_SMOOTH) / np.maximum(
+        ndi.gaussian_filter(w, RELIEF_SMOOTH), 1e-6
+    )
+    return np.where(mask, np.maximum(0.5 * excess + 0.5 * blur, 0.0), 0.0)
 
 
 def landmark_reliefs(tile: Tile, s: Surfaces) -> list[dict]:
@@ -371,6 +409,8 @@ def find(tile: Tile, s: Surfaces) -> list[dict]:
     for g, kind, other in mapped_columns(tile):
         anchor = g.centroid
         if not owns(tile.bounds, anchor.x, anchor.y):
+            continue
+        if kind in BUILT_TOWERS and s.under_roof(anchor):
             continue
         f = column(s, g, kind, other)
         if f:

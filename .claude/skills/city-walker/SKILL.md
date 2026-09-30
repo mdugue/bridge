@@ -145,10 +145,16 @@ chip. Every tile change re-renders the shadow map. The layers:
 - Beyond LoD2 (plan 038, ADR 0036): geometry is added only where DOM1
   measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
   names it — never from the surface model alone (cranes). `structures.py`
-  → `lib/city/structures.ts` lathes chimneys/towers/masts and extrudes
-  missing buildings and relief slabs; `appendGapStructures` puts them in
-  the city mesh with `source` = 2 (a relief slab copies its host's row, so
-  demolish takes it along). OSM `building:material` / `building:colour` /
+  → `lib/city/structures.ts` lathes chimneys/towers/masts, extrudes
+  missing buildings and builds a landmark's relief from its measured
+  height field (`reliefMesh`: the `grid` on 1 m, heights above the host's
+  highest LoD2 roof, −1 outside, lightly smoothed in the bake; corners
+  average the patch cells around them, walls down to the roof, no floor —
+  a truncated spire rises to its tip; the old stacked slabs made a stepped
+  pyramid, and a relief without `grid` builds nothing); `appendGapStructures`
+  puts them in the city mesh with `source` = 2 (a relief copies its host's
+  row, so demolish takes it along). A tower, lighthouse or water tower
+  under a LoD2 roof is LoD2's own (`BUILT_TOWERS`) — no second column. OSM `building:material` / `building:colour` /
   `roof:colour` reach the clay only through `osmColourTint` (hue kept,
   saturation ≤ 0.45, lightness clamped) and the palette families; glass
   (flag 4) and metal (8) are a cool tint, lower roughness and, on glass, a
@@ -541,6 +547,16 @@ a pylon and a fan. The deck's `depth` comes from the OSM fairway clearance
 over the DGM water; beam piers keep the fairway clear. The LoD2's own
 bridge slabs (`53001_*`) are dropped from the building mesh.
 
+**Underground is not drawn.** The DLM's rail lines say nothing of a
+tunnel, so `rail.py` cuts a stretch that runs within 2 m of a DLM tunnel
+(`ver06` `BWF=1870`) for more than 15 m — a shorter overlap is a surface
+track crossing over it (a 6 m reach took Munich Hauptbahnhof's surface
+tracks). DLM trams (`BKT=1201`, standard gauge in Bavaria) are the OSM
+tram layer's. OSM platforms below ground (`osm.below_ground`: tunnel,
+`location=underground`, negative `layer`/`level`) and tram ways in a
+tunnel (`osm.in_tunnel`) are skipped. A tram's `street` bed is any
+pavement: road, path (squares, pedestrian zones) or built-up.
+
 ## Performance model
 
 Buildings are already merged (low draw calls) — **BatchedMesh is moot** and
@@ -659,7 +675,12 @@ bun run test:pipeline                  # pytest + ruff
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
-runtime falls back); rail decks fall back to the DGM ramp.
+runtime falls back); rail decks fall back to the DGM ramp. `rasters.py`
+refuses a height mosaic flatter than 0.5 m (1–99 %) — Hamburg's DGM was
+once committed as 0 m everywhere and every house floated; the pipeline
+tests hold every committed DGM to ≥ 2 m. The laser scan (`--lsc`) is read
+for Saxony (GeoSN's LSC) and NRW (3D-Messdaten: four 1 km LAZ merged per
+tile by `lsc.merge_laz`, intensities × 1/16 to GeoSN's range — unverified).
 
 The later modules, one step each: `osm_buildings.py` (shops, heritage,
 material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,

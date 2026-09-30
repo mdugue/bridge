@@ -230,7 +230,20 @@ test("gap structures: a chimney is its own object, a relief slab joins its landm
           ],
         ],
       },
-      properties: { h: 2, kind: "relief", of: "house", z: 112 },
+      properties: {
+        h: 2,
+        kind: "relief",
+        of: "house",
+        z: 112,
+        grid: {
+          x: 412_042,
+          y: 5_656_008,
+          res: 1,
+          cols: 2,
+          rows: 2,
+          z: [2, 2, 2, 2],
+        },
+      },
     },
     // a slab whose host is not in this tile is dropped
     {

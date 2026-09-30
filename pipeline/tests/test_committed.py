@@ -77,3 +77,28 @@ def test_no_committed_orchard_tree_stands_by_a_measured_tree(cultivated):
         return
     # the tile's own measured trees (the bake reads the neighbours' too)
     assert unclaimed(trees, _measured(cultivated.parent, _tile(cultivated, "cultivated"))) == trees
+
+
+DGMS = sorted(
+    p
+    for site in (Path(__file__).resolve().parents[2] / "data").glob("*/dgm")
+    for p in site.glob("*/*.tif")
+)
+# A 2 km tile of any German city spans more than this (m): the lowest
+# Hamburg tile, harbour to Binnenalster, 25 m.
+MIN_DGM_RANGE_M = 2.0
+
+
+@pytest.mark.parametrize("dgm", DGMS, ids=lambda p: p.stem)
+def test_every_committed_dgm_holds_real_heights(dgm):
+    """A DGM once committed as zeros everywhere (Hamburg's, a mosaic that
+    kept the float-min NoData) put the ground at 0 m under houses standing
+    on their true 5–10 m: every building floated. Each tile must vary."""
+    import rasterio
+
+    with rasterio.open(dgm) as ds:
+        a = ds.read(1, masked=True, out_shape=(ds.height // 8, ds.width // 8))
+    values = a.compressed()
+    assert values.size > 0.9 * a.size, "mostly NoData"
+    lo, hi = np.percentile(values, [1, 99])
+    assert hi - lo >= MIN_DGM_RANGE_M, f"flat: {lo:.2f}..{hi:.2f} m"

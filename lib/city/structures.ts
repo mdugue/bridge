@@ -3,14 +3,14 @@
  * structures.py) as closed meshes for the city mesh: a column (chimney,
  * tower, mast, …) as a lathed ring profile of its kind, a missing building
  * as its outline extruded to the measured height with a flat roof, a
- * landmark's roof relief as the same extrusion per slab. Flat
+ * landmark's roof relief as its measured height field. Flat
  * non-indexed triangles wound counter-clockwise seen from outside, like the
  * scan's sheds (small-buildings.ts); the bake appends them to a tile's
  * buildings (scripts/bake-city-mesh.ts), so they wear the clay, cast
  * shadows, collide and can be picked like any building. No THREE, no DOM:
  * the roof's triangulation is passed in.
  */
-import type { StructureFeature, StructureKind } from "./features";
+import type { HeightField, StructureFeature, StructureKind } from "./features";
 import type { Point2 } from "./polyline";
 import type { StructureMesh } from "./small-buildings";
 
@@ -225,13 +225,113 @@ export function buildingMesh(
   return out;
 }
 
-/** The mesh of any kind: an outline (a building, a relief slab) extruded,
- *  a column lathed. */
+/** The height at a grid corner: the mean of the patch cells around it
+ *  (a corner on the patch's edge takes only the cells inside). */
+function cornerHeight(g: HeightField, r: number, c: number): number {
+  let sum = 0;
+  let n = 0;
+  for (const [dr, dc] of [
+    [-1, -1],
+    [-1, 0],
+    [0, -1],
+    [0, 0],
+  ]) {
+    const rr = r + dr;
+    const cc = c + dc;
+    if (rr >= 0 && rr < g.rows && cc >= 0 && cc < g.cols) {
+      const v = g.z[rr * g.cols + cc];
+      if (v >= 0) {
+        sum += v;
+        n++;
+      }
+    }
+  }
+  return n > 0 ? sum / n : 0;
+}
+
+/**
+ * A landmark's roof relief (structures.py `relief`): its measured height
+ * field as a surface, cell by cell over the patch, with walls down to the
+ * LoD2 top it sits on along the patch's edge. Corner heights average the
+ * cells around them, so a spire rises to a point and a wave rolls instead
+ * of stepping. No floor: it rests on the roof it measures above.
+ */
+export function reliefMesh(
+  f: StructureFeature,
+  offset: { cx: number; cy: number }
+): StructureMesh {
+  const out: StructureMesh = { isRoof: [], positions: [] };
+  const p = f.properties;
+  const g = p?.grid;
+  if (!p || !g || g.z.length !== g.rows * g.cols) {
+    return out;
+  }
+  const inside = (r: number, c: number) =>
+    r >= 0 && r < g.rows && c >= 0 && c < g.cols && g.z[r * g.cols + c] >= 0;
+  const corner = new Map<number, number[]>();
+  // (r, c) is the corner at the cell's north-west; base: on the roof
+  const at = (r: number, c: number, base = false): number[] => {
+    const x = g.x + c * g.res - offset.cx;
+    const y = g.y - r * g.res - offset.cy;
+    if (base) {
+      return [x, y, p.z];
+    }
+    const key = r * (g.cols + 1) + c;
+    let v = corner.get(key);
+    if (!v) {
+      v = [x, y, p.z + cornerHeight(g, r, c)];
+      corner.set(key, v);
+    }
+    return v;
+  };
+  for (let r = 0; r < g.rows; r++) {
+    for (let c = 0; c < g.cols; c++) {
+      if (!inside(r, c)) {
+        continue;
+      }
+      // counter-clockwise from above: SW, SE, NE, NW
+      const ring: [number, number][] = [
+        [r + 1, c],
+        [r + 1, c + 1],
+        [r, c + 1],
+        [r, c],
+      ];
+      const [sw, se, ne, nw] = ring.map(([rr, cc]) => at(rr, cc));
+      push(out, 1, sw, se, ne);
+      push(out, 1, sw, ne, nw);
+      // the neighbour across each edge, walking the ring (inside on the left)
+      const across: [number, number][] = [
+        [r + 1, c],
+        [r, c + 1],
+        [r - 1, c],
+        [r, c - 1],
+      ];
+      for (let k = 0; k < 4; k++) {
+        if (inside(...across[k])) {
+          continue;
+        }
+        const [ar, ac] = ring[k];
+        const [br, bc] = ring[(k + 1) % 4];
+        const aTop = at(ar, ac);
+        const bTop = at(br, bc);
+        push(out, 0, at(ar, ac, true), at(br, bc, true), bTop);
+        push(out, 0, at(ar, ac, true), bTop, aTop);
+      }
+    }
+  }
+  return out;
+}
+
+/** The mesh of any kind: a relief's height field, an outline (a missing
+ *  building) extruded, a column lathed. */
 export function structureShape(
   f: StructureFeature,
   offset: { cx: number; cy: number },
   triangulate: Triangulate
 ): StructureMesh {
+  if (f.properties?.kind === "relief") {
+    return reliefMesh(f, offset);
+  }
   return f.geometry.type === "Polygon"
     ? buildingMesh(f, offset, triangulate)
     : columnMesh(f, offset);

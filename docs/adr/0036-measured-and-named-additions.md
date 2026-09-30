@@ -83,14 +83,36 @@ the next city ([ADR 0035](./0035-sites-providers-and-per-site-data.md)).
 - A column's radius is at the mercy of a 1 m raster: a chimney is held
   to at least h/24, and each kind is clamped, but a slim shaft's true
   width is not measured.
-- The relief is a stack of flat slabs; a smooth curve reads as terraces
-  from close by. Its thresholds were tuned on synthetic tests and the
-  Elbphilharmonie only.
+- The relief was first a stack of flat slabs, and a smooth curve read as
+  terraces; it is now the measured height field (see the update below).
+  Its thresholds were tuned on synthetic tests and a handful of real
+  cases.
 - The landmark list is as good as Wikidata's coverage and OSM's
   `wikidata=` tags; ranking by sitelinks favours the internationally known
   over the locally loved.
 - All three looks (columns, mapped colours, the glass sheen) are
   conservative defaults, not yet judged on a real GPU.
+
+## Update (2026-09-30)
+
+- **The relief is the measured height field, not slabs.** Per connected
+  patch the bake writes the 1 m grid of the surface model's heights
+  above the host's highest LoD2 roof (`grid`, −1 outside the patch),
+  smoothed only lightly (half the cell, half a Gaussian of σ = 1 cell
+  normalised over the patch); `reliefMesh` builds one surface from it.
+  Stacked 2 m slabs had made a spire LoD2 cuts short a stepped pyramid
+  (Unna's Stadtkirche: LoD2 137 m, the surface model ≈ 178 m). It stays
+  within point 2: every height is a measured cell, nothing is invented.
+- **A tower LoD2 draws is not added again.** A mapped tower, lighthouse or
+  water tower whose foot lies under a LoD2 roof is the building's own
+  (a church's, a castle's); the column search had lathed a second one
+  inside it (Meißen's cathedral, Grimma's churches, 13 of Munich's 14
+  towers). Masts and chimneys on roofs are not in LoD2 and stay.
+- **What no open source records is left undrawn**, even on a landmark:
+  the Elbphilharmonie's brick base (the Kaispeicher A) is in neither
+  LoD2, OSM (one outline, no `building:part`) nor Wikidata (steel, glass,
+  concrete), so the building wears one look. Mapping the part in OSM is
+  the route, not a hand-drawn exception (plan 038's open items).
 
 ## Alternatives
 

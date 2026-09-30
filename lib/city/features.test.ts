@@ -235,18 +235,20 @@ test.each(tiles)(
 );
 
 test.each(tiles)(
-  "%s: structures beyond LoD2 are columns (points), buildings or relief slabs (outlines) of a measured height",
+  "%s: structures beyond LoD2 are columns (points), buildings (outlines) or relief height fields of a measured height",
   (tile, site) => {
     const src = cityMeshSourceFiles(site, tile).structures;
     for (const f of loadSource<StructureFeature>(src)) {
       const p = f.properties;
       expect(STRUCTURE_KINDS as readonly string[]).toContain(p?.kind ?? "none");
       expect(Number.isFinite(p?.z)).toBe(true);
-      expect(p?.h ?? 0).toBeGreaterThanOrEqual(2);
+      expect(p?.h ?? 0).toBeGreaterThanOrEqual(p?.kind === "relief" ? 1 : 2);
       expect(p?.h ?? 999).toBeLessThan(400);
       if (p?.kind === "relief") {
         // a slab of a landmark's roof: on the LoD2 object it sits on
         expect(p.of ?? "").not.toBe("");
+        const g = p.grid;
+        expect(g?.z.length).toBe((g?.rows ?? 0) * (g?.cols ?? 0));
       }
       if (p?.kind === "building" || p?.kind === "relief") {
         expect(f.geometry.type).toBe("Polygon");

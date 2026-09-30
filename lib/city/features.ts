@@ -235,12 +235,24 @@ export interface StructureFeature {
     h: number;
     kind: StructureKind;
     name?: string;
-    /** a relief slab: the LoD2 object it sits on (and whose look it wears) */
+    /** a relief: the LoD2 object it sits on (and whose look it wears) */
     of?: string;
+    /** a relief's height field: heights (m) above `z` on a north-up grid
+     *  from its north-west corner (x, y), row by row; -1 outside it */
+    grid?: HeightField;
     r?: number;
     rt?: number;
     z: number;
   } | null;
+}
+
+export interface HeightField {
+  cols: number;
+  res: number;
+  rows: number;
+  x: number;
+  y: number;
+  z: number[];
 }
 
 export const STRUCTURE_KINDS = [

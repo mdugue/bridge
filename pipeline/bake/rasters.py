@@ -15,6 +15,9 @@ from rasterio.merge import merge
 
 from .common import Tile
 
+# A 2 km height tile varies by more than this (m); less is a broken mosaic.
+MIN_HEIGHT_RANGE_M = 0.5
+
 
 def write_tile_raster(
     sources: list[Path],
@@ -61,6 +64,11 @@ def write_tile_raster(
     if not valid.any() or (nodata is None and not mosaic.any()):
         raise ValueError(f"{dest.name}: the sources hold no data inside the tile")
     if heights:
+        lo, hi = np.percentile(mosaic[valid], [1, 99])
+        if hi - lo < MIN_HEIGHT_RANGE_M:
+            # a mosaic that lost its values reads as a constant (Hamburg's
+            # once came out 0 m everywhere and every house floated)
+            raise ValueError(f"{dest.name}: flat heights {lo:.2f}..{hi:.2f} m — a broken mosaic?")
         mosaic[valid] = np.round(mosaic[valid] * 100) / 100
     profile = {
         "driver": "GTiff",

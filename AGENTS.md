@@ -193,8 +193,8 @@ config change.
   (per-genus leaf-out, autumn and leaf fall), `building-tint.ts` (the
   per-building clay tint, storey height, roof palette), `small-buildings.ts`
   (the scan's sheds as boxes; the canopy points they veto),
-  `structures.ts` (the columns, missing buildings and roof-relief slabs
-  DOM1 shows beyond LoD2, as meshes), `landmarks.ts` (the site's
+  `structures.ts` (the columns, missing buildings and roof-relief height
+  fields DOM1 shows beyond LoD2, as meshes), `landmarks.ts` (the site's
   Wikidata landmarks for the HUD and the vantage it glides to), `markings.ts`,
   `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
   of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
@@ -373,7 +373,8 @@ call (ADR 0035). No Git-LFS. Derived per-tile artifacts
   the scan's trees outside the canopy mask, thinned against the cadastre.
   The laser scan (`data/_raw/<provider>/lsc/<tile>.laz`) is fetched by
   `bun run fetch <site> --lsc` where the provider's adapter reads one
-  (`products.lsc`, Saxony so far) or put there by hand, and rasterised in
+  (`products.lsc`: Saxony, and NRW, whose four 1 km files a tile are
+  merged by `lsc.merge_laz`) or put there by hand, and rasterised in
   Python (`lsc.py`, laspy — no PDAL); without it the step is OSM only.
 - `monuments.py` takes the monuments (statues, stones, columns, named
   fountains) from the Basis-DLM (`sie03_p`, official names) and the fountain
@@ -385,6 +386,10 @@ call (ADR 0035). No Git-LFS. Derived per-tile artifacts
   fountains, platforms, bridge structure, paving) come from the site's
   Geofabrik `.osm.pbf` via GDAL's OSM driver — no Overpass. `furniture.py`
   turns a bench without a tagged `direction` towards the nearest highway line.
+  What lies below ground is not drawn on the terrain: OSM platforms and
+  tram ways under it are skipped (`osm.below_ground`, `osm.in_tunnel`),
+  and `rail.py` cuts a DLM rail that runs along a DLM tunnel (Munich's
+  U-Bahn, Leipzig's City-Tunnel).
 - Missing DOM1 or DOP skips the canopy, NDVI and roof-colour bakes with a
   note (the runtime falls back); rail decks fall back to the DGM ramp.
 - **Every tile carries the same baked files** — `lib/city/tile-data.test.ts`
