@@ -138,6 +138,38 @@ function capEnd(
   return step.crest;
 }
 
+/** Where a snapped column's face stands (offset along +perp). */
+function faceOf(step: StepSnap): number {
+  return step.foot - step.up * FACE_MARGIN_M;
+}
+
+/** How many columns either side a cap's end is carried over: one vertex's
+ *  wider ramp widens its neighbours' cap too, so the cap's back edge runs
+ *  as a steady line rather than a sawtooth. */
+const CAP_SMOOTH = 2;
+
+/** The farthest cap end (toward the high side) within CAP_SMOOTH columns
+ *  that agree on the side. */
+function smoothCapEnds(
+  ends: (number | null)[],
+  steps: (StepSnap | null)[]
+): (number | null)[] {
+  return ends.map((end, i) => {
+    const up = steps[i]?.up;
+    if (end === null || up === undefined) {
+      return end;
+    }
+    let far = end;
+    for (let k = i - CAP_SMOOTH; k <= i + CAP_SMOOTH; k++) {
+      const other = ends[k];
+      if (other !== null && other !== undefined && steps[k]?.up === up) {
+        far = up > 0 ? Math.max(far, other) : Math.min(far, other);
+      }
+    }
+    return far;
+  });
+}
+
 /** The column at a (smoothed) measured step: face just in front of the
  *  ramp's foot, cap back to where the ground reaches its level. */
 function snappedColumn(
@@ -146,13 +178,12 @@ function snappedColumn(
   h: number,
   step: StepSnap,
   offset: RecenterOffset,
-  heightAt: HeightAt
+  backAt: number
 ): WallCol {
   const [ex, ey] = e;
   const [px, py] = p;
-  const faceAt = step.foot - step.up * FACE_MARGIN_M;
+  const faceAt = faceOf(step);
   const face = epsgToWorld(ex + px * faceAt, ey + py * faceAt, offset);
-  const backAt = capEnd(heightAt, e, p, step, faceAt);
   const back = epsgToWorld(ex + px * backAt, ey + py * backAt, offset);
   const base = Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - 0.4;
   return {
@@ -268,12 +299,20 @@ function columnsOf(
         )
       )
     : [];
+  const ends = smoothCapEnds(
+    pts.map((p, i) => {
+      const step = steps[i];
+      return step ? capEnd(heightAt, p, perps[i], step, faceOf(step)) : null;
+    }),
+    steps
+  );
   return pts.map((p, i) => {
     const step = steps[i];
+    const end = ends[i];
     // smoothSnaps fills gaps from the neighbours; a vertex off every tile
     // must still break the ribbon (columnAt's rule), not get a filled column.
-    return step && heightAt(p[0], p[1]) !== null
-      ? snappedColumn(p, perps[i], h, step, offset, heightAt)
+    return step && end !== null && heightAt(p[0], p[1]) !== null
+      ? snappedColumn(p, perps[i], h, step, offset, end)
       : columnAt(p, perps[i], h, heightAt, offset);
   });
 }
