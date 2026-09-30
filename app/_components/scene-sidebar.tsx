@@ -546,13 +546,15 @@ function ControlTable({ coarse }: { coarse: boolean }) {
   return (
     <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
       <span className={SECTION_LABEL}>Steuerung</span>
-      <div className="grid grid-cols-[auto_1fr_auto_1fr] items-center gap-x-2.5 gap-y-2 text-xs">
+      {/* One key/action pair per row: two side by side ran out of the
+          sidebar on desktop and the phone sheet alike. */}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 text-xs">
         {(coarse ? TOUCH_HINTS : CONTROL_HINTS).map((hint) => (
           <Fragment key={hint.key}>
-            <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center whitespace-nowrap rounded-sm border bg-muted px-1.5 font-medium text-[10px] text-muted-foreground leading-none">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center whitespace-nowrap rounded-sm border bg-muted px-1.5 font-medium text-[10px] text-muted-foreground leading-none">
               {hint.key}
             </span>
-            <span className="whitespace-nowrap text-muted-foreground">
+            <span className="text-pretty text-muted-foreground leading-tight">
               {hint.action}
             </span>
           </Fragment>
