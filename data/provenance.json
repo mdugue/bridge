@@ -166,6 +166,35 @@
         "33416_5656_2_sn": 943,
         "33416_5658_2_sn": 0
       }
+    },
+    "Verkehrsmengen": {
+      "service": "https://kommisdd.dresden.de/net3/public/ogcsl.ashx?NODEID=0&Service=WFS",
+      "typeName": "cls:L363",
+      "title": "Kfz/Tag (Verkehrsbelegung, Straßen- und Tiefbauamt)",
+      "licence": "dl-de/by-2-0; credit: Landeshauptstadt Dresden",
+      "coverage": "counted road sections, mostly 2023–2026 (some back to 2010): manual one-day counts scaled to the average day, induction loops and infrared detectors as yearly means, a few estimates (Hilfswert); drawn only when the HUD's data layer is on (traffic-layer.ts)",
+      "retrieved": "2026-10-01",
+      "raw": "data/_raw/<site>/traffic/<tile>.geojson (+ .meta.json), requested in EPSG:25833 with a 50 m margin (ingest_sn.py ingest_traffic)",
+      "committed": "data/dlm/traffic_<tile>.geojson",
+      "usedBy": ["pipeline/bake/traffic.py"],
+      "numberMatched": {
+        "$comment": "per tile bbox incl. the 50 m margin, before the clip",
+        "33408_5654_2_sn": 168,
+        "33408_5656_2_sn": 111,
+        "33408_5658_2_sn": 121,
+        "33410_5654_2_sn": 196,
+        "33410_5656_2_sn": 183,
+        "33410_5658_2_sn": 112,
+        "33412_5654_2_sn": 150,
+        "33412_5656_2_sn": 241,
+        "33412_5658_2_sn": 128,
+        "33414_5654_2_sn": 226,
+        "33414_5656_2_sn": 141,
+        "33414_5658_2_sn": 47,
+        "33416_5654_2_sn": 140,
+        "33416_5656_2_sn": 116,
+        "33416_5658_2_sn": 2
+      }
     }
   },
   "wikidata": {

@@ -168,6 +168,9 @@ const ARTIFACTS = {
   // hedges and the laser-scan crowns outside the canopy mask
   // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
   trees: { file: named("trees", "geojson"), dressing: true },
+  // Optional: the city's counted motor traffic per road section
+  // (pipeline/bake/traffic.py); drawn only while its data layer is on.
+  traffic: { file: named("traffic", "geojson"), dressing: true },
   lowveg: { file: named("lowveg", "geojson"), dressing: true, osm: true },
   canopyx: { file: named("canopyx", "geojson"), dressing: true },
 } as const satisfies Record<string, ArtifactSpec>;

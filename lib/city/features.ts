@@ -352,6 +352,34 @@ export interface RiversideFeature {
   } | null;
 }
 
+/** How a section was counted (pipeline/bake/traffic.py): by hand on one
+ *  day scaled to the average day, an induction loop or an infrared
+ *  detector (yearly means), or the office's estimate. */
+export type TrafficMethod = "detector" | "estimate" | "loop" | "man";
+
+/**
+ * The city's counted motor traffic per road section, cut to the tile
+ * (pipeline/bake/traffic.py; Landeshauptstadt Dresden, dl-de/by-2-0).
+ * `f` vehicles per day along the line as drawn, `b` against it (each
+ * absent where that direction was not counted), `t` the total; `hf` / `hb`
+ * the heavy share (0..1) of each direction; `y` the year counted, `m` how;
+ * `n` the street; `br` 1 = the street is a bridge (lifted onto its deck).
+ */
+export interface TrafficFeature {
+  geometry: LineGeometry;
+  properties: {
+    b?: number;
+    br?: 1;
+    f?: number;
+    hb?: number;
+    hf?: number;
+    m?: TrafficMethod;
+    n?: string;
+    t: number;
+    y?: number;
+  } | null;
+}
+
 /** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
 export interface RailFeature {
   geometry: LineGeometry;

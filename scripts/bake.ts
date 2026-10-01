@@ -11,7 +11,8 @@
  *                                     ndvi, roof-colour, osm-buildings, rail,
  *                                     lamps, monuments, furniture, walls,
  *                                     stairs, surface, edges, markings,
- *                                     sport, tram, riverside, skyview,
+ *                                     sport, tram, riverside, traffic,
+ *                                     skyview,
  *                                     soundmarks, lowveg, cultivated,
  *                                     small-buildings)
  *   bun run bake --ingest --lsc       ... and the laser scan (≈380 MB a tile)

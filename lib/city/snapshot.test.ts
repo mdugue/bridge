@@ -102,6 +102,7 @@ test("look flags are type- and enum-checked", () => {
   expect(reason(withLook({ focusMode: "fixed" }))).toMatch(/look.focusMode/);
   expect(reason(withLook({ dof: "yes" }))).toMatch(/look.dof/);
   expect(reason(withLook({ multiTuft: 1 }))).toMatch(/look.multiTuft/);
+  expect(reason(withLook({ bikeLayer: "on" }))).toMatch(/look.bikeLayer/);
   expect(reason(withLook({ style: "ghost" }))).toMatch(/look.style/);
   expect(reason(withLook({ style: 2 }))).toMatch(/look.style/);
   expect(reason(withLook({ focusDistanceM: 0.5 }))).toMatch(
@@ -154,8 +155,12 @@ test("what Copy encodes, Apply decodes back — through the same parser", () => 
     focusDistanceM: 80,
     multiTuft: false,
     style: "sincity" as const,
+    trafficLayer: true,
+    tramLayer: true,
   };
   const snap = encodeSnapshot(values, valid.camera, new Date(valid.date));
+  expect(snap.look?.trafficLayer).toBe(true);
+  expect(snap.look?.bikeLayer).toBe(false);
   expect(snap.v).toBe(1);
   expect(snap.date).toBe(valid.date);
   expect(snap.look?.fogPct).toBe(35);

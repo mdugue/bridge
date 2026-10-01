@@ -26,11 +26,13 @@ import type {
   MonumentFeature,
   RailFeature,
   RiversideFeature,
+  TrafficFeature,
   TramFeature,
   TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
 import { orchardTrees, vineRows } from "@/lib/city/cultivated";
+import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import { onRelief } from "@/lib/city/monuments";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
@@ -76,6 +78,7 @@ import {
   estimateGeometryBytes,
   trackedBytesOf,
 } from "./three-utils";
+import { buildTraffic } from "./traffic-layer";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -111,6 +114,9 @@ export interface TileDressing {
   tram?: Group;
   /** the Elbe's landing stages, groynes, ferry lines (riverside-layer.ts) */
   riverside?: Group;
+  /** the counted motor traffic (traffic-layer.ts): a data layer, shown
+   *  only while the HUD has it on */
+  traffic?: Group;
   vegetation?: VegetationControl;
   /** vine rows (cultivated-layer.ts): static */
   vineyards?: Group;
@@ -238,6 +244,7 @@ export const DRESSING_PARTS = {
   rail: (d) => d.rail,
   tram: (d) => d.tram,
   riverside: (d) => d.riverside,
+  traffic: (d) => d.traffic,
   sport: (d) => d.sport?.group,
   vineyards: (d) => d.vineyards,
 } as const satisfies Record<
@@ -275,12 +282,25 @@ function withinCompileWait(done: Promise<void>): Promise<void> {
  * pass it by. Each setter is idempotent: nothing moves when nothing did.
  */
 export function catchUp(
-  d: Pick<TileDressing, "lamps" | "vegetation">,
+  d: Pick<TileDressing, "lamps" | "traffic" | "vegetation">,
   ctx: Pick<TileStreamContext, "look" | "night" | "season">
 ): void {
-  d.vegetation?.applyLook(ctx.look.get());
+  const look = ctx.look.get();
+  d.vegetation?.applyLook(look);
   d.vegetation?.setSeason(ctx.season());
   d.lamps?.setNightFactor(ctx.night());
+  showDataLayers(d, look);
+}
+
+/** A dressing's data layers shown or hidden as the look has them
+ *  (lib/city/data-layers.ts): a layer that is off draws nothing. */
+export function showDataLayers(
+  d: Pick<TileDressing, "traffic">,
+  look: Pick<LookValues, "trafficLayer">
+): void {
+  if (d.traffic) {
+    d.traffic.visible = look.trafficLayer;
+  }
 }
 
 function disposeDressing(d: TileDressing): void {
@@ -451,6 +471,7 @@ async function buildDressing(
     cultivated,
     trams,
     river,
+    traffic,
   } = await allNamed({
     rows: get<VegRowFeature>("vegrows"),
     canopy: get<CanopyFeature>("canopy"),
@@ -478,6 +499,7 @@ async function buildDressing(
     cultivated: get<CultivatedFeature>("cultivated"),
     trams: get<TramFeature>("tram"),
     river: get<RiversideFeature>("riverside"),
+    traffic: get<TrafficFeature>("traffic"),
   });
   const sport = buildSport(terrain, sportTable, ctx);
   await nextTask();
@@ -562,10 +584,15 @@ async function buildDressing(
   // the seam samples the neighbour's ground past it.
   const riverside =
     river.length > 0 ? buildRiverside(river, ground) : undefined;
+  // Sections are cut at the tile edge by the bake; a bridge street rides
+  // the decks of this tile's bridge file (which names a seam deck in both).
+  const trafficBands =
+    traffic.length > 0 ? buildTraffic(traffic, bridges, ground) : undefined;
   return {
     tile,
     tram,
     riverside,
+    traffic: trafficBands,
     vegetation,
     lowVegetation,
     vineyards,

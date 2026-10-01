@@ -53,6 +53,7 @@ import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
+import { setTrafficTime } from "./traffic-layer";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -78,6 +79,7 @@ import {
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
   type DressingPartName,
+  showDataLayers,
   type TileDressing,
 } from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
@@ -914,6 +916,7 @@ async function bootApp(
     postStack.applyLook(look);
     for (const d of stream.dressings) {
       d.vegetation?.applyLook(look);
+      showDataLayers(d, look);
     }
   };
   applyLook(opts.look.get());
@@ -1302,6 +1305,8 @@ async function bootApp(
     stepVegetation(elapsed);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
+    // The traffic bands' dashes (one shared uniform; drawn only when on).
+    setTrafficTime(elapsed);
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(pose.getPose());

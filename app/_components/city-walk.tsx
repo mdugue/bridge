@@ -27,6 +27,7 @@ import {
   type SkippedStages,
   type StageFractions,
 } from "@/lib/city/load-stages";
+import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
@@ -683,10 +684,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
           rememberedView={rememberedView}
-          // The sliders go back to their defaults; the picture style is a
-          // choice of its own, made above them, and stays.
+          // The sliders go back to their defaults; the picture style and
+          // the data layers are choices of their own, and stay.
           resetLook={() =>
-            look.set({ ...LOOK_DEFAULTS, style: look.get().style })
+            look.set({
+              ...LOOK_DEFAULTS,
+              ...dataLayersOf(look.get()),
+              style: look.get().style,
+            })
           }
           setRememberedView={setRememberedView}
           setSnapshotText={setSnapshotText}

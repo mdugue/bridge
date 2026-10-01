@@ -27,6 +27,7 @@ from . import (
     sport,
     stairs,
     surface,
+    traffic,
     tram,
     trees,
     walls,
@@ -58,6 +59,8 @@ STEPS = {
     # that already has a shelter).
     "tram": tram.run,
     "riverside": riverside.run,
+    # The city's counted motor traffic (its WFS, cached by the ingest).
+    "traffic": traffic.run,
     # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
     "skyview": skyview.run,
     # OSM churches + the committed LoD2/DGM: the bell towers the hidden

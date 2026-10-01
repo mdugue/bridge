@@ -95,6 +95,7 @@ test("every part of a dressing is in the part table, so disposal and the census 
     rail: group(),
     tram: group(),
     riverside: group(),
+    traffic: group(),
     sport: control(),
     vineyards: group(),
   } as unknown as TileDressing;

@@ -12,6 +12,7 @@ import {
   type LookValues,
   maxValueOf,
 } from "./look-controls";
+import { DATA_LAYERS } from "./data-layers";
 import { isRenderStyle } from "./render-style";
 
 export type LookListener = (values: LookValues) => void;
@@ -56,6 +57,12 @@ export function clampLook(patch: Partial<LookValues>): Partial<LookValues> {
   }
   if (isRenderStyle(patch.style)) {
     out.style = patch.style;
+  }
+  for (const { key } of DATA_LAYERS) {
+    const on = patch[key];
+    if (typeof on === "boolean") {
+      out[key] = on;
+    }
   }
   return out;
 }

@@ -18,6 +18,7 @@ import type {
   SmallBuildingFeature,
   StairFeature,
   TerraceFeature,
+  TrafficFeature,
   TramFeature,
   TreeFeature,
   VegRowFeature,
@@ -559,3 +560,27 @@ test.each(tileIds(DRESDEN))(
     }
   }
 );
+
+test.each(cases)("%s: counted traffic is lines with their counts", (_, a) => {
+  for (const f of load<TrafficFeature>(a.traffic)) {
+    const p = f.properties;
+    expect(f.geometry.type).toBe("LineString");
+    expect(isLine(f.geometry.coordinates)).toBe(true);
+    expect(p?.t).toBeGreaterThan(0);
+    for (const count of [p?.f, p?.b]) {
+      if (count !== undefined) {
+        expect(count).toBeGreaterThan(0);
+      }
+    }
+    expect((p?.f ?? 0) + (p?.b ?? 0) <= (p?.t ?? 0)).toBe(true);
+    for (const share of [p?.hf, p?.hb]) {
+      if (share !== undefined) {
+        expect(share).toBeGreaterThanOrEqual(0);
+        expect(share).toBeLessThanOrEqual(1);
+      }
+    }
+    if (p?.m !== undefined) {
+      expect(["detector", "estimate", "loop", "man"]).toContain(p.m);
+    }
+  }
+});

@@ -39,6 +39,16 @@ test("clampLook keeps percent rows inside [0, max] and the focus distance at 1 m
   ).toEqual({ dof: false, focusMode: "manual", multiTuft: false });
 });
 
+test("clampLook keeps the data layers' flags and drops anything else there", () => {
+  expect(clampLook({ trafficLayer: true, bikeLayer: false })).toEqual({
+    trafficLayer: true,
+    bikeLayer: false,
+  });
+  expect(clampLook({ tramLayer: 1 } as unknown as Partial<LookValues>)).toEqual(
+    {}
+  );
+});
+
 test("clampLook keeps a known style and drops an unknown one", () => {
   expect(clampLook({ style: "noir" })).toEqual({ style: "noir" });
   expect(

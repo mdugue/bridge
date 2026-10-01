@@ -6,6 +6,7 @@
  * every consumer follows. No THREE, no DOM (the e2e harness imports this
  * file).
  */
+import { DATA_LAYER_DEFAULTS, type DataLayerKey } from "./data-layers";
 import { DEFAULT_RENDER_STYLE, type RenderStyle } from "./render-style";
 
 export type LookGroup = "atmosphere" | "buildings" | "rendering" | "vegetation";
@@ -78,9 +79,11 @@ export interface LookControlDef {
 /**
  * Every look value the scene renders with, as the scene consumes it: the
  * table rows as 0..1 floats (percent is only how the HUD and the snapshot
- * show them) plus the five controls that are not percent sliders.
+ * show them), the five controls that are not percent sliders, and one flag
+ * per data layer (data-layers.ts).
  */
-export interface LookValues extends Record<LookKey, number> {
+export interface LookValues
+  extends Record<LookKey, number>, Record<DataLayerKey, boolean> {
   /** photographic depth of field with crosshair autofocus */
   dof: boolean;
   /** manual focus distance (m), used when focusMode is "manual" */
@@ -353,7 +356,8 @@ export const LOOK_BY_KEY: Readonly<Record<LookKey, LookControlDef>> =
     LookControlDef
   >;
 
-/** What the scene boots with: each row's `initial` plus the five flags. */
+/** What the scene boots with: each row's `initial` plus the five flags,
+ *  every data layer off. */
 export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   ...(Object.fromEntries(
     LOOK_CONTROLS.map((def) => [def.key, def.initial])
@@ -363,6 +367,7 @@ export const LOOK_DEFAULTS: Readonly<LookValues> = Object.freeze<LookValues>({
   focusDistanceM: 40,
   multiTuft: true,
   style: DEFAULT_RENDER_STYLE,
+  ...DATA_LAYER_DEFAULTS,
 });
 
 /** A row's slider maximum as a 0..1 value. */

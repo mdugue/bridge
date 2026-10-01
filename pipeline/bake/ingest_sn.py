@@ -7,6 +7,8 @@ bakes read (bake/common.py `Tile`):
     <raw>/osm/*.osm.pbf              OpenStreetMap: the Geofabrik extract
     <raw>/trees/<tile>.geojson       Dresden's street-tree cadastre (the
                                      city's WFS; empty outside Dresden)
+    <raw>/traffic/<tile>.geojson     the city's counted traffic per road
+                                     section (the same WFS, cls:L363)
     <raw>/lsc/<tile>.laz             the GeoSN laser scan, layer 1 — only
                                      with --lsc (≈380 MB a tile), for the
                                      hedge heights and the scan trees
@@ -33,6 +35,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from .bridge import fetch_wikidata
@@ -265,33 +268,53 @@ def ingest_osm(raw: Path) -> None:
         print(f"OSM extract not downloaded ({err}); put a .osm.pbf into {osm}")
 
 
-# The city's WFS 2.0, feature type cls:L1261 "Stadtbäume" (dl-de/by-2-0,
-# Landeshauptstadt Dresden). It implements no paging and no count default, so
-# one request returns every tree; the cache is trusted only when its feature
-# count equals the server's numberMatched.
-TREES_WFS = "https://kommisdd.dresden.de/net3/public/ogcsl.ashx"
-TREES_MARGIN = 10  # m: a tree on the seam lands in both requests
+# The city's WFS 2.0 (Landeshauptstadt Dresden, dl-de/by-2-0). It implements
+# no paging and no count default, so one request returns every feature in
+# the box; a cache is trusted only when its feature count equals the
+# server's numberMatched.
+CITY_WFS = "https://kommisdd.dresden.de/net3/public/ogcsl.ashx"
+CITY_CRS = "urn:ogc:def:crs:EPSG::25833"
 
 
-def _trees_query(bounds: list[float], **extra: str) -> str:
+@dataclass(frozen=True)
+class CityLayer:
+    """One feature type of the city's WFS, cached per tile under
+    `<raw>/<folder>/<tile>.geojson` (+ `.meta.json`)."""
+
+    folder: str
+    node: str
+    type_name: str
+    margin: float  # m around the tile: a feature on the seam lands in both
+    what: str  # for the log
+    extra: tuple[tuple[str, str], ...] = ()
+
+
+# cls:L1261 "Stadtbäume" — the street-tree cadastre (trees.py).
+TREES = CityLayer("trees", "1633", "cls:L1261", 10, "tree cadastre")
+# cls:L363 "Kfz/Tag" — the counted traffic per road section, both directions
+# on one line (traffic.py; its twin cls:L364 is the same table drawn for the
+# other direction). Asked for in the tile's CRS: the default answer is WGS84.
+TRAFFIC = CityLayer("traffic", "0", "cls:L363", 50, "traffic counts", (("srsName", CITY_CRS),))
+
+
+def _city_query(layer: CityLayer, bounds: list[float], **extra: str) -> str:
     xmin, ymin, xmax, ymax = bounds
-    m = TREES_MARGIN
-    bbox = (
-        f"{xmin - m:.0f},{ymin - m:.0f},{xmax + m:.0f},{ymax + m:.0f},urn:ogc:def:crs:EPSG::25833"
-    )
+    m = layer.margin
+    bbox = f"{xmin - m:.0f},{ymin - m:.0f},{xmax + m:.0f},{ymax + m:.0f},{CITY_CRS}"
     params = {
-        "NODEID": "1633",
+        "NODEID": layer.node,
         "Service": "WFS",
         "Version": "2.0.0",
         "Request": "GetFeature",
-        "TypeNames": "cls:L1261",
+        "TypeNames": layer.type_name,
         "BBOX": bbox,
+        **dict(layer.extra),
         **extra,
     }
-    return f"{TREES_WFS}?{urllib.parse.urlencode(params)}"
+    return f"{CITY_WFS}?{urllib.parse.urlencode(params)}"
 
 
-def _trees_complete(raw_path: Path, meta_path: Path) -> bool:
+def _city_complete(raw_path: Path, meta_path: Path) -> bool:
     try:
         doc = json.loads(raw_path.read_text())
         meta = json.loads(meta_path.read_text())
@@ -301,34 +324,36 @@ def _trees_complete(raw_path: Path, meta_path: Path) -> bool:
     return isinstance(feats, list) and len(feats) == meta.get("numberMatched")
 
 
-def ingest_trees(raw: Path, tile: str, bounds: list[float]) -> None:
-    """The street-tree cadastre over the tile (+ a margin) as GeoJSON, with a
+def ingest_city_layer(raw: Path, layer: CityLayer, tile: str, bounds: list[float]) -> None:
+    """One city WFS layer over the tile (+ its margin) as GeoJSON, with a
     sidecar recording the request, the date and the server's count."""
-    out = raw / "trees"
+    out = raw / layer.folder
     raw_path = out / f"{tile}.geojson"
     meta_path = out / f"{tile}.meta.json"
-    if _trees_complete(raw_path, meta_path):
+    if _city_complete(raw_path, meta_path):
         return
     out.mkdir(parents=True, exist_ok=True)
     try:
-        with urllib.request.urlopen(_trees_query(bounds, resultType="hits"), timeout=300) as res:
+        hits = _city_query(layer, bounds, resultType="hits")
+        with urllib.request.urlopen(hits, timeout=300) as res:
             m = re.search(r'numberMatched="(\d+)"', res.read().decode("utf-8", "replace"))
         if not m:
-            print(f"{tile}: tree cadastre hits request failed — no inventory trees")
+            print(f"{tile}: {layer.what} hits request failed — skipped")
             return
-        query = _trees_query(bounds, outputFormat="application/geo+json")
+        query = _city_query(layer, bounds, outputFormat="application/geo+json")
         with urllib.request.urlopen(query, timeout=300) as res:
             raw_path.write_bytes(res.read())
     except OSError as err:
-        print(f"{tile}: tree cadastre not downloaded ({err})")
+        print(f"{tile}: {layer.what} not downloaded ({err})")
         return
     meta_path.write_text(
         json.dumps(
             {
-                "service": f"{TREES_WFS}?NODEID=1633&Service=WFS",
-                "typeName": "cls:L1261",
+                "service": f"{CITY_WFS}?NODEID={layer.node}&Service=WFS",
+                "typeName": layer.type_name,
                 "bounds": bounds,
                 "outputFormat": "application/geo+json",
+                **dict(layer.extra),
                 "numberMatched": int(m.group(1)),
                 "retrieved": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
                 "licence": "dl-de/by-2-0, Landeshauptstadt Dresden",
@@ -336,11 +361,21 @@ def ingest_trees(raw: Path, tile: str, bounds: list[float]) -> None:
             indent=2,
         )
     )
-    if not _trees_complete(raw_path, meta_path):
+    if not _city_complete(raw_path, meta_path):
         raw_path.unlink(missing_ok=True)
-        print(f"{tile}: the tree cadastre response is incomplete — retry later")
+        print(f"{tile}: the {layer.what} response is incomplete — retry later")
         return
-    print(f"{tile}: tree cadastre → {raw_path}")
+    print(f"{tile}: {layer.what} → {raw_path}")
+
+
+def ingest_trees(raw: Path, tile: str, bounds: list[float]) -> None:
+    """The street-tree cadastre over the tile (trees.py)."""
+    ingest_city_layer(raw, TREES, tile, bounds)
+
+
+def ingest_traffic(raw: Path, tile: str, bounds: list[float]) -> None:
+    """The counted traffic per road section over the tile (traffic.py)."""
+    ingest_city_layer(raw, TRAFFIC, tile, bounds)
 
 
 def main() -> None:
@@ -354,6 +389,7 @@ def main() -> None:
     ingest_osm(args.raw)
     ingest_tile(args.raw, args.tile, args.bounds)
     ingest_trees(args.raw, args.tile, args.bounds)
+    ingest_traffic(args.raw, args.tile, args.bounds)
     if args.lsc:
         ingest_lsc(args.raw, args.tile, args.bounds)
     # Saxony's grid is EPSG:25833
