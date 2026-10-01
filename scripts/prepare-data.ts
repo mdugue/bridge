@@ -59,6 +59,7 @@ import {
   DRESSING_KINDS,
   pickFiles,
   SOUND_KINDS,
+  ASK_KINDS,
   type TileArtifact,
   type TileArtifactKind,
   dgmSourceFiles,
@@ -696,6 +697,7 @@ const extras: TilesetExtras = {
     minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
     bridges: sideFiles.get(t.id)?.bridge,
     sound: pickFiles(sideFiles.get(t.id) ?? {}, SOUND_KINDS),
+    ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));

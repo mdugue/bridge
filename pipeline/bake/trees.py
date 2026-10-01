@@ -44,6 +44,16 @@ Output `data/dlm/trees_<tile>.geojson`, points with
   t trunk diameter at breast height (cm, when measured or tagged and
   plausible), s "osm"
   for an OSM tree (absent = the cadastre) (lib/city/features.ts `TreeFeature`).
+
+And `data/dlm/treefacts_<tile>.json`, what the inquiry card says about each
+of those trees (ADR 0037; the viewer fetches it with the first question
+about a tree on the tile, never to draw): columns aligned with the
+features, by index — the species (German, botanical; a table of the
+names), the register's location and tree number, the age it records and
+the date of that record, and which sizes are measured (bit 1 height, 2
+crown, 4 trunk) rather than filled in from the tile's statistics. An OSM
+tree has its tagged taxon and German name, its tagged sizes, no location
+(lib/city/features.ts `TreeFactsFile`).
 """
 
 from __future__ import annotations
@@ -167,10 +177,43 @@ def parse_trees(raw: dict, bounds: tuple[float, float, float, float]) -> list[di
                 "h": _num(p.get("baumhoehe_akt")),
                 "d": _num(p.get("kronendurchmesser_akt")),
                 "t": _num(p.get("stammdurchmesser_akt")),
+                "facts": cadastre_facts(p),
                 **c,
             }
         )
     return trees
+
+
+def _text(v) -> str:
+    """A register text, its runs of spaces collapsed ("Europäische  Eibe")."""
+    return " ".join(v.split()) if isinstance(v, str) else ""
+
+
+def _record_date(v) -> str:
+    """The register's change date ("10.09.2026 11:30:37") as ISO, "" if none."""
+    m = re.match(r"\s*(\d{1,2})\.(\d{1,2})\.(\d{4})", v or "")
+    return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}" if m else ""
+
+
+def _whole(v) -> int | None:
+    """A positive whole number from a register field ("46   ", 40.0)."""
+    try:
+        n = round(float(str(v).strip()))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return n if n > 0 else None
+
+
+def cadastre_facts(p: dict) -> dict:
+    """What the register says about one tree beyond its shape."""
+    return {
+        "de": _text(p.get("art_deutsch")),
+        "bot": _text(p.get("art_botanisch")),
+        "place": _text(p.get("name")),
+        "nr": _whole(p.get("standort_nr")),
+        "age": _whole(p.get("jalter")),
+        "date": _record_date(p.get("aend_dat")),
+    }
 
 
 def _metres(v: str | None, unit_cm: bool = False) -> float | None:
@@ -273,6 +316,7 @@ def osm_tree(x: float, y: float, other_tags: str | None) -> dict | None:
     if c is None:
         return None
     circumference = _metres(tag(other_tags, "circumference"), unit_cm=True)
+    german = tag(other_tags, "species:de") or tag(other_tags, "genus:de") or ""
     return {
         "x": x,
         "y": y,
@@ -280,6 +324,7 @@ def osm_tree(x: float, y: float, other_tags: str | None) -> dict | None:
         "d": _metres(tag(other_tags, "diameter_crown")),
         "t": circumference / np.pi * 100 if circumference else None,
         "src": "osm",
+        "facts": {"de": german.strip(), "bot": osm_taxon(other_tags)},
         **c,
     }
 
@@ -407,6 +452,38 @@ def tree_features(trees: list[dict], sizes, cls: np.ndarray | None, bounds) -> l
     return features
 
 
+def tree_facts(trees: list[dict], props: list[dict]) -> dict:
+    """The facts file's body for trees in feature order (`props` their
+    feature properties, which say which sizes the feature carries as
+    measured): names, places and dates as tables, the rest as columns,
+    -1 for unknown."""
+    names: dict[tuple[str, str], int] = {}
+    places: dict[str, int] = {}
+    dates: dict[str, int] = {}
+
+    def index(table: dict, key) -> int:
+        if not key or key == ("", ""):
+            return -1
+        return table.setdefault(key, len(table))
+
+    cols: dict[str, list[int]] = {k: [] for k in ("name", "place", "nr", "age", "date", "known")}
+    for t, p in zip(trees, props, strict=True):
+        f = t.get("facts") or {}
+        cols["name"].append(index(names, (f.get("de", ""), f.get("bot", ""))))
+        cols["place"].append(index(places, f.get("place", "")))
+        cols["nr"].append(f.get("nr") or -1)
+        cols["age"].append(f.get("age") or -1)
+        cols["date"].append(index(dates, f.get("date", "")))
+        known = (1 if t["h"] else 0) | (2 if t["d"] else 0) | (4 if "t" in p else 0)
+        cols["known"].append(known)
+    return {
+        "names": [list(k) for k in names],
+        "places": list(places),
+        "dates": list(dates),
+        **cols,
+    }
+
+
 def _osm_complement(tile: Tile, cadastre: np.ndarray) -> list[dict]:
     if not has_extract(tile, "the OSM trees"):
         return []
@@ -431,6 +508,7 @@ def run(tile: Tile) -> None:
     # holds every tile to the same set of files). The OSM complement fills in
     # sizes from the cadastre's own statistics, so it needs a cadastre tree.
     features = []
+    facts = tree_facts([], [])
     osm: list[dict] = []
     imputed_h = imputed_d = 0
     if trees:
@@ -446,6 +524,7 @@ def run(tile: Tile) -> None:
         )
         cls = tile.classes()
         features = tree_features([r[0] for r in rows], [r[1] for r in rows], cls, tile.bounds)
+        facts = tree_facts([r[0] for r in rows], [f["properties"] for f in features])
     doc = {
         "type": "FeatureCollection",
         "attribution": f"{ATTRIBUTION}; {OSM_ATTRIBUTION}" if osm else ATTRIBUTION,
@@ -455,6 +534,13 @@ def run(tile: Tile) -> None:
         "features": features,
     }
     tile.out("dlm", f"trees_{tile.id}.geojson").write_text(json.dumps(doc, separators=(",", ":")))
+    tile.out("dlm", f"treefacts_{tile.id}.json").write_text(
+        json.dumps(
+            {"attribution": doc["attribution"], "count": len(features), **facts},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+    )
     print(
         f"{tile.id}: {len(trees)} cadastre trees "
         f"({imputed_h} heights, {imputed_d} crown diameters imputed), {len(osm)} OSM trees"

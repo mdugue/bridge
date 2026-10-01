@@ -20,6 +20,7 @@ import type {
   StairFeature,
   TerraceFeature,
   TramFeature,
+  TreeFactsFile,
   TreeFeature,
   VegRowFeature,
   WallFileFeature,
@@ -455,6 +456,42 @@ test.each(cases)(
       }
       expect([undefined, "osm"]).toContain(p?.s);
     }
+  }
+);
+
+test.each(cases)(
+  "%s: the tree facts follow the trees file, column by column",
+  (_, a) => {
+    const trees = load<TreeFeature>(a.trees);
+    const path = join(DATA, a.treeFacts.file);
+    // the bake writes both or neither
+    expect(existsSync(path)).toBe(existsSync(join(DATA, a.trees.file)));
+    if (!existsSync(path)) {
+      return;
+    }
+    const facts = JSON.parse(readFileSync(path, "utf8")) as TreeFactsFile;
+    expect(facts.count).toBe(trees.length);
+    expect(facts.attribution).toContain("Landeshauptstadt Dresden");
+    const within = (column: number[], table: unknown[]) => {
+      expect(column).toHaveLength(trees.length);
+      for (const i of column) {
+        expect(Number.isInteger(i) && i >= -1 && i < table.length).toBe(true);
+      }
+    };
+    within(facts.name, facts.names);
+    within(facts.place, facts.places);
+    within(facts.date, facts.dates);
+    for (const column of [facts.nr, facts.age, facts.known]) {
+      expect(column).toHaveLength(trees.length);
+      expect(column.every((v) => Number.isInteger(v) && v >= -1)).toBe(true);
+    }
+    expect(facts.dates.every((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))).toBe(true);
+    // an OSM tree has no place in the register
+    trees.forEach((f, i) => {
+      if (f.properties?.s === "osm") {
+        expect(facts.place[i]).toBe(-1);
+      }
+    });
   }
 );
 

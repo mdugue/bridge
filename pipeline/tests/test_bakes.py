@@ -1001,6 +1001,40 @@ def test_a_cadastre_tree_carries_its_genus_and_trunk():
     assert "s" not in props
 
 
+def test_tree_facts_follow_the_features_and_say_what_is_measured():
+    from bake.trees import osm_tree, parse_trees, tree_facts, tree_props
+
+    raw = {"features": [_cadastre_tree(1.0, 1.0, 12, None, "Tilia cordata", "Winter-Linde")]}
+    raw["features"][0]["properties"].update(
+        {
+            "name": "Grunaer  Straße",
+            "standort_nr": 40.0,
+            "jalter": "16                ",
+            "stammdurchmesser_akt": 20.0,
+            "aend_dat": "27.08.2025 08:54:17",
+        }
+    )
+    cadastre = parse_trees(raw, (0.0, 0.0, 10.0, 10.0))[0]
+    osm = osm_tree(5.0, 5.0, '"species"=>"Acer platanoides","species:de"=>"Spitz-Ahorn"')
+    assert osm is not None
+    trees = [cadastre, osm, cadastre]
+    props = [tree_props(cadastre, 12.0, 7.0), tree_props(osm, 9.0, 5.0), {}]
+    facts = tree_facts(trees, props)
+    assert facts["names"] == [
+        ["Winter-Linde", "Tilia cordata"],
+        ["Spitz-Ahorn", "Acer platanoides"],
+    ]
+    assert facts["name"] == [0, 1, 0]
+    assert facts["places"] == ["Grunaer Straße"]
+    assert facts["place"] == [0, -1, 0]
+    assert facts["nr"] == [40, -1, 40]
+    assert facts["age"] == [16, -1, 16]
+    assert facts["dates"] == ["2025-08-27"]
+    assert facts["date"] == [0, -1, 0]
+    # height measured, crown filled in, trunk shown only where the feature has it
+    assert facts["known"] == [1 | 4, 0, 1]
+
+
 def test_the_genus_table_keys_the_autumn_not_just_the_genus():
     from bake.tree_archetypes import GENERA, genus_id
 

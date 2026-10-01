@@ -23,7 +23,7 @@
  * `world` group like every other data-frame layer.
  */
 import type { TerrainBounds } from "./terrain-geometry";
-import type { DressingKind, SoundKind } from "./tile";
+import type { AskKind, DressingKind, SoundKind } from "./tile";
 
 /**
  * Whether a tile owns the point: west and south edges in, east and north
@@ -143,7 +143,13 @@ export type ContentExtras = CityExtras | TerrainExtras;
  */
 export type TileSoundFiles = Partial<Record<SoundKind, string>>;
 
+/** A tile's side files only the inquiry card fetches (ADR 0037): the
+ *  artifact table's `ask` column (lib/city/tile.ts). */
+export type TileAskFiles = Partial<Record<AskKind, string>>;
+
 export interface TilesetTileInfo {
+  /** the inquiry card's files, fetched when something is asked */
+  ask?: TileAskFiles;
   bounds: TerrainBounds;
   /**
    * minimap footprints per object: `[object][polygon][vertex] = [x, y]`.

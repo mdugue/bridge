@@ -62,6 +62,29 @@ export interface CanopyFeature {
  * 0, other deciduous) and `t` the trunk diameter at breast height (cm;
  * absent = not measured).
  */
+/**
+ * What the inquiry card says about each tree of a tile's trees file
+ * (`treefacts_<tile>.json`, pipeline/bake/trees.py; ADR 0037): columns
+ * aligned with that file's features by index, -1 for unknown; the names
+ * (German, botanical), the register's locations and record dates as
+ * tables the columns index. `known`: bit 1 the height, 2 the crown, 4 the
+ * trunk is measured (or tagged), not filled in from the tile's statistics.
+ * Fetched with the first question about a tree on the tile, never to draw.
+ */
+export interface TreeFactsFile {
+  age: number[];
+  attribution: string;
+  count: number;
+  date: number[];
+  dates: string[];
+  known: number[];
+  name: number[];
+  names: [string, string][];
+  nr: number[];
+  place: number[];
+  places: string[];
+}
+
 export interface TreeFeature {
   geometry: PointGeometry;
   properties: {
