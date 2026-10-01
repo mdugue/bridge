@@ -14,8 +14,9 @@
  *
  *   bun scripts/ground-joins.ts [tile …]
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { SmallBuildingFeature } from "../lib/city/features";
 import { cutWallGates, fenceGeometry } from "../lib/city/fences";
 import {
   checkJoins,
@@ -30,7 +31,8 @@ import {
   type TerrainBounds,
 } from "../lib/city/terrain-geometry";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
-import { dgmSourceFiles, tileIds } from "../lib/city/tile";
+import { structureJoins } from "../lib/city/small-buildings";
+import { cityMeshSourceFiles, dgmSourceFiles, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
 import { wallGeometry } from "../lib/city/walls";
 import { currentSite } from "../sites";
@@ -46,7 +48,13 @@ import {
 } from "./tile-sources";
 
 /** The parts measured, by the name the report uses. */
-export const JOIN_PARTS = ["kerbs", "walls", "stairs", "fences"] as const;
+export const JOIN_PARTS = [
+  "kerbs",
+  "walls",
+  "stairs",
+  "fences",
+  "sheds",
+] as const;
 export type JoinPart = (typeof JOIN_PARTS)[number];
 
 const OFFSET = { cx: 0, cy: 0 }; // joins are EPSG: the frame does not matter
@@ -79,6 +87,18 @@ async function tileGround(tile: string): Promise<Ground> {
   };
 }
 
+/** The scan's small structures the bake appends to a tile's buildings. */
+function smallBuildings(tile: string): SmallBuildingFeature[] {
+  const path = join(process.cwd(), cityMeshSourceFiles(tile).smallBuild);
+  return existsSync(path)
+    ? ((
+        JSON.parse(readFileSync(path, "utf8")) as {
+          features?: SmallBuildingFeature[];
+        }
+      ).features ?? [])
+    : [];
+}
+
 /** The joins each part of one tile reports, on the site's ground. */
 function tileJoins(
   tile: string,
@@ -103,6 +123,7 @@ function tileJoins(
     fences:
       fenceGeometry(fenceLines(tile), gates, heightAt, OFFSET, cut.leaves)
         ?.joins ?? [],
+    sheds: smallBuildings(tile).flatMap(structureJoins),
   };
 }
 
@@ -127,12 +148,9 @@ export async function measureJoins(
   const grounds = await Promise.all(all.map(tileGround));
   const heightAt: HeightAt = (x, y) =>
     grounds.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null;
-  const joins: Record<JoinPart, JoinPoint[]> = {
-    kerbs: [],
-    walls: [],
-    stairs: [],
-    fences: [],
-  };
+  const joins = Object.fromEntries(
+    JOIN_PARTS.map((part) => [part, [] as JoinPoint[]])
+  ) as Record<JoinPart, JoinPoint[]>;
   for (const tile of tiles) {
     const bounds = grounds[all.indexOf(tile)].bounds;
     const found = tileJoins(tile, bounds, heightAt);

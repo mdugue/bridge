@@ -114,6 +114,7 @@ const BUDGET: Record<JoinPart, number> = {
   walls: 0.007,
   stairs: 0.001,
   fences: 0.003,
+  sheds: 0.001,
 };
 
 test("the committed parts meet the ground within their budgets", async () => {

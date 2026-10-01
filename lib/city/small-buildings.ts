@@ -7,7 +7,7 @@
  * bake appends them to a tile's buildings (scripts/bake-city-mesh.ts). No
  * THREE, no DOM.
  */
-import { SINK } from "./ground-join";
+import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
 import type { PointGeometry, SmallBuildingFeature } from "./features";
 
 /** Metres the box reaches below its lowest ground, so a slope shows no gap. */
@@ -78,6 +78,25 @@ export function structureMesh(
   tri(0, low[0], low[2], low[1]);
   tri(0, low[0], low[3], low[2]);
   return out;
+}
+
+/** Where a structure stands on the ground (ADR 0035): its walls' feet all
+ *  round its footprint, EPSG. Empty when the feature is malformed. */
+export function structureJoins(f: SmallBuildingFeature): JoinPoint[] {
+  const corners = structureCorners(f);
+  const z = f.properties?.z;
+  if (!corners || z === undefined) {
+    return [];
+  }
+  const base = z - SMALL_BUILDING_SINK;
+  return corners.flatMap((c, i) => {
+    const d = corners[(i + 1) % 4];
+    return joinsAlong(
+      "foot",
+      { x: c.x, y: c.y, z: base },
+      { x: d.x, y: d.y, z: base }
+    );
+  });
 }
 
 /**
