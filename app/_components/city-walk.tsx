@@ -1,6 +1,6 @@
 "use client";
 
-import { arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site } from "@/lib/city/site";
 import {
@@ -266,7 +266,9 @@ function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
   if (!at) {
     return;
   }
-  history.replaceState(history.state, "", location.pathname);
+  const url = new URL(location.href);
+  url.searchParams.delete(ARRIVAL_PARAM);
+  history.replaceState(history.state, "", url);
   const placement = placementOf(
     { ...at, accuracy: 0, headingDeg: null },
     site.provider.epsg,

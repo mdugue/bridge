@@ -6,6 +6,7 @@ import {
   orderSites,
   parseSiteStats,
   quantile,
+  SITE_ORDERINGS,
   type SiteStats,
 } from "./site-stats";
 import type { CityJsonDocument } from "./types";
@@ -83,17 +84,23 @@ test("a building's height: measured, else the span of it and its parts", () => {
   expect(quantile([], 0.5)).toBe(0);
 });
 
-test("footprints in centimetres add up to square metres", () => {
+test("footprints in projected metres add up to square metres", () => {
   const square: [number, number][] = [
-    [0, 0],
-    [1000, 0],
-    [1000, 1000],
-    [0, 1000],
+    [408_300, 5_708_800],
+    [408_310, 5_708_800],
+    [408_310, 5_708_810],
+    [408_300, 5_708_810],
   ];
-  expect(footprintArea([[square], [square]])).toBe(200);
+  expect(footprintArea([[square], [square]])).toBeCloseTo(200, 6);
 });
 
 test("only a complete record parses as stats", () => {
   expect(parseSiteStats(stats({}))).toBeDefined();
   expect(parseSiteStats({ areaKm2: 4 })).toBeUndefined();
+});
+
+test("a trace of water does not read as none", () => {
+  const water = SITE_ORDERINGS.find((o) => o.id === "water");
+  expect(water?.figure?.(stats({ waterShare: 0.002 }))).toBe("< 1 % Wasser");
+  expect(water?.figure?.(stats({ waterShare: 0.249 }))).toBe("25 % Wasser");
 });

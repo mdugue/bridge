@@ -91,7 +91,8 @@ const de = (n: number, digits = 0) =>
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
   });
-const percent = (share: number) => `${de(share * 100)} %`;
+const percent = (share: number) =>
+  share > 0 && share < 0.005 ? "< 1 %" : `${de(share * 100)} %`;
 
 export const SITE_ORDERINGS: readonly SiteOrdering[] = [
   { id: "featured", label: "Empfohlen" },
@@ -243,21 +244,27 @@ export function buildingHeights(doc: CityJsonDocument): number[] {
   return out;
 }
 
-/** The area (m²) of a footprints file's polygons (cm, per object). */
+/** The area (m²) of a footprints file's polygons (projected metres, per
+ *  object: `[object][polygon][vertex]`). */
 export function footprintArea(
   footprints: readonly (readonly (readonly [number, number])[][])[]
 ): number {
-  let cm2 = 0;
+  let m2 = 0;
   for (const polys of footprints) {
     for (const ring of polys) {
+      if (ring.length < 3) {
+        continue;
+      }
+      // relative to the first vertex: UTM coordinates squared lose digits
+      const [ox, oy] = ring[0];
       let a = 0;
       for (let i = 0; i < ring.length; i++) {
         const [x0, y0] = ring[i];
         const [x1, y1] = ring[(i + 1) % ring.length];
-        a += x0 * y1 - x1 * y0;
+        a += (x0 - ox) * (y1 - oy) - (x1 - ox) * (y0 - oy);
       }
-      cm2 += Math.abs(a) / 2;
+      m2 += Math.abs(a) / 2;
     }
   }
-  return cm2 / 1e4;
+  return m2;
 }
