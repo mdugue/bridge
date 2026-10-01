@@ -277,14 +277,16 @@ Two inputs are not the provider's alone:
   by class. Bavaria's 6 is not used as a building mask beyond LoD2: that
   would hide exactly the sheds LoD2 lacks.
 
-  **Open: NRW is not AdV 2/20 either.** On Unna's 32408_5710 (66.7 M
-  points, 2026-10-01): 1 = 22 %, all of it multi-echo, 1.7–22 m above
-  ground — the crowns' non-last echoes; 20 = 26 %, 18 % multi-echo (roofs
-  and last echoes); 17 bridge, 18 noise (half below ground), 24 ≈ 1 m
-  below ground, 26 synthetic ground (intensity 0). `providers/nw.py`
-  merges without a table, so the rasters drop class 1. The fix is the
-  Bavarian pattern: `{2: 2, 26: 30, 1: 20, 20: 20, 17: 20}`, then
-  re-fetch and re-bake Unna's `lowveg`, `cultivated`, `small-buildings`.
+  **NRW is not AdV 2/20 either.** On Unna's 32408_5710 (66.7 M points,
+  2026-10-01): 1 = 22 %, all of it multi-echo, 1.7–22 m above ground — the
+  crowns' non-last echoes; 20 = 26 %, 18 % multi-echo (roofs and last
+  echoes); 17 bridge, 18 noise (half below ground), 24 ≈ 1 m below
+  ground, 26 synthetic ground (intensity 0). `providers/nw.py` merges with
+  the table `LSC_CLASSES = {2: 2, 26: 30, 1: 20, 20: 20, 17: 20}` (noise
+  and below-ground dropped). Read as GeoSN's, the rasters had dropped
+  class 1: Unna's re-bake with the table found 14 457 scan trees outside
+  the canopy mask where it had found 2 385, and 897 small structures where
+  it had found 1 596 — the gaps in the crowns had read as low roofs.
 
   *Intensity.* The low-vegetation cue (`intensity ≥ 1250`) was measured on
   GeoSN's flight over Dresden; two sensors' intensities are not calibrated
@@ -297,9 +299,9 @@ Two inputs are not the provider's alone:
   identical to the previous code's, byte for byte. The factor is printed
   and written into `lowint_050.tif`'s tags (`ground_intensity_median`,
   `intensity_scale`). Bavaria's ground medians are 1436–1493 per 1 km
-  file (factor ≈ 0.92); NRW's fixed 1/16 (`nw.LSC_INTENSITY_SCALE`, still
-  applied while merging) no longer matters: a fixed factor does not change
-  a median ratio. *Assumption:* the same ground — asphalt and lawn in the
+  file (factor ≈ 0.92); NRW's raw 16-bit ground medians are 50 429 and
+  54 852 on Unna's two tiles (factors 0.0268 and 0.0246; the hand-set 1/16
+  that preceded the normalisation is gone). *Assumption:* the same ground — asphalt and lawn in the
   mix a city has — reads equally bright to every sensor; the mix differs
   from city to city, so this is a first-order gain correction, not a
   calibration.

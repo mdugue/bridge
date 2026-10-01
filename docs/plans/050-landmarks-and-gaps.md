@@ -324,9 +324,8 @@ Ledger (the five entries and four 🗃️ rows), `data-flow.md`,
   height band wearing its own material) is a possible later step, but
   thin today: 11 parts with both a height and a material in our Hamburg
   tiles, 1 in Munich.
-- **NRW's laser-scan intensity scale is unverified**: the 1/16 that
-  brings NRW's 16-bit intensities (median ≈ 44 000) to GeoSN's range is a
-  ratio of ranges, not a calibration; the low-vegetation cue (intensity ≥
-  1250) was measured on GeoSN's flight. Check Unna's low-vegetation mask
-  against its OSM hedges (how many take the scan's height, `osm+lsc`)
-  before trusting it.
+- ~~**NRW's laser-scan intensity scale is unverified**~~ **Resolved
+  2026-10-01** ([plan 051](./051-stand-ins-and-derived-looks.md)): every
+  scan is normalised against its own ground's median intensity (NRW's
+  factors 0.025–0.027), and NRW's classes are mapped by a table of their
+  own — its crown tops are class 1, which the rasters had dropped.

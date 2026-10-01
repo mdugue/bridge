@@ -1109,14 +1109,14 @@ visual-variable codebook is in
     class, median 13.3 m). Intensity factors per tile 0.92 / 0.90 / 0.89 /
     0.86.
     *NRW's classes are not AdV's either* (measured 2026-10-01 on 32408_5710,
-    66.7 M points — an open item): class 1 is 22 % of the scan, every point
-    of it a multi-echo return 1.7–22 m above ground (the crowns' non-last
-    echoes), while 20 is 18 % multi-echo (roofs, the last echoes); 17
-    bridge, 18 noise, 24 below ground, 26 synthetic ground. The rasters read
-    only 20, so Unna's surface misses most crown tops and its echo ratio is
-    low under trees: its `canopyx`, `smallbuild` and hedge heights are
-    suspect until `providers/nw.py` maps 1/17 → 20, 26 → 30 (as Bavaria's
-    table does) and Unna is re-fetched and re-baked.
+    66.7 M points): class 1 is 22 % of the scan, every point of it a
+    multi-echo return 1.7–22 m above ground (the crowns' non-last echoes),
+    while 20 is 18 % multi-echo (roofs, the last echoes); 17 bridge, 18
+    noise, 24 below ground, 26 synthetic ground. Read as GeoSN's (20 only)
+    Unna's surface missed most crown tops; `providers/nw.py` now maps
+    1/17/20 → 20, 26 → 30 and drops 18/24 (`LSC_CLASSES`), and Unna's
+    re-bake found 14 457 scan trees (was 2 385) and 897 small structures
+    (was 1 596: crown gaps had read as low roofs).
     München's open DOP is RGB, so its NDVI branch reads the RGB stand-in
     (`ndvi.py`) rather than a near-infrared NDVI, and its flight is
     leaf-on (June 2022): the cue's thresholds are Dresden's, untested

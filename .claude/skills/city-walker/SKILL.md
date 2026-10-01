@@ -722,8 +722,10 @@ Stand-ins are marked per city in the generated
 refuses a height mosaic flatter than 0.5 m (1–99 %) — Hamburg's DGM was
 once committed as 0 m everywhere and every house floated; the pipeline
 tests hold every committed DGM to ≥ 2 m. The laser scan (`--lsc`) is read
-for Saxony (GeoSN's LSC) and NRW (3D-Messdaten: four 1 km LAZ merged per
-tile by `lsc.merge_laz`, intensities × 1/16 to GeoSN's range — unverified).
+for Saxony (GeoSN's LSC), NRW (3D-Messdaten) and Bavaria (four 1 km LAZ
+merged per tile by `lsc.merge_laz`, each provider's classes mapped into
+AdV's by its table — NRW keeps the crown tops in class 1); every scan's
+intensities are normalised against its own ground (`lsc.rasterise`).
 
 The later modules, one step each: `osm_buildings.py` (shops, heritage,
 material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,

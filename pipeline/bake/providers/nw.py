@@ -33,9 +33,14 @@ PATTERNS = {
     "dop": r"dop10rgbi_32_{e}_{n}_1_nw(_\d{{4}})?\.jp2",
     "lsc": r"3dm_32_{e}_{n}_1_nw(_\d{{4}})?\.laz",
 }
-# NRW's scan records 16-bit intensities; GeoSN's, which the low-vegetation
-# cue was measured on, sit about 16 times lower (NRW median ≈ 44 000).
-LSC_INTENSITY_SCALE = 1 / 16
+# NRW's classes into the AdV scheme the rasters read (lsc.ADV). NRW is not
+# GeoSN: its class 1 holds 22 % of a scan, every point a non-last echo
+# 1.7–22 m above the ground — the tree crowns' tops — and class 20 the
+# roofs and last echoes; 17 is a bridge, 26 synthetic ground. Read as GeoSN's
+# (20 only) the surface missed most crowns. Noise (18) and points below the
+# ground (24) are dropped. Intensities are normalised per scan in
+# lsc.rasterise, against the scan's own ground.
+LSC_CLASSES = {2: 2, 26: 30, 1: 20, 20: 20, 17: 20}
 DLM = f"{BASE}/lm/akt/basis-dlm/basis-dlm_EPSG25832_Shape.zip"
 
 
@@ -75,11 +80,11 @@ def lod2(ctx: Ctx, tile: Tile) -> list[Path]:
 
 
 def lsc(ctx: Ctx, tile: Tile) -> list[Path]:
-    """The classified laser scan ("3D-Messdaten", the AdV classes GeoSN
-    uses too: 2 ground, 20 non-ground), four 1 km LAZ (≈100 MB each) merged
-    into the one scan the rasters read."""
+    """The classified laser scan ("3D-Messdaten"), four 1 km LAZ (≈100 MB
+    each) merged into the one scan the rasters read, its classes mapped by
+    `LSC_CLASSES`."""
     merged = ctx.scratch / "lsc" / f"{tile.id}.laz"
-    return [merge_laz(_files(ctx, tile, "lsc"), merged, LSC_INTENSITY_SCALE)]
+    return [merge_laz(_files(ctx, tile, "lsc"), merged, classes=lambda _: LSC_CLASSES)]
 
 
 def dlm(ctx: Ctx) -> None:

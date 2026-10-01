@@ -115,3 +115,16 @@ def test_buildings_and_vegetation_both_stand_on_the_ground_after_the_merge(tmp_p
         assert ds.read(1)[7, 0] == 1
     with rasterio.open(tmp_path / "dsm_050.tif") as ds:
         assert ds.read(1)[7, 0] == 108.0
+
+
+def test_nrws_crown_tops_in_class_1_are_read_as_non_ground(tmp_path):
+    # NRW keeps a scan's non-last echoes (the crowns) in class 1, roofs and
+    # last echoes in 20, a bridge in 17, synthetic ground in 26; noise (18)
+    # and points below the ground (24) are dropped
+    from bake.providers import nw
+
+    cls = [2, 1, 20, 17, 26, 18, 24]
+    n = len(cls)
+    a = scan(tmp_path / "a.laz", np.arange(n) + 0.5, [0.5] * n, [100.0] * n, cls, [1000] * n)
+    las = laspy.read(lsc.merge_laz([a], tmp_path / "m.laz", classes=lambda _: nw.LSC_CLASSES))
+    assert list(las.classification) == [2, 20, 20, 20, 30]
