@@ -32,6 +32,7 @@ import {
   type TreeFacts,
   treeCard,
 } from "./inquiry-features";
+import { bikeCard, trafficCard } from "./inquiry-traffic";
 import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
 
@@ -230,6 +231,10 @@ export function inquiryCard(
       return monumentCard(inquiry, provenance);
     case "bridge":
       return bridgeCard(inquiry, provenance);
+    case "traffic":
+      return trafficCard(inquiry);
+    case "bikes":
+      return bikeCard(inquiry);
   }
 }
 

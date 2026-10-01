@@ -174,6 +174,16 @@ name and, for a fountain, the basin's form; a **bridge** its name, its
 structure and main span (from Wikidata, whose identifier you can copy),
 its length and the shipping clearance under it.
 
+The **traffic data** can be asked too, while its layer is on. A
+**traffic flow** says its street, the vehicles counted a day both ways
+and per direction (named by the compass point they head to, with the
+heavy-goods share), the year and how they were counted — and where the
+source counts both directions only together, the card says so rather
+than inventing a split. It adds an estimate for the time set, labelled
+as one, from a typical daily curve. A **bicycle counter** says the
+bicycles of the last full hour per direction and when they were counted.
+Both cards name their source and licence.
+
 ## The panel
 
 The button in the corner opens a panel with three tabs.

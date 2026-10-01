@@ -83,6 +83,7 @@ import {
   trackedBytesOf,
 } from "./three-utils";
 import { buildTraffic } from "./traffic-layer";
+import { trafficAskSet } from "./traffic-ask";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -666,6 +667,11 @@ async function buildDressing(
           ctx.tileBounds(tile) ?? terrain.bounds
         )
       : undefined;
+  // The counted sections are asked on their bodies, while the layer shows.
+  const trafficSet = trafficAskSet(trafficBands, traffic, tile);
+  if (trafficSet) {
+    asks.push(trafficSet);
+  }
   return {
     asks,
     tile,

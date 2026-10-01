@@ -99,11 +99,19 @@ export type OutlineSubject =
   | { building: { layer: CityLayer; objects: ReadonlySet<number> } }
   | { thing: AskHit<FeatureInquiry> };
 
-/** A thing's key for the vote: one per tree, monument, deck. */
+/** A thing's key for the vote: one per tree, monument, deck, counted
+ *  section, counter. */
 function thingKey(t: FeatureInquiry): string {
-  return t.kind === "tree"
-    ? `tree:${t.tile}:${t.index}`
-    : `${t.kind}:${t.tile}:${t.position.join(",")}`;
+  switch (t.kind) {
+    case "tree":
+    case "traffic":
+      return `${t.kind}:${t.tile}:${t.index}`;
+    case "bikes":
+      return `bikes:${t.id}:${t.position.join(",")}`;
+    case "bridge":
+    case "monument":
+      return `${t.kind}:${t.tile}:${t.position.join(",")}`;
+  }
 }
 
 /** How far a ray looks for a thing when no building stops it (m). */

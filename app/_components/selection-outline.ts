@@ -1,5 +1,6 @@
 import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
 import {
+  type BufferAttribute,
   BufferGeometry,
   Float32BufferAttribute,
   HalfFloatType,
@@ -13,6 +14,7 @@ import {
   type WebGPURenderer,
   Color,
   DoubleSide,
+  Uint32BufferAttribute,
 } from "three/webgpu";
 import {
   float,
@@ -32,6 +34,23 @@ import {
 } from "three/tsl";
 import { OUTLINE_BAND, OUTLINE_HALO, outlineSpread } from "@/lib/city/outline";
 import type { V4 } from "./shader-chunks";
+import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-layer";
+
+/**
+ * What the outline goes around: an element's triangles in world space
+ * (non-indexed) with how far behind them the scene's surface may lie and
+ * still be the element (`reach`, m — 0 for its own triangles; a stand-in's
+ * depth, so the mask is what the scene drew inside it; unbounded for
+ * glass, which writes no depth) — or one counted section of a traffic
+ * flow (`triangles` of the tile's `flow` mesh), drawn as the layer draws
+ * it, grown with the hour and widened from the air.
+ */
+export type OutlineSelection =
+  | { positions: Float32Array; reach: number }
+  | { flow: Mesh; triangles: Uint32Array };
+
+/** The flow bodies' attributes the mask's flow program reads. */
+const FLOW_ATTRIBUTES = ["position", ...TRAFFIC_ATTRIBUTES] as const;
 
 /**
  * The outline around the asked element (plan 052): one line along its
@@ -51,14 +70,8 @@ import type { V4 } from "./shader-chunks";
  * mark and outline read as one drawing.
  */
 export interface SelectionOutline {
-  /**
-   * The element's triangles in world space (non-indexed), or null. `reach`
-   * (m): how far behind them the scene's own surface may lie and still be
-   * the element — 0 for the element's own triangles; for a stand-in shape
-   * (a tree's crown, a monument) its depth, so the mask is what the scene
-   * drew inside the stand-in, not the stand-in.
-   */
-  set: (positions: Float32Array | null, reach?: number) => void;
+  /** what to outline, or null for nothing */
+  set: (selection: OutlineSelection | null) => void;
   /** draws the mask after the scene pass (nothing when nothing is asked) */
   renderMask: (renderer: WebGPURenderer, camera: PerspectiveCamera) => void;
   /** the frame with the outline over it */
@@ -110,18 +123,27 @@ export function createSelectionOutline(deps: {
   // with depth): about 0 on its own triangles, up to `reach` in a stand-in
   const behind = positionView.z.sub(sceneZ);
   const reach = uniform(0);
-  const material = new MeshBasicNodeMaterial();
-  material.colorNode = vec4(1, 1, 1, 1);
+  const maskMaterial = (name: string) => {
+    const m = new MeshBasicNodeMaterial();
+    m.colorNode = vec4(1, 1, 1, 1);
+    // both faces: the LoD2's polygons do not all face out (the clay draws
+    // both sides too)
+    m.side = DoubleSide;
+    m.depthTest = false;
+    m.depthWrite = false;
+    m.fog = false;
+    m.name = name;
+    return m;
+  };
+  const material = maskMaterial("selection-mask");
   material.maskNode = behind
     .greaterThanEqual(slack.negate())
     .and(behind.lessThanEqual(reach.add(slack)));
-  // both faces: the LoD2's polygons do not all face out (the clay draws
-  // both sides too)
-  material.side = DoubleSide;
-  material.depthTest = false;
-  material.depthWrite = false;
-  material.fog = false;
-  material.name = "selection-mask";
+  // A flow is glass: no depth of its own, so only what stands in front of
+  // it hides it.
+  const flowMaterial = maskMaterial("selection-mask-flow");
+  flowMaterial.positionNode = trafficPositionNode();
+  flowMaterial.maskNode = behind.greaterThanEqual(slack.negate());
 
   // Always a position attribute, even with nothing asked (one degenerate
   // triangle): the program is built from the geometry's attributes, and
@@ -136,11 +158,45 @@ export function createSelectionOutline(deps: {
     );
     return geometry;
   };
+  // The flow's own attributes over the asked section's triangles; nothing
+  // asked: one degenerate triangle with every attribute (see above).
+  const flowGeometry = (source: Mesh | null, triangles: Uint32Array) => {
+    const geometry = new BufferGeometry();
+    for (const name of FLOW_ATTRIBUTES) {
+      const own = source?.geometry.getAttribute(name) as
+        | BufferAttribute
+        | undefined;
+      const size = name === "trafficLane" ? 4 : 3;
+      geometry.setAttribute(
+        name,
+        own ?? new Float32BufferAttribute(new Float32Array(3 * size), size)
+      );
+    }
+    geometry.setIndex(new Uint32BufferAttribute(triangles, 1));
+    return geometry;
+  };
+  // Frees the wrapper's own index only: the attributes are the flow's,
+  // and a geometry's dispose frees every attribute it holds.
+  const dropFlowGeometry = (geometry: BufferGeometry, shared: boolean) => {
+    if (shared) {
+      for (const name of FLOW_ATTRIBUTES) {
+        geometry.deleteAttribute(name);
+      }
+    }
+    geometry.dispose();
+  };
   const scene = new Scene();
   const shape = new Mesh(shapeGeometry(null), material);
   shape.frustumCulled = false;
   shape.visible = false;
   scene.add(shape);
+  const flow = new Mesh(flowGeometry(null, new Uint32Array(3)), flowMaterial);
+  flow.frustumCulled = false;
+  flow.visible = false;
+  flow.matrixAutoUpdate = false;
+  flow.matrixWorldAutoUpdate = false;
+  let flowShared = false;
+  scene.add(flow);
   // whether something is asked (the compile shows the shape for a moment)
   let selected = false;
   let drawn = false;
@@ -192,12 +248,31 @@ export function createSelectionOutline(deps: {
   };
 
   return {
-    set: (positions, depth = 0) => {
-      reach.value = depth;
+    set: (selection) => {
       shape.geometry.dispose();
-      selected = positions !== null && positions.length >= 9;
-      shape.geometry = shapeGeometry(selected ? positions : null);
-      shape.visible = selected;
+      dropFlowGeometry(flow.geometry, flowShared);
+      const positions =
+        selection && "positions" in selection ? selection.positions : null;
+      const section = selection && "flow" in selection ? selection : null;
+      reach.value = selection && "reach" in selection ? selection.reach : 0;
+      shape.geometry = shapeGeometry(
+        positions && positions.length >= 9 ? positions : null
+      );
+      shape.visible = positions !== null && positions.length >= 9;
+      flowShared = section !== null && section.triangles.length >= 3;
+      flow.geometry = flowShared
+        ? flowGeometry(
+            section?.flow ?? null,
+            section?.triangles ?? new Uint32Array(3)
+          )
+        : flowGeometry(null, new Uint32Array(3));
+      if (section && flowShared) {
+        section.flow.updateWorldMatrix(true, false);
+        flow.matrix.copy(section.flow.matrixWorld);
+        flow.matrixWorld.copy(section.flow.matrixWorld);
+      }
+      flow.visible = flowShared;
+      selected = shape.visible || flow.visible;
     },
     renderMask: (renderer, camera) => {
       if (!selected) {
@@ -229,18 +304,22 @@ export function createSelectionOutline(deps: {
     // returns, so the target and the shape are restored before a frame
     compile: (renderer, camera) => {
       const previous = renderer.getRenderTarget();
+      const shown = [shape.visible, flow.visible] as const;
       shape.visible = true;
+      flow.visible = true;
       renderer.setRenderTarget(mask);
       try {
         return renderer.compileAsync(scene, camera);
       } finally {
-        shape.visible = selected;
+        [shape.visible, flow.visible] = shown;
         renderer.setRenderTarget(previous);
       }
     },
     dispose: () => {
       shape.geometry.dispose();
+      dropFlowGeometry(flow.geometry, flowShared);
       material.dispose();
+      flowMaterial.dispose();
       mask.dispose();
     },
   };

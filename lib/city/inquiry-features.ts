@@ -19,6 +19,7 @@ import {
   sourceLine,
   whole,
 } from "./card-lines";
+import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
 import type { SiteProvenance } from "./provenance";
 
 type Props<F extends { properties: unknown }> = NonNullable<F["properties"]>;
@@ -91,7 +92,12 @@ export interface BridgeInquiry {
   tile: string;
 }
 
-export type FeatureInquiry = BridgeInquiry | MonumentInquiry | TreeInquiry;
+export type FeatureInquiry =
+  | BikeInquiry
+  | BridgeInquiry
+  | MonumentInquiry
+  | TrafficInquiry
+  | TreeInquiry;
 
 const KNOWN_HEIGHT = 1;
 const KNOWN_CROWN = 2;

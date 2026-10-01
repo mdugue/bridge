@@ -176,3 +176,20 @@ export function standInDepth(solids: readonly AskSolid[]): number {
   }
   return depth;
 }
+
+/** One counted section's triangles of a tile's flow mesh (its index
+ *  entries whose vertices belong to `section`, traffic-layer.ts). */
+export function trafficTriangles(flow: Mesh, section: number): Uint32Array {
+  const index = flow.geometry.getIndex()?.array;
+  const sections = flow.userData.trafficSection as Uint32Array | undefined;
+  if (!(index && sections)) {
+    return new Uint32Array();
+  }
+  const out: number[] = [];
+  for (let t = 0; t + 2 < index.length; t += 3) {
+    if (sections[index[t]] === section) {
+      out.push(index[t], index[t + 1], index[t + 2]);
+    }
+  }
+  return Uint32Array.from(out);
+}

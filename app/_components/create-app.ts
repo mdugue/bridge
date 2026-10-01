@@ -53,7 +53,10 @@ import {
   buildingShape,
   solidShape,
   standInDepth,
+  trafficTriangles,
 } from "./selection-shape";
+import type { OutlineSelection } from "./selection-outline";
+import { trafficMesh } from "./traffic-ask";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -1051,12 +1054,11 @@ async function bootApp(
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
   // monument's shape after its data.
   const outline = (subject: OutlineSubject | null) => {
-    const shape = outlineShape(subject);
-    postStack.setSelection(shape?.positions ?? null, shape?.reach ?? 0);
+    postStack.setSelection(outlineShape(subject));
   };
   const outlineShape = (
     subject: OutlineSubject | null
-  ): { positions: Float32Array; reach: number } | null => {
+  ): OutlineSelection | null => {
     if (!subject) {
       return null;
     }
@@ -1075,10 +1077,23 @@ async function bootApp(
       )?.rail;
       return { positions: bridgeShape(rail, first.slab), reach: 0 };
     }
-    // a stand-in: the scene's surface anywhere inside it is the thing
+    if (target.kind === "traffic") {
+      // the section as the layer draws it, grown with the hour
+      const flow = trafficMesh(
+        [...stream.dressings].find((d) => d.tile === target.tile)?.traffic
+      );
+      return flow
+        ? { flow, triangles: trafficTriangles(flow, target.index) }
+        : null;
+    }
+    // a stand-in: the scene's surface anywhere inside it is the thing; the
+    // counters' columns are glass, which writes no depth
     return {
       positions: solidShape(solids, target.kind === "tree" && target.conifer),
-      reach: standInDepth(solids),
+      reach:
+        target.kind === "bikes"
+          ? Number.POSITIVE_INFINITY
+          : standInDepth(solids),
     };
   };
   const probe = createInquiryProbe({
@@ -1087,7 +1102,10 @@ async function bootApp(
     isLoaded: (layer) => stream.cities.has(layer),
     groundAlong,
     outline,
-    things: () => stream.visibleDressings().flatMap((d) => d.asks ?? []),
+    things: () => [
+      ...stream.visibleDressings().flatMap((d) => d.asks ?? []),
+      ...overlays.asks(),
+    ],
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,
       height: renderer.domElement.clientHeight || 1,
@@ -1098,12 +1116,33 @@ async function bootApp(
     const file = extras.tiles.find((t) => t.id === tile)?.ask?.treeFacts;
     return file ? new URL(file, tilesetUrl).href : undefined;
   };
+  // What the card needs beyond what was met: a tree's facts file, a data
+  // layer's credit (the site's) and, for a counted section, the hour.
+  const layerSources = opts.site.dataLayers;
+  const answered = (asked: Inquiry | null): Inquiry | null => {
+    switch (asked?.kind) {
+      case "tree": {
+        const factsUrl = treeFactsUrl(asked.tile);
+        return factsUrl ? { ...asked, factsUrl } : asked;
+      }
+      case "traffic":
+        return {
+          ...asked,
+          credit: layerSources?.traffic?.credit,
+          hour: overlays.trafficHour(),
+        };
+      case "bikes":
+        return { ...asked, credit: layerSources?.bikes?.credit };
+      case "building":
+      case "bridge":
+      case "monument":
+        return asked;
+      case undefined:
+        return null;
+    }
+  };
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
-    const asked = probe.ask(ndc);
-    const factsUrl =
-      asked?.kind === "tree" ? treeFactsUrl(asked.tile) : undefined;
-    const inquiry =
-      asked?.kind === "tree" && factsUrl ? { ...asked, factsUrl } : asked;
+    const inquiry = answered(probe.ask(ndc));
     opts.onInquiry?.(inquiry);
     return inquiry;
   };

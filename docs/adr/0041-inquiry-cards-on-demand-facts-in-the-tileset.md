@@ -106,6 +106,13 @@ only where a source offers no CORS.
   Instanced sets cannot be raycast one by one since ADR 0027, so trees and
   monuments are picked by rays against solids from their data; bridges by
   their drawn meshes.
+- **The data layers are asked too (2026-10-01).** ADR 0040's flows and
+  bicycle counters answer while their layer shows, with what their
+  source counted and its credit; the hour's figure is labelled an
+  estimate from the typical day's curve. A flow is picked on its drawn
+  glass (the vertex names its section through a CPU-side table: WebGPU's
+  eight vertex buffers are spent), a counter on its columns as they
+  stand. The card stays the only place their numbers become text.
 
 ## Alternatives
 

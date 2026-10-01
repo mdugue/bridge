@@ -187,6 +187,17 @@ Beckens; eine **Brücke** ihren Namen, Tragwerk und Hauptspannweite (aus
 Wikidata, dessen Kennung du kopieren kannst), ihre Länge und die
 Durchfahrtshöhe für die Schifffahrt.
 
+Auch die **Verkehrsdaten** lassen sich befragen, solange ihre Ebene
+eingeschaltet ist. Ein **Verkehrsstrom** nennt seine Straße, die
+gezählten Fahrzeuge am Tag in beiden Richtungen und je Richtung (nach der
+Himmelsrichtung, in die sie fahren, mit dem Anteil des Schwerverkehrs),
+das Jahr und wie gezählt wurde — und wenn die Quelle beide Richtungen nur
+zusammen zählt, sagt die Karte das, statt eine Aufteilung zu erfinden.
+Dazu kommt ein Schätzwert für die eingestellte Uhrzeit, ausdrücklich als
+Schätzung nach einem typischen Tagesgang. Eine **Radzählstelle** nennt
+die Räder der letzten vollen Stunde je Richtung und wann sie gezählt
+wurden. Beide Karten nennen ihre Quelle mit Lizenz.
+
 ## Das Feld
 
 Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.

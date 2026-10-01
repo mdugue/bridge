@@ -829,8 +829,27 @@ the crosshair), it answers in a card ([ADR 0041](./adr/0041-inquiry-cards-on-dem
   height; a bridge's name and measured deck (Basis-DLM, DOM1), structure
   and main span (Wikidata or OSM), clearance (OSM), keyed by its Wikidata
   item.
+- **Asking the traffic layers** — while a data layer shows, its flows
+  and counters answer like the rest. A counted section is met on its
+  drawn glass bodies (`traffic-ask.ts`; the bodies' BVH built on the
+  first question that reaches them), the vertex the ray meets names its
+  section (`userData.trafficSection`, a CPU-side table — WebGPU allows
+  eight vertex buffers and the bodies use them). A counter is met on its
+  columns as tall as they stand now (`bike-ask.ts`, cylinders from
+  `bikeColumns`). The cards (`lib/city/inquiry-traffic.ts`): a section's
+  vehicles a day both ways, per direction named by the compass point it
+  heads to with its heavy-goods share (where the source counted per
+  direction; an even split says so instead), the year and how it was
+  counted, the scene's hour as an estimate (≈ the day's count on the
+  typical curve, rounded to tens, the curve's source named) and the
+  layer's credit; a counter's bicycles in the last hour per direction,
+  when they were counted, and whether that is older than three hours.
+  The outline takes a section's own triangles, drawn with the layer's
+  own position node (grown with the hour, widened from the air); the
+  glass writes no depth, so its mask tests only what stands in front.
+  Trams are not asked yet.
 - **The outline** (no slider) — whatever is asked, building, tree,
-  monument or bridge, gets one line along its silhouette as the camera
+  monument, bridge, traffic flow or bicycle counter, gets one line along its silhouette as the camera
   sees it now, not along its edges: the element's triangles (a
   building's own out of its tile's mesh, a bridge's out of the tile's
   bridge meshes within 12 m of its deck; a tree's crown ellipsoid — a
@@ -2015,7 +2034,9 @@ GPU**.
   its own colour from the air and past ~200 m, so the layer reads as glass
   up close and as a map from above; the bodies widen up to 5× from the
   air (`map-overlay.ts` `mapWidenNode`). A street without a count draws
-  nothing — no gap filling, no model.
+  nothing — no gap filling, no model. A click on a flow asks it (the
+  twin's card: its counts, directions, year, method, the hour's
+  estimate and the source).
 - **Bicycle counters, live** — the city's permanent counters (WFS
   `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
   bicycles of the last full hour per direction) read **by the browser**
@@ -2028,7 +2049,7 @@ GPU**.
   the top a soft dome; rings of light rise through each at 0.18 m/s ×
   √count, and a soft pool of its colour lies on the ground around its
   foot; grey and still when the count is older than three hours. The sidebar lists the counts,
-  busiest first; a click flies there. The first runtime request to a
+  busiest first; a click flies there, a click on a column asks it. The first runtime request to a
   server other than the site's own ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)).
 - **Every site, its own sources** (`Site.dataLayers`, `sites/<id>.ts`):
   a site names the source of each layer it has, and the HUD offers only

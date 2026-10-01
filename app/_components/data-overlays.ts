@@ -1,4 +1,5 @@
 import type { Object3D } from "three/webgpu";
+import type { AskSet } from "@/lib/city/ask-solids";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import {
   BIKE_FEED_READERS,
@@ -8,6 +9,7 @@ import {
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { BridgeFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import {
   type TrafficHourStatus,
   trafficFactor,
@@ -15,6 +17,7 @@ import {
   trafficSpeed,
 } from "@/lib/city/traffic-hours";
 import type { TramTimetable } from "@/lib/city/tram-timetable";
+import { bikeAskSets } from "./bike-ask";
 import { createBikeFeed, createBikeLayer } from "./bike-layer";
 import {
   fetchFeaturesFrom,
@@ -41,6 +44,9 @@ import {
 export interface DataOverlays {
   /** shows, hides, starts and stops the layers as the look has them */
   apply: (layers: Readonly<Record<DataLayerKey, boolean>>) => void;
+  /** what the probe can ask on the shown layers: the bicycle counters'
+   *  columns (bike-ask.ts; the traffic's sections are the tiles') */
+  asks: () => AskSet<FeatureInquiry>[];
   dispose: () => void;
   /** the layers' scene parts, by name (the HUD census) */
   parts: () => { bikes?: Object3D; trams?: Object3D };
@@ -50,6 +56,8 @@ export interface DataOverlays {
   /** a frame: the trams move on, the traffic keeps the hour
    *  (`nowMs` = performance.now()) */
   step: (nowMs: number) => void;
+  /** the traffic's hour at the scene's instant now (a card's estimate) */
+  trafficHour: () => TrafficHourStatus;
   /** the tile set changed: what stands on the ground is placed again;
    *  true when something moved (the shadows need no redraw: no layer
    *  here casts) */
@@ -143,6 +151,10 @@ function bikeOverlay(
         opts.onBikeCounts?.([]);
       }
     },
+    asks: () =>
+      on && layer?.group.visible
+        ? bikeAskSets(layer.counters(), opts.ground, new Date())
+        : [],
     dispose: () => {
       feed.stop();
       layer?.dispose();
@@ -305,6 +317,7 @@ export function createDataOverlays(opts: DataOverlayOptions): DataOverlays {
       trams.apply(layers.tramLayer);
       traffic.apply(layers.trafficLayer);
     },
+    asks: () => bikes?.asks() ?? [],
     dispose: () => {
       disposed = true;
       aborter.abort();
@@ -323,5 +336,6 @@ export function createDataOverlays(opts: DataOverlayOptions): DataOverlays {
       traffic.step(nowMs);
     },
     streamChanged: () => bikes?.reground() ?? false,
+    trafficHour: () => trafficHourStatus(clock(performance.now())),
   };
 }

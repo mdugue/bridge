@@ -18,8 +18,8 @@
   default frame
 - **Planned at**: 2026-09-27
 - **Status**: **PARTIAL** — phases 1–3 built (2026-09-27), phase 4
-  (trees, monuments, bridges) 2026-10-01, the outline for every kind the
-  same day; the hatch and the outline unjudged on a real GPU; phases
+  (trees, monuments, bridges; the traffic flows and bicycle counters)
+  2026-10-01, the outline for every kind the same day; the hatch and the outline unjudged on a real GPU; phases
   4b–7 open
 
 ## Idea
@@ -131,6 +131,15 @@ its own source lines (`lib/city/inquiry-features.ts`):
 - **Bridges** — name and deck (Basis-DLM, measured in DOM1), structure
   and main span (Wikidata where matched, else OSM), the fairway
   clearance; keyed by the Wikidata item.
+- **Traffic flows and bicycle counters** (the data layers, while they
+  show) — a section's vehicles a day both ways and per direction (named
+  by the compass point it heads to, with the heavy-goods share), the
+  year and method, an even split said as one, the scene's hour as an
+  estimate on the typical day's curve; a counter's bicycles in the last
+  hour per direction and when they were counted. Picked on the drawn
+  glass (`traffic-ask.ts`, the vertex → section table on the CPU) and
+  the columns as they stand (`bike-ask.ts`); cards in
+  `lib/city/inquiry-traffic.ts`.
 
 Picking: the raycaster cannot pick instanced sets (`Instances` since the
 WebGPU port), so trees and monuments are rays against solids from their
@@ -165,7 +174,8 @@ it follows a building's, a crown's and a bridge's silhouette; the
 half-resolution lite frame shows its steps, a full-resolution one
 should not); a neighbouring crown inside a tree's stand-in can join its
 outline; the season model's state on a
-tree's card; furniture, lamps and stops as further kinds (their files
+tree's card; the timetable's trams as a kind (a car moves, so the
+pick runs on its sections' current frames); furniture, lamps and stops as further kinds (their files
 are in the dressing already).
 
 ### 4b. Aim and ask in live mode (S–M)

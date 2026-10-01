@@ -58,7 +58,10 @@ import {
 } from "@/lib/city/render-style";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
-import { createSelectionOutline } from "./selection-outline";
+import {
+  createSelectionOutline,
+  type OutlineSelection,
+} from "./selection-outline";
 import { createPipelineAnchors } from "./pipeline-anchors";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { compileRepresentatives } from "./three-utils";
@@ -193,11 +196,11 @@ export interface PostStack {
   /** Follows the canvas (the scene target is drawing-buffer sized). */
   setSize: () => void;
   /**
-   * The asked element's triangles (world, non-indexed) to outline, or null
+   * What to outline around the asked element, or null
    * (selection-outline.ts): drawn over every picture style, after the
    * antialiasing, under the paper grain.
    */
-  setSelection: (positions: Float32Array | null, reach?: number) => void;
+  setSelection: (selection: OutlineSelection | null) => void;
   /** How many pipeline anchors hold scene-wide pipelines (diagnostics). */
   anchorCount: () => number;
   /** The sun's altitude in degrees (Film noir opens up at dusk). */
@@ -697,7 +700,7 @@ export function createPostStack(
       beforeAa.setSize(size.x, size.y);
       outline.setSize(size.x, size.y);
     },
-    setSelection: (positions, reach) => outline.set(positions, reach),
+    setSelection: (selection) => outline.set(selection),
     applyLook: (look) => {
       for (const key of Object.keys(rows) as PostLookKey[]) {
         rows[key](look[key]);
