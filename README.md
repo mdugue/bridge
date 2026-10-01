@@ -103,7 +103,7 @@ Desktop:
 | Scroll | Move forward / back |
 | `Alt` + scroll | Zoom (field of view) |
 | Double-click the ground | Glide there |
-| Click the minimap | Teleport there |
+| Click the minimap | Glide there |
 | `R` | Demolish the building under the crosshair |
 | "Immersive mode" | Pointer lock (`Esc` exits) |
 

@@ -681,7 +681,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           onLook={look.set}
           onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
           onTab={setTab}
-          onTeleport={(x, y) => handleRef.current?.teleportTo(x, y)}
+          onTeleport={(x, y) => handleRef.current?.glideToSpot(x, y)}
           rememberedView={rememberedView}
           // The sliders go back to their defaults; the picture style is a
           // choice of its own, made above them, and stays.

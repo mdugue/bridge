@@ -57,6 +57,8 @@ interface ActiveFlight {
 export interface CameraFlight {
   cancel: () => void;
   isActive: () => boolean;
+  /** Where the active flight ends, or null when none is flying. */
+  destination: () => Xyz | null;
   /**
    * Hands the view back to the player while the flight carries on moving
    * the camera (a landing that a drag looks around in).
@@ -113,6 +115,10 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
 
   return {
     isActive: () => flight !== null,
+    destination: () =>
+      flight
+        ? { x: flight.endPos.x, y: flight.endPos.y, z: flight.endPos.z }
+        : null,
     cancel: () => {
       flight = null;
     },

@@ -172,6 +172,14 @@ export interface CameraPose {
   captureViewpoint: () => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
+  /** Where the glide in progress lands (EPSG), or null when none is. */
+  getGlideTarget: () => { epsgX: number; epsgY: number } | null;
+  /**
+   * Glides to EPSG coordinates (the minimap): on foot to stand there,
+   * looking ahead; in the air at the same height above the ground, the aim
+   * held. A trip across the city bows up and over the roofs on its way.
+   */
+  glideToSpot: (epsgX: number, epsgY: number) => void;
   getMode: () => MovementMode;
   getPose: () => PlayerPose;
   /**
@@ -400,7 +408,7 @@ export function createCameraPose(
   /** Starts one of the player's own glides (see ownGlide). */
   const glideTo = (
     target: FlightTarget,
-    shape: { arc: number; duration: number }
+    shape?: { arc: number; duration: number }
   ) => {
     flight.start(target, glideFloor, shape);
     ownGlide = true;
@@ -620,8 +628,34 @@ export function createCameraPose(
     );
   };
 
+  const glideToSpot = (epsgX: number, epsgY: number) => {
+    cancelGlide();
+    endFollow();
+    const p = camera.position;
+    const w = epsgToWorld(epsgX, epsgY, offset);
+    const ground = groundAt(epsgX, epsgY);
+    const walking = movement.getMode() === "walk";
+    const above = walking ? EYE_HEIGHT : p.y - groundWorld(p.x, p.z);
+    const aim = aimDeg();
+    glideTo({
+      pos: clearOf({ x: w.x, y: ground + above, z: w.z }, walking).pos,
+      headingDeg: aim.headingDeg,
+      pitchDeg: walking ? 0 : aim.pitchDeg,
+      fov: camera.fov,
+    });
+  };
+
   return {
     getMode: movement.getMode,
+    glideToSpot,
+    getGlideTarget: () => {
+      const to = flight.destination();
+      if (!to) {
+        return null;
+      }
+      const epsg = worldToEpsg(to.x, to.z, offset);
+      return { epsgX: epsg.x, epsgY: epsg.y };
+    },
     getPose,
     getCameraState: () => {
       camera.getWorldDirection(dir);

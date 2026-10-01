@@ -397,6 +397,39 @@ test("a pinch still coasting stops at a double tap or a teleport", () => {
   expect(camera.position.z).toBeCloseTo(0, 6);
 });
 
+test("a minimap click glides there: on foot to stand, in the air at the same height", () => {
+  const { camera, pose } = rig();
+  pose.glideToSpot(OFFSET.cx + 400, OFFSET.cy - 300);
+  expect(pose.getGlideTarget()).toEqual({
+    epsgX: OFFSET.cx + 400,
+    epsgY: OFFSET.cy - 300,
+  });
+  pose.step(1 / 60);
+  // A glide, not a jump.
+  expect(camera.position.x).toBeLessThan(10);
+  settle(pose);
+  expect(pose.getGlideTarget()).toBeNull();
+  expect(camera.position.x).toBeCloseTo(400, 6);
+  expect(camera.position.z).toBeCloseTo(300, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  expect(pose.getMode()).toBe("walk");
+
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 120, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 30,
+    pitchDeg: -20,
+    fov: 55,
+  });
+  pose.glideToSpot(OFFSET.cx - 500, OFFSET.cy);
+  settle(pose);
+  expect(camera.position.x).toBeCloseTo(-500, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + 120, 6);
+  expect(pose.getCameraState().pitchDeg).toBeCloseTo(-20, 4);
+  expect(pose.getMode()).toBe("fly");
+});
+
 test("flyTo drops the camera at a world position in fly mode, facing the target", () => {
   const { camera, pose, poses } = rig();
   pose.flyTo({ x: 10, y: 250, z: 10 }, { x: 10, y: 100, z: 110 });

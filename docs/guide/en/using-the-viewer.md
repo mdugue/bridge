@@ -36,7 +36,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Mouse wheel (or a two-finger trackpad gesture) | move forward or back |
 | `Alt` + mouse wheel | zoom (narrows or widens the field of view) |
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
-| Click on the minimap | teleport there |
+| Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
 | `R` | demolish the building under the crosshair |
 | `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier) |
@@ -108,7 +108,7 @@ The button in the corner opens a panel with three tabs.
 
 - **Minimap** — the whole area from above, with the land-use colours, the
   bridges and the footprints of the buildings currently loaded. Your position and view
-  direction are drawn on it; a click teleports.
+  direction are drawn on it; a click glides there.
 - **Gehen / Fliegen** — walk or fly.
 - **Aussichtspunkte** ("viewpoints") — hand-picked vantages the camera
   glides to (on a keyboard also with `1` – `9`):

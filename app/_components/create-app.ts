@@ -370,6 +370,10 @@ export interface CityWalkHandle {
   placeAt: (viewpoint: ViewpointGeometry) => void;
   /** Drops the player at EPSG coordinates, standing on the terrain. */
   teleportTo: (epsgX: number, epsgY: number) => void;
+  /** Glides to EPSG coordinates (the minimap click; camera-pose.ts). */
+  glideToSpot: (epsgX: number, epsgY: number) => void;
+  /** Where the glide in progress lands (EPSG), or null. */
+  getGlideTarget: () => { epsgX: number; epsgY: number } | null;
   /** the site's extent in EPSG coordinates — the minimap frame */
   terrainBounds: TerrainBounds;
   /**
@@ -1513,6 +1517,8 @@ async function bootApp(
     captureViewpoint: pose.captureViewpoint,
     placeAt: pose.placeAt,
     teleportTo: pose.teleportTo,
+    glideToSpot: pose.glideToSpot,
+    getGlideTarget: pose.getGlideTarget,
     getPose: pose.getPose,
     getCameraState: pose.getCameraState,
     applyCameraState: pose.applyCameraState,

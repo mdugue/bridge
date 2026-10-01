@@ -38,7 +38,7 @@ lädt* oben im Bild (siehe
 | Mausrad (oder Zwei-Finger-Geste auf dem Trackpad) | vor oder zurück |
 | `Alt` + Mausrad | zoomen (Blickwinkel enger oder weiter) |
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
-| Klick auf die Minikarte | dorthin teleportieren |
+| Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
@@ -114,7 +114,7 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 
 - **Minikarte** — das ganze Gebiet von oben, mit den Landnutzungsfarben,
   den Brücken und den Grundrissen der gerade geladenen Gebäude. Deine Position und
-  Blickrichtung sind eingezeichnet; ein Klick teleportiert.
+  Blickrichtung sind eingezeichnet; ein Klick gleitet dorthin.
 - **Gehen / Fliegen** — der Bewegungsmodus.
 - **Aussichtspunkte** — handverlesene Standpunkte, zu denen die Kamera
   gleitet (am Rechner auch mit den Tasten `1` – `9`):
