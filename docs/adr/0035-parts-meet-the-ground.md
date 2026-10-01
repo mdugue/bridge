@@ -48,8 +48,8 @@ leaves the next layer — and the next site — to rediscover the rule.
   falling at its grade until it lands). Never a step the data does not
   have; never a surface that stops where a median says it should.
 - **Decisions per sample are smoothed along the part** (`farthestNear` in
-  TypeScript; in the bakes a majority over a window and no run shorter than
-  a minimum, as the tram bed now is), never taken once for a whole line,
+  TypeScript; in the bakes `common.label_line`: a majority over a window
+  and no run shorter than a minimum, as the tram bed now is), never taken once for a whole line,
   and never left raw: a raw per-sample decision turns an edge into a
   sawtooth, a whole-line one is wrong for most of the line.
 - **A part reports where it meets the ground.** Every builder of a part
@@ -78,7 +78,20 @@ pure function's unit test.
    joins with `checkJoins` (runtime parts);
 4. is judged from an oblique angle at the place the check names as worst.
 
+- **A part follows the ground between its samples**: `followGround`
+  densifies a line where the ground bends away from its straight span,
+  `lowestGround` takes a foot down to the lowest ground along it, and a
+  top whose edge finds the ground *below* it drops a face to the ground
+  (a wall's cap behind, a flight's top landing) instead of ending in the
+  air.
+
 ## Consequences
+
+- The first run over the site (2026-10-01) found the same failures in the
+  parts built before the rule, and they were fixed with the same helpers:
+  misses of kerbs 2.9 → 0.2 %, walls 3.3 → 0.6 %, stairs 4.4 → 0.03 %,
+  fences 1.7 → 0.16 %; the scan's sheds already stood on their lowest
+  ground (0.02 %).
 
 - The budgets are the measured state, not zero: a kerb where the pavement
   lies below the road keeps its step, a wall whose cap finds no ground

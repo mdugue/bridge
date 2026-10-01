@@ -38,7 +38,9 @@ visual-variable codebook is in
   6 m of the OSM line, running medians along the wall, face just in front of
   the ramp foot + a coping cap back to where the ground reaches its level,
   per column — a cap ending at the median crest left the DGM's steep ramp
-  showing behind it as a row of jagged facets wherever the ramp ran wider).
+  showing behind it as a row of jagged facets wherever the ramp ran wider;
+  where it finds no shelf within 5 m it drops a back face to the ground,
+  and the foot reaches the lowest ground along the face — ADR 0035).
   The coarse 512² level keeps
   the grid and the conflation; a DGM with NoData keeps the grid for its fine
   level too ([ADR 0030](./adr/0030-terrain-tin-and-wall-snap.md)).
@@ -160,7 +162,9 @@ visual-variable codebook is in
   far side is ground (not water or railway). The terrain bake stands a
   **kerb stone** on them in the fine terrain glTF (`lib/city/kerbs.ts`,
   12 cm above the road, 24 cm wide, face toward the road, its top falling
-  to the pavement's level where the stone ends — a stone level across stood
+  to the pavement's level where the stone ends (a verge or bank below the
+  road too), densified where the ground bends between its 2.5 m columns,
+  its face's foot down to a gutter below the road (ADR 0035) — a stone level across stood
   a second step on the pavement side, whose smoothed DGM lies only a few
   centimetres above the road; `kerb-layer.ts`, casts shadow) — the DGM1 smooths the
   step away and the 2 m grid cannot hold it. In the fragment pass
@@ -1256,7 +1260,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   (33412_5656, 33412_5658) on 2026-09-26. **Baked into the
   fine terrain glTF** as a `fences` node (`lib/city/fences.ts`,
   `scripts/bake-tiles.ts` `fenceMesh`, ADR 0029): **one low, calm band**
-  along the line on the fine TIN — a flat, double-sided quad per ≤ 2.5 m at
+  along the line on the fine TIN — a flat, double-sided quad per ≤ 2.5 m
+  (closer where the ground bends between, ADR 0035: a band bridging a dip
+  floated over it) at
   ¾ of the tagged height (0.4–1 m; a handrail only its top 15 cm) — cut
   `w` wide at each gate with a leaf in a lighter tone in the gap (a boom
   at the band's top for a lift gate, swing gate or cycle barrier); a closed
@@ -1340,7 +1346,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   *Wange* instead: a 3 m block topped at the bank's level, a 0.5 m stone
   coping along the steps and the rest in the built-up ground's tone, over
   the ground the burn lowered beside the flight, which had shown as a
-  ragged trench — into
+  ragged trench (its outer edge meeting the bank where it ends); a cheek
+  reaches the ground beside it, and a top landing over lower ground drops
+  a face to it (ADR 0035) — into
   the fine terrain glTF of the tile owning its middle (a `stairs` node,
   vertex colours); `stair-layer.ts` only gives it its material.
   **Why:** the DGM1 smooths a staircase into a bank (the flight beside the
