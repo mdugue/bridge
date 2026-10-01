@@ -18,9 +18,11 @@
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
 import {
+  EDGE_TOLERANCE_M,
   farthestNear,
   type JoinPoint,
   joinsAlong,
+  lowestGround,
   reachLevel,
   SINK,
 } from "./ground-join";
@@ -67,6 +69,9 @@ const MAX_H = 14; // clamp tall tags (m)
 interface WallCol {
   /** the EPSG point the cap's back edge ends at (a snapped column) */
   back?: Point2;
+  /** where the ground behind the cap lies below it: the foot of the back
+   *  face the cap drops to there */
+  backFoot?: number;
   base: number;
   /** the EPSG point the face stands at */
   face: Point2;
@@ -245,15 +250,37 @@ function wallJoins(a: WallCol, b: WallCol): JoinPoint[] {
     { x: b.face[0], y: b.face[1], z: b.base }
   );
   if (a.back && b.back) {
+    // a cap meets the ground behind it, or drops a back face to it
+    const dropped = a.backFoot !== undefined || b.backFoot !== undefined;
     out.push(
       ...joinsAlong(
-        "edge",
-        { x: a.back[0], y: a.back[1], z: a.top },
-        { x: b.back[0], y: b.back[1], z: b.top }
+        dropped ? "foot" : "edge",
+        { x: a.back[0], y: a.back[1], z: a.backFoot ?? a.top },
+        { x: b.back[0], y: b.back[1], z: b.backFoot ?? b.top }
       )
     );
   }
   return out;
+}
+
+/** The back face a cap drops to the ground behind it, where either column
+ *  needs one (`backFoot`). */
+function pushBack(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
+  if (
+    (a.backFoot === undefined && b.backFoot === undefined) ||
+    a.bx === undefined ||
+    a.bz === undefined ||
+    b.bx === undefined ||
+    b.bz === undefined
+  ) {
+    return;
+  }
+  pushQuad(
+    pos,
+    nrm,
+    { ...a, wx: a.bx, wz: a.bz, base: a.backFoot ?? a.top },
+    { ...b, wx: b.bx, wz: b.bz, base: b.backFoot ?? b.top }
+  );
 }
 
 /** Pushes the two triangles of a vertical quad between two columns. */
@@ -334,7 +361,7 @@ function columnsOf(
     }),
     steps
   );
-  return pts.map((p, i) => {
+  const cols = pts.map((p, i) => {
     const step = steps[i];
     const end = ends[i];
     // smoothSnaps fills gaps from the neighbours; a vertex off every tile
@@ -343,6 +370,36 @@ function columnsOf(
       ? snappedColumn(p, perps[i], h, step, offset, end)
       : columnAt(p, perps[i], h, heightAt, offset);
   });
+  return cols.map((c, i) =>
+    c ? grounded(c, cols[i - 1], cols[i + 1], heightAt) : c
+  );
+}
+
+/**
+ * A column held to the ground it meets (ADR 0035): its foot reaches the
+ * lowest ground along the face to its neighbours — a wall sampled every
+ * 2.5 m stood its foot on the shelves either side of a dip, a ditch or the
+ * water at a quay; and where the ground behind its cap lies below the cap
+ * (a cap that found no shelf within reach: steps down, a slope), the cap
+ * drops a back face to that ground instead of ending in the air.
+ */
+function grounded(
+  c: WallCol,
+  prev: WallCol | null | undefined,
+  next: WallCol | null | undefined,
+  heightAt: HeightAt
+): WallCol {
+  const mid = (n: WallCol | null | undefined): Point2[] =>
+    n ? [[(c.face[0] + n.face[0]) / 2, (c.face[1] + n.face[1]) / 2]] : [];
+  const low = lowestGround(heightAt, [c.face, ...mid(prev), ...mid(next)]);
+  const base = low === null ? c.base : Math.min(c.base, low - SINK.wall);
+  if (!c.back) {
+    return { ...c, base };
+  }
+  const behind = heightAt(c.back[0], c.back[1]);
+  return behind !== null && behind < c.top - EDGE_TOLERANCE_M
+    ? { ...c, base, backFoot: behind - SINK.wall }
+    : { ...c, base };
 }
 
 /**
@@ -376,6 +433,7 @@ export function wallGeometry(
       }
       pushQuad(positions, normals, c0, c1);
       pushCap(positions, normals, c0, c1);
+      pushBack(positions, normals, c0, c1);
       joins.push(...wallJoins(c0, c1));
     }
   }

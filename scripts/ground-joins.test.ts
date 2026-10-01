@@ -102,16 +102,18 @@ test("every builder's joins hold on the ground it stood on", () => {
  * The share of joins that miss on the spawn tile (and the parts of its
  * neighbours it reads), per part (ADR 0035): the measured state, a little
  * above it. A change that floats a part or stands a step on the ground
- * (the kerb stood a second step on the pavement: 32 % of its joins)
+ * (the kerb stood a second step on the pavement: 32 % of its joins;
+ * before ADR 0035's audit the walls missed 3.5 %, the stairs 4.5 %, the
+ * fences 1.6 %)
  * fails here. Lower a budget when a fix lowers its share; raising one
  * needs a reason in the commit. `bun scripts/ground-joins.ts` prints the
  * table and the worst places for the whole site.
  */
 const BUDGET: Record<JoinPart, number> = {
-  kerbs: 0.025,
-  walls: 0.03,
-  stairs: 0.05,
-  fences: 0.02,
+  kerbs: 0.003,
+  walls: 0.007,
+  stairs: 0.001,
+  fences: 0.003,
 };
 
 test("the committed parts meet the ground within their budgets", async () => {

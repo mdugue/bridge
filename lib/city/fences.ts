@@ -26,7 +26,7 @@
  * The UV carries only the kind: `u` = the code's slot, `v` = the height
  * fraction (the shader's top edge and rooted foot).
  */
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import { followGround, type JoinPoint, joinsAlong, SINK } from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
 
@@ -401,7 +401,9 @@ function simplify(line: Point2[]): Point2[] {
   ];
 }
 
-/** Stations every ≤ SAMPLE_M along a piece; null where the ground is unknown. */
+/** Stations every ≤ SAMPLE_M along a piece, closer where the ground bends
+ *  between them (`followGround`: a band bridging a dip floated over it);
+ *  null where the ground is unknown. */
 function stationsOf(
   piece: Point2[],
   heightAt: HeightAt,
@@ -421,7 +423,7 @@ function stationsOf(
     }
   }
   pts.push(line.at(-1) ?? line[0]);
-  return pts.map((p) => {
+  return followGround(pts, heightAt).map((p) => {
     const g = heightAt(p[0], p[1]);
     if (g === null) {
       return null;

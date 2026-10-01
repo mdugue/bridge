@@ -32,7 +32,14 @@
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
-import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
+import {
+  EDGE_TOLERANCE_M,
+  type HeightAt,
+  type JoinPoint,
+  joinsAlong,
+  meetGround,
+  SINK,
+} from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";
 import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
@@ -687,7 +694,7 @@ function wange(
   out: StairWriter,
   a: Section,
   b: Section,
-  ctx: { base: number; half: number; side: 1 | -1 },
+  ctx: { base: number; groundAt: HeightAt; half: number; side: 1 | -1 },
   tops: [number, number],
   ends: { first: boolean; last: boolean }
 ): void {
@@ -699,47 +706,60 @@ function wange(
   const [ai, bi] = [at(a, half), at(b, half)];
   const [ac, bc] = [at(a, half + COPING_M), at(b, half + COPING_M)];
   const [ao, bo] = [at(a, half + WANGE_M), at(b, half + WANGE_M)];
+  // the outer edge meets the bank where it ends (ADR 0035): the bank is
+  // read further out, and a slope is lower here than there
+  const outer: [number, number] = [
+    meetGround(tops[0], ctx.groundAt(ao[0], ao[1])),
+    meetGround(tops[1], ctx.groundAt(bo[0], bo[1])),
+  ];
   const n: [number, number] = [a.px * sd, a.py * sd]; // outward
   const bases: [number, number] = [base, base];
   out.span("foot", [ao, base], [bo, base]);
-  out.span("edge", [ao, tops[0]], [bo, tops[1]]);
+  out.span("edge", [ao, outer[0]], [bo, outer[1]]);
   // seen from the steps (normal −n) the left side runs a → b, the right b → a
   if (sd === 1) {
     side(out, ai, bi, bases, tops, [-n[0], -n[1]]);
-    side(out, bo, ao, bases, [tops[1], tops[0]], n);
+    side(out, bo, ao, bases, [outer[1], outer[0]], n);
   } else {
     side(out, bi, ai, bases, [tops[1], tops[0]], [-n[0], -n[1]]);
-    side(out, ao, bo, bases, tops, n);
+    side(out, ao, bo, bases, outer, n);
   }
-  const top = (p: Point2, q: Point2, r: Point2, s: Point2, kind: number) => {
-    // counter-clockwise seen from above: the steps' tread order (right → left)
-    const [ta, tb] = tops;
-    const quad: Corner[] =
-      sd === 1
-        ? [
-            [...p, ta],
-            [...q, tb],
-            [...r, tb],
-            [...s, ta],
-          ]
-        : [
-            [...s, ta],
-            [...r, tb],
-            [...q, tb],
-            [...p, ta],
-          ];
-    out.quad(quad, [0, 0, 1], kind);
+  // A top strip from its inner (p at a, q at b) to its outer edge (r at b,
+  // s at a), counter-clockwise seen from above: the steps' tread order
+  // (right → left) — the inner edge is the right one on the left side.
+  const top = (
+    [p, q]: [Point2, Point2],
+    [r, s]: [Point2, Point2],
+    inner: [number, number],
+    outerTops: [number, number],
+    kind: number
+  ) => {
+    const quad: Corner[] = [
+      [...p, inner[0]],
+      [...q, inner[1]],
+      [...r, outerTops[1]],
+      [...s, outerTops[0]],
+    ];
+    out.quad(
+      sd === 1 ? quad : [quad[3], quad[2], quad[1], quad[0]],
+      [0, 0, 1],
+      kind
+    );
   };
-  top(ai, bi, bc, ac, STAIR_CHEEK);
-  top(ac, bc, bo, ao, STAIR_BANK);
+  top([ai, bi], [bc, ac], tops, tops, STAIR_CHEEK);
+  top([ac, bc], [bo, ao], tops, outer, STAIR_BANK);
   const down: [number, number] = [-a.py, a.px]; // −tangent: down the flight
   if (ends.first) {
     const [p, q] = sd === 1 ? [ao, ai] : [ai, ao];
-    side(out, p, q, bases, [tops[0], tops[0]], down);
+    const t: [number, number] =
+      sd === 1 ? [outer[0], tops[0]] : [tops[0], outer[0]];
+    side(out, p, q, bases, t, down);
   }
   if (ends.last) {
     const [p, q] = sd === 1 ? [bi, bo] : [bo, bi];
-    side(out, p, q, bases, [tops[1], tops[1]], [-down[0], -down[1]]);
+    const t: [number, number] =
+      sd === 1 ? [tops[1], outer[1]] : [outer[1], tops[1]];
+    side(out, p, q, bases, t, [-down[0], -down[1]]);
   }
 }
 
@@ -786,7 +806,14 @@ export function stairGeometry(
       return false;
     }
     const ends = { first: a.s <= 1e-6, last: b.s >= length - 1e-6 };
-    wange(out, a, b, { base, half, side: sd }, [ta, tb], ends);
+    wange(
+      out,
+      a,
+      b,
+      { base, groundAt: surround?.groundAt ?? (() => null), half, side: sd },
+      [ta, tb],
+      ends
+    );
     return true;
   };
   const block = (a: Section, b: Section) => {
@@ -823,15 +850,27 @@ export function stairGeometry(
       joint(out, end, next, half, tread(stepOf(end.s)), base);
     }
   }
-  // The top landing's edge meets the ground beyond it: read past the burn's
-  // reach, where the ground is the terrain the flight climbs onto.
+  // The top landing meets the ground beyond it (read past the burn's reach,
+  // where the ground is the terrain the flight climbs onto); where that
+  // lies below the top tread (a flight onto a structure the DGM lacks, a
+  // free-standing flight) the landing drops a face to it, rather than end
+  // in the air with the steps hollow behind.
   const last = segments.at(-1)?.at(-1);
   if (last) {
-    out.join(
-      "edge",
-      [last.x + last.py * BEYOND_TOP_M, last.y - last.px * BEYOND_TOP_M],
-      tread(stair.n - 1)
-    );
+    const top = tread(stair.n - 1);
+    const beyond: Point2 = [
+      last.x + last.py * BEYOND_TOP_M,
+      last.y - last.px * BEYOND_TOP_M,
+    ];
+    const g = surround?.groundAt(beyond[0], beyond[1]) ?? null;
+    if (g !== null && g < top - EDGE_TOLERANCE_M) {
+      const [l, r] = [edge(last, 1), edge(last, -1)];
+      const feet: [number, number] = [footAt(r), footAt(l)];
+      side(out, r, l, feet, [top, top], [last.py, -last.px]);
+      out.span("foot", [r, feet[0]], [l, feet[1]]);
+    } else {
+      out.join("edge", beyond, top);
+    }
   }
   // A riser at the front of every step, facing down the flight.
   const all = segments.flat();

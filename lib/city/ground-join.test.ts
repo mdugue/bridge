@@ -3,6 +3,8 @@ import {
   checkJoins,
   EDGE_TOLERANCE_M,
   farthestNear,
+  followGround,
+  lowestGround,
   meetGround,
   reachLevel,
 } from "./ground-join";
@@ -69,4 +71,39 @@ test("feet must reach the ground, edges must not stand above it", () => {
   expect(report.edges).toBe(3);
   expect(report.unknown).toBe(1);
   expect(report.misses.map((m) => m.join.x)).toEqual([4, 1]);
+});
+
+test("a line follows the ground where it bends between its points", () => {
+  // a 1 m deep gutter 2 m wide around x = 5 on a 10 m span
+  const gutter = (x: number) => (Math.abs(x - 5) < 1 ? 99 : 100);
+  const line = followGround(
+    [
+      [0, 0],
+      [10, 0],
+    ],
+    gutter
+  );
+  expect(line.length).toBeGreaterThan(2);
+  expect(line.some(([x]) => Math.abs(x - 5) < 1)).toBe(true);
+  // flat ground is left alone
+  expect(
+    followGround(
+      [
+        [0, 0],
+        [10, 0],
+      ],
+      () => 100
+    )
+  ).toEqual([
+    [0, 0],
+    [10, 0],
+  ]);
+  expect(
+    lowestGround(gutter, [
+      [0, 0],
+      [5, 0],
+      [20, 0],
+    ])
+  ).toBe(99);
+  expect(lowestGround(() => null, [[0, 0]])).toBeNull();
 });

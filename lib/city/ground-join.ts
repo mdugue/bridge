@@ -80,6 +80,75 @@ export function meetGround(
   return Math.min(top, Math.max(ground + lift, floor));
 }
 
+/** The lowest known ground under `points` (EPSG), or null where none is
+ *  known: what a foot spanning them must reach below. */
+export function lowestGround(
+  heightAt: HeightAt,
+  points: readonly (readonly [number, number])[]
+): number | null {
+  let low: number | null = null;
+  for (const [x, y] of points) {
+    const g = heightAt(x, y);
+    if (g !== null && (low === null || g < low)) {
+      low = g;
+    }
+  }
+  return low;
+}
+
+/** How far the ground may bend away from a part's straight span before
+ *  `followGround` splits it (m), and its shortest span (m). */
+const FOLLOW_TOLERANCE_M = 0.05;
+const FOLLOW_MIN_M = 0.5;
+
+/**
+ * A polyline (EPSG) with points added wherever the ground between two of
+ * them bends away from the straight line between their grounds by more
+ * than `tolerance` — halving the span, down to `minStep`. A part that
+ * stands on its points' ground (a kerb, a fence) then follows a dip or a
+ * crest between them instead of bridging it: a foot sampled every few
+ * metres floated over every gutter and every step down.
+ */
+export function followGround(
+  points: readonly (readonly [number, number])[],
+  heightAt: HeightAt,
+  opts: { minStep?: number; tolerance?: number } = {}
+): [number, number][] {
+  const tolerance = opts.tolerance ?? FOLLOW_TOLERANCE_M;
+  const minStep = opts.minStep ?? FOLLOW_MIN_M;
+  const out: [number, number][] = [];
+  const split = (
+    a: readonly [number, number],
+    b: readonly [number, number],
+    ga: number | null,
+    gb: number | null
+  ): void => {
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 2 * minStep) {
+      const m: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const gm = heightAt(m[0], m[1]);
+      if (
+        ga !== null &&
+        gb !== null &&
+        gm !== null &&
+        Math.abs(gm - (ga + gb) / 2) > tolerance
+      ) {
+        split(a, m, ga, gm);
+        out.push(m);
+        split(m, b, gm, gb);
+      }
+    }
+  };
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    out.push([p[0], p[1]]);
+    const q = points[i + 1];
+    if (q) {
+      split(p, q, heightAt(p[0], p[1]), heightAt(q[0], q[1]));
+    }
+  }
+  return out;
+}
+
 export interface ReachOptions {
   /** an unknown ground on the way ends the search (null) or is stepped
    *  over */

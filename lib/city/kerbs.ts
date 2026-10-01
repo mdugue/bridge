@@ -16,7 +16,13 @@
  * lies a few centimetres above the road there, not at the kerb's top, and
  * every kerb showed an edge toward the pavement as well as the road.
  */
-import { type JoinPoint, joinsAlong, meetGround, SINK } from "./ground-join";
+import {
+  followGround,
+  type JoinPoint,
+  joinsAlong,
+  meetGround,
+  SINK,
+} from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
 
@@ -79,11 +85,14 @@ function kerbCol(
     face,
     back,
     n: { x: n.x - face.x, z: n.z - face.z },
-    faceFoot: road - SINK_M,
+    // the feet reach the lower of the ground under them and beside them: a
+    // gutter or a verge dips below the road a few decimetres out
+    faceFoot: Math.min(road, g) - SINK_M,
     backFoot: walk - SINK_M,
     top,
-    // never below the road (a pavement lower than the road keeps a step)
-    backTop: meetGround(top, walk, { floor: road + LIFT_M, lift: LIFT_M }),
+    // on the pavement's level, a lower one too (a verge, a bank down): the
+    // top then falls further rather than stand a step on it
+    backTop: meetGround(top, walk, { lift: LIFT_M }),
   };
 }
 
@@ -178,7 +187,7 @@ export function kerbGeometry(
     if (line.length < 2) {
       continue;
     }
-    const pts = subdividePolyline(line, SAMPLE_M);
+    const pts = followGround(subdividePolyline(line, SAMPLE_M), heightAt);
     const dirs = towardRoad(pts);
     const cols = pts.map((p, i) => kerbCol(p, dirs[i], heightAt, offset));
     for (let i = 0; i < cols.length - 1; i++) {
