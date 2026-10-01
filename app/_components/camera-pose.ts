@@ -70,6 +70,45 @@ const GRAB_RADIANS_PER_PX = 0.004;
 /** rad per CSS px of pointer-locked mouse motion (half the grab speed). */
 const MOUSE_RADIANS_PER_PX = 0.002;
 
+/**
+ * Dolly (pinch, wheel): m per unit of ln(finger-distance ratio) — spreading
+ * the fingers to twice their distance walks about 10 m on foot…
+ */
+const WALK_DOLLY_M = 14;
+/**
+ * …and in the air covers this share of the height above the ground per
+ * unit, so a pinch feels the same from the rooftops as from high above.
+ */
+const FLY_DOLLY_PER_M = 0.9;
+const FLY_DOLLY_MIN_M = 15;
+
+/** m above the ground a take-off (walk → fly) rises to. */
+const TAKEOFF_HEIGHT = 30;
+/** s the take-off takes. */
+const TAKEOFF_DURATION = 1.1;
+/** deg — taking off, the view tips this far down at least, onto the street. */
+const TAKEOFF_PITCH_DEG = -12;
+/** s — a landing (fly → walk): this, plus LANDING_S_PER_SQRT_M · √drop… */
+const LANDING_BASE = 0.35;
+const LANDING_S_PER_SQRT_M = 0.12;
+/** …at most (s): even from 1 km up the landing is a breath, not a wait. */
+const LANDING_MAX = 2.2;
+
+/** A double-tap glide: s, plus TRAVEL_S_PER_M per metre… */
+const TRAVEL_BASE = 0.6;
+const TRAVEL_S_PER_M = 0.004;
+const TRAVEL_MIN = 0.8;
+const TRAVEL_MAX = 2.6;
+/** …bowing up by this share of the distance on foot (a hop, not a flight). */
+const TRAVEL_ARC_RATIO = 0.06;
+const TRAVEL_MAX_ARC = 25;
+/**
+ * In the air a double tap flies this share of the way towards the tapped
+ * spot, along the line of sight — the spot stays where it was on screen,
+ * only nearer, like a map's double-tap zoom.
+ */
+const FLY_TRAVEL_SHARE = 0.6;
+
 export interface CameraPoseOptions {
   /**
    * The lowest real terrain elevation (world Y) so far: where the player
@@ -105,10 +144,16 @@ export interface CameraPoseOptions {
 export interface CameraPose {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
-  /** Captures the FOV a pinch starts from; zoomTo is relative to it. */
-  beginZoom: () => void;
+  /** Starts a pinch; pinchTo is relative to the finger distance here. */
+  beginPinch: () => void;
   /** Drops a scenic glide in progress — the player took the wheel. */
   cancelGlide: () => void;
+  /**
+   * Moves the camera forward (> 0) or back by `amount` units of
+   * ln(zoom ratio) — the pinch and the wheel. On foot it walks along the
+   * ground; in the air it flies along the view, further the higher it is.
+   */
+  dolly: (amount: number) => void;
   /**
    * Teleports the camera (world/Y-up coords) — used by tests and QA.
    * Switches to fly mode so the ground clamp doesn't drag the camera down.
@@ -127,6 +172,14 @@ export interface CameraPose {
   captureViewpoint: () => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
+  /** Where the glide in progress lands (EPSG), or null when none is. */
+  getGlideTarget: () => { epsgX: number; epsgY: number } | null;
+  /**
+   * Glides to EPSG coordinates (the minimap): on foot to stand there,
+   * looking ahead; in the air at the same height above the ground, the aim
+   * held. A trip across the city bows up and over the roofs on its way.
+   */
+  glideToSpot: (epsgX: number, epsgY: number) => void;
   getMode: () => MovementMode;
   getPose: () => PlayerPose;
   /**
@@ -168,19 +221,27 @@ export interface CameraPose {
   toggleMode: () => void;
   /** Grab-look: drag deltas in CSS px (dragging right turns the view left). */
   turn: (dxPx: number, dyPx: number) => void;
-  /** Wheel zoom: `ratio` > 1 zooms in, relative to the current FOV. */
+  /**
+   * Double tap: glides to a world point — on foot to stand there, in the
+   * air part of the way along the line of sight.
+   */
+  travelTo: (point: Xyz) => void;
+  /** Pinch: `ratio` = finger distance / distance at beginPinch. */
+  pinchTo: (ratio: number) => void;
+  /** Wheel zoom (FOV): `ratio` > 1 zooms in, relative to the current FOV. */
   zoomBy: (ratio: number) => void;
-  /** Pinch zoom: `ratio` = finger distance / distance at beginZoom. */
-  zoomTo: (ratio: number) => void;
 }
 
 /**
  * Owns the camera's pose: where the player stands, which way they look, walk
  * vs fly, and the scenic glides. Every way the pose can change goes through
  * here, which is what makes the one rule enforceable: **any player input
- * takes the wheel** — a movement key, the stick, a drag, a zoom or a mode
+ * takes the wheel** — a movement key, the stick, a drag, a pinch or a mode
  * switch cancels a scenic glide instead of fighting it or being swallowed by
- * it. Poses set from outside (spawn, teleport, snapshot) do the same.
+ * it. Poses set from outside (spawn, teleport, snapshot) do the same. The
+ * player's own glides — a landing or take-off when the mode switches, a
+ * double-tap trip — are the exception for a drag: it looks around while the
+ * glide carries on, so a walker is never left hanging in mid-air.
  *
  * The other rule: **the camera is never below the ground or inside a
  * building** — not after a step, a glide frame (the glide plans its path
@@ -208,7 +269,13 @@ export function createCameraPose(
   const flight = createCameraFlight(camera);
   /** The mode a scenic glide settles into on the frame it lands. */
   let pendingMode: MovementMode | null = null;
-  let zoomStartFov = camera.fov;
+  /**
+   * The glide is the player's own (a landing, a take-off, a double-tap
+   * trip): a drag looks around in it rather than stopping it in mid-air.
+   */
+  let ownGlide = false;
+  /** the pinch ratio the last dolly step was taken at */
+  let lastPinch = 1;
   let followAim: FollowAim | null = null;
   /** world x/z the camera eases towards in live mode */
   let followPos: { x: number; z: number } | null = null;
@@ -296,6 +363,8 @@ export function createCameraPose(
 
   /** After a jump: callers may raycast (demolish) before the next frame. */
   const poseJumped = () => {
+    // A push still coasting belongs to where the camera was.
+    movement.stopDolly();
     camera.updateMatrixWorld(true);
     opts.onPose?.(getPose());
   };
@@ -303,6 +372,7 @@ export function createCameraPose(
   const cancelGlide = () => {
     flight.cancel();
     pendingMode = null;
+    ownGlide = false;
   };
 
   /** Mode change without touching the glide — the glide itself uses it. */
@@ -328,10 +398,99 @@ export function createCameraPose(
     p.set(clear.pos.x, clear.pos.y, clear.pos.z);
   };
 
+  /** The view's compass heading and pitch, in degrees. */
+  const aimDeg = (): { headingDeg: number; pitchDeg: number } => {
+    camera.getWorldDirection(dir);
+    const { heading, pitch } = headingPitchOf(dir);
+    return { headingDeg: heading * RAD2DEG, pitchDeg: pitch * RAD2DEG };
+  };
+
+  /** Starts one of the player's own glides (see ownGlide). */
+  const glideTo = (
+    target: FlightTarget,
+    shape?: { arc: number; duration: number }
+  ) => {
+    flight.start(target, glideFloor, shape);
+    ownGlide = true;
+    // A pinch still coasting would otherwise resume once the glide lands.
+    movement.stopDolly();
+  };
+
+  /**
+   * Fly → walk: glides down onto the ground below — beside a building
+   * rather than on its roof — levelling the view, so the walker looks down
+   * the street and not at their feet. Nowhere near to stand: hovers on.
+   */
+  const land = () => {
+    const p = camera.position;
+    const spot = standOutside({
+      x: p.x,
+      y: groundWorld(p.x, p.z) + EYE_HEIGHT,
+      z: p.z,
+    });
+    if (!spot) {
+      keepClear(true);
+      return;
+    }
+    const pos = liftClear(spot);
+    const drop = Math.hypot(p.x - pos.x, p.y - pos.y, p.z - pos.z);
+    glideTo(
+      { pos, headingDeg: aimDeg().headingDeg, pitchDeg: 0, fov: camera.fov },
+      {
+        arc: 0,
+        duration: Math.min(
+          LANDING_BASE + LANDING_S_PER_SQRT_M * Math.sqrt(drop),
+          LANDING_MAX
+        ),
+      }
+    );
+  };
+
+  /**
+   * Walk → fly: rises straight up to TAKEOFF_HEIGHT over the ground (and
+   * any roof), tipping the view down onto the street — on a phone flying
+   * would otherwise start at eye height with the altitude stick to climb.
+   */
+  const takeOff = () => {
+    const p = camera.position;
+    const y = Math.max(p.y, groundWorld(p.x, p.z) + TAKEOFF_HEIGHT);
+    const pos = liftClear({ x: p.x, y, z: p.z });
+    if (pos.y - p.y < 1) {
+      keepClear(false);
+      return;
+    }
+    const aim = aimDeg();
+    glideTo(
+      {
+        pos,
+        headingDeg: aim.headingDeg,
+        pitchDeg: Math.min(aim.pitchDeg, TAKEOFF_PITCH_DEG),
+        fov: camera.fov,
+      },
+      { arc: 0, duration: TAKEOFF_DURATION }
+    );
+  };
+
+  /**
+   * A switch between walking and flying is animated: a landing or a
+   * take-off. The mode is the new one at once (the HUD follows the press);
+   * the glide only carries the camera there.
+   */
   const setMovementMode = (mode: MovementMode) => {
+    const was = movement.getMode();
     cancelGlide();
-    settle(mode);
-    keepClear(mode === "walk");
+    if (mode === was) {
+      settle(mode);
+      keepClear(mode === "walk");
+      return;
+    }
+    movement.setMode(mode);
+    opts.onModeChange?.(mode);
+    if (mode === "walk") {
+      land();
+    } else {
+      takeOff();
+    }
   };
 
   const setFov = (fov: number) => {
@@ -393,9 +552,16 @@ export function createCameraPose(
     }
   };
 
-  /** Yaw/pitch the view by radians; the player took the wheel. */
+  /**
+   * Yaw/pitch the view by radians; the player took the wheel. Their own
+   * glide (a landing, a double-tap trip) carries on and lets them look.
+   */
   const rotate = (yaw: number, pitch: number) => {
-    cancelGlide();
+    if (ownGlide) {
+      flight.releaseLook();
+    } else {
+      cancelGlide();
+    }
     endFollow();
     euler.setFromQuaternion(camera.quaternion);
     euler.y += yaw;
@@ -404,8 +570,92 @@ export function createCameraPose(
     camera.quaternion.setFromEuler(euler);
   };
 
+  /** Pushes the camera along by `amount` units of ln(zoom ratio). */
+  const dolly = (amount: number) => {
+    if (amount === 0 || !Number.isFinite(amount)) {
+      return;
+    }
+    cancelGlide();
+    endFollow();
+    const p = camera.position;
+    const metres =
+      movement.getMode() === "walk"
+        ? WALK_DOLLY_M
+        : Math.max(
+            FLY_DOLLY_MIN_M,
+            (p.y - groundWorld(p.x, p.z)) * FLY_DOLLY_PER_M
+          );
+    movement.dolly(amount * metres);
+  };
+
+  const travelTo = (point: Xyz) => {
+    cancelGlide();
+    endFollow();
+    const p = camera.position;
+    const aim = aimDeg();
+    const walking = movement.getMode() === "walk";
+    const pos = walking
+      ? clearOf(
+          {
+            x: point.x,
+            y: groundWorld(point.x, point.z) + EYE_HEIGHT,
+            z: point.z,
+          },
+          true
+        ).pos
+      : liftClear({
+          x: p.x + (point.x - p.x) * FLY_TRAVEL_SHARE,
+          y: p.y + (point.y - p.y) * FLY_TRAVEL_SHARE,
+          z: p.z + (point.z - p.z) * FLY_TRAVEL_SHARE,
+        });
+    const dist = Math.hypot(pos.x - p.x, pos.y - p.y, pos.z - p.z);
+    glideTo(
+      {
+        pos,
+        headingDeg: aim.headingDeg,
+        // On foot the trip ends looking ahead; in the air the aim holds, so
+        // the tapped spot stays put on screen.
+        pitchDeg: walking ? 0 : aim.pitchDeg,
+        fov: camera.fov,
+      },
+      {
+        arc: walking ? Math.min(dist * TRAVEL_ARC_RATIO, TRAVEL_MAX_ARC) : 0,
+        duration: Math.min(
+          Math.max(TRAVEL_BASE + dist * TRAVEL_S_PER_M, TRAVEL_MIN),
+          TRAVEL_MAX
+        ),
+      }
+    );
+  };
+
+  const glideToSpot = (epsgX: number, epsgY: number) => {
+    cancelGlide();
+    endFollow();
+    const p = camera.position;
+    const w = epsgToWorld(epsgX, epsgY, offset);
+    const ground = groundAt(epsgX, epsgY);
+    const walking = movement.getMode() === "walk";
+    const above = walking ? EYE_HEIGHT : p.y - groundWorld(p.x, p.z);
+    const aim = aimDeg();
+    glideTo({
+      pos: clearOf({ x: w.x, y: ground + above, z: w.z }, walking).pos,
+      headingDeg: aim.headingDeg,
+      pitchDeg: walking ? 0 : aim.pitchDeg,
+      fov: camera.fov,
+    });
+  };
+
   return {
     getMode: movement.getMode,
+    glideToSpot,
+    getGlideTarget: () => {
+      const to = flight.destination();
+      if (!to) {
+        return null;
+      }
+      const epsg = worldToEpsg(to.x, to.z, offset);
+      return { epsgX: epsg.x, epsgY: epsg.y };
+    },
     getPose,
     getCameraState: () => {
       camera.getWorldDirection(dir);
@@ -487,6 +737,7 @@ export function createCameraPose(
       settle("fly");
       flight.start(targetOf(viewpoint), glideFloor);
       pendingMode = viewpoint.mode;
+      ownGlide = false;
     },
     placeAt: (viewpoint) => {
       cancelGlide();
@@ -517,6 +768,7 @@ export function createCameraPose(
         keepClear(false);
         return;
       }
+      ownGlide = false;
       if (pendingMode) {
         settle(pendingMode);
         pendingMode = null;
@@ -592,10 +844,17 @@ export function createCameraPose(
       rotate(dxPx * GRAB_RADIANS_PER_PX, dyPx * GRAB_RADIANS_PER_PX),
     look: (dxPx, dyPx) =>
       rotate(-dxPx * MOUSE_RADIANS_PER_PX, -dyPx * MOUSE_RADIANS_PER_PX),
-    beginZoom: () => {
-      zoomStartFov = camera.fov;
+    beginPinch: () => {
+      lastPinch = 1;
     },
-    zoomTo: (ratio) => setFov(nextFov(zoomStartFov, ratio)),
+    pinchTo: (ratio) => {
+      if (ratio > 0 && Number.isFinite(ratio)) {
+        dolly(Math.log(ratio / lastPinch));
+        lastPinch = ratio;
+      }
+    },
+    dolly,
+    travelTo,
     zoomBy: (ratio) => setFov(nextFov(camera.fov, ratio)),
   };
 }
