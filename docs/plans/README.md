@@ -82,7 +82,7 @@ history. Decisions that came out of plans are written up as
 | 048 | Spike: a view as a `?snap=` link; committed QA views for plan 019 | **TODO** — spike + small build | [048-spike-view-links-and-qa-views.md](./048-spike-view-links-and-qa-views.md) |
 | 049 | A queryable twin: object ids and semantics in the tileset, the provenance manifest, the *Befragen* mode with its paper card | **PARTIAL** — 1–3 built (2026-09-27; ten fact columns, +3.5 % per building tile; OSM names, addresses, storeys re-baked on fifteen tiles; `I` / *Befragen*; since 2026-09-28 a long press asks, taps are tolerant, a bottom sheet on touch); the hatch unjudged on a GPU; 4–7 open (trees, bridges, a link, a Datenstand panel, ingest-written provenance) | [049-queryable-twin.md](./049-queryable-twin.md) |
 | 050 | Time and live sources: the day plays, weather sets the mood, the Elbe follows its gauge | **TODO** — static where possible (ADR 0001 amended); CORS of each source to verify first | [050-time-and-live-sources.md](./050-time-and-live-sources.md) |
-| 051 | Scenarios in the scene's own hand: flood, sun hours, sight lines, a planned building | **TODO** — shader phases with or after plan 020 | [051-scenarios.md](./051-scenarios.md) |
+| 051 | Scenarios in the scene's own hand: flood, sun hours, sight lines, a planned building | **TODO** — TSL terms on the terrain and clay graphs | [051-scenarios.md](./051-scenarios.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work

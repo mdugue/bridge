@@ -6,15 +6,15 @@
 > lines) — never a rainbow heat map, never text in the scene (ADR 0036;
 > numbers go into the inquiry card or the sidebar). Each phase is
 > independent. Judge every overlay on a real GPU (`bun run shots`,
-> headed) before it ships. Shader work waits for, or is written with, the
-> WebGPU port (plan 020): write it as a terrain/clay chunk that the port
-> can turn into a node function.
+> headed) before it ships. The scene is node materials since the WebGPU
+> port (ADR 0027): every overlay is a TSL node on the terrain's or the
+> clay's graph, driven by shared uniform nodes (no rebuild per change).
 
 ## Status
 
 - **Priority**: P2
 - **Effort**: L (four phases, S–M each)
-- **Risk**: MED — shader chunks in files the WebGPU port rewrites
+- **Risk**: MED — new terms in the shared terrain and clay node graphs
 - **Planned at**: 2026-09-27
 - **Status**: **TODO**
 

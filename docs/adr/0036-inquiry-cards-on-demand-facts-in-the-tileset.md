@@ -107,7 +107,7 @@ only where a source offers no CORS.
 - `scripts/tile-glb.ts` (STRING and ENUM columns), `scripts/bake-tiles.ts`,
   `scripts/bake-city-mesh.ts`, `scripts/prepare-data.ts`
 - `app/_components/inquiry-probe.ts`, `inquiry-card.tsx`, `city-layer.ts`
-  (`facts`, `mark`), `visual-style.ts` (`ASKED_HATCH`)
+  (`facts`, `mark`), `visual-style.ts` (`askedColour`)
 - `pipeline/bake/osm_buildings.py` (name, address, storeys)
 - [plan 049](../plans/049-queryable-twin.md), [050](../plans/050-time-and-live-sources.md),
-  [051](../plans/051-scenarios.md); ADR 0001 (amended), 0024, 0034
+  [051](../plans/051-scenarios.md); ADR 0001 (amended), 0024, 0027, 0034

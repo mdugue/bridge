@@ -192,7 +192,13 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
     roughness: clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
-    colour: askedColour(clayColour(d, tint, build, h, wall, flags), h, wall, flags, wn),
+    colour: askedColour(
+      clayColour(d, tint, build, h, wall, flags),
+      h,
+      wall,
+      flags,
+      wn
+    ),
     // Himmelslicht: the courtyard's ground floor gets less of the sky.
     ao: createClaySky().ao(h, build.z, d.uSkyView),
     emissive: clayGlow(d, build, h, wall, flags, wn),

@@ -66,7 +66,7 @@ years ("Modell 2024 · Dach gemessen 2016 · Grundriss 2022").
 
 `app/_components/inquiry-probe.ts` (pick under a screen point, the ground
 in front of a building wins, the tree marked), `city-layer.ts` (`facts`,
-`mark`), `visual-style.ts` (`ASKED_HATCH`: a paper lift and light, a
+`mark`), `visual-style.ts` (`askedColour`: a paper lift and light, a
 pencil hatch every 0.9 m on the building, 45° screen-space strokes every
 7 px where those crowd), `inquiry-card.tsx` (a
 non-modal `<aside>`, Esc and × close it), `lib/city/inquiry.ts` (the German
@@ -112,8 +112,12 @@ already has:
 - **Monuments and fountains** — the DLM's official name
   (`monuments_<tile>.geojson`).
 
-Each gets its own source line. Picking instanced meshes needs
-`instanceId` from the raycast; keep the pick order: the nearest hit wins,
+Each gets its own source line. The raycaster cannot pick these: since
+the WebGPU port (ADR 0027) instanced sets are `Instances`, a plain `Mesh`
+over an `InstancedBufferGeometry`, and three's `Raycaster` tests only its
+base geometry. Pick them from the data instead — a ray against each
+feature's simple solid (a trunk-and-crown capsule, a deck box, a monument
+cylinder) — and keep the pick order: the nearest hit wins, a building or
 the ground in front of it cancels.
 
 ### 4b. Aim and ask in live mode (S–M)
