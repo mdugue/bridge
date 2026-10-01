@@ -3,10 +3,13 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { loadStageStates } from "@/lib/city/load-stages";
+import { siteDataBase } from "@/lib/city/site-index";
 import { type DataManifest, MANIFEST_FILE, manifestUrl } from "@/lib/city/tile";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "@/lib/city/tileset";
 import { LoadScreen } from "./load-screen";
 import { currentSceneBudget, type SceneBudget } from "./scene-profile";
+import { SiteProvider } from "./site-context";
+import { siteById } from "@/sites";
 
 /**
  * The same Laden screen the viewer shows, at zero — the manifest fetch and
@@ -41,11 +44,11 @@ const CityWalk = dynamic(() => import("./city-walk"), {
  * while the hashed files themselves stay cached forever — the tileset it
  * names references everything else by hashed name.
  */
-function useDataManifest(): DataManifest | null | undefined {
+function useDataManifest(base: string): DataManifest | null | undefined {
   const [manifest, setManifest] = useState<DataManifest | null | undefined>();
   useEffect(() => {
     let cancelled = false;
-    void fetch(`/data/${MANIFEST_FILE}`, { cache: "no-cache" })
+    void fetch(`${base}/${MANIFEST_FILE}`, { cache: "no-cache" })
       .then((res) => (res.ok ? (res.json() as Promise<DataManifest>) : null))
       .catch(() => null)
       .then((m) => {
@@ -56,12 +59,40 @@ function useDataManifest(): DataManifest | null | undefined {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [base]);
   return manifest;
 }
 
-export function CityWalkClient() {
-  const manifest = useDataManifest();
+/**
+ * The viewer for one site (the route /<site>): its data folder, and the
+ * site itself for every part of the HUD (site-context.tsx). Takes the id, not
+ * the Site, since a Server Component renders it; the registry resolves it.
+ */
+export function CityWalkClient({
+  builtIds = [],
+  siteId,
+}: {
+  /** every site this deployment serves (the route's own included) */
+  builtIds?: readonly string[];
+  siteId: string;
+}) {
+  const site = siteById(siteId);
+  const others = builtIds
+    .filter((id) => id !== siteId)
+    .map((id) => siteById(id))
+    .filter((s): s is NonNullable<typeof s> => s !== undefined);
+  if (!site) {
+    throw new Error(`unknown site "${siteId}"`);
+  }
+  return (
+    <SiteProvider others={others} site={site}>
+      <SiteViewer base={siteDataBase(site.id)} />
+    </SiteProvider>
+  );
+}
+
+function SiteViewer({ base }: { base: string }) {
+  const manifest = useDataManifest(base);
   // The render budget (profile, device tier, whether the rest of the site
   // streams) is read from the page ONCE, here, and handed down; the scene
   // never re-reads the window. The lite profile streams the spawn tile alone.
@@ -71,8 +102,8 @@ export function CityWalkClient() {
     }
     const budget: SceneBudget = currentSceneBudget();
     const tileset = budget.neighbourTiles ? TILESET_FILE : TILESET_SPAWN_FILE;
-    return { budget, tilesetUrl: manifestUrl(manifest, tileset) };
-  }, [manifest]);
+    return { budget, tilesetUrl: manifestUrl(manifest, tileset, base) };
+  }, [base, manifest]);
   if (!setup) {
     return <BootScreen />;
   }

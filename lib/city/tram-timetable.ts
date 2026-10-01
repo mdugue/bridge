@@ -15,7 +15,9 @@ import type { Point2 } from "./polyline";
 
 /** The committed timetable (pipeline/bake/transit.py), and the name
  *  scripts/prepare-data.ts publishes it under (before hashing). */
-export const TRAM_TIMETABLE_SOURCE = "data/transit/trams.json";
+export function tramTimetableSource(dataDir: string): string {
+  return `${dataDir}/transit/trams.json`;
+}
 export const TRAM_TIMETABLE_FILE = "trams.json";
 
 /** The cars' yellow and their trail's gold (app/_components/tram-cars.ts;

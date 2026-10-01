@@ -1,11 +1,11 @@
-"""The trams by timetable: the DVB's scheduled tram trips (GTFS from
+"""The trams by timetable: the site's scheduled tram trips (GTFS from
 gtfs.de, built from DELFI's NeTEx; CC BY 4.0) laid onto the site's OSM tram
 tracks → one site-wide file the viewer runs the trams from at the scene's
 clock (app/_components/tram-cars.ts). Not live positions: what the
 timetable says, every trip, at its scheduled times.
 
 The feed has no shapes, so the path between two stops is the shortest way
-along the tracks the tram bake drew (data/dlm/tram_<tile>.geojson, OSM,
+along the tracks the tram bake drew (data/<site>/dlm/tram_<tile>.geojson, OSM,
 ODbL) from the track nearest the one stop's platform to the track nearest
 the next's — each platform has its own position in DELFI's stops, so the
 nearest track is the one on the platform's side: a tram keeps right on a
@@ -21,12 +21,14 @@ the coming three weeks (a public holiday runs a reduced or a Sunday
 service and loses). The viewer runs the trips of the scene's kind of day
 (a public holiday is not told apart).
 
-The raw feed (`<raw>/gtfs/nv_free.zip`, ≈290 MB, all of Germany's local
-transport) is filtered once to the site's trams and cached beside it
+The raw feed (`data/_raw/gtfs/nv_free.zip`, ≈290 MB, all of Germany's
+local transport, shared by every site; `bun run fetch` downloads it for a
+site with trams) is filtered once to the site's trams and cached beside it
 (`trams_<site extent>.json`): streaming its 2 GB of stop times takes a few
-minutes.
+minutes. Every operator's trams are the same here: route type 0 (and the
+extended 900–906), whoever runs them.
 
-Output `data/transit/trams.json` (lib/city/features.ts `TramTimetable`):
+Output `data/<site>/transit/trams.json` (lib/city/features.ts `TramTimetable`):
   routes     the line names ("1", "2", …)
   patterns   one per sequence of stops: `route` (index), `coords` the path
              (projected, decimetres), `at` the distance along it of each
@@ -56,6 +58,8 @@ import numpy as np
 import shapely
 from pyproj import Transformer
 from scipy.spatial import cKDTree
+
+from .net import download
 
 ATTRIBUTION = (
     "Fahrplan: DELFI e.V. via gtfs.de (CC BY 4.0); Gleise © OpenStreetMap contributors (ODbL)"
@@ -165,12 +169,39 @@ def site_trams(zip_path: Path, bounds, epsg: int) -> dict:
     }
 
 
-def cached_site_trams(raw: Path, bounds, epsg: int) -> dict | None:
-    zip_path = raw / "gtfs" / "nv_free.zip"
+def gtfs_dir(raw: Path) -> Path:
+    """Where the feed lives: one folder for every provider (it covers all
+    of Germany), beside the providers' raw folders."""
+    return raw.parent / "gtfs"
+
+
+# Germany's local transport timetable as GTFS (gtfs.de, from DELFI's NeTEx;
+# CC BY 4.0), ≈290 MB, refreshed weekly by its publisher. Fetched again once
+# the copy is a week old (the feed covers about a month ahead).
+GTFS_URL = "https://download.gtfs.de/germany/nv_free/latest.zip"
+GTFS_MAX_AGE_DAYS = 7
+
+
+def fetch_gtfs(folder: Path) -> None:
+    out = folder / "nv_free.zip"
+    if out.exists():
+        age = datetime.datetime.now().timestamp() - out.stat().st_mtime
+        if age < GTFS_MAX_AGE_DAYS * 86400:
+            return
+        out.unlink()
+    try:
+        download(GTFS_URL, out)
+        print(f"GTFS feed → {out}")
+    except Exception as err:  # noqa: BLE001 — the tiles do not need it
+        print(f"GTFS feed not downloaded ({err}); put {GTFS_URL} at {out}")
+
+
+def cached_site_trams(folder: Path, bounds, epsg: int) -> dict | None:
+    zip_path = folder / "nv_free.zip"
     if not zip_path.exists():
         return None
     key = "_".join(f"{v:.0f}" for v in bounds)
-    cache = raw / "gtfs" / f"trams_{key}.json"
+    cache = folder / f"trams_{key}.json"
     if cache.exists() and cache.stat().st_mtime >= zip_path.stat().st_mtime:
         return json.loads(cache.read_text())
     feed = site_trams(zip_path, bounds, epsg)
@@ -466,9 +497,10 @@ def build_timetable(feed: dict, tracks: Tracks, days: dict[str, datetime.date]) 
 
 
 def run_site(raw: Path, data: Path, bounds, epsg: int, today: datetime.date | None = None) -> None:
-    feed = cached_site_trams(raw, bounds, epsg)
+    folder = gtfs_dir(raw)
+    feed = cached_site_trams(folder, bounds, epsg)
     if feed is None:
-        print(f"no GTFS feed at {raw / 'gtfs' / 'nv_free.zip'} — skipping the timetable trams")
+        print(f"no GTFS feed at {folder / 'nv_free.zip'} — skipping the timetable trams")
         return
     tracks = read_tracks(data)
     days = pick_days(feed, today or datetime.date.today())
@@ -485,20 +517,3 @@ def run_site(raw: Path, data: Path, bounds, epsg: int, today: datetime.date | No
         f"timetable trams: {len(doc['routes'])} lines, {len(doc['patterns'])} patterns, "
         f"{len(doc['profiles'])} running-time profiles, trips per day {counts}"
     )
-
-
-def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(prog="bake.transit")
-    parser.add_argument("--bounds", nargs=4, type=float, required=True, help="the site's extent")
-    parser.add_argument("--epsg", type=int, required=True)
-    parser.add_argument("--raw", type=Path, required=True)
-    parser.add_argument("--data", type=Path, default=Path("data"))
-    parser.add_argument("--today", type=datetime.date.fromisoformat, default=None)
-    args = parser.parse_args()
-    run_site(args.raw, args.data, tuple(args.bounds), args.epsg, args.today)
-
-
-if __name__ == "__main__":
-    main()

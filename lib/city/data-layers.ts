@@ -8,6 +8,8 @@
  * poetic city, not part of it. No THREE, no DOM.
  */
 
+import type { SiteDataLayers } from "./site";
+
 export type DataLayerKey = "bikeLayer" | "trafficLayer" | "tramLayer";
 
 export interface DataLayerDef {
@@ -19,7 +21,8 @@ export interface DataLayerDef {
   label: string;
   /** Key inside Snapshot.look. Never rename one. */
   snapshotKey: string;
-  /** the credit the HUD shows while the layer is on */
+  /** the credit the HUD shows while the layer is on (the site's, see
+   *  `siteDataLayers`) */
   source: string;
 }
 
@@ -30,9 +33,9 @@ export const DATA_LAYERS: readonly DataLayerDef[] = [
     id: "data-traffic",
     label: "Kfz-Verkehr",
     description:
-      "Gezählte Kraftfahrzeuge je Tag und Straßenabschnitt als gläserne Ströme auf der Fahrbahn: breiter, höher und röter, wo mehr fährt; Licht läuft in Fahrtrichtung, viel Schwerverkehr färbt sie pflaumenfarben",
+      "Gezählte Kraftfahrzeuge je Tag und Straßenabschnitt als gläserne Ströme auf der Fahrbahn, verteilt über den Tag zur eingestellten Uhrzeit: breiter, höher und kräftiger gefärbt, wo mehr fährt; Licht läuft in Fahrtrichtung, viel Schwerverkehr färbt sie schieferblau",
     snapshotKey: "trafficLayer",
-    source: "Verkehrsmengen © Landeshauptstadt Dresden (dl-de/by-2-0)",
+    source: "",
   },
   {
     key: "bikeLayer",
@@ -41,19 +44,64 @@ export const DATA_LAYERS: readonly DataLayerDef[] = [
     description:
       "Die Dauerzählstellen der Stadt: je Fahrtrichtung eine Glassäule, so hoch wie die Räder der letzten Stunde; die Lichtringe darin steigen umso schneller, je mehr fuhren",
     snapshotKey: "bikeLayer",
-    source: "Radzählstellen © Landeshauptstadt Dresden (dl-de/by-2-0)",
+    source: "",
   },
   {
     key: "tramLayer",
     id: "data-trams",
     label: "Straßenbahnen (Fahrplan)",
     description:
-      "Die Bahnen der DVB auf ihren Gleisen, mit einer Lichtspur hinter sich, wie sie der Fahrplan zur Szenenzeit fahren lässt — keine GPS-Positionen",
+      "Die Straßenbahnen auf ihren Gleisen, mit einer Lichtspur hinter sich, wie sie der Fahrplan zur Szenenzeit fahren lässt — keine GPS-Positionen",
     snapshotKey: "tramLayer",
     source:
       "Fahrplan: DELFI e.V. via gtfs.de (CC BY 4.0) · Gleise © OpenStreetMap-Mitwirkende (ODbL)",
   },
 ];
+
+/** A source that counts both directions together (every one but
+ *  Dresden's): the HUD says the split is even, not measured. */
+const SPLIT_NOTE =
+  " — hier beide Richtungen zusammen gezählt und je zur Hälfte gezeigt";
+
+/**
+ * The rows a site offers, with its own credits and wording: a layer the
+ * site has no source for is left out (the HUD shows no switch that would
+ * draw nothing).
+ */
+export function siteDataLayers(
+  layers: SiteDataLayers | undefined
+): DataLayerDef[] {
+  if (!layers) {
+    return [];
+  }
+  return DATA_LAYERS.flatMap((def): DataLayerDef[] => {
+    if (def.key === "trafficLayer" && layers.traffic) {
+      const split = layers.traffic.source !== "dresden";
+      return [
+        {
+          ...def,
+          description: split ? def.description + SPLIT_NOTE : def.description,
+          source: `${layers.traffic.credit} · Tagesgang: Freie und Hansestadt Hamburg, dl-de/by-2-0`,
+        },
+      ];
+    }
+    if (def.key === "bikeLayer" && layers.bikes) {
+      return [{ ...def, source: layers.bikes.credit }];
+    }
+    if (def.key === "tramLayer" && layers.trams) {
+      return [
+        {
+          ...def,
+          description: def.description.replace(
+            "Die Straßenbahnen",
+            `Die Bahnen der ${layers.trams.operator}`
+          ),
+        },
+      ];
+    }
+    return [];
+  });
+}
 
 /** Every layer off: what the scene boots with. */
 export const DATA_LAYER_DEFAULTS: Readonly<Record<DataLayerKey, boolean>> =

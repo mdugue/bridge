@@ -22,6 +22,7 @@ import {
   memoryLimitsFor,
 } from "@/lib/city/memory-governor";
 import { createGround } from "@/lib/city/ground";
+import type { Landmark } from "@/lib/city/landmarks";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import {
   LOOK_DEFAULTS,
@@ -35,10 +36,14 @@ import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
-import { spawnViewpoint, type ViewpointGeometry } from "@/lib/city/site";
+import {
+  type Site,
+  spawnViewpoint,
+  type ViewpointGeometry,
+} from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
-import { currentSite } from "@/sites";
+import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
@@ -295,6 +300,8 @@ export interface CityWalkOptions {
    * tile data and leave a second canvas around until then).
    */
   signal?: AbortSignal;
+  /** the site the route renders: its spawn, viewpoints and fallback place */
+  site: Site;
   /** the 3D Tiles tileset to stream (lib/city/tileset.ts), a served URL */
   tilesetUrl: string;
 }
@@ -361,6 +368,8 @@ export interface CityWalkHandle {
     memory: Readonly<Record<string, number>>;
     triangles: number;
   };
+  /** the site's most notable landmarks (Wikidata), for the HUD's list */
+  landmarks: Landmark[];
   /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
   landcoverTiles: MapTile[];
   /** the scene's geographic position — the HUD's sunrise/sunset times */
@@ -500,12 +509,11 @@ function traceRenderer(renderer: WebGPURenderer, trail: CrashTrail): void {
 
 /** Reprojects the recenter point (the spawn tile's centre) for SunCalc. */
 function siteLatLng(
+  site: Site,
   epsg: number,
   offset: { cx: number; cy: number }
 ): { lat: number; lng: number } {
-  return (
-    utmToLatLng(epsg, offset.cx, offset.cy) ?? currentSite().fallbackLatLng
-  );
+  return utmToLatLng(epsg, offset.cx, offset.cy) ?? site.fallbackLatLng;
 }
 
 export async function createCityWalkApp(
@@ -648,6 +656,8 @@ async function bootApp(
     fogRangeFor(opts.look.get().fogAmount)
   );
   installSceneFog(scene, sceneFog);
+  // How deep the valley haze pools: a share of the site's own relief.
+  sceneFog.heightFalloff.value = valleyFalloff(extras.ground);
   // The site's world XZ rectangle: EPSG north is world −Z.
   sceneFog.siteRect.value.set(
     siteBounds[0] - offset.cx,
@@ -688,7 +698,7 @@ async function bootApp(
   );
   // Where the site sits on the globe: the sun rig needs it, and so does the
   // HUD's sunrise/sunset readout.
-  const latLng = siteLatLng(extras.epsg, offset);
+  const latLng = siteLatLng(opts.site, extras.epsg, offset);
   const sunRig = createSunRig(
     scene,
     worldBounds,
@@ -892,6 +902,7 @@ async function bootApp(
   // The site-wide data layers (the live bicycle counters): built, fetched
   // and polled only once switched on (lib/city/data-layers.ts).
   const overlays = createDataOverlays({
+    bikeFeed: opts.site.dataLayers?.bikes?.feed,
     bounds: unionBounds(extras),
     bridgeUrls: extras.tiles.flatMap((t) =>
       t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
@@ -994,7 +1005,7 @@ async function bootApp(
   // Spawn at the site's start vantage (on the spawn tile, so the boot's
   // wait for that tile holds); placed again once its terrain has landed
   // (below) — the height is above the ground, which is not there yet.
-  const spawnView = spawnViewpoint(currentSite());
+  const spawnView = spawnViewpoint(opts.site);
   pose.placeAt(spawnView);
 
   // Street-view-style canvas gestures (touch and mouse, incl. pointer lock).
@@ -1153,7 +1164,7 @@ async function bootApp(
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
         viewpoint: (index) => {
-          const view = currentSite().viewpoints[index];
+          const view = opts.site.viewpoints[index];
           if (view) {
             pose.flyToViewpoint(view);
           }
@@ -1629,6 +1640,7 @@ async function bootApp(
         const gone = stream.demolished.get(tile);
         return footprintPolys(polys, (i) => !gone?.has(i));
       }),
+    landmarks: extras.landmarks ?? [],
     landcoverTiles: extras.tiles.map((t) => ({
       src: new URL(t.minimap, tilesetUrl).href,
       bounds: t.bounds,

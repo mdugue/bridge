@@ -146,10 +146,12 @@ def test_a_bridge_track_is_marked_on_its_pattern():
 
 
 def test_the_file_is_written(tmp_path):
-    raw = tmp_path / "raw"
+    raw = tmp_path / "raw" / "sn"
     data = tmp_path / "data"
-    (raw / "gtfs").mkdir(parents=True)
-    _feed_zip(raw / "gtfs" / "nv_free.zip")
+    # the feed is shared by every provider: beside their raw folders
+    gtfs = tmp_path / "raw" / "gtfs"
+    gtfs.mkdir(parents=True)
+    _feed_zip(gtfs / "nv_free.zip")
     (data / "dlm").mkdir(parents=True)
     tracks = {
         "type": "FeatureCollection",
@@ -171,4 +173,4 @@ def test_the_file_is_written(tmp_path):
     assert "DELFI" in doc["attribution"] and "OpenStreetMap" in doc["attribution"]
     assert doc["days"]["weekday"]["date"] == "2026-10-01"
     # the filtered feed is cached beside the raw one
-    assert list((raw / "gtfs").glob("trams_*.json"))
+    assert list(gtfs.glob("trams_*.json"))

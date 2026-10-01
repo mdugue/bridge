@@ -15,9 +15,9 @@ wenn sich eine Quelle ändert**. Abkürzungen stehen im
 flowchart TB
   S1["<b>1 · Portale der Anbieter</b><br/>geodaten.sachsen.de · OpenStreetMap<br/><i>die Wahrheit über die Welt</i>"]
   S2["<b>2 · Rohdownloads</b> — data/_raw/<br/>Gigabytes · nur auf der Festplatte des Betreibers<br/>nie im Repository"]
-  S3["<b>3 · Bakes</b> — pipeline/ · bun run bake<br/>von Hand je Kachel · ein Python-Paket<br/>ausschneiden, klassifizieren, abtasten, vereinfachen"]
+  S3["<b>3 · Bakes</b> — pipeline/ · bun run bake &lt;ort&gt;<br/>von Hand je Kachel · ein Python-Paket<br/>ausschneiden, klassifizieren, abtasten, vereinfachen"]
   S4["<b>4 · Eingecheckte Derivate</b> — data/<br/>kleine Dateien je Kachel im Repository<br/><i>die Wahrheit darüber, was die App zeigt</i>"]
-  S5["<b>5 · Build-Schritt</b> — scripts/prepare-data.ts<br/>läuft vor jedem Dev-Server und Build<br/>backt ein 3D-Tiles-Tileset nach public/data/"]
+  S5["<b>5 · Build-Schritt</b> — scripts/prepare-data.ts<br/>läuft vor jedem Dev-Server und Build<br/>backt je Stadt ein 3D-Tiles-Tileset nach public/data/"]
   S6["<b>6 · Browser</b><br/>streamt die Kacheln, die die Kamera sieht<br/>zeichnet alles auf der Grafikkarte"]
   S1 -->|"Download (manuell oder per Skript)"| S2
   S2 -->|"Bake (manuell)"| S3
@@ -42,9 +42,10 @@ Schnappschuss; wie alt jeder ist, steht in der
 Die Rohdownloads sind groß: das landesweite Landschaftsmodell mehrere
 Gigabyte, eine Luftbildkachel hunderte Megabyte, der OpenStreetMap-Auszug
 für Sachsen etwa 250 MB. Sie liegen in einem Ordner, den die
-Versionsverwaltung ignoriert, mit einem Unterordner je Standort und Quelle
-(`data/_raw/dresden/dom1`, `…/dop`, `…/dlm`, `…/osm`). Jeder kann sie neu
-herunterladen — `bun run bake --ingest` erledigt das in einem Rutsch —, und
+Versionsverwaltung ignoriert, mit einem Unterordner je Datenanbieter und Quelle
+(`data/_raw/sn/dom1`, `…/dop`, `…/dlm`, `…/osm` für Sachsen — alle
+sächsischen Orte teilen sie). Jeder kann sie neu
+herunterladen — `bun run fetch dresden` erledigt das in einem Rutsch —, und
 niemand braucht sie, um den Viewer zu betreiben.
 
 **Die eine Ausnahme** ist das Geländemodell: Sein GeoTIFF ist eingecheckt
@@ -57,15 +58,16 @@ englisch).
 
 Ein Python-Paket, `pipeline/bake/`, verwandelt die Rohdownloads in kleine,
 kachelgroße Dateien. Es läuft auf dem Rechner des Betreibers mit einem
-einzigen Befehl, `bun run bake`, der die **Standort-Konfiguration** liest
+einzigen Befehl, `bun run bake dresden`, der die **Standort-Konfiguration** liest
 (`sites/dresden.ts`: welche Kacheln, wo sie liegen, welches
 Koordinatensystem) und je Kachel sieben Schritte ausführt. Die
 Python-Umgebung ist festgeschrieben, und ihre Geodaten-Bibliotheken bringen
-GDAL gleich mit, sodass nichts weiter installiert werden muss. Mit
-`--ingest` holt es die Downloads vorher selbst: Oberflächenmodell und
-Luftbild jeder Kachel über den Download-Dienst der Landesvermessung, das
-landesweite Landschaftsmodell und den OpenStreetMap-Auszug für Sachsen von
-Geofabrik.
+GDAL gleich mit, sodass nichts weiter installiert werden muss. Davor holt
+`bun run fetch dresden` die Downloads selbst: jedes Produkt jeder Kachel von der
+Landesvermessung (das Gebäudemodell unterwegs nach CityJSON umgewandelt),
+das landesweite Landschaftsmodell und den OpenStreetMap-Auszug von
+Geofabrik. Welcher Ort — und damit welche Landesvermessung — sagt das
+erste Wort nach dem Befehl: `dresden`, `leipzig`, `unna`, …
 
 Die Schritte laufen in fester Reihenfolge, weil manche die Ausgabe eines
 früheren lesen:
@@ -98,9 +100,9 @@ enthält je Kachel:
 
 | Ordner | Dateien | Was sie sind | Größe je Kachel |
 |---|---|---|---|
-| `data/dgm/` | `dgm1_<Kachel>.tif` + `.tfw` + `_akt.csv` | das Geländemodell wie heruntergeladen (die Ausnahme von oben) | 13,6 MB |
-| `data/cityjson/` | `lod2_<Kachel>.city.json` | das Gebäudemodell, nach CityJSON umgewandelt | 8–11 MB |
-| `data/dlm/` | `landcover_<Kachel>.png` + `.json` | Landnutzungsklasse je Halbmeter-Pixel (4096²), mit Legende; die Datei enthält nur Klassennummern, die Farben kommen erst im Browser dazu | 0,2 MB |
+| `data/dresden/dgm/` | `dgm1_<Kachel>.tif` + `.tfw` + `_akt.csv` | das Geländemodell wie heruntergeladen (die Ausnahme von oben) | 13,6 MB |
+| `data/dresden/cityjson/` | `lod2_<Kachel>.city.json` | das Gebäudemodell, nach CityJSON umgewandelt | 8–11 MB |
+| `data/dresden/dlm/` | `landcover_<Kachel>.png` + `.json` | Landnutzungsklasse je Halbmeter-Pixel (4096²), mit Legende; die Datei enthält nur Klassennummern, die Farben kommen erst im Browser dazu | 0,2 MB |
 | | `ndvi_<Kachel>.png` | Grünindex aus dem Luftbild, 1024² | 0,3–0,5 MB |
 | | `vegrows_<Kachel>.geojson` | Hecken- und Baumreihenlinien | wenige kB |
 | | `canopy_<Kachel>.geojson` | ein Punkt je Baum mit Höhe (5 000–16 000 je Kachel) | 0,6–1,8 MB |
@@ -114,7 +116,7 @@ enthält je Kachel:
 | | `bridge_<Kachel>.geojson` | Brückendeck-Umrisse mit Höhe je Ecke, Art und Tragwerk | wenige kB |
 | | `platform_<Kachel>.geojson` | Bahnsteige | wenige kB |
 | | `osmbuild_<Kachel>.json` | je Gebäude: Laden oder Café im Erdgeschoss, Baudenkmal | 15–40 kB |
-| `data/dop/` | `roofcolor_<Kachel>.json` | eine Farbe je Gebäude, aus dem Luftbild abgetastet | 0,2 MB |
+| `data/dresden/dop/` | `roofcolor_<Kachel>.json` | eine Farbe je Gebäude, aus dem Luftbild abgetastet | 0,2 MB |
 
 Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 
@@ -136,8 +138,11 @@ Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
 
-Jedes `bun dev` und `bun build` beginnt damit, dieses Skript auszuführen.
-Es tut drei Dinge:
+Jedes `bun dev` und `bun build` beginnt damit, dieses Skript auszuführen —
+einmal für jede Stadt, deren Daten auf der Platte liegen
+(`scripts/prepare-sites.ts` entscheidet, welche), und jede Stadt bekommt
+ihren eigenen Ordner, `public/data/dresden/`, `public/data/leipzig/`, …
+Für jede Stadt tut es drei Dinge:
 
 1. **Backt die schweren Eingaben zu einem Tileset.** Für jede Kachel wird
    das Gelände-GeoTIFF zu zwei fertigen Geländenetzen: einem detaillierten
@@ -157,7 +162,7 @@ Es tut drei Dinge:
    die grobe ersetzt. Das Landnutzungsklassen-PNG bekommt eine
    2048²- und eine 512²-Kopie. Ergebnisse werden in `.cache/` zwischengespeichert und nur
    neu erzeugt, wenn sich eine Eingabe oder der Bake-Code geändert hat.
-2. **Veröffentlicht** jede Datei nach `public/data/` unter einem Namen, der
+2. **Veröffentlicht** jede Datei in den Ordner der Stadt unter einem Namen, der
    einen Fingerabdruck ihres Inhalts trägt (zum Beispiel
    `canopy_33412_5656_2_sn.55a26a2d.geojson`), und schreibt eine
    `manifest.json`, die die einfachen Namen auf die Namen mit
@@ -170,9 +175,18 @@ zu cachen; nur das winzige Manifest wird bei jedem Besuch neu geprüft. Ein
 neues Bake ändert die Fingerabdrücke, und das neue Manifest zeigt auf die
 neuen Dateien.
 
+Zuletzt schreibt der Build neben die Ordner eine kurze Liste der gebauten
+Städte, `public/data/sites.json`. Die Startseite zeigt je Eintrag eine
+Karte (mit der Landnutzungskarte der Stadt, gemalt in denselben Farben wie
+der Boden), und jeder Eintrag bekommt seine eigene Adresse: `/dresden`,
+`/leipzig`, … Eine Stadt, deren Daten nicht auf dem Rechner liegen, der
+baut, erscheint einfach nicht.
+
 ### Station 6 — der Browser
 
-Der Browser holt das Manifest und das Tileset und **streamt** dann: Eine
+Die Adresse sagt, welche Stadt: Unter `/dresden` holt der Browser das
+Manifest Dresdens (`/data/dresden/manifest.json`) und sein Tileset und
+**streamt** dann: Eine
 Bibliothek namens 3DTilesRendererJS entscheidet danach, wo die Kamera
 steht und wohin sie schaut, welche Dateien geladen werden. Das erste Bild
 wartet nur auf Gebäude und Gelände der Kachel, auf der du startest.
@@ -227,13 +241,13 @@ und Schatten und der gesamte Nachbearbeitungs-Look.
 
 | Änderung | Manuelle Schritte | Automatisch |
 |---|---|---|
-| Neuer Geländestand | GeoTIFF in `data/dgm/` ersetzen; die Bakes `canopy` und `rail` neu ausführen (sie lesen es) | die Geländenetze samt Mauerkanten werden beim nächsten Build neu gebacken |
-| Neues Gebäudemodell | nach CityJSON umwandeln, in `data/cityjson/` ersetzen; das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
+| Neuer Geländestand | GeoTIFF in `data/<ort>/dgm/` ersetzen (oder löschen und `bun run fetch <ort>`); die Bakes `canopy` und `rail` neu ausführen (sie lesen es) | die Geländenetze samt Mauerkanten werden beim nächsten Build neu gebacken |
+| Neues Gebäudemodell | CityJSON in `data/<ort>/cityjson/` löschen und `bun run fetch <ort>` (wandelt das neue CityGML um); das Bake `roof-colour` neu ausführen | das Gebäudenetz wird beim nächsten Build neu gebacken |
 | Neuer Landnutzungsstand | das neue Paket laden, das Bake `landcover` neu ausführen, dann `canopy`, `lamps`, `furniture`, `rail` und `tram` (sie lesen das Klassenraster) | die 2048²- und 512²-Kopien werden neu gebacken |
 | Neue Luftbilder | die Bakes `ndvi` und `roof-colour` neu ausführen | die Dachfarben werden beim nächsten Build ins Netz eingearbeitet |
 | Neue OpenStreetMap-Daten | einen frischen Geofabrik-Auszug laden und die Bakes `lamps`, `furniture`, `monuments`, `osm-buildings`, `walls`, `stairs`, `rail` und `tram` neu ausführen | — |
 | Andere Bodenfarben | die eine Palette im Code ändern | nichts neu zu backen: Der Browser malt die Farben |
-| Eine neue Kachel | Gelände- und Gebäudemodell von Hand laden (das Gebäudemodell nach CityJSON umgewandelt) und beide einchecken; die Kachel in die Standort-Konfiguration `sites/dresden.ts` eintragen; `bun run bake --ingest` holt den Rest und führt alle sieben Bakes aus | der Build nimmt sie ins Tileset auf und veröffentlicht sie |
+| Eine neue Kachel | die Kachel in die Standort-Konfiguration (`sites/dresden.ts`) eintragen; `bun run fetch <ort>` lädt alles für sie, das Gebäudemodell unterwegs nach CityJSON umgewandelt; `bun run bake <ort>` führt alle sieben Bakes aus | der Build nimmt sie ins Tileset auf und veröffentlicht sie |
 
 ## Warum es so gebaut ist
 

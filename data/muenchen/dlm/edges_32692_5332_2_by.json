@@ -1,0 +1,17 @@
+{
+  "tile": "32692_5332_2_by",
+  "crs": "EPSG:25832",
+  "bounds": [
+    692000,
+    5332000,
+    694000,
+    5334000
+  ],
+  "size": 2048,
+  "encoding": {
+    "layout": "8-bit greyscale, 2 * size wide: R0 G0 R1 G1 ... per row",
+    "r": "128 + scale * signed distance (m) to the road edge, positive on the road",
+    "g": "128 + scale * signed distance (m) to the meadow edge, positive on the meadow"
+  },
+  "scale": 20.0
+}

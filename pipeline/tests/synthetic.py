@@ -27,7 +27,14 @@ def osm_tile(
 ) -> Tile:
     """`nodes` maps an id to (x, y, tags as `<tag .../>` XML); `classes` is
     the 200 × 200 class raster (row 0 = north), all 0 when omitted."""
-    tile = Tile("t", (X0, Y0, X0 + SIZE, Y0 + SIZE), 25833, tmp_path / "raw", tmp_path / "data")
+    tile = Tile(
+        "t",
+        (X0, Y0, X0 + SIZE, Y0 + SIZE),
+        25833,
+        tmp_path / "raw",
+        tmp_path / "data",
+        credit="Quelle: GeoSN, dl-de/by-2-0",
+    )
     tile.dgm.parent.mkdir(parents=True)
     with rasterio.open(
         tile.dgm,

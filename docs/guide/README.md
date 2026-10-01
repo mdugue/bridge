@@ -12,6 +12,7 @@ beiden Sprachen; der Link zur Zwillingsseite steht oben.
 |---|---|---|
 | [How the city walker works](./en/how-it-works.md) | [So funktioniert der Stadtspaziergang](./de/how-it-works.md) | What am I looking at, and how much of it is real? · Was sehe ich, und wie viel davon ist echt? |
 | [Where the data comes from](./en/data-sources.md) | [Woher die Daten kommen](./de/data-sources.md) | Every dataset: download, strengths, weaknesses, edition, licence · Jeder Datensatz: Download, Stärken, Schwächen, Stand, Lizenz |
+| [Sources by city](./en/sources-by-city.md) | [Quellen nach Stadt](./de/sources-by-city.md) | Which city draws what from which source, and how good it is · Welche Stadt was aus welcher Quelle zeichnet, und wie gut die ist |
 | [From download to browser](./en/data-journey.md) | [Der Weg der Daten](./de/data-journey.md) | Source of truth vs. derivative, what the browser receives · Wahrheit vs. Derivat, was der Browser bekommt |
 | [Using the viewer](./en/using-the-viewer.md) | [Bedienung](./de/using-the-viewer.md) | Controls and the settings panel, label by label · Steuerung und Einstellungsfeld, Beschriftung für Beschriftung |
 | [Glossary](./en/glossary.md) | [Glossar](./de/glossary.md) | The abbreviations · Die Abkürzungen |

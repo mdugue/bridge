@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections import defaultdict
 
 import numpy as np
@@ -60,7 +61,7 @@ from .common import (
     value_at,
     write_geojson,
 )
-from .osm import has_extract, read_osm, tag
+from .osm import has_extract, in_tunnel, read_osm, tag
 from .rail import merge_lines
 
 MARGIN_M = 30.0  # tracks and masts around the tile the supports are decided on
@@ -142,16 +143,27 @@ def layer_of(other: str | None) -> int:
         return 0
 
 
+def gauge_of(other: str | None) -> float | None:
+    """The track gauge OSM maps (`gauge` in mm: Dresden 1450, Leipzig 1458,
+    Munich 1435), in metres; None when untagged or implausible."""
+    m = re.match(r"\d+", (tag(other, "gauge") or "").strip())
+    if not m or not 600 <= int(m.group()) <= 1700:
+        return None
+    return int(m.group()) / 1000
+
+
 def tracks(tile: Tile, beds: Beds) -> list[tuple[shapely.LineString, dict]]:
     """Merged track lines (unclipped) with their properties."""
     geoms, fields = read_osm(tile, "lines", "railway = 'tram'", ["railway", "other_tags"])
     groups: dict[tuple, list] = defaultdict(list)
     fallback: dict[tuple, list] = defaultdict(list)
     for g, other in zip(geoms, column(fields, "other_tags", geoms), strict=True):
+        if in_tunnel(other):
+            continue  # a tram tunnel is not drawn at street level
         for part in shapely.get_parts(g):
             if part.geom_type != "LineString" or part.length < 0.5:
                 continue
-            key = (bridge_of(other), layer_of(other))
+            key = (bridge_of(other), layer_of(other), gauge_of(other))
             for piece, bed in beds.beds(part):
                 coords = [(x, y) for x, y, *_ in piece.coords]
                 if bed is None:
@@ -159,12 +171,14 @@ def tracks(tile: Tile, beds: Beds) -> list[tuple[shapely.LineString, dict]]:
                 else:
                     groups[(bed, *key)].append(coords)
     out = []
-    for (bed, bridge, layer), lines in groups.items():
+    for (bed, bridge, layer, gauge), lines in groups.items():
         for chain in merge_lines(lines):
-            out.append((shapely.LineString(chain), {"bed": bed, "bridge": bridge, "layer": layer}))
-    for (bridge, layer), lines in fallback.items():
+            props = {"bed": bed, "bridge": bridge, "layer": layer, "gauge": gauge}
+            out.append((shapely.LineString(chain), props))
+    for (bridge, layer, gauge), lines in fallback.items():
         for chain in merge_lines(lines):
-            out.append((shapely.LineString(chain), {"bed": None, "bridge": bridge, "layer": layer}))
+            props = {"bed": None, "bridge": bridge, "layer": layer, "gauge": gauge}
+            out.append((shapely.LineString(chain), props))
     return out
 
 
@@ -339,6 +353,8 @@ def track_features(
                 p["bridge"] = 1
             if props["layer"]:
                 p["layer"] = props["layer"]
+            if props.get("gauge"):
+                p["g"] = props["gauge"]
             if tree is not None:
                 s = _stations(part, supports, tree)
                 if s:

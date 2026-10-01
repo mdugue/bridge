@@ -1,0 +1,49 @@
+/* The start page (app/page.tsx): the paper tone of /wissen (the sand of the
+   land-cover map, barely there), a map hero that fades into it, and cards
+   that sit on it as white sheets. */
+
+.start-paper {
+  background: color-mix(in oklch, var(--background) 93%, oklch(0.9 0.03 80));
+  --start-paper: color-mix(in oklch, var(--background) 93%, oklch(0.9 0.03 80));
+}
+
+.start-hero-map {
+  object-position: 50% 60%;
+  opacity: 0.9;
+}
+
+.start-hero-veil {
+  background:
+    linear-gradient(to top, var(--start-paper) 0%, transparent 40%),
+    linear-gradient(
+      to right,
+      var(--start-paper) 0%,
+      color-mix(in oklch, var(--start-paper) 88%, transparent) 40%,
+      color-mix(in oklch, var(--start-paper) 25%, transparent) 75%,
+      transparent 100%
+    );
+}
+
+@media (max-width: 640px) {
+  .start-hero-veil {
+    background:
+      linear-gradient(to top, var(--start-paper) 0%, transparent 30%),
+      color-mix(in oklch, var(--start-paper) 82%, transparent);
+  }
+}
+
+/* A card without a map picture (its land cover was missing at build). */
+.start-card-blank {
+  background:
+    radial-gradient(
+      circle at 30% 35%,
+      oklch(0.9 0.05 150) 0 18%,
+      transparent 19%
+    ),
+    radial-gradient(
+      circle at 70% 65%,
+      oklch(0.88 0.05 230) 0 22%,
+      transparent 23%
+    ),
+    oklch(0.95 0.02 80);
+}

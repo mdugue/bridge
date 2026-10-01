@@ -8,7 +8,7 @@ import {
 } from "react";
 import { gridConvergenceDeg } from "@/lib/city/crs";
 import { normalizeDeg, placementOf } from "@/lib/city/geolocation";
-import { currentSite } from "@/sites";
+import { useSite } from "./site-context";
 import type { CityWalkHandle } from "./create-app";
 import {
   orientationNeedsPermission,
@@ -46,6 +46,8 @@ export function useLiveMode(
   coarse: boolean,
   latLng: { lat: number; lng: number } | null
 ) {
+  const site = useSite();
+  const { epsg } = site.provider;
   const [live, setLive] = useState(false);
   const [refused, setRefused] = useState(false);
   const [on, setOn] = useState(false);
@@ -66,10 +68,8 @@ export function useLiveMode(
   // convergence barely changes across a site, so it is taken once.
   const convergence = useMemo(
     () =>
-      latLng
-        ? (gridConvergenceDeg(currentSite().epsg, latLng.lat, latLng.lng) ?? 0)
-        : 0,
-    [latLng]
+      latLng ? (gridConvergenceDeg(epsg, latLng.lat, latLng.lng) ?? 0) : 0,
+    [epsg, latLng]
   );
 
   /** Drops the GPS watch and marks the mode off (the scene is told apart). */
@@ -124,8 +124,7 @@ export function useLiveMode(
         if (!(h && onRef.current)) {
           return;
         }
-        const site = currentSite();
-        const placement = placementOf(fix, site.epsg, h.terrainBounds);
+        const placement = placementOf(fix, epsg, h.terrainBounds);
         if (placement.kind === "inside") {
           h.setFollowPosition({ x: placement.epsgX, y: placement.epsgY });
           if (first || wasOutside) {
@@ -144,7 +143,7 @@ export function useLiveMode(
       },
       () => say("Standort nicht verfügbar — nur der Blick folgt")
     );
-  }, [handleRef, say]);
+  }, [epsg, handleRef, say, site.label]);
 
   const start = useCallback(() => {
     onRef.current = true;

@@ -1,0 +1,59 @@
+{
+  "$comment": "Where this site’s committed data came from. Written when the folder was first committed; `bun run fetch unna` and `bun run bake unna` regenerate everything from the sources named here (raw downloads live in data/_raw/nw/, never committed).",
+  "version": 1,
+  "site": "unna",
+  "retrieved": "2026-09-24 (provider products); Wikidata and the re-bake of the bridge steps 2026-09-27",
+  "tiles": [
+    "32408_5710_2_nw",
+    "32408_5708_2_nw"
+  ],
+  "provider": {
+    "id": "nw",
+    "name": "Geobasis NRW (Bezirksregierung Köln)",
+    "portal": "https://www.opengeodata.nrw.de/produkte/geobasis/",
+    "licence": "dl-de/zero-2-0",
+    "credit": "Geobasis NRW, dl-de/zero-2-0",
+    "products": [
+      "DGM1 (terrain)",
+      "LoD2 (buildings, CityGML → CityJSON)",
+      "DOM1 (surface model: canopy, bridges, monuments)",
+      "DOP (orthophoto, RGBI: NDVI, roof colours)",
+      "Basis-DLM (land cover, tree rows, rail, bridges, monuments)"
+    ]
+  },
+  "committed": {
+    "data/unna/dgm/": "DGM1 per tile, clipped to the 2 km grid and written compact (DEFLATE, float predictor, centimetres) by `bun run fetch`",
+    "data/unna/cityjson/": "LoD2 per tile, converted from the provider’s CityGML by pipeline/bake/citygml.py",
+    "data/unna/dlm/": "the derived per-tile artifacts of `bun run bake` (class raster, canopy, vegetation, OSM layers, …)",
+    "data/unna/dop/": "per-tile values derived from the orthophoto (roof colours)"
+  },
+  "openstreetmap": {
+    "licence": "Open Database License (ODbL); credit: © OpenStreetMap contributors",
+    "extract": "a stand-in: the Arnsberg region extract from download.openstreetmap.fr, because download.geofabrik.de was unreachable from the build container",
+    "usedFor": "walls, stairs, lamps, street furniture, fountains, paving, markings, trams, riverside, sport, shops and heritage"
+  },
+  "wikidata": {
+    "licence": "CC0",
+    "usedFor": "bridge names and types, cached per tile under data/_raw/nw/wikidata/"
+  },
+  "dataLayers": {
+    "traffic": {
+      "service": "https://www.wfs.nrw.de/wfs/strassen_nrw",
+      "typeName": "ms:Verkehrswerte",
+      "title": "Verkehrswerte (Straßen.NRW)",
+      "licence": "dl-de/by-2-0; credit: Straßen.NRW",
+      "coverage": "federal, state and district roads, all days (DTVKFZA), both directions together, with the heavy vehicles (DTVSVA); split evenly between the directions (sp 1)",
+      "retrieved": "2026-10-01",
+      "raw": "data/_raw/nw/traffic/<tile>.geojson (+ .meta.json), with a 50 m margin (traffic_sources.py)",
+      "committed": "data/unna/dlm/traffic_<tile>.geojson",
+      "usedBy": [
+        "pipeline/bake/traffic.py"
+      ],
+      "sections": {
+        "$comment": "per tile bbox incl. the 50 m margin, before the clip",
+        "32408_5710_2_nw": 14,
+        "32408_5708_2_nw": 11
+      }
+    }
+  }
+}

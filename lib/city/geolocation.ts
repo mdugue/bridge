@@ -5,6 +5,7 @@
  * adapter (app/_components/locate-me.ts) feeds it. No THREE, no DOM.
  */
 import { gridConvergenceDeg, latLngToUtm } from "./crs";
+import { type Site, tileExtentOf } from "./site";
 import type { TerrainBounds } from "./terrain-geometry";
 
 const DEG = Math.PI / 180;
@@ -160,4 +161,46 @@ export function placementOf(
         ? null
         : normalizeDeg(fix.headingDeg + convergence),
   };
+}
+
+/**
+ * The site among `sites` whose tiles hold a fix (each in its own Land's
+ * projection), if any: the off-site dialog offers to go there.
+ */
+export function siteHolding(
+  fix: Pick<GeoFix, "lat" | "lng">,
+  sites: readonly Site[]
+): Site | undefined {
+  return sites.find((site) => {
+    const at = latLngToUtm(site.provider.epsg, fix.lat, fix.lng);
+    return (
+      at !== null &&
+      site.tiles.some(
+        (cell) => distanceOutside(tileExtentOf(cell), at.x, at.y) === 0
+      )
+    );
+  });
+}
+
+/** The query that hands a fix to another site's page (`?at=lat,lng`). */
+export const ARRIVAL_PARAM = "at";
+
+/** `/<site>?at=lat,lng`: the other site's page, told where the player is. */
+export function arrivalHref(
+  siteId: string,
+  fix: Pick<GeoFix, "lat" | "lng">
+): string {
+  return `/${siteId}?${ARRIVAL_PARAM}=${fix.lat.toFixed(6)},${fix.lng.toFixed(6)}`;
+}
+
+/** The fix a page was opened with (`?at=lat,lng`), or null. */
+export function arrivalOf(search: string): Pick<GeoFix, "lat" | "lng"> | null {
+  const value = new URLSearchParams(search).get(ARRIVAL_PARAM);
+  const m = value?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+  if (!m) {
+    return null;
+  }
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }

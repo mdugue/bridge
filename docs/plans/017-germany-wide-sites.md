@@ -7,6 +7,14 @@
 > improvise. When a phase is done, update the status row for this plan in
 > `docs/plans/README.md` (PARTIAL with the open phases, DONE at the end).
 >
+> **Multi-site layout (merged 2026-10-01, ADR 0037, plan 049)**: the data
+> lives per site — `data/<site>/{dgm,cityjson,dlm,dop}` (Dresden's under
+> `data/dresden/`), raw downloads in `data/_raw/<provider>/` — and the bakes
+> run as `bun run fetch <site>` / `bun run bake <site> [tile…] [--step X]`
+> through `scripts/pipeline.ts` (`scripts/bake.ts` and `--ingest` are gone;
+> Saxony's adapter is `pipeline/bake/providers/sn.py`). Read the paths and
+> commands below in that layout; this is drift, not a STOP condition.
+>
 > **Drift check (run first)**:
 > `git log --oneline -10 -- lib/city/site.ts sites pipeline/bake/ingest_sn.py pipeline/bake/landcover.py pipeline/bake/__main__.py scripts/bake.ts docs/portability.md`
 
@@ -23,8 +31,27 @@
 - **Planned at**: commit `cf8602a`, 2026-09-23; rewritten for the Python
   pipeline on 2026-10-01 (audit) — the bash/JSON text is in git history
 - **Status**: PARTIAL — the site config, the Python bake package and the
-  Saxony adapter are built; NAS input, OSM land cover, a second Land and
-  site, `site:check` and per-tile provenance are open.
+  Saxony adapter are built (below), and plans 049 and 051 built most of
+  phases A, C and D in their own shape (see "Progress, second round");
+  open: NAS input (phase B) and the canopy without DOM1 (phase D.1).
+
+## Progress, second round (plans 049 and 051)
+
+[Plan 049](./049-many-sites-one-env-var.md) and
+[ADR 0037](../adr/0037-sites-providers-and-per-site-data.md) finished most
+of what is open below, in a different shape: a typed `Provider` per
+Land instead of `Site.ingest`; `bun run fetch <site>` with one adapter per
+provider — Saxony, NRW, Bavaria, Hamburg (tested), Berlin (untested) — that
+also fetches the DGM1 and the LoD2 (CityGML converted in-house, no
+citygml-tools/cjio); per-site data in `data/<site>/`, downloads per
+provider (`data/_raw/<provider>/`), provenance per site
+(`data/<site>/provenance.json`); OSM land cover where the Basis-DLM is not
+open as Shape (phase C); `bun run site <site>` (phase D's `site:check`);
+tests over every site; one deployment with a route per site.
+[Plan 051](./051-stand-ins-and-derived-looks.md) and
+[ADR 0039](../adr/0039-stand-ins-marked-per-city.md) added phase C.2: OSM
+rails and bridge decks (`rail_osm.py`) for providers without a DLM. Still
+open: NAS input (phase B) and row-only trees without DOM1 (phase D.1).
 
 ## Built (2026-09-24…26)
 

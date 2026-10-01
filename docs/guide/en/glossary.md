@@ -113,7 +113,9 @@ its inputs (here: 2016 laser scan, 2021/2022 footprints).
 [Fact sheet](./data-sources.md#lod2--the-3d-building-model).
 
 **LSC** — *Laserscandaten*, the classified laser point cloud itself (LAZ
-files), the raw material of the height models; not used by the viewer yet.
+files), the raw material of the height models. Read offline, where a
+survey office offers it (Saxony, North Rhine-Westphalia), for hedge
+heights, garden trees and the sheds the 3D building model lacks.
 [Fact sheet](./data-sources.md#lsc--the-laser-scan-point-cloud).
 
 **nDOM** — *normalisiertes DOM*: surface model minus terrain model, i.e. the
@@ -135,8 +137,8 @@ dl-de/by-2-0".
 
 **OSM / Overpass** — *OpenStreetMap*, the volunteer world map, mapped from
 GPS traces, surveys and traced aerial imagery, updated continuously, with
-no accuracy guarantee. The viewer's lamps, walls, platforms and bridge
-structure types come from it; the bakes read it from the Geofabrik extract.
+no accuracy guarantee. The viewer's lamps, walls, stairs, platforms and
+bridge structure types come from it; the bakes read it from the Geofabrik extract.
 The *Overpass API* is a live query service for it; the bakes no longer use
 it, but the committed lamp, platform and bridge-structure files were still
 fetched through it. [Fact sheet](./data-sources.md#osm--openstreetmap).
@@ -241,8 +243,8 @@ it draws the scene on the CPU, slowly and without the real look.
 
 **Bake** — any offline or build-time step that turns a heavy input into a
 small, ready-to-use artifact. The offline bakes are one Python package
-(`pipeline/`), run with `bun run bake`; the build-time one is
-`scripts/prepare-data.ts`.
+(`pipeline/`), run with `bun run bake <site>`; the build-time one is
+`scripts/prepare-data.ts`, run for every city by `scripts/prepare-sites.ts`.
 
 **Artifact** — one of the prepared files the browser may request. The
 tileset names all of them; the list of a tile's side files (rasters and
@@ -250,16 +252,20 @@ feature files) lives in `lib/city/tile.ts`.
 
 **Site config** — `sites/dresden.ts`: everything about the place that is
 not data — its name, coordinate system, tiles, spawn tile, viewpoints and
-credits. The bakes and the viewer both read it; one build shows one
-site.
+credits. The bakes and the viewer both read it; one deployment shows every
+site whose data it was built with, each at its own address (`/dresden`).
 
-**Manifest** — `public/data/manifest.json`, mapping plain file names to the
-fingerprinted names they are served under.
+**Start page** — the page at `/`: one card per city the deployment was
+built with (its land-cover map, its Land, area and viewpoints), each
+leading to that city's viewer.
+
+**Manifest** — `public/data/<site>/manifest.json` (one per city), mapping
+plain file names to the fingerprinted names they are served under.
 
 **Content hash** — the eight-character fingerprint in a served file name;
 changes whenever the content changes, so caches never serve stale data.
 
-**Lite profile** — `?scene=lite`: the spawn tile only, tiny shadow map,
+**Lite profile** — `?scene=lite` (`/dresden?scene=lite`): the spawn tile only, tiny shadow map,
 half resolution; for automated tests only.
 
 **Snapshot** — the JSON text that captures camera, date/time and every

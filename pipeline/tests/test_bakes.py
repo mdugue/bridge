@@ -2,12 +2,14 @@
 against the committed artifacts is in docs/data-pipeline.md)."""
 
 import math
+import re
 
 import numpy as np
+import pytest
 import shapely
 
+from bake.cadastre import REGISTERS
 from bake.common import owns, round_coords
-from bake.ingest_sn import current_share_url, share_catalogue
 from bake.landcover import CLASSES
 from bake.osm import tag
 from bake.rail import buffer_line, is_platform, merge_lines
@@ -909,6 +911,9 @@ def test_only_ground_floor_levels_count_as_street_shops():
     assert not is_shop("no", None) and not is_shop(None, "bench")
 
 
+DRESDEN = REGISTERS["dresden"].fields
+
+
 def _cadastre_tree(x, y, h=None, d=None, botanical="Tilia cordata", german="Winter-Linde"):
     return {
         "properties": {
@@ -932,7 +937,7 @@ def test_the_tile_owns_its_cadastre_trees_and_skips_stumps():
             _cadastre_tree(150.0, 150.0, 2, 1, botanical="Stammstück"),
         ]
     }
-    trees = parse_trees(raw, (0.0, 0.0, 200.0, 200.0))
+    trees = parse_trees(raw, (0.0, 0.0, 200.0, 200.0), DRESDEN)
     assert [(t["x"], t["y"]) for t in trees] == [(100.0, 100.0)]
     assert trees[0]["leaf"] == "d"
 
@@ -947,7 +952,7 @@ def test_missing_sizes_come_from_the_tiles_own_trees_clamped():
             _cadastre_tree(8.0, 1.0, 99, None),  # clamped
         ]
     }
-    sizes, imputed_h, imputed_d = impute(parse_trees(raw, (0.0, 0.0, 10.0, 10.0)))
+    sizes, imputed_h, imputed_d = impute(parse_trees(raw, (0.0, 0.0, 10.0, 10.0), DRESDEN))
     assert (imputed_h, imputed_d) == (1, 2)
     assert sizes[3] == (10, 5)
     assert sizes[4][0] == H_MAX
@@ -969,7 +974,7 @@ def test_a_cadastre_tree_carries_its_genus_and_trunk():
 
     raw = {"features": [_cadastre_tree(1.0, 1.0, 12, 8, botanical="Acer rub. 'October Glory'")]}
     raw["features"][0]["properties"]["stammdurchmesser_akt"] = 41.0
-    t = parse_trees(raw, (0.0, 0.0, 10.0, 10.0))[0]
+    t = parse_trees(raw, (0.0, 0.0, 10.0, 10.0), DRESDEN)[0]
     props = tree_props(t, 12.0, 8.0)
     assert GENERA[props["gn"]] == "Acer rubrum"
     assert props["t"] == 41
@@ -1055,14 +1060,123 @@ def test_an_osm_leaf_type_or_cycle_overrides_the_taxon():
     assert t["leaf"] == "e"
 
 
+def test_hamburgs_register_reads_its_multipoints_cultivars_and_circumferences():
+    from bake.trees import parse_trees
+
+    fields = REGISTERS["hamburg"].fields
+    f = {
+        "geometry": {"type": "MultiPoint", "coordinates": [[565102.6, 5933612.9]]},
+        "properties": {
+            "gattung_latein": "Quercus",
+            "art_latein": "Quercus robur",
+            "sorte_latein": "Quercus robur 'Fastigiata'",
+            "sorte_deutsch": "Säulen-Eiche 'Fastigiata'",
+            "pflanzjahr": 2024,
+            "kronendurchmesser": 1,
+            "stammumfang": 19,
+        },
+    }
+    nameless = {
+        "geometry": {"type": "MultiPoint", "coordinates": [[565110.0, 5933612.9]]},
+        "properties": {"sorte_latein": "", "art_latein": "", "gattung_latein": ""},
+    }
+    t, unknown = parse_trees(
+        {"features": [f, nameless]}, (564000, 5932000, 566000, 5934000), fields
+    )
+    assert (t["x"], t["y"]) == (565102.6, 5933612.9)
+    assert t["h"] is None and t["d"] == 1 and t["planted"] == 2024
+    assert t["t"] == pytest.approx(19 / math.pi)  # a circumference, in cm
+    assert t["genus"] == "Quercus" and t["archetype"] == 2  # columnar: the cultivar wins
+    assert not unknown["known"]  # no taxon: still a tree, of no known genus
+
+
+def test_leipzigs_register_skips_felled_trees_and_stands_and_prefers_the_diameter():
+    from bake.trees import parse_trees
+
+    def tree(x, **props):
+        return {"geometry": {"type": "Point", "coordinates": [x, 5.0]}, "properties": props}
+
+    raw = {
+        "features": [
+            tree(
+                1.0,
+                ga_lang_wiss="Pinus species",
+                baumhoehe=8,
+                kr_durchm=5,
+                st_durchm=27,
+                st_umfang=85,
+                gefaellt_am=None,
+            ),
+            tree(2.0, ga_lang_wiss="Tilia cordata", baumhoehe=12, gefaellt_am="2025-03-01"),
+            tree(3.0, ga_lang_wiss="waldartiger Bestand", baumhoehe=15),
+            tree(4.0, ga_lang_wiss="nicht bestimmt", baumhoehe=4, st_umfang=31.4),
+        ]
+    }
+    pine, unknown = parse_trees(raw, (0.0, 0.0, 10.0, 10.0), REGISTERS["leipzig"].fields)
+    assert (pine["h"], pine["d"], pine["t"]) == (8, 5, 27)
+    assert pine["archetype"] == 3 and pine["leaf"] == "e"
+    assert not unknown["known"] and unknown["t"] == pytest.approx(10.0, abs=0.01)
+
+
+def test_berlins_register_reads_a_planting_year_given_as_text():
+    from bake.trees import register_tree
+
+    f = {
+        "geometry": {"type": "Point", "coordinates": [391524.5, 5819418.0]},
+        "properties": {
+            "art_bot": "Catalpa bignonioides",
+            "art_dtsch": "Trompetenbaum",
+            "pflanzjahr": "1999",
+            "kronedurch": 5,
+            "stammumfg": 43,
+            "baumhoehe": 7.5,
+        },
+    }
+    t = register_tree(f, REGISTERS["berlin"].fields)
+    assert (t["h"], t["d"], t["planted"]) == (7.5, 5, 1999)
+    assert t["genus"] == "Catalpa"
+
+
+def test_every_register_queries_each_of_its_feature_types_in_its_own_crs():
+    for reg in REGISTERS.values():
+        for type_name in reg.type_names:
+            q = reg.query(type_name, (0.0, 0.0, 2000.0, 2000.0), reg.epsg, resultType="hits")
+            assert (
+                f"EPSG%3A%3A{reg.epsg}" in q and f"TypeNames={type_name.replace(':', '%3A')}" in q
+            )
+
+
+def test_the_registers_are_the_ones_the_site_type_names():
+    from pathlib import Path
+
+    site_ts = (Path(__file__).parents[2] / "lib" / "city" / "site.ts").read_text()
+    block = site_ts.split("TREE_REGISTERS = [", 1)[1].split("]", 1)[0]
+    assert sorted(re.findall(r'"(\w+)"', block)) == sorted(REGISTERS)
+
+
+def test_a_missing_height_is_measured_in_the_surface_model_when_it_fits_the_crown():
+    from bake.trees import measure_heights
+
+    ndom = np.zeros((10, 10))
+    ndom[2, 2] = 9.0  # a crown top 1 m from the first trunk
+    ndom[7, 7] = 30.0  # a roof beside the sapling
+    trees = [
+        {"x": 2.5, "y": 6.5, "h": None, "d": 6.0},  # row 3, col 2: reaches the top
+        {"x": 7.5, "y": 3.5, "h": None, "d": 1.0},  # 30 m over a 1 m crown: no
+        {"x": 5.5, "y": 5.5, "h": 11.0, "d": 6.0},  # the register's own height stays
+    ]
+    assert measure_heights(trees, ndom, (0.0, 0.0, 10.0, 10.0)) == 1
+    assert [t["h"] for t in trees] == [9.0, None, 11.0]
+
+
 def test_the_cadastre_wins_within_three_metres_and_fills_osm_sizes():
     from bake.trees import cadastre_points, complement, impute, osm_tree, parse_trees, size_stats
 
     raw = {"features": [_cadastre_tree(float(i) * 20, 0.0, 10, 5) for i in range(3)]}
-    cadastre = parse_trees(raw, (0.0, -1.0, 100.0, 100.0))
+    cadastre = parse_trees(raw, (0.0, -1.0, 100.0, 100.0), DRESDEN)
     tags = '"natural"=>"tree","genus"=>"Tilia"'
     osm = [osm_tree(2.5, 0.0, tags), osm_tree(23.5, 0.0, tags), osm_tree(50.0, 0.0, tags)]
-    kept = complement([t for t in osm if t], cadastre_points(raw))
+    kept = complement([t for t in osm if t], cadastre_points(raw, DRESDEN))
     assert [t["x"] for t in kept] == [23.5, 50.0]
     sizes, imputed_h, _ = impute(kept, size_stats(cadastre))
     assert imputed_h == 2
@@ -1074,11 +1188,11 @@ def test_a_cadastre_tree_across_the_seam_claims_its_osm_twin():
 
     # The WFS answer's margin: a tree 1 m past the tile's east seam.
     raw = {"features": [_cadastre_tree(101.0, 50.0, 10, 5), _cadastre_tree(50.0, 50.0, 10, 5)]}
-    assert len(parse_trees(raw, (0.0, 0.0, 100.0, 100.0))) == 1
+    assert len(parse_trees(raw, (0.0, 0.0, 100.0, 100.0), DRESDEN)) == 1
     twin = osm_tree(99.0, 50.0, '"natural"=>"tree","genus"=>"Tilia"')
     assert twin is not None
-    assert complement([twin], cadastre_points(raw)) == []
-    assert complement([twin], cadastre_points({"features": []})) == [twin]
+    assert complement([twin], cadastre_points(raw, DRESDEN)) == []
+    assert complement([twin], cadastre_points({"features": []}, DRESDEN)) == [twin]
 
 
 def test_an_implausible_trunk_is_dropped_not_clamped():
@@ -1187,20 +1301,3 @@ def test_a_laser_scan_rasterises_by_pdals_binning_rules(tmp_path):
     assert band("lowint_050.tif", "mean")[6, 0] == 1000.0
     assert band("lowint_050.tif", "count")[6, 0] == 1
     assert band("lowint_050.tif", "mean")[0, 7] == -9999.0
-
-
-def test_a_rotated_share_is_found_in_the_batch_catalogue():
-    page = (
-        '"LSC":{"fullname":"Laserscandaten","shortname":"LSC","share_id":"NewLsc123",'
-        '"packagesize":2000,"filename":"lsc_33$Rechtswert$_$Hochwert$_2_sn_laz.zip","category":"x"},'
-        '"LoD2_CityGML":{"shortname":"LoD2_CityGML","share_id":"NewLod2",'
-        '"packagesize":2000,"filename":"lod2_33$Rechtswert$_$Hochwert$_2_sn_citygml.zip"}'
-    )
-    catalogue = share_catalogue(page)
-    assert current_share_url("lsc_33414_5656_2_sn_laz.zip", catalogue) == (
-        "https://geocloud.landesvermessung.sachsen.de/public.php/dav/files/NewLsc123/lsc_33414_5656_2_sn_laz.zip"
-    )
-    assert current_share_url("lod2_33412_5656_2_sn_citygml.zip", catalogue).endswith(
-        "/NewLod2/lod2_33412_5656_2_sn_citygml.zip"
-    )
-    assert current_share_url("dop20rgb_33412_5656_2_sn_tiff.zip", catalogue) is None

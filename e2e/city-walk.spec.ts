@@ -17,7 +17,8 @@ const slow = (ms: number) => (process.env.CI ? ms * 3 : ms);
  * scenic context — which nothing here asserts on — for a suite that finishes
  * in a couple of minutes instead of twenty.
  */
-const LITE = "/?scene=lite";
+const SITE = "/dresden";
+const LITE = `${SITE}?scene=lite`;
 
 /**
  * Wide enough to stay above the sidebar's 768 px mobile breakpoint (below it
@@ -139,14 +140,15 @@ async function withFramesHeld(
 }
 
 /**
- * Resolves a logical /data artifact name to its content-hashed URL through
- * the manifest scripts/prepare-data.ts publishes (see lib/city/tile.ts).
+ * Resolves a logical artifact name of the site to its content-hashed URL
+ * through the manifest scripts/prepare-data.ts publishes (see
+ * lib/city/tile.ts).
  */
 async function dataUrl(page: Page, file: string): Promise<string> {
   const manifest = (await (
-    await page.request.get("/data/manifest.json")
+    await page.request.get(`/data${SITE}/manifest.json`)
   ).json()) as { files: Record<string, string> };
-  return `/data/${manifest.files[file] ?? file}`;
+  return `/data${SITE}/${manifest.files[file] ?? file}`;
 }
 
 /** True when the browser has WebGL at all (render assertions need it). */
@@ -204,12 +206,33 @@ async function openSidebar(target: Page): Promise<void> {
   }
 }
 
-test("city page serves the viewer shell", async ({ page }) => {
-  // Deliberately the DEFAULT route (no ?scene=lite): this is the only spec
-  // that proves the product URL serves a viewer at all. It never waits for the
-  // scene to finish loading, so it costs the shell and nothing more.
+test("the start page leads to a city", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // Every built city (every committed data/<site>/) is a card linking to
+  // its route.
+  const res = await page.request.get("/data/sites.json");
+  expect(res.ok()).toBe(true);
+  const index = (await res.json()) as { sites: { id: string }[] };
+  expect(index.sites.map((s) => s.id)).toContain("dresden");
+  for (const { id } of index.sites) {
+    await expect(page.locator(`main a[href="/${id}"]`)).toHaveCount(1);
+  }
+  expect(errors.page).toEqual([]);
+});
+
+test("a city that is not built is a 404", async ({ page }) => {
+  const res = await page.goto("/atlantis");
+  expect(res?.status()).toBe(404);
+});
+
+test("city page serves the viewer shell", async ({ page }) => {
+  // Deliberately the city's DEFAULT route (no ?scene=lite): this is the only
+  // spec that proves the product URL serves a viewer at all. It never waits
+  // for the scene to finish loading, so it costs the shell and nothing more.
+  const errors = watchErrors(page);
+  await page.goto(SITE);
   // Either the loading overlay or the booted canvas — never a blank page.
   await expect(
     page

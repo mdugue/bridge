@@ -18,13 +18,13 @@
  *
  * Not part of the app; nothing imports it. See docs/transformations.md
  * ("Terrain TIN") for the results. The whole study, in order (STUDY = any
- * scratch dir, e.g. data/_raw/dresden/lsc/33412_5656_2_sn_tin; the LAZ is
+ * scratch dir, e.g. data/_raw/sn/lsc/33412_5656_2_sn_tin; the LAZ is
  * the gitignored GeoSN laser scan of the spawn tile):
  *
  *   PY="uv run --with numpy --with rasterio --with scipy --with matplotlib \
  *       --with laspy[lazrs] python"
  *   $PY scripts/terrain-study/lsc_extract.py <laz> $STUDY
- *   $PY scripts/terrain-study/build_grids.py data/dgm/…/dgm1_<tile>.tif $STUDY
+ *   $PY scripts/terrain-study/build_grids.py data/dresden/dgm/…/dgm1_<tile>.tif $STUDY
  *   bun scripts/terrain-study/tin-study.ts grids $STUDY
  *   bun scripts/terrain-study/tin-study.ts tin $STUDY v1_2000 0.25 0.2 0.15 0.1 0.05
  *   bun scripts/terrain-study/tin-study.ts tin $STUDY v1c_2000 0.25 0.1
@@ -53,6 +53,7 @@ import {
 import { dgmSourceFiles, wallSourceFile } from "../../lib/city/tile";
 import { readDgm } from "../bake-tiles";
 import { writeMeshGlb } from "../tile-glb";
+import { DRESDEN } from "../../sites/dresden";
 
 const SPAWN_TILE = "33412_5656_2_sn";
 const BOUNDS: TerrainBounds = [412_000, 5_656_000, 414_000, 5_658_000];
@@ -78,7 +79,9 @@ function gridN(name: string): number {
 }
 
 function wallLines(): WallLine[] {
-  const doc = JSON.parse(readFileSync(wallSourceFile(SPAWN_TILE), "utf8")) as {
+  const doc = JSON.parse(
+    readFileSync(wallSourceFile(DRESDEN, SPAWN_TILE), "utf8")
+  ) as {
     features: WallFeature[];
   };
   return doc.features
@@ -92,7 +95,7 @@ function wallLines(): WallLine[] {
 }
 
 async function grids(dir: string): Promise<void> {
-  const src = dgmSourceFiles(SPAWN_TILE);
+  const src = dgmSourceFiles(DRESDEN, SPAWN_TILE);
   const tif = readFileSync(src.tif);
   const { elevations: v0 } = await readDgm(
     tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength),

@@ -96,7 +96,7 @@ def test_a_sliver_left_by_the_clip_is_dropped():
 
 @pytest.fixture
 def tile(tmp_path: Path) -> Tile:
-    return Tile("t", BOUNDS, 25833, tmp_path / "raw", tmp_path / "data")
+    return Tile("t", BOUNDS, 25833, tmp_path / "raw", tmp_path / "data", traffic="dresden")
 
 
 def test_a_tile_without_counts_still_gets_its_empty_file(tile: Tile):
@@ -106,3 +106,46 @@ def test_a_tile_without_counts_still_gets_its_empty_file(tile: Tile):
     doc = json.loads((tile.data / "dlm" / "traffic_t.geojson").read_text())
     assert doc["features"] == []
     assert "Landeshauptstadt Dresden" in doc["attribution"]
+
+
+# --- the other sources (traffic_sources.py) ----------------------------------
+
+
+def test_a_total_counted_both_ways_is_split_evenly_and_marked():
+    from bake.traffic_sources import split_total
+
+    p = split_total(4409, 0.069, 2021, "B 107")
+    assert p["f"] + p["b"] == p["t"] == 4409
+    assert abs(p["f"] - p["b"]) <= 1
+    assert p["sp"] == 1 and p["m"] == "census"
+    assert p["hf"] == p["hb"] == 0.069
+    assert p["n"] == "B 107" and "br" not in p
+    assert split_total(1, None, None)["f"] == 1
+
+
+def test_each_source_reads_its_own_fields():
+    from bake.traffic_sources import (
+        berlin_props,
+        hamburg_props,
+        nrw_props,
+        saxony_svz_props,
+    )
+
+    assert berlin_props({"dtvw_kfz": 24900, "str_name": "Potsdamer Straße"})["n"] == (
+        "Potsdamer Straße"
+    )
+    hh = hamburg_props({"dtv": 40000, "sv": 6})
+    assert hh["t"] == 40000 and hh["hf"] == 0.06 and hh["y"] == 2019
+    sn = saxony_svz_props({"dtv_kfzges": 9651, "sv_kfz": "6.1", "jahr": "2021", "strasse": "B 107"})
+    assert sn["t"] == 9651 and sn["hf"] == 0.061 and sn["y"] == 2021
+    nw = nrw_props({"DTVKFZA": "15963.0", "DTVSVA": "929.0", "STRBEZ": "B1"})
+    assert nw["t"] == 15963 and nw["hf"] == round(929 / 15963, 3)
+    # nothing counted: no section
+    assert hamburg_props({"dtv": 0}) is None
+    assert nrw_props({"DTVKFZA": None}) is None
+
+
+def test_the_site_names_its_source_and_a_site_without_one_bakes_nothing(tmp_path: Path):
+    tile = Tile("t", BOUNDS, 25833, tmp_path / "raw", tmp_path / "data")
+    run(tile)
+    assert not (tile.data / "dlm" / "traffic_t.geojson").exists()

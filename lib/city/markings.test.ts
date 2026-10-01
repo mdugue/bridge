@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DRESDEN } from "../../sites/dresden";
+import { SITES } from "../../sites";
 import { SURFACE_ALONG_PERIOD } from "./landcover";
 import {
   MARKING_KINDS,
@@ -11,35 +11,39 @@ import {
   packMarkingTable,
   stripeCoverage,
 } from "./markings";
-import { tileArtifacts, tileIds } from "./tile";
+import { sideFileSource, tileArtifacts, tileIds } from "./tile";
 
-const DATA = join(import.meta.dir, "..", "..", "data", "dlm");
+const ROOT = join(import.meta.dir, "..", "..");
 
 test("the committed tables name the kinds in the viewer's order", () => {
   let rows = 0;
-  for (const tile of tileIds(DRESDEN)) {
-    const path = join(DATA, tileArtifacts(tile).markingsTable.file);
-    if (!existsSync(path)) {
-      continue;
-    }
-    const doc = JSON.parse(readFileSync(path, "utf8")) as MarkingTable & {
-      kinds: Record<string, string>;
-    };
-    expect(Object.values(doc.kinds)).toEqual([...MARKING_KINDS]);
-    for (const [cx, cy, , hl, hw, kind] of doc.markings) {
-      // inside the tile (a small margin: a row centred just past the seam)
-      expect(cx).toBeGreaterThan(-50);
-      expect(cx).toBeLessThan(2050);
-      expect(cy).toBeLessThan(50);
-      expect(cy).toBeGreaterThan(-2050);
-      expect(hl).toBeGreaterThan(0);
-      // half the widest carriageway (30 m), and a little more where the
-      // bake merged two nodes of one crossing at an angle
-      expect(hl).toBeLessThanOrEqual(16);
-      expect(hw).toBeGreaterThan(0);
-      expect(kind).toBeGreaterThan(0);
-      expect(kind).toBeLessThan(MARKING_KINDS.length);
-      rows++;
+  // every site whose bakes are on disk (Dresden's are committed)
+  for (const site of Object.values(SITES)) {
+    for (const tile of tileIds(site)) {
+      const file = tileArtifacts(tile).markingsTable.file;
+      const path = join(ROOT, sideFileSource(site, file));
+      if (!existsSync(path)) {
+        continue;
+      }
+      const doc = JSON.parse(readFileSync(path, "utf8")) as MarkingTable & {
+        kinds: Record<string, string>;
+      };
+      expect(Object.values(doc.kinds)).toEqual([...MARKING_KINDS]);
+      for (const [cx, cy, , hl, hw, kind] of doc.markings) {
+        // inside the tile (a small margin: a row centred just past the seam)
+        expect(cx).toBeGreaterThan(-50);
+        expect(cx).toBeLessThan(2050);
+        expect(cy).toBeLessThan(50);
+        expect(cy).toBeGreaterThan(-2050);
+        expect(hl).toBeGreaterThan(0);
+        // half the widest carriageway (30 m), and a little more where the
+        // bake merged two nodes of one crossing at an angle
+        expect(hl).toBeLessThanOrEqual(16);
+        expect(hw).toBeGreaterThan(0);
+        expect(kind).toBeGreaterThan(0);
+        expect(kind).toBeLessThan(MARKING_KINDS.length);
+        rows++;
+      }
     }
   }
   expect(rows).toBeGreaterThan(0);

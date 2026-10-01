@@ -8,7 +8,7 @@ import {
   type BikeCounter,
   tintCss,
 } from "@/lib/city/bike-counts";
-import { DATA_LAYERS, type DataLayerKey } from "@/lib/city/data-layers";
+import type { DataLayerDef, DataLayerKey } from "@/lib/city/data-layers";
 import type { LookValues } from "@/lib/city/look-controls";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { DataLayerSwatch } from "./data-layer-swatch";
@@ -24,14 +24,17 @@ export function DataLayersPanel({
   detail,
   look,
   onLook,
+  rows,
 }: {
   detail?: Partial<Record<DataLayerKey, ReactNode>>;
   look: LookValues;
   onLook: (patch: Partial<LookValues>) => void;
+  /** the site's layers (lib/city/data-layers.ts `siteDataLayers`) */
+  rows: readonly DataLayerDef[];
 }) {
   return (
     <div className="flex flex-col gap-3">
-      {DATA_LAYERS.map((def) => (
+      {rows.map((def) => (
         <div className="flex flex-col gap-1" key={def.key}>
           <Field orientation="horizontal">
             <FieldLabel

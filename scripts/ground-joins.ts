@@ -35,7 +35,8 @@ import { structureJoins } from "../lib/city/small-buildings";
 import { cityMeshSourceFiles, dgmSourceFiles, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
 import { wallGeometry } from "../lib/city/walls";
-import { currentSite } from "../sites";
+import type { Site } from "../lib/city/site";
+import { REFERENCE_SITE, SITES, siteFromArgs } from "../sites";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { readDgm, shapeDgm } from "./bake-tiles";
 import {
@@ -65,8 +66,8 @@ interface Ground {
 }
 
 /** A tile's fine ground: its native DGM, shaped as the TIN is shaped. */
-async function tileGround(tile: string): Promise<Ground> {
-  const src = dgmSourceFiles(tile);
+async function tileGround(site: Site, tile: string): Promise<Ground> {
+  const src = dgmSourceFiles(site, tile);
   const tif = readFileSync(join(process.cwd(), src.tif));
   const tfw = readFileSync(join(process.cwd(), src.tfw), "utf8");
   const dgm = await readDgm(
@@ -76,8 +77,8 @@ async function tileGround(tile: string): Promise<Ground> {
   );
   const elevations = shapeDgm(
     dgm,
-    wallLines(tile),
-    { stairs: stairLines(tile), terraces: terraces(tile) },
+    wallLines(site, tile),
+    { stairs: stairLines(site, tile), terraces: terraces(site, tile) },
     { burnWalls: false, stairMargin: FINE_TIN_MAX_ERROR }
   );
   const field = { elevations, n: dgm.n, bounds: dgm.bounds };
@@ -88,8 +89,8 @@ async function tileGround(tile: string): Promise<Ground> {
 }
 
 /** The scan's small structures the bake appends to a tile's buildings. */
-function smallBuildings(tile: string): SmallBuildingFeature[] {
-  const path = join(process.cwd(), cityMeshSourceFiles(tile).smallBuild);
+function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
+  const path = join(process.cwd(), cityMeshSourceFiles(site, tile).smallBuild);
   return existsSync(path)
     ? ((
         JSON.parse(readFileSync(path, "utf8")) as {
@@ -101,41 +102,43 @@ function smallBuildings(tile: string): SmallBuildingFeature[] {
 
 /** The joins each part of one tile reports, on the site's ground. */
 function tileJoins(
+  site: Site,
   tile: string,
   bounds: TerrainBounds,
   heightAt: HeightAt
 ): Record<JoinPart, JoinPoint[]> {
-  const walls = wallLines(tile);
-  const gates = gatePoints(tile);
+  const walls = wallLines(site, tile);
+  const gates = gatePoints(site, tile);
   const cut = cutWallGates(walls, gates);
   const surround = { groundAt: heightAt, walls: walls.map((w) => w.coords) };
   return {
-    kerbs: kerbGeometry(kerbLines(tile), heightAt, OFFSET)?.joins ?? [],
+    kerbs: kerbGeometry(kerbLines(site, tile), heightAt, OFFSET)?.joins ?? [],
     walls:
       wallGeometry(cut.walls, heightAt, OFFSET, { snapToStep: true })?.joins ??
       [],
-    stairs: stairLines(tile).flatMap((stair) => {
+    stairs: stairLines(site, tile).flatMap((stair) => {
       const [x, y] = axisMiddle(stair.coords);
       return ownsPoint(bounds, x, y)
         ? (stairGeometry(stair, OFFSET, surround)?.joins ?? [])
         : [];
     }),
     fences:
-      fenceGeometry(fenceLines(tile), gates, heightAt, OFFSET, cut.leaves)
+      fenceGeometry(fenceLines(site, tile), gates, heightAt, OFFSET, cut.leaves)
         ?.joins ?? [],
-    sheds: smallBuildings(tile).flatMap(structureJoins),
+    sheds: smallBuildings(site, tile).flatMap(structureJoins),
   };
 }
 
 /** Every part's joins over `tiles` (default: the whole site), checked. */
 export async function measureJoins(
-  tiles: string[] = tileIds(currentSite())
+  tiles?: string[],
+  site: Site = SITES[REFERENCE_SITE]
 ): Promise<Record<JoinPart, JoinReport>> {
+  tiles ??= tileIds(site);
   // the measured tiles and the ones touching them: a wall or a fence near
   // a seam stands on its neighbour's ground
-  const site = currentSite();
   const extent = new Map(
-    site.tiles.map((cell) => [tileIdOf(site, cell), tileExtentOf(site, cell)])
+    site.tiles.map((cell) => [tileIdOf(site, cell), tileExtentOf(cell)])
   );
   const touches = (a: string, b: string) => {
     const [ax0, ay0, ax1, ay1] = extent.get(a) ?? [0, 0, 0, 0];
@@ -145,7 +148,7 @@ export async function measureJoins(
   const all = [...extent.keys()].filter((t) =>
     tiles.some((m) => touches(t, m))
   );
-  const grounds = await Promise.all(all.map(tileGround));
+  const grounds = await Promise.all(all.map((t) => tileGround(site, t)));
   const heightAt: HeightAt = (x, y) =>
     grounds.find((g) => ownsPoint(g.bounds, x, y))?.heightAt(x, y) ?? null;
   const joins = Object.fromEntries(
@@ -153,7 +156,7 @@ export async function measureJoins(
   ) as Record<JoinPart, JoinPoint[]>;
   for (const tile of tiles) {
     const bounds = grounds[all.indexOf(tile)].bounds;
-    const found = tileJoins(tile, bounds, heightAt);
+    const found = tileJoins(site, tile, bounds, heightAt);
     for (const part of JOIN_PARTS) {
       joins[part].push(...found[part]);
     }
@@ -169,8 +172,12 @@ export function missShare(r: JoinReport): number {
 }
 
 if (import.meta.main) {
-  const tiles = process.argv.slice(2);
-  const reports = await measureJoins(tiles.length > 0 ? tiles : undefined);
+  // bun scripts/ground-joins.ts <site> [tile…]
+  const { site, rest: tiles } = siteFromArgs(process.argv.slice(2));
+  const reports = await measureJoins(
+    tiles.length > 0 ? tiles : undefined,
+    site
+  );
   for (const part of JOIN_PARTS) {
     const r = reports[part];
     const edges = r.misses.filter((m) => m.join.kind === "edge").length;

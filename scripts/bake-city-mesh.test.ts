@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import type { CityJsonDocument } from "../lib/city/types";
+import { OBJECT_SOURCE_GAP } from "../lib/city/city-mesh";
+import type { StructureFeature } from "../lib/city/features";
 import { SMALL_BUILDING_SINK } from "../lib/city/small-buildings";
 import { bakeCityMesh, scanStructureId } from "./bake-city-mesh";
 import { cityMesh } from "./bake-tiles";
@@ -209,6 +211,80 @@ test("a scan structure's tint key is its first corner, not its index", () => {
   );
 });
 
+test("gap structures: a chimney is its own object, a relief slab joins its landmark", () => {
+  const gaps: StructureFeature[] = [
+    {
+      geometry: { type: "Point", coordinates: [412_030, 5_656_030] },
+      properties: { h: 40, kind: "chimney", r: 2, rt: 1.2, z: 100 },
+    },
+    {
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [412_042, 5_656_002],
+            [412_048, 5_656_002],
+            [412_048, 5_656_008],
+            [412_042, 5_656_008],
+            [412_042, 5_656_002],
+          ],
+        ],
+      },
+      properties: {
+        h: 2,
+        kind: "relief",
+        of: "house",
+        z: 112,
+        grid: {
+          x: 412_042,
+          y: 5_656_008,
+          res: 1,
+          cols: 2,
+          rows: 2,
+          z: [2, 2, 2, 2],
+        },
+      },
+    },
+    // a slab whose host is not in this tile is dropped
+    {
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [412_000, 5_656_000],
+            [412_002, 5_656_000],
+            [412_002, 5_656_002],
+            [412_000, 5_656_000],
+          ],
+        ],
+      },
+      properties: { h: 2, kind: "relief", of: "elsewhere", z: 112 },
+    },
+  ];
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    gaps
+  );
+  expect(baked.objects.length).toBe(5);
+  const [chimney, slab] = baked.objects.slice(3);
+  expect(chimney.root).toBe(3);
+  expect(chimney.building).toBe(false);
+  expect(chimney.source).toBe(OBJECT_SOURCE_GAP);
+  const house = baked.objects[2];
+  expect(slab.root).toBe(house.root);
+  expect(slab.tint).toEqual(house.tint);
+  expect(slab.roof).toEqual(house.roof);
+  expect(slab.building).toBe(false);
+  expect(slab.footprints).toEqual([]);
+  expect(slab.source).toBe(OBJECT_SOURCE_GAP);
+});
+
 test("a measured roof replaces its object's LoD2 triangles, same row", () => {
   const part = (x0: number, z: number) => ({
     geometry: {
@@ -232,6 +308,8 @@ test("a measured roof replaces its object's LoD2 triangles, same row", () => {
     undefined,
     null,
     undefined,
+    undefined,
+    "render",
     undefined,
     // two steps over the house's 10 × 10 m: 4 m and 7 m above its base
     [part(0, 104), part(5, 107)]

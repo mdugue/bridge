@@ -1,5 +1,10 @@
 import type { Object3D } from "three/webgpu";
 import type { BikeCounter } from "@/lib/city/bike-counts";
+import {
+  BIKE_FEED_READERS,
+  type BikeFeedId,
+  type BikeFeedReader,
+} from "@/lib/city/bike-feeds";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { BridgeFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
@@ -55,6 +60,8 @@ export interface DataOverlays {
 const TRAM_STATUS_MS = 1000;
 
 export interface DataOverlayOptions {
+  /** the site's live bicycle-counter feed, or undefined where it has none */
+  bikeFeed?: BikeFeedId;
   /** the site's extent (projected): counters off it are left out */
   bounds: readonly [number, number, number, number];
   /** every tile's bridge decks (served URLs): the trams ride them */
@@ -83,7 +90,11 @@ export interface DataOverlayOptions {
 
 /** The live bicycle counters: built on the first switch-on, polled while
  *  on, shown once compiled. */
-function bikeOverlay(opts: DataOverlayOptions, alive: () => boolean) {
+function bikeOverlay(
+  opts: DataOverlayOptions,
+  alive: () => boolean,
+  reader: BikeFeedReader
+) {
   let on = false;
   let layer: ReturnType<typeof createBikeLayer> | null = null;
   let compiling = false;
@@ -91,6 +102,7 @@ function bikeOverlay(opts: DataOverlayOptions, alive: () => boolean) {
   const feed = createBikeFeed({
     bounds: opts.bounds,
     epsg: opts.epsg,
+    feed: reader,
     onCounts: (counters) => {
       if (!(alive() && layer)) {
         return;
@@ -280,22 +292,26 @@ export function createDataOverlays(opts: DataOverlayOptions): DataOverlays {
   let clockBase = opts.initialDate.getTime();
   let clockSetAt = performance.now();
   const clock = (nowMs: number) => new Date(clockBase + (nowMs - clockSetAt));
-  const bikes = bikeOverlay(opts, alive);
+  // A site without a feed has no bicycle layer: its switch is not shown,
+  // and a snapshot that turns it on finds nothing to start.
+  const bikes = opts.bikeFeed
+    ? bikeOverlay(opts, alive, BIKE_FEED_READERS[opts.bikeFeed])
+    : null;
   const trams = tramOverlay(opts, alive, aborter.signal, clock);
   const traffic = trafficClock(opts, clock);
   return {
     apply: (layers) => {
-      bikes.apply(layers.bikeLayer);
+      bikes?.apply(layers.bikeLayer);
       trams.apply(layers.tramLayer);
       traffic.apply(layers.trafficLayer);
     },
     dispose: () => {
       disposed = true;
       aborter.abort();
-      bikes.dispose();
+      bikes?.dispose();
       trams.dispose();
     },
-    parts: () => ({ bikes: bikes.group(), trams: trams.group() }),
+    parts: () => ({ bikes: bikes?.group(), trams: trams.group() }),
     setClock: (date: Date) => {
       clockBase = date.getTime();
       clockSetAt = performance.now();
@@ -306,6 +322,6 @@ export function createDataOverlays(opts: DataOverlayOptions): DataOverlays {
       trams.step(nowMs);
       traffic.step(nowMs);
     },
-    streamChanged: bikes.reground,
+    streamChanged: () => bikes?.reground() ?? false,
   };
 }

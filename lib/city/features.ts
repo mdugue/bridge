@@ -1,12 +1,12 @@
 /**
  * The GeoJSON feature shapes the offline bakes write (pipeline/bake/*.py)
- * and the layers read — the one contract between data/dlm and the viewer.
+ * and the layers read — the one contract between data/<site>/dlm and the viewer.
  * features.test.ts checks every committed file against it, so a bake that
  * changes a property name fails there, not as an empty layer in the browser.
  *
  * GeoJSON allows `"properties": null`, so properties are nullable and every
  * read goes through `?.`: one odd feature must never throw out of a layer's
- * documented non-fatal load. Coordinates are EPSG:25833, never recentered.
+ * documented non-fatal load. Coordinates are in the site's CRS (EPSG:25832/25833), never recentered.
  * No THREE, no DOM.
  */
 import type { Point2 } from "./polyline";
@@ -224,6 +224,52 @@ export interface SmallBuildingFeature {
   properties: { h: number; hc?: number[]; z: number } | null;
 }
 
+/** What the surface model shows and LoD2 lacks, confirmed by OSM
+ *  (pipeline/bake/structures.py, ODbL): a column (chimney, tower, mast,
+ *  water tower, communications tower, lighthouse) as its axis point with
+ *  foot radius `r` and top radius `rt`, or a whole building as its outline;
+ *  `z` the lowest ground, `h` the measured height above it. */
+export interface StructureFeature {
+  geometry: PointGeometry | PolygonGeometry;
+  properties: {
+    h: number;
+    kind: StructureKind;
+    name?: string;
+    /** a relief: the LoD2 object it sits on (and whose look it wears) */
+    of?: string;
+    /** a relief's height field: heights (m) above `z` on a north-up grid
+     *  from its north-west corner (x, y), row by row; -1 outside it */
+    grid?: HeightField;
+    r?: number;
+    rt?: number;
+    z: number;
+  } | null;
+}
+
+export interface HeightField {
+  cols: number;
+  /** per cell, where its walls end below `z` (≤ 0): the LoD2 roof under
+   *  the cell; without it every wall ends at `z` */
+  floor?: number[];
+  res: number;
+  rows: number;
+  x: number;
+  y: number;
+  z: number[];
+}
+
+export const STRUCTURE_KINDS = [
+  "chimney",
+  "tower",
+  "mast",
+  "communications_tower",
+  "water_tower",
+  "lighthouse",
+  "building",
+  "relief",
+] as const;
+export type StructureKind = (typeof STRUCTURE_KINDS)[number];
+
 /** A LoD2 roof that misses DOM1, rebuilt as stepped flat blocks
  *  (pipeline/bake/roofs.py, GeoSN): one part of the object `id` (its LoD2
  *  CityObject key), its roof at `z` metres (absolute), outline and
@@ -303,7 +349,7 @@ export type TramKind = "arm" | "mast" | "rosette" | "span" | "stop" | "track";
 /**
  * OSM trams (pipeline/bake/tram.py, ODbL). A `track` is one track's
  * centreline, cut at the tile edge, with its `bed`, `bridge: 1` on a bridge,
- * the OSM `layer`, and `s`: the distances (m along the line) where a span or
+ * the OSM `layer`, its gauge `g` (m) where OSM maps one, and `s`: the distances (m along the line) where a span or
  * arm holds its contact wire. A `mast` is a Point; `span`, `rosette` and
  * `arm` are two-point lines between their anchors (mast or facade; an arm
  * ends over its track) with `x`, the fractions along a span where it
@@ -316,6 +362,8 @@ export interface TramFeature {
     a?: number;
     bed?: TramBed;
     bridge?: number;
+    /** a track's gauge (m) */
+    g?: number;
     k: TramKind;
     layer?: number;
     name?: string;
@@ -365,15 +413,18 @@ export interface RiversideFeature {
 /** How a section was counted (pipeline/bake/traffic.py): by hand on one
  *  day scaled to the average day, an induction loop or an infrared
  *  detector (yearly means), or the office's estimate. */
-export type TrafficMethod = "detector" | "estimate" | "loop" | "man";
+export type TrafficMethod = "census" | "detector" | "estimate" | "loop" | "man";
 
 /**
- * The city's counted motor traffic per road section, cut to the tile
- * (pipeline/bake/traffic.py; Landeshauptstadt Dresden, dl-de/by-2-0).
+ * The site's counted motor traffic per road section, cut to the tile
+ * (pipeline/bake/traffic.py; its source in traffic_sources.py).
  * `f` vehicles per day along the line as drawn, `b` against it (each
  * absent where that direction was not counted), `t` the total; `hf` / `hb`
- * the heavy share (0..1) of each direction; `y` the year counted, `m` how;
- * `n` the street; `br` 1 = the street is a bridge (lifted onto its deck).
+ * the heavy share (0..1) of each direction; `y` the year counted, `m` how
+ * ("census": a road census counting both directions together); `sp` 1 =
+ * the total split evenly between the directions (not measured per
+ * direction); `n` the street; `br` 1 = the street is a bridge (lifted onto
+ * its deck).
  */
 export interface TrafficFeature {
   geometry: LineGeometry;
@@ -385,6 +436,7 @@ export interface TrafficFeature {
     hf?: number;
     m?: TrafficMethod;
     n?: string;
+    sp?: 1;
     t: number;
     y?: number;
   } | null;

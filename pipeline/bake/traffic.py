@@ -1,18 +1,20 @@
-"""The city's counted motor traffic (Verkehrsmengen, the WFS's "Kfz/Tag",
-`cls:L363`) → one line per road section and tile, with the vehicles per day
-in each direction and the heavy-goods share.
+"""The counted motor traffic → one line per road section and tile, with the
+vehicles per day in each direction and the heavy-goods share.
 
-Landeshauptstadt Dresden, Straßen- und Tiefbauamt; licence dl-de/by-2-0 —
-the output carries an `attribution` member. The ingest adapter caches the
-WFS answer as `<raw>/traffic/<tile>.geojson` (ingest_sn.py
-`ingest_traffic`). One feature of the table is one section between two
-crossings, both directions on one line: `dtv_hin` runs the way the line is
-drawn, `dtv_rueck` against it (−1 where that direction was not counted —
-a one-way street, or a count of one side only), `sv_*` the heavy vehicles
-(lorries and buses over 3.5 t) per day. Most sections are counted by hand
-on one day and scaled to the year's average day; the induction loops
-(PZS) and infrared detectors (TEU) give a yearly mean, a "Hilfswert" (HW)
-is the office's estimate. This step:
+The site names its source (`Site.dataLayers.traffic`; traffic_sources.py:
+the fetch and the mapping of a row). `bun run fetch` caches it as
+`<raw>/traffic/<tile>.geojson`; the output carries the source's
+`attribution`. Dresden's own table (`section_props`, below — the WFS's
+"Kfz/Tag", `cls:L363`, Landeshauptstadt Dresden, dl-de/by-2-0): one
+feature is one section between two crossings, both directions on one
+line: `dtv_hin` runs the way the line is drawn, `dtv_rueck` against it
+(−1 where that direction was not counted — a one-way street, or a count of
+one side only), `sv_*` the heavy vehicles (lorries and buses over 3.5 t)
+per day. Most sections are counted by hand on one day and scaled to the
+year's average day; the induction loops (PZS) and infrared detectors (TEU)
+give a yearly mean, a "Hilfswert" (HW) is the office's estimate. The other
+sources count both directions together; their total is split evenly
+(traffic_sources.py `split_total`, `sp` 1). This step:
 
   1. clips every section to the tile (a section across a seam is cut there,
      so each tile draws its own piece and nothing twice);
@@ -24,12 +26,13 @@ is the office's estimate. This step:
   4. writes the counts as they are: no smoothing, no gap filling between
      counted sections (a street without a count draws nothing).
 
-Output `data/dlm/traffic_<tile>.geojson`, LineStrings with
+Output `data/<site>/dlm/traffic_<tile>.geojson`, LineStrings with
   f vehicles per day along the line (absent = not counted), b against it,
   t the total (f + b, or the table's own total where neither direction
   is given), hf / hb the heavy share along / against (0..1, absent = not
   counted), y the year of the count, m the method ("man", "loop",
-  "detector", "estimate"), n the street, br 1 = on a bridge
+  "detector", "estimate", "census"), sp 1 = a total split evenly between
+  the directions, n the street, br 1 = on a bridge
   (lib/city/features.ts `TrafficFeature`).
 """
 
@@ -109,14 +112,15 @@ def _pieces(geom: shapely.Geometry) -> list[shapely.LineString]:
     return []
 
 
-def clip_sections(raw: dict, bounds) -> list[dict]:
-    """The tile's pieces of every counted section, sorted by section id and
-    position (a re-bake diffs by what changed)."""
+def clip_sections(raw: dict, bounds, props_of=None, key: str | None = "sta_id") -> list[dict]:
+    """The tile's pieces of every counted section, read through the
+    source's mapping (`props_of`; default Dresden's `section_props`) and
+    sorted by its key and position (a re-bake diffs by what changed)."""
     box = shapely.box(*bounds)
     rows = []
     for f in raw.get("features", []):
         q = f.get("properties") or {}
-        props = section_props(q)
+        props = (props_of or section_props)(q)
         geom = f.get("geometry")
         if props is None or not geom:
             continue
@@ -131,18 +135,27 @@ def clip_sections(raw: dict, bounds) -> list[dict]:
                 continue
             piece = piece.simplify(SIMPLIFY_M)
             x0, y0 = piece.coords[0]
-            rows.append((str(q.get("sta_id") or ""), round(x0, 1), round(y0, 1), piece, props))
+            rows.append(
+                (str(q.get(key) or "") if key else "", round(x0, 1), round(y0, 1), piece, props)
+            )
     rows.sort(key=lambda r: r[:3])
     return [feature(geometry_json(r[3]), dict(r[4])) for r in rows]
 
 
 def run(tile: Tile) -> None:
-    raw_path = tile.raw / "traffic" / f"{tile.id}.geojson"
-    if not raw_path.exists():
-        print(f"{tile.id}: no traffic counts at {raw_path} — skipping the traffic layer")
+    from .traffic_sources import raw_path, source_of
+
+    source = source_of(tile)
+    if source is None:
+        print(f"{tile.id}: the site names no traffic counts — skipping the traffic layer")
         return
-    features = clip_sections(json.loads(raw_path.read_text()), tile.bounds)
+    path = raw_path(tile)
+    if not path.exists():
+        print(f"{tile.id}: no traffic counts at {path} — skipping the traffic layer")
+        return
+    features = clip_sections(json.loads(path.read_text()), tile.bounds, source.props, source.key)
     # A tile without a counted road still gets its file, empty (lib/city/
     # tile-data.test.ts holds every tile to the same set of files).
-    write_geojson(tile.out("dlm", f"traffic_{tile.id}.geojson"), features, tile.epsg, ATTRIBUTION)
+    out = tile.out("dlm", f"traffic_{tile.id}.geojson")
+    write_geojson(out, features, tile.epsg, source.attribution)
     print(f"{tile.id}: {len(features)} counted road sections")

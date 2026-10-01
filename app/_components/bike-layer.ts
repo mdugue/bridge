@@ -1,3 +1,4 @@
+import type { BikeFeedReader } from "@/lib/city/bike-feeds";
 import {
   CircleGeometry,
   Color,
@@ -26,9 +27,7 @@ import {
   BIKE_STALE_TINT,
   BIKE_POLL_MS,
   bikeColumnHeight,
-  bikeCountsUrl,
   isStale,
-  parseBikeCounts,
 } from "@/lib/city/bike-counts";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
@@ -279,6 +278,8 @@ export interface BikeFeed {
 export function createBikeFeed(opts: {
   bounds: readonly [number, number, number, number];
   epsg: number;
+  /** the site's feed (lib/city/bike-feeds.ts) */
+  feed: BikeFeedReader;
   onCounts: (counters: BikeCounter[]) => void;
 }): BikeFeed {
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -289,11 +290,11 @@ export function createBikeFeed(opts: {
     aborter = mine;
     try {
       const doc = await fetchOptionalJson<unknown>(
-        bikeCountsUrl(opts.epsg),
+        opts.feed.url(opts.bounds, opts.epsg),
         mine.signal
       );
       if (doc !== null && aborter === mine) {
-        opts.onCounts(parseBikeCounts(doc, opts.bounds));
+        opts.onCounts(opts.feed.parse(doc, opts.bounds, opts.epsg));
       }
     } catch (err) {
       if (!isAbortError(err)) {

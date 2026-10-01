@@ -17,6 +17,7 @@ import type {
   SoundmarkFeature,
   MeasuredRoofFeature,
   SmallBuildingFeature,
+  StructureFeature,
   StairFeature,
   TerraceFeature,
   TrafficFeature,
@@ -26,15 +27,16 @@ import type {
   WallFileFeature,
   KerbFeature,
 } from "./features";
-import { DRESDEN } from "../../sites/dresden";
-import { tileExtentOf, tileIdOf } from "./site";
+import { SITES } from "../../sites";
+import { STRUCTURE_KINDS } from "./features";
+import { type Site, tileExtentOf, tileIdOf } from "./site";
 import { TREE_GENERA } from "./tree-season";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import {
   cityMeshSourceFiles,
   OSM_KINDS,
+  sideFileSource,
   stairSourceFile,
-  type TileArtifact,
   terraceSourceFile,
   tileArtifacts,
   tileIds,
@@ -42,17 +44,24 @@ import {
   kerbSourceFile,
 } from "./tile";
 
-// The committed bakes under data/dlm, checked against the shapes the layers
-// read. Every tile, every kind — a renamed property or a geometry type the
-// bake starts writing shows up here, not as a silently empty layer.
-const DATA = join(import.meta.dir, "..", "..", "data", "dlm");
+// The bakes under data/<site>/dlm, checked against the shapes the layers
+// read. Every site whose bakes are all on disk (Dresden's are committed;
+// another site's once `bun run bake` has finished — a half-baked one is
+// skipped, `bun run site` reports it), every tile, every kind — a renamed
+// property or a geometry type the bake starts writing shows up here, not as
+// a silently empty layer.
+const ROOT = join(import.meta.dir, "..", "..");
 
-function load<F>(artifact: TileArtifact): F[] {
-  const path = join(DATA, artifact.file);
+interface Source {
+  path: string;
+  required: boolean;
+}
+
+function load<F>({ path, required }: Source): F[] {
   if (!existsSync(path)) {
     // An optional artifact may be absent (the loader treats it as "off"); a
-    // required one must be committed, or prepare-data fails at build time.
-    expect(artifact.required).toBe(false);
+    // required one must be there, or prepare-data fails at build time.
+    expect(required).toBe(false);
     return [];
   }
   const doc = JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>;
@@ -60,9 +69,9 @@ function load<F>(artifact: TileArtifact): F[] {
   return doc.features ?? [];
 }
 
-/** A terrain-bake input under data/dlm (never served), or none. */
+/** A bake input under data/<site>/ (never served), or none. */
 function loadSource<F>(file: string): F[] {
-  const path = join(DATA, "..", "..", file);
+  const path = join(ROOT, file);
   if (!existsSync(path)) {
     return [];
   }
@@ -83,9 +92,38 @@ const isLine = (coords: unknown): boolean =>
 const isRing = (ring: unknown): boolean =>
   Array.isArray(ring) && ring.length >= 4 && ring.every(isPoint2);
 
-const cases = tileIds(DRESDEN).map(
-  (tile) => [tile, tileArtifacts(tile)] as const
+const baked = (site: Site) =>
+  tileIds(site).every((tile) =>
+    Object.values(tileArtifacts(tile))
+      .filter((a) => a.required && !a.bakedFrom)
+      .every((a) => existsSync(join(ROOT, sideFileSource(site, a.file))))
+  );
+
+const SITES_BAKED: Site[] = Object.values(SITES).filter(baked);
+
+const cases = SITES_BAKED.flatMap((site) =>
+  tileIds(site).map((tile) => {
+    const sources = Object.fromEntries(
+      Object.entries(tileArtifacts(tile)).map(([kind, a]) => [
+        kind,
+        {
+          path: join(ROOT, sideFileSource(site, a.file)),
+          required: a.required,
+        },
+      ])
+    ) as Record<keyof ReturnType<typeof tileArtifacts>, Source>;
+    return [tile, sources] as const;
+  })
 );
+
+/** Every tile of every baked site, for the bake inputs (never served). */
+const tiles = SITES_BAKED.flatMap((site) =>
+  tileIds(site).map((tile) => [tile, site] as const)
+);
+
+test("Dresden's committed data is among the checked sites", () => {
+  expect(cases.some(([tile]) => tile === "33412_5656_2_sn")).toBe(true);
+});
 
 test.each(cases)("%s: tree rows are hedge/treerow LineStrings", (_, a) => {
   for (const f of load<VegRowFeature>(a.vegrows)) {
@@ -176,10 +214,10 @@ test.each(cases)("%s: lamps are points", (_, a) => {
   }
 });
 
-test.each(tileIds(DRESDEN))(
+test.each(tiles)(
   "%s: small structures are rectangles with a ground and a top in range",
-  (tile) => {
-    const src = cityMeshSourceFiles(tile).smallBuild;
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).smallBuild;
     for (const f of loadSource<SmallBuildingFeature>(src)) {
       expect(f.geometry.type).toBe("Polygon");
       const ring = f.geometry.coordinates[0];
@@ -198,33 +236,63 @@ test.each(tileIds(DRESDEN))(
   }
 );
 
-test.each(tileIds(DRESDEN))(
-  "%s: measured roofs are polygons of a LoD2 object at a height in range",
-  (tile) => {
-    const src = cityMeshSourceFiles(tile).measuredRoofs;
-    for (const f of loadSource<MeasuredRoofFeature>(src)) {
-      expect(f.geometry.type).toBe("Polygon");
-      expect(f.geometry.coordinates.every(isRing)).toBe(true);
-      expect(typeof f.properties?.id).toBe("string");
-      // Dresden's roofs: the Elbe valley floor to the tallest towers
-      expect(f.properties?.z ?? 0).toBeGreaterThan(100);
-      expect(f.properties?.z ?? 999).toBeLessThan(300);
+test.each(tiles)(
+  "%s: structures beyond LoD2 are columns (points), buildings (outlines) or relief height fields of a measured height",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).structures;
+    for (const f of loadSource<StructureFeature>(src)) {
+      const p = f.properties;
+      expect(STRUCTURE_KINDS as readonly string[]).toContain(p?.kind ?? "none");
+      expect(Number.isFinite(p?.z)).toBe(true);
+      expect(p?.h ?? 0).toBeGreaterThanOrEqual(p?.kind === "relief" ? 1 : 2);
+      expect(p?.h ?? 999).toBeLessThan(400);
+      if (p?.kind === "relief") {
+        // a slab of a landmark's roof: on the LoD2 object it sits on
+        expect(p.of ?? "").not.toBe("");
+        const g = p.grid;
+        expect(g?.z.length).toBe((g?.rows ?? 0) * (g?.cols ?? 0));
+      }
+      if (p?.kind === "building" || p?.kind === "relief") {
+        expect(f.geometry.type).toBe("Polygon");
+        if (f.geometry.type === "Polygon") {
+          expect(isRing(f.geometry.coordinates[0])).toBe(true);
+        }
+      } else {
+        expect(f.geometry.type).toBe("Point");
+        expect(p?.r ?? 0).toBeGreaterThan(0);
+        expect(p?.rt ?? 0).toBeGreaterThan(0);
+      }
     }
   }
 );
 
-test.each(tileIds(DRESDEN))("%s: kerbs are LineStrings", (tile) => {
-  for (const f of loadSource<KerbFeature>(kerbSourceFile(tile))) {
+test.each(tiles)(
+  "%s: measured roofs are polygons of a LoD2 object at a height in range",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).measuredRoofs;
+    for (const f of loadSource<MeasuredRoofFeature>(src)) {
+      expect(f.geometry.type).toBe("Polygon");
+      expect(f.geometry.coordinates.every(isRing)).toBe(true);
+      expect(typeof f.properties?.id).toBe("string");
+      // absolute roof heights: Hamburg's harbour to Munich's towers
+      expect(f.properties?.z ?? -999).toBeGreaterThan(-20);
+      expect(f.properties?.z ?? 9999).toBeLessThan(1000);
+    }
+  }
+);
+
+test.each(tiles)("%s: kerbs are LineStrings", (tile, site) => {
+  for (const f of loadSource<KerbFeature>(kerbSourceFile(site, tile))) {
     expect(f.geometry.type).toBe("LineString");
     expect(isLine(f.geometry.coordinates)).toBe(true);
   }
 });
 
-test.each(tileIds(DRESDEN))(
+test.each(tiles)(
   "%s: walls and fences are LineStrings with a kind and a height, gates points with a width",
-  (tile) => {
+  (tile, site) => {
     const kinds: string[] = [];
-    for (const f of loadSource<WallFileFeature>(wallSourceFile(tile))) {
+    for (const f of loadSource<WallFileFeature>(wallSourceFile(site, tile))) {
       const kind = f.properties?.kind ?? "";
       kinds.push(kind);
       if (f.geometry.type === "Point") {
@@ -255,11 +323,13 @@ test.each(tileIds(DRESDEN))(
 );
 
 test.each(
-  DRESDEN.tiles.map((cell) => [tileIdOf(DRESDEN, cell), cell] as const)
-)("%s: no wall or fence runs along the tile's edge", (tile, cell) => {
+  SITES_BAKED.flatMap((site) =>
+    site.tiles.map((cell) => [tileIdOf(site, cell), cell, site] as const)
+  )
+)("%s: no wall or fence runs along the tile's edge", (tile, cell, site) => {
   // An area clipped as a polygon closes its ring along the tile edge: a
   // wall or fence on the seam that stands nowhere (walls.py clips rings).
-  const [x0, y0, x1, y1] = tileExtentOf(DRESDEN, cell);
+  const [x0, y0, x1, y1] = tileExtentOf(cell);
   const onEdge = (a: number[], b: number[]) =>
     [
       [0, x0],
@@ -271,7 +341,7 @@ test.each(
         Math.abs(a[axis] - v) < 0.005 && Math.abs(b[axis] - v) < 0.005
     );
   let metres = 0;
-  for (const f of loadSource<WallFileFeature>(wallSourceFile(tile))) {
+  for (const f of loadSource<WallFileFeature>(wallSourceFile(site, tile))) {
     if (f.geometry.type !== "LineString") {
       continue;
     }
@@ -361,10 +431,10 @@ test.each(cases)(
   }
 );
 
-test.each(tileIds(DRESDEN))(
+test.each(tiles)(
   "%s: stairs run bottom → top with a width, steps and landings",
-  (tile) => {
-    for (const f of loadSource<StairFeature>(stairSourceFile(tile))) {
+  (tile, site) => {
+    for (const f of loadSource<StairFeature>(stairSourceFile(site, tile))) {
       expect(f.geometry.type).toBe("LineString");
       expect(isLine(f.geometry.coordinates)).toBe(true);
       expect(f.properties?.w).toBeGreaterThan(0);
@@ -375,12 +445,14 @@ test.each(tileIds(DRESDEN))(
   }
 );
 
-test.each(tileIds(DRESDEN))(
+test.each(tiles)(
   "%s: terraces are polygons with a level above the ground",
-  (tile) => {
-    for (const f of loadSource<TerraceFeature>(terraceSourceFile(tile))) {
+  (tile, site) => {
+    for (const f of loadSource<TerraceFeature>(terraceSourceFile(site, tile))) {
       expect(["Polygon", "MultiPolygon"]).toContain(f.geometry?.type ?? "");
-      expect(f.properties?.z).toBeGreaterThan(50);
+      // an absolute level (NHN), not a height: Hamburg's lie near 0 m,
+      // Germany's lowest ground at −3.5 m
+      expect(f.properties?.z).toBeGreaterThan(-5);
     }
   }
 );
@@ -462,7 +534,7 @@ test.each(cases)(
 test.each(cases)(
   "%s: the trees' genus table is the season model's, in order",
   (_, a) => {
-    const path = join(DATA, a.trees.file);
+    const path = a.trees.path;
     if (!existsSync(path)) {
       return;
     }
@@ -551,20 +623,20 @@ test.each(cases)(
 // "Attribution is part of the data"). The served ones are the artifact
 // table's `osm` column; the terrain-bake inputs and the building facts are
 // OSM too, and so is the paving raster's legend.
-test.each(tileIds(DRESDEN))(
+test.each(tiles)(
   "%s: every OSM-derived file carries the ODbL credit",
-  (tile) => {
+  (tile, site) => {
     const artifacts = tileArtifacts(tile);
     const files = [
-      ...OSM_KINDS.map((kind) => `data/dlm/${artifacts[kind].file}`),
-      wallSourceFile(tile),
-      stairSourceFile(tile),
-      terraceSourceFile(tile),
-      cityMeshSourceFiles(tile).osmBuild,
-      `data/dlm/surface_${tile}.json`,
+      ...OSM_KINDS.map((kind) => sideFileSource(site, artifacts[kind].file)),
+      wallSourceFile(site, tile),
+      stairSourceFile(site, tile),
+      terraceSourceFile(site, tile),
+      cityMeshSourceFiles(site, tile).osmBuild,
+      sideFileSource(site, `surface_${tile}.json`),
     ];
     for (const file of files) {
-      const path = join(DATA, "..", "..", file);
+      const path = join(ROOT, file);
       if (!existsSync(path)) {
         continue;
       }
@@ -596,7 +668,7 @@ test.each(cases)("%s: counted traffic is lines with their counts", (_, a) => {
       }
     }
     if (p?.m !== undefined) {
-      expect(["detector", "estimate", "loop", "man"]).toContain(p.m);
+      expect(["census", "detector", "estimate", "loop", "man"]).toContain(p.m);
     }
   }
 });
