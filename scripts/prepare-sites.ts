@@ -13,7 +13,7 @@
  * out, never an error.
  */
 import { parseSiteStats, SITE_STATS_FILE } from "../lib/city/site-stats";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -22,7 +22,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { availableParallelism, totalmem } from "node:os";
 import { join } from "node:path";
+import { createInterface } from "node:readline";
 import {
   SITE_INDEX_FILE,
   SITE_MAP_FILE,
@@ -49,6 +51,53 @@ function isReady(id: SiteId): boolean {
   return siteReport(SITES[id], existsSync).every((t) => t.next === "ready");
 }
 
+/** prepare-data.ts for one site, each line it prints under the site's id
+ *  (the sites run side by side); resolves with its exit code. */
+function prepare(id: SiteId): Promise<number | null> {
+  const child = spawn("bun", ["scripts/prepare-data.ts", id], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  for (const [from, to] of [
+    [child.stdout, process.stdout],
+    [child.stderr, process.stderr],
+  ] as const) {
+    createInterface({ input: from }).on("line", (line) => {
+      to.write(`[${id}] ${line}\n`);
+    });
+  }
+  return new Promise((resolve) => {
+    child.on("close", resolve);
+  });
+}
+
+/**
+ * Bakes the sites, each in its own process, several at a time: a bake is
+ * single-threaded, so one after the other a cold build waited for every
+ * site in turn (seven sites: ~4 min) where side by side it waits for the
+ * largest (Dresden, ~2 min). Largest first, so it never starts last. A
+ * cold bake peaks at ~3 GB (Dresden; the others ~1 GB), which bounds the
+ * processes on a small machine as the cores do on a large one.
+ */
+async function prepareAll(ids: readonly SiteId[]): Promise<SiteId[]> {
+  const queue = [...ids].sort(
+    (a, b) => SITES[b].tiles.length - SITES[a].tiles.length
+  );
+  const jobs = Math.max(
+    1,
+    Math.min(queue.length, availableParallelism(), Math.floor(totalmem() / 3e9))
+  );
+  const failed: SiteId[] = [];
+  const worker = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      if ((await prepare(id)) !== 0) {
+        failed.push(id);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: jobs }, worker));
+  return failed;
+}
+
 const named = process.argv.slice(2);
 for (const id of named) {
   if (!siteById(id)) {
@@ -69,14 +118,12 @@ log(
 );
 
 mkdirSync(OUT_DIR, { recursive: true });
+const failed = await prepareAll(ids);
+if (failed.length > 0) {
+  fail(`${failed.join(", ")} failed`);
+}
 const index: SiteIndex = { version: 1, sites: [] };
 for (const id of ids) {
-  const run = spawnSync("bun", ["scripts/prepare-data.ts", id], {
-    stdio: "inherit",
-  });
-  if (run.status !== 0) {
-    fail(`${id} failed`);
-  }
   const manifest = JSON.parse(
     readFileSync(join(OUT_DIR, id, MANIFEST_FILE), "utf8")
   ) as DataManifest;

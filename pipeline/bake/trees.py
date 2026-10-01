@@ -54,7 +54,7 @@ Output `data/<site>/dlm/trees_<tile>.geojson`, points with
   for an OSM tree (absent = the cadastre) (lib/city/features.ts `TreeFeature`).
 
 And `data/dlm/treefacts_<tile>.json`, what the inquiry card says about each
-of those trees (ADR 0040; the viewer fetches it with the first question
+of those trees (ADR 0041; the viewer fetches it with the first question
 about a tree on the tile, never to draw): columns aligned with the
 features, by index — the species (German, botanical; a table of the
 names), the register's location and tree number, the age it records and

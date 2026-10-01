@@ -1,6 +1,6 @@
 # Plan 052: A queryable twin — identity, semantics and provenance, asked on demand
 
-> **Executor instructions**: Read fully first, and ADR 0040 with it. The
+> **Executor instructions**: Read fully first, and ADR 0041 with it. The
 > maintainer's two rules: the scene stays wordless (**text only in a card,
 > only on demand**), and the app stays **static where possible** (ADR 0001,
 > amended). Only measured or mapped facts reach the card — never an
@@ -37,7 +37,7 @@ look stays the product).
 `lib/city/object-facts.ts`, `scripts/bake-city-mesh.ts`,
 `scripts/bake-tiles.ts`, `scripts/tile-glb.ts` (STRING and ENUM columns).
 Ten fact columns per object in the building glTF's property table
-(ADR 0040): `buildingId` (the Building's `gml:id`), `function`, `roofType`,
+(ADR 0041): `buildingId` (the Building's `gml:id`), `function`, `roofType`,
 `created` (ENUM), `name`, `addr` (STRING), `height`, `roofPitch`, `area`,
 `levels` (FLOAT32, noData −1). Spawn tile: +46 kB gzipped (+3.5 %).
 The code lists are `lib/city/adv-codes.ts` (the AdV CityGML profile's
@@ -122,7 +122,7 @@ its own source lines (`lib/city/inquiry-features.ts`):
   record's date; an OSM tree its tagged taxon and sizes. `trees.py` writes
   them to `treefacts_<tile>.json`, columns aligned with the trees file
   (≈ 37 kB gzipped a tile), named in the tileset's tile list (`ask`) and
-  fetched with the first question about a tree there — ADR 0040's
+  fetched with the first question about a tree there — ADR 0041's
   side-file pattern. The register was re-read for all fifteen tiles for
   it (626 trees new on 33414_5656; the ten laser-scan trees they claim
   thinned by lowveg's own last step).
@@ -199,7 +199,7 @@ the card quoting an old edition (plans/README direction option 6).
 ## Rejected on the way
 
 - Part UUIDs in the tileset — 41 incompressible bytes per part, known to
-  no other dataset (ADR 0040).
+  no other dataset (ADR 0041).
 - A label over the asked building — plan 032's decision: no text in the
   scene.
 - Guessing storeys from the height — the card shows mapped storeys only.

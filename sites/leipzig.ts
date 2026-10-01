@@ -14,6 +14,7 @@ export const LEIPZIG: Site = {
   label: "Leipzig · Innenstadt",
   name: "Leipzig",
   provider: SAXONY,
+  dataLayers: { trams: { operator: "LVB" } },
   treeCadastre: {
     id: "leipzig",
     credit:

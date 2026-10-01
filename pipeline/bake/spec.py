@@ -22,6 +22,10 @@ class Spec:
     osm_url: str
     tiles: list[Tile]
     tree_cadastre: TreeCadastre | None = None
+    # the site's traffic-count source (traffic_sources.py), or None
+    traffic: str | None = None
+    # whether the site runs the timetable trams (transit.py)
+    trams: bool = False
 
     @property
     def osm(self) -> Path:
@@ -51,9 +55,20 @@ def parse(text: str) -> Spec:
             products,
             doc["credit"],
             cadastre,
+            doc.get("traffic"),
         )
         for t in doc["tiles"]
     ]
     return Spec(
-        doc["site"], doc["provider"], doc["epsg"], products, raw, data, osm_url, tiles, cadastre
+        doc["site"],
+        doc["provider"],
+        doc["epsg"],
+        products,
+        raw,
+        data,
+        osm_url,
+        tiles,
+        cadastre,
+        doc.get("traffic"),
+        bool(doc.get("trams")),
     )

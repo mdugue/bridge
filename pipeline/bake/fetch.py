@@ -12,6 +12,8 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/dlm/*.shp                       Basis-DLM (AdV Shape)
     data/_raw/<provider>/osm/<extract>.osm.pbf           the OSM extract
     data/_raw/<provider>/trees/<tile>.geojson            the site's tree cadastre
+    data/_raw/<provider>/traffic/<tile>.geojson          the site's traffic counts
+    data/_raw/gtfs/nv_free.zip                           Germany's timetable (sites with trams)
     data/_raw/<provider>/wikidata/bridges_<tile>.json    the bridges Wikidata knows
     data/_raw/<provider>/wikidata/landmarks_<tile>.json  its notable buildings and structures
     data/_raw/<provider>/lsc/<tile>.laz                  laser scan (`--lsc` only)
@@ -33,7 +35,7 @@ from typing import Protocol
 
 from rasterio.enums import Resampling
 
-from . import bridge, cadastre, landmarks
+from . import bridge, cadastre, landmarks, traffic_sources, transit
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .net import download
@@ -162,6 +164,7 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> No
             laz = tile.raw / "lsc" / f"{tile.id}.laz"
             _step("laser scan", tile, laz, lambda: _place_laz(source.lsc(ctx, tile), laz))
     cadastre.fetch(tile)
+    traffic_sources.fetch(tile)
     bridge.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
     landmarks.fetch_wikidata(spec.raw, tile.id, tile.bounds, tile.epsg)
 
@@ -186,6 +189,8 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
         except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
             print(f"Basis-DLM not fetched ({type(err).__name__}: {err})")
     fetch_osm(spec)
+    if spec.trams:
+        transit.fetch_gtfs(transit.gtfs_dir(spec.raw))
     if lsc and not spec.products.lsc:
         print(f"--lsc: the {spec.provider} adapter reads no laser scan — skipped")
     for tile in tiles:

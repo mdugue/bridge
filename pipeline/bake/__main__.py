@@ -32,7 +32,9 @@ from . import (
     stairs,
     structures,
     surface,
+    traffic,
     tram,
+    transit,
     trees,
     walls,
 )
@@ -64,6 +66,8 @@ STEPS = {
     # that already has a shelter).
     "tram": tram.run,
     "riverside": riverside.run,
+    # The site's counted motor traffic (its source, cached by the fetch).
+    "traffic": traffic.run,
     # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
     # miss DOM1, rebuilt as stepped flat blocks (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
@@ -93,11 +97,34 @@ STEPS = {
 }
 
 
+# Run once for the site, after every tile (they read the tiles' files: the
+# timetable trams ride the tram tracks).
+SITE_STEPS = ("transit",)
+
+
+def site_extent(spec) -> tuple[float, float, float, float]:
+    b = [t.bounds for t in spec.tiles]
+    return (
+        min(x[0] for x in b),
+        min(x[1] for x in b),
+        max(x[2] for x in b),
+        max(x[3] for x in b),
+    )
+
+
+def run_site_step(spec, step: str) -> None:
+    if step == "transit":
+        if not spec.trams:
+            print(f"{spec.site}: the site runs no timetable trams — skipping transit")
+            return
+        transit.run_site(spec.raw, spec.data, site_extent(spec), spec.epsg)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake")
     parser.add_argument("command", choices=["fetch", "bake"])
     parser.add_argument("--spec", required=True, help="the site spec as JSON")
-    parser.add_argument("--step", choices=[*STEPS, "all"], default="all")
+    parser.add_argument("--step", choices=[*STEPS, *SITE_STEPS, "all"], default="all")
     parser.add_argument("--tile", nargs="*", default=[], help="only these tile ids")
     parser.add_argument(
         "--lsc",
@@ -118,6 +145,9 @@ def main() -> None:
     if args.command == "fetch":
         fetch.run(spec, tiles, lsc=args.lsc)
         return
+    if args.step in SITE_STEPS:
+        run_site_step(spec, args.step)
+        return
     steps = list(STEPS) if args.step == "all" else [args.step]
     for tile in tiles:
         for step in steps:
@@ -125,6 +155,9 @@ def main() -> None:
                 lowveg.run(tile, research=args.research)
                 continue
             STEPS[step](tile)
+    if args.step == "all" and not args.tile:
+        for step in SITE_STEPS:
+            run_site_step(spec, step)
 
 
 if __name__ == "__main__":

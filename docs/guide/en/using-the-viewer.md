@@ -201,6 +201,27 @@ The button in the corner opens a panel with three tabs.
   yet. The last card, *Aktuelle Sicht merken*, remembers where you stand;
   it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
   forget it.
+- **Verkehrsdaten** ("traffic data") — up to three data layers over the
+  city, each with its own switch, all off at start; a city shows only those
+  it has open data for (see [Sources by city](./sources-by-city.md) and
+  [Where the data comes from](./data-sources.md)):
+  - *Kfz-Verkehr* ("motor traffic"): the vehicles counted per day as
+    glass flows on the carriageway, one per direction — wider, taller and
+    deeper in colour (sage, peach, coral, rose, wine) where more traffic
+    runs, light running through them. The flows follow the time set: each
+    day's count is spread over the day on a measured typical daily curve
+    (slim and nearly dark at night, full and slow at the rush hours);
+    below the switch, how busy the hour is;
+  - *Radverkehr (live)* ("cycling, live"): at each of the city's counters
+    two glass columns, as tall as the last hour's bicycles per direction; below
+    the switch the list of counters with their numbers, a click flies
+    there;
+  - *Straßenbahnen (Fahrplan)* ("trams, by timetable"): every one of the city's trams
+    where the timetable has it at the time set, trailing light — the clock runs on from
+    there; below the switch, how many are out.
+
+  From the air the flows, columns and trails widen and thicken so they
+  stay legible.
 - **Wahrzeichen** ("landmarks") — the city's best-known buildings and
   structures, up to twelve, as small chips under the viewpoints: the
   Frauenkirche in Dresden, the Elbphilharmonie, the Chilehaus and St.

@@ -38,6 +38,17 @@ export const DRESDEN: Site = {
   label: "Dresden · Altstadt",
   name: "Dresden",
   provider: SAXONY,
+  dataLayers: {
+    traffic: {
+      source: "dresden",
+      credit: "Verkehrsmengen: Landeshauptstadt Dresden, dl-de/by-2-0",
+    },
+    bikes: {
+      feed: "dresden",
+      credit: "Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0",
+    },
+    trams: { operator: "DVB" },
+  },
   treeCadastre: {
     id: "dresden",
     credit: "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0",

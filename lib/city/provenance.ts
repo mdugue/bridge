@@ -5,7 +5,7 @@
  * the site's `data/<site>/provenance.json` (the record of what was downloaded
  * when, with the queries and the URLs) by `scripts/prepare-data.ts`, and
  * published next to the tileset as `provenance.json`; the inquiry card
- * fetches it once, when first opened (ADR 0040). No THREE, no DOM.
+ * fetches it once, when first opened (ADR 0041). No THREE, no DOM.
  */
 
 import type { Provider, TreeCadastre } from "./site";

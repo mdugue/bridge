@@ -125,7 +125,7 @@ export function readObjectTable(
   return table;
 }
 
-/** One object's facts from the tile's table (ADR 0040); a tile baked before
+/** One object's facts from the tile's table (ADR 0041); a tile baked before
  *  the fact columns answers with unknowns and its feature index. */
 function readObjectFacts(
   metadata: StructuralMetadataLike,

@@ -10,7 +10,7 @@ object table (like the DOP roof colours):
   floor (`level` without a 0) are left out.
 - `heritage`: an OSM building with `heritage=*` covering at least half
   the footprint.
-- `name`, `addr`, `levels` — for the inquiry card (ADR 0040): the `name`,
+- `name`, `addr`, `levels` — for the inquiry card (ADR 0041): the `name`,
   `addr:street` + `addr:housenumber` and `building:levels` of the OSM
   building outline that covers most of the footprint (at least half);
   where that outline has no address, the address points inside the

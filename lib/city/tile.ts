@@ -89,7 +89,7 @@ export const SMALL_RASTER_PX = 512;
  * finds it — `dressing`: named in the fine terrain's dressing extras
  * (tile-stream.ts fetches it per tile); `sound`: named in the tileset's
  * tile list for the soundscape (plan 035); `ask`: named there for the
- * inquiry card (ADR 0040), fetched only when something is asked — and
+ * inquiry card (ADR 0041), fetched only when something is asked — and
  * `osm`: the file is derived
  * from OpenStreetMap, so its JSON carries the ODbL credit (checked over
  * every committed file by features.test.ts). The raster rows the terrain
@@ -203,8 +203,11 @@ const ARTIFACTS = {
   trees: { file: named("trees", "geojson"), dressing: true },
   // What the card says about those trees (species, location, age, the
   // measured sizes) — fetched with the first question about a tree on the
-  // tile (ADR 0040), never to draw.
+  // tile (ADR 0041), never to draw.
   treeFacts: { file: named("treefacts", "json"), ask: true },
+  // Optional: the city's counted motor traffic per road section
+  // (pipeline/bake/traffic.py); drawn only while its data layer is on.
+  traffic: { file: named("traffic", "geojson"), dressing: true },
   lowveg: { file: named("lowveg", "geojson"), dressing: true, osm: true },
   canopyx: { file: named("canopyx", "geojson"), dressing: true },
 } as const satisfies Record<string, ArtifactSpec>;
@@ -225,6 +228,17 @@ const kindsWith = <F extends "ask" | "dressing" | "osm" | "sound">(flag: F) =>
   ) as KindsWith<F>[];
 
 export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
+/**
+ * The side files the coarse terrain level is dressed with: only what must
+ * show beyond the fine level's reach — the counted traffic (a data layer
+ * read from the air, which stopped at every tile the fine level had not
+ * reached yet) and the bridge decks it rides.
+ */
+export const COARSE_DRESSING_KINDS = [
+  "traffic",
+  "bridge",
+] as const satisfies readonly DressingKind[];
+export type CoarseDressingKind = (typeof COARSE_DRESSING_KINDS)[number];
 export const SOUND_KINDS: readonly SoundKind[] = kindsWith("sound");
 /** The side files only the inquiry card fetches. */
 export type AskKind = KindsWith<"ask">;

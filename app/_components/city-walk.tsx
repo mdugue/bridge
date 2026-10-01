@@ -31,6 +31,8 @@ import {
   type StageFractions,
 } from "@/lib/city/load-stages";
 import type { Inquiry } from "@/lib/city/inquiry";
+import type { BikeCounter } from "@/lib/city/bike-counts";
+import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import type { Landmark } from "@/lib/city/landmarks";
 import { createLookState } from "@/lib/city/look-state";
@@ -68,7 +70,14 @@ import {
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
-import type { ViewpointGeometry } from "@/lib/city/site";
+import { overlook, type ViewpointGeometry } from "@/lib/city/site";
+import {
+  BikeCountList,
+  TrafficHourLine,
+  TramStatusLine,
+} from "./data-layers-panel";
+import type { TramCarsStatus } from "./tram-cars";
+import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { SceneSidebar } from "./scene-sidebar";
 import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
@@ -333,6 +342,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
   const [stats, setStats] = useState<CityWalkStats | null>(null);
+  // The live bicycle counts while their data layer is on (data-overlays.ts).
+  const [bikeCounters, setBikeCounters] = useState<BikeCounter[]>([]);
+  // The timetable trams' day and count while their layer is on.
+  const [tramStatus, setTramStatus] = useState<TramCarsStatus | null>(null);
+  const [trafficHour, setTrafficHour] = useState<TrafficHourStatus | null>(
+    null
+  );
   const time = useSceneTime(applySceneTime, INITIAL_DATE);
   const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
@@ -355,7 +371,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     });
   }, [look]);
   const [mode, setMode] = useState<MovementMode>("walk");
-  // Befragen (ADR 0040): what was asked last, while its card is open.
+  // Befragen (ADR 0041): what was asked last, while its card is open.
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
   const closeInquiry = useCallback(() => {
@@ -497,6 +513,21 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             setFootprints(h.getFootprints());
           }
         });
+      },
+      onTramStatus: (status) => {
+        if (!cancelled) {
+          startTransition(() => setTramStatus(status));
+        }
+      },
+      onTrafficHour: (status) => {
+        if (!cancelled) {
+          startTransition(() => setTrafficHour(status));
+        }
+      },
+      onBikeCounts: (counters) => {
+        if (!cancelled) {
+          startTransition(() => setBikeCounters(counters));
+        }
       },
       onFps: (value) => {
         if (!cancelled) {
@@ -668,7 +699,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
       {/* No text selection or callout over the scene: a long press asks a
-          building (ADR 0040), it must not also mark the HUD's text. */}
+          building (ADR 0041), it must not also mark the HUD's text. */}
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
         <div className="absolute inset-0" ref={mountRef} />
 
@@ -749,6 +780,27 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
 
       {booted && (
         <SceneSidebar
+          dataLayerDetail={{
+            bikeLayer: (
+              <BikeCountList
+                counters={bikeCounters}
+                onFly={(c) =>
+                  handleRef.current?.flyToViewpoint(
+                    overlook(c, {
+                      altitude: 45,
+                      description: c.where,
+                      headingDeg: 0,
+                      id: c.id,
+                      label: c.name,
+                      pitchDeg: -30,
+                    })
+                  )
+                }
+              />
+            ),
+            trafficLayer: <TrafficHourLine status={trafficHour} />,
+            tramLayer: <TramStatusLine status={tramStatus} />,
+          }}
           applySnapshot={applySnapshot}
           bounds={bounds}
           coarse={coarse}
@@ -768,10 +820,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.glideToSpot(x, y)}
           rememberedView={rememberedView}
-          // The sliders go back to their defaults; the picture style is a
-          // choice of its own, made above them, and stays.
+          // The sliders go back to their defaults; the picture style and
+          // the data layers are choices of their own, and stay.
           resetLook={() =>
-            look.set({ ...LOOK_DEFAULTS, style: look.get().style })
+            look.set({
+              ...LOOK_DEFAULTS,
+              ...dataLayersOf(look.get()),
+              style: look.get().style,
+            })
           }
           setRememberedView={setRememberedView}
           setSnapshotText={setSnapshotText}

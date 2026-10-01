@@ -46,7 +46,7 @@ class Fields:
     trunk_circumference: str | None = None  # cm; read when no diameter is
     planted: str | None = None  # planting year (an int or a numeric string)
     felled: str | None = None  # a value here: the tree is gone
-    # for the inquiry card (ADR 0040; trees.py `cadastre_facts`): where the
+    # for the inquiry card (ADR 0041; trees.py `cadastre_facts`): where the
     # tree stands (a street or a park), its number there, its age in years
     # and the date its record was last changed
     place: str | None = None

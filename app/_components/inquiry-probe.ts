@@ -5,7 +5,7 @@ import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
 import { type CityLayer, pickCityObject } from "./city-layer";
 
 /**
- * The scene side of the "Befragen" mode (ADR 0040): asks the city what
+ * The scene side of the "Befragen" mode (ADR 0041): asks the city what
  * stands under a screen point and marks it. Only buildings answer — a ray
  * that meets the ground first finds nothing, so a building behind a hill
  * cannot be picked through it. A finger is not a pixel: when nothing

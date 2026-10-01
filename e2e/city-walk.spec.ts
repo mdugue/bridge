@@ -717,6 +717,95 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     });
     expectNoErrors(errors);
   });
+
+  test("the data layers switch on and off from the sidebar", async () => {
+    // The live bicycle counts come from the city's WFS; the spec answers
+    // for it (two counters on the spawn tile), so CI never waits on the
+    // city's server and the counts are known.
+    await page.route("**/kommisdd.dresden.de/**", (route) =>
+      route.fulfill({
+        contentType: "application/geo+json",
+        body: JSON.stringify({
+          type: "FeatureCollection",
+          features: [
+            ["F01092", "Albertbrücke", 412_610, 5_657_020, 309, 482],
+            ["F01093", "Glacisstraße", 412_900, 5_657_300, 0, 123],
+          ].map(([id, name, x, y, w1, w2]) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [x, y] },
+            properties: {
+              fremd_id: id,
+              bezeichnung: name,
+              lage: "",
+              r1: "Richtung Nord",
+              w1,
+              r2: "Richtung Süd",
+              w2,
+              messzeit: "01.10.2026 07:00:00",
+              winkel: 0,
+              inaktiv: "0",
+            },
+          })),
+        }),
+      })
+    );
+    const traffic = page.getByRole("switch", { name: "Kfz-Verkehr" });
+    const bikes = page.getByRole("switch", { name: "Radverkehr (live)" });
+    const trams = page.getByRole("switch", {
+      name: "Straßenbahnen (Fahrplan)",
+    });
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      await expect(traffic).not.toBeChecked({ timeout: slow(15_000) });
+      await traffic.click();
+      await expect(traffic).toBeChecked();
+      await bikes.click();
+      await expect(bikes).toBeChecked();
+      await trams.click();
+      await expect(trams).toBeChecked();
+    });
+    const look = await page.evaluate(() => window.__poc?.look?.get());
+    expect(look?.trafficLayer).toBe(true);
+    expect(look?.bikeLayer).toBe(true);
+    // The counts land in the HUD's list and as a pair of columns each,
+    // every column with its pool of light: 2 counters × 2 × 2.
+    await expect(page.locator("#bike-counts li")).toHaveCount(2, {
+      timeout: slow(30_000),
+    });
+    await page.waitForFunction(
+      () => (window.__poc?.stats?.layerStats.bikes.instances ?? 0) === 8,
+      undefined,
+      { timeout: slow(30_000) }
+    );
+    // The spawn tile's counted sections are built (hidden until now).
+    const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
+    expect(stats?.traffic.triangles ?? 0).toBeGreaterThan(0);
+    // The timetable runs at the scene's 14:00: trams are out on the spawn
+    // tile's tracks, and the HUD says how many.
+    await expect(page.locator("#tram-status")).toContainText(
+      "Bahnen unterwegs",
+      { timeout: slow(30_000) }
+    );
+    await page.waitForFunction(
+      () => (window.__poc?.stats?.layerStats.trams.instances ?? 0) > 0,
+      undefined,
+      { timeout: slow(30_000) }
+    );
+    await withFramesHeld(page, async () => {
+      await traffic.click();
+      await bikes.click();
+      await trams.click();
+      await expect(page.locator("#bike-counts")).toHaveCount(0);
+      await expect(page.locator("#tram-status")).toHaveCount(0);
+    });
+    const off = await page.evaluate(() => window.__poc?.look?.get());
+    expect(off?.trafficLayer).toBe(false);
+    expect(off?.bikeLayer).toBe(false);
+    expect(off?.tramLayer).toBe(false);
+    await page.unroute("**/kommisdd.dresden.de/**");
+    expectNoErrors(errors);
+  });
 });
 
 /**
@@ -796,7 +885,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   });
 
   test("the inquiry card tells what the data knows, and where it comes from", async () => {
-    // Befragen (ADR 0040): a plain click asks — no mode first. It marks
+    // Befragen (ADR 0041): a plain click asks — no mode first. It marks
     // the building and opens the card with its identity, its facts and a
     // source line per source; I asks again at the crosshair. Before
     // demolish, which takes a building of the same kind away.
@@ -1148,7 +1237,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     );
 
     // A long press asks the building under the finger, no mode needed
-    // (ADR 0040): aim the screen centre at a roof, hold a touch there until
+    // (ADR 0041): aim the screen centre at a roof, hold a touch there until
     // the answer comes — under software rendering the press timer fires
     // late, so the release waits for it — and the answer is a bottom sheet
     // that folds the joystick away.

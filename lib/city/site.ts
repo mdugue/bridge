@@ -164,7 +164,37 @@ export interface TreeCadastre {
   id: (typeof TREE_REGISTERS)[number];
 }
 
+/** The traffic-count sources pipeline/bake/traffic_sources.py knows: a
+ *  city's own counts, or a Land's road census. */
+export const TRAFFIC_SOURCES = [
+  "berlin",
+  "dresden",
+  "hamburg",
+  "nrw",
+  "saxony-svz",
+] as const;
+
+/** The live bicycle-counter feeds lib/city/bike-counts.ts reads. */
+export const BIKE_FEEDS = ["dresden", "hamburg"] as const;
+
+/**
+ * The data layers a site has (lib/city/data-layers.ts; ADR 0040): which
+ * sources feed them, and each source's licence credit. A layer the site
+ * does not name is not offered in the HUD.
+ */
+export interface SiteDataLayers {
+  /** the counted motor traffic per road section (baked per tile) */
+  traffic?: { credit: string; source: (typeof TRAFFIC_SOURCES)[number] };
+  /** the live bicycle counters (read by the browser) */
+  bikes?: { credit: string; feed: (typeof BIKE_FEEDS)[number] };
+  /** the trams by timetable (GTFS, baked once for the site); `operator`
+   *  as the HUD names it ("DVB") */
+  trams?: { operator: string };
+}
+
 export interface Site {
+  /** the data layers the site offers, when it has any */
+  dataLayers?: SiteDataLayers;
   /** where the sun is computed when the tiles cannot be reprojected */
   fallbackLatLng: { lat: number; lng: number };
   /** the `SITE` value and the data folder, `data/<id>/` */
@@ -267,10 +297,10 @@ function shortName(provider: Provider): string {
   return m[1].length <= 20 ? m[1] : m[2];
 }
 
-/** A register's credit line ("Stadtbäume: Landeshauptstadt Dresden,
+/** A source's credit line ("Stadtbäume: Landeshauptstadt Dresden,
  *  dl-de/by-2-0") as its holder and licence. */
-function registerHolder(cadastre: TreeCadastre): [string, string] {
-  const body = cadastre.credit.replace(/^[^:]*:\s*/, "");
+function registerHolder(credit: string): [string, string] {
+  const body = credit.replace(/^[^:]*:\s*/, "");
   const cut = body.lastIndexOf(", ");
   return cut < 0 ? [body, ""] : [body.slice(0, cut), body.slice(cut + 2)];
 }
@@ -291,8 +321,8 @@ export function siteCredit(site: Site): string {
     byLicence.set(licence, holders);
   };
   add(shortName(site.provider), site.provider.licence);
-  if (site.treeCadastre) {
-    add(...registerHolder(site.treeCadastre));
+  for (const credit of dataCredits(site)) {
+    add(...registerHolder(credit));
   }
   const parts = [...byLicence].map(([licence, holders]) =>
     licence ? `${holders.join(", ")} (${licence})` : holders.join(", ")
@@ -300,12 +330,38 @@ export function siteCredit(site: Site): string {
   return [...parts, "© OpenStreetMap (ODbL)"].join(" · ");
 }
 
+/** The daily curve the traffic keeps its hours by (lib/city/
+ *  traffic-hours.ts), and the timetable the trams run by. */
+export const TRAFFIC_HOURS_CREDIT =
+  "Tagesgang: Freie und Hansestadt Hamburg, dl-de/by-2-0";
+export const TIMETABLE_CREDIT =
+  "Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0";
+
+/** The credits of the site's registers and data layers, each a
+ *  "what: holder, licence" line. */
+function dataCredits(site: Site): string[] {
+  const layers = site.dataLayers;
+  return [
+    ...(site.treeCadastre ? [site.treeCadastre.credit] : []),
+    ...(layers?.traffic ? [layers.traffic.credit, TRAFFIC_HOURS_CREDIT] : []),
+    ...(layers?.bikes ? [layers.bikes.credit] : []),
+    ...(layers?.trams ? [TIMETABLE_CREDIT] : []),
+  ];
+}
+
 /** The credit lines the HUD footer shows (the sources' licence terms). */
 export function siteAttribution(site: Site): string[] {
+  const layers = site.dataLayers;
+  const data = [
+    ...(layers?.traffic ? [layers.traffic.credit, TRAFFIC_HOURS_CREDIT] : []),
+    ...(layers?.bikes ? [layers.bikes.credit] : []),
+    ...(layers?.trams ? [TIMETABLE_CREDIT] : []),
+  ];
   return [
     site.provider.credit,
     osmCredit(site),
     ...(site.treeCadastre ? [treeCredit(site.treeCadastre)] : []),
+    ...(data.length > 0 ? [data.join(" · ")] : []),
   ];
 }
 

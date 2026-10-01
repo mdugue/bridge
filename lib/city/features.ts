@@ -64,7 +64,7 @@ export interface CanopyFeature {
  */
 /**
  * What the inquiry card says about each tree of a tile's trees file
- * (`treefacts_<tile>.json`, pipeline/bake/trees.py; ADR 0040): columns
+ * (`treefacts_<tile>.json`, pipeline/bake/trees.py; ADR 0041): columns
  * aligned with that file's features by index, -1 for unknown; the names
  * (German, botanical), the register's locations and record dates as
  * tables the columns index. `known`: bit 1 the height, 2 the crown, 4 the
@@ -430,6 +430,38 @@ export interface RiversideFeature {
     k: RiversideKind;
     len?: number;
     name?: string;
+  } | null;
+}
+
+/** How a section was counted (pipeline/bake/traffic.py): by hand on one
+ *  day scaled to the average day, an induction loop or an infrared
+ *  detector (yearly means), or the office's estimate. */
+export type TrafficMethod = "census" | "detector" | "estimate" | "loop" | "man";
+
+/**
+ * The site's counted motor traffic per road section, cut to the tile
+ * (pipeline/bake/traffic.py; its source in traffic_sources.py).
+ * `f` vehicles per day along the line as drawn, `b` against it (each
+ * absent where that direction was not counted), `t` the total; `hf` / `hb`
+ * the heavy share (0..1) of each direction; `y` the year counted, `m` how
+ * ("census": a road census counting both directions together); `sp` 1 =
+ * the total split evenly between the directions (not measured per
+ * direction); `n` the street; `br` 1 = the street is a bridge (lifted onto
+ * its deck).
+ */
+export interface TrafficFeature {
+  geometry: LineGeometry;
+  properties: {
+    b?: number;
+    br?: 1;
+    f?: number;
+    hb?: number;
+    hf?: number;
+    m?: TrafficMethod;
+    n?: string;
+    sp?: 1;
+    t: number;
+    y?: number;
   } | null;
 }
 

@@ -12,6 +12,13 @@ export const MEISSEN: Site = {
   label: "Meißen · Burgberg",
   name: "Meißen",
   provider: SAXONY,
+  dataLayers: {
+    traffic: {
+      source: "saxony-svz",
+      credit:
+        "Straßenverkehrszählung 2021: Freistaat Sachsen, LASuV, dl-de/by-2-0",
+    },
+  },
   spawn: "elbufer",
   tiles: [{ e: 392, n: 5668 }],
   fallbackLatLng: { lat: 51.16, lng: 13.47 },

@@ -1,4 +1,4 @@
-# ADR 0040: The twin answers on demand — facts ride in the tileset, text only in a card
+# ADR 0041: The twin answers on demand — facts ride in the tileset, text only in a card
 
 - **Status:** accepted
 - **Date:** 2026-09

@@ -107,7 +107,7 @@ function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
 }
 
 /**
- * The card of the "Befragen" mode (ADR 0040): what the data says
+ * The card of the "Befragen" mode (ADR 0041): what the data says
  * about the building someone asked, on demand only — the scene itself
  * carries no text (plan 032's lettering was removed for that reason). A
  * non-modal landmark, not a dialog: the city stays live behind it, and the

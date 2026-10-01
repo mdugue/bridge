@@ -70,6 +70,7 @@ import { groundRelief } from "../lib/city/valley-fog";
 import {
   cityMeshSourceFiles,
   type DataManifest,
+  COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
   pickFiles,
   SOUND_KINDS,
@@ -100,6 +101,10 @@ import {
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
+import {
+  TRAM_TIMETABLE_FILE,
+  tramTimetableSource,
+} from "../lib/city/tram-timetable";
 import { siteFromArgs } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
 import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
@@ -207,6 +212,14 @@ const hashOf = createContentHasher();
 function cacheKey(inputs: string[], ...extra: unknown[]): string {
   return contentKey(hashOf, [...inputs, ...BAKE_SOURCES], extra);
 }
+
+/**
+ * A site-wide artifact's cache name. Every site shares the cache, and
+ * `cached` keeps one entry per name: unscoped, each site's build would evict
+ * the entry of the site built before it (and re-bake its own on every run).
+ * A tile's names need no scope while no two sites share a tile.
+ */
+const siteWide = (name: string) => `${SITE.id}.${name}`;
 
 /** The cached bytes for `key`, or the baked ones (then cached). */
 async function cached(
@@ -443,7 +456,7 @@ function parseCity(tile: string): BakedCityMesh {
 /** The shared offset and CRS, cached with the spawn tile's CityJSON. */
 const frame = parse<{ cx: number; cy: number; epsg: number }>(
   await cached(
-    "frame.json",
+    siteWide("frame.json"),
     cacheKey([at(cityMeshSourceFiles(SITE, TILES[0]).city)]),
     () => {
       const baked = parseCity(TILES[0]);
@@ -686,7 +699,9 @@ async function bakeTerrain(
       ? { sport: names.sport, sportTable: names.sportTable }
       : {}),
     ...paintAndLight(names, level, colonyCrops.get(tile)),
-    ...(level === 0 ? { dressing: pickFiles(names, DRESSING_KINDS) } : {}),
+    ...(level === 0
+      ? { dressing: pickFiles(names, DRESSING_KINDS) }
+      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
   const key = cacheKey(inputs, offset, described);
   const meta = parse<{
@@ -788,7 +803,7 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 // --- 3. tilesets ------------------------------------------------------------------
 
 // Who publishes each source, and each tile's edition of it: the inquiry
-// card's "Quelle" lines (ADR 0040), from the hand-kept record.
+// card's "Quelle" lines (ADR 0041), from the hand-kept record.
 const provenanceFile = publish(
   PROVENANCE_FILE,
   utf8(
@@ -799,6 +814,11 @@ const provenanceFile = publish(
     )
   )
 );
+// The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
+const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
+const trams = existsSync(tramSource)
+  ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
+  : undefined;
 
 const extras: TilesetExtras = {
   site: SITE.id,
@@ -818,6 +838,7 @@ const extras: TilesetExtras = {
     sound: pickFiles(sideFiles.get(t.id) ?? {}, SOUND_KINDS),
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
+  ...(trams ? { trams } : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(
@@ -846,7 +867,7 @@ if (rasters.every((path) => existsSync(path))) {
     at("scripts/bake-wissen-hero.ts"),
     at("lib/city/landcover.ts"),
   ];
-  const hero = await cached(HERO_FILE, cacheKey(heroSources), () =>
+  const hero = await cached(siteWide(HERO_FILE), cacheKey(heroSources), () =>
     bakeWissenHero(SITE.tiles, rasters, 1600)
   );
   publish(HERO_FILE, hero);
@@ -870,7 +891,7 @@ const statSources = TILES.flatMap((tile) => {
   ];
 });
 const stats = await cached(
-  SITE_STATS_FILE,
+  siteWide(SITE_STATS_FILE),
   cacheKey(statSources, extras.ground ?? null, footprintFiles.size),
   async () => utf8(await siteStats())
 );
