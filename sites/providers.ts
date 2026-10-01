@@ -4,7 +4,7 @@ import type { Provider } from "@/lib/city/site";
  * The data providers the sites draw on — one per Land — and what each
  * publishes openly. The fetch adapter for each is
  * pipeline/bake/providers/<id>.py. `products.lsc` is true where that
- * adapter fetches the laser scan — Saxony so far; NRW, Bavaria, Hamburg and
+ * adapter fetches the laser scan — Saxony, NRW and Bavaria; Hamburg and
  * Berlin publish theirs openly too, but their adapters do not read them yet.
  */
 
@@ -40,7 +40,9 @@ export const NRW: Provider = {
 
 /** Bavaria: LDBV. CC BY 4.0; 1 km rasters, 2 km LoD2. No DOM1 — the
  *  photogrammetric DOM20 is averaged to 1 m; the open DOP20 is RGB only
- *  (the infrared needs a WMS export), so no NDVI. */
+ *  (the infrared needs a WMS export), so no NDVI. The classified laser
+ *  points are four 1 km LAZ a tile, their classes mapped to the AdV
+ *  scheme (vegetation is "object point", 20, with buildings in 6). */
 export const BAVARIA: Provider = {
   id: "by",
   land: "Bayern",
@@ -51,7 +53,7 @@ export const BAVARIA: Provider = {
     "Bayerische Vermessungsverwaltung – www.geodaten.bayern.de, CC BY 4.0",
   portal: "https://geodaten.bayern.de/opengeodata/",
   osm: "europe/germany/bayern",
-  products: { dom: true, dop: "rgb", dlm: true, lsc: false },
+  products: { dom: true, dop: "rgb", dlm: true, lsc: true },
   tileSuffix: "_by",
 };
 

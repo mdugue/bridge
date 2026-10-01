@@ -46,6 +46,7 @@ each data → look transformation does and its status.
 | [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
 | [0035](./0035-sites-providers-and-per-site-data.md) | Sites pick a provider; data per site, downloads per provider; fetch → bake → build | accepted |
 | [0036](./0036-measured-and-named-additions.md) | Geometry beyond LoD2 only where a measurement (DOM1) and a name (OSM, Wikidata) agree; mapped attributes tint within the clay palette, never textures; landmarks from Wikidata, ranked per tile | accepted |
+| [0037](./0037-stand-ins-marked-per-city.md) | Where a Land publishes less, a named stand-in (OSM rails and decks, a visible-band vegetation index, a register table per city), marked per city in a generated source matrix; no per-site look switches — derived from the site's data | accepted |
 
 ## Format
 

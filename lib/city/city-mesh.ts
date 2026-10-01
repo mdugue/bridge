@@ -1,3 +1,4 @@
+import type { FacadeMaterial } from "./building-tint";
 import type { FootprintPoly } from "./minimap";
 import type { CityJsonDocument } from "./types";
 
@@ -29,6 +30,9 @@ export type WallMaterial =
 export interface OsmBuildingFacts {
   /** walls, `#rrggbb` (OSM `building:colour`) */
   colour?: string;
+  /** the walls its neighbourhood is mapped as, where they differ from the
+   *  tile's (osm_buildings.py `context`) */
+  context?: FacadeMaterial;
   heritage?: number;
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
@@ -89,9 +93,10 @@ export function inheritedFlags(
 export function inheritedLook(
   own?: OsmBuildingFacts,
   root?: OsmBuildingFacts
-): Pick<OsmBuildingFacts, "colour" | "material" | "roof_colour"> {
+): Pick<OsmBuildingFacts, "colour" | "context" | "material" | "roof_colour"> {
   return {
     colour: own?.colour ?? root?.colour,
+    context: own?.context ?? root?.context,
     material: own?.material ?? root?.material,
     roof_colour: own?.roof_colour ?? root?.roof_colour,
   };

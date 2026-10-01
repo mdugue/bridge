@@ -251,10 +251,10 @@ function cornerHeight(g: HeightField, r: number, c: number): number {
 
 /**
  * A landmark's roof relief (structures.py `relief`): its measured height
- * field as a surface, cell by cell over the patch, with walls down to the
- * LoD2 top it sits on along the patch's edge. Corner heights average the
+ * field as a surface, cell by cell over the patch, with walls along the
+ * patch's edge down to the LoD2 roof under each cell (`floor`). Corner heights average the
  * cells around them, so a spire rises to a point and a wave rolls instead
- * of stepping. No floor: it rests on the roof it measures above.
+ * of stepping. No bottom face: it rests on the roof it measures above.
  */
 export function reliefMesh(
   f: StructureFeature,
@@ -269,12 +269,14 @@ export function reliefMesh(
   const inside = (r: number, c: number) =>
     r >= 0 && r < g.rows && c >= 0 && c < g.cols && g.z[r * g.cols + c] >= 0;
   const corner = new Map<number, number[]>();
-  // (r, c) is the corner at the cell's north-west; base: on the roof
-  const at = (r: number, c: number, base = false): number[] => {
+  const floor = g.floor?.length === g.z.length ? g.floor : undefined;
+  // (r, c) is the corner at the cell's north-west; base: where the walls of
+  // cell `cell` end, on the roof under it
+  const at = (r: number, c: number, base?: number): number[] => {
     const x = g.x + c * g.res - offset.cx;
     const y = g.y - r * g.res - offset.cy;
-    if (base) {
-      return [x, y, p.z];
+    if (base !== undefined) {
+      return [x, y, p.z + Math.min(floor?.[base] ?? 0, 0)];
     }
     const key = r * (g.cols + 1) + c;
     let v = corner.get(key);
@@ -314,8 +316,9 @@ export function reliefMesh(
         const [br, bc] = ring[(k + 1) % 4];
         const aTop = at(ar, ac);
         const bTop = at(br, bc);
-        push(out, 0, at(ar, ac, true), at(br, bc, true), bTop);
-        push(out, 0, at(ar, ac, true), bTop, aTop);
+        const cell = r * g.cols + c;
+        push(out, 0, at(ar, ac, cell), at(br, bc, cell), bTop);
+        push(out, 0, at(ar, ac, cell), bTop, aTop);
       }
     }
   }

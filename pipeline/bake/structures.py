@@ -38,6 +38,10 @@ alone; OSM names the structure, the surface model measures it:
    it sits on, whose look it wears). Measured against the highest roof, so
    courtyard trees and roof steps a metre off stay out; and not for every
    building — on ordinary roofs the excess is antennas, dormers and trees.
+   Its walls reach down to the roof under each cell (`floor`): a tower
+   LoD2 folded into its church's pitched roof stands on the slope, not
+   hovering at the ridge. Surface-model cells below the LoD2 roof are
+   voids (a sound opening, glass), filled from the nearest measured one.
 
 Across a seam: rasters are read over the tile and `MARGIN_M` around it
 (the neighbours' DGM, LoD2 and DOM), and a structure is written by the tile
@@ -97,8 +101,14 @@ RELIEF_MIN_M = 3.0
 RELIEF_SHARE = 0.02
 RELIEF_MIN_M2 = 60.0
 RELIEF_MIN_PART_M2 = 6.0
+# How many of a tile's landmarks (the most notable) get a roof relief.
+RELIEF_LANDMARKS = 12
 # How far a relief's heights are smoothed (cells, Gaussian sigma).
 RELIEF_SMOOTH = 1.0
+# A surface-model cell this far below the LoD2 roof under it is a void.
+VOID_M = 1.0
+# How far a relief's walls sink into the roof they stand on (m).
+FLOOR_SINK_M = 0.3
 
 NOT_BUILDINGS = {
     "roof",
@@ -290,7 +300,10 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
     if not np.isfinite(roof[inside]).any():
         return []
     top = float(np.nanpercentile(roof[inside], 98))
-    dom = np.where(inside, s.dom[win], np.nan)
+    # what each cell stands on: its own LoD2 roof, else the ground
+    ground = s.ground[win]
+    floor = np.where(np.isfinite(roof), np.fmax(roof, ground), ground)
+    dom = np.where(inside, fill_voids(s.dom[win], inside & (s.dom[win] < floor - VOID_M)), np.nan)
     excess = np.nan_to_num(dom - top, nan=-1e9)
     over = excess >= RELIEF_MIN_M
     cells = s.field.res**2
@@ -321,6 +334,16 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
             ]
         )
         grid = np.where(patch, np.round(height[sl], 1), -1.0)
+        # walls reach down to the roof under each cell (a tower over a
+        # pitched nave stands on the slope, not on the ridge), sunk a little
+        # so the roof's slope inside a cell leaves no slit
+        # (the lowest roof around the cell — only roofs: at the footprint's
+        # edge the ground would pull the wall down along the LoD2 facade)
+        roofed = np.where(np.isfinite(roof), floor, np.inf)
+        low = ndi.minimum_filter(roofed, size=3, mode="nearest")
+        low = np.where(np.isfinite(low), low, floor)
+        under = low[sl] - top - FLOOR_SINK_M
+        under = np.where(patch, np.round(np.minimum(under, grid - 0.5), 1), 0.0)
         props = {
             "kind": "relief",
             "z": round(top, 2),
@@ -333,10 +356,22 @@ def relief(s: Surfaces, geom: shapely.Geometry, of: str) -> list[dict]:
                 "cols": int(grid.shape[1]),
                 "rows": int(grid.shape[0]),
                 "z": [float(v) for v in grid.ravel()],
+                "floor": [float(v) for v in under.ravel()],
             },
         }
         out.append(feature(geometry_json(outline.simplify(0.5)), props))
     return out
+
+
+def fill_voids(dom: np.ndarray, void: np.ndarray) -> np.ndarray:
+    """The surface model with its voids filled from the nearest measured
+    cell. A surface below the LoD2 roof is no surface: the laser saw
+    through a sound opening, a glass roof or a dark slate (the cell then
+    holds the ground), and drawn as such it tears a shaft into a tower."""
+    if not void.any():
+        return dom
+    _, (rows, cols) = ndi.distance_transform_edt(void, return_indices=True)
+    return dom[rows, cols]
 
 
 def relief_heights(excess: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -363,7 +398,11 @@ def landmark_reliefs(tile: Tile, s: Surfaces) -> list[dict]:
     ids, polys = footprints(city)
     by_id = dict(zip(ids, polys, strict=True))
     out = []
-    for lm in landmarks:
+    # the file lists them most notable first; only the first few get a
+    # relief: on a villa among old trees the crowns over its roof would
+    # read as the roof's own form, and the further down the list, the more
+    # ordinary the building
+    for lm in landmarks[:RELIEF_LANDMARKS]:
         # per LoD2 object: a part's roof is its own (the relief over the
         # hall, not over the tower beside it)
         for oid in lm["objects"]:

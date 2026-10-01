@@ -43,6 +43,7 @@ import {
 } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
+import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createCityCollider } from "./collision";
@@ -628,6 +629,8 @@ async function bootApp(
     fogRangeFor(opts.look.get().fogAmount)
   );
   installSceneFog(scene, sceneFog);
+  // How deep the valley haze pools: a share of the site's own relief.
+  sceneFog.heightFalloff.value = valleyFalloff(extras.ground);
   // The site's world XZ rectangle: EPSG north is world −Z.
   sceneFog.siteRect.value.set(
     siteBounds[0] - offset.cx,

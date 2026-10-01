@@ -7,9 +7,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { placementOf } from "@/lib/city/geolocation";
+import { arrivalHref, placementOf, siteHolding } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
-import { useSite } from "./site-context";
+import { useOtherSites, useSite } from "./site-context";
 import type { CityWalkHandle } from "./create-app";
 import {
   canLocate,
@@ -69,6 +69,7 @@ export function useLocateMe(
   const [offsite, setOffsite] = useState<Offsite | null>(null);
   const dismissOffsite = useCallback(() => setOffsite(null), []);
   const site = useSite();
+  const others = useOtherSites();
   const { epsg } = site.provider;
 
   const locate = useCallback(() => {
@@ -88,7 +89,16 @@ export function useLocateMe(
         const placement = placementOf(fix, epsg, h.terrainBounds);
         if (placement.kind !== "inside") {
           clear();
-          setOffsite(placement);
+          // in another city this deployment serves: offer to go there
+          const there = siteHolding(fix, others);
+          setOffsite(
+            there
+              ? {
+                  ...placement,
+                  elsewhere: { href: arrivalHref(there.id, fix), site: there },
+                }
+              : placement
+          );
           return;
         }
         const now = h.getCameraState();
@@ -104,7 +114,7 @@ export function useLocateMe(
       })
       .catch((err: unknown) => say(describeFailure(err)))
       .finally(() => setLocating(false));
-  }, [clear, epsg, handleRef, locating, say, site.label]);
+  }, [clear, epsg, handleRef, locating, others, say, site.label]);
 
   return { available, dismissOffsite, locate, locating, offsite };
 }

@@ -13,6 +13,10 @@ export const BERLIN: Site = {
   label: "Berlin · Mitte",
   name: "Berlin",
   provider: BERLIN_SENSBW,
+  treeCadastre: {
+    id: "berlin",
+    credit: "Baumbestand: Geoportal Berlin, dl-de/zero-2-0",
+  },
   spawn: "pariser-platz",
   tiles: [
     { e: 390, n: 5818 },

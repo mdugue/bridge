@@ -5,6 +5,8 @@
  * static params read. Written by scripts/prepare-sites.ts; pure, no DOM.
  */
 
+import { parseSiteStats, type SiteStats } from "./site-stats";
+
 /** The index of built sites, at the root of the data folder. */
 export const SITE_INDEX_FILE = "sites.json";
 
@@ -14,6 +16,9 @@ export const SITE_MAP_FILE = "site-map.webp";
 
 export interface SiteIndexEntry {
   id: string;
+  /** the city in numbers (lib/city/site-stats.ts), for the start page's
+   *  orderings */
+  stats?: SiteStats;
   /** the map picture's served path (`/data/<id>/site-map.<hash>.webp`), when
    *  the land cover was there to paint it */
   map?: string;
@@ -40,11 +45,16 @@ export function parseSiteIndex(value: unknown): SiteIndex | null {
   ) {
     return null;
   }
-  const sites = (value as { sites: unknown[] }).sites.filter(
-    (s): s is SiteIndexEntry =>
-      typeof s === "object" &&
-      s !== null &&
-      typeof (s as { id?: unknown }).id === "string"
-  );
+  const sites = (value as { sites: unknown[] }).sites
+    .filter(
+      (s): s is SiteIndexEntry =>
+        typeof s === "object" &&
+        s !== null &&
+        typeof (s as { id?: unknown }).id === "string"
+    )
+    .map(({ stats, ...entry }) => {
+      const parsed = parseSiteStats(stats);
+      return parsed ? { ...entry, stats: parsed } : entry;
+    });
   return { version: 1, sites };
 }

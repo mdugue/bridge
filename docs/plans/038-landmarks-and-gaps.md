@@ -226,6 +226,21 @@ Ledger (the five entries and four 🗃️ rows), `data-flow.md`,
   STOP. The relief is now the measured height field on the 1 m grid,
   lightly smoothed, built as one surface: the spire rises to a point, the
   crests roll (2026-09-30).
+- **The relief hovered at the ridge** (Unna's Evangelische Stadtkirche,
+  2026-10-01): LoD2 draws the church as one gabled block (ridge
+  ≈ 137 m, eaves ≈ 122 m); the west tower (walls ≈ 147 m, spire
+  ≈ 187 m) is only in DOM1. The relief is measured above the highest
+  roof, so its walls ended at the ridge's height and stood in the air
+  beside the slope — and where the laser saw through the tower's sound
+  openings to the ground, those cells tore "legs" down into it. Now the
+  height field carries a `floor` per cell — the lowest LoD2 roof in the
+  3 × 3 around it (roof cells only), sunk 0.3 m — and `reliefMesh` drops
+  each edge wall to it; DOM cells more than 1 m below the LoD2 roof under
+  them are voids, filled from the nearest measured cell before the excess
+  is taken (`fill_voids`). Unna's tower now stands on the nave's slope,
+  its walls down to ≈ 126 m (floor −10.1 m under the 136.3 m roof). Only
+  Unna's `structures` is re-baked so far; a file without `floor` keeps
+  the old walls.
 - **Towers were drawn twice**: a church's or castle's tower is in LoD2,
   and the column search lathed a second one inside it — Meißen's
   cathedral towers (81 / 83 m), Grimma's churches, 13 of Munich's 14
@@ -266,6 +281,8 @@ Ledger (the five entries and four 🗃️ rows), `data-flow.md`,
   (ADR 0036).
 - **An absolute sitelink threshold** — it left Unna with one landmark;
   the ranking is per tile.
+- **A fixed count per tile** (the first 12) — on a dense tile it cut the
+  second rank; replaced by a floor relative to the tile's top (2026-10-01).
 
 ## Open items
 
@@ -283,10 +300,21 @@ Ledger (the five entries and four 🗃️ rows), `data-flow.md`,
   church.
 - **Column width** is a floor and a clamp, not a measurement; the laser
   point cloud (LSC) would resolve a shaft.
-- **Dense tiles**: at most 12 landmarks a tile, so on an old town's tile
+- ~~**Dense tiles**: at most 12 landmarks a tile, so on an old town's tile
   the most notable win — Dresden's Congress Center is not on the Altstadt
   tile's list (Frauenkirche, Zwinger, Semperoper, …) and so has neither
-  the flag nor Wikidata's material; its OSM tags still colour it.
+  the flag nor Wikidata's material; its OSM tags still colour it.~~
+  **Resolved 2026-10-01** ([plan 039](./039-stand-ins-and-derived-looks.md),
+  ADR 0037): a tile keeps every landmark with ≥ 8 % of its most notable
+  one's sitelinks (`NOTABLE_SHARE`, never under 2), 40 a tile only as a
+  safety cap — a floor relative to the tile, not a count; re-baked on
+  every site. The roof relief stays with the tile's 12 most notable
+  (`RELIEF_LANDMARKS`): further down the list the buildings are ordinary,
+  and over a villa among old trees the crowns would read as its roof's
+  form. The Congress Center itself is still not on the list: it is not in
+  Wikidata's answer for the tile at all (the query keeps a box's 80 most
+  linked items; the Altstadt tile has more), so the floor cannot reach
+  it — its OSM tags colour it.
 - **The Elbphilharmonie's brick base** (the Kaispeicher A, ≈ 37 m) is in
   no open source we read: LoD2 is one block, OSM maps the Elbphilharmonie
   as one outline without `building:part`, and Wikidata names steel, glass

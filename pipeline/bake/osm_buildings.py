@@ -23,6 +23,14 @@ A marked part marks its root Building too, and the building bake
 (`scripts/bake-city-mesh.ts`) hands a root's flags down to every part of it
 (the part's own or the root's): a Saxon LoD2 Building with parts has no
 geometry of its own, so the whole building shows what one part carries.
+- `context` (the file's default, and per object where its neighbourhood
+  differs): the walls a building without a mapped material wears — brick
+  where the mapped walls around it (within `VOTE_REACH_M`, weighted by
+  distance) are mostly brick, else plaster; with too few mapped neighbours
+  the tile's and its surroundings' vote. So Hamburg's Speicherstadt and a
+  Ruhr town's terraces come out in brick and HafenCity or a Saxon old town
+  in plaster, without a per-site switch.
+
 OSM's construction dates are too sparse to use (plan 027 phase 3,
 rejected): the file carries no era."""
 
@@ -250,11 +258,11 @@ def colour_of(value: str | None) -> str | None:
     return v if re.fullmatch(r"#[0-9a-f]{6}", v) else None
 
 
-def look_outlines(tile: Tile) -> list[tuple[shapely.Geometry, dict, bool]]:
+def look_outlines(tile: Tile, margin: float = 0.0005) -> list[tuple[shapely.Geometry, dict, bool]]:
     """OSM outlines that say what a building looks like: (outline, its look,
     whether it is a building part)."""
     geoms, fields = read_osm(
-        tile, "multipolygons", LOOK_WHERE, ["building", "other_tags"], margin=0.0005
+        tile, "multipolygons", LOOK_WHERE, ["building", "other_tags"], margin=margin
     )
     out = []
     for g, building, other in zip(
@@ -285,6 +293,64 @@ def apply_looks(objects: dict, city: dict, ids, polys, tree, outlines) -> int:
     return len(touched)
 
 
+# The walls a building without a mapped material wears: what its
+# neighbourhood is mapped as. Brick votes brick; plaster, stone, concrete and
+# wood vote against it; glass and metal (curtain walls) do not vote.
+VOTE_REACH_M = 300.0  # the neighbourhood (m)
+VOTE_MIN_LOCAL = 6  # votes a neighbourhood needs to speak for itself
+VOTE_MIN_AREA = 20  # ... and the tile with its surroundings
+VOTE_SOFT_M = 50.0  # a vote weighs 1 / (distance + this)
+VOTE_MARGIN = 0.005  # how far around the tile votes are read (deg, ≈ 350 m)
+WALL_VOTES = {"brick": 1.0, "plaster": 0.0, "stone": 0.0, "concrete": 0.0, "wood": 0.0}
+
+
+def brick_votes(outlines) -> np.ndarray:
+    """(x, y, 1 for brick / 0 for other walls) of the outlines that vote."""
+    rows = [
+        (*g.representative_point().coords[0], WALL_VOTES[look["material"]])
+        for g, look, _ in outlines
+        if look.get("material") in WALL_VOTES
+    ]
+    return np.array(rows, dtype=np.float64).reshape(-1, 3)
+
+
+def area_context(votes: np.ndarray) -> str:
+    """The walls of the area as a whole: brick when most votes say so."""
+    if len(votes) < VOTE_MIN_AREA:
+        return "render"
+    return "brick" if votes[:, 2].mean() >= 0.5 else "render"
+
+
+def local_contexts(centres: np.ndarray, votes: np.ndarray, default: str) -> list[str]:
+    """Each centre's walls by its neighbourhood's distance-weighted vote; the
+    area's where too few neighbours are mapped."""
+    out = []
+    for x, y in centres:
+        d = np.hypot(votes[:, 0] - x, votes[:, 1] - y) if len(votes) else np.empty(0)
+        near = d <= VOTE_REACH_M
+        if near.sum() < VOTE_MIN_LOCAL:
+            out.append(default)
+            continue
+        w = 1.0 / (d[near] + VOTE_SOFT_M)
+        out.append("brick" if (w * votes[near, 2]).sum() / w.sum() >= 0.5 else "render")
+    return out
+
+
+def apply_contexts(objects: dict, ids, polys, outlines) -> tuple[str, int]:
+    """The tile's default walls and, on the objects whose neighbourhood
+    differs from it, their own (`context`); objects with a mapped material
+    keep theirs. Returns the default and how many objects differ."""
+    votes = brick_votes(outlines)
+    default = area_context(votes)
+    centres = np.array([p.representative_point().coords[0] for p in polys]).reshape(-1, 2)
+    differ = 0
+    for oid, ctx in zip(ids, local_contexts(centres, votes, default), strict=True):
+        if ctx != default and not objects.get(oid, {}).get("material"):
+            objects.setdefault(oid, {})["context"] = ctx
+            differ += 1
+    return default, differ
+
+
 def run(tile: Tile) -> None:
     city_path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
     if not city_path.exists() or not has_extract(tile, "the OSM building flags"):
@@ -301,12 +367,15 @@ def run(tile: Tile) -> None:
         flag(objects, city, ids[i], "shop")
     for i in covered_by(heritage_areas, polys, tree):
         flag(objects, city, ids[i], "heritage")
-    looks = apply_looks(objects, city, ids, polys, tree, look_outlines(tile))
+    outlines = look_outlines(tile, VOTE_MARGIN)
+    looks = apply_looks(objects, city, ids, polys, tree, outlines)
+    context, differ = apply_contexts(objects, ids, polys, outlines)
     counts = {
         key: sum(1 for oid in ids if objects.get(oid, {}).get(key)) for key in ("shop", "heritage")
     }
     doc = {
         "attribution": OSM_ATTRIBUTION,
+        "context": context,
         "meta": {
             "tile": tile.id,
             "shop_points": len(points),
@@ -316,6 +385,7 @@ def run(tile: Tile) -> None:
             "objects_shop": counts["shop"],
             "objects_heritage": counts["heritage"],
             "objects_look": looks,
+            "objects_context": differ,
         },
         "objects": dict(sorted(objects.items())),
     }
@@ -323,5 +393,6 @@ def run(tile: Tile) -> None:
     print(
         f"{tile.id}: {counts['shop']} objects with a shop "
         f"({placed} of {len(points)} points placed), {counts['heritage']} listed, "
-        f"{looks} with a material or colour"
+        f"{looks} with a material or colour, walls {context} "
+        f"({differ} objects with their neighbourhood's own)"
     )

@@ -1,5 +1,8 @@
 "use client";
 
+import { arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { EYE_HEIGHT } from "@/lib/city/pose";
+import type { Site } from "@/lib/city/site";
 import {
   LocateFixedIcon,
   NavigationIcon,
@@ -54,7 +57,12 @@ import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { useLiveMode } from "./live-mode";
-import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
+import {
+  LocateMessage,
+  type Say,
+  useHudMessage,
+  useLocateMe,
+} from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
@@ -247,6 +255,38 @@ function OffsiteDialog({
   );
 }
 
+/**
+ * The page was opened from another city's off-site dialog with where the
+ * player stands (`?at=lat,lng`, lib/city/geolocation.ts `arrivalHref`):
+ * put them there, on foot, and drop the parameter so a reload starts at the
+ * site's spawn again.
+ */
+function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
+  const at = arrivalOf(location.search);
+  if (!at) {
+    return;
+  }
+  history.replaceState(history.state, "", location.pathname);
+  const placement = placementOf(
+    { ...at, accuracy: 0, headingDeg: null },
+    site.provider.epsg,
+    h.terrainBounds
+  );
+  if (placement.kind !== "inside") {
+    return;
+  }
+  const now = h.getCameraState();
+  h.placeAt({
+    epsg: { x: placement.epsgX, y: placement.epsgY },
+    aboveGround: EYE_HEIGHT,
+    headingDeg: now.headingDeg,
+    pitchDeg: 0,
+    fov: now.fov,
+    mode: "walk",
+  });
+  say(`Willkommen in ${site.name} — du stehst, wo du bist`);
+}
+
 export default function CityWalk({ budget, tilesetUrl }: Props) {
   const site = useSite();
   const mountRef = useRef<HTMLDivElement>(null);
@@ -258,6 +298,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
   const hud = useHudMessage();
+  const sayHud = hud.say;
   const locate = useLocateMe(handleRef, hud);
 
   // Probed once, before the renderer is created: three's raw backend error
@@ -480,6 +521,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         if (recovered) {
           recovery.current?.restore(h, recovered);
           trail.note("recovered", "after a lost GPU");
+        } else {
+          arriveAt(h, site, sayHud);
         }
         syncTime();
         setFootprints(h.getFootprints());
@@ -536,7 +579,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         look: undefined,
       });
     };
-  }, [budget, look, site, tilesetUrl, supported, timeNow, syncTime]);
+  }, [budget, look, site, tilesetUrl, supported, timeNow, syncTime, sayHud]);
 
   const copySnapshot = () => {
     const h = handleRef.current;

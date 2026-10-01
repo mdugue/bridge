@@ -205,3 +205,77 @@ def test_a_foot_under_a_lod2_roof_is_told_from_one_in_the_open():
     assert s.under_roof(foot)
     assert not s.under_roof(shapely.Point(X0 + 10, Y0 + 10))
     assert not s.under_roof(shapely.Point(X0 - 500, Y0))  # off the field
+
+
+def test_a_tower_folded_into_a_pitched_roof_stands_on_the_slope():
+    # LoD2 drew the church as one gabled block (ridge 37 m, eaves 22 m);
+    # the tower above its west end is only in the surface model, with a
+    # sound opening the laser saw through to the ground
+    roof = np.full((N, N), np.nan)
+    for r in range(30, 70):
+        roof[r, 30:70] = GROUND + 37 - abs(r - 50) * 0.75
+    dom = np.where(np.isfinite(roof), roof, GROUND)
+    dom[35:50, 30:45] = GROUND + 47
+    dom[42, 40] = GROUND  # the sound opening
+    s = surfaces(dom, roof)
+    (f,) = structures.relief(s, cell_box(30, 30, 40, 40), "church")
+    p = f["properties"]
+    grid = p["grid"]
+    z = np.array(grid["z"]).reshape(grid["rows"], grid["cols"])
+    floor = np.array(grid["floor"]).reshape(grid["rows"], grid["cols"])
+    assert (grid["rows"], grid["cols"]) == (15, 15)
+    # no shaft where the opening was
+    assert (z[1:-1, 1:-1] >= 8).all()
+    # the north face stands far down the slope, the south one near the ridge
+    assert p["z"] + floor[0].mean() < GROUND + 26.5
+    assert p["z"] + floor[-1].mean() > GROUND + 35
+    assert (floor[z >= 0] < z[z >= 0]).all()
+
+
+def test_unmapped_walls_take_their_neighbourhoods_material():
+    from bake.osm_buildings import apply_contexts
+
+    def outline(x, y, material):
+        return (shapely.box(x, y, x + 10, y + 10), {"material": material}, False)
+
+    # a brick quarter in the west, a plaster one 2 km east, glass in between
+    outlines = [outline(i * 20, 0, "brick") for i in range(12)]
+    outlines += [outline(2000 + i * 20, 0, "plaster") for i in range(10)]
+    outlines += [outline(1000 + i * 20, 0, "glass") for i in range(30)]
+    ids = ["west", "east", "between", "mapped"]
+    polys = [
+        shapely.box(100, 50, 110, 60),
+        shapely.box(2100, 50, 2110, 60),
+        shapely.box(1100, 50, 1110, 60),
+        shapely.box(2050, 50, 2060, 60),
+    ]
+    objects = {"mapped": {"material": "plaster"}}
+    default, differ = apply_contexts(objects, ids, polys, outlines)
+    # 12 brick against 10 plaster votes: the area is brick; glass does not vote
+    assert default == "brick"
+    assert "context" not in objects.get("west", {})
+    assert objects["east"]["context"] == "render"
+    # too few mapped walls near the glass towers: the area's walls
+    assert "context" not in objects.get("between", {})
+    # a mapped material is kept
+    assert "context" not in objects["mapped"]
+    assert differ == 1
+
+
+def test_without_infrared_green_reads_as_vegetation_and_grey_does_not():
+    from bake.ndvi import gli_raster
+
+    red = np.array([[60.0, 120.0, 90.0]])
+    green = np.array([[110.0, 120.0, 95.0]])
+    blue = np.array([[50.0, 120.0, 85.0]])
+    lawn, road, dull = gli_raster(red, green, blue)[0] / 255.0
+    assert lawn > 0.3  # on the NDVI's "vegetated" side
+    assert road < 0.2
+    assert road < dull < lawn
+
+
+def test_a_dense_tile_keeps_its_second_rank_and_a_small_town_its_few():
+    city = [{"links": n} for n in (120, 80, 40, 15, 9, 3)]
+    assert landmarks.notable_floor(city) == 120 * landmarks.NOTABLE_SHARE
+    town = [{"links": n} for n in (6, 3, 2)]
+    assert landmarks.notable_floor(town) == landmarks.MIN_SITELINKS

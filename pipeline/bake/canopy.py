@@ -8,9 +8,12 @@ as tall in the nDOM as a crown, and would have become one."""
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import rasterio
 import shapely
+import shapely.geometry
 from rasterio.features import rasterize
 
 from . import landcover_osm
@@ -45,11 +48,17 @@ def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
 
 def bridge_mask(tile: Tile, px: int) -> np.ndarray:
     """The bridges of the DLM (centrelines and deck outlines), grown by
-    BRIDGE_REACH; none without a DLM (the bridge decks are DLM-only too)."""
+    BRIDGE_REACH; without a DLM the decks the rail step baked from OSM
+    (`bridge_<tile>.geojson`, rail_osm.py)."""
     geoms = [
         *read_layer(tile.dlm / "ver06_l.shp", tile.bounds, where=BRIDGE)[0],
         *read_layer(tile.dlm / "ver06_f.shp", tile.bounds, where=BRIDGE)[0],
     ]
+    baked = tile.out("dlm", f"bridge_{tile.id}.geojson")
+    if not tile.products.dlm and baked.exists():
+        geoms += [
+            shapely.geometry.shape(f["geometry"]) for f in json.loads(baked.read_text())["features"]
+        ]
     mask = np.zeros((px, px), dtype=np.uint8)
     if geoms:
         grown = (shapely.buffer(g, BRIDGE_REACH) for g in geoms)

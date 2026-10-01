@@ -166,6 +166,9 @@ export interface TilesetTileInfo {
 /** What the viewer needs before any content has loaded. */
 export interface TilesetExtras {
   epsg: number;
+  /** the site's ground: its 2nd and 90th height percentile (m), for the
+   *  valley haze's depth (lib/city/valley-fog.ts) */
+  ground?: [number, number];
   /** the site's most notable landmarks, for the HUD (lib/city/landmarks.ts) */
   landmarks?: Landmark[];
   /** recenter offset: data-frame x = epsgX − cx, y = epsgY − cy */

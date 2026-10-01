@@ -6,12 +6,15 @@ import {
   type SiteIndexEntry,
 } from "@/lib/city/site-index";
 import type { Site } from "@/lib/city/site";
+import type { SiteStats } from "@/lib/city/site-stats";
 import { REFERENCE_SITE, siteById } from "@/sites";
 
 export interface BuiltSite {
   /** the land-cover map picture's served path, when it was baked */
   map?: string;
   site: Site;
+  /** the city in numbers, when the build measured it */
+  stats?: SiteStats;
 }
 
 /**
@@ -38,9 +41,9 @@ export function builtSites(): BuiltSite[] {
   } catch {
     // no index yet: the reference site alone
   }
-  return entries.flatMap(({ id, map }) => {
+  return entries.flatMap(({ id, map, stats }) => {
     const site = siteById(id);
-    return site ? [{ site, map }] : [];
+    return site ? [{ site, map, stats }] : [];
   });
 }
 

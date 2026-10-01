@@ -45,7 +45,10 @@ export default async function SitePage({ params }: Props) {
   }
   return (
     <main className="h-dvh w-full">
-      <CityWalkClient siteId={built.site.id} />
+      <CityWalkClient
+        builtIds={builtSites().map((b) => b.site.id)}
+        siteId={built.site.id}
+      />
     </main>
   );
 }

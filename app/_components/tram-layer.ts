@@ -72,7 +72,7 @@ import { sceneMaterial } from "./three-utils";
  * Trams (pipeline/bake/tram.py, OSM, ODbL): the tracks in their bed and the
  * overhead line above them.
  *
- * - Tracks: two rails per track at Dresden's 1 450 mm gauge, reusing the
+ * - Tracks: two rails per track at its mapped gauge (Dresden's 1 450 mm), reusing the
  *   rail layer's profile, in a soft lavender-grey a shade under the road's.
  *   In the street the rail heads flush with the road (no sleepers, no
  *   groove: fewer, calmer lines); on a lawn (*Rasengleis*) the rails a hand
@@ -309,8 +309,13 @@ interface TrackMeshes {
   streetRail: Mesh3;
 }
 
-function addTrack(acc: TrackMeshes, run: TrackRun, bed: TramBed): void {
-  const half = TRAM_GAUGE / 2;
+function addTrack(
+  acc: TrackMeshes,
+  run: TrackRun,
+  bed: TramBed,
+  gauge = TRAM_GAUGE
+): void {
+  const half = gauge / 2;
   if (bed === "street") {
     for (const side of [-1, 1]) {
       addRibbon(
@@ -535,7 +540,7 @@ function buildTracks(
     const onBridge = f.properties?.bridge === 1;
     const coords = f.geometry.coordinates;
     for (const run of trackRuns(coords, bed, onBridge, decks, ctx, SAMPLE_M)) {
-      addTrack(acc, run, onBridge ? "street" : bed);
+      addTrack(acc, run, onBridge ? "street" : bed, f.properties?.g);
     }
     let length = 0;
     for (let i = 1; i < coords.length; i++) {

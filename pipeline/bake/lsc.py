@@ -1,5 +1,5 @@
-"""The provider's laser scan (LAZ; GeoSN's so far) → the 0.5 m rasters the
-low-vegetation bake reads, in numpy through laspy (lazrs decompresses the
+"""The provider's laser scan (LAZ) → the 0.5 m rasters the low-vegetation
+and small-structure bakes read, in numpy through laspy (lazrs decompresses the
 LAZ; both are wheels in the uv environment, so no PDAL). The rules are PDAL's `writers.gdal` with
 `binmode`, which made the committed files:
 
@@ -25,7 +25,25 @@ reads the same:
   nonground_count_050.tif            non-ground (20): count
   nonground_multiecho_count_050.tif  non-ground with ≥ 2 returns: count
   lowint_050.tif                     non-ground 0.25–4 m above the DTM's `idw`: the
-                                     mean intensity, count
+                                     mean intensity (normalised, below), count
+
+**Classes.** The rasters read the AdV scheme GeoSN's and NRW's scans
+use (`ADV`): 2 measured ground, 8 and 30 synthetic ground (water, under
+buildings: DGM1 fill, not measurements), 20 everything standing on the
+ground — vegetation, buildings, cars, fences alike; what is what is decided
+downstream (LoD2, NDVI, land cover, the echo ratio, the low returns'
+intensity). A provider with another scheme maps its classes into this one
+when its 1 km files are merged (`merge_laz(classes=…)`; Bavaria's table is
+`providers/by.py`), so `lsc/<tile>.laz` always speaks AdV.
+
+**Intensity.** The low-vegetation cue (`lowveg.INT_T`) was measured on
+GeoSN's flight over Dresden (2024-11-30). Intensities are not calibrated
+between sensors, so every scan is scaled by `REFERENCE_GROUND_INTENSITY /
+its own measured-ground median` (`intensity_scale`) — the same surface
+class, asphalt and lawn, read as the same brightness. The reference is
+that median on Dresden's spawn tile, so it rasterises with a factor of
+exactly 1, as before; the factor is printed and written into the
+`lowint` raster's tags.
 
 The scan is streamed in chunks; the per-cell sums are the only full-size
 state (a 2 km tile at 0.5 m is 4000², ~64 MB per float64 plane).
@@ -33,7 +51,8 @@ state (a 2 km tile at 0.5 m is 4000², ~64 MB per float64 plane).
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 import laspy
@@ -43,10 +62,38 @@ from rasterio.transform import from_origin
 from scipy import ndimage as ndi
 
 NODATA = -9999.0
-GROUND = (2, 8, 30)
-NON_GROUND = 20
 LOW_HAG = (0.25, 4.0)
 CHUNK = 5_000_000
+
+
+@dataclass(frozen=True)
+class Classes:
+    """A scan's class table in the terms the rasters read: the measured
+    ground (the DTM, the surface, the intensity reference), the synthetic
+    ground (the DTM only) and everything standing on the ground (the
+    surface, the non-ground and low-return rasters)."""
+
+    ground: int
+    synthetic: tuple[int, ...]
+    nonground: tuple[int, ...]
+
+    @property
+    def dtm(self) -> tuple[int, ...]:
+        return (self.ground, *self.synthetic)
+
+    @property
+    def surface(self) -> tuple[int, ...]:
+        return (self.ground, *self.nonground)
+
+
+# GeoSN and NRW: 2 ground, 8 water and 30 under-building fill (synthetic),
+# 20 non-ground. Other classes (noise, …) are not read.
+ADV = Classes(ground=2, synthetic=(8, 30), nonground=(20,))
+
+# GeoSN's measured-ground (class 2) intensity median on Dresden's spawn tile
+# 33412_5656 (flight 2024-11-30, 34.1 M ground points; p10/p90 958/1637),
+# where the low-vegetation cue was measured: every scan is brought to it.
+REFERENCE_GROUND_INTENSITY = 1352
 
 
 class Bins:
@@ -151,27 +198,49 @@ def _chunks(laz: Path) -> Iterator[laspy.ScaleAwarePointRecord]:
         yield from reader.chunk_iterator(CHUNK)
 
 
-def rasterise(laz: Path, out: Path, bounds, epsg: int, res: float = 0.5) -> None:
-    """Every raster the low-vegetation bake reads, from one LAZ, into `out`."""
+def histogram_median(hist: np.ndarray) -> int:
+    """The median of the values a bincount counts (0 when it is empty)."""
+    total = hist.sum()
+    if total == 0:
+        return 0
+    return int(np.searchsorted(np.cumsum(hist), 0.5 * total))
+
+
+def intensity_scale(ground_median: int) -> float:
+    """The factor that brings a scan's measured-ground intensity median to
+    the reference's (1 where the scan carries no intensities)."""
+    if ground_median <= 0:
+        return 1.0
+    return REFERENCE_GROUND_INTENSITY / ground_median
+
+
+def rasterise(
+    laz: Path, out: Path, bounds, epsg: int, res: float = 0.5, classes: Classes = ADV
+) -> float:
+    """Every raster the low-vegetation bake reads, from one LAZ, into `out`.
+    Returns the scan's intensity factor."""
     xmin, ymin, xmax, _ = bounds
     bins = Bins(xmin, ymin, xmax - xmin, res)
     ground = Stats(bins.n)
     surface = Stats(bins.n)
     nonground = np.zeros(bins.n * bins.n)
     multiecho = np.zeros(bins.n * bins.n)
+    ground_int = np.zeros(65536, np.int64)
     size = bins.n * bins.n
     for pts in _chunks(laz):
         x, y, z = np.asarray(pts.x), np.asarray(pts.y), np.asarray(pts.z)
         cls = np.asarray(pts.classification)
         idx, ok = bins.cells(x, y)
-        g = ok & np.isin(cls, GROUND)
+        g = ok & np.isin(cls, classes.dtm)
         ground.add(idx[g], z[g])
-        s = ok & ((cls == 2) | (cls == NON_GROUND))
+        s = ok & np.isin(cls, classes.surface)
         surface.add(idx[s], z[s])
-        ng = ok & (cls == NON_GROUND)
+        ng = ok & np.isin(cls, classes.nonground)
         nonground += np.bincount(idx[ng], minlength=size)
         me = ng & (np.asarray(pts.number_of_returns) >= 2)
         multiecho += np.bincount(idx[me], minlength=size)
+        measured = ok & (cls == classes.ground)
+        ground_int += np.bincount(np.asarray(pts.intensity)[measured], minlength=65536)
     # PDAL writes its bands in a fixed order — min, max, mean, idw, count —
     # whatever order `output_type` lists them in (GDALWriter.cpp).
     dtm = {k: window_fill(ground.band(k), 3) for k in ("min", "idw")}
@@ -203,28 +272,43 @@ def rasterise(laz: Path, out: Path, bounds, epsg: int, res: float = 0.5) -> None
     for pts in _chunks(laz):
         x, y, z = np.asarray(pts.x), np.asarray(pts.y), np.asarray(pts.z)
         idx, ok = bins.cells(x, y)
-        ng = ok & (np.asarray(pts.classification) == NON_GROUND)
+        ng = ok & np.isin(np.asarray(pts.classification), classes.nonground)
         hag = z[ng] - dem[idx[ng]]
         keep = (hag >= LOW_HAG[0]) & (hag <= LOW_HAG[1])  # NaN ground drops out
         low.add(idx[ng][keep], np.asarray(pts.intensity, np.float64)[ng][keep])
-    write_raster(
-        out / "lowint_050.tif",
-        bins,
-        {"mean": low.band("mean"), "count": low.band("count")},
-        epsg,
-    )
+    median = histogram_median(ground_int)
+    scale = intensity_scale(median)
+    mean = low.band("mean")
+    if scale != 1.0:
+        mean = mean * scale
+    path = out / "lowint_050.tif"
+    write_raster(path, bins, {"mean": mean, "count": low.band("count")}, epsg)
+    with rasterio.open(path, "r+") as ds:
+        ds.update_tags(ground_intensity_median=median, intensity_scale=f"{scale:.6f}")
+    print(f"{laz.name}: measured-ground intensity median {median} → intensity × {scale:.4f}")
+    return scale
 
 
 # The dimensions the rasters read; a merged scan keeps these.
 MERGED_DIMS = ("intensity", "return_number", "number_of_returns", "classification")
 
 
-def merge_laz(sources: list[Path], dest: Path, intensity_scale: float = 1.0) -> Path:
+def merge_laz(
+    sources: list[Path],
+    dest: Path,
+    intensity_scale: float = 1.0,
+    classes: Callable[[laspy.LasHeader], Mapping[int, int]] | None = None,
+) -> Path:
     """Several LAZ files (a provider's 1 km tiles) as the one scan per 2 km
     tile the rasters read, in the first file's point format and scale. Only
     what the rasters need is carried: x, y, z and `MERGED_DIMS`.
-    `intensity_scale` brings a provider's intensities to GeoSN's range, which
-    the low-vegetation thresholds were measured on (NRW records 16 bit)."""
+
+    `classes` maps a source's classes into the AdV scheme the rasters read
+    (`ADV`), given the source's header (a provider's scheme may change with
+    the survey year); a class it does not list is dropped. `intensity_scale`
+    is a fixed pre-scale, kept for callers that set one: `rasterise`
+    normalises every scan by its own ground median anyway, which a fixed
+    factor does not change."""
     if not sources:
         raise ValueError(f"no laser scan files for {dest.name}")
     with laspy.open(sources[0]) as first:
@@ -235,14 +319,30 @@ def merge_laz(sources: list[Path], dest: Path, intensity_scale: float = 1.0) -> 
     dest.parent.mkdir(parents=True, exist_ok=True)
     with laspy.open(tmp, mode="w", header=header, do_compress=True) as out:
         for src in sources:
+            with laspy.open(src) as reader:
+                table = class_table(classes(reader.header)) if classes else None
             for pts in _chunks(src):
+                if table is not None:
+                    mapped = table[np.asarray(pts.classification)]
+                    keep = mapped > 0
+                    pts = pts[keep]
                 rec = laspy.ScaleAwarePointRecord.zeros(len(pts), header=header)
                 rec.x, rec.y, rec.z = pts.x, pts.y, pts.z
                 for dim in MERGED_DIMS:
                     rec[dim] = pts[dim]
+                if table is not None:
+                    rec.classification = mapped[keep]
                 if intensity_scale != 1.0:
                     scaled = np.asarray(pts.intensity, np.float64) * intensity_scale
                     rec.intensity = np.clip(np.round(scaled), 0, 65535).astype(np.uint16)
                 out.write_points(rec)
     tmp.replace(dest)
     return dest
+
+
+def class_table(mapping: Mapping[int, int]) -> np.ndarray:
+    """A class mapping as a lookup over every class code; 0 = dropped."""
+    table = np.zeros(256, np.uint8)
+    for src, dst in mapping.items():
+        table[src] = dst
+    return table

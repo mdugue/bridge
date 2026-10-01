@@ -449,7 +449,12 @@ visual-variable codebook is in
   (Meißen: 475 small structures; Leipzig: 1 303), and NRW's
   "3D-Messdaten" for Unna (1 596 small structures, 2 385 extra crowns)
   (the same AdV classes, 2 ground / 20 non-ground; `providers/nw.py`
-  merges the four 1 km LAZ of a tile, see *Hedges* below). The rules
+  merges the four 1 km LAZ of a tile, see *Hedges* below), and (2026-10-01)
+  the LDBV's laser points for München (526 small structures: 147 / 88 /
+  168 / 123 in tile order 32690_5334, 32692_5334, 32690_5332, 32692_5332;
+  32 552 extra crowns), its classes mapped
+  to AdV with buildings (6) kept in the non-ground class, so the sheds'
+  roofs are in the surface (`providers/by.py`, see *Hedges*). The rules
   were tuned on Dresden's flight alone.
 - **Structures beyond LoD2: columns** (plan 038,
   [ADR 0036](./adr/0036-measured-and-named-additions.md)) — the chimneys,
@@ -503,9 +508,23 @@ visual-variable codebook is in
   normalised over the patch alone, so a tip keeps its height and the 1 m
   cells stop reading as steps. `lib/city/structures.ts` `reliefMesh` builds
   a surface from it, each corner the mean of the patch cells around it,
-  with walls down to the roof along the patch's edge and no floor (it
-  rests on the roof it was measured above) — the measured roof, not an
-  invented shape. The Elbphilharmonie is LoD2's flat 96.3 m block; the
+  with walls along the patch's edge down to **the roof under each cell**
+  and no bottom face (it rests on the roof it was measured above) — the
+  measured roof, not an invented shape. *Floor* (2026-10-01): the grid
+  carries `floor` per cell (m relative to `z`, ≤ 0, at least 0.5 m below
+  the cell's top): the lowest LoD2 roof in the 3 × 3 cells around it —
+  roof cells only, so at the footprint's edge the ground does not pull a
+  wall down along the LoD2 facade — sunk `FLOOR_SINK_M` = 0.3 m so the
+  roof's slope inside a cell leaves no slit. *Voids*: a surface-model
+  cell more than `VOID_M` = 1 m below the LoD2 roof under it is no
+  surface (the laser saw through a sound opening, glass or dark slate)
+  and is filled from the nearest measured cell (`fill_voids`) before the
+  excess is taken. The case: Unna's Evangelische Stadtkirche — LoD2 draws
+  the church as one gabled block (ridge ≈ 137 m, eaves ≈ 122 m), the west
+  tower (walls ≈ 147 m, spire ≈ 187 m) is only in DOM1; the relief used to
+  hover at the ridge height with its walls ending in the air beside the
+  slope, and the voids tore "legs" into it. A file without `floor` builds
+  every wall down to `z`, as before. The Elbphilharmonie is LoD2's flat 96.3 m block; the
   DOM reaches ≈ 109 m over its crests, which now roll; a spire LoD2 cuts
   short rises to a point (Unna's Stadtkirche: LoD2 stops at 137 m, the
   surface model at ≈ 178 m). *(Until 2026-09-30 the excess was stacked
@@ -527,14 +546,36 @@ visual-variable codebook is in
   `function` family + `measuredHeight` nudge → muted per-building wall colour.
   **Source preference:** real per-building colour *(planned: DOP)* would replace
   the hash; the hash exists precisely so the look survives when `function` is 86 %
-  "unspecified". **Per site:** `Site.facades` picks the wall material —
-  `"render"` (default: sand, ochre, soft terracotta plaster) or `"brick"`
-  (Hamburg: four clinker swatches from orange brick to dark red-brown plus
-  one pale render; civic buildings keep their cool stone). The brick
-  swatches are saturated because the shader mixes them 60 % into the pale
-  clay in linear light, where they land on a washed, dusty brick.
-  `lib/city/building-tint.ts` (at bake time, into the property table's
-  `tint`), `visual-style.ts`.
+  "unspecified". **Palette:** `"render"` (sand, ochre, soft terracotta
+  plaster) or `"brick"` (four clinker swatches from orange brick to dark
+  red-brown plus one pale render; civic buildings keep their cool stone),
+  chosen per building by its **facade context** (below) — no longer per
+  site. The brick swatches are saturated because the shader mixes them
+  60 % into the pale clay in linear light, where they land on a washed,
+  dusty brick. `lib/city/building-tint.ts` (at bake time, into the
+  property table's `tint`), `visual-style.ts`.
+- **Facade context** (*Farbvariation*; 2026-10-01, ADR 0037) — the walls a
+  building without a mapped material wears: what its OSM neighbourhood is
+  mapped as. `osm_buildings.py` `apply_contexts`: every OSM outline with a
+  wall material votes — brick for brick; plaster, stone, concrete and wood
+  against it; glass and metal (curtain walls) not at all — weighted by
+  1 / (distance + 50 m) within 300 m of the LoD2 object (`local_contexts`,
+  ≥ 6 votes); with fewer, the tile and ≈ 350 m around it vote
+  (`area_context`, ≥ 20 votes), else plaster. Brick wins at ≥ 50 %. The
+  file carries the tile's vote as a top-level `context` and an object's
+  own `context` only where it differs (`meta.objects_context` counts
+  them); an object with a mapped material keeps its own. The build passes
+  the tile's context (`prepare-data.ts`), `bake-city-mesh.ts` uses
+  `look.context ?? facades`, and a part inherits its root's
+  (`inheritedLook`). Mapped wall materials in the baked files: Hamburg
+  106 brick / 11 plaster, Unna 45 plaster / 0 brick, Munich 272 plaster /
+  38 brick, Dresden 866 plaster / 246 brick. Hamburg's four tiles vote
+  brick, and 128 objects on 32564_5934 whose neighbourhood is mapped
+  otherwise wear plaster; HafenCity's mapped glass keeps its own
+  material (glass does not vote, so its unmapped neighbours follow the
+  brick around them).
+  Replaces the per-site `Site.facades` switch (🗃️ below). Not yet judged
+  on a real GPU.
 - **Roof colour** (*Dachfarbe*) — real **DOP-sampled** colour per building when
   available (`roofColor()` + the per-tile LUT, ~83 % coverage), else the
   synthesized palette (`surfacetype==RoofSurface` + `roofType` / `Dachneigung` →
@@ -631,10 +672,13 @@ visual-variable codebook is in
   item to the LoD2 objects that draw it — OSM outlines tagged
   `wikidata=<Q>` covering objects by half, else, for a building, the LoD2
   building under its point (root and parts) — drops what matches nothing
-  drawn (districts, streets, harbours) and keeps ≤ 12 per tile, ranked by
-  sitelinks: a **relative** ranking per tile, so Unna gets its own
-  (its churches have two sitelinks each; an absolute floor gave it one,
-  🗃️ below). → `data/<site>/dlm/landmarks_<tile>.json`. The build flags the
+  drawn (districts, streets, harbours) and keeps, most notable first,
+  those with at least `NOTABLE_SHARE` = 8 % of the sitelinks of the tile's
+  most notable one (never fewer than `MIN_SITELINKS` = 2; `MAX_PER_TILE` =
+  40 is a safety cap, not the rule): a **relative** floor per tile, so
+  Unna gets its own (its churches have two sitelinks each; an absolute
+  floor gave it one, 🗃️ below) and a dense old town keeps its second rank
+  (a fixed 12 per tile cut it, 🗃️ below). → `data/<site>/dlm/landmarks_<tile>.json`. The build flags the
   objects (`OBJECT_FLAG_LANDMARK` = 16; no look of its own), gives them
   the Wikidata material where OSM names none (`withLandmarks` in
   `prepare-data.ts`), and writes the site's twelve most notable into the
@@ -648,9 +692,14 @@ visual-variable codebook is in
   point lies beside the building: matched to the nearest within 25 m).
   Districts are kept out by matching only OSM outlines of buildings,
   building parts and `man_made` structures (HafenCity, Wachwitz got in
-  through their place outlines before). On a dense tile the 12 are the
-  most notable: Dresden's Congress Center does not make the Altstadt
-  tile's list (Frauenkirche, Zwinger, Semperoper, …).
+  through their place outlines before). On a dense tile the floor follows
+  the tile's top (2026-10-01): an old town's second rank stays on the
+  list beside the Frauenkirche, the Zwinger and the Semperoper, where a
+  fixed 12 cut it (Dresden's tiles now list up to 40). The roof relief
+  stays with each tile's 12 most notable (`RELIEF_LANDMARKS`): over an
+  ordinary villa among old trees the crowns would read as its roof.
+  Dresden's Congress Center is not in Wikidata's answer for its tile (the
+  query keeps a box's 80 most linked items), so it is still not listed.
   Coverage follows Wikidata's, which varies by city; a site fetched before
   the query existed needs `bun run fetch <site>` again (it only adds what
   is missing) before `bun run bake <site> --step landmarks`.
@@ -714,7 +763,9 @@ visual-variable codebook is in
   pixel, scaled to measured height, **gated off road/bridge/water** via the DLM
   class raster, and off everything within 10 m of a DLM bridge (a bridge's
   steel on a park bank is as tall as a crown: the Blaues Wunder's pylons came
-  out as two trees). `pipeline/bake/canopy.py`. At build time
+  out as two trees; without a DLM the decks the rail step baked from OSM,
+  `bridge_<tile>.geojson` — so `rail` runs before `canopy`).
+  `pipeline/bake/canopy.py`. At build time
   (`scripts/prepare-data.ts`, `treesOffStructures` in
   `lib/city/small-buildings.ts`) a canopy or laser-scan point in or within
   0.5 m of one of the tile's small structures is dropped: DOM1 reads a
@@ -733,6 +784,18 @@ visual-variable codebook is in
   (`data/dresden/provenance.json`), so deciduous crowns are bare in the imagery and
   the index mostly separates evergreens and grass from everything else. A
   summer DOP would make the recentre less necessary and the meadow tint truer.
+- **Vegetation index from the visible bands** (GLI; 2026-10-01, ADR 0037)
+  — a DOP without an infrared band (Bavaria's open DOP is RGB only) gets
+  the same `ndvi_<tile>.png` from its colours: the Green Leaf Index
+  GLI = (2G − R − B) / (2G + R + B), mapped onto the NDVI's scale by
+  `GLI_SCALE` 3.3 · GLI + `GLI_OFFSET` 0.14, clamped to 0..1 (`ndvi.py`
+  `gli_raster`). The line was fitted where both exist — Unna's two summer
+  DOP tiles, NRW's RGBI: r ≈ 0.7 against the NDVI, 85 % agreement on
+  NDVI > 0.3; checked on Hamburg's four tiles, r 0.75–0.86. Every consumer
+  (crown colour, meadow tint, the tram's lawn bed, the hedge cue) reads it
+  as it reads the NDVI. It tells green from grey well and vigour less
+  well — a stand-in, marked 🟡 in the *Sources by city* page. München's
+  four tiles have it. A DOP with fewer than three bands still skips.
 - **Crown shaping** — radial crown normals (free), organic trunk, base darkening;
   the mid crown is a detail-2 icosphere (180 tris) with lobes;
   **three-tier crown LOD** per 250 m chunk (`lib/city/vegetation-lod.ts`),
@@ -816,6 +879,49 @@ visual-variable codebook is in
   *Fallback:* no `trees_<tile>.geojson` → rows + canopy, unchanged.
   *Portability:* any city's tree register (or segmented LiDAR trees) fills
   the same contract.
+- **Tree registers of other cities** (2026-10-01; Hamburg and Leipzig
+  baked, Berlin configured) — *inputs:* `pipeline/bake/cadastre.py` holds
+  a register per city as data: its WFS (service, one or more feature
+  types, output format, CRS) and a field mapping (`Fields`: botanical and
+  German name, height, crown, trunk diameter or circumference — a
+  circumference is divided by π —, planting year, felled date, position
+  from two properties or from the geometry). `trees.py` reads every
+  register through it into one record; no per-city branch. Registers:
+  **Hamburg**'s *Straßenbaumkataster* (`de.hh.up:strassenbaumkataster`,
+  dl-de/by-2-0, BUKEA; street trees only; taxon from the cultivar, else
+  species, else genus), **Leipzig**'s *Baumkataster* (`OpenData:Baeume`,
+  dl-de/by-2-0, Amt für Stadtgrün und Gewässer; street and park trees;
+  felled trees and the "Bestandsfläche"/"waldartiger Bestand" points —
+  a stand, not a tree — skipped), **Berlin**'s *Baumbestand*
+  (`baumbestand:strassenbaeume` + `baumbestand:anlagenbaeume`,
+  dl-de/zero-2-0; its root CA is only in certifi's bundle, which the
+  fetch adds to the system trust — verification stays on). The taxon
+  table gained *Calocedrus* (conifer), *Eriolobus* and *Crataemespilus*
+  (small) and the registers' placeholders ("unbekannt", "nicht
+  bestimmt") as no taxon: trees of no genus the classifier knows are
+  2.3 % in Hamburg (all of them records without any name), 0.3 % in
+  Leipzig, 0.1 % in Berlin's spawn tile (2.4 % in Dresden).
+  **Hamburg records no height.** For a register without a height field
+  the bake measures it in the surface model (DOM1 − DGM1: the highest
+  texel within a quarter of the crown diameter, 1–3 m, of the trunk),
+  kept when it fits the recorded crown (0.6·d ≤ h ≤ max(3·d, 6 m) + 2 m);
+  otherwise the usual imputation from the crown and the tile's measured
+  crown-to-height ratio. Checked on Leipzig's register, which has
+  heights: the surface model reads 0.6 m low in the median and 1.5 m off
+  (median absolute), 79 % within 3 m, for the 90 % of trees the gate
+  keeps — against 2.3 m off for a height guessed from the crown (r = 1 m,
+  d/3, d/2 and the 90th percentile did worse). In Hamburg 8 575 of
+  10 418 trees (82 %) got a measured height. Caveat: a tree planted after
+  the flight, or one under a taller neighbour's crown, is measured wrong
+  where the crown gate does not catch it. Baked: Hamburg 10 418 register
+  + 3 224 OSM trees (1 838 / 3 330 / 2 139 / 3 111 + 694 / 875 / 757 /
+  898 on 32564_5932, 32564_5934, 32566_5932, 32566_5934), Leipzig 25 498 +
+  2 826 (5 452 / 5 424 / 7 237 / 7 385 + 794 / 735 / 612 / 685 on
+  33316_5688, 33316_5690, 33318_5688, 33318_5690); Leipzig's scan trees
+  (`canopyx`) were thinned against the new register (8 814 of 27 893
+  dropped as register trees). Dresden's output is unchanged by the
+  generalisation (re-bake of 33412_5656: the same 6 121 trees,
+  property for property).
 - **OSM trees beside the cadastre, genus and trunk** (plan 025 phase A,
   every tile) — *inputs:* the site's OSM extract (`natural=tree` nodes,
   ODbL) and the cadastre's `stammdurchmesser_akt`. `trees.py` writes each
@@ -895,8 +1001,9 @@ visual-variable codebook is in
   site (`bun run fetch <site> --lsc`, then `bun run bake <site>`); a tile without one would bake
   OSM-only (hedges at their tag / 1.5 m, no extra trees). Where a scan is
   read (`products.lsc`): Saxony (Dresden, and since 2026-09-30 Meißen,
-  Grimma and Leipzig — Meißen 6 449 extra trees) and NRW (Unna, the same
-  date); Bavaria, Hamburg and Berlin stay OSM-only. **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
+  Grimma and Leipzig — Meißen 6 449 extra trees), NRW (Unna, the same
+  date) and, since 2026-10-01, Bavaria (München, see below); Hamburg and
+  Berlin stay OSM-only. **Shipped:** the OSM `barrier=hedge` lines (`src` `osm` /
   `osm+lsc`) and the extra trees. **Not shipped** (🗃️ below): the
   laser-scan-only hedges and all shrubs — the bake still finds them
   (`bun run bake <site> --step lowveg --research` writes every candidate under
@@ -924,12 +1031,54 @@ visual-variable codebook is in
     works *because* the city's hedges are largely evergreen. Rule: `NDVI ≥
     0.12 ∨ (intensity ≥ 1250 ∧ echo ≥ 0.3)`; inside OSM scrub `NDVI ≥ 0.06 ∨
     echo ≥ 0.3`. Then close 3×3, open 2×2, blobs ≥ 2 m².
-    *NRW's scan* ("3D-Messdaten", Geobasis NRW, dl-de/zero-2-0) records
-    16-bit intensities (median ≈ 44 000); `providers/nw.py` merges a
-    tile's four 1 km LAZ (`lsc.merge_laz`) and scales them by 1/16 to
-    GeoSN's range the 1250 threshold was measured on — **an assumption**:
-    two sensors' intensities are not calibrated against each other, and
-    the scale is not verified on Unna's hedges.
+    *Other scans: intensity normalised per scan* (2026-10-01). Two
+    sensors' intensities are not calibrated against each other, so
+    `lsc.rasterise` scales every scan's low-return intensities by
+    1352 / the median intensity of its own measured ground (class 2) in
+    the tile — 1352 being that median on the spawn tile 33412_5656 where
+    the 1250 was measured (34.1 M ground points, p10/p90 958/1637), so
+    that tile keeps a factor of exactly 1 and its rasters are byte for
+    byte what they were. Bavaria (LDBV, CC BY 4.0, flight 2022): ground
+    medians 1436–1548 per 1 km file, factors ≈ 0.88–0.94. NRW
+    ("3D-Messdaten", Geobasis NRW, dl-de/zero-2-0) records 16-bit
+    intensities; it had been divided by a hand-set 16 (a ratio of whole-
+    scan medians, not of like surfaces) — still applied while merging, now
+    moot: a fixed factor does not change the median ratio. *Assumption:*
+    the same mix of ground (asphalt, lawn) reads equally bright to every
+    sensor — a first-order gain correction, not a calibration. Not
+    verified on Unna's or München's hedges by eye.
+    On Unna's 32408_5710 the NRW ground median is 3152 after the old 1/16
+    (raw 48–52 k per 1 km file), factor 0.43: the old scale had left its
+    intensities 2.3× too bright, yet the shipped result is the same — the
+    11 OSM hedges (4 with the scan's height) identical, the low-vegetation
+    mask 10.39 → 10.29 ha, the scan trees (echo only) unchanged at 1 258 —
+    because Unna's mask leans on NDVI. So Unna was not re-baked for it.
+    *Bavaria's classes* are not AdV's: 6 building, 20 "object point, e.g.
+    vegetation" (no 3/4/5), 9 water, 23/24 synthetic ground, 22 bridge
+    (≤ 2020) or cellar entrance (≥ 2021). `providers/by.py` maps them into
+    the AdV scheme while merging (6 and 20 → 20, 9 → 8, 23/24 → 30, 22 →
+    20 up to 2020 and dropped after, 0/1/7 dropped): buildings stay in the
+    non-ground class as in GeoSN's, because every rule here was measured
+    with roofs in it and the small structures need the sheds' roofs; LoD2,
+    land cover, NDVI, echo ratio and intensity decide what is vegetation.
+    München (2026-10-01, the four tiles): 108 of 195 OSM hedges take the
+    scan's height (`osm+lsc`); 6 104 / 8 068 / 7 708 / 10 655 extra trees
+    (no cadastre to thin them; 97 % of the Altstadt tile's on the built-up
+    class, median 13.3 m). Intensity factors per tile 0.92 / 0.90 / 0.89 /
+    0.86.
+    *NRW's classes are not AdV's either* (measured 2026-10-01 on 32408_5710,
+    66.7 M points — an open item): class 1 is 22 % of the scan, every point
+    of it a multi-echo return 1.7–22 m above ground (the crowns' non-last
+    echoes), while 20 is 18 % multi-echo (roofs, the last echoes); 17
+    bridge, 18 noise, 24 below ground, 26 synthetic ground. The rasters read
+    only 20, so Unna's surface misses most crown tops and its echo ratio is
+    low under trees: its `canopyx`, `smallbuild` and hedge heights are
+    suspect until `providers/nw.py` maps 1/17 → 20, 26 → 30 (as Bavaria's
+    table does) and Unna is re-fetched and re-baked.
+    München's open DOP is RGB, so its NDVI branch reads the RGB stand-in
+    (`ndvi.py`) rather than a near-infrared NDVI, and its flight is
+    leaf-on (June 2022): the cue's thresholds are Dresden's, untested
+    against either.
   - *Shape:* elongated components (skeleton ≥ 4 m, length/width ≥ 3, width ≤
     3 m from the distance transform on the skeleton, few spurs) → skeleton →
     polyline → Douglas-Peucker 0.4 m, `h` = median ridge nDOM, `w` = 2 × median
@@ -1123,6 +1272,35 @@ hand-wound to match its supplied normal (`pushTri`), so every material is
 `FrontSide` (halves shadow/fill cost). *(Redesigned after the v1 per-line approach
 z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — see
 🗃️ below.)*
+- **Rails, ballast and decks from OSM where there is no Basis-DLM**
+  (Hamburg, Berlin; 2026-10-01, ADR 0037) — `rail.py` `run_osm` writes the
+  same four files from the site's extract (`pipeline/bake/rail_osm.py`).
+  *Rails:* `railway=rail|light_rail|subway|narrow_gauge` (Hamburg's
+  S-Bahn is `light_rail`, its U-Bahn `subway`; the trams stay the tram
+  layer's), out of tunnels and off the underground, with `tracks` and
+  `electrified`, clipped to the tile and snap-merged like the DLM's.
+  *Ballast:* those rails off bridges, buffered by their bed width (4.5 m
+  for one track, 4 m more for each further one), dissolved into one
+  surface. *Decks:* every `bridge`-tagged `highway`/`railway` way ≥ 4 m
+  (not a proposal or construction), on its `man_made=bridge` outline where
+  it runs on one; else — OSM maps a carriageway, its pavements and a
+  cycle track as separate ways — the buffers of one bridge's ways on one
+  `layer` merged into one deck (`decks(..., merge=True)`,
+  `merged_decks`: the outline, the first name — `bridge:name` before
+  `name` —, the weightiest kind, rail over road over path, the longest
+  way as its axis), each at its `width`, else `lanes` × 3.25 m + 2 m,
+  else the kind's width; a way on an outline another way already claimed
+  adds nothing. The kind of an outline no way runs on comes from OSM's
+  networks (`Ground(tile, networks)`, the masks the DLM's lines fill
+  otherwise). Deck heights (DOM1 over the DGM ramp), the superstructure,
+  the fairway clearance and Wikidata are the DLM path's, unchanged.
+  Hamburg (four tiles): 348 decks — the Busanbrücke, Brooktorkaibrücke,
+  Kuhmühlenbrücke, the Berlin–Hamburg and Lübeck–Hamburg lines' bridges
+  among them —, 81 km of track (OSM maps each track as its own way where
+  the DLM bundles them, so the count is high against a DLM city's) and
+  0.27 km² of ballast. Before, the layer was DLM-only and Hamburg, a city
+  of bridges, had none. Marked 🟡 (OSM + DOM1) in *Sources by city*.
+  Not yet judged on a real GPU.
 - **Ballast yards** — Basis-DLM `ver03_f` (railway AREA, `OBJART=42010`),
   **dissolved** with shapely `union_all(make_valid())` in the bake and clipped
   to the tile (~5 non-overlapping parts) → **one merged surface**, so dozens of
@@ -1309,8 +1487,13 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   outlines instead, because a dressing cannot count on its neighbour's
   buildings being loaded, and the result must not depend on load order).
   Each track carries `s`, the distances at which a span or arm holds its
-  wire. Runtime `app/_components/tram-layer.ts`: two rails per track at
-  ±0.725 m with the rail layer's profile (`addRibbon`), in the road's
+  wire. **Gauge** (2026-10-01): each track carries its OSM `gauge` in
+  metres as `g` (`tram.py` `gauge_of`, 600–1700 mm accepted, else none;
+  fragments of different gauges are not chained) — Dresden 1450, Leipzig
+  1458, Munich 1435 mm; an untagged track gets standard gauge
+  (`TRAM_GAUGE` = 1.435 m in `lib/city/tram.ts`, Dresden's 1.45 until
+  then). Runtime `app/_components/tram-layer.ts`: two rails per track at
+  ± half its gauge (`addTrack`; Dresden's ±0.725 m) with the rail layer's profile (`addRibbon`), in the road's
   lavender-grey a shade deeper — **street**: the heads flush with the road
   (+2 cm), no sleepers, and no groove (the plan's darker groove strip was
   left out: fewer, calmer lines); **grass**: rails +15 cm over a 2.6 m meadow strip;
@@ -1571,7 +1754,16 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
 - **Height-term fog** — DGM elevation (per-fragment world height) → extra haze
   pooling in low ground, a term of the one `scene.fogNode` every material
   takes (`fog = false` opts out: the river mist); HUD *Talnebel*.
-  `height-fog.ts`.
+  `height-fog.ts`. **Depth from the site's relief** (2026-10-01, ADR
+  0037): the pool's fade height (`heightFalloff`) was Dresden's
+  Elbe-to-rim 28 m everywhere, which hazed flat Hamburg and Munich from
+  the river to the rooftops. `prepare-data.ts` samples each tile's coarse
+  ground on a 32 × 32 grid and writes the site's 2nd and 90th height
+  percentile into the tileset's `extras.ground` (`groundRelief`);
+  `create-app.ts` sets the fade height to 0.6 × that relief, clamped to
+  8–28 m (`lib/city/valley-fog.ts` `valleyFalloff`; 28 m without
+  `ground`). Dresden, Grimma, Meißen and Unna keep 28 m; Hamburg ≈ 9.6 m,
+  Leipzig ≈ 12 m, Munich ≈ 15 m. Not yet judged on a real GPU.
 - **River mist** — DLM water mask (the painted splat's alpha) → a drifting,
   sun-lit mist sheet over the Elbe; HUD *Flussnebel*. `water-layer.ts`
   `createWaterMist`.
@@ -1752,7 +1944,11 @@ research that produced them):
 | **Every Basis-DLM rail at street level** (the rail layer before 2026-09-30) | The DLM files subways and S-Bahn trunk lines as ordinary railway lines: Munich's U-Bahn (23 km) and the S-Bahn trunk line (4.2 km) ran across the Marienplatz and the Odeonsplatz as broken track, and OSM's U-Bahn platforms lay on the squares above them. | A stretch within 2 m of a DLM tunnel (`BWF=1870`) for > 15 m is cut; OSM platforms and tram ways below ground are skipped. |
 | **A 6 m tunnel reach for the rail cut** (the first cut: a rail within 6 m of a DLM tunnel) | Munich Hauptbahnhof's surface tracks run straight over the S-Bahn tunnel, parallel and a few metres beside its axis: the wider reach cut them too. | The DLM draws a tunnel on its rail's own axis, so 2 m is enough; plus the 15 m overlap floor so a surface track crossing over a tunnel keeps its crossing. |
 | **Street bed for trams on the road class alone** (plan 024's rule) | A track through a pedestrian zone or a paved square (class `path`, built-up) got the gravel bed: Munich's trams by the Marienplatz read as broken track (≈ 13 km ballast in Munich). | Pavement is road, path or built-up; ballast in Munich ≈ 3 km. |
-| **Absolute notability floor for landmarks** (a fixed sitelink threshold) | Set where a metropolis's landmarks stand out, it left Unna with one. | A low floor (≥ 2 sitelinks), then the most notable twelve per tile, ranked relatively. |
+| **Absolute notability floor for landmarks** (a fixed sitelink threshold) | Set where a metropolis's landmarks stand out, it left Unna with one. | A low floor (≥ 2 sitelinks), then a floor relative to the tile's most notable landmark (below). |
+| **A fixed count of landmarks per tile** (the most notable 12, plan 038 as first built) | On a dense old-town tile the count, not notability, decided: the second rank fell off the Altstadt tile behind the Frauenkirche, the Zwinger and the Semperoper, while a quiet tile listed everything with two sitelinks. | Those with ≥ 8 % of the tile's top sitelinks (≥ 2), 40 as a safety cap only (2026-10-01, ADR 0037). |
+| **Per-site facade material** (`Site.facades: "brick"` for Hamburg, plaster elsewhere) | One palette for a whole site is wrong inside it — Hamburg is clinker in the Speicherstadt and glass and plaster in HafenCity, Dresden has brick quarters too (246 mapped brick walls) — and every new city needed tuning by hand ([ADR 0037](./adr/0037-stand-ins-marked-per-city.md)). | Removed 2026-10-01: each building wears what its OSM neighbourhood is mapped as (✅ *Facade context*). A look that differs between cities is derived from data, not added to `Site`. |
+| **One valley-haze depth for every site** (Dresden's 28 m Elbe-to-rim drop) | Tuned on Dresden's valley; on flat Hamburg and Munich the pool reached the rooftops and the whole city stood in haze. | The depth follows the site's ground relief (✅ *Height-term fog*), capped at Dresden's 28 m. |
+| **Rails, ballast and bridge decks from the Basis-DLM only** (until 2026-10-01) | Honest, but Hamburg and Berlin publish no open DLM: a city of bridges had no bridges and no track — the U3 viaduct, the Hauptbahnhof's approaches. | OSM's rail ways and bridge ways stand in, the deck heights still measured in DOM1 (✅ *Rails, ballast and decks from OSM*). |
 | **Raw OSM colours on facades** (`building:colour` used as given) | A mapped `red` or `#ff0000` is a signal colour in a pastel city. | Hue kept, saturation and lightness clamped into the clay's register. |
 | **Building era** (colour by construction year; plan 027 phase 3) | Coverage: OSM carries `start_date` on 52 and `year_of_construction` on 12 of 8 310 building outlines in the four first tiles, measured 2026-09-25 (0.8 %, far under the plan's 30 % bar). No official source is reachable: the LfD Sachsen heritage layer (INSPIRE WMS `iwms_gsz_schutzgebiete`, *Kulturdenkmale_Flaeche*) answers GetFeatureInfo with designation and name but no dating, its WFS paths are refused (403); the Denkmalliste's dating lives only in its web app, per object; Dresden lists its Kulturdenkmale among the themes without an open dataset (2026-09-25). | Revisit with an official Baualter dataset (the city's, or ALKIS `baujahr` where a Land fills it); listed buildings alone would colour only the monuments. |
 | **Allotment bed bands** (plan 028 as first shipped: 1.2 m soil/green/grass stripes per ≈12 m jittered-Voronoi plot over a NEAREST colony-id raster) | Maintainer feedback on a phone (2026-09-25, 33410_5658 from ≈180 m up): the colony's edge and its carved paths showed the 1 m raster's staircase, and the flat pale stripes read as a rendering glitch, not as gardens. | Replaced by a baked signed distance (LINEAR, a soft wandering edge) and analytic plots — soft greens, thin soft paths, a few warm beds, flower dots — box-filtered and faded with distance (✅ *Cultivated land*). Keep cell ids off any boundary the eye can see. |

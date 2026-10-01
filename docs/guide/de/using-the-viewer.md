@@ -22,6 +22,16 @@ Lesezeichen direkt hineinführt. Im Viewer führt *Andere Stadt wählen*
 unter dem Namen der Stadt oben im Feld zurück zur Startseite. Die
 Startseite verlinkt außerdem die Wissensseiten (`/wissen`).
 
+Über den Karten ordnet *Sortieren* sie. *Empfohlen* stellt Dresden an den
+Anfang — die am besten gepflegte Stadt — und die übrigen nach Namen; die
+anderen Ordnungen reihen nach einer Zahl, die der Build für jede Stadt
+gleich gemessen hat, und jede Karte zeigt dann ihre Zahl: die meisten
+Baumkronen je km² (so wie das Oberflächenmodell sie sieht), die grünste
+(Wald, Wiese und Feld in der Bodenbedeckung), das meiste Wasser, die
+höchsten Häuser (die Höhe des mittleren Gebäudes), die dichteste Bebauung
+(der Anteil des Bodens unter einem Dach), die hügeligste (der
+Höhenunterschied im Gelände), die meisten Wahrzeichen, die größte Fläche.
+
 ## Laden
 
 Der Ladebildschirm listet fünf Stufen und einen Balken. Die ersten drei
@@ -88,7 +98,10 @@ Blickrichtung, wie sie war. Die Genauigkeit meldet eine kurze Zeile oben —
 GPS liegt in der Stadt oft 5–20 m daneben, ein Handykompass einige Grad.
 Stehst du außerhalb des Gebiets, sagt ein kleines Fenster, wie weit, und
 bietet an, wohin es stattdessen gehen kann: zu einem der Aussichtspunkte, zu
-einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
+einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
+Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
+Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
+sich mit dir dort, wo du stehst. Browser fragen dafür um Erlaubnis (iPhones auch für den
 Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
 dem er geschickt würde.
 

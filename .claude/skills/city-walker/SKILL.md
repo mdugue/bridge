@@ -99,7 +99,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   `instanceMatrix`, `instanceFloat`).
 - `three-utils.ts` — `sceneMaterial(key, make)` (scene-wide node
   materials), the dispose helpers, `sceneShared`, the texture byte tracker.
-- `height-fog.ts` — `SceneFog`: distance fog, the valley pool (*Talnebel*)
+- `height-fog.ts` — `SceneFog`: distance fog, the valley pool (*Talnebel*;
+  its depth from the site's ground relief, `lib/city/valley-fog.ts`, set
+  in `create-app.ts` from the tileset's `extras.ground`)
   and the site-edge haze as **one `scene.fogNode`**.
 - `sun-rig.ts` — directional light + shadow camera, the TSL `SkyMesh` dome
   (tempered, with a horizon haze band), hemisphere fill, fog colour by time
@@ -149,7 +151,10 @@ chip. Every tile change re-renders the shadow map. The layers:
   missing buildings and builds a landmark's relief from its measured
   height field (`reliefMesh`: the `grid` on 1 m, heights above the host's
   highest LoD2 roof, −1 outside, lightly smoothed in the bake; corners
-  average the patch cells around them, walls down to the roof, no floor —
+  average the patch cells around them, each edge wall down to its cell's
+  `floor` — the LoD2 roof under it, so a tower folded into a pitched nave
+  stands on the slope — no bottom face; DOM voids below the LoD2 roof are
+  filled in the bake —
   a truncated spire rises to its tip; the old stacked slabs made a stepped
   pyramid, and a relief without `grid` builds nothing); `appendGapStructures`
   puts them in the city mesh with `source` = 2 (a relief copies its host's
@@ -666,8 +671,8 @@ bun run fetch dresden                  # download what the site needs (its provi
 bun run bake dresden                   # every tile, every step
 bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
-                                       #   landcover islands canopy trees ndvi roof-colour osm-buildings
-                                       #   rail lamps monuments furniture walls stairs surface edges
+                                       #   landcover islands rail canopy trees ndvi roof-colour
+                                       #   osm-buildings lamps monuments furniture walls stairs surface edges
                                        #   markings sport tram riverside skyview soundmarks
                                        #   lowveg cultivated small-buildings
                                        #   landmarks structures
@@ -675,7 +680,13 @@ bun run test:pipeline                  # pytest + ruff
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
-runtime falls back); rail decks fall back to the DGM ramp. `rasters.py`
+runtime falls back); rail decks fall back to the DGM ramp. An RGB-only DOP
+(Bavaria) gets the NDVI raster from the visible bands (GLI, `ndvi.py`
+`gli_raster`). Without a Basis-DLM (Hamburg, Berlin) `rail` reads OSM
+(`rail_osm.py`: rails, ballast beds, bridge ways merged per bridge and
+level) — it runs before `canopy`, which keeps crowns off those decks.
+Stand-ins are marked per city in the generated
+`docs/guide/*/sources-by-city.md` (`bun run docs:matrix`, ADR 0037). `rasters.py`
 refuses a height mosaic flatter than 0.5 m (1–99 %) — Hamburg's DGM was
 once committed as 0 m everywhere and every house floated; the pipeline
 tests hold every committed DGM to ≥ 2 m. The laser scan (`--lsc`) is read

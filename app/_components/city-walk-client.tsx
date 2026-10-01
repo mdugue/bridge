@@ -68,13 +68,24 @@ function useDataManifest(base: string): DataManifest | null | undefined {
  * site itself for every part of the HUD (site-context.tsx). Takes the id, not
  * the Site, since a Server Component renders it; the registry resolves it.
  */
-export function CityWalkClient({ siteId }: { siteId: string }) {
+export function CityWalkClient({
+  builtIds = [],
+  siteId,
+}: {
+  /** every site this deployment serves (the route's own included) */
+  builtIds?: readonly string[];
+  siteId: string;
+}) {
   const site = siteById(siteId);
+  const others = builtIds
+    .filter((id) => id !== siteId)
+    .map((id) => siteById(id))
+    .filter((s): s is NonNullable<typeof s> => s !== undefined);
   if (!site) {
     throw new Error(`unknown site "${siteId}"`);
   }
   return (
-    <SiteProvider site={site}>
+    <SiteProvider others={others} site={site}>
       <SiteViewer base={siteDataBase(site.id)} />
     </SiteProvider>
   );

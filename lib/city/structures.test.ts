@@ -159,3 +159,36 @@ test("a relief is its height field over the patch, with walls down to the roof",
     expect((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)).toBeGreaterThan(0);
   }
 });
+
+test("a relief's walls end on the roof under each cell", () => {
+  // a tower over a pitched roof: the west cell stands on the ridge, the
+  // east one 6 m further down the slope
+  const relief: StructureFeature = {
+    geometry: { type: "Polygon", coordinates: [] },
+    properties: {
+      kind: "relief",
+      of: "church",
+      z: 100,
+      h: 10,
+      grid: {
+        x: 0,
+        y: 1,
+        res: 1,
+        cols: 2,
+        rows: 1,
+        z: [10, 10],
+        floor: [-0.3, -6],
+      },
+    },
+  };
+  const m = reliefMesh(relief, { cx: 0, cy: 0 });
+  const bottom = (x: number) =>
+    Math.min(
+      ...m.positions
+        .map((v, i) => (i % 3 === 2 && m.positions[i - 2] === x ? v : Infinity))
+        .filter(Number.isFinite)
+    );
+  // the west edge's wall ends at the ridge, the east edge's on the slope
+  expect(bottom(0)).toBeCloseTo(99.7, 5);
+  expect(bottom(2)).toBeCloseTo(94, 5);
+});

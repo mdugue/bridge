@@ -96,11 +96,23 @@ test("Dresden keeps its tile ids, credits and extract", () => {
     "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
     "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
   ]);
-  // Only Dresden names a tree cadastre; the others credit two sources.
-  expect(siteAttribution(SITES.leipzig)).toHaveLength(2);
+  // A site without a tree register credits two sources.
+  expect(siteAttribution(SITES.grimma)).toHaveLength(2);
   expect(siteTitle(DRESDEN)).toBe("City Walk — Dresden");
   expect(osmExtractUrl(DRESDEN)).toBe(
     "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf"
+  );
+});
+
+test("each city's tree register is credited with its licence", () => {
+  expect(siteAttribution(SITES.hamburg)[2]).toBe(
+    "Straßenbaumkataster: Freie und Hansestadt Hamburg (BUKEA), dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)"
+  );
+  expect(siteAttribution(SITES.leipzig)[2]).toStartWith(
+    "Baumkataster: Stadt Leipzig, Amt für Stadtgrün und Gewässer, dl-de/by-2-0;"
+  );
+  expect(siteAttribution(SITES.berlin)[2]).toStartWith(
+    "Baumbestand: Geoportal Berlin, dl-de/zero-2-0;"
   );
 });
 

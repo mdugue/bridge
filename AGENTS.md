@@ -65,6 +65,8 @@ bun run bake <site>   # offline bakes (pipeline/, Python via uv): raw → derive
 bun run test:pipeline   # pytest + ruff for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
                    # (Bun.WebView + Chrome; commit the SVGs with the change)
+bun run docs:matrix     # write docs/guide/{en,de}/sources-by-city.md from
+                   # the site and provider configs (its test fails on drift)
 bun test:e2e       # playwright (e2e/) against a production build
 E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
 ```
@@ -195,7 +197,10 @@ config change.
   (the scan's sheds as boxes; the canopy points they veto),
   `structures.ts` (the columns, missing buildings and roof-relief height
   fields DOM1 shows beyond LoD2, as meshes), `landmarks.ts` (the site's
-  Wikidata landmarks for the HUD and the vantage it glides to), `markings.ts`,
+  Wikidata landmarks for the HUD and the vantage it glides to),
+  `valley-fog.ts` (the valley haze's depth from the site's ground relief),
+  `source-matrix.ts` (the *Sources by city* table: per site and drawn
+  layer, the source and how good it is — ADR 0037), `markings.ts`,
   `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
   of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
   mix and its boot-side half), `site.ts` (the
@@ -236,9 +241,11 @@ config change.
   LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`, `lamps.py`,
   `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py` +
   `bridge.py` (the deck and superstructure measured in the surface model,
-  the fairway clearance, Wikidata), `surface.py`, `edges.py`, `sport.py`, `markings.py`, `cultivated.py`,
+  the fairway clearance, Wikidata) + `rail_osm.py` (rails, ballast and
+  bridge ways from OSM where the provider has no Basis-DLM), `surface.py`, `edges.py`, `sport.py`, `markings.py`, `cultivated.py`,
   `skyview.py`, `osm_buildings.py` (shops, heritage, material and
-  colours per LoD2 object),
+  colours per LoD2 object; the walls' `context`, brick or plaster as the
+  neighbourhood is mapped),
   `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers), `osm.py`);
   tests in `pipeline/tests/`. Run by
   `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
@@ -259,7 +266,8 @@ config change.
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
   `downsample-raster.ts` (the 2048² and 512² class rasters), `bake-wissen-hero.ts`
   (the site's land-cover map, `site-map.webp`),
-  `render-diagrams.ts`
+  `render-diagrams.ts`, `docs-matrix.ts` (`bun run docs:matrix`, the
+  generated *Sources by city* pages)
 - `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
   `dlm/`, `dop/` (derived), `provenance.json`. Dresden, Grimma, Hamburg,
   Leipzig, Meißen, München and Unna are committed (each un-ignored by name
@@ -357,19 +365,28 @@ call (ADR 0035). No Git-LFS. Derived per-tile artifacts
   GDAL comes inside the wheels (with the OSM driver): fix the environment,
   don't bend the code around a missing tool. `bun run bake <site>` passes each
   tile's extent and CRS from the site config; the steps run land cover
-  first (the canopy, lamps and street furniture are gated on it). `bun run test:pipeline` and
+  first (the canopy, lamps and street furniture are gated on it), then
+  `rail` (its bridge decks keep the canopy, furniture and tram off them). `bun run test:pipeline` and
   CI's `pipeline` job run pytest + ruff.
 - A provider without an open Basis-DLM (Hamburg, Berlin) gets the same class
-  raster, legend and veg rows from OSM (`landcover_osm.py`); rails and
-  bridge decks are then off. `Provider.products` decides which steps run.
+  raster, legend and veg rows from OSM (`landcover_osm.py`), and its
+  rails, ballast and bridge decks from OSM too (`rail_osm.py`, the deck
+  heights still measured in DOM1); the statues and stones are then off.
+  A Land without an infrared DOP (Bavaria) gets a visible-band vegetation
+  index (GLI) in place of the NDVI. `Provider.products` decides which
+  steps run; the generated `docs/guide/*/sources-by-city.md` marks every
+  stand-in per city (ADR 0037). No per-site look switches: a look that
+  differs between cities (facade material, haze depth, tram gauge) is
+  derived from the city's data, not added to `Site`.
 - `landcover.py` bakes **only class ids** (4096² 8-bit PNG + legend); the
   colours are `lib/city/landcover.ts`, painted on the GPU at runtime
   (`landcover-splat.ts`, ADR 0023). Changing a colour is not a re-bake.
 - `canopy.py` derives canopy points from `nDOM = DOM1 − DGM1` and gates
   them on the class raster so no tree sits on a road, bridge or water.
-- `trees.py` bakes the site's street-tree cadastre (`Site.treeCadastre`,
-  Dresden's so far; `bun run fetch <site>` caches the city's WFS per tile through
-  `cadastre.py`); `lowveg.py` the OSM hedges at their laser-scan height and
+- `trees.py` bakes the site's street-tree cadastre (`Site.treeCadastre`:
+  Dresden, Hamburg, Leipzig, Berlin — each a WFS and a field mapping in
+  `cadastre.py`; `bun run fetch <site>` caches the city's WFS per tile through
+  it); `lowveg.py` the OSM hedges at their laser-scan height and
   the scan's trees outside the canopy mask, thinned against the cadastre.
   The laser scan (`data/_raw/<provider>/lsc/<tile>.laz`) is fetched by
   `bun run fetch <site> --lsc` where the provider's adapter reads one

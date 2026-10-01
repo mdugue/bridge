@@ -3,24 +3,42 @@
 import { createContext, type ReactNode, use } from "react";
 import type { Site } from "@/lib/city/site";
 
-const SiteContext = createContext<Site | null>(null);
+interface SiteValue {
+  /** the other sites this deployment serves (their routes exist) */
+  others: readonly Site[];
+  site: Site;
+}
 
-/** The site the route renders (/dresden), for every HUD part under it. */
+const SiteContext = createContext<SiteValue | null>(null);
+
+/** The site the route renders (/dresden), for every HUD part under it, and
+ *  the other sites the deployment serves. */
 export function SiteProvider({
   children,
+  others = [],
   site,
 }: {
   children: ReactNode;
+  others?: readonly Site[];
   site: Site;
 }) {
-  return <SiteContext value={site}>{children}</SiteContext>;
+  return <SiteContext value={{ others, site }}>{children}</SiteContext>;
+}
+
+function useSiteValue(): SiteValue {
+  const value = use(SiteContext);
+  if (!value) {
+    throw new Error("useSite outside a SiteProvider");
+  }
+  return value;
 }
 
 /** The site the viewer shows. Only valid under the route's SiteProvider. */
 export function useSite(): Site {
-  const site = use(SiteContext);
-  if (!site) {
-    throw new Error("useSite outside a SiteProvider");
-  }
-  return site;
+  return useSiteValue().site;
+}
+
+/** The deployment's other sites (the off-site dialog offers to go there). */
+export function useOtherSites(): readonly Site[] {
+  return useSiteValue().others;
 }

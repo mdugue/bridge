@@ -325,7 +325,8 @@ function concat(
  * used to pass it, so every tile lands in the same recentered frame.
  * `osmLut` holds what OSM knows per object (shops, heritage), when baked;
  * a part carries its own flags and its root Building's. `facades` is the
- * site's wall material (the tint palette).
+ * tile's wall material (the tint palette; osm_buildings.py `context`), an
+ * object's own neighbourhood overriding it.
  */
 export function bakeCityMesh(
   tile: string,
@@ -399,7 +400,7 @@ export function bakeCityMesh(
       storeyH: cm(storeyHeight(measured)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
-      tint: rgb(buildingTint(id, attrs, facades, look)),
+      tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
       roof: rgb(roofColor(id, attrs, roofLut, look)),
       footprints,
     };

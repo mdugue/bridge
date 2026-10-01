@@ -27,6 +27,7 @@
  * Writes public/data/<site>/ (gitignored), the folder the route /<site>
  * streams from.
  */
+import sharp from "sharp";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -38,7 +39,7 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import type { Matrix4 } from "three";
-import type { RoofColorLut } from "../lib/city/building-tint";
+import type { FacadeMaterial, RoofColorLut } from "../lib/city/building-tint";
 import type { OsmBuildingLut, WallMaterial } from "../lib/city/city-mesh";
 import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
@@ -69,6 +70,15 @@ import {
 } from "../lib/city/stairs";
 import type { WallLine } from "../lib/city/terrain-conflate";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
+import {
+  buildingHeights,
+  footprintArea,
+  landcoverShares,
+  quantile,
+  SITE_STATS_FILE,
+  type SiteStats,
+} from "../lib/city/site-stats";
+import { groundRelief } from "../lib/city/valley-fog";
 import type { WallRibbon } from "../lib/city/walls";
 import {
   cityMeshSourceFiles,
@@ -132,7 +142,6 @@ const SITE = (() => {
 })();
 const OUT_DIR = join(process.cwd(), "public/data", SITE.id);
 const TILES = tileIds(SITE);
-const FACADES = SITE.facades ?? "render";
 /** What a missing source means for a site that has not been fetched yet. */
 const HINT = ` — run \`bun run fetch ${SITE.id}\` and \`bun run bake ${SITE.id}\``;
 
@@ -402,12 +411,12 @@ function parseCity(tile: string): BakedCityMesh {
   const roofLut = existsSync(at(src.roofColor))
     ? readJson<{ roofs?: RoofColorLut }>(at(src.roofColor)).roofs
     : undefined;
-  const osmLut = withLandmarks(
-    existsSync(at(src.osmBuild))
-      ? readJson<{ objects?: OsmBuildingLut }>(at(src.osmBuild)).objects
-      : undefined,
-    landmarkFile(tile)
-  );
+  const osmDoc = existsSync(at(src.osmBuild))
+    ? readJson<{ context?: FacadeMaterial; objects?: OsmBuildingLut }>(
+        at(src.osmBuild)
+      )
+    : undefined;
+  const osmLut = withLandmarks(osmDoc?.objects, landmarkFile(tile));
   const scan = existsSync(at(src.smallBuild))
     ? readJson<FeatureCollection<SmallBuildingFeature>>(at(src.smallBuild))
         .features
@@ -422,7 +431,7 @@ function parseCity(tile: string): BakedCityMesh {
     sharedMatrix,
     osmLut,
     scan,
-    FACADES,
+    osmDoc?.context ?? "render",
     gaps
   );
   sharedMatrix ??= baked.matrix;
@@ -464,7 +473,7 @@ async function bakeCity(
     at(src.structures),
     at(src.landmarks),
   ];
-  const key = cacheKey(inputs, offset, FACADES);
+  const key = cacheKey(inputs, offset);
   let mesh: ReturnType<typeof cityMesh> | null = null;
   const built = () => {
     mesh ??= cityMesh(parseCity(tile));
@@ -488,17 +497,14 @@ async function bakeCity(
     ...(svf ? { svf } : {}),
   };
   const name = `city_${tile}.glb.gz`;
-  const glb = await cached(
-    name,
-    cacheKey(inputs, offset, FACADES, extras),
-    async () =>
-      gz(
-        await writeMeshGlb({
-          ...built().input,
-          name: "city",
-          extras: { ...extras },
-        })
-      )
+  const glb = await cached(name, cacheKey(inputs, offset, extras), async () =>
+    gz(
+      await writeMeshGlb({
+        ...built().input,
+        name: "city",
+        extras: { ...extras },
+      })
+    )
   );
   return { file: publish(name, glb), footprints, maxZ };
 }
@@ -738,7 +744,12 @@ function paintAndLight(
 async function bakeTerrain(
   tile: string,
   level: 0 | 1
-): Promise<{ file: string; maxZ: number; minZ: number }> {
+): Promise<{
+  file: string;
+  ground?: number[];
+  maxZ: number;
+  minZ: number;
+}> {
   const source = dgmSourceFiles(SITE, tile);
   if (!existsSync(at(source.tif))) {
     fail(`missing source file ${source.tif}${HINT}`);
@@ -768,19 +779,25 @@ async function bakeTerrain(
   const key = cacheKey(inputs, offset, described);
   const meta = parse<{
     bounds: TerrainExtras["bounds"];
+    ground?: number[];
     maxZ: number;
     minZ: number;
     tin?: TerrainExtras["tin"];
   }>(
-    await cached(`${stem}.json`, key, async () => {
-      const m = await shapedTerrain(tile, level);
-      return utf8({
-        bounds: m.bounds,
-        minZ: m.minElevation,
-        maxZ: m.maxElevation,
-        ...(m.tin ? { tin: m.tin } : {}),
-      });
-    })
+    await cached(
+      `${stem}.json`,
+      cacheKey(inputs, offset, described, "ground"),
+      async () => {
+        const m = await shapedTerrain(tile, level);
+        return utf8({
+          bounds: m.bounds,
+          minZ: m.minElevation,
+          maxZ: m.maxElevation,
+          ...(level === 1 ? { ground: groundSamples(m) } : {}),
+          ...(m.tin ? { tin: m.tin } : {}),
+        });
+      }
+    )
   );
   const extras: TerrainExtras = {
     ...described,
@@ -801,16 +818,46 @@ async function bakeTerrain(
       })
     )
   );
-  return { file: publish(name, glb), minZ: meta.minZ, maxZ: meta.maxZ };
+  return {
+    file: publish(name, glb),
+    ground: meta.ground,
+    minZ: meta.minZ,
+    maxZ: meta.maxZ,
+  };
+}
+
+/** The ground's heights on a coarse grid over the tile (the valley haze's
+ *  relief: lib/city/valley-fog.ts). */
+function groundSamples(m: {
+  bounds: TerrainBounds;
+  heightAt: (x: number, y: number) => number | null;
+}): number[] {
+  const [x0, y0, x1, y1] = m.bounds;
+  const out: number[] = [];
+  const n = 32;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const h = m.heightAt(
+        x0 + ((i + 0.5) / n) * (x1 - x0),
+        y0 + ((j + 0.5) / n) * (y1 - y0)
+      );
+      if (h !== null) {
+        out.push(Math.round(h * 10) / 10);
+      }
+    }
+  }
+  return out;
 }
 
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
+const groundHeights: number[] = [];
 for (const [i, tile] of TILES.entries()) {
   const city = await bakeCity(tile);
   footprintFiles.set(tile, city.footprints);
   const fine = await bakeTerrain(tile, 0);
   const coarse = await bakeTerrain(tile, 1);
+  groundHeights.push(...(coarse.ground ?? []));
   const minZ = Math.min(fine.minZ, coarse.minZ);
   const maxZ = Math.max(fine.maxZ, coarse.maxZ, city.maxZ);
   baked.push({
@@ -834,6 +881,7 @@ const extras: TilesetExtras = {
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
   ),
   epsg: frame.epsg,
+  ...(groundHeights.length > 0 ? { ground: groundRelief(groundHeights) } : {}),
   offset,
   tiles: baked.map((t) => ({
     id: t.id,
@@ -877,6 +925,86 @@ if (rasters.every((path) => existsSync(path))) {
   publish(HERO_FILE, hero);
 } else {
   log("land-cover raster missing, skipping the map picture");
+}
+
+// --- the city in numbers ------------------------------------------------------------
+// The start page's orderings (lib/city/site-stats.ts): shares of the land
+// cover, crowns per km², the buildings' heights and footprint share, the
+// relief, the landmarks. Not hashed: prepare-sites folds it into the index.
+
+const statSources = TILES.flatMap((tile) => {
+  const kinds = tileArtifacts(tile);
+  return [
+    at(sideFileSource(SITE, kinds.landcover.file)),
+    at(sideFileSource(SITE, kinds.canopy.file)),
+    at(sideFileSource(SITE, kinds.canopyx.file)),
+    at(cityMeshSourceFiles(SITE, tile).city),
+    at(cityMeshSourceFiles(SITE, tile).landmarks),
+  ];
+});
+const stats = await cached(
+  SITE_STATS_FILE,
+  cacheKey(statSources, extras.ground ?? null, footprintFiles.size),
+  async () => utf8(await siteStats())
+);
+writeFileSync(join(OUT_DIR, SITE_STATS_FILE), stats);
+keep.add(SITE_STATS_FILE);
+
+async function siteStats(): Promise<SiteStats> {
+  const histogram: number[] = [];
+  let crowns = 0;
+  let footprint = 0;
+  let landmarks = 0;
+  const heights: number[] = [];
+  for (const tile of TILES) {
+    const kinds = tileArtifacts(tile);
+    const classes = at(sideFileSource(SITE, kinds.landcover.file));
+    if (existsSync(classes)) {
+      const { data } = await sharp(classes)
+        .removeAlpha()
+        .toColourspace("b-w")
+        .resize(512, 512, { kernel: "nearest" })
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      for (const c of data) {
+        histogram[c] = (histogram[c] ?? 0) + 1;
+      }
+    }
+    for (const kind of ["canopy", "canopyx"] as const) {
+      const src = at(sideFileSource(SITE, kinds[kind].file));
+      if (existsSync(src)) {
+        crowns += readJson<{ features: unknown[] }>(src).features.length;
+      }
+    }
+    heights.push(
+      ...buildingHeights(
+        readJson<CityJsonDocument>(at(cityMeshSourceFiles(SITE, tile).city))
+      )
+    );
+    const prints = footprintFiles.get(tile);
+    if (prints) {
+      footprint += footprintArea(
+        readJson<[number, number][][][]>(join(OUT_DIR, prints))
+      );
+    }
+    landmarks += landmarkFile(tile)?.landmarks.length ?? 0;
+  }
+  const areaKm2 = TILES.length * 4;
+  const relief = extras.ground ? extras.ground[1] - extras.ground[0] : 0;
+  const round = (n: number, d = 3) => Math.round(n * 10 ** d) / 10 ** d;
+  return {
+    areaKm2,
+    buildingsPerKm2: round(heights.length / areaKm2, 1),
+    builtShare: round(footprint / (areaKm2 * 1e6)),
+    crownsPerKm2: round(crowns / areaKm2, 1),
+    ...Object.fromEntries(
+      Object.entries(landcoverShares(histogram)).map(([k, v]) => [k, round(v)])
+    ),
+    landmarks,
+    medianHeightM: round(quantile(heights, 0.5), 1),
+    reliefM: round(relief, 1),
+    tallestM: round(quantile(heights, 1), 1),
+  } as SiteStats;
 }
 
 // --- 4. manifest + prune -------------------------------------------------------------

@@ -12,6 +12,7 @@
  * fetched sites but Berlin today); a site whose folder is missing is left
  * out, never an error.
  */
+import { parseSiteStats, SITE_STATS_FILE } from "../lib/city/site-stats";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -80,9 +81,14 @@ for (const id of ids) {
     readFileSync(join(OUT_DIR, id, MANIFEST_FILE), "utf8")
   ) as DataManifest;
   const map = manifest.files[SITE_MAP_FILE];
+  const statsPath = join(OUT_DIR, id, SITE_STATS_FILE);
+  const stats = existsSync(statsPath)
+    ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf8")))
+    : undefined;
   index.sites.push({
     id,
     ...(map ? { map: `${siteDataBase(id)}/${map}` } : {}),
+    ...(stats ? { stats } : {}),
   });
 }
 

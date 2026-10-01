@@ -12,7 +12,10 @@ source is load-bearing.** The core is LoD2 buildings and DGM1 terrain —
 published openly by every German Land. Everything else degrades: without
 an open Basis-DLM the land cover comes from OpenStreetMap, without a
 surface model the trees come from the rows only, without an infrared band
-there is no NDVI. Outside Germany (other CRS, OSM buildings, a public DEM)
+the vegetation index comes from the visible bands. Which stand-in each
+city uses is the generated
+[Sources by city](./guide/en/sources-by-city.md) page
+([ADR 0037](./adr/0037-stand-ins-marked-per-city.md)). Outside Germany (other CRS, OSM buildings, a public DEM)
 is an open direction in [plans/README.md](./plans/README.md).
 
 ## What is built
@@ -44,8 +47,8 @@ Meißen, München and Unna (ADR 0035).
 | Provider | Id | CRS | Licence | Downloads | Surface model | DOP | Basis-DLM (Shape) | Laser scan (`--lsc`) | Adapter tested |
 |---|---|---|---|---|---|---|---|---|---|
 | Saxony (GeoSN) | `sn` | 25833 | dl-de/by-2-0 | 2 km tiles (our grid) | DOM1 | RGBI | ✅ statewide package | ✅ LSC, 2 km LAZ (≈380 MB) | ✅ Dresden, Leipzig, Meißen, Grimma |
-| NRW (Geobasis NRW) | `nw` | 25832 | dl-de/zero-2-0 | 1 km tiles, `index.json` per folder | DOM1 | RGBI (JPEG 2000) | ✅ 4.7 GB package, layers read by range | ✅ 3D-Messdaten, four 1 km LAZ (≈100 MB each) merged; 16-bit intensities scaled 1/16 (unverified) | ✅ Unna |
-| Bavaria (LDBV) | `by` | 25832 | CC BY 4.0 | 1 km rasters, 2 km LoD2 | DOM20 → 1 m | RGB only | ✅ 1.3 GB package (Deflate64), layers by range | — not read | ✅ München |
+| NRW (Geobasis NRW) | `nw` | 25832 | dl-de/zero-2-0 | 1 km tiles, `index.json` per folder | DOM1 | RGBI (JPEG 2000) | ✅ 4.7 GB package, layers read by range | ✅ 3D-Messdaten, four 1 km LAZ (≈100 MB each) merged; 16-bit intensities, normalised per scan like every scan | ✅ Unna |
+| Bavaria (LDBV) | `by` | 25832 | CC BY 4.0 | 1 km rasters, 2 km LoD2 | DOM20 → 1 m | RGB only | ✅ 1.3 GB package (Deflate64), layers by range | ✅ laser points, four 1 km LAZ (≈105 MB each) merged, LDBV classes mapped to AdV (buildings 6 and "object points" 20 → 20) | ✅ München |
 | Hamburg (LGV) | `hh` | 25832 | dl-de/by-2-0 | one ZIP per product for the city (1 km inside), read by range | bDOM1 | RGBI | ❌ NAS only → OSM | — not read | ✅ Hamburg |
 | Berlin (SenSBW) | `be` | 25833 | dl-de/zero-2-0 | ATOM: 2 km XYZ heights, 1 km LoD2, DOP per district | DOM1 | RGBI (JPEG 2000) | ❌ WFS only → OSM | — not read | ❌ portal unreachable from the agent's container |
 
@@ -83,10 +86,25 @@ centrelines; the DLM whole street spaces).
 
 **One palette, painted at runtime**
 ([ADR 0023](./adr/0023-land-cover-colours-painted-at-runtime.md)). The
-bakes write class ids only; the colours are `lib/city/landcover.ts`. The
-building tint has one per-site switch, `facades: "brick"` for clinker
-cities (Hamburg); the default is Dresden's rendered plaster
-(`lib/city/building-tint.ts`).
+bakes write class ids only; the colours are `lib/city/landcover.ts`.
+There are **no per-site look switches**
+([ADR 0037](./adr/0037-stand-ins-marked-per-city.md)): what differs
+between cities is derived from their data. A building without a mapped
+material wears brick or plaster as its OSM neighbourhood is mapped
+(`osm_buildings.py` `context`; Hamburg's former `facades: "brick"` is
+gone — its tiles now vote brick from their own mapped walls); the valley haze
+pools over a share of the site's ground relief (`lib/city/valley-fog.ts`);
+a tram track carries its OSM `gauge`; a tile's landmarks are those with a
+share of its most notable one's Wikipedia articles. A new look parameter
+that differs between cities is derived in the bake or the build, not
+added to `Site`.
+
+**Sources by city.** `bun run docs:matrix` writes the guide's
+[Sources by city](./guide/en/sources-by-city.md) table from the site and
+provider configs (`lib/city/source-matrix.ts`): per city and per drawn
+layer, the best source (🟢), OSM as the only one (🔵), a stand-in (🟡)
+or nothing (⚪), with the reason. A new site or provider product shows
+up there after a re-run; its test keeps the committed page current.
 
 ## Degradation matrix
 
@@ -98,12 +116,12 @@ the planned fallback. ✅ built · ❌ not built.
 | **LoD2** (CityGML → CityJSON, `data/<site>/cityjson/`) | building geometry + attributes; roof-colour sampling; with the DGM the sky-view factor and far horizon (`skyview`), the bell towers' heights (`soundmarks`) | ❌ the build fails (`prepare-data: missing source file … — run bun run fetch`) | open in every Land, so no fallback is planned; OSM footprints are an idea for outside Germany (Direction option 1) |
 | **DGM1** (`data/<site>/dgm/`) | terrain; ground heights for the canopy and rail bakes | ❌ the build fails; the canopy and rail bakes need it | open in every Land; a flat plane is an idea for outside Germany |
 | **Surface model** (DOM1; Bavaria's DOM20 averaged to 1 m) | canopy heights (nDOM); bridge roadway height and superstructure (truss, pylons, arch); the structures beyond LoD2 (`structures`: columns, missing buildings, a landmark's roof relief) | ✅ the canopy step skips with a note and the build treats the canopy as optional (trees come from the hedge / tree rows only); ✅ rail decks fall back to the DGM abutment ramp, with no ribs (slabs over arches or piers); ✅ `structures` writes an empty file (LoD2 only) | — |
-| **Basis-DLM** (AdV Shape profile) | class raster (surface colours, water, the tree and lamp gates), hedge / tree rows, rail tracks + ballast, bridge decks, the official monuments (statues, memorial stones, columns, named fountains) | ✅ a provider without it (`products.dlm: false`) gets the class raster, legend and veg rows **from OSM**, the canopy's forest/park gate from the class raster plus OSM parks, and its fountains from OSM alone. ❌ rails, ballast, bridge decks and the statues and stones are off (optional at runtime). The DLM's tunnels (`ver06`, `BWF=1870`) cut the rails that run underground; a package without them would draw subways at street level. A DLM provider whose package is missing on disk stops the land-cover step (`bun run fetch` first) | OSM tracks (`railway=rail`) and decks (`man_made=bridge`); a NAS reader for Hamburg's open NAS package |
-| **DOP** (RGB + NIR) | roof colour per building; NDVI (crown colour, meadow tint) | ✅ both steps skip; an RGB-only DOP (Bavaria) skips the NDVI only; the runtime uses the synthesized roof palette and hash-only sage crowns (`ndvi` and the roof LUT are optional) | — |
-| **OSM extract** (`.osm.pbf`) | retaining walls (+ terrain breaklines), stairs and terraces (shaped into the fine terrain), fountains, street lamps, street furniture and playgrounds, sports grounds, paving and parking, the road islands carved out of the DLM's roads, platforms, bridge structure (arches), the fairway clearance under bridges (`seamark:*`), fences and gates, road markings, trams, the Elbe's landing stages and ferries (`riverside`), allotments, orchards and vineyards (`cultivated`), shops, listed buildings, wall materials and colours (`osm-buildings`), what the surface model's gaps are (`structures`: nothing is added without it), which objects a landmark is (`landmarks`: else the LoD2 building under its point), churches (`soundmarks`); the land cover where there is no DLM | ✅ the lamps, walls, stairs, furniture, paving, sport and islands steps skip with a note, and the rail step writes bridges without structure or clearance (1.1 m decks, piers anywhere); none of them empties a file already there (platforms stay as committed). Lamps, walls, stairs, furniture, paving, sports grounds and platforms are optional at runtime. ❌ Where the land cover comes from OSM (Hamburg, Berlin) the land-cover step stops ("run bun run fetch first") — the extract is then required | — |
+| **Basis-DLM** (AdV Shape profile) | class raster (surface colours, water, the tree and lamp gates), hedge / tree rows, rail tracks + ballast, bridge decks, the official monuments (statues, memorial stones, columns, named fountains) | ✅ a provider without it (`products.dlm: false`) gets the class raster, legend and veg rows **from OSM**, the canopy's forest/park gate from the class raster plus OSM parks, and its fountains from OSM alone, and **rails, ballast and bridge decks from OSM** (`rail_osm.py`: `railway=rail/light_rail/subway/narrow_gauge` with `tracks`, their beds as ballast, `bridge` ways merged per bridge and level on `man_made=bridge` outlines; deck heights still measured in DOM1 — weaker: a track per way, no bundled yards). ❌ the statues and stones are off (optional at runtime). The DLM's tunnels (`ver06`, `BWF=1870`) cut the rails that run underground; a package without them would draw subways at street level. A DLM provider whose package is missing on disk stops the land-cover step (`bun run fetch` first) | a NAS reader for Hamburg's open NAS package |
+| **DOP** (RGB + NIR) | roof colour per building; NDVI (crown colour, meadow tint, the tram's lawn bed, the hedge cue) | ✅ an RGB-only DOP (Bavaria) gets the vegetation index from its visible bands instead (GLI on the NDVI's scale, `ndvi.py` `gli_raster`; r ≈ 0.7 against the NDVI — green vs grey well, vigour less well); no DOP: both steps skip and the runtime uses the synthesized roof palette and hash-only sage crowns (`ndvi` and the roof LUT are optional) | — |
+| **OSM extract** (`.osm.pbf`) | retaining walls (+ terrain breaklines), stairs and terraces (shaped into the fine terrain), fountains, street lamps, street furniture and playgrounds, sports grounds, paving and parking, the road islands carved out of the DLM's roads, platforms, bridge structure (arches), the fairway clearance under bridges (`seamark:*`), fences and gates, road markings, trams, the Elbe's landing stages and ferries (`riverside`), allotments, orchards and vineyards (`cultivated`), shops, listed buildings, wall materials and colours (`osm-buildings`), what the surface model's gaps are (`structures`: nothing is added without it), which objects a landmark is (`landmarks`: else the LoD2 building under its point), churches (`soundmarks`); the land cover where there is no DLM | ✅ the lamps, walls, stairs, furniture, paving, sport and islands steps skip with a note, and the rail step writes bridges without structure or clearance (1.1 m decks, piers anywhere) — without a DLM as well it writes nothing (`has_extract`); none of them empties a file already there (platforms stay as committed). Lamps, walls, stairs, furniture, paving, sports grounds and platforms are optional at runtime. ❌ Where the land cover comes from OSM (Hamburg, Berlin) the land-cover step stops ("run bun run fetch first") — the extract is then required | — |
 | **Wikidata** (`data/_raw/<provider>/wikidata/bridges_<tile>.json` and `landmarks_<tile>.json`, fetched by `bun run fetch` for every provider) | bridge class (overrides OSM's `bridge:structure`), main span; the landmarks (flag, the HUD's list, the roof relief, a material where OSM has none) | ✅ no file: the OSM structure, the default fairway width; an empty landmark list (no *Wahrzeichen* chips, no relief) | — |
-| **Laser scan (LAZ)** (`Provider.products.lsc`: GeoSN's LSC and NRW's 3D-Messdaten, the same AdV classes 2 / 20 — NRW's 1 km files merged per tile by `lsc.merge_laz`; `data/_raw/<provider>/lsc/<tile>.laz`, `bun run fetch <site> --lsc` or by hand) | hedge heights along the OSM hedges; trees outside the canopy mask (`canopyx`); the sheds and garden houses LoD2 lacks (`small-buildings`) | ✅ the hedge step falls back to OSM only: mapped hedges at their `height` tag (or 1.5 m), no extra trees; the small-buildings step skips; `canopyx` and `smallbuild` are optional. Also without PDAL on PATH | sparser points (< 4 /m²) leave holes in the 0.5 m rasters — bin at 1 m and raise `MIN_AREA_M2`; classified low vegetation (ASPRS 3/4) would replace the NDVI + intensity cue outright; another scanner's intensities need scaling to GeoSN's range (the adapter's `intensity_scale`, as NRW's 1/16) |
-| **Street-tree cadastre** (`Site.treeCadastre`: Dresden's WFS `cls:L1261` so far; `data/_raw/<provider>/trees/<tile>.geojson`, fetched by `bun run fetch`) | surveyed trees with height, crown and taxon; the OSM trees it does not cover are added beside it (sized from its statistics) | ✅ the trees step skips (the OSM trees with it: they are sized from the cadastre); `trees` is optional at runtime, and the canopy and rows plant alone. Another city's cadastre needs its own entry in `pipeline/bake/cadastre.py` (the WFS and the field mapping) (and its taxonomy in `tree_archetypes.py`) | — |
+| **Laser scan (LAZ)** (`Provider.products.lsc`: GeoSN's LSC and NRW's 3D-Messdaten, the same AdV classes 2 / 20, and Bavaria's laser points, whose classes the merge maps into AdV — NRW's and Bavaria's 1 km files merged per tile by `lsc.merge_laz`; `data/_raw/<provider>/lsc/<tile>.laz`, `bun run fetch <site> --lsc` or by hand) | hedge heights along the OSM hedges; trees outside the canopy mask (`canopyx`); the sheds and garden houses LoD2 lacks (`small-buildings`) | ✅ the hedge step falls back to OSM only: mapped hedges at their `height` tag (or 1.5 m), no extra trees; the small-buildings step skips; `canopyx` and `smallbuild` are optional. Also without PDAL on PATH | sparser points (< 4 /m²) leave holes in the 0.5 m rasters — bin at 1 m and raise `MIN_AREA_M2`; classified low vegetation (ASPRS 3/4) would replace the NDVI + intensity cue outright; another scanner's intensities are normalised by `lsc.rasterise` itself (its ground median to GeoSN's 1352 on Dresden's spawn tile); another class scheme needs a table in its adapter (`merge_laz(classes=…)`, as Bavaria's) |
+| **Street-tree cadastre** (`Site.treeCadastre`: the registers of Dresden, Hamburg, Leipzig and Berlin, `cadastre.py` `REGISTERS`; `data/_raw/<provider>/trees/<tile>.geojson`, fetched by `bun run fetch`) | surveyed trees with height, crown and taxon; the OSM trees it does not cover are added beside it (sized from its statistics) | ✅ the trees step skips (the OSM trees with it: they are sized from the cadastre); `trees` is optional at runtime, and the canopy and rows plant alone (a city's own register is a city's, not a Land's: Grimma, Meißen, Munich and Unna have none open). A register without heights (Hamburg's) has them measured in DOM1 − DGM1 around the trunk where that fits the crown, else imputed. Another city's cadastre needs its own entry in `pipeline/bake/cadastre.py` (the WFS and the field mapping) and an id in `TREE_REGISTERS` (and its taxonomy in `tree_archetypes.py`) | — |
 
 **Lower quality or different shape** is mostly untested:
 
@@ -112,8 +130,9 @@ the planned fallback. ✅ built · ❌ not built.
   provider's heights to that grid (`rasters.py`), so a coarser model reads
   as a blurrier one (Bavaria's DOM20 is averaged down, which is fine). The
   terrain bake itself resamples the DGM to its 1024² / 512² grids.
-- An **RGB-only DOP** (no NIR band) skips the NDVI step; the roof colours
-  only need bands 1–3.
+- An **RGB-only DOP** (no NIR band) gets a Green Leaf Index on the NDVI's
+  scale from bands 1–3 (fitted on NRW's RGBI); the roof colours only need
+  bands 1–3 anyway.
 - The raster edges are per tile, not per metre: a 4096² class raster and
   1024² terrain over a 2 km tile, which is why every tile is 2 km.
 - **LoD1** buildings (boxes, no roof shape) have not been tried through the

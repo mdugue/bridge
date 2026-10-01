@@ -28,10 +28,12 @@ import { clamp01 } from "./math";
 export type TintRgb = [number, number, number];
 
 /**
- * What a site's walls are mostly made of (`Site.facades`): rendered plaster
- * — the default, Dresden and most southern and central old towns — or
- * brick, the northern clinker cities (Hamburg). It swaps the palette of
- * housing and commerce; civic buildings keep their cool stone.
+ * What the walls around a building are mostly made of, as its OSM
+ * neighbourhood is mapped (pipeline/bake/osm_buildings.py `context`):
+ * rendered plaster — the default, Dresden and most southern and central old
+ * towns — or brick (Hamburg's Speicherstadt, the northern clinker quarters).
+ * It swaps the palette of housing and commerce for a building without a
+ * mapped material of its own; civic buildings keep their cool stone.
  */
 export type FacadeMaterial = "brick" | "render";
 
@@ -235,7 +237,7 @@ function readNumber(v: unknown): number | undefined {
  * Stable linear-RGB tint for one building. `objectId` seeds the hash (so the
  * same building always gets the same colour across reloads/demolish), `attrs`
  * is the CityJSON `attributes` bag (`function`, `measuredHeight`), `facades`
- * the site's wall material.
+ * what the walls around it are made of.
  */
 export function buildingTint(
   objectId: string,

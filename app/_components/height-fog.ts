@@ -1,4 +1,5 @@
 import { AdditiveBlending, Color, type Scene, Vector4 } from "three/webgpu";
+import { VALLEY_FALLOFF_MAX } from "@/lib/city/valley-fog";
 import {
   clamp,
   float,
@@ -55,8 +56,10 @@ export interface SceneFog {
   siteRect: UniformNode<"vec4", Vector4>;
 }
 
-/** Default fade height (m) above the valley floor — ~the Elbe-to-rim drop. */
-const DEFAULT_FALLOFF = 28;
+/** Default fade height (m) above the valley floor — ~the Elbe-to-rim drop;
+ *  the site's own relief sets it once the tileset is read
+ *  (lib/city/valley-fog.ts). */
+const DEFAULT_FALLOFF = VALLEY_FALLOFF_MAX;
 
 /**
  * Width (m) of the haze band inside the site's outer edge. Wide enough that

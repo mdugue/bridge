@@ -11,8 +11,6 @@
  * every site of that Land (ADR 0035).
  */
 
-import type { FacadeMaterial } from "./building-tint";
-
 export type MovementMode = "fly" | "walk";
 
 /**
@@ -145,19 +143,28 @@ export interface Provider {
 }
 
 /**
+ * The municipal tree registers pipeline/bake/cadastre.py knows: each is a
+ * WFS query plus the mapping of its fields (taxon, height, crown, trunk …)
+ * onto the bake's one tree record.
+ */
+export const TREE_REGISTERS = [
+  "berlin",
+  "dresden",
+  "hamburg",
+  "leipzig",
+] as const;
+
+/**
  * A municipal street-tree register the site can use (surveyed trees with
- * height, crown and taxon). `id` names its entry in pipeline/bake/cadastre.py
- * — the WFS and its field mapping; `credit` is its licence's credit line.
+ * taxon, crown and mostly height). `id` names its entry in
+ * pipeline/bake/cadastre.py; `credit` is its licence's credit line.
  */
 export interface TreeCadastre {
   credit: string;
-  id: "dresden";
+  id: (typeof TREE_REGISTERS)[number];
 }
 
 export interface Site {
-  /** what the walls are mostly made of — the building tint's palette
-   *  (lib/city/building-tint.ts); default "render" */
-  facades?: FacadeMaterial;
   /** where the sun is computed when the tiles cannot be reprojected */
   fallbackLatLng: { lat: number; lng: number };
   /** the `SITE` value and the data folder, `data/<id>/` */

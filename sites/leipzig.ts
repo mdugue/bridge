@@ -14,6 +14,11 @@ export const LEIPZIG: Site = {
   label: "Leipzig · Innenstadt",
   name: "Leipzig",
   provider: SAXONY,
+  treeCadastre: {
+    id: "leipzig",
+    credit:
+      "Baumkataster: Stadt Leipzig, Amt für Stadtgrün und Gewässer, dl-de/by-2-0",
+  },
   spawn: "markt",
   tiles: [
     { e: 316, n: 5690 },

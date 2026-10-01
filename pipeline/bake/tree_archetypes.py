@@ -1,5 +1,6 @@
-"""Taxon -> crown archetype, leaf type and foliage colour for the Dresden
-street-tree cadastre (Stadtbaumkataster, `art_botanisch` / `art_deutsch`).
+"""Taxon -> crown archetype, leaf type and foliage colour for the municipal
+tree registers (cadastre.py: Dresden, Hamburg, Leipzig, Berlin — the
+botanical and the German name, whatever field each register keeps them in).
 
 Pure Python, no third-party imports: `trees.py` bakes with it and
 `scripts/eval/kataster-eval.py` reuses it, so the analysis and the committed
@@ -34,6 +35,7 @@ ROUND, OVAL, COLUMNAR, CONIFER, WEEPING, SMALL = range(6)
 EVERGREEN_CONIFERS = {
     "Abies",
     "Araucaria",
+    "Calocedrus",
     "Cedrus",
     "Chamaecyparis",
     "Cupressocyparis",
@@ -60,7 +62,9 @@ SMALL_GENERA = {
     "Cornus",
     "Cotinus",
     "Crataegus",
+    "Crataemespilus",
     "Cydonia",
+    "Eriolobus",
     "Euonymus",
     "Laburnum",
     "Magnolia",
@@ -175,7 +179,9 @@ PURPLE_DE = re.compile(r"blut-|rotblättrig", re.IGNORECASE)
 GOLD_RE = re.compile(r"sunburst|frisia|aurea|aureovariegat|wredei", re.IGNORECASE)
 GOLD_DE = re.compile(r"gold-|goldulme|gelbblättrig", re.IGNORECASE)
 
-UNKNOWN = {"Baumart", "Stammstück", ""}
+# First words that name no taxon: the registers' placeholders ("Baumart",
+# Leipzig's "nicht bestimmt", Berlin's "Unbekannt").
+UNKNOWN = {"Baumart", "Stammstück", "", "unbekannt", "Unbekannt", "unbekannter", "nicht"}
 
 # The phenology table's keys: a tree's `gn` in trees_<tile>.geojson is an
 # index into this list, and lib/city/tree-season.ts holds the leaf-out,

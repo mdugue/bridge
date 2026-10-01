@@ -1,6 +1,7 @@
 """A city's landmarks: what Wikidata knows as a building or structure on the
-tile, notable enough (at least `MIN_SITELINKS` Wikipedia articles, the most
-notable `MAX_PER_TILE` of a tile), matched to what the viewer draws of it
+tile, notable enough (at least `MIN_SITELINKS` Wikipedia articles and
+`NOTABLE_SHARE` of the tile's most notable one's, at most `MAX_PER_TILE`),
+matched to what the viewer draws of it
 (plan 038).
 
 - `bun run fetch` asks Wikidata once per tile (`fetch_wikidata`) and caches
@@ -35,10 +36,14 @@ from .osm_buildings import MATERIALS, covered_by, footprints, root_of
 
 SPARQL = "https://query.wikidata.org/sparql"
 # A small town's landmarks have few Wikipedia articles (the Lindenbrauerei
-# in Unna: a handful), a metropolis has dozens: a low floor, then the tile's
-# most notable first and at most MAX_PER_TILE of them.
+# in Unna: a handful), a metropolis has dozens: a low floor, and a floor
+# relative to the tile's most notable — so a dense old town keeps its
+# second rank (Dresden's Congress Center beside the Frauenkirche, the Zwinger
+# and the Semperoper) where a fixed count of 12 cut it — then the most
+# notable first, at most MAX_PER_TILE (a safety cap, not the rule).
 MIN_SITELINKS = 2
-MAX_PER_TILE = 12
+NOTABLE_SHARE = 0.08
+MAX_PER_TILE = 40
 # How far from a building's point its LoD2 building is looked for (m).
 NEAR_M = 25.0
 QUERY = """
@@ -221,9 +226,19 @@ def object_heights(city: dict) -> dict[str, tuple[float, float]]:
     return out
 
 
+def notable_floor(items: list[dict]) -> float:
+    """The sitelinks a landmark needs on its tile: `NOTABLE_SHARE` of the
+    most notable one's, never below `MIN_SITELINKS`."""
+    top = max((i["links"] for i in items), default=0)
+    return max(MIN_SITELINKS, NOTABLE_SHARE * top)
+
+
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"landmarks_{tile.id}.json")
-    items = [i for i in load_wikidata(tile) if owns(tile.bounds, i["x"], i["y"])]
+    items = sorted(
+        (i for i in load_wikidata(tile) if owns(tile.bounds, i["x"], i["y"])),
+        key=lambda i: -i["links"],
+    )
     if not tile.cityjson.exists() or not has_extract(tile, "the landmarks"):
         return
     city = json.loads(tile.cityjson.read_text())
@@ -232,8 +247,9 @@ def run(tile: Tile) -> None:
     outlines = tagged_outlines(tile)
     heights = object_heights(city)
     landmarks = []
+    floor = notable_floor(items)
     for item in items:
-        if len(landmarks) >= MAX_PER_TILE:
+        if len(landmarks) >= MAX_PER_TILE or item["links"] < floor:
             break
         objects = matched_objects(item, city, ids, polys, tree, outlines)
         if not objects:

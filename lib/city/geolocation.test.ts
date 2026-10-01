@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { latLngToUtm, utmToLatLng } from "./crs";
+import { SITES } from "@/sites";
 import {
+  arrivalHref,
+  arrivalOf,
   deviceAim,
   deviceHeadingDeg,
   devicePitchDeg,
@@ -8,6 +11,7 @@ import {
   easeAngleDeg,
   normalizeDeg,
   placementOf,
+  siteHolding,
 } from "./geolocation";
 import type { TerrainBounds } from "./terrain-geometry";
 
@@ -142,5 +146,32 @@ describe("easeAngleDeg", () => {
     expect(easeAngleDeg(0, 90, 0.5)).toBeCloseTo(45, 9);
     near(normalizeDeg(easeAngleDeg(350, 10, 0.5)), 0, 1e-9);
     near(normalizeDeg(easeAngleDeg(10, 350, 1)), 350, 1e-9);
+  });
+});
+
+describe("another city of the deployment", () => {
+  test("a fix in Leipzig's old town is Leipzig's, one in Berlin none's", () => {
+    const others = [SITES.leipzig, SITES.hamburg, SITES.unna];
+    // the Thomaskirche
+    expect(siteHolding({ lat: 51.3393, lng: 12.3726 }, others)?.id).toBe(
+      "leipzig"
+    );
+    // Hamburg's Rathaus, in the other UTM zone (25832)
+    expect(siteHolding({ lat: 53.5503, lng: 9.9925 }, others)?.id).toBe(
+      "hamburg"
+    );
+    expect(siteHolding({ lat: 52.52, lng: 13.405 }, others)).toBeUndefined();
+  });
+
+  test("the fix travels to the other page and back out of its query", () => {
+    const href = arrivalHref("leipzig", { lat: 51.3393, lng: 12.3726 });
+    expect(href).toBe("/leipzig?at=51.339300,12.372600");
+    expect(arrivalOf(href.slice(href.indexOf("?")))).toEqual({
+      lat: 51.3393,
+      lng: 12.3726,
+    });
+    expect(arrivalOf("?at=91,0")).toBeNull();
+    expect(arrivalOf("?at=nowhere")).toBeNull();
+    expect(arrivalOf("")).toBeNull();
   });
 });

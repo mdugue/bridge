@@ -248,6 +248,9 @@ export interface StructureFeature {
 
 export interface HeightField {
   cols: number;
+  /** per cell, where its walls end below `z` (≤ 0): the LoD2 roof under
+   *  the cell; without it every wall ends at `z` */
+  floor?: number[];
   res: number;
   rows: number;
   x: number;
@@ -336,7 +339,7 @@ export type TramKind = "arm" | "mast" | "rosette" | "span" | "stop" | "track";
 /**
  * OSM trams (pipeline/bake/tram.py, ODbL). A `track` is one track's
  * centreline, cut at the tile edge, with its `bed`, `bridge: 1` on a bridge,
- * the OSM `layer`, and `s`: the distances (m along the line) where a span or
+ * the OSM `layer`, its gauge `g` (m) where OSM maps one, and `s`: the distances (m along the line) where a span or
  * arm holds its contact wire. A `mast` is a Point; `span`, `rosette` and
  * `arm` are two-point lines between their anchors (mast or facade; an arm
  * ends over its track) with `x`, the fractions along a span where it
@@ -349,6 +352,8 @@ export interface TramFeature {
     a?: number;
     bed?: TramBed;
     bridge?: number;
+    /** a track's gauge (m) */
+    g?: number;
     k: TramKind;
     layer?: number;
     name?: string;

@@ -21,6 +21,16 @@ wählen* ("choose another city") under the city's name at the top of the
 panel leads back to the start page. The start page also links to the
 knowledge base (`/wissen`).
 
+Above the cards, *Sortieren* ("sort") orders them. *Empfohlen*
+("featured") puts Dresden first — the best-kept city — and the rest by
+name; the other orderings rank by a figure the build measured for every
+city the same way, and each card then shows its figure: the most tree
+crowns per km² (as the surface model sees them), the greenest (forest,
+meadow and fields in the land cover), the most water, the tallest houses
+(the median building's height), the most densely built (the share of the
+ground under a roof), the hilliest (the ground's height range), the most
+landmarks, the largest area.
+
 ## Loading
 
 The loading screen lists five stages and a bar. The first three
@@ -83,7 +93,9 @@ when it lies flat); without one the view keeps its direction. A short line
 at the top reports the precision — GPS in a city is often 5–20 m off, a
 phone compass a few degrees. If you stand outside the area, a small window
 says how far and offers where to go instead: one of the vantage points, a
-spot you pick on the map, or staying where you are. Browsers ask for permission first
+spot you pick on the map, or staying where you are. If you stand in
+another city this site also shows, the window says so first and offers to
+jump there: its viewer opens with you standing where you are. Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — there
 is no server to send it to.
 

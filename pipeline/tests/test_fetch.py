@@ -177,7 +177,9 @@ def test_a_site_without_a_tree_cadastre_skips_the_trees(tmp_path):
 def test_the_cadastre_query_carries_the_sites_crs():
     from bake.cadastre import REGISTERS
 
-    q = REGISTERS["dresden"].query((0.0, 0.0, 2000.0, 2000.0), 25832, resultType="hits")
+    q = REGISTERS["dresden"].query(
+        "cls:L1261", (0.0, 0.0, 2000.0, 2000.0), 25832, resultType="hits"
+    )
     assert "EPSG%3A%3A25832" in q and "cls%3AL1261" in q and "resultType=hits" in q
 
 

@@ -40,14 +40,15 @@ from .spec import parse
 STEPS = {
     "landcover": landcover.run,
     "islands": landcover.run_islands,
+    # Before the canopy (no tree on a deck; without a DLM the decks are
+    # OSM's, rail_osm.py), the furniture (it keeps benches off the decks),
+    # the tram, lowveg and small-buildings (masks).
+    "rail": rail.run,
     "canopy": canopy.run,
     "trees": trees.run,
     "ndvi": ndvi.run,
     "roof-colour": roof_colour.run,
     "osm-buildings": osm_buildings.run,
-    # Before the furniture (it keeps benches off the bridge decks), the tram,
-    # lowveg and small-buildings (masks).
-    "rail": rail.run,
     "lamps": lamps.run,
     "monuments": monuments.run,
     "furniture": furniture.run,
