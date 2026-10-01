@@ -30,6 +30,7 @@ import {
   type SceneLookKey,
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
+import type { BikeCounter } from "@/lib/city/bike-counts";
 import { nextRenderStyle } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
@@ -54,6 +55,7 @@ import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
 import { setTrafficTime } from "./traffic-layer";
+import { createDataOverlays } from "./data-overlays";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -112,6 +114,7 @@ const GOVERN_MS = 1000;
 /** The HUD census's layers: the content's own, and a dressing's parts
  *  (tile-stream.ts DRESSING_PARTS). */
 export type LayerName =
+  | "bikes"
   | "city"
   | "fences"
   | "stairs"
@@ -268,6 +271,11 @@ export interface CityWalkOptions {
    */
   onStage?: (update: LoadStageUpdate) => void;
   onStats?: (stats: CityWalkStats) => void;
+  /**
+   * The live bicycle counts while their data layer is on (data-overlays.ts),
+   * for the HUD's list; [] when it is switched off.
+   */
+  onBikeCounts?: (counters: BikeCounter[]) => void;
   /**
    * Aborts startup mid-load (React StrictMode mounts effects twice in dev;
    * without this the doomed first instance would finish loading 19 MB of
@@ -860,6 +868,18 @@ async function bootApp(
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
   sunToStyles = postStack.setSunAltitude;
+  // The site-wide data layers (the live bicycle counters): built, fetched
+  // and polled only once switched on (lib/city/data-layers.ts).
+  const overlays = createDataOverlays({
+    bounds: unionBounds(extras),
+    compile: (object) => postStack.compile(object).catch(() => undefined),
+    epsg: extras.epsg,
+    ground: { offset, heightAt },
+    onBikeCounts: opts.onBikeCounts,
+    onChange: () => emitStats(),
+    parent: scene,
+  });
+  cleanups.push(() => overlays.dispose());
   postStack.setSunAltitude(sunAltitude);
 
   // The look store is the one source of every slider value: applied now, on
@@ -918,6 +938,7 @@ async function bootApp(
       d.vegetation?.applyLook(look);
       showDataLayers(d, look);
     }
+    overlays.apply(look);
   };
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
@@ -1015,6 +1036,7 @@ async function bootApp(
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
         fences: census(terrains.map((t) => t.fences)),
+        bikes: census([overlays.parts().bikes]),
       },
     });
   };
@@ -1063,6 +1085,7 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
+    overlays.streamChanged();
     postStack.sceneChanged();
     invalidateShadows();
     emitStats();

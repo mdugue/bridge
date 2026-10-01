@@ -27,6 +27,7 @@ import {
   type SkippedStages,
   type StageFractions,
 } from "@/lib/city/load-stages";
+import type { BikeCounter } from "@/lib/city/bike-counts";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
@@ -58,7 +59,8 @@ import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
-import type { ViewpointGeometry } from "@/lib/city/site";
+import { overlook, type ViewpointGeometry } from "@/lib/city/site";
+import { BikeCountList } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
 import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
@@ -282,6 +284,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
   const [stats, setStats] = useState<CityWalkStats | null>(null);
+  // The live bicycle counts while their data layer is on (data-overlays.ts).
+  const [bikeCounters, setBikeCounters] = useState<BikeCounter[]>([]);
   const time = useSceneTime(applySceneTime, INITIAL_DATE);
   const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
@@ -437,6 +441,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             setFootprints(h.getFootprints());
           }
         });
+      },
+      onBikeCounts: (counters) => {
+        if (!cancelled) {
+          startTransition(() => setBikeCounters(counters));
+        }
       },
       onFps: (value) => {
         if (!cancelled) {
@@ -666,6 +675,25 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
 
       {booted && (
         <SceneSidebar
+          dataLayerDetail={{
+            bikeLayer: (
+              <BikeCountList
+                counters={bikeCounters}
+                onFly={(c) =>
+                  handleRef.current?.flyToViewpoint(
+                    overlook(c, {
+                      altitude: 45,
+                      description: c.where,
+                      headingDeg: 0,
+                      id: c.id,
+                      label: c.name,
+                      pitchDeg: -30,
+                    })
+                  )
+                }
+              />
+            ),
+          }}
           applySnapshot={applySnapshot}
           bounds={bounds}
           coarse={coarse}

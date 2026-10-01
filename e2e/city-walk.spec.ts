@@ -615,6 +615,75 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     });
     expectNoErrors(errors);
   });
+
+  test("the data layers switch on and off from the sidebar", async () => {
+    // The live bicycle counts come from the city's WFS; the spec answers
+    // for it (two counters on the spawn tile), so CI never waits on the
+    // city's server and the counts are known.
+    await page.route("**/kommisdd.dresden.de/**", (route) =>
+      route.fulfill({
+        contentType: "application/geo+json",
+        body: JSON.stringify({
+          type: "FeatureCollection",
+          features: [
+            ["F01092", "Albertbrücke", 412_610, 5_657_020, 309, 482],
+            ["F01093", "Glacisstraße", 412_900, 5_657_300, 0, 123],
+          ].map(([id, name, x, y, w1, w2]) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [x, y] },
+            properties: {
+              fremd_id: id,
+              bezeichnung: name,
+              lage: "",
+              r1: "Richtung Nord",
+              w1,
+              r2: "Richtung Süd",
+              w2,
+              messzeit: "01.10.2026 07:00:00",
+              winkel: 0,
+              inaktiv: "0",
+            },
+          })),
+        }),
+      })
+    );
+    const traffic = page.getByRole("switch", { name: "Kfz-Verkehr" });
+    const bikes = page.getByRole("switch", { name: "Radverkehr (live)" });
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      await expect(traffic).not.toBeChecked({ timeout: slow(15_000) });
+      await traffic.click();
+      await expect(traffic).toBeChecked();
+      await bikes.click();
+      await expect(bikes).toBeChecked();
+    });
+    const look = await page.evaluate(() => window.__poc?.look?.get());
+    expect(look?.trafficLayer).toBe(true);
+    expect(look?.bikeLayer).toBe(true);
+    // The counts land in the HUD's list and as a pair of columns each.
+    await expect(page.locator("#bike-counts li")).toHaveCount(2, {
+      timeout: slow(30_000),
+    });
+    await page.waitForFunction(
+      () => (window.__poc?.stats?.layerStats.bikes.instances ?? 0) === 4,
+      undefined,
+      { timeout: slow(30_000) }
+    );
+    // The spawn tile's counted sections are built (hidden until now).
+    const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
+    expect(stats?.traffic.triangles ?? 0).toBeGreaterThan(0);
+    await withFramesHeld(page, async () => {
+      await traffic.click();
+      await bikes.click();
+      await expect(page.locator("#bike-counts")).toHaveCount(0);
+    });
+    const off = await page.evaluate(() => window.__poc?.look?.get());
+    expect(off?.trafficLayer).toBe(false);
+    expect(off?.bikeLayer).toBe(false);
+    await page.unroute("**/kommisdd.dresden.de/**");
+    expectNoErrors(errors);
+  });
 });
 
 /**
