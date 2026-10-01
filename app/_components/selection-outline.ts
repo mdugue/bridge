@@ -123,8 +123,21 @@ export function createSelectionOutline(deps: {
   material.fog = false;
   material.name = "selection-mask";
 
+  // Always a position attribute, even with nothing asked (one degenerate
+  // triangle): the program is built from the geometry's attributes, and
+  // the boot's compile (`compile`, before any question) must build the one
+  // a question draws with — compiled without positions, every vertex sat
+  // at the origin and the mask stayed empty.
+  const shapeGeometry = (positions: Float32Array | null) => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new Float32BufferAttribute(positions ?? new Float32Array(9), 3)
+    );
+    return geometry;
+  };
   const scene = new Scene();
-  const shape = new Mesh(new BufferGeometry(), material);
+  const shape = new Mesh(shapeGeometry(null), material);
   shape.frustumCulled = false;
   shape.visible = false;
   scene.add(shape);
@@ -182,15 +195,8 @@ export function createSelectionOutline(deps: {
     set: (positions, depth = 0) => {
       reach.value = depth;
       shape.geometry.dispose();
-      const geometry = new BufferGeometry();
       selected = positions !== null && positions.length >= 9;
-      if (positions && selected) {
-        geometry.setAttribute(
-          "position",
-          new Float32BufferAttribute(positions, 3)
-        );
-      }
-      shape.geometry = geometry;
+      shape.geometry = shapeGeometry(selected ? positions : null);
       shape.visible = selected;
     },
     renderMask: (renderer, camera) => {

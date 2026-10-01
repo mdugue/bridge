@@ -587,6 +587,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       cancelled = true;
       aborter.abort();
       trail.end();
+      // The card belongs to the scene that marked its building: a route
+      // kept hidden (and shown again) boots a new scene without that mark.
+      setInquiry(null);
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
