@@ -30,7 +30,24 @@ export interface Prism {
   y1: number;
 }
 
-export type AskSolid = { cylinder: Cylinder } | { prism: Prism };
+/**
+ * A deck over a ring whose top follows a measured line (a bridge): within
+ * the coarse prism, the ray must come within `below` under and `above`
+ * over `topAt` (x, z → world Y) to meet it.
+ */
+export interface Slab extends Prism {
+  above: number;
+  below: number;
+  topAt: (x: number, z: number) => number;
+}
+
+export type AskSolid =
+  | { cylinder: Cylinder }
+  | { prism: Prism }
+  | { slab: Slab };
+
+/** The step a ray marches a slab in (m). */
+const SLAB_STEP = 0.25;
 
 /** One askable thing: its solids and what it is. */
 export interface AskItem<T> {
@@ -130,6 +147,43 @@ export function rayPrism(o: Xyz, d: Xyz, p: Prism): number | null {
   return Number.isFinite(best) ? best : null;
 }
 
+/** Distance along the ray (unit `d`) to the slab's deck, or null: from
+ *  where the ray enters the coarse prism, marched until it meets the deck
+ *  or leaves the prism's extent. */
+export function raySlab(o: Xyz, d: Xyz, s: Slab): number | null {
+  const enter = rayPrism(o, d, s);
+  if (enter === null) {
+    return null;
+  }
+  let span = 0;
+  for (const [x, z] of s.ring) {
+    for (const [x2, z2] of s.ring) {
+      span = Math.max(span, Math.hypot(x - x2, z - z2));
+    }
+  }
+  const reach = Math.hypot(span, s.y1 - s.y0);
+  for (let t = enter; t <= enter + reach; t += SLAB_STEP) {
+    const x = o.x + t * d.x;
+    const y = o.y + t * d.y;
+    const z = o.z + t * d.z;
+    if (y < s.y0 - SLAB_STEP || y > s.y1 + SLAB_STEP) {
+      // left through the bottom or the top
+      if ((d.y < 0 && y < s.y0) || (d.y > 0 && y > s.y1)) {
+        return null;
+      }
+      continue;
+    }
+    if (!insideRingXz(s.ring, x, z)) {
+      continue;
+    }
+    const top = s.topAt(x, z);
+    if (y <= top + s.above && y >= top - s.below) {
+      return t;
+    }
+  }
+  return null;
+}
+
 /** Distance along the ray to the nearest of a thing's solids, or null. */
 export function raySolids(
   o: Xyz,
@@ -139,7 +193,11 @@ export function raySolids(
   let best: number | null = null;
   for (const s of solids) {
     const t =
-      "cylinder" in s ? rayCylinder(o, d, s.cylinder) : rayPrism(o, d, s.prism);
+      "cylinder" in s
+        ? rayCylinder(o, d, s.cylinder)
+        : "prism" in s
+          ? rayPrism(o, d, s.prism)
+          : raySlab(o, d, s.slab);
     if (t !== null && (best === null || t < best)) {
       best = t;
     }
@@ -162,4 +220,114 @@ export function nearestItem<T>(
     }
   }
   return best;
+}
+
+/** An axis-aligned box (world). */
+export interface Aabb {
+  max: Xyz;
+  min: Xyz;
+}
+
+/** Things grouped by a cell of the ground, with the box they fill. */
+export interface AskSet<T> {
+  box: Aabb;
+  items: AskItem<T>[];
+}
+
+/** The box a solid fills. */
+function solidBox(s: AskSolid): Aabb {
+  if ("cylinder" in s) {
+    const c = s.cylinder;
+    return {
+      min: { x: c.x - c.r, y: c.y0, z: c.z - c.r },
+      max: { x: c.x + c.r, y: c.y1, z: c.z + c.r },
+    };
+  }
+  const p = "prism" in s ? s.prism : s.slab;
+  const xs = p.ring.map(([x]) => x);
+  const zs = p.ring.map(([, z]) => z);
+  return {
+    min: { x: Math.min(...xs), y: p.y0, z: Math.min(...zs) },
+    max: { x: Math.max(...xs), y: p.y1, z: Math.max(...zs) },
+  };
+}
+
+function grow(a: Aabb, b: Aabb): Aabb {
+  return {
+    min: {
+      x: Math.min(a.min.x, b.min.x),
+      y: Math.min(a.min.y, b.min.y),
+      z: Math.min(a.min.z, b.min.z),
+    },
+    max: {
+      x: Math.max(a.max.x, b.max.x),
+      y: Math.max(a.max.y, b.max.y),
+      z: Math.max(a.max.z, b.max.z),
+    },
+  };
+}
+
+/** Items grouped by the `cell` (m) their first solid stands in. */
+export function askSets<T>(
+  items: readonly AskItem<T>[],
+  cell = 64
+): AskSet<T>[] {
+  const sets = new Map<string, AskSet<T>>();
+  for (const item of items) {
+    const box = item.solids.map(solidBox).reduce(grow);
+    const key = `${Math.floor(box.min.x / cell)},${Math.floor(box.min.z / cell)}`;
+    const set = sets.get(key);
+    if (set) {
+      set.items.push(item);
+      set.box = grow(set.box, box);
+    } else {
+      sets.set(key, { box, items: [item] });
+    }
+  }
+  return [...sets.values()];
+}
+
+/** Where the ray (unit `d`) enters the box, or null if it misses it. */
+export function rayAabb(o: Xyz, d: Xyz, b: Aabb): number | null {
+  let near = 0;
+  let far = Number.POSITIVE_INFINITY;
+  for (const axis of ["x", "y", "z"] as const) {
+    if (Math.abs(d[axis]) < EPS) {
+      if (o[axis] < b.min[axis] || o[axis] > b.max[axis]) {
+        return null;
+      }
+      continue;
+    }
+    const t0 = (b.min[axis] - o[axis]) / d[axis];
+    const t1 = (b.max[axis] - o[axis]) / d[axis];
+    near = Math.max(near, Math.min(t0, t1));
+    far = Math.min(far, Math.max(t0, t1));
+    if (near > far) {
+      return null;
+    }
+  }
+  return near;
+}
+
+/** The nearest item in the sets the ray meets within `far`. */
+export function nearestInSets<T>(
+  o: Xyz,
+  d: Xyz,
+  sets: Iterable<AskSet<T>>,
+  far: number
+): { distance: number; target: T } | null {
+  // the reach shrinks to the nearest hit so far
+  const found: { hit: { distance: number; target: T } | null; reach: number } =
+    { hit: null, reach: far };
+  for (const set of sets) {
+    const enter = rayAabb(o, d, set.box);
+    if (enter !== null && enter <= found.reach) {
+      const hit = nearestItem(o, d, set.items, found.reach);
+      if (hit !== null) {
+        found.hit = hit;
+        found.reach = hit.distance;
+      }
+    }
+  }
+  return found.hit;
 }

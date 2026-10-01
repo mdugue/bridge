@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import {
   type AskItem,
+  askSets,
+  nearestInSets,
+  rayAabb,
   insideRingXz,
   nearestItem,
   rayCylinder,
@@ -51,4 +54,30 @@ test("of several things, the nearest within reach answers", () => {
     "near"
   );
   expect(nearestItem({ x: 0, y: 2, z: 0 }, east, items, 5)).toBeNull();
+});
+
+test("sets of things: the boxes a ray misses are never opened", () => {
+  const items: AskItem<number>[] = Array.from({ length: 200 }, (_, i) => ({
+    target: i,
+    solids: [
+      {
+        cylinder: {
+          x: (i % 20) * 10,
+          z: Math.floor(i / 20) * 10,
+          y0: 0,
+          y1: 5,
+          r: 1,
+        },
+      },
+    ],
+  }));
+  const sets = askSets(items, 64);
+  expect(sets.length).toBeGreaterThan(1);
+  expect(sets.reduce((n, s) => n + s.items.length, 0)).toBe(200);
+  // along the row z = 30 from the west: the first post it meets
+  const hit = nearestInSets({ x: -10, y: 2, z: 30 }, east, sets, 1000);
+  expect(hit?.target).toBe(60);
+  expect(hit?.distance).toBeCloseTo(9, 9);
+  expect(rayAabb({ x: -10, y: 50, z: 30 }, east, sets[0].box)).toBeNull();
+  expect(nearestInSets({ x: -10, y: 2, z: 30 }, east, sets, 5)).toBeNull();
 });
