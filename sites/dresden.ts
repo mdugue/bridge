@@ -69,6 +69,7 @@ export const DRESDEN: Site = {
     "Lampen, Bänke, Ampeln, Hydranten, Uhren, Litfaßsäulen, Brunnen, Mauern, Zäune, Hecken, Treppen, Plätze, Beläge, Fahrbahnmarkierungen, Sportplätze, Kleingärten, Obstwiesen, Weinberge, Bahnsteige, Straßenbahn, Anlegestellen, Brücken, Läden, Baudenkmale und Kirchtürme © OpenStreetMap-Mitwirkende (ODbL)",
     "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
   ],
+  credit: "GeoSN, Stadt Dresden (dl-de/by-2-0) · © OpenStreetMap (ODbL)",
   spawn: "altstadt",
   viewpoints: [
     // The start: low over the Elbe just west of the Carolabrücke, the whole
