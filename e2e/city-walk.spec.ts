@@ -802,6 +802,57 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expectNoErrors(errors);
   });
 
+  test("a tree answers with what the city's register says about it", async () => {
+    // Plan 049 phase 4: a street tree of the register, asked from above
+    // and a little aside, answers with its species, where it stands and
+    // the register as its source — the facts file fetched with the
+    // question.
+    const trees = (await (
+      await page.request.get(
+        await dataUrl(page, "trees_33412_5656_2_sn.geojson")
+      )
+    ).json()) as {
+      features: {
+        geometry: { coordinates: [number, number] };
+        properties: { h: number; s?: string };
+      }[];
+    };
+    const tree = trees.features.find(
+      (f) => f.properties.s === undefined && f.properties.h > 14
+    );
+    expect(tree).toBeDefined();
+    const [east, north] = tree?.geometry.coordinates ?? [0, 0];
+    await page.evaluate(
+      ([e, n]) => {
+        const api = window.__poc?.handle;
+        if (!api) {
+          throw new Error("scene handle not published");
+        }
+        api.teleportTo(e, n);
+        const ground = api.getCameraState().pos.y - 1.7;
+        const x = e - api.offset.cx;
+        const z = -(n - api.offset.cy);
+        // from above and aside, at the crown: the ray meets the tree first
+        api.flyTo({ x, y: ground + 18, z: z + 22 }, { x, y: ground + 8, z });
+      },
+      [east, north]
+    );
+    await waitForFrames(page, 1);
+    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    expect(asked?.kind).toBe("tree");
+    await withFramesHeld(page, async () => {
+      const card = page.getByTestId("inquiry-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Stadtbaum");
+      await expect(card).toContainText("Lage");
+      // the facts file arrived: the source line names what it gave
+      await expect(card).toContainText(/Art.*: Stadtbaumkataster/);
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+    });
+    expectNoErrors(errors);
+  });
+
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
