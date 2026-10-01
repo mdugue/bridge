@@ -1,6 +1,6 @@
 /**
  * A tile's committed sources for what the fine terrain carries — kerb lines,
- * walls, fences, gates, stairs and terraces — read from `data/` as the
+ * walls, fences, gates, stairs and terraces — read from `data/<site>/` as the
  * terrain bake (prepare-data.ts) and the ground-join check
  * (ground-joins.test.ts) both need them. Reads files, no side effects.
  */
@@ -29,6 +29,7 @@ import {
   wallSourceFile,
 } from "../lib/city/tile";
 import type { WallRibbon } from "../lib/city/walls";
+import type { Site } from "../lib/city/site";
 
 const at = (path: string) => join(process.cwd(), path);
 const readJson = <T>(path: string): T =>
@@ -36,8 +37,8 @@ const readJson = <T>(path: string): T =>
 
 /** The tile's kerb lines (the smoothed DLM road edge), for the kerb stones
  *  the fine level carries. */
-export function kerbLines(tile: string): Point2[][] {
-  const path = at(kerbSourceFile(tile));
+export function kerbLines(site: Site, tile: string): Point2[][] {
+  const path = at(kerbSourceFile(site, tile));
   if (!existsSync(path)) {
     return [];
   }
@@ -48,8 +49,8 @@ export function kerbLines(tile: string): Point2[][] {
 }
 
 /** Everything the tile's walls file carries: walls, fences, gates. */
-export function wallFile(tile: string): WallFileFeature[] {
-  const path = at(wallSourceFile(tile));
+export function wallFile(site: Site, tile: string): WallFileFeature[] {
+  const path = at(wallSourceFile(site, tile));
   return existsSync(path)
     ? readJson<{ features: WallFileFeature[] }>(path).features
     : [];
@@ -58,8 +59,8 @@ export function wallFile(tile: string): WallFileFeature[] {
 /** The tile's OSM walls: the lines the terrain conflation burns in, and the
  *  ribbons the fine level carries. Not the fences: they never shape the
  *  ground. */
-export function wallLines(tile: string): (WallLine & WallRibbon)[] {
-  return wallFile(tile).flatMap((f) =>
+export function wallLines(site: Site, tile: string): (WallLine & WallRibbon)[] {
+  return wallFile(site, tile).flatMap((f) =>
     f.geometry?.type === "LineString" && f.properties?.kind !== "fence"
       ? [
           {
@@ -75,8 +76,8 @@ export function wallLines(tile: string): (WallLine & WallRibbon)[] {
 const FENCE_TYPES = new Set<FenceType>(["mesh", "picket", "rail", "railing"]);
 
 /** The tile's OSM fences and railings, standing on their lines. */
-export function fenceLines(tile: string): FenceLine[] {
-  return wallFile(tile).flatMap((f) => {
+export function fenceLines(site: Site, tile: string): FenceLine[] {
+  return wallFile(site, tile).flatMap((f) => {
     if (f.geometry?.type !== "LineString" || f.properties?.kind !== "fence") {
       return [];
     }
@@ -90,10 +91,10 @@ export function fenceLines(tile: string): FenceLine[] {
 
 /** The gates on the tile's wall and fence lines (a neighbour's too, where
  *  its gap reaches over the seam). */
-export function gatePoints(tile: string): GatePoint[] {
+export function gatePoints(site: Site, tile: string): GatePoint[] {
   const isGate = (f: WallFileFeature): f is GateFeature =>
     f.geometry?.type === "Point" && f.properties?.kind === "gate";
-  return wallFile(tile)
+  return wallFile(site, tile)
     .filter(isGate)
     .flatMap((f) =>
       f.properties
@@ -112,8 +113,8 @@ export function gatePoints(tile: string): GatePoint[] {
 
 /** The tile's OSM stairs: the terrain bake shapes the ground under them and
  *  writes them into the fine level's glTF. */
-export function stairLines(tile: string): StairLine[] {
-  const path = at(stairSourceFile(tile));
+export function stairLines(site: Site, tile: string): StairLine[] {
+  const path = at(stairSourceFile(site, tile));
   if (!existsSync(path)) {
     return [];
   }
@@ -122,8 +123,8 @@ export function stairLines(tile: string): StairLine[] {
 }
 
 /** The raised areas the terrain bake lifts to their level. */
-export function terraces(tile: string): Terrace[] {
-  const path = at(terraceSourceFile(tile));
+export function terraces(site: Site, tile: string): Terrace[] {
+  const path = at(terraceSourceFile(site, tile));
   if (!existsSync(path)) {
     return [];
   }

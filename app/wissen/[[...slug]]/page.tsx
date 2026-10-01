@@ -90,7 +90,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const route = routeOf(file) ?? undefined;
   const lang = langOf(file);
   return {
-    title: `${titleFor(file)} · Wissen · City Walk Dresden`,
+    title: `${titleFor(file)} · Wissen · City Walk`,
     description: descriptionOf(readDoc(file)) ?? undefined,
     alternates: {
       canonical: route,

@@ -108,7 +108,7 @@ export async function readDgm(
   } else {
     throw new Error(
       "DGM GeoTIFF has no embedded georeferencing and no readable .tfw sidecar. " +
-        "Embed it with: gdal_translate -a_srs EPSG:25833 in.tif out.tif"
+        "Re-run `bun run fetch` (it writes the georeferencing), or embed it: gdal_translate -a_srs EPSG:<the provider's CRS> in.tif out.tif"
     );
   }
   const raster = await image.readRasters(
@@ -463,7 +463,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
       tint: { type: "VEC3", componentType: "FLOAT32", values: t.tint },
-      // What the object is, for the inquiry card (ADR 0037): read one row
+      // What the object is, for the inquiry card (ADR 0040): read one row
       // at a time, only when asked — never packed for the shader.
       ...Object.fromEntries(
         Object.entries(facts.strings).map(([name, values]) => [

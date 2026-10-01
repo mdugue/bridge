@@ -4,6 +4,7 @@ import { TinIndex, tinSurface } from "../lib/city/terrain-tin";
 import { dgmSourceFiles } from "../lib/city/tile";
 import { tinFromGrid } from "./bake-terrain-tin";
 import { readDgm, tinTerrainMesh } from "./bake-tiles";
+import { DRESDEN } from "../sites/dresden";
 
 const SPAWN_TILE = "33412_5656_2_sn";
 
@@ -59,7 +60,7 @@ test("a grid with holes is refused (that tile keeps the grid)", () => {
 });
 
 test("the fine level meshes the committed spawn DGM at its native resolution", async () => {
-  const src = dgmSourceFiles(SPAWN_TILE);
+  const src = dgmSourceFiles(DRESDEN, SPAWN_TILE);
   const dgm = await readDgm(
     arrayBufferOf(readFileSync(src.tif)),
     readFileSync(src.tfw, "utf8"),

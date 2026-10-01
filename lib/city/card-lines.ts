@@ -1,6 +1,6 @@
 /**
  * The inquiry card's shape and the German line builders every kind of card
- * shares (ADR 0037): numbers, dates, a position as the thing's key, and
+ * shares (ADR 0040): numbers, dates, a position as the thing's key, and
  * the source lines with their editions and licences. No THREE, no DOM.
  */
 import type { OsmProduct, SiteProvenance, SourceKey } from "./provenance";

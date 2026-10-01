@@ -34,7 +34,7 @@ import { OUTLINE_BAND, OUTLINE_HALO, outlineSpread } from "@/lib/city/outline";
 import type { V4 } from "./shader-chunks";
 
 /**
- * The outline around the asked element (plan 049): one line along its
+ * The outline around the asked element (plan 052): one line along its
  * silhouette as the camera sees it now — not along every edge of it —
  * thick, soft and a little rounded, in the hatch's graphite on a hair of
  * its paper, a constant width on screen whatever the distance.

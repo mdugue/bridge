@@ -1,5 +1,5 @@
 /**
- * The outline around the asked element, in numbers (plan 049; the pass is
+ * The outline around the asked element, in numbers (plan 052; the pass is
  * app/_components/selection-outline.ts). The silhouette's mask is blurred
  * with a Gaussian; across a straight edge the blurred value is the normal
  * distribution's CDF of the distance to the edge over the blur's sigma, so

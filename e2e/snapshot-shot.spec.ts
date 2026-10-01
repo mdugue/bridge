@@ -34,6 +34,8 @@ const SHOTS_DIR = join(process.cwd(), "shots");
  * `shots/<name>.x.png` so the untagged plate is not overwritten.
  */
 const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
+/** The city the shots are taken in (its route): `SHOTS_SITE=leipzig`. */
+const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
 
 function snapshotFiles(): string[] {
@@ -56,7 +58,7 @@ for (const file of snapshotFiles()) {
     }
     const snap: Snapshot = parsed.snapshot;
 
-    await page.goto(SHOTS_QUERY ? `/?${SHOTS_QUERY}` : "/");
+    await page.goto(`/${SHOTS_SITE}${SHOTS_QUERY ? `?${SHOTS_QUERY}` : ""}`);
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
       timeout: 120_000,
     });

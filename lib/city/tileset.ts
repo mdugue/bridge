@@ -22,6 +22,7 @@
  * renderer rotates it in. The tileset's group sits in the viewer's rotated
  * `world` group like every other data-frame layer.
  */
+import type { Landmark } from "./landmarks";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { AskKind, DressingKind, SoundKind } from "./tile";
 
@@ -143,7 +144,7 @@ export type ContentExtras = CityExtras | TerrainExtras;
  */
 export type TileSoundFiles = Partial<Record<SoundKind, string>>;
 
-/** A tile's side files only the inquiry card fetches (ADR 0037): the
+/** A tile's side files only the inquiry card fetches (ADR 0040): the
  *  artifact table's `ask` column (lib/city/tile.ts). */
 export type TileAskFiles = Partial<Record<AskKind, string>>;
 
@@ -171,6 +172,11 @@ export interface TilesetTileInfo {
 /** What the viewer needs before any content has loaded. */
 export interface TilesetExtras {
   epsg: number;
+  /** the site's ground: its 2nd and 90th height percentile (m), for the
+   *  valley haze's depth (lib/city/valley-fog.ts) */
+  ground?: [number, number];
+  /** the site's most notable landmarks, for the HUD (lib/city/landmarks.ts) */
+  landmarks?: Landmark[];
   /** recenter offset: data-frame x = epsgX − cx, y = epsgY − cy */
   offset: { cx: number; cy: number };
   /** the provenance manifest (lib/city/provenance.ts), relative to the

@@ -11,6 +11,27 @@ Gegenden erscheinen) und für ein flüssiges Bild eine halbwegs aktuelle
 Grafikkarte. Handys werden unterstützt: Sie bekommen
 automatisch ein leichteres Render-Budget.
 
+## Eine Stadt wählen
+
+Die Startseite (`/`) zeigt eine Karte für jede Stadt, mit der diese
+Bereitstellung gebaut wurde: die Karte der Stadt in den Bodenfarben des
+Viewers, ihr Bundesland, die Fläche, die sie abdeckt, und wie viele
+Aussichtspunkte sie hat. Eine Karte öffnet den Viewer dieser Stadt, der
+eine eigene Adresse hat — `/dresden`, `/leipzig`, … —, sodass ein Link oder
+Lesezeichen direkt hineinführt. Im Viewer führt *Andere Stadt wählen*
+unter dem Namen der Stadt oben im Feld zurück zur Startseite. Die
+Startseite verlinkt außerdem die Wissensseiten (`/wissen`).
+
+Über den Karten ordnet *Sortieren* sie. *Empfohlen* stellt Dresden an den
+Anfang — die am besten gepflegte Stadt — und die übrigen nach Namen; die
+anderen Ordnungen reihen nach einer Zahl, die der Build für jede Stadt
+gleich gemessen hat, und jede Karte zeigt dann ihre Zahl: die meisten
+Baumkronen je km² (so wie das Oberflächenmodell sie sieht), die grünste
+(Wald, Wiese und Feld in der Bodenbedeckung), das meiste Wasser, die
+höchsten Häuser (die Höhe des mittleren Gebäudes), die dichteste Bebauung
+(der Anteil des Bodens unter einem Dach), die hügeligste (der
+Höhenunterschied im Gelände), die meisten Wahrzeichen, die größte Fläche.
+
 ## Laden
 
 Der Ladebildschirm listet fünf Stufen und einen Balken. Die ersten drei
@@ -89,7 +110,10 @@ Blickrichtung, wie sie war. Die Genauigkeit meldet eine kurze Zeile oben —
 GPS liegt in der Stadt oft 5–20 m daneben, ein Handykompass einige Grad.
 Stehst du außerhalb des Gebiets, sagt ein kleines Fenster, wie weit, und
 bietet an, wohin es stattdessen gehen kann: zu einem der Aussichtspunkte, zu
-einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist. Browser fragen dafür um Erlaubnis (iPhones auch für den
+einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
+Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
+Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
+sich mit dir dort, wo du stehst. Browser fragen dafür um Erlaubnis (iPhones auch für den
 Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
 dem er geschickt würde.
 
@@ -190,6 +214,15 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
   sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
   zurückspringt, mit einem ✕ zum Vergessen.
+- **Wahrzeichen** — die bekanntesten Bauwerke der Stadt, bis zu zwölf,
+  als kleine Chips unter den Aussichtspunkten: die Frauenkirche in
+  Dresden, die Elbphilharmonie, das Chilehaus und St. Michaelis in
+  Hamburg, die Lindenbrauerei in Unna. Die Liste ist nicht von Hand
+  gewählt: Sie kommt aus
+  Wikidata (die Bauwerke mit den meisten Wikipedia-Artikeln, zugeordnet
+  zu den Gebäuden, die der Viewer zeichnet), so bekommt jede Stadt ihre
+  eigene. Ein Klick gleitet zu einem Blick aus Süd-Südwest, etwas über
+  dem Wahrzeichen und umso höher, je höher es ist.
 - **Steuerung** — die vollständige Tastentabelle.
 
 ### Szene
@@ -271,12 +304,13 @@ zurück, sobald du stehst.
 - **Statistik** — Anzahl der Gebäude und Geländepunkte, die gerade im
   Blick sind, geschätzter Grafikspeicher und die Bildrate.
 
-Die Fußzeile nennt die Datenquellen: die sächsische Landesvermessung für
-die amtlichen Datensätze und die OpenStreetMap-Mitwirkenden unter anderem
-für Lampen, Mauern und Zäune, Bahnsteige, Brückentragwerke, Läden und
-Baudenkmale. Daneben führt *Unterstützen* zur
-Ko-fi-Seite des Projekts; es ist ein einfacher Link, der erst beim Klick
-etwas von Ko-fi lädt.
+Die Fußzeile nennt die Datenquellen: die Landesvermessung (in Dresden
+die sächsische) für die amtlichen Datensätze und die
+OpenStreetMap-Mitwirkenden unter anderem für Lampen, Mauern und Zäune,
+Bahnsteige, Brückentragwerke, Läden und Baudenkmale (und die
+Landbedeckung, wo das Land kein Basis-DLM veröffentlicht). Daneben führt
+*Unterstützen* zur Ko-fi-Seite des Projekts; es ist ein einfacher Link,
+der erst beim Klick etwas von Ko-fi lädt.
 
 ## Tipps
 
@@ -287,8 +321,8 @@ etwas von Ko-fi lädt.
   20:00 im Sommer.
 - Auf einem Laptop ohne eigene Grafikkarte senke *Kontaktschatten* und
   schalte *Tiefenschärfe* aus, um mehr Bilder pro Sekunde zu bekommen.
-- `?scene=lite` in der Adresszeile streamt nur die Startkachel, mit
-  groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
+- `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
+  streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
 
 ## Kleinigkeiten

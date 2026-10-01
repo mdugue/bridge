@@ -10,7 +10,7 @@ each data → look transformation does and its status.
 
 | # | Decision | Status |
 |---|---|---|
-| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024); relaxed to "static where possible" 2026-09-27 |
+| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024; a prerendered route per site: 0037); relaxed to "static where possible" 2026-09-27 |
 | [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber | accepted |
 | [0003](./0003-bake-heavy-inputs-at-build-time.md) | Bake heavy inputs at build time; the browser decodes no raster and parses no CityJSON | accepted |
 | [0004](./0004-commit-derived-artifacts-not-raw-data.md) | Commit small derived artifacts, not raw bulk data; the DGM1 GeoTIFF is the one exception; no Git-LFS | accepted |
@@ -35,7 +35,7 @@ each data → look transformation does and its status.
 | [0023](./0023-land-cover-colours-painted-at-runtime.md) | Land-cover colours are painted at runtime from one palette | accepted |
 | [0024](./0024-site-streams-as-3d-tiles.md) | The site streams as OGC 3D Tiles with glTF content through 3DTilesRendererJS | accepted |
 | [0025](./0025-bakes-are-one-python-package.md) | The bakes are one Python package in a uv environment; OSM comes only from a local extract | accepted |
-| [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted |
+| [0026](./0026-one-site-config-per-build.md) | One site config per build, with an ingest adapter per data provider | accepted; one site per build superseded by 0037 (a route per site) |
 | [0027](./0027-webgpu-renderer-and-tsl.md) | WebGPURenderer and TSL node materials, one path, public API only | accepted (2026-09-26) |
 | [0028](./0028-osm-stairs-as-geometry-over-a-lowered-terrain.md) | OSM stairs as step geometry over a lowered terrain | accepted |
 | [0029](./0029-static-dressing-baked-into-the-fine-terrain.md) | Static dressing (walls, stairs) is baked into the fine terrain glTF | accepted |
@@ -46,7 +46,10 @@ each data → look transformation does and its status.
 | [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
 | [0035](./0035-parts-meet-the-ground.md) | Every part meets the ground by one set of rules (feet under, edges meeting the ground, decisions smoothed along the part) and reports where it does; one check holds them to it | accepted |
 | [0036](./0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md) | A LoD2 roof that misses DOM1 (the free-form roofs of complex buildings, 3 m placeholders of new ones) is rebuilt from it as stepped flat blocks inside its footprint, only where that fits the scan better | accepted |
-| [0037](./0037-inquiry-cards-on-demand-facts-in-the-tileset.md) | The twin answers on demand: identity, semantics and provenance ride in the tileset; text appears only in a card | accepted |
+| [0037](./0037-sites-providers-and-per-site-data.md) | Sites pick a provider; data per site, downloads per provider; fetch → bake → build | accepted |
+| [0038](./0038-measured-and-named-additions.md) | Geometry beyond LoD2 only where a measurement (DOM1) and a name (OSM, Wikidata) agree; mapped attributes tint within the clay palette, never textures; landmarks from Wikidata, ranked per tile | accepted |
+| [0039](./0039-stand-ins-marked-per-city.md) | Where a Land publishes less, a named stand-in (OSM rails and decks, a visible-band vegetation index, a register table per city), marked per city in a generated source matrix; no per-site look switches — derived from the site's data | accepted |
+| [0040](./0040-inquiry-cards-on-demand-facts-in-the-tileset.md) | The twin answers on demand: identity, semantics and provenance ride in the tileset; text appears only in a card | accepted |
 
 ## Format
 

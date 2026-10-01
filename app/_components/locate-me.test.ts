@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { SITES } from "@/sites";
 import {
   describeFailure,
   describeOffsite,
@@ -54,4 +55,18 @@ test("describeOffsite names the site and the distance, and asks where to", () =>
   expect(describeOffsite({ kind: "unsupported" }, "Dresden").body).toContain(
     "Karte von Dresden"
   );
+});
+
+test("describeOffsite names the other city the player stands in", () => {
+  const words = describeOffsite(
+    {
+      kind: "outside",
+      distanceM: 100_000,
+      elsewhere: { href: "/leipzig?at=51.3,12.4", site: SITES.leipzig },
+    },
+    "Dresden · Altstadt"
+  );
+  expect(words.title).toBe("Du bist in Leipzig");
+  expect(words.body).toContain("nicht in Dresden · Altstadt");
+  expect(words.body).toContain(SITES.leipzig.label);
 });

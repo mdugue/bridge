@@ -1,26 +1,34 @@
-"""The Dresden street-tree cadastre (Stadtbaumkataster, WFS `cls:L1261`) and
-the OSM `natural=tree` nodes it does not cover → one point per tree with its
+"""A municipal tree register (cadastre.py: Dresden's Stadtbäume, Hamburg's
+Straßenbaumkataster, Leipzig's Baumkataster, Berlin's Baumbestand) and the
+OSM `natural=tree` nodes it does not cover → one point per tree with its
 height, crown, silhouette archetype, genus and trunk.
 
-Street trees, parks, schools and other municipal land (not the Großer
-Garten, not private courtyards); licence dl-de/by-2-0, credit
-"Landeshauptstadt Dresden" — the output carries an `attribution` member.
-The ingest adapter caches the WFS response as `<raw>/trees/<tile>.geojson`
-(ingest_sn.py `ingest_trees`); this step:
+Each register is read through its field mapping (`cadastre.Fields`) into one
+record: position, taxon, German name, height, crown and trunk diameter (a
+circumference is divided by π), planting year. What a register covers
+differs — Dresden's street, park and school trees, Hamburg's street trees,
+Leipzig's street and park trees, Berlin's street and park trees — and each
+licence's credit goes into the output's `attribution` member. `bun run
+fetch` caches the WFS response as `<raw>/trees/<tile>.geojson` (cadastre.py;
+only for a site that names a register); this step:
 
-  1. keeps the trees whose `gis_x_utm`/`gis_y_utm` (= the geometry, verified
-     to µm) the tile owns — west/south edges in, so each tree lands in
-     exactly one tile;
+  1. keeps the standing trees (not felled, not a stump or a stand mapped as
+     one point) whose position the tile owns — west/south edges in, so each
+     tree lands in exactly one tile;
   2. maps the taxon to archetype / leaf type / foliage colour
      (tree_archetypes.py);
-  3. imputes a missing height or crown diameter from this tile's own trees:
-     the genus median height and the archetype's median crown-to-height
-     ratio;
-  4. flags (`f`) a tree standing in DLM forest or copse (class 2/3 of the
+  3. for a register that records no height (Hamburg's), measures it in the
+     surface model (DOM1 − DGM1, the highest texel within a quarter of the
+     crown diameter of the trunk, `measure_heights`) where the result fits
+     the recorded crown;
+  4. imputes a still missing height or crown diameter from this tile's own
+     trees: the genus median height and the archetype's median
+     crown-to-height ratio;
+  5. flags (`f`) a tree standing in forest or copse (class 2/3 of the
      committed class raster): the viewer does not let such a tree veto the
      canopy trees around it — a park's measured canopy is denser than the
      municipal register (docs/transformations.md);
-  5. adds the OSM trees (the site's extract, ODbL) that stand more than
+  6. adds the OSM trees (the site's extract, ODbL) that stand more than
      OSM_CLEARANCE from every cadastre tree of the cached answer (its margin
      across the seams included) — courts, the Zwinger, Free-State and
      private ground the municipal register skips. The cadastre wins: it is
@@ -32,10 +40,10 @@ The ingest adapter caches the WFS response as `<raw>/trees/<tile>.geojson`
      `leaf_cycle` sets the leaf type. Its `height`/`diameter_crown`/
      `circumference` tags are read when present, the gaps filled from the
      cadastre's own statistics for the tile.
-  6. drops a trunk diameter that cannot be the tree's (over T_MAX, or over
+  7. drops a trunk diameter that cannot be the tree's (over T_MAX, or over
      T_PER_H cm per metre of its height) rather than clamping it.
 
-Output `data/dlm/trees_<tile>.geojson`, points with
+Output `data/<site>/dlm/trees_<tile>.geojson`, points with
   h tree height (m), d crown diameter (m), a archetype id (0 round, 1 oval,
   2 columnar, 3 conifer, 4 weeping, 5 small), l leaf type ("e"/"d"),
   c foliage colour (1 purple, 2 golden; absent = green), g 1 = globe
@@ -46,7 +54,7 @@ Output `data/dlm/trees_<tile>.geojson`, points with
   for an OSM tree (absent = the cadastre) (lib/city/features.ts `TreeFeature`).
 
 And `data/dlm/treefacts_<tile>.json`, what the inquiry card says about each
-of those trees (ADR 0037; the viewer fetches it with the first question
+of those trees (ADR 0040; the viewer fetches it with the first question
 about a tree on the tile, never to draw): columns aligned with the
 features, by index — the species (German, botanical; a table of the
 names), the register's location and tree number, the age it records and
@@ -64,13 +72,14 @@ import statistics
 from dataclasses import dataclass
 
 import numpy as np
+import rasterio
 from scipy.spatial import cKDTree
 
 from . import tree_archetypes as ta
+from .cadastre import Fields, register_of
 from .common import OSM_ATTRIBUTION, Tile, crs_member, feature, owns
 from .osm import has_extract, read_osm, tag
 
-ATTRIBUTION = "Stadtbaumkataster © Landeshauptstadt Dresden (dl-de/by-2-0)"
 H_MIN, H_MAX, D_MIN, D_MAX = 1.5, 40.0, 0.8, 30.0
 WOODLAND = (2, 3)  # the class raster's forest and copse (landcover.py)
 DEFAULT_RATIO = 0.55  # crown / height where an archetype has no sample
@@ -83,6 +92,10 @@ T_PER_H = 15.0
 # An OSM tree this close to a cadastre tree is taken to be that tree (the
 # register is surveyed; OSM positions are often traced from imagery).
 OSM_CLEARANCE = 3.0
+# The disc the surface model is searched in for a tree's top: a quarter of
+# its crown diameter, between 1 and 3 m (on Leipzig's measured trees the
+# best of r = 1 m, d/4, d/3 and d/2, max or 90th percentile).
+NDOM_REACH = (0.25, 1.0, 3.0)
 OSM_WHERE = 'other_tags LIKE \'%"natural"=>"tree"%\''
 # Common names OSM mappers put into `species`/`genus` (German, seen in the
 # Dresden extract) → the botanical name. A value matches by its last word's
@@ -149,6 +162,13 @@ EPITHETS = {
 
 
 def _num(v) -> float | None:
+    """A positive number from a register value (a number or a numeric
+    string, decimal comma allowed); None for anything else."""
+    if isinstance(v, str):
+        try:
+            v = float(v.strip().replace(",", "."))
+        except ValueError:
+            return None
     return float(v) if isinstance(v, (int, float)) and v > 0 else None
 
 
@@ -159,28 +179,74 @@ def plausible_trunk(cm: float, height: float) -> bool:
     return cm <= T_MAX and cm <= T_PER_H * height
 
 
-def parse_trees(raw: dict, bounds: tuple[float, float, float, float]) -> list[dict]:
-    """The WFS features the tile owns, classified; heights may be None."""
+def _first(p: dict, names: tuple[str, ...]) -> str:
+    """The first of `names` that holds a non-empty text, stripped."""
+    for name in names:
+        v = p.get(name)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
+def position(f: dict, fields: Fields) -> tuple[float, float] | None:
+    """A register feature's position in the tile's CRS: the two properties
+    the register names, or its geometry's (first) point."""
+    p = f.get("properties") or {}
+    if fields.position is not None:
+        x, y = (p.get(k) for k in fields.position)
+        return (x, y) if isinstance(x, (int, float)) and isinstance(y, (int, float)) else None
+    g = f.get("geometry") or {}
+    coords = g.get("coordinates")
+    if g.get("type") == "MultiPoint" and coords:
+        coords = coords[0]
+    if g.get("type") in ("Point", "MultiPoint") and coords and len(coords) >= 2:
+        return float(coords[0]), float(coords[1])
+    return None
+
+
+def _trunk(p: dict, fields: Fields) -> float | None:
+    """The trunk diameter (cm): measured, or from the circumference."""
+    if fields.trunk_diameter and (d := _num(p.get(fields.trunk_diameter))):
+        return d
+    if fields.trunk_circumference and (c := _num(p.get(fields.trunk_circumference))):
+        return c / np.pi
+    return None
+
+
+def register_tree(f: dict, fields: Fields) -> dict | None:
+    """One register feature as the bake's tree record (position, sizes,
+    classification; a size the register lacks is None), or None when it is
+    no standing tree: felled, a stump, or without a position."""
+    p = f.get("properties") or {}
+    if fields.felled and p.get(fields.felled) not in (None, ""):
+        return None
+    taxon = _first(p, fields.taxon)
+    if taxon in fields.not_trees:
+        return None  # a trunk stump, not a tree
+    xy = position(f, fields)
+    if xy is None:
+        return None
+    planted = _num(p.get(fields.planted)) if fields.planted else None
+    return {
+        "x": xy[0],
+        "y": xy[1],
+        "h": _num(p.get(fields.height)) if fields.height else None,
+        "d": _num(p.get(fields.crown)) if fields.crown else None,
+        "t": _trunk(p, fields),
+        "planted": int(planted) if planted else None,
+        "facts": cadastre_facts(p, fields),
+        **ta.classify(taxon, _first(p, fields.german)),
+    }
+
+
+def parse_trees(raw: dict, bounds: tuple[float, float, float, float], fields: Fields) -> list[dict]:
+    """The register's standing trees the tile owns (west/south edges in, so
+    each lands in exactly one tile), classified; sizes may be None."""
     trees = []
     for f in raw.get("features", []):
-        p = f.get("properties") or {}
-        x, y = p.get("gis_x_utm"), p.get("gis_y_utm")
-        if x is None or y is None or not owns(bounds, x, y):
-            continue
-        if (p.get("art_botanisch") or "").strip() == "Stammstück":
-            continue  # a trunk stump, not a tree
-        c = ta.classify(p.get("art_botanisch") or "", p.get("art_deutsch") or "")
-        trees.append(
-            {
-                "x": x,
-                "y": y,
-                "h": _num(p.get("baumhoehe_akt")),
-                "d": _num(p.get("kronendurchmesser_akt")),
-                "t": _num(p.get("stammdurchmesser_akt")),
-                "facts": cadastre_facts(p),
-                **c,
-            }
-        )
+        t = register_tree(f, fields)
+        if t is not None and owns(bounds, t["x"], t["y"]):
+            trees.append(t)
     return trees
 
 
@@ -204,15 +270,21 @@ def _whole(v) -> int | None:
     return n if n > 0 else None
 
 
-def cadastre_facts(p: dict) -> dict:
-    """What the register says about one tree beyond its shape."""
+def cadastre_facts(p: dict, fields: Fields) -> dict:
+    """What the register says about one tree beyond its shape (the card's
+    lines): its names, where it stands and its number there, its age and
+    the date of the record — as far as the register keeps them."""
+
+    def get(name: str | None):
+        return p.get(name) if name else None
+
     return {
-        "de": _text(p.get("art_deutsch")),
-        "bot": _text(p.get("art_botanisch")),
-        "place": _text(p.get("name")),
-        "nr": _whole(p.get("standort_nr")),
-        "age": _whole(p.get("jalter")),
-        "date": _record_date(p.get("aend_dat")),
+        "de": _text(_first(p, fields.german)),
+        "bot": _text(_first(p, fields.taxon)),
+        "place": _text(get(fields.place)),
+        "nr": _whole(get(fields.number)),
+        "age": _whole(get(fields.age)),
+        "date": _record_date(get(fields.recorded)),
     }
 
 
@@ -329,16 +401,11 @@ def osm_tree(x: float, y: float, other_tags: str | None) -> dict | None:
     }
 
 
-def cadastre_points(raw: dict) -> np.ndarray:
+def cadastre_points(raw: dict, fields: Fields) -> np.ndarray:
     """Every tree position in the cached WFS answer, (n, 2): the tile's own
-    and those in the margin across its seams, stumps included (an OSM tree
-    on a stump is the tree the register lost)."""
-    points = [
-        (p["gis_x_utm"], p["gis_y_utm"])
-        for f in raw.get("features", [])
-        if (p := f.get("properties") or {}).get("gis_x_utm") is not None
-        and p.get("gis_y_utm") is not None
-    ]
+    and those in the margin across its seams, stumps and felled trees
+    included (an OSM tree on one is the tree the register lost)."""
+    points = [xy for f in raw.get("features", []) if (xy := position(f, fields)) is not None]
     return np.array(points, dtype=float).reshape(-1, 2)
 
 
@@ -414,6 +481,63 @@ def impute(
     return out, imputed_h, imputed_d
 
 
+def _disc_max(ndom: np.ndarray, r: int, c: int, reach: int) -> float:
+    """The highest nDOM texel within `reach` texels of (r, c)."""
+    n_r, n_c = ndom.shape
+    r0, r1, c0, c1 = (
+        max(r - reach, 0),
+        min(r + reach + 1, n_r),
+        max(c - reach, 0),
+        min(c + reach + 1, n_c),
+    )
+    yy, xx = np.mgrid[r0 - r : r1 - r, c0 - c : c1 - c]
+    vals = ndom[r0:r1, c0:c1][yy**2 + xx**2 <= reach * reach]
+    return float(vals.max()) if vals.size else 0.0
+
+
+def plausible_measure(h: float, d: float | None) -> bool:
+    """Whether a height read from the surface model can be the tree's: in
+    the bake's range and, with a crown on record, neither far flatter nor
+    far taller than it (a roof or a bigger neighbour's crown above a
+    sapling, or the ground beside one the flight predates)."""
+    if not H_MIN <= h <= H_MAX:
+        return False
+    return d is None or 0.6 * d <= h <= max(3 * d, 6.0) + 2.0
+
+
+def measure_heights(trees: list[dict], ndom: np.ndarray, bounds) -> int:
+    """Fills each missing height from the surface model (nDOM = DOM1 − DGM1):
+    the highest texel within NDOM_REACH of the trunk, kept when plausible
+    (`plausible_measure`). For a register that records no height (Hamburg);
+    on Leipzig's, which does, this reads 0.6 m low in the median, 1.5 m off
+    — against 2.3 m for a height guessed from the crown. Returns how many."""
+    xmin, _, xmax, ymax = bounds
+    px = (xmax - xmin) / ndom.shape[1]
+    measured = 0
+    for t in trees:
+        if t["h"] is not None:
+            continue
+        reach_m = min(max((t["d"] or 0) * NDOM_REACH[0], NDOM_REACH[1]), NDOM_REACH[2])
+        r = min(int((ymax - t["y"]) / px), ndom.shape[0] - 1)
+        c = min(int((t["x"] - xmin) / px), ndom.shape[1] - 1)
+        h = _disc_max(ndom, r, c, max(1, round(reach_m / px)))
+        if plausible_measure(h, t["d"]):
+            t["h"] = h
+            measured += 1
+    return measured
+
+
+def surface_heights(tile: Tile, trees: list[dict]) -> int:
+    """`measure_heights` over the tile's surface model; 0 without one."""
+    dom = tile.raw_raster("dom1")
+    if not dom.exists() or not tile.dgm.exists():
+        print(f"{tile.id}: no surface model — the register's heights come from the crowns")
+        return 0
+    with rasterio.open(dom) as d, rasterio.open(tile.dgm) as g:
+        ndom = d.read(1).astype(np.float64) - g.read(1).astype(np.float64)
+    return measure_heights(trees, ndom, tile.bounds)
+
+
 def woodland_at(cls: np.ndarray, bounds, x: float, y: float) -> bool:
     """Whether the class raster (row 0 = north) says forest or copse there."""
     xmin, ymin, xmax, ymax = bounds
@@ -433,8 +557,8 @@ def tree_props(t: dict, h: float, d: float) -> dict:
         props["g"] = 1
     if t.get("gn"):
         props["gn"] = t["gn"]
-    if t.get("t") and plausible_trunk(t["t"], h):
-        props["t"] = round(t["t"])
+    if t.get("t") and plausible_trunk(t["t"], h) and round(t["t"]) > 0:
+        props["t"] = round(t["t"])  # a sapling's 1 cm girth rounds to none
     if t.get("src") == "osm":
         props["s"] = "osm"
     return props
@@ -497,12 +621,16 @@ def _osm_complement(tile: Tile, cadastre: np.ndarray) -> list[dict]:
 
 
 def run(tile: Tile) -> None:
+    register = register_of(tile)
+    if register is None:
+        print(f"{tile.id}: the site names no tree cadastre — skipping the inventory trees")
+        return
     raw_path = tile.raw / "trees" / f"{tile.id}.geojson"
     if not raw_path.exists():
         print(f"{tile.id}: no tree cadastre at {raw_path} — skipping the inventory trees")
         return
     raw = json.loads(raw_path.read_text())
-    trees = parse_trees(raw, tile.bounds)
+    trees = parse_trees(raw, tile.bounds, register.fields)
     # A tile the cadastre has no tree on (all forest) still gets its file,
     # empty: "baked, nothing here" is not "never baked" (lib/city/tile-data.test.ts
     # holds every tile to the same set of files). The OSM complement fills in
@@ -510,11 +638,13 @@ def run(tile: Tile) -> None:
     features = []
     facts = tree_facts([], [])
     osm: list[dict] = []
-    imputed_h = imputed_d = 0
+    measured = imputed_h = imputed_d = 0
     if trees:
+        if register.fields.height is None:
+            measured = surface_heights(tile, trees)
         stats = size_stats(trees)
         sizes, imputed_h, imputed_d = impute(trees, stats)
-        osm = _osm_complement(tile, cadastre_points(raw))
+        osm = _osm_complement(tile, cadastre_points(raw, register.fields))
         osm_sizes, _, _ = impute(osm, stats)
         # Sorted by position, so a re-bake diffs by what changed, not by the
         # order the WFS happened to answer in.
@@ -525,9 +655,10 @@ def run(tile: Tile) -> None:
         cls = tile.classes()
         features = tree_features([r[0] for r in rows], [r[1] for r in rows], cls, tile.bounds)
         facts = tree_facts([r[0] for r in rows], [f["properties"] for f in features])
+    credit = tile.tree_cadastre.credit
     doc = {
         "type": "FeatureCollection",
-        "attribution": f"{ATTRIBUTION}; {OSM_ATTRIBUTION}" if osm else ATTRIBUTION,
+        "attribution": f"{credit}; {OSM_ATTRIBUTION}" if osm else credit,
         "archetypes": ta.ARCHETYPES,
         "genera": ta.GENERA,
         "crs": crs_member(tile.epsg),
@@ -541,7 +672,9 @@ def run(tile: Tile) -> None:
             separators=(",", ":"),
         )
     )
+    unknown = sum(not t["known"] or not ta.is_genus(t["genus"]) for t in trees)
     print(
         f"{tile.id}: {len(trees)} cadastre trees "
-        f"({imputed_h} heights, {imputed_d} crown diameters imputed), {len(osm)} OSM trees"
+        f"({measured} heights measured in the surface model, {imputed_h} heights and "
+        f"{imputed_d} crown diameters imputed, {unknown} of no known genus), {len(osm)} OSM trees"
     )

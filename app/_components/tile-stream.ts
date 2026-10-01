@@ -104,7 +104,7 @@ import { dressWalls } from "./wall-layer";
  */
 export interface TileDressing {
   /** the trees, monuments and bridge decks the inquiry probe can ask
-   *  (lib/city/ask-items.ts; plan 049 phase 4): data, nothing drawn */
+   *  (lib/city/ask-items.ts; plan 052 phase 4): data, nothing drawn */
   asks?: AskSet<FeatureInquiry>[];
   furniture?: Group;
   lamps?: LampControl;

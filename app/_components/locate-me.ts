@@ -1,4 +1,5 @@
 import type { DeviceAim, GeoFix, Placement } from "@/lib/city/geolocation";
+import type { Site } from "@/lib/city/site";
 import {
   orientationNeedsPermission,
   requestOrientationPermission,
@@ -211,8 +212,11 @@ export function describePlacement(
   }
 }
 
-/** A placement the player cannot be put down at: off the site, or unmappable. */
-export type Offsite = Exclude<Placement, { kind: "inside" }>;
+/** A placement the player cannot be put down at: off the site, or unmappable;
+ *  `elsewhere` is another site of this deployment that holds the fix. */
+export type Offsite = Exclude<Placement, { kind: "inside" }> & {
+  elsewhere?: { href: string; site: Site };
+};
 
 /**
  * The off-site dialog's words (locate-offsite-dialog.tsx): what happened,
@@ -222,6 +226,13 @@ export function describeOffsite(
   placement: Offsite,
   siteLabel: string
 ): { body: string; title: string } {
+  if (placement.elsewhere) {
+    const { site } = placement.elsewhere;
+    return {
+      title: `Du bist in ${site.name}`,
+      body: `Dein Standort liegt nicht in ${siteLabel}, aber in ${site.label} — und das gibt es hier auch. Spring hin und steh dort, wo du bist, oder bleib hier.`,
+    };
+  }
   return placement.kind === "outside"
     ? {
         title: `Du bist nicht in ${siteLabel}`,

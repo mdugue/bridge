@@ -2,11 +2,13 @@
  * The provenance manifest the viewer reads: for each source the site draws
  * on, who publishes it under which licence, and — per tile — the edition
  * ("Stand") the committed data was made from. Derived at build time from
- * the hand-kept `data/provenance.json` (the record of what was downloaded
+ * the site's `data/<site>/provenance.json` (the record of what was downloaded
  * when, with the queries and the URLs) by `scripts/prepare-data.ts`, and
  * published next to the tileset as `provenance.json`; the inquiry card
- * fetches it once, when first opened (ADR 0037). No THREE, no DOM.
+ * fetches it once, when first opened (ADR 0040). No THREE, no DOM.
  */
+
+import type { Provider, TreeCadastre } from "./site";
 
 /** The logical name the build publishes the manifest under. */
 export const PROVENANCE_FILE = "provenance.json";
@@ -52,7 +54,8 @@ export interface SiteProvenance {
   version: 1;
 }
 
-/** The parts of `data/provenance.json` the manifest reads. */
+/** The parts of `data/<site>/provenance.json` the manifest reads (a GeoSN
+ *  site's record carries per-tile editions; others' only the provider). */
 export interface ProvenanceRecord {
   dresden?: { Stadtbaumkataster?: { retrieved?: string } };
   geosn?: Record<string, { tiles?: Record<string, { stand?: string }> }>;
@@ -70,8 +73,11 @@ const OSM_PRODUCTS: [OsmProduct, string][] = [
   ["trees", "trees"],
 ];
 
-const GEOSN = "Quelle: GeoSN, dl-de/by-2-0";
-const DL_DE = "dl-de/by-2-0";
+/** What the manifest needs to know of the site: whose data it is. */
+export interface ProvenanceSite {
+  provider: Pick<Provider, "credit" | "licence">;
+  treeCadastre?: TreeCadastre;
+}
 
 /** The GeoSN product behind each per-tile source. */
 const GEOSN_PRODUCTS: [SourceKey, string][] = [
@@ -101,35 +107,80 @@ function osmStands(
   return stands;
 }
 
+/** The trees' source: the site's register by its holder and licence
+ *  ("Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0"), else OSM's. */
+function treesSource(
+  site: ProvenanceSite,
+  record: ProvenanceRecord
+): SourceInfo {
+  const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/, "");
+  if (!register) {
+    return {
+      label: "OpenStreetMap",
+      credit: "© OpenStreetMap-Mitwirkende",
+      licence: "ODbL",
+    };
+  }
+  const stand = leadingDate(record.dresden?.Stadtbaumkataster?.retrieved);
+  return {
+    label: "Stadtbaumkataster",
+    credit: register,
+    licence: register.split(", ").at(-1) ?? register,
+    ...(stand ? { stand } : {}),
+  };
+}
+
+/** Each tile's editions, where the record carries them (GeoSN's rows). */
+function tileEditions(
+  record: ProvenanceRecord,
+  tiles: readonly string[]
+): SiteProvenance["tiles"] {
+  const out: SiteProvenance["tiles"] = {};
+  for (const tile of tiles) {
+    const row: Partial<Record<SourceKey, string>> = {};
+    for (const [key, product] of GEOSN_PRODUCTS) {
+      const stand = record.geosn?.[product]?.tiles?.[tile]?.stand;
+      if (stand) {
+        row[key] = stand;
+      }
+    }
+    out[tile] = row;
+  }
+  return out;
+}
+
 /**
  * The manifest for `tiles` from the provenance record. The OSM building
  * facts (shops, heritage, names, addresses, storeys) are the product the
- * inquiry card quotes, so the OSM edition is theirs.
+ * inquiry card quotes, so the OSM edition is theirs. Credits and licences
+ * are the site's provider's (and its tree register's).
  */
 export function siteProvenance(
   record: ProvenanceRecord,
-  tiles: readonly string[]
+  tiles: readonly string[],
+  site: ProvenanceSite
 ): SiteProvenance {
+  const official = site.provider.credit;
+  const licence = site.provider.licence;
   const products = record.openstreetmap?.bbbike?.products;
   const osmStand = leadingDate(products?.osmBuildings?.dataAsOf);
   const stands = osmStands(products);
   const wikidataStand = leadingDate(record.wikidata?.dataAsOf);
-  const treesStand = leadingDate(record.dresden?.Stadtbaumkataster?.retrieved);
   const sources: Record<SourceKey, SourceInfo> = {
-    lod2: { label: "3D-Stadtmodell LoD2", credit: GEOSN, licence: DL_DE },
-    lsc: { label: "Laserscan", credit: GEOSN, licence: DL_DE },
+    lod2: { label: "3D-Stadtmodell LoD2", credit: official, licence },
+    lsc: { label: "Laserscan", credit: official, licence },
     dgm: {
       label: "Digitales Geländemodell DGM1",
-      credit: GEOSN,
-      licence: DL_DE,
+      credit: official,
+      licence,
     },
     dom: {
       label: "Digitales Oberflächenmodell DOM1",
-      credit: GEOSN,
-      licence: DL_DE,
+      credit: official,
+      licence,
     },
-    dop: { label: "Digitales Orthophoto", credit: GEOSN, licence: DL_DE },
-    dlm: { label: "Basis-DLM", credit: GEOSN, licence: DL_DE },
+    dop: { label: "Digitales Orthophoto", credit: official, licence },
+    dlm: { label: "Basis-DLM", credit: official, licence },
     osm: {
       label: "OpenStreetMap",
       credit: "© OpenStreetMap-Mitwirkende",
@@ -144,25 +195,9 @@ export function siteProvenance(
       licence: "CC0",
       ...(wikidataStand ? { stand: wikidataStand } : {}),
     },
-    trees: {
-      label: "Stadtbaumkataster",
-      credit: "Landeshauptstadt Dresden, dl-de/by-2-0",
-      licence: DL_DE,
-      ...(treesStand ? { stand: treesStand } : {}),
-    },
+    trees: treesSource(site, record),
   };
-  const out: SiteProvenance["tiles"] = {};
-  for (const tile of tiles) {
-    const row: Partial<Record<SourceKey, string>> = {};
-    for (const [key, product] of GEOSN_PRODUCTS) {
-      const stand = record.geosn?.[product]?.tiles?.[tile]?.stand;
-      if (stand) {
-        row[key] = stand;
-      }
-    }
-    out[tile] = row;
-  }
-  return { version: 1, sources, tiles: out };
+  return { version: 1, sources, tiles: tileEditions(record, tiles) };
 }
 
 /**

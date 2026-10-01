@@ -17,7 +17,7 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 const PIER_REACH = 12;
 
 /**
- * A tile's bridges as one askable set (plan 049 phase 4): rays meet the
+ * A tile's bridges as one askable set (plan 052 phase 4): rays meet the
  * drawn bridge itself — deck, arches, piers, the measured steel above
  * (rail-layer.ts tags them `userData.bridge`) — and the point they meet
  * names its deck: the outline it lies in, or the nearest within reach.

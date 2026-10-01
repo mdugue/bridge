@@ -17,7 +17,8 @@ const slow = (ms: number) => (process.env.CI ? ms * 3 : ms);
  * scenic context — which nothing here asserts on — for a suite that finishes
  * in a couple of minutes instead of twenty.
  */
-const LITE = "/?scene=lite";
+const SITE = "/dresden";
+const LITE = `${SITE}?scene=lite`;
 
 /**
  * Wide enough to stay above the sidebar's 768 px mobile breakpoint (below it
@@ -139,14 +140,15 @@ async function withFramesHeld(
 }
 
 /**
- * Resolves a logical /data artifact name to its content-hashed URL through
- * the manifest scripts/prepare-data.ts publishes (see lib/city/tile.ts).
+ * Resolves a logical artifact name of the site to its content-hashed URL
+ * through the manifest scripts/prepare-data.ts publishes (see
+ * lib/city/tile.ts).
  */
 async function dataUrl(page: Page, file: string): Promise<string> {
   const manifest = (await (
-    await page.request.get("/data/manifest.json")
+    await page.request.get(`/data${SITE}/manifest.json`)
   ).json()) as { files: Record<string, string> };
-  return `/data/${manifest.files[file] ?? file}`;
+  return `/data${SITE}/${manifest.files[file] ?? file}`;
 }
 
 /** True when the browser has WebGL at all (render assertions need it). */
@@ -204,12 +206,33 @@ async function openSidebar(target: Page): Promise<void> {
   }
 }
 
-test("city page serves the viewer shell", async ({ page }) => {
-  // Deliberately the DEFAULT route (no ?scene=lite): this is the only spec
-  // that proves the product URL serves a viewer at all. It never waits for the
-  // scene to finish loading, so it costs the shell and nothing more.
+test("the start page leads to a city", async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // Every built city (every committed data/<site>/) is a card linking to
+  // its route.
+  const res = await page.request.get("/data/sites.json");
+  expect(res.ok()).toBe(true);
+  const index = (await res.json()) as { sites: { id: string }[] };
+  expect(index.sites.map((s) => s.id)).toContain("dresden");
+  for (const { id } of index.sites) {
+    await expect(page.locator(`main a[href="/${id}"]`)).toHaveCount(1);
+  }
+  expect(errors.page).toEqual([]);
+});
+
+test("a city that is not built is a 404", async ({ page }) => {
+  const res = await page.goto("/atlantis");
+  expect(res?.status()).toBe(404);
+});
+
+test("city page serves the viewer shell", async ({ page }) => {
+  // Deliberately the city's DEFAULT route (no ?scene=lite): this is the only
+  // spec that proves the product URL serves a viewer at all. It never waits
+  // for the scene to finish loading, so it costs the shell and nothing more.
+  const errors = watchErrors(page);
+  await page.goto(SITE);
   // Either the loading overlay or the booted canvas — never a blank page.
   await expect(
     page
@@ -773,7 +796,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   });
 
   test("the inquiry card tells what the data knows, and where it comes from", async () => {
-    // Befragen (ADR 0037): a plain click asks — no mode first. It marks
+    // Befragen (ADR 0040): a plain click asks — no mode first. It marks
     // the building and opens the card with its identity, its facts and a
     // source line per source; I asks again at the crosshair. Before
     // demolish, which takes a building of the same kind away.
@@ -803,7 +826,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   });
 
   test("a tree answers with what the city's register says about it", async () => {
-    // Plan 049 phase 4: a street tree of the register, asked from above
+    // Plan 052 phase 4: a street tree of the register, asked from above
     // and a little aside, answers with its species, where it stands and
     // the register as its source — the facts file fetched with the
     // question.
@@ -1125,7 +1148,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     );
 
     // A long press asks the building under the finger, no mode needed
-    // (ADR 0037): aim the screen centre at a roof, hold a touch there until
+    // (ADR 0040): aim the screen centre at a roof, hold a touch there until
     // the answer comes — under software rendering the press timer fires
     // late, so the release waits for it — and the answer is a bottom sheet
     // that folds the joystick away.

@@ -1,5 +1,5 @@
 /**
- * The askable things of one tile that are not buildings (plan 049 phase
+ * The askable things of one tile that are not buildings (plan 052 phase
  * 4), as the inquiry probe tests them: each tree of the trees file, each
  * monument and fountain, each bridge deck the tile draws — its solids in
  * the Y-up world frame (lib/city/ask-solids.ts) and the inquiry it

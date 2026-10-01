@@ -122,8 +122,10 @@ ist der ihrer Eingaben (hier: Laserscan 2016, Grundrisse 2021/2022).
 [Steckbrief](./data-sources.md#lod2--das-3d-gebäudemodell).
 
 **LSC** — *Laserscandaten*, die klassifizierte Laser-Punktwolke selbst
-(LAZ-Dateien), das Rohmaterial der Höhenmodelle; vom Viewer noch nicht
-genutzt. [Steckbrief](./data-sources.md#lsc--die-laserscan-punktwolke).
+(LAZ-Dateien), das Rohmaterial der Höhenmodelle. Offline gelesen, wo ein
+Vermessungsamt sie anbietet (Sachsen, Nordrhein-Westfalen), für
+Heckenhöhen, Gartenbäume und die Schuppen, die dem 3D-Gebäudemodell
+fehlen. [Steckbrief](./data-sources.md#lsc--die-laserscan-punktwolke).
 
 **nDOM** — *normalisiertes DOM*: Oberflächenmodell minus Geländemodell,
 also die Höhe dessen, was auf dem Boden steht. Vom Projekt aus DOM1 und
@@ -144,8 +146,8 @@ GeoSN, dl-de/by-2-0“.
 
 **OSM / Overpass** — *OpenStreetMap*, die Freiwilligen-Weltkarte, kartiert
 aus GPS-Spuren, Begehungen und abgezeichneten Luftbildern, laufend
-aktualisiert, ohne Genauigkeitsgarantie. Lampen, Mauern, Bahnsteige und
-Brücken-Tragwerkstypen des Viewers stammen daraus; die Bakes lesen sie aus
+aktualisiert, ohne Genauigkeitsgarantie. Lampen, Mauern, Treppen, Bahnsteige
+und Brücken-Tragwerkstypen des Viewers stammen daraus; die Bakes lesen sie aus
 dem Geofabrik-Auszug. Die *Overpass-API* ist ein Live-Abfragedienst dafür;
 die Bakes nutzen sie nicht mehr, aber die eingecheckten Lampen-,
 Bahnsteig- und Brückentragwerk-Dateien wurden noch über sie geholt.
@@ -257,8 +259,9 @@ echten Look.
 
 **Bake** — jeder Offline- oder Build-Schritt, der eine schwere Eingabe in
 ein kleines, direkt nutzbares Artefakt verwandelt. Die Offline-Bakes sind
-ein Python-Paket (`pipeline/`), gestartet mit `bun run bake`; der
-Build-Schritt ist `scripts/prepare-data.ts`.
+ein Python-Paket (`pipeline/`), gestartet mit `bun run bake <ort>`; der
+Build-Schritt ist `scripts/prepare-data.ts`, von `scripts/prepare-sites.ts`
+für jede Stadt ausgeführt.
 
 **Artefakt** — eine der vorbereiteten Dateien, die der Browser anfordern
 kann. Das Tileset nennt sie alle; die Liste der Begleitdateien einer Kachel
@@ -266,17 +269,22 @@ kann. Das Tileset nennt sie alle; die Liste der Begleitdateien einer Kachel
 
 **Standort-Konfiguration** — `sites/dresden.ts`: alles über den Ort, was
 keine Daten sind — Name, Koordinatensystem, Kacheln, Startkachel,
-Aussichtspunkte und Quellenvermerke. Bakes und Viewer lesen sie beide; ein
-Build zeigt einen Standort.
+Aussichtspunkte und Quellenvermerke. Bakes und Viewer lesen sie beide; eine
+Bereitstellung zeigt jeden Standort, mit dessen Daten sie gebaut wurde,
+jeden unter seiner eigenen Adresse (`/dresden`).
 
-**Manifest** — `public/data/manifest.json`, das einfache Dateinamen auf die
+**Startseite** — die Seite unter `/`: eine Karte je Stadt, mit der die
+Bereitstellung gebaut wurde (ihre Landnutzungskarte, ihr Bundesland, Fläche
+und Aussichtspunkte), jede führt in den Viewer dieser Stadt.
+
+**Manifest** — `public/data/<ort>/manifest.json` (eines je Stadt), das einfache Dateinamen auf die
 Namen mit Fingerabdruck abbildet, unter denen sie ausgeliefert werden.
 
 **Content-Hash** — der achtstellige Fingerabdruck in einem ausgelieferten
 Dateinamen; ändert sich, sobald sich der Inhalt ändert, sodass Caches nie
 veraltete Daten liefern.
 
-**Lite-Profil** — `?scene=lite`: nur die Startkachel, winzige
+**Lite-Profil** — `?scene=lite` (`/dresden?scene=lite`): nur die Startkachel, winzige
 Schattenkarte, halbe Auflösung; nur für automatische Tests.
 
 **Snapshot** — der JSON-Text, der Kamera, Datum/Uhrzeit und jeden Regler

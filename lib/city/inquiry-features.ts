@@ -1,5 +1,5 @@
 /**
- * The inquiry cards of the things that are not buildings (plan 049 phase
+ * The inquiry cards of the things that are not buildings (plan 052 phase
  * 4): a tree of the city's register or OSM, a monument or fountain, a
  * bridge. Each says only what its data knows — a size the register filled
  * in from the tile's statistics is no fact — and quotes each source it
@@ -29,7 +29,7 @@ export interface TreeInquiry {
   conifer: boolean;
   /** the genus the bake keyed its season on ("" none) */
   genus: string;
-  /** the tile's facts file (ADR 0037), fetched with the question */
+  /** the tile's facts file (ADR 0040), fetched with the question */
   factsUrl?: string;
   /** its index in the tile's trees file */
   index: number;

@@ -5,8 +5,9 @@
  */
 import type { TramBed } from "./features";
 
-/** Dresden's own track gauge (m; OSM `gauge=1450` on every track). */
-export const TRAM_GAUGE = 1.45;
+/** The track gauge where OSM maps none (m): standard gauge. A track carries
+ *  its own as `g` (OSM `gauge`: Dresden 1450, Leipzig 1458, Munich 1435). */
+export const TRAM_GAUGE = 1.435;
 /** Contact wire above the rail top (m). */
 export const CONTACT_WIRE_M = 5.6;
 /** Sag of the contact wire midway between two supports ~30 m apart (m). */

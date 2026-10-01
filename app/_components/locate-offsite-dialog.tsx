@@ -4,10 +4,11 @@ import {
   ChevronRightIcon,
   FootprintsIcon,
   MapIcon,
+  NavigationIcon,
   PlaneIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Viewpoint } from "@/lib/city/site";
-import { currentSite } from "@/sites";
+import { useSite } from "./site-context";
 import { describeOffsite, type Offsite } from "./locate-me";
 
 /**
@@ -28,6 +29,11 @@ import { describeOffsite, type Offsite } from "./locate-me";
  * A site has many vantages (Dresden 17), so they are one-line rows in a list
  * that scrolls on its own between a fixed header and footer: on a phone the
  * two ways out never leave the screen, however long the list.
+ *
+ * When the fix lies in another city this deployment serves, that comes
+ * first: one prominent link to its page, which puts the player where they
+ * stand (`?at=lat,lng`, read after its first frame); the vantages here stay
+ * below as the other choice.
  */
 export function LocateOffsiteDialog({
   offsite,
@@ -41,7 +47,7 @@ export function LocateOffsiteDialog({
   onShowMap: () => void;
   onTravel: (view: Viewpoint) => void;
 }) {
-  const site = currentSite();
+  const site = useSite();
   // The last placement is kept while the dialog animates out, so the text
   // doesn't blank mid-fade (state set during render, React's own pattern).
   const [shown, setShown] = useState(offsite);
@@ -63,6 +69,30 @@ export function LocateOffsiteDialog({
           <DialogTitle>{words?.title}</DialogTitle>
           <DialogDescription>{words?.body}</DialogDescription>
         </DialogHeader>
+        {shown?.elsewhere ? (
+          <a
+            className={buttonVariants({
+              className: "h-auto shrink-0 justify-start gap-3 py-3 text-left",
+              size: "lg",
+            })}
+            href={shown.elsewhere.href}
+          >
+            <NavigationIcon aria-hidden className="size-5 shrink-0" />
+            <span className="flex min-w-0 flex-col">
+              <span className="font-semibold">
+                Nach {shown.elsewhere.site.name} springen
+              </span>
+              <span className="text-xs font-normal opacity-80">
+                Dort stehst du, wo du gerade bist
+              </span>
+            </span>
+          </a>
+        ) : null}
+        {shown?.elsewhere ? (
+          <p className="shrink-0 text-xs text-muted-foreground">
+            Oder hier in {site.name} umsehen:
+          </p>
+        ) : null}
         <ul
           aria-label="Aussichtspunkte"
           className="-mx-4 min-h-0 flex-1 overflow-y-auto overscroll-contain border-y px-2 py-1 sm:max-h-96"

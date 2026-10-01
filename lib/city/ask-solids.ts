@@ -1,6 +1,6 @@
 /**
  * What the inquiry probe tests a ray against when the scene cannot answer
- * the ray itself (ADR 0037, plan 049 phase 4): trees, monuments and
+ * the ray itself (ADR 0040, plan 052 phase 4): trees, monuments and
  * fountains are drawn as instanced sets or merged meshes that three's
  * Raycaster cannot pick one by one, so each askable thing gets simple
  * solids built from its data — a vertical cylinder (a trunk, a crown, a
