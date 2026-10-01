@@ -437,6 +437,39 @@ visual-variable codebook is in
   now ruled out, and a shadow). Unverified on a real GPU. Remaining
   temporaries: 3 probable stalls on the Schloßstraße pavement (a living
   street), container stacks in the Alberthafen.
+- **Roofs rebuilt from DOM1** ([ADR 0036](./adr/0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md))
+  — a LoD2 roof that misses the surface model is drawn as stepped flat
+  blocks measured in it, inside the object's own footprint. The fault: the
+  2025 edition's `tdcFreeFormRoof` (10 305 objects) is, on a complex
+  building, often a handful of non-planar facets over the whole footprint —
+  the Westin Bellevue (`DESNATPU1000GHDs`) was three facets rising from 7 m
+  at the eaves to a 25 m peak, a tent over a flat-roofed slab, wings and
+  two courtyards; and buildings finished after the LoD2's roofs were
+  measured (2016 here) stand as 3 m placeholders (a block on the
+  Ferdinandplatz: 3 m, 19 m in the scan). `pipeline/bake/roofs.py`: each
+  building's roof burned at 1 m with its vertices' own heights (as the
+  loader draws it; cells under another object's higher roof are not its
+  own); a candidate when ≥ 150 m² and > 40 % of its cells (one inside the
+  edge, NDVI ≤ 0.3) stand > 2 m off DOM1. The blocks: DOM1 3 × 3-median
+  filtered over the footprint, cut into 1 m bands, pieces < 20 m² into the
+  neighbour closest in height, neighbours < 1.5 m apart merged, each
+  region at its median; polygonised, `coverage_simplify` 1 m, clipped to
+  the footprint. Kept only when they miss on ≤ half the LoD2's share and
+  ≤ 30 % (the hotel: 78 % → 3 %), not where the scan sees open ground on
+  > 15 % of the footprint (a block torn down since: the footprint is out
+  of date too), parts under 2 m dropped →
+  `data/dlm/roofs_<tile>.geojson` (Polygons with the object `id` and the
+  roof `z`, GeoSN). **889 of 49 936 objects, 3 146 parts** on the fifteen
+  tiles (0–132 a tile, the Altstadt most). `bakeCityMesh`
+  (`withMeasuredRoofs`, `scripts/measured-roofs.ts`) drops the object's
+  LoD2 triangles and stands each part as a prism (walls and roof, no
+  floor) from the object's lowest LoD2 vertex — same object id, so the
+  table row, picking, demolish, collision and minimap stay; eave and
+  storey rows follow the new shape. +8.4 % city-mesh triangles. Limits:
+  flat by construction (a pitched roof inside a rebuilt object becomes one
+  level). The sky-view and horizon bake (`skyview.py`) burns the rebuilt
+  tops in place of their objects' LoD2 surfaces, so the far shadows match
+  the mesh (`roofs` runs before `skyview`). Unverified on a real GPU (headless SwiftShader before/after only).
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.

@@ -41,6 +41,7 @@ import type { OsmBuildingLut } from "../lib/city/city-mesh";
 import type {
   CanopyFeature,
   FeatureCollection,
+  MeasuredRoofFeature,
   SmallBuildingFeature,
 } from "../lib/city/features";
 import { cutWallGates } from "../lib/city/fences";
@@ -348,7 +349,19 @@ function parseCity(tile: string): BakedCityMesh {
     ? readJson<FeatureCollection<SmallBuildingFeature>>(at(src.smallBuild))
         .features
     : undefined;
-  const baked = bakeCityMesh(tile, doc, roofLut, sharedMatrix, osmLut, scan);
+  const measured = existsSync(at(src.measuredRoofs))
+    ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
+        .features
+    : undefined;
+  const baked = bakeCityMesh(
+    tile,
+    doc,
+    roofLut,
+    sharedMatrix,
+    osmLut,
+    scan,
+    measured
+  );
   sharedMatrix ??= baked.matrix;
   return baked;
 }
@@ -385,6 +398,7 @@ async function bakeCity(
     at(src.roofColor),
     at(src.osmBuild),
     at(src.smallBuild),
+    at(src.measuredRoofs),
   ];
   const key = cacheKey(inputs, offset);
   let mesh: ReturnType<typeof cityMesh> | null = null;
