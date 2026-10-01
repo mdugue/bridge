@@ -15,6 +15,7 @@ import type {
   RailFeature,
   RiversideFeature,
   SoundmarkFeature,
+  MeasuredRoofFeature,
   SmallBuildingFeature,
   StairFeature,
   TerraceFeature,
@@ -192,6 +193,21 @@ test.each(tileIds(DRESDEN))(
         expect(p.hc.length).toBe(4);
         expect(p.hc.every((h) => h > 1 && h < 12)).toBe(true);
       }
+    }
+  }
+);
+
+test.each(tileIds(DRESDEN))(
+  "%s: measured roofs are polygons of a LoD2 object at a height in range",
+  (tile) => {
+    const src = cityMeshSourceFiles(tile).measuredRoofs;
+    for (const f of loadSource<MeasuredRoofFeature>(src)) {
+      expect(f.geometry.type).toBe("Polygon");
+      expect(f.geometry.coordinates.every(isRing)).toBe(true);
+      expect(typeof f.properties?.id).toBe("string");
+      // Dresden's roofs: the Elbe valley floor to the tallest towers
+      expect(f.properties?.z ?? 0).toBeGreaterThan(100);
+      expect(f.properties?.z ?? 999).toBeLessThan(300);
     }
   }
 );

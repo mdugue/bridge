@@ -21,6 +21,7 @@ from . import (
     rail,
     riverside,
     roof_colour,
+    roofs,
     skyview,
     small_buildings,
     soundmarks,
@@ -73,6 +74,9 @@ STEPS = {
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.
     "small-buildings": small_buildings.run,
+    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
+    # miss DOM1, rebuilt as stepped flat blocks (scripts/bake-city-mesh.ts).
+    "roofs": roofs.run,
 }
 
 

@@ -141,7 +141,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   shared with the buildings through `shared-rasters.ts`).
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
-  the canopy points they veto at build time).
+  the canopy points they veto at build time), `scripts/measured-roofs.ts`
+  (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
+  replaced by stepped blocks from `pipeline/bake/roofs.py`; ADR 0036).
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
   `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
@@ -659,6 +661,7 @@ bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main
                                        #   rail lamps monuments furniture walls stairs surface edges
                                        #   markings sport tram riverside skyview soundmarks
                                        #   lowveg cultivated small-buildings
+                                       #   roofs
 bun run test:pipeline                  # pytest + ruff
 ```
 

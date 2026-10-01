@@ -224,6 +224,16 @@ export interface SmallBuildingFeature {
   properties: { h: number; hc?: number[]; z: number } | null;
 }
 
+/** A LoD2 roof that misses DOM1, rebuilt as stepped flat blocks
+ *  (pipeline/bake/roofs.py, GeoSN): one part of the object `id` (its LoD2
+ *  CityObject key), its roof at `z` metres (absolute), outline and
+ *  courtyards in plan. scripts/measured-roofs.ts stands each part from the
+ *  object's LoD2 base. */
+export interface MeasuredRoofFeature {
+  geometry: PolygonGeometry;
+  properties: { id: string; z: number } | null;
+}
+
 /** OSM retaining/city walls and cliffs (pipeline/bake/walls.py, ODbL): the
  *  barrier/man_made kind or "cliff" (only retaining kinds and cliffs reshape
  *  the terrain) and the height in metres. */

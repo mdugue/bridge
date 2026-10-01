@@ -13,7 +13,7 @@
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, skyview,
  *                                     soundmarks, lowveg, cultivated,
- *                                     small-buildings)
+ *                                     small-buildings, roofs)
  *   bun run bake --ingest --lsc       ... and the laser scan (≈380 MB a tile)
  *   bun run bake --step lowveg --research   also every hedge/shrub candidate
  *
@@ -23,7 +23,8 @@
  * lamps and street furniture are gated on it; the bridges (rail) before the
  * furniture and trams; the hedges and scan trees late (they are
  * thinned against the canopy and the cadastre), then the orchards (against
- * those trees) and the small structures. Several steps read the neighbours'
+ * those trees), the small structures and the roofs rebuilt from DOM1
+ * (after the NDVI). Several steps read the neighbours'
  * files across a seam, so run a step for every tile. Then
  * `bun scripts/prepare-data.ts` turns data/ into the tileset.
  */
