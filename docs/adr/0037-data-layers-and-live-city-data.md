@@ -63,8 +63,9 @@ the air their geometry widens with one shared uniform
 **The look: tinted glass and light, not paint.** A layer has to be
 plain to read and still belong to the clay-and-paper city. The bodies
 (the traffic flows, the bicycle columns) are glass in one colour family
-per layer (sage → peach → coral, teal and lilac; the trams keep the
-DVB's yellow), refracting what lies behind them, and light moves through
+per layer (sage → peach → coral → rose → wine over five stops placed
+where the counts spread, teal and lilac; the trams keep the DVB's
+yellow), refracting what lies behind them, and light moves through
 them (comets with the traffic, rings rising with the bicycles, a trail
 behind each tram — after deck.gl's TripsLayer). The refraction is one
 copy of the frame (`glass.ts`): the scene target is copied when the
@@ -137,3 +138,14 @@ colour, so the layers read as a map there.
   `app/_components/tram-cars.ts`
 - [transformations.md](../transformations.md) — *Traffic (the data
   layers)*; the 🗃️ rows on pedestrian counts and live tram positions
+
+**Counts per day, shown per hour.** The city counts motor traffic per
+day; the scene has a clock. Rather than a static daily picture, each
+street's count is spread over the day on one measured curve — Hamburg's
+inner-city counters (hourly, open), per working day, Saturday and Sunday
+(`lib/city/traffic-hours.ts`) — and the flows' colour, size and light
+follow the hour through two shared uniforms. It is a typical shape, not
+a measurement of the street, and the sidebar says so. Live detector
+counts exist for some cities (Hamburg, Berlin's archive); a city that
+publishes per-hour counts per street would replace the curve there, not
+sit beside it.

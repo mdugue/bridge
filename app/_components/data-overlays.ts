@@ -3,6 +3,12 @@ import type { BikeCounter } from "@/lib/city/bike-counts";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { BridgeFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
+import {
+  type TrafficHourStatus,
+  trafficFactor,
+  trafficHourStatus,
+  trafficSpeed,
+} from "@/lib/city/traffic-hours";
 import type { TramTimetable } from "@/lib/city/tram-timetable";
 import { createBikeFeed, createBikeLayer } from "./bike-layer";
 import {
@@ -11,6 +17,7 @@ import {
   isAbortError,
 } from "./fetch-optional";
 import { buildDeckTable } from "./rail-layer";
+import { setTrafficClock } from "./traffic-layer";
 import {
   createTramCars,
   type TramCars,
@@ -19,8 +26,9 @@ import {
 
 /**
  * The site-wide data layers (lib/city/data-layers.ts) — the ones not cut
- * into tiles: the live bicycle counters and the timetable trams. (The
- * traffic flows are per tile, dressing parts in tile-stream.ts.) Each is
+ * into tiles: the live bicycle counters and the timetable trams, and the
+ * traffic's hour. (The traffic flows themselves are per tile, dressing
+ * parts in tile-stream.ts; their hour is one pair of shared uniforms.) Each is
  * built on its first switch-on, compiled before it shows, fetched (and the
  * counters polled) only while it is on, and placed again over the ground
  * as tiles stream in.
@@ -32,9 +40,10 @@ export interface DataOverlays {
   /** the layers' scene parts, by name (the HUD census) */
   parts: () => { bikes?: Object3D; trams?: Object3D };
   /** the scene's instant changed (the HUD's sun and time): the trams'
-   *  clock starts again from it */
+   *  and the traffic's clock starts again from it */
   setClock: (date: Date) => void;
-  /** a frame: the trams move on (`nowMs` = performance.now()) */
+  /** a frame: the trams move on, the traffic keeps the hour
+   *  (`nowMs` = performance.now()) */
   step: (nowMs: number) => void;
   /** the tile set changed: what stands on the ground is placed again;
    *  true when something moved (the shadows need no redraw: no layer
@@ -42,7 +51,7 @@ export interface DataOverlays {
   streamChanged: () => boolean;
 }
 
-/** How often the trams' status goes to the HUD (ms). */
+/** How often the trams' status and the traffic's hour go to the HUD (ms). */
 const TRAM_STATUS_MS = 1000;
 
 export interface DataOverlayOptions {
@@ -60,6 +69,9 @@ export interface DataOverlayOptions {
   onBikeCounts?: (counters: BikeCounter[]) => void;
   /** something a layer draws changed (the stats follow) */
   onChange?: () => void;
+  /** the traffic's hour, about once a second while its layer is on; null
+   *  when it is switched off */
+  onTrafficHour?: (status: TrafficHourStatus | null) => void;
   /** the trams' day and count, about once a second while they run; null
    *  when they are switched off */
   onTramStatus?: (status: TramCarsStatus | null) => void;
@@ -134,15 +146,13 @@ function bikeOverlay(opts: DataOverlayOptions, alive: () => boolean) {
 function tramOverlay(
   opts: DataOverlayOptions,
   alive: () => boolean,
-  signal: AbortSignal
+  signal: AbortSignal,
+  clock: (nowMs: number) => Date
 ) {
   let on = false;
   let cars: TramCars | null = null;
   let loading = false;
-  let clockBase = opts.initialDate.getTime();
-  let clockSetAt = performance.now();
   let statusDue = 0;
-  const clock = (nowMs: number) => new Date(clockBase + (nowMs - clockSetAt));
   const load = async () => {
     const url = opts.tramTimetableUrl;
     if (!url || loading) {
@@ -199,9 +209,7 @@ function tramOverlay(
       cars = null;
     },
     group: () => cars?.group,
-    setClock: (date: Date) => {
-      clockBase = date.getTime();
-      clockSetAt = performance.now();
+    clockChanged: () => {
       statusDue = 0;
     },
     step: (nowMs: number) => {
@@ -217,16 +225,69 @@ function tramOverlay(
   };
 }
 
+/** The traffic flows' hour (the flows themselves are per tile): how busy
+ *  the scene's instant is and how far their light has run, written to the
+ *  flows' shared uniforms every frame; the HUD hears it about once a
+ *  second while the layer is on. */
+function trafficClock(
+  opts: DataOverlayOptions,
+  clock: (nowMs: number) => Date
+) {
+  let on = false;
+  let travel = 0;
+  let lastMs: number | null = null;
+  let statusDue = 0;
+  return {
+    apply: (next: boolean) => {
+      if (next === on) {
+        return;
+      }
+      on = next;
+      statusDue = 0;
+      if (!on) {
+        opts.onTrafficHour?.(null);
+      }
+    },
+    clockChanged: () => {
+      statusDue = 0;
+    },
+    step: (nowMs: number) => {
+      if (!on) {
+        lastMs = null;
+        return;
+      }
+      const date = clock(nowMs);
+      const factor = trafficFactor(date);
+      // a frame's step, capped: a tab in the background comes back calm
+      const dt = lastMs === null ? 0 : Math.min((nowMs - lastMs) / 1000, 0.1);
+      lastMs = nowMs;
+      travel += dt * trafficSpeed(factor);
+      setTrafficClock(factor, travel);
+      if (nowMs >= statusDue) {
+        statusDue = nowMs + TRAM_STATUS_MS;
+        opts.onTrafficHour?.(trafficHourStatus(date));
+      }
+    },
+  };
+}
+
 export function createDataOverlays(opts: DataOverlayOptions): DataOverlays {
   let disposed = false;
   const alive = () => !disposed;
   const aborter = new AbortController();
+  // The scene's clock: set by the HUD's sun and time, running on in real
+  // time from there — the trams and the traffic's hour both read it.
+  let clockBase = opts.initialDate.getTime();
+  let clockSetAt = performance.now();
+  const clock = (nowMs: number) => new Date(clockBase + (nowMs - clockSetAt));
   const bikes = bikeOverlay(opts, alive);
-  const trams = tramOverlay(opts, alive, aborter.signal);
+  const trams = tramOverlay(opts, alive, aborter.signal, clock);
+  const traffic = trafficClock(opts, clock);
   return {
     apply: (layers) => {
       bikes.apply(layers.bikeLayer);
       trams.apply(layers.tramLayer);
+      traffic.apply(layers.trafficLayer);
     },
     dispose: () => {
       disposed = true;
@@ -235,8 +296,16 @@ export function createDataOverlays(opts: DataOverlayOptions): DataOverlays {
       trams.dispose();
     },
     parts: () => ({ bikes: bikes.group(), trams: trams.group() }),
-    setClock: trams.setClock,
-    step: trams.step,
+    setClock: (date: Date) => {
+      clockBase = date.getTime();
+      clockSetAt = performance.now();
+      trams.clockChanged();
+      traffic.clockChanged();
+    },
+    step: (nowMs: number) => {
+      trams.step(nowMs);
+      traffic.step(nowMs);
+    },
     streamChanged: bikes.reground,
   };
 }

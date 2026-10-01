@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { BIKE_DIRECTION_TINTS, tintCss } from "@/lib/city/bike-counts";
 import type { DataLayerKey } from "@/lib/city/data-layers";
-import { TRAFFIC_TINTS } from "@/lib/city/traffic";
+import { TRAFFIC_SCALE } from "@/lib/city/traffic";
 import { TRAM_TINTS } from "@/lib/city/tram-timetable";
 import { cn } from "cn";
 
@@ -37,7 +37,7 @@ export function DataLayerSwatch({
 
 function TrafficSample() {
   const style: CSSProperties = {
-    background: `linear-gradient(90deg, ${tintCss(TRAFFIC_TINTS.calm)}, ${tintCss(TRAFFIC_TINTS.busy)}, ${tintCss(TRAFFIC_TINTS.full)})`,
+    background: `linear-gradient(90deg, ${TRAFFIC_SCALE.map((s) => tintCss(s.tint)).join(", ")})`,
   };
   return (
     <span

@@ -56,6 +56,7 @@ import { setMapAltitude } from "./map-overlay";
 import { setDataTime } from "./glass";
 import { createDataOverlays } from "./data-overlays";
 import type { TramCarsStatus } from "./tram-cars";
+import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -282,6 +283,12 @@ export interface CityWalkOptions {
    * (about once a second); null when it is switched off.
    */
   onTramStatus?: (status: TramCarsStatus | null) => void;
+  /**
+   * The traffic's hour (how busy the scene's instant is on the typical
+   * daily curve) while its data layer is on, about once a second; null
+   * when it is switched off.
+   */
+  onTrafficHour?: (status: TrafficHourStatus | null) => void;
   /**
    * Aborts startup mid-load (React StrictMode mounts effects twice in dev;
    * without this the doomed first instance would finish loading 19 MB of
@@ -896,6 +903,7 @@ async function bootApp(
     onBikeCounts: opts.onBikeCounts,
     onChange: () => emitStats(),
     onTramStatus: opts.onTramStatus,
+    onTrafficHour: opts.onTrafficHour,
     parent: scene,
     tramTimetableUrl: extras.trams
       ? new URL(extras.trams, tilesetUrl).href

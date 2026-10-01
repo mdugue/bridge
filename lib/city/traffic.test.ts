@@ -10,6 +10,7 @@ import {
   laneWidth,
   rightOf,
   TRAFFIC_DTV,
+  TRAFFIC_SCALE,
   trafficLanes,
   trafficLoad,
 } from "./traffic";
@@ -27,13 +28,18 @@ const section = (
   properties: props,
 });
 
-test("the load runs from calm to full on a log scale", () => {
+test("the load steps a quarter per colour stop, log-spaced between them", () => {
   expect(trafficLoad(0)).toBe(0);
-  expect(trafficLoad(TRAFFIC_DTV.calm)).toBe(0);
-  expect(trafficLoad(TRAFFIC_DTV.full)).toBe(1);
-  expect(trafficLoad(TRAFFIC_DTV.full * 3)).toBe(1);
-  const mid = Math.sqrt(TRAFFIC_DTV.calm * TRAFFIC_DTV.full);
-  expect(trafficLoad(mid)).toBeCloseTo(0.5, 6);
+  expect(trafficLoad(TRAFFIC_SCALE[0].dtv)).toBe(0);
+  TRAFFIC_SCALE.forEach((stop, i) => {
+    expect(trafficLoad(stop.dtv)).toBeCloseTo(i / 4, 9);
+  });
+  expect(trafficLoad(TRAFFIC_SCALE[4].dtv * 3)).toBe(1);
+  const mid = Math.sqrt(TRAFFIC_SCALE[1].dtv * TRAFFIC_SCALE[2].dtv);
+  expect(trafficLoad(mid)).toBeCloseTo(0.375, 6);
+  // the main roads no longer share one colour: 6 000 and 12 000 a day
+  // lie a whole stop apart
+  expect(trafficLoad(12_000) - trafficLoad(6000)).toBeGreaterThan(0.2);
 });
 
 test("a busier lane is wider, within its bounds", () => {

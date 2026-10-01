@@ -132,7 +132,11 @@ The button in the corner opens a panel with three tabs.
   [Where the data comes from](./data-sources.md)):
   - *Kfz-Verkehr* ("motor traffic"): the vehicles counted per day as
     glass flows on the carriageway, one per direction — wider, taller and
-    redder where more traffic runs, light running through them;
+    deeper in colour (sage, peach, coral, rose, wine) where more traffic
+    runs, light running through them. The flows follow the time set: each
+    day's count is spread over the day on a measured typical daily curve
+    (slim and nearly dark at night, full and slow at the rush hours);
+    below the switch, how busy the hour is;
   - *Radverkehr (live)* ("cycling, live"): at each of the city's counters
     two glass columns, as tall as the last hour's bicycles per direction; below
     the switch the list of counters with their numbers, a click flies

@@ -1517,11 +1517,27 @@ GPU**.
   ground; 3D Tiles swaps them with their terrain. Built on the fine level
   only, the flows ended at the first tile the fine level had not loaded —
   the Waldschlößchenbrücke stopped at its Johannstadt end, the
-  Käthe-Kollwitz-Ufer showed nothing from across the river. Its tint runs sage
-  → peach → coral with their logarithm (300 → 30 000 a day; yellow is
-  left to the trams), plum mixed in with the heavy share; light runs
-  through it in the direction of travel (soft comets at 11 m/s, up to
-  three times as many on a busy lane), brightest along the crown. The
+  Käthe-Kollwitz-Ufer showed nothing from across the river. Its tint runs over
+  five stops placed where Dresden's lanes spread (`TRAFFIC_SCALE`: 400,
+  2 000, 5 000, 9 000, 16 000 a day — sage, peach, coral, rose, wine;
+  log-spaced between stops; yellow is left to the trams), slate mixed in
+  with the heavy share. One log scale from 300 to 30 000 put every main
+  road in the same coral (half the lanes carry under 2 700 a day, a
+  quarter over 6 000). **The flows keep the scene's hour**
+  (`lib/city/traffic-hours.ts`): the counts are per day, so each lane's
+  count is spread over the day on a measured curve — Hamburg's infrared
+  counters on 38 inner-city main roads, hourly, September 2026 (Urban
+  Data Platform, dl-de/by-2-0), per working day, Saturday and Sunday.
+  The hour's multiple of the average hour (≈ 0.08 at 3 h, 1.8 at 16 h on a
+  working day) sets the colour (the count × that multiple on the scale),
+  the body's size (√, from 0.35× to 1.5× of its daily one) and how many
+  of its comets are lit (one in eight at night, all from the average hour
+  on); the light runs at 11 m/s, slowing to about half at the evening
+  peak (integrated on the CPU, so it never jumps). Two shared uniforms,
+  nothing rebuilt; the sidebar says the hour and that the curve is a
+  typical one, not a measurement of the street. Light runs through the
+  body in the direction of travel (soft comets, up to three times as many
+  on a busy lane), brightest along the crown. The
   glass (`glass.ts`) refracts the street, trees and houses behind it with
   a touch of dispersion, a sky sheen and a Fresnel rim, and thickens into
   its own colour from the air and past ~200 m, so the layer reads as glass

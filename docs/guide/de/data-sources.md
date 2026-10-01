@@ -62,7 +62,8 @@ Straßenbahnen der dritten Datenebene, so wie der Fahrplan sie fahren lässt.
 | **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Hecken, Stadtmöbel (Bänke, Papierkörbe, Fahrradbügel, Poller, Briefkästen, Wartehäuschen und Haltestellenschilder, Litfaßsäulen, Ampeln, Hydranten, Uhren, Trinkbrunnen), Spielplätze und ihre Geräte, Bahnsteige, Mauern, Felskanten, Treppen, Brücken-Tragwerkstypen und Durchfahrtshöhen, Brunnenbecken, womit Straßen, Gehwege und Parkplätze belegt sind, Sportplätze, Läden und Cafés im Erdgeschoss, Baudenkmale, Zäune, Geländer und Tore, Fahrbahnmarkierungen (Überwege, Haltlinien, Rad- und Mittellinien), Kleingärten, Obstwiesen und Weinberge, Bäume, die das Stadtbaumkataster nicht führt, Straßenbahngleise mit ihren Oberleitungsmasten, Anlegestellen, Buhnen und Fährrouten auf der Elbe, Kirchen und Glockentürme (für die verborgene Klangkulisse) |
 | **Wikidata** | freie Wissensdatenbank | Freiwillige | Bauart und Hauptspannweite benannter Brücken |
 | **Stadtbaumkataster** | Das Baumverzeichnis der Stadt | Landeshauptstadt Dresden | Straßen- und Parkbäume an ihrem vermessenen Standort, mit Höhe, Kronenbreite, Stamm, einer Kronenform nach der Art und deren Herbstfarbe und Laubfall |
-| **Verkehrsmengen** | Kfz je Tag und Straßenabschnitt | Landeshauptstadt Dresden | Datenebene *Kfz-Verkehr*: gläserne Ströme je Fahrtrichtung, breiter, höher und röter, wo mehr fährt |
+| **Verkehrsmengen** | Kfz je Tag und Straßenabschnitt | Landeshauptstadt Dresden | Datenebene *Kfz-Verkehr*: gläserne Ströme je Fahrtrichtung, breiter, höher und kräftiger gefärbt, wo mehr fährt |
+| **Tagesgang** | Anteil jeder Stunde am Tagesverkehr | Freie und Hansestadt Hamburg | die Uhrzeit der Datenebene *Kfz-Verkehr* |
 | **Rad-Dauerzählstellen** | Fahrräder der letzten Stunde, live | Landeshauptstadt Dresden | Datenebene *Radverkehr (live)*: je Zählstelle zwei Glassäulen, eine je Richtung |
 | **GTFS-Fahrplan** | Soll-Fahrplan des Nahverkehrs | DELFI e.V. über gtfs.de | Datenebene *Straßenbahnen (Fahrplan)*: jede Bahn der DVB zur Szenenzeit auf ihrem Gleis |
 
@@ -225,10 +226,21 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 | **Steht für** | Die *Verkehrsbelegung* des Straßen- und Tiefbauamts: Kraftfahrzeuge je Tag (DTV, durchschnittlicher täglicher Verkehr) für jeden gezählten Straßenabschnitt zwischen zwei Kreuzungen, je Fahrtrichtung, mit dem Schwerverkehr. |
 | **Wie erhoben** | Meist von Hand an einem Tag gezählt und auf den Durchschnittstag hochgerechnet; an einigen Straßen Induktionsschleifen oder Infrarotdetektoren mit Jahresmittelwerten; an wenigen ein geschätzter „Hilfswert“. |
 | **Aktualisierung** | Abschnitt für Abschnitt, wenn neu gezählt wird; im Gebiet meist 2023–2026, einzelne Abschnitte bis 2010 zurück. |
-| **Hier genutzt für** | Die Datenebene *Kfz-Verkehr*: je gezählter Richtung ein gläserner Strom auf der Fahrbahn, rechts der Fahrtrichtung, so breit und so hoch wie die Wurzel der Fahrzeuge je Tag, von Salbei über Pfirsich zu Koralle getönt; Licht läuft in Fahrtrichtung hindurch, viel Schwerverkehr färbt ihn pflaumenfarben. Durch das Glas sieht man die Straße dahinter, leicht gebrochen; aus der Luft wird es satter, damit die Ebene als Karte lesbar bleibt. Eine Straße ohne Zählung bleibt leer — es wird nichts geschätzt. |
+| **Hier genutzt für** | Die Datenebene *Kfz-Verkehr*: je gezählter Richtung ein gläserner Strom auf der Fahrbahn, rechts der Fahrtrichtung, so breit und so hoch wie die Wurzel der Fahrzeuge je Tag, in fünf Stufen von Salbei über Pfirsich, Koralle und Rosé zu Weinrot getönt; Licht läuft in Fahrtrichtung hindurch, viel Schwerverkehr färbt ihn schieferblau. Die Ströme folgen der eingestellten Uhrzeit: Die Tageszahl wird nach dem *Tagesgang* (unten) auf die Stunde umgelegt — nachts schmal und fast dunkel, im Berufsverkehr voll und langsam. Durch das Glas sieht man die Straße dahinter, leicht gebrochen; aus der Luft wird es satter, damit die Ebene als Karte lesbar bleibt. Eine Straße ohne Zählung bleibt leer — es wird nichts geschätzt. |
 | **Stärken** | Gemessen und je Richtung; fast alle Hauptstraßen gezählt. |
-| **Schwächen** | Ein Tagesmittel, kein Verlauf über den Tag; Zählungen aus verschiedenen Jahren nebeneinander; Nebenstraßen oft ungezählt. |
+| **Schwächen** | Ein Tagesmittel, kein eigener Verlauf über den Tag (den liefert der Tagesgang, für alle Straßen derselbe); Zählungen aus verschiedenen Jahren nebeneinander; Nebenstraßen oft ungezählt. |
 | **Download und Lizenz** | Der WFS der Stadt (`kommisdd.dresden.de`, Ebene `cls:L363` „Kfz/Tag“), je Kachel abgefragt. Lizenz `dl-de/by-2-0`, Vermerk „Landeshauptstadt Dresden“. |
+
+### Tagesgang — wie sich der Verkehr über den Tag verteilt
+
+| | |
+|---|---|
+| **Steht für** | Welcher Anteil der Fahrzeuge eines Tages in welcher Stunde fährt, je für Werktag, Samstag und Sonntag. |
+| **Wie erhoben** | Gemessen von den Infrarotdetektoren Hamburgs an 38 innerstädtischen Hauptstraßen, stündlich, im September 2026: je Zählstelle die vollständigen Tage auf eins normiert und gemittelt, dann über die Zählstellen. Dresden veröffentlicht nur Tageswerte; die Form der Hauptstraßen einer deutschen Großstadt steht für ihre Stunden. |
+| **Hier genutzt für** | Die Uhrzeit der Datenebene *Kfz-Verkehr*: Farbe, Größe und Licht eines Stroms folgen der Tageszahl seiner Straße mal dem Anteil der eingestellten Stunde. Die Seitenleiste nennt die Stunde und wie viel los ist. |
+| **Stärken** | Gemessen, städtisch, mit Werktag, Samstag und Sonntag. |
+| **Schwächen** | Eine Kurve für alle Straßen und aus einer anderen Stadt; Feiertage zählen als Werktage; ein Monat, keine Jahreszeiten. |
+| **Download und Lizenz** | Hamburgs Urban Data Platform (SensorThings, `iot.hamburg.de`, `HH_STA_Verkehrsdaten_Kfz_Infrarotdetektoren`), einmal ausgewertet; die Werte stehen in `lib/city/traffic-hours.ts`. Lizenz `dl-de/by-2-0`, Vermerk „Freie und Hansestadt Hamburg“. |
 
 ### Rad-Dauerzählstellen — Fahrräder, live
 
@@ -329,6 +341,7 @@ Overpass-API.
 | Wikidata | *CC0* (gemeinfrei) | keiner erforderlich |
 | Stadtbaumkataster | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
 | Verkehrsmengen, Rad-Dauerzählstellen | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
+| Tagesgang (Kfz-Zählstellen Hamburg) | `dl-de/by-2-0` | „Freie und Hansestadt Hamburg“ |
 | GTFS-Fahrplan | *CC BY 4.0* | „DELFI e.V. via gtfs.de“ |
 
 Der Viewer zeigt diese Vermerke in der Fußzeile seines Einstellungsfelds.

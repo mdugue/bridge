@@ -60,8 +60,13 @@ import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import { overlook, type ViewpointGeometry } from "@/lib/city/site";
-import { BikeCountList, TramStatusLine } from "./data-layers-panel";
+import {
+  BikeCountList,
+  TrafficHourLine,
+  TramStatusLine,
+} from "./data-layers-panel";
 import type { TramCarsStatus } from "./tram-cars";
+import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { SceneSidebar } from "./scene-sidebar";
 import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
@@ -289,6 +294,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [bikeCounters, setBikeCounters] = useState<BikeCounter[]>([]);
   // The timetable trams' day and count while their layer is on.
   const [tramStatus, setTramStatus] = useState<TramCarsStatus | null>(null);
+  const [trafficHour, setTrafficHour] = useState<TrafficHourStatus | null>(
+    null
+  );
   const time = useSceneTime(applySceneTime, INITIAL_DATE);
   const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
@@ -448,6 +456,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       onTramStatus: (status) => {
         if (!cancelled) {
           startTransition(() => setTramStatus(status));
+        }
+      },
+      onTrafficHour: (status) => {
+        if (!cancelled) {
+          startTransition(() => setTrafficHour(status));
         }
       },
       onBikeCounts: (counters) => {
@@ -701,6 +714,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 }
               />
             ),
+            trafficLayer: <TrafficHourLine status={trafficHour} />,
             tramLayer: <TramStatusLine status={tramStatus} />,
           }}
           applySnapshot={applySnapshot}

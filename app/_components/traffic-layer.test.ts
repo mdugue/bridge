@@ -42,6 +42,8 @@ test("a two-way street is two glass bodies on the ground, apart, as tall as thei
     "trafficAlong",
     "trafficRise",
     "trafficLoad",
+    "trafficDtv",
+    "trafficLift",
     "trafficHeavy",
     "trafficFlow",
   ]) {
@@ -56,6 +58,12 @@ test("a two-way street is two glass bodies on the ground, apart, as tall as thei
   // north and south of the line (world z = −y): the lanes do not overlap
   expect(geo?.boundingBox?.min.z).toBeLessThan(-1);
   expect(geo?.boundingBox?.max.z).toBeGreaterThan(1);
+  // each vertex knows its height over the feet: the hour scales it there
+  const lift = geo?.getAttribute("trafficLift");
+  const pos = geo?.getAttribute("position");
+  for (let i = 0; i < (lift?.count ?? 0); i += 37) {
+    expect((pos?.getY(i) ?? 0) - (lift?.getX(i) ?? 0)).toBeCloseTo(109.8, 4);
+  }
   const material = mesh?.material;
   expect(material?.positionNode).not.toBeNull();
   expect(material?.colorNode).not.toBeNull();

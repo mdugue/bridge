@@ -10,6 +10,7 @@ import {
 } from "@/lib/city/bike-counts";
 import { DATA_LAYERS, type DataLayerKey } from "@/lib/city/data-layers";
 import type { LookValues } from "@/lib/city/look-controls";
+import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { DataLayerSwatch } from "./data-layer-swatch";
 import type { TramCarsStatus } from "./tram-cars";
 
@@ -153,6 +154,45 @@ const DAY_KIND_LABEL: Record<TramCarsStatus["kind"], string> = {
   saturday: "Samstag",
   sunday: "Sonntag",
 };
+
+/** How busy the hour is, in words: the HUD's line under the traffic
+ *  switch. */
+function busyWord(factor: number): string {
+  if (factor < 0.3) {
+    return "Nachtruhe";
+  }
+  if (factor < 0.75) {
+    return "ruhig";
+  }
+  if (factor < 1.25) {
+    return "normal";
+  }
+  return factor < 1.6 ? "lebhaft" : "Stoßzeit";
+}
+
+/**
+ * The traffic's hour in words: the counts are per day, the flows show the
+ * scene's hour on a typical daily curve — said here, so the picture is
+ * not read as a live measurement.
+ */
+export function TrafficHourLine({
+  status,
+}: {
+  status: TrafficHourStatus | null;
+}) {
+  if (!status) {
+    return null;
+  }
+  const day = DAY_KIND_LABEL[status.kind];
+  const percent = Math.round(status.factor * 100);
+  return (
+    <span className="text-[11px] text-muted-foreground" id="traffic-hour">
+      {status.time} Uhr · {day}: {busyWord(status.factor)} ({percent} % einer
+      mittleren Stunde) — die Tageszählung, über den Tag verteilt nach einem
+      typischen Tagesgang
+    </span>
+  );
+}
 
 /** "2026-10-01" → "1.10.2026". */
 function germanDate(iso: string): string {

@@ -60,7 +60,8 @@ data layer run from it, as the timetable has them run.
 | **OSM** | OpenStreetMap | Volunteers | Street lamps, hedges, street furniture (benches, bins, bicycle stands, bollards, post boxes, stop shelters and stop signs, advertising columns, traffic signals, hydrants, clocks, drinking fountains), playgrounds and their equipment, station platforms, walls, cliff edges, stairs, bridge structure types and navigation clearances, fountain basins, what streets, pavements and car parks are paved with, sports grounds, shops and cafés on the ground floor, listed buildings, fences, railings and gates, road markings (crossings, stop lines, cycle and centre lines), allotment gardens, orchards and vineyards, trees the city's register does not list, tram tracks with their overhead-line masts, the landing stages, groynes and ferry routes on the Elbe, churches and bell towers (for the hidden soundscape) |
 | **Wikidata** | free knowledge base | Volunteers | The kind and main span of named bridges |
 | **Stadtbaumkataster** | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width, trunk, a crown shape from the species and the species' autumn colour and leaf fall |
-| **Verkehrsmengen** | Motor vehicles per day and road section | Landeshauptstadt Dresden | Data layer *Kfz-Verkehr*: glass flows per direction, wider, taller and redder where more traffic runs |
+| **Verkehrsmengen** | Motor vehicles per day and road section | Landeshauptstadt Dresden | Data layer *Kfz-Verkehr*: glass flows per direction, wider, taller and deeper in colour where more traffic runs |
+| **Tagesgang** | Each hour's share of the day's traffic | Freie und Hansestadt Hamburg | the time of day of the *Kfz-Verkehr* data layer |
 | **Rad-Dauerzählstellen** | Bicycles of the last hour, live | Landeshauptstadt Dresden | Data layer *Radverkehr (live)*: two glass columns per counter, one per direction |
 | **GTFS timetable** | The scheduled local-transport timetable | DELFI e.V. via gtfs.de | Data layer *Straßenbahnen (Fahrplan)*: every DVB tram at the scene's time on its track |
 
@@ -222,10 +223,21 @@ repository, because the build step reads it directly. See
 | **Stands for** | The road office's *Verkehrsbelegung*: motor vehicles per day (AADT, the annual average daily traffic) for every counted road section between two junctions, per direction, with the heavy goods vehicles. |
 | **How it is made** | Mostly counted by hand on one day and scaled to the average day; on some roads induction loops or infrared detectors giving yearly means; on a few an estimated "Hilfswert". |
 | **Updates** | Section by section, when counted again; in the site mostly 2023–2026, a few sections back to 2010. |
-| **Used here for** | The *Kfz-Verkehr* data layer: one glass flow per counted direction on the carriageway, on the right of travel, as wide and as tall as the root of the vehicles per day, tinted sage → peach → coral, with light running through it in the direction of travel; a high heavy-goods share turns it plum. The street behind shows through the glass, gently bent; from the air it thickens so the layer still reads as a map. A street without a count stays empty — nothing is estimated. |
+| **Used here for** | The *Kfz-Verkehr* data layer: one glass flow per counted direction on the carriageway, on the right of travel, as wide and as tall as the root of the vehicles per day, tinted in five steps from sage through peach, coral and rose to wine, with light running through it in the direction of travel; a high heavy-goods share turns it slate blue. The flows follow the time set: the day's count is spread over the hours by the *daily curve* (below) — slim and nearly dark at night, full and slow at the rush hours. The street behind shows through the glass, gently bent; from the air it thickens so the layer still reads as a map. A street without a count stays empty — nothing is estimated. |
 | **Strengths** | Measured, per direction; nearly every main road counted. |
-| **Weaknesses** | A daily mean, no curve over the day; counts from different years side by side; minor streets often uncounted. |
+| **Weaknesses** | A daily mean, no curve of its own over the day (the daily curve supplies one, the same for every street); counts from different years side by side; minor streets often uncounted. |
 | **Download and licence** | The city's WFS (`kommisdd.dresden.de`, layer `cls:L363` "Kfz/Tag"), read per tile. Licence `dl-de/by-2-0`, credit "Landeshauptstadt Dresden". |
+
+### Tagesgang — how traffic spreads over the day
+
+| | |
+|---|---|
+| **Stands for** | Which share of a day's vehicles drives in which hour, for working days, Saturdays and Sundays. |
+| **How it is made** | Measured by Hamburg's infrared detectors on 38 inner-city main roads, hourly, in September 2026: each station's complete days normalised to one and averaged, then the stations. Dresden publishes daily values only; the shape of a German city's main roads stands in for its hours. |
+| **Used here for** | The time of day of the *Kfz-Verkehr* data layer: a flow's colour, size and light follow its street's daily count times the share of the hour set. The sidebar names the hour and how busy it is. |
+| **Strengths** | Measured, urban, with working day, Saturday and Sunday. |
+| **Weaknesses** | One curve for every street, from another city; public holidays count as working days; one month, no seasons. |
+| **Download and licence** | Hamburg's Urban Data Platform (SensorThings, `iot.hamburg.de`, `HH_STA_Verkehrsdaten_Kfz_Infrarotdetektoren`), evaluated once; the values live in `lib/city/traffic-hours.ts`. Licence `dl-de/by-2-0`, credit "Freie und Hansestadt Hamburg". |
 
 ### Rad-Dauerzählstellen — bicycles, live
 
@@ -323,6 +335,7 @@ bridge-structure files still date from earlier Overpass API queries.
 | Wikidata | *CC0* (public domain) | none required |
 | Stadtbaumkataster | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
 | Verkehrsmengen, Rad-Dauerzählstellen | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
+| Daily curve (Hamburg's traffic counters) | `dl-de/by-2-0` | "Freie und Hansestadt Hamburg" |
 | GTFS timetable | *CC BY 4.0* | "DELFI e.V. via gtfs.de" |
 
 The viewer shows these credits in the footer of its settings panel. The

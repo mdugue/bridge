@@ -9,10 +9,15 @@ import {
   attribute,
   color,
   float,
+  floor,
   fract,
+  hash,
+  log,
   mix,
   positionLocal,
   smoothstep,
+  step,
+  uniform,
   vec3,
 } from "three/tsl";
 import type { BridgeFeature, TrafficFeature } from "@/lib/city/features";
@@ -24,14 +29,15 @@ import {
   flowTaper,
   openEnds,
   rightOf,
-  TRAFFIC_TINTS,
+  TRAFFIC_HEAVY_TINT,
+  TRAFFIC_SCALE,
   type TrafficLane,
   trafficLanes,
 } from "@/lib/city/traffic";
-import { dataTime, glassColour, glassGrazing } from "./glass";
+import { glassColour, glassGrazing } from "./glass";
 import { mapWidenNode } from "./map-overlay";
 import { buildDeckTable, type DeckPoly, deckLift } from "./rail-layer";
-import type { F, V3 } from "./shader-chunks";
+import type { F, Live, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -46,14 +52,21 @@ import { sceneMaterial } from "./three-utils";
  *   four times the traffic is twice as wide and twice as tall), tapering
  *   to a round point only where the flow really ends — where no other
  *   counted section runs on and the tile's edge did not cut it
- *   (lib/city/traffic.ts `openEnds`). Its tint runs sage → peach → coral with
- *   the logarithm of the traffic, plum where the heavy-goods share is high.
+ *   (lib/city/traffic.ts `openEnds`). Its tint runs sage → peach → coral →
+ *   rose → wine over five stops of the traffic (`TRAFFIC_SCALE`), slate
+ *   where the heavy-goods share is high.
+ * - The flows keep the scene's hour (lib/city/traffic-hours.ts): the
+ *   counts are per day, the bodies show the hour's share of it on a
+ *   typical daily curve — slim, pale and nearly dark at night, full and
+ *   deep-coloured at the rush hours. Size, colour and light follow the
+ *   hour in the shader (two shared uniforms); nothing is rebuilt.
  * - The glass (glass.ts) bends and tints the street, the trees and the
  *   houses behind it rather than covering them; its rim brightens where
  *   the eye grazes it.
  * - Light runs through it in the direction of travel — soft comets, more
- *   and brighter the busier the street; a section with only an undirected
- *   total holds its light still.
+ *   and brighter the busier the street, fewer lit at night and slower at
+ *   the peaks; a section with only an undirected total holds its light
+ *   still.
  * - From the air the bodies widen (`mapWidenNode`): a lane stays a lane
  *   from 500 m up.
  * - A body sits on the ground under its line, its feet 0.2 m under it
@@ -84,12 +97,49 @@ const DETAIL: Record<TrafficDetail, { profile: number; sample: number }> = {
 };
 /** How deep the feet go under the ground or the deck (m). */
 const FOOT_SINK_M = 0.2;
-/** The light's period along the lane at no traffic (m), and how fast it
- *  runs (m/s, ~40 km/h). */
+/** The light's period along the lane at no traffic (m); how fast it runs
+ *  is the hour's (lib/city/traffic-hours.ts `trafficSpeed`). */
 const PULSE_PERIOD_M = 36;
-const PULSE_SPEED = 11;
 
-const { calm: CALM, busy: BUSY, full: FULL, heavy: HEAVY } = TRAFFIC_TINTS;
+/** How the flows stand at the scene's hour (lib/city/traffic-hours.ts):
+ *  the traffic as a multiple of the day's average hour, and how far the
+ *  light has run (m) — integrated on the CPU, so a change of speed never
+ *  jumps the comets. One pair for every tile's flows. */
+const trafficNow: Live = uniform(1);
+const trafficTravel: Live = uniform(0);
+
+/** The scene's hour moved on: how busy (`factor`, 1 = the day's average
+ *  hour) and how far the light has run since the start (m). */
+export function setTrafficClock(factor: number, travel: number): void {
+  trafficNow.value = factor;
+  trafficTravel.value = travel;
+}
+
+/** The body's size against its daily one, with the hour: the root of the
+ *  traffic (like its build), from a third at night to half again at the
+ *  peak. */
+const GROW = { min: 0.35, max: 1.5 } as const;
+
+/** The colour of a lane carrying `dtv` vehicles a day at the hour's rate
+ *  (`TRAFFIC_SCALE`, log-spaced between its stops), and its place on the
+ *  scale 0..1. */
+function liveRamp(dtv: F): { load: F; tint: V3 } {
+  const logd = log(dtv.mul(trafficNow).max(1));
+  let tint = color(TRAFFIC_SCALE[0].tint) as unknown as V3;
+  let load = float(0) as F;
+  const span = TRAFFIC_SCALE.length - 1;
+  for (let i = 0; i < span; i++) {
+    const lo = Math.log(TRAFFIC_SCALE[i].dtv);
+    const hi = Math.log(TRAFFIC_SCALE[i + 1].dtv);
+    const seg = logd
+      .sub(lo)
+      .div(hi - lo)
+      .clamp(0, 1);
+    tint = mix(tint, color(TRAFFIC_SCALE[i + 1].tint), seg);
+    load = load.add(seg.div(span));
+  }
+  return { load, tint };
+}
 
 function trafficMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("traffic-glass", () => {
@@ -98,42 +148,53 @@ function trafficMaterial(): MeshBasicNodeMaterial {
       depthWrite: false,
     });
     const along = attribute("trafficAlong", "float") as F;
-    const load = attribute("trafficLoad", "float") as F;
+    const daily = attribute("trafficLoad", "float") as F;
+    const dtv = attribute("trafficDtv", "float") as F;
+    const lift = attribute("trafficLift", "float") as F;
     const heavy = attribute("trafficHeavy", "float") as F;
     const flows = attribute("trafficFlow", "float") as F;
     const rise = attribute("trafficRise", "float") as F;
     const across = attribute("trafficAcross", "vec3") as V3;
-    // Wider from the air: each vertex moves out along its own offset from
-    // the section's line, so a body widens about its centre and the two
-    // directions of a street stay apart.
-    m.positionNode = positionLocal.add(across.mul(mapWidenNode().sub(1)));
-    const ramp = mix(
-      mix(color(CALM), color(BUSY), smoothstep(0, 0.5, load)),
-      color(FULL),
-      smoothstep(0.5, 1, load)
+    // The hour's size: each vertex moves along its own offset from the
+    // section's line (wider from the air, too — the two directions of a
+    // street stay apart) and its own height over the feet.
+    const grow = trafficNow.sqrt().clamp(GROW.min, GROW.max);
+    m.positionNode = positionLocal
+      .add(across.mul(mapWidenNode().mul(grow).sub(1)))
+      .add(vec3(0, lift.mul(grow.sub(1)), 0));
+    const ramp = liveRamp(dtv);
+    const tint = mix(
+      ramp.tint,
+      color(TRAFFIC_HEAVY_TINT),
+      heavy.mul(4).clamp(0, 0.6)
     ) as V3;
-    const tint = mix(ramp, color(HEAVY), heavy.mul(4).clamp(0, 0.6)) as V3;
     const glass = glassColour({
       tint,
-      density: load.mul(0.3).add(0.22),
+      density: ramp.load.mul(0.3).add(0.22),
       rim: 0.8,
     });
-    // The light: comets running with the traffic, more of them the busier
-    // the lane (the period shrinks to a third), brightest along the crown
-    // and fading toward the feet; a still glow where nothing flows.
-    const period = float(PULSE_PERIOD_M).div(load.mul(2).add(1));
-    const phase = fract(
-      along.sub(dataTime.mul(PULSE_SPEED).mul(flows)).div(period)
+    // The light: comets running with the traffic, spaced by the street's
+    // daily load (the period shrinks to a third on the busiest) — so the
+    // spacing never jumps as the hour moves on — and as many of them lit
+    // as the hour has traffic: one in eight at night, all from the
+    // average hour on. Brightest along the crown, fading toward the feet;
+    // a still glow where nothing flows.
+    const period = float(PULSE_PERIOD_M).div(daily.mul(2).add(1));
+    const cell = along.sub(trafficTravel.mul(flows)).div(period);
+    const phase = fract(cell);
+    const lit = step(
+      hash(floor(cell).add(dtv.mul(0.0137))),
+      trafficNow.mul(0.9).clamp(0.12, 1)
     );
-    const comet = smoothstep(0, 0.08, phase).mul(
-      float(1).sub(smoothstep(0.08, 0.55, phase))
-    );
+    const comet = smoothstep(0, 0.08, phase)
+      .mul(float(1).sub(smoothstep(0.08, 0.55, phase)))
+      .mul(lit);
     const pulse = mix(float(0.35), comet, flows);
     const core = smoothstep(0.15, 0.9, rise).mul(
       float(1).sub(glassGrazing().mul(0.7))
     );
     const light = mix(tint, vec3(1), 0.35).mul(
-      pulse.mul(core).mul(load.mul(0.45).add(0.2))
+      pulse.mul(core).mul(ramp.load.mul(0.45).add(0.2))
     );
     m.colorNode = glass.add(light);
     return m;
@@ -143,9 +204,11 @@ function trafficMaterial(): MeshBasicNodeMaterial {
 interface Body {
   across: number[];
   along: number[];
+  dtv: number[];
   flow: number[];
   heavy: number[];
   index: number[];
+  lift: number[];
   load: number[];
   pos: number[];
   rise: number[];
@@ -236,7 +299,10 @@ function addLane(
         p[1] + right[1] * r,
         ctx.offset
       );
-      body.pos.push(w.x, ground - FOOT_SINK_M + v * height * size, w.z);
+      const up = v * height * size;
+      body.pos.push(w.x, ground - FOOT_SINK_M + up, w.z);
+      body.lift.push(up);
+      body.dtv.push(lane.dtv);
       // the same offset in the world frame (z = −y)
       body.across.push(right[0] * r, 0, -right[1] * r);
       body.along.push(at);
@@ -274,9 +340,11 @@ export function buildTraffic(
   const body: Body = {
     across: [],
     along: [],
+    dtv: [],
     flow: [],
     heavy: [],
     index: [],
+    lift: [],
     load: [],
     pos: [],
     rise: [],
@@ -299,13 +367,16 @@ export function buildTraffic(
   geo.setAttribute("trafficAlong", new Float32BufferAttribute(body.along, 1));
   geo.setAttribute("trafficRise", new Float32BufferAttribute(body.rise, 1));
   geo.setAttribute("trafficLoad", new Float32BufferAttribute(body.load, 1));
+  geo.setAttribute("trafficDtv", new Float32BufferAttribute(body.dtv, 1));
+  geo.setAttribute("trafficLift", new Float32BufferAttribute(body.lift, 1));
   geo.setAttribute("trafficHeavy", new Float32BufferAttribute(body.heavy, 1));
   geo.setAttribute("trafficFlow", new Float32BufferAttribute(body.flow, 1));
   geo.setIndex(body.index);
   geo.computeVertexNormals();
   geo.computeBoundingSphere();
-  // From the air the bodies widen up to MAP_WIDEN.max ×: the sphere must
-  // hold them then too, or a street at the frame's edge culls out.
+  // From the air the bodies widen up to MAP_WIDEN.max ×, and at the peak
+  // they grow by GROW.max: the sphere must hold them then too, or a
+  // street at the frame's edge culls out.
   if (geo.boundingSphere) {
     geo.boundingSphere.radius += 20;
   }

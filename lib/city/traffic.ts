@@ -13,21 +13,33 @@
 import type { TrafficFeature } from "./features";
 import type { Point2 } from "./polyline";
 
-/** The vehicles per day at which a lane reads as calm, and as full: the
- *  site's busiest sections carry ~35 000 a day in one direction, a quiet
- *  residential street a few hundred. */
+/** The vehicles per day that size a lane: a quiet residential street
+ *  carries a few hundred in one direction, the site's busiest sections
+ *  ~35 000. Width and height grow with the root of the count up to `full`. */
 export const TRAFFIC_DTV = { calm: 300, full: 30_000 } as const;
 /** A lane's width (m) at no traffic and at `TRAFFIC_DTV.full`. */
 export const LANE_WIDTH_M = { min: 1.2, max: 3.6 } as const;
-/** The flows' tints, calm → busy → full, and the heavy-goods tint mixed
- *  in (app/_components/traffic-layer.ts; the HUD's swatch shows the same).
- *  Yellow is left to the trams. */
-export const TRAFFIC_TINTS = {
-  calm: 0x7f_c8_b8, // sage
-  busy: 0xf0_a0_86, // peach
-  full: 0xe8_6a_5a, // coral
-  heavy: 0x7a_5a_8c, // plum
-} as const;
+
+/**
+ * The flows' colour scale: five stops, in vehicles per day in one
+ * direction, log-spaced between them, placed where Dresden's counted
+ * lanes actually spread (a quarter carry under 1 000, half under 2 700,
+ * a quarter over 6 000, a tenth over 9 500). One log scale from 300 to
+ * 30 000 put every main road in the same coral; now a collector, a main
+ * road and an arterial each have their own colour. Sage → peach → coral →
+ * rose → wine; yellow is left to the trams, and the heavy-goods tint is a
+ * cool slate, apart from the warm ramp. The HUD's swatch and the legend
+ * show the same stops (app/_components/data-layer-swatch.tsx).
+ */
+export const TRAFFIC_SCALE = [
+  { dtv: 400, tint: 0x7f_c8_b8 }, // sage: a residential street
+  { dtv: 2000, tint: 0xf2_bf_96 }, // peach: a collector
+  { dtv: 5000, tint: 0xec_86_68 }, // coral: a main road
+  { dtv: 9000, tint: 0xd6_4a_63 }, // rose: a busy main road
+  { dtv: 16_000, tint: 0x8e_2c_6a }, // wine: an arterial at its busiest
+] as const;
+/** The tint mixed in where the heavy-goods share is high. */
+export const TRAFFIC_HEAVY_TINT = 0x4f_6f_a8; // slate
 
 /** The gap (m) between the two lanes of a section. */
 export const LANE_GAP_M = 0.5;
@@ -46,7 +58,7 @@ export interface TrafficLane {
   flows: boolean;
   /** heavy-goods share 0..1 (0 when not counted) */
   heavy: number;
-  /** 0 (calm) .. 1 (full), on a log scale of the vehicles per day */
+  /** 0 (calm) .. 1 (full), along the colour scale (`trafficLoad`) */
   load: number;
   /** the lane's centre, metres to the right of its travel direction */
   offset: number;
@@ -54,16 +66,23 @@ export interface TrafficLane {
   width: number;
 }
 
-/** 0..1 on a log scale between `TRAFFIC_DTV.calm` and `.full`: a doubling
- *  of the traffic is the same step anywhere on the scale. */
+/** 0..1 along `TRAFFIC_SCALE`: each stop a quarter further, log-spaced
+ *  between stops — a doubling of the traffic is the same step within one
+ *  stretch of the scale. */
 export function trafficLoad(dtv: number): number {
-  if (!(dtv > 0)) {
+  const stops = TRAFFIC_SCALE;
+  if (!(dtv > stops[0].dtv)) {
     return 0;
   }
-  const t =
-    Math.log(dtv / TRAFFIC_DTV.calm) /
-    Math.log(TRAFFIC_DTV.full / TRAFFIC_DTV.calm);
-  return Math.min(Math.max(t, 0), 1);
+  const span = stops.length - 1;
+  for (let i = 0; i < span; i++) {
+    const hi = stops[i + 1].dtv;
+    if (dtv < hi) {
+      const lo = stops[i].dtv;
+      return (i + Math.log(dtv / lo) / Math.log(hi / lo)) / span;
+    }
+  }
+  return 1;
 }
 
 /** A lane's width (m): the square root of the traffic, so the band's area
