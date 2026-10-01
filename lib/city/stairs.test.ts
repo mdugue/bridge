@@ -4,6 +4,7 @@ import {
   burnStairs,
   projectOntoAxis,
   raiseTerraces,
+  STAIR_BANK,
   STAIR_BURN_M,
   STAIR_RISER,
   STAIR_TREAD,
@@ -139,6 +140,33 @@ test("a flight the DGM runs flat under lifts the walkable ground with it", () =>
   expect(at(out, 60, 50)).toBe(100); // beside the flight: untouched
 });
 
+test("beside a raised flight the DGM's shoulder is dug down to the ground around it", () => {
+  // Flat ground at 100 m, a flight climbing 4 m that the DGM has as a ramp
+  // with 2 m shoulders sloping off either side of its 4 m width.
+  const el = new Float32Array(N * N);
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      const x = (col + 0.5) * DX;
+      const y = 100 - (row + 0.5) * DX;
+      const ramp = y > 40 && y < 60 ? ((y - 40) / 20) * 4 : 0;
+      const off = Math.max(0, Math.abs(x - 50) - 2);
+      el[row * N + col] = 100 + ramp * Math.max(0, 1 - off / 2);
+    }
+  }
+  const out = burnStairs({
+    elevations: el,
+    n: N,
+    bounds: BOUNDS,
+    stairs: [FLIGHT],
+  });
+  // 3 m from the axis (1 m beside the flight): the shoulder is gone
+  expect(at(out, 53, 55)).toBe(100);
+  expect(at(out, 47, 55)).toBe(100);
+  // far off, and under the flight, as before
+  expect(at(out, 60, 55)).toBe(100);
+  expect(at(out, 51, 55)).toBeCloseTo(103 - STAIR_BURN_M, 5);
+});
+
 test("the burn never reaches across a wall", () => {
   const el = grid();
   const wall: [number, number][] = [
@@ -235,6 +263,67 @@ test("every triangle is wound to face its normal", () => {
     const dot = face[0] * nrm[t] + face[1] * nrm[t + 1] + face[2] * nrm[t + 2];
     expect(dot).toBeGreaterThan(0);
   }
+});
+
+function windsToItsNormals(g: { normals: number[]; positions: number[] }) {
+  const p = g.positions;
+  const nrm = g.normals;
+  for (let t = 0; t < p.length; t += 9) {
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = p.slice(t, t + 9);
+    const [ux, uy, uz] = [bx - ax, by - ay, bz - az];
+    const [vx, vy, vz] = [cx - ax, cy - ay, cz - az];
+    const face = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+    const dot = face[0] * nrm[t] + face[1] * nrm[t + 1] + face[2] * nrm[t + 2];
+    expect(dot).toBeGreaterThan(0);
+  }
+}
+
+test("a flight cut into a bank gets Wangen at the bank's level", () => {
+  // The bank beside the flight stands 1 m above its treads, level along it.
+  const cut = (x: number, y: number) =>
+    Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
+  const g = stairGeometry(FLIGHT, { cx: 0, cy: 0 }, { groundAt: cut });
+  expect(g).not.toBeNull();
+  const geo = g as NonNullable<typeof g>;
+  const banks = geo.kinds.filter((k) => k === STAIR_BANK).length;
+  // both sides, every section: two triangles of the ground-toned top
+  expect(banks).toBe(2 * 25 * 6);
+  // a Wange top stands at the bank beyond it (world y), not at the tread
+  for (let v = 0; v < geo.kinds.length; v++) {
+    if (geo.kinds[v] === STAIR_BANK) {
+      const z = -geo.positions[v * 3 + 2]; // data y
+      expect(geo.positions[v * 3 + 1]).toBeGreaterThan(bank(z) + 0.5);
+    }
+  }
+  windsToItsNormals(geo);
+  // a flight over open ground, or with a wall between it and the bank, has
+  // plain cheeks
+  const flat = stairGeometry(
+    FLIGHT,
+    { cx: 0, cy: 0 },
+    {
+      groundAt: (_x, y) => bank(y),
+    }
+  );
+  expect(flat?.kinds.includes(STAIR_BANK)).toBe(false);
+  const walled = stairGeometry(
+    FLIGHT,
+    { cx: 0, cy: 0 },
+    {
+      groundAt: cut,
+      walls: [
+        [
+          [47, 30],
+          [47, 70],
+        ],
+        [
+          [53, 30],
+          [53, 70],
+        ],
+      ],
+    }
+  );
+  expect(walled?.kinds.includes(STAIR_BANK)).toBe(false);
 });
 
 test("a malformed feature is not a flight", () => {

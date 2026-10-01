@@ -17,9 +17,16 @@
  *   steps) — and lowers every grid vertex beside it whose triangles reach
  *   under the flight, so no ground pokes through a tread (never across a
  *   wall: a flight between walls does not dig into the terrace beyond them);
+ *   beside a flight that stands above its surroundings it digs the DGM's
+ *   blurred shoulder down to the surrounding ground, so the cheeks stand
+ *   as faces over level ground instead of over a ragged slope;
  * - `stairGeometry` builds the flight as solid blocks: a tread per step, a
  *   riser at each step's front and the two side cheeks, reaching below the
- *   bottom landing.
+ *   bottom landing. Where the bank beside a flight stands above its treads
+ *   (a flight cut into a slope), a side is a *Wange* instead: a block as
+ *   wide as the burn reaches, topped at the bank's level — a stone coping
+ *   along the steps, the rest in the pale ground tone — so the lowered
+ *   ground beside the steps never shows as a ragged trench.
  *
  * Step k (0-based) spans [k, k+1]·L/n along the axis with its tread at
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
@@ -46,9 +53,29 @@ export const STAIR_BURN_M = 0.12;
 /** How far beyond the flight's edge the burn reaches, in grid cells: every
  *  vertex of a triangle under the flight lies within √2 cells of it. */
 const BURN_REACH_CELLS = 1.5;
+/** Beside a flight raised above its surroundings, the DGM's blurred
+ *  shoulder is dug down to the surrounding ground this far out (m)... */
+const SHOULDER_M = 2.5;
+/** ...read this far out from the flight's edge (m), past the shoulder. */
+const SURROUND_M = 3.5;
 /** How far below the bottom landing the cheeks and the first riser reach
  *  (m): the flight is a solid block, whatever the ground does beside it. */
 const BURY_M = 0.6;
+/** A Wange reaches this far out from the flight's edge (m): past every
+ *  triangle the burn lowered beside a flight on the native 1 m grid (its
+ *  vertices up to BURN_REACH_CELLS out, their triangles √2 cells further). */
+const WANGE_M = 3;
+/** The bank is read this far out from the flight's edge (m), beyond the
+ *  burn and its triangles. */
+const BANK_PROBE_M = 3.2;
+/** A bank this much above the tread makes a side a Wange (m): more than
+ *  the DGM's own rounding of a flight into its bank. */
+const WANGE_MIN_M = 0.4;
+/** A Wange stands at most this far above the tread (m). */
+const WANGE_MAX_M = 4;
+/** The stone coping along the steps on a Wange's top (m); the rest is the
+ *  ground's tone. */
+const COPING_M = 0.5;
 
 /** A raised area the build lifts the ground to (pipeline/bake/stairs.py). */
 export interface Terrace {
@@ -239,8 +266,11 @@ export interface StairBurnInput {
  * so a flight onto a structure the DGM lacks must lift it. Vertices beyond
  * the flight's edge, up to `BURN_REACH_CELLS` cells out (its ends
  * included), are only lowered, so no triangle under a tread keeps a vertex
- * above it; one with a wall between it and the axis is left alone. NoData
- * stays NoData.
+ * above it; along its sides, up to SHOULDER_M out, a vertex above the
+ * ground SURROUND_M out (where that lies below the ramp: a raised flight)
+ * is lowered to it — the DGM rounds a raised flight's cheeks into a slope a
+ * metre or two wide. One with a wall between it and the axis is left
+ * alone. NoData stays NoData.
  */
 export function burnStairs(input: StairBurnInput): Float32Array {
   const { elevations, n, bounds, stairs, margin = 0 } = input;
@@ -255,7 +285,8 @@ export function burnStairs(input: StairBurnInput): Float32Array {
       continue;
     }
     const half = stair.w / 2;
-    const reach = half + cell * BURN_REACH_CELLS;
+    const near = half + cell * BURN_REACH_CELLS;
+    const reach = Math.max(near, half + SHOULDER_M);
     const walls = wallsNear(input.walls ?? [], stair.coords, reach);
     const xs = stair.coords.map((p) => p[0]);
     const ys = stair.coords.map((p) => p[1]);
@@ -288,11 +319,47 @@ export function burnStairs(input: StairBurnInput): Float32Array {
         // Under the flight the ground IS the ramp, lifted where the DGM runs
         // below it (a flight onto a structure the DGM lacks): the player
         // walks on this grid, not on the steps. Beside it, only lowered.
-        out[idx] = hit.d <= half && !hit.beyond ? target : Math.min(z, target);
+        if (hit.d <= half && !hit.beyond) {
+          out[idx] = target;
+          continue;
+        }
+        const surround = hit.beyond
+          ? null
+          : surroundAt(input, hit, x, y, half + SURROUND_M);
+        const floor =
+          surround !== null && surround < target ? surround : target;
+        if (hit.d <= near || floor < target) {
+          out[idx] = Math.min(z, floor);
+        }
       }
     }
   }
   return out;
+}
+
+/** The input ground `at` metres from the axis on the side of (x, y): the
+ *  surroundings a flight stands in. Null off the grid or on NoData. */
+function surroundAt(
+  input: StairBurnInput,
+  hit: AxisHit,
+  x: number,
+  y: number,
+  at: number
+): number | null {
+  const { elevations, n, bounds } = input;
+  const [minX, minY, maxX, maxY] = bounds;
+  if (hit.d === 0) {
+    return null;
+  }
+  const sx = hit.px + ((x - hit.px) / hit.d) * at;
+  const sy = hit.py + ((y - hit.py) / hit.d) * at;
+  const col = Math.floor(((sx - minX) / (maxX - minX)) * n);
+  const row = Math.floor(((maxY - sy) / (maxY - minY)) * n);
+  if (col < 0 || row < 0 || col >= n || row >= n) {
+    return null;
+  }
+  const z = elevations[row * n + col];
+  return isInvalidElevation(z) ? null : z;
 }
 
 /** Even-odd point-in-polygon over every ring (holes included). */
@@ -366,6 +433,9 @@ export const STAIR_STONE = 0xc4_b0_90;
 /** Risers clearly darker than the treads, cheeks between: every step edge
  *  reads, even under a flat, overcast light. */
 const STAIR_SHADE = [1, 0.62, 0.8];
+/** A Wange's top beyond the coping: the built-up ground's pale clay
+ *  (lib/city/landcover.ts), sRGB. */
+const BANK_GROUND = 0xe4_db_cb;
 
 function srgbToLinear(c: number): number {
   return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -376,12 +446,16 @@ export function stairColors(kinds: number[]): Float32Array<ArrayBuffer> {
   const stone = [16, 8, 0].map((shift) =>
     srgbToLinear(((STAIR_STONE >> shift) & 0xff) / 255)
   );
+  const bank = [16, 8, 0].map((shift) =>
+    srgbToLinear(((BANK_GROUND >> shift) & 0xff) / 255)
+  );
   const out = new Float32Array(kinds.length * 3);
   for (const [i, kind] of kinds.entries()) {
     const shade = STAIR_SHADE[kind] ?? 1;
-    out[i * 3] = stone[0] * shade;
-    out[i * 3 + 1] = stone[1] * shade;
-    out[i * 3 + 2] = stone[2] * shade;
+    const base = kind === STAIR_BANK ? bank : stone;
+    out[i * 3] = base[0] * (kind === STAIR_BANK ? 1 : shade);
+    out[i * 3 + 1] = base[1] * (kind === STAIR_BANK ? 1 : shade);
+    out[i * 3 + 2] = base[2] * (kind === STAIR_BANK ? 1 : shade);
   }
   return out;
 }
@@ -389,6 +463,8 @@ export function stairColors(kinds: number[]): Float32Array<ArrayBuffer> {
 export const STAIR_TREAD = 0;
 export const STAIR_RISER = 1;
 export const STAIR_CHEEK = 2;
+/** a Wange's top beyond its coping, in the ground's tone */
+export const STAIR_BANK = 3;
 
 /** A cross-section of the flight: the axis point and the unit perpendicular
  *  (pointing left of the climb) of the segment it lies on. */
@@ -472,6 +548,28 @@ class StairWriter {
   }
 }
 
+/** A vertical quad from `p` to `q` (in that order, seen from the side
+ *  `normal` faces), from the bases up to the tops. */
+function side(
+  out: StairWriter,
+  p: Point2,
+  q: Point2,
+  bases: [number, number],
+  tops: [number, number],
+  normal: [number, number]
+): void {
+  out.quad(
+    [
+      [...p, bases[0]],
+      [...q, bases[1]],
+      [...q, tops[1]],
+      [...p, tops[0]],
+    ],
+    [normal[0], normal[1], 0],
+    STAIR_CHEEK
+  );
+}
+
 /** A side cheek from `p` to `q` (in that order, seen from outside), from
  *  the buried base up to the tread. */
 function cheek(
@@ -520,13 +618,106 @@ function joint(
   cheek(out, first, second, [base, base], h, [nx / nl, ny / nl]);
 }
 
+/** The ground beside a flight, for its Wangen: the final ground (EPSG in,
+ *  elevation out) and the walls it never reaches across. */
+export interface StairSurround {
+  groundAt: (x: number, y: number) => number | null;
+  walls?: Point2[][];
+}
+
+/** The bank's level beside section `c` on `side` (+1 left, −1 right) when
+ *  it stands above the tread `h`, else null (no Wange there). */
+function bankLevel(
+  c: Section,
+  side: 1 | -1,
+  half: number,
+  h: number,
+  surround: StairSurround | undefined,
+  walls: Point2[][]
+): number | null {
+  if (!surround) {
+    return null;
+  }
+  const edge: Point2 = [c.x + c.px * half * side, c.y + c.py * half * side];
+  const far = half + BANK_PROBE_M;
+  const probe: Point2 = [c.x + c.px * far * side, c.y + c.py * far * side];
+  const g = surround.groundAt(probe[0], probe[1]);
+  if (g === null || g < h + WANGE_MIN_M || behindWall(walls, probe, edge)) {
+    return null;
+  }
+  return Math.min(g, h + WANGE_MAX_M);
+}
+
+/** A Wange between sections a and b on `side`: its inner face toward the
+ *  steps, its top (stone coping, then the ground's tone), its outer face;
+ *  and its end face where the flight begins (`first`) or ends (`last`). */
+function wange(
+  out: StairWriter,
+  a: Section,
+  b: Section,
+  ctx: { base: number; half: number; side: 1 | -1 },
+  tops: [number, number],
+  ends: { first: boolean; last: boolean }
+): void {
+  const { base, half, side: sd } = ctx;
+  const at = (c: Section, d: number): Point2 => [
+    c.x + c.px * d * sd,
+    c.y + c.py * d * sd,
+  ];
+  const [ai, bi] = [at(a, half), at(b, half)];
+  const [ac, bc] = [at(a, half + COPING_M), at(b, half + COPING_M)];
+  const [ao, bo] = [at(a, half + WANGE_M), at(b, half + WANGE_M)];
+  const n: [number, number] = [a.px * sd, a.py * sd]; // outward
+  const bases: [number, number] = [base, base];
+  // seen from the steps (normal −n) the left side runs a → b, the right b → a
+  if (sd === 1) {
+    side(out, ai, bi, bases, tops, [-n[0], -n[1]]);
+    side(out, bo, ao, bases, [tops[1], tops[0]], n);
+  } else {
+    side(out, bi, ai, bases, [tops[1], tops[0]], [-n[0], -n[1]]);
+    side(out, ao, bo, bases, tops, n);
+  }
+  const top = (p: Point2, q: Point2, r: Point2, s: Point2, kind: number) => {
+    // counter-clockwise seen from above: the steps' tread order (right → left)
+    const [ta, tb] = tops;
+    const quad: Corner[] =
+      sd === 1
+        ? [
+            [...p, ta],
+            [...q, tb],
+            [...r, tb],
+            [...s, ta],
+          ]
+        : [
+            [...s, ta],
+            [...r, tb],
+            [...q, tb],
+            [...p, ta],
+          ];
+    out.quad(quad, [0, 0, 1], kind);
+  };
+  top(ai, bi, bc, ac, STAIR_CHEEK);
+  top(ac, bc, bo, ao, STAIR_BANK);
+  const down: [number, number] = [-a.py, a.px]; // −tangent: down the flight
+  if (ends.first) {
+    const [p, q] = sd === 1 ? [ao, ai] : [ai, ao];
+    side(out, p, q, bases, [tops[0], tops[0]], down);
+  }
+  if (ends.last) {
+    const [p, q] = sd === 1 ? [bi, bo] : [bo, bi];
+    side(out, p, q, bases, [tops[1], tops[1]], [-down[0], -down[1]]);
+  }
+}
+
 /**
- * The flight as blocks, in the viewer's Y-up recentered frame. Null for a
+ * The flight as blocks, in the viewer's Y-up recentered frame. With the
+ * `surround`, a side the bank stands above becomes a Wange. Null for a
  * flight with no length.
  */
 export function stairGeometry(
   stair: StairLine,
-  offset: RecenterOffset
+  offset: RecenterOffset,
+  surround?: StairSurround
 ): StairGeometryData | null {
   const lengths = arcLengths(stair.coords);
   const length = lengths.at(-1) ?? 0;
@@ -545,6 +736,19 @@ export function stairGeometry(
   ];
   const out = new StairWriter(offset);
   const segments = segmentSections(stair, lengths);
+  const walls = surround
+    ? wallsNear(surround.walls ?? [], stair.coords, half + BANK_PROBE_M)
+    : [];
+  const wangeSide = (a: Section, b: Section, h: number, sd: 1 | -1) => {
+    const ta = bankLevel(a, sd, half, h, surround, walls);
+    const tb = bankLevel(b, sd, half, h, surround, walls);
+    if (ta === null || tb === null) {
+      return false;
+    }
+    const ends = { first: a.s <= 1e-6, last: b.s >= length - 1e-6 };
+    wange(out, a, b, { base, half, side: sd }, [ta, tb], ends);
+    return true;
+  };
   const block = (a: Section, b: Section) => {
     const h = tread(stepOf((a.s + b.s) / 2));
     const [al, bl, ar, br] = [edge(a, 1), edge(b, 1), edge(a, -1), edge(b, -1)];
@@ -558,8 +762,12 @@ export function stairGeometry(
       [0, 0, 1],
       STAIR_TREAD
     );
-    cheek(out, bl, al, [base, base], h, [a.px, a.py]);
-    cheek(out, ar, br, [base, base], h, [-a.px, -a.py]);
+    if (!wangeSide(a, b, h, 1)) {
+      cheek(out, bl, al, [base, base], h, [a.px, a.py]);
+    }
+    if (!wangeSide(a, b, h, -1)) {
+      cheek(out, ar, br, [base, base], h, [-a.px, -a.py]);
+    }
   };
   for (const [j, sections] of segments.entries()) {
     for (let i = 0; i < sections.length - 1; i++) {

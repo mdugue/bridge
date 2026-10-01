@@ -129,7 +129,7 @@ test("a track the OSM way puts on a bridge rides the deck, along its ramp", () =
     },
     properties: { kind: "road", deck: [104, 108, 108, 104, 104] },
   };
-  const decks = buildDeckTable([deck], ctx.offset);
+  const decks = buildDeckTable([deck], { offset: ctx.offset });
   // world z = −y: the lift is read in the Y-up frame
   expect(deckLift(decks, 30, 0)).toBeCloseTo(106, 5);
   expect(deckLift(decks, 30, 0, ["rail"])).toBeNull();
