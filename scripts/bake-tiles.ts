@@ -21,6 +21,7 @@ import {
   stairGeometry,
   type Terrace,
 } from "../lib/city/stairs";
+import { carvePassages, type Passage } from "../lib/city/passages";
 import { ownsPoint } from "../lib/city/tileset";
 import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
 import {
@@ -183,17 +184,21 @@ export interface TerrainMesh {
 
 /** What the terrain bake shapes the DGM with besides the walls. */
 export interface TerrainFeatures {
+  /** the passages a line opens through the fill under a deck
+   *  (lib/city/passages.ts) */
+  passages?: Passage[];
   stairs?: StairLine[];
   terraces?: Terrace[];
 }
 
 /**
- * The DGM shaped in three passes: the walls burned in as steps
+ * The DGM shaped in four passes: the walls burned in as steps
  * (lib/city/terrain-conflate.ts; the grid only — a TIN keeps the measured
  * ramps and the wall ribbons snap to them), the raised areas the DGM lacks
- * lifted to their level, then the ground under each flight of stairs lowered
+ * lifted to their level, the ground under each flight of stairs lowered
  * below its treads (lib/city/stairs.ts), `stairMargin` deeper for a mesh
- * that only approximates the grid.
+ * that only approximates the grid, and the passages under the decks opened
+ * (lib/city/passages.ts).
  */
 export function shapeDgm(
   dgm: Dgm,
@@ -202,7 +207,7 @@ export function shapeDgm(
   opts: { burnWalls: boolean; stairMargin: number }
 ): Float32Array {
   const { n, bounds } = dgm;
-  const { stairs = [], terraces = [] } = features;
+  const { passages = [], stairs = [], terraces = [] } = features;
   let elevations: Float32Array = dgm.elevations;
   if (opts.burnWalls && walls.length > 0) {
     elevations = conflateWalls({ elevations, n, bounds, walls });
@@ -220,6 +225,9 @@ export function shapeDgm(
       walls: lines,
       margin: opts.stairMargin,
     });
+  }
+  if (passages.length > 0) {
+    elevations = carvePassages({ elevations, n, bounds, passages });
   }
   return elevations;
 }

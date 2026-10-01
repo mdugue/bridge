@@ -9,7 +9,8 @@ import type { BridgeFeature, TramFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { CONTACT_WIRE_M, RAIL_TOP_M } from "@/lib/city/tram";
 import type { Instances } from "./instancing";
-import { buildDeckTable, deckLift } from "./rail-layer";
+import { deckLift } from "@/lib/city/decks";
+import { buildDeckTable } from "./rail-layer";
 import { buildTram } from "./tram-layer";
 
 const ctx: GroundContext = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };

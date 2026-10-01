@@ -584,6 +584,19 @@ a pylon and a fan. The deck's `depth` comes from the OSM fairway clearance
 over the DGM water; beam piers keep the fairway clear. The LoD2's own
 bridge slabs (`53001_*`) are dropped from the building mesh.
 
+**Lines take their level along the whole line** (ADR 0040). Rails and
+trams are not lifted onto whatever deck lies under a point (a lower line
+jumped onto the flyover above it; an upper one fell into the DGM's gap
+beside its deck): `lib/city/levels.ts` picks, per 4 m (rail) / 2 m (tram)
+sample, the ground or a deck within 2 m by a Viterbi on the climb beyond
+the grade (rail 4 %, tram 8 %), then a grade cone turns a gap the line
+cannot get down into from either side into a *span* (the layer draws a
+span deck, `addSpanDeck`) and a fill it cannot climb into a *cut*. The
+build solves every piece with 450 m of context from the pieces that run
+on through its ends (`lib/city/line-levels.ts`) and publishes the runs as
+`lv`; a cut ≥ 30 % under a drawn deck opens a passage in the terrain bake
+(`lib/city/passages.ts`). Check with `bun scripts/line-levels.ts <site>`.
+
 **Underground is not drawn.** The DLM's rail lines say nothing of a
 tunnel, so `rail.py` cuts a stretch that runs within 2 m of a DLM tunnel
 (`ver06` `BWF=1870`) for more than 15 m — a shorter overlap is a surface

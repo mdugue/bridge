@@ -141,7 +141,7 @@ flowchart LR
   %% railway + bridges + platforms
   DLM ==>|"ver03_f area (dissolved) = ballast<br/>+ ver03_l tracks (heavy rail)"| RAIL
   OSM -. "fallback without a DLM: railway=rail/light_rail/subway<br/>→ tracks + ballast beds" .-> RAIL
-  DGM -. "drape / lift onto deck" .-> RAIL
+  DGM -. "the level along the whole line<br/>ground · deck · span · cut" .-> RAIL
   DLM ==>|"ver06_l decks + ver06_f footprints"| BRG
   OSM -. "fallback without a DLM: bridge ways + man_made=bridge<br/>→ decks (one bridge's ways merged per level)" .-> BRG
   DGM ==>|"abutment ramp · piers · water under the fairway"| BRG
@@ -152,7 +152,7 @@ flowchart LR
   OSM ==>|"railway=tram + gauge · power=catenary_mast · tram_stop + platforms<br/>building outlines → rosette spans"| TRAM
   DLM -. "road / meadow class → track bed" .-> TRAM
   DOP -. "NDVI → lawn track bed" .-> TRAM
-  DGM -. "drape · lift onto a bridge deck" .-> TRAM
+  DGM -. "the level along the whole line<br/>ground · deck · span" .-> TRAM
   OSM ==>|"man_made=pier / groyne · route=ferry"| RIV
   DLM -. "water class → pontoon · ferry cut to the water" .-> RIV
   DGM -. "pier deck from the bank · pontoon on the drawn water" .-> RIV
@@ -208,7 +208,7 @@ flowchart LR
 | **Street lamps** | OSM `highway=street_lamp` (Geofabrik extract) | DGM1 (ground-clamp); gated off water + railway | baked by `pipeline/bake/lamps.py`; `lamp-layer.ts` |
 | **Street furniture & playgrounds** | OSM `amenity=bench/waste_basket/bicycle_parking/post_box/clock/drinking_water`, `leisure=picnic_table`, `barrier=bollard` (+ `height`, `material`), `advertising=column` (+ `lit`), `highway=traffic_signals` (+ `traffic_signals:direction`), `emergency=fire_hydrant` (+ `fire_hydrant:type`), `leisure=playground` outlines + `playground=*` equipment, stops with `shelter=yes` and bus stops without (their sign) (Geofabrik extract; the committed files from BBBike's Dresden cut) | OSM highways (the bearing an untagged object faces; a signal's travel direction) · the DLM road class (the kerb a signal or hydrant sign in the carriageway moves to) · OSM building outlines (wall clocks) · DGM1 (ground-clamp); gated off water, railway and bridge decks | baked by `pipeline/bake/furniture.py`; `furniture-layer.ts`, `lib/city/furniture.ts` |
 | **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
-| **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel; trams left to OSM); without a DLM (Hamburg, Berlin) OSM `railway=rail/light_rail/subway/narrow_gauge` with `tracks` and `electrified`, its ballast the ways' beds buffered | DGM1 (drape / lift onto deck) · Basis-DLM tunnels `ver06` `BWF=1870` (a stretch > 15 m within 2 m of one is underground: cut; OSM: `tunnel`, `location=underground`) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` (`rail_osm.py` without a DLM) |
+| **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel; trams left to OSM); without a DLM (Hamburg, Berlin) OSM `railway=rail/light_rail/subway/narrow_gauge` with `tracks` and `electrified`, its ballast the ways' beds buffered | DGM1 (the level along the whole line: ground, deck, span — ADR 0040) · Basis-DLM tunnels `ver06` `BWF=1870` (a stretch > 15 m within 2 m of one is underground: cut; OSM: `tunnel`, `location=underground`) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` (`rail_osm.py` without a DLM) |
 | **Trams** | OSM `railway=tram` (each track, with its `gauge`; standard gauge where untagged), `power=catenary_mast` (the masts within 15 m of a tram track), the OSM building outlines (facades for the rosette spans), `railway=tram_stop` + the platforms (the stop signs) | DLM class raster (street — road, path or built-up — vs lawn vs ballast bed; no way in a tunnel) · DOP NDVI (lawn bed) · DGM1 (drape) · the bridge decks (a track tagged `bridge` rides the deck) | `tram-layer.ts`, `lib/city/tram.ts` (wire stations and sag); baked by `pipeline/bake/tram.py` |
 | **Elbe landing stages** | OSM `man_made=pier` (fixed or `floating`), `man_made=groyne`, `route=ferry` | DLM water class (a pontoon and a ferry line cut to the water) · DGM1 (a pier's deck from the bank; a pontoon floats on the terrain the water sheet lies on) | `riverside-layer.ts`, `map-overlay.ts` (the ferry lines show from the air only); baked by `pipeline/bake/riverside.py` |
 | **Sound** (hidden, opt-in: L or *Klang*) | OSM churches and bell towers at the tip and height the LoD2 measures (`soundmarks_<t>.geojson`) — the hour bells | Basis-DLM class raster (water, green, roads) · the sky-view factor · the OSM paving raster (footsteps) · OSM tram tracks · the fountains · the loaded trees · sun and date | `app/_components/soundscape/`, `soundscape-toggle.tsx`, `lib/city/soundscape.ts`; baked by `pipeline/bake/soundmarks.py` |
