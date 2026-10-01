@@ -6,7 +6,7 @@
 > update this plan's row in `docs/plans/README.md` (status + deviations).
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- AGENTS.md README.md playwright.config.ts package.json bun.lock .github .claude/skills/city-walker/SKILL.md docs/rendering.md docs/data-pipeline.md docs/data-flow.md docs/portability.md docs/guide app/_components/keyboard-controls.ts lib/docs`
+> `git diff --stat dd470e9..HEAD -- AGENTS.md README.md playwright.config.ts package.json bun.lock .github .claude/skills/city-walker/SKILL.md docs/rendering.md docs/data-pipeline.md docs/data-flow.md docs/portability.md docs/transformations.md docs/guide app/_components/keyboard-controls.ts lib/docs`
 > If any of these changed, compare the "Current state" excerpts against the
 > live files; a mismatch is a STOP condition.
 
@@ -17,7 +17,7 @@
 - **Risk**: LOW — docs, config and one new test
 - **Depends on**: none. Do this plan **first**.
 - **Category**: dx + docs
-- **Planned at**: commit `a28de75`, 2026-10-01
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035) the same day
 
 ## Why this matters
 
@@ -94,7 +94,7 @@ script.** Fix the test side instead.
 run is ≈ 2 min for fifteen tiles.
 `README.md:59`: "resamples the DGM into terrain meshes (1024² and 512² grids, with retaining walls burned in as breaklines)".
 
-### Phone cache numbers in the skill (`.claude/skills/city-walker/SKILL.md:461-465`)
+### Phone cache numbers in the skill (`.claude/skills/city-walker/SKILL.md:491-495`)
 
 ```
 - Phones keep only 120–180 MB of out-of-view tile content cached
@@ -136,8 +136,12 @@ retaining walls **snapped** to the measured step; only the coarse level (L1,
 - `docs/data-flow.md:292` (Mermaid): `tTER["terrain glTF<br/>L0 1024² · L1 512²"]`
 - `docs/portability.md:90` ("resamples any GeoTIFF to its 1024² / 512² grids") and `:94` ("1024² terrain over a 2 km tile")
 - `docs/guide/en/glossary.md:188` ("a detailed one (1024² grid)"), `docs/guide/de/glossary.md:201` ("einer detaillierten (1024²-Raster)")
-- `docs/guide/en/data-journey.md` / `de` — grep them; one statement of the
-  same kind is reported around line 138 (en) / 144 (de).
+- `docs/guide/en/data-journey.md:138` ("…on a 1024 × 1024 grid and a coarse
+  one on a 512 × 512 grid…") and `docs/guide/de/data-journey.md:144`.
+- `docs/transformations.md:170` ("the 2 m grid cannot hold it") and
+  `:1355` ("its ~2 m grid cannot") — the ledger's own wording of the same
+  error. (The third hit, `:1580`, is plan 023 phase 7's micro-relief idea;
+  the 2026-10-01 audit already moved it to 🗃️ — leave it.)
 
 Do **not** touch correct 1024² mentions: `docs/rendering.md:386` (says
 "the 1024² grid it replaced"), the NDVI/SVF/markings_low raster sizes in
@@ -219,12 +223,13 @@ workspace `"activity-card"` while `package.json` says `"bridge"`.
 
 **In scope**: `AGENTS.md`, `README.md`, `playwright.config.ts`,
 `package.json` (`trustedDependencies` only), `bun.lock` (header only),
-`.github/dependabot.yml`, `.github/workflows/ci.yml` (path list only),
+`.github/dependabot.yml`, `.github/workflows/ci.yml` (the path list and the unit job),
 `.claude/skills/city-walker/SKILL.md`, `docs/rendering.md`,
 `docs/data-pipeline.md`, `docs/data-flow.md`, `docs/portability.md`,
 `docs/adr/0001-client-only-static-app.md` (the one command), `docs/guide/{en,de}/*.md`,
 `docs/diagrams/*.svg` (regenerated only), `app/_components/keyboard-controls.ts`
-(comment only), `lib/docs/guide-labels.test.ts` (create), optionally
+(comment only), `lib/docs/guide-labels.test.ts` (create), `lib/docs/links.test.ts` (create),
+`scripts/coverage-gaps.ts` (+ test, create), `.gitignore` (`coverage/`),
 `bunfig.toml` (create).
 
 **Out of scope**: the `dev` script and `next.config.ts` (HTTPS dev and
@@ -293,7 +298,7 @@ available, say so in the status row — do not install one.
 
 ### Step 3: The skill's phone cache numbers
 
-Replace the SKILL.md bullet (lines 461-465) with: phones cache
+Replace the SKILL.md bullet (lines 491-495) with: phones cache
 **320–600 MB** of tile content, weighed as the GPU holds it (the dressing
 plugin's `calculateBytesUsed`), and `max − min` must exceed the largest
 tile; at 120–180 MB a phone flying to the Alaunpark never loaded the ground
@@ -378,6 +383,44 @@ fail naming that label, and restore it.
 `python3 -c "import yaml,sys;yaml.safe_load(open('.github/dependabot.yml'));yaml.safe_load(open('.github/workflows/ci.yml'))"` → no error
 (if `python3` lacks yaml, use `uv run --project pipeline python -c …`).
 
+### Step 7b: Coverage as a CI artifact, untested files included (from plan 008)
+
+Bun's coverage report lists only files some test imports — `create-app.ts`,
+`post-stack.ts`, `stylize-effect.ts`, `prepare-data.ts` and the soundscape
+(≈ 6 600 lines) are simply absent, so a plain lcov would read ≈ 86 % while
+the riskiest modules do not appear at all.
+
+1. In the `bunfig.toml` from step 1 (create it if step 1 dropped it), add
+   under `[test]`: `coverageReporter = ["text", "lcov"]` and
+   `coverageDir = "coverage"` (check the key names with
+   `bun test --help`; `coverage/` must be gitignored — add it if not).
+2. `scripts/coverage-gaps.ts`: reads `coverage/lcov.info`, lists every
+   `app/_components/**/*.ts(x)`, `lib/**/*.ts` and `scripts/*.ts` source
+   (not tests) that has no `SF:` entry, and prints them with their line
+   counts as a Markdown table (for `$GITHUB_STEP_SUMMARY`). A unit test
+   with a tiny fake lcov and file list.
+3. `ci.yml`, unit job: `bun run test:coverage`, then
+   `bun scripts/coverage-gaps.ts >> "$GITHUB_STEP_SUMMARY"`, then upload
+   `coverage/` with `actions/upload-artifact` (match the version the e2e
+   job already uses). No threshold — this is a report, not a gate.
+
+**Verify**: `bun run test:coverage` → writes `coverage/lcov.info`;
+`bun scripts/coverage-gaps.ts` lists `app/_components/create-app.ts`;
+`git status` shows no `coverage/` files.
+
+### Step 7c: Relative links in docs/ resolve (new test)
+
+Plans get condensed and deleted (docs/plans/README.md, "Lifecycle"), and
+nothing checks the links pointing at them. In `lib/docs/` add a test that
+walks every `*.md` under `docs/` (and `AGENTS.md`), extracts the relative
+link targets with `linkTargets` (`lib/docs/content.ts`), resolves each
+against the file's folder (drop `#anchors` and `http(s):`/`mailto:`
+targets), and asserts the target file exists. Report all misses in one
+failure message.
+
+**Verify**: `bun test ./lib/docs` → passes; temporarily break one link in
+a plan → fails naming file and target; restore.
+
 ### Step 8: Diagrams and gate
 
 Run `bun run docs:diagrams` (Mermaid blocks changed in data-pipeline.md,
@@ -403,6 +446,8 @@ and `bun run verify`.
 - [ ] `grep -n "320" .claude/skills/city-walker/SKILL.md` → the new cache numbers
 - [ ] `grep -n "n8ao\|postprocessing" .github/dependabot.yml` → no matches
 - [ ] `bun install --frozen-lockfile` exits 0; `grep -n activity-card bun.lock` → no matches
+- [ ] `bun scripts/coverage-gaps.ts` runs after `bun run test:coverage`; CI's unit job uploads `coverage/`
+- [ ] the docs link test exists and passes
 - [ ] `git status` shows only in-scope files changed
 
 ## STOP conditions

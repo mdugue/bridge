@@ -196,7 +196,7 @@ say "e2e not run locally" in the status row — CI runs them.
 
 ## Scope
 
-**In scope**: `app/_components/tile-stream.ts` (step 1 extraction only),
+**In scope**: `lib/city/features.test.ts` (step 5b), `app/_components/tile-stream.ts` (step 1 extraction only),
 `app/_components/tile-stream.test.ts`, `app/_components/collision.test.ts`
 (create), `app/_components/create-app.ts` (add the `kerbs` census entry
 only), `e2e/city-walk.spec.ts`, `app/_components/stylize-effect.test.ts`
@@ -334,6 +334,26 @@ would test nothing).
 **Verify**: `bun test app/_components/pipeline-anchors.test.ts` → all pass
 (same assertions, now against three's key).
 
+### Step 5b: The fixture checks plan 008 left (contract rows)
+
+`lib/city/tile-data.test.ts` already checks that every tile carries every
+kind of file (CityJSON, `landcover_*.png` + legend, DGM `.tif`/`.tfw`, …).
+Still unchecked, from plan 008 step 6 — add them to
+`lib/city/features.test.ts` next to the existing per-kind contract tests
+(follow their style; they iterate `tileIds(DRESDEN)`):
+
+- every tile's `canopy_*.geojson` and `vegrows_*.geojson` has at least one
+  feature (true on all fifteen today; an empty file means a skipped bake);
+- every `bridge_*.geojson` feature's `kind` ∈ {`rail`, `road`, `path`, `other`};
+- every `rail_*.geojson` feature's `tracks` is a finite number ≥ 1 when
+  present (8 of 15 rail files are legitimately empty — no rail lines);
+- every `roofcolor_*.json` has the shape `{ meta, roofs }`;
+- every committed `.geojson` has `type === "FeatureCollection"`.
+
+**Verify**: `bun test lib/city/features.test.ts` → all pass; break one
+committed file locally (e.g. set a bridge `kind` to `"x"`) → fails; restore
+with `git checkout -- data/`.
+
 ### Step 6: Gate
 
 **Verify**: `bun run fix && bun run verify` → exit 0.
@@ -352,6 +372,7 @@ test switched to three's key.
 - [ ] `grep -n "stats.stairs\|stats.kerbs\|stats.sport" e2e/city-walk.spec.ts` → 3 matches
 - [ ] `grep -n "EYE_HEIGHT" e2e/city-walk.spec.ts` → 1 match
 - [ ] `grep -n "getGeometryCacheKey" app/_components/pipeline-anchors.test.ts` → 1 match
+- [ ] Step 5b's five contract checks exist in `lib/city/features.test.ts` and pass
 - [ ] Only in-scope files changed
 
 ## STOP conditions

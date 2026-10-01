@@ -8,7 +8,7 @@
 > this plan's row in `docs/plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- scripts/bake.ts pipeline/bake/__main__.py pipeline/bake/stairs.py pipeline/bake/rail.py pipeline/bake/ingest_sn.py pipeline/bake/common.py scripts/prepare-data.ts scripts/bake-wissen-hero.ts app/wissen/_components/landing.tsx`
+> `git diff --stat dd470e9..HEAD -- scripts/bake.ts pipeline/bake/__main__.py pipeline/bake/stairs.py pipeline/bake/rail.py pipeline/bake/ingest_sn.py pipeline/bake/common.py scripts/prepare-data.ts scripts/bake-wissen-hero.ts app/wissen/_components/landing.tsx`
 > On a change in the lines a step edits, compare with the excerpts below;
 > a mismatch is a STOP condition for that step.
 
@@ -19,7 +19,7 @@
 - **Risk**: LOW
 - **Depends on**: 037 (correct test commands)
 - **Category**: bug
-- **Planned at**: commit `a28de75`, 2026-10-01
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035)
 
 ## Why this matters
 
@@ -156,7 +156,7 @@ writes its DGM to `data/dgm/dgm1_t_tiff/dgm1_t.tif`; stairs tests are in
 The download tests (`pipeline/tests/test_ingest.py`) use `file://` URLs
 (`src.as_uri()`) — a scheme check must not live in `download()` itself.
 
-### 4 — prepare-data (`scripts/prepare-data.ts:155-207`)
+### 4 — prepare-data (`scripts/prepare-data.ts:144-197`)
 
 ```ts
 function publish(logical: string, content: Uint8Array): string {

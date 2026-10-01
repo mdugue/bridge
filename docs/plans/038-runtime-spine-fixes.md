@@ -7,7 +7,7 @@
 > plan's row in `docs/plans/README.md` (status + deviations).
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- app/_components/sun-rig.ts app/_components/create-app.ts app/_components/tile-stream.ts lib/city/boot-phases.ts app/_components/gpu-recovery.ts app/_components/crash-report.tsx lib/city/crash-trail.ts app/_components/keyboard-controls.ts app/_components/camera-pose.ts`
+> `git diff --stat dd470e9..HEAD -- app/_components/sun-rig.ts app/_components/create-app.ts app/_components/tile-stream.ts lib/city/boot-phases.ts app/_components/gpu-recovery.ts app/_components/crash-report.tsx lib/city/crash-trail.ts app/_components/keyboard-controls.ts app/_components/camera-pose.ts`
 > If any of these changed, compare the excerpts below against the live
 > code; a mismatch in the lines a step edits is a STOP condition for that
 > step (the other steps may proceed).
@@ -19,7 +19,7 @@
 - **Risk**: LOW–MED (step 2 touches the boot state machine)
 - **Depends on**: 037 (for the correct test command); otherwise none
 - **Category**: bug
-- **Planned at**: commit `a28de75`, 2026-10-01
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035)
 
 ## Why this matters
 
@@ -117,7 +117,7 @@ place the shadow camera's `matrixWorld`/`matrixWorldInverse` are updated.
 `extras.dressing` is set (`if (extras.dressing) { this.queueDressing(scene, terrain, extras); }`),
 and `queueDressing`'s `finally` does `this.settled.add(extras.tileId)`
 (`:1012-1014`). Only level 0 carries `dressing`
-(`scripts/prepare-data.ts:699`: `...(level === 0 ? { dressing: pickFiles(names, DRESSING_KINDS) } : {})`).
+(`scripts/prepare-data.ts:591`: `...(level === 0 ? { dressing: pickFiles(names, DRESSING_KINDS) } : {})`).
 `TerrainLayer` has `level: 0 | 1` (`terrain-layer.ts:126`) and the stream
 holds every loaded one in `stream.terrains: Set<TerrainLayer>`
 (`tile-stream.ts:164`). Whether a `TerrainLayer` knows its tile id: check

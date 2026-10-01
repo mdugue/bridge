@@ -9,7 +9,7 @@
 > this plan's row in `docs/plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- app/_components/rail-layer.ts app/_components/rail-layer.test.ts lib/city/bridge.ts app/_components/stylize-effect.ts app/_components/paper-scene.ts app/_components/paper-scene.test.ts app/_components/post-stack.ts`
+> `git diff --stat dd470e9..HEAD -- app/_components/rail-layer.ts app/_components/rail-layer.test.ts lib/city/bridge.ts lib/city/ground-join.ts app/_components/stylize-effect.ts app/_components/paper-scene.ts app/_components/paper-scene.test.ts app/_components/post-stack.ts`
 > On a change in the lines a step edits, compare against the excerpts; a
 > mismatch is a STOP condition for that step.
 >
@@ -23,7 +23,7 @@
 - **Risk**: LOW (1, 2), LOW–MED (3), MED (4: new paper programs to warm)
 - **Depends on**: 037 (correct test command)
 - **Category**: bug
-- **Planned at**: commit `a28de75`, 2026-10-01
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035)
 
 ## Why this matters
 
@@ -61,17 +61,21 @@
 
 ### 1 — approaches (`app/_components/rail-layer.ts`, `lib/city/bridge.ts`)
 
-`lib/city/bridge.ts:640-648` (`approachLanding`):
+`lib/city/bridge.ts:639-649` (`approachLanding`, since ADR 0035 through the
+shared `reachLevel` of `lib/city/ground-join.ts`):
 
 ```ts
-  const g0 = groundAt(0);
-  if (g0 === null) {
-    return null;
-  }
-  if (g0 >= top - APPROACH_FLUSH_M) {
-    return 0;
-  }
+  return reachLevel(groundAt, (d) => top - grade * d, {
+    reach: APPROACH_REACH_M,
+    step: APPROACH_STEP_M,
+    tolerance: APPROACH_FLUSH_M,
+    onUnknown: "stop",
+  });
 ```
+
+`reachLevel` walks `d = 0, step, 2·step, …` and returns the first `d` where
+the ground reaches the level — **0 when the column is already flush** (the
+ground at the deck end within `APPROACH_FLUSH_M` = 0.05 m of the top).
 
 A column with landing distance 0 gets `land` = the column itself
 (`rail-layer.ts:900-909`: `land: { x: c.x + dir.x * d, y: c.y - grade * d, z: c.z + dir.z * d }`).
@@ -207,8 +211,8 @@ fixtures).
 `app/_components/stylize-effect.ts`, `app/_components/paper-scene.ts`
 (+ test), and — only if step 4's warm-up needs it — `app/_components/post-stack.ts`.
 
-**Out of scope**: `lib/city/bridge.ts` (the landing rule is right; the
-drawing is wrong), `tram-layer.ts`, the bakes (`pipeline/bake/rail.py`:
+**Out of scope**: `lib/city/bridge.ts` and `lib/city/ground-join.ts` (the
+landing rule is right; the drawing is wrong), `tram-layer.ts`, the bakes (`pipeline/bake/rail.py`:
 adding a bridge flag to rail lines is a better long-term fix but a re-bake
 of fifteen tiles — note it, don't do it), `hash21`'s formula, every layer
 material (Papier must stay a render-time swap: ADR 0034, "nothing a tile

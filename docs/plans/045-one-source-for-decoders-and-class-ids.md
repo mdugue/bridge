@@ -9,7 +9,7 @@
 > `docs/plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- lib/city/landcover.ts lib/city/landcover.test.ts lib/city/soundscape.ts lib/city/markings.ts lib/city/cultivated.ts pipeline/bake`
+> `git diff --stat dd470e9..HEAD -- lib/city/landcover.ts lib/city/landcover.test.ts lib/city/soundscape.ts lib/city/markings.ts lib/city/cultivated.ts pipeline/bake`
 
 ## Status
 
@@ -18,7 +18,7 @@
 - **Risk**: LOW (steps 1, 2, 4), MED (step 3 changes tag parsing)
 - **Depends on**: 037 (test commands); do **before** plan 017 phase 4 (OSM land cover renumbers/adds classes)
 - **Category**: tech-debt
-- **Planned at**: commit `a28de75`, 2026-10-01
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035: `pipeline/bake/common.py` now also holds `label_line`/`smooth_labels`/`absorb_short`, moved out of `tram.py` — the shared-helper home this plan uses too)
 
 ## Why this matters
 

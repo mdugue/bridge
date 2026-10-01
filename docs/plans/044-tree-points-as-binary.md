@@ -8,7 +8,7 @@
 > with the numbers.
 >
 > **Drift check (run first)**:
-> `git diff --stat a28de75..HEAD -- scripts/prepare-data.ts app/_components/tile-stream.ts app/_components/fetch-optional.ts lib/city/tile.ts lib/city/features.ts`
+> `git diff --stat dd470e9..HEAD -- scripts/prepare-data.ts app/_components/tile-stream.ts app/_components/fetch-optional.ts lib/city/tile.ts lib/city/features.ts`
 
 ## Status
 
@@ -17,7 +17,7 @@
 - **Risk**: MED — a published-artifact format change (the runtime is the only reader)
 - **Depends on**: 037; best after 042 (both touch the boot's main-thread budget, no file overlap)
 - **Category**: perf
-- **Planned at**: commit `a28de75`, 2026-10-01
+- **Planned at**: commit `a28de75`, 2026-10-01; refreshed against `dd470e9` (main with ADR 0035)
 
 ## Why this matters
 
@@ -35,7 +35,7 @@ governor is already busy. Wire size is fine (gzip takes 9.5 MB to
 
 ## Current state
 
-`scripts/prepare-data.ts:263-286` — the canopy and the laser-scan crowns
+`scripts/prepare-data.ts:252-281` — the canopy and the laser-scan crowns
 are already re-serialised at build time (points inside scan structures
 dropped):
 
