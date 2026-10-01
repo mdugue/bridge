@@ -99,7 +99,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   `instanceMatrix`, `instanceFloat`).
 - `three-utils.ts` — `sceneMaterial(key, make)` (scene-wide node
   materials), the dispose helpers, `sceneShared`, the texture byte tracker.
-- `height-fog.ts` — `SceneFog`: distance fog, the valley pool (*Talnebel*)
+- `height-fog.ts` — `SceneFog`: distance fog, the valley pool (*Talnebel*;
+  its depth from the site's ground relief, `lib/city/valley-fog.ts`, set
+  in `create-app.ts` from the tileset's `extras.ground`)
   and the site-edge haze as **one `scene.fogNode`**.
 - `sun-rig.ts` — directional light + shadow camera, the TSL `SkyMesh` dome
   (tempered, with a horizon haze band), hemisphere fill, fog colour by time
@@ -144,6 +146,30 @@ chip. Every tile change re-renders the shadow map. The layers:
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
   (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
   replaced by stepped blocks from `pipeline/bake/roofs.py`; ADR 0036).
+- Beyond LoD2 (plan 050, ADR 0038): geometry is added only where DOM1
+  measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
+  names it — never from the surface model alone (cranes). `structures.py`
+  → `lib/city/structures.ts` lathes chimneys/towers/masts, extrudes
+  missing buildings and builds a landmark's relief from its measured
+  height field (`reliefMesh`: the `grid` on 1 m, heights above the host's
+  highest LoD2 roof, −1 outside, lightly smoothed in the bake; corners
+  average the patch cells around them, each edge wall down to its cell's
+  `floor` — the LoD2 roof under it, so a tower folded into a pitched nave
+  stands on the slope — no bottom face; DOM voids below the LoD2 roof are
+  filled in the bake —
+  a truncated spire rises to its tip; the old stacked slabs made a stepped
+  pyramid, and a relief without `grid` builds nothing); `appendGapStructures`
+  puts them in the city mesh with `source` = 2 (a relief copies its host's
+  row, so demolish takes it along). A tower, lighthouse or water tower
+  under a LoD2 roof is LoD2's own (`BUILT_TOWERS`) — no second column. OSM `building:material` / `building:colour` /
+  `roof:colour` reach the clay only through `osmColourTint` (hue kept,
+  saturation ≤ 0.45, lightness clamped) and the palette families; glass
+  (flag 4) and metal (8) are a cool tint, lower roughness and, on glass, a
+  Fresnel sky sheen (`visual-style.ts`: `osmColour`, `clayGlow`) — no
+  panes, no textures (the window grid is vetoed). Landmarks (flag 16) come from Wikidata
+  (`landmarks.py`, cached at fetch time), the site's twelve in the
+  tileset's `extras.landmarks` → the HUD's *Wahrzeichen* chips →
+  `landmarkVantage`.
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
   `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
@@ -558,6 +584,16 @@ a pylon and a fan. The deck's `depth` comes from the OSM fairway clearance
 over the DGM water; beam piers keep the fairway clear. The LoD2's own
 bridge slabs (`53001_*`) are dropped from the building mesh.
 
+**Underground is not drawn.** The DLM's rail lines say nothing of a
+tunnel, so `rail.py` cuts a stretch that runs within 2 m of a DLM tunnel
+(`ver06` `BWF=1870`) for more than 15 m — a shorter overlap is a surface
+track crossing over it (a 6 m reach took Munich Hauptbahnhof's surface
+tracks). DLM trams (`BKT=1201`, standard gauge in Bavaria) are the OSM
+tram layer's. OSM platforms below ground (`osm.below_ground`: tunnel,
+`location=underground`, negative `layer`/`level`) and tram ways in a
+tunnel (`osm.in_tunnel`) are skipped. A tram's `street` bed is any
+pavement: road, path (squares, pedestrian zones) or built-up.
+
 ## Performance model
 
 Buildings are already merged (low draw calls) — **BatchedMesh is moot** and
@@ -595,6 +631,8 @@ bun run shots   # = SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed
 # writes shots/<name>.png (HUD hidden, real GPU). shots/ is gitignored.
 # Before/after pairs: SHOTS_QUERY=scene=lite SHOTS_TAG=x bun run shots
 # appends the query to the page URL and writes shots/<name>.x.png.
+# The shots are taken at /dresden; SHOTS_SITE=leipzig takes them in another
+# built city.
 # Plain `bun run test:e2e` ignores the harness (testIgnore in playwright.config.ts).
 ```
 
@@ -638,40 +676,64 @@ because boot is the largest fixed cost left once frames are cheap. The
 
 ## Data pipeline
 
+Every script takes the site as its first argument (`bun run fetch leipzig`,
+ADR 0037); its data is `data/<site>/`. One deployment serves every site
+whose data is ready, each at `/<site>`; `/` is the start page.
 Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
-`data/_raw/<site>/{dom1,dop,dlm,osm,trees,lsc,downloads}`; no Git-LFS. Committed by
-design: the small derived per-tile artifacts in `data/dlm/` and `data/dop/`,
-the CityJSON, **and the DGM1 GeoTIFF + `.tfw` per tile in `data/dgm/`**
-(~13–15 MB each), because `prepare-data.ts` bakes the terrain from it at
-build time and the canopy/rail bakes read it.
+`data/_raw/<provider>/{dom1,dop,dlm,osm,trees,lsc,downloads}`, shared by the
+provider's sites; no Git-LFS. The build sources are the CityJSON **and the
+DGM1 GeoTIFF per tile in `data/<site>/{cityjson,dgm}/`** — `prepare-data.ts`
+bakes the terrain from it at build time and the canopy/rail bakes read it —
+next to the small derived artifacts in `data/<site>/{dlm,dop}/`. Dresden,
+Grimma, Hamburg, Leipzig, Meißen, München and Unna are committed; a new
+site's folder is a maintainer decision. `bun run fetch <site>` downloads everything through the
+provider's adapter (`pipeline/bake/providers/<id>.py`) and converts the LoD2
+CityGML itself (`citygml.py`); `bun run site <site>` says what is missing.
 
 **Stage 1, the offline bakes** (ADR 0025): one Python package,
 `pipeline/bake/`, in a uv environment (numpy, rasterio, pyogrio, shapely,
 Pillow, scipy, scikit-image; GDAL inside the wheels, with the OSM driver;
 laspy for the laser scan — no PDAL). If a tool is missing,
 fix the environment (`pipeline/pyproject.toml`), don't bend the code.
-`bun run bake` runs every step for every tile of the site with its extent and
+`bun run bake <site>` runs every step for every tile of the site with its extent and
 CRS, land cover first:
 
 ```bash
-bun run bake --ingest                  # download raw inputs (Saxony: GeoSN + Geofabrik), then bake
-bun run bake 33412_5656_2_sn           # one tile, all steps
-bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
-                                       #   landcover islands canopy trees ndvi roof-colour osm-buildings
-                                       #   rail lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside roofs skyview
-                                       #   soundmarks lowveg cultivated small-buildings
+bun run fetch dresden                  # download what the site needs (its provider's adapter)
+bun run bake dresden                   # every tile, every step
+bun run bake dresden 33412_5656_2_sn   # one tile, all steps
+bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
+                                       #   landcover islands rail canopy trees ndvi roof-colour
+                                       #   osm-buildings lamps monuments furniture walls stairs surface edges
+                                       #   markings sport tram riverside roofs skyview soundmarks
+                                       #   lowveg cultivated small-buildings
+                                       #   landmarks structures
 bun run test:pipeline                  # pytest + ruff
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the
-runtime falls back); rail decks fall back to the DGM ramp.
+runtime falls back); rail decks fall back to the DGM ramp. An RGB-only DOP
+(Bavaria) gets the NDVI raster from the visible bands (GLI, `ndvi.py`
+`gli_raster`). Without a Basis-DLM (Hamburg, Berlin) `rail` reads OSM
+(`rail_osm.py`: rails, ballast beds, bridge ways merged per bridge and
+level) — it runs before `canopy`, which keeps crowns off those decks.
+Stand-ins are marked per city in the generated
+`docs/guide/*/sources-by-city.md` (`bun run docs:matrix`, ADR 0039). `rasters.py`
+refuses a height mosaic flatter than 0.5 m (1–99 %) — Hamburg's DGM was
+once committed as 0 m everywhere and every house floated; the pipeline
+tests hold every committed DGM to ≥ 2 m. The laser scan (`--lsc`) is read
+for Saxony (GeoSN's LSC), NRW (3D-Messdaten) and Bavaria (four 1 km LAZ
+merged per tile by `lsc.merge_laz`, each provider's classes mapped into
+AdV's by its table — NRW keeps the crown tops in class 1); every scan's
+intensities are normalised against its own ground (`lsc.rasterise`).
 
-The later modules, one step each: `osm_buildings.py` (shops and heritage
-per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
+The later modules, one step each: `osm_buildings.py` (shops, heritage,
+material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
 `riverside.py`, `skyview.py` (DGM + LoD2, the rebuilt roofs of `roofs.py`
 in place of theirs),
-`soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
+`soundmarks.py` (bell towers), `small_buildings.py` (plan 034),
+`landmarks.py` and `structures.py` (plan 050; landmarks first, the relief
+is measured on their objects). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the
 neighbours through `Tile.neighbours` (the committed DGMs): markings
 measure on the neighbours' class rasters and paint a neighbour's crossing
@@ -680,11 +742,13 @@ takes a vineyard's slope from every DGM it touches, tram and small-buildings
 read the neighbours' furniture / scan — so bake those steps on every tile. All OSM layers come
 from the Geofabrik extract — no Overpass.
 
-**Stage 2, the build step** (`bun dev` / `bun run build` → `prepare-data.ts`):
-the tileset (`tileset.json`, `tileset-spawn.json`), per tile
+**Stage 2, the build step** (`bun dev` / `bun run build` →
+`prepare-sites.ts` → `prepare-data.ts <site>` for every ready site, then the
+index `public/data/sites.json` the start page and `app/[site]` read): per
+site the tileset (`tileset.json`, `tileset-spawn.json`), per tile
 `city_<tile>.glb.gz`, `terrain_<tile>_l0|l1.glb.gz`, `footprints_<tile>.json`
-and the side files, all content-hashed under `public/data/` with
-`manifest.json` as the one no-cache entry. `scripts/tile-glb.ts` owns the
+and the side files, all content-hashed under `public/data/<site>/` with its
+`manifest.json` (and the shared `sites.json`) as the no-cache entries. `scripts/tile-glb.ts` owns the
 glTF writing (meshopt, quantisation, the feature table); the `.tif` and the
 CityJSON are never served. It caches by content in `.cache/prepare-data`.
 

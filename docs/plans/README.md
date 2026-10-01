@@ -48,7 +48,7 @@ history. Decisions that came out of plans are written up as
 | 014 | Bring AGENTS.md, the skill, `docs/`, comments and the OSM attribution in line with the code | DONE | [completed.md](./completed.md#014--knowledge-base-currency--done) |
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0023 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
-| 017 | Any German city: site config, per-Land ingest adapters, NAS input, OSM land cover as a DLM substitute | **PARTIAL** — site config, Python bake package and the Saxony adapter built; open (rewritten 2026-10-01 for the Python pipeline): phase A (NRW adapter, a second site, per-tile provenance), B (NAS), C (OSM land cover — after plan 045), D (no-DOM1 trees, `site:check`, every site in the tests) | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
+| 017 | Any German city: site config, per-Land ingest adapters, NAS input, OSM land cover as a DLM substitute | **PARTIAL** — site config, Python bake package and the Saxony adapter built; plans 049 and 051 built most of phases A, C and D in their own shape (providers for SN, NW, BY, HH, BE; per-site data and provenance; OSM land cover, rails and decks; `bun run site <site>`; every site in the tests); open: B (NAS), D.1 (row-only trees without DOM1), a first run of Berlin's adapter | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
 | 019 | **The one GPU checklist**: backends, palette, quantisation, LOD and seams, shadows, GTAO and sky light, picture styles, frame time and memory, phones, deploy host, and the feature plates of plans 023–039 | **TODO** — needs a GPU and two phones; rewritten 2026-10-01 | [019-gpu-verification.md](./019-gpu-verification.md) |
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | DONE (2026-09-26) — the whole port, one path (WebGPU, its WebGL2 backend as the fallback), public API only; the spike's internal patches rejected for a top-level scene pass, `Instances` and `sceneMaterial`; look unjudged on a real GPU | [completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26) |
@@ -80,6 +80,9 @@ history. Decisions that came out of plans are written up as
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043 | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
 | 047 | Spike: "Problem melden" — the crash report with a destination, the view only on opt-in | **TODO** — spike; maintainer answers needed at its step 3 | [047-spike-report-a-problem.md](./047-spike-report-a-problem.md) |
 | 048 | Spike: a view as a `?snap=` link; committed QA views for plan 019 | **TODO** — spike + small build | [048-spike-view-links-and-qa-views.md](./048-spike-view-links-and-qa-views.md) |
+| 049 | Many sites: providers, per-site data, `bun run fetch <site>` → `bake` → build, eight sites with viewpoints; one deployment with a route per site (`/dresden`) and a start page to pick the city | **DONE** (2026-10-01) — Berlin's adapter untested; committing sites other than Dresden is the maintainer's call | [049-many-sites-one-env-var.md](./049-many-sites-one-env-var.md) |
+| 050 | Landmarks and what LoD2 leaves out: DOM1 gaps named by OSM (chimneys, towers, masts, missing buildings, a landmark's roof relief), OSM materials and colours in the clay palette, Wikidata landmarks in the HUD | **BUILT** (2026-09-28) — all three parts, baked on the seven committed sites: 386 columns, 920 missing buildings, 508 relief slabs on 74 landmark objects, 310 landmarks; the relief a measured height field since 2026-09-30 (re-bake `structures` everywhere), towers LoD2 draws no longer doubled; look unverified on a real GPU; since 2026-10-01 a tile's landmarks are those with ≥ 8 % of its top sitelinks (the *Dense tiles* item, plan 051) and the relief stands on the roof under each cell (Unna re-baked) | [050-landmarks-and-gaps.md](./050-landmarks-and-gaps.md) |
+| 051 | Stand-ins where a Land publishes less (OSM rails and decks without a DLM, a visible-band vegetation index without infrared, tree registers per city, Bavaria's laser scan), marked in a generated *Sources by city* page; looks derived from each city's data (facade context, valley-haze depth, tram gauge, landmarks per tile) instead of per-site switches | **BUILT** (2026-10-01) — Hamburg's 348 decks and 81 km of track, Hamburg's and Leipzig's registers, Munich's GLI baked; `osm-buildings`, `landmarks` and `structures` still to re-bake on most sites; Berlin not built; looks unverified on a real GPU | [051-stand-ins-and-derived-looks.md](./051-stand-ins-and-derived-looks.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
@@ -93,18 +96,21 @@ S/M/L.
    after 039 and 041–043, which edit the same files). The spikes 047 and
    048 can go any time after 038. Plan 019 (item 1) stays the one that
    needs a GPU; 039 step 4 and 048 part B add to its checklist. Plan 022
-   (the four tiles' re-bake) waits for 040 step 1; plan 017 phase C waits
-   for 045.
+   (the four tiles' re-bake) waits for 040 step 1. Plan 017 phase C was
+   built by plan 049 without 045's named class ids; 045 then covers
+   `landcover_osm.py` too.
 
 1. **Plan 019 (M, GPU) — the one GPU checklist.** Everything since the 3D
    Tiles switch was verified headless only. Since 2026-10-01 every "look
    unjudged on a GPU" of the condensed plans (023–035) and of the backlog
    is a ticked item there, grouped by feature; the plans' records in
    [completed.md](./completed.md) point to it.
-2. **Plan 017, the rest (M–L).** Rewritten 2026-10-01 for the Python
-   pipeline: the NRW adapter, a second site and per-tile provenance (A),
-   NAS input (B), OSM land cover as a class raster (C, after plan 045),
-   row-only trees without DOM1, `site:check`, every site in the tests (D).
+2. **Plan 017, the rest (S–M).** Plans 049 and 051 built most of it
+   (providers, per-site data, OSM land cover, rails and decks, `bun run
+   site`, every site in the tests); left: a NAS reader for Hamburg's open
+   Basis-DLM (B), row-only trees without DOM1 (D.1), per-tile provenance
+   (A.3), and a first run of Berlin's adapter. Decide which sites to
+   commit and deploy (plan 049, ADR 0037).
 3. ~~**Plan 020 (L, GPU-gated).**~~ Done 2026-09-26: WebGPU + TSL, every
    `onBeforeCompile` patch and both post libraries gone
    ([completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26)).
@@ -404,7 +410,9 @@ the port (2026-09-26) made of it:
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
 6. ~~**A provenance manifest per tile (S).**~~ Now plan 017 phase A step 3
    (the ingest adapter writes `data/<site>/<tile>.provenance.json` from the
-   values its checked downloads already know).
+   values its checked downloads already know). `bun run fetch <site>
+   [tile]` exists (plan 049), and `data/<site>/provenance.json` is the
+   hand-kept per-site version until then.
 7. **Offline repeat visits: a service worker over the tileset (S–M).**
    [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)
    already makes every `/data/*` file immutable and content-hashed, with

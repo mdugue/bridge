@@ -22,7 +22,7 @@ export default function WissenLayout({ children }: { children: ReactNode }) {
               aria-hidden
               className="size-3 rotate-45 rounded-xs border-2 border-primary"
             />
-            City Walk Dresden
+            City Walk
           </Link>
           <span aria-hidden className="text-muted-foreground/60">
             /

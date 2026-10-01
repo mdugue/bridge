@@ -1,5 +1,8 @@
 "use client";
 
+import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { EYE_HEIGHT } from "@/lib/city/pose";
+import type { Site } from "@/lib/city/site";
 import {
   LocateFixedIcon,
   NavigationIcon,
@@ -28,6 +31,7 @@ import {
   type StageFractions,
 } from "@/lib/city/load-stages";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
+import type { Landmark } from "@/lib/city/landmarks";
 import { createLookState } from "@/lib/city/look-state";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
@@ -53,7 +57,12 @@ import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
 import { useLiveMode } from "./live-mode";
-import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
+import {
+  LocateMessage,
+  type Say,
+  useHudMessage,
+  useLocateMe,
+} from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
@@ -64,6 +73,7 @@ import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
 import { readStoredStyle, writeStoredStyle } from "./style-memory";
 import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
+import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
 
@@ -245,7 +255,42 @@ function OffsiteDialog({
   );
 }
 
+/**
+ * The page was opened from another city's off-site dialog with where the
+ * player stands (`?at=lat,lng`, lib/city/geolocation.ts `arrivalHref`):
+ * put them there, on foot, and drop the parameter so a reload starts at the
+ * site's spawn again.
+ */
+function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
+  const at = arrivalOf(location.search);
+  if (!at) {
+    return;
+  }
+  const url = new URL(location.href);
+  url.searchParams.delete(ARRIVAL_PARAM);
+  history.replaceState(history.state, "", url);
+  const placement = placementOf(
+    { ...at, accuracy: 0, headingDeg: null },
+    site.provider.epsg,
+    h.terrainBounds
+  );
+  if (placement.kind !== "inside") {
+    return;
+  }
+  const now = h.getCameraState();
+  h.placeAt({
+    epsg: { x: placement.epsgX, y: placement.epsgY },
+    aboveGround: EYE_HEIGHT,
+    headingDeg: now.headingDeg,
+    pitchDeg: 0,
+    fov: now.fov,
+    mode: "walk",
+  });
+  say(`Willkommen in ${site.name} — du stehst, wo du bist`);
+}
+
 export default function CityWalk({ budget, tilesetUrl }: Props) {
+  const site = useSite();
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   const applySceneTime = useCallback(
@@ -255,6 +300,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const poseListeners = useRef<Set<(pose: PlayerPose) => void>>(new Set());
   const coarse = useCoarsePointer();
   const hud = useHudMessage();
+  const sayHud = hud.say;
   const locate = useLocateMe(handleRef, hud);
 
   // Probed once, before the renderer is created: three's raw backend error
@@ -344,6 +390,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     };
   });
   const [landcoverTiles, setLandcoverTiles] = useState<MapTile[]>([]);
+  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [fps, setFps] = useState<number | null>(null);
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
@@ -382,6 +429,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       container,
       budget,
       look,
+      site,
       tilesetUrl,
       initialDate: timeNow(),
       signal: aborter.signal,
@@ -475,12 +523,15 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         if (recovered) {
           recovery.current?.restore(h, recovered);
           trail.note("recovered", "after a lost GPU");
+        } else {
+          arriveAt(h, site, sayHud);
         }
         syncTime();
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
         setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
+        setLandmarks(h.landmarks);
         updatePocDebug({ handle: h, look, firstFrame: true });
         // The frame the scene goes live in. The loading screen stays up and
         // stops taking input: the city is now rendering behind its glass, and
@@ -530,7 +581,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         look: undefined,
       });
     };
-  }, [budget, look, tilesetUrl, supported, timeNow, syncTime]);
+  }, [budget, look, site, tilesetUrl, supported, timeNow, syncTime, sayHud]);
 
   const copySnapshot = () => {
     const h = handleRef.current;
@@ -674,6 +725,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           fps={fps}
           handleRef={handleRef}
           landcoverTiles={landcoverTiles}
+          landmarks={landmarks}
           latLng={latLng}
           look={lookValues}
           minutes={time.minutes}

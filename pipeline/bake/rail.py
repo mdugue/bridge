@@ -27,6 +27,7 @@ import shapely
 from rasterio.features import rasterize
 from rasterio.merge import merge
 
+from . import rail_osm
 from .bridge import (
     MAX_GRADE,
     RAIL_GRADE,
@@ -42,7 +43,7 @@ from .bridge import (
     wikidata_for,
 )
 from .common import OSM_ATTRIBUTION, Tile, column, feature, geometry_json, read_layer, write_geojson
-from .osm import has_extract, read_osm, tag
+from .osm import below_ground, has_extract, read_osm, tag
 
 WIDTH = {"rail": 9.0, "road": 11.0, "path": 3.5, "other": 8.0}
 CAMBER = 0.012
@@ -106,17 +107,65 @@ def merge_lines(lines: list[list[tuple[float, float]]]) -> list[list[tuple[float
     return out
 
 
+# A rail stretch under a tunnel for longer than this is cut out; a shorter
+# overlap is a surface track crossing one (m).
+TUNNEL_OVERLAP_M = 15.0
+# The Basis-DLM draws a tunnel on its rail's own axis: only a rail this
+# close to one runs through it. A wider reach took the surface tracks of
+# Munich's Hauptbahnhof, which run straight over the S-Bahn trunk line (m).
+TUNNEL_HALF_M = 2.0
+# Basis-DLM Bahnkategorie: trams (Straßenbahn) are the tram layer's, from
+# OSM — some Länder file them with the standard gauge (Munich).
+TRAM_BKT = {"1201"}
+
+
+def tunnels(tile: Tile) -> shapely.Geometry | None:
+    """Where the rails run underground: the Basis-DLM's tunnels (`ver06`
+    BWF 1870, "Tunnel, Unterführung"), as one area. Subways and S-Bahn trunk
+    lines are in the rail layer with nothing on the line itself to say they
+    are underground (Munich's Marienplatz, Leipzig's City-Tunnel)."""
+    areas = []
+    for layer in ("ver06_l", "ver06_f"):
+        path = tile.dlm / f"{layer}.shp"
+        if path.exists():
+            geoms, _ = read_layer(path, tile.bounds, where="BWF='1870'")
+            areas += [g.buffer(TUNNEL_HALF_M) for g in geoms if g is not None]
+    return shapely.union_all(areas) if areas else None
+
+
+def above_ground(line: shapely.Geometry, under: shapely.Geometry | None) -> list:
+    """The parts of a rail line not in a tunnel. Only a long overlap is cut:
+    a surface track that crosses over a tunnel keeps its crossing."""
+    if under is None or not line.intersects(under):
+        return [line]
+    inside = [p for p in shapely.get_parts(line.intersection(under)) if p.length > TUNNEL_OVERLAP_M]
+    if not inside:
+        return [line]
+    cut = line.difference(shapely.union_all([p.buffer(0.05) for p in inside]))
+    return [p for p in shapely.get_parts(cut) if p.length > 1.0]
+
+
 def rails(tile: Tile) -> list[dict]:
     geoms, fields = read_layer(
-        tile.dlm / "ver03_l.shp", tile.bounds, where="SPW='1000'", columns=["SPW", "GLS", "ELK"]
+        tile.dlm / "ver03_l.shp",
+        tile.bounds,
+        where="SPW='1000'",
+        columns=["SPW", "GLS", "ELK", "BKT"],
     )
+    under = tunnels(tile)
     groups: dict[tuple[int, int], list] = defaultdict(list)
-    for g, gls, elk in zip(
-        geoms, column(fields, "GLS", geoms), column(fields, "ELK", geoms), strict=True
+    for g, gls, elk, bkt in zip(
+        geoms,
+        column(fields, "GLS", geoms),
+        column(fields, "ELK", geoms),
+        column(fields, "BKT", geoms),
+        strict=True,
     ):
+        if set(str(bkt).split("#")) <= TRAM_BKT:
+            continue
         tracks = {"2000": 2, "3000": 3}.get(str(gls), 1)
         electrified = 1 if str(elk) == "1000" else 0
-        for part in shapely.get_parts(g):
+        for part in (p for line in shapely.get_parts(g) for p in above_ground(line, under)):
             coords = [(x, y) for x, y, *_ in part.coords]
             if len(coords) >= 2:
                 groups[(tracks, electrified)].append(coords)
@@ -166,6 +215,8 @@ def mosaic(paths: list[Path], bounds: tuple[float, float, float, float]):
 
 
 NODATA = -9999.0
+# how far either side of a network's centreline a deck point counts as on it (m)
+NETWORK_REACH = {"rail": 8.0, "road": 8.0, "path": 5.0}
 
 
 class Ground:
@@ -173,7 +224,7 @@ class Ground:
     across a seam gets the same heights from either tile — on a 1 m grid,
     and the network masks."""
 
-    def __init__(self, tile: Tile):
+    def __init__(self, tile: Tile, networks: dict[str, list] | None = None):
         xmin, ymin, xmax, ymax = tile.bounds
         self.bounds = (xmin - MARGIN, ymin - MARGIN, xmax + MARGIN, ymax + MARGIN)
         dgms = sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
@@ -185,14 +236,18 @@ class Ground:
             dom, dom_transform = mosaic(sorted((tile.raw / "dom1").glob("*.tif")), self.bounds)
             if dom is not None and dom.shape == self.dgm.shape and dom_transform == self.transform:
                 self.dom = dom
+        if networks is None:  # the Basis-DLM's networks
+            networks = {
+                "rail": read_layer(tile.dlm / "ver03_l.shp", self.bounds, where="SPW='1000'")[0],
+                "road": read_layer(tile.dlm / "ver01_l.shp", self.bounds)[0],
+                "path": read_layer(tile.dlm / "ver02_l.shp", self.bounds)[0],
+            }
         self.masks = {
-            "rail": self._mask(tile, "ver03_l", 8, "SPW='1000'"),  # heavy rail only
-            "road": self._mask(tile, "ver01_l", 8),
-            "path": self._mask(tile, "ver02_l", 5),
+            kind: self._mask(networks.get(kind, []), NETWORK_REACH[kind])
+            for kind in ("rail", "road", "path")
         }
 
-    def _mask(self, tile: Tile, layer: str, buffer: float, where: str | None = None):
-        geoms, _ = read_layer(tile.dlm / f"{layer}.shp", self.bounds, where=where)
+    def _mask(self, geoms, buffer: float):
         if len(geoms) == 0:
             return None
         out = np.zeros(self.dgm.shape, dtype=np.uint8)
@@ -395,11 +450,27 @@ def footprint_of(line, polys) -> int:
 
 
 def bridges(tile: Tile, structures, marks, known) -> list[dict]:
-    ground = Ground(tile)
+    """The decks of the Basis-DLM's bridges (`ver06`, BWF 1800)."""
     line_geoms, line_fields = read_layer(
         tile.dlm / "ver06_l.shp", tile.bounds, where="BWF='1800'", columns=["BWF", "NAM"]
     )
     poly_geoms, _ = read_layer(tile.dlm / "ver06_f.shp", tile.bounds, where="BWF='1800'")
+    lines = [
+        (g, name or None, None)
+        for g, name in zip(line_geoms, column(line_fields, "NAM", line_geoms), strict=True)
+    ]
+    return decks(Ground(tile), lines, list(poly_geoms), structures, marks, known)
+
+
+def decks(
+    ground: Ground, lines: list, poly_geoms: list, structures, marks, known, merge=False
+) -> list[dict]:
+    """Decks from bridge centrelines `(geometry, name, kind or None)` and
+    footprints: a line runs on the footprint it lies on, else is buffered by
+    its kind's width; a footprint no line claimed is a deck of its own.
+    With `merge` (OSM, where a carriageway, its pavements and a cycle track
+    are separate ways), a line on a footprint already claimed adds nothing,
+    and the buffers of the remaining lines on one level merge into one deck."""
     polys = []
     for g in poly_geoms:
         for part in shapely.get_parts(g):
@@ -423,27 +494,72 @@ def bridges(tile: Tile, structures, marks, known) -> list[dict]:
             )
         )
 
-    for g, name in zip(line_geoms, column(line_fields, "NAM", line_geoms), strict=True):
+    loose = []
+    for g, name, given, *rest in lines:
+        width = rest[0] if rest else None
+        level = rest[1] if len(rest) > 1 else 0
         for part in shapely.get_parts(g):
             coords = [(x, y) for x, y, *_ in part.coords]
             if len(coords) < 2:
                 continue
-            pts = []
-            for i in range(len(coords) - 1):
-                a, b = coords[i], coords[i + 1]
-                pts += [a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)]
-            pts.append(coords[-1])
-            kind = ground.classify(pts)
+            kind = given or ground.classify(midpoints(coords))
             best = footprint_of(part, polys)
             if best >= 0:
                 polys[best][3] = True
-                emit(polys[best][0], name or None, kind, coords)
+                emit(polys[best][0], name, kind, coords)
+            elif merge and on_claimed(part, polys):
+                continue
+            elif merge:
+                loose.append((part, name, kind, width or WIDTH[kind], level))
             else:
-                emit(buffer_line(coords, WIDTH[kind] / 2), name or None, kind, coords)
+                emit(buffer_line(coords, WIDTH[kind] / 2), name, kind, coords)
+    for ring, name, kind, centre in merged_decks(loose):
+        emit(ring, name, kind, centre)
     for p in polys:
         if not p[3]:
             emit(p[0], None, ground.classify(p[0] + [(p[1], p[2])]))
     return features
+
+
+def midpoints(coords):
+    """A line's vertices and the midpoints between them."""
+    pts = []
+    for a, b in zip(coords, coords[1:], strict=False):
+        pts += [a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)]
+    return [*pts, coords[-1]]
+
+
+def on_claimed(line, polys) -> bool:
+    """Whether a line lies on a footprint another line already runs on."""
+    share = LINE_ON_FOOTPRINT * line.length
+    return any(p[3] and line.intersection(shapely.buffer(p[4], 1.0)).length > share for p in polys)
+
+
+KIND_RANK = {"rail": 0, "road": 1, "path": 2, "other": 3}
+
+
+def merged_decks(loose):
+    """One deck per group of touching buffered lines on one level: its
+    outline, the first name, the weightiest kind (rail over road over path)
+    and the longest line as its centre."""
+    by_level: dict = defaultdict(list)
+    for item in loose:
+        by_level[item[4]].append(item)
+    out = []
+    for items in by_level.values():
+        shapes = [shapely.buffer(line, width / 2, cap_style="flat") for line, *_, width, _ in items]
+        merged = shapely.union_all(shapes)
+        for part in shapely.get_parts(merged):
+            if not isinstance(part, shapely.Polygon) or part.area < 1.0:
+                continue
+            members = [it for it, sh in zip(items, shapes, strict=True) if sh.intersects(part)]
+            longest = max(members, key=lambda it: it[0].length)
+            kind = min((it[2] for it in members), key=lambda k: KIND_RANK[k])
+            name = next((it[1] for it in members if it[1]), None)
+            ring = [(x, y) for x, y, *_ in part.simplify(0.3).exterior.coords]
+            centre = [(x, y) for x, y, *_ in longest[0].coords]
+            out.append((ring, name, kind, centre))
+    return out
 
 
 # --- platforms ---------------------------------------------------------------------
@@ -484,7 +600,7 @@ def platforms(tile: Tile) -> list[dict]:
             column(fields, "other_tags", geoms),
             strict=True,
         ):
-            if not is_platform(railway, other):
+            if not is_platform(railway, other) or below_ground(other):
                 continue
             for part in shapely.get_parts(g):
                 if (
@@ -499,6 +615,9 @@ def platforms(tile: Tile) -> list[dict]:
 
 
 def run(tile: Tile) -> None:
+    if not tile.products.dlm:
+        run_osm(tile)
+        return
     if not tile.has_dlm("the rail layer (tracks, ballast, bridges, platforms)"):
         return
     write_geojson(tile.out("dlm", f"railarea_{tile.id}.geojson"), ballast(tile), tile.epsg)
@@ -512,6 +631,40 @@ def run(tile: Tile) -> None:
         tile.epsg,
         OSM_ATTRIBUTION,
     )
+    write_platforms(tile, has_osm)
+    print(f"{tile.id}: rail layer written")
+
+
+def run_osm(tile: Tile) -> None:
+    """Without a Basis-DLM: the same four files from OSM (rail_osm.py)."""
+    if not has_extract(tile, "the rail layer from OSM"):
+        return
+    print(f"{tile.id}: no Basis-DLM — rails, ballast and bridges from OSM")
+    write_geojson(
+        tile.out("dlm", f"railarea_{tile.id}.geojson"),
+        rail_osm.ballast(tile),
+        tile.epsg,
+        OSM_ATTRIBUTION,
+    )
+    write_geojson(
+        tile.out("dlm", f"rail_{tile.id}.geojson"), rail_osm.rails(tile), tile.epsg, OSM_ATTRIBUTION
+    )
+    ground = Ground(tile, rail_osm.networks(tile))
+    found = decks(
+        ground,
+        rail_osm.bridge_lines(tile),
+        rail_osm.footprints(tile),
+        osm_structures(tile),
+        fairway_marks(tile),
+        load_wikidata(tile),
+        merge=True,
+    )
+    write_geojson(tile.out("dlm", f"bridge_{tile.id}.geojson"), found, tile.epsg, OSM_ATTRIBUTION)
+    write_platforms(tile, True)
+    print(f"{tile.id}: rail layer written from OSM ({len(found)} decks)")
+
+
+def write_platforms(tile: Tile, has_osm: bool) -> None:
     if has_osm:
         write_geojson(
             tile.out("dlm", f"platform_{tile.id}.geojson"),
@@ -519,4 +672,3 @@ def run(tile: Tile) -> None:
             tile.epsg,
             OSM_ATTRIBUTION,
         )
-    print(f"{tile.id}: rail layer written")

@@ -8,39 +8,57 @@ as tall in the nDOM as a crown, and would have become one."""
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import rasterio
 import shapely
+import shapely.geometry
 from rasterio.features import rasterize
 
+from . import landcover_osm
 from .common import Tile, feature, read_layer, write_geojson
 
 MIN_H, MAX_H = 3.0, 45.0
 BLOCKED = (5, 6, 7, 8)  # railway, path, road, water
+WOODED = (2, 3)  # forest, copse
 PARK = "OBJART_TXT='AX_SportFreizeitUndErholungsflaeche'"
 BRIDGE = "BWF='1800'"
 BRIDGE_REACH = 10.0  # no tree this close to a bridge's centreline or deck (m)
 
 
 def vegetation_mask(tile: Tile, px: int) -> np.ndarray:
-    geoms = [
-        *read_layer(tile.dlm / "veg02_f.shp", tile.bounds)[0],
-        *read_layer(tile.dlm / "veg03_f.shp", tile.bounds)[0],
-        *read_layer(tile.dlm / "sie02_f.shp", tile.bounds, where=PARK)[0],
-    ]
+    """Forest, copse and parks: from the Basis-DLM, or without one from the
+    class raster's forest and copse plus OSM's parks."""
+    if tile.products.dlm:
+        geoms = [
+            *read_layer(tile.dlm / "veg02_f.shp", tile.bounds)[0],
+            *read_layer(tile.dlm / "veg03_f.shp", tile.bounds)[0],
+            *read_layer(tile.dlm / "sie02_f.shp", tile.bounds, where=PARK)[0],
+        ]
+    else:
+        geoms = landcover_osm.parks(tile)
     mask = np.zeros((px, px), dtype=np.uint8)
     if geoms:
         rasterize(((g, 1) for g in geoms), out=mask, transform=tile.transform(px))
+    if not tile.products.dlm:
+        mask |= np.isin(class_raster_at(tile, (px, px)), WOODED).astype(np.uint8)
     return mask
 
 
 def bridge_mask(tile: Tile, px: int) -> np.ndarray:
     """The bridges of the DLM (centrelines and deck outlines), grown by
-    BRIDGE_REACH."""
+    BRIDGE_REACH; without a DLM the decks the rail step baked from OSM
+    (`bridge_<tile>.geojson`, rail_osm.py)."""
     geoms = [
         *read_layer(tile.dlm / "ver06_l.shp", tile.bounds, where=BRIDGE)[0],
         *read_layer(tile.dlm / "ver06_f.shp", tile.bounds, where=BRIDGE)[0],
     ]
+    baked = tile.out("dlm", f"bridge_{tile.id}.geojson")
+    if not tile.products.dlm and baked.exists():
+        geoms += [
+            shapely.geometry.shape(f["geometry"]) for f in json.loads(baked.read_text())["features"]
+        ]
     mask = np.zeros((px, px), dtype=np.uint8)
     if geoms:
         grown = (shapely.buffer(g, BRIDGE_REACH) for g in geoms)
@@ -48,8 +66,8 @@ def bridge_mask(tile: Tile, px: int) -> np.ndarray:
     return mask
 
 
-def blocked_mask(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
-    """The class raster's blocked classes, nearest-sampled onto `shape`."""
+def class_raster_at(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
+    """The baked class raster, nearest-sampled onto `shape`."""
     cls = tile.classes()
     if cls is None:
         raise FileNotFoundError(
@@ -57,7 +75,12 @@ def blocked_mask(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
         )
     rows = np.minimum((np.arange(shape[0]) * cls.shape[0]) // shape[0], cls.shape[0] - 1)
     cols = np.minimum((np.arange(shape[1]) * cls.shape[1]) // shape[1], cls.shape[1] - 1)
-    return np.isin(cls[np.ix_(rows, cols)], BLOCKED)
+    return cls[np.ix_(rows, cols)]
+
+
+def blocked_mask(tile: Tile, shape: tuple[int, int]) -> np.ndarray:
+    """The class raster's blocked classes, nearest-sampled onto `shape`."""
+    return np.isin(class_raster_at(tile, shape), BLOCKED)
 
 
 def canopy_points(tile: Tile, cell: int) -> list[dict]:
@@ -92,7 +115,7 @@ def canopy_points(tile: Tile, cell: int) -> list[dict]:
 
 def run(tile: Tile, cell: int = 7) -> None:
     if not tile.raw_raster("dom1").exists():
-        print(f"{tile.id}: no DOM1 — skipping the canopy (trees from rows only)")
+        print(f"{tile.id}: no surface model — skipping the canopy (trees from rows only)")
         return
     features = canopy_points(tile, cell)
     write_geojson(tile.out("dlm", f"canopy_{tile.id}.geojson"), features, tile.epsg)

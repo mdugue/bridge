@@ -13,6 +13,7 @@ import {
   FootprintsIcon,
   FullscreenIcon,
   HammerIcon,
+  LandmarkIcon,
   type LucideIcon,
   PlaneIcon,
   SparklesIcon,
@@ -67,6 +68,7 @@ import {
   lookPatch,
   type LookValues,
 } from "@/lib/city/look-controls";
+import { type Landmark, landmarkVantage } from "@/lib/city/landmarks";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import {
   RENDER_STYLE_BY_ID,
@@ -83,8 +85,12 @@ import { CONTROL_HINTS, TOUCH_HINTS } from "./control-hints";
 import type { SoundscapeControl } from "./soundscape-toggle";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
-import type { ViewpointGeometry } from "@/lib/city/site";
-import { currentSite } from "@/sites";
+import {
+  siteAttribution,
+  siteCredit,
+  type ViewpointGeometry,
+} from "@/lib/city/site";
+import { useSite } from "./site-context";
 
 /**
  * The scene sidebar, structured by what you came to do rather than by which
@@ -468,11 +474,12 @@ function Viewpoints({
   /** show each card's 1–9 shortcut (keyboard devices) */
   showKeys: boolean;
 }) {
+  const site = useSite();
   return (
     <div className="flex flex-col gap-2 px-3 pt-1 pb-3.5">
       <span className={`${SECTION_LABEL} px-1`}>Aussichtspunkte</span>
       <div className="grid grid-cols-2 gap-2">
-        {currentSite().viewpoints.map((view, index) => (
+        {site.viewpoints.map((view, index) => (
           <button
             className="flex min-h-16.5 flex-col gap-2 rounded-lg border bg-background p-2.5 text-left hover:border-ring"
             key={view.id}
@@ -533,6 +540,43 @@ function Viewpoints({
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The city's landmarks: what Wikidata knows as its most notable buildings
+ * and structures, matched to what the scene draws (plan 050). A quiet list
+ * under the authored vantages — one click glides up to an overlook on it.
+ * Built from the data for every city, so a new one gets its list for free.
+ */
+function Landmarks({
+  landmarks,
+  onTravel,
+}: {
+  landmarks: Landmark[];
+  onTravel: (lm: Landmark) => void;
+}) {
+  if (landmarks.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-2 px-3 pb-3.5">
+      <span className={`${SECTION_LABEL} px-1`}>Wahrzeichen</span>
+      <div className="flex flex-wrap gap-1.5">
+        {landmarks.map((lm) => (
+          <button
+            className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-left text-[11px] leading-tight hover:border-ring"
+            key={lm.id}
+            onClick={() => onTravel(lm)}
+            title={`Zu ${lm.name} fliegen`}
+            type="button"
+          >
+            <LandmarkIcon className="size-3 shrink-0 text-muted-foreground" />
+            <span className="truncate">{lm.name}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -701,6 +745,8 @@ export interface SceneSidebarProps {
   fps: number | null;
   handleRef: RefObject<CityWalkHandle | null>;
   landcoverTiles: MapTile[];
+  /** the site's landmarks (Wikidata), most notable first */
+  landmarks: Landmark[];
   latLng: { lat: number; lng: number } | null;
   look: LookValues;
   minutes: number;
@@ -727,6 +773,7 @@ export interface SceneSidebarProps {
 export function SceneSidebar(props: SceneSidebarProps) {
   const { toggleSidebar } = useSidebar();
   const { handleRef, look, onLook } = props;
+  const site = useSite();
   return (
     <Sidebar
       className="p-3 [&>[data-slot=sidebar-inner]]:rounded-xl [&>[data-slot=sidebar-inner]]:shadow-xl"
@@ -735,7 +782,15 @@ export function SceneSidebar(props: SceneSidebarProps) {
       variant="floating"
     >
       <SidebarHeader className="flex-row items-center justify-between gap-2 py-3 pr-2 pl-4">
-        <span className="font-semibold text-sm">{currentSite().label}</span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="font-semibold text-sm">{site.label}</span>
+          <Link
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            href="/"
+          >
+            Andere Stadt wählen
+          </Link>
+        </div>
         <Button
           aria-label="Seitenleiste schließen"
           onClick={toggleSidebar}
@@ -777,13 +832,19 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 }
               }}
               onTravel={(id) => {
-                const view = currentSite().viewpoints.find((v) => v.id === id);
+                const view = site.viewpoints.find((v) => v.id === id);
                 if (view) {
                   handleRef.current?.flyToViewpoint(view);
                 }
               }}
               remembered={props.rememberedView !== null}
               showKeys={!props.coarse}
+            />
+            <Landmarks
+              landmarks={props.landmarks}
+              onTravel={(lm) =>
+                handleRef.current?.flyToViewpoint(landmarkVantage(lm))
+              }
             />
             {/* Below the vantages, and quiet: one-click travel is the reason
                 to open this tab, while walk/fly is a mode you set once. Same
@@ -1015,12 +1076,12 @@ export function SceneSidebar(props: SceneSidebarProps) {
  * open on demand, above the row so the trigger does not move.
  */
 function SourcesFooter() {
-  const site = currentSite();
+  const site = useSite();
   return (
     <Collapsible>
       <CollapsibleContent>
         <ul className="flex flex-col gap-1 pb-2">
-          {site.attribution.map((line) => (
+          {siteAttribution(site).map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>
@@ -1035,15 +1096,17 @@ function SourcesFooter() {
         <CollapsibleTrigger className="group/sources flex min-w-0 flex-1 items-center gap-1 text-left hover:text-foreground">
           <span className="min-w-0 flex-1">
             {/* a licence id like "(dl-de/by-2-0)" breaks only before it */}
-            {site.credit.split(/(\([^)]*\))/).map((part, i) =>
-              i % 2 === 1 ? (
-                <span className="whitespace-nowrap" key={part}>
-                  {part}
-                </span>
-              ) : (
-                part
-              )
-            )}
+            {siteCredit(site)
+              .split(/(\([^)]*\))/)
+              .map((part, i) =>
+                i % 2 === 1 ? (
+                  <span className="whitespace-nowrap" key={part}>
+                    {part}
+                  </span>
+                ) : (
+                  part
+                )
+              )}
           </span>
           <span className="sr-only">Quellen und Lizenzen</span>
           <ChevronDownIcon
