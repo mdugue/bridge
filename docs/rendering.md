@@ -227,7 +227,8 @@ is spelled: changing one is a look change, not a re-bake
   build.
 
 - **Baked large-scale light** (plan 033): two rasters from the committed
-  DGM1 + LoD2 (`pipeline/bake/skyview.py`). The *sky-view factor* dims the
+  DGM1 + LoD2, the roofs rebuilt from DOM1 in place of theirs
+  (`pipeline/bake/skyview.py`, ADR 0036). The *sky-view factor* dims the
   hemisphere fill where the city hides the sky (courtyards, street
   canyons), on the terrain and the clay facades, and never touches the
   sun (the material's `aoNode`). The *horizon* answers "is the sun above

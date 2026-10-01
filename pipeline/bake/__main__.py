@@ -59,7 +59,11 @@ STEPS = {
     # that already has a shelter).
     "tram": tram.run,
     "riverside": riverside.run,
-    # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
+    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
+    # miss DOM1, rebuilt as stepped flat blocks (scripts/bake-city-mesh.ts).
+    "roofs": roofs.run,
+    # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
+    # factor and far horizon.
     "skyview": skyview.run,
     # OSM churches + the committed LoD2/DGM: the bell towers the hidden
     # soundscape strikes the hour from (plan 035).
@@ -74,9 +78,6 @@ STEPS = {
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.
     "small-buildings": small_buildings.run,
-    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
-    # miss DOM1, rebuilt as stepped flat blocks (scripts/bake-city-mesh.ts).
-    "roofs": roofs.run,
 }
 
 

@@ -467,8 +467,9 @@ visual-variable codebook is in
   table row, picking, demolish, collision and minimap stay; eave and
   storey rows follow the new shape. +8.4 % city-mesh triangles. Limits:
   flat by construction (a pitched roof inside a rebuilt object becomes one
-  level); the horizon bake (`skyview.py`) still reads the LoD2 roofs.
-  Unverified on a real GPU (headless SwiftShader before/after only).
+  level). The sky-view and horizon bake (`skyview.py`) burns the rebuilt
+  tops in place of their objects' LoD2 surfaces, so the far shadows match
+  the mesh (`roofs` runs before `skyview`). Unverified on a real GPU (headless SwiftShader before/after only).
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.

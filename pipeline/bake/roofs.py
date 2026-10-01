@@ -322,7 +322,10 @@ def region_polygons(
     )
     out = []
     for poly, rid in zip(cover, ids, strict=True):
-        clipped = shapely.make_valid(shapely.intersection(poly, footprint))
+        # on the centimetre grid the file is written on, so it stays valid
+        clipped = shapely.set_precision(
+            shapely.make_valid(shapely.intersection(poly, footprint)), 0.01
+        )
         for part in shapely.get_parts(clipped):
             if part.geom_type == "Polygon" and part.area >= MIN_POLY_M2:
                 out.append((part, float(heights[rid - 1])))

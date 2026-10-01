@@ -62,9 +62,10 @@ leaves the committed file alone.
   a facade's setback reads as a step at the next metre band.
 - DOM1 is now a city-mesh input (through the committed GeoJSON). A new
   LoD2 edition or a new scan means re-running `bun run bake --step roofs`.
-- The sky-view and horizon bake (`skyview.py`) still reads the LoD2 roofs,
-  so the far shadows of a rebuilt building come from its old shape (a few
-  metres off, at 8 m and 22.5° resolution).
+- The sky-view and horizon bake (`skyview.py`) reads the rebuilt roofs in
+  place of their objects, so the far shadows and the sky light agree with
+  the mesh; `roofs` runs before `skyview`, and re-baking one means
+  re-baking the other.
 - Two parts side by side each stand a full-height wall on the shared edge;
   the lower part's is hidden inside the higher. Cutting walls to the
   exposed band would save triangles, not change the picture.

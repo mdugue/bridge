@@ -659,9 +659,8 @@ bun run bake 33412_5656_2_sn           # one tile, all steps
 bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands canopy trees ndvi roof-colour osm-buildings
                                        #   rail lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside skyview soundmarks
-                                       #   lowveg cultivated small-buildings
-                                       #   roofs
+                                       #   markings sport tram riverside roofs skyview
+                                       #   soundmarks lowveg cultivated small-buildings
 bun run test:pipeline                  # pytest + ruff
 ```
 
@@ -670,7 +669,8 @@ runtime falls back); rail decks fall back to the DGM ramp.
 
 The later modules, one step each: `osm_buildings.py` (shops and heritage
 per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
-`riverside.py`, `skyview.py` (DGM + LoD2 only),
+`riverside.py`, `skyview.py` (DGM + LoD2, the rebuilt roofs of `roofs.py`
+in place of theirs),
 `soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the
 neighbours through `Tile.neighbours` (the committed DGMs): markings
