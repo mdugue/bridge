@@ -1,10 +1,5 @@
 import { type Camera, Raycaster, Vector2 } from "three/webgpu";
-import {
-  type AskHit,
-  type AskSet,
-  type AskSolid,
-  nearestInSets,
-} from "@/lib/city/ask-solids";
+import { type AskHit, type AskSet, nearestInSets } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
 import { type CityLayer, pickCityObject } from "./city-layer";
@@ -16,10 +11,13 @@ import { type CityLayer, pickCityObject } from "./city-layer";
  * cannot be picked through it. A finger is not a pixel: when nothing
  * stands exactly under the point, rays on two rings around it (TOLERANCE_PX)
  * vote, and the building most of them hit wins (the nearest on a tie). The
- * mark (the clay's pencil hatch) is the whole building tree, the same set
- * demolish would take; it stays until the next question or `clear`, and is
- * dropped with the tile if the tile unloads. The HUD owns the card; this
- * module owns only the scene state.
+ * mark (the clay's pencil hatch, and the outline round what the screen
+ * shows of it) is the whole building tree, the same set demolish would
+ * take; a tree, monument or bridge gets the outline alone. It stays until
+ * the next question or `clear`; the hatch goes with its tile if the tile
+ * unloads, the outline with what the scene draws (its mask is only where
+ * the element shows). The HUD owns the card; this module owns only the
+ * scene state.
  */
 export interface InquiryProbe {
   /** asks at a screen point (NDC; the crosshair when omitted) */
@@ -96,6 +94,11 @@ type ProbeHit =
   | { building: { layer: CityLayer; objectIndex: number } }
   | { thing: AskHit<FeatureInquiry> };
 
+/** What the outline goes around: a building's tree, or another thing. */
+export type OutlineSubject =
+  | { building: { layer: CityLayer; objects: ReadonlySet<number> } }
+  | { thing: AskHit<FeatureInquiry> };
+
 /** A thing's key for the vote: one per tree, monument, deck. */
 function thingKey(t: FeatureInquiry): string {
   return t.kind === "tree"
@@ -115,8 +118,8 @@ export function createInquiryProbe(deps: {
   isLoaded: (layer: CityLayer) => boolean;
   /** distance along the pick ray to the ground, or null within `far` */
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
-  /** the pencil's loop around a thing that is not a building */
-  pencil: { draw: (solids: readonly AskSolid[] | null) => void };
+  /** the outline's subject: what was asked, or null when nothing is */
+  outline: (subject: OutlineSubject | null) => void;
   /** the trees, monuments and decks on screen now (lib/city/ask-items.ts) */
   things: () => Iterable<AskSet<FeatureInquiry>>;
   /** the canvas size in CSS px, for the tolerance rings */
@@ -132,7 +135,7 @@ export function createInquiryProbe(deps: {
       marked.mark(new Set());
     }
     marked = null;
-    deps.pencil.draw(null);
+    deps.outline(null);
   };
 
   /** One ray: what it meets first, before the ground, if anything. */
@@ -193,8 +196,10 @@ export function createInquiryProbe(deps: {
         tree.push(i);
       }
     }
-    layer.mark(new Set(tree));
+    const objects = new Set(tree);
+    layer.mark(objects);
     marked = layer;
+    deps.outline({ building: { layer, objects } });
     const object = (i: number): InquiryObject => ({
       objectIndex: i,
       building: table.building[i] === 1,
@@ -218,7 +223,7 @@ export function createInquiryProbe(deps: {
       return null;
     }
     if ("thing" in hit) {
-      deps.pencil.draw(hit.thing.solids);
+      deps.outline({ thing: hit.thing });
       return hit.thing.target;
     }
     return askBuilding(hit.building.layer, hit.building.objectIndex);

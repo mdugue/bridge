@@ -171,8 +171,10 @@ config change.
     `lib/city/provenance.ts`, the AdV code lists `lib/city/adv-codes.ts`;
     the things that are not buildings are asked by rays against solids from
     their data (`lib/city/ask-solids.ts`, `ask-items.ts`; bridges by their
-    meshes, `bridge-ask.ts`) and circled by a pencil loop
-    (`lib/city/pencil.ts`, `pencil-mark.ts`); a tree's facts are its tile's
+    meshes, `bridge-ask.ts`); every asked element is outlined along its
+    silhouette in screen pixels (`selection-outline.ts`, the post pass;
+    `selection-shape.ts`, its triangles; `lib/city/outline.ts`, the
+    numbers); a tree's facts are its tile's
     `treefacts` file, fetched with the question (the artifact table's `ask`
     column, `lib/city/tile.ts`)
   - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L

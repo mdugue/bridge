@@ -18,8 +18,9 @@
   default frame
 - **Planned at**: 2026-09-27
 - **Status**: **PARTIAL** — phases 1–3 built (2026-09-27), phase 4
-  (trees, monuments, bridges) 2026-10-01; the hatch and the pencil loop
-  unjudged on a real GPU; phases 4b–7 open
+  (trees, monuments, bridges) 2026-10-01, the outline for every kind the
+  same day; the hatch and the outline unjudged on a real GPU; phases
+  4b–7 open
 
 ## Idea
 
@@ -142,17 +143,28 @@ data would either miss the masonry under an arch or block the open space
 under a beam bridge. The nearest answer of any kind wins; the ground in
 front cancels; the tolerant rings vote across kinds.
 
-The mark: what has no clay to hatch is circled — a graphite stroke on a
-band of the card's paper, screen-constant, once round and a little past
-(`lib/city/pencil.ts`, `pencil-mark.ts`): on the ground around a tree or
-a monument, along the parapets of a deck. Graphite alone vanished on dark
-asphalt; the paper band keeps it legible there and stays quiet on a
-lawn. E2E: a register tree asked from above in the `@desktop-render`
-group.
+The mark: every asked element, the building included, gets one outline
+along its silhouette as the camera sees it now — not along its edges
+(`selection-outline.ts`, numbers in `lib/city/outline.ts`). Its
+triangles are drawn into a mask where the scene pass's depth shows them
+(a building's or bridge's own; a tree's crown and trunk, a monument's
+cylinder, a basin's prism as stand-ins, which count only where the
+scene's surface lies inside them), the mask is blurred at half
+resolution, and a band of the blur is the line: rounded, simplified
+below its own width, smooth at its edge (fwidth), 4.5 CSS px whatever
+the screen's pixel ratio or the distance. Graphite with a hair of paper
+outside, the hatch's two colours, so it reads on dark asphalt as on a
+lawn. A first mark, a pencil loop on the ground around a tree and along
+a deck's parapets, said "here" rather than "this" and left a building
+without a line (maintainer review, 2026-10-01; 🗃️ in the ledger). E2E:
+a register tree asked from above in the `@desktop-render` group.
 
-**Open in this phase**: plates on a real GPU of the loop at walking
+**Open in this phase**: plates on a real GPU of the outline at walking
 height and from the air (headless only so far, lite at half resolution:
-legible on a tree, subtle on a deck); the season model's state on a
+it follows a building's, a crown's and a bridge's silhouette; the
+half-resolution lite frame shows its steps, a full-resolution one
+should not); a neighbouring crown inside a tree's stand-in can join its
+outline; the season model's state on a
 tree's card; furniture, lamps and stops as further kinds (their files
 are in the dressing already).
 

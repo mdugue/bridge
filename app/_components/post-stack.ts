@@ -58,6 +58,7 @@ import {
 } from "@/lib/city/render-style";
 import type { SceneFog } from "./height-fog";
 import { createPaperScene } from "./paper-scene";
+import { createSelectionOutline } from "./selection-outline";
 import { createPipelineAnchors } from "./pipeline-anchors";
 import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { compileRepresentatives } from "./three-utils";
@@ -191,6 +192,12 @@ export interface PostStack {
   setRegressed: (on: boolean) => void;
   /** Follows the canvas (the scene target is drawing-buffer sized). */
   setSize: () => void;
+  /**
+   * The asked element's triangles (world, non-indexed) to outline, or null
+   * (selection-outline.ts): drawn over every picture style, after the
+   * antialiasing, under the paper grain.
+   */
+  setSelection: (positions: Float32Array | null, reach?: number) => void;
   /** How many pipeline anchors hold scene-wide pipelines (diagnostics). */
   anchorCount: () => number;
   /** The sun's altitude in degrees (Film noir opens up at dusk). */
@@ -404,12 +411,20 @@ export function createPostStack(
   });
   beforeAa.texture.name = "BeforeAA";
   const antialiased = smaa(texture(beforeAa.texture));
+  // The asked element's outline: its own antialiasing (a smooth band of a
+  // blurred mask), so after SMAA, and under the paper grain like the ink.
+  const outline = createSelectionOutline({
+    camera,
+    depthTexture,
+    width: size.x,
+    height: size.y,
+  });
   const finished = new RenderPipeline(
     renderer,
     renderOutput(
       finish(
         // reason: as above, SMAANode's vec4 output
-        nodeObject(antialiased) as unknown as V4,
+        outline.over(nodeObject(antialiased) as unknown as V4),
         viewZ,
         finishing
       ),
@@ -622,7 +637,11 @@ export function createPostStack(
     },
     anchorCount: () => anchors.count(),
     warmStyles: () => {
-      stylesWarm ??= warmStyles().catch(() => undefined);
+      // the outline's mask program too: the first question builds nothing
+      stylesWarm ??= outline
+        .compile(renderer, camera)
+        .then(warmStyles)
+        .catch(() => undefined);
       return stylesWarm;
     },
     sceneChanged: () => {
@@ -652,6 +671,8 @@ export function createPostStack(
         dressed?.();
         renderer.setRenderTarget(previous);
       }
+      outline.update(renderer.getPixelRatio());
+      outline.renderMask(renderer, camera);
       const shown = pipeline();
       const warming = toWarm.shift();
       renderer.setRenderTarget(beforeAa);
@@ -674,7 +695,9 @@ export function createPostStack(
       renderer.getDrawingBufferSize(size);
       target.setSize(size.x, size.y);
       beforeAa.setSize(size.x, size.y);
+      outline.setSize(size.x, size.y);
     },
+    setSelection: (positions, reach) => outline.set(positions, reach),
     applyLook: (look) => {
       for (const key of Object.keys(rows) as PostLookKey[]) {
         rows[key](look[key]);
@@ -707,6 +730,7 @@ export function createPostStack(
       }
       antialiased.dispose();
       beforeAa.dispose();
+      outline.dispose();
       paperScene.dispose();
       styleDressing.dispose();
       anchors.dispose();

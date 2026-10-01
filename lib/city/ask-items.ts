@@ -320,7 +320,6 @@ export function bridgeItems(
       Number.isFinite
     );
     const below = (p.depth ?? 0) + DECK_BELOW;
-    const deck = p.deck ?? [];
     out.push({
       solids: [
         {
@@ -334,9 +333,6 @@ export function bridgeItems(
             topAt,
             above: DECK_ABOVE,
             below,
-            ...(deck.length >= ring.length
-              ? { ringTop: deck.slice(0, ring.length) }
-              : {}),
           },
         },
       ],

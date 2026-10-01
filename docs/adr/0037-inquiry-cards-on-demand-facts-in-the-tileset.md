@@ -93,8 +93,11 @@ only where a source offers no CORS.
   trees file, named in the tileset's tile list (the artifact table's `ask`
   column), fetched with the first question about a tree on the tile.
   Monuments and bridges answer from the features the dressing already has.
-  What has no clay to hatch is circled by a pencil loop (a graphite stroke
-  on a band of paper, `pencil-mark.ts`) — still no text in the scene.
+  Every asked element, building or not, is outlined: one line along its
+  silhouette as seen now, a constant width in screen pixels, in the
+  hatch's graphite on a hair of its paper (`selection-outline.ts`; it
+  replaced a first pencil loop on the ground) — still no text in the
+  scene.
   Instanced sets cannot be raycast one by one since ADR 0027, so trees and
   monuments are picked by rays against solids from their data; bridges by
   their drawn meshes.

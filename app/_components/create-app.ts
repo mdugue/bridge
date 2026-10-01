@@ -41,8 +41,13 @@ import type { Inquiry } from "@/lib/city/inquiry";
 import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
-import { createInquiryProbe } from "./inquiry-probe";
-import { createPencilMark } from "./pencil-mark";
+import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
+import {
+  bridgeShape,
+  buildingShape,
+  solidShape,
+  standInDepth,
+} from "./selection-shape";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -979,20 +984,46 @@ async function bootApp(
   tapRaycaster.firstHitOnly = true;
   // Befragen (ADR 0037): a click asks, a long press on a touch screen,
   // and I at the crosshair — there is no mode to switch on first.
-  // The pencil's loop around an asked tree, monument or deck: one line,
-  // in the scene from the start so the boot's compile covers it.
-  const pencil = createPencilMark();
-  scene.add(pencil.line);
-  cleanups.push(() => {
-    scene.remove(pencil.line);
-    pencil.dispose();
-  });
+  // What the outline goes around (selection-shape.ts): a building's own
+  // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
+  // monument's shape after its data.
+  const outline = (subject: OutlineSubject | null) => {
+    const shape = outlineShape(subject);
+    postStack.setSelection(shape?.positions ?? null, shape?.reach ?? 0);
+  };
+  const outlineShape = (
+    subject: OutlineSubject | null
+  ): { positions: Float32Array; reach: number } | null => {
+    if (!subject) {
+      return null;
+    }
+    if ("building" in subject) {
+      const positions = buildingShape(
+        subject.building.layer,
+        subject.building.objects
+      );
+      return { positions, reach: 0 };
+    }
+    const { target, solids } = subject.thing;
+    const first = solids[0];
+    if (target.kind === "bridge" && first && "slab" in first) {
+      const rail = [...stream.dressings].find(
+        (d) => d.tile === target.tile
+      )?.rail;
+      return { positions: bridgeShape(rail, first.slab), reach: 0 };
+    }
+    // a stand-in: the scene's surface anywhere inside it is the thing
+    return {
+      positions: solidShape(solids, target.kind === "tree" && target.conifer),
+      reach: standInDepth(solids),
+    };
+  };
   const probe = createInquiryProbe({
     camera,
     cities: () => stream.visibleCities(),
     isLoaded: (layer) => stream.cities.has(layer),
     groundAlong,
-    pencil,
+    outline,
     things: () => stream.visibleDressings().flatMap((d) => d.asks ?? []),
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,

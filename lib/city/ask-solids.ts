@@ -38,9 +38,6 @@ export interface Prism {
 export interface Slab extends Prism {
   above: number;
   below: number;
-  /** the deck's top at each ring vertex as the scene draws it (rail-layer
-   *  interpolates it along the edges), for the pencil to follow */
-  ringTop?: readonly number[];
   topAt: (x: number, z: number) => number;
 }
 

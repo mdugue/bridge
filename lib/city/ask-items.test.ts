@@ -41,7 +41,7 @@ test("every tree of the file is askable, by its index there", () => {
   const w = epsgToWorld(ex, ey, offset);
   const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
   expect(hit?.target).toMatchObject({ kind: "tree", index: i, tile: TILE });
-  // its solids come with it, for the pencil
+  // its solids come with it, for the outline
   expect(hit?.solids).toHaveLength(2);
   // straight down onto the crown's top
   expect(hit?.distance).toBeCloseTo(

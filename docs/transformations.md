@@ -627,15 +627,24 @@ the crosshair), it answers in a card ([ADR 0037](./adr/0037-inquiry-cards-on-dem
   height; a bridge's name and measured deck (Basis-DLM, DOM1), structure
   and main span (Wikidata or OSM), clearance (OSM), keyed by its Wikidata
   item.
-- **The pencil loop** (no slider) — what has no clay to hatch is circled:
-  a graphite stroke 2.5 px wide on a 5.5 px band of the card's paper,
-  screen-constant, drawn once round and 12 % past, wavering a few
-  percent of its size, seeded by where it stands (`lib/city/pencil.ts`,
-  `pencil-mark.ts`): on the ground around a tree (1.2 × its crown) or a
-  monument, along a deck's parapets (1.6 m over the drawn deck edge).
-  Graphite alone vanished on dark asphalt in the first cut; the band
-  keeps it legible. In *Papier* it draws itself. **Not yet judged on a
-  real GPU.**
+- **The outline** (no slider) — whatever is asked, building, tree,
+  monument or bridge, gets one line along its silhouette as the camera
+  sees it now, not along its edges: the element's triangles (a
+  building's own out of its tile's mesh, a bridge's out of the tile's
+  bridge meshes within 12 m of its deck; a tree's crown ellipsoid — a
+  cone for a conifer — on its trunk, a monument's cylinder, a basin's
+  prism) are drawn into a mask where the scene pass's depth shows them
+  (a stand-in only where the scene's own surface lies inside it), the
+  mask is blurred at half resolution, and the band of the blur between
+  0.07 and 0.66 is the line: 4.5 CSS px of the hatch's graphite, on a
+  hair of its paper outside (0.012–0.07, 55 %), anti-aliased by its own
+  gradient. The blur rounds the corners and drops what is finer than
+  the line; its reach follows the device pixel ratio, so the width is
+  in screen pixels at any distance (`lib/city/outline.ts`,
+  `selection-outline.ts`, `selection-shape.ts`; over the finished frame,
+  before the output transform, so every picture style shows it). It
+  replaced the pencil loop (🗃️ below). **Not yet judged on a real
+  GPU.**
 
 ### Vegetation
 - **Cultivated land** (plan 028) — OSM `landuse=allotments|orchard|vineyard`
@@ -1752,7 +1761,8 @@ research that produced them):
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |
 | **Large `normalBias`** | Bright peter-panning contact strip. | Keep `normalBias=0`, small negative `bias`. |
 | **Bigger shadow frustum / 4096 map** | Coarser texels → fraying / cost without gain once radius softens. | Tight ~110 m frustum at 3072 + radius. |
-| **Sobel / deferred outlines** | Hard edges clash with the watercolor look. | — |
+| **Sobel / deferred outlines** | Hard edges clash with the watercolor look. | The asked element's outline (✅ *The outline*) is not one: a single soft silhouette of one element, on demand, never the scene's edges. |
+| **The pencil loop** (plan 049 phase 4's first mark: a wavering graphite stroke on a band of paper, once round and a little past, on the ground around an asked tree or monument and along a deck's parapets; `lib/city/pencil.ts`, `pencil-mark.ts`) | Maintainer review (2026-10-01): which element is selected should read more strongly. A ring on the ground says "here", not "this" — beside a crown among crowns, or along a deck seen from below, it did not name the element; and a building, hatched only, had no line at all. | Replaced by one screen-space outline for every kind (✅ *The outline*), in the same graphite and paper. |
 | **Selective bloom, quad leaf billboards** | No payoff yet for the cost. | Revisit only with a concrete need. |
 | **`BatchedMesh` for buildings** | Already merged per tile; would break `objectid` picking/demolish and not cut draw calls. | Bottleneck is fill-rate, not draw calls. |
 | **Blender texture baking** | No UVs on the source geometry. | — |

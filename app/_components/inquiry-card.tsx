@@ -112,7 +112,7 @@ function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
  * carries no text (plan 032's lettering was removed for that reason). A
  * non-modal landmark, not a dialog: the city stays live behind it, and the
  * next click asks the next building. Esc or the × closes it and clears
- * the pencil mark in the scene. It looks like the HUD's other cards (the
+ * the mark in the scene (the hatch, the outline). It looks like the HUD's other cards (the
  * shadcn Card's surface, ring and a shadow): sober, so the scene keeps the
  * colour.
  */
