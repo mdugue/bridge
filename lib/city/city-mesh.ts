@@ -25,7 +25,7 @@ export type OsmBuildingLut = Record<string, OsmBuildingFacts | undefined>;
 export const OBJECT_FLAG_SHOP = 1;
 /** A listed building, OSM `heritage=*` (column `flags`). */
 export const OBJECT_FLAG_HERITAGE = 2;
-/** The building someone is asking about (the inquiry card, ADR 0035): set
+/** The building someone is asking about (the inquiry card, ADR 0037): set
  *  in the packed texture at runtime only, never baked. */
 export const OBJECT_FLAG_ASKED = 4;
 
@@ -70,7 +70,7 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
-  /** identity and semantics, the table's fact columns (ADR 0035) */
+  /** identity and semantics, the table's fact columns (ADR 0037) */
   facts?: ObjectFacts;
   /** OBJECT_FLAG_SHOP + OBJECT_FLAG_HERITAGE, from OSM (0 = neither) */
   flags: number;

@@ -76,7 +76,7 @@
      pill, the settings button and the hint bar are one surface. */
   --hud: oklch(0.195 0.011 260.66);
   --hud-foreground: oklch(0.941 0.01 252.81);
-  /* The inquiry card (ADR 0035) is a sheet of the scene's paper with ink on
+  /* The inquiry card (ADR 0037) is a sheet of the scene's paper with ink on
      it — the same in both themes, like the HUD: warm off-white, graphite
      ink, a faded pencil for labels and sources, a dashed pencil rule. */
   --paper: oklch(0.967 0.014 84);

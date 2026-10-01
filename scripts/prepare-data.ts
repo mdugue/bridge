@@ -673,7 +673,7 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 // --- 3. tilesets ------------------------------------------------------------------
 
 // Who publishes each source, and each tile's edition of it: the inquiry
-// card's "Quelle" lines (ADR 0035), from the hand-kept record.
+// card's "Quelle" lines (ADR 0037), from the hand-kept record.
 const provenanceFile = publish(
   PROVENANCE_FILE,
   utf8(

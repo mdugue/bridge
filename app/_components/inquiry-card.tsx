@@ -76,7 +76,7 @@ function useProvenance(url: string | null): SiteProvenance | null {
 }
 
 /**
- * The paper card of the "Befragen" mode (ADR 0035): what the data says
+ * The paper card of the "Befragen" mode (ADR 0037): what the data says
  * about the building someone asked, on demand only — the scene itself
  * carries no text (plan 032's lettering was removed for that reason). A
  * non-modal landmark, not a dialog: the city stays live behind it, and the

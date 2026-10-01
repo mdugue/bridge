@@ -5,7 +5,7 @@
  * the hand-kept `data/provenance.json` (the record of what was downloaded
  * when, with the queries and the URLs) by `scripts/prepare-data.ts`, and
  * published next to the tileset as `provenance.json`; the inquiry card
- * fetches it once, when first opened (ADR 0035). No THREE, no DOM.
+ * fetches it once, when first opened (ADR 0037). No THREE, no DOM.
  */
 
 /** The logical name the build publishes the manifest under. */

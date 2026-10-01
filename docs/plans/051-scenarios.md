@@ -3,7 +3,7 @@
 > **Executor instructions**: Read fully first. A scenario is a *tool*: the
 > visitor turns it on, it answers a question about the city, and it is
 > drawn in the watercolour/contour language (washes, hatching, contour
-> lines) — never a rainbow heat map, never text in the scene (ADR 0036;
+> lines) — never a rainbow heat map, never text in the scene (ADR 0037;
 > numbers go into the inquiry card or the sidebar). Each phase is
 > independent. Judge every overlay on a real GPU (`bun run shots`,
 > headed) before it ships. The scene is node materials since the WebGPU

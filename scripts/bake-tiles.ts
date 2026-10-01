@@ -463,7 +463,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
       source: { type: "SCALAR", componentType: "UINT8", values: t.source },
       storeyH: { type: "SCALAR", componentType: "FLOAT32", values: t.storeyH },
       tint: { type: "VEC3", componentType: "FLOAT32", values: t.tint },
-      // What the object is, for the inquiry card (ADR 0035): read one row
+      // What the object is, for the inquiry card (ADR 0037): read one row
       // at a time, only when asked — never packed for the shader.
       ...Object.fromEntries(
         Object.entries(facts.strings).map(([name, values]) => [

@@ -256,7 +256,7 @@ export interface CityWalkOptions {
   /** a manual look or move ended live mode (camera-pose.ts) */
   onFollowEnd?: () => void;
   /**
-   * The inquiry mode ("Befragen", ADR 0035): whether it is on, and the
+   * The inquiry mode ("Befragen", ADR 0037): whether it is on, and the
    * building last asked about (null: nothing there, or the mark cleared).
    */
   onInquiry?: (state: { active: boolean; inquiry: Inquiry | null }) => void;
@@ -978,7 +978,7 @@ async function bootApp(
   };
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
-  // Befragen (ADR 0036): a long press always asks; the I key or the
+  // Befragen (ADR 0037): a long press always asks; the I key or the
   // toolbar turn on the mode in which a plain tap asks too.
   const probe = createInquiryProbe({
     camera,
@@ -1008,7 +1008,7 @@ async function bootApp(
         inquireAt({ x: ndcX, y: ndcY });
       }
     },
-    // A long press asks without the mode (the phone's way to ask, ADR 0036).
+    // A long press asks without the mode (the phone's way to ask, ADR 0037).
     onLongPress: (ndcX, ndcY) => {
       inquireAt({ x: ndcX, y: ndcY });
     },

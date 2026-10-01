@@ -117,7 +117,7 @@ function SettingsToggle() {
 
 /**
  * The tools the floating toolbar offers here: the inquiry mode (the I key's
- * stand-in, ADR 0035), "take me to where I am"
+ * stand-in, ADR 0037), "take me to where I am"
  * wherever the browser can locate the player (locate-button.tsx), live mode
  * while a compass is reporting (live-mode.ts), and on a touch screen walk/
  * fly, the F key's stand-in.
@@ -338,7 +338,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     });
   }, [look]);
   const [mode, setMode] = useState<MovementMode>("walk");
-  // Befragen (ADR 0035): the mode and the building last asked about.
+  // Befragen (ADR 0037): the mode and the building last asked about.
   const [inquiry, setInquiry] = useState<{
     active: boolean;
     inquiry: Inquiry | null;
@@ -646,7 +646,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
       {/* No text selection or callout over the scene: a long press asks a
-          building (ADR 0036), it must not also mark the HUD's text. */}
+          building (ADR 0037), it must not also mark the HUD's text. */}
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
         <div
           className={cn(

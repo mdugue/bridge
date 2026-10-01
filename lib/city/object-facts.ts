@@ -7,7 +7,7 @@
  * (name, address, storeys). The bake writes these as columns of the
  * building glTF's EXT_structural_metadata table next to the style columns
  * (`scripts/bake-tiles.ts`); the viewer reads them one object at a time,
- * only when someone asks (`app/_components/city-layer.ts`) — ADR 0035.
+ * only when someone asks (`app/_components/city-layer.ts`) — ADR 0037.
  * No THREE, no DOM.
  */
 

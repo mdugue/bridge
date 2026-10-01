@@ -773,7 +773,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   });
 
   test("the inquiry card tells what the data knows, and where it comes from", async () => {
-    // Befragen (ADR 0035): the I key switches the mode; asking at the
+    // Befragen (ADR 0037): the I key switches the mode; asking at the
     // crosshair marks the building and opens the paper card with its
     // identity, its facts and a source line per source. Before demolish,
     // which takes a building of the same kind away.
@@ -1079,7 +1079,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     );
 
     // A long press asks the building under the finger, no mode needed
-    // (ADR 0036): aim the screen centre at a roof, hold a touch there until
+    // (ADR 0037): aim the screen centre at a roof, hold a touch there until
     // the answer comes — under software rendering the press timer fires
     // late, so the release waits for it — and the answer is a bottom sheet
     // that folds the joystick away.
