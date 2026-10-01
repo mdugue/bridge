@@ -38,6 +38,16 @@ Kronen- und Stammdurchmesser. Der Viewer pflanzt diese Bäume dort, wo sie
 wirklich stehen, mit gemessener Höhe, Krone und Stamm, einer Kronenform,
 die der Art folgt, und dem Jahr der Art: wann sie austreibt, wie sie sich
 im Herbst färbt und wann sie kahl ist.
+Aus derselben Quelle kommen zwei Verkehrsdatensätze, die der Viewer als
+**zuschaltbare Datenebenen** zeigt (Seitenleiste, *Erkunden* →
+*Verkehrsdaten*; beim Start aus): die gezählten Kraftfahrzeuge je
+Straßenabschnitt und die Rad-Dauerzählstellen, deren Zählwerte der Browser
+live bei der Stadt abruft.
+
+**DELFI und gtfs.de** — DELFI e.V. sammelt die Fahrpläne aller
+Verkehrsverbünde Deutschlands (hier den des VVO mit den Linien der DVB);
+gtfs.de stellt sie im verbreiteten GTFS-Format bereit. Daraus fahren die
+Straßenbahnen der dritten Datenebene, so wie der Fahrplan sie fahren lässt.
 
 ## Die Datensätze im Überblick
 
@@ -52,6 +62,9 @@ im Herbst färbt und wann sie kahl ist.
 | **OSM** | OpenStreetMap | Freiwillige | Straßenlampen, Hecken, Stadtmöbel (Bänke, Papierkörbe, Fahrradbügel, Poller, Briefkästen, Wartehäuschen und Haltestellenschilder, Litfaßsäulen, Ampeln, Hydranten, Uhren, Trinkbrunnen), Spielplätze und ihre Geräte, Bahnsteige, Mauern, Felskanten, Treppen, Brücken-Tragwerkstypen und Durchfahrtshöhen, Brunnenbecken, womit Straßen, Gehwege und Parkplätze belegt sind, Sportplätze, Läden und Cafés im Erdgeschoss, Baudenkmale, Zäune, Geländer und Tore, Fahrbahnmarkierungen (Überwege, Haltlinien, Rad- und Mittellinien), Kleingärten, Obstwiesen und Weinberge, Bäume, die das Stadtbaumkataster nicht führt, Straßenbahngleise mit ihren Oberleitungsmasten, Anlegestellen, Buhnen und Fährrouten auf der Elbe, Kirchen und Glockentürme (für die verborgene Klangkulisse) |
 | **Wikidata** | freie Wissensdatenbank | Freiwillige | Bauart und Hauptspannweite benannter Brücken |
 | **Stadtbaumkataster** | Das Baumverzeichnis der Stadt | Landeshauptstadt Dresden | Straßen- und Parkbäume an ihrem vermessenen Standort, mit Höhe, Kronenbreite, Stamm, einer Kronenform nach der Art und deren Herbstfarbe und Laubfall |
+| **Verkehrsmengen** | Kfz je Tag und Straßenabschnitt | Landeshauptstadt Dresden | Datenebene *Kfz-Verkehr*: fließende Bänder je Fahrtrichtung, breiter und dichter, wo mehr fährt |
+| **Rad-Dauerzählstellen** | Fahrräder der letzten Stunde, live | Landeshauptstadt Dresden | Datenebene *Radverkehr (live)*: je Zählstelle zwei Säulen, eine je Richtung |
+| **GTFS-Fahrplan** | Soll-Fahrplan des Nahverkehrs | DELFI e.V. über gtfs.de | Datenebene *Straßenbahnen (Fahrplan)*: jede Bahn der DVB zur Szenenzeit auf ihrem Gleis |
 
 Im selben Portal verfügbar, aber **noch nicht genutzt**: die Flurstücke
 (**ALKIS**) und die topographische Grundkarte (**DTK**). Der Abschnitt
@@ -205,6 +218,42 @@ eingecheckt ist, weil der Build-Schritt ihn direkt liest. Siehe
 | **Schwächen** | Nicht jede Lampe oder Bank ist erfasst, und nur wenige Bänke sagen, wohin sie blicken, Höhen fehlen oft (der Viewer nutzt Standardwerte je Mauertyp), Tags variieren. Freiwilligendaten müssen genannt werden (ODbL). |
 | **Download und Lizenz** | Ein regionaler Auszug des ganzen Bundeslandes, `sachsen-latest.osm.pbf`, von [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) geladen (etwa 250 MB) und lokal gelesen, was Ratenlimits vermeidet und das Ergebnis reproduzierbar macht. Die heute eingecheckten Lampen-, Bahnsteig- und Brückentragwerk-Dateien sind älter: Sie wurden über die **Overpass-API**, einen Live-Abfragedienst, geholt, bevor die Bakes auf den Auszug umgestellt wurden, und wechseln beim nächsten Neubacken auf den Auszug. Lizenz: **ODbL**, Vermerk „© OpenStreetMap-Mitwirkende“. |
 
+### Verkehrsmengen — die gezählten Kraftfahrzeuge
+
+| | |
+|---|---|
+| **Steht für** | Die *Verkehrsbelegung* des Straßen- und Tiefbauamts: Kraftfahrzeuge je Tag (DTV, durchschnittlicher täglicher Verkehr) für jeden gezählten Straßenabschnitt zwischen zwei Kreuzungen, je Fahrtrichtung, mit dem Schwerverkehr. |
+| **Wie erhoben** | Meist von Hand an einem Tag gezählt und auf den Durchschnittstag hochgerechnet; an einigen Straßen Induktionsschleifen oder Infrarotdetektoren mit Jahresmittelwerten; an wenigen ein geschätzter „Hilfswert“. |
+| **Aktualisierung** | Abschnitt für Abschnitt, wenn neu gezählt wird; im Gebiet meist 2023–2026, einzelne Abschnitte bis 2010 zurück. |
+| **Hier genutzt für** | Die Datenebene *Kfz-Verkehr*: je gezählter Richtung ein Band auf der Fahrbahn, rechts der Fahrtrichtung, so breit wie die Wurzel der Fahrzeuge je Tag, von Salbei über Bernstein zu Koralle gefärbt, mit Strichen, die in Fahrtrichtung laufen; viel Schwerverkehr färbt es pflaumenfarben. Eine Straße ohne Zählung bleibt leer — es wird nichts geschätzt. |
+| **Stärken** | Gemessen und je Richtung; fast alle Hauptstraßen gezählt. |
+| **Schwächen** | Ein Tagesmittel, kein Verlauf über den Tag; Zählungen aus verschiedenen Jahren nebeneinander; Nebenstraßen oft ungezählt. |
+| **Download und Lizenz** | Der WFS der Stadt (`kommisdd.dresden.de`, Ebene `cls:L363` „Kfz/Tag“), je Kachel abgefragt. Lizenz `dl-de/by-2-0`, Vermerk „Landeshauptstadt Dresden“. |
+
+### Rad-Dauerzählstellen — Fahrräder, live
+
+| | |
+|---|---|
+| **Steht für** | Die automatischen Zählstellen der Stadt für den Radverkehr — im Gebiet 35, etwa auf der Albert- und der Waldschlößchenbrücke und am Elberadweg. |
+| **Wie erhoben** | Messschwellen oder Sensoren im Radweg zählen jedes Rad und seine Richtung und melden die Summe jeder Stunde. |
+| **Aktualisierung** | Stündlich, wenige Minuten nach der vollen Stunde. |
+| **Hier genutzt für** | Die Datenebene *Radverkehr (live)*: Der Browser fragt die Zählwerte beim Einschalten und dann alle fünf Minuten direkt bei der Stadt ab. Je Zählstelle stehen zwei Säulen beidseits der Straße, eine je Richtung (türkis, lila), so hoch wie die Wurzel der Räder der letzten Stunde; meldet eine Zählstelle seit drei Stunden nichts, wird sie grau. In der Seitenleiste stehen die Zahlen, ein Klick fliegt hin. |
+| **Stärken** | Aktuell, gemessen, je Richtung. |
+| **Schwächen** | Nur wenige Punkte; zeigt nicht, wo dazwischen gefahren wird. Ist der Dienst der Stadt nicht erreichbar, bleiben die letzten Werte stehen. |
+| **Download und Lizenz** | Derselbe WFS, Ebene `cls:L1781` („aktuelle Zählwerte“; die ganze Stundenreihe seit 2017 ist `cls:L1780`). Lizenz `dl-de/by-2-0`, Vermerk „Landeshauptstadt Dresden“. |
+
+### GTFS-Fahrplan — die Straßenbahnen
+
+| | |
+|---|---|
+| **Steht für** | *General Transit Feed Specification*, das verbreitete Austauschformat für Fahrpläne: Linien, Haltestellen, Fahrten und ihre Zeiten. |
+| **Wie erhoben** | Die Verkehrsunternehmen planen ihre Fahrten; DELFI e.V. sammelt die Fahrpläne aller Verbünde Deutschlands (im NeTEx-Format), gtfs.de wandelt sie wöchentlich nach GTFS. |
+| **Aktualisierung** | Wöchentlich, jeweils etwa einen Monat voraus. |
+| **Hier genutzt für** | Die Datenebene *Straßenbahnen (Fahrplan)*: jede Straßenbahnfahrt der DVB im Gebiet — an einem Werktag rund 2 600 —, auf die Gleise aus OpenStreetMap gelegt (der Fahrplan kennt keine Streckenverläufe, nur die Haltestellen). Zur Szenenzeit, die von der eingestellten Uhrzeit an in Echtzeit weiterläuft, fährt jede Bahn als gelber Wagen aus vier Teilen, hält an ihren Haltestellen und fährt über die Brücken. Der Viewer unterscheidet Werktag, Samstag und Sonntag; ein Feiertag fährt wie sein Wochentag. |
+| **Stärken** | Vollständig: jede geplante Fahrt jeder Linie. |
+| **Schwächen** | Nicht live — Verspätungen, Umleitungen und Ausfälle zeigt er nicht. An wenigen Stellen liegt der Weg zwischen zwei Haltestellen auf dem falschen von zwei Gleisen. |
+| **Download und Lizenz** | `nv_free` von [gtfs.de](https://gtfs.de/de/feeds/de_nv/) (ganz Deutschland, etwa 290 MB, nicht eingecheckt); eingecheckt ist nur der Auszug für das Gebiet, `data/transit/trams.json`. Lizenz *CC BY 4.0*, Vermerk „DELFI e.V. via gtfs.de“; die Gleise „© OpenStreetMap-Mitwirkende“. |
+
 ## Verwendete Datenstände
 
 Der genaue Stand zählt, wenn das Bild der Wirklichkeit widerspricht. Das
@@ -228,6 +277,9 @@ Download fand an diesem Tag oder kurz davor statt.
 | OSM über Geofabrik | landesweiter Auszug | der Tagesauszug vom 2026-09-18 oder kurz davor | Git-History (Mauern an dem Tag neu gebacken); `osmium fileinfo -e` auf der Rohdatei zeigt den exakten Zeitstempel | 2026-09-18 |
 | OSM über BBBike (Treppen) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/provenance.json` | 2026-09-24 |
 | OSM über BBBike (Beläge) | der Stadtauszug Dresden | der Auszug vom 2026-09-19 | `Last-Modified` der Datei; `data/provenance.json` | 2026-09-25 |
+| Verkehrsmengen | alle fünfzehn | Zählungen von 2010 bis 2026, meist 2023–2026, abgefragt am **2026-10-01** | WFS der Stadt; `data/provenance.json` | 2026-10-01 |
+| Rad-Dauerzählstellen | — | live, beim Einschalten der Ebene und alle fünf Minuten | WFS der Stadt | nicht eingecheckt |
+| GTFS-Fahrplan | das ganze Gebiet | der Feed vom **2026-09-26**; die Tage 2026-10-01 (Werktag), 2026-10-10 (Samstag), 2026-10-04 (Sonntag) | `Last-Modified` der Datei; `data/transit/trams.json` | 2026-10-01 |
 
 Beachte die **unterschiedlichen Stände in einem Bild**: Boden und Baumhöhen
 stammen von Ende 2024, die Gebäudeformen aus einem Laserscan von 2016 mit
@@ -276,6 +328,8 @@ Overpass-API.
 | OpenStreetMap | *Open Database License* (ODbL) | „© OpenStreetMap-Mitwirkende“ |
 | Wikidata | *CC0* (gemeinfrei) | keiner erforderlich |
 | Stadtbaumkataster | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
+| Verkehrsmengen, Rad-Dauerzählstellen | `dl-de/by-2-0` | „Landeshauptstadt Dresden“ |
+| GTFS-Fahrplan | *CC BY 4.0* | „DELFI e.V. via gtfs.de“ |
 
 Der Viewer zeigt diese Vermerke in der Fußzeile seines Einstellungsfelds.
 Die abgeleiteten Lampen- und Mauerdateien tragen den OSM-Vermerk zusätzlich

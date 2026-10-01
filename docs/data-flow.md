@@ -38,6 +38,9 @@ flowchart LR
     WD["Wikidata<br/>(bridge class · main span)"]
     LSC["Laser scan (LAZ)<br/>every tile"]
     KAT["Stadtbaumkataster<br/>(Dresden street trees)"]
+    VM["Verkehrsmengen<br/>(Dresden: vehicles / day per section)"]
+    RZ["Rad-Dauerzählstellen<br/>(Dresden: bicycles / hour, live)"]
+    GTFS["GTFS timetable<br/>(DELFI via gtfs.de)"]
   end
 
   HASH["deterministic hash"]:::synth
@@ -60,6 +63,9 @@ flowchart LR
     TRAM["Trams<br/>tracks · masts · contact wire"]
     RIV["Elbe landing stages<br/>piers · pontoons · groynes · ferry lines"]
     SND["Sound (hidden, opt-in)<br/>hour bells · footsteps · river · birds"]
+    TRF["Data layer: motor traffic<br/>flowing bands per direction"]
+    BIK["Data layer: bicycle counters<br/>a column per direction (live)"]
+    TCAR["Data layer: trams by timetable<br/>cars at the scene's clock"]
     BRG["Bridges<br/>deck · truss · pylons · arch"]
     PLT["Station platforms"]
     WAL["Retaining walls"]
@@ -145,6 +151,15 @@ flowchart LR
   OSM ==>|"man_made=pier / groyne · route=ferry"| RIV
   DLM -. "water class → pontoon · ferry cut to the water" .-> RIV
   DGM -. "pier deck from the bank · pontoon on the drawn water" .-> RIV
+  VM ==>|"vehicles / day per direction · heavy share"| TRF
+  DGM -. "drape (0.15 m over the ground)" .-> TRF
+  BRG -. "deck under a bridge street" .-> TRF
+  RZ ==>|"read by the browser every 5 min while on"| BIK
+  DGM -. ground-clamp .-> BIK
+  GTFS ==>|"trips · stop times · day kinds"| TCAR
+  OSM ==>|"tram tracks → the way between two stops"| TCAR
+  BRG -. "deck under a bridge track" .-> TCAR
+  SUN -. "the scene's clock" .-> TCAR
   OSM ==>|"churches · bell towers · paving · tram tracks"| SND
   CJ -. "tower tip + height" .-> SND
   DLM -. "water · green · roads" .-> SND
@@ -198,6 +213,9 @@ flowchart LR
 | **Fountains & monuments** | Basis-DLM `sie03_p` monument points (`BWF` 1750/1770/1780, official names) | OSM `amenity=fountain` (basin outlines, fountains the DLM lacks, which DLM monument is a fountain) · DOM1 − DGM1 (the sculpture's measured form) · DGM1 (seated over the highest ground under a basin) | baked by `pipeline/bake/monuments.py`; `monument-layer.ts`, `lib/city/monuments.ts` |
 | **Railway tracks** | Basis-DLM `ver03_f` area (dissolved ballast) **+** `ver03_l` (heavy-rail steel) | DGM1 (drape / lift onto deck) | `rail-layer.ts`; baked by `pipeline/bake/rail.py` |
 | **Trams** | OSM `railway=tram` (each track), `power=catenary_mast` (the masts within 15 m of a tram track), the OSM building outlines (facades for the rosette spans), `railway=tram_stop` + the platforms (the stop signs) | DLM class raster (street vs lawn vs ballast bed) · DOP NDVI (lawn bed) · DGM1 (drape) · the bridge decks (a track tagged `bridge` rides the deck) | `tram-layer.ts`, `lib/city/tram.ts` (wire stations and sag); baked by `pipeline/bake/tram.py` |
+| **Data layer: motor traffic** (off by default) | Verkehrsmengen Dresden (WFS `cls:L363`): vehicles per day per road section and direction, heavy goods share | DGM1 (drape) · the bridge decks (a section on a street named a bridge rides the deck) · the HUD's switch | `traffic-layer.ts`, `lib/city/traffic.ts`, `tile-stream.ts`; baked by `pipeline/bake/traffic.py` |
+| **Data layer: bicycle counters** (off by default) | Rad-Dauerzählstellen Dresden (WFS `cls:L1781`), read live by the browser: bicycles of the last hour per direction | DGM1 (ground-clamp) · the HUD's switch and list | `bike-layer.ts`, `data-overlays.ts`, `lib/city/bike-counts.ts` |
+| **Data layer: trams by timetable** (off by default) | GTFS from DELFI via gtfs.de: every DVB tram trip, its stops and times, three kinds of day | OSM tram tracks (the way between two stops) · DGM1 (rail top) · the bridge decks · the scene's clock · the HUD's switch | `tram-cars.ts`, `data-overlays.ts`, `lib/city/tram-timetable.ts`; baked once for the site by `pipeline/bake/transit.py` |
 | **Elbe landing stages** | OSM `man_made=pier` (fixed or `floating`), `man_made=groyne`, `route=ferry` | DLM water class (a pontoon and a ferry line cut to the water) · DGM1 (a pier's deck from the bank; a pontoon floats on the terrain the water sheet lies on) | `riverside-layer.ts`, `map-overlay.ts` (the ferry lines show from the air only); baked by `pipeline/bake/riverside.py` |
 | **Sound** (hidden, opt-in: L or *Klang*) | OSM churches and bell towers at the tip and height the LoD2 measures (`soundmarks_<t>.geojson`) — the hour bells | Basis-DLM class raster (water, green, roads) · the sky-view factor · the OSM paving raster (footsteps) · OSM tram tracks · the fountains · the loaded trees · sun and date | `app/_components/soundscape/`, `soundscape-toggle.tsx`, `lib/city/soundscape.ts`; baked by `pipeline/bake/soundmarks.py` |
 | **Bridges** | Basis-DLM `ver06_l` decks (+ `ver06_f` footprints) | DGM1 (abutment ramp, piers, the water under the fairway) · DOM1 (the roadway's height; the superstructure — truss, pylons, steel arch — as ribs) · OSM `bridge:structure` and the fairway's clearance (deck depth, a pier-free fairway) · Wikidata (class, main span) — *LoD2's bridge slabs are left out of the buildings* | `rail-layer.ts`, `lib/city/bridge.ts`; baked by `pipeline/bake/rail.py` + `bridge.py` |
@@ -239,6 +257,8 @@ flowchart LR
     iDGM["DGM1 GeoTIFF<br/>data/dgm (committed)"]
     iCJ["LoD2 CityJSON<br/>data/cityjson (committed)"]
     iWD["Wikidata bridges<br/>wikidata/*.json"]
+    iVM["Verkehrsmengen<br/>traffic/*.geojson"]
+    iGTFS["GTFS feed<br/>gtfs/nv_free.zip"]
   end
 
   subgraph PY["pipeline/bake — Python (uv)"]
@@ -262,6 +282,8 @@ flowchart LR
     bCULT["cultivated.py"]
     bTRAM["tram.py"]
     bRIV["riverside.py"]
+    bTRF["traffic.py"]
+    bTRS["transit.py (site-wide)"]
   end
 
   subgraph DATA["data/ — committed per tile"]
@@ -285,6 +307,8 @@ flowchart LR
     dCULT["cultivated GeoJSON + colony PNG"]
     dTRAM["tram"]
     dRIV["riverside"]
+    dTRF["traffic"]
+    dTRS["transit/trams.json (site-wide)"]
   end
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
@@ -347,6 +371,10 @@ flowchart LR
   dCLS ==>|water| bRIV
   iDGM -. "pier decks" .-> bRIV
   bRIV ==> dRIV
+  iVM ==> bTRF ==> dTRF
+  iGTFS ==> bTRS
+  dTRAM ==>|tracks| bTRS
+  bTRS ==> dTRS
 
   iDGM ==> tTER
   dWALL -. "breaklines · the ribbons (L0)" .-> tTER
@@ -367,6 +395,8 @@ flowchart LR
   dSPT -.-> tSIDE
   dTRAM -.-> tSIDE
   dRIV -.-> tSIDE
+  dTRF -.-> tSIDE
+  dTRS -. "trams.json, named in the tileset" .-> tSIDE
   dEDGE -. "kerb stones (L0)" .-> tTER
   dWALL -. "fences and gate leaves (L0)" .-> tTER
 ```

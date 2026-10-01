@@ -37,6 +37,15 @@ height, crown width and trunk. The viewer plants those trees where they
 really stand, with their measured height, crown and trunk, a crown shape
 that follows the species, and the species' year: when it leafs out, which
 colour it turns in autumn and when it is bare.
+The same source provides two traffic datasets the viewer shows as
+**switchable data layers** (sidebar, *Erkunden* → *Verkehrsdaten*; off
+at start): the motor vehicles counted per road section, and the permanent
+bicycle counters, whose counts the browser reads live from the city.
+
+**DELFI and gtfs.de** — DELFI e.V. collects the timetables of every
+transport association in Germany (here the VVO's, with the DVB's lines);
+gtfs.de publishes them in the common GTFS format. The trams of the third
+data layer run from it, as the timetable has them run.
 
 ## The datasets at a glance
 
@@ -51,6 +60,9 @@ colour it turns in autumn and when it is bare.
 | **OSM** | OpenStreetMap | Volunteers | Street lamps, hedges, street furniture (benches, bins, bicycle stands, bollards, post boxes, stop shelters and stop signs, advertising columns, traffic signals, hydrants, clocks, drinking fountains), playgrounds and their equipment, station platforms, walls, cliff edges, stairs, bridge structure types and navigation clearances, fountain basins, what streets, pavements and car parks are paved with, sports grounds, shops and cafés on the ground floor, listed buildings, fences, railings and gates, road markings (crossings, stop lines, cycle and centre lines), allotment gardens, orchards and vineyards, trees the city's register does not list, tram tracks with their overhead-line masts, the landing stages, groynes and ferry routes on the Elbe, churches and bell towers (for the hidden soundscape) |
 | **Wikidata** | free knowledge base | Volunteers | The kind and main span of named bridges |
 | **Stadtbaumkataster** | The city's street-tree register | Landeshauptstadt Dresden | Street and park trees at their surveyed positions, with height, crown width, trunk, a crown shape from the species and the species' autumn colour and leaf fall |
+| **Verkehrsmengen** | Motor vehicles per day and road section | Landeshauptstadt Dresden | Data layer *Kfz-Verkehr*: flowing bands per direction, wider and denser where more traffic runs |
+| **Rad-Dauerzählstellen** | Bicycles of the last hour, live | Landeshauptstadt Dresden | Data layer *Radverkehr (live)*: two columns per counter, one per direction |
+| **GTFS timetable** | The scheduled local-transport timetable | DELFI e.V. via gtfs.de | Data layer *Straßenbahnen (Fahrplan)*: every DVB tram at the scene's time on its track |
 
 Available from the same portal but **not used yet**: the cadastral parcels
 (**ALKIS**), and the topographic base map (**DTK**). The planned section of
@@ -203,6 +215,42 @@ repository, because the build step reads it directly. See
 | **Weaknesses** | Not every lamp or bench is mapped, and few benches say which way they face, heights are often missing (the viewer uses defaults per wall type), tags vary. Volunteer data must be credited (ODbL). |
 | **Download and licence** | One regional extract of the whole state, `sachsen-latest.osm.pbf`, downloaded from [Geofabrik](https://download.geofabrik.de/europe/germany/sachsen.html) (about 250 MB) and read locally, which avoids rate limits and makes the result reproducible. The lamp, platform and bridge-structure files committed today are older: they were fetched through the **Overpass API**, a live query service, before the bakes switched to the extract, and move to the extract at their next re-bake. Licence: **ODbL**, credit "© OpenStreetMap contributors". |
 
+### Verkehrsmengen — the counted motor traffic
+
+| | |
+|---|---|
+| **Stands for** | The road office's *Verkehrsbelegung*: motor vehicles per day (AADT, the annual average daily traffic) for every counted road section between two junctions, per direction, with the heavy goods vehicles. |
+| **How it is made** | Mostly counted by hand on one day and scaled to the average day; on some roads induction loops or infrared detectors giving yearly means; on a few an estimated "Hilfswert". |
+| **Updates** | Section by section, when counted again; in the site mostly 2023–2026, a few sections back to 2010. |
+| **Used here for** | The *Kfz-Verkehr* data layer: one band per counted direction on the carriageway, on the right of travel, as wide as the root of the vehicles per day, coloured sage → amber → coral, with dashes running in the direction of travel; a high heavy-goods share turns it plum. A street without a count stays empty — nothing is estimated. |
+| **Strengths** | Measured, per direction; nearly every main road counted. |
+| **Weaknesses** | A daily mean, no curve over the day; counts from different years side by side; minor streets often uncounted. |
+| **Download and licence** | The city's WFS (`kommisdd.dresden.de`, layer `cls:L363` "Kfz/Tag"), read per tile. Licence `dl-de/by-2-0`, credit "Landeshauptstadt Dresden". |
+
+### Rad-Dauerzählstellen — bicycles, live
+
+| | |
+|---|---|
+| **Stands for** | The city's automatic bicycle counters — 35 in the site, on the Albert and Waldschlößchen bridges and along the Elbe cycle path among others. |
+| **How it is made** | Sensors in the cycle path count each bicycle and its direction and report every hour's sum. |
+| **Updates** | Hourly, a few minutes after the hour. |
+| **Used here for** | The *Radverkehr (live)* data layer: the browser reads the counts from the city when it is switched on and every five minutes after. Each counter is two columns either side of the street, one per direction (teal, lilac), as tall as the root of the last hour's bicycles; a counter silent for three hours turns grey. The sidebar lists the numbers; a click flies there. |
+| **Strengths** | Current, measured, per direction. |
+| **Weaknesses** | Few points; says nothing about the streets in between. When the city's service is down the last counts stay. |
+| **Download and licence** | The same WFS, layer `cls:L1781` ("aktuelle Zählwerte"; the whole hourly series since 2017 is `cls:L1780`). Licence `dl-de/by-2-0`, credit "Landeshauptstadt Dresden". |
+
+### GTFS timetable — the trams
+
+| | |
+|---|---|
+| **Stands for** | *General Transit Feed Specification*, the common exchange format for timetables: lines, stops, trips and their times. |
+| **How it is made** | The operators plan their trips; DELFI e.V. collects the timetables of every German transport association (as NeTEx), and gtfs.de converts them to GTFS every week. |
+| **Updates** | Weekly, each about a month ahead. |
+| **Used here for** | The *Straßenbahnen (Fahrplan)* data layer: every DVB tram trip in the site — about 2,600 on a working day — laid onto the OpenStreetMap tracks (the timetable knows the stops, not the way between them). At the scene's time, which runs on in real time from the time set, each tram is a yellow car of four sections that stands at its stops and crosses the bridges. The viewer tells working days, Saturdays and Sundays apart; a public holiday runs as its weekday. |
+| **Strengths** | Complete: every planned trip of every line. |
+| **Weaknesses** | Not live — delays, diversions and cancellations are not shown. In a few places the way between two stops lies on the wrong one of two tracks. |
+| **Download and licence** | `nv_free` from [gtfs.de](https://gtfs.de/en/feeds/de_nv/) (all of Germany, about 290 MB, not committed); only the cut for the site, `data/transit/trams.json`, is. Licence *CC BY 4.0*, credit "DELFI e.V. via gtfs.de"; the tracks "© OpenStreetMap contributors". |
+
 ## Dataset editions in use
 
 The exact edition matters when the picture disagrees with reality. GeoSN
@@ -226,6 +274,9 @@ before it.
 | OSM via Geofabrik | statewide extract | the daily extract of 2026-09-18 or shortly before | git history (walls re-baked that day); `osmium fileinfo -e` on the raw file prints the exact timestamp | 2026-09-18 |
 | OSM via BBBike (stairs; every OSM layer of the eleven tiles added 2026-09-25) | the Dresden city extract | the extract of 2026-09-19 | the file's `Last-Modified`; `data/provenance.json` | 2026-09-24 |
 | OSM via BBBike (paving; also the eleven tiles added 2026-09-25) | the Dresden city extract | the extract of 2026-09-19 | the file's `Last-Modified`; `data/provenance.json` | 2026-09-25 |
+| Verkehrsmengen | all fifteen | counts from 2010 to 2026, mostly 2023–2026, read on **2026-10-01** | the city's WFS; `data/provenance.json` | 2026-10-01 |
+| Rad-Dauerzählstellen | — | live, when the layer is switched on and every five minutes | the city's WFS | not committed |
+| GTFS timetable | the whole site | the feed of **2026-09-26**; the days 2026-10-01 (working day), 2026-10-10 (Saturday), 2026-10-04 (Sunday) | the file's `Last-Modified`; `data/transit/trams.json` | 2026-10-01 |
 
 Note the **mismatch of dates inside one picture**: the ground and the tree
 heights are from late 2024, the building shapes from a 2016 laser scan with
@@ -271,6 +322,8 @@ bridge-structure files still date from earlier Overpass API queries.
 | OpenStreetMap | *Open Database License* (ODbL) | "© OpenStreetMap contributors" |
 | Wikidata | *CC0* (public domain) | none required |
 | Stadtbaumkataster | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
+| Verkehrsmengen, Rad-Dauerzählstellen | `dl-de/by-2-0` | "Landeshauptstadt Dresden" |
+| GTFS timetable | *CC BY 4.0* | "DELFI e.V. via gtfs.de" |
 
 The viewer shows these credits in the footer of its settings panel. The
 derived lamp and wall files carry the OSM credit inside the file as well;

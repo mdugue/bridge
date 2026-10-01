@@ -45,6 +45,7 @@ each data → look transformation does and its status.
 | [0033](./0033-bridges-measured-in-the-surface-model.md) | Bridges are measured in the surface model, typed by Wikidata | accepted |
 | [0034](./0034-picture-styles-as-one-post-pass.md) | Picture styles (comic, film noir, Sin City, Papier) are one optional post pass over the clay scene; Papier adds a render-time material override | accepted |
 | [0035](./0035-parts-meet-the-ground.md) | Every part meets the ground by one set of rules (feet under, edges meeting the ground, decisions smoothed along the part) and reports where it does; one check holds them to it | accepted |
+| [0036](./0036-data-layers-and-live-city-data.md) | Traffic is shown as switchable data layers (motor traffic baked per tile, bicycle counters read live from the city, trams by timetable), all off at start; the first runtime read from a server other than the site's own | accepted |
 
 ## Format
 

@@ -131,7 +131,13 @@ config change.
     terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
     vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
     stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
-    lines) and `map-overlay.ts` (fades the ferry lines in with height),
+    lines) and `map-overlay.ts` (fades the ferry lines in with height,
+    widens the data layers from the air), the data layers
+    (`lib/city/data-layers.ts`, switched in the HUD, all off at start —
+    ADR 0036): `traffic-layer.ts` (the counted motor traffic as flowing
+    bands, per tile), `data-overlays.ts` (the site-wide ones:
+    `bike-layer.ts`, the city's bicycle counters read live, and
+    `tram-cars.ts`, the trams by timetable),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
@@ -207,7 +213,9 @@ config change.
   `markings.py`,
   `cultivated.py`, `skyview.py`, `osm_buildings.py` (shops and heritage
   per LoD2 object), `tram.py`, `riverside.py`, `soundmarks.py`
-  (the bell towers), `osm.py`; `ingest_sn.py` is Saxony's
+  (the bell towers), `traffic.py` (the city's counted traffic),
+  `transit.py` (the trams' timetable, once for the site), `osm.py`;
+  `ingest_sn.py` is Saxony's
   download adapter (it also fetches Wikidata's bridges); tests in `pipeline/tests/`), run by `bun run bake`
   (`scripts/bake.ts`) — see ADR 0025
 - `scripts/` — the build step: `prepare-data.ts` bakes the committed

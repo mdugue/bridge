@@ -118,6 +118,21 @@ The button in the corner opens a panel with three tabs.
   yet. The last card, *Aktuelle Sicht merken*, remembers where you stand;
   it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
   forget it.
+- **Verkehrsdaten** ("traffic data") — three data layers over the city,
+  each with its own switch, all off at start (see
+  [Where the data comes from](./data-sources.md)):
+  - *Kfz-Verkehr* ("motor traffic"): the vehicles counted per day as
+    flowing bands on the carriageway, one per direction — wider, denser
+    and redder where more traffic runs;
+  - *Radverkehr (live)* ("cycling, live"): at each of the city's counters
+    two columns, as tall as the last hour's bicycles per direction; below
+    the switch the list of counters with their numbers, a click flies
+    there;
+  - *Straßenbahnen (Fahrplan)* ("trams, by timetable"): every DVB tram
+    where the timetable has it at the time set — the clock runs on from
+    there; below the switch, how many are out.
+
+  From the air the bands and columns widen so they stay legible.
 - **Steuerung** — the full controls table.
 
 ### Szene ("Scene")

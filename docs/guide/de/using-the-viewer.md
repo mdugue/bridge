@@ -124,6 +124,20 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
   sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
   zurückspringt, mit einem ✕ zum Vergessen.
+- **Verkehrsdaten** — drei Datenebenen über der Stadt, jede mit eigenem
+  Schalter, beim Start alle aus (siehe
+  [Woher die Daten kommen](./data-sources.md)):
+  - *Kfz-Verkehr*: die gezählten Fahrzeuge je Tag als fließende Bänder auf
+    der Fahrbahn, je Richtung eines — breiter, dichter und röter, wo mehr
+    fährt;
+  - *Radverkehr (live)*: an jeder Zählstelle der Stadt zwei Säulen, so hoch
+    wie die Räder der letzten Stunde je Richtung; darunter die Liste der
+    Zählstellen mit ihren Zahlen, ein Klick fliegt hin;
+  - *Straßenbahnen (Fahrplan)*: jede Bahn der DVB, wie der Fahrplan sie zur
+    eingestellten Zeit fahren lässt — die Zeit läuft von dort an weiter;
+    darunter, wie viele gerade unterwegs sind.
+
+  Aus der Luft werden Bänder und Säulen breiter, damit sie lesbar bleiben.
 - **Steuerung** — die vollständige Tastentabelle.
 
 ### Szene

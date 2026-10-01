@@ -1449,6 +1449,69 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
   lines on flat roads). No slope, no contour line. `terrain-layer.ts`.
 
+### Traffic (the data layers)
+Overlays on the city, each switched on and off on its own in the HUD
+(*Erkunden* → *Verkehrsdaten*; `lib/city/data-layers.ts`, one flag per
+layer in the look store and the snapshot, all **off** at boot): nothing is
+drawn, fetched or polled for a layer that is off (the traffic bands are
+fetched with their tile's dressing — 37 KB a tile — and only hidden). They
+are measurements laid over the poetic city, not part of it: unlit or flat
+colours, no shadows, no text in the scene (what they say in words is in
+the sidebar). Judged on SwiftShader plates only so far — **unjudged on a
+GPU**.
+- **Counted motor traffic** — the city's *Verkehrsmengen* (WFS
+  `cls:L363` "Kfz/Tag", Straßen- und Tiefbauamt, dl-de/by-2-0; 2 082
+  sections over the fifteen tiles, mostly counted 2023–2026: one-day hand
+  counts scaled to the average day, induction loops and infrared detectors
+  as yearly means, a few estimates) → `pipeline/bake/traffic.py` →
+  `traffic_<tile>.geojson`: each section cut to the tile, the vehicles per
+  day along and against its line (`f`/`b`, absent where a direction was not
+  counted), the heavy-goods share per direction, the year and method, the
+  street, `br` on a street named a bridge. Runtime
+  (`app/_components/traffic-layer.ts`, `lib/city/traffic.ts`): one band per
+  counted direction on the right of its travel (both: either side of the
+  line; one: on the line; only a total: on the line, not flowing), width
+  1.2–3.6 m with the root of the vehicles per day, colour sage → amber →
+  coral with their logarithm (300 → 30 000 a day), plum mixed in with the
+  heavy share; dashes run with the traffic (8 m/s, longer the busier),
+  0.15 m over the ground, on a bridge street the deck. From the air the
+  bands widen up to 5× (`map-overlay.ts` `mapWidenNode`). A street without
+  a count draws nothing — no gap filling, no model.
+- **Bicycle counters, live** — the city's permanent counters (WFS
+  `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
+  bicycles of the last full hour per direction) read **by the browser**
+  from the city's server (it answers any origin) when the layer is
+  switched on and every 5 minutes while it is on
+  (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
+  columns per counter across the street (`winkel`, its run, degrees
+  counter-clockwise from north), one per direction (teal, lilac), height
+  1.5 m + 1.6 × √count (482 an hour on the Albertbrücke ≈ 37 m); grey when
+  the count is older than three hours. The sidebar lists the counts,
+  busiest first; a click flies there. The first runtime request to a
+  server other than the site's own ([ADR 0036](./adr/0036-data-layers-and-live-city-data.md)).
+- **Trams by timetable** — the DVB's scheduled tram trips (gtfs.de's
+  Germany-wide GTFS from DELFI's NeTEx, CC BY 4.0; ≈ 290 MB, not
+  committed) → `pipeline/bake/transit.py`, **site-wide** →
+  `data/transit/trams.json` (≈ 680 KB): 12 lines, 127 stop patterns, 264
+  running-time profiles, 2 598 / 2 002 / 1 629 trips on a working day /
+  Saturday / Sunday (the busiest day of each kind in the next three weeks:
+  3 October 2026, a holiday, lost to the 10th). The feed has no shapes:
+  each leg is laid on the OSM tram tracks (`tram_<tile>.geojson`) as the
+  shortest way between the tracks near its two platforms, a metre from
+  platform to track weighing three of way, so a car keeps to the track
+  beside its platform; every leg on the site finds one (Postplatz's
+  platforms stand up to 60 m from a track). Runtime
+  (`app/_components/tram-cars.ts`, `lib/city/tram-timetable.ts`): every
+  trip of the scene's kind of day (and the night's of the day before) at
+  the scene's clock, which runs on in real time from the HUD's instant;
+  a car is four 7.2 m sections, each following the path on its own,
+  standing at its stops from arrival to departure and easing between them;
+  the rail top over the ground, the deck on a bridge track; DVB yellow
+  with a slate window band; no shadow (a moving caster would redraw the
+  shadow map every frame). **Not live positions**: a delay or a
+  diversion is not shown. The sidebar says how many trams run and from
+  which day's timetable.
+
 ### Sound
 Hidden and opt-in (plan [035](./plans/035-soundscape.md)): nothing below
 sounds, and no `AudioContext` exists, until the visitor presses **L** or
@@ -1597,6 +1660,14 @@ research that produced them):
     (Cultivated land), 030 (Signs and fixtures), 031 (Landing stages,
     groynes, ferries), 033 (Sky-view factor, Horizon shade),
     034 (Small structures from the laser scan), 035 (Sound — unheard).
+14. **The traffic data layers, next** (✅ *Traffic* above) — tram delays
+    from the VVO's departure monitor (`webapi.vvo-online.de/dm`, real time
+    per stop, answers any origin: poll the stops in view, shift each trip
+    by its delay); the bicycle counters' hourly history since 2017
+    (`cls:L1780`, > 140 MB unfiltered: bake a typical day per counter and
+    run the columns with the scene's hour); the accidents with injury
+    (Unfallatlas, the statistics offices, dl-de/by-2-0; pedestrian and
+    cyclist involvement per point) as a fourth layer.
 
 ---
 
@@ -1604,6 +1675,8 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
+| **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |
 | **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. |

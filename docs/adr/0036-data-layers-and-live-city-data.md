@@ -1,0 +1,107 @@
+# ADR 0036: Traffic is shown as switchable data layers, and one of them is read live from the city
+
+- **Status:** accepted
+- **Date:** 2026-10
+
+## Context
+
+The maintainer asked to show traffic over the city — how dense the
+motor traffic is, how many people cycle and walk — and to be able to show
+and hide each of these. Three open sources fit the site (checked
+2026-10-01): the city's counted motor traffic per road section (WFS
+`cls:L363`, a daily mean per direction), the city's permanent bicycle
+counters (WFS `cls:L1781`, the last hour per direction, updated hourly),
+and the DVB's tram timetable (gtfs.de's GTFS from DELFI). There is no open
+measured source for pedestrians on the site.
+
+Two things about them are new for the viewer. They are *measurements laid
+over* the poetic city rather than part of its look; nothing so far was
+optional in that sense except the hidden soundscape. And the bicycle
+counts are only worth showing live — a baked copy is an hour old by the
+time it is committed — while the viewer has so far fetched nothing at
+runtime but its own files under `/data` ([ADR 0001](./0001-client-only-static-app.md)).
+
+## Decision
+
+**Each source is a data layer with a switch of its own**, declared once in
+`lib/city/data-layers.ts` (label, explanation, credit) and held as one
+boolean per layer in the look store (`trafficLayer`, `bikeLayer`,
+`tramLayer`), so the snapshot carries them and the HUD renders the
+switches from the table (*Erkunden* → *Verkehrsdaten*). Every layer starts
+**off**; the look reset leaves them as they are. A layer that is off
+draws nothing and polls nothing. What a layer says in words (the counts,
+the number of trams) is in the sidebar, never as text in the scene.
+
+- **Motor traffic** is baked per tile like any other side file
+  (`pipeline/bake/traffic.py` → `traffic_<tile>.geojson`) and built with the
+  tile's dressing, hidden until switched on (37 KB a tile; building it
+  late would put a node build inside a frame).
+- **The bicycle counters are read by the browser from the city's server**
+  when the layer is switched on and every five minutes while it is on
+  (the service answers any origin). Nothing is fetched until the visitor
+  asks for it — the same stance as the Ko-fi link, which loads nothing from
+  there until clicked — and a failed read keeps the last counts. The e2e
+  spec answers for the city's server, so CI never depends on it.
+- **The trams run from the timetable**, baked once for the whole site
+  (`pipeline/bake/transit.py` → `data/transit/trams.json`, named in the
+  tileset's extras) and placed every frame at the scene's clock, which runs
+  on in real time from the HUD's instant. They are not live positions, and
+  the HUD says so.
+
+The layers are site-wide where their data is (the counters, the trams:
+`data-overlays.ts`, owned by `create-app.ts`) and per tile where it is
+(the traffic bands: dressing parts in `tile-stream.ts`). None casts a
+shadow: the bands are map marks, and the trams move every frame — a
+moving caster would redraw the sun's shadow map in each one
+([ADR 0020](./0020-fixed-light-pool-and-static-shadow-casters.md)). From
+the air their geometry widens with one shared uniform
+(`map-overlay.ts` `mapWidenNode`), never a rebuild.
+
+## Consequences
+
+- ADR 0001 still holds — no backend, nothing persisted, every computation
+  in the browser — but the viewer is no longer self-contained once the
+  bicycle layer is on: it depends on `kommisdd.dresden.de` being up and
+  answering cross-origin requests. If either changes, the layer shows
+  nothing new and keeps the last counts; the rest of the scene is
+  untouched.
+- A new data layer is a row in the table, a flag the scene reads, and a
+  credit — the HUD, the snapshot and the reset follow.
+- The trams' timetable ages: the feed covers about a month, the committed
+  file three dates in it. The viewer runs a date by its kind (working day,
+  Saturday, Sunday), so an old file still runs plausibly; re-bake with
+  `bun run bake --ingest --step transit` to follow a timetable change.
+- The visual tuning (band widths, colours, column heights, tram size) was
+  judged on SwiftShader plates only; it wants a real-GPU look.
+
+## Alternatives
+
+- **Bake the bicycle counts.** An hour old at best, a week at worst; the
+  live counts are the point. Rejected. (The hourly history since 2017,
+  `cls:L1780`, could still be baked into a typical day per counter: 📋 in
+  the ledger.)
+- **A proxy route for the city's WFS.** A backend for one GET the browser
+  can make itself ([ADR 0001](./0001-client-only-static-app.md)). Rejected
+  while the service answers cross-origin.
+- **Live tram positions** (gtfs.de's GTFS-RT, one protobuf for all of
+  Germany; the TLMS volunteers' radio-telegram socket). Too heavy for a
+  browser to poll, or a service whose uptime the viewer cannot vouch for
+  (🗃️ in the ledger). Delays from the VVO's departure monitor per stop are
+  the planned next step.
+- **Pedestrian density from a model** (stops, shops, census cells). A model
+  drawn as if measured; rejected. The only pedestrian counter on the site
+  (hystreet, Prager Straße) is commercial.
+- **Data layers as look sliders.** A slider at 0 still builds and draws;
+  a switch can keep a layer from fetching at all.
+
+## References
+
+- `lib/city/data-layers.ts`, `app/_components/data-layers-panel.tsx`,
+  `app/_components/data-overlays.ts`
+- `pipeline/bake/traffic.py`, `app/_components/traffic-layer.ts`,
+  `lib/city/traffic.ts`
+- `lib/city/bike-counts.ts`, `app/_components/bike-layer.ts`
+- `pipeline/bake/transit.py`, `lib/city/tram-timetable.ts`,
+  `app/_components/tram-cars.ts`
+- [transformations.md](../transformations.md) — *Traffic (the data
+  layers)*; the 🗃️ rows on pedestrian counts and live tram positions
