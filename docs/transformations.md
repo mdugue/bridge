@@ -785,7 +785,7 @@ the crosshair), it answers in a card ([ADR 0040](./adr/0040-inquiry-cards-on-dem
   (LoD2 split into the model year and its inputs' years). The card's
   source lines; fetched with the first question.
 - **The asked building** (no slider) — the picked object's building tree
-  (the set demolish takes) gets flag 4 in the packed object texture at
+  (the set demolish takes) gets flag 32 in the packed object texture at
   runtime; the clay lifts it 40 % towards paper white, adds a faint
   paper light (brighter at night) and draws a pencil hatch: near, strokes
   on the building every 0.9 m (up the facade at 45°, across the roof;
