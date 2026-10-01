@@ -21,6 +21,12 @@ function gridOf(cells: readonly TileCell[]) {
   }));
 }
 
+/** The palette as bytes, three per class id: one table lookup a pixel. */
+const PALETTE = Uint8Array.from(
+  { length: 256 * 3 },
+  (_, i) => landcoverSrgb(Math.floor(i / 3))[i % 3]
+);
+
 /** A class raster painted in the palette, as a raw RGB image. */
 async function paint(classRaster: string) {
   const { data, info } = await sharp(classRaster)
@@ -28,9 +34,14 @@ async function paint(classRaster: string) {
     .toColourspace("b-w")
     .raw()
     .toBuffer({ resolveWithObject: true });
+  // Byte by byte, not `rgb.set(landcoverSrgb(id), …)` per pixel: same
+  // bytes, and Dresden's map bakes in 1.1 s instead of 6.4 s.
   const rgb = new Uint8Array(info.width * info.height * 3);
-  for (let i = 0; i < data.length; i++) {
-    rgb.set(landcoverSrgb(data[i]), i * 3);
+  for (let i = 0, o = 0; i < data.length; i++, o += 3) {
+    const c = data[i] * 3;
+    rgb[o] = PALETTE[c];
+    rgb[o + 1] = PALETTE[c + 1];
+    rgb[o + 2] = PALETTE[c + 2];
   }
   return sharp(rgb, {
     raw: { width: info.width, height: info.height, channels: 3 },

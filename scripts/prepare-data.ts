@@ -201,6 +201,14 @@ function cacheKey(inputs: string[], ...extra: unknown[]): string {
   return contentKey(hashOf, [...inputs, ...BAKE_SOURCES], extra);
 }
 
+/**
+ * A site-wide artifact's cache name. Every site shares the cache, and
+ * `cached` keeps one entry per name: unscoped, each site's build would evict
+ * the entry of the site built before it (and re-bake its own on every run).
+ * A tile's names need no scope while no two sites share a tile.
+ */
+const siteWide = (name: string) => `${SITE.id}.${name}`;
+
 /** The cached bytes for `key`, or the baked ones (then cached). */
 async function cached(
   name: string,
@@ -436,7 +444,7 @@ function parseCity(tile: string): BakedCityMesh {
 /** The shared offset and CRS, cached with the spawn tile's CityJSON. */
 const frame = parse<{ cx: number; cy: number; epsg: number }>(
   await cached(
-    "frame.json",
+    siteWide("frame.json"),
     cacheKey([at(cityMeshSourceFiles(SITE, TILES[0]).city)]),
     () => {
       const baked = parseCity(TILES[0]);
@@ -824,7 +832,7 @@ if (rasters.every((path) => existsSync(path))) {
     at("scripts/bake-wissen-hero.ts"),
     at("lib/city/landcover.ts"),
   ];
-  const hero = await cached(HERO_FILE, cacheKey(heroSources), () =>
+  const hero = await cached(siteWide(HERO_FILE), cacheKey(heroSources), () =>
     bakeWissenHero(SITE.tiles, rasters, 1600)
   );
   publish(HERO_FILE, hero);
@@ -848,7 +856,7 @@ const statSources = TILES.flatMap((tile) => {
   ];
 });
 const stats = await cached(
-  SITE_STATS_FILE,
+  siteWide(SITE_STATS_FILE),
   cacheKey(statSources, extras.ground ?? null, footprintFiles.size),
   async () => utf8(await siteStats())
 );
