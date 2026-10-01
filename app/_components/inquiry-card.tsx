@@ -19,60 +19,91 @@ import {
   type InquiryCard as InquiryCardModel,
   inquiryCard,
 } from "@/lib/city/inquiry";
+import type { TreeFactsFile } from "@/lib/city/features";
+import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
 import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { isTextEntry } from "./keyboard-controls";
 
 type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
 
-/** One fetch per manifest URL for the page's life (the file is
- *  content-hashed and immutable, ADR 0007). */
-const provenanceFetches = new Map<string, Promise<SiteProvenance | null>>();
-
-function fetchProvenance(url: string): Promise<SiteProvenance | null> {
-  let pending = provenanceFetches.get(url);
+/**
+ * One fetch per URL for the page's life (the files are content-hashed and
+ * immutable, ADR 0007); a failed one is not kept, so the next card tries
+ * again.
+ */
+function cachedFetch<T>(
+  cache: Map<string, Promise<T | null>>,
+  url: string,
+  accept: (json: unknown) => json is T
+): Promise<T | null> {
+  let pending = cache.get(url);
   if (!pending) {
     pending = fetch(url)
       .then((res) => (res.ok ? (res.json() as Promise<unknown>) : null))
-      .then((json) => (isSiteProvenance(json) ? json : null))
+      .then((json) => (accept(json) ? json : null))
       .catch(() => null)
-      .then((provenance) => {
-        // A failed fetch is not kept: the next card tries again.
-        if (!provenance) {
-          provenanceFetches.delete(url);
+      .then((value) => {
+        if (!value) {
+          cache.delete(url);
         }
-        return provenance;
+        return value;
       });
-    provenanceFetches.set(url, pending);
+    cache.set(url, pending);
   }
   return pending;
 }
 
-/**
- * The provenance manifest, fetched when the first card opens — never at
- * boot — and kept for the session. A failed fetch leaves the card without
- * editions; each source line still names its source and licence.
- */
-function useProvenance(url: string | null): SiteProvenance | null {
-  const [loaded, setLoaded] = useState<{
-    provenance: SiteProvenance | null;
-    url: string;
-  } | null>(null);
+/** A file fetched when a card first needs it, never at boot. */
+function useFetched<T>(
+  cache: Map<string, Promise<T | null>>,
+  url: string | null | undefined,
+  accept: (json: unknown) => json is T
+): T | null {
+  const [loaded, setLoaded] = useState<{ url: string; value: T | null } | null>(
+    null
+  );
   useEffect(() => {
     if (!url) {
       return;
     }
     let live = true;
-    void fetchProvenance(url).then((provenance) => {
+    void cachedFetch(cache, url, accept).then((value) => {
       if (live) {
-        setLoaded({ url, provenance });
+        setLoaded({ url, value });
       }
     });
     return () => {
       live = false;
     };
-  }, [url]);
-  return loaded?.url === url ? loaded.provenance : null;
+  }, [cache, url, accept]);
+  return url && loaded?.url === url ? loaded.value : null;
+}
+
+const provenanceFetches = new Map<string, Promise<SiteProvenance | null>>();
+const treeFactsFetches = new Map<string, Promise<TreeFactsFile | null>>();
+
+const isTreeFacts = (json: unknown): json is TreeFactsFile =>
+  typeof json === "object" &&
+  json !== null &&
+  Array.isArray((json as Partial<TreeFactsFile>).known) &&
+  Array.isArray((json as Partial<TreeFactsFile>).names);
+
+/**
+ * The provenance manifest, fetched when the first card opens and kept for
+ * the session. A failed fetch leaves the card without editions; each
+ * source line still names its source and licence.
+ */
+function useProvenance(url: string | null): SiteProvenance | null {
+  return useFetched(provenanceFetches, url, isSiteProvenance);
+}
+
+/** A tree's row of its tile's facts file (fetched with the question), or
+ *  null for anything else and until it has arrived. */
+function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
+  const tree = inquiry.kind === "tree" ? inquiry : null;
+  const file = useFetched(treeFactsFetches, tree?.factsUrl, isTreeFacts);
+  return tree && file ? treeFactsAt(file, tree.index) : null;
 }
 
 /**
@@ -98,9 +129,10 @@ export function InquiryCard({
   sheet?: boolean;
 }) {
   const provenance = useProvenance(provenanceUrl);
+  const treeFacts = useTreeFacts(inquiry);
   const card = useMemo(
-    () => inquiryCard(inquiry, provenance),
-    [inquiry, provenance]
+    () => inquiryCard(inquiry, provenance, treeFacts),
+    [inquiry, provenance, treeFacts]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -293,15 +325,15 @@ function CardDetails({ card }: { card: InquiryCardModel }) {
       )}
 
       <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-[11px] text-muted-foreground">
-        <span>Kennung</span>
+        <span>{card.idLabel}</span>
         <code className="min-w-0 flex-1 truncate font-mono text-foreground/80 select-all">
           {card.id}
         </code>
         <button
-          aria-label="Kennung kopieren"
+          aria-label={`${card.idLabel} kopieren`}
           className="rounded p-1 hover:bg-muted hover:text-foreground"
           onClick={copy}
-          title="Kennung kopieren"
+          title={`${card.idLabel} kopieren`}
           type="button"
         >
           {copied ? (

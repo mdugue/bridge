@@ -14,6 +14,8 @@ const LIFT = 0.2;
 const ROOM = 1.2;
 /** The loop goes on past its start by this much of a turn. */
 const OVERRUN = 0.12;
+/** Over a deck's edge: the parapet (rail-layer.ts, 0.85 m) and clear of it. */
+const OVER_PARAPET = 1.6;
 /** A segment of a resampled outline is at most this long (m). */
 const STEP = 1.5;
 
@@ -35,10 +37,18 @@ export function outlineOf(solids: readonly AskSolid[]): Xyz[] {
     const p = first.prism;
     return resample(p.ring.map(([x, z]) => ({ x, y: p.y0 + LIFT, z })));
   }
+  // along the parapet's top, as the scene draws the deck: on the deck
+  // itself the parapets hide it
   const s = first.slab;
+  const top = s.ringTop;
+  if (top && top.length >= s.ring.length) {
+    return resample(
+      s.ring.map(([x, z], i) => ({ x, y: top[i] + OVER_PARAPET, z }))
+    );
+  }
   return resample(s.ring.map(([x, z]) => ({ x, y: 0, z }))).map((p) => ({
     ...p,
-    y: s.topAt(p.x, p.z) + LIFT,
+    y: s.topAt(p.x, p.z) + OVER_PARAPET,
   }));
 }
 

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { bridgeItems, monumentItems, treeItems } from "./ask-items";
-import { nearestItem } from "./ask-solids";
+import { bridgeItems, monumentItems, treeSets } from "./ask-items";
+import { nearestInSets, nearestItem } from "./ask-solids";
 import type {
   BridgeFeature,
   FeatureCollection,
@@ -35,13 +35,14 @@ const down = { x: 0, y: -1, z: 0 };
 
 test("every tree of the file is askable, by its index there", () => {
   const trees = read<TreeFeature>("trees");
-  const items = treeItems(trees, ctx);
-  expect(items).toHaveLength(trees.length);
+  const sets = treeSets(trees, ctx);
   const i = 1234;
   const [ex, ey] = trees[i].geometry.coordinates;
   const w = epsgToWorld(ex, ey, offset);
-  const hit = nearestItem({ x: w.x, y: 200, z: w.z }, down, items, 500);
+  const hit = nearestInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500);
   expect(hit?.target).toMatchObject({ kind: "tree", index: i, tile: TILE });
+  // its solids come with it, for the pencil
+  expect(hit?.solids).toHaveLength(2);
   // straight down onto the crown's top
   expect(hit?.distance).toBeCloseTo(
     200 - 110 - (trees[i].properties?.h ?? 0),

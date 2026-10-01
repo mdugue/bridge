@@ -2171,6 +2171,10 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
 
   const decks = buildDeckTable(features.bridges, ctx);
   const bridgeMeshes = buildBridges(features.bridges, ctx, decks);
+  // what the inquiry probe raycasts for a bridge (bridge-ask.ts)
+  for (const mesh of bridgeMeshes) {
+    mesh.userData.bridge = true;
+  }
   // add() with no arguments logs a three error, so guard the spread.
   if (bridgeMeshes.length > 0) {
     group.add(...bridgeMeshes);

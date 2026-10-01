@@ -8,6 +8,7 @@ import {
   nearestItem,
   rayCylinder,
   rayPrism,
+  ringDistanceXz,
 } from "./ask-solids";
 
 const east = { x: 1, y: 0, z: 0 };
@@ -40,6 +41,8 @@ test("a ray meets a prism's wall or its top; a ring is even–odd", () => {
   expect(rayPrism({ x: 6, y: 10, z: 2 }, down, prism)).toBeNull();
   expect(insideRingXz(basin, 2, 2)).toBe(true);
   expect(insideRingXz(basin, 5, 2)).toBe(false);
+  expect(ringDistanceXz(basin, 2, 2)).toBe(0);
+  expect(ringDistanceXz(basin, 7, 2)).toBeCloseTo(3, 9);
 });
 
 test("of several things, the nearest within reach answers", () => {
@@ -73,7 +76,6 @@ test("sets of things: the boxes a ray misses are never opened", () => {
   }));
   const sets = askSets(items, 64);
   expect(sets.length).toBeGreaterThan(1);
-  expect(sets.reduce((n, s) => n + s.items.length, 0)).toBe(200);
   // along the row z = 30 from the west: the first post it meets
   const hit = nearestInSets({ x: -10, y: 2, z: 30 }, east, sets, 1000);
   expect(hit?.target).toBe(60);

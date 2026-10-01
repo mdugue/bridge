@@ -13,7 +13,7 @@ test("a tree is circled on the ground, wider than its crown", () => {
   }
 });
 
-test("a deck's outline follows its measured top", () => {
+test("a deck's outline follows its measured top, along the railing", () => {
   const loop = outlineOf([
     {
       slab: {
@@ -37,7 +37,7 @@ test("a deck's outline follows its measured top", () => {
     const a = loop[i];
     const b = loop[(i + 1) % loop.length];
     expect(Math.hypot(b.x - a.x, b.z - a.z)).toBeLessThanOrEqual(1.5 + 1e-9);
-    expect(a.y).toBeCloseTo(100 + a.x / 10 + 0.2, 9);
+    expect(a.y).toBeCloseTo(100 + a.x / 10 + 1.6, 9);
   }
 });
 
@@ -52,4 +52,29 @@ test("the hand goes round once and a little past, wavering a little", () => {
   expect(Math.max(...radii) - Math.min(...radii)).toBeGreaterThan(0.05);
   // the same place, the same stroke
   expect(pencilStroke(loop)).toEqual(stroke);
+});
+
+test("a deck drawn from its vertex tops is followed edge by edge", () => {
+  const loop = outlineOf([
+    {
+      slab: {
+        ring: [
+          [0, 0],
+          [30, 0],
+          [30, 4],
+          [0, 4],
+        ],
+        ringTop: [100, 106, 106, 100],
+        y0: 90,
+        y1: 110,
+        above: 1.3,
+        below: 1,
+        topAt: () => 0,
+      },
+    },
+  ]);
+  for (const p of loop) {
+    // linear along each edge, as rail-layer draws it, over the parapet
+    expect(p.y).toBeCloseTo(100 + p.x / 5 + 1.6, 9);
+  }
 });

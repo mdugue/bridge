@@ -42,6 +42,9 @@ import {
   type TerrainExtras,
 } from "@/lib/city/tileset";
 import type { DressingKind } from "@/lib/city/tile";
+import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
+import { askSets, type AskSet } from "@/lib/city/ask-solids";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
@@ -51,6 +54,7 @@ import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { buildRail } from "./rail-layer";
+import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
@@ -99,6 +103,9 @@ import { dressWalls } from "./wall-layer";
  * handle whose content comes and goes with it.
  */
 export interface TileDressing {
+  /** the trees, monuments and bridge decks the inquiry probe can ask
+   *  (lib/city/ask-items.ts; plan 049 phase 4): data, nothing drawn */
+  asks?: AskSet<FeatureInquiry>[];
   furniture?: Group;
   lamps?: LampControl;
   /** OSM hedges (low-vegetation-layer.ts): static, no per-frame work */
@@ -241,8 +248,9 @@ export const DRESSING_PARTS = {
   sport: (d) => d.sport?.group,
   vineyards: (d) => d.vineyards,
 } as const satisfies Record<
-  // every field but the id: a new part cannot be left out
-  Exclude<keyof TileDressing, "tile">,
+  // every field but the id and the askables (data): a new part cannot be
+  // left out
+  Exclude<keyof TileDressing, "asks" | "tile">,
   (d: TileDressing) => Object3D | undefined
 >;
 
@@ -562,7 +570,25 @@ async function buildDressing(
   // the seam samples the neighbour's ground past it.
   const riverside =
     river.length > 0 ? buildRiverside(river, ground) : undefined;
+  // What the probe can ask, sized as drawn: the trees on the tile's own
+  // ground (as the inventory stands them), decks only where this tile
+  // draws them.
+  const askCtx = {
+    ...ground,
+    tile,
+    treeHeightAt: terrain.heightAt,
+    owns: extent
+      ? (x: number, y: number) => ownsPoint(extent, x, y)
+      : undefined,
+  };
+  const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+  const asks = [
+    ...treeSets(inventory, askCtx),
+    ...askSets(monumentItems(monuments, askCtx)),
+    ...(bridgeSet ? [bridgeSet] : []),
+  ];
   return {
+    asks,
     tile,
     tram,
     riverside,

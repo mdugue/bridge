@@ -1,4 +1,11 @@
-import type { Camera, Raycaster } from "three";
+import { type Camera, Raycaster, Vector2 } from "three/webgpu";
+import {
+  type AskHit,
+  type AskSet,
+  type AskSolid,
+  nearestInSets,
+} from "@/lib/city/ask-solids";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
 import { type CityLayer, pickCityObject } from "./city-layer";
 
@@ -84,6 +91,22 @@ export function ringOffsets(
   return out;
 }
 
+/** What a ray met: a building's object, or another askable thing. */
+type ProbeHit =
+  | { building: { layer: CityLayer; objectIndex: number } }
+  | { thing: AskHit<FeatureInquiry> };
+
+/** A thing's key for the vote: one per tree, monument, deck. */
+function thingKey(t: FeatureInquiry): string {
+  return t.kind === "tree"
+    ? `tree:${t.tile}:${t.index}`
+    : `${t.kind}:${t.tile}:${t.position.join(",")}`;
+}
+
+/** How far a ray looks for a thing when no building stops it (m). */
+const FAR = 6000;
+const CENTRE = new Vector2(0, 0);
+
 export function createInquiryProbe(deps: {
   camera: Camera;
   /** the city layers on screen now */
@@ -92,10 +115,15 @@ export function createInquiryProbe(deps: {
   isLoaded: (layer: CityLayer) => boolean;
   /** distance along the pick ray to the ground, or null within `far` */
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
+  /** the pencil's loop around a thing that is not a building */
+  pencil: { draw: (solids: readonly AskSolid[] | null) => void };
+  /** the trees, monuments and decks on screen now (lib/city/ask-items.ts) */
+  things: () => Iterable<AskSet<FeatureInquiry>>;
   /** the canvas size in CSS px, for the tolerance rings */
   viewport: () => { height: number; width: number };
 }): InquiryProbe {
   let marked: CityLayer | null = null;
+  const ray = new Raycaster();
 
   const clear = () => {
     // A tile that unloaded took its texture with it: never touch it again.
@@ -104,32 +132,49 @@ export function createInquiryProbe(deps: {
       marked.mark(new Set());
     }
     marked = null;
+    deps.pencil.draw(null);
   };
 
-  /** One ray: the building it meets before the ground, if any. */
-  const sample = (ndc: { x: number; y: number } | undefined) => {
+  /** One ray: what it meets first, before the ground, if anything. */
+  const sample = (
+    ndc: { x: number; y: number } | undefined
+  ): PickSample<ProbeHit> | null => {
     const picked = pickCityObject(deps.camera, deps.cities(), ndc);
+    ray.setFromCamera(ndc ? new Vector2(ndc.x, ndc.y) : CENTRE, deps.camera);
+    const thing = nearestInSets(
+      ray.ray.origin,
+      ray.ray.direction,
+      deps.things(),
+      picked?.distance ?? FAR
+    );
+    const distance = thing?.distance ?? picked?.distance;
+    if (distance === undefined) {
+      return null;
+    }
+    const ground = deps.groundAlong(ray, distance);
+    if (ground !== null && ground < distance) {
+      return null;
+    }
+    if (thing) {
+      return { distance, hit: { thing }, key: thingKey(thing.target) };
+    }
     if (!picked) {
       return null;
     }
-    const ground = deps.groundAlong(picked.raycaster, picked.distance);
-    if (ground !== null && ground < picked.distance) {
-      return null;
-    }
-    const { layer, objectIndex, distance } = picked;
+    const { layer, objectIndex } = picked;
     return {
       distance,
-      hit: { layer, objectIndex },
+      hit: { building: { layer, objectIndex } },
       key: `${layer.tile}:${layer.table.root[objectIndex]}`,
     };
   };
 
-  const pick = (ndc?: { x: number; y: number }) => {
+  const pick = (ndc?: { x: number; y: number }): ProbeHit | null => {
     const exact = sample(ndc);
     if (exact || !ndc) {
       return exact?.hit ?? null;
     }
-    const samples: PickSample<{ layer: CityLayer; objectIndex: number }>[] = [];
+    const samples: PickSample<ProbeHit>[] = [];
     for (const d of ringOffsets(TOLERANCE_PX, deps.viewport())) {
       const s = sample({ x: ndc.x + d.x, y: ndc.y + d.y });
       if (s) {
@@ -139,13 +184,8 @@ export function createInquiryProbe(deps: {
     return chooseSample(samples)?.hit ?? null;
   };
 
-  const ask = (ndc?: { x: number; y: number }): Inquiry | null => {
-    clear();
-    const picked = pick(ndc);
-    if (!picked) {
-      return null;
-    }
-    const { layer, objectIndex } = picked;
+  /** A building's whole tree, marked in the clay. */
+  const askBuilding = (layer: CityLayer, objectIndex: number): Inquiry => {
     const { table } = layer;
     const tree: number[] = [];
     for (let i = 0; i < table.count; i++) {
@@ -169,6 +209,19 @@ export function createInquiryProbe(deps: {
       picked: object(objectIndex),
       tree: tree.map(object),
     };
+  };
+
+  const ask = (ndc?: { x: number; y: number }): Inquiry | null => {
+    clear();
+    const hit = pick(ndc);
+    if (!hit) {
+      return null;
+    }
+    if ("thing" in hit) {
+      deps.pencil.draw(hit.thing.solids);
+      return hit.thing.target;
+    }
+    return askBuilding(hit.building.layer, hit.building.objectIndex);
   };
 
   return { ask, clear };

@@ -38,6 +38,9 @@ export interface Prism {
 export interface Slab extends Prism {
   above: number;
   below: number;
+  /** the deck's top at each ring vertex as the scene draws it (rail-layer
+   *  interpolates it along the edges), for the pencil to follow */
+  ringTop?: readonly number[];
   topAt: (x: number, z: number) => number;
 }
 
@@ -53,6 +56,11 @@ const SLAB_STEP = 0.25;
 export interface AskItem<T> {
   solids: readonly AskSolid[];
   target: T;
+}
+
+/** What a ray met: how far along, what, and its solids (for its mark). */
+export interface AskHit<T> extends AskItem<T> {
+  distance: number;
 }
 
 const EPS = 1e-12;
@@ -211,12 +219,12 @@ export function nearestItem<T>(
   d: Xyz,
   items: Iterable<AskItem<T>>,
   far: number
-): { distance: number; target: T } | null {
-  let best: { distance: number; target: T } | null = null;
+): AskHit<T> | null {
+  let best: AskHit<T> | null = null;
   for (const item of items) {
     const t = raySolids(o, d, item.solids);
     if (t !== null && t <= far && (best === null || t < best.distance)) {
-      best = { distance: t, target: item.target };
+      best = { ...item, distance: t };
     }
   }
   return best;
@@ -228,10 +236,13 @@ export interface Aabb {
   min: Xyz;
 }
 
-/** Things grouped by a cell of the ground, with the box they fill. */
+/**
+ * Askable things in one box: the probe opens the box only when the ray
+ * passes through it, then asks the set for its nearest hit.
+ */
 export interface AskSet<T> {
   box: Aabb;
-  items: AskItem<T>[];
+  nearest: (o: Xyz, d: Xyz, far: number) => AskHit<T> | null;
 }
 
 /** The box a solid fills. */
@@ -272,19 +283,38 @@ export function askSets<T>(
   items: readonly AskItem<T>[],
   cell = 64
 ): AskSet<T>[] {
-  const sets = new Map<string, AskSet<T>>();
+  const cells = new Map<string, { box: Aabb; items: AskItem<T>[] }>();
   for (const item of items) {
     const box = item.solids.map(solidBox).reduce(grow);
     const key = `${Math.floor(box.min.x / cell)},${Math.floor(box.min.z / cell)}`;
-    const set = sets.get(key);
-    if (set) {
-      set.items.push(item);
-      set.box = grow(set.box, box);
+    const group = cells.get(key);
+    if (group) {
+      group.items.push(item);
+      group.box = grow(group.box, box);
     } else {
-      sets.set(key, { box, items: [item] });
+      cells.set(key, { box, items: [item] });
     }
   }
-  return [...sets.values()];
+  return [...cells.values()].map((g) => ({
+    box: g.box,
+    nearest: (o, d, far) => nearestItem(o, d, g.items, far),
+  }));
+}
+
+/** The box around cylinders (x, z, y0, y1, r) — a packed set's box. */
+export function cylindersBox(
+  x: number,
+  z: number,
+  y0: number,
+  y1: number,
+  r: number,
+  box?: Aabb
+): Aabb {
+  const own = {
+    min: { x: x - r, y: y0, z: z - r },
+    max: { x: x + r, y: y1, z: z + r },
+  };
+  return box ? grow(box, own) : own;
 }
 
 /** Where the ray (unit `d`) enters the box, or null if it misses it. */
@@ -315,14 +345,16 @@ export function nearestInSets<T>(
   d: Xyz,
   sets: Iterable<AskSet<T>>,
   far: number
-): { distance: number; target: T } | null {
+): AskHit<T> | null {
   // the reach shrinks to the nearest hit so far
-  const found: { hit: { distance: number; target: T } | null; reach: number } =
-    { hit: null, reach: far };
+  const found: { hit: AskHit<T> | null; reach: number } = {
+    hit: null,
+    reach: far,
+  };
   for (const set of sets) {
     const enter = rayAabb(o, d, set.box);
     if (enter !== null && enter <= found.reach) {
-      const hit = nearestItem(o, d, set.items, found.reach);
+      const hit = set.nearest(o, d, found.reach);
       if (hit !== null) {
         found.hit = hit;
         found.reach = hit.distance;
@@ -330,4 +362,25 @@ export function nearestInSets<T>(
     }
   }
   return found.hit;
+}
+
+/** How far (x, z) lies from the ring's edge in plan; 0 inside it. */
+export function ringDistanceXz(
+  ring: readonly (readonly [number, number])[],
+  x: number,
+  z: number
+): number {
+  if (insideRingXz(ring, x, z)) {
+    return 0;
+  }
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [ax, az] = ring[j];
+    const ex = ring[i][0] - ax;
+    const ez = ring[i][1] - az;
+    const len2 = ex * ex + ez * ez || 1;
+    const t = Math.min(Math.max(((x - ax) * ex + (z - az) * ez) / len2, 0), 1);
+    best = Math.min(best, Math.hypot(x - (ax + t * ex), z - (az + t * ez)));
+  }
+  return best;
 }

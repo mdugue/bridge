@@ -42,6 +42,7 @@ import { currentSite } from "@/sites";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createInquiryProbe } from "./inquiry-probe";
+import { createPencilMark } from "./pencil-mark";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -978,18 +979,37 @@ async function bootApp(
   tapRaycaster.firstHitOnly = true;
   // Befragen (ADR 0037): a click asks, a long press on a touch screen,
   // and I at the crosshair — there is no mode to switch on first.
+  // The pencil's loop around an asked tree, monument or deck: one line,
+  // in the scene from the start so the boot's compile covers it.
+  const pencil = createPencilMark();
+  scene.add(pencil.line);
+  cleanups.push(() => {
+    scene.remove(pencil.line);
+    pencil.dispose();
+  });
   const probe = createInquiryProbe({
     camera,
     cities: () => stream.visibleCities(),
     isLoaded: (layer) => stream.cities.has(layer),
     groundAlong,
+    pencil,
+    things: () => stream.visibleDressings().flatMap((d) => d.asks ?? []),
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,
       height: renderer.domElement.clientHeight || 1,
     }),
   });
+  // A tree's card fetches what the register says about it (ADR 0037).
+  const treeFactsUrl = (tile: string) => {
+    const file = extras.tiles.find((t) => t.id === tile)?.ask?.treeFacts;
+    return file ? new URL(file, tilesetUrl).href : undefined;
+  };
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
-    const inquiry = probe.ask(ndc);
+    const asked = probe.ask(ndc);
+    const factsUrl =
+      asked?.kind === "tree" ? treeFactsUrl(asked.tile) : undefined;
+    const inquiry =
+      asked?.kind === "tree" && factsUrl ? { ...asked, factsUrl } : asked;
     opts.onInquiry?.(inquiry);
     return inquiry;
   };

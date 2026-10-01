@@ -7,7 +7,15 @@
  * dressing already fetched; sized as the layers draw them, so a ray meets
  * what is on screen. No THREE, no DOM.
  */
-import type { AskItem, AskSolid } from "./ask-solids";
+import {
+  type Aabb,
+  type AskItem,
+  type AskSet,
+  type AskSolid,
+  type Cylinder,
+  cylindersBox,
+  rayCylinder,
+} from "./ask-solids";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature, MonumentFeature, TreeFeature } from "./features";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
@@ -40,14 +48,112 @@ const BASIN_RIM = 1;
 const DECK_ABOVE = 1.3;
 const DECK_BELOW = 1.3;
 
-/** The inventory trees as askable things (index = the trees file's). */
-export function treeItems(
+/** One tree packed: x, z, ground, crown base, crown top, crown radius. */
+const TREE_STRIDE = 6;
+/** The cell a packed tree set covers (m). */
+const TREE_CELL = 64;
+
+/** What a tile knows of its trees beyond their solids, by feature index. */
+interface TreeTable {
+  crown: Float32Array;
+  /** bit 1 OSM, bit 2 conifer */
+  flags: Uint8Array;
+  genus: Uint8Array;
+  height: Float32Array;
+  /** EPSG easting, northing */
+  position: Float64Array;
+  trunk: Float32Array;
+}
+
+/** The tree at feature index `i` as an inquiry. */
+function treeInquiry(t: TreeTable, i: number, tile: string): FeatureInquiry {
+  const trunk = t.trunk[i];
+  return {
+    kind: "tree",
+    tile,
+    index: i,
+    position: [t.position[i * 2], t.position[i * 2 + 1]],
+    osm: (t.flags[i] & 1) === 1,
+    conifer: (t.flags[i] & 2) === 2,
+    genus: TREE_GENERA[t.genus[i]] ?? "",
+    height: t.height[i],
+    crown: t.crown[i],
+    ...(trunk > 0 ? { trunk } : {}),
+  };
+}
+
+/**
+ * One cell's packed trees as a set. Its own function, so the closure holds
+ * only what it reads — not the build's scope (the parsed features).
+ */
+function packedTreeSet(
+  box: Aabb,
+  solids: Float32Array,
+  index: Int32Array,
+  table: TreeTable,
+  tile: string
+): AskSet<FeatureInquiry> {
+  const cylinders = (k: number): [Cylinder, Cylinder] => {
+    const at = k * TREE_STRIDE;
+    const [x, z, y0, yb, yt, r] = solids.subarray(at, at + TREE_STRIDE);
+    return [
+      { x, z, y0, y1: yb, r: TRUNK_R },
+      { x, z, y0: yb, y1: yt, r },
+    ];
+  };
+  return {
+    box,
+    nearest: (o, d, far) => {
+      let best = -1;
+      let reach = far;
+      for (let k = 0; k < index.length; k++) {
+        const [trunk, crown] = cylinders(k);
+        const t = Math.min(
+          rayCylinder(o, d, trunk) ?? Number.POSITIVE_INFINITY,
+          rayCylinder(o, d, crown) ?? Number.POSITIVE_INFINITY
+        );
+        if (t <= reach) {
+          reach = t;
+          best = k;
+        }
+      }
+      if (best < 0) {
+        return null;
+      }
+      const [trunk, crown] = cylinders(best);
+      return {
+        distance: reach,
+        target: treeInquiry(table, index[best], tile),
+        solids: [{ cylinder: trunk }, { cylinder: crown }],
+      };
+    },
+  };
+}
+
+/**
+ * The inventory trees as askable things (index = the trees file's),
+ * packed: a tile has thousands, and each as objects of its own held 3.5 MB
+ * on the busiest tile (7 453 trees); packed, the tile's askables hold
+ * 0.8 MB. Per 64 m cell a typed array of trunk-and-crown cylinders; the
+ * inquiry is made only for the tree a ray meets.
+ */
+export function treeSets(
   features: readonly TreeFeature[],
   ctx: AskContext
-): AskItem<FeatureInquiry>[] {
+): AskSet<FeatureInquiry>[] {
   const ground = ctx.treeHeightAt ?? ctx.heightAt;
-  const out: AskItem<FeatureInquiry>[] = [];
-  features.forEach((f, index) => {
+  const n = features.length;
+  const table: TreeTable = {
+    position: new Float64Array(n * 2),
+    height: new Float32Array(n),
+    crown: new Float32Array(n),
+    trunk: new Float32Array(n),
+    genus: new Uint8Array(n),
+    flags: new Uint8Array(n),
+  };
+  const cells = new Map<string, { box: Aabb; trees: number[] }>();
+  const packed: number[] = [];
+  features.forEach((f, i) => {
     const p = f.properties;
     if (f.geometry?.type !== "Point" || !p) {
       return;
@@ -60,34 +166,39 @@ export function treeItems(
     const archetype = archetypeOf(p.a);
     const ext = treeExtents(p.h, p.d, archetype, p.g === 1);
     const { x, z } = epsgToWorld(ex, ey, ctx.offset);
-    out.push({
-      solids: [
-        { cylinder: { x, z, y0: y, y1: y + ext.crownBase, r: TRUNK_R } },
-        {
-          cylinder: {
-            x,
-            z,
-            y0: y + ext.crownBase,
-            y1: y + ext.crownTop,
-            r: Math.max(ext.crownWidth / 2, MIN_CROWN_R),
-          },
-        },
-      ],
-      target: {
-        kind: "tree",
-        tile: ctx.tile,
-        index,
-        position: [ex, ey],
-        osm: p.s === "osm",
-        conifer: archetype === "conifer",
-        genus: TREE_GENERA[p.gn ?? 0] ?? "",
-        height: p.h,
-        crown: p.d,
-        ...(p.t ? { trunk: p.t } : {}),
-      },
-    });
+    const r = Math.max(ext.crownWidth / 2, MIN_CROWN_R);
+    table.position.set([ex, ey], i * 2);
+    table.height[i] = p.h;
+    table.crown[i] = p.d;
+    table.trunk[i] = p.t ?? 0;
+    table.genus[i] = p.gn ?? 0;
+    table.flags[i] =
+      (p.s === "osm" ? 1 : 0) | (archetype === "conifer" ? 2 : 0);
+    const key = `${Math.floor(x / TREE_CELL)},${Math.floor(z / TREE_CELL)}`;
+    const cell = cells.get(key);
+    const box = cylindersBox(x, z, y, y + ext.crownTop, r, cell?.box);
+    if (cell) {
+      cell.box = box;
+      cell.trees.push(i);
+    } else {
+      cells.set(key, { box, trees: [i] });
+    }
+    packed[i * TREE_STRIDE] = x;
+    packed[i * TREE_STRIDE + 1] = z;
+    packed[i * TREE_STRIDE + 2] = y;
+    packed[i * TREE_STRIDE + 3] = y + ext.crownBase;
+    packed[i * TREE_STRIDE + 4] = y + ext.crownTop;
+    packed[i * TREE_STRIDE + 5] = r;
   });
-  return out;
+  return [...cells.values()].map(({ box, trees }) => {
+    const solids = new Float32Array(trees.length * TREE_STRIDE);
+    trees.forEach((i, k) => {
+      for (let c = 0; c < TREE_STRIDE; c++) {
+        solids[k * TREE_STRIDE + c] = packed[i * TREE_STRIDE + c];
+      }
+    });
+    return packedTreeSet(box, solids, Int32Array.from(trees), table, ctx.tile);
+  });
 }
 
 /** The measured form's height (m), when the bake measured one. */
@@ -209,6 +320,7 @@ export function bridgeItems(
       Number.isFinite
     );
     const below = (p.depth ?? 0) + DECK_BELOW;
+    const deck = p.deck ?? [];
     out.push({
       solids: [
         {
@@ -222,6 +334,9 @@ export function bridgeItems(
             topAt,
             above: DECK_ABOVE,
             below,
+            ...(deck.length >= ring.length
+              ? { ringTop: deck.slice(0, ring.length) }
+              : {}),
           },
         },
       ],
