@@ -9,6 +9,8 @@ bakes read (bake/common.py `Tile`):
                                      city's WFS; empty outside Dresden)
     <raw>/traffic/<tile>.geojson     the city's counted traffic per road
                                      section (the same WFS, cls:L363)
+    <raw>/gtfs/nv_free.zip           Germany's local transport timetable
+                                     (gtfs.de; --gtfs, once for the site)
     <raw>/lsc/<tile>.laz             the GeoSN laser scan, layer 1 — only
                                      with --lsc (≈380 MB a tile), for the
                                      hedge heights and the scan trees
@@ -378,13 +380,48 @@ def ingest_traffic(raw: Path, tile: str, bounds: list[float]) -> None:
     ingest_city_layer(raw, TRAFFIC, tile, bounds)
 
 
+# Germany's local transport timetable as GTFS (gtfs.de, from DELFI's NeTEx;
+# CC BY 4.0), ≈290 MB, refreshed weekly by its publisher: the timetable
+# trams (transit.py). Fetched again once the copy is a week old (the feed
+# covers about a month ahead).
+GTFS = "https://download.gtfs.de/germany/nv_free/latest.zip"
+GTFS_MAX_AGE_DAYS = 7
+
+
+def ingest_gtfs(raw: Path) -> None:
+    out = raw / "gtfs" / "nv_free.zip"
+    if out.exists():
+        age = datetime.datetime.now().timestamp() - out.stat().st_mtime
+        if age < GTFS_MAX_AGE_DAYS * 86400:
+            return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    part = out.with_suffix(".part")
+    try:
+        with urllib.request.urlopen(GTFS, timeout=600) as res, part.open("wb") as f:
+            shutil.copyfileobj(res, f)
+    except OSError as err:
+        part.unlink(missing_ok=True)
+        print(f"GTFS feed not downloaded ({err}); put it at {out}")
+        return
+    part.replace(out)
+    print(f"GTFS feed → {out}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake.ingest_sn")
     parser.add_argument("--raw", type=Path, required=True)
-    parser.add_argument("--tile", required=True)
-    parser.add_argument("--bounds", nargs=4, type=float, required=True)
+    parser.add_argument("--tile")
+    parser.add_argument("--bounds", nargs=4, type=float)
     parser.add_argument("--lsc", action="store_true", help="also the laser scan (≈380 MB a tile)")
+    parser.add_argument(
+        "--gtfs", action="store_true", help="only the site-wide timetable (the GTFS feed)"
+    )
     args = parser.parse_args()
+    if args.gtfs:
+        ingest_gtfs(args.raw)
+        return
+    if args.tile is None or args.bounds is None:
+        parser.error("--tile and --bounds are required (unless --gtfs)")
     ingest_dlm(args.raw)
     ingest_osm(args.raw)
     ingest_tile(args.raw, args.tile, args.bounds)

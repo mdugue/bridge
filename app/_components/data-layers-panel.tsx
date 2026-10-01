@@ -10,6 +10,7 @@ import {
 } from "@/lib/city/bike-counts";
 import { DATA_LAYERS, type DataLayerKey } from "@/lib/city/data-layers";
 import type { LookValues } from "@/lib/city/look-controls";
+import type { TramCarsStatus } from "./tram-cars";
 
 /**
  * The data layers' switches (lib/city/data-layers.ts): one per layer, its
@@ -138,5 +139,40 @@ export function BikeCountList({
         ))}
       </ul>
     </div>
+  );
+}
+
+const DAY_KIND_LABEL: Record<TramCarsStatus["kind"], string> = {
+  weekday: "Werktag",
+  saturday: "Samstag",
+  sunday: "Sonntag",
+};
+
+/** "2026-10-01" → "1.10.2026". */
+function germanDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d}.${m}.${y}`;
+}
+
+/** The timetable trams in words: how many run now, from which day's
+ *  timetable. */
+export function TramStatusLine({ status }: { status: TramCarsStatus | null }) {
+  if (!status) {
+    return (
+      <span className="text-[11px] text-muted-foreground">
+        Fahrplan wird geladen …
+      </span>
+    );
+  }
+  const day = DAY_KIND_LABEL[status.kind];
+  return (
+    <span className="text-[11px] text-muted-foreground" id="tram-status">
+      {status.running === 1
+        ? "1 Bahn unterwegs"
+        : `${status.running} Bahnen unterwegs`}
+      {status.date
+        ? ` · Fahrplan ${day} (${germanDate(status.date)})`
+        : ` · kein Fahrplan für ${day}`}
+    </span>
   );
 }

@@ -649,6 +649,9 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     );
     const traffic = page.getByRole("switch", { name: "Kfz-Verkehr" });
     const bikes = page.getByRole("switch", { name: "Radverkehr (live)" });
+    const trams = page.getByRole("switch", {
+      name: "Straßenbahnen (Fahrplan)",
+    });
     await withFramesHeld(page, async () => {
       await openSidebar(page);
       await page.getByRole("tab", { name: "Erkunden" }).click();
@@ -657,6 +660,8 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await expect(traffic).toBeChecked();
       await bikes.click();
       await expect(bikes).toBeChecked();
+      await trams.click();
+      await expect(trams).toBeChecked();
     });
     const look = await page.evaluate(() => window.__poc?.look?.get());
     expect(look?.trafficLayer).toBe(true);
@@ -673,14 +678,28 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // The spawn tile's counted sections are built (hidden until now).
     const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
     expect(stats?.traffic.triangles ?? 0).toBeGreaterThan(0);
+    // The timetable runs at the scene's 14:00: trams are out on the spawn
+    // tile's tracks, and the HUD says how many.
+    await expect(page.locator("#tram-status")).toContainText(
+      "Bahnen unterwegs",
+      { timeout: slow(30_000) }
+    );
+    await page.waitForFunction(
+      () => (window.__poc?.stats?.layerStats.trams.instances ?? 0) > 0,
+      undefined,
+      { timeout: slow(30_000) }
+    );
     await withFramesHeld(page, async () => {
       await traffic.click();
       await bikes.click();
+      await trams.click();
       await expect(page.locator("#bike-counts")).toHaveCount(0);
+      await expect(page.locator("#tram-status")).toHaveCount(0);
     });
     const off = await page.evaluate(() => window.__poc?.look?.get());
     expect(off?.trafficLayer).toBe(false);
     expect(off?.bikeLayer).toBe(false);
+    expect(off?.tramLayer).toBe(false);
     await page.unroute("**/kommisdd.dresden.de/**");
     expectNoErrors(errors);
   });

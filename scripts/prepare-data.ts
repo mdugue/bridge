@@ -76,6 +76,10 @@ import {
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
+import {
+  TRAM_TIMETABLE_FILE,
+  TRAM_TIMETABLE_SOURCE,
+} from "../lib/city/tram-timetable";
 import { currentSite } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
 import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
@@ -653,6 +657,12 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
 // --- 3. tilesets ------------------------------------------------------------------
 
+// The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
+const tramSource = at(TRAM_TIMETABLE_SOURCE);
+const trams = existsSync(tramSource)
+  ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
+  : undefined;
+
 const extras: TilesetExtras = {
   site: SITE.id,
   epsg: frame.epsg,
@@ -665,6 +675,7 @@ const extras: TilesetExtras = {
     bridges: sideFiles.get(t.id)?.bridge,
     sound: pickFiles(sideFiles.get(t.id) ?? {}, SOUND_KINDS),
   })),
+  ...(trams ? { trams } : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(

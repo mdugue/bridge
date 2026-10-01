@@ -50,7 +50,8 @@ export const DATA_LAYERS: readonly DataLayerDef[] = [
     description:
       "Die Bahnen der DVB auf ihren Gleisen, wie sie der Fahrplan zur Szenenzeit fahren lässt — keine GPS-Positionen",
     snapshotKey: "tramLayer",
-    source: "Fahrplan VVO/DVB via DELFI, gtfs.de (CC BY 4.0)",
+    source:
+      "Fahrplan: DELFI e.V. via gtfs.de (CC BY 4.0) · Gleise © OpenStreetMap-Mitwirkende (ODbL)",
   },
 ];
 

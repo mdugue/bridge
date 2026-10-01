@@ -60,7 +60,8 @@ import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import { overlook, type ViewpointGeometry } from "@/lib/city/site";
-import { BikeCountList } from "./data-layers-panel";
+import { BikeCountList, TramStatusLine } from "./data-layers-panel";
+import type { TramCarsStatus } from "./tram-cars";
 import { SceneSidebar } from "./scene-sidebar";
 import { SoundGlyph, useSoundscape } from "./soundscape-toggle";
 import type { SceneTabId } from "./scene-tabs";
@@ -286,6 +287,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
   const [stats, setStats] = useState<CityWalkStats | null>(null);
   // The live bicycle counts while their data layer is on (data-overlays.ts).
   const [bikeCounters, setBikeCounters] = useState<BikeCounter[]>([]);
+  // The timetable trams' day and count while their layer is on.
+  const [tramStatus, setTramStatus] = useState<TramCarsStatus | null>(null);
   const time = useSceneTime(applySceneTime, INITIAL_DATE);
   const { current: timeNow, sync: syncTime } = time;
   // The look store outlives the scene: a remount (StrictMode, a tile switch)
@@ -441,6 +444,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             setFootprints(h.getFootprints());
           }
         });
+      },
+      onTramStatus: (status) => {
+        if (!cancelled) {
+          startTransition(() => setTramStatus(status));
+        }
       },
       onBikeCounts: (counters) => {
         if (!cancelled) {
@@ -693,6 +701,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 }
               />
             ),
+            tramLayer: <TramStatusLine status={tramStatus} />,
           }}
           applySnapshot={applySnapshot}
           bounds={bounds}

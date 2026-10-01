@@ -15,6 +15,9 @@
  *                                     skyview,
  *                                     soundmarks, lowveg, cultivated,
  *                                     small-buildings)
+ *   bun run bake --step transit       only the site-wide timetable trams
+ *                                     (pipeline/bake/transit.py; `all` runs
+ *                                     it last, once for the site)
  *   bun run bake --ingest --lsc       ... and the laser scan (≈380 MB a tile)
  *   bun run bake --step lowveg --research   also every hedge/shrub candidate
  *
@@ -55,6 +58,10 @@ function python(module: string, rest: string[]): void {
   }
 }
 
+// The site-wide steps run once, after every tile (they read the tiles'
+// files: the timetable trams ride the tram tracks).
+const SITE_STEPS = new Set(["transit"]);
+
 for (const cell of SITE.tiles) {
   const tile = tileIdOf(SITE, cell);
   if (wanted.size > 0 && !wanted.has(tile)) {
@@ -72,6 +79,9 @@ for (const cell of SITE.tiles) {
       ...(flag("--lsc") ? ["--lsc"] : []),
     ]);
   }
+  if (SITE_STEPS.has(step)) {
+    continue;
+  }
   python("bake", [
     step,
     "--tile",
@@ -85,5 +95,28 @@ for (const cell of SITE.tiles) {
     "--data",
     "data",
     ...(flag("--research") ? ["--research"] : []),
+  ]);
+}
+
+if (step === "all" || SITE_STEPS.has(step)) {
+  const extents = SITE.tiles.map((cell) => tileExtentOf(SITE, cell));
+  const site = [
+    Math.min(...extents.map((e) => e[0])),
+    Math.min(...extents.map((e) => e[1])),
+    Math.max(...extents.map((e) => e[2])),
+    Math.max(...extents.map((e) => e[3])),
+  ].map(String);
+  if (flag("--ingest")) {
+    python(`bake.ingest_${SITE.ingest}`, ["--raw", raw, "--gtfs"]);
+  }
+  python("bake.transit", [
+    "--bounds",
+    ...site,
+    "--epsg",
+    String(SITE.epsg),
+    "--raw",
+    raw,
+    "--data",
+    "data",
   ]);
 }

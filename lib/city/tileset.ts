@@ -170,6 +170,9 @@ export interface TilesetExtras {
   site: string;
   /** the site's tiles, the spawn tile first */
   tiles: TilesetTileInfo[];
+  /** the trams' timetable (lib/city/tram-timetable.ts), site-wide; absent
+   *  where the site has none */
+  trams?: string;
 }
 
 /** Everything the bake knows about one tile when it writes the tree. */
