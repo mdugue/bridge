@@ -39,7 +39,7 @@ history. Decisions that came out of plans are written up as
 | 005 | Input & collision fixes: stuck keys, diagonal speed, pinch baseline, inserted building, failure-path cleanup | DONE (PR #25) | [completed.md](./completed.md#005--input-and-collision-correctness--done-pr-25) |
 | 006 | Scaffold cleanup, unused deps, lint config, fonts, README + AGENTS.md | DONE (PR #25) | [completed.md](./completed.md#006--scaffold-cleanup-dependencies-readme--done-pr-25) |
 | 007 | Adaptive quality while the camera moves | DONE (PR #25; SSAO gating reverted 2026-09-22; step 4 open) | [completed.md](./completed.md#007--adaptive-quality-while-the-camera-moves--done-pr-25-step-4-open-amended) |
-| 008 | Make the verification net catch what it exists to catch | **PARTIAL** — steps 1–4, 8 done; 5, 6 (rest) open; 7 moot since plan 020 | [008-verification-net.md](./008-verification-net.md) |
+| 008 | Make the verification net catch what it exists to catch | CLOSED (2026-10-01) — steps 1–4, 8 done, 7 moot; the coverage artifact moved to plan 037, the remaining fixture checks to plan 041 | [completed.md](./completed.md#008--the-verification-net--done-in-part-2026-09-24-step-7-moot-closed-the-rest-moved-to-plans-037-coverage-and-041-fixture-checks) |
 | 009 | Re-render the shadow map only when the player has moved a real distance | DONE | [completed.md](./completed.md#009--shadow-refresh-dead-zone--done) |
 | 010 | One tile artifact map, one fetch/abort policy, walls fetched once, neighbours loaded concurrently | DONE | [completed.md](./completed.md#010--tile-artifact-map-and-parallel-loads--done) |
 | 011 | Six confirmed defects: flight cancel, keyup in text fields, minimap re-decode, null/MultiPolygon rail data, WebGL2 preflight | DONE | [completed.md](./completed.md#011--six-confirmed-defects--done) |
@@ -48,25 +48,25 @@ history. Decisions that came out of plans are written up as
 | 014 | Bring AGENTS.md, the skill, `docs/`, comments and the OSM attribution in line with the code | DONE | [completed.md](./completed.md#014--knowledge-base-currency--done) |
 | 015 | Progressive first frame | DONE | [completed.md](./completed.md#015--progressive-first-frame--done) |
 | 016 | Replace `sharp` with `Bun.Image` for the 2048² raster downsample | REJECTED — premise gone with ADR 0023 (no baked RGB splat) | [completed.md](./completed.md#016--bunimage-instead-of-sharp-for-the-raster-downsample--rejected-premise-gone) |
-| 017 | Any German city: site config, own 2 km tile grid, per-Land ingest adapters, OSM land cover as a DLM substitute | **PARTIAL** — phases 1–2 done for Saxony (site config in TS, Python bakes, `ingest_sn`); 3 half; 4 (OSM land cover), NRW, 5 (rest) open | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
+| 017 | Any German city: site config, per-Land ingest adapters, NAS input, OSM land cover as a DLM substitute | **PARTIAL** — site config, Python bake package and the Saxony adapter built; open (rewritten 2026-10-01 for the Python pipeline): phase A (NRW adapter, a second site, per-tile provenance), B (NAS), C (OSM land cover — after plan 045), D (no-DOM1 trees, `site:check`, every site in the tests) | [017-germany-wide-sites.md](./017-germany-wide-sites.md) |
 | 018 | Stream tiles around the camera: tile manager, loader worker, 1 km near cells, KTX2 splat | REJECTED — superseded by 3D Tiles + 3DTilesRendererJS (ADR 0024) | [completed.md](./completed.md#018--stream-tiles-around-the-camera--rejected-superseded-by-adr-0024) |
-| 019 | Verify and tune the 3D Tiles branch on a real GPU (palette, quantisation, LOD, seams, shadows, frame time, phones, deploy host) | **TODO** — needs a GPU | [019-gpu-verification.md](./019-gpu-verification.md) |
+| 019 | **The one GPU checklist**: backends, palette, quantisation, LOD and seams, shadows, GTAO and sky light, picture styles, frame time and memory, phones, deploy host, and the feature plates of plans 023–039 | **TODO** — needs a GPU and two phones; rewritten 2026-10-01 | [019-gpu-verification.md](./019-gpu-verification.md) |
 | 020 | WebGPURenderer + TSL instead of WebGL and `onBeforeCompile`; node post instead of `postprocessing`/`n8ao` | DONE (2026-09-26) — the whole port, one path (WebGPU, its WebGL2 backend as the fallback), public API only; the spike's internal patches rejected for a top-level scene pass, `Instances` and `sceneMaterial`; look unjudged on a real GPU | [completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26) |
 | 021 | `/wissen` on Astro Starlight instead of a hand-built Next route | **TODO** — plan only; Phase 0 awaits the maintainer | [021-wissen-astro-starlight.md](./021-wissen-astro-starlight.md) |
-| 022 | Re-bake land cover, canopy, NDVI, roof colours and lamps from the current editions (one DLM edition for every product, lamps owned by one tile) | **TODO** | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
-| 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green; kerb geometry, grass volume, micro-relief, official sources | **PARTIAL** — 1–3 and 5 done (kerb stones on baked edges, lawn edges, OSM paving with parking bays, urban green as meadow); 4 (GPU tuning), 5–8 open | [023-ground-detail.md](./023-ground-detail.md) |
-| 024 | Trams: OSM tracks (street, grass, ballast), contact wire, masts, span wires, stop signs | **DONE** (2026-09-25) — all three phases built; look unverified on a real GPU | [024-tram-and-catenary.md](./024-tram-and-catenary.md) |
-| 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | **PARTIAL** — A–C built (genus + trunk in the tree data, 3 453 OSM trees over the fifteen tiles, the season model, autumn colour and stippled bare crowns with thinned shadows; 4–7 ms per date change); the GPU plates are open (look unjudged) | [025-trees-by-species-and-season.md](./025-trees-by-species-and-season.md) |
-| 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | DONE — all phases (bake + shader, fifteen tiles; rows measured and painted across the seams since 2026-09-26); centre lines on main roads only; look unjudged on a GPU | [026-road-markings.md](./026-road-markings.md) |
-| 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | **PARTIAL** — 0–2 built (1 682 parts regain their use; 1 188 shop objects, 842 listed), 3 REJECTED (0.8 % dated); open: dusk plates on a GPU | [027-buildings-from-osm.md](./027-buildings-from-osm.md) |
-| 028 | Cultivated land: allotment colonies, orchards, vineyards | DONE — all phases (bake, allotment beds at low strength: 0 of 66 colonies map parcels, orchard trees, 11 vineyards with 305 rows on the fifteen tiles); look unjudged on a GPU | [028-cultivated-land.md](./028-cultivated-land.md) |
-| 029 | Fences, railings and gates, baked into the fine terrain | **PARTIAL** — 1–2 built (97.7 km, 875 gates), restyled to one calm band after review ("zu hart und kleinteilig"), seam artefacts fixed; open: plates on a GPU | [029-fences-and-gates.md](./029-fences-and-gates.md) |
-| 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | **DONE** (2026-09-25) — every kind built; look unverified on a real GPU | [030-street-furniture-2.md](./030-street-furniture-2.md) |
-| 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | **DONE** (2026-09-25) — both phases built; look unverified on a real GPU | [031-elbe-riverside.md](./031-elbe-riverside.md) |
+| 022 | Re-bake the four original tiles from the current editions, the whole chain downstream of the land cover | **TODO** — after plan 040 step 1; re-scoped 2026-10-01 | [022-rebake-current-editions.md](./022-rebake-current-editions.md) |
+| 023 | The ground up close: kerbs, lawn edges, OSM paving and parking, urban green | CLOSED (2026-10-01) — phases 1–3 and 5 built; the raised pavement and micro-relief rejected (🗃️), shell grass an idea only; the look in plan 019, the DLM split and LSC intensity in the [data-streams survey](../data-streams.md), trees in carved parks in plan 022 | [completed.md](./completed.md#023--the-ground-up-close-kerbs-paving-lawn-edges-urban-green--closed-2026-09-25-phases-13-and-5-built-rest-rejected-or-moved) |
+| 024 | Trams: OSM tracks (street, grass, ballast), contact wire, masts, span wires, stop signs | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#024--trams-tracks-overhead-line-stops--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
+| 025 | Trees by species and season: OSM trees beside the cadastre, autumn colour, bare winter crowns | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#025--trees-by-species-and-season--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
+| 026 | Road markings: zebra and signalled crossings, stop lines, cycle lanes, centre lines | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#026--road-markings--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
+| 027 | Buildings from OSM: part attribute inheritance (bug), ground-floor shop glow, heritage, era (spike) | DONE (2026-09-25) — phases 0–2 built, 3 REJECTED (0.8 % dated); dusk look in plan 019 | [completed.md](./completed.md#027--what-osm-knows-about-the-buildings--done-2026-09-25-phase-3-rejected-dusk-look-unjudged-on-a-gpu--plan-019) |
+| 028 | Cultivated land: allotment colonies, orchards, vineyards | DONE (2026-09-25) — look in plan 019; open: vine rows ignore the season (backlog) | [completed.md](./completed.md#028--cultivated-land-allotments-orchards-vineyards--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
+| 029 | Fences, railings and gates, baked into the fine terrain | DONE (2026-09-25) — restyled to one calm band, ground join per ADR 0035; look in plan 019 | [completed.md](./completed.md#029--fences-railings-and-gates--done-2026-09-25-restyled-to-one-band-look-unjudged-on-a-gpu--plan-019) |
+| 030 | More street furniture: advertising columns, traffic signals, hydrants, clocks, drinking water, stop signs | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#030--more-street-furniture-columns-signals-hydrants-clocks-stops--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
+| 031 | The Elbe: landing stages, pontoons, groynes, ferry lines | DONE (2026-09-25) — look in plan 019 | [completed.md](./completed.md#031--the-elbe-landing-stages-groynes-ferries--done-2026-09-25-look-unjudged-on-a-gpu--plan-019) |
 | 032 | Street names: map lettering in fly mode, a caption on foot | REJECTED — built 2026-09-25, removed 2026-09-26 by the maintainer's decision after seeing it | [completed.md](./completed.md#032--street-names-lettering-and-the-on-foot-caption--rejected-removed-2026-09-26) |
-| 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | **PARTIAL** — phases 1–3 built (bake, terrain ambient + far shadow, clay facades SVF); horizon at 8 m (4 m broke the 1.5 MB cap), a near band past the shadow frustum since the review; GPU plates and tuning open, horizon on facades not done | [033-sky-view-and-horizon-shading.md](./033-sky-view-and-horizon-shading.md) |
-| 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | **DONE** (2026-09-26) — gate passed with a per-cell echo rule (213 on the spawn tile, 16 of 20 sampled are structures; the plan's blob-wide rule found 4); 6 625 on fifteen tiles (6 783 before the review's seam, ground and overlap fixes), the Christmas markets excluded via OSM, +3.3 % city glTF; look unverified on a real GPU | [034-dom-minus-lod2.md](./034-dom-minus-lod2.md) |
-| 035 | A hidden, opt-in soundscape synthesised from the scene's data | **BUILT, UNHEARD** — all phases (L / *Klang* switch, engine by dynamic import, beds, birds, crickets, footsteps by paving, hour bells from the new soundmarks bake, tram bell); no listening pass yet | [035-soundscape.md](./035-soundscape.md) |
+| 033 | Sky-view factor and baked horizon map: city-scale ambient light and far-field shadows | DONE (2026-09-25) — plates and tuning in plan 019; horizon on facades folded into ledger 📋 #7 (CSM) | [completed.md](./completed.md#033--sky-view-factor-and-baked-horizon-shading--done-2026-09-25-plates-and-tuning-open-on-a-gpu--plan-019) |
+| 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | DONE (2026-09-26) — look in plan 019 | [completed.md](./completed.md#034--small-structures-from-dom--lod2--done-2026-09-26-look-unjudged-on-a-gpu--plan-019) |
+| 035 | A hidden, opt-in soundscape synthesised from the scene's data | DONE (2026-09-26) — unheard: the listening pass rides along with plan 019's phone session | [completed.md](./completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action) |
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **REFERENCE** — moved to [docs/data-streams.md](../data-streams.md) on 2026-10-01 (a survey, not a plan); pick an item into its own plan | [data-streams.md](../data-streams.md) |
 | 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | **TODO** — P1, do first | [037-agent-commands-and-doc-drift.md](./037-agent-commands-and-doc-drift.md) |
 | 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | **TODO** — P1 | [038-runtime-spine-fixes.md](./038-runtime-spine-fixes.md) |
@@ -92,26 +92,26 @@ S/M/L.
    043 / 044 (each behind a measurement gate) → 045 → 046 (moves only,
    after 039 and 041–043, which edit the same files). The spikes 047 and
    048 can go any time after 038. Plan 019 (item 1) stays the one that
-   needs a GPU; 039 step 4 and 048 part B add to its checklist.
+   needs a GPU; 039 step 4 and 048 part B add to its checklist. Plan 022
+   (the four tiles' re-bake) waits for 040 step 1; plan 017 phase C waits
+   for 045.
 
-1. **Plan 019 (S–M, GPU) — first.** The 3D Tiles branch (ADRs 0023–0026)
-   was verified headless only; look at it on a real GPU, tune the LOD and
-   cache knobs, check phones and the deploy host. Take plan 023 phase 4
-   along (the ground detail's look and cost on the same GPU); its phases
-   5–8 follow on their own. Take the WebGPU port along too: plates against
-   the spike's, GTAO's contact shadows re-tuned by eye, the flight probe
-   on both backends (completed.md, plan 020).
-2. **Plan 017, the rest (M).** OSM land cover as a DLM substitute (now a
-   class raster only), the NRW adapter and a second site, `site:check`.
-   Run the OSM bakes once against a Geofabrik extract (unreachable from
-   the environment that ported them).
+1. **Plan 019 (M, GPU) — the one GPU checklist.** Everything since the 3D
+   Tiles switch was verified headless only. Since 2026-10-01 every "look
+   unjudged on a GPU" of the condensed plans (023–035) and of the backlog
+   is a ticked item there, grouped by feature; the plans' records in
+   [completed.md](./completed.md) point to it.
+2. **Plan 017, the rest (M–L).** Rewritten 2026-10-01 for the Python
+   pipeline: the NRW adapter, a second site and per-tile provenance (A),
+   NAS input (B), OSM land cover as a class raster (C, after plan 045),
+   row-only trees without DOM1, `site:check`, every site in the tests (D).
 3. ~~**Plan 020 (L, GPU-gated).**~~ Done 2026-09-26: WebGPU + TSL, every
    `onBeforeCompile` patch and both post libraries gone
    ([completed.md](./completed.md#020--webgpurenderer-and-tsl-node-materials--done-2026-09-26)).
    Its GPU look is item 1's.
-4. **Plan 008, steps 5–6 (S).** The coverage artifact; the remaining
-   fixture-integrity checks. (Step 7, the shader-anchor tests, is moot
-   since plan 020.)
+4. ~~**Plan 008, steps 5–6 (S).**~~ Closed 2026-10-01: the coverage
+   artifact is plan 037 step 7b, the remaining fixture checks plan 041
+   step 5b.
 5. **Plan 021 (M, maintainer-gated).** `/wissen` on Starlight: about 2 000
    lines of hand-built docs site out, search in.
 6. **Pixel-ratio drop while moving (S, GPU).** Plan 007 step 4:
@@ -238,6 +238,17 @@ S/M/L.
     resolving it from the stream's change handler drops the poll.
     `SceneSidebar` still takes the scene time as five props although
     `useSceneTime` (`scene-time.ts`) owns it; a context removes them.
+25. **Small follow-ups the condensed plans left (S each; 2026-10-01).**
+    Vine rows ignore the season although plan 025's plumbing exists
+    (`cultivated-layer.ts` takes no date: bare canes in winter, leaf-out
+    with the calendar); canopy and row trees (species unknown) follow the
+    generic season curve and hedges none — a per-class curve if plates in
+    plan 019 ask for it; a site without a tree cadastre gets no OSM trees
+    (an OSM-only `trees` artifact is a small change in `trees.run`); the
+    official listed-building flag (the city's WFS `L1544`, rank 1 of the
+    [data-streams survey](../data-streams.md)) instead of the OSM heritage
+    join; tram tracks have no ground-join test (ADR 0035: a runtime part is
+    tested with `checkJoins`).
 
 ### 2026-10-01 audit (`improve deep`, against `a28de75`)
 
@@ -355,26 +366,6 @@ the port (2026-09-26) made of it:
 - Items 20 and 21 above were to go inside the port or after it; they no
   longer wait for it.
 
-### Data → scene: plans 024–035 (planned 2026-09-25)
-
-A batch of features derived from OSM, the DGM and the laser scan, each its
-own plan. OSM counts in the plans are from the BBBike Dresden extract of
-2026-09-19 over the four tiles. Suggested order, by leverage and
-independence:
-
-1. **033** sky-view factor + horizon shading (committed inputs only; also
-   the cheap answer to the far-shadow limit, ledger 📋 #7).
-2. **027 phase 0** — BuildingParts do not inherit `function` (wrong tint
-   and dusk glow on the parts of 90 non-housing buildings in one tile).
-3. **024** trams, then **030** street furniture (shares the stop sign).
-4. **026** road markings, **029** fences and gates.
-5. **027** phases 1–3, **031** the Elbe (**032** street names was built
-   and removed again: REJECTED).
-6. **025** (on the cadastre shipped in PR #49; the genus must first reach
-   the tree data), **028** (its parcel hedges are the shipped OSM hedges),
-   **034** once the laser scan is downloaded (`lsc.py` is shipped).
-7. **035** the soundscape, last, once the data it listens to exists.
-
 ### Direction — options for the maintainer (choices, not defects)
 
 1. **Make portability real: a second, OSM-only location (spike M, build L).**
@@ -411,13 +402,9 @@ independence:
 5. **A user-facing quality tier (S–M).** The device tier already halves
    shadow texels and rasters on phones; a selectable `medium` tuple (DPR 1,
    2048² shadows, AO/DoF off) for weak desktops needs real-device looks.
-6. **A provenance manifest per tile (S).** `bun run bake [tile]
-   [--ingest]` exists (plan 017 phase 2); what is left is writing
-   `data/<site>/<tile>.provenance.json` (dataset, edition, download date,
-   licence) from the ingest adapter, for the HUD footer to read. The guide's
-   dataset table and `data/provenance.json` are the hand-kept version.
-   Since 2026-09-26 the ingest adapter checks each download (length, ZIP
-   CRCs, the Geofabrik md5); those are the values to record.
+6. ~~**A provenance manifest per tile (S).**~~ Now plan 017 phase A step 3
+   (the ingest adapter writes `data/<site>/<tile>.provenance.json` from the
+   values its checked downloads already know).
 7. **Offline repeat visits: a service worker over the tileset (S–M).**
    [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)
    already makes every `/data/*` file immutable and content-hashed, with
@@ -615,6 +602,10 @@ not render it (no GPU, no WebGPU in Bun).
   and ADR 0022 and removed plan 016's premise. Plans 019 (GPU
   verification), 020 (WebGPU/TSL, ADR 0027 proposed) and 021 (`/wissen` on
   Starlight) were written.
+- **2026-09-25**: plans 024–035 written as one batch of data → scene
+  features (OSM, the DGM, the laser scan), in the order 033 → 027 phase 0
+  → 024, 030 → 026, 029 → 027, 031 (032 built and removed) → 025, 028,
+  034 → 035; all built by 2026-09-26, condensed on 2026-10-01.
 - **2026-09-26 run** (against `d613345`): `improve deep` and an
   architecture review (`improve-codebase-architecture`) ran in parallel
   and were merged into one ranked list, scoped around the WebGPU port
@@ -636,3 +627,13 @@ not render it (no GPU, no WebGPU in Bun).
   notes reconciled (item 9 and the cache weighing were already done);
   what was left out is in the "2026-10-01 audit" section and under
   "Rejected".
+- **2026-10-01, plan cleanup** (on the same PR, after merging ADR 0035):
+  every open plan checked against `main`. Thirteen plans condensed into
+  [completed.md](./completed.md) and deleted (008, 023–031, 033–035 —
+  built, or closed with the rest rejected or moved); their GPU looks
+  collected in plan 019, rewritten as the one GPU checklist; 017 trimmed
+  to its open half and rewritten for the Python pipeline; 022 re-scoped to
+  the four original tiles; 036 moved to
+  [docs/data-streams.md](../data-streams.md) (a survey, not a plan); the
+  new plans 037–045 refreshed against `main`; ledger 📋 #12 and two 🗃️
+  rows (raised pavement, micro-relief) updated.
