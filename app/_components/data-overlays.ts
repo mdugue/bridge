@@ -20,7 +20,7 @@ import {
 /**
  * The site-wide data layers (lib/city/data-layers.ts) — the ones not cut
  * into tiles: the live bicycle counters and the timetable trams. (The
- * traffic bands are per tile, dressing parts in tile-stream.ts.) Each is
+ * traffic flows are per tile, dressing parts in tile-stream.ts.) Each is
  * built on its first switch-on, compiled before it shows, fetched (and the
  * counters polled) only while it is on, and placed again over the ground
  * as tiles stream in.

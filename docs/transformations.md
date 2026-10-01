@@ -1468,25 +1468,35 @@ GPU**.
   day along and against its line (`f`/`b`, absent where a direction was not
   counted), the heavy-goods share per direction, the year and method, the
   street, `br` on a street named a bridge. Runtime
-  (`app/_components/traffic-layer.ts`, `lib/city/traffic.ts`): one band per
-  counted direction on the right of its travel (both: either side of the
-  line; one: on the line; only a total: on the line, not flowing), width
-  1.2–3.6 m with the root of the vehicles per day, colour sage → amber →
-  coral with their logarithm (300 → 30 000 a day), plum mixed in with the
-  heavy share; dashes run with the traffic (8 m/s, longer the busier),
-  0.15 m over the ground, on a bridge street the deck. From the air the
-  bands widen up to 5× (`map-overlay.ts` `mapWidenNode`). A street without
-  a count draws nothing — no gap filling, no model.
+  (`app/_components/traffic-layer.ts`, `lib/city/traffic.ts`): one **glass
+  body** per counted direction on the right of its travel (both: either
+  side of the line; one: on the line; only a total: on the line, not
+  flowing) — a soft dome in cross-section, 1.2–3.6 m wide and 0.6–6 m
+  tall with the root of the vehicles per day, tapering to a round point
+  over the last ≤ 8 m of each counted section (each count one body), feet
+  0.2 m under the ground, on a bridge street the deck. Its tint runs sage
+  → peach → coral with their logarithm (300 → 30 000 a day; yellow is
+  left to the trams), plum mixed in with the heavy share; light runs
+  through it in the direction of travel (soft comets at 11 m/s, up to
+  three times as many on a busy lane), brightest along the crown. The
+  glass (`glass.ts`) refracts the street, trees and houses behind it with
+  a touch of dispersion, a sky sheen and a Fresnel rim, and thickens into
+  its own colour from the air and past ~200 m, so the layer reads as glass
+  up close and as a map from above; the bodies widen up to 5× from the
+  air (`map-overlay.ts` `mapWidenNode`). A street without a count draws
+  nothing — no gap filling, no model.
 - **Bicycle counters, live** — the city's permanent counters (WFS
   `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
   bicycles of the last full hour per direction) read **by the browser**
   from the city's server (it answers any origin) when the layer is
   switched on and every 5 minutes while it is on
   (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
-  columns per counter across the street (`winkel`, its run, degrees
-  counter-clockwise from north), one per direction (teal, lilac), height
-  1.5 m + 1.6 × √count (482 an hour on the Albertbrücke ≈ 37 m); grey when
-  the count is older than three hours. The sidebar lists the counts,
+  **glass columns** per counter across the street (`winkel`, its run,
+  degrees counter-clockwise from north), one per direction (teal, lilac),
+  height 1.5 m + 1.6 × √count (482 an hour on the Albertbrücke ≈ 37 m),
+  the top a soft dome; rings of light rise through each at 0.18 m/s ×
+  √count, and a soft pool of its colour lies on the ground around its
+  foot; grey and still when the count is older than three hours. The sidebar lists the counts,
   busiest first; a click flies there. The first runtime request to a
   server other than the site's own ([ADR 0036](./adr/0036-data-layers-and-live-city-data.md)).
 - **Trams by timetable** — the DVB's scheduled tram trips (gtfs.de's
@@ -1508,7 +1518,11 @@ GPU**.
   standing at its stops from arrival to departure and easing between them;
   the rail top over the ground, the deck on a bridge track; DVB yellow
   with a slate window band; no shadow (a moving caster would redraw the
-  shadow map every frame). **Not live positions**: a delay or a
+  shadow map every frame). Behind each car a **trail of light** along its
+  track (deck.gl's TripsLayer in the scene's palette): 140 m, 3.2 m wide,
+  0.6 m over the rail top (the coarse terrain stands up to half a metre
+  over the TIN), warm white at the car fading to gold and nothing, one
+  mesh for all trams rewritten every frame; it widens from the air. **Not live positions**: a delay or a
   diversion is not shown. The sidebar says how many trams run and from
   which day's timetable.
 

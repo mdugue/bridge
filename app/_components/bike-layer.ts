@@ -1,11 +1,24 @@
 import {
+  CircleGeometry,
   Color,
-  CylinderGeometry,
   Group,
+  InstancedBufferAttribute,
+  LatheGeometry,
   Matrix4,
-  MeshStandardNodeMaterial,
+  MeshBasicNodeMaterial,
+  Vector2,
 } from "three/webgpu";
-import { materialColor, positionLocal, vec3 } from "three/tsl";
+import {
+  float,
+  fract,
+  mix,
+  positionLocal,
+  positionWorld,
+  smoothstep,
+  uv,
+  vec3,
+  vec4,
+} from "three/tsl";
 import {
   acrossStreet,
   type BikeCounter,
@@ -19,7 +32,13 @@ import {
 } from "@/lib/city/bike-counts";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { fetchOptionalJson, isAbortError } from "./fetch-optional";
-import { Instances, instancePosition, instanceTint } from "./instancing";
+import { dataTime, glassColour, glassGrazing } from "./glass";
+import {
+  Instances,
+  instanceFloat,
+  instancePosition,
+  instanceTint,
+} from "./instancing";
 import { mapWidenNode } from "./map-overlay";
 import { sceneMaterial } from "./three-utils";
 
@@ -29,31 +48,64 @@ import { sceneMaterial } from "./three-utils";
  * (lib/city/data-layers.ts), hidden unless the HUD switches it on, and
  * fetched only then.
  *
- * Per counter a pair of slim columns either side of the street, one per
+ * Per counter a pair of glass columns either side of the street, one per
  * direction (teal the first, lilac the second, as the HUD's list names
  * them), each as tall as the root of its bicycles in the last counted hour
- * (`bikeColumnHeight`); a counter whose count is older than three hours
- * stands grey. From the air the columns widen with the bands
- * (`mapWidenNode`). They stand on the ground under the counter — feet a
- * row under it (ADR 0035's 0.2 m of a box), so a slope beside it buries
- * the downhill side's foot rather than leaving it in the air — and are
- * placed again as the ground streams in: a counter over ground not loaded
- * yet waits. No shadow: a data mark, not a body. Site-wide, not per tile:
- * one set for the 35 counters, owned by create-app.ts.
+ * (`bikeColumnHeight`), its top rounded. The glass (glass.ts) bends the
+ * street behind it; inside, rings of light rise — faster the more
+ * bicycles passed — and a soft pool of the column's colour lies on the
+ * ground around its foot. A counter whose count is older than three hours
+ * stands grey and still. From the air the columns and their pools widen
+ * with the traffic bodies (`mapWidenNode`). They stand on the ground under
+ * the counter — feet a row under it (ADR 0035's 0.2 m of a box), so a
+ * slope beside it buries the downhill side's foot rather than leaving it
+ * in the air — and are placed again as the ground streams in: a counter
+ * over ground not loaded yet waits. No shadow: a data mark, not a body.
+ * Site-wide, not per tile: one set for the 35 counters, owned by
+ * data-overlays.ts.
  */
 
-/** The column's radius (m) on foot. */
-const COLUMN_RADIUS = 0.6;
+/** The column's radius (m) on foot, and its rounded top's share of a unit
+ *  column (stretched with its height: a soft dome, never a cut face). */
+const COLUMN_RADIUS = 0.75;
+const CAP_SHARE = 0.06;
 /** Half the distance between a counter's two columns (m). */
-const PAIR_HALF_M = 1.0;
+const PAIR_HALF_M = 1.1;
 /** How far the foot goes under the ground (m; ADR 0035's box row). */
 const FOOT_SINK_M = 0.2;
-/** The most counters the set holds (the city runs 35). */
+/** The pool of light at a column's foot: its radius (m) and its lift over
+ *  the ground. */
+const POOL_RADIUS_M = 3.2;
+const POOL_LIFT_M = 0.08;
+/** The rings: their spacing up the column (m), and how fast they rise per
+ *  root of the hour's count (m/s). */
+const RING_SPACING_M = 2.4;
+const RING_SPEED = 0.18;
+/** At most this many columns (the city runs 35 counters). */
 const CAPACITY = 128;
 
-function columnMaterial(): MeshStandardNodeMaterial {
-  return sceneMaterial("bike-column", () => {
-    const m = new MeshStandardNodeMaterial({ roughness: 0.6 });
+/** A unit column standing on its foot (y 0..1), the top a soft dome. */
+function columnGeometry(): LatheGeometry {
+  const points = [new Vector2(0, 0), new Vector2(COLUMN_RADIUS, 0)];
+  points.push(new Vector2(COLUMN_RADIUS, 1 - CAP_SHARE));
+  for (let i = 1; i <= 6; i++) {
+    const a = (i / 6) * (Math.PI / 2);
+    points.push(
+      new Vector2(
+        COLUMN_RADIUS * Math.cos(a),
+        1 - CAP_SHARE + CAP_SHARE * Math.sin(a)
+      )
+    );
+  }
+  return new LatheGeometry(points, 24);
+}
+
+function columnMaterial(): MeshBasicNodeMaterial {
+  return sceneMaterial("bike-glass", () => {
+    const m = new MeshBasicNodeMaterial({
+      transparent: true,
+      depthWrite: false,
+    });
     const widen = mapWidenNode();
     m.positionNode = instancePosition(
       vec3(
@@ -62,9 +114,46 @@ function columnMaterial(): MeshStandardNodeMaterial {
         positionLocal.z.mul(widen)
       )
     );
-    m.colorNode = materialColor.mul(instanceTint());
-    // A faint glow of its own, so a column reads at dusk too.
-    m.emissiveNode = instanceTint().mul(0.18);
+    const tint = instanceTint();
+    const glass = glassColour({ tint, density: 0.5, rim: 0.9 });
+    // Rings of light rising through the column, as fast as the bicycles
+    // came (a still column where none did, or the count is stale).
+    const rate = instanceFloat("bikeRate");
+    const phase = fract(
+      positionWorld.y.sub(dataTime.mul(rate)).div(RING_SPACING_M)
+    );
+    const ring = smoothstep(0, 0.1, phase).mul(
+      float(1).sub(smoothstep(0.1, 0.3, phase))
+    );
+    const light = mix(tint, vec3(1), 0.4).mul(
+      ring.mul(float(1).sub(glassGrazing().mul(0.6))).mul(0.55)
+    );
+    m.colorNode = glass.add(light);
+    return m;
+  });
+}
+
+/** The pool of colour on the ground: a soft disc, densest at its middle. */
+function poolMaterial(): MeshBasicNodeMaterial {
+  return sceneMaterial("bike-pool", () => {
+    const m = new MeshBasicNodeMaterial({
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -4,
+    });
+    const widen = mapWidenNode();
+    m.positionNode = instancePosition(
+      vec3(
+        positionLocal.x.mul(widen),
+        positionLocal.y,
+        positionLocal.z.mul(widen)
+      )
+    );
+    const r = uv().sub(0.5).length().mul(2);
+    const fall = float(1).sub(smoothstep(0.15, 1, r));
+    m.colorNode = vec4(instanceTint(), fall.mul(fall).mul(0.55));
     return m;
   });
 }
@@ -84,15 +173,23 @@ export interface BikeLayer {
 export function createBikeLayer(ctx: GroundContext): BikeLayer {
   const group = new Group();
   group.name = "bike-counters";
-  // A unit column standing on its foot (y 0..1), scaled per instance.
-  const unit = new CylinderGeometry(COLUMN_RADIUS, COLUMN_RADIUS, 1, 12);
-  unit.translate(0, 0.5, 0);
+  const unit = columnGeometry();
   const columns = new Instances(unit, columnMaterial(), CAPACITY);
   columns.name = "bike-columns";
-  columns.castShadow = false;
-  columns.receiveShadow = false;
-  columns.drawCount = 0;
-  group.add(columns);
+  const rates = new InstancedBufferAttribute(new Float32Array(CAPACITY), 1);
+  columns.geometry.setAttribute("bikeRate", rates);
+  const disc = new CircleGeometry(1, 32).rotateX(-Math.PI / 2);
+  const pools = new Instances(disc, poolMaterial(), CAPACITY);
+  pools.name = "bike-pools";
+  for (const set of [columns, pools]) {
+    set.castShadow = false;
+    set.receiveShadow = false;
+    set.drawCount = 0;
+    group.add(set);
+  }
+  // The pools under the glass: the glass's copy of the frame holds them.
+  pools.renderOrder = 3;
+  columns.renderOrder = 4;
   let shown: BikeCounter[] = [];
   let now = new Date();
   let placed = "";
@@ -120,8 +217,13 @@ export function createBikeLayer(ctx: GroundContext): BikeLayer {
         const h = bikeColumnHeight(d.count) + FOOT_SINK_M;
         m.makeScale(1, h, 1).setPosition(w.x, ground - FOOT_SINK_M, w.z);
         columns.setMatrixAt(n, m);
+        const r = POOL_RADIUS_M * (0.6 + 0.4 * Math.min(h / 20, 1));
+        m.makeScale(r, 1, r).setPosition(w.x, ground + POOL_LIFT_M, w.z);
+        pools.setMatrixAt(n, m);
         tint.setHex(stale ? BIKE_STALE_TINT : BIKE_DIRECTION_TINTS[i % 2]);
         columns.setColorAt(n, tint);
+        pools.setColorAt(n, tint);
+        rates.setX(n, stale ? 0 : RING_SPEED * Math.sqrt(d.count));
         key.push(`${n}:${w.x.toFixed(1)}:${ground.toFixed(2)}:${h}:${stale}`);
         n++;
       });
@@ -131,12 +233,15 @@ export function createBikeLayer(ctx: GroundContext): BikeLayer {
       return false;
     }
     placed = next;
-    columns.drawCount = n;
-    columns.instanceMatrix.needsUpdate = true;
-    if (columns.instanceTints) {
-      columns.instanceTints.needsUpdate = true;
+    rates.needsUpdate = true;
+    for (const set of [columns, pools]) {
+      set.drawCount = n;
+      set.instanceMatrix.needsUpdate = true;
+      if (set.instanceTints) {
+        set.instanceTints.needsUpdate = true;
+      }
+      set.computeBoundingSphere();
     }
-    columns.computeBoundingSphere();
     return true;
   };
 
@@ -146,7 +251,9 @@ export function createBikeLayer(ctx: GroundContext): BikeLayer {
     dispose: () => {
       group.removeFromParent();
       columns.geometry.dispose();
+      pools.geometry.dispose();
       unit.dispose();
+      disc.dispose();
     },
     reground: place,
     set: (counters, at) => {

@@ -51,11 +51,28 @@ the number of trams) is in the sidebar, never as text in the scene.
 The layers are site-wide where their data is (the counters, the trams:
 `data-overlays.ts`, owned by `create-app.ts`) and per tile where it is
 (the traffic bands: dressing parts in `tile-stream.ts`). None casts a
-shadow: the bands are map marks, and the trams move every frame — a
+shadow: the flows and columns are data marks, and the trams move every frame — a
 moving caster would redraw the sun's shadow map in each one
 ([ADR 0020](./0020-fixed-light-pool-and-static-shadow-casters.md)). From
 the air their geometry widens with one shared uniform
 (`map-overlay.ts` `mapWidenNode`), never a rebuild.
+
+**The look: tinted glass and light, not paint.** A layer has to be
+plain to read and still belong to the clay-and-paper city. The bodies
+(the traffic flows, the bicycle columns) are glass in one colour family
+per layer (sage → peach → coral, teal and lilac; the trams keep the
+DVB's yellow), refracting what lies behind them, and light moves through
+them (comets with the traffic, rings rising with the bicycles, a trail
+behind each tram — after deck.gl's TripsLayer). The refraction is one
+copy of the frame (`glass.ts`): the scene target is copied when the
+first glass draws — after every opaque object, so the copy holds the
+city — and each body samples it through its own bent normal. That is
+not `transmission`, which renders the scene again for the glass
+([ADR 0010](./0010-opaque-clay-buildings-only.md)); it costs one
+texture copy the size of the scene target per frame, and nothing while
+no layer is on. Glass does not see glass (the copy is taken before the
+first one). From the air and far off the glass thickens into its own
+colour, so the layers read as a map there.
 
 ## Consequences
 
@@ -71,8 +88,11 @@ the air their geometry widens with one shared uniform
   file three dates in it. The viewer runs a date by its kind (working day,
   Saturday, Sunday), so an old file still runs plausibly; re-bake with
   `bun run bake --ingest --step transit` to follow a timetable change.
-- The visual tuning (band widths, colours, column heights, tram size) was
-  judged on SwiftShader plates only; it wants a real-GPU look.
+- The visual tuning (body sizes, glass density, colours, column heights,
+  tram size, trail length) was judged on SwiftShader plates only; it
+  wants a real-GPU look. Papier hides transparent sheets for its frames,
+  so the glass layers do not show under that picture style (the tram
+  cars do, as paper).
 
 ## Alternatives
 
@@ -91,6 +111,13 @@ the air their geometry widens with one shared uniform
 - **Pedestrian density from a model** (stops, shops, census cells). A model
   drawn as if measured; rejected. The only pedestrian counter on the site
   (hystreet, Prager Straße) is commercial.
+- **`transmission` glass** (`MeshPhysicalMaterial`): a second scene
+  render per frame for the glass alone — what ADR 0010 dropped the ghost
+  buildings for. The one frame copy gives the same bent, tinted view for
+  a texture copy.
+- **Flat painted bands** (the first cut): legible from the air, but on
+  foot a stripe of paint on the road, and they fought the road markings
+  and the pastel ground. Replaced by the glass bodies.
 - **Data layers as look sliders.** A slider at 0 still builds and draws;
   a switch can keep a layer from fetching at all.
 

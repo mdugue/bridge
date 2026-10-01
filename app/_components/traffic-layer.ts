@@ -10,106 +10,128 @@ import {
   color,
   float,
   fract,
-  materialOpacity,
   mix,
   positionLocal,
   smoothstep,
-  uniform,
+  vec3,
 } from "three/tsl";
 import type { BridgeFeature, TrafficFeature } from "@/lib/city/features";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { type Point2, subdividePolyline } from "@/lib/city/polyline";
-import { rightOf, type TrafficLane, trafficLanes } from "@/lib/city/traffic";
+import {
+  flowHeight,
+  flowProfile,
+  flowTaper,
+  rightOf,
+  type TrafficLane,
+  trafficLanes,
+} from "@/lib/city/traffic";
+import { dataTime, glassColour, glassGrazing } from "./glass";
 import { mapWidenNode } from "./map-overlay";
 import { buildDeckTable, type DeckPoly, deckLift } from "./rail-layer";
-import type { F, Live, V3 } from "./shader-chunks";
+import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
 /**
  * The counted motor traffic (pipeline/bake/traffic.py; Landeshauptstadt
- * Dresden, dl-de/by-2-0) as flowing bands on the road — a data layer
- * (lib/city/data-layers.ts), hidden unless the HUD switches it on.
+ * Dresden, dl-de/by-2-0) as bodies of tinted glass flowing along the
+ * streets — a data layer (lib/city/data-layers.ts), hidden unless the HUD
+ * switches it on.
  *
- * - One band per counted direction, on the right of its travel
- *   (lib/city/traffic.ts): its width grows with the root of the vehicles
- *   per day, its colour runs sage → amber → coral with their logarithm, and
- *   dashes run along it in the direction of travel, longer the busier it
- *   is. A band whose heavy-goods share is high darkens toward plum. A
- *   section with only an undirected total does not flow.
- * - From the air the bands widen (`mapWidenNode`): a 3 m lane stays legible
+ * - One body per counted direction, on the right of its travel
+ *   (lib/city/traffic.ts): a soft dome in cross-section whose width and
+ *   height both grow with the root of the vehicles per day (a street with
+ *   four times the traffic is twice as wide and twice as tall), tapering
+ *   to a round point over the last metres of each counted section, so
+ *   every count reads as one body. Its tint runs sage → peach → coral with
+ *   the logarithm of the traffic, plum where the heavy-goods share is high.
+ * - The glass (glass.ts) bends and tints the street, the trees and the
+ *   houses behind it rather than covering them; its rim brightens where
+ *   the eye grazes it.
+ * - Light runs through it in the direction of travel — soft comets, more
+ *   and brighter the busier the street; a section with only an undirected
+ *   total holds its light still.
+ * - From the air the bodies widen (`mapWidenNode`): a lane stays a lane
  *   from 500 m up.
- * - Draped 0.15 m over the ground, sampled every 2 m — a map mark, not a
- *   body: where the ground beside it is higher (a bank) or lower (a raised
- *   carriageway) the band simply follows the ground under its line;
- *   `polygonOffset` keeps it over the road surface it lies on. A section
- *   whose street is a bridge (`br`) rides the deck and its approach ramps
+ * - A body sits on the ground under its line, its feet 0.2 m under it
+ *   (ADR 0035's box row), sampled every 2 m: where the ground beside it is
+ *   higher, a bank buries that flank; where it is lower, the flank stands
+ *   free of it — a data body follows its line, not the kerb. A section on
+ *   a street named a bridge (`br`) rides the deck and its approach ramps
  *   (rail-layer.ts's lift table) where it crosses them; any other street
- *   stays on the ground, so one passing under a railway bridge is not
- *   lifted onto it (and one crossing over a railway on a bridge it is not
- *   named after runs under that deck).
+ *   stays on the ground.
  *
- * Unlit, no shadow, fogged like everything else. Built per fine terrain
- * tile in the Y-up frame on the cross-tile ground; freed with the tile.
+ * Unlit (the glass carries the light of what is behind it), no shadow,
+ * fogged like everything else. Built per fine terrain tile in the Y-up
+ * frame on the cross-tile ground; freed with the tile.
  */
 
-/** How far apart the band's cross-sections are (m). */
+/** How far apart the body's cross-sections are (m). */
 const SAMPLE_M = 2;
-/** Height of the band over the ground or the deck (m). */
-const LIFT_M = 0.15;
-/** One dash and its gap, along the lane (m). */
-const DASH_PERIOD_M = 24;
-/** How fast the dashes run (m/s, ~30 km/h). */
-const FLOW_SPEED = 8;
+/** The cross-section's segments, foot to foot over the crown. */
+const PROFILE_SEGMENTS = 10;
+/** How deep the feet go under the ground or the deck (m). */
+const FOOT_SINK_M = 0.2;
+/** The light's period along the lane at no traffic (m), and how fast it
+ *  runs (m/s, ~40 km/h). */
+const PULSE_PERIOD_M = 36;
+const PULSE_SPEED = 11;
 
-const CALM = 0x8f_cf_c0; // sage
-const BUSY = 0xf2_c1_6b; // amber
-const FULL = 0xe4_6f_5e; // coral
-const HEAVY = 0x6d_4f_78; // plum
-
-/** The traffic's own clock (s), shared by every tile's bands. */
-const trafficTime: Live = uniform(0);
-
-/** Advances the dashes (the render loop, create-app.ts). */
-export function setTrafficTime(seconds: number): void {
-  trafficTime.value = seconds;
-}
+const CALM = 0x7f_c8_b8; // sage
+const BUSY = 0xf0_a0_86; // peach (yellow is the trams')
+const FULL = 0xe8_6a_5a; // coral
+const HEAVY = 0x7a_5a_8c; // plum
 
 function trafficMaterial(): MeshBasicNodeMaterial {
-  return sceneMaterial("traffic-band", () => {
+  return sceneMaterial("traffic-glass", () => {
     const m = new MeshBasicNodeMaterial({
       transparent: true,
       depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -4,
     });
     const along = attribute("trafficAlong", "float") as F;
     const load = attribute("trafficLoad", "float") as F;
     const heavy = attribute("trafficHeavy", "float") as F;
     const flows = attribute("trafficFlow", "float") as F;
+    const rise = attribute("trafficRise", "float") as F;
     const across = attribute("trafficAcross", "vec3") as V3;
     // Wider from the air: each vertex moves out along its own offset from
-    // the section's line, so a lane widens about its centre and the two
-    // lanes of a street stay apart.
+    // the section's line, so a body widens about its centre and the two
+    // directions of a street stay apart.
     m.positionNode = positionLocal.add(across.mul(mapWidenNode().sub(1)));
     const ramp = mix(
       mix(color(CALM), color(BUSY), smoothstep(0, 0.5, load)),
       color(FULL),
       smoothstep(0.5, 1, load)
     ) as V3;
-    m.colorNode = mix(ramp, color(HEAVY), heavy.mul(4).clamp(0, 0.6));
+    const tint = mix(ramp, color(HEAVY), heavy.mul(4).clamp(0, 0.6)) as V3;
+    const glass = glassColour({
+      tint,
+      density: load.mul(0.3).add(0.22),
+      rim: 0.8,
+    });
+    // The light: comets running with the traffic, more of them the busier
+    // the lane (the period shrinks to a third), brightest along the crown
+    // and fading toward the feet; a still glow where nothing flows.
+    const period = float(PULSE_PERIOD_M).div(load.mul(2).add(1));
     const phase = fract(
-      along.sub(trafficTime.mul(FLOW_SPEED).mul(flows)).div(DASH_PERIOD_M)
+      along.sub(dataTime.mul(PULSE_SPEED).mul(flows)).div(period)
     );
-    // The dash fills more of its period the busier the lane.
-    const duty = mix(float(0.2), float(0.75), load);
-    const dash = float(1).sub(smoothstep(duty.sub(0.06), duty, phase));
-    m.opacityNode = materialOpacity.mul(mix(float(0.32), float(0.92), dash));
+    const comet = smoothstep(0, 0.08, phase).mul(
+      float(1).sub(smoothstep(0.08, 0.55, phase))
+    );
+    const pulse = mix(float(0.35), comet, flows);
+    const core = smoothstep(0.15, 0.9, rise).mul(
+      float(1).sub(glassGrazing().mul(0.7))
+    );
+    const light = mix(tint, vec3(1), 0.35).mul(
+      pulse.mul(core).mul(load.mul(0.45).add(0.2))
+    );
+    m.colorNode = glass.add(light);
     return m;
   });
 }
 
-interface Band {
+interface Body {
   across: number[];
   along: number[];
   flow: number[];
@@ -117,10 +139,11 @@ interface Band {
   index: number[];
   load: number[];
   pos: number[];
+  rise: number[];
 }
 
-/** The height a band rides at (x, y): the deck — or its approach ramp —
- *  under a bridge street, else the ground; null where neither is there. */
+/** The height a body stands on at (x, y): the deck — or its approach ramp
+ *  — under a bridge street, else the ground; null where neither is there. */
 function rideAt(
   p: Point2,
   onBridge: boolean,
@@ -137,56 +160,84 @@ function rideAt(
   return ctx.heightAt(p[0], p[1]);
 }
 
+const PROFILE = flowProfile(PROFILE_SEGMENTS);
+
+/** The lane's samples: point, distance along, and the size of the taper
+ *  there (0 at the ends, 1 inside, a quarter circle between). */
+function samples(lane: TrafficLane): { at: number; p: Point2; size: number }[] {
+  const dense = subdividePolyline(lane.coords, SAMPLE_M);
+  const dist = [0];
+  for (let i = 1; i < dense.length; i++) {
+    dist.push(
+      dist[i - 1] +
+        Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1])
+    );
+  }
+  const length = dist.at(-1) ?? 0;
+  const taper = flowTaper(length);
+  return dense.map((p, i) => {
+    const edge = Math.min(dist[i], length - dist[i]);
+    const t = taper > 0 ? Math.min(edge / taper, 1) : 1;
+    return { at: dist[i], p, size: Math.sqrt(Math.max(t, 0) * (2 - t)) };
+  });
+}
+
 function addLane(
-  band: Band,
+  body: Body,
   lane: TrafficLane,
   onBridge: boolean,
   decks: DeckPoly[],
   ctx: GroundContext
 ): void {
-  const dense = subdividePolyline(lane.coords, SAMPLE_M);
-  let s = 0;
+  const ring = PROFILE.length;
+  const height = flowHeight(lane.dtv);
+  const pts = samples(lane);
   let prevOk = false;
-  for (let i = 0; i < dense.length; i++) {
-    const p = dense[i];
-    if (i > 0) {
-      s += Math.hypot(p[0] - dense[i - 1][0], p[1] - dense[i - 1][1]);
-    }
+  for (let i = 0; i < pts.length; i++) {
+    const { at, p, size } = pts[i];
     const right = rightOf(
-      dense[Math.max(i - 1, 0)],
-      dense[Math.min(i + 1, dense.length - 1)]
+      pts[Math.max(i - 1, 0)].p,
+      pts[Math.min(i + 1, pts.length - 1)].p
     );
-    const y = rideAt(p, onBridge, decks, ctx);
-    if (y === null || right === null) {
+    const ground = rideAt(p, onBridge, decks, ctx);
+    if (ground === null || right === null) {
       prevOk = false;
       continue;
     }
-    const base = band.pos.length / 3;
-    for (const edge of [-1, 1]) {
-      // metres to the right of travel of this edge
-      const r = lane.offset + (edge * lane.width) / 2;
+    const base = body.pos.length / 3;
+    const half = (lane.width / 2) * size;
+    for (const [u, v] of PROFILE) {
+      // metres to the right of travel of this vertex
+      const r = lane.offset + u * half;
       const w = epsgToWorld(
         p[0] + right[0] * r,
         p[1] + right[1] * r,
         ctx.offset
       );
-      band.pos.push(w.x, y + LIFT_M, w.z);
+      body.pos.push(w.x, ground - FOOT_SINK_M + v * height * size, w.z);
       // the same offset in the world frame (z = −y)
-      band.across.push(right[0] * r, 0, -right[1] * r);
-      band.along.push(s);
-      band.load.push(lane.load);
-      band.heavy.push(lane.heavy);
-      band.flow.push(lane.flows ? 1 : 0);
+      body.across.push(right[0] * r, 0, -right[1] * r);
+      body.along.push(at);
+      body.rise.push(v);
+      body.load.push(lane.load);
+      body.heavy.push(lane.heavy);
+      body.flow.push(lane.flows ? 1 : 0);
     }
     if (prevOk) {
-      band.index.push(base - 2, base - 1, base, base - 1, base + 1, base);
+      for (let k = 0; k < ring - 1; k++) {
+        const a = base - ring + k;
+        const b = base + k;
+        // wound so the outside faces out (forward × up points to the
+        // right of travel on the right flank)
+        body.index.push(a, b, a + 1, a + 1, b, b + 1);
+      }
     }
     prevOk = true;
   }
 }
 
-/** One tile's traffic bands; an empty group where the tile has no counted
- *  road. Freed with the tile (disposeObject3D). */
+/** One tile's traffic bodies; an empty group where the tile has no
+ *  counted road. Freed with the tile (disposeObject3D). */
 export function buildTraffic(
   features: TrafficFeature[],
   bridges: BridgeFeature[],
@@ -194,7 +245,7 @@ export function buildTraffic(
 ): Group {
   const group = new Group();
   group.name = "traffic";
-  const band: Band = {
+  const body: Body = {
     across: [],
     along: [],
     flow: [],
@@ -202,37 +253,42 @@ export function buildTraffic(
     index: [],
     load: [],
     pos: [],
+    rise: [],
   };
   const needsDecks = features.some((f) => f.properties?.br === 1);
   const decks = needsDecks ? buildDeckTable(bridges, ctx) : [];
   for (const f of features) {
     const onBridge = f.properties?.br === 1;
     for (const lane of trafficLanes(f)) {
-      addLane(band, lane, onBridge, decks, ctx);
+      addLane(body, lane, onBridge, decks, ctx);
     }
   }
-  if (band.index.length === 0) {
+  if (body.index.length === 0) {
     return group;
   }
   const geo = new BufferGeometry();
-  geo.setAttribute("position", new Float32BufferAttribute(band.pos, 3));
-  geo.setAttribute("trafficAcross", new Float32BufferAttribute(band.across, 3));
-  geo.setAttribute("trafficAlong", new Float32BufferAttribute(band.along, 1));
-  geo.setAttribute("trafficLoad", new Float32BufferAttribute(band.load, 1));
-  geo.setAttribute("trafficHeavy", new Float32BufferAttribute(band.heavy, 1));
-  geo.setAttribute("trafficFlow", new Float32BufferAttribute(band.flow, 1));
-  geo.setIndex(band.index);
+  geo.setAttribute("position", new Float32BufferAttribute(body.pos, 3));
+  geo.setAttribute("trafficAcross", new Float32BufferAttribute(body.across, 3));
+  geo.setAttribute("trafficAlong", new Float32BufferAttribute(body.along, 1));
+  geo.setAttribute("trafficRise", new Float32BufferAttribute(body.rise, 1));
+  geo.setAttribute("trafficLoad", new Float32BufferAttribute(body.load, 1));
+  geo.setAttribute("trafficHeavy", new Float32BufferAttribute(body.heavy, 1));
+  geo.setAttribute("trafficFlow", new Float32BufferAttribute(body.flow, 1));
+  geo.setIndex(body.index);
+  geo.computeVertexNormals();
   geo.computeBoundingSphere();
-  // From the air the bands widen up to MAP_WIDEN.max ×: the sphere must
+  // From the air the bodies widen up to MAP_WIDEN.max ×: the sphere must
   // hold them then too, or a street at the frame's edge culls out.
   if (geo.boundingSphere) {
     geo.boundingSphere.radius += 20;
   }
   const mesh = new Mesh(geo, trafficMaterial());
-  mesh.name = "traffic-bands";
+  mesh.name = "traffic-flows";
   mesh.castShadow = false;
   mesh.receiveShadow = false;
-  mesh.renderOrder = 3; // over the water sheet, like the ferry wakes
+  // After the water sheet (renderOrder 3, like the ferry wakes): the
+  // glass's copy of the frame then holds the river too.
+  mesh.renderOrder = 4;
   group.add(mesh);
   return group;
 }

@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import type { TrafficFeature } from "./features";
 import {
+  FLOW_HEIGHT_M,
+  flowHeight,
+  flowProfile,
+  flowTaper,
   LANE_WIDTH_M,
   laneWidth,
   rightOf,
@@ -72,4 +76,27 @@ test("only a total: one lane that does not flow", () => {
 
 test("a zero-length step has no side", () => {
   expect(rightOf([1, 1], [1, 1])).toBeNull();
+});
+
+test("a flow body grows with the root of its traffic, tapers at its ends", () => {
+  expect(flowHeight(0)).toBe(FLOW_HEIGHT_M.min);
+  expect(flowHeight(TRAFFIC_DTV.full)).toBeCloseTo(FLOW_HEIGHT_M.max, 9);
+  expect(flowHeight(4 * 2000) - FLOW_HEIGHT_M.min).toBeCloseTo(
+    2 * (flowHeight(2000) - FLOW_HEIGHT_M.min),
+    9
+  );
+  expect(flowTaper(100)).toBe(8);
+  expect(flowTaper(12)).toBe(3);
+});
+
+test("the profile runs from foot over the crown to foot", () => {
+  const p = flowProfile(8);
+  expect(p).toHaveLength(9);
+  expect(p[0][0]).toBeCloseTo(1, 9);
+  expect(p[0][1]).toBeCloseTo(0, 9);
+  expect(p[4][0]).toBeCloseTo(0, 9);
+  expect(p[4][1]).toBeCloseTo(1, 9);
+  expect(p[8][0]).toBeCloseTo(-1, 9);
+  // near-upright flanks: halfway out, already most of the height
+  expect(p[2][1]).toBeGreaterThan(0.8);
 });

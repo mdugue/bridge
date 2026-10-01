@@ -70,3 +70,31 @@ test("a Sunday without a timetable runs nothing", () => {
   });
   cars.dispose();
 });
+
+test("a running tram trails light along its track, fading behind it", () => {
+  const cars = createTramCars(TT, [], ctx);
+  cars.update(new Date(2026, 9, 1, 8, 1));
+  const trail = cars.group.getObjectByName("tram-trails") as unknown as {
+    geometry: {
+      drawRange: { count: number };
+      getAttribute: (n: string) => { getX: (i: number) => number };
+    };
+  };
+  expect(trail.geometry.drawRange.count).toBe(23 * 6);
+  // its faces look up (the light lies on the track, seen from above)
+  const g = cars.group.getObjectByName("tram-trails") as unknown as {
+    geometry: import("three/webgpu").BufferGeometry;
+  };
+  const pos = g.geometry.getAttribute("position");
+  const idx = g.geometry.getIndex();
+  const v = (i: number) =>
+    new Vector3().fromBufferAttribute(pos, idx?.getX(i) ?? 0);
+  const n = v(1)
+    .sub(v(0))
+    .cross(v(2).sub(v(0)));
+  expect(n.y).toBeGreaterThan(0);
+  const fade = trail.geometry.getAttribute("trailFade");
+  expect(fade.getX(0)).toBe(1);
+  expect(fade.getX(2 * 23)).toBe(0);
+  cars.dispose();
+});

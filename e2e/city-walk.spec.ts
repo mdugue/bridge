@@ -666,12 +666,13 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     const look = await page.evaluate(() => window.__poc?.look?.get());
     expect(look?.trafficLayer).toBe(true);
     expect(look?.bikeLayer).toBe(true);
-    // The counts land in the HUD's list and as a pair of columns each.
+    // The counts land in the HUD's list and as a pair of columns each,
+    // every column with its pool of light: 2 counters × 2 × 2.
     await expect(page.locator("#bike-counts li")).toHaveCount(2, {
       timeout: slow(30_000),
     });
     await page.waitForFunction(
-      () => (window.__poc?.stats?.layerStats.bikes.instances ?? 0) === 4,
+      () => (window.__poc?.stats?.layerStats.bikes.instances ?? 0) === 8,
       undefined,
       { timeout: slow(30_000) }
     );

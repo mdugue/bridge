@@ -30,7 +30,7 @@ export const DATA_LAYERS: readonly DataLayerDef[] = [
     id: "data-traffic",
     label: "Kfz-Verkehr",
     description:
-      "Gezählte Kraftfahrzeuge je Tag und Straßenabschnitt als fließende Bänder: breiter und dichter, wo mehr fährt; der Schwerverkehr dunkler",
+      "Gezählte Kraftfahrzeuge je Tag und Straßenabschnitt als gläserne Ströme auf der Fahrbahn: breiter, höher und röter, wo mehr fährt; Licht läuft in Fahrtrichtung, viel Schwerverkehr färbt sie pflaumenfarben",
     snapshotKey: "trafficLayer",
     source: "Verkehrsmengen © Landeshauptstadt Dresden (dl-de/by-2-0)",
   },
@@ -39,7 +39,7 @@ export const DATA_LAYERS: readonly DataLayerDef[] = [
     id: "data-bikes",
     label: "Radverkehr (live)",
     description:
-      "Die Dauerzählstellen der Stadt: je Fahrtrichtung eine Säule, so hoch wie die Räder der letzten Stunde",
+      "Die Dauerzählstellen der Stadt: je Fahrtrichtung eine Glassäule, so hoch wie die Räder der letzten Stunde; die Lichtringe darin steigen umso schneller, je mehr fuhren",
     snapshotKey: "bikeLayer",
     source: "Radzählstellen © Landeshauptstadt Dresden (dl-de/by-2-0)",
   },
@@ -48,7 +48,7 @@ export const DATA_LAYERS: readonly DataLayerDef[] = [
     id: "data-trams",
     label: "Straßenbahnen (Fahrplan)",
     description:
-      "Die Bahnen der DVB auf ihren Gleisen, wie sie der Fahrplan zur Szenenzeit fahren lässt — keine GPS-Positionen",
+      "Die Bahnen der DVB auf ihren Gleisen, mit einer Lichtspur hinter sich, wie sie der Fahrplan zur Szenenzeit fahren lässt — keine GPS-Positionen",
     snapshotKey: "tramLayer",
     source:
       "Fahrplan: DELFI e.V. via gtfs.de (CC BY 4.0) · Gleise © OpenStreetMap-Mitwirkende (ODbL)",

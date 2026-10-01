@@ -135,9 +135,11 @@ config change.
     widens the data layers from the air), the data layers
     (`lib/city/data-layers.ts`, switched in the HUD, all off at start —
     ADR 0036): `traffic-layer.ts` (the counted motor traffic as flowing
-    bands, per tile), `data-overlays.ts` (the site-wide ones:
-    `bike-layer.ts`, the city's bicycle counters read live, and
-    `tram-cars.ts`, the trams by timetable),
+    glass bodies, per tile), `data-overlays.ts` (the site-wide ones:
+    `bike-layer.ts`, the city's bicycle counters read live as glass
+    columns, and `tram-cars.ts`, the trams by timetable with their light
+    trails), `glass.ts` (their refracting glass: one copy of the frame,
+    not `transmission`),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view

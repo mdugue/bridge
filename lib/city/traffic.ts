@@ -21,6 +21,8 @@ export const TRAFFIC_DTV = { calm: 300, full: 30_000 } as const;
 export const LANE_WIDTH_M = { min: 1.2, max: 3.6 } as const;
 /** The gap (m) between the two lanes of a section. */
 export const LANE_GAP_M = 0.5;
+/** A flow body's height (m) at no traffic and at `TRAFFIC_DTV.full`. */
+export const FLOW_HEIGHT_M = { min: 0.6, max: 6 } as const;
 
 export interface TrafficLane {
   /** the lane's centreline in travel order (projected coordinates) */
@@ -58,6 +60,37 @@ export function laneWidth(dtv: number): number {
   return (
     LANE_WIDTH_M.min + (LANE_WIDTH_M.max - LANE_WIDTH_M.min) * Math.sqrt(f)
   );
+}
+
+/** A flow body's height (m): the root of the traffic, like its width, so
+ *  its cross-section grows with the flow — a street with four times the
+ *  traffic stands twice as tall and twice as wide. */
+export function flowHeight(dtv: number): number {
+  const f = Math.min(Math.max(dtv, 0) / TRAFFIC_DTV.full, 1);
+  return (
+    FLOW_HEIGHT_M.min + (FLOW_HEIGHT_M.max - FLOW_HEIGHT_M.min) * Math.sqrt(f)
+  );
+}
+
+/** How far (m) a flow body tapers in at each end: a soft point, not a cut
+ *  face — each counted section reads as one body. */
+export function flowTaper(length: number): number {
+  return Math.min(8, length / 4);
+}
+
+/**
+ * The flow body's cross-section at its full size: `segments` + 1 points
+ * from the right foot over the crown to the left foot, as (across, up) in
+ * units of half the width and the height — a soft dome with near-upright
+ * flanks (a superellipse's upper half).
+ */
+export function flowProfile(segments: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = (Math.PI * i) / segments;
+    out.push([Math.cos(t), Math.sin(t) ** 0.45]);
+  }
+  return out;
 }
 
 function lane(

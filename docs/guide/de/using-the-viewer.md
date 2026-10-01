@@ -127,17 +127,19 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 - **Verkehrsdaten** — drei Datenebenen über der Stadt, jede mit eigenem
   Schalter, beim Start alle aus (siehe
   [Woher die Daten kommen](./data-sources.md)):
-  - *Kfz-Verkehr*: die gezählten Fahrzeuge je Tag als fließende Bänder auf
-    der Fahrbahn, je Richtung eines — breiter, dichter und röter, wo mehr
-    fährt;
-  - *Radverkehr (live)*: an jeder Zählstelle der Stadt zwei Säulen, so hoch
+  - *Kfz-Verkehr*: die gezählten Fahrzeuge je Tag als gläserne Ströme auf
+    der Fahrbahn, je Richtung einer — breiter, höher und röter, wo mehr
+    fährt, mit Licht, das in Fahrtrichtung hindurchläuft;
+  - *Radverkehr (live)*: an jeder Zählstelle der Stadt zwei Glassäulen, so hoch
     wie die Räder der letzten Stunde je Richtung; darunter die Liste der
     Zählstellen mit ihren Zahlen, ein Klick fliegt hin;
   - *Straßenbahnen (Fahrplan)*: jede Bahn der DVB, wie der Fahrplan sie zur
-    eingestellten Zeit fahren lässt — die Zeit läuft von dort an weiter;
+    eingestellten Zeit fahren lässt, mit einer Lichtspur dahinter — die
+    Zeit läuft von dort an weiter;
     darunter, wie viele gerade unterwegs sind.
 
-  Aus der Luft werden Bänder und Säulen breiter, damit sie lesbar bleiben.
+  Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit
+  sie lesbar bleiben.
 - **Steuerung** — die vollständige Tastentabelle.
 
 ### Szene

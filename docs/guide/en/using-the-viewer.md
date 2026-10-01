@@ -122,17 +122,18 @@ The button in the corner opens a panel with three tabs.
   each with its own switch, all off at start (see
   [Where the data comes from](./data-sources.md)):
   - *Kfz-Verkehr* ("motor traffic"): the vehicles counted per day as
-    flowing bands on the carriageway, one per direction — wider, denser
-    and redder where more traffic runs;
+    glass flows on the carriageway, one per direction — wider, taller and
+    redder where more traffic runs, light running through them;
   - *Radverkehr (live)* ("cycling, live"): at each of the city's counters
-    two columns, as tall as the last hour's bicycles per direction; below
+    two glass columns, as tall as the last hour's bicycles per direction; below
     the switch the list of counters with their numbers, a click flies
     there;
   - *Straßenbahnen (Fahrplan)* ("trams, by timetable"): every DVB tram
-    where the timetable has it at the time set — the clock runs on from
+    where the timetable has it at the time set, trailing light — the clock runs on from
     there; below the switch, how many are out.
 
-  From the air the bands and columns widen so they stay legible.
+  From the air the flows, columns and trails widen and thicken so they
+  stay legible.
 - **Steuerung** — the full controls table.
 
 ### Szene ("Scene")

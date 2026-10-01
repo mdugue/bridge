@@ -54,7 +54,7 @@ import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
-import { setTrafficTime } from "./traffic-layer";
+import { setDataTime } from "./glass";
 import { createDataOverlays } from "./data-overlays";
 import type { TramCarsStatus } from "./tram-cars";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
@@ -1349,8 +1349,8 @@ async function bootApp(
     stepVegetation(elapsed);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
-    // The traffic bands' dashes (one shared uniform; drawn only when on).
-    setTrafficTime(elapsed);
+    // The data layers' light (one shared uniform; drawn only when on).
+    setDataTime(elapsed);
     // The timetable trams move on (only while their layer is on).
     overlays.step(performance.now());
     if (timer.getElapsed() >= tickDue) {
