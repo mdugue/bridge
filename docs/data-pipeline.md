@@ -435,7 +435,10 @@ environment.
 (`bun dev`, `bun build`). It picks every site whose data is ready (the
 `bun run site --all` report; or only the ids it is given,
 `bun scripts/prepare-sites.ts leipzig unna`), runs
-`bun scripts/prepare-data.ts <site>` for each, then writes the index
+`bun scripts/prepare-data.ts <site>` for each — one process per site,
+several side by side (largest site first; as many as the cores and the
+memory allow, a cold Dresden peaks at ~3 GB), each line prefixed with the
+site's id — then writes the index
 **`public/data/sites.json`** (`{ version: 1, sites: [{ id, map, stats }] }`,
 `lib/city/site-index.ts`) — what the start page lists and what
 `app/[site]/page.tsx` prerenders from (`generateStaticParams`, through
@@ -565,8 +568,11 @@ so every `lib/city/` module and site config the bake reaches is in the key,
 plus `bun.lock` and `patches/` (the glTF tools' versions shape the output).
 A changed input, a changed bake or a renamed side file re-bakes; a checkout
 or a touch alone does not; anything else is a cache
-read. A cold run of the Dresden site (fifteen tiles) takes ≈ 2 min on four
-cores, a warm one ≈ 1 s. CI keeps the directory between runs (`actions/cache`
+read. Every site shares the directory, and it keeps one entry per name: a
+tile's names are unique across sites, the site-wide ones (the frame, the
+map picture, the stats) carry the site's id. A cold run of the Dresden site
+(fifteen tiles) takes ≈ 2 min on four cores, and so does a cold run of all
+seven sites, side by side; a warm one ≈ 1 s. CI keeps the directory between runs (`actions/cache`
 in the e2e job): any earlier entry is a sound start, since every artifact is
 keyed by what it was baked from. Most of a cold run is decoding the DGM
 GeoTIFFs (LZW, twice per tile: once per terrain level), the fine level's TIN
