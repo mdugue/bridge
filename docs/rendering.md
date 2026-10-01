@@ -501,7 +501,7 @@ start.
 
 ## Sound (hidden, opt-in)
 
-The viewer is silent. A hidden soundscape ([plan 035](./plans/035-soundscape.md))
+The viewer is silent. A hidden soundscape ([plan 035](./plans/completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action))
 plays only after an explicit toggle — the **L** key (listed in no hint) or
 the quiet *Klang (experimentell)* switch at the bottom of the Erweitert
 tab — and is off again at every load. No `AudioContext` exists before

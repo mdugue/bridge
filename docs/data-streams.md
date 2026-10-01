@@ -1,24 +1,18 @@
-# Plan 036: What the data streams carry that the walker does not use yet
+# What the data streams carry that the walker does not use yet
 
-> **Executor instructions**: This is a survey, not a build plan. It lists,
-> per source, the information that is present over the site but unread by
-> any bake, with measured coverage, and ranks what would fit the walker.
-> Pick an item, give it its own numbered plan, and mark it here. Every
-> item must pass the art-direction north star at the end of
-> [transformations.md](../transformations.md) and must not revive a 🗃️
-> entry without its caveat (notably **no map lettering**: plan 032).
->
-> **Drift check (run first)**: re-run the census before trusting a count
-> older than a few months — OSM and Wikidata are live data, the city's WFS
-> layers are replaced without notice.
+A measured survey (2026-09-27): per source — OSM, the LoD2 CityJSON, the
+city's open-data WFS, Wikidata, GeoSN, the Basis-DLM — the information
+that is present over the site but unread by any bake, with its coverage,
+and a ranking of what would fit the walker. It was plan 036 until the
+2026-10-01 audit; it has no steps of its own. To build an item, give it a
+numbered plan in [plans/](./plans/README.md), and add a 📋 row to the
+[ledger](./transformations.md) when it is picked. Every item must pass the
+art-direction north star at the end of the ledger and must not revive a
+🗃️ entry without its caveat (notably **no map lettering**: plan 032).
 
-## Status
-
-- **Priority**: P3 (direction)
-- **Effort**: survey S (done); each item S–L, see the ranking
-- **Risk**: LOW (read-only); per item as stated
-- **Planned at**: 2026-09-27
-- **Status**: **TODO** — survey done, no item picked
+**Re-run the census before trusting a count older than a few months** —
+OSM and Wikidata are live data, and the city's WFS layers are replaced
+without notice.
 
 ## Method (2026-09-27)
 

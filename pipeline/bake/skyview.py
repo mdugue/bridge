@@ -2,7 +2,7 @@
 the sky-view factor (how much of the sky a point on the ground sees) and
 the far horizon (per direction, the elevation angle of the skyline more
 than 80 m away) — the ambient term the hemisphere light cannot know and the
-long shadows the shadow map's 110 m frustum cuts off (docs/plans/033).
+long shadows the shadow map's 110 m frustum cuts off (plan 033, docs/plans/completed.md).
 
 Height field: the DGM1 with every non-vertical LoD2 surface burned on top
 (max over its triangles, the plane of each surface evaluated per cell).
