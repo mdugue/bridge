@@ -113,3 +113,43 @@ test("off the loaded ground the body breaks rather than drops to zero", () => {
   expect(mesh?.geometry.boundingBox?.min.y).toBeCloseTo(109.8, 4);
   expect(mesh?.geometry.boundingBox?.max.x).toBeLessThanOrEqual(200.5);
 });
+
+test("where the street runs on, the body stays full: no pinch at the joint", () => {
+  const mesh = bodies(
+    buildTraffic(
+      [
+        street({ t: 3000, f: 3000 }, [
+          [0, 0],
+          [100, 0],
+        ]),
+        street({ t: 3000, f: 3000 }, [
+          [100, 0],
+          [180, 0],
+        ]),
+      ],
+      [],
+      ctx
+    )
+  );
+  const pos = mesh?.geometry.getAttribute("position");
+  const rise = mesh?.geometry.getAttribute("trafficRise");
+  // the crown over the joint (x = 100) stands at the full height
+  let crownAtJoint = 0;
+  for (let i = 0; i < (pos?.count ?? 0); i++) {
+    if (Math.abs((pos?.getX(i) ?? 0) - 100) < 0.01 && rise?.getX(i) === 1) {
+      crownAtJoint = Math.max(crownAtJoint, pos?.getY(i) ?? 0);
+    }
+  }
+  expect(crownAtJoint).toBeCloseTo(109.8 + flowHeight(3000), 3);
+});
+
+test("the coarse level builds the same bodies with a seventh of the vertices", () => {
+  const fine = bodies(buildTraffic([street({ t: 3000, f: 3000 })], [], ctx));
+  const coarse = bodies(
+    buildTraffic([street({ t: 3000, f: 3000 })], [], ctx, "coarse")
+  );
+  const n = (m: typeof fine) => m?.geometry.getAttribute("position").count ?? 0;
+  expect(n(coarse)).toBeLessThan(n(fine) / 5);
+  expect(coarse?.material === fine?.material).toBe(true);
+  expect(coarse?.name).toBe("traffic-flows-coarse");
+});

@@ -31,6 +31,7 @@ import {
   runningTrams,
   secondsOfDay,
   type TramDayKind,
+  TRAM_TINTS,
   type TramTimetable,
 } from "@/lib/city/tram-timetable";
 import { Instances, instancePosition } from "./instancing";
@@ -82,11 +83,11 @@ const TRAIL_M = 140;
 const TRAIL_POINTS = 24;
 const TRAIL_WIDTH = 3.2;
 const TRAIL_LIFT = 0.6;
-const TRAIL = 0xf6_d3_6b;
+const TRAIL = TRAM_TINTS.trail;
 /** At most this many trams trail (≈ the site's busiest minute × 2). */
 const TRAIL_CAPACITY = 256;
 
-const BODY = 0xf2_cf_5c; // the DVB's yellow, softened
+const BODY = TRAM_TINTS.car; // the DVB's yellow, softened
 const BAND = 0x5a_63_70; // the windows
 const ROOF = 0xdc_d8_d0;
 

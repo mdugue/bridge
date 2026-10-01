@@ -35,7 +35,10 @@ the number of trams) is in the sidebar, never as text in the scene.
 - **Motor traffic** is baked per tile like any other side file
   (`pipeline/bake/traffic.py` → `traffic_<tile>.geojson`) and built with the
   tile's dressing, hidden until switched on (37 KB a tile; building it
-  late would put a node build inside a frame).
+  late would put a node build inside a frame). Unlike every other
+  dressing it is built on **both terrain levels** — coarser on the coarse
+  one (`coarse` in its extras) — because a layer read from the air must
+  not end at the first tile the fine level has not loaded.
 - **The bicycle counters are read by the browser from the city's server**
   when the layer is switched on and every five minutes while it is on
   (the service answers any origin). Nothing is fetched until the visitor
@@ -82,8 +85,10 @@ colour, so the layers read as a map there.
   answering cross-origin requests. If either changes, the layer shows
   nothing new and keeps the last counts; the rest of the scene is
   untouched.
-- A new data layer is a row in the table, a flag the scene reads, and a
-  credit — the HUD, the snapshot and the reset follow.
+- A new data layer is a row in the table, a flag the scene reads, a
+  credit and a swatch (`data-layer-swatch.tsx`: a moving sample in the
+  layer's own colours, the bridge from the switch to the picture) — the
+  HUD, the snapshot and the reset follow.
 - The trams' timetable ages: the feed covers about a month, the committed
   file three dates in it. The viewer runs a date by its kind (working day,
   Saturday, Sunday), so an old file still runs plausibly; re-bake with

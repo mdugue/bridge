@@ -6,6 +6,7 @@ import {
   flowProfile,
   flowTaper,
   LANE_WIDTH_M,
+  openEnds,
   laneWidth,
   rightOf,
   TRAFFIC_DTV,
@@ -99,4 +100,55 @@ test("the profile runs from foot over the crown to foot", () => {
   expect(p[8][0]).toBeCloseTo(-1, 9);
   // near-upright flanks: halfway out, already most of the height
   expect(p[2][1]).toBeGreaterThan(0.8);
+});
+
+const line = (
+  coords: [number, number][],
+  props: NonNullable<TrafficFeature["properties"]> = { t: 1000, f: 500, b: 500 }
+): TrafficFeature => ({
+  geometry: { type: "LineString", coordinates: coords },
+  properties: props,
+});
+
+test("a flow ends only where no counted section runs on", () => {
+  const ends = openEnds([
+    line([
+      [0, 0],
+      [100, 0],
+    ]),
+    // the next stretch of the street, its end 1 m off (a junction)
+    line([
+      [101, 0],
+      [200, 0],
+    ]),
+  ]);
+  expect(ends).toEqual([
+    [true, false],
+    [false, true],
+  ]);
+});
+
+test("a section cut at the tile's edge runs on into the neighbour", () => {
+  const [ends] = openEnds(
+    [
+      line([
+        [50, 50],
+        [100, 50],
+      ]),
+    ],
+    [0, 0, 100, 100]
+  );
+  expect(ends).toEqual([true, false]);
+});
+
+test("the lane against the line takes its section's ends the other way round", () => {
+  const [along, against] = trafficLanes(
+    line([
+      [0, 0],
+      [100, 0],
+    ]),
+    [true, false]
+  );
+  expect(along.open).toEqual([true, false]);
+  expect(against.open).toEqual([false, true]);
 });

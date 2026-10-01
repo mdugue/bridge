@@ -18,6 +18,10 @@ import type { Point2 } from "./polyline";
 export const TRAM_TIMETABLE_SOURCE = "data/transit/trams.json";
 export const TRAM_TIMETABLE_FILE = "trams.json";
 
+/** The cars' yellow and their trail's gold (app/_components/tram-cars.ts;
+ *  the HUD's swatch shows the same). */
+export const TRAM_TINTS = { car: 0xf2_cf_5c, trail: 0xf6_d3_6b } as const;
+
 export type TramDayKind = "saturday" | "sunday" | "weekday";
 
 export interface TramPattern {

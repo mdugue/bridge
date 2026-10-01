@@ -10,11 +10,13 @@ import {
 } from "@/lib/city/bike-counts";
 import { DATA_LAYERS, type DataLayerKey } from "@/lib/city/data-layers";
 import type { LookValues } from "@/lib/city/look-controls";
+import { DataLayerSwatch } from "./data-layer-swatch";
 import type { TramCarsStatus } from "./tram-cars";
 
 /**
- * The data layers' switches (lib/city/data-layers.ts): one per layer, its
- * line of explanation, and — while it is on — its credit and whatever the
+ * The data layers' switches (lib/city/data-layers.ts): one per layer, a
+ * small moving sample of what it draws (data-layer-swatch.tsx), its line
+ * of explanation, and — while it is on — its credit and whatever the
  * layer has to say in words (`detail`; the scene itself carries no text).
  */
 export function DataLayersPanel({
@@ -31,7 +33,11 @@ export function DataLayersPanel({
       {DATA_LAYERS.map((def) => (
         <div className="flex flex-col gap-1" key={def.key}>
           <Field orientation="horizontal">
-            <FieldLabel className="font-medium text-xs" htmlFor={def.id}>
+            <FieldLabel
+              className="flex items-center gap-2 font-medium text-xs"
+              htmlFor={def.id}
+            >
+              <DataLayerSwatch layer={def.key} on={look[def.key]} />
               {def.label}
             </FieldLabel>
             <Switch

@@ -22,7 +22,9 @@ import {
   flowHeight,
   flowProfile,
   flowTaper,
+  openEnds,
   rightOf,
+  TRAFFIC_TINTS,
   type TrafficLane,
   trafficLanes,
 } from "@/lib/city/traffic";
@@ -42,8 +44,9 @@ import { sceneMaterial } from "./three-utils";
  *   (lib/city/traffic.ts): a soft dome in cross-section whose width and
  *   height both grow with the root of the vehicles per day (a street with
  *   four times the traffic is twice as wide and twice as tall), tapering
- *   to a round point over the last metres of each counted section, so
- *   every count reads as one body. Its tint runs sage → peach → coral with
+ *   to a round point only where the flow really ends — where no other
+ *   counted section runs on and the tile's edge did not cut it
+ *   (lib/city/traffic.ts `openEnds`). Its tint runs sage → peach → coral with
  *   the logarithm of the traffic, plum where the heavy-goods share is high.
  * - The glass (glass.ts) bends and tints the street, the trees and the
  *   houses behind it rather than covering them; its rim brightens where
@@ -66,10 +69,19 @@ import { sceneMaterial } from "./three-utils";
  * frame on the cross-tile ground; freed with the tile.
  */
 
-/** How far apart the body's cross-sections are (m). */
-const SAMPLE_M = 2;
-/** The cross-section's segments, foot to foot over the crown. */
-const PROFILE_SEGMENTS = 10;
+/**
+ * How finely a body is built: on the fine terrain level a cross-section
+ * every 2 m with ten segments over the crown; on the coarse level — the
+ * tiles the fine one has not reached, seen from afar or from the air — every
+ * 8 m with six, about a seventh of the vertices. 3D Tiles swaps the two
+ * with their terrain (REPLACE), so the flow never ends at a tile the fine
+ * level has not loaded yet.
+ */
+export type TrafficDetail = "coarse" | "fine";
+const DETAIL: Record<TrafficDetail, { profile: number; sample: number }> = {
+  fine: { sample: 2, profile: 10 },
+  coarse: { sample: 8, profile: 6 },
+};
 /** How deep the feet go under the ground or the deck (m). */
 const FOOT_SINK_M = 0.2;
 /** The light's period along the lane at no traffic (m), and how fast it
@@ -77,10 +89,7 @@ const FOOT_SINK_M = 0.2;
 const PULSE_PERIOD_M = 36;
 const PULSE_SPEED = 11;
 
-const CALM = 0x7f_c8_b8; // sage
-const BUSY = 0xf0_a0_86; // peach (yellow is the trams')
-const FULL = 0xe8_6a_5a; // coral
-const HEAVY = 0x7a_5a_8c; // plum
+const { calm: CALM, busy: BUSY, full: FULL, heavy: HEAVY } = TRAFFIC_TINTS;
 
 function trafficMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("traffic-glass", () => {
@@ -160,12 +169,18 @@ function rideAt(
   return ctx.heightAt(p[0], p[1]);
 }
 
-const PROFILE = flowProfile(PROFILE_SEGMENTS);
+const PROFILES: Record<TrafficDetail, [number, number][]> = {
+  fine: flowProfile(DETAIL.fine.profile),
+  coarse: flowProfile(DETAIL.coarse.profile),
+};
 
 /** The lane's samples: point, distance along, and the size of the taper
  *  there (0 at the ends, 1 inside, a quarter circle between). */
-function samples(lane: TrafficLane): { at: number; p: Point2; size: number }[] {
-  const dense = subdividePolyline(lane.coords, SAMPLE_M);
+function samples(
+  lane: TrafficLane,
+  step: number
+): { at: number; p: Point2; size: number }[] {
+  const dense = subdividePolyline(lane.coords, step);
   const dist = [0];
   for (let i = 1; i < dense.length; i++) {
     dist.push(
@@ -175,8 +190,13 @@ function samples(lane: TrafficLane): { at: number; p: Point2; size: number }[] {
   }
   const length = dist.at(-1) ?? 0;
   const taper = flowTaper(length);
+  const [openStart, openEnd] = lane.open;
   return dense.map((p, i) => {
-    const edge = Math.min(dist[i], length - dist[i]);
+    // only an open end tapers: one running on stays full
+    const edge = Math.min(
+      openStart ? dist[i] : Number.POSITIVE_INFINITY,
+      openEnd ? length - dist[i] : Number.POSITIVE_INFINITY
+    );
     const t = taper > 0 ? Math.min(edge / taper, 1) : 1;
     return { at: dist[i], p, size: Math.sqrt(Math.max(t, 0) * (2 - t)) };
   });
@@ -187,11 +207,13 @@ function addLane(
   lane: TrafficLane,
   onBridge: boolean,
   decks: DeckPoly[],
-  ctx: GroundContext
+  ctx: GroundContext,
+  detail: TrafficDetail
 ): void {
-  const ring = PROFILE.length;
+  const profile = PROFILES[detail];
+  const ring = profile.length;
   const height = flowHeight(lane.dtv);
-  const pts = samples(lane);
+  const pts = samples(lane, DETAIL[detail].sample);
   let prevOk = false;
   for (let i = 0; i < pts.length; i++) {
     const { at, p, size } = pts[i];
@@ -206,7 +228,7 @@ function addLane(
     }
     const base = body.pos.length / 3;
     const half = (lane.width / 2) * size;
-    for (const [u, v] of PROFILE) {
+    for (const [u, v] of profile) {
       // metres to the right of travel of this vertex
       const r = lane.offset + u * half;
       const w = epsgToWorld(
@@ -241,7 +263,11 @@ function addLane(
 export function buildTraffic(
   features: TrafficFeature[],
   bridges: BridgeFeature[],
-  ctx: GroundContext
+  ctx: GroundContext,
+  detail: TrafficDetail = "fine",
+  /** the tile's extent: a section cut at its edge runs on into the
+   *  neighbour and does not taper there */
+  bounds?: readonly [number, number, number, number]
 ): Group {
   const group = new Group();
   group.name = "traffic";
@@ -257,10 +283,11 @@ export function buildTraffic(
   };
   const needsDecks = features.some((f) => f.properties?.br === 1);
   const decks = needsDecks ? buildDeckTable(bridges, ctx) : [];
-  for (const f of features) {
+  const open = openEnds(features, bounds);
+  for (const [i, f] of features.entries()) {
     const onBridge = f.properties?.br === 1;
-    for (const lane of trafficLanes(f)) {
-      addLane(body, lane, onBridge, decks, ctx);
+    for (const lane of trafficLanes(f, open[i])) {
+      addLane(body, lane, onBridge, decks, ctx, detail);
     }
   }
   if (body.index.length === 0) {
@@ -283,7 +310,7 @@ export function buildTraffic(
     geo.boundingSphere.radius += 20;
   }
   const mesh = new Mesh(geo, trafficMaterial());
-  mesh.name = "traffic-flows";
+  mesh.name = `traffic-flows-${detail}`;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   // After the water sheet (renderOrder 3, like the ferry wakes): the

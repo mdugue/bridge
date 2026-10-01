@@ -1473,8 +1473,18 @@ GPU**.
   side of the line; one: on the line; only a total: on the line, not
   flowing) — a soft dome in cross-section, 1.2–3.6 m wide and 0.6–6 m
   tall with the root of the vehicles per day, tapering to a round point
-  over the last ≤ 8 m of each counted section (each count one body), feet
-  0.2 m under the ground, on a bridge street the deck. Its tint runs sage
+  over the last ≤ 8 m only where the flow really ends: an end within 3 m
+  of another counted section's end, or on the tile's edge (the bake cut it
+  there), runs on full (`openEnds` — tapering every section end drew the
+  streets as strings of beads, pinched at every junction and seam). Feet
+  0.2 m under the ground, on a bridge street the deck. **Both terrain
+  levels carry the flows**: the fine one a cross-section every 2 m with
+  ten segments, the coarse one (the tiles the fine level has not reached)
+  every 8 m with six, about a seventh of the vertices, on the coarse
+  ground; 3D Tiles swaps them with their terrain. Built on the fine level
+  only, the flows ended at the first tile the fine level had not loaded —
+  the Waldschlößchenbrücke stopped at its Johannstadt end, the
+  Käthe-Kollwitz-Ufer showed nothing from across the river. Its tint runs sage
   → peach → coral with their logarithm (300 → 30 000 a day; yellow is
   left to the trams), plum mixed in with the heavy share; light runs
   through it in the direction of travel (soft comets at 11 m/s, up to

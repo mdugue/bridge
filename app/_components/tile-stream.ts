@@ -436,6 +436,42 @@ const nextTask = () =>
     setTimeout(resolve, 0);
   });
 
+/**
+ * The coarse terrain level's dressing: only the counted traffic, built
+ * coarser (traffic-layer.ts `TrafficDetail`) on the coarse ground it is
+ * drawn over, so the flows reach every tile in view and not just the ones
+ * the fine level has loaded.
+ */
+async function buildCoarseDressing(
+  terrain: TerrainLayer,
+  extras: TerrainExtras,
+  offset: { cx: number; cy: number },
+  extent: TerrainBounds,
+  url: (file: string) => string,
+  signal?: AbortSignal
+): Promise<TileDressing> {
+  const files = extras.coarse ?? {};
+  const fetchKind = <T>(file: string | undefined): Features<T> =>
+    file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
+  const [traffic, bridges] = await Promise.all([
+    fetchKind<TrafficFeature>(files.traffic),
+    fetchKind<BridgeFeature>(files.bridge),
+  ]);
+  return {
+    tile: extras.tileId,
+    traffic:
+      traffic.length > 0
+        ? buildTraffic(
+            traffic,
+            bridges,
+            { offset, heightAt: terrain.heightAt },
+            "coarse",
+            extent
+          )
+        : undefined,
+  };
+}
+
 async function buildDressing(
   terrain: TerrainLayer,
   extras: TerrainExtras,
@@ -446,7 +482,16 @@ async function buildDressing(
   const d = extras.dressing;
   const tile = extras.tileId;
   if (!d) {
-    return { tile };
+    return extras.coarse?.traffic
+      ? buildCoarseDressing(
+          terrain,
+          extras,
+          ctx.offset,
+          ctx.tileBounds(tile) ?? terrain.bounds,
+          url,
+          signal
+        )
+      : { tile };
   }
   // A kind the tile lacks is a feature off, never a request.
   const get = <T>(kind: DressingKind): Features<T> => {
@@ -587,7 +632,15 @@ async function buildDressing(
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).
   const trafficBands =
-    traffic.length > 0 ? buildTraffic(traffic, bridges, ground) : undefined;
+    traffic.length > 0
+      ? buildTraffic(
+          traffic,
+          bridges,
+          ground,
+          "fine",
+          ctx.tileBounds(tile) ?? terrain.bounds
+        )
+      : undefined;
   return {
     tile,
     tram,
@@ -914,7 +967,7 @@ export class DressingPlugin {
     this.stream.terrains.add(terrain);
     this.dressed.set(scene, { terrain });
     this.holdRasters(scene, terrain.rasters, true);
-    if (extras.dressing) {
+    if (extras.dressing || extras.coarse?.traffic) {
       this.queueDressing(scene, terrain, extras);
     }
   }
@@ -1038,7 +1091,11 @@ export class DressingPlugin {
       })
       .finally(() => {
         this.pending--;
-        this.settled.add(extras.tileId);
+        // A tile is dressed when its fine level is (the coarse one carries
+        // only the traffic flows).
+        if (extras.level === 0) {
+          this.settled.add(extras.tileId);
+        }
         if (!this.disposed) {
           this.ctx.onChange();
         }

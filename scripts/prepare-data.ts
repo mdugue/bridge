@@ -50,6 +50,7 @@ import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import {
   cityMeshSourceFiles,
   type DataManifest,
+  COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
   pickFiles,
   SOUND_KINDS,
@@ -592,7 +593,9 @@ async function bakeTerrain(
       ? { sport: names.sport, sportTable: names.sportTable }
       : {}),
     ...paintAndLight(names, level, colonyCrops.get(tile)),
-    ...(level === 0 ? { dressing: pickFiles(names, DRESSING_KINDS) } : {}),
+    ...(level === 0
+      ? { dressing: pickFiles(names, DRESSING_KINDS) }
+      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
   const key = cacheKey(inputs, offset, described);
   const meta = parse<{
