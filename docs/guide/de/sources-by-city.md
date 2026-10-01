@@ -20,7 +20,10 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 | Schuppen, weitere Bäume, Heckenhöhen | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁴ | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | 🟢 Laserscan | ⚪ — ⁵ |
 | Vegetationsfarbe (Vitalität) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
 | Denkmäler, Brunnen | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
-| 🟢 aus der besten Quelle | **16** / 18 | **15** / 18 | **9** / 18 | **16** / 18 | **15** / 18 | **14** / 18 | **15** / 18 | **10** / 18 |
+| Datenebene: Kfz-Verkehr | 🟢 Zählungen der Stadt | 🟡 Straßenverkehrszählung ⁷ | 🟢 Zählungen der Stadt (Hauptstraßen) | ⚪ — ⁸ | 🟡 Straßenverkehrszählung ⁷ | ⚪ — ⁸ | 🟡 Straßenverkehrszählung ⁷ | 🟢 Zählungen der Stadt |
+| Datenebene: Radverkehr live | 🟢 Zählstellen der Stadt | ⚪ — ⁹ | 🟢 Zählstellen der Stadt | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ |
+| Datenebene: Straßenbahnen (Fahrplan) | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM |
+| 🟢 aus der besten Quelle | **19** / 21 | **15** / 21 | **11** / 21 | **17** / 21 | **15** / 21 | **15** / 21 | **15** / 21 | **12** / 21 |
 
 ## Legende
 
@@ -37,6 +40,10 @@ Lizenzen) beschreibt [Woher die Daten kommen](./data-sources.md).
 4. Das Land veröffentlicht keinen offenen klassifizierten Laserscan (Hamburg lehnt das mit Verweis auf den Datenschutz ab).
 5. Die Pipeline liest den Laserscan dieses Landes noch nicht (kein Adapter dafür).
 6. Das offene Luftbild hat keinen Infrarotkanal: Der Vegetationsindex wird aus seinen sichtbaren Farben berechnet (Green Leaf Index) — er unterscheidet Grün von Grau gut, die Vitalität weniger gut.
+7. Die Stadt veröffentlicht keine eigenen Zählungen: Die Straßenverkehrszählung zählt nur Bundes-, Landes- und Kreisstraßen, beide Richtungen zusammen (je zur Hälfte gezeigt).
+8. Keine offenen Zählwerte je Straßenabschnitt: Die Stadt veröffentlicht keine, und die Straßenverkehrszählung reicht nicht bis in ihre Mitte.
+9. Keine offene Radzählstelle, die der Browser live lesen kann (Zählwerte nur jährlich, monatlich oder täglich, oder gar keine).
+10. Die Stadt hat keine Straßenbahn.
 
 ## In jeder Stadt gleich
 

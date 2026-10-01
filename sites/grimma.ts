@@ -12,6 +12,13 @@ export const GRIMMA: Site = {
   label: "Grimma · Altstadt",
   name: "Grimma",
   provider: SAXONY,
+  dataLayers: {
+    traffic: {
+      source: "saxony-svz",
+      credit:
+        "Straßenverkehrszählung 2021: Freistaat Sachsen, LASuV, dl-de/by-2-0",
+    },
+  },
   spawn: "muldeufer",
   tiles: [
     { e: 340, n: 5678 },

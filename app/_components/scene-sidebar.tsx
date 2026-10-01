@@ -68,6 +68,7 @@ import {
   lookPatch,
   type LookValues,
 } from "@/lib/city/look-controls";
+import { type DataLayerKey, siteDataLayers } from "@/lib/city/data-layers";
 import { type Landmark, landmarkVantage } from "@/lib/city/landmarks";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import {
@@ -79,6 +80,7 @@ import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
 import type { CityWalkHandle, CityWalkStats } from "./create-app";
+import { DataLayersPanel } from "./data-layers-panel";
 import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
 import { CONTROL_HINTS, TOUCH_HINTS } from "./control-hints";
@@ -97,7 +99,8 @@ import { useSite } from "./site-context";
  * uniform a slider writes to:
  *
  *  - **Erkunden** — where you are and where you can go: minimap, walk/fly,
- *    the scenic vantages, the keys. Everything a first visit needs.
+ *    the scenic vantages, the data layers (traffic, bikes, trams), the
+ *    keys. Everything a first visit needs.
  *  - **Szene** — what the scene looks like right now: sun and time, then the
  *    look groups, each collapsed until asked for.
  *  - **Erweitert** — the tools, the snapshot codec and the counters.
@@ -740,6 +743,8 @@ export interface SceneSidebarProps {
   bounds: TerrainBounds | null;
   coarse: boolean;
   copySnapshot: () => void;
+  /** what a data layer that is on says in words (the bike counts) */
+  dataLayerDetail?: Partial<Record<DataLayerKey, ReactNode>>;
   day: Date;
   footprints: FootprintPoly[];
   fps: number | null;
@@ -877,6 +882,17 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
+            {siteDataLayers(site.dataLayers).length > 0 && (
+              <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
+                <span className={SECTION_LABEL}>Verkehrsdaten</span>
+                <DataLayersPanel
+                  detail={props.dataLayerDetail}
+                  look={look}
+                  onLook={onLook}
+                  rows={siteDataLayers(site.dataLayers)}
+                />
+              </div>
+            )}
             <ControlTable coarse={props.coarse} />
           </SceneTabPanel>
 

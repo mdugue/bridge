@@ -198,6 +198,9 @@ const ARTIFACTS = {
   // hedges and the laser-scan crowns outside the canopy mask
   // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
   trees: { file: named("trees", "geojson"), dressing: true },
+  // Optional: the city's counted motor traffic per road section
+  // (pipeline/bake/traffic.py); drawn only while its data layer is on.
+  traffic: { file: named("traffic", "geojson"), dressing: true },
   lowveg: { file: named("lowveg", "geojson"), dressing: true, osm: true },
   canopyx: { file: named("canopyx", "geojson"), dressing: true },
 } as const satisfies Record<string, ArtifactSpec>;
@@ -218,6 +221,17 @@ const kindsWith = <F extends "dressing" | "osm" | "sound">(flag: F) =>
   ) as KindsWith<F>[];
 
 export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
+/**
+ * The side files the coarse terrain level is dressed with: only what must
+ * show beyond the fine level's reach — the counted traffic (a data layer
+ * read from the air, which stopped at every tile the fine level had not
+ * reached yet) and the bridge decks it rides.
+ */
+export const COARSE_DRESSING_KINDS = [
+  "traffic",
+  "bridge",
+] as const satisfies readonly DressingKind[];
+export type CoarseDressingKind = (typeof COARSE_DRESSING_KINDS)[number];
 export const SOUND_KINDS: readonly SoundKind[] = kindsWith("sound");
 /** Side files derived from OSM (their JSON must carry the ODbL credit). */
 export const OSM_KINDS: readonly TileArtifactKind[] = kindsWith("osm");

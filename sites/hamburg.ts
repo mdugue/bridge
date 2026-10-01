@@ -13,6 +13,17 @@ export const HAMBURG: Site = {
   label: "Hamburg · Innenstadt",
   name: "Hamburg",
   provider: HAMBURG_LGV,
+  dataLayers: {
+    traffic: {
+      source: "hamburg",
+      credit:
+        "Verkehrsmengen 2019: Freie und Hansestadt Hamburg, Behörde für Verkehr und Mobilitätswende, dl-de/by-2-0",
+    },
+    bikes: {
+      feed: "hamburg",
+      credit: "Radzählnetz: Freie und Hansestadt Hamburg, dl-de/by-2-0",
+    },
+  },
   treeCadastre: {
     id: "hamburg",
     credit:

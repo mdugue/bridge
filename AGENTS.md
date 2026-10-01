@@ -147,7 +147,16 @@ config change.
     terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
     vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
     stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
-    lines) and `map-overlay.ts` (fades the ferry lines in with height),
+    lines) and `map-overlay.ts` (fades the ferry lines in with height,
+    widens the data layers from the air), the data layers
+    (`lib/city/data-layers.ts`, switched in the HUD, all off at start —
+    ADR 0040): `traffic-layer.ts` (the counted motor traffic as flowing
+    glass bodies, per tile), `data-overlays.ts` (the site-wide ones:
+    `bike-layer.ts`, the city's bicycle counters read live as glass
+    columns — the feed per site in `lib/city/bike-feeds.ts` —, and
+    `tram-cars.ts`, the trams by timetable with their light trails; which
+    layers a site has is its `dataLayers`), `glass.ts` (their refracting glass: one copy of the frame,
+    not `transmission`),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
@@ -216,7 +225,7 @@ config change.
   table: which deck tops lie under a point), `levels.ts` +
   `line-levels.ts` (which level a rail or tram line runs on — ground,
   deck, span, cut — decided along the whole line within its grade, solved
-  by the build with each piece's context across tiles; ADR 0040),
+  by the build with each piece's context across tiles; ADR 0041),
   `passages.ts` (a cut under a deck opened in the terrain), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
@@ -258,7 +267,10 @@ config change.
   `skyview.py`, `osm_buildings.py` (shops, heritage, material and
   colours per LoD2 object; the walls' `context`, brick or plaster as the
   neighbourhood is mapped),
-  `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers), `osm.py`);
+  `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers),
+  `traffic.py` (the counted traffic; its sources per site in
+  `traffic_sources.py`), `transit.py` (the trams' timetable, once for the
+  site), `osm.py`);
   tests in `pipeline/tests/`. Run by
   `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037
@@ -475,6 +487,12 @@ main thread) out of the frames:
 - WebGPU has no 1-component 8/16-bit vertex formats (the feature id and roof
   flag are baked as FLOAT), and draws points 1 px wide (the lamp halos are
   sprites).
+- **WebGPU draws from at most eight vertex buffers** (the default limit;
+  three asks for no more), and every non-interleaved attribute is one —
+  `position` and `normal` included. A ninth makes the pipeline invalid and
+  the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
+  backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
+  `TRAFFIC_ATTRIBUTES`, its test holds the count).
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈
@@ -635,7 +653,7 @@ runtime one with `checkJoins`, and say in its doc comment what happens
 where the ground beside it is higher and where it is lower.
 `bun scripts/ground-joins.ts <site>` prints the shares and the worst places.
 
-**Lines keep to a level they can drive** (ADR 0040, `lib/city/levels.ts`).
+**Lines keep to a level they can drive** (ADR 0041, `lib/city/levels.ts`).
 A rail or tram line is never lifted onto whatever deck lies under a point:
 the build step (`scripts/line-levels.ts`, run by `prepare-data.ts`) solves
 each line's level along its whole run within its grade — the ground, a

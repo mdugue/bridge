@@ -1,4 +1,4 @@
-# ADR 0040: A line's level is decided along the whole line; a cut under a deck opens a passage
+# ADR 0041: A line's level is decided along the whole line; a cut under a deck opens a passage
 
 - **Status:** accepted
 - **Date:** 2026-10

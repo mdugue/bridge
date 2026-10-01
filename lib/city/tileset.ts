@@ -24,7 +24,7 @@
  */
 import type { Landmark } from "./landmarks";
 import type { TerrainBounds } from "./terrain-geometry";
-import type { DressingKind, SoundKind } from "./tile";
+import type { CoarseDressingKind, DressingKind, SoundKind } from "./tile";
 
 /**
  * Whether a tile owns the point: west and south edges in, east and north
@@ -79,6 +79,9 @@ export interface TerrainExtras {
   bounds: TerrainBounds;
   /** fine level only */
   dressing?: DressingFiles;
+  /** coarse level only: the few side files it is dressed with
+   *  (lib/city/tile.ts `COARSE_DRESSING_KINDS`) */
+  coarse?: Partial<Record<CoarseDressingKind, string>>;
   kind: "terrain";
   /** class raster at the level's edge */
   landcover: string;
@@ -176,6 +179,9 @@ export interface TilesetExtras {
   site: string;
   /** the site's tiles, the spawn tile first */
   tiles: TilesetTileInfo[];
+  /** the trams' timetable (lib/city/tram-timetable.ts), site-wide; absent
+   *  where the site has none */
+  trams?: string;
 }
 
 /** Everything the bake knows about one tile when it writes the tree. */

@@ -24,6 +24,6 @@ test("every footnote a page marks is listed once, in order", () => {
   const page = sourceMatrixPage(sites, "en", built);
   const notes = page.split("## Why not the best source")[1];
   const listed = notes.match(/^\d+\. /gm) ?? [];
-  const marks = new Set(page.match(/[¹²³⁴⁵⁶⁷⁸⁹]/g));
+  const marks = new Set(page.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g));
   expect(listed.length).toBe(marks.size);
 });

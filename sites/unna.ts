@@ -12,6 +12,12 @@ export const UNNA: Site = {
   label: "Unna · Altstadt",
   name: "Unna",
   provider: NRW,
+  dataLayers: {
+    traffic: {
+      source: "nrw",
+      credit: "Verkehrswerte: Straßen.NRW, dl-de/by-2-0",
+    },
+  },
   osm: "europe/germany/nordrhein-westfalen/arnsberg-regbez",
   spawn: "kirchplatz",
   tiles: [

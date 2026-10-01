@@ -1346,7 +1346,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Ballast yards** — Basis-DLM `ver03_f` (railway AREA, `OBJART=42010`),
   **dissolved** with shapely `union_all(make_valid())` in the bake and clipped
   to the tile (~5 non-overlapping parts) → **one merged surface**, so dozens of
-  yard tracks can't z-fight. **Draped on the ground** (2026-10-01, ADR 0040,
+  yard tracks can't z-fight. **Draped on the ground** (2026-10-01, ADR 0041,
   `addDrapedArea`): the outline and its holes triangulated, each triangle split
   in four while the ground at its edge midpoints and centre strays from its
   plane by > 1 m (and always above 48 m), down to 6 m, every corner on the
@@ -1383,7 +1383,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   span over a gap, on a deck of its own. Railway
   class recoloured dusty-mauve → **ballast warm-grey** (class 5 in
   `lib/city/landcover.ts`).
-- **Line levels** (2026-10-01, [ADR 0040](./adr/0040-line-levels-along-the-whole-line.md))
+- **Line levels** (2026-10-01, [ADR 0041](./adr/0041-line-levels-along-the-whole-line.md))
   — which level a rail or tram line runs on is decided **along the whole
   line**, never per sample (`lib/city/levels.ts`): the candidates per 4 m
   (rail) or 2 m (tram) sample are the ground and every deck the line may
@@ -1410,7 +1410,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   20). What remains: deck ends above lower ground for good, and deck tops
   DOM1 put 1.5–2 m off their embankment. *(Until then: lifted onto every
   deck under a point — 🗃️ below.)*
-- **Passages under decks** (2026-10-01, ADR 0040) — a *cut* lying ≥ 30 %
+- **Passages under decks** (2026-10-01, ADR 0041) — a *cut* lying ≥ 30 %
   under a drawn deck (any kind, within 2 m) opens the fill in the terrain
   bake (`lib/city/passages.ts`, `shapeDgm`'s last pass, both levels): along
   the line, half-width 2 m per track + 1.5 m, the ground lowered to the
@@ -1904,6 +1904,141 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   contour has `fwidth` 0, and 0/0 striped it with NaN ink (a diamond of
   lines on flat roads). No slope, no contour line. `terrain-layer.ts`.
 
+### Traffic (the data layers)
+Overlays on the city, each switched on and off on its own in the HUD
+(*Erkunden* → *Verkehrsdaten*; `lib/city/data-layers.ts`, one flag per
+layer in the look store and the snapshot, all **off** at boot): nothing is
+drawn, fetched or polled for a layer that is off (the traffic bands are
+fetched with their tile's dressing — 37 KB a tile — and only hidden). They
+are measurements laid over the poetic city, not part of it: unlit or flat
+colours, no shadows, no text in the scene (what they say in words is in
+the sidebar). Judged on SwiftShader plates only so far — **unjudged on a
+GPU**.
+- **Counted motor traffic** — in Dresden the city's *Verkehrsmengen* (WFS
+  `cls:L363` "Kfz/Tag", Straßen- und Tiefbauamt, dl-de/by-2-0; 2 082
+  sections over the fifteen tiles, mostly counted 2023–2026: one-day hand
+  counts scaled to the average day, induction loops and infrared detectors
+  as yearly means, a few estimates) → `pipeline/bake/traffic.py` →
+  `traffic_<tile>.geojson`: each section cut to the tile, the vehicles per
+  day along and against its line (`f`/`b`, absent where a direction was not
+  counted), the heavy-goods share per direction, the year and method, the
+  street, `br` on a street named a bridge. Runtime
+  (`app/_components/traffic-layer.ts`, `lib/city/traffic.ts`): one **glass
+  body** per counted direction on the right of its travel (both: either
+  side of the line; one: on the line; only a total: on the line, not
+  flowing) — a soft dome in cross-section, 1.2–3.6 m wide and 0.6–6 m
+  tall with the root of the vehicles per day, tapering to a round point
+  over the last ≤ 8 m only where the flow really ends: an end within 3 m
+  of another counted section's end, or on the tile's edge (the bake cut it
+  there), runs on full (`openEnds` — tapering every section end drew the
+  streets as strings of beads, pinched at every junction and seam). Feet
+  0.2 m under the ground, on a bridge street the deck. **Both terrain
+  levels carry the flows**: the fine one a cross-section every 2 m with
+  ten segments, the coarse one (the tiles the fine level has not reached)
+  every 8 m with six, about a seventh of the vertices, on the coarse
+  ground; 3D Tiles swaps them with their terrain. Built on the fine level
+  only, the flows ended at the first tile the fine level had not loaded —
+  the Waldschlößchenbrücke stopped at its Johannstadt end, the
+  Käthe-Kollwitz-Ufer showed nothing from across the river. Its tint runs over
+  five stops placed where Dresden's lanes spread (`TRAFFIC_SCALE`: 400,
+  2 000, 5 000, 9 000, 16 000 a day — sage, peach, coral, rose, wine;
+  log-spaced between stops; yellow is left to the trams), slate mixed in
+  with the heavy share. One log scale from 300 to 30 000 put every main
+  road in the same coral (half the lanes carry under 2 700 a day, a
+  quarter over 6 000). **The flows keep the scene's hour**
+  (`lib/city/traffic-hours.ts`): the counts are per day, so each lane's
+  count is spread over the day on a measured curve — Hamburg's infrared
+  counters on 38 inner-city main roads, hourly, September 2026 (Urban
+  Data Platform, dl-de/by-2-0), per working day, Saturday and Sunday.
+  The hour's multiple of the average hour (≈ 0.08 at 3 h, 1.8 at 16 h on a
+  working day) sets the colour (the count × that multiple on the scale),
+  the body's size (√, from 0.35× to 1.5× of its daily one) and how many
+  of its comets are lit (one in eight at night, all from the average hour
+  on); the light runs at 11 m/s, slowing to about half at the evening
+  peak (integrated on the CPU, so it never jumps). Two shared uniforms,
+  nothing rebuilt; the sidebar says the hour and that the curve is a
+  typical one, not a measurement of the street. Light runs through the
+  body in the direction of travel (soft comets, up to three times as many
+  on a busy lane), brightest along the crown. The
+  glass (`glass.ts`) refracts the street, trees and houses behind it with
+  a touch of dispersion, a sky sheen and a Fresnel rim, and thickens into
+  its own colour from the air and past ~200 m, so the layer reads as glass
+  up close and as a map from above; the bodies widen up to 5× from the
+  air (`map-overlay.ts` `mapWidenNode`). A street without a count draws
+  nothing — no gap filling, no model.
+- **Bicycle counters, live** — the city's permanent counters (WFS
+  `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
+  bicycles of the last full hour per direction) read **by the browser**
+  from the city's server (it answers any origin) when the layer is
+  switched on and every 5 minutes while it is on
+  (`app/_components/bike-layer.ts`, `lib/city/bike-counts.ts`): a pair of
+  **glass columns** per counter across the street (`winkel`, its run,
+  degrees counter-clockwise from north), one per direction (teal, lilac),
+  height 1.5 m + 1.6 × √count (482 an hour on the Albertbrücke ≈ 37 m),
+  the top a soft dome; rings of light rise through each at 0.18 m/s ×
+  √count, and a soft pool of its colour lies on the ground around its
+  foot; grey and still when the count is older than three hours. The sidebar lists the counts,
+  busiest first; a click flies there. The first runtime request to a
+  server other than the site's own ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)).
+- **Every site, its own sources** (`Site.dataLayers`, `sites/<id>.ts`):
+  a site names the source of each layer it has, and the HUD offers only
+  those (`siteDataLayers`; the "sources by city" page marks the rest).
+  Motor traffic: Dresden's own per-direction counts; **Berlin's**
+  Verkehrsmengen 2023 (gdi.berlin.de WFS `dtvw2023kfz`, vehicles per
+  working day, dl-de/zero-2-0; configured, Berlin's tiles not built yet);
+  **Hamburg's** Verkehrsmengen 2019 on the main roads
+  (`HH_WFS_Verkehrsmengen`, `dtv` + heavy % `sv`, dl-de/by-2-0; 547
+  sections on its four tiles); **Saxony's road census** SVZ 2021 (LASuV,
+  statewide shapefile, dl-de/by-2-0; Grimma 10, Meißen 14 sections: the
+  federal, state and district roads only); **NRW's Verkehrswerte**
+  (Straßen.NRW WFS, GML only, `DTVKFZA` + `DTVSVA`, dl-de/by-2-0; Unna
+  23). Every source but Dresden's counts both directions together: the
+  bake splits the total evenly (`sp` 1, `m` "census" for the road
+  censuses; `pipeline/bake/traffic_sources.py`), and the HUD says so. A
+  one-way couplet would be drawn as two half flows — the sources do not
+  mark one-way roads. Leipzig and Munich name none: neither city
+  publishes counts per section, and the Land's census (Saxony's SVZ,
+  Bavaria's BAYSIS SVZ 2021) does not reach their centres (0 and 0
+  sections on their tiles; Munich's are the motorways at the city's
+  edge). Live bicycle counters: Dresden's WFS and **Hamburg's**
+  SensorThings service (`iot.hamburg.de`, the "HaRaZäN" infrared
+  counters, hourly per counting point and direction, dl-de/by-2-0; 21
+  points on its tiles; `lib/city/bike-feeds.ts`); Leipzig's counters
+  refresh daily without CORS, Munich's monthly, Berlin's yearly — not
+  live, left out. Trams by timetable: **Leipzig** (LVB; 19 lines with
+  the night and special lines, 2 973 / 2 504 / 1 842 trips) and
+  **Munich** (MVG; 14 lines, 2 217 / 2 186 / 1 885 trips) from the same
+  feed and their own OSM tracks, Berlin configured (BVG); Hamburg,
+  Grimma, Meißen and Unna have no trams. The feed lives once for every
+  site, `data/_raw/gtfs/` (`bun run fetch <site>` downloads it where the
+  site has trams).
+- **Trams by timetable** — in Dresden the DVB's scheduled tram trips (gtfs.de's
+  Germany-wide GTFS from DELFI's NeTEx, CC BY 4.0; ≈ 290 MB, not
+  committed) → `pipeline/bake/transit.py`, **site-wide** →
+  `data/dresden/transit/trams.json` (≈ 680 KB): 12 lines, 127 stop patterns, 264
+  running-time profiles, 2 598 / 2 002 / 1 629 trips on a working day /
+  Saturday / Sunday (the busiest day of each kind in the next three weeks:
+  3 October 2026, a holiday, lost to the 10th). The feed has no shapes:
+  each leg is laid on the OSM tram tracks (`tram_<tile>.geojson`) as the
+  shortest way between the tracks near its two platforms, a metre from
+  platform to track weighing three of way, so a car keeps to the track
+  beside its platform; every leg on the site finds one (Postplatz's
+  platforms stand up to 60 m from a track). Runtime
+  (`app/_components/tram-cars.ts`, `lib/city/tram-timetable.ts`): every
+  trip of the scene's kind of day (and the night's of the day before) at
+  the scene's clock, which runs on in real time from the HUD's instant;
+  a car is four 7.2 m sections, each following the path on its own,
+  standing at its stops from arrival to departure and easing between them;
+  the rail top over the ground, the deck on a bridge track; DVB yellow
+  with a slate window band; no shadow (a moving caster would redraw the
+  shadow map every frame). Behind each car a **trail of light** along its
+  track (deck.gl's TripsLayer in the scene's palette): 140 m, 3.2 m wide,
+  0.6 m over the rail top (the coarse terrain stands up to half a metre
+  over the TIN), warm white at the car fading to gold and nothing, one
+  mesh for all trams rewritten every frame; it widens from the air. **Not live positions**: a delay or a
+  diversion is not shown. The sidebar says how many trams run and from
+  which day's timetable.
+
 ### Sound
 Hidden and opt-in (plan [035](./plans/completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action)): nothing below
 sounds, and no `AudioContext` exists, until the visitor presses **L** or
@@ -2056,6 +2191,14 @@ research that produced them):
     (Cultivated land), 030 (Signs and fixtures), 031 (Landing stages,
     groynes, ferries), 033 (Sky-view factor, Horizon shade),
     034 (Small structures from the laser scan), 035 (Sound — unheard).
+14. **The traffic data layers, next** (✅ *Traffic* above) — tram delays
+    from the VVO's departure monitor (`webapi.vvo-online.de/dm`, real time
+    per stop, answers any origin: poll the stops in view, shift each trip
+    by its delay); the bicycle counters' hourly history since 2017
+    (`cls:L1780`, > 140 MB unfiltered: bake a typical day per counter and
+    run the columns with the scene's hour); the accidents with injury
+    (Unfallatlas, the statistics offices, dl-de/by-2-0; pedestrian and
+    cyclist involvement per point) as a fourth layer.
 
 ---
 
@@ -2063,6 +2206,8 @@ research that produced them):
 
 | Idea | Why rejected | Caveat |
 |---|---|---|
+| **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
+| **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |
 | **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **A raised pavement behind the kerb** (plan 023's leftover: lift the pavement a kerb's height above the road) | The DGM1 has no such step to lift, and ADR 0035 makes every part meet the ground at the ground's own level: the kerb's back now runs down to the pavement (`meetGround`), which took its ground-join misses from 32 % to 2 % (2026-10-01 audit). | Only with a measured kerb height per street (none of the sources carries it) and a terrain cut that ADR 0035's join check accepts. |
@@ -2093,7 +2238,7 @@ research that produced them):
 | **`BatchedMesh` for buildings** | Already merged per tile; would break `objectid` picking/demolish and not cut draw calls. | Bottleneck is fill-rate, not draw calls. |
 | **Blender texture baking** | No UVs on the source geometry. | — |
 | **Orthophoto as the *only* tint source** | Leaves everything identical where imagery is flat; no facade info. | Hash carries variation; DOP augments roofs. |
-| **A line lifted onto every deck under it** (rails and trams until 2026-10-01: a point inside a rail deck's outline rode the deck, a tram on an OSM `bridge` way any deck) | A lower line passing under another's bridge jumped 7–8 m onto it and back (16 of 109 rail–deck crossings in Dresden; the flyovers north of Neustadt), and an upper line dropped into the DGM's gap wherever it ran longer than the deck's outline — 230 steps beyond the grade by > 1 m in Dresden. | The level is decided along the whole line within its grade (✅ *Line levels*, ADR 0040). |
+| **A line lifted onto every deck under it** (rails and trams until 2026-10-01: a point inside a rail deck's outline rode the deck, a tram on an OSM `bridge` way any deck) | A lower line passing under another's bridge jumped 7–8 m onto it and back (16 of 109 rail–deck crossings in Dresden; the flyovers north of Neustadt), and an upper line dropped into the DGM's gap wherever it ran longer than the deck's outline — 230 steps beyond the grade by > 1 m in Dresden. | The level is decided along the whole line within its grade (✅ *Line levels*, ADR 0041). |
 | **Per-line ballast ribbons** (rail v1: one ~9.6 m ribbon per `ver03_l` line) | 42+ overlapping coplanar ribbons in the yard z-fought into ragged/torn edges. | Replaced by the **dissolved `ver03_f` area** as one merged surface. |
 | **`ver06_l` centreline-buffered decks** (rail v1) | Buffered planks stacked deck-top + ballast + parapet-cap → "2-story" bridges, and one plank merged the parallel Marienbrücke spans. | Replaced by **`ver06_f` deck polygons** (one slab per real footprint); kept as the no-`ver06_f` portability fallback. |
 | **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build on the **cross-tile `heightAt`** — once for the block until ADR 0024, now per fine terrain tile over every loaded terrain. |

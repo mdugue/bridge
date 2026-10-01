@@ -13,6 +13,14 @@ export const BERLIN: Site = {
   label: "Berlin · Mitte",
   name: "Berlin",
   provider: BERLIN_SENSBW,
+  dataLayers: {
+    traffic: {
+      source: "berlin",
+      credit:
+        "Verkehrsmengen 2023: Senatsverwaltung für Mobilität, Verkehr, Klimaschutz und Umwelt Berlin, dl-de/zero-2-0",
+    },
+    trams: { operator: "BVG" },
+  },
   treeCadastre: {
     id: "berlin",
     credit: "Baumbestand: Geoportal Berlin, dl-de/zero-2-0",

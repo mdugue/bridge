@@ -37,5 +37,19 @@
   "wikidata": {
     "licence": "CC0",
     "usedFor": "bridge names and types, cached per tile under data/_raw/sn/wikidata/"
+  },
+  "dataLayers": {
+    "trams": {
+      "download": "https://download.gtfs.de/germany/nv_free/latest.zip",
+      "title": "GTFS nv_free (DELFI e.V. via gtfs.de): the LVB's tram trips",
+      "licence": "CC BY 4.0; credit: DELFI e.V. via gtfs.de",
+      "feed": "the feed of 2026-09-26",
+      "retrieved": "2026-10-01",
+      "raw": "data/_raw/gtfs/nv_free.zip (shared by every site)",
+      "committed": "data/leipzig/transit/trams.json",
+      "usedBy": [
+        "pipeline/bake/transit.py"
+      ]
+    }
   }
 }

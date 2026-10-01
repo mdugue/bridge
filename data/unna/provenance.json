@@ -35,5 +35,25 @@
   "wikidata": {
     "licence": "CC0",
     "usedFor": "bridge names and types, cached per tile under data/_raw/nw/wikidata/"
+  },
+  "dataLayers": {
+    "traffic": {
+      "service": "https://www.wfs.nrw.de/wfs/strassen_nrw",
+      "typeName": "ms:Verkehrswerte",
+      "title": "Verkehrswerte (Straßen.NRW)",
+      "licence": "dl-de/by-2-0; credit: Straßen.NRW",
+      "coverage": "federal, state and district roads, all days (DTVKFZA), both directions together, with the heavy vehicles (DTVSVA); split evenly between the directions (sp 1)",
+      "retrieved": "2026-10-01",
+      "raw": "data/_raw/nw/traffic/<tile>.geojson (+ .meta.json), with a 50 m margin (traffic_sources.py)",
+      "committed": "data/unna/dlm/traffic_<tile>.geojson",
+      "usedBy": [
+        "pipeline/bake/traffic.py"
+      ],
+      "sections": {
+        "$comment": "per tile bbox incl. the 50 m margin, before the clip",
+        "32408_5710_2_nw": 14,
+        "32408_5708_2_nw": 11
+      }
+    }
   }
 }
