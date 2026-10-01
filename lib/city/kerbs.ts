@@ -16,6 +16,7 @@
  * lies a few centimetres above the road there, not at the kerb's top, and
  * every kerb showed an edge toward the pavement as well as the road.
  */
+import { meetGround, SINK } from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
 
@@ -25,7 +26,7 @@ export const KERB_HEIGHT = 0.12; // m above the road
 export const KERB_WIDTH = 0.24; // m, face to back
 const SAMPLE_M = 2.5; // densify to this spacing (m) so the foot follows the ground
 const PROBE_M = 0.4; // read the ground this far out on either side (m)
-const SINK_M = 0.06; // the foot reaches this far below the ground (m)
+const SINK_M = SINK.kerb; // the foot reaches this far below the ground
 const LIFT_M = 0.01; // the back's top this far above the pavement (m): no z-fight
 
 export interface KerbGeometryData {
@@ -76,7 +77,7 @@ function kerbCol(
     backFoot: walk - SINK_M,
     top,
     // never below the road (a pavement lower than the road keeps a step)
-    backTop: Math.min(top, Math.max(walk + LIFT_M, road + LIFT_M)),
+    backTop: meetGround(top, walk, { floor: road + LIFT_M, lift: LIFT_M }),
   };
 }
 

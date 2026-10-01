@@ -32,6 +32,7 @@
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
+import { SINK } from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";
 import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
@@ -60,7 +61,7 @@ const SHOULDER_M = 2.5;
 const SURROUND_M = 3.5;
 /** How far below the bottom landing the cheeks and the first riser reach
  *  (m): the flight is a solid block, whatever the ground does beside it. */
-const BURY_M = 0.6;
+const BURY_M = SINK.stair;
 /** A Wange reaches this far out from the flight's edge (m): past every
  *  triangle the burn lowered beside a flight on the native 1 m grid (its
  *  vertices up to BURN_REACH_CELLS out, their triangles √2 cells further). */

@@ -6,6 +6,8 @@
  * deck's axis from its first abutment. No THREE, no DOM.
  */
 
+import { reachLevel } from "./ground-join";
+
 /** Spacing of the baked stations (`line`, `rise`) along the axis (m) —
  *  `STEP` in pipeline/bake/bridge.py. */
 export const BRIDGE_STEP = 2;
@@ -639,21 +641,10 @@ export function approachLanding(
   top: number,
   grade: number
 ): number | null {
-  const g0 = groundAt(0);
-  if (g0 === null) {
-    return null;
-  }
-  if (g0 >= top - APPROACH_FLUSH_M) {
-    return 0;
-  }
-  for (let d = APPROACH_STEP_M; d <= APPROACH_REACH_M; d += APPROACH_STEP_M) {
-    const g = groundAt(d);
-    if (g === null) {
-      return null;
-    }
-    if (g >= top - grade * d - APPROACH_FLUSH_M) {
-      return d;
-    }
-  }
-  return null;
+  return reachLevel(groundAt, (d) => top - grade * d, {
+    reach: APPROACH_REACH_M,
+    step: APPROACH_STEP_M,
+    tolerance: APPROACH_FLUSH_M,
+    onUnknown: "stop",
+  });
 }

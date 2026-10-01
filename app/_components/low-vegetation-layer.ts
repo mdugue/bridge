@@ -1,3 +1,4 @@
+import { SINK } from "@/lib/city/ground-join";
 import {
   type BufferGeometry,
   Color,
@@ -52,7 +53,7 @@ const HEDGE_PIECE_M = 2.5;
 /** each piece reaches this far into its neighbours so the chain has no gaps */
 const HEDGE_OVERLAP_M = 0.6;
 /** instances are sunk this far so the terrain's ~2 m facets never show a gap */
-const SINK_M = 0.25;
+const SINK_M = SINK.planted;
 /** superellipsoid exponents of the hedge block (2 = ellipsoid, ∞ = box):
  *  a clipped, softly rounded top half on a squarer base */
 const HEDGE_P = 4;

@@ -7,10 +7,11 @@
  * bake appends them to a tile's buildings (scripts/bake-city-mesh.ts). No
  * THREE, no DOM.
  */
+import { SINK } from "./ground-join";
 import type { PointGeometry, SmallBuildingFeature } from "./features";
 
 /** Metres the box reaches below its lowest ground, so a slope shows no gap. */
-export const SMALL_BUILDING_SINK = 0.2;
+export const SMALL_BUILDING_SINK = SINK.box;
 
 /** One structure's triangles in the recentered data frame (Z-up). */
 export interface StructureMesh {

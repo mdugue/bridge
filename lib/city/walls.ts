@@ -17,6 +17,7 @@
  */
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
+import { farthestNear, reachLevel, SINK } from "./ground-join";
 import { type StepSnap, smoothSnaps, snapToStep } from "./wall-snap";
 
 export interface WallRibbon {
@@ -94,7 +95,7 @@ function columnAt(
   // base = the low shelf, dropped further to span the OSM height when the
   // step is shallower than the tag; clamped to MAX_H + a small dip below
   // ground.
-  const base = Math.max(top - MAX_H, Math.min(lowShelf, top - h)) - 0.4;
+  const base = Math.max(top - MAX_H, Math.min(lowShelf, top - h)) - SINK.wall;
   const w = epsgToWorld(sx, sy, offset);
   return { wx: w.x, wz: w.z, base, top };
 }
@@ -126,16 +127,13 @@ function capEnd(
 ): number {
   const [ex, ey] = e;
   const [px, py] = p;
-  const level = step.hi - CAP_TOLERANCE_M;
-  const n = Math.round(CAP_REACH_M / CAP_SCAN_M);
-  for (let k = 1; k <= n; k++) {
-    const o = faceAt + step.up * k * CAP_SCAN_M;
-    const g = heightAt(ex + px * o, ey + py * o);
-    if (g !== null && g >= level) {
-      return o + step.up * CAP_OVERLAP_M;
-    }
-  }
-  return step.crest;
+  const at = (d: number) => faceAt + step.up * d;
+  const d = reachLevel(
+    (dd) => heightAt(ex + px * at(dd), ey + py * at(dd)),
+    () => step.hi,
+    { reach: CAP_REACH_M, step: CAP_SCAN_M, tolerance: CAP_TOLERANCE_M }
+  );
+  return d === null ? step.crest : at(d + CAP_OVERLAP_M);
 }
 
 /** Where a snapped column's face stands (offset along +perp). */
@@ -154,20 +152,12 @@ function smoothCapEnds(
   ends: (number | null)[],
   steps: (StepSnap | null)[]
 ): (number | null)[] {
-  return ends.map((end, i) => {
-    const up = steps[i]?.up;
-    if (end === null || up === undefined) {
-      return end;
-    }
-    let far = end;
-    for (let k = i - CAP_SMOOTH; k <= i + CAP_SMOOTH; k++) {
-      const other = ends[k];
-      if (other !== null && other !== undefined && steps[k]?.up === up) {
-        far = up > 0 ? Math.max(far, other) : Math.min(far, other);
-      }
-    }
-    return far;
-  });
+  return farthestNear(
+    ends,
+    CAP_SMOOTH,
+    (i) => (steps[i]?.up ?? 1) as 1 | -1,
+    (i) => steps[i]?.up
+  );
 }
 
 /** The column at a (smoothed) measured step: face just in front of the
@@ -185,7 +175,8 @@ function snappedColumn(
   const faceAt = faceOf(step);
   const face = epsgToWorld(ex + px * faceAt, ey + py * faceAt, offset);
   const back = epsgToWorld(ex + px * backAt, ey + py * backAt, offset);
-  const base = Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - 0.4;
+  const base =
+    Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - SINK.wall;
   return {
     wx: face.x,
     wz: face.z,

@@ -26,6 +26,7 @@
  * The UV carries only the kind: `u` = the code's slot, `v` = the height
  * fraction (the shader's top edge and rooted foot).
  */
+import { SINK } from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
 
@@ -72,7 +73,7 @@ export const FENCE_UV_CODES = 6;
 
 const SAMPLE_M = 2.5; // the longest quad along a line (m)
 const SIMPLIFY_M = 0.1; // line vertices this close to the chord are dropped (m)
-const SINK_M = 0.05; // bands reach this far into the ground (m)
+const SINK_M = SINK.band; // bands reach this far into the ground
 const BAND_SCALE = 0.75; // a band stands at this share of the tagged height...
 const BAND_MIN_M = 0.4; // ...and between these (m)
 const BAND_MAX_M = 1.0;
