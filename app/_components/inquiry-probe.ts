@@ -26,10 +26,8 @@ export const TOLERANCE_PX = 22;
 /** Rays per ring (two rings: half and full radius). */
 const RING_RAYS = 8;
 
-/** One ray's answer: which building tree it hit, and how far away. */
+/** One ring ray's answer: which building tree it hit, and how far away. */
 export interface PickSample<T> {
-  /** the ray through the point itself, not one of the rings */
-  centre: boolean;
   distance: number;
   hit: T;
   /** the building tree it hit (tile + root), for the vote */
@@ -37,16 +35,12 @@ export interface PickSample<T> {
 }
 
 /**
- * The building a tap means: the one under the point itself when there is
- * one, else the tree most ring rays hit, the nearest hit on a tie.
+ * The building a tap means when nothing stands exactly under it: the tree
+ * most ring rays hit, the nearest hit on a tie.
  */
 export function chooseSample<T>(
   samples: readonly PickSample<T>[]
 ): PickSample<T> | null {
-  const centre = samples.find((s) => s.centre);
-  if (centre) {
-    return centre;
-  }
   const votes = new Map<string, { best: PickSample<T>; count: number }>();
   for (const s of samples) {
     const v = votes.get(s.key);
@@ -94,6 +88,8 @@ export function createInquiryProbe(deps: {
   camera: Camera;
   /** the city layers on screen now */
   cities: () => readonly CityLayer[];
+  /** whether a layer's tile is still loaded (shown or not) */
+  isLoaded: (layer: CityLayer) => boolean;
   /** distance along the pick ray to the ground, or null within `far` */
   groundAlong: (raycaster: Raycaster, far: number) => number | null;
   /** the canvas size in CSS px, for the tolerance rings */
@@ -103,17 +99,15 @@ export function createInquiryProbe(deps: {
 
   const clear = () => {
     // A tile that unloaded took its texture with it: never touch it again.
-    if (marked && deps.cities().includes(marked)) {
+    // One merely out of view keeps its texture, and its mark must go.
+    if (marked && deps.isLoaded(marked)) {
       marked.mark(new Set());
     }
     marked = null;
   };
 
   /** One ray: the building it meets before the ground, if any. */
-  const sample = (
-    ndc: { x: number; y: number } | undefined,
-    centre: boolean
-  ) => {
+  const sample = (ndc: { x: number; y: number } | undefined) => {
     const picked = pickCityObject(deps.camera, deps.cities(), ndc);
     if (!picked) {
       return null;
@@ -124,7 +118,6 @@ export function createInquiryProbe(deps: {
     }
     const { layer, objectIndex, distance } = picked;
     return {
-      centre,
       distance,
       hit: { layer, objectIndex },
       key: `${layer.tile}:${layer.table.root[objectIndex]}`,
@@ -132,13 +125,13 @@ export function createInquiryProbe(deps: {
   };
 
   const pick = (ndc?: { x: number; y: number }) => {
-    const exact = sample(ndc, true);
+    const exact = sample(ndc);
     if (exact || !ndc) {
       return exact?.hit ?? null;
     }
     const samples: PickSample<{ layer: CityLayer; objectIndex: number }>[] = [];
     for (const d of ringOffsets(TOLERANCE_PX, deps.viewport())) {
-      const s = sample({ x: ndc.x + d.x, y: ndc.y + d.y }, false);
+      const s = sample({ x: ndc.x + d.x, y: ndc.y + d.y });
       if (s) {
         samples.push(s);
       }

@@ -48,7 +48,7 @@ credit and licence; per tile its edition. The tileset's extras name it; the
 card fetches it with its first question, never at boot.
 
 **Text appears only on demand, in one place.** A long press asks the
-building under the finger; the *Befragen* mode (key `I`, the toolbar's
+building under the finger (touch and pen only); the *Befragen* mode (key `I`, the toolbar's
 *Befragen*) makes a plain tap ask too. The answer is a non-modal paper
 card in the HUD — a bottom sheet on touch screens (`inquiry-card.tsx`,
 the model in `lib/city/inquiry.ts`). The scene itself stays wordless: the asked

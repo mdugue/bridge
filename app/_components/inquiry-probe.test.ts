@@ -1,16 +1,10 @@
 import { expect, test } from "bun:test";
 import { chooseSample, type PickSample, ringOffsets } from "./inquiry-probe";
 
-const s = (
-  key: string,
-  distance: number,
-  centre = false
-): PickSample<string> => ({ key, distance, centre, hit: `${key}@${distance}` });
-
-test("the building under the point itself wins over any vote", () => {
-  expect(chooseSample([s("a", 50), s("a", 40), s("b", 90, true)])?.hit).toBe(
-    "b@90"
-  );
+const s = (key: string, distance: number): PickSample<string> => ({
+  key,
+  distance,
+  hit: `${key}@${distance}`,
 });
 
 test("off target, the tree most ring rays hit wins, nearest hit on a tie", () => {

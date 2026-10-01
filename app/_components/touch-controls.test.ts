@@ -321,6 +321,25 @@ test("a finger held still is a long press, and its release is no tap", () => {
   expect(calls.tap).toHaveLength(1);
 });
 
+test("a mouse held still is no long press: the desktop asks by I and a click", () => {
+  const { fire, calls, elapse } = harness();
+  fire("pointerdown", {
+    pointerId: 1,
+    clientX: 100,
+    clientY: 200,
+    pointerType: "mouse",
+  });
+  elapse();
+  fire("pointermove", {
+    pointerId: 1,
+    clientX: 160,
+    clientY: 200,
+    pointerType: "mouse",
+  });
+  expect(calls.longPress).toEqual([]);
+  expect(calls.look).toHaveLength(1);
+});
+
 test("moving or a second finger cancels a long press", () => {
   const { fire, calls, elapse } = harness();
   fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });

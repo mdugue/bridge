@@ -70,8 +70,9 @@ in front of a building wins, the tree marked), `city-layer.ts` (`facts`,
 pencil hatch every 0.9 m on the building, 45° screen-space strokes every
 7 px where those crowd), `inquiry-card.tsx` (a
 non-modal `<aside>`, Esc and × close it), `lib/city/inquiry.ts` (the German
-lines). A **long press** (450 ms held still, `touch-controls.ts`) always
-asks; `I` toggles a mode in which a plain tap asks too (in pointer lock
+lines). A **long press** (a finger or pen held still 450 ms,
+`touch-controls.ts`; not the mouse, whose drags often start with a pause)
+always asks; `I` toggles a mode in which a plain tap asks too (in pointer lock
 `I` asks at the crosshair), the toolbar's *Befragen* is its touch
 stand-in. A tap off target still finds its building: when the ray under
 the finger meets nothing, two rings of rays (11 and 22 px) vote and the
@@ -96,7 +97,13 @@ paper lift (0.4), the paper light (0.06 by day) and the ink (0.6 near,
 and the shop glow, and whether the screen-space strokes read as pencil or
 as a screen door while the camera moves. Checked headless only
 (SwiftShader, lite): the first cut's wash and lift cancelled, the current
-one reads from 100 m.
+one reads from 100 m. Its cost: the hatch (`askedColour`) is branch-free,
+so every clay fragment pays its ~20 ALU ops whether or not anything is
+asked. Measure the main pass with and without it on a phone; if it
+shows, give the marked tile's clay its own graph variant with the hatch
+(`setGraph` key `clay|asked`, warmed with the others) and keep it out of
+the default build — a uniform branch around it would put `fwidth` under
+WGSL's uniformity analysis, unverifiable headless.
 
 ### 4. More things to ask (S–M each)
 

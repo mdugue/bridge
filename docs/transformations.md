@@ -598,8 +598,9 @@ it answers in a paper card ([ADR 0036](./adr/0036-inquiry-cards-on-demand-facts-
   rays vote; a bottom sheet on touch screens) — `lib/city/inquiry.ts` →
   `inquiry-card.tsx`: the
   OSM name or the ALKIS use as the title, the address, then only the facts
-  that are known (height of the tallest part, eave, roof form and pitch,
-  ground area over all parts, mapped storeys, parts, *Kulturdenkmal*, a
+  that are known (the Building's height — its tree's base to top unless
+  the survey measured it —, eave, roof form and pitch, the ground area
+  of its parts' union, overlaps counted once, mapped storeys, parts, *Kulturdenkmal*, a
   shop on the ground floor), the `buildingId` to copy, and one source line
   per source quoted, with edition and licence. Unspecified use (86 % of
   the objects) is said as such, never guessed.

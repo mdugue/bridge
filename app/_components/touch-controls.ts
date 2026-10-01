@@ -8,8 +8,10 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
  *  - double-tap / double-click: travel to the tapped spot
  *  - a single tap / click: `onTap` (the inquiry mode asks what is there;
  *    the first tap of a double one fires it too)
- *  - a long press (one pointer held still for LONG_PRESS_MS): `onLongPress`
- *    — asks what is there without the mode; the release after it is no tap
+ *  - a long press (one finger or pen held still for LONG_PRESS_MS):
+ *    `onLongPress` — asks what is there without the mode; the release after
+ *    it is no tap. Not for the mouse: a desktop drag often starts with a
+ *    pause, and the desktop asks by `I` and a click.
  *  - pointer lock (immersive mode, opt-in via `lockPointer`): mouse motion
  *    is mouse-look; Esc exits natively. Clicks/drags are ignored meanwhile.
  * The element must have `touch-action: none` so the browser doesn't consume
@@ -19,7 +21,7 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
 export interface TouchControlsCallbacks {
   /** ndc coordinates of the tap (-1..1, three.js raycaster convention) */
   onDoubleTap: (ndcX: number, ndcY: number) => void;
-  /** one pointer held still for LONG_PRESS_MS, in ndc */
+  /** one finger or pen held still for LONG_PRESS_MS, in ndc */
   onLongPress?: (ndcX: number, ndcY: number) => void;
   /** a single tap or click, in ndc (every tap, before any double) */
   onTap?: (ndcX: number, ndcY: number) => void;
@@ -180,7 +182,11 @@ export function attachTouchControls(
     syncPinchBaseline();
     if (pointers.size === 1) {
       longPressed = false;
-      armPress(pointers.get(e.pointerId) as PointerState);
+      if (e.pointerType === "mouse") {
+        cancelPress();
+      } else {
+        armPress(pointers.get(e.pointerId) as PointerState);
+      }
     } else {
       cancelPress();
     }

@@ -193,7 +193,7 @@ def levels_of(other_tags: str | None) -> int | None:
     value = tag(other_tags, "building:levels")
     try:
         levels = round(float((value or "").replace(",", ".")))
-    except ValueError:
+    except (ValueError, OverflowError):  # "x" or "nan"; "inf" overflows round()
         return None
     return levels if 0 < levels < 200 else None
 

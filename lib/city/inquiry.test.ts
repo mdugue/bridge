@@ -97,6 +97,30 @@ test("numbers, dates and codes read as German", () => {
   expect(roofLabel("", NO_FACT)).toBe("");
 });
 
+test("the Building's own tree facts win over its parts' (the bake's union)", () => {
+  const card = inquiryCard(
+    {
+      tile: "t",
+      picked: object({ facts: facts({ height: 10, area: 300 }) }),
+      tree: [
+        object({
+          building: true,
+          objectIndex: 2,
+          facts: facts({ height: 24.5, area: 520 }),
+        }),
+        object({ facts: facts({ height: 10, area: 300 }) }),
+        object({ objectIndex: 1, facts: facts({ height: 24, area: 300 }) }),
+      ],
+    },
+    null
+  );
+  const fact = (label: string) =>
+    card.facts.find((f) => f.label === label)?.value;
+  // overlapping parts counted once, the tower's top over the podium's base
+  expect(fact("Grundfläche")).toBe("520 m²");
+  expect(fact("Höhe")).toBe("24,5 m");
+});
+
 test("a named church: name as title, use above, every source quoted", () => {
   const part = object({
     eaveH: 21.5,

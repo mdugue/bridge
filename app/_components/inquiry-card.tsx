@@ -35,7 +35,14 @@ function fetchProvenance(url: string): Promise<SiteProvenance | null> {
     pending = fetch(url)
       .then((res) => (res.ok ? (res.json() as Promise<unknown>) : null))
       .then((json) => (isSiteProvenance(json) ? json : null))
-      .catch(() => null);
+      .catch(() => null)
+      .then((provenance) => {
+        // A failed fetch is not kept: the next card tries again.
+        if (!provenance) {
+          provenanceFetches.delete(url);
+        }
+        return provenance;
+      });
     provenanceFetches.set(url, pending);
   }
   return pending;
@@ -104,7 +111,12 @@ export function InquiryCard({
   }, [onClose]);
 
   if (sheet) {
-    return <InquirySheet card={card} onClose={onClose} />;
+    // One sheet per question: a new one asked while the last slides away
+    // opens a fresh sheet, never the closing one (whose close would drop
+    // the new question).
+    return (
+      <InquirySheet card={card} key={inquiryKey(inquiry)} onClose={onClose} />
+    );
   }
   return (
     <aside
@@ -117,6 +129,18 @@ export function InquiryCard({
       <CardDetails card={card} />
     </aside>
   );
+}
+
+/** Each question its own key (an Inquiry is a new object per ask). */
+const inquiryKeys = new WeakMap<Inquiry, number>();
+let nextInquiryKey = 0;
+function inquiryKey(inquiry: Inquiry): number {
+  let key = inquiryKeys.get(inquiry);
+  if (key === undefined) {
+    key = nextInquiryKey++;
+    inquiryKeys.set(inquiry, key);
+  }
+  return key;
 }
 
 /** Folded: what and where; unfolded: three quarters of the screen. */

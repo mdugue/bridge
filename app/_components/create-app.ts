@@ -983,6 +983,7 @@ async function bootApp(
   const probe = createInquiryProbe({
     camera,
     cities: () => stream.visibleCities(),
+    isLoaded: (layer) => stream.cities.has(layer),
     groundAlong,
     viewport: () => ({
       width: renderer.domElement.clientWidth || 1,
@@ -997,9 +998,8 @@ async function bootApp(
   };
   const setInquiring = (on: boolean) => {
     inquiring = on;
-    if (!on) {
-      probe.clear();
-    }
+    // Either way the open card closes, so its mark goes with it.
+    probe.clear();
     opts.onInquiry?.({ active: on, inquiry: null });
   };
   const canvasControls = attachTouchControls(renderer.domElement, {

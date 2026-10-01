@@ -139,8 +139,9 @@ test("every object carries its identity and semantics as fact columns", () => {
   // part keeps its GroundSurface (the minimap once lost every part's).
   expect(baked.objects[1].footprints).toHaveLength(1);
   expect(baked.objects[2].footprints).toHaveLength(1);
-  // The geometry-less Building: no height, no ground.
-  expect(shop).toMatchObject({ buildingId: "shop", height: -1, area: -1 });
+  // The geometry-less Building answers for its tree (its one part):
+  // the part's ground, base to top.
+  expect(shop).toMatchObject({ buildingId: "shop", height: 9, area: 100 });
   // A flat roof's pitch 0 is a value, not "unknown"; dates lose the clock.
   expect(house).toMatchObject({
     buildingId: "house",
@@ -163,7 +164,7 @@ test("every object carries its identity and semantics as fact columns", () => {
     values: ["31001_2000", "31001_2000", "31001_1000"],
   });
   expect(table?.height).toMatchObject({ componentType: "FLOAT32", noData: -1 });
-  expect([...(table?.height.values ?? [])]).toEqual([-1, 9, 12]);
+  expect([...(table?.height.values ?? [])]).toEqual([9, 9, 12]);
 });
 
 test("a part carries its root Building's flags as well as its own", () => {

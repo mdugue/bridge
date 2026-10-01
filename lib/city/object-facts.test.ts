@@ -8,6 +8,8 @@ import {
   readFacts,
   ringsArea,
   scanFacts,
+  treeFacts,
+  unionArea,
 } from "./object-facts";
 
 const square: [number, number][] = [
@@ -21,6 +23,48 @@ test("ring areas count positive whatever the winding", () => {
   expect(ringsArea([square])).toBe(50);
   expect(ringsArea([[...square].reverse(), square])).toBe(100);
   expect(ringsArea([])).toBe(0);
+});
+
+const shifted = (dx: number, dy: number): [number, number][] =>
+  square.map(([x, y]) => [x + dx, y + dy]);
+
+test("a union of footprints counts an overlap once", () => {
+  expect(unionArea([square])).toBeCloseTo(50, 6);
+  // half of the second square lies on the first: 50 + 25
+  expect(unionArea([square, shifted(5, 0)])).toBeCloseTo(75, 6);
+  // a part on top of the other (the same ground) adds nothing
+  expect(unionArea([square, square])).toBeCloseTo(50, 6);
+  // apart, they add up; a triangle within a scanline step of exact
+  expect(unionArea([square, shifted(20, 0)])).toBeCloseTo(100, 6);
+  const triangle: [number, number][] = [
+    [0, 0],
+    [10, 0],
+    [0, 10],
+  ];
+  expect(unionArea([triangle])).toBeCloseTo(50, 1);
+  expect(unionArea([])).toBe(0);
+});
+
+test("a Building answers for its tree: union ground, base to top", () => {
+  const root = lod2Facts({
+    buildingId: "B",
+    fallbackHeight: 0,
+    footprints: [],
+    own: {},
+    resolved: {},
+  });
+  const tree = [
+    { baseZ: 100, topZ: 110, footprints: [square] },
+    // a tower on the podium
+    { baseZ: 110, topZ: 140, footprints: [shifted(5, 0)] },
+  ];
+  const facts = treeFacts(root, tree, false);
+  expect(facts.area).toBe(75);
+  expect(facts.height).toBe(40);
+  // what the survey measured for the Building itself stays
+  const surveyed = treeFacts({ ...root, height: 38.5 }, tree, true);
+  expect(surveyed.height).toBe(38.5);
+  expect(surveyed.area).toBe(75);
 });
 
 test("dates lose their clock; anything else is no date", () => {

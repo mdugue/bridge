@@ -35,7 +35,12 @@ import type {
   SmallBuildingFeature,
 } from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
-import { inheritedOsm, lod2Facts, scanFacts } from "../lib/city/object-facts";
+import {
+  inheritedOsm,
+  lod2Facts,
+  scanFacts,
+  treeFacts,
+} from "../lib/city/object-facts";
 import { recenterOffset } from "../lib/city/recenter";
 import {
   SMALL_BUILDING_SINK,
@@ -376,6 +381,32 @@ export function bakeCityMesh(
       }),
     };
   });
+
+  // A Building with parts answers for its whole tree (the inquiry card
+  // reads it): the union of the footprints, the tree's height.
+  const trees = new Map<number, number[]>();
+  objects.forEach((o, i) =>
+    trees.set(o.root, [...(trees.get(o.root) ?? []), i])
+  );
+  for (const [root, members] of trees) {
+    const facts = objects[root].facts;
+    if (members.length > 1 && facts) {
+      objects[root].facts = treeFacts(
+        facts,
+        // only what has geometry: a Building drawn by its parts has no
+        // base of its own
+        members
+          .filter((i) => minZ.has(i))
+          .map((i) => ({
+            baseZ: minZ.get(i) ?? 0,
+            topZ: maxZ.get(i) ?? 0,
+            footprints: footprintsOf[i],
+          })),
+        typeof doc.CityObjects[keys[root]].attributes?.measuredHeight ===
+          "number"
+      );
+    }
+  }
 
   const baked = { epsg, matrix, objects, offset, vertices: v };
   if (scan) {

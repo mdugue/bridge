@@ -27,7 +27,6 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "Scroll", action: "vor / zurück" },
   { key: "Alt + Scroll", action: "zoomen" },
   { key: "I", action: "Befragen (dann klicken)" },
-  { key: "Lange drücken", action: "Gebäude befragen" },
   { key: "R", action: "abreißen" },
   { key: "V", action: "Bildstil wechseln" },
   { key: "Esc", action: "immersiv beenden" },

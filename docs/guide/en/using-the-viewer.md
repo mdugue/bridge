@@ -105,11 +105,11 @@ A floating bar shows the four essential controls until you dismiss it with
 
 ## Asking a building
 
-The city itself carries no text. Ask it instead: a **long press** on a
-building (hold a finger or the mouse button still for half a second)
+The city itself carries no text. Ask it instead: on a touch screen, a
+**long press** on a building (hold a finger still for half a second)
 draws a fine pencil hatch over it and opens a paper card. *Befragen* in
 the toolbar (or `I`) switches on an ask mode in which a plain click or tap
-asks — a line top left says so. You need not hit a small house exactly:
+asks — a line top left says so; with a mouse, that is the way to ask. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
 the bottom: folded it says what the building is and where; swipe it up

@@ -112,11 +112,12 @@ mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
 ## Ein Gebäude befragen
 
 Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
-**Lange drücken** auf ein Gebäude (Finger oder Maustaste eine halbe
-Sekunde ruhig halten) legt eine feine Bleistiftschraffur darüber und
-öffnet eine Papierkarte. *Befragen* in der Werkzeugleiste (oder `I`)
+Auf einem Touchscreen legt **langes Drücken** auf ein Gebäude (den Finger
+eine halbe Sekunde ruhig halten) eine feine Bleistiftschraffur darüber
+und öffnet eine Papierkarte. *Befragen* in der Werkzeugleiste (oder `I`)
 schaltet einen Fragemodus ein, in dem schon ein einfacher Klick oder
-Tipp fragt — eine Zeile oben links sagt es. Ein kleines Haus musst du
+Tipp fragt — eine Zeile oben links sagt es; mit der Maus ist das der Weg
+zu fragen. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
 die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude

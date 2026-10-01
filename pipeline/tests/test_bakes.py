@@ -916,6 +916,8 @@ def test_address_lines_group_numbers_by_street_and_storeys_parse():
     assert levels_of('"building:levels"=>"4"') == 4
     assert levels_of('"building:levels"=>"2,5"') == 2
     assert levels_of('"building:levels"=>"many"') is None
+    assert levels_of('"building:levels"=>"inf"') is None
+    assert levels_of('"building:levels"=>"nan"') is None
     assert levels_of(None) is None
 
 

@@ -92,6 +92,87 @@ export function ringsArea(rings: readonly (readonly [number, number][])[]) {
 }
 
 /**
+ * Area (m²) covered by any of the rings — overlapping parts counted once.
+ * Scanlines every `step` m (sampled at their middles): each ring's filled
+ * spans on the line (even-odd), merged across rings. Exact along x; the
+ * error across y is far below the survey's own (a 5 cm step on a 20 m
+ * house is under 0.1 %).
+ */
+export function unionArea(
+  rings: readonly (readonly [number, number][])[],
+  step = 0.05
+): number {
+  let y0 = Number.POSITIVE_INFINITY;
+  let y1 = Number.NEGATIVE_INFINITY;
+  for (const ring of rings) {
+    for (const [, y] of ring) {
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+  }
+  let area = 0;
+  const spans: [number, number][] = [];
+  const xs: number[] = [];
+  for (let y = y0 + step / 2; y < y1; y += step) {
+    spans.length = 0;
+    for (const ring of rings) {
+      xs.length = 0;
+      for (let i = 0; i < ring.length; i++) {
+        const [ax, ay] = ring[i];
+        const [bx, by] = ring[(i + 1) % ring.length];
+        if (ay > y !== by > y) {
+          xs.push(ax + ((y - ay) * (bx - ax)) / (by - ay));
+        }
+      }
+      xs.sort((a, b) => a - b);
+      for (let i = 0; i + 1 < xs.length; i += 2) {
+        spans.push([xs[i], xs[i + 1]]);
+      }
+    }
+    spans.sort((a, b) => a[0] - b[0]);
+    let end = Number.NEGATIVE_INFINITY;
+    for (const [from, to] of spans) {
+      if (to > end) {
+        area += (to - Math.max(from, end)) * step;
+        end = to;
+      }
+    }
+  }
+  return area;
+}
+
+/**
+ * A Building's facts once its whole tree is known (the bake side): its
+ * ground area is the union of every footprint in the tree — parts that
+ * overlap or stand on one another count once — and, unless the survey
+ * measured the Building itself (`surveyed`), its height runs from the
+ * tree's lowest base to its highest top (a tower on a podium is the
+ * tower's top above the podium's base, as `measuredHeight` is defined).
+ */
+export function treeFacts(
+  root: ObjectFacts,
+  tree: readonly {
+    baseZ: number;
+    footprints: readonly (readonly [number, number][])[];
+    topZ: number;
+  }[],
+  surveyed: boolean
+): ObjectFacts {
+  if (tree.length === 0) {
+    return root;
+  }
+  const rings = tree.flatMap((o) => o.footprints);
+  const area = rings.length > 0 ? unionArea(rings) : 0;
+  const base = Math.min(...tree.map((o) => o.baseZ));
+  const top = Math.max(...tree.map((o) => o.topZ));
+  return {
+    ...root,
+    area: area > 0 ? round(area, 10) : root.area,
+    height: surveyed || !(top > base) ? root.height : round(top - base, 100),
+  };
+}
+
+/**
  * The facts of one LoD2 object. `own` is its CityJSON attribute bag,
  * `resolved` the bag through its root Building (`inheritedAttributes`: a
  * part takes its use from the Building), `osm` what OSM adds for it or its

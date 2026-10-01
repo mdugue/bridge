@@ -151,24 +151,32 @@ function osmSource(provenance: SiteProvenance | null, what: string[]): string {
     .join(" · ");
 }
 
-/** The facts of a building tree, merged: the picked part's roof, the
- *  tree's highest part, the ground of all its parts. */
-function treeFacts(inquiry: Inquiry) {
+/**
+ * The facts of a building tree, merged: the picked part's roof; height and
+ * ground from the Building itself, which the bake gives its whole tree's
+ * (the union of the footprints, base to top: lib/city/object-facts.ts
+ * `treeFacts`), else the highest part and the parts' sum.
+ */
+function mergedFacts(inquiry: Inquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);
   const pick = inquiry.picked.facts;
+  const building = all.find((o) => o.building)?.facts;
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));
   const areas = known(facts.map((f) => f.area));
   const levels = known(facts.map((f) => f.levels));
+  const own = (v: number | undefined) => (v !== undefined && v > 0 ? v : 0);
   const flags = all.reduce((sum, o) => sum | o.flags, 0);
   return {
     address: distinct([pick.addr, ...facts.map((f) => f.addr)]).join(" · "),
     created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
     functionCode:
       pick.function || distinct(facts.map((f) => f.function))[0] || "",
-    height: heights.length > 0 ? Math.max(...heights) : NO_FACT,
-    area: areas.reduce((s, a) => s + a, 0),
+    height:
+      own(building?.height) ||
+      (heights.length > 0 ? Math.max(...heights) : NO_FACT),
+    area: own(building?.area) || areas.reduce((s, a) => s + a, 0),
     levels: levels.length > 0 ? Math.max(...levels) : NO_FACT,
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
@@ -183,7 +191,7 @@ function treeFacts(inquiry: Inquiry) {
  * absence needs saying.
  */
 function cardFacts(
-  t: ReturnType<typeof treeFacts>,
+  t: ReturnType<typeof mergedFacts>,
   pick: InquiryObject,
   scan: boolean,
   use: string
@@ -212,7 +220,7 @@ export function inquiryCard(
 ): InquiryCard {
   const pick = inquiry.picked;
   const scan = pick.source === OBJECT_SOURCE_SCAN;
-  const t = treeFacts(inquiry);
+  const t = mergedFacts(inquiry);
   const use = functionLabel(t.functionCode);
   const kind = scan ? "Kleinbau" : "Gebäude";
   const title = t.name || use || kind;
