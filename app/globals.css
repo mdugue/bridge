@@ -41,10 +41,6 @@
   --color-card: var(--card);
   --color-hud: var(--hud);
   --color-hud-foreground: var(--hud-foreground);
-  --color-paper: var(--paper);
-  --color-paper-ink: var(--paper-ink);
-  --color-paper-muted: var(--paper-muted);
-  --color-paper-rule: var(--paper-rule);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -76,13 +72,6 @@
      pill, the settings button and the hint bar are one surface. */
   --hud: oklch(0.195 0.011 260.66);
   --hud-foreground: oklch(0.941 0.01 252.81);
-  /* The inquiry card (ADR 0037) is a sheet of the scene's paper with ink on
-     it — the same in both themes, like the HUD: warm off-white, graphite
-     ink, a faded pencil for labels and sources, a dashed pencil rule. */
-  --paper: oklch(0.967 0.014 84);
-  --paper-ink: oklch(0.29 0.012 60);
-  --paper-muted: oklch(0.52 0.03 70);
-  --paper-rule: oklch(0.85 0.03 80);
   --hud-scrim: radial-gradient(
     ellipse at 50% 40%,
     oklch(0.25 0.015 256.8) 0%,

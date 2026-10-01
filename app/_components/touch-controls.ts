@@ -6,12 +6,12 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
  *  - two-finger pinch: move forward (spread) or back (pinch) — touch only
  *  - mouse wheel / trackpad pinch: the same; with Alt, zoom (FOV)
  *  - double-tap / double-click: travel to the tapped spot
- *  - a single tap / click: `onTap` (the inquiry mode asks what is there;
- *    the first tap of a double one fires it too)
+ *  - a single tap / click: `onTap`, with the pointer's type (a click asks
+ *    what is there; the first tap of a double one fires it too)
  *  - a long press (one finger or pen held still for LONG_PRESS_MS):
- *    `onLongPress` — asks what is there without the mode; the release after
- *    it is no tap. Not for the mouse: a desktop drag often starts with a
- *    pause, and the desktop asks by `I` and a click.
+ *    `onLongPress` — asks what is there; the release after it is no tap.
+ *    Not for the mouse: a desktop drag often starts with a pause, and the
+ *    desktop asks by a click.
  *  - pointer lock (immersive mode, opt-in via `lockPointer`): mouse motion
  *    is mouse-look; Esc exits natively. Clicks/drags are ignored meanwhile.
  * The element must have `touch-action: none` so the browser doesn't consume
@@ -23,8 +23,9 @@ export interface TouchControlsCallbacks {
   onDoubleTap: (ndcX: number, ndcY: number) => void;
   /** one finger or pen held still for LONG_PRESS_MS, in ndc */
   onLongPress?: (ndcX: number, ndcY: number) => void;
-  /** a single tap or click, in ndc (every tap, before any double) */
-  onTap?: (ndcX: number, ndcY: number) => void;
+  /** a single tap or click, in ndc (every tap, before any double), and
+   *  what made it: "mouse", "touch" or "pen" */
+  onTap?: (ndcX: number, ndcY: number, pointerType: string) => void;
   /** drag delta in CSS pixels since the last event */
   onLook: (dxPx: number, dyPx: number) => void;
   /** pointer-locked mouse motion in CSS pixels */
@@ -234,7 +235,7 @@ export function attachTouchControls(
         y: e.clientY,
       };
       const [ndcX, ndcY] = ndcOf(e.clientX, e.clientY);
-      callbacks.onTap?.(ndcX, ndcY);
+      callbacks.onTap?.(ndcX, ndcY, e.pointerType);
       if (isDoubleTap(lastTap, tap)) {
         lastTap = null;
         callbacks.onDoubleTap(ndcX, ndcY);

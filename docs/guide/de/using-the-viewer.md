@@ -40,7 +40,8 @@ lädt* oben im Bild (siehe
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
 | Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
-| `I` | *Befragen*: den Modus ein- oder ausschalten; dann ein Gebäude anklicken (immersiv: `I` fragt am Fadenkreuz) |
+| Klick auf ein Gebäude | es befragen: eine Karte sagt, was die Daten darüber wissen |
+| `I` | befragen, was unter dem Fadenkreuz steht (auch immersiv) |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | immersiven Modus verlassen |
@@ -52,8 +53,7 @@ lädt* oben im Bild (siehe
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
 | *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
 | *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln (abheben / landen) |
-| Lange auf ein Gebäude drücken | es befragen (ohne Modus) |
-| *Befragen* (Werkzeugleiste) | den Fragemodus ein- oder ausschalten; dann fragt schon ein einfaches Antippen |
+| Lange auf ein Gebäude drücken | es befragen |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
@@ -112,12 +112,11 @@ mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
 ## Ein Gebäude befragen
 
 Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
-Auf einem Touchscreen legt **langes Drücken** auf ein Gebäude (den Finger
-eine halbe Sekunde ruhig halten) eine feine Bleistiftschraffur darüber
-und öffnet eine Papierkarte. *Befragen* in der Werkzeugleiste (oder `I`)
-schaltet einen Fragemodus ein, in dem schon ein einfacher Klick oder
-Tipp fragt — eine Zeile oben links sagt es; mit der Maus ist das der Weg
-zu fragen. Ein kleines Haus musst du
+Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
+**langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
+fragt, was unter dem Fadenkreuz steht. Das Gebäude bekommt eine feine
+Bleistiftschraffur, und eine Karte öffnet sich. Ein Klick ins Leere
+schließt sie wieder. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
 die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude

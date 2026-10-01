@@ -2,7 +2,6 @@
 
 import {
   LocateFixedIcon,
-  MessageCircleQuestionMarkIcon,
   NavigationIcon,
   PlaneIcon,
   SlidersHorizontalIcon,
@@ -17,7 +16,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { cn } from "cn";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
@@ -55,7 +53,7 @@ import {
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
-import { InquiryCard, InquiryHint } from "./inquiry-card";
+import { InquiryCard } from "./inquiry-card";
 import { useLiveMode } from "./live-mode";
 import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
@@ -116,40 +114,25 @@ function SettingsToggle() {
 }
 
 /**
- * The tools the floating toolbar offers here: the inquiry mode (the I key's
- * stand-in, ADR 0037), "take me to where I am"
+ * The tools the floating toolbar offers here: "take me to where I am"
  * wherever the browser can locate the player (locate-button.tsx), live mode
  * while a compass is reporting (live-mode.ts), and on a touch screen walk/
  * fly, the F key's stand-in.
  */
 function sceneTools({
   coarse,
-  inquiring,
   live,
   locate,
   mode,
-  onInquire,
   onToggleMode,
 }: {
   coarse: boolean;
-  inquiring: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
-  onInquire: () => void;
   onToggleMode: () => void;
 }): HudTool[] {
-  const tools: HudTool[] = [
-    {
-      id: "inquire",
-      label: "Befragen",
-      icon: MessageCircleQuestionMarkIcon,
-      pressed: inquiring,
-      onClick: onInquire,
-      title:
-        "Befragen (I): auf ein Gebäude tippen — was die Daten darüber wissen",
-    },
-  ];
+  const tools: HudTool[] = [];
   if (locate.available) {
     tools.push({
       id: "locate",
@@ -196,24 +179,20 @@ function sceneTools({
 function SceneOverlays({
   coarse,
   covered,
-  inquiring,
   live,
   locate,
   mode,
   onClimb,
-  onInquire,
   onMove,
   onToggleMode,
 }: {
   coarse: boolean;
   /** the inquiry sheet covers the bottom of the screen (touch) */
   covered: boolean;
-  inquiring: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
   onClimb: (v: number) => void;
-  onInquire: () => void;
   onMove: (x: number, y: number) => void;
   onToggleMode: () => void;
 }) {
@@ -234,15 +213,7 @@ function SceneOverlays({
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
         {flying && <AltitudeStick onChange={onClimb} />}
         <HudToolbar
-          tools={sceneTools({
-            coarse,
-            inquiring,
-            live,
-            locate,
-            mode,
-            onInquire,
-            onToggleMode,
-          })}
+          tools={sceneTools({ coarse, live, locate, mode, onToggleMode })}
         />
       </div>
     </>
@@ -338,15 +309,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     });
   }, [look]);
   const [mode, setMode] = useState<MovementMode>("walk");
-  // Befragen (ADR 0037): the mode and the building last asked about.
-  const [inquiry, setInquiry] = useState<{
-    active: boolean;
-    inquiry: Inquiry | null;
-  }>({ active: false, inquiry: null });
+  // Befragen (ADR 0037): what was asked last, while its card is open.
+  const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
   const closeInquiry = useCallback(() => {
     handleRef.current?.clearInquiry();
-    setInquiry((prev) => ({ ...prev, inquiry: null }));
+    setInquiry(null);
   }, []);
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
@@ -498,9 +466,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           setMode(m);
         }
       },
-      onInquiry: (state) => {
+      onInquiry: (asked) => {
         if (!cancelled) {
-          setInquiry(state);
+          setInquiry(asked);
         }
       },
       onPose: (pose) => {
@@ -648,13 +616,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       {/* No text selection or callout over the scene: a long press asks a
           building (ADR 0037), it must not also mark the HUD's text. */}
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
-        <div
-          className={cn(
-            "absolute inset-0",
-            inquiry.active && "[&_canvas]:cursor-help"
-          )}
-          ref={mountRef}
-        />
+        <div className="absolute inset-0" ref={mountRef} />
 
         {veilUp && (
           <LoadScreen
@@ -680,7 +642,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             {/* crosshair */}
             <div
               aria-hidden
-              className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
+              className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
             />
 
             {/* The loading screen, at pill size. It retires itself once the
@@ -704,26 +666,22 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             />
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
-            {inquiry.inquiry ? (
+            {inquiry && (
               <InquiryCard
-                inquiry={inquiry.inquiry}
+                inquiry={inquiry}
                 onClose={closeInquiry}
                 provenanceUrl={provenanceUrl}
                 sheet={coarse}
               />
-            ) : (
-              inquiry.active && <InquiryHint coarse={coarse} />
             )}
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
-              covered={coarse && inquiry.inquiry !== null}
-              inquiring={inquiry.active}
+              covered={coarse && inquiry !== null}
               live={live}
               locate={locate}
               mode={mode}
               onClimb={(v) => handleRef.current?.setClimbInput(v)}
-              onInquire={() => handleRef.current?.setInquiring(!inquiry.active)}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
               onToggleMode={() =>
                 handleRef.current?.setMovementMode(

@@ -161,9 +161,10 @@ config change.
     the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
-  - the twin (ADR 0037): `inquiry-probe.ts` (the *Befragen* mode's pick
-    and the pencil-hatch mark, `I` / the toolbar) and `inquiry-card.tsx`
-    (the paper card — the only place the scene's facts become text); the
+  - the twin (ADR 0037): `inquiry-probe.ts` (what a click, a long press
+    or `I` at the crosshair asks, and the pencil-hatch mark) and
+    `inquiry-card.tsx` (the card — the only place the scene's facts become
+    text); the
     facts are `lib/city/object-facts.ts` (bake and read), the card's lines
     `lib/city/inquiry.ts`, the sources `lib/city/provenance.ts`, the AdV
     code lists `lib/city/adv-codes.ts`

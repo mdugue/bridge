@@ -344,7 +344,7 @@ function askedFlag(flags: F): F {
 /**
  * The building someone asks about (flag 4, OBJECT_FLAG_ASKED — set in the
  * packed table at runtime by the inquiry probe, ADR 0037): lifted towards
- * the card's paper (a faint paper light of its own in clayGlow, so it
+ * paper white (a faint paper light of its own in clayGlow, so it
  * reads in shade too), and drawn over with a pencil hatch. Near, the
  * strokes lie on the building — every 0.9 m, along the wall and up it (so
  * they climb the facade at 45°), straight across the roof, fwidth-constant

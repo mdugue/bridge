@@ -548,8 +548,8 @@ visual-variable codebook is in
 
 ### The twin: identity, facts and provenance (asked on demand)
 
-The scene says nothing on its own; asked (the *Befragen* mode, key `I`),
-it answers in a paper card ([ADR 0037](./adr/0037-inquiry-cards-on-demand-facts-in-the-tileset.md),
+The scene says nothing on its own; asked (a click, a long press, `I` at
+the crosshair), it answers in a card ([ADR 0037](./adr/0037-inquiry-cards-on-demand-facts-in-the-tileset.md),
 [plan 049](./plans/049-queryable-twin.md)).
 
 - **Object identity and semantics in the tileset** — CityJSON attributes →
@@ -584,7 +584,7 @@ it answers in a paper card ([ADR 0037](./adr/0037-inquiry-cards-on-demand-facts-
   source lines; fetched with the first question.
 - **The asked building** (no slider) — the picked object's building tree
   (the set demolish takes) gets flag 4 in the packed object texture at
-  runtime; the clay lifts it 40 % towards the card's paper, adds a faint
+  runtime; the clay lifts it 40 % towards paper white, adds a faint
   paper light (brighter at night) and draws a pencil hatch: near, strokes
   on the building every 0.9 m (up the facade at 45°, across the roof;
   fwidth-constant); where those would crowd closer than a few pixels, 45°
@@ -593,8 +593,9 @@ it answers in a paper card ([ADR 0037](./adr/0037-inquiry-cards-on-demand-facts-
   35 % lift) was checked headless: the wash and the lift cancelled, and
   from 100 m the building looked unchanged. Not in *Papier* (its override
   material). **Not yet judged on a real GPU.**
-- **The inquiry card** (asked by a long press, or a tap in the *Befragen*
-  mode; a tap slightly off a small house still finds it — two rings of
+- **The inquiry card** (asked by a click, a long press on touch, or `I`
+  at the crosshair — no mode since 2026-10-01; the HUD's card surface, no
+  longer a warm paper sheet; a tap slightly off a small house still finds it — two rings of
   rays vote; a bottom sheet on touch screens) — `lib/city/inquiry.ts` →
   `inquiry-card.tsx`: the
   OSM name or the ALKIS use as the title, the address, then only the facts

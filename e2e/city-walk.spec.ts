@@ -773,36 +773,31 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   });
 
   test("the inquiry card tells what the data knows, and where it comes from", async () => {
-    // Befragen (ADR 0037): the I key switches the mode; asking at the
-    // crosshair marks the building and opens the paper card with its
-    // identity, its facts and a source line per source. Before demolish,
-    // which takes a building of the same kind away.
-    await withFramesHeld(page, async () => {
-      await page.keyboard.press("i");
-      await expect(
-        page.getByText("Befragen: auf ein Gebäude klicken")
-      ).toBeVisible();
-    });
+    // Befragen (ADR 0037): a plain click asks — no mode first. It marks
+    // the building and opens the card with its identity, its facts and a
+    // source line per source; I asks again at the crosshair. Before
+    // demolish, which takes a building of the same kind away.
     await aimAtBuilding(page);
-    const inquiry = await page.evaluate(() =>
-      window.__poc?.handle?.inquireAt()
-    );
-    // The LoD2 Building's gml:id — the key every other dataset joins on.
-    expect(inquiry?.picked.facts.buildingId).toMatch(/^DESNAT/);
-    expect(inquiry?.tree.length).toBeGreaterThan(0);
+    const box = await page.locator("canvas[data-engine]").boundingBox();
     await withFramesHeld(page, async () => {
+      // the crosshair's own spot: the dot over it must not take the click
+      await page.mouse.click(
+        (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        (box?.y ?? 0) + (box?.height ?? 0) / 2
+      );
       const card = page.getByTestId("inquiry-card");
       await expect(card).toBeVisible();
-      await expect(card).toContainText(inquiry?.picked.facts.buildingId ?? "");
+      // The LoD2 Building's gml:id — the key every other dataset joins on.
+      await expect(card).toContainText(/DESNAT\w+/);
       await expect(card).toContainText("Quelle: GeoSN, dl-de/by-2-0");
       // the provenance manifest arrives with the first card: the edition
       await expect(card).toContainText(/Modell \d{4}/);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       await page.keyboard.press("i");
-      await expect(
-        page.getByText("Befragen: auf ein Gebäude klicken")
-      ).toBeHidden();
+      await expect(card).toContainText(/DESNAT\w+/);
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
     });
     expectNoErrors(errors);
   });

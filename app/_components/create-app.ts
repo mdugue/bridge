@@ -256,10 +256,10 @@ export interface CityWalkOptions {
   /** a manual look or move ended live mode (camera-pose.ts) */
   onFollowEnd?: () => void;
   /**
-   * The inquiry mode ("Befragen", ADR 0037): whether it is on, and the
-   * building last asked about (null: nothing there, or the mark cleared).
+   * What was asked last ("Befragen", ADR 0037): a click, a long press or
+   * `I` at the crosshair; null when nothing stands there.
    */
-  onInquiry?: (state: { active: boolean; inquiry: Inquiry | null }) => void;
+  onInquiry?: (inquiry: Inquiry | null) => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -302,8 +302,6 @@ export interface CityWalkHandle {
   /** The provenance manifest (lib/city/provenance.ts), when the tileset
    *  names one: the inquiry card's source lines. */
   provenanceUrl: string | null;
-  /** Switches the inquiry mode: a tap or click then asks what is there. */
-  setInquiring: (on: boolean) => void;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
   /**
@@ -978,8 +976,8 @@ async function bootApp(
   };
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
-  // Befragen (ADR 0037): a long press always asks; the I key or the
-  // toolbar turn on the mode in which a plain tap asks too.
+  // Befragen (ADR 0037): a click asks, a long press on a touch screen,
+  // and I at the crosshair — there is no mode to switch on first.
   const probe = createInquiryProbe({
     camera,
     cities: () => stream.visibleCities(),
@@ -990,25 +988,20 @@ async function bootApp(
       height: renderer.domElement.clientHeight || 1,
     }),
   });
-  let inquiring = false;
   const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
     const inquiry = probe.ask(ndc);
-    opts.onInquiry?.({ active: inquiring, inquiry });
+    opts.onInquiry?.(inquiry);
     return inquiry;
   };
-  const setInquiring = (on: boolean) => {
-    inquiring = on;
-    // Either way the open card closes, so its mark goes with it.
-    probe.clear();
-    opts.onInquiry?.({ active: on, inquiry: null });
-  };
   const canvasControls = attachTouchControls(renderer.domElement, {
-    onTap: (ndcX, ndcY) => {
-      if (inquiring) {
+    // A click asks (a drag looks, a double click glides there); a finger's
+    // tap does not — on glass a tap is too easily a missed drag.
+    onTap: (ndcX, ndcY, pointerType) => {
+      if (pointerType === "mouse") {
         inquireAt({ x: ndcX, y: ndcY });
       }
     },
-    // A long press asks without the mode (the phone's way to ask, ADR 0037).
+    // A finger or a pen asks by holding still (the phone's way, ADR 0037).
     onLongPress: (ndcX, ndcY) => {
       inquireAt({ x: ndcX, y: ndcY });
     },
@@ -1147,15 +1140,10 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
-        // Immersive (pointer lock): there is no pointer to tap with, so I
-        // asks at the crosshair. Otherwise it switches the mode.
+        // I asks at the crosshair: in pointer lock there is no pointer
+        // to click with.
         inquire: () => {
-          if (document.pointerLockElement === renderer.domElement) {
-            setInquiring(true);
-            inquireAt();
-          } else {
-            setInquiring(!inquiring);
-          }
+          inquireAt();
         },
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
@@ -1578,7 +1566,6 @@ async function bootApp(
     provenanceUrl: extras.provenance
       ? new URL(extras.provenance, tilesetUrl).href
       : null,
-    setInquiring,
     enterImmersive: canvasControls.lockPointer,
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,

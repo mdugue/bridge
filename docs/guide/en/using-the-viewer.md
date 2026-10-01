@@ -38,7 +38,8 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
-| `I` | *Befragen* ("ask"): switch the mode on or off; then click a building (immersive: `I` asks at the crosshair) |
+| Click on a building | ask it: a card says what the data knows about it |
+| `I` | ask what stands under the crosshair (immersive too) |
 | `R` | demolish the building under the crosshair |
 | `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | leave immersive mode |
@@ -50,8 +51,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
 | *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
 | *Fliegen* (toolbar) | switch between walking and flying (take off / land) |
-| Long press on a building | ask it (no mode needed) |
-| *Befragen* (toolbar) | switch the ask mode on or off; then a plain tap asks |
+| Long press on a building | ask it |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
@@ -105,11 +105,11 @@ A floating bar shows the four essential controls until you dismiss it with
 
 ## Asking a building
 
-The city itself carries no text. Ask it instead: on a touch screen, a
-**long press** on a building (hold a finger still for half a second)
-draws a fine pencil hatch over it and opens a paper card. *Befragen* in
-the toolbar (or `I`) switches on an ask mode in which a plain click or tap
-asks — a line top left says so; with a mouse, that is the way to ask. You need not hit a small house exactly:
+The city itself carries no text. Ask it instead: with a mouse, a
+**click** on a building; on a touch screen, a **long press** (hold a
+finger still for half a second); `I` asks what stands under the
+crosshair. The building gets a fine pencil hatch and a card opens; a
+click on nothing closes it again. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
 the bottom: folded it says what the building is and where; swipe it up

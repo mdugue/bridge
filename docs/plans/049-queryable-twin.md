@@ -62,7 +62,7 @@ credit, licence; per tile: the edition of LoD2, the laser scan, DGM1,
 DOM1, DOP. The LoD2 edition is split into the model year and its inputs'
 years ("Modell 2024 · Dach gemessen 2016 · Grundriss 2022").
 
-### 3. The Befragen mode and the paper card — ✅ built
+### 3. Asking and the card — ✅ built
 
 `app/_components/inquiry-probe.ts` (pick under a screen point, the ground
 in front of a building wins, the tree marked), `city-layer.ts` (`facts`,
@@ -70,11 +70,15 @@ in front of a building wins, the tree marked), `city-layer.ts` (`facts`,
 pencil hatch every 0.9 m on the building, 45° screen-space strokes every
 7 px where those crowd), `inquiry-card.tsx` (a
 non-modal `<aside>`, Esc and × close it), `lib/city/inquiry.ts` (the German
-lines). A **long press** (a finger or pen held still 450 ms,
+lines). A **click** asks (a mouse tap: no drag, a double click still
+glides there); a **long press** (a finger or pen held still 450 ms,
 `touch-controls.ts`; not the mouse, whose drags often start with a pause)
-always asks; `I` toggles a mode in which a plain tap asks too (in pointer lock
-`I` asks at the crosshair), the toolbar's *Befragen* is its touch
-stand-in. A tap off target still finds its building: when the ray under
+asks on glass, where a plain tap is too easily a missed drag; `I` asks
+at the crosshair. There is no mode: the first cut had one (`I` or the
+toolbar's *Befragen*, then a tap), and a key before every click was too
+much (maintainer, 2026-10-01). The card looks like the HUD's other cards
+(the shadcn Card's surface, ring and shadow); a warm paper sheet was
+too warm next to the pastel scene (same review). A tap off target still finds its building: when the ray under
 the finger meets nothing, two rings of rays (11 and 22 px) vote and the
 tree most of them hit wins (`chooseSample`). On touch screens the card is
 a **bottom sheet**, the shadcn Drawer (Base UI) — non-modal

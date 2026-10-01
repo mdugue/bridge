@@ -76,12 +76,14 @@ function useProvenance(url: string | null): SiteProvenance | null {
 }
 
 /**
- * The paper card of the "Befragen" mode (ADR 0037): what the data says
+ * The card of the "Befragen" mode (ADR 0037): what the data says
  * about the building someone asked, on demand only — the scene itself
  * carries no text (plan 032's lettering was removed for that reason). A
  * non-modal landmark, not a dialog: the city stays live behind it, and the
- * next tap asks the next building. Esc or the × closes it and clears the
- * pencil mark in the scene.
+ * next click asks the next building. Esc or the × closes it and clears
+ * the pencil mark in the scene. It looks like the HUD's other cards (the
+ * shadcn Card's surface, ring and a shadow): sober, so the scene keeps the
+ * colour.
  */
 export function InquiryCard({
   inquiry,
@@ -121,7 +123,7 @@ export function InquiryCard({
   return (
     <aside
       aria-labelledby="inquiry-title"
-      className="absolute top-4 left-4 z-20 w-[min(22rem,calc(100%-2rem))] rounded-sm border border-paper-rule bg-paper/95 p-4 text-paper-ink shadow-[0_10px_30px_-12px_rgba(40,30,20,0.55)] backdrop-blur-sm select-text"
+      className="absolute top-4 left-4 z-20 w-[min(22rem,calc(100%-2rem))] rounded-lg bg-card p-4 text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
       data-testid="inquiry-card"
       data-variant="card"
     >
@@ -153,8 +155,7 @@ const SHEET_SNAP_POINTS: DrawerSnapPoint[] = ["8.25rem", 0.75];
  * building stays in view above it); a swipe up — or "Angaben und Quellen"
  * — unfolds the facts, the id and the sources; a swipe down folds it, and
  * closes it from the fold. The scene's joystick and toolbar step aside
- * while it is open (city-walk.tsx). Retinted to the card's paper through
- * the popover tokens (and the grip through the muted one).
+ * while it is open (city-walk.tsx).
  */
 function InquirySheet({
   card,
@@ -184,11 +185,7 @@ function InquirySheet({
       snapPoint={snap}
       snapPoints={SHEET_SNAP_POINTS}
     >
-      <DrawerContent
-        className="[--muted:var(--paper-rule)] [--popover-foreground:var(--paper-ink)] [--popover:var(--paper)]"
-        data-testid="inquiry-card"
-        data-variant="sheet"
-      >
+      <DrawerContent data-testid="inquiry-card" data-variant="sheet">
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
           <CardHeader
             card={card}
@@ -197,7 +194,7 @@ function InquirySheet({
           />
           <button
             aria-expanded={unfolded}
-            className="mt-1 self-start text-[11px] text-paper-muted underline decoration-dotted underline-offset-2"
+            className="mt-1 self-start text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2"
             onClick={() => setSnap(SHEET_SNAP_POINTS[unfolded ? 0 : 1] ?? null)}
             type="button"
           >
@@ -215,7 +212,7 @@ function SheetClose() {
   return (
     <DrawerClose
       aria-label="Karte schließen"
-      className="-mt-1 -mr-1 rounded-full p-1.5 text-paper-muted hover:bg-paper-rule/60 hover:text-paper-ink"
+      className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
       title="Schließen"
     >
       <XIcon className="size-4" />
@@ -240,24 +237,26 @@ function CardHeader({
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium tracking-[0.14em] text-paper-muted uppercase">
+        <p className="text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
           {card.kicker}
         </p>
         <Title
           aria-live="polite"
-          className="font-heading text-lg leading-tight font-normal text-balance text-paper-ink"
+          className="font-heading text-lg leading-tight font-normal text-balance text-foreground"
           id="inquiry-title"
         >
           {card.title}
         </Title>
         {card.address && (
-          <p className="mt-0.5 text-[13px] text-paper-ink/80">{card.address}</p>
+          <p className="mt-0.5 text-[13px] text-foreground/80">
+            {card.address}
+          </p>
         )}
       </div>
       {closeSlot ?? (
         <button
           aria-label="Karte schließen"
-          className="-mt-1 -mr-1 rounded-full p-1.5 text-paper-muted hover:bg-paper-rule/60 hover:text-paper-ink"
+          className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={onClose}
           title="Schließen (Esc)"
           type="button"
@@ -283,24 +282,24 @@ function CardDetails({ card }: { card: InquiryCardModel }) {
   return (
     <>
       {card.facts.length > 0 && (
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-dashed border-paper-rule pt-3 text-[13px]">
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-border pt-3 text-[13px]">
           {card.facts.map((fact) => (
             <div className="contents" key={fact.label}>
-              <dt className="text-paper-muted">{fact.label}</dt>
+              <dt className="text-muted-foreground">{fact.label}</dt>
               <dd className="tabular-nums">{fact.value}</dd>
             </div>
           ))}
         </dl>
       )}
 
-      <div className="mt-3 flex items-center gap-2 border-t border-dashed border-paper-rule pt-2 text-[11px] text-paper-muted">
+      <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-[11px] text-muted-foreground">
         <span>Kennung</span>
-        <code className="min-w-0 flex-1 truncate font-mono text-paper-ink/80 select-all">
+        <code className="min-w-0 flex-1 truncate font-mono text-foreground/80 select-all">
           {card.id}
         </code>
         <button
           aria-label="Kennung kopieren"
-          className="rounded p-1 hover:bg-paper-rule/60 hover:text-paper-ink"
+          className="rounded p-1 hover:bg-muted hover:text-foreground"
           onClick={copy}
           title="Kennung kopieren"
           type="button"
@@ -313,25 +312,11 @@ function CardDetails({ card }: { card: InquiryCardModel }) {
         </button>
       </div>
 
-      <ul className="mt-2 space-y-1 text-[10.5px] leading-snug text-paper-muted">
+      <ul className="mt-2 space-y-1 text-[10.5px] leading-snug text-muted-foreground">
         {card.sources.map((line) => (
           <li key={line}>{line}</li>
         ))}
       </ul>
     </>
-  );
-}
-
-/** The mode's quiet reminder while no card is open. */
-export function InquiryHint({ coarse }: { coarse: boolean }) {
-  return (
-    <output
-      aria-live="polite"
-      className="pointer-events-none absolute top-4 left-4 z-20 rounded-full bg-paper/90 px-3 py-1 text-[12px] text-paper-ink shadow"
-    >
-      {coarse
-        ? "Befragen: ein Gebäude antippen"
-        : "Befragen: auf ein Gebäude klicken"}
-    </output>
   );
 }

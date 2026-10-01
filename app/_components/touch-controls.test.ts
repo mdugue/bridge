@@ -42,6 +42,7 @@ function harness() {
     pinch: [] as number[],
     doubleTap: [] as [number, number][],
     tap: [] as [number, number][],
+    tapBy: [] as string[],
     longPress: [] as [number, number][],
     wheel: [] as number[],
     zoom: [] as number[],
@@ -56,7 +57,10 @@ function harness() {
     onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
     onWheelDolly: (amount) => calls.wheel.push(amount),
     onWheelZoom: (ratio) => calls.zoom.push(ratio),
-    onTap: (x, y) => calls.tap.push([x, y]),
+    onTap: (x, y, pointerType) => {
+      calls.tap.push([x, y]);
+      calls.tapBy.push(pointerType);
+    },
     onLongPress: (x, y) => calls.longPress.push([x, y]),
   };
   // The long press's timer, fired by hand: `elapse()` runs what is due.
@@ -200,7 +204,21 @@ test("a single tap reports its spot in NDC, y up", () => {
     timeStamp: 10,
   });
   expect(calls.tap).toEqual([[0.5, 0.5]]);
+  expect(calls.tapBy).toEqual(["touch"]);
   expect(calls.doubleTap).toEqual([]);
+});
+
+test("a click is a tap that says it came from the mouse (the desktop asks by it)", () => {
+  const { fire, calls } = harness();
+  const mouse = {
+    pointerId: 1,
+    clientX: 300,
+    clientY: 200,
+    pointerType: "mouse",
+  };
+  fire("pointerdown", mouse);
+  fire("pointerup", { ...mouse, timeStamp: 10 });
+  expect(calls.tapBy).toEqual(["mouse"]);
 });
 
 test("a drag is never a tap, so it cannot start a double tap", () => {
@@ -321,7 +339,7 @@ test("a finger held still is a long press, and its release is no tap", () => {
   expect(calls.tap).toHaveLength(1);
 });
 
-test("a mouse held still is no long press: the desktop asks by I and a click", () => {
+test("a mouse held still is no long press: the desktop asks by a click", () => {
   const { fire, calls, elapse } = harness();
   fire("pointerdown", {
     pointerId: 1,
