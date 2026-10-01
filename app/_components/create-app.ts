@@ -1072,15 +1072,20 @@ async function bootApp(
     const { target, solids } = subject.thing;
     const first = solids[0];
     if (target.kind === "bridge" && first && "slab" in first) {
+      // the fine level's dressing: the coarse one carries only flows
       const rail = [...stream.dressings].find(
-        (d) => d.tile === target.tile
+        (d) => d.tile === target.tile && d.rail
       )?.rail;
       return { positions: bridgeShape(rail, first.slab), reach: 0 };
     }
     if (target.kind === "traffic") {
-      // the section as the layer draws it, grown with the hour
+      // the section as the layer draws it, grown with the hour — on the
+      // level that answered: a tile's fine and coarse terrain each carry
+      // the flows, and the hidden one hangs outside the scene
       const flow = trafficMesh(
-        [...stream.dressings].find((d) => d.tile === target.tile)?.traffic
+        stream
+          .visibleDressings()
+          .find((d) => d.tile === target.tile && d.traffic)?.traffic
       );
       return flow
         ? { flow, triangles: trafficTriangles(flow, target.index) }

@@ -831,8 +831,9 @@ the crosshair), it answers in a card ([ADR 0041](./adr/0041-inquiry-cards-on-dem
   item.
 - **Asking the traffic layers** — while a data layer shows, its flows
   and counters answer like the rest. A counted section is met on its
-  drawn glass bodies (`traffic-ask.ts`; the bodies' BVH built on the
-  first question that reaches them), the vertex the ray meets names its
+  drawn glass bodies, on whichever terrain level shows them
+  (`traffic-ask.ts`; the bodies' BVH built on the first question that
+  reaches them), the vertex the ray meets names its
   section (`userData.trafficSection`, a CPU-side table — WebGPU allows
   eight vertex buffers and the bodies use them). A counter is met on its
   columns as tall as they stand now (`bike-ask.ts`, cylinders from

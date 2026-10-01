@@ -466,18 +466,23 @@ async function buildCoarseDressing(
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
   ]);
+  const bands =
+    traffic.length > 0
+      ? buildTraffic(
+          traffic,
+          bridges,
+          { offset, heightAt: terrain.heightAt },
+          "coarse",
+          extent
+        )
+      : undefined;
+  // asked on the coarse bodies too: the tiles the fine level has not
+  // reached show only these
+  const set = trafficAskSet(bands, traffic, extras.tileId);
   return {
+    asks: set ? [set] : undefined,
     tile: extras.tileId,
-    traffic:
-      traffic.length > 0
-        ? buildTraffic(
-            traffic,
-            bridges,
-            { offset, heightAt: terrain.heightAt },
-            "coarse",
-            extent
-          )
-        : undefined,
+    traffic: bands,
   };
 }
 
