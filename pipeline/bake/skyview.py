@@ -2,12 +2,15 @@
 the sky-view factor (how much of the sky a point on the ground sees) and
 the far horizon (per direction, the elevation angle of the skyline more
 than 80 m away) — the ambient term the hemisphere light cannot know and the
-long shadows the shadow map's 110 m frustum cuts off (docs/plans/033).
+long shadows the shadow map's 110 m frustum cuts off (plan 033, docs/plans/completed.md).
 
 Height field: the DGM1 with every non-vertical LoD2 surface burned on top
-(max over its triangles, the plane of each surface evaluated per cell).
+(max over its triangles, the plane of each surface evaluated per cell) —
+where a LoD2 roof misses DOM1 and roofs.py rebuilt it, the rebuilt flat
+blocks instead, as the city mesh draws them (ADR 0036).
 Trees are left out on purpose — they cast real shadows and have their own
-shading — and so is DOM1: the bake is reproducible from the repository.
+shading — and so is DOM1 itself (it reaches the field only through the
+committed rebuilt roofs): the bake is reproducible from the repository.
 Committed neighbour tiles fill the margin; beyond the site the ground is
 open, at the mean height of the tile's edge.
 
@@ -217,8 +220,26 @@ def _burn_chunk(out, idx, col, row, c0, r0, w, count, z) -> None:
     np.maximum.at(out, (rr[inside], cc[inside]), zz[inside])
 
 
+def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:
+    """The roofs rebuilt from DOM1 (roofs.py): the ids they replace and their
+    flat tops as (n, 3, 3) triangles. Missing file → none."""
+    if not path.exists():
+        return set(), np.zeros((0, 3, 3))
+    features = json.loads(path.read_text()).get("features", [])
+    ids = {f["properties"]["id"] for f in features}
+    tris = []
+    for f in features:
+        z = f["properties"]["z"]
+        poly = shapely.geometry.shape(f["geometry"])
+        for t in shapely.get_parts(shapely.constrained_delaunay_triangles(poly)):
+            xy = np.asarray(t.exterior.coords)[:3]
+            tris.append(np.column_stack([xy, np.full(3, z)]))
+    return ids, np.asarray(tris) if tris else np.zeros((0, 3, 3))
+
+
 class Roofs:
-    """Each committed tile's LoD2 triangles, read once per run."""
+    """Each committed tile's LoD2 triangles (the rebuilt roofs in place of
+    the objects they replace), read once per run."""
 
     def __init__(self, tile: Tile, sources):
         self.tile = tile
@@ -228,7 +249,8 @@ class Roofs:
     def triangles(self, tid: str) -> np.ndarray:
         if tid not in self._tris:
             path = self.tile.data / "cityjson" / f"lod2_{tid}.city.json"
-            self._tris[tid] = surface_triangles(lod2_rings(path))
+            ids, rebuilt = measured_triangles(self.tile.data / "dlm" / f"roofs_{tid}.geojson")
+            self._tris[tid] = np.concatenate([surface_triangles(lod2_rings(path, ids)), rebuilt])
         return self._tris[tid]
 
     def burn(self, field: Field) -> np.ndarray:

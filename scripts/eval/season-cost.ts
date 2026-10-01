@@ -5,7 +5,7 @@
  * chunks) and times `setSeason` over the transitions a user can make — a
  * summer day to mid-autumn (every deciduous crown recoloured), one autumn
  * day to the next, autumn to January (every chunk switches to the bare
- * variant), January back to July. The plan's bar (docs/plans/025): a
+ * variant), January back to July. The plan's bar (plan 025, docs/plans/completed.md): a
  * recompute over 16 ms on the full site must be throttled to the end of a
  * date drag — the viewer throttles either way (SEASON_THROTTLE_MS).
  *

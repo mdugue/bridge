@@ -141,7 +141,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   shared with the buildings through `shared-rasters.ts`).
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
-  the canopy points they veto at build time).
+  the canopy points they veto at build time), `scripts/measured-roofs.ts`
+  (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
+  replaced by stepped blocks from `pipeline/bake/roofs.py`; ADR 0036).
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
   `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),
@@ -657,8 +659,8 @@ bun run bake 33412_5656_2_sn           # one tile, all steps
 bun run bake --step canopy             # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands canopy trees ndvi roof-colour osm-buildings
                                        #   rail lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside skyview soundmarks
-                                       #   lowveg cultivated small-buildings
+                                       #   markings sport tram riverside roofs skyview
+                                       #   soundmarks lowveg cultivated small-buildings
 bun run test:pipeline                  # pytest + ruff
 ```
 
@@ -667,7 +669,8 @@ runtime falls back); rail decks fall back to the DGM ramp.
 
 The later modules, one step each: `osm_buildings.py` (shops and heritage
 per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
-`riverside.py`, `skyview.py` (DGM + LoD2 only),
+`riverside.py`, `skyview.py` (DGM + LoD2, the rebuilt roofs of `roofs.py`
+in place of theirs),
 `soundmarks.py` (bell towers) and `small_buildings.py` (plan 034). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the
 neighbours through `Tile.neighbours` (the committed DGMs): markings

@@ -1014,38 +1014,77 @@ export function SceneSidebar(props: SceneSidebarProps) {
         </SceneTabs>
       </SidebarContent>
 
-      <SidebarFooter className="border-t px-4 pt-2.5 pb-3 text-[10px] text-muted-foreground leading-snug">
-        <p>{currentSite().attribution.join(" · ")}</p>
-        <div className="mt-1.5 flex items-center gap-3">
-          <Link
-            className="underline underline-offset-2 hover:text-foreground"
-            href="/wissen"
-          >
-            Wissen: Datenquellen und wie die Stadt entsteht
-          </Link>
-          {/* The one call to action in the footer, so it is a button, not a
-              second muted link. A plain link to Ko-fi, not its widget:
-              nothing loads from there until it is clicked. */}
-          <Button
-            className="ml-auto"
-            nativeButton={false}
-            render={
-              <a
-                aria-label="Unterstützen – auf Ko-fi, öffnet in neuem Tab"
-                href={SUPPORT_URL}
-                rel="noopener noreferrer"
-                target="_blank"
-                title="Auf Ko-fi unterstützen"
-              />
-            }
-            size="sm"
-            variant="outline"
-          >
-            <CoffeeIcon aria-hidden data-icon="inline-start" />
-            Unterstützen
-          </Button>
-        </div>
+      <SidebarFooter className="border-t px-4 pt-2 pb-3 text-[10px] text-muted-foreground leading-snug">
+        <SourcesFooter />
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+/**
+ * The footer folds its licence lines away: they ran to six lines and took
+ * that much from the tabs above. The short credit stays visible (every
+ * licensor and licence named once), the full lines and the way to /wissen
+ * open on demand, above the row so the trigger does not move.
+ */
+function SourcesFooter() {
+  const site = currentSite();
+  return (
+    <Collapsible>
+      <CollapsibleContent>
+        <ul className="flex flex-col gap-1 pb-2">
+          {site.attribution.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <Link
+          className="mb-2 inline-block underline underline-offset-2 hover:text-foreground"
+          href="/wissen"
+        >
+          Wissen: Datenquellen und wie die Stadt entsteht
+        </Link>
+      </CollapsibleContent>
+      <div className="flex items-center gap-3">
+        <CollapsibleTrigger className="group/sources flex min-w-0 flex-1 items-center gap-1 text-left hover:text-foreground">
+          <span className="min-w-0 flex-1">
+            {/* a licence id like "(dl-de/by-2-0)" breaks only before it */}
+            {site.credit.split(/(\([^)]*\))/).map((part, i) =>
+              i % 2 === 1 ? (
+                <span className="whitespace-nowrap" key={part}>
+                  {part}
+                </span>
+              ) : (
+                part
+              )
+            )}
+          </span>
+          <span className="sr-only">Quellen und Lizenzen</span>
+          <ChevronDownIcon
+            aria-hidden
+            className="size-3 shrink-0 rotate-180 opacity-50 transition-transform group-aria-expanded/sources:rotate-0"
+          />
+        </CollapsibleTrigger>
+        {/* The one call to action in the footer, so it is a button, not a
+            second muted link. A plain link to Ko-fi, not its widget:
+            nothing loads from there until it is clicked. */}
+        <Button
+          nativeButton={false}
+          render={
+            <a
+              aria-label="Unterstützen – auf Ko-fi, öffnet in neuem Tab"
+              href={SUPPORT_URL}
+              rel="noopener noreferrer"
+              target="_blank"
+              title="Auf Ko-fi unterstützen"
+            />
+          }
+          size="sm"
+          variant="outline"
+        >
+          <CoffeeIcon aria-hidden data-icon="inline-start" />
+          Unterstützen
+        </Button>
+      </div>
+    </Collapsible>
   );
 }

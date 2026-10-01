@@ -21,7 +21,7 @@ import { mapFadeNode } from "./map-overlay";
 import type { F, Live, V3 } from "./shader-chunks";
 
 /**
- * The data layers' glass (ADR 0036): bodies that tint and bend what lies
+ * The data layers' glass (ADR 0037): bodies that tint and bend what lies
  * behind them instead of covering it — the traffic flows, the bicycle
  * columns.
  *

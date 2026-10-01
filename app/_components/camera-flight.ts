@@ -30,6 +30,14 @@ export interface FlightTarget {
   pos: Xyz;
 }
 
+/** How a flight differs from a scenic glide. */
+export interface FlightShape {
+  /** m the path bows upward at its middle; default from the distance */
+  arc?: number;
+  /** s; default from the distance */
+  duration?: number;
+}
+
 interface ActiveFlight {
   arc: number;
   duration: number;
@@ -39,6 +47,8 @@ interface ActiveFlight {
   endQuat: Quaternion;
   /** the lift over the straight line that clears what lies beneath it */
   hull: LiftPoint[];
+  /** the player took the view: the flight moves the camera, not its aim */
+  lookFree: boolean;
   startFov: number;
   startPos: Vector3;
   startQuat: Quaternion;
@@ -47,6 +57,13 @@ interface ActiveFlight {
 export interface CameraFlight {
   cancel: () => void;
   isActive: () => boolean;
+  /** Where the active flight ends, or null when none is flying. */
+  destination: () => Xyz | null;
+  /**
+   * Hands the view back to the player while the flight carries on moving
+   * the camera (a landing that a drag looks around in).
+   */
+  releaseLook: () => void;
   /**
    * Begins gliding the camera from its current pose to `target`. With
    * `floorAt` — the lowest height the camera may pass at over world (x, z)
@@ -55,7 +72,8 @@ export interface CameraFlight {
    */
   start: (
     target: FlightTarget,
-    floorAt?: (x: number, z: number) => number
+    floorAt?: (x: number, z: number) => number,
+    shape?: FlightShape
   ) => void;
   /**
    * Advances the active flight by `dt` seconds, driving the camera. Returns
@@ -97,10 +115,19 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
 
   return {
     isActive: () => flight !== null,
+    destination: () =>
+      flight
+        ? { x: flight.endPos.x, y: flight.endPos.y, z: flight.endPos.z }
+        : null,
     cancel: () => {
       flight = null;
     },
-    start: (target, floorAt) => {
+    releaseLook: () => {
+      if (flight) {
+        flight.lookFree = true;
+      }
+    },
+    start: (target, floorAt, shape = {}) => {
       const startPos = camera.position.clone();
       const endPos = new Vector3(target.pos.x, target.pos.y, target.pos.z);
       const dist = startPos.distanceTo(endPos);
@@ -112,13 +139,16 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
         endQuat: targetQuat(endPos, target.headingDeg, target.pitchDeg),
         startFov: camera.fov,
         endFov: target.fov,
-        arc: Math.min(dist * ARC_RATIO, MAX_ARC),
-        duration: clamp(
-          BASE_DURATION + dist * SECONDS_PER_METRE,
-          MIN_DURATION,
-          MAX_DURATION
-        ),
+        arc: shape.arc ?? Math.min(dist * ARC_RATIO, MAX_ARC),
+        duration:
+          shape.duration ??
+          clamp(
+            BASE_DURATION + dist * SECONDS_PER_METRE,
+            MIN_DURATION,
+            MAX_DURATION
+          ),
         elapsed: 0,
+        lookFree: false,
       };
     },
     update: (dt) => {
@@ -138,8 +168,10 @@ export function createCameraFlight(camera: PerspectiveCamera): CameraFlight {
         hullLift(flight.hull, e)
       );
       camera.position.copy(tmpPos);
-      tmpQuat.slerpQuaternions(flight.startQuat, flight.endQuat, e);
-      camera.quaternion.copy(tmpQuat);
+      if (!flight.lookFree) {
+        tmpQuat.slerpQuaternions(flight.startQuat, flight.endQuat, e);
+        camera.quaternion.copy(tmpQuat);
+      }
       if (flight.startFov !== flight.endFov) {
         camera.fov = flight.startFov + (flight.endFov - flight.startFov) * e;
         camera.updateProjectionMatrix();

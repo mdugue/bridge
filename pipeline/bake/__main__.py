@@ -21,6 +21,7 @@ from . import (
     rail,
     riverside,
     roof_colour,
+    roofs,
     skyview,
     small_buildings,
     soundmarks,
@@ -61,7 +62,11 @@ STEPS = {
     "riverside": riverside.run,
     # The city's counted motor traffic (its WFS, cached by the ingest).
     "traffic": traffic.run,
-    # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
+    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
+    # miss DOM1, rebuilt as stepped flat blocks (scripts/bake-city-mesh.ts).
+    "roofs": roofs.run,
+    # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
+    # factor and far horizon.
     "skyview": skyview.run,
     # OSM churches + the committed LoD2/DGM: the bell towers the hidden
     # soundscape strikes the hour from (plan 035).

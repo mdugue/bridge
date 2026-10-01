@@ -70,6 +70,7 @@ export const DRESDEN: Site = {
     "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0; weitere Bäume © OpenStreetMap-Mitwirkende (ODbL)",
     "Verkehrsmengen und Radzählstellen: Landeshauptstadt Dresden, dl-de/by-2-0 · Straßenbahn-Fahrplan: DELFI e.V. via gtfs.de, CC BY 4.0",
   ],
+  credit: "GeoSN, Stadt Dresden (dl-de/by-2-0) · © OpenStreetMap (ODbL)",
   spawn: "altstadt",
   viewpoints: [
     // The start: low over the Elbe just west of the Carolabrücke, the whole

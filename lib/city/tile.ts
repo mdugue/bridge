@@ -25,15 +25,18 @@ export function cityJsonFile(tile: string): string {
 }
 
 /** The committed inputs of the building bake (CityJSON + DOP roof LUT +
- *  the OSM facts per object + the laser scan's small structures). */
+ *  the OSM facts per object + the laser scan's small structures + the
+ *  roofs rebuilt from DOM1). */
 export function cityMeshSourceFiles(tile: string): {
   city: string;
+  measuredRoofs: string;
   osmBuild: string;
   roofColor: string;
   smallBuild: string;
 } {
   return {
     city: `data/cityjson/${cityJsonFile(tile)}`,
+    measuredRoofs: `data/dlm/roofs_${tile}.geojson`,
     osmBuild: `data/dlm/osmbuild_${tile}.json`,
     roofColor: `data/dop/roofcolor_${tile}.json`,
     smallBuild: `data/dlm/smallbuild_${tile}.geojson`,

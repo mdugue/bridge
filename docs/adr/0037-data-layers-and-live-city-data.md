@@ -1,4 +1,4 @@
-# ADR 0036: Traffic is shown as switchable data layers, and one of them is read live from the city
+# ADR 0037: Traffic is shown as switchable data layers, and one of them is read live from the city
 
 - **Status:** accepted
 - **Date:** 2026-10

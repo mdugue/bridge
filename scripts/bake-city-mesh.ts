@@ -6,6 +6,8 @@
  * OSM flags (shop, heritage; a part carries its Building's too), the
  * demolish tree and the minimap footprints, then appends the small
  * structures the laser scan saw and LoD2 lacks (`appendScanStructures`).
+ * An object whose LoD2 roof misses DOM1 wears its measured stepped blocks
+ * instead (`withMeasuredRoofs`, scripts/measured-roofs.ts).
  * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
@@ -28,7 +30,10 @@ import {
   withoutTrafficStructures,
 } from "../lib/city/city-mesh";
 import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
-import type { SmallBuildingFeature } from "../lib/city/features";
+import type {
+  MeasuredRoofFeature,
+  SmallBuildingFeature,
+} from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
 import { recenterOffset } from "../lib/city/recenter";
 import {
@@ -37,6 +42,7 @@ import {
   structureMesh,
 } from "../lib/city/small-buildings";
 import type { CityJsonDocument } from "../lib/city/types";
+import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
 
 /** RoofSurface index in the loader's fixed `defaultSemanticsColors` order. */
 const ROOF_SURFACE_TYPE = 2;
@@ -202,11 +208,75 @@ function concat(
 }
 
 /**
+ * The vertex stream with every object that has measured parts rebuilt:
+ * its LoD2 triangles dropped, its prisms appended under the same object id
+ * (so its table row, picking and demolish stay), standing on the lowest
+ * vertex of its LoD2 shell. A part id the tile does not hold is ignored.
+ */
+export function withMeasuredRoofs(
+  v: CityVertices,
+  keys: readonly string[],
+  offset: { cx: number; cy: number },
+  features: readonly MeasuredRoofFeature[]
+): CityVertices {
+  const byId = measuredRoofsById(features);
+  const replaced = new Map<number, MeasuredRoofFeature[]>();
+  keys.forEach((id, index) => {
+    const parts = byId.get(id);
+    if (parts) {
+      replaced.set(index, parts);
+    }
+  });
+  if (replaced.size === 0) {
+    return v;
+  }
+  const base = new Map<number, number>();
+  const keep: number[] = [];
+  for (let i = 0; i < v.objectIds.length; i++) {
+    const idx = v.objectIds[i];
+    if (replaced.has(idx)) {
+      const z = v.positions[i * 3 + 2];
+      base.set(idx, Math.min(base.get(idx) ?? z, z));
+    } else {
+      keep.push(i);
+    }
+  }
+  const positions: number[] = [];
+  const objectIds: number[] = [];
+  const isRoof: number[] = [];
+  for (const i of keep) {
+    positions.push(
+      v.positions[i * 3],
+      v.positions[i * 3 + 1],
+      v.positions[i * 3 + 2]
+    );
+    objectIds.push(v.objectIds[i]);
+    isRoof.push(v.isRoof[i]);
+  }
+  for (const [index, parts] of replaced) {
+    const z = base.get(index);
+    if (z === undefined) {
+      continue;
+    }
+    const mesh = measuredRoofMesh(parts, z, offset);
+    positions.push(...mesh.positions);
+    isRoof.push(...mesh.isRoof);
+    objectIds.push(...mesh.isRoof.map(() => index));
+  }
+  return {
+    positions: Float32Array.from(positions),
+    objectIds: Float32Array.from(objectIds),
+    isRoof: Float32Array.from(isRoof),
+  };
+}
+
+/**
  * Parses and annotates one tile. `sharedMatrix` is the spawn tile's
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
  * `osmLut` holds what OSM knows per object (shops, heritage), when baked;
- * a part carries its own flags and its root Building's.
+ * a part carries its own flags and its root Building's. `measured` are
+ * the roofs rebuilt from DOM1, when baked.
  */
 export function bakeCityMesh(
   tile: string,
@@ -214,7 +284,8 @@ export function bakeCityMesh(
   roofLut: RoofColorLut | undefined,
   sharedMatrix: Matrix4 | null,
   osmLut?: OsmBuildingLut,
-  scan?: readonly SmallBuildingFeature[]
+  scan?: readonly SmallBuildingFeature[],
+  measured?: readonly MeasuredRoofFeature[]
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
   const doc = withoutTrafficStructures(source);
@@ -232,9 +303,14 @@ export function bakeCityMesh(
   loader.load(doc);
   const matrix = loader.matrix;
   const offset = recenterOffset(matrix);
-  const v = collectVertices(loader.scene);
-
   const keys = Object.keys(doc.CityObjects);
+  const v = withMeasuredRoofs(
+    collectVertices(loader.scene),
+    keys,
+    offset,
+    measured ?? []
+  );
+
   // Per-object vertex scans: base (lowest Z), top and lowest ROOF vertex.
   const minZ = new Map<number, number>();
   const maxZ = new Map<number, number>();

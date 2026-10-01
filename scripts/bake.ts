@@ -12,9 +12,8 @@
  *                                     lamps, monuments, furniture, walls,
  *                                     stairs, surface, edges, markings,
  *                                     sport, tram, riverside, traffic,
- *                                     skyview,
- *                                     soundmarks, lowveg, cultivated,
- *                                     small-buildings)
+ *                                     roofs, skyview, soundmarks, lowveg,
+ *                                     cultivated, small-buildings)
  *   bun run bake --step transit       only the site-wide timetable trams
  *                                     (pipeline/bake/transit.py; `all` runs
  *                                     it last, once for the site)
@@ -27,7 +26,8 @@
  * lamps and street furniture are gated on it; the bridges (rail) before the
  * furniture and trams; the hedges and scan trees late (they are
  * thinned against the canopy and the cadastre), then the orchards (against
- * those trees) and the small structures. Several steps read the neighbours'
+ * those trees) and the small structures; the roofs rebuilt from DOM1
+ * before the sky view, which burns them. Several steps read the neighbours'
  * files across a seam, so run a step for every tile. Then
  * `bun scripts/prepare-data.ts` turns data/ into the tileset.
  */

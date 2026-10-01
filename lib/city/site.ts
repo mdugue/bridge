@@ -89,8 +89,12 @@ export interface TileCell {
 }
 
 export interface Site {
-  /** credit lines the HUD footer shows (licence terms of the sources) */
+  /** credit lines the HUD footer shows on demand (licence terms of the
+   *  sources, one per line) */
   attribution: string[];
+  /** the short credit the HUD footer always shows: every licensor and
+   *  licence named once, the full lines folded behind it */
+  credit: string;
   /** ETRS89 / UTM: 25832 (zone 32) or 25833 (zone 33) */
   epsg: 25832 | 25833;
   /** where the sun is computed when the tiles cannot be reprojected */

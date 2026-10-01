@@ -41,6 +41,7 @@ function harness() {
     pinch: [] as number[],
     doubleTap: [] as [number, number][],
     wheel: [] as number[],
+    zoom: [] as number[],
   };
   const callbacks: TouchControlsCallbacks = {
     onLook: (dx, dy) => calls.look.push([dx, dy]),
@@ -50,7 +51,8 @@ function harness() {
     },
     onPinch: (ratio) => calls.pinch.push(ratio),
     onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
-    onWheel: (ratio) => calls.wheel.push(ratio),
+    onWheelDolly: (amount) => calls.wheel.push(amount),
+    onWheelZoom: (ratio) => calls.zoom.push(ratio),
   };
   const { detach } = attachTouchControls(element, callbacks);
   const fire = (type: string, e: FiredPointer) =>
@@ -68,10 +70,15 @@ function harness() {
       movementX,
       movementY,
     } as unknown as PointerEvent);
-  const wheel = (deltaY: number) => {
+  const wheel = (
+    deltaY: number,
+    mods: { altKey?: boolean; ctrlKey?: boolean; deltaMode?: number } = {}
+  ) => {
     let prevented = false;
     handlers.get("wheel")?.({
       deltaY,
+      deltaMode: 0,
+      ...mods,
       preventDefault: () => {
         prevented = true;
       },
@@ -159,13 +166,31 @@ test("a drag is never a tap, so it cannot start a double tap", () => {
   expect(calls.doubleTap).toEqual([]);
 });
 
-test("a wheel notch is one zoom step, up = in, and the page never scrolls", () => {
+test("the wheel moves like a pinch: up = forward, proportional, capped, and the page never scrolls", () => {
   const { wheel, calls } = harness();
   expect(wheel(-100)).toBe(true);
   expect(wheel(100)).toBe(true);
   expect(calls.wheel).toHaveLength(2);
-  expect(calls.wheel[0]).toBeGreaterThan(1);
-  expect(calls.wheel[1]).toBeCloseTo(1 / calls.wheel[0], 10);
+  expect(calls.wheel[0]).toBeGreaterThan(0);
+  expect(calls.wheel[1]).toBeCloseTo(-calls.wheel[0], 10);
+  // Three lines are 48 px: about half a 100 px notch.
+  wheel(-3, { deltaMode: 1 });
+  expect(calls.wheel[2]).toBeCloseTo(calls.wheel[0] * 0.48, 10);
+  // A trackpad pinch (ctrlKey) reacts to its small deltas; a fling is capped.
+  wheel(-10, { ctrlKey: true });
+  expect(calls.wheel[3]).toBeGreaterThan(calls.wheel[0] / 2);
+  wheel(-100_000);
+  expect(calls.wheel[4]).toBe(0.5);
+  expect(calls.zoom).toEqual([]);
+});
+
+test("Alt + wheel is one zoom step, up = in", () => {
+  const { wheel, calls } = harness();
+  wheel(-100, { altKey: true });
+  wheel(100, { altKey: true });
+  expect(calls.wheel).toEqual([]);
+  expect(calls.zoom[0]).toBeGreaterThan(1);
+  expect(calls.zoom[1]).toBeCloseTo(1 / calls.zoom[0], 10);
 });
 
 test("pointer lock turns mouse motion into mouse-look and silences grab-look", () => {

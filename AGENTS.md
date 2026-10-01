@@ -134,7 +134,7 @@ config change.
     lines) and `map-overlay.ts` (fades the ferry lines in with height,
     widens the data layers from the air), the data layers
     (`lib/city/data-layers.ts`, switched in the HUD, all off at start —
-    ADR 0036): `traffic-layer.ts` (the counted motor traffic as flowing
+    ADR 0037): `traffic-layer.ts` (the counted motor traffic as flowing
     glass bodies, per tile), `data-overlays.ts` (the site-wide ones:
     `bike-layer.ts`, the city's bicycle counters read live as glass
     columns, and `tram-cars.ts`, the trams by timetable with their light
@@ -209,6 +209,10 @@ config change.
   `lowveg.py` (+ `lsc.py`, the laser scan's rasters), `small_buildings.py`
   (the sheds and garden houses LoD2 lacks, appended to the city mesh),
   `ndvi.py`, `roof_colour.py`,
+  `roofs.py` (a LoD2 roof that misses DOM1 — the free-form roofs of
+  complex buildings, the 3 m placeholders of new ones — rebuilt as stepped
+  flat blocks the build puts in its place, `scripts/measured-roofs.ts`;
+  ADR 0036),
   `lamps.py`, `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`,
   `rail.py` + `bridge.py` (the deck and superstructure measured in DOM1,
   the fairway clearance, Wikidata), `surface.py`, `edges.py`, `sport.py`,
