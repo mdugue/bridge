@@ -427,6 +427,36 @@ exactly (`rmStripes`), and along-street periods divide 165 m.
 (`cultivated.py`) in jittered-Voronoi plots — no colony in the fifteen tiles
 maps its parcels, so keep it faint.
 
+## Parts meet the ground (ADR 0035)
+
+The DGM1 rounds every real step into a 1–2 m ramp, so whatever stands on
+the ground meets an edge that is not where its own is. Five layers got it
+wrong at once (2026-09-30: the kerb's second step on the pavement, a quay
+wall's jagged cap, bridge decks ending in the air, stairs in a trench, tram
+beds decided per whole chain). The rules, in `lib/city/ground-join.ts`:
+
+- **feet under** by a `SINK` row (band 5 cm, kerb 6, box/patch 20,
+  planted/relief 25, wall 40, stair 60) — pick a row, don't add a number;
+- **edges meet the ground**: `meetGround` (end the top at the ground's
+  level, never below a floor such as the road), `reachLevel` (run on until
+  the ground comes up to a flat or falling level: a cap, an approach ramp);
+- **per-sample decisions smoothed along the part** (`farthestNear`; in the
+  Python bakes a window majority + a minimum run, `tram.py`
+  `smooth_beds`/`absorb_short`) — never one decision per whole line, never
+  raw per sample (a sawtooth);
+- **report the joins**: a builder returns `joins` (`foot` must reach the
+  ground, `edge` must not stand > 5 cm above it), every metre along each
+  span via `joinsAlong`. Baked parts are listed in
+  `scripts/ground-joins.ts` `JOIN_PARTS`; its test holds each part's
+  share of misses to a budget on the spawn tile. `bun
+  scripts/ground-joins.ts [tile]` prints the shares and the worst places —
+  render those, obliquely.
+
+Before shipping a part that stands on the ground, answer in its doc
+comment: what happens where the ground beside it is **higher** than the
+part (a bank: Wange, cap run-on), and where it is **lower** (a raised
+flight, a deck end: dig the DGM's shoulder down, land a ramp)?
+
 ## Terrain seams
 
 Vertices sit at pixel centres, so a tile stops half a pixel short of its bounds;

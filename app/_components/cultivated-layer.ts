@@ -1,3 +1,4 @@
+import { SINK } from "@/lib/city/ground-join";
 import {
   BoxGeometry,
   Color,
@@ -302,7 +303,7 @@ export function colonyGarden(
 // --- vineyards --------------------------------------------------------------------
 
 /** vine boxes are sunk this far so the terrain's facets never show a gap */
-const SINK_M = 0.2;
+const SINK_M = SINK.planted;
 const OVERLAP_M = 0.3;
 
 interface VineInstance {

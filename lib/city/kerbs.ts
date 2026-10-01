@@ -16,6 +16,13 @@
  * lies a few centimetres above the road there, not at the kerb's top, and
  * every kerb showed an edge toward the pavement as well as the road.
  */
+import {
+  followGround,
+  type JoinPoint,
+  joinsAlong,
+  meetGround,
+  SINK,
+} from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
 
@@ -25,16 +32,21 @@ export const KERB_HEIGHT = 0.12; // m above the road
 export const KERB_WIDTH = 0.24; // m, face to back
 const SAMPLE_M = 2.5; // densify to this spacing (m) so the foot follows the ground
 const PROBE_M = 0.4; // read the ground this far out on either side (m)
-const SINK_M = 0.06; // the foot reaches this far below the ground (m)
+const SINK_M = SINK.kerb; // the foot reaches this far below the ground
 const LIFT_M = 0.01; // the back's top this far above the pavement (m): no z-fight
 
 export interface KerbGeometryData {
+  /** where the stones meet the ground (ADR 0035): both feet, and the back
+   *  edge of the top, which meets the pavement */
+  joins: JoinPoint[];
   normals: number[];
   /** world frame (x, elevation, z), recentered */
   positions: number[];
 }
 
 interface KerbCol {
+  /** the face's and the back's EPSG points */
+  at: { back: Point2; face: Point2 };
   back: { x: number; z: number };
   backFoot: number;
   face: { x: number; z: number };
@@ -69,14 +81,18 @@ function kerbCol(
   const n = epsgToWorld(x + rx, y + ry, offset);
   const top = Math.max(road + KERB_HEIGHT, walk + LIFT_M);
   return {
+    at: { face: [x, y], back: [bx, by] },
     face,
     back,
     n: { x: n.x - face.x, z: n.z - face.z },
-    faceFoot: road - SINK_M,
+    // the feet reach the lower of the ground under them and beside them: a
+    // gutter or a verge dips below the road a few decimetres out
+    faceFoot: Math.min(road, g) - SINK_M,
     backFoot: walk - SINK_M,
     top,
-    // never below the road (a pavement lower than the road keeps a step)
-    backTop: Math.min(top, Math.max(walk + LIFT_M, road + LIFT_M)),
+    // on the pavement's level, a lower one too (a verge, a bank down): the
+    // top then falls further rather than stand a step on it
+    backTop: meetGround(top, walk, { lift: LIFT_M }),
   };
 }
 
@@ -122,6 +138,29 @@ function pushSpan(pos: number[], nrm: number[], a: KerbCol, b: KerbCol): void {
   pushTri(pos, nrm, nb, ba0, ba1, bb1);
 }
 
+/** A span's joins between two columns: its feet on either side, its
+ *  top's back edge, which meets the pavement. */
+function kerbJoins(a: KerbCol, b: KerbCol): JoinPoint[] {
+  const end = (c: KerbCol, side: "back" | "face", z: number) => ({
+    x: c.at[side][0],
+    y: c.at[side][1],
+    z,
+  });
+  return [
+    ...joinsAlong(
+      "foot",
+      end(a, "face", a.faceFoot),
+      end(b, "face", b.faceFoot)
+    ),
+    ...joinsAlong(
+      "foot",
+      end(a, "back", a.backFoot),
+      end(b, "back", b.backFoot)
+    ),
+    ...joinsAlong("edge", end(a, "back", a.backTop), end(b, "back", b.backTop)),
+  ];
+}
+
 /** Unit direction toward the road (left of the line) at each point. */
 function towardRoad(pts: Point2[]): Point2[] {
   return pts.map((_, i) => {
@@ -143,11 +182,12 @@ export function kerbGeometry(
 ): KerbGeometryData | null {
   const positions: number[] = [];
   const normals: number[] = [];
+  const joins: JoinPoint[] = [];
   for (const line of lines) {
     if (line.length < 2) {
       continue;
     }
-    const pts = subdividePolyline(line, SAMPLE_M);
+    const pts = followGround(subdividePolyline(line, SAMPLE_M), heightAt);
     const dirs = towardRoad(pts);
     const cols = pts.map((p, i) => kerbCol(p, dirs[i], heightAt, offset));
     for (let i = 0; i < cols.length - 1; i++) {
@@ -155,8 +195,9 @@ export function kerbGeometry(
       const b = cols[i + 1];
       if (a && b) {
         pushSpan(positions, normals, a, b);
+        joins.push(...kerbJoins(a, b));
       }
     }
   }
-  return positions.length > 0 ? { positions, normals } : null;
+  return positions.length > 0 ? { positions, normals, joins } : null;
 }

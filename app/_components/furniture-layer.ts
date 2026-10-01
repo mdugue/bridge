@@ -1,3 +1,4 @@
+import { SINK } from "@/lib/city/ground-join";
 import {
   BufferGeometry,
   CapsuleGeometry,
@@ -140,7 +141,7 @@ const CLOCK_Y = { clock: 3.5, wallClock: 3.5 };
 const PATCH_LIFT = 0.04;
 const SAND_LIFT = 0.06;
 /** The slab's edge reaches this far below its top, so no slope shows under it. */
-const PATCH_SKIRT = 0.2;
+const PATCH_SKIRT = SINK.patch;
 /** Ring vertices this far apart at most, each seated on the ground (m). */
 const PATCH_STEP = 2;
 

@@ -195,7 +195,7 @@ export interface TerrainFeatures {
  * below its treads (lib/city/stairs.ts), `stairMargin` deeper for a mesh
  * that only approximates the grid.
  */
-function shapeDgm(
+export function shapeDgm(
   dgm: Dgm,
   walls: WallLine[],
   features: TerrainFeatures,

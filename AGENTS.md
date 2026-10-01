@@ -50,6 +50,7 @@ bun test           # unit tests in lib/, app/_components/ and scripts/
 bun run bake       # offline bakes (pipeline/, Python via uv): raw → data/
                    # [tile] [--ingest] [--step X]; --ingest downloads first
 bun run test:pipeline   # pytest + ruff for pipeline/
+bun scripts/ground-joins.ts   # where the baked parts miss the ground (ADR 0035)
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
                    # (Bun.WebView + Chrome; commit the SVGs with the change)
 bun test:e2e       # playwright (e2e/) against a production build
@@ -171,7 +172,9 @@ config change.
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
   policy, the look table + store, the Snapshot codec, `ground.ts` (the
   site's ground: terrain heights, the floor, rays — one owner for the pose,
-  focus, shadow fit and soundscape), `boot-phases.ts` (the load after the
+  focus, shadow fit and soundscape), `ground-join.ts` (how a part meets
+  the ground: foot depths, edges, the join contract — ADR 0035),
+  `boot-phases.ts` (the load after the
   first frame as a pure state machine), `terrain-tin.ts`
   (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
   the measured step), `fences.ts` (fence panels and gate gaps),
@@ -526,6 +529,22 @@ StrictMode remount. The e2e hook distinguishes `__poc.firstFrame` from
 `__poc.ready`; the lite profile streams `tileset-spawn.json` (the spawn tile
 only), and `?scene=lite&block=1` streams the whole site in lite to exercise
 the streaming headless.
+
+**Parts meet the ground by one set of rules** (ADR 0035,
+`lib/city/ground-join.ts`). The DGM1 rounds every step — kerb, quay wall,
+flight of steps, a bridge's abutment — into a 1–2 m ramp, so anything
+standing on it meets a ground whose edge is not where its own is. Feet go
+under by a row of `SINK` (never a new constant); a top's edge on the ground
+side ends at the ground (`meetGround`) or runs on until the ground reaches
+it (`reachLevel`); per-sample decisions are smoothed along the part
+(`farthestNear`; in the bakes a majority over a window, no run shorter than
+a minimum), never taken once per whole line. A builder returns `joins`
+(feet and edges, every metre along each span), and
+`scripts/ground-joins.test.ts` holds the baked parts' misses to budgets
+over the committed tiles — list a new baked part in `JOIN_PARTS`, test a
+runtime one with `checkJoins`, and say in its doc comment what happens
+where the ground beside it is higher and where it is lower.
+`bun scripts/ground-joins.ts` prints the shares and the worst places.
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.

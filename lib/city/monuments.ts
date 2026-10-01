@@ -5,6 +5,7 @@
  * relief, and the markers of monuments nothing measured. Plain numbers in,
  * plain numbers out. No THREE, no DOM.
  */
+import { SINK } from "./ground-join";
 import type { FountainStyle, MonumentKind, ReliefGrid } from "./features";
 import type { Point2 } from "./polyline";
 
@@ -155,7 +156,7 @@ export const RELIEF_SUB = 4;
 /** Below this the smoothed relief sinks under the ground (m), so its fringe
  *  does not lie on the paving as a film. */
 const RELIEF_FLOOR = 0.08;
-const RELIEF_SINK = -0.25;
+const RELIEF_SINK = -SINK.relief;
 
 export interface ReliefSurface {
   /** heights above ground (m) at the samples, row-major from the north */
