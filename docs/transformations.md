@@ -36,7 +36,10 @@ visual-variable codebook is in
   ribbons baked beside it snap to the step the ground measures
   (`lib/city/wall-snap.ts` via `lib/city/walls.ts`: steepest metre within
   6 m of the OSM line, running medians along the wall, face just in front of
-  the ramp foot + a coping cap to the crest). The coarse 512² level keeps
+  the ramp foot + a coping cap back to where the ground reaches its level,
+  per column — a cap ending at the median crest left the DGM's steep ramp
+  showing behind it as a row of jagged facets wherever the ramp ran wider).
+  The coarse 512² level keeps
   the grid and the conflation; a DGM with NoData keeps the grid for its fine
   level too ([ADR 0030](./adr/0030-terrain-tin-and-wall-snap.md)).
   **In the 3D Tiles bake** (2026-09-25): 0.30 / 0.39 / 0.49 / 0.31 M
@@ -164,8 +167,10 @@ visual-variable codebook is in
   the **kerb lines** (`kerbs_<tile>.geojson`, road on the left) where the
   far side is ground (not water or railway). The terrain bake stands a
   **kerb stone** on them in the fine terrain glTF (`lib/city/kerbs.ts`,
-  12 cm above the road, 24 cm wide, its top level at the higher side, face
-  toward the road; `kerb-layer.ts`, casts shadow) — the DGM1 smooths the
+  12 cm above the road, 24 cm wide, face toward the road, its top falling
+  to the pavement's level where the stone ends — a stone level across stood
+  a second step on the pavement side, whose smoothed DGM lies only a few
+  centimetres above the road; `kerb-layer.ts`, casts shadow) — the DGM1 smooths the
   step away and the 2 m grid cannot hold it. In the fragment pass
   (`ground-detail.ts`) the distance draws a pale stone band on the
   pavement side and a darker gutter on the road side (the coarse level's
@@ -1374,6 +1379,21 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   bridges, which lack area polygons; the DGM ramp alone — it put the
   Waldschlößchenbrücke 3 m low and rail decks up to 6 m high; per-tile
   ground — seam bridges drawn twice at two heights; see 🗃️.)*
+  **Approaches** (*Rampen*, 2026-09-30): the deck's ends are measured in
+  DOM1, the terrain is the bare-earth DGM, which runs on under an approach
+  as the ground it was built on — every deck end stood as a slab edge a
+  metre or more above the road running up to it. So from each abutment
+  end (the ring's edges across the axis) that stands ≥ 0.5 m above the
+  ground, a ramp runs out at the kind's grade (road 8 %, path 10 %, rail
+  3 %) to where it meets the ground, column by column across the end (≤ 2 m
+  apart), within 40 m (`lib/city/bridge.ts` `approachLanding`,
+  `rail-layer.ts` `approaches`): the deck's own top colour, the fascia's
+  sides and soffit 1.1 m deep. None where the deck runs on onto another
+  deck, where most of the end finds no ground in reach (a deck over a
+  street, a viaduct onto an embankment the DGM has), or where the end is
+  flush. The approaches join the lift table: a rail rides a rail deck's,
+  a tram track OSM does not put on the bridge rides one that stands less
+  than 1.5 m over the ground under it (not a street passing below).
 - **Bridge superstructure** (*Oberbau*: truss, pylons, steel arch) — **DOM1**
   above the deck line, per half of the cross-section (the outline grown by
   3 m): the highest surface per station, a morphological **opening** (7 m:
@@ -1462,18 +1482,21 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   (321 points on the four first tiles, **167 of them within 15 m of a tram track** — the rest are
   the railway's) + the OSM building outlines. `pipeline/bake/tram.py` →
   `tram_<tile>.geojson`: each track (fragments chained at 1 m, cut at the
-  tile edge) with its **bed** — `street` when ≥ 70 % of its 2 m samples lie
-  on pavement in the committed class raster (road, and since 2026-09-30
-  equally a pedestrian zone or square — class `path` — or built-up: a
-  track through a paved square is set into it too; with the road class
-  alone the trams across Munich's pedestrian squares got a gravel bed,
-  which read as broken — its ballast fell from ≈ 13 km to ≈ 3 km, and
-  Dresden's from 23.8 to 11.6 km: Prager Straße, the Altmarkt),
-  `grass` (*Rasengleis*)
-  when most lie on the meadow class or NDVI > 0.3, else `ballast` — and the
-  OSM `bridge`/`layer` (per-tile numbers in the table below). A way in a
-  tunnel or tagged `location=underground` (`osm.in_tunnel`) is skipped: a
-  tram tunnel is not drawn at street level; at the Albertplatz
+  tile edge) with its **bed**, read every 2 m — `street` on the road class
+  of the committed class raster and on the paved squares and yards (the
+  built-up and path classes), `grass` (*Rasengleis*) on the meadow class or
+  NDVI > 0.3, else `ballast`, a majority over 20 m, no stretch shorter than
+  20 m — the track cut where it changes; and the
+  OSM `bridge`/`layer` (per-tile numbers in the table below). *(Until
+  2026-09-30 one bed per whole chain: `street` only when ≥ 70 % of it lay on
+  the road class, so a kilometre of street track went to ballast for a lawn
+  or a square under a third of it — the Postplatz's tracks lay half in a
+  brown ballast strip, half in the paving. 23.8 km of ballast became 3.2 km;
+  the committed files were re-cut by the same rule from their own track
+  lines, the class raster and the NDVI, without a new OSM extract — the
+  table below is the bake before that.)* A way in a tunnel or tagged
+  `location=underground` (`osm.in_tunnel`) is skipped: a tram tunnel is not
+  drawn at street level. At the Albertplatz
   (150 m round) 87 % street / 5 % grass, the Hauptstraße 100 % street — the
   plan's > 10 % STOP was not hit. The supports are decided on the tracks
   and masts within 30 m around the tile (so a seam support is the same in
@@ -1546,7 +1569,8 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   [ADR 0029](./adr/0029-static-dressing-baked-into-the-fine-terrain.md)):
   base on every tile's fine TIN (so a wall near a seam reads its
   neighbour's), top on the high shelf; an earth-retaining wall snaps to the
-  step the TIN measures (face at the ramp foot, a coping cap to the crest —
+  step the TIN measures (face at the ramp foot, a coping cap back to where
+  the ground reaches its level —
   "Terrain TIN" above), any other wall stands on the OSM line nudged
   slightly onto the low side; `wall-layer.ts` only gives it its material.
   Until then the browser built the ribbons from the GeoJSON over whichever
@@ -1668,8 +1692,18 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   flight to 12 cm below the ramp (on the fine TIN 12 + 15 cm, its tolerance) through the steps' inner corners — lifting
   it where the DGM runs below, since the player walks on the grid — and
   lowers every vertex beside it whose triangles reach under it, never
-  across a wall. The same build step writes each flight as sandstone blocks
-  — treads, darker risers, side cheeks down past the bottom landing — into
+  across a wall; beside a flight that stands above its surroundings (the
+  ground 3.5 m out below its ramp) it digs the DGM's blurred shoulder —
+  the raster rounds a raised flight's sides into a slope a metre or two
+  wide, which showed as a ragged bank beside the cheeks — down to that
+  ground, up to 2.5 m out. The same build step writes each flight as sandstone blocks
+  — treads, darker risers, side cheeks down past the bottom landing; where
+  the bank beside a flight stands ≥ 0.4 m above its treads (a flight cut
+  into a slope, read 3.2 m out on the final ground, never across a wall), a
+  *Wange* instead: a 3 m block topped at the bank's level, a 0.5 m stone
+  coping along the steps and the rest in the built-up ground's tone, over
+  the ground the burn lowered beside the flight, which had shown as a
+  ragged trench — into
   the fine terrain glTF of the tile owning its middle (a `stairs` node,
   vertex colours); `stair-layer.ts` only gives it its material.
   **Why:** the DGM1 smooths a staircase into a bank (the flight beside the

@@ -17,6 +17,7 @@ import {
   raiseTerraces,
   stairColors,
   type StairLine,
+  type StairSurround,
   stairGeometry,
   type Terrace,
 } from "../lib/city/stairs";
@@ -329,19 +330,24 @@ function worldToData(xyz: number[]): Float32Array<ArrayBuffer> {
  * The flights of stairs this tile owns (the tile owning a flight's middle
  * stands it; a flight across a seam is burned into both terrains) as one
  * mesh: treads, risers and cheeks with their stone shades as vertex colours
- * (lib/city/stairs.ts). Null when the tile owns none.
+ * (lib/city/stairs.ts). With the `surround` (the final fine ground of every
+ * tile and the walls), a side cut into a bank becomes a Wange. Null when the
+ * tile owns none.
  */
 export function stairMesh(
   stairs: StairLine[],
   offset: { cx: number; cy: number },
-  bounds: TerrainBounds
+  bounds: TerrainBounds,
+  surround?: StairSurround
 ): Omit<MeshInput, "children" | "extras" | "table" | "weld"> | null {
   const positions: number[] = [];
   const normals: number[] = [];
   const kinds: number[] = [];
   for (const stair of stairs) {
     const [x, y] = axisMiddle(stair.coords);
-    const data = ownsPoint(bounds, x, y) ? stairGeometry(stair, offset) : null;
+    const data = ownsPoint(bounds, x, y)
+      ? stairGeometry(stair, offset, surround)
+      : null;
     if (data) {
       positions.push(...data.positions);
       normals.push(...data.normals);

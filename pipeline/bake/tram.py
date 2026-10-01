@@ -3,13 +3,17 @@ and (plan 024 phase 3) the stop signs.
 
 - **Tracks**: `railway=tram` ways (OSM maps every track as its own way;
   Dresden's are all `gauge=1450`, `electrified=contact_line`), each with the
-  bed it runs in — `street` when ≥ 70 % of its 2 m samples lie on the road
-  class of the committed class raster, `grass` (Dresden's *Rasengleis*)
-  when most lie on farmland/meadow or on vegetation (NDVI > 0.3), else
-  `ballast` — and the OSM `bridge` and `layer`. Fragments with the same
-  properties are chained (1 m snap, as rail.py does) and cut at the tile
-  edge: each tile draws its own stretch and the runtime samples the
-  cross-tile ground, so the rails meet at the seam.
+  bed it runs in and the OSM `bridge` and `layer`. The bed is read every
+  2 m from the committed class raster — `street` on the road and on the
+  paved squares and yards (the built-up and path classes: Postplatz), `grass`
+  (Dresden's *Rasengleis*) on farmland/meadow or vegetation (NDVI > 0.3),
+  else `ballast` — smoothed along the track (a majority over 20 m, no bed
+  shorter than 20 m), and the track is cut where it changes: one bed per
+  whole chain put a kilometre of street track in ballast because a lawn or
+  a square lay under a third of it. Fragments with the same properties are
+  chained (1 m snap, as rail.py does) and cut at the tile edge: each tile
+  draws its own stretch and the runtime samples the cross-tile ground, so
+  the rails meet at the seam.
 - **Supports**: the mapped `power=catenary_mast` points (each owned by one
   tile); a *span* wire from a mast across the tracks to the nearest mast on
   the other side (≤ 28 m), else an *arm* from the mast over the nearest
@@ -44,6 +48,7 @@ from collections import defaultdict
 
 import numpy as np
 import shapely
+import shapely.ops
 from PIL import Image
 
 from .common import (
@@ -61,14 +66,12 @@ from .rail import merge_lines
 
 MARGIN_M = 30.0  # tracks and masts around the tile the supports are decided on
 SAMPLE_M = 2.0
-STREET_SHARE = 0.7
-GRASS_SHARE = 0.5
 GRASS_NDVI = 0.3
 ROAD, MEADOW = 7, 1  # class ids (landcover.py CLASSES)
-# Where a track runs through pavement, it is set into it: a street, and
-# equally a pedestrian zone or a square (path, built-up). A gravel bed there
-# read as broken track (Munich's Theatinerstraße, by the Marienplatz).
-PAVED = {ROAD, 6, 4}
+PAVED = (4, 6)  # built-up (squares, yards) and path: a track there is set in paving
+BED_WINDOW_M = 20.0  # the bed is the majority of the samples this long around a point
+BED_MIN_M = 20.0  # a stretch of another bed shorter than this takes its neighbours'
+BED_ORDER = ("street", "grass", "ballast")
 SPAN_MAX_M = 28.0
 ARM_MAX_M = 10.0
 MAST_NEAR_M = 15.0  # a mast further from every tram track is the railway's
@@ -104,27 +107,82 @@ class Beds:
     def _at(self, raster: np.ndarray, x: float, y: float) -> int | None:
         return value_at(raster, self.bounds, x, y)
 
-    def bed(self, line: shapely.LineString) -> str | None:
-        """street (paved) / grass / ballast by the share of 2 m samples; None when no
-        sample lies on the tile (a way seen only through the margin)."""
-        n = max(int(line.length / SAMPLE_M), 1)
-        road = green = seen = 0
-        for i in range(n + 1):
-            p = line.interpolate(i / n, normalized=True)
-            c = self._at(self.cls, p.x, p.y)
-            if c is None:
-                continue
-            seen += 1
-            v = self._at(self.ndvi, p.x, p.y) if self.ndvi is not None else None
-            if c in PAVED:
-                road += 1
-            if c == MEADOW or (v is not None and v > GRASS_NDVI * 255):
-                green += 1
-        if seen == 0:
+    def sample_bed(self, x: float, y: float) -> str | None:
+        """The bed under one point; None off the tile."""
+        c = self._at(self.cls, x, y)
+        if c is None:
             return None
-        if road >= STREET_SHARE * seen:
+        v = self._at(self.ndvi, x, y) if self.ndvi is not None else None
+        if c == ROAD:
             return "street"
-        return "grass" if green >= GRASS_SHARE * seen else "ballast"
+        if c == MEADOW or (v is not None and v > GRASS_NDVI * 255):
+            return "grass"
+        return "street" if c in PAVED else "ballast"
+
+    def beds(self, line: shapely.LineString) -> list[tuple[shapely.LineString, str | None]]:
+        """The line cut where its bed changes: [(piece, bed)], the bed None
+        for a way seen only through the margin (no sample on the tile)."""
+        n = max(int(line.length / SAMPLE_M), 1)
+        raw = [
+            self.sample_bed(*line.interpolate(i / n, normalized=True).coords[0])
+            for i in range(n + 1)
+        ]
+        if all(b is None for b in raw):
+            return [(line, None)]
+        labels = smooth_beds(raw, max(int(BED_WINDOW_M / SAMPLE_M / 2), 1))
+        labels = absorb_short(labels, max(int(BED_MIN_M / SAMPLE_M), 1))
+        out = []
+        i = 0
+        while i < len(labels):
+            j = i
+            while j + 1 < len(labels) and labels[j + 1] == labels[i]:
+                j += 1
+            # cut halfway between the last sample of one bed and the first of the next
+            a = 0.0 if i == 0 else (i - 0.5) / n
+            b = 1.0 if j == len(labels) - 1 else (j + 0.5) / n
+            piece = shapely.ops.substring(line, a, b, normalized=True)
+            if piece.geom_type == "LineString" and piece.length > 0:
+                out.append((piece, labels[i]))
+            i = j + 1
+        return out
+
+
+def smooth_beds(raw: list[str | None], half: int) -> list[str]:
+    """The majority bed within `half` samples either side of each (ties in
+    BED_ORDER), ignoring samples off the tile."""
+    out = []
+    for i in range(len(raw)):
+        near = [b for b in raw[max(0, i - half) : i + half + 1] if b is not None]
+        if not near:
+            near = [b for b in raw if b is not None]
+        out.append(max(BED_ORDER, key=lambda b: (near.count(b), -BED_ORDER.index(b))))
+    return out
+
+
+def absorb_short(labels: list[str], min_run: int) -> list[str]:
+    """Runs shorter than `min_run` samples take the bed of the longer
+    neighbouring run, shortest first, until none is left (or one run)."""
+    labels = list(labels)
+    while True:
+        runs = []
+        i = 0
+        while i < len(labels):
+            j = i
+            while j + 1 < len(labels) and labels[j + 1] == labels[i]:
+                j += 1
+            runs.append((i, j))
+            i = j + 1
+        short = [r for r in runs if r[1] - r[0] + 1 < min_run]
+        if len(runs) == 1 or not short:
+            return labels
+        k = runs.index(min(short, key=lambda r: r[1] - r[0]))
+        prev = runs[k - 1] if k > 0 else None
+        nxt = runs[k + 1] if k + 1 < len(runs) else None
+        side = max((r for r in (prev, nxt) if r is not None), key=lambda r: r[1] - r[0])
+        bed = labels[side[0]]
+        i0, i1 = runs[k]
+        for m in range(i0, i1 + 1):
+            labels[m] = bed
 
 
 def bridge_of(other: str | None) -> int:
@@ -159,12 +217,12 @@ def tracks(tile: Tile, beds: Beds) -> list[tuple[shapely.LineString, dict]]:
             if part.geom_type != "LineString" or part.length < 0.5:
                 continue
             key = (bridge_of(other), layer_of(other), gauge_of(other))
-            bed = beds.bed(part)
-            coords = [(x, y) for x, y, *_ in part.coords]
-            if bed is None:
-                fallback[key].append(coords)  # margin only: its bed never shows
-            else:
-                groups[(bed, *key)].append(coords)
+            for piece, bed in beds.beds(part):
+                coords = [(x, y) for x, y, *_ in piece.coords]
+                if bed is None:
+                    fallback[key].append(coords)  # margin only: its bed never shows
+                else:
+                    groups[(bed, *key)].append(coords)
     out = []
     for (bed, bridge, layer, gauge), lines in groups.items():
         for chain in merge_lines(lines):

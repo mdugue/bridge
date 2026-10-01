@@ -36,7 +36,28 @@ test("on a road lower than the pavement the top is level with the pavement", () 
   const ys = (kerbGeometry([east], step, offset)?.positions ?? []).filter(
     (_, i) => i % 3 === 1
   );
-  expect(Math.max(...ys)).toBeCloseTo(100.32, 6);
+  expect(Math.max(...ys)).toBeCloseTo(100.31, 6);
+});
+
+test("the top falls to the pavement at the back: no second step there", () => {
+  // The smoothed DGM: the pavement (south) only 4 cm above the road.
+  const ramp = (_x: number, y: number) => (y < -0.1 ? 100.04 : 100);
+  const g = kerbGeometry([east], ramp, offset);
+  const pos = g?.positions ?? [];
+  const backTops: number[] = [];
+  for (let i = 0; i < pos.length; i += 3) {
+    // world +z is south: the back edge lies KERB_WIDTH south of the line
+    if (Math.abs(pos[i + 2] - KERB_WIDTH) < 1e-6 && pos[i + 1] > 100) {
+      backTops.push(pos[i + 1]);
+    }
+  }
+  expect(backTops.length).toBeGreaterThan(0);
+  for (const y of backTops) {
+    expect(y).toBeCloseTo(100.05, 6);
+  }
+  // the face still stands the kerb's height over the road
+  const ys = pos.filter((_, i) => i % 3 === 1);
+  expect(Math.max(...ys)).toBeCloseTo(100 + KERB_HEIGHT, 6);
 });
 
 test("every triangle winds counter-clockwise about its normal", () => {

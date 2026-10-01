@@ -70,6 +70,34 @@ def test_tracks_take_their_bed_from_the_ground_and_stop_at_the_tile_edge(tmp_pat
     assert beds == {100: "street", 150: "grass", 50: "ballast"}
 
 
+def test_a_track_across_a_square_and_a_lawn_is_cut_where_its_bed_changes(tmp_path, monkeypatch):
+    from bake import tram
+
+    cls = np.zeros((200, 200), np.uint8)
+    cls[90:111, 0:60] = 7  # road: x 0..60
+    cls[90:111, 60:120] = 4  # a paved square (built-up): x 60..120
+    cls[90:111, 120:200] = 1  # meadow: x 120..200
+    cls[90:111, 150:156] = 7  # a 6 m road crossing the lawn: too short to cut
+    nodes = {1: (0, 100, ""), 2: (200, 100, "")}
+    tile = osm_tile(tmp_path, monkeypatch, nodes, way(1, [1, 2], TRAM), classes=cls)
+    tram.run(tile)
+    pieces = sorted(
+        (min(local(c)[0] for c in f["geometry"]["coordinates"]), f["properties"]["bed"])
+        for f in _by_kind(read(tile, "tram"), "track")
+    )
+    assert [bed for _, bed in pieces] == ["street", "grass"]
+    assert 115 <= pieces[1][0] <= 125  # cut where the lawn begins
+
+
+def test_beds_are_smoothed_and_short_runs_absorbed():
+    from bake.tram import absorb_short, smooth_beds
+
+    raw = ["street"] * 10 + ["ballast"] + ["street"] * 10 + [None] * 3
+    assert set(smooth_beds(raw, 3)) == {"street"}
+    labels = ["street"] * 12 + ["grass"] * 3 + ["street"] * 5 + ["ballast"] * 20
+    assert absorb_short(labels, 10) == ["street"] * 20 + ["ballast"] * 20
+
+
 def test_masts_pair_across_the_tracks_or_carry_an_arm(tmp_path, monkeypatch):
     from bake import tram
 
