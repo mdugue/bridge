@@ -380,6 +380,23 @@ test("a double tap glides on foot to the spot; in the air part of the way along 
   expect(pose.getMode()).toBe("fly");
 });
 
+test("a pinch still coasting stops at a double tap or a teleport", () => {
+  const { camera, pose } = rig();
+  pose.dolly(1);
+  pose.step(1 / 60);
+  pose.travelTo({ x: 30, y: GROUND, z: 0 });
+  settle(pose);
+  expect(camera.position.x).toBeCloseTo(30, 6);
+  expect(camera.position.z).toBeCloseTo(0, 6);
+
+  pose.dolly(1);
+  pose.step(1 / 60);
+  pose.teleportTo(OFFSET.cx + 100, OFFSET.cy);
+  settle(pose);
+  expect(camera.position.x).toBeCloseTo(100, 6);
+  expect(camera.position.z).toBeCloseTo(0, 6);
+});
+
 test("flyTo drops the camera at a world position in fly mode, facing the target", () => {
   const { camera, pose, poses } = rig();
   pose.flyTo({ x: 10, y: 250, z: 10 }, { x: 10, y: 100, z: 110 });

@@ -81,6 +81,8 @@ export interface FpsMovement {
    * along the view, down too, never through the ground. Adds up.
    */
   dolly: (metres: number) => void;
+  /** Drops whatever dolly is still pending (a glide takes the camera). */
+  stopDolly: () => void;
   /** Snaps the eye onto the ground at the current spot (used by teleports). */
   snapToGround: () => void;
   update: (dt: number) => void;
@@ -264,6 +266,9 @@ export function createFpsMovement(
       if (Number.isFinite(metres)) {
         pendingDolly += metres;
       }
+    },
+    stopDolly: () => {
+      pendingDolly = 0;
     },
     setAnalog: (x, y) => {
       analogX = Math.min(Math.max(x, -1), 1);

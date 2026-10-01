@@ -355,6 +355,8 @@ export function createCameraPose(
 
   /** After a jump: callers may raycast (demolish) before the next frame. */
   const poseJumped = () => {
+    // A push still coasting belongs to where the camera was.
+    movement.stopDolly();
     camera.updateMatrixWorld(true);
     opts.onPose?.(getPose());
   };
@@ -402,6 +404,8 @@ export function createCameraPose(
   ) => {
     flight.start(target, glideFloor, shape);
     ownGlide = true;
+    // A pinch still coasting would otherwise resume once the glide lands.
+    movement.stopDolly();
   };
 
   /**
