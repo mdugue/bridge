@@ -343,6 +343,9 @@ export function bakeCityMesh(
     }
   }
 
+  // the objects drawn as their measured blocks (ADR 0036): their facts
+  // say so, not what the LoD2 roof said
+  const rebuilt = measuredRoofsById(measured ?? []);
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const root = rootOf(doc, keys, index);
@@ -378,6 +381,7 @@ export function bakeCityMesh(
         osm: inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]),
         fallbackHeight: total,
         footprints,
+        rebuilt: rebuilt.has(id),
       }),
     };
   });
@@ -403,7 +407,7 @@ export function bakeCityMesh(
             footprints: footprintsOf[i],
           })),
         typeof doc.CityObjects[keys[root]].attributes?.measuredHeight ===
-          "number"
+          "number" && members.every((i) => !rebuilt.has(keys[i]))
       );
     }
   }

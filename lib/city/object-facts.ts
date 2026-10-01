@@ -14,6 +14,13 @@
 /** "Unknown" in a numeric fact column (the schema's `noData`). */
 export const NO_FACT = -1;
 
+/**
+ * The `roofType` of an object whose LoD2 roof missed the surface model and
+ * was rebuilt from it as stepped flat blocks (ADR 0036): not an AdV code —
+ * the LoD2's form no longer describes what stands there.
+ */
+export const MEASURED_ROOF = "DOM1";
+
 export interface ObjectFacts {
   /** OSM `addr:street` + `addr:housenumber` ("" unknown) */
   addr: string;
@@ -186,15 +193,18 @@ export function lod2Facts(input: {
   footprints: readonly (readonly [number, number][])[];
   osm?: OsmBuildingFacts;
   own: Record<string, unknown>;
+  /** its roof was rebuilt from DOM1 (ADR 0036): the LoD2's roof form,
+   *  pitch and height no longer describe it; its height is the shape's */
+  rebuilt?: boolean;
   resolved: Record<string, unknown>;
 }): ObjectFacts {
   const { own, resolved, osm } = input;
-  const measured = number(own.measuredHeight);
+  const measured = input.rebuilt ? NO_FACT : number(own.measuredHeight);
   const area = input.footprints.length > 0 ? ringsArea(input.footprints) : 0;
   return {
     buildingId: input.buildingId,
     function: text(resolved.function),
-    roofType: text(own.roofType),
+    roofType: input.rebuilt ? MEASURED_ROOF : text(own.roofType),
     created: isoDate(own.creationDate ?? resolved.creationDate),
     name: text(osm?.name),
     addr: text(osm?.addr),
@@ -203,7 +213,7 @@ export function lod2Facts(input: {
       measured > 0 ? measured : positive(input.fallbackHeight),
       100
     ),
-    roofPitch: round(number(own.Dachneigung), 10),
+    roofPitch: input.rebuilt ? NO_FACT : round(number(own.Dachneigung), 10),
     area: area > 0 ? round(area, 10) : NO_FACT,
     levels: number(osm?.levels),
   };

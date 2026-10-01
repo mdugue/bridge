@@ -10,7 +10,7 @@ import {
   roofLabel,
   squareMetres,
 } from "./inquiry";
-import { NO_FACT, type ObjectFacts } from "./object-facts";
+import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
 import type { SiteProvenance } from "./provenance";
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
@@ -119,6 +119,26 @@ test("the Building's own tree facts win over its parts' (the bake's union)", () 
   // overlapping parts counted once, the tower's top over the podium's base
   expect(fact("Grundfläche")).toBe("520 m²");
   expect(fact("Höhe")).toBe("24,5 m");
+});
+
+test("a roof rebuilt from the surface model is said to be measured there", () => {
+  const card = inquiryCard(
+    {
+      tile: "t",
+      picked: object({
+        facts: facts({ roofType: MEASURED_ROOF, height: 19.2 }),
+      }),
+      tree: [],
+    },
+    provenance
+  );
+  expect(card.facts).toContainEqual({
+    label: "Dach",
+    value: "flach, gestuft (gemessen)",
+  });
+  // the LoD2 line no longer claims the roof; the surface model's does
+  expect(card.sources[0]).not.toContain("Dach gemessen");
+  expect(card.sources[1]).toStartWith("Dach und Höhe: DOM1");
 });
 
 test("a named church: name as title, use above, every source quoted", () => {

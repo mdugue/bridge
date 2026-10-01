@@ -14,7 +14,7 @@ import {
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
 } from "./city-mesh";
-import { NO_FACT, type ObjectFacts } from "./object-facts";
+import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
 
 /** One object of the asked building, as the scene read it. */
@@ -88,6 +88,9 @@ export function functionLabel(code: string): string {
 
 /** A Dachform with its pitch: "Satteldach, 38°". */
 export function roofLabel(code: string, pitch: number): string {
+  if (code === MEASURED_ROOF) {
+    return "flach, gestuft (gemessen)";
+  }
   const form = code ? (ROOF_TYPE[code] ?? `Dachform ${code}`) : "";
   const slope = pitch === NO_FACT ? "" : `${whole.format(pitch)}°`;
   return [form, slope].filter(Boolean).join(", ");
@@ -103,7 +106,8 @@ const known = (values: readonly number[]): number[] =>
 function lod2Source(
   provenance: SiteProvenance | null,
   tile: string,
-  created: string
+  created: string,
+  rebuilt: boolean
 ): string {
   const source = provenance?.sources.lod2;
   const stand = provenance?.tiles[tile]?.lod2;
@@ -111,7 +115,8 @@ function lod2Source(
   if (stand) {
     const { model, inputs } = parseLod2Stand(stand);
     parts.push(`Modell ${model}`);
-    if (inputs.LSC) {
+    // a rebuilt roof is the surface model's (its own line), not the LoD2's
+    if (inputs.LSC && !rebuilt) {
       parts.push(`Dach gemessen ${inputs.LSC}`);
     }
     if (inputs["Basis-DLM"]) {
@@ -123,6 +128,23 @@ function lod2Source(
   }
   parts.push(source?.credit ?? "Quelle: GeoSN, dl-de/by-2-0");
   return parts.join(" · ");
+}
+
+/** The surface model's line for a roof rebuilt from it (ADR 0036). */
+function rebuiltSource(
+  provenance: SiteProvenance | null,
+  tile: string
+): string {
+  const source = provenance?.sources.dom;
+  const stand = provenance?.tiles[tile]?.dom;
+  return [
+    `Dach und Höhe: ${source?.label ?? "Digitales Oberflächenmodell DOM1"}`,
+    stand ? `Befliegung ${germanDates(stand)}` : "",
+    "das Stadtmodell verfehlt dieses Dach",
+    source?.credit ?? "Quelle: GeoSN, dl-de/by-2-0",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** The laser scan's source line (a structure LoD2 lacks, plan 034). */
@@ -181,6 +203,7 @@ function mergedFacts(inquiry: Inquiry) {
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
     heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
+    rebuilt: facts.some((f) => f.roofType === MEASURED_ROOF),
     shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
   };
 }
@@ -237,8 +260,11 @@ export function inquiryCard(
   const sources = [
     scan
       ? scanSource(provenance, inquiry.tile)
-      : lod2Source(provenance, inquiry.tile, t.created),
+      : lod2Source(provenance, inquiry.tile, t.created, t.rebuilt),
   ];
+  if (t.rebuilt) {
+    sources.push(rebuiltSource(provenance, inquiry.tile));
+  }
   if (fromOsm.length > 0) {
     sources.push(osmSource(provenance, fromOsm));
   }

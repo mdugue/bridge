@@ -4,6 +4,7 @@ import {
   inheritedOsm,
   isoDate,
   lod2Facts,
+  MEASURED_ROOF,
   NO_FACT,
   readFacts,
   ringsArea,
@@ -172,4 +173,19 @@ test("reading a tile that predates the fact columns yields unknowns", () => {
     readFacts((c) => (c === "roofPitch" ? 0 : Number.NaN), "#1").roofPitch
   ).toBe(0);
   expect(readFacts(() => Number.NaN, "#1").height).toBe(NO_FACT);
+});
+
+test("a roof rebuilt from the surface model drops the LoD2's form, pitch, height", () => {
+  const facts = lod2Facts({
+    buildingId: "B",
+    fallbackHeight: 19.2,
+    footprints: [square],
+    // a new block the LoD2 still holds as a 3 m placeholder
+    own: { measuredHeight: 3, roofType: "1000", Dachneigung: 0 },
+    resolved: {},
+    rebuilt: true,
+  });
+  expect(facts.roofType).toBe(MEASURED_ROOF);
+  expect(facts.roofPitch).toBe(NO_FACT);
+  expect(facts.height).toBe(19.2);
 });

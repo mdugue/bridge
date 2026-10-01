@@ -603,7 +603,9 @@ it answers in a paper card ([ADR 0037](./adr/0037-inquiry-cards-on-demand-facts-
   of its parts' union, overlaps counted once, mapped storeys, parts, *Kulturdenkmal*, a
   shop on the ground floor), the `buildingId` to copy, and one source line
   per source quoted, with edition and licence. Unspecified use (86 % of
-  the objects) is said as such, never guessed.
+  the objects) is said as such, never guessed. A roof rebuilt from DOM1
+  (ADR 0036) is said to be measured there: no LoD2 form, pitch or
+  height, DOM1 as its source.
 
 ### Vegetation
 - **Cultivated land** (plan 028) — OSM `landuse=allotments|orchard|vineyard`

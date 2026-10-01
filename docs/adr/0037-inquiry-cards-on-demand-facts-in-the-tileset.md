@@ -81,6 +81,11 @@ only where a source offers no CORS.
   houses with an address each.
 - Papier (ADR 0034) replaces every material for its frames, so it does not
   show the hatch; the card still opens.
+- An object whose LoD2 roof was rebuilt from DOM1 (ADR 0036) answers with
+  what is drawn: `roofType` `DOM1` (not an AdV code; the card says "flach,
+  gestuft (gemessen)"), no pitch, the rebuilt shape's height (the LoD2's
+  `measuredHeight` can be a 3 m placeholder), and DOM1 as the roof's
+  source line. 75 such objects on the spawn tile.
 
 ## Alternatives
 
