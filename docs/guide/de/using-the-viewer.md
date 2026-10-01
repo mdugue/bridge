@@ -157,6 +157,28 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
   sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
   zurückspringt, mit einem ✕ zum Vergessen.
+- **Verkehrsdaten** — bis zu drei Datenebenen über der Stadt, jede mit
+  eigenem Schalter, beim Start alle aus; eine Stadt zeigt nur die, für die
+  es offene Daten gibt (siehe [Quellen nach Stadt](./sources-by-city.md) und
+  [Woher die Daten kommen](./data-sources.md)):
+  - *Kfz-Verkehr*: die gezählten Fahrzeuge je Tag als gläserne Ströme auf
+    der Fahrbahn, je Richtung einer — breiter, höher und kräftiger gefärbt
+    (salbeigrün, pfirsich, koralle, rosé, weinrot), wo mehr fährt, mit
+    Licht, das in Fahrtrichtung hindurchläuft. Die Ströme folgen der
+    eingestellten Uhrzeit: Die Tageszählung wird nach einem gemessenen
+    typischen Tagesgang über den Tag verteilt (nachts schmal und fast
+    dunkel, im Berufsverkehr voll und gestaut); unter dem Schalter steht,
+    wie viel gerade los ist;
+  - *Radverkehr (live)*: an jeder Zählstelle der Stadt zwei Glassäulen, so hoch
+    wie die Räder der letzten Stunde je Richtung; darunter die Liste der
+    Zählstellen mit ihren Zahlen, ein Klick fliegt hin;
+  - *Straßenbahnen (Fahrplan)*: jede Straßenbahn der Stadt, wie der Fahrplan sie zur
+    eingestellten Zeit fahren lässt, mit einer Lichtspur dahinter — die
+    Zeit läuft von dort an weiter;
+    darunter, wie viele gerade unterwegs sind.
+
+  Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit
+  sie lesbar bleiben.
 - **Wahrzeichen** — die bekanntesten Bauwerke der Stadt, bis zu zwölf,
   als kleine Chips unter den Aussichtspunkten: die Frauenkirche in
   Dresden, die Elbphilharmonie, das Chilehaus und St. Michaelis in

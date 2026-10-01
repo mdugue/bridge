@@ -22,7 +22,11 @@ export type Reason =
   | "noHeight"
   | "noLsc"
   | "noNir"
-  | "scanNotRead";
+  | "scanNotRead"
+  | "censusOnly"
+  | "noTrafficCounts"
+  | "noLiveBikes"
+  | "noTrams";
 
 export interface Cell {
   quality: Quality;
@@ -75,6 +79,13 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
       "The register has no tree heights: each tree's height is taken from the surface model where it stands, else from its crown.",
     noDom:
       "The Land publishes no open surface model: no measured heights above the ground.",
+    censusOnly:
+      "The city publishes no counts of its own: the road census counts the federal, state and district roads only, both directions together (shown split evenly).",
+    noTrafficCounts:
+      "No open counts per road section: the city publishes none, and the road census does not reach its centre.",
+    noLiveBikes:
+      "No open bicycle counter the browser can read live (counts published yearly, monthly or daily only, or none).",
+    noTrams: "The city has no trams.",
   },
   de: {
     noDlm:
@@ -91,6 +102,13 @@ const REASONS: Record<Lang, Record<Reason, string>> = {
       "Das Kataster kennt keine Baumhöhen: Die Höhe eines Baums kommt aus dem Oberflächenmodell an seinem Standort, sonst aus seiner Krone.",
     noDom:
       "Das Land veröffentlicht kein offenes Oberflächenmodell: keine gemessenen Höhen über dem Boden.",
+    censusOnly:
+      "Die Stadt veröffentlicht keine eigenen Zählungen: Die Straßenverkehrszählung zählt nur Bundes-, Landes- und Kreisstraßen, beide Richtungen zusammen (je zur Hälfte gezeigt).",
+    noTrafficCounts:
+      "Keine offenen Zählwerte je Straßenabschnitt: Die Stadt veröffentlicht keine, und die Straßenverkehrszählung reicht nicht bis in ihre Mitte.",
+    noLiveBikes:
+      "Keine offene Radzählstelle, die der Browser live lesen kann (Zählwerte nur jährlich, monatlich oder täglich, oder gar keine).",
+    noTrams: "Die Stadt hat keine Straßenbahn.",
   },
 };
 
@@ -252,6 +270,49 @@ const ROWS: Row[] = [
   },
   {
     label: {
+      en: "Data layer: motor traffic",
+      de: "Datenebene: Kfz-Verkehr",
+    },
+    cell: (s) => {
+      const traffic = s.dataLayers?.traffic;
+      if (!traffic) {
+        return none("noTrafficCounts");
+      }
+      if (traffic.source === "dresden" || traffic.source === "berlin") {
+        return best({ en: "city counts", de: "Zählungen der Stadt" });
+      }
+      if (traffic.source === "hamburg") {
+        return best({
+          en: "city counts (main roads)",
+          de: "Zählungen der Stadt (Hauptstraßen)",
+        });
+      }
+      return substitute(
+        { en: "road census", de: "Straßenverkehrszählung" },
+        "censusOnly"
+      );
+    },
+  },
+  {
+    label: {
+      en: "Data layer: cycling, live",
+      de: "Datenebene: Radverkehr live",
+    },
+    cell: (s) =>
+      s.dataLayers?.bikes
+        ? best({ en: "city counters", de: "Zählstellen der Stadt" })
+        : none("noLiveBikes"),
+  },
+  {
+    label: {
+      en: "Data layer: trams by timetable",
+      de: "Datenebene: Straßenbahnen (Fahrplan)",
+    },
+    cell: (s) =>
+      s.dataLayers?.trams ? best("GTFS (DELFI) + OSM") : none("noTrams"),
+  },
+  {
+    label: {
       en: "Sky light, far shadows",
       de: "Himmelslicht, Fernschatten",
     },
@@ -259,7 +320,20 @@ const ROWS: Row[] = [
   },
 ];
 
-const SUPERSCRIPT = ["¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
+const SUPERSCRIPT = [
+  "¹",
+  "²",
+  "³",
+  "⁴",
+  "⁵",
+  "⁶",
+  "⁷",
+  "⁸",
+  "⁹",
+  "¹⁰",
+  "¹¹",
+  "¹²",
+];
 
 const TEXT = {
   en: {

@@ -30,6 +30,7 @@ import {
   type SceneLookKey,
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
+import type { BikeCounter } from "@/lib/city/bike-counts";
 import { nextRenderStyle } from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
@@ -57,6 +58,10 @@ import { createLampLights } from "./lamp-layer";
 import { setFountainNight, setFountainTime } from "./monument-layer";
 import { setClockTime, setFurnitureNight } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
+import { setDataTime } from "./glass";
+import { createDataOverlays } from "./data-overlays";
+import type { TramCarsStatus } from "./tram-cars";
+import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { pocFramesHeld, tickPocFrame, updatePocDebug } from "./poc-debug";
 import { createPostStack, type PostStack } from "./post-stack";
 import { type SceneCensus, sceneCensus } from "./scene-census";
@@ -82,6 +87,7 @@ import {
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
   type DressingPartName,
+  showDataLayers,
   type TileDressing,
 } from "./tile-stream";
 import { attachTouchControls } from "./touch-controls";
@@ -114,6 +120,8 @@ const GOVERN_MS = 1000;
 /** The HUD census's layers: the content's own, and a dressing's parts
  *  (tile-stream.ts DRESSING_PARTS). */
 export type LayerName =
+  | "bikes"
+  | "trams"
   | "city"
   | "fences"
   | "stairs"
@@ -270,6 +278,22 @@ export interface CityWalkOptions {
    */
   onStage?: (update: LoadStageUpdate) => void;
   onStats?: (stats: CityWalkStats) => void;
+  /**
+   * The live bicycle counts while their data layer is on (data-overlays.ts),
+   * for the HUD's list; [] when it is switched off.
+   */
+  onBikeCounts?: (counters: BikeCounter[]) => void;
+  /**
+   * The timetable trams' day and count while their data layer is on
+   * (about once a second); null when it is switched off.
+   */
+  onTramStatus?: (status: TramCarsStatus | null) => void;
+  /**
+   * The traffic's hour (how busy the scene's instant is on the typical
+   * daily curve) while its data layer is on, about once a second; null
+   * when it is switched off.
+   */
+  onTrafficHour?: (status: TrafficHourStatus | null) => void;
   /**
    * Aborts startup mid-load (React StrictMode mounts effects twice in dev;
    * without this the doomed first instance would finish loading 19 MB of
@@ -707,6 +731,9 @@ async function bootApp(
   // post stack is built after the first setSun, so it catches up there.
   let sunAltitude = 90;
   let sunToStyles: ((altitudeDeg: number) => void) | null = null;
+  // The data layers' clock (the timetable trams) follows the HUD's instant;
+  // they are created with the post stack, after the first setSun.
+  let clockToOverlays: ((date: Date) => void) | null = null;
   // Single fixed pool of real point lights for the nearest lamps across ALL
   // tiles, built before the first render so the light count is part of
   // every lit node build once (ADR 0020); each tile's lamps retarget it.
@@ -839,6 +866,7 @@ async function bootApp(
     setClockTime(date);
     clayNight.value = state.nightFactor;
     seasonClock.set(date);
+    clockToOverlays?.(date);
     invalidateShadows();
     return state;
   };
@@ -871,6 +899,29 @@ async function bootApp(
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
   sunToStyles = postStack.setSunAltitude;
+  // The site-wide data layers (the live bicycle counters): built, fetched
+  // and polled only once switched on (lib/city/data-layers.ts).
+  const overlays = createDataOverlays({
+    bikeFeed: opts.site.dataLayers?.bikes?.feed,
+    bounds: unionBounds(extras),
+    bridgeUrls: extras.tiles.flatMap((t) =>
+      t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
+    ),
+    compile: (object) => postStack.compile(object).catch(() => undefined),
+    epsg: extras.epsg,
+    ground: { offset, heightAt },
+    initialDate: opts.initialDate,
+    onBikeCounts: opts.onBikeCounts,
+    onChange: () => emitStats(),
+    onTramStatus: opts.onTramStatus,
+    onTrafficHour: opts.onTrafficHour,
+    parent: scene,
+    tramTimetableUrl: extras.trams
+      ? new URL(extras.trams, tilesetUrl).href
+      : undefined,
+  });
+  clockToOverlays = overlays.setClock;
+  cleanups.push(() => overlays.dispose());
   postStack.setSunAltitude(sunAltitude);
 
   // The look store is the one source of every slider value: applied now, on
@@ -927,7 +978,9 @@ async function bootApp(
     postStack.applyLook(look);
     for (const d of stream.dressings) {
       d.vegetation?.applyLook(look);
+      showDataLayers(d, look);
     }
+    overlays.apply(look);
   };
   applyLook(opts.look.get());
   cleanups.push(opts.look.subscribe(applyLook));
@@ -1026,6 +1079,8 @@ async function bootApp(
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
         fences: census(terrains.map((t) => t.fences)),
+        bikes: census([overlays.parts().bikes]),
+        trams: census([overlays.parts().trams]),
       },
     });
   };
@@ -1074,6 +1129,7 @@ async function bootApp(
     lampLights.setHeads(
       stream.visibleDressings().flatMap((d) => d.lamps?.headPositions ?? [])
     );
+    overlays.streamChanged();
     postStack.sceneChanged();
     invalidateShadows();
     emitStats();
@@ -1316,6 +1372,10 @@ async function bootApp(
     stepVegetation(elapsed);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
+    // The data layers' light (one shared uniform; drawn only when on).
+    setDataTime(elapsed);
+    // The timetable trams move on (only while their layer is on).
+    overlays.step(performance.now());
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
       opts.onPose?.(pose.getPose());

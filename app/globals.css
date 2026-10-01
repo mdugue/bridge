@@ -159,3 +159,66 @@
    frosted veil above (--hud-veil): the loading screen stays put while the city
    appears behind it, and is then removed in a single frame. Nothing animates,
    so there is nothing left to drop frames. See app/_components/handover.ts. */
+
+/* The data layers' swatches (data-layer-swatch.tsx): a moving sample of
+   what each layer draws — still while the layer is off, and for anyone
+   who asks for reduced motion. */
+.data-swatch-glass {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.65),
+    inset 0 -1px 1px rgb(0 0 0 / 0.12);
+}
+.data-swatch-comet {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.85) 70%,
+    transparent
+  );
+  animation: data-swatch-flow 1.8s linear infinite;
+}
+.data-swatch-rings {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 4px,
+    rgb(255 255 255 / 0.75) 4px 5px
+  );
+  background-size: 100% 10px;
+  animation: data-swatch-rise 1.4s linear infinite;
+}
+.data-swatch-tram {
+  animation: data-swatch-drive 3.2s ease-in-out infinite;
+}
+@keyframes data-swatch-flow {
+  from {
+    left: -0.75rem;
+  }
+  to {
+    left: 2rem;
+  }
+}
+@keyframes data-swatch-rise {
+  from {
+    background-position-y: 0;
+  }
+  to {
+    background-position-y: -10px;
+  }
+}
+@keyframes data-swatch-drive {
+  from {
+    transform: translateX(-1.25rem);
+  }
+  to {
+    transform: translateX(0.5rem);
+  }
+}
+.data-swatch-off *,
+.data-swatch-off {
+  animation-play-state: paused !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .data-swatch * {
+    animation: none !important;
+  }
+}

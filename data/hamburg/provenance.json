@@ -36,5 +36,27 @@
   "wikidata": {
     "licence": "CC0",
     "usedFor": "bridge names and types, cached per tile under data/_raw/hh/wikidata/"
+  },
+  "dataLayers": {
+    "traffic": {
+      "service": "https://geodienste.hamburg.de/HH_WFS_Verkehrsmengen",
+      "typeName": "de.hh.up:verkehrsmengen_dtv_hvs_2019",
+      "title": "Verkehrsmengen 2019 (DTV) der Hauptverkehrsstraßen, Behörde für Verkehr und Mobilitätswende",
+      "licence": "dl-de/by-2-0; credit: Freie und Hansestadt Hamburg, Behörde für Verkehr und Mobilitätswende",
+      "coverage": "the main roads (HVS), both directions together, rounded to the thousand, with the heavy-goods share in %; split evenly between the directions (sp 1)",
+      "retrieved": "2026-10-01",
+      "raw": "data/_raw/hh/traffic/<tile>.geojson (+ .meta.json), with a 50 m margin (traffic_sources.py)",
+      "committed": "data/hamburg/dlm/traffic_<tile>.geojson",
+      "usedBy": [
+        "pipeline/bake/traffic.py"
+      ],
+      "sections": {
+        "$comment": "per tile bbox incl. the 50 m margin, before the clip",
+        "32564_5934_2_hh": 135,
+        "32564_5932_2_hh": 147,
+        "32566_5932_2_hh": 152,
+        "32566_5934_2_hh": 185
+      }
+    }
   }
 }

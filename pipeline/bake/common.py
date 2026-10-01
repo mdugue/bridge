@@ -87,6 +87,8 @@ class Tile:
     products: Products = Products(dom=True, dop="rgbi", dlm=True)
     credit: str = ""
     tree_cadastre: TreeCadastre | None = None
+    # the site's traffic-count source (traffic_sources.py), or None
+    traffic: str | None = None
 
     @property
     def size(self) -> tuple[float, float]:

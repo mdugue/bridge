@@ -5,6 +5,7 @@
  * a trimmed or hand-edited one (the documented QA workflow) reports what is
  * wrong instead of yielding NaN camera matrices. No THREE, no DOM.
  */
+import { DATA_LAYERS } from "./data-layers";
 import {
   type FocusMode,
   LOOK_CONTROLS,
@@ -111,7 +112,11 @@ function checkDate(v: unknown): string {
 }
 
 function checkLookFlags(look: Record<string, unknown>): void {
-  for (const key of ["dof", "multiTuft"]) {
+  for (const key of [
+    "dof",
+    "multiTuft",
+    ...DATA_LAYERS.map((def) => def.snapshotKey),
+  ]) {
     if (look[key] !== undefined && typeof look[key] !== "boolean") {
       throw new SnapshotError(`look.${key} must be a boolean`);
     }
@@ -145,7 +150,7 @@ function checkLook(v: unknown): SnapshotLook {
 
 /**
  * The persisted document for the live values: one `<snapshotKey>` percent per
- * table row, the five flags and the sun instant. What Copy writes.
+ * table row, the five flags, the data layers and the sun instant. What Copy writes.
  */
 export function encodeSnapshot(
   look: LookValues,
@@ -162,6 +167,9 @@ export function encodeSnapshot(
   for (const def of LOOK_CONTROLS) {
     lookJson[def.snapshotKey] = Math.round(look[def.key] * 100);
   }
+  for (const def of DATA_LAYERS) {
+    lookJson[def.snapshotKey] = look[def.key];
+  }
   return {
     v: SNAPSHOT_VERSION,
     camera,
@@ -173,7 +181,7 @@ export function encodeSnapshot(
 /**
  * The look values a parsed snapshot carries, as a store patch: every percent
  * key that is present (older snapshots omit newer controls, which keep their
- * current value) and each of the five flags when present. Ranges are clamped
+ * current value) and each of the five flags and the data layers when present. Ranges are clamped
  * by the store on apply. What Apply reads.
  */
 export function decodeLook(
@@ -203,6 +211,12 @@ export function decodeLook(
   }
   if (look.style !== undefined) {
     patch.style = look.style;
+  }
+  for (const def of DATA_LAYERS) {
+    const on = look[def.snapshotKey];
+    if (typeof on === "boolean") {
+      patch[def.key] = on;
+    }
   }
   return patch;
 }

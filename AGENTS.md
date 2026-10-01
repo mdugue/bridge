@@ -147,7 +147,16 @@ config change.
     terrain pass), `cultivated-layer.ts` (allotment beds in the same pass,
     vine rows), `tram-layer.ts` (tracks in their bed, the overhead line,
     stop signs), `riverside-layer.ts` (landing stages, groynes, ferry
-    lines) and `map-overlay.ts` (fades the ferry lines in with height),
+    lines) and `map-overlay.ts` (fades the ferry lines in with height,
+    widens the data layers from the air), the data layers
+    (`lib/city/data-layers.ts`, switched in the HUD, all off at start —
+    ADR 0040): `traffic-layer.ts` (the counted motor traffic as flowing
+    glass bodies, per tile), `data-overlays.ts` (the site-wide ones:
+    `bike-layer.ts`, the city's bicycle counters read live as glass
+    columns — the feed per site in `lib/city/bike-feeds.ts` —, and
+    `tram-cars.ts`, the trams by timetable with their light trails; which
+    layers a site has is its `dataLayers`), `glass.ts` (their refracting glass: one copy of the frame,
+    not `transmission`),
     `shader-chunks.ts` (the shared TSL pieces: data-frame positions from
     world space, raster uv, node types)
   - lighting/post: `sun-rig.ts`, `sky-light.ts` (the baked sky-view
@@ -253,7 +262,10 @@ config change.
   `skyview.py`, `osm_buildings.py` (shops, heritage, material and
   colours per LoD2 object; the walls' `context`, brick or plaster as the
   neighbourhood is mapped),
-  `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers), `osm.py`);
+  `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers),
+  `traffic.py` (the counted traffic; its sources per site in
+  `traffic_sources.py`), `transit.py` (the trams' timetable, once for the
+  site), `osm.py`);
   tests in `pipeline/tests/`. Run by
   `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
   Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037
@@ -470,6 +482,12 @@ main thread) out of the frames:
 - WebGPU has no 1-component 8/16-bit vertex formats (the feature id and roof
   flag are baked as FLOAT), and draws points 1 px wide (the lamp halos are
   sprites).
+- **WebGPU draws from at most eight vertex buffers** (the default limit;
+  three asks for no more), and every non-interleaved attribute is one —
+  `position` and `normal` included. A ninth makes the pipeline invalid and
+  the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
+  backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
+  `TRAFFIC_ATTRIBUTES`, its test holds the count).
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈

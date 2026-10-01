@@ -12,6 +12,7 @@ export const MUENCHEN: Site = {
   label: "München · Altstadt",
   name: "München",
   provider: BAVARIA,
+  dataLayers: { trams: { operator: "MVG" } },
   osm: "europe/germany/bayern/oberbayern",
   spawn: "marienplatz",
   tiles: [

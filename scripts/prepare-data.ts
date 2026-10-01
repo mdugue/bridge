@@ -65,6 +65,7 @@ import { groundRelief } from "../lib/city/valley-fog";
 import {
   cityMeshSourceFiles,
   type DataManifest,
+  COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
   pickFiles,
   SOUND_KINDS,
@@ -74,6 +75,7 @@ import {
   kerbSourceFile,
   MANIFEST_FILE,
   sideFileSource,
+  siteDataDir,
   stairSourceFile,
   terraceSourceFile,
   tileArtifacts,
@@ -93,6 +95,10 @@ import {
   type TilesetExtras,
 } from "../lib/city/tileset";
 import type { CityJsonDocument } from "../lib/city/types";
+import {
+  TRAM_TIMETABLE_FILE,
+  tramTimetableSource,
+} from "../lib/city/tram-timetable";
 import { siteFromArgs } from "../sites";
 import { type BakedCityMesh, bakeCityMesh } from "./bake-city-mesh";
 import { contentKey, createContentHasher, moduleGraph } from "./bake-sources";
@@ -687,7 +693,9 @@ async function bakeTerrain(
       ? { sport: names.sport, sportTable: names.sportTable }
       : {}),
     ...paintAndLight(names, level, colonyCrops.get(tile)),
-    ...(level === 0 ? { dressing: pickFiles(names, DRESSING_KINDS) } : {}),
+    ...(level === 0
+      ? { dressing: pickFiles(names, DRESSING_KINDS) }
+      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
   const key = cacheKey(inputs, offset, described);
   const meta = parse<{
@@ -788,6 +796,12 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
 // --- 3. tilesets ------------------------------------------------------------------
 
+// The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
+const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
+const trams = existsSync(tramSource)
+  ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
+  : undefined;
+
 const extras: TilesetExtras = {
   site: SITE.id,
   landmarks: siteLandmarks(
@@ -804,6 +818,7 @@ const extras: TilesetExtras = {
     bridges: sideFiles.get(t.id)?.bridge,
     sound: pickFiles(sideFiles.get(t.id) ?? {}, SOUND_KINDS),
   })),
+  ...(trams ? { trams } : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(

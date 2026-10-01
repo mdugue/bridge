@@ -20,7 +20,10 @@ described in [Where the data comes from](./data-sources.md).
 | Sheds, extra trees, hedge heights | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁴ | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | 🟢 laser scan | ⚪ — ⁵ |
 | Vegetation colour (vigour) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) | 🟡 DOP RGB (GLI) ⁶ | 🟢 DOP (NDVI) | 🟢 DOP (NDVI) |
 | Monuments, fountains | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟢 Basis-DLM + OSM | 🟡 OSM ¹ |
-| 🟢 from the best source | **16** / 18 | **15** / 18 | **9** / 18 | **16** / 18 | **15** / 18 | **14** / 18 | **15** / 18 | **10** / 18 |
+| Data layer: motor traffic | 🟢 city counts | 🟡 road census ⁷ | 🟢 city counts (main roads) | ⚪ — ⁸ | 🟡 road census ⁷ | ⚪ — ⁸ | 🟡 road census ⁷ | 🟢 city counts |
+| Data layer: cycling, live | 🟢 city counters | ⚪ — ⁹ | 🟢 city counters | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ | ⚪ — ⁹ |
+| Data layer: trams by timetable | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM | ⚪ — ¹⁰ | 🟢 GTFS (DELFI) + OSM |
+| 🟢 from the best source | **19** / 21 | **15** / 21 | **11** / 21 | **17** / 21 | **15** / 21 | **15** / 21 | **15** / 21 | **12** / 21 |
 
 ## Legend
 
@@ -37,6 +40,10 @@ described in [Where the data comes from](./data-sources.md).
 4. The Land publishes no open classified laser scan (Hamburg declined to, citing privacy).
 5. The pipeline does not read this Land's laser scan yet (no adapter for it).
 6. The open aerial photograph has no infrared band: the vegetation index is computed from its visible colours (the Green Leaf Index), which tells green from grey well but vigour less well.
+7. The city publishes no counts of its own: the road census counts the federal, state and district roads only, both directions together (shown split evenly).
+8. No open counts per road section: the city publishes none, and the road census does not reach its centre.
+9. No open bicycle counter the browser can read live (counts published yearly, monthly or daily only, or none).
+10. The city has no trams.
 
 ## The same in every city
 

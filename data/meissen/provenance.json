@@ -34,5 +34,23 @@
   "wikidata": {
     "licence": "CC0",
     "usedFor": "bridge names and types, cached per tile under data/_raw/sn/wikidata/"
+  },
+  "dataLayers": {
+    "traffic": {
+      "download": "https://www.list.smwa.sachsen.de/gdi/download/DE-SN-SBV-SVZ2021.zip",
+      "title": "Straßenverkehrszählung 2021 (SVZ), Landesamt für Straßenbau und Verkehr",
+      "licence": "dl-de/by-2-0; credit: Freistaat Sachsen, LASuV",
+      "coverage": "federal, state and district roads, both directions together, with the heavy-goods share; split evenly between the directions (sp 1)",
+      "retrieved": "2026-10-01",
+      "raw": "data/_raw/sn/traffic/<tile>.geojson (+ .meta.json), with a 50 m margin (traffic_sources.py)",
+      "committed": "data/meissen/dlm/traffic_<tile>.geojson",
+      "usedBy": [
+        "pipeline/bake/traffic.py"
+      ],
+      "sections": {
+        "$comment": "per tile bbox incl. the 50 m margin, before the clip",
+        "33392_5668_2_sn": 14
+      }
+    }
   }
 }

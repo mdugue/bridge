@@ -262,6 +262,14 @@ and therefore what keeps builds out of frames:
   (and the WebGL2 backend rejects them against TSL's float attribute): the
   feature id and roof flag are baked as FLOAT (`scripts/tile-glb.ts`).
   3-component snorm8/16 positions and normals are fine (three pads them).
+- **Eight vertex buffers a draw on WebGPU** (the device's default limit;
+  three requests no more). Each non-interleaved attribute is one buffer,
+  `position` and `normal` included (an interleaved instance matrix is
+  one). A ninth invalidates the pipeline and the mesh silently draws
+  nothing on a real GPU, while the WebGL2 backend (sixteen) — the
+  headless e2e's — draws it fine: the traffic flows vanished that way
+  with ten single-float attributes. Pack scalars into vec4s and test the
+  count.
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
 - **No tone mapping.** The output node is `renderOutput(…, NoToneMapping,
