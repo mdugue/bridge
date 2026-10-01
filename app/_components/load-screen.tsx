@@ -6,7 +6,7 @@ import {
   WALKABLE_PERCENT,
 } from "@/lib/city/load-stages";
 import { cn } from "cn";
-import { currentSite } from "@/sites";
+import { useSite } from "./site-context";
 
 /**
  * "Laden" — the full-bleed screen shown until the spawn tile is walkable.
@@ -108,6 +108,7 @@ export function LoadScreen({
   percent: number;
   stages: LoadStageState[];
 }) {
+  const site = useSite();
   const plates = stages.filter((stage) => stage.plate);
   const walkable = percent >= WALKABLE_PERCENT;
   return (
@@ -133,7 +134,7 @@ export function LoadScreen({
             City Walk
           </span>
           <span className="font-semibold text-lg leading-tight sm:text-xl">
-            {currentSite().label}
+            {site.label}
           </span>
         </div>
 

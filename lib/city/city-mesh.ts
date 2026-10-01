@@ -1,5 +1,6 @@
+import type { FacadeMaterial } from "./building-tint";
 import type { FootprintPoly } from "./minimap";
-import type { ObjectFacts, OsmBuildingFacts } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
 import type { CityJsonDocument } from "./types";
 
 /**
@@ -15,9 +16,42 @@ import type { CityJsonDocument } from "./types";
 
 export type Rgb = [number, number, number];
 
+/** The wall materials the clay tells apart (osm_buildings.py normalises
+ *  OSM's `building:material` to these). */
+export type WallMaterial =
+  | "brick"
+  | "concrete"
+  | "glass"
+  | "metal"
+  | "plaster"
+  | "stone"
+  | "wood";
+
+/** What OSM knows about one CityObject. */
+export interface OsmBuildingFacts {
+  /** its address line, for the inquiry card (ADR 0040) */
+  addr?: string;
+  /** walls, `#rrggbb` (OSM `building:colour`) */
+  colour?: string;
+  /** the walls its neighbourhood is mapped as, where they differ from the
+   *  tile's (osm_buildings.py `context`) */
+  context?: FacadeMaterial;
+  heritage?: number;
+  /** one of the city's landmarks (landmarks.py, Wikidata) */
+  landmark?: number;
+  /** `building:levels`, for the inquiry card */
+  levels?: number;
+  material?: WallMaterial;
+  /** the outline's `name`, for the inquiry card */
+  name?: string;
+  /** roof, `#rrggbb` (OSM `roof:colour`) */
+  roof_colour?: string;
+  shop?: number;
+}
+
 /**
  * What OSM knows about a CityObject, keyed by its id
- * (`pipeline/bake/osm_buildings.py` → `data/dlm/osmbuild_<tile>.json`).
+ * (`pipeline/bake/osm_buildings.py` → `data/<site>/dlm/osmbuild_<tile>.json`).
  */
 export type OsmBuildingLut = Record<string, OsmBuildingFacts | undefined>;
 
@@ -25,18 +59,24 @@ export type OsmBuildingLut = Record<string, OsmBuildingFacts | undefined>;
 export const OBJECT_FLAG_SHOP = 1;
 /** A listed building, OSM `heritage=*` (column `flags`). */
 export const OBJECT_FLAG_HERITAGE = 2;
-/** The building someone is asking about (the inquiry card, ADR 0037): set
+/** Glass walls (OSM `building:material=glass`): a cool sheen (column `flags`). */
+export const OBJECT_FLAG_GLASS = 4;
+/** Metal walls or cladding: a cool, smoother clay (column `flags`). */
+export const OBJECT_FLAG_METAL = 8;
+/** Part of one of the city's landmarks (Wikidata; column `flags`). */
+export const OBJECT_FLAG_LANDMARK = 16;
+/** The building someone is asking about (the inquiry card, ADR 0040): set
  *  in the packed texture at runtime only, never baked. */
-export const OBJECT_FLAG_ASKED = 4;
+export const OBJECT_FLAG_ASKED = 32;
 
 /** The `flags` value of one object: its OSM facts summed as bits. */
-export function objectFlags(entry?: {
-  heritage?: number;
-  shop?: number;
-}): number {
+export function objectFlags(entry?: OsmBuildingFacts): number {
   return (
     (entry?.shop ? OBJECT_FLAG_SHOP : 0) +
-    (entry?.heritage ? OBJECT_FLAG_HERITAGE : 0)
+    (entry?.heritage ? OBJECT_FLAG_HERITAGE : 0) +
+    (entry?.material === "glass" ? OBJECT_FLAG_GLASS : 0) +
+    (entry?.material === "metal" ? OBJECT_FLAG_METAL : 0) +
+    (entry?.landmark ? OBJECT_FLAG_LANDMARK : 0)
   );
 }
 
@@ -48,13 +88,28 @@ export function objectFlags(entry?: {
  * attributes, `inheritedAttributes`).
  */
 export function inheritedFlags(
-  own?: { heritage?: number; shop?: number },
-  root?: { heritage?: number; shop?: number }
+  own?: OsmBuildingFacts,
+  root?: OsmBuildingFacts
 ): number {
   return objectFlags({
     shop: (own?.shop ?? 0) + (root?.shop ?? 0),
     heritage: (own?.heritage ?? 0) + (root?.heritage ?? 0),
+    landmark: (own?.landmark ?? 0) + (root?.landmark ?? 0),
+    material: own?.material ?? root?.material,
   });
+}
+
+/** An object's look from OSM, its own facts over its root Building's. */
+export function inheritedLook(
+  own?: OsmBuildingFacts,
+  root?: OsmBuildingFacts
+): Pick<OsmBuildingFacts, "colour" | "context" | "material" | "roof_colour"> {
+  return {
+    colour: own?.colour ?? root?.colour,
+    context: own?.context ?? root?.context,
+    material: own?.material ?? root?.material,
+    roof_colour: own?.roof_colour ?? root?.roof_colour,
+  };
 }
 
 /** Whether `flags` carries `bit` (one of the OBJECT_FLAG_* powers of two). */
@@ -70,9 +125,9 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
-  /** identity and semantics, the table's fact columns (ADR 0037) */
+  /** identity and semantics, the table's fact columns (ADR 0040) */
   facts?: ObjectFacts;
-  /** OBJECT_FLAG_SHOP + OBJECT_FLAG_HERITAGE, from OSM (0 = neither) */
+  /** OBJECT_FLAG_* summed, from OSM (0 = none) */
   flags: number;
   /** GroundSurface footprints (EPSG), for the minimap */
   footprints: [number, number][][];
@@ -96,6 +151,9 @@ export interface CityObjectRow {
 export const OBJECT_SOURCE_LOD2 = 0;
 /** A small structure from the laser scan (pipeline/bake/small_buildings.py). */
 export const OBJECT_SOURCE_SCAN = 1;
+/** A structure the surface model shows beyond LoD2 (pipeline/bake/
+ *  structures.py): a chimney, tower or mast, or a missing building. */
+export const OBJECT_SOURCE_GAP = 2;
 
 /** The property table as typed columns — how the glTF carries it. */
 export interface CityObjectTable {

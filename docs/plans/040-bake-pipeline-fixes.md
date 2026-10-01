@@ -7,6 +7,14 @@
 > synthetic tiles. On a STOP condition, stop and report. When done, update
 > this plan's row in `docs/plans/README.md`.
 >
+> **Multi-site layout (merged 2026-10-01, ADR 0037, plan 049)**: the data
+> lives per site — `data/<site>/{dgm,cityjson,dlm,dop}` (Dresden's under
+> `data/dresden/`), raw downloads in `data/_raw/<provider>/` — and the bakes
+> run as `bun run fetch <site>` / `bun run bake <site> [tile…] [--step X]`
+> through `scripts/pipeline.ts` (`scripts/bake.ts` and `--ingest` are gone;
+> Saxony's adapter is `pipeline/bake/providers/sn.py`). Read the paths and
+> commands below in that layout; this is drift, not a STOP condition.
+>
 > **Drift check (run first)**:
 > `git diff --stat dd470e9..HEAD -- scripts/bake.ts pipeline/bake/__main__.py pipeline/bake/stairs.py pipeline/bake/rail.py pipeline/bake/ingest_sn.py pipeline/bake/common.py scripts/prepare-data.ts scripts/bake-wissen-hero.ts app/wissen/_components/landing.tsx`
 > On a change in the lines a step edits, compare with the excerpts below;

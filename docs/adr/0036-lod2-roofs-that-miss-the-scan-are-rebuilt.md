@@ -28,7 +28,7 @@ cadastre.
 
 **A LoD2 object whose roof misses DOM1 is drawn as stepped flat blocks
 measured in DOM1, inside its own footprint** (`pipeline/bake/roofs.py` →
-`data/dlm/roofs_<tile>.geojson`; `scripts/measured-roofs.ts`, applied in
+`data/<site>/dlm/roofs_<tile>.geojson`; `scripts/measured-roofs.ts`, applied in
 `scripts/bake-city-mesh.ts` `withMeasuredRoofs`).
 
 - **When:** a building (`31001_*`) whose own roof cells (no other roof
@@ -61,7 +61,7 @@ leaves the committed file alone.
   barrel roof inside a rebuilt object becomes one level at its median, and
   a facade's setback reads as a step at the next metre band.
 - DOM1 is now a city-mesh input (through the committed GeoJSON). A new
-  LoD2 edition or a new scan means re-running `bun run bake --step roofs`.
+  LoD2 edition or a new scan means re-running `bun run bake <site> --step roofs`.
 - The sky-view and horizon bake (`skyview.py`) reads the rebuilt roofs in
   place of their objects, so the far shadows and the sky light agree with
   the mesh; `roofs` runs before `skyview`, and re-baking one means

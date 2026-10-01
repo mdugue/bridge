@@ -4,6 +4,8 @@ import { descriptionOf, titleOf } from "@/lib/docs/content";
 import { docFiles } from "@/lib/docs/files";
 import { type NavGroup, type NavItem, navGroups } from "@/lib/docs/nav";
 import { routeOf, segmentsOf } from "@/lib/docs/routes";
+import { REFERENCE_SITE } from "@/sites";
+import { builtSite } from "../../_lib/built-sites";
 
 /**
  * The docs/ folder as the /wissen pages read it, at build time: every page is
@@ -68,21 +70,11 @@ export interface HeroImage {
 }
 
 /**
- * The land-cover map of the tile block (scripts/bake-wissen-hero.ts), as
+ * The reference site's land-cover map (scripts/bake-wissen-hero.ts), as
  * prepare-data published it; next/image serves it in the sizes a page asks
  * for. Null when the bake was skipped – the pages then go without it.
  */
 export function heroImage(): HeroImage | null {
-  try {
-    const manifest = JSON.parse(
-      readFileSync(
-        path.join(process.cwd(), "public", "data", "manifest.json"),
-        "utf8"
-      )
-    ) as { files: Record<string, string> };
-    const file = manifest.files["wissen-hero.webp"];
-    return file ? { src: `/data/${file}` } : null;
-  } catch {
-    return null;
-  }
+  const map = builtSite(REFERENCE_SITE)?.map;
+  return map ? { src: map } : null;
 }

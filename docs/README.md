@@ -1,7 +1,8 @@
 # docs/ — the project knowledge base
 
-Durable, version-controlled documentation for the 3D city walker (one site
-per build; Dresden is the one site so far): what it shows, where the data
+Durable, version-controlled documentation for the 3D city walker (one
+deployment, a route per built site; Dresden is the reference site, the one
+whose data is committed): what it shows, where the data
 comes from, how it is built, which decisions were taken and why, and what
 is still open. It lives in the repository so it
 survives across chat threads and contributors.

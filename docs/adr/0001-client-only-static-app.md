@@ -38,8 +38,8 @@ is done by copying a Snapshot JSON, not by a server-side link.
 The maintainer set the project's direction to a digital twin with an
 aesthetic claim and relaxed this decision from "strictly static" to
 "static where possible". Everything the twin knows about the city stays
-baked into files ([ADR 0037](./0037-inquiry-cards-on-demand-facts-in-the-tileset.md));
-live sources ([plan 050](../plans/050-time-and-live-sources.md)) are read
+baked into files ([ADR 0040](./0040-inquiry-cards-on-demand-facts-in-the-tileset.md));
+live sources ([plan 053](../plans/053-time-and-live-sources.md)) are read
 from the browser where their APIs allow it (CORS), and a small, stateless
 proxy — no database, no accounts, no user data — is allowed only where a
 source offers no other way. Anything stateful (saved places, shared edits)
@@ -55,7 +55,8 @@ still needs its own decision.
 
 ## References
 
-- README.md ("one route, no backend, no database, no accounts, nothing
-  persisted"); AGENTS.md "When in doubt, ask before introducing a backend".
+- README.md ("no backend, no database, no accounts, nothing persisted";
+  since [ADR 0037](./0037-sites-providers-and-per-site-data.md) a start page
+  and one prerendered route per site rather than one route); AGENTS.md "When in doubt, ask before introducing a backend".
 - Audit rejections in [plans/README.md](../plans/README.md#rejected-kept-so-nobody-re-audits-them)
   (CSP headers, `.env.example`).

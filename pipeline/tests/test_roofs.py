@@ -52,7 +52,14 @@ def _square(x, y, w, z):
 
 
 def _tile(tmp_path, dom):
-    tile = Tile("t", (X0, Y0, X0 + SIZE, Y0 + SIZE), 25833, tmp_path / "raw", tmp_path / "data")
+    tile = Tile(
+        "t",
+        (X0, Y0, X0 + SIZE, Y0 + SIZE),
+        25833,
+        tmp_path / "raw",
+        tmp_path / "data",
+        credit="Quelle: GeoSN, dl-de/by-2-0",
+    )
     _raster(tile.dgm, np.full((SIZE, SIZE), BASE))
     _raster(tile.raw_raster("dom1"), dom)
     # 1. a tent: four facets from 5 m eaves to a 20 m peak, over 40 × 40 m
@@ -102,7 +109,8 @@ def test_a_tent_over_two_blocks_becomes_the_two_blocks(tmp_path):
     tile = _tile(tmp_path, _dom())
     run(tile)
     doc = json.loads((tile.data / "dlm" / "roofs_t.geojson").read_text())
-    assert "GeoSN" in doc["attribution"]
+    # the provider's credit line, whatever the Land
+    assert doc["attribution"] == "Quelle: GeoSN, dl-de/by-2-0 (LoD2, DOM1)"
     parts = [(f["properties"]["id"], f["properties"]["z"], f["geometry"]) for f in doc["features"]]
     # the flat roof fits and the torn-down one is not rebuilt
     assert {p[0] for p in parts} == {"tent"}

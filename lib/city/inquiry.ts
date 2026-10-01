@@ -1,6 +1,6 @@
 /**
  * The inquiry card: what the viewer says about a building when someone asks
- * (the "Befragen" mode, ADR 0037). The scene picks an object and hands over
+ * (the "Befragen" mode, ADR 0040). The scene picks an object and hands over
  * its building tree's facts (lib/city/object-facts.ts); this module turns
  * them, with the provenance manifest, into the card's German lines — the
  * title, the facts, the identity and a source line for every fact shown.

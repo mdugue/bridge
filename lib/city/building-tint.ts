@@ -27,6 +27,16 @@ import { clamp01 } from "./math";
 
 export type TintRgb = [number, number, number];
 
+/**
+ * What the walls around a building are mostly made of, as its OSM
+ * neighbourhood is mapped (pipeline/bake/osm_buildings.py `context`):
+ * rendered plaster — the default, Dresden and most southern and central old
+ * towns — or brick (Hamburg's Speicherstadt, the northern clinker quarters).
+ * It swaps the palette of housing and commerce for a building without a
+ * mapped material of its own; civic buildings keep their cool stone.
+ */
+export type FacadeMaterial = "brick" | "render";
+
 /** Muted clay-family swatches (sRGB 0..255), grouped by building use. Families
  *  overlap at the edges so the warm/neutral/cool transition is never abrupt.
  *  (Stored as channel tuples, not hex, to keep the module free of bitwise ops.) */
@@ -49,6 +59,19 @@ const FAMILIES = {
     [217, 213, 204],
     [207, 210, 206],
     [199, 205, 210],
+  ],
+  // Brick cities — the clinker of the Kontorhäuser and the Speicherstadt,
+  // from orange brick to dark red-brown, plus one pale render for the white
+  // stucco between them. The swatches are strong on purpose: at the default
+  // mix (60 % into the pale clay, in linear light) they land on a washed,
+  // dusty brick (≈ sRGB 182–218, 157–170, 150–155), rosier and darker than
+  // the plaster families, and still inside the watercolour register.
+  brick: [
+    [190, 78, 42],
+    [150, 52, 36],
+    [204, 104, 62],
+    [130, 50, 40],
+    [229, 214, 184],
   ],
 } as const;
 
@@ -101,6 +124,107 @@ function srgbChannelToLinear(c: number): number {
   return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
+/** What OSM says a building looks like (osm_buildings.py via
+ *  lib/city/city-mesh.ts `inheritedLook`). */
+export interface OsmLook {
+  /** walls, `#rrggbb` */
+  colour?: string;
+  material?: string;
+  /** roof, `#rrggbb` */
+  roof_colour?: string;
+}
+
+/** A mapped wall material → the palette family it reads as. Glass and metal
+ *  also set a flag the clay shows (a cool sheen, lib/city/city-mesh.ts). */
+const MATERIAL_FAMILY: Record<string, FamilyKey> = {
+  brick: "brick",
+  stone: "cool",
+  concrete: "neutral",
+  glass: "cool",
+  metal: "cool",
+  wood: "warm",
+  plaster: "warm",
+};
+
+/** Where a mapped colour's lightness is held (HSL, 0–1): walls stay pale,
+ *  roofs may be darker — the clay's register, whatever a mapper wrote. */
+const WALL_LIGHTNESS: [number, number] = [0.45, 0.9];
+const ROOF_LIGHTNESS: [number, number] = [0.3, 0.8];
+/** And its saturation: a red wall stays a dusty red, not a signal. */
+const MAX_SATURATION = 0.45;
+
+function hslOf(r: number, g: number, b: number): [number, number, number] {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) {
+    return [0, 0, l];
+  }
+  const d = max - min;
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) {
+    h = (g - b) / d + (g < b ? 6 : 0);
+  } else if (max === g) {
+    h = (b - r) / d + 2;
+  } else {
+    h = (r - g) / d + 4;
+  }
+  return [h / 6, sat, l];
+}
+
+function rgbOfHsl(h: number, sat: number, l: number): [number, number, number] {
+  if (sat === 0) {
+    return [l, l, l];
+  }
+  const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
+  const p = 2 * l - q;
+  const channel = (t0: number) => {
+    const t = t0 - Math.floor(t0);
+    if (t < 1 / 6) {
+      return p + (q - p) * 6 * t;
+    }
+    if (t < 1 / 2) {
+      return q;
+    }
+    if (t < 2 / 3) {
+      return p + (q - p) * (2 / 3 - t) * 6;
+    }
+    return p;
+  };
+  return [channel(h + 1 / 3), channel(h), channel(h - 1 / 3)];
+}
+
+/**
+ * A mapped colour (`#rrggbb`) brought into the clay's register: its hue
+ * kept, its saturation capped and its lightness held in `range`, with the
+ * same per-building lightness jitter as the palettes. Null when the value
+ * is not a colour.
+ */
+export function osmColourTint(
+  objectId: string,
+  hex: string,
+  range: [number, number] = WALL_LIGHTNESS
+): TintRgb | null {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/iu.exec(hex);
+  if (!m) {
+    return null;
+  }
+  const [h, sat, l] = hslOf(
+    Number.parseInt(m[1], 16) / 255,
+    Number.parseInt(m[2], 16) / 255,
+    Number.parseInt(m[3], 16) / 255
+  );
+  const jitter = (hash01(`${objectId}#L`) - 0.5) * 2 * LIGHT_JITTER;
+  const held = Math.min(Math.max(l, range[0]), range[1]) + jitter;
+  const [r, g, b] = rgbOfHsl(h, Math.min(sat, MAX_SATURATION), clamp01(held));
+  return [
+    srgbChannelToLinear(r),
+    srgbChannelToLinear(g),
+    srgbChannelToLinear(b),
+  ];
+}
+
 /** Reads a `Record<string, unknown>` field as a string without `any`. */
 function readString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
@@ -112,13 +236,30 @@ function readNumber(v: unknown): number | undefined {
 /**
  * Stable linear-RGB tint for one building. `objectId` seeds the hash (so the
  * same building always gets the same colour across reloads/demolish), `attrs`
- * is the CityJSON `attributes` bag (`function`, `measuredHeight`).
+ * is the CityJSON `attributes` bag (`function`, `measuredHeight`), `facades`
+ * what the walls around it are made of.
  */
 export function buildingTint(
   objectId: string,
-  attrs: Record<string, unknown> = {}
+  attrs: Record<string, unknown> = {},
+  facades: FacadeMaterial = "render",
+  look: OsmLook = {}
 ): TintRgb {
-  const family = FAMILIES[familyOf(readString(attrs.function))];
+  if (look.colour) {
+    const own = osmColourTint(objectId, look.colour, WALL_LIGHTNESS);
+    if (own) {
+      return own;
+    }
+  }
+  const use = familyOf(readString(attrs.function));
+  const family =
+    FAMILIES[
+      look.material
+        ? MATERIAL_FAMILY[look.material]
+        : facades === "brick" && use !== "cool"
+          ? "brick"
+          : use
+    ];
   const pick =
     family[
       Math.min(family.length - 1, Math.floor(hash01(objectId) * family.length))
@@ -236,7 +377,8 @@ export type RoofColorLut = Record<string, TintRgb>;
 
 /**
  * Roof colour for one building: the real DOP-sampled colour when the LUT has it,
- * otherwise the synthesized terracotta/slate palette. This is the source
+ * then OSM's `roof:colour` in the clay's register, otherwise the synthesized
+ * terracotta/slate palette. This is the source
  * preference baked into one place — present LUT entry wins, missing one (no DOP,
  * a roof too small to sample, a demolished/edited building) degrades to
  * `roofTint` so the look never breaks. See docs/transformations.md.
@@ -244,13 +386,18 @@ export type RoofColorLut = Record<string, TintRgb>;
 export function roofColor(
   objectId: string,
   attrs: Record<string, unknown> = {},
-  lut?: RoofColorLut
+  lut?: RoofColorLut,
+  look: OsmLook = {}
 ): TintRgb {
   const sampled = lut?.[objectId];
   if (sampled?.length === 3) {
     return [sampled[0], sampled[1], sampled[2]];
   }
-  return roofTint(objectId, attrs);
+  // no measured colour: what OSM says, in the clay's register
+  const mapped = look.roof_colour
+    ? osmColourTint(`${objectId}#roof`, look.roof_colour, ROOF_LIGHTNESS)
+    : null;
+  return mapped ?? roofTint(objectId, attrs);
 }
 
 /**

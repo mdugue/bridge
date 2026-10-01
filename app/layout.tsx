@@ -12,8 +12,13 @@ const spaceGroteskHeading = Space_Grotesk({
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
+  // The deployment's own origin (e.g. https://walkedby.manuel.fyi; every
+  // city is a route under it), for absolute metadata URLs.
+  ...(process.env.SITE_URL
+    ? { metadataBase: new URL(process.env.SITE_URL) }
+    : {}),
   title: "City Walk",
-  description: "Walkable 3D city viewer",
+  description: "Deutsche Städte als begehbare 3D-Modelle aus offenen Geodaten",
 };
 
 export default function RootLayout({

@@ -11,10 +11,17 @@
  * Called by scripts/prepare-data.ts; no DOM.
  */
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
-import type { BufferGeometry, Matrix4, Mesh } from "three";
+import {
+  type BufferGeometry,
+  type Matrix4,
+  type Mesh,
+  ShapeUtils,
+  Vector2,
+} from "three";
 import {
   buildingGlows,
   buildingTint,
+  type FacadeMaterial,
   inheritedAttributes,
   type RoofColorLut,
   roofColor,
@@ -25,6 +32,8 @@ import {
 import {
   type CityObjectRow,
   inheritedFlags,
+  inheritedLook,
+  OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   type OsmBuildingLut,
   withoutTrafficStructures,
@@ -33,6 +42,7 @@ import { epsgCodeFromReferenceSystem } from "../lib/city/crs";
 import type {
   MeasuredRoofFeature,
   SmallBuildingFeature,
+  StructureFeature,
 } from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
 import {
@@ -47,6 +57,11 @@ import {
   structureCorners,
   structureMesh,
 } from "../lib/city/small-buildings";
+import {
+  STRUCTURE_SINK,
+  structureFootprint,
+  structureShape,
+} from "../lib/city/structures";
 import type { CityJsonDocument } from "../lib/city/types";
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
 
@@ -198,6 +213,107 @@ export function appendScanStructures(
   };
 }
 
+/**
+ * The structures the surface model shows beyond LoD2 (pipeline/bake/
+ * structures.py) appended like the scan's: one object each, its own root,
+ * `source` 2. A column is no Building (the HUD does not count a chimney as
+ * a house); a missing building is. Chimneys, towers and lighthouses take
+ * the brick palette, masts and the rest the site's walls; a column's head
+ * reads as roof, so the roof tint is the wall's own (no terracotta cap on a
+ * chimney).
+ */
+export function appendGapStructures(
+  tile: string,
+  baked: Pick<BakedCityMesh, "objects" | "offset" | "vertices">,
+  features: readonly StructureFeature[],
+  facades: FacadeMaterial = "render",
+  /** the LoD2 object ids by row, for a relief slab's host */
+  objectIndex: ReadonlyMap<string, number> = new Map()
+): void {
+  const positions: number[] = [];
+  const objectIds: number[] = [];
+  const isRoof: number[] = [];
+  for (const f of features) {
+    const p = f.properties;
+    const mesh = structureShape(f, baked.offset, triangulateXY);
+    if (!p || mesh.positions.length === 0) {
+      continue;
+    }
+    const index = baked.objects.length;
+    const hostIndex = p.of === undefined ? undefined : objectIndex.get(p.of);
+    const host = hostIndex === undefined ? undefined : baked.objects[hostIndex];
+    if (p.kind === "relief" && !host) {
+      continue;
+    }
+    positions.push(...mesh.positions);
+    isRoof.push(...mesh.isRoof);
+    objectIds.push(...mesh.isRoof.map(() => index));
+    if (host) {
+      // a relief slab is part of its landmark: its look, its building tree
+      // (demolish takes it along), no footprint of its own, no storey bands
+      baked.objects.push({
+        ...host,
+        building: false,
+        baseZ: cm(p.z),
+        eaveH: cm(p.h),
+        storeyH: cm(p.h + 1),
+        source: OBJECT_SOURCE_GAP,
+        footprints: [],
+      });
+      continue;
+    }
+    const id = gapStructureId(tile, f);
+    const isBuilding = p.kind === "building";
+    const brick = ["chimney", "tower", "lighthouse"].includes(p.kind);
+    const tint = rgb(buildingTint(id, {}, brick ? "brick" : facades));
+    baked.objects.push({
+      building: isBuilding,
+      root: index,
+      baseZ: cm(p.z - STRUCTURE_SINK),
+      eaveH: cm(p.h + STRUCTURE_SINK),
+      flags: 0,
+      storeyH: cm(isBuilding ? storeyHeight(p.h) : p.h + STRUCTURE_SINK + 1),
+      glow: 0,
+      rough: r3(roughJitter(id)),
+      tint,
+      roof: isBuilding ? rgb(roofTint(id, { roofType: "1000" })) : tint,
+      source: OBJECT_SOURCE_GAP,
+      footprints: [
+        structureFootprint(f).map(([x, y]): [number, number] => [cm(x), cm(y)]),
+      ],
+    });
+  }
+  const v = baked.vertices;
+  baked.vertices = {
+    positions: concat(v.positions, positions),
+    objectIds: concat(v.objectIds, objectIds),
+    isRoof: concat(v.isRoof, isRoof),
+  };
+}
+
+/** A gap structure's hash key: its kind and anchor to the decimetre. */
+export function gapStructureId(tile: string, f: StructureFeature): string {
+  const [x, y] =
+    f.geometry.type === "Point"
+      ? f.geometry.coordinates
+      : (f.geometry.coordinates[0]?.[0] ?? [0, 0]);
+  return `gap:${tile}:${f.properties?.kind}:${x.toFixed(1)}:${y.toFixed(1)}`;
+}
+
+/** THREE's polygon triangulation behind lib/city/structures.ts's
+ *  `Triangulate` (flat coordinates, hole starts → flat index triples). */
+export const triangulateXY = (data: number[], holes: number[]): number[] => {
+  const pts: Vector2[] = [];
+  for (let i = 0; i + 1 < data.length; i += 2) {
+    pts.push(new Vector2(data[i], data[i + 1]));
+  }
+  const cuts = [...holes, pts.length];
+  const contour = pts.slice(0, cuts[0]);
+  const rings = holes.map((start, i) => pts.slice(start, cuts[i + 1]));
+  // triangulateShape indexes contour ++ holes, as Triangulate does
+  return ShapeUtils.triangulateShape(contour, rings).flat();
+};
+
 /** A scan structure's hash key: the tile and its ring's first corner to the
  *  decimetre — stable when the tile's LoD2 object count changes. */
 export function scanStructureId(tile: string, f: SmallBuildingFeature): string {
@@ -283,8 +399,10 @@ export function withMeasuredRoofs(
  * recenter matrix (null for the primary itself), exactly as the browser
  * used to pass it, so every tile lands in the same recentered frame.
  * `osmLut` holds what OSM knows per object (shops, heritage), when baked;
- * a part carries its own flags and its root Building's. `measured` are
- * the roofs rebuilt from DOM1, when baked.
+ * a part carries its own flags and its root Building's. `facades` is the
+ * tile's wall material (the tint palette; osm_buildings.py `context`), an
+ * object's own neighbourhood overriding it.
+ * `measured` are the roofs rebuilt from DOM1, when baked.
  */
 export function bakeCityMesh(
   tile: string,
@@ -293,6 +411,8 @@ export function bakeCityMesh(
   sharedMatrix: Matrix4 | null,
   osmLut?: OsmBuildingLut,
   scan?: readonly SmallBuildingFeature[],
+  facades: FacadeMaterial = "render",
+  gaps?: readonly StructureFeature[],
   measured?: readonly MeasuredRoofFeature[]
 ): BakedCityMesh {
   // Bridges are the rail layer's (ALKIS 53001 slabs would double the decks).
@@ -361,6 +481,7 @@ export function bakeCityMesh(
     const measured =
       typeof own.measuredHeight === "number" ? own.measuredHeight : total;
     const roofMin = roofMinZ.get(index);
+    const look = inheritedLook(osmLut?.[id], osmLut?.[keys[root]]);
     const footprints = footprintsOf[index];
     return {
       building: o.type === "Building",
@@ -371,8 +492,8 @@ export function bakeCityMesh(
       storeyH: cm(storeyHeight(measured)),
       glow: buildingGlows(attrs) ? 1 : 0,
       rough: r3(roughJitter(id)),
-      tint: rgb(buildingTint(id, attrs)),
-      roof: rgb(roofColor(id, attrs, roofLut)),
+      tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
+      roof: rgb(roofColor(id, attrs, roofLut, look)),
       footprints,
       facts: lod2Facts({
         buildingId: keys[root],
@@ -415,6 +536,15 @@ export function bakeCityMesh(
   const baked = { epsg, matrix, objects, offset, vertices: v };
   if (scan) {
     appendScanStructures(tile, baked, scan);
+  }
+  if (gaps) {
+    appendGapStructures(
+      tile,
+      baked,
+      gaps,
+      facades,
+      new Map(keys.map((id, i) => [id, i]))
+    );
   }
   return baked;
 }

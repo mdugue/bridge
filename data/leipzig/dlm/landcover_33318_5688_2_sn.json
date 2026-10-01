@@ -1,0 +1,24 @@
+{
+  "tile": "33318_5688_2_sn",
+  "crs": "EPSG:25833",
+  "bounds": [
+    318000,
+    5688000,
+    320000,
+    5690000
+  ],
+  "size": 4096,
+  "source": "Basis-DLM",
+  "classes": {
+    "0": "background",
+    "1": "farmland",
+    "2": "forest",
+    "3": "copse",
+    "4": "builtup",
+    "5": "railway",
+    "6": "path",
+    "7": "road",
+    "8": "water"
+  },
+  "attribution": "Quelle: GeoSN, dl-de/by-2-0; islands: \u00a9 OpenStreetMap contributors (ODbL)"
+}

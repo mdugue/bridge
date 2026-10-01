@@ -250,6 +250,17 @@ def test_two_nodes_of_one_crossing_at_an_angle_keep_the_zebra_width():
     assert merged[3] == pytest.approx(8.0)
 
 
+def test_the_crossings_of_two_carriageways_in_line_stay_two_rows():
+    # A dual carriageway, a 3 m median between: each crossing is 12 m across
+    # and they touch, but one row would paint 27 m across the median too.
+    north = [1000.0, 1013.5, UP, 12.0, 2.0, ZEBRA]
+    south = [1000.0, 986.5, UP, 12.0, 2.0, ZEBRA]
+    assert len(merge_rows([north, south])) == 2
+    # the same nodes close enough to be one road's crossing do merge
+    (merged,) = merge_rows([north, [1000.0, 1010.0, UP, 12.0, 2.0, ZEBRA]])
+    assert merged[3] == pytest.approx(13.75)
+
+
 def test_two_arms_of_a_junction_and_a_stop_line_stay_apart():
     # (an axis UP runs north: hl along y, hw along x)
     arm_a = [1000.0, 1000.0, UP, 6.0, 2.0, ZEBRA]

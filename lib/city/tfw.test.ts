@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { tfwToBounds } from "./tfw";
 
-// Real sidecar of data/dgm/dgm1_33412_5656_2_sn_tiff (1 m pixels, 2000x2000).
+// Real sidecar of data/dresden/dgm/dgm1_33412_5656_2_sn_tiff (1 m pixels, 2000x2000).
 const dresdenTfw = `1.0000000000
 0.0000000000
 0.0000000000

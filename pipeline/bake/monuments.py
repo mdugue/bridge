@@ -52,7 +52,6 @@ from .common import (
 )
 from .osm import has_extract, read_osm, tag
 
-GEOSN_ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0"
 # Bauwerksfunktion of AX_SonstigesBauwerkOderSonstigeEinrichtung (51009).
 MONUMENT, COLUMN_OR_STONE, FOUNTAIN = "1750", "1770", "1780"
 FOUNTAIN_NAME = re.compile(r"brunnen|tränke|fontäne|wasserspiel", re.IGNORECASE)
@@ -256,8 +255,8 @@ def _patch_to_relief(heights: np.ndarray, patch: np.ndarray, window, origin) -> 
     west, north = origin
     r0, c0 = window[0], window[1]
     return {
-        "west": round(west + c0 + ca, 1),
-        "north": round(north - r0 - ra, 1),
+        "west": round(float(west + c0 + ca), 1),
+        "north": round(float(north - r0 - ra), 1),
         "cols": int(grid.shape[1]),
         "rows": int(grid.shape[0]),
         "dm": [int(round(v * 10)) for v in grid.ravel()],
@@ -336,10 +335,14 @@ def _ndom(tile: Tile) -> np.ndarray | None:
 
 
 def run(tile: Tile) -> None:
-    if not tile.has_dlm("the monuments"):
+    # Without an open Basis-DLM (Hamburg, Berlin) the OSM fountains stand
+    # alone; a DLM provider whose package is missing keeps its files.
+    if tile.products.dlm and not tile.has_dlm("the monuments"):
         return
-    dlm = _dlm_points(tile)
+    dlm = _dlm_points(tile) if tile.products.dlm else []
     osm = _osm_fountains(tile) if has_extract(tile, "the OSM fountains") else []
+    if not dlm and not osm and not tile.products.dlm:
+        return
     ndom = _ndom(tile)
     if ndom is None:
         print(f"{tile.id}: no DOM1 — monuments without their measured relief")
@@ -358,7 +361,7 @@ def run(tile: Tile) -> None:
         features.append(feature(geometry_json(item["geom"]), props))
     # Stable order: the committed file diffs by feature, not by read order.
     features.sort(key=lambda f: (f["properties"]["kind"], _anchor_key(f["geometry"])))
-    credit = GEOSN_ATTRIBUTION + (f"; {OSM_ATTRIBUTION}" if osm else "")
+    credit = "; ".join(c for c in (tile.credit if dlm else "", OSM_ATTRIBUTION if osm else "") if c)
     write_geojson(tile.out("dlm", f"monuments_{tile.id}.geojson"), features, tile.epsg, credit)
     kinds = {k: sum(f["properties"]["kind"] == k for f in features) for k in KINDS}
     reliefs = sum("relief" in f["properties"] for f in features)

@@ -10,6 +10,27 @@ may stutter briefly while new areas appear), and, for a smooth picture, a
 reasonably recent graphics card. Phones are supported: they automatically
 get a lighter render budget.
 
+## Choosing a city
+
+The start page (`/`) shows one card for every city this deployment was
+built with: the city's map in the viewer's ground colours, its Land, the
+area it covers and how many viewpoints it has. A card opens that city's
+viewer, which has an address of its own — `/dresden`, `/leipzig`, … — so a
+link or bookmark leads straight into it. Inside the viewer, *Andere Stadt
+wählen* ("choose another city") under the city's name at the top of the
+panel leads back to the start page. The start page also links to the
+knowledge base (`/wissen`).
+
+Above the cards, *Sortieren* ("sort") orders them. *Empfohlen*
+("featured") puts Dresden first — the best-kept city — and the rest by
+name; the other orderings rank by a figure the build measured for every
+city the same way, and each card then shows its figure: the most tree
+crowns per km² (as the surface model sees them), the greenest (forest,
+meadow and fields in the land cover), the most water, the tallest houses
+(the median building's height), the most densely built (the share of the
+ground under a roof), the hilliest (the ground's height range), the most
+landmarks, the largest area.
+
 ## Loading
 
 The loading screen lists five stages and a bar. The first three
@@ -84,7 +105,9 @@ when it lies flat); without one the view keeps its direction. A short line
 at the top reports the precision — GPS in a city is often 5–20 m off, a
 phone compass a few degrees. If you stand outside the area, a small window
 says how far and offers where to go instead: one of the vantage points, a
-spot you pick on the map, or staying where you are. Browsers ask for permission first
+spot you pick on the map, or staying where you are. If you stand in
+another city this site also shows, the window says so first and offers to
+jump there: its viewer opens with you standing where you are. Browsers ask for permission first
 (iPhones for the compass too); the location never leaves the device — there
 is no server to send it to.
 
@@ -165,6 +188,15 @@ The button in the corner opens a panel with three tabs.
   yet. The last card, *Aktuelle Sicht merken*, remembers where you stand;
   it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
   forget it.
+- **Wahrzeichen** ("landmarks") — the city's best-known buildings and
+  structures, up to twelve, as small chips under the viewpoints: the
+  Frauenkirche in Dresden, the Elbphilharmonie, the Chilehaus and St.
+  Michaelis in Hamburg, the Lindenbrauerei in Unna. The list is not
+  hand-picked: it comes from
+  Wikidata (the buildings with the most Wikipedia articles, matched to
+  the buildings the viewer draws), so every city gets its own. A click
+  glides up to a view from the south-south-west, a little above the
+  landmark and higher the taller it is.
 - **Steuerung** — the full controls table.
 
 ### Szene ("Scene")
@@ -243,12 +275,13 @@ cannot resolve it in motion) and comes back when you stop.
 - **Statistik** — number of buildings and terrain points currently in
   view, estimated graphics memory and the frame rate.
 
-The footer credits the data sources: the Saxon survey office for the
-official datasets and OpenStreetMap contributors for, among others, lamps,
-walls and fences, platforms, bridge structures, shops and listed buildings.
-Next to it, *Unterstützen* (support)
-leads to the project's Ko-fi page; it is a plain link that loads nothing
-from Ko-fi until it is clicked.
+The footer credits the data sources: the Land's survey office (in
+Dresden the Saxon one) for the official datasets and OpenStreetMap
+contributors for, among others, lamps, walls and fences, platforms, bridge
+structures, shops and listed buildings (and the land cover where the Land
+publishes no Basis-DLM). Next to it, *Unterstützen* (support) leads to the
+project's Ko-fi page; it is a plain link that loads nothing from Ko-fi
+until it is clicked.
 
 ## Tips
 
@@ -258,9 +291,9 @@ from Ko-fi until it is clicked.
   degrees below) give the richest colours; try 07:00 or 20:00 in summer.
 - On a laptop without a discrete graphics card, lower *Kontaktschatten*
   and switch off *Tiefenschärfe* for a higher frame rate.
-- `?scene=lite` in the address bar streams only the start tile, with
-  coarse shadows. It exists for automated tests and is not how the scene
-  is meant to look.
+- `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
+  only the start tile, with coarse shadows. It exists for automated tests
+  and is not how the scene is meant to look.
 
 ## Small things
 

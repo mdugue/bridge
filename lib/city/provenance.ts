@@ -2,11 +2,13 @@
  * The provenance manifest the viewer reads: for each source the site draws
  * on, who publishes it under which licence, and — per tile — the edition
  * ("Stand") the committed data was made from. Derived at build time from
- * the hand-kept `data/provenance.json` (the record of what was downloaded
+ * the site's `data/<site>/provenance.json` (the record of what was downloaded
  * when, with the queries and the URLs) by `scripts/prepare-data.ts`, and
  * published next to the tileset as `provenance.json`; the inquiry card
- * fetches it once, when first opened (ADR 0037). No THREE, no DOM.
+ * fetches it once, when first opened (ADR 0040). No THREE, no DOM.
  */
+
+import type { Provider, TreeCadastre } from "./site";
 
 /** The logical name the build publishes the manifest under. */
 export const PROVENANCE_FILE = "provenance.json";
@@ -45,7 +47,8 @@ export interface SiteProvenance {
   version: 1;
 }
 
-/** The parts of `data/provenance.json` the manifest reads. */
+/** The parts of `data/<site>/provenance.json` the manifest reads (a GeoSN
+ *  site's record carries per-tile editions; others' only the provider). */
 export interface ProvenanceRecord {
   dresden?: { Stadtbaumkataster?: { retrieved?: string } };
   geosn?: Record<string, { tiles?: Record<string, { stand?: string }> }>;
@@ -54,8 +57,11 @@ export interface ProvenanceRecord {
   };
 }
 
-const GEOSN = "Quelle: GeoSN, dl-de/by-2-0";
-const DL_DE = "dl-de/by-2-0";
+/** What the manifest needs to know of the site: whose data it is. */
+export interface ProvenanceSite {
+  provider: Pick<Provider, "credit" | "licence">;
+  treeCadastre?: TreeCadastre;
+}
 
 /** The GeoSN product behind each per-tile source. */
 const GEOSN_PRODUCTS: [SourceKey, string][] = [
@@ -74,42 +80,55 @@ export function leadingDate(text: string | undefined): string | undefined {
 /**
  * The manifest for `tiles` from the provenance record. The OSM building
  * facts (shops, heritage, names, addresses, storeys) are the product the
- * inquiry card quotes, so the OSM edition is theirs.
+ * inquiry card quotes, so the OSM edition is theirs. Credits and licences
+ * are the site's provider's (and its tree register's).
  */
 export function siteProvenance(
   record: ProvenanceRecord,
-  tiles: readonly string[]
+  tiles: readonly string[],
+  site: ProvenanceSite
 ): SiteProvenance {
+  const official = site.provider.credit;
+  const licence = site.provider.licence;
+  // "Stadtbäume: Landeshauptstadt Dresden, dl-de/by-2-0" → its holder and
+  // licence; a site without a register names OSM's trees
+  const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/, "");
   const osmStand = leadingDate(
     record.openstreetmap?.bbbike?.products?.osmBuildings?.dataAsOf
   );
   const treesStand = leadingDate(record.dresden?.Stadtbaumkataster?.retrieved);
   const sources: Record<SourceKey, SourceInfo> = {
-    lod2: { label: "3D-Stadtmodell LoD2", credit: GEOSN, licence: DL_DE },
-    lsc: { label: "Laserscan", credit: GEOSN, licence: DL_DE },
+    lod2: { label: "3D-Stadtmodell LoD2", credit: official, licence },
+    lsc: { label: "Laserscan", credit: official, licence },
     dgm: {
       label: "Digitales Geländemodell DGM1",
-      credit: GEOSN,
-      licence: DL_DE,
+      credit: official,
+      licence,
     },
     dom: {
       label: "Digitales Oberflächenmodell DOM1",
-      credit: GEOSN,
-      licence: DL_DE,
+      credit: official,
+      licence,
     },
-    dop: { label: "Digitales Orthophoto", credit: GEOSN, licence: DL_DE },
+    dop: { label: "Digitales Orthophoto", credit: official, licence },
     osm: {
       label: "OpenStreetMap",
       credit: "© OpenStreetMap-Mitwirkende",
       licence: "ODbL",
       ...(osmStand ? { stand: osmStand } : {}),
     },
-    trees: {
-      label: "Stadtbaumkataster",
-      credit: "Landeshauptstadt Dresden, dl-de/by-2-0",
-      licence: DL_DE,
-      ...(treesStand ? { stand: treesStand } : {}),
-    },
+    trees: register
+      ? {
+          label: "Stadtbaumkataster",
+          credit: register,
+          licence: register.split(", ").at(-1) ?? register,
+          ...(treesStand ? { stand: treesStand } : {}),
+        }
+      : {
+          label: "OpenStreetMap",
+          credit: "© OpenStreetMap-Mitwirkende",
+          licence: "ODbL",
+        },
   };
   const out: SiteProvenance["tiles"] = {};
   for (const tile of tiles) {

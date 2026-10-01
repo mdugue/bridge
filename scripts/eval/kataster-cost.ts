@@ -55,8 +55,9 @@ import {
   tileIds,
 } from "../../lib/city/tile";
 import { parseTilesetExtras, TILESET_FILE } from "../../lib/city/tileset";
-import { currentSite } from "../../sites";
+import { REFERENCE_SITE, SITES, siteById } from "../../sites";
 import { readDgm } from "../bake-tiles";
+import { DRESDEN } from "../../sites/dresden";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const PUB = join(ROOT, "public", "data");
@@ -69,7 +70,7 @@ const features = <F>(file: string): F[] => {
     return (
       (
         JSON.parse(
-          readFileSync(join(ROOT, "data", "dlm", file), "utf8")
+          readFileSync(join(ROOT, "data", "dresden", "dlm", file), "utf8")
         ) as FeatureCollection<F>
       ).features ?? []
     );
@@ -86,7 +87,7 @@ const { offset } = parseTilesetExtras(
 /** Ground height from the committed DGM, resampled to 1024² (vegetation
  *  placement only — a few centimetres off the fine level's TIN). */
 async function heightAtFor(tile: string) {
-  const src = dgmSourceFiles(tile);
+  const src = dgmSourceFiles(DRESDEN, tile);
   const tif = readFileSync(join(ROOT, src.tif));
   const tfw = join(ROOT, src.tfw);
   const n = 1024;
@@ -113,7 +114,12 @@ const controls: Record<
 const buildMs: Record<Mode, number> = { canopy: 0, kataster: 0, shipped: 0 };
 const heights: ((x: number, y: number) => number | null)[] = [];
 
-for (const tile of tileIds(currentSite())) {
+// `--site <id>` measures another site than the reference one.
+const siteArg = process.argv.indexOf("--site");
+const evalSite =
+  (siteArg >= 0 ? siteById(process.argv[siteArg + 1] ?? "") : undefined) ??
+  SITES[REFERENCE_SITE];
+for (const tile of tileIds(evalSite)) {
   const heightAt = await heightAtFor(tile);
   heights.push(heightAt);
   const ctx = { offset, heightAt };

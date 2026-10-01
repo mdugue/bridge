@@ -79,7 +79,7 @@ The goal is not a percentage — it's *which untested code is dangerous*.
 
 - Missing or broken: typecheck script, lint config, formatter, pre-commit hooks, editorconfig.
 - Slow feedback loops: dev-server or test startup measured in minutes, no watch mode, CI without caching.
-- Onboarding friction: README setup steps that are wrong/incomplete, undocumented required env vars, no `.env.example`.
+- Onboarding friction: README setup steps that are wrong/incomplete, undocumented required env vars, no `.env.example` where the app reads required env vars (a repo that needs none has nothing to template).
 - Missing `CLAUDE.md`/`AGENTS.md` — for repos where agents will execute the plans, this is high-leverage: recommend one and include its outline as a plan.
 - Error messages/logging: unstructured logs on services, missing request IDs/correlation, debugging requiring code changes.
 

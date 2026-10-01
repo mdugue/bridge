@@ -1,5 +1,5 @@
 """What OSM knows about the LoD2 buildings → flags per CityObject id,
-`data/dlm/osmbuild_<tile>.json`, which the building bake folds into the
+`data/<site>/dlm/osmbuild_<tile>.json`, which the building bake folds into the
 object table (like the DOP roof colours):
 
 - `shop`: a shop or a place to eat and drink on the ground floor — an OSM
@@ -10,18 +10,34 @@ object table (like the DOP roof colours):
   floor (`level` without a 0) are left out.
 - `heritage`: an OSM building with `heritage=*` covering at least half
   the footprint.
-- `name`, `addr`, `levels` — for the inquiry card (ADR 0037): the `name`,
+- `name`, `addr`, `levels` — for the inquiry card (ADR 0040): the `name`,
   `addr:street` + `addr:housenumber` and `building:levels` of the OSM
   building outline that covers most of the footprint (at least half);
   where that outline has no address, the address points inside the
   footprint (else on the nearest within `SNAP_M`), grouped by street
   ("Hauptstraße 1, 3"). These stay on the object itself, never its root:
   one LoD2 Building often spans several houses with an address each.
+- `material`, `colour`, `roof_colour` (plan 050): what an OSM building or
+  building part covering at least half the footprint says its walls are
+  made of (`building:material`, `building:facade:material`,
+  `facade:material`, normalised to glass, metal, brick, stone, concrete,
+  wood or plaster) and what colour its walls and roof are
+  (`building:colour`, `roof:colour`, a name or hex, as `#rrggbb`). A part's
+  own tags win over its building's. The build turns them into the clay's
+  palette (lib/city/building-tint.ts), never into a raw colour.
 
 A marked part marks its root Building too, and the building bake
 (`scripts/bake-city-mesh.ts`) hands a root's flags down to every part of it
 (the part's own or the root's): a Saxon LoD2 Building with parts has no
 geometry of its own, so the whole building shows what one part carries.
+- `context` (the file's default, and per object where its neighbourhood
+  differs): the walls a building without a mapped material wears — brick
+  where the mapped walls around it (within `VOTE_REACH_M`, weighted by
+  distance) are mostly brick, else plaster; with too few mapped neighbours
+  the tile's and its surroundings' vote. So Hamburg's Speicherstadt and a
+  Ruhr town's terraces come out in brick and HafenCity or a Saxon old town
+  in plaster, without a per-site switch.
+
 OSM's construction dates are too sparse to use (plan 027 phase 3,
 rejected): the file carries no era."""
 
@@ -47,6 +63,75 @@ AREA_WHERE = (
     + ") OR other_tags LIKE '%\"heritage\"=>%')"
 )
 ADDR_WHERE = "other_tags LIKE '%\"addr:housenumber\"=>%'"
+LOOK_KEYS = (
+    "building:material",
+    "building:facade:material",
+    "facade:material",
+    "building:colour",
+    "roof:colour",
+)
+LOOK_WHERE = (
+    "(building IS NOT NULL OR other_tags LIKE '%\"building:part\"=>%') AND ("
+    + " OR ".join(f"other_tags LIKE '%\"{k}\"=>%'" for k in LOOK_KEYS)
+    + ")"
+)
+# OSM material values → the handful the clay tells apart
+MATERIALS = {
+    "glass": "glass",
+    "metal": "metal",
+    "steel": "metal",
+    "aluminium": "metal",
+    "copper": "metal",
+    "zinc": "metal",
+    "brick": "brick",
+    "clinker": "brick",
+    "stone": "stone",
+    "sandstone": "stone",
+    "limestone": "stone",
+    "granite": "stone",
+    "marble": "stone",
+    "concrete": "concrete",
+    "reinforced_concrete": "concrete",
+    "wood": "wood",
+    "timber_framing": "wood",
+    "plaster": "plaster",
+    "render": "plaster",
+    "stucco": "plaster",
+}
+# the colour names OSM mappers use (CSS names), as sRGB
+COLOUR_NAMES = {
+    "white": "#ffffff",
+    "black": "#000000",
+    "grey": "#808080",
+    "gray": "#808080",
+    "silver": "#c0c0c0",
+    "lightgrey": "#d3d3d3",
+    "lightgray": "#d3d3d3",
+    "darkgrey": "#a9a9a9",
+    "darkgray": "#a9a9a9",
+    "red": "#ff0000",
+    "darkred": "#8b0000",
+    "maroon": "#800000",
+    "brown": "#a52a2a",
+    "sienna": "#a0522d",
+    "orange": "#ffa500",
+    "yellow": "#ffff00",
+    "beige": "#f5f5dc",
+    "tan": "#d2b48c",
+    "wheat": "#f5deb3",
+    "ivory": "#fffff0",
+    "cream": "#fffdd0",
+    "green": "#008000",
+    "darkgreen": "#006400",
+    "olive": "#808000",
+    "blue": "#0000ff",
+    "lightblue": "#add8e6",
+    "navy": "#000080",
+    "teal": "#008080",
+    "pink": "#ffc0cb",
+    "purple": "#800080",
+    "gold": "#ffd700",
+}
 SNAP_M = 3.0  # a point this close to a footprint's outline still marks it
 MIN_COVER = 0.5  # share of the LoD2 footprint an OSM outline must cover
 
@@ -198,7 +283,7 @@ def levels_of(other_tags: str | None) -> int | None:
     return levels if 0 < levels < 200 else None
 
 
-def outlines(tile: Tile) -> tuple[list, list, list]:
+def building_outlines(tile: Tile) -> tuple[list, list, list]:
     """Every OSM building outline near the tile: geometries, names, tags."""
     geoms, fields = read_osm(
         tile, "multipolygons", "building IS NOT NULL", ["name", "other_tags"], margin=0.0005
@@ -209,7 +294,7 @@ def outlines(tile: Tile) -> tuple[list, list, list]:
 def describe(objects: dict, ids: list[str], polys: list, tree: shapely.STRtree, tile: Tile) -> None:
     """Name, address and storeys per object from the outline covering most
     of its footprint, and the address points on it (see the module doc)."""
-    geoms, names, others = outlines(tile)
+    geoms, names, others = building_outlines(tile)
     best: dict[int, tuple[float, int]] = {}
     for j, g in enumerate(geoms):
         g = shapely.make_valid(g)
@@ -241,6 +326,118 @@ def describe(objects: dict, ids: list[str], polys: list, tree: shapely.STRtree, 
             objects.setdefault(oid, {}).update(facts)
 
 
+def material_of(other_tags: str | None) -> str | None:
+    for key in ("building:material", "building:facade:material", "facade:material"):
+        value = (tag(other_tags, key) or "").split(";")[0].strip().lower()
+        if value in MATERIALS:
+            return MATERIALS[value]
+    return None
+
+
+def colour_of(value: str | None) -> str | None:
+    """An OSM colour (a CSS name or #rgb / #rrggbb) as `#rrggbb`, or None."""
+    if not value:
+        return None
+    v = value.split(";")[0].strip().lower().replace(" ", "")
+    v = COLOUR_NAMES.get(v, v)
+    if re.fullmatch(r"#[0-9a-f]{3}", v):
+        v = "#" + "".join(c * 2 for c in v[1:])
+    return v if re.fullmatch(r"#[0-9a-f]{6}", v) else None
+
+
+def look_outlines(tile: Tile, margin: float = 0.0005) -> list[tuple[shapely.Geometry, dict, bool]]:
+    """OSM outlines that say what a building looks like: (outline, its look,
+    whether it is a building part)."""
+    geoms, fields = read_osm(
+        tile, "multipolygons", LOOK_WHERE, ["building", "other_tags"], margin=margin
+    )
+    out = []
+    for g, building, other in zip(
+        geoms, column(fields, "building", geoms), column(fields, "other_tags", geoms), strict=True
+    ):
+        look = {
+            "material": material_of(other),
+            "colour": colour_of(tag(other, "building:colour")),
+            "roof_colour": colour_of(tag(other, "roof:colour")),
+        }
+        look = {k: v for k, v in look.items() if v}
+        if look and g is not None:
+            out.append((g, look, building is None and tag(other, "building:part") is not None))
+    return out
+
+
+def apply_looks(objects: dict, city: dict, ids, polys, tree, outlines) -> int:
+    """Writes the looks onto the objects they cover: buildings first, then
+    parts, so a part's own tags win. Returns how many objects got one."""
+    touched = set()
+    for want_part in (False, True):
+        for g, look, is_part in outlines:
+            if is_part != want_part:
+                continue
+            for i in covered_by([g], polys, tree):
+                objects.setdefault(ids[i], {}).update(look)
+                touched.add(ids[i])
+    return len(touched)
+
+
+# The walls a building without a mapped material wears: what its
+# neighbourhood is mapped as. Brick votes brick; plaster, stone, concrete and
+# wood vote against it; glass and metal (curtain walls) do not vote.
+VOTE_REACH_M = 300.0  # the neighbourhood (m)
+VOTE_MIN_LOCAL = 6  # votes a neighbourhood needs to speak for itself
+VOTE_MIN_AREA = 20  # ... and the tile with its surroundings
+VOTE_SOFT_M = 50.0  # a vote weighs 1 / (distance + this)
+VOTE_MARGIN = 0.005  # how far around the tile votes are read (deg, ≈ 350 m)
+WALL_VOTES = {"brick": 1.0, "plaster": 0.0, "stone": 0.0, "concrete": 0.0, "wood": 0.0}
+
+
+def brick_votes(outlines) -> np.ndarray:
+    """(x, y, 1 for brick / 0 for other walls) of the outlines that vote."""
+    rows = [
+        (*g.representative_point().coords[0], WALL_VOTES[look["material"]])
+        for g, look, _ in outlines
+        if look.get("material") in WALL_VOTES
+    ]
+    return np.array(rows, dtype=np.float64).reshape(-1, 3)
+
+
+def area_context(votes: np.ndarray) -> str:
+    """The walls of the area as a whole: brick when most votes say so."""
+    if len(votes) < VOTE_MIN_AREA:
+        return "render"
+    return "brick" if votes[:, 2].mean() >= 0.5 else "render"
+
+
+def local_contexts(centres: np.ndarray, votes: np.ndarray, default: str) -> list[str]:
+    """Each centre's walls by its neighbourhood's distance-weighted vote; the
+    area's where too few neighbours are mapped."""
+    out = []
+    for x, y in centres:
+        d = np.hypot(votes[:, 0] - x, votes[:, 1] - y) if len(votes) else np.empty(0)
+        near = d <= VOTE_REACH_M
+        if near.sum() < VOTE_MIN_LOCAL:
+            out.append(default)
+            continue
+        w = 1.0 / (d[near] + VOTE_SOFT_M)
+        out.append("brick" if (w * votes[near, 2]).sum() / w.sum() >= 0.5 else "render")
+    return out
+
+
+def apply_contexts(objects: dict, ids, polys, outlines) -> tuple[str, int]:
+    """The tile's default walls and, on the objects whose neighbourhood
+    differs from it, their own (`context`); objects with a mapped material
+    keep theirs. Returns the default and how many objects differ."""
+    votes = brick_votes(outlines)
+    default = area_context(votes)
+    centres = np.array([p.representative_point().coords[0] for p in polys]).reshape(-1, 2)
+    differ = 0
+    for oid, ctx in zip(ids, local_contexts(centres, votes, default), strict=True):
+        if ctx != default and not objects.get(oid, {}).get("material"):
+            objects.setdefault(oid, {})["context"] = ctx
+            differ += 1
+    return default, differ
+
+
 def run(tile: Tile) -> None:
     city_path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
     if not city_path.exists() or not has_extract(tile, "the OSM building flags"):
@@ -258,12 +455,16 @@ def run(tile: Tile) -> None:
     for i in covered_by(heritage_areas, polys, tree):
         flag(objects, city, ids[i], "heritage")
     describe(objects, ids, polys, tree, tile)
+    outlines = look_outlines(tile, VOTE_MARGIN)
+    looks = apply_looks(objects, city, ids, polys, tree, outlines)
+    context, differ = apply_contexts(objects, ids, polys, outlines)
     counts = {
         key: sum(1 for oid in ids if objects.get(oid, {}).get(key))
         for key in ("shop", "heritage", "name", "addr", "levels")
     }
     doc = {
         "attribution": OSM_ATTRIBUTION,
+        "context": context,
         "meta": {
             "tile": tile.id,
             "shop_points": len(points),
@@ -275,6 +476,8 @@ def run(tile: Tile) -> None:
             "objects_named": counts["name"],
             "objects_addressed": counts["addr"],
             "objects_levels": counts["levels"],
+            "objects_look": looks,
+            "objects_context": differ,
         },
         "objects": dict(sorted(objects.items())),
     }
@@ -282,5 +485,7 @@ def run(tile: Tile) -> None:
     print(
         f"{tile.id}: {counts['shop']} objects with a shop "
         f"({placed} of {len(points)} points placed), {counts['heritage']} listed, "
-        f"{counts['addr']} addressed, {counts['name']} named, {counts['levels']} with storeys"
+        f"{counts['addr']} addressed, {counts['name']} named, {counts['levels']} with storeys, "
+        f"{looks} with a material or colour, walls {context} "
+        f"({differ} objects with their neighbourhood's own)"
     )

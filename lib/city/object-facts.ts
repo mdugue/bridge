@@ -7,9 +7,10 @@
  * (name, address, storeys). The bake writes these as columns of the
  * building glTF's EXT_structural_metadata table next to the style columns
  * (`scripts/bake-tiles.ts`); the viewer reads them one object at a time,
- * only when someone asks (`app/_components/city-layer.ts`) — ADR 0037.
+ * only when someone asks (`app/_components/city-layer.ts`) — ADR 0040.
  * No THREE, no DOM.
  */
+import type { OsmBuildingFacts } from "./city-mesh";
 
 /** "Unknown" in a numeric fact column (the schema's `noData`). */
 export const NO_FACT = -1;
@@ -60,15 +61,6 @@ export const FACT_NUMBER_COLUMNS = [
   "area",
   "levels",
 ] as const;
-
-/** What OSM knows about a CityObject (`data/dlm/osmbuild_<tile>.json`). */
-export interface OsmBuildingFacts {
-  addr?: string;
-  heritage?: number;
-  levels?: number;
-  name?: string;
-  shop?: number;
-}
 
 const text = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const number = (v: unknown): number =>

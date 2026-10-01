@@ -56,7 +56,6 @@ from scipy import ndimage as ndi
 from .common import Tile, feature, geometry_json, overlaps, write_geojson
 from .skyview import burn_triangles
 
-GEOSN_ATTRIBUTION = "Quelle: GeoSN, dl-de/by-2-0 (LoD2, DOM1)"
 RES = 1.0
 MIN_AREA_M2 = 150.0
 MISS_M = 2.0
@@ -444,5 +443,6 @@ def run(tile: Tile) -> None:
         for r in found
         for poly, z in sorted(r.parts, key=lambda p: (-p[1], p[0].bounds))
     ]
-    write_geojson(out, feats, tile.epsg, GEOSN_ATTRIBUTION)
+    # the provider's LoD2 and DOM1, under its credit line
+    write_geojson(out, feats, tile.epsg, f"{tile.credit} (LoD2, DOM1)")
     print(f"{tile.id}: {len(found)} of {len(objects)} roofs rebuilt from DOM1 ({len(feats)} parts)")
