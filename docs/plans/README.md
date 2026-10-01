@@ -68,12 +68,31 @@ history. Decisions that came out of plans are written up as
 | 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | **DONE** (2026-09-26) — gate passed with a per-cell echo rule (213 on the spawn tile, 16 of 20 sampled are structures; the plan's blob-wide rule found 4); 6 625 on fifteen tiles (6 783 before the review's seam, ground and overlap fixes), the Christmas markets excluded via OSM, +3.3 % city glTF; look unverified on a real GPU | [034-dom-minus-lod2.md](./034-dom-minus-lod2.md) |
 | 035 | A hidden, opt-in soundscape synthesised from the scene's data | **BUILT, UNHEARD** — all phases (L / *Klang* switch, engine by dynamic import, beds, birds, crickets, footsteps by paving, hour bells from the new soundmarks bake, tram bell); no listening pass yet | [035-soundscape.md](./035-soundscape.md) |
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **TODO** — survey done 2026-09-27, no item picked | [036-data-stream-potential.md](./036-data-stream-potential.md) |
+| 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | **TODO** — P1, do first | [037-agent-commands-and-doc-drift.md](./037-agent-commands-and-doc-drift.md) |
+| 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | **TODO** — P1 | [038-runtime-spine-fixes.md](./038-runtime-spine-fixes.md) |
+| 039 | Bridge approach ramps without zero normals, rails passing under a rail deck stay down, Papier keeps double-sided ribbons and bare crowns, Sin City rain that lasts | **TODO** — P1/P2; step 4 needs a GPU look | [039-geometry-and-style-fixes.md](./039-geometry-and-style-fixes.md) |
+| 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer) | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
+| 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | **TODO** — P2 | [041-test-net-for-lifetime-and-collision.md](./041-test-net-for-lifetime-and-collision.md) |
+| 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | **TODO** — P2 | [042-boot-and-stream-main-thread-waste.md](./042-boot-and-stream-main-thread-waste.md) |
+| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **TODO** — P2, measurement gate; after 041 | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
+| 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | **TODO** — P2, measurement gate | [044-tree-points-as-binary.md](./044-tree-points-as-binary.md) |
+| 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
+| 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043 | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
+| 047 | Spike: "Problem melden" — the crash report with a destination, the view only on opt-in | **TODO** — spike; maintainer answers needed at its step 3 | [047-spike-report-a-problem.md](./047-spike-report-a-problem.md) |
+| 048 | Spike: a view as a `?snap=` link; committed QA views for plan 019 | **TODO** — spike + small build | [048-spike-view-links-and-qa-views.md](./048-spike-view-links-and-qa-views.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
 
 Ordered by leverage. Everything here is vetted against the code; effort
 S/M/L.
+
+0. **Plans 037–048 (2026-10-01 audit) — before the items below.** Order:
+   037 (every executor runs its commands) → 038 → 040 → 039 → 041 → 042 →
+   043 / 044 (each behind a measurement gate) → 045 → 046 (moves only,
+   after 039 and 041–043, which edit the same files). The spikes 047 and
+   048 can go any time after 038. Plan 019 (item 1) stays the one that
+   needs a GPU; 039 step 4 and 048 part B add to its checklist.
 
 1. **Plan 019 (S–M, GPU) — first.** The 3D Tiles branch (ADRs 0023–0026)
    was verified headless only; look at it on a real GPU, tune the LOD and
@@ -109,15 +128,16 @@ S/M/L.
    `sceneMaterial`. +1 draw call, sub-0.1 ms of JS; vertex-stage-only
    beyond ~8 k motes. Ledger: 📋 planned #10.
 8. **Water and mist sheets draw the whole terrain geometry (M, bake +
-   GPU).** ≈7.3 M of the ≈10.9 M terrain-derived triangles per frame belong
-   to transparent sheets that `discard` on ~95 % of each tile (counted
-   before ADR 0024; each fine terrain tile still hangs its sheets on the
-   whole 1024² grid). Fix, now in the bake: a water-only index buffer over
-   the shared positions, written into the terrain glTF as a second
-   primitive from the class raster.
-9. **Far crown LOD tier (S–M, GPU).** A third instanced set per cell
-   (detail 1 or 0, trunk hidden) beyond ~500 m; today a tree 2 km away
-   draws ~400 triangles in the main and every shadow pass. Ledger 📋 #11.
+   GPU) — re-measure before doing.** The ≈7.3 M of ≈10.9 M triangles were
+   counted on the old 1024² grid (before ADR 0024/0030). The sheets now
+   hang on the fine level's TIN (0.30–0.49 M triangles per tile, against
+   ≈2.1 M for the grid), so the cost is roughly 4–5× smaller than stated;
+   count again on a GPU before ranking it. Fix if still worth it: a
+   water-only index buffer over the shared positions, written into the
+   terrain glTF as a second primitive from the class raster.
+9. ~~**Far crown LOD tier (S–M, GPU).**~~ Done: `lib/city/vegetation-lod.ts`
+   has a `far` tier (80 triangles, no trunk, from `FAR_IN_M` = 650 m);
+   ledger 📋 #11 says shipped. (Found stale by the 2026-10-01 audit.)
 10. ~~**Terrain BVH → grid ray-march (M).**~~ Done 2026-09-24
     (`lib/city/ground-ray.ts`): no terrain BVH any more; it was the longest
     stall on flights (~1 s per fine tile).
@@ -135,20 +155,25 @@ S/M/L.
 13. **Bundle: `proj4` for one conversion (S).** A 40-line UTM inverse for
     zones 32/33 replaces it (`lib/city/crs.ts`). Size unmeasured.
     (`GLTFLoader` is load-bearing now: every tile is glTF.)
-14. **Split the 1 000-line `create-app.ts` (L).** Partly done 2026-09-26:
-    the ground (`lib/city/ground.ts`) and the second boot phase
-    (`lib/city/boot-phases.ts`) left the closure. Left: lamps, focus and
-    the scene-wide state the dressings bind — see item 20.
-15. **One `densify` (S–M).** `clamp` is one module since 2026-09-26
-    (`lib/city/math.ts`); left: four polyline resamplers with divergent
-    carry semantics — unifying changes geometry slightly and needs a shot
-    comparison. Folds into item 21.
-16. **Pure-helper tests (S each, when a module is next touched).** Rail
-    geometry (`pushTri`, `deckLift`, `addArches`, `buildRails` — none run in
-    CI because the lite tile has no rail lines and the only arch bridge is
-    on a neighbour), vegetation (`sampleLine`, `bucketByCell`, `crownColor`,
-    `updateLod`), lamps, walls. (`prepare-data`'s cache is content-keyed
-    and tested since 2026-09-26: `scripts/bake-sources.ts`.)
+14. **Split the `create-app.ts` closure (L; 1 598 lines at `a28de75`).**
+    Partly done 2026-09-26: the ground (`lib/city/ground.ts`) and the
+    second boot phase (`lib/city/boot-phases.ts`) left the closure.
+    Telemetry and picking: [plan 046](./046-split-the-god-modules-and-sweep.md)
+    step 2. Left after it: lamps and the scene-wide state the dressings
+    bind — see item 20.
+15. **One `densify` (S–M) — mostly done.** `lib/city/polyline.ts` holds
+    `subdividePolyline` and `samplePolyline`; what is left is the two
+    arc-length tables (`lib/city/stairs.ts`, `lib/city/fences.ts`), which
+    belong to item 21.
+16. **Pure-helper tests (S each, when a module is next touched).**
+    Rail and vegetation now have tests (`rail-layer.test.ts`,
+    `vegetation-layer.test.ts`, ≈ 90 % lines). Left: lamps and walls'
+    runtime halves; `collision.ts`, the tile cache's weighing and the
+    terrain's TIN-height glue (`terrain-layer.ts` `tinHeightAt`,
+    `waterGeometryOf`) — the first two in
+    [plan 041](./041-test-net-for-lifetime-and-collision.md), the last
+    open. (`prepare-data`'s cache is content-keyed and tested since
+    2026-09-26: `scripts/bake-sources.ts`.)
 17. **`dispose()` leaves stray textures to the GC (S).** Mostly closed:
     the sun rig frees the shadow map, the post stack its target and
     pipelines, and the teardown disposes the renderer (its device, or on
@@ -214,6 +239,51 @@ S/M/L.
     `SceneSidebar` still takes the scene time as five props although
     `useSceneTime` (`scene-time.ts`) owns it; a context removes them.
 
+### 2026-10-01 audit (`improve deep`, against `a28de75`)
+
+Eight parallel auditors (spine, layers and geometry, build and bakes,
+security and dependencies, performance, tests and DX, architecture, docs
+and direction), every finding re-opened in the code before it was ranked;
+the WebGPU port and the 97 commits since the last run were in scope.
+Baseline green: `bun run verify` (1 051 unit tests), pipeline pytest
+(224). The maintainer picked eight bundles → plans 037–046 — and two
+direction options → spikes 047–048. Vetted but **not planned** (backlog,
+S each unless noted):
+
+- **Supply chain of agent sessions.** The vendored skills run unpinned
+  tools (`.agents/skills/shadcn/SKILL.md`: `npx shadcn@latest` in
+  `allowed-tools` and a load-time `!` command; `modern-web-guidance`:
+  `npx -y …@latest`; `web-design-guidelines` WebFetches its rules from a
+  `main` branch); the session hook installs Bun with `curl | bash`
+  (`.claude/hooks/session-start.sh:36`, version pinned, no checksum);
+  `pipeline/pyproject.toml` pins `pillow==11.3.0` (18 HIGH OSV advisories,
+  fixed in 12.x; reached only by offline bakes on self-made rasters). No
+  secrets in the tree or history; no prompt-injection content found.
+- **Latent: DGM NoData blended by the resample.** `scripts/bake-tiles.ts`
+  `readDgm` resamples bilinear before testing for NoData, so a hole would
+  blend −9999 into pits; all fifteen committed DGMs have none. Fix when a
+  tile with holes arrives (mask first, or fail loudly).
+- **One path bridge at the site's west edge is drawn by no tile** (its
+  ring's mean lies outside the site, `bridge_33408_5656`); the same
+  centre-ownership rule governs sheds, stairs and tram spans.
+- **Investigate on a GPU (plan 019):** the three always-present lamp
+  `PointLight`s are shaded by every lit fragment by day (intensity 0);
+  `WebGLRenderer`/GLSL may ride into the viewer chunk through
+  3d-tiles-renderer's metadata `TextureReadUtility` (plain `three`
+  import) — check with a bundle analyser.
+- **Small robustness:** only `postStack.render` is guarded in the frame
+  loop (a throw before it freezes silently while the crash trail writes
+  on every error); the stream's `dispose()` during an in-flight compile
+  leaves a dressing to attach to a disposed stream (teardown only);
+  style-dressing siblings dispose a shared geometry's buffers on every
+  tile release (re-uploaded by the next frame — churn, not a bug);
+  vegetation LOD re-plans and allocates every frame though only camera
+  movement can change it.
+- **Docs:** the crash trail is undocumented in the guide and ADR 0001
+  (folded into spike 047); `cityjson-threejs-loader` 0.4.0 is unmaintained
+  (last release 2023) — on a three bump, a cold `prepare-data` is its
+  canary; replace only when it breaks.
+
 ### 2026-09-26 audit (`improve deep` + architecture review, PR #67)
 
 Done on PR #67: the build cache keyed on contents and the bake's import
@@ -264,14 +334,19 @@ the port (2026-09-26) made of it:
   unchanged).
 - The NDVI texture is loaded per terrain level instead of shared through
   `shared-rasters.ts` like the sky view; one decode per tile could serve
-  both levels and the crown sampler. *Still open.*
+  both levels and the crown sampler. *Mostly done (44c4111, found by the
+  2026-10-01 audit):* the texture is shared by both levels
+  (`DressingPlugin.ndvis`); the crown sampler (`loadNdviSampler`) still
+  decodes the PNG a second time per tile (S).
 - The tile cache's byte budget (`tileCacheBytesFor`) is filled from
   3DTilesRendererJS's estimate, taken once per tile when it loads: its
   geometry and the textures on standard material slots. The dressing,
   built later, and the terrain's textures bound as node textures are not
   counted. The renderer asks plugins through `calculateBytesUsed`, so the
-  dressing plugin could report them. *Still open;* take it with plan
-  019's cache tuning.
+  dressing plugin could report them. *Done (44c4111, fe1bee4):*
+  `DressingPlugin.calculateBytesUsed` weighs the rasters (a raster two
+  levels share half each) and the dressing; tests in
+  [plan 041](./041-test-net-for-lifetime-and-collision.md).
 - Demolish replaces the city mesh's index attribute (`city-layer.ts`)
   without disposing the old one. *Re-checked under the node renderer:*
   its `Geometries` also frees only the current index when a geometry is
@@ -314,15 +389,18 @@ independence:
    there; the site config and a Land-neutral pipeline exist since
    ADRs 0025/0026). The OSM-only case outside Germany stays open here; the
    CRS check still accepts only 25832/25833.
-2. **Shareable view links (S–M).** The Snapshot codec is versioned and
-   validated; the only URL read is `?scene=`. A `?snap=<base64>` read once
+2. **Shareable view links (S–M) — now [plan 048](./048-spike-view-links-and-qa-views.md)
+   (spike), and cheaper:** the boot already restores a Snapshot string
+   after the first frame (the GPU recovery), so `?snap=` is a second source
+   for that hook. The Snapshot codec is versioned and
+   validated; the URL reads are `scene`, `gpu`, `block` and `trail`. A `?snap=<base64>` read once
    after `ready` and written on Copy turns "this corner at 08:00 on
    21 December" into a link and collapses the shot harness to `page.goto`.
    Trade-off: URL length (~600 chars with every slider) vs. camera + date
    only; throttle `replaceState` on drags. Would supersede part of
    [ADR 0001](../adr/0001-client-only-static-app.md)'s "nothing persisted".
-3. **Guided tour / attract mode and a day-cycle play button (S–M).** Five
-   authored viewpoints, an arc tween and cancel-on-input exist; nothing
+3. **Guided tour / attract mode and a day-cycle play button (S–M).**
+   Nineteen authored viewpoints (`sites/dresden.ts`), the picture styles, an arc tween and cancel-on-input exist; nothing
    chains them or animates the sun. A moving sun forces a shadow re-render
    per step — step it at a few Hz, not per frame.
 4. **Editing (M).** The unused insert plumbing (`insertedModelUrl`,
@@ -356,17 +434,35 @@ independence:
    matrices, positions) is renderer-agnostic; the port settled the
    instancing formats (`Instances`: one Float32 buffer of 16 floats per
    instance, a Float32 RGB tint attribute, extra per-instance floats as
-   named attributes). Cheaper interim: time-slice the builders as
-   `lib/city/png-raster.ts` does.
+   named attributes). The cheaper interim is done (efae831: the builders
+   run in separate tasks, `tile-stream.ts` `nextTask`); what is left is the
+   worker itself. Plans 043 (the city BVH) and 044 (the canopy as a packed
+   binary) take the two biggest single tasks off first.
 9. **A bilingual HUD (M).** The page is `lang="de"` since 2026-09-26: the
    HUD, the spoken feedback and the `/wissen` landing are German, while
    the guide comes in both languages. About sixty HUD strings, picked by
    `navigator.language` or a `?lang=`, including the `aria-label`s and
    the spoken feedback, would follow the guide's pairing.
+10. **"Problem melden" (S) — [plan 047](./047-spike-report-a-problem.md)
+    (spike).** The crash panel says "copy and send it on" but names no
+    destination; a prefilled report (the trail; the view only on opt-in)
+    closes the loop the crash trail was built for. (2026-10-01.)
+11. **A recovered page starts one memory step down (S).** The memory
+    governor always starts at level 0, so a phone reloads after a lost
+    GPU into the same load that killed it; starting the recovered session
+    at level 1 (`lib/city/memory-governor.ts` `MEMORY_STEPS`) would make
+    recovery stick, and makes option 5 (a quality tier) a starting level
+    plus the scene-profile tuple. Offered 2026-10-01, not picked; plan
+    038 step 3 stops the reload loop either way.
+12. **Committed QA views (S) — [plan 048](./048-spike-view-links-and-qa-views.md)
+    part B.** Plan 019's reference views have no coordinates and eleven
+    rows say "look unjudged on a GPU"; `qa/views/*.json` read by the shot
+    harness makes GPU passes repeatable. (2026-10-01.)
 
 ### Maintainer actions
 
-- Run plan 019 on a GPU machine before merging the 3D Tiles branch.
+- Run plan 019 on a GPU machine (the 3D Tiles branch is long merged;
+  the look of everything since is unjudged on a GPU).
 - Re-bake the remaining DLM/DOP products with the current editions:
   [plan 022](./022-rebake-current-editions.md).
 - Plan 021's Phase 0 (a second framework for `/wissen`, the URL scheme).
@@ -459,6 +555,24 @@ independence:
     and `test_committed.py`; the per-layer tests that go through
     `buildX(features, ctx)` with a fake ground.
 
+- **From the 2026-10-01 run:**
+  - *`bun dev` serving HTTPS only* — a maintainer decision (WebGPU on a
+    phone over the LAN needs a secure context, `efae831`); plan 037 fixes
+    the test side instead. *`allowedDevOrigins` with a LAN IP* — dev
+    only, the same decision.
+  - *`bun run verify` not running pytest/ruff* — CI's pipeline job gates
+    it; no fallout in the history.
+  - *The memory governor's hysteresis, shadow-fit octaves, storage access
+    (all try-wrapped), StrictMode cleanup, iOS permission calls, Snapshot
+    NaN* — checked, correct.
+  - *Seam handling of bridges, determinism and overflow in the bakes, the
+    `prepare-data` cache key, zip-slip in the ingest, the TS ↔ Python
+    feature contract* — checked, sound.
+  - *Regrouping `app/_components` into folders* — import churn across
+    ≈ 110 files for orientation AGENTS.md already gives.
+  - *Version lag* — none: three, 3d-tiles-renderer, three-mesh-bvh,
+    TypeScript 7, oxlint, mermaid at npm latest; `next` one patch behind.
+
 ## What the audits did not cover
 
 Internals of `components/ui/**` and the vendored skills (scanned for
@@ -470,7 +584,9 @@ source); the production deploy environment. The 2026-09-26 run also left
 out everything the WebGPU port rewrites (the GLSL patch sites, the splat
 pass, the post stack, the renderer construction and preflight, the sky
 and lamp-halo materials, the vertex formats), and each of its audit
-categories had one reader.
+categories had one reader. The 2026-10-01 run ran the tests (unit, pipeline, coverage)
+but no e2e and no `next build`, and read the WebGPU port's code but could
+not render it (no GPU, no WebGPU in Bun).
 
 ## History
 
@@ -513,3 +629,10 @@ categories had one reader.
   porting the layers side by side against one contract. ADR 0027
   accepted; plan 020 condensed into [completed.md](./completed.md); the
   port-side audit notes above got their outcomes.
+- **2026-10-01 run** (against `a28de75`, `improve deep`): eight parallel
+  auditors over the 97 commits since the last run, the WebGPU port
+  included; findings vetted in the code. The maintainer picked plans
+  037–046 and the spikes 047–048; backlog items 8, 9, 14–16 and two port
+  notes reconciled (item 9 and the cache weighing were already done);
+  what was left out is in the "2026-10-01 audit" section and under
+  "Rejected".
