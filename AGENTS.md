@@ -166,8 +166,15 @@ config change.
     `inquiry-card.tsx` (the card — the only place the scene's facts become
     text); the
     facts are `lib/city/object-facts.ts` (bake and read), the card's lines
-    `lib/city/inquiry.ts`, the sources `lib/city/provenance.ts`, the AdV
-    code lists `lib/city/adv-codes.ts`
+    `lib/city/inquiry.ts` (buildings) and `inquiry-features.ts` (trees,
+    monuments, bridges; shared lines in `card-lines.ts`), the sources
+    `lib/city/provenance.ts`, the AdV code lists `lib/city/adv-codes.ts`;
+    the things that are not buildings are asked by rays against solids from
+    their data (`lib/city/ask-solids.ts`, `ask-items.ts`; bridges by their
+    meshes, `bridge-ask.ts`) and circled by a pencil loop
+    (`lib/city/pencil.ts`, `pencil-mark.ts`); a tree's facts are its tile's
+    `treefacts` file, fetched with the question (the artifact table's `ask`
+    column, `lib/city/tile.ts`)
   - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
     key; no AudioContext before it) and `soundscape/` (`engine.ts`,
     `hearing.ts`, `voices.ts`: loaded by dynamic import on the first

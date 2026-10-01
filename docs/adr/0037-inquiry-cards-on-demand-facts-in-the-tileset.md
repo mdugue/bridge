@@ -88,6 +88,16 @@ only where a source offers no CORS.
   gestuft (gemessen)"), no pitch, the rebuilt shape's height (the LoD2's
   `measuredHeight` can be a 3 m placeholder), and DOM1 as the roof's
   source line. 75 such objects on the spawn tile.
+- **Phase 4 (2026-10-01): trees, monuments, bridges.** The side-file
+  pattern took the trees' facts: `treefacts_<tile>.json`, aligned with the
+  trees file, named in the tileset's tile list (the artifact table's `ask`
+  column), fetched with the first question about a tree on the tile.
+  Monuments and bridges answer from the features the dressing already has.
+  What has no clay to hatch is circled by a pencil loop (a graphite stroke
+  on a band of paper, `pencil-mark.ts`) — still no text in the scene.
+  Instanced sets cannot be raycast one by one since ADR 0027, so trees and
+  monuments are picked by rays against solids from their data; bridges by
+  their drawn meshes.
 
 ## Alternatives
 

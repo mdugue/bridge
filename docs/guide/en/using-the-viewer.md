@@ -138,6 +138,17 @@ so. Esc, × or a swipe down closes the card and removes the hatch; the
 next question asks the next building. Nothing is estimated: a building without mapped
 storeys simply has no storey line.
 
+Trees, monuments and fountains, and bridges answer the same way; a
+pencil circles them instead of hatching them — on the ground around a
+tree or a fountain, along the parapets of a bridge. A **street tree**
+says its species (German and botanical), its street and number in the
+city's tree register, the height, crown and trunk the register measured
+(a size the register lacks is left out, not guessed) and the age it
+records, with the date of that record. A **monument** says its official
+name and, for a fountain, the basin's form; a **bridge** its name, its
+structure and main span (from Wikidata, whose identifier you can copy),
+its length and the shipping clearance under it.
+
 ## The panel
 
 The button in the corner opens a panel with three tabs.

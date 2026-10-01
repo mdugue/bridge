@@ -607,6 +607,35 @@ the crosshair), it answers in a card ([ADR 0037](./adr/0037-inquiry-cards-on-dem
   the objects) is said as such, never guessed. A roof rebuilt from DOM1
   (ADR 0036) is said to be measured there: no LoD2 form, pitch or
   height, DOM1 as its source.
+- **Tree facts** (plan 049 phase 4) — the street-tree register's
+  `art_deutsch`, `art_botanisch`, `name` (the location), `standort_nr`,
+  `jalter` (age), `aend_dat` (the record's date) and which of height,
+  crown and trunk it measured rather than the bake filled in →
+  `treefacts_<tile>.json` (`pipeline/bake/trees.py`), columns aligned with
+  the trees file, names, places and dates as tables; an OSM tree its
+  tagged taxon, German name and sizes. ≈ 37 kB gzipped a tile, fetched
+  with the first question about a tree there, never to draw. The card:
+  species, location and tree number, measured sizes only, age with the
+  record's date.
+- **Asking trees, monuments, bridges** — `lib/city/ask-items.ts` builds
+  each tile's askable things from the features the dressing already has:
+  a tree's trunk and crown cylinders (as the inventory sizes them; packed
+  per 64 m cell), a monument's marker or measured form, a basin's prism;
+  bridges are met on their drawn meshes (`bridge-ask.ts`), the point
+  naming its deck. The card (`lib/city/inquiry-features.ts`): a
+  monument's official name (Basis-DLM), basin form (OSM), measured
+  height; a bridge's name and measured deck (Basis-DLM, DOM1), structure
+  and main span (Wikidata or OSM), clearance (OSM), keyed by its Wikidata
+  item.
+- **The pencil loop** (no slider) — what has no clay to hatch is circled:
+  a graphite stroke 2.5 px wide on a 5.5 px band of the card's paper,
+  screen-constant, drawn once round and 12 % past, wavering a few
+  percent of its size, seeded by where it stands (`lib/city/pencil.ts`,
+  `pencil-mark.ts`): on the ground around a tree (1.2 × its crown) or a
+  monument, along a deck's parapets (1.6 m over the drawn deck edge).
+  Graphite alone vanished on dark asphalt in the first cut; the band
+  keeps it legible. In *Papier* it draws itself. **Not yet judged on a
+  real GPU.**
 
 ### Vegetation
 - **Cultivated land** (plan 028) — OSM `landuse=allotments|orchard|vineyard`

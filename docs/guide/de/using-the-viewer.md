@@ -149,6 +149,18 @@ nächsten Gebäude.
 Geschätzt wird nichts: Ein Gebäude ohne erfasste Geschosse hat einfach
 keine Geschosszeile.
 
+Bäume, Denkmale und Brunnen und Brücken antworten genauso; statt einer
+Schraffur kreist sie ein Bleistiftstrich ein — auf dem Boden um einen
+Baum oder Brunnen, entlang der Brüstungen einer Brücke. Ein
+**Straßenbaum** nennt seine Art (deutsch und botanisch), Straße und
+Nummer im Stadtbaumkataster, Höhe, Krone und Stamm, soweit das Kataster
+sie gemessen hat (was fehlt, bleibt weg, statt geschätzt zu werden), und
+das Alter, das es verzeichnet, mit dem Datum des Eintrags. Ein
+**Denkmal** nennt seinen amtlichen Namen, ein Brunnen die Form seines
+Beckens; eine **Brücke** ihren Namen, Tragwerk und Hauptspannweite (aus
+Wikidata, dessen Kennung du kopieren kannst), ihre Länge und die
+Durchfahrtshöhe für die Schifffahrt.
+
 ## Das Feld
 
 Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.

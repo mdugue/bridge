@@ -13,12 +13,13 @@
 ## Status
 
 - **Priority**: P1 (the direction the maintainer set on 2026-09-27)
-- **Effort**: M (phases 1–3 built; 4–7 S–M each)
+- **Effort**: M (phases 1–4 built; 4b–7 S–M each)
 - **Risk**: LOW — additive columns, an opt-in mode, no change to the
   default frame
 - **Planned at**: 2026-09-27
-- **Status**: **PARTIAL** — phases 1–3 built (2026-09-27); the hatch is
-  unjudged on a real GPU; phases 4–7 open
+- **Status**: **PARTIAL** — phases 1–3 built (2026-09-27), phase 4
+  (trees, monuments, bridges) 2026-10-01; the hatch and the pencil loop
+  unjudged on a real GPU; phases 4b–7 open
 
 ## Idea
 
@@ -109,27 +110,51 @@ shows, give the marked tile's clay its own graph variant with the hatch
 the default build — a uniform branch around it would put `fwidth` under
 WGSL's uniformity analysis, unverifiable headless.
 
-### 4. More things to ask (S–M each)
+### 4. More things to ask — **BUILT** (2026-10-01)
 
-The same card for the other layers, each reading a file the viewer
-already has:
+The same card for trees, monuments and fountains, and bridges, each with
+its own source lines (`lib/city/inquiry-features.ts`):
 
-- **Trees** — the cadastre's genus, species (German and botanical), height
-  and crown (`trees_<tile>.geojson`, Dresden's street-tree register,
-  dl-de/by-2-0); the season model's state for the scene date. Needs an
-  instance → feature index per vegetation chunk.
-- **Bridges** — name (DLM), class and main span (Wikidata), the measured
-  deck height (`bridge_<tile>.geojson`).
-- **Monuments and fountains** — the DLM's official name
-  (`monuments_<tile>.geojson`).
+- **Trees** — species (German and botanical), the register's location
+  and tree number, the sizes the register *measured* (a crown it filled
+  in from the tile's statistics is no fact), the age it records with the
+  record's date; an OSM tree its tagged taxon and sizes. `trees.py` writes
+  them to `treefacts_<tile>.json`, columns aligned with the trees file
+  (≈ 37 kB gzipped a tile), named in the tileset's tile list (`ask`) and
+  fetched with the first question about a tree there — ADR 0037's
+  side-file pattern. The register was re-read for all fifteen tiles for
+  it (626 trees new on 33414_5656; the ten laser-scan trees they claim
+  thinned by lowveg's own last step).
+- **Monuments and fountains** — the DLM's official name, the basin's
+  form (OSM), a measured height where the bake measured the form.
+- **Bridges** — name and deck (Basis-DLM, measured in DOM1), structure
+  and main span (Wikidata where matched, else OSM), the fairway
+  clearance; keyed by the Wikidata item.
 
-Each gets its own source line. The raycaster cannot pick these: since
-the WebGPU port (ADR 0027) instanced sets are `Instances`, a plain `Mesh`
-over an `InstancedBufferGeometry`, and three's `Raycaster` tests only its
-base geometry. Pick them from the data instead — a ray against each
-feature's simple solid (a trunk-and-crown capsule, a deck box, a monument
-cylinder) — and keep the pick order: the nearest hit wins, a building or
-the ground in front of it cancels.
+Picking: the raycaster cannot pick instanced sets (`Instances` since the
+WebGPU port), so trees and monuments are rays against solids from their
+data (`lib/city/ask-solids.ts`, `ask-items.ts`): a tree's trunk and crown
+cylinders — packed per 64 m cell in typed arrays, 0.8 MB on the busiest
+tile where objects took 3.5 MB — a monument's marker or measured form, a
+basin's prism. Bridges are met on the drawn bridge itself (deck, arches,
+piers; `bridge-ask.ts`, a BVH on the first question): a slab from the
+data would either miss the masonry under an arch or block the open space
+under a beam bridge. The nearest answer of any kind wins; the ground in
+front cancels; the tolerant rings vote across kinds.
+
+The mark: what has no clay to hatch is circled — a graphite stroke on a
+band of the card's paper, screen-constant, once round and a little past
+(`lib/city/pencil.ts`, `pencil-mark.ts`): on the ground around a tree or
+a monument, along the parapets of a deck. Graphite alone vanished on dark
+asphalt; the paper band keeps it legible there and stays quiet on a
+lawn. E2E: a register tree asked from above in the `@desktop-render`
+group.
+
+**Open in this phase**: plates on a real GPU of the loop at walking
+height and from the air (headless only so far, lite at half resolution:
+legible on a tree, subtle on a deck); the season model's state on a
+tree's card; furniture, lamps and stops as further kinds (their files
+are in the dressing already).
 
 ### 4b. Aim and ask in live mode (S–M)
 
