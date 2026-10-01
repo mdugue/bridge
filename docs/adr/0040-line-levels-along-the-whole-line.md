@@ -56,6 +56,11 @@ run. Without `lv` a layer solves its own piece. Under a span the layer
 draws a deck: a slab as wide as the tracks, piers every 26 m where it
 clears the ground by 2.5 m.
 
+The ballast yard under the lines follows the same ground: draped on it
+(each triangle split where the ground strays from it by more than a
+metre, down to 6 m) and left out on the rail decks, never stretched
+across what lies between its outline's corners.
+
 A cut that lies at least 30 % under a drawn deck (any kind) opens a
 **passage** in the terrain bake (`lib/city/passages.ts`, `shapeDgm`): the
 ground along the line, as wide as its tracks plus a 1.5 m shoulder,
@@ -77,12 +82,16 @@ road the bridge data lacks.
   the committed files stay as the bakes write them, and `lv` is never
   committed. The levels are solved on the native DGM, the layers draw on
   the TIN (±0.15 m): a span's rims can sit a few centimetres off.
-- The DGM under a deck no line passes through stays as measured. Where
-  it rises inside the outline (an abutment the DLM outline includes —
-  Dresden's Bahnhof Mitte), the passage beside it is narrower than the
-  outline and reads as closed from an oblique view; telling a fill from
-  an abutment needs the road under the bridge, which no committed file
-  carries.
+- What closed the underpass at Dresden's Bahnhof Mitte was not the
+  ground: the station's ballast yard spans the bridge, and draped at its
+  outline's corners alone, it sloped from the embankment down to corners
+  in the street under the deck — a wall across the passage, seen from the
+  tram tracks themselves. The yard is now draped on the ground and left
+  out on the rail decks (`addDrapedArea`). The DGM under a deck no line
+  passes through stays as measured: there it rises along one edge of the
+  outline (the abutment the DLM outline includes), and telling a fill from
+  an abutment would need the road under the bridge, which no committed
+  file carries.
 - Tunnels proper are still the bakes' (ADR 0013's DLM tunnel cut, OSM's
   `tunnel` and `layer`); a cut under no deck hides the line in the
   ground, as a tunnel would.
@@ -103,6 +112,10 @@ road the bridge data lacks.
 - **Opening every fill under a deck from the DGM alone**: under Bahnhof
   Mitte the raised part of the outline is the abutment, not fill; without
   a line through it there is nothing to say which.
+- **The ballast at its outline's corners, or as a grid**: the corners left
+  sheets across every passage and pit; a uniform split of every triangle
+  to 5 m made a million triangles a tile (the triangulation of a yard is
+  long slivers), a grid cell mask a staircase at the yard's edge.
 
 ## References
 
@@ -110,7 +123,8 @@ road the bridge data lacks.
   `lib/city/passages.ts`; `scripts/line-levels.ts` (+ its test),
   `scripts/prepare-data.ts` (`publishLevels`, the passages in
   `shapedTerrain`), `scripts/bake-tiles.ts` (`shapeDgm`)
-- `app/_components/rail-layer.ts` (`lineLevelsAt`, `addSpanDeck`),
+- `app/_components/rail-layer.ts` (`lineLevelsAt`, `addSpanDeck`,
+  `addDrapedArea`),
   `app/_components/tram-layer.ts` (`trackRuns`)
 - Ledger: *Railway & bridges* → *Line levels*, *Passages under decks*;
   🗃️ *A line lifted onto every deck under it*

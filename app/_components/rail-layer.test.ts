@@ -55,6 +55,48 @@ test("a Polygon ballast area builds a slab", () => {
   expect(triangleCount(mesh)).toBeGreaterThan(0);
 });
 
+test("a yard across an underpass follows the ground, not its corners", () => {
+  // the embankment at 117 m, a street at 111 m through it (x 40–60); the
+  // yard's outline has corners down in the street
+  const underpass: RailContext = {
+    offset: { cx: 0, cy: 0 },
+    heightAt: (x) => (x > 40 && x < 60 ? 111 : 117),
+  };
+  const yard: AreaFeature = {
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [0, 0],
+          [45, 0],
+          [55, 0],
+          [100, 0],
+          [100, 30],
+          [55, 30],
+          [45, 30],
+          [0, 30],
+          [0, 0],
+        ],
+      ],
+    },
+    properties: {},
+  };
+  const mesh = buildBallast([yard], underpass);
+  const pos = mesh?.geometry.getAttribute("position");
+  expect(pos?.count ?? 0).toBeGreaterThan(0);
+  let overStreet = 0;
+  for (let i = 0; pos && i < pos.count; i += 3) {
+    const xs = [0, 1, 2].map((k) => pos.getX(i + k));
+    const mx = (xs[0] + xs[1] + xs[2]) / 3;
+    const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
+    if (mx > 44 && mx < 56 && top > 113) {
+      overStreet++;
+    }
+  }
+  // no sheet stands over the street, closing the passage
+  expect(overStreet).toBe(0);
+});
+
 test("MultiPolygon ballast contributes every part", () => {
   const single = triangleCount(buildBallast([polygon], ctx));
   const multi = triangleCount(buildBallast([polygon, multiPolygon], ctx));

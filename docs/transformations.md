@@ -1346,8 +1346,17 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Ballast yards** — Basis-DLM `ver03_f` (railway AREA, `OBJART=42010`),
   **dissolved** with shapely `union_all(make_valid())` in the bake and clipped
   to the tile (~5 non-overlapping parts) → **one merged surface**, so dozens of
-  yard tracks can't z-fight. Per-vertex ground-clamp + `BALLAST_RAISE`, short edge
-  fascia, `polygonOffset`. The recoloured class-5 splat sits underneath so any gap
+  yard tracks can't z-fight. **Draped on the ground** (2026-10-01, ADR 0040,
+  `addDrapedArea`): the outline and its holes triangulated, each triangle split
+  in four while the ground at its edge midpoints and centre strays from its
+  plane by > 1 m (and always above 48 m), down to 6 m, every corner on the
+  ground + `BALLAST_RAISE`; the fascia (0.45 m) on the ground every 6 m; **left
+  out on the rail decks** (the tracks ride the deck). ~5·10⁴ triangles and
+  ~0.3 s a tile with a big yard (750 before). *(Clamped at the outline's corners alone, the
+  yard spanned whatever lay between them: across the underpass at Dresden's
+  Bahnhof Mitte its sheets sloped from the embankment down to the street
+  corners under the deck — the passage read as a closed wall, from the
+  tracks too.)* `polygonOffset`. The recoloured class-5 splat sits underneath so any gap
   reads as ballast, not seam.
 - **Steel rails** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`; the
   DLM carries trams poorly — `SPW=3000`/`BKT=1201` — so they come from OSM,

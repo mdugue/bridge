@@ -1890,23 +1890,204 @@ function addMasonryPier(
   }
 }
 
+/** A draped area's triangle is split while the ground under it strays
+ *  from its plane by more than DRAPE_TOLERANCE_M (m), down to DRAPE_M:
+ *  the ground under a yard is not flat between its outline's corners. The
+ *  tolerance is coarse on purpose — the class raster paints the yard on
+ *  the ground under it anyway — so a tile's yards stay ~5·10⁴ triangles. */
+const DRAPE_M = 6;
+const DRAPE_TOLERANCE_M = 1;
+/** A triangle longer than this (m) is split whatever its probes say: four
+ *  probes can miss a passage under a deck. */
+const DRAPE_PROBE_M = 48;
+
+type XZ = { x: number; z: number };
+
+/** A ring's points, its edges split to at most `step` apart. */
+function densified(pts: readonly XZ[], step: number): XZ[] {
+  const out: XZ[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
+    for (let k = 0; k < n; k++) {
+      out.push({
+        x: a.x + ((b.x - a.x) * k) / n,
+        z: a.z + ((b.z - a.z) * k) / n,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * An area draped on the ground (+ `raise`): its outline and holes
+ * triangulated, each triangle split in four while the ground under it
+ * strays from its plane (`DRAPE_TOLERANCE_M`, down to `DRAPE_M`), each
+ * corner on the ground under it — then a fascia `drop` deep along the
+ * outline, its top on the ground every DRAPE_M. Triangles whose middle
+ * `skip`s (a rail deck: the tracks ride it, no ballast under them) are
+ * left out, and so is their fascia. (Draped at the outline's corners
+ * alone, a yard across an underpass spanned the passage with sloped
+ * sheets from the embankment down to the street — the passage read as
+ * closed.)
+ */
+function addDrapedArea(
+  acc: Mesh3,
+  rings: Ring2[],
+  raise: number,
+  drop: number,
+  ctx: RailContext,
+  skip: (x: number, z: number) => boolean
+): void {
+  const [outer, ...holes] = rings.map((r) => r.pts);
+  if (!outer || outer.length < 3) {
+    return;
+  }
+  const heights = new Map<number, number | null>();
+  const yAt = (x: number, z: number): number | null => {
+    // a 1/64 m lattice: shared corners and midpoints are sampled once
+    const key = Math.round(x * 64) * 2 ** 26 + Math.round(z * 64) + 2 ** 25;
+    let y = heights.get(key);
+    if (y === undefined) {
+      const e = worldToEpsg({ x, z }, ctx.offset);
+      const g = ctx.heightAt(e.x, e.y);
+      y = g === null ? null : g + raise;
+      heights.set(key, y);
+    }
+    return y;
+  };
+  const mid = (p: XZ, q: XZ): XZ => ({
+    x: (p.x + q.x) / 2,
+    z: (p.z + q.z) / 2,
+  });
+  const flat = (a: XZ, b: XZ, c: XZ): boolean => {
+    const ya = yAt(a.x, a.z);
+    const yb = yAt(b.x, b.z);
+    const yc = yAt(c.x, c.z);
+    if (ya === null || yb === null || yc === null) {
+      return true;
+    }
+    // the plane through the corners against the ground at the edge
+    // midpoints and the centre
+    const probes: [XZ, number][] = [
+      [mid(a, b), (ya + yb) / 2],
+      [mid(b, c), (yb + yc) / 2],
+      [mid(c, a), (yc + ya) / 2],
+      [
+        { x: (a.x + b.x + c.x) / 3, z: (a.z + b.z + c.z) / 3 },
+        (ya + yb + yc) / 3,
+      ],
+    ];
+    return probes.every(([p, plane]) => {
+      const y = yAt(p.x, p.z);
+      return y === null || Math.abs(y - plane) <= DRAPE_TOLERANCE_M;
+    });
+  };
+  const emit = (a: XZ, b: XZ, c: XZ) => {
+    if (skip((a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3)) {
+      return;
+    }
+    const ya = yAt(a.x, a.z);
+    const yb = yAt(b.x, b.z);
+    const yc = yAt(c.x, c.z);
+    if (ya !== null && yb !== null && yc !== null) {
+      pushTri(acc, a.x, ya, a.z, b.x, yb, b.z, c.x, yc, c.z, 0, 1, 0);
+    }
+  };
+  const drape = (a: XZ, b: XZ, c: XZ) => {
+    const longest = Math.max(
+      Math.hypot(b.x - a.x, b.z - a.z),
+      Math.hypot(c.x - b.x, c.z - b.z),
+      Math.hypot(a.x - c.x, a.z - c.z)
+    );
+    if (longest <= DRAPE_M || (longest <= DRAPE_PROBE_M && flat(a, b, c))) {
+      emit(a, b, c);
+      return;
+    }
+    const ab = mid(a, b);
+    const bc = mid(b, c);
+    const ca = mid(c, a);
+    drape(a, ab, ca);
+    drape(ab, b, bc);
+    drape(ca, bc, c);
+    drape(ab, bc, ca);
+  };
+  const all = [outer, ...holes].flat();
+  const tris = ShapeUtils.triangulateShape(
+    outer.map((p) => new Vector2(p.x, p.z)),
+    holes.map((h) => h.map((p) => new Vector2(p.x, p.z)))
+  );
+  for (const [ia, ib, ic] of tris) {
+    drape(all[ia], all[ib], all[ic]);
+  }
+  // the fascia along the outline and round the holes, facing out of the
+  // area, its top on the ground every DRAPE_M
+  for (const [k, raw] of [outer, ...holes].entries()) {
+    const ring = densified(raw, DRAPE_M);
+    const winding = (ringWinding(ring) * (k === 0 ? 1 : -1)) as 1 | -1;
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i];
+      const q = ring[(i + 1) % ring.length];
+      const yp = yAt(p.x, p.z);
+      const yq = yAt(q.x, q.z);
+      if (
+        yp === null ||
+        yq === null ||
+        skip((p.x + q.x) / 2, (p.z + q.z) / 2)
+      ) {
+        continue;
+      }
+      const [nx, nz] = outward(ring, i, winding);
+      quad(
+        acc,
+        [p.x, yp, p.z],
+        [q.x, yq, q.z],
+        [q.x, yq - drop, q.z],
+        [p.x, yp - drop, p.z],
+        [nx, 0, nz]
+      );
+    }
+  }
+}
+
+/** Every polygon of an area as its rings (outer first, then its holes). */
+function polygonsOf(
+  geometry: AreaFeature["geometry"] | null | undefined
+): [number, number][][][] {
+  if (geometry?.type === "Polygon") {
+    return geometry.coordinates.length > 0 ? [geometry.coordinates] : [];
+  }
+  if (geometry?.type === "MultiPolygon") {
+    return geometry.coordinates.filter((poly) => poly.length > 0);
+  }
+  return [];
+}
+
 /**
  * One merged ballast surface from the dissolved railway-area polygons
- * (Polygon or MultiPolygon — a yard dissolved into several parts). Exported
- * for tests.
+ * (Polygon or MultiPolygon — a yard dissolved into several parts), draped
+ * on the ground (`addDrapedArea`) and left out on the rail decks, where
+ * the tracks ride the deck. Exported for tests.
  */
 export function buildBallast(
   features: AreaFeature[],
-  ctx: RailContext
+  ctx: RailContext,
+  decks: DeckPoly[] = []
 ): Mesh | null {
   const acc = mesh3();
+  const onDeck = (x: number, z: number) =>
+    decksAt(decks, x, z, RIDES.rail, "decks").length > 0;
   for (const f of features) {
-    for (const outer of outerRings(f.geometry)) {
-      const ring = ringToWorld(outer, ctx.offset);
-      const topY = clampRing(ring, BALLAST_RAISE, ctx);
-      if (topY) {
-        addFootprint(acc, ring, topY, BALLAST_DROP);
-      }
+    for (const rings of polygonsOf(f.geometry)) {
+      addDrapedArea(
+        acc,
+        rings.map((r) => ringToWorld(r, ctx.offset)),
+        BALLAST_RAISE,
+        BALLAST_DROP,
+        ctx,
+        onDeck
+      );
     }
   }
   return meshFrom(acc, COLORS.ballast, {
@@ -2169,7 +2350,7 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (bridgeMeshes.length > 0) {
     group.add(...bridgeMeshes);
   }
-  const ballast = buildBallast(features.ballast, ctx);
+  const ballast = buildBallast(features.ballast, ctx, decks);
   if (ballast) {
     group.add(ballast);
   }
