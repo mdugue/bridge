@@ -1,4 +1,4 @@
-# Plan 039: Stand-ins where a Land publishes less, and looks derived from each city's data
+# Plan 051: Stand-ins where a Land publishes less, and looks derived from each city's data
 
 > **Executor instructions**: Read fully first. The code is built and
 > baked where noted; what is open is the look on a real GPU (`bun run
@@ -6,10 +6,10 @@
 > under *Open items*, and the items a stand-in cannot fix. Update the
 > status row in `docs/plans/README.md` when one lands.
 >
-> **Builds on** ADR 0035 (sites, providers, per-tile steps read from the
-> site config), plan 038 (landmarks, the roof relief, OSM materials) and
+> **Builds on** ADR 0037 (sites, providers, per-tile steps read from the
+> site config), plan 050 (landmarks, the roof relief, OSM materials) and
 > ADR 0033 (bridges measured in DOM1). The decisions are
-> [ADR 0037](../adr/0037-stand-ins-marked-per-city.md).
+> [ADR 0039](../adr/0039-stand-ins-marked-per-city.md).
 >
 > **Drift check (run first)**:
 > `git log --oneline -5 -- pipeline/bake/rail_osm.py pipeline/bake/ndvi.py pipeline/bake/osm_buildings.py lib/city/valley-fog.ts lib/city/source-matrix.ts`
@@ -33,10 +33,10 @@
 ## Goal
 
 Generalise the one-off fixes so that **every city benefits**. A city
-added under ADR 0035 got exactly what its Land publishes, and a step
+added under ADR 0037 got exactly what its Land publishes, and a step
 whose source was missing wrote an empty file; some looks were tuned on
 Dresden and applied everywhere, or set per site by hand. Two rules came
-out of it (ADR 0037):
+out of it (ADR 0039):
 
 1. Where a Land or a city lacks the best source, read a **named
    stand-in** that measures or maps the same thing — and mark it per
@@ -66,7 +66,7 @@ out of it (ADR 0037):
    in the 3 × 3 around it, roof cells only, sunk 0.3 m; `fill_voids` for
    DOM cells > 1 m below the LoD2 roof; `lib/city/structures.ts`
    `reliefMesh` drops each edge wall to its cell's floor). Found on Unna's
-   Evangelische Stadtkirche (plan 038, Findings).
+   Evangelische Stadtkirche (plan 050, Findings).
 3. **Facade material from the neighbourhood** (`osm_buildings.py`
    `apply_contexts`): mapped wall materials within 300 m vote, distance
    weighted (brick for, plaster/stone/concrete/wood against, glass and
@@ -89,7 +89,7 @@ out of it (ADR 0037):
    height to 0.6 × that relief, clamped to 8–28 m.
 7. **Landmarks by relative notability** (`landmarks.py`): ≥ 8 % of the
    tile's top sitelinks (`NOTABLE_SHARE`, never under 2), 40 a tile as a
-   safety cap instead of a fixed 12 — plan 038's *Dense tiles* item.
+   safety cap instead of a fixed 12 — plan 050's *Dense tiles* item.
 8. **The generated *Sources by city* page**: `lib/city/source-matrix.ts`
    (pure: a row per drawn layer, a column per configured site, each cell
    🟢 best / 🔵 OSM only / 🟡 stand-in / ⚪ none, with the reason),
@@ -176,4 +176,4 @@ visible bands*, *Facade context*, the haze depth under *Height-term
 fog*, the tram gauge, the relief floor, the landmark floor, five 🗃️
 rows), `data-flow.md` (both diagrams), the `rendering.md` codebook,
 `data-pipeline.md`, `portability.md`, the guide's data sources (en + de)
-and the generated *Sources by city*, ADR 0037, AGENTS.md.
+and the generated *Sources by city*, ADR 0039, AGENTS.md.

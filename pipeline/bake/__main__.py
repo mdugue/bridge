@@ -24,6 +24,7 @@ from . import (
     rail,
     riverside,
     roof_colour,
+    roofs,
     skyview,
     small_buildings,
     soundmarks,
@@ -63,7 +64,11 @@ STEPS = {
     # that already has a shelter).
     "tram": tram.run,
     "riverside": riverside.run,
-    # Committed inputs only (DGM + LoD2): the sky-view factor and far horizon.
+    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
+    # miss DOM1, rebuilt as stepped flat blocks (scripts/bake-city-mesh.ts).
+    "roofs": roofs.run,
+    # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
+    # factor and far horizon.
     "skyview": skyview.run,
     # OSM churches + the committed LoD2/DGM: the bell towers the hidden
     # soundscape strikes the hour from (plan 035).
@@ -83,7 +88,7 @@ STEPS = {
     "landmarks": landmarks.run,
     # After landmarks (their roofs' relief): DOM1 against LoD2, confirmed by
     # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
-    # does not carry yet, and a landmark's roof form it flattens (plan 038).
+    # does not carry yet, and a landmark's roof form it flattens (plan 050).
     "structures": structures.run,
 }
 

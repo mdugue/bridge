@@ -45,30 +45,13 @@ import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
   FeatureCollection,
-  KerbFeature,
+  MeasuredRoofFeature,
   SmallBuildingFeature,
-  StairFeature,
   StructureFeature,
-  GateFeature,
-  TerraceFeature,
-  WallFileFeature,
 } from "../lib/city/features";
-import {
-  cutWallGates,
-  type FenceLine,
-  type FenceType,
-  type GatePoint,
-} from "../lib/city/fences";
-import type { Point2 } from "../lib/city/polyline";
+import { cutWallGates } from "../lib/city/fences";
 import { tileExtentOf } from "../lib/city/site";
 import { treesOffStructures } from "../lib/city/small-buildings";
-import {
-  type StairLine,
-  stairLineOf,
-  type Terrace,
-  terraceOf,
-} from "../lib/city/stairs";
-import type { WallLine } from "../lib/city/terrain-conflate";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import {
   buildingHeights,
@@ -79,7 +62,6 @@ import {
   type SiteStats,
 } from "../lib/city/site-stats";
 import { groundRelief } from "../lib/city/valley-fog";
-import type { WallRibbon } from "../lib/city/walls";
 import {
   cityMeshSourceFiles,
   type DataManifest,
@@ -130,6 +112,14 @@ import { bakeWissenHero } from "./bake-wissen-hero";
 import { type ColonyCrop, cropColonyRaster } from "./crop-raster";
 import { downsampleClassRaster } from "./downsample-raster";
 import { writeMeshGlb } from "./tile-glb";
+import {
+  fenceLines,
+  gatePoints,
+  kerbLines,
+  stairLines,
+  terraces,
+  wallLines,
+} from "./tile-sources";
 
 const CACHE_DIR = join(process.cwd(), ".cache/prepare-data");
 const SITE = (() => {
@@ -424,6 +414,10 @@ function parseCity(tile: string): BakedCityMesh {
   const gaps = existsSync(at(src.structures))
     ? readJson<FeatureCollection<StructureFeature>>(at(src.structures)).features
     : undefined;
+  const measured = existsSync(at(src.measuredRoofs))
+    ? readJson<FeatureCollection<MeasuredRoofFeature>>(at(src.measuredRoofs))
+        .features
+    : undefined;
   const baked = bakeCityMesh(
     tile,
     doc,
@@ -432,7 +426,8 @@ function parseCity(tile: string): BakedCityMesh {
     osmLut,
     scan,
     osmDoc?.context ?? "render",
-    gaps
+    gaps,
+    measured
   );
   sharedMatrix ??= baked.matrix;
   return baked;
@@ -472,6 +467,7 @@ async function bakeCity(
     at(src.smallBuild),
     at(src.structures),
     at(src.landmarks),
+    at(src.measuredRoofs),
   ];
   const key = cacheKey(inputs, offset);
   let mesh: ReturnType<typeof cityMesh> | null = null;
@@ -507,103 +503,6 @@ async function bakeCity(
     )
   );
   return { file: publish(name, glb), footprints, maxZ };
-}
-
-/** The tile's kerb lines (the smoothed DLM road edge), for the kerb stones
- *  the fine level carries. */
-function kerbLines(tile: string): Point2[][] {
-  const path = at(kerbSourceFile(SITE, tile));
-  if (!existsSync(path)) {
-    return [];
-  }
-  const { features } = readJson<{ features: KerbFeature[] }>(path);
-  return features.flatMap((f) =>
-    f.geometry?.type === "LineString" ? [f.geometry.coordinates] : []
-  );
-}
-
-/** Everything the tile's walls file carries: walls, fences, gates. */
-function wallFile(tile: string): WallFileFeature[] {
-  const path = at(wallSourceFile(SITE, tile));
-  return existsSync(path)
-    ? readJson<{ features: WallFileFeature[] }>(path).features
-    : [];
-}
-
-/** The tile's OSM walls: the lines the terrain conflation burns in, and the
- *  ribbons the fine level carries. Not the fences: they never shape the
- *  ground. */
-function wallLines(tile: string): (WallLine & WallRibbon)[] {
-  return wallFile(tile).flatMap((f) =>
-    f.geometry?.type === "LineString" && f.properties?.kind !== "fence"
-      ? [
-          {
-            coords: f.geometry.coordinates,
-            kind: f.properties?.kind ?? "wall",
-            h: (f.properties as { h?: number } | null)?.h ?? 2,
-          },
-        ]
-      : []
-  );
-}
-
-const FENCE_TYPES = new Set<FenceType>(["mesh", "picket", "rail", "railing"]);
-
-/** The tile's OSM fences and railings, standing on their lines. */
-function fenceLines(tile: string): FenceLine[] {
-  return wallFile(tile).flatMap((f) => {
-    if (f.geometry?.type !== "LineString" || f.properties?.kind !== "fence") {
-      return [];
-    }
-    const p = f.properties as { h?: number; type?: string };
-    const type = FENCE_TYPES.has(p.type as FenceType)
-      ? (p.type as FenceType)
-      : "railing";
-    return [{ coords: f.geometry.coordinates, h: p.h ?? 1.2, type }];
-  });
-}
-
-/** The gates on the tile's wall and fence lines (a neighbour's too, where
- *  its gap reaches over the seam). */
-function gatePoints(tile: string): GatePoint[] {
-  const isGate = (f: WallFileFeature): f is GateFeature =>
-    f.geometry?.type === "Point" && f.properties?.kind === "gate";
-  return wallFile(tile)
-    .filter(isGate)
-    .flatMap((f) =>
-      f.properties
-        ? [
-            {
-              at: f.geometry.coordinates,
-              on: f.properties.on,
-              w: f.properties.w,
-              ...(f.properties.type ? { type: f.properties.type } : {}),
-              ...(f.properties.seam ? { seam: true } : {}),
-            },
-          ]
-        : []
-    );
-}
-
-/** The tile's OSM stairs: the terrain bake shapes the ground under them and
- *  writes them into the fine level's glTF. */
-function stairLines(tile: string): StairLine[] {
-  const path = at(stairSourceFile(SITE, tile));
-  if (!existsSync(path)) {
-    return [];
-  }
-  const { features } = readJson<{ features: StairFeature[] }>(path);
-  return features.flatMap((f) => stairLineOf(f) ?? []);
-}
-
-/** The raised areas the terrain bake lifts to their level. */
-function terraces(tile: string): Terrace[] {
-  const path = at(terraceSourceFile(SITE, tile));
-  if (!existsSync(path)) {
-    return [];
-  }
-  const { features } = readJson<{ features: TerraceFeature[] }>(path);
-  return features.flatMap((f) => terraceOf(f) ?? []);
 }
 
 /** The files a tile's shaped ground is baked from. */
@@ -645,12 +544,15 @@ function shapedTerrain(
           existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
           size
         );
-      const features = { stairs: stairLines(tile), terraces: terraces(tile) };
+      const features = {
+        stairs: stairLines(SITE, tile),
+        terraces: terraces(SITE, tile),
+      };
       if (level === 0) {
         const dgm = await read("native");
         const tin = tinTerrainMesh(
           dgm,
-          wallLines(tile),
+          wallLines(SITE, tile),
           offset,
           features,
           FINE_TIN_MAX_ERROR
@@ -661,7 +563,7 @@ function shapedTerrain(
         log(`${tile}: the DGM has NoData, the fine level stays a grid`);
       }
       const dgm = await read(TERRAIN_LEVELS[level].n);
-      const mesh = terrainMesh(dgm, wallLines(tile), offset, features);
+      const mesh = terrainMesh(dgm, wallLines(SITE, tile), offset, features);
       return { ...mesh, bounds: dgm.bounds };
     })();
     terrains.set(memo, built);
@@ -693,18 +595,18 @@ async function fineChildren(
   bounds: TerrainExtras["bounds"]
 ): Promise<NonNullable<Parameters<typeof writeMeshGlb>[0]["children"]>> {
   const ground = await siteGround();
-  const stairs = stairMesh(stairLines(tile), offset, bounds, {
+  const stairs = stairMesh(stairLines(SITE, tile), offset, bounds, {
     groundAt: ground.heightAt,
-    walls: wallLines(tile).map((w) => w.coords),
+    walls: wallLines(SITE, tile).map((w) => w.coords),
   });
-  const gates = gatePoints(tile);
-  const cut = cutWallGates(wallLines(tile), gates);
+  const gates = gatePoints(SITE, tile);
+  const cut = cutWallGates(wallLines(SITE, tile), gates);
   const walls = wallMesh(cut.walls, ground.heightAt, offset, {
     snapToStep: ground.tin,
   });
-  const kerbs = kerbMesh(kerbLines(tile), ground.heightAt, offset);
+  const kerbs = kerbMesh(kerbLines(SITE, tile), ground.heightAt, offset);
   const fences = fenceMesh(
-    fenceLines(tile),
+    fenceLines(SITE, tile),
     gates,
     ground.heightAt,
     offset,

@@ -4,11 +4,11 @@
  * vantages — plus the data provider it draws on. The registry is
  * `sites/index.ts`; one deployment serves every site whose data was built,
  * each under its own route (`/dresden`), all prerendered, so the app stays
- * a static bundle (ADR 0001, 0035). No THREE, no DOM.
+ * a static bundle (ADR 0001, 0037). No THREE, no DOM.
  *
  * What belongs to the Land rather than the place — CRS, licence and credit,
  * which products are open, the OSM extract — is the `Provider`, shared by
- * every site of that Land (ADR 0035).
+ * every site of that Land (ADR 0037).
  */
 
 export type MovementMode = "fly" | "walk";
@@ -254,6 +254,50 @@ export function landcoverCredit(site: Site): string {
   return site.provider.products.dlm
     ? `Basis-DLM, ${site.provider.credit}`
     : `OpenStreetMap, ${OSM_LICENCE}`;
+}
+
+/** A provider as a credit names it: "GeoSN", "Geobasis NRW", "LGV" — the
+ *  name before its parenthesis when that is short, else what the
+ *  parenthesis holds. */
+function shortName(provider: Provider): string {
+  const m = provider.name.match(/^(.*?) \((.*)\)$/);
+  if (!m) {
+    return provider.name;
+  }
+  return m[1].length <= 20 ? m[1] : m[2];
+}
+
+/** A register's credit line ("Stadtbäume: Landeshauptstadt Dresden,
+ *  dl-de/by-2-0") as its holder and licence. */
+function registerHolder(cadastre: TreeCadastre): [string, string] {
+  const body = cadastre.credit.replace(/^[^:]*:\s*/, "");
+  const cut = body.lastIndexOf(", ");
+  return cut < 0 ? [body, ""] : [body.slice(0, cut), body.slice(cut + 2)];
+}
+
+/**
+ * The short credit the HUD footer always shows (its full lines,
+ * `siteAttribution`, fold behind it): every licensor and licence named
+ * once — "GeoSN, Landeshauptstadt Dresden (dl-de/by-2-0) · © OpenStreetMap
+ * (ODbL)".
+ */
+export function siteCredit(site: Site): string {
+  const byLicence = new Map<string, string[]>();
+  const add = (holder: string, licence: string) => {
+    const holders = byLicence.get(licence) ?? [];
+    if (!holders.includes(holder)) {
+      holders.push(holder);
+    }
+    byLicence.set(licence, holders);
+  };
+  add(shortName(site.provider), site.provider.licence);
+  if (site.treeCadastre) {
+    add(...registerHolder(site.treeCadastre));
+  }
+  const parts = [...byLicence].map(([licence, holders]) =>
+    licence ? `${holders.join(", ")} (${licence})` : holders.join(", ")
+  );
+  return [...parts, "© OpenStreetMap (ODbL)"].join(" · ");
 }
 
 /** The credit lines the HUD footer shows (the sources' licence terms). */

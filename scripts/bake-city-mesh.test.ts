@@ -284,3 +284,54 @@ test("gap structures: a chimney is its own object, a relief slab joins its landm
   expect(slab.footprints).toEqual([]);
   expect(slab.source).toBe(OBJECT_SOURCE_GAP);
 });
+
+test("a measured roof replaces its object's LoD2 triangles, same row", () => {
+  const part = (x0: number, z: number) => ({
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [412_040 + x0, 5_656_000],
+          [412_045 + x0, 5_656_000],
+          [412_045 + x0, 5_656_010],
+          [412_040 + x0, 5_656_010],
+          [412_040 + x0, 5_656_000],
+        ] as [number, number][],
+      ],
+    },
+    properties: { id: "house", z },
+  });
+  const lod2 = bakeCityMesh("t", fixture(), undefined, null);
+  const baked = bakeCityMesh(
+    "t",
+    fixture(),
+    undefined,
+    null,
+    undefined,
+    undefined,
+    "render",
+    undefined,
+    // two steps over the house's 10 × 10 m: 4 m and 7 m above its base
+    [part(0, 104), part(5, 107)]
+  );
+  const v = baked.vertices;
+  const zOf = (id: number) =>
+    [...v.objectIds.keys()]
+      .filter((i) => v.objectIds[i] === id)
+      .map((i) => v.positions[i * 3 + 2]);
+  // the shop's part keeps its LoD2 triangles, the house is the two blocks
+  expect(zOf(1)).toEqual(
+    [...lod2.vertices.objectIds.keys()]
+      .filter((i) => lod2.vertices.objectIds[i] === 1)
+      .map((i) => lod2.vertices.positions[i * 3 + 2])
+  );
+  const house = zOf(2);
+  // the house's LoD2 base (the CityJSON's 100 m), up to each step
+  expect(Math.min(...house)).toBeCloseTo(100, 5);
+  expect(new Set(house.map((z) => Math.round(z)))).toEqual(
+    new Set([100, 104, 107])
+  );
+  // the row follows the new shape: the eave is the lower block's roof
+  expect(baked.objects[2].eaveH).toBeCloseTo(4, 2);
+  expect(baked.objects).toHaveLength(lod2.objects.length);
+});

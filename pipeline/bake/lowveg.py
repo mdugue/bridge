@@ -159,11 +159,11 @@ def dgm_on(grid, path, epsg):
     return out
 
 
-def lod2_rings(cityjson):
+def lod2_rings(cityjson, skip=frozenset()):
     """Every LoD2 surface ring of a CityJSON file as (n, 3) vertex arrays in
     the projected CRS (x, y, absolute z) — the one CityJSON walk the bakes
-    share (the building mask here, the roof heights in skyview.py). Missing
-    file → nothing."""
+    share (the building mask here, the roof heights in skyview.py), less
+    the objects in `skip`. Missing file → nothing."""
     if not Path(cityjson).exists():
         return
     d = json.loads(Path(cityjson).read_text())
@@ -177,7 +177,9 @@ def lod2_rings(cityjson):
             for c in b:
                 yield from rings(c)
 
-    for o in d["CityObjects"].values():
+    for oid, o in d["CityObjects"].items():
+        if oid in skip:
+            continue
         for g in o.get("geometry", []):
             for ring in rings(g["boundaries"]):
                 if len(ring) >= 3:

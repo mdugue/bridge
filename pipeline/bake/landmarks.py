@@ -2,7 +2,7 @@
 tile, notable enough (at least `MIN_SITELINKS` Wikipedia articles and
 `NOTABLE_SHARE` of the tile's most notable one's, at most `MAX_PER_TILE`),
 matched to what the viewer draws of it
-(plan 038).
+(plan 050).
 
 - `bun run fetch` asks Wikidata once per tile (`fetch_wikidata`) and caches
   the answer under `data/_raw/<provider>/wikidata/landmarks_<tile>.json`:

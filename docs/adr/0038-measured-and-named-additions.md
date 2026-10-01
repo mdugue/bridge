@@ -1,4 +1,4 @@
-# ADR 0036: Geometry beyond LoD2 only where a measurement and a name agree; attributes tint within the clay
+# ADR 0038: Geometry beyond LoD2 only where a measurement and a name agree; attributes tint within the clay
 
 - **Status:** accepted
 - **Date:** 2026-09
@@ -35,7 +35,7 @@ mapped structure, Hamburg 90–98 m ones beside a 2023 building.
 The viewer's look is one opaque clay with hashed pastel tints
 ([ADR 0010](./0010-opaque-clay-buildings-only.md)); a procedural window
 grid was tried and vetoed (ledger 🗃️). Every step must run unchanged for
-the next city ([ADR 0035](./0035-sites-providers-and-per-site-data.md)).
+the next city ([ADR 0037](./0037-sites-providers-and-per-site-data.md)).
 
 ## Decision
 
@@ -112,7 +112,7 @@ the next city ([ADR 0035](./0035-sites-providers-and-per-site-data.md)).
   the Elbphilharmonie's brick base (the Kaispeicher A) is in neither
   LoD2, OSM (one outline, no `building:part`) nor Wikidata (steel, glass,
   concrete), so the building wears one look. Mapping the part in OSM is
-  the route, not a hand-drawn exception (plan 038's open items).
+  the route, not a hand-drawn exception (plan 050's open items).
 
 ## Alternatives
 
@@ -144,7 +144,7 @@ the next city ([ADR 0035](./0035-sites-providers-and-per-site-data.md)).
   `scripts/bake-city-mesh.ts` (`appendGapStructures`),
   `scripts/prepare-data.ts` (`withLandmarks`), `app/_components/
   visual-style.ts` (`osmColour`, `clayGlow`), `app/_components/scene-sidebar.tsx`.
-- [Plan 038](../plans/038-landmarks-and-gaps.md), [plan 034](../plans/034-dom-minus-lod2.md)
+- [Plan 050](../plans/050-landmarks-and-gaps.md), [plan 034](../plans/completed.md#034--small-structures-from-dom--lod2--done-2026-09-26-look-unjudged-on-a-gpu--plan-019)
   (the scan's small structures, the same append path),
   [ADR 0033](./0033-bridges-measured-in-the-surface-model.md) (bridges:
   measured in DOM1, typed by Wikidata), [ADR 0010](./0010-opaque-clay-buildings-only.md).

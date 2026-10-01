@@ -17,6 +17,15 @@
  */
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
+import {
+  EDGE_TOLERANCE_M,
+  farthestNear,
+  type JoinPoint,
+  joinsAlong,
+  lowestGround,
+  reachLevel,
+  SINK,
+} from "./ground-join";
 import { type StepSnap, smoothSnaps, snapToStep } from "./wall-snap";
 
 export interface WallRibbon {
@@ -58,7 +67,14 @@ const MAX_H = 14; // clamp tall tags (m)
 /** A densified wall vertex with its world XZ and the base/top elevations;
  *  a snapped column also carries where its coping cap ends (`bx`, `bz`). */
 interface WallCol {
+  /** the EPSG point the cap's back edge ends at (a snapped column) */
+  back?: Point2;
+  /** where the ground behind the cap lies below it: the foot of the back
+   *  face the cap drops to there */
+  backFoot?: number;
   base: number;
+  /** the EPSG point the face stands at */
+  face: Point2;
   bx?: number;
   bz?: number;
   top: number;
@@ -94,9 +110,9 @@ function columnAt(
   // base = the low shelf, dropped further to span the OSM height when the
   // step is shallower than the tag; clamped to MAX_H + a small dip below
   // ground.
-  const base = Math.max(top - MAX_H, Math.min(lowShelf, top - h)) - 0.4;
+  const base = Math.max(top - MAX_H, Math.min(lowShelf, top - h)) - SINK.wall;
   const w = epsgToWorld(sx, sy, offset);
-  return { wx: w.x, wz: w.z, base, top };
+  return { face: [sx, sy], wx: w.x, wz: w.z, base, top };
 }
 
 /** How far behind the face the coping cap may reach to find the high
@@ -126,16 +142,13 @@ function capEnd(
 ): number {
   const [ex, ey] = e;
   const [px, py] = p;
-  const level = step.hi - CAP_TOLERANCE_M;
-  const n = Math.round(CAP_REACH_M / CAP_SCAN_M);
-  for (let k = 1; k <= n; k++) {
-    const o = faceAt + step.up * k * CAP_SCAN_M;
-    const g = heightAt(ex + px * o, ey + py * o);
-    if (g !== null && g >= level) {
-      return o + step.up * CAP_OVERLAP_M;
-    }
-  }
-  return step.crest;
+  const at = (d: number) => faceAt + step.up * d;
+  const d = reachLevel(
+    (dd) => heightAt(ex + px * at(dd), ey + py * at(dd)),
+    () => step.hi,
+    { reach: CAP_REACH_M, step: CAP_SCAN_M, tolerance: CAP_TOLERANCE_M }
+  );
+  return d === null ? step.crest : at(d + CAP_OVERLAP_M);
 }
 
 /** Where a snapped column's face stands (offset along +perp). */
@@ -154,20 +167,12 @@ function smoothCapEnds(
   ends: (number | null)[],
   steps: (StepSnap | null)[]
 ): (number | null)[] {
-  return ends.map((end, i) => {
-    const up = steps[i]?.up;
-    if (end === null || up === undefined) {
-      return end;
-    }
-    let far = end;
-    for (let k = i - CAP_SMOOTH; k <= i + CAP_SMOOTH; k++) {
-      const other = ends[k];
-      if (other !== null && other !== undefined && steps[k]?.up === up) {
-        far = up > 0 ? Math.max(far, other) : Math.min(far, other);
-      }
-    }
-    return far;
-  });
+  return farthestNear(
+    ends,
+    CAP_SMOOTH,
+    (i) => (steps[i]?.up ?? 1) as 1 | -1,
+    (i) => steps[i]?.up
+  );
 }
 
 /** The column at a (smoothed) measured step: face just in front of the
@@ -183,10 +188,15 @@ function snappedColumn(
   const [ex, ey] = e;
   const [px, py] = p;
   const faceAt = faceOf(step);
-  const face = epsgToWorld(ex + px * faceAt, ey + py * faceAt, offset);
-  const back = epsgToWorld(ex + px * backAt, ey + py * backAt, offset);
-  const base = Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - 0.4;
+  const faceE: Point2 = [ex + px * faceAt, ey + py * faceAt];
+  const backE: Point2 = [ex + px * backAt, ey + py * backAt];
+  const face = epsgToWorld(faceE[0], faceE[1], offset);
+  const back = epsgToWorld(backE[0], backE[1], offset);
+  const base =
+    Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - SINK.wall;
   return {
+    face: faceE,
+    back: backE,
     wx: face.x,
     wz: face.z,
     bx: back.x,
@@ -231,6 +241,48 @@ function pushCap(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   }
 }
 
+/** A quad's joins between two columns: the face's foot, and the cap's
+ *  back edge where both columns carry one. */
+function wallJoins(a: WallCol, b: WallCol): JoinPoint[] {
+  const out = joinsAlong(
+    "foot",
+    { x: a.face[0], y: a.face[1], z: a.base },
+    { x: b.face[0], y: b.face[1], z: b.base }
+  );
+  if (a.back && b.back) {
+    // a cap meets the ground behind it, or drops a back face to it
+    const dropped = a.backFoot !== undefined || b.backFoot !== undefined;
+    out.push(
+      ...joinsAlong(
+        dropped ? "foot" : "edge",
+        { x: a.back[0], y: a.back[1], z: a.backFoot ?? a.top },
+        { x: b.back[0], y: b.back[1], z: b.backFoot ?? b.top }
+      )
+    );
+  }
+  return out;
+}
+
+/** The back face a cap drops to the ground behind it, where either column
+ *  needs one (`backFoot`). */
+function pushBack(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
+  if (
+    (a.backFoot === undefined && b.backFoot === undefined) ||
+    a.bx === undefined ||
+    a.bz === undefined ||
+    b.bx === undefined ||
+    b.bz === undefined
+  ) {
+    return;
+  }
+  pushQuad(
+    pos,
+    nrm,
+    { ...a, wx: a.bx, wz: a.bz, base: a.backFoot ?? a.top },
+    { ...b, wx: b.bx, wz: b.bz, base: b.backFoot ?? b.top }
+  );
+}
+
 /** Pushes the two triangles of a vertical quad between two columns. */
 function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   let nx = -(b.wz - a.wz);
@@ -265,6 +317,9 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
 }
 
 export interface WallGeometryData {
+  /** where the walls meet the ground (ADR 0035): the face's foot, and the
+   *  back edge of a snapped wall's cap, which meets the high shelf */
+  joins: JoinPoint[];
   /** world-frame (Y-up, recentered) flat normals, xyz per vertex */
   normals: number[];
   /** world-frame (Y-up, recentered) positions, xyz per vertex, triangles */
@@ -306,7 +361,7 @@ function columnsOf(
     }),
     steps
   );
-  return pts.map((p, i) => {
+  const cols = pts.map((p, i) => {
     const step = steps[i];
     const end = ends[i];
     // smoothSnaps fills gaps from the neighbours; a vertex off every tile
@@ -315,6 +370,36 @@ function columnsOf(
       ? snappedColumn(p, perps[i], h, step, offset, end)
       : columnAt(p, perps[i], h, heightAt, offset);
   });
+  return cols.map((c, i) =>
+    c ? grounded(c, cols[i - 1], cols[i + 1], heightAt) : c
+  );
+}
+
+/**
+ * A column held to the ground it meets (ADR 0035): its foot reaches the
+ * lowest ground along the face to its neighbours — a wall sampled every
+ * 2.5 m stood its foot on the shelves either side of a dip, a ditch or the
+ * water at a quay; and where the ground behind its cap lies below the cap
+ * (a cap that found no shelf within reach: steps down, a slope), the cap
+ * drops a back face to that ground instead of ending in the air.
+ */
+function grounded(
+  c: WallCol,
+  prev: WallCol | null | undefined,
+  next: WallCol | null | undefined,
+  heightAt: HeightAt
+): WallCol {
+  const mid = (n: WallCol | null | undefined): Point2[] =>
+    n ? [[(c.face[0] + n.face[0]) / 2, (c.face[1] + n.face[1]) / 2]] : [];
+  const low = lowestGround(heightAt, [c.face, ...mid(prev), ...mid(next)]);
+  const base = low === null ? c.base : Math.min(c.base, low - SINK.wall);
+  if (!c.back) {
+    return { ...c, base };
+  }
+  const behind = heightAt(c.back[0], c.back[1]);
+  return behind !== null && behind < c.top - EDGE_TOLERANCE_M
+    ? { ...c, base, backFoot: behind - SINK.wall }
+    : { ...c, base };
 }
 
 /**
@@ -330,11 +415,13 @@ export function wallGeometry(
 ): WallGeometryData | null {
   const positions: number[] = [];
   const normals: number[] = [];
+  const joins: JoinPoint[] = [];
   for (const wall of walls) {
     if (wall.coords.length < 2) {
       continue;
     }
     const cols = columnsOf(wall, heightAt, offset, opts);
+
     for (let i = 0; i < cols.length - 1; i++) {
       const c0 = cols[i];
       const c1 = cols[i + 1];
@@ -346,7 +433,9 @@ export function wallGeometry(
       }
       pushQuad(positions, normals, c0, c1);
       pushCap(positions, normals, c0, c1);
+      pushBack(positions, normals, c0, c1);
+      joins.push(...wallJoins(c0, c1));
     }
   }
-  return positions.length > 0 ? { positions, normals } : null;
+  return positions.length > 0 ? { positions, normals, joins } : null;
 }

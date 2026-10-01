@@ -48,7 +48,6 @@ from collections import defaultdict
 
 import numpy as np
 import shapely
-import shapely.ops
 from PIL import Image
 
 from .common import (
@@ -56,6 +55,7 @@ from .common import (
     Tile,
     column,
     feature,
+    label_line,
     overlaps,
     owns,
     value_at,
@@ -122,67 +122,14 @@ class Beds:
     def beds(self, line: shapely.LineString) -> list[tuple[shapely.LineString, str | None]]:
         """The line cut where its bed changes: [(piece, bed)], the bed None
         for a way seen only through the margin (no sample on the tile)."""
-        n = max(int(line.length / SAMPLE_M), 1)
-        raw = [
-            self.sample_bed(*line.interpolate(i / n, normalized=True).coords[0])
-            for i in range(n + 1)
-        ]
-        if all(b is None for b in raw):
-            return [(line, None)]
-        labels = smooth_beds(raw, max(int(BED_WINDOW_M / SAMPLE_M / 2), 1))
-        labels = absorb_short(labels, max(int(BED_MIN_M / SAMPLE_M), 1))
-        out = []
-        i = 0
-        while i < len(labels):
-            j = i
-            while j + 1 < len(labels) and labels[j + 1] == labels[i]:
-                j += 1
-            # cut halfway between the last sample of one bed and the first of the next
-            a = 0.0 if i == 0 else (i - 0.5) / n
-            b = 1.0 if j == len(labels) - 1 else (j + 0.5) / n
-            piece = shapely.ops.substring(line, a, b, normalized=True)
-            if piece.geom_type == "LineString" and piece.length > 0:
-                out.append((piece, labels[i]))
-            i = j + 1
-        return out
-
-
-def smooth_beds(raw: list[str | None], half: int) -> list[str]:
-    """The majority bed within `half` samples either side of each (ties in
-    BED_ORDER), ignoring samples off the tile."""
-    out = []
-    for i in range(len(raw)):
-        near = [b for b in raw[max(0, i - half) : i + half + 1] if b is not None]
-        if not near:
-            near = [b for b in raw if b is not None]
-        out.append(max(BED_ORDER, key=lambda b: (near.count(b), -BED_ORDER.index(b))))
-    return out
-
-
-def absorb_short(labels: list[str], min_run: int) -> list[str]:
-    """Runs shorter than `min_run` samples take the bed of the longer
-    neighbouring run, shortest first, until none is left (or one run)."""
-    labels = list(labels)
-    while True:
-        runs = []
-        i = 0
-        while i < len(labels):
-            j = i
-            while j + 1 < len(labels) and labels[j + 1] == labels[i]:
-                j += 1
-            runs.append((i, j))
-            i = j + 1
-        short = [r for r in runs if r[1] - r[0] + 1 < min_run]
-        if len(runs) == 1 or not short:
-            return labels
-        k = runs.index(min(short, key=lambda r: r[1] - r[0]))
-        prev = runs[k - 1] if k > 0 else None
-        nxt = runs[k + 1] if k + 1 < len(runs) else None
-        side = max((r for r in (prev, nxt) if r is not None), key=lambda r: r[1] - r[0])
-        bed = labels[side[0]]
-        i0, i1 = runs[k]
-        for m in range(i0, i1 + 1):
-            labels[m] = bed
+        return label_line(
+            line,
+            self.sample_bed,
+            step=SAMPLE_M,
+            window=BED_WINDOW_M,
+            min_run=BED_MIN_M,
+            order=BED_ORDER,
+        )
 
 
 def bridge_of(other: str | None) -> int:

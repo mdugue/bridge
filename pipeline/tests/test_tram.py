@@ -90,10 +90,11 @@ def test_a_track_across_a_square_and_a_lawn_is_cut_where_its_bed_changes(tmp_pat
 
 
 def test_beds_are_smoothed_and_short_runs_absorbed():
-    from bake.tram import absorb_short, smooth_beds
+    from bake.common import absorb_short, smooth_labels
+    from bake.tram import BED_ORDER
 
     raw = ["street"] * 10 + ["ballast"] + ["street"] * 10 + [None] * 3
-    assert set(smooth_beds(raw, 3)) == {"street"}
+    assert set(smooth_labels(raw, 3, BED_ORDER)) == {"street"}
     labels = ["street"] * 12 + ["grass"] * 3 + ["street"] * 5 + ["ballast"] * 20
     assert absorb_short(labels, 10) == ["street"] * 20 + ["ballast"] * 20
 

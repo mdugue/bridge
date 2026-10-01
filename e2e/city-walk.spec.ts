@@ -373,7 +373,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     expectNoErrors(errors);
   });
 
-  test("minimap click teleports the player", async () => {
+  test("minimap click glides the player there", async () => {
     // The map spans the loaded terrain, whatever the scene profile loaded, so
     // the assertion is about the MAPPING, not about a fixed tile block:
     // clicking a quarter in from the north-west corner must land the player a
@@ -399,7 +399,12 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
         y: (minimapBox?.height ?? 0) / 4,
       },
     });
-    const pose = await page.evaluate(() => window.__poc?.handle?.getPose());
+    // The click glides there: where it lands is the glide's target (the
+    // glide itself takes dozens of software-rendered frames).
+    const pose = await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      return handle?.getGlideTarget() ?? handle?.getPose();
+    });
     // 50 m on a 2 km tile — loose enough for the rounding a click position
     // goes through, tight enough that a wrong quadrant or a flipped axis
     // (north-up vs canvas-down) fails.

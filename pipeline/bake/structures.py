@@ -3,7 +3,7 @@ and masts the building model leaves out, and whole buildings it does not
 carry yet — measured in DOM1 and confirmed by OpenStreetMap, as shapes the
 build appends to the city mesh (lib/city/structures.ts).
 
-Measurement (plan 038): over the tile and a margin, `gap = DOM − max(DGM,
+Measurement (plan 050): over the tile and a margin, `gap = DOM − max(DGM,
 LoD2 roof)`, the height the surface model sees above everything the
 building model draws. Tall, slim gaps are common and mostly not buildings —
 tree crowns, power pylons, and in a city centre the construction cranes

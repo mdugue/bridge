@@ -200,3 +200,29 @@ def test_the_neighbour_tile_fills_the_margin_across_the_seam(tmp_path):
     assert 65 < angle < 70
     # beyond the site the ground is open, at the tile edge's height
     assert np.all(ground[:, : margin - 1] == 100.0)
+
+
+def test_a_rebuilt_roof_stands_in_for_its_lod2_object(tmp_path):
+    from bake.skyview import measured_triangles
+
+    path = tmp_path / "roofs_t.geojson"
+    ring = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]
+    path.write_text(
+        json.dumps(
+            {
+                "features": [
+                    {
+                        "geometry": {"type": "Polygon", "coordinates": [ring]},
+                        "properties": {"id": "a", "z": 130.0},
+                    }
+                ]
+            }
+        )
+    )
+    ids, tris = measured_triangles(path)
+    assert ids == {"a"}
+    assert tris.shape == (2, 3, 3)
+    assert np.all(tris[..., 2] == 130.0)
+    field = Field((0, 0, 10, 10), 1.0)
+    assert np.nanmin(burn_triangles(field, tris)) == 130.0
+    assert measured_triangles(tmp_path / "missing.geojson")[0] == set()

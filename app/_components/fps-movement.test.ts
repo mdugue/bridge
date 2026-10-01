@@ -6,7 +6,10 @@ const EYE = 1.7;
 /** WALK_SPEED in fps-movement.ts — one second of input equals this many metres. */
 const WALK_STEP = 9;
 const SPRINT_STEP = 27;
+/** FLY_SPEED: flying where the ground is unknown (it scales with the height). */
 const FLY_STEP = 35;
+/** No ground under the camera: flying at the base speed, sinking unbounded. */
+const UNKNOWN_GROUND = { groundHeight: () => null };
 
 function rig(overrides: Partial<FpsMovementOptions> = {}) {
   const camera = new PerspectiveCamera(70, 1, 0.1, 100);
@@ -152,7 +155,10 @@ test("flying meets the facades too: fly mode applies resolveStep", () => {
   blocked.movement.update(1);
   expect(blocked.camera.position.z).toBeCloseTo(0, 5);
 
-  const free = rig({ resolveStep: (_position, displacement) => displacement });
+  const free = rig({
+    ...UNKNOWN_GROUND,
+    resolveStep: (_position, displacement) => displacement,
+  });
   free.movement.setMode("fly");
   free.movement.press("KeyW");
   free.movement.update(1);
@@ -166,13 +172,13 @@ test("off the terrain the eye height is held, not dropped", () => {
 });
 
 test("fly mode moves vertically with Space and Shift", () => {
-  const up = rig();
+  const up = rig(UNKNOWN_GROUND);
   up.movement.setMode("fly");
   up.movement.press("Space");
   up.movement.update(1);
   expect(up.camera.position.y).toBeCloseTo(EYE + FLY_STEP, 5);
 
-  const down = rig();
+  const down = rig(UNKNOWN_GROUND);
   down.camera.position.y = 100;
   down.movement.setMode("fly");
   down.movement.press("ShiftLeft");
@@ -186,7 +192,7 @@ test("fly mode moves vertically with Space and Shift", () => {
 });
 
 test("E and Q climb and sink like Space and Shift", () => {
-  const { camera, movement } = rig();
+  const { camera, movement } = rig(UNKNOWN_GROUND);
   camera.position.y = 100;
   movement.setMode("fly");
   movement.press("KeyE");
@@ -199,7 +205,7 @@ test("E and Q climb and sink like Space and Shift", () => {
 });
 
 test("the altitude stick climbs in proportion and adds to the keys", () => {
-  const { camera, movement } = rig();
+  const { camera, movement } = rig(UNKNOWN_GROUND);
   camera.position.y = 100;
   movement.setMode("fly");
   movement.setVertical(0.5);
@@ -247,4 +253,56 @@ test("snapToGround sets the eye height without smoothing", () => {
   expect(camera.position.y).toBe(50 + EYE);
   movement.setMode("fly");
   expect(movement.getMode()).toBe("fly");
+});
+
+test("flying is slow near the ground and fast high above it", () => {
+  const speedAt = (height: number) => {
+    const { camera, movement } = rig();
+    camera.position.y = height;
+    movement.setMode("fly");
+    movement.press("KeyW");
+    movement.update(0.1);
+    return -camera.position.z / 0.1;
+  };
+  expect(speedAt(EYE)).toBeCloseTo(15, 5);
+  expect(speedAt(30)).toBeCloseTo(FLY_STEP - 1, 5);
+  expect(speedAt(150)).toBeCloseTo(130, 5);
+  expect(speedAt(1000)).toBeCloseTo(180, 5);
+});
+
+test("a dolly eases out along the ground on foot, walls stopping it like a step", () => {
+  const { camera, movement } = rig();
+  movement.dolly(10);
+  movement.update(1 / 60);
+  // Eased: the first frame covers a slice, not the whole push.
+  expect(camera.position.z).toBeLessThan(0);
+  expect(camera.position.z).toBeGreaterThan(-2);
+  for (let i = 0; i < 120; i += 1) {
+    movement.update(1 / 60);
+  }
+  expect(camera.position.z).toBeCloseTo(-10, 5);
+  expect(camera.position.y).toBeCloseTo(EYE, 5);
+
+  const blocked = rig({ resolveStep: () => new Vector3() });
+  blocked.movement.dolly(10);
+  blocked.movement.update(1);
+  expect(blocked.camera.position.z).toBeCloseTo(0, 5);
+});
+
+test("a dolly in the air follows the view, and a mode switch drops what is left", () => {
+  const { camera, movement } = rig();
+  camera.position.y = 100;
+  camera.lookAt(0, 0, -100); // 45° down, facing −Z
+  movement.setMode("fly");
+  movement.dolly(20);
+  movement.update(10);
+  expect(camera.position.z).toBeCloseTo(-20 * Math.SQRT1_2, 5);
+  expect(camera.position.y).toBeCloseTo(100 - 20 * Math.SQRT1_2, 5);
+
+  movement.dolly(20);
+  movement.setMode("walk");
+  movement.setMode("fly");
+  const z = camera.position.z;
+  movement.update(10);
+  expect(camera.position.z).toBeCloseTo(z, 5);
 });

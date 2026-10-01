@@ -1,4 +1,4 @@
-# ADR 0035: Sites pick a provider; data per site, downloads per provider; one deployment, a route per site
+# ADR 0037: Sites pick a provider; data per site, downloads per provider; one deployment, a route per site
 
 - **Status:** accepted (extends [ADR 0026](./0026-one-site-config-per-build.md)
   and supersedes its one-site-per-build part;
@@ -122,5 +122,5 @@ whose sites differ only in data.
   `app/page.tsx`, `app/_components/site-context.tsx`,
   `scripts/pipeline.ts`, `scripts/site-report.ts`, `pipeline/bake/{fetch,
   spec,net,rasters,citygml,landcover_osm}.py`, `pipeline/bake/providers/`.
-- [Plan 037](../plans/037-many-sites-one-env-var.md), [plan 017](../plans/017-germany-wide-sites.md),
+- [Plan 049](../plans/049-many-sites-one-env-var.md), [plan 017](../plans/017-germany-wide-sites.md),
   [portability.md](../portability.md).

@@ -75,7 +75,7 @@ is on disk. Adding a place in a covered Land is one file plus one line in
 every site whose `data/<id>/` is present where it builds, at `/<id>`. A host
 that builds from git sees only what is committed — the seven cities above
 (`.gitignore` un-ignores each by name); un-ignore a new site's folder once
-you decide to ship it — it is roughly 20–90 MB per site, plain git, no LFS ([ADR 0035](docs/adr/0035-sites-providers-and-per-site-data.md)).
+you decide to ship it — it is roughly 20–90 MB per site, plain git, no LFS ([ADR 0037](docs/adr/0037-sites-providers-and-per-site-data.md)).
 
 ## Data
 
@@ -129,16 +129,18 @@ Desktop:
 |---|---|
 | Drag | Look around |
 | `W` `A` `S` `D` | Move (`Shift` sprints) |
-| `F` | Toggle walk / fly |
+| `F` | Toggle walk / fly (an animated take-off / landing) |
 | `Space` / `Shift` | Up / down (fly mode) |
-| Scroll | Zoom (field of view) |
-| Double-click the ground | Travel there |
-| Click the minimap | Teleport there |
+| Scroll | Move forward / back |
+| `Alt` + scroll | Zoom (field of view) |
+| Double-click the ground | Glide there |
+| Click the minimap | Glide there |
 | `R` | Demolish the building under the crosshair |
 | "Immersive mode" | Pointer lock (`Esc` exits) |
 
-Touch: drag to look, joystick to walk, pinch to zoom, double-tap the ground to
-travel, and the button in the corner opens the scene settings.
+Touch: drag to look, joystick to walk, pinch to move forward / back, double-tap
+the ground to glide there, and the button in the corner opens the scene
+settings.
 
 ## Architecture
 

@@ -44,12 +44,14 @@ export function cityJsonFile(tile: string): string {
 
 /** The inputs of the building bake (CityJSON + DOP roof LUT + the OSM
  *  facts per object + the laser scan's small structures + the structures
- *  the surface model shows beyond LoD2 + the landmarks Wikidata knows). */
+ *  the surface model shows beyond LoD2 + the landmarks Wikidata knows +
+ *  the roofs rebuilt from DOM1). */
 export function cityMeshSourceFiles(
   site: Site,
   tile: string
 ): {
   city: string;
+  measuredRoofs: string;
   osmBuild: string;
   roofColor: string;
   landmarks: string;
@@ -60,6 +62,7 @@ export function cityMeshSourceFiles(
   return {
     city: `${dir}/cityjson/${cityJsonFile(tile)}`,
     osmBuild: `${dir}/dlm/osmbuild_${tile}.json`,
+    measuredRoofs: `${dir}/dlm/roofs_${tile}.geojson`,
     roofColor: `${dir}/dop/roofcolor_${tile}.json`,
     smallBuild: `${dir}/dlm/smallbuild_${tile}.geojson`,
     structures: `${dir}/dlm/structures_${tile}.geojson`,

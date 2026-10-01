@@ -143,8 +143,10 @@ chip. Every tile change re-renders the shadow map. The layers:
   shared with the buildings through `shared-rasters.ts`).
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
-  the canopy points they veto at build time).
-- Beyond LoD2 (plan 038, ADR 0036): geometry is added only where DOM1
+  the canopy points they veto at build time), `scripts/measured-roofs.ts`
+  (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
+  replaced by stepped blocks from `pipeline/bake/roofs.py`; ADR 0036).
+- Beyond LoD2 (plan 050, ADR 0038): geometry is added only where DOM1
   measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
   names it — never from the surface model alone (cranes). `structures.py`
   → `lib/city/structures.ts` lathes chimneys/towers/masts, extrudes
@@ -453,6 +455,36 @@ exactly (`rmStripes`), and along-street periods divide 165 m.
 (`cultivated.py`) in jittered-Voronoi plots — no colony in the fifteen tiles
 maps its parcels, so keep it faint.
 
+## Parts meet the ground (ADR 0035)
+
+The DGM1 rounds every real step into a 1–2 m ramp, so whatever stands on
+the ground meets an edge that is not where its own is. Five layers got it
+wrong at once (2026-09-30: the kerb's second step on the pavement, a quay
+wall's jagged cap, bridge decks ending in the air, stairs in a trench, tram
+beds decided per whole chain). The rules, in `lib/city/ground-join.ts`:
+
+- **feet under** by a `SINK` row (band 5 cm, kerb 6, box/patch 20,
+  planted/relief 25, wall 40, stair 60) — pick a row, don't add a number;
+- **edges meet the ground**: `meetGround` (end the top at the ground's
+  level, never below a floor such as the road), `reachLevel` (run on until
+  the ground comes up to a flat or falling level: a cap, an approach ramp);
+- **per-sample decisions smoothed along the part** (`farthestNear`; in the
+  Python bakes a window majority + a minimum run, `tram.py`
+  `smooth_beds`/`absorb_short`) — never one decision per whole line, never
+  raw per sample (a sawtooth);
+- **report the joins**: a builder returns `joins` (`foot` must reach the
+  ground, `edge` must not stand > 5 cm above it), every metre along each
+  span via `joinsAlong`. Baked parts are listed in
+  `scripts/ground-joins.ts` `JOIN_PARTS`; its test holds each part's
+  share of misses to a budget on the spawn tile. `bun
+  scripts/ground-joins.ts [tile]` prints the shares and the worst places —
+  render those, obliquely.
+
+Before shipping a part that stands on the ground, answer in its doc
+comment: what happens where the ground beside it is **higher** than the
+part (a bank: Wange, cap run-on), and where it is **lower** (a raised
+flight, a deck end: dig the DGM's shoulder down, land a ramp)?
+
 ## Terrain seams
 
 Vertices sit at pixel centres, so a tile stops half a pixel short of its bounds;
@@ -645,7 +677,7 @@ because boot is the largest fixed cost left once frames are cheap. The
 ## Data pipeline
 
 Every script takes the site as its first argument (`bun run fetch leipzig`,
-ADR 0035); its data is `data/<site>/`. One deployment serves every site
+ADR 0037); its data is `data/<site>/`. One deployment serves every site
 whose data is ready, each at `/<site>`; `/` is the start page.
 Bulk raw downloads (DLM, DOM1, DOP, OSM `.osm.pbf`) stay in the gitignored
 `data/_raw/<provider>/{dom1,dop,dlm,osm,trees,lsc,downloads}`, shared by the
@@ -673,7 +705,7 @@ bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step (STEPS in pipeline/bake/__main__.py, in this order):
                                        #   landcover islands rail canopy trees ndvi roof-colour
                                        #   osm-buildings lamps monuments furniture walls stairs surface edges
-                                       #   markings sport tram riverside skyview soundmarks
+                                       #   markings sport tram riverside roofs skyview soundmarks
                                        #   lowveg cultivated small-buildings
                                        #   landmarks structures
 bun run test:pipeline                  # pytest + ruff
@@ -686,7 +718,7 @@ runtime falls back); rail decks fall back to the DGM ramp. An RGB-only DOP
 (`rail_osm.py`: rails, ballast beds, bridge ways merged per bridge and
 level) — it runs before `canopy`, which keeps crowns off those decks.
 Stand-ins are marked per city in the generated
-`docs/guide/*/sources-by-city.md` (`bun run docs:matrix`, ADR 0037). `rasters.py`
+`docs/guide/*/sources-by-city.md` (`bun run docs:matrix`, ADR 0039). `rasters.py`
 refuses a height mosaic flatter than 0.5 m (1–99 %) — Hamburg's DGM was
 once committed as 0 m everywhere and every house floated; the pipeline
 tests hold every committed DGM to ≥ 2 m. The laser scan (`--lsc`) is read
@@ -695,9 +727,10 @@ tile by `lsc.merge_laz`, intensities × 1/16 to GeoSN's range — unverified).
 
 The later modules, one step each: `osm_buildings.py` (shops, heritage,
 material and colours per LoD2 object), `markings.py`, `cultivated.py`, `tram.py`,
-`riverside.py`, `skyview.py` (DGM + LoD2 only),
+`riverside.py`, `skyview.py` (DGM + LoD2, the rebuilt roofs of `roofs.py`
+in place of theirs),
 `soundmarks.py` (bell towers), `small_buildings.py` (plan 034),
-`landmarks.py` and `structures.py` (plan 038; landmarks first, the relief
+`landmarks.py` and `structures.py` (plan 050; landmarks first, the relief
 is measured on their objects). **Seams:**
 a step whose result must agree on both sides of a tile edge reads the
 neighbours through `Tile.neighbours` (the committed DGMs): markings

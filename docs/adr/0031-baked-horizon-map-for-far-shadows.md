@@ -77,7 +77,7 @@ courtyard as brightly as a meadow.
 - Only the ground receives it; facades do not (the plan's phase 3 waits on
   plates). Trees cast nothing into it.
   What is baked into the fine terrain takes the ground's terms too
-  (`sky-light.ts` `injectGroundLight`): kerbs, fences and stairs both,
+  (`sky-light.ts` `groundLitMaterial`): kerbs, fences and stairs both,
   walls the horizon only (the ground's sky view at a wall's foot counts
   the wall itself).
 - CSM is no longer needed for "the far streets are sunlit"; it would still
@@ -116,7 +116,7 @@ with, but still a pass per cascade; its own decision.
 
 ## References
 
-- [plan 033](../plans/033-sky-view-and-horizon-shading.md), ledger
+- [plan 033](../plans/completed.md#033--sky-view-factor-and-baked-horizon-shading--done-2026-09-25-plates-and-tuning-open-on-a-gpu--plan-019), ledger
   "Lighting" (*Sky-view factor*, *Far horizon shade*) and 📋 #7
 - `pipeline/bake/skyview.py`, `pipeline/tests/test_skyview.py`,
   `lib/city/skyview.ts`, `app/_components/sky-light.ts`,

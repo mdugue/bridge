@@ -8,7 +8,7 @@
  * prerenders from; folders of sites no longer built are pruned.
  *
  * A site is served exactly when its data is on disk at build time: in a
- * fresh clone that is every site whose folder is committed (ADR 0035 — all
+ * fresh clone that is every site whose folder is committed (ADR 0037 — all
  * fetched sites but Berlin today); a site whose folder is missing is left
  * out, never an error.
  */

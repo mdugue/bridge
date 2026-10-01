@@ -9,7 +9,7 @@ rendering of a German city built from open geodata and walk (or fly) through
 it. Dresden is the reference site; Leipzig, Meißen, Grimma, Hamburg, München,
 Berlin and Unna are configured too. **One deployment serves every site
 whose data is on disk at build time, each under its own route** (`/dresden`,
-`/leipzig`, …); `/` is a start page that lists the built cities (ADR 0035,
+`/leipzig`, …); `/` is a start page that lists the built cities (ADR 0037,
 which superseded the one-site-per-build of ADR 0026).
 Buildings come from LoD2 **CityJSON**, the ground from **DGM1** elevation
 rasters (the walked-on level an error-bounded TIN), surfaces
@@ -63,6 +63,7 @@ bun run fetch <site>  # download the site's data through its provider's
 bun run bake <site>   # offline bakes (pipeline/, Python via uv): raw → derived
                    # data/<site>/{dlm,dop} [tile…] [--step X]
 bun run test:pipeline   # pytest + ruff for pipeline/
+bun scripts/ground-joins.ts <site> [tile…]   # where the baked parts miss the ground (ADR 0035)
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
                    # (Bun.WebView + Chrome; commit the SVGs with the change)
 bun run docs:matrix     # write docs/guide/{en,de}/sources-by-city.md from
@@ -187,7 +188,9 @@ config change.
   ground-clamp, polyline resampling, the pose convention + pitch/FOV
   policy, the look table + store, the Snapshot codec, `ground.ts` (the
   site's ground: terrain heights, the floor, rays — one owner for the pose,
-  focus, shadow fit and soundscape), `boot-phases.ts` (the load after the
+  focus, shadow fit and soundscape), `ground-join.ts` (how a part meets
+  the ground: foot depths, edges, the join contract — ADR 0035),
+  `boot-phases.ts` (the load after the
   first frame as a pure state machine), `terrain-tin.ts`
   (the fine level's TIN + its height index), `wall-snap.ts` (walls onto
   the measured step), `fences.ts` (fence panels and gate gaps),
@@ -200,7 +203,7 @@ config change.
   Wikidata landmarks for the HUD and the vantage it glides to),
   `valley-fog.ts` (the valley haze's depth from the site's ground relief),
   `source-matrix.ts` (the *Sources by city* table: per site and drawn
-  layer, the source and how good it is — ADR 0037), `markings.ts`,
+  layer, the source and how good it is — ADR 0039), `markings.ts`,
   `cultivated.ts`, `tram.ts` and `skyview.ts` (the pure halves
   of those layers), `soundscape.ts` and `sound-entry.ts` (the soundscape's
   mix and its boot-side half), `site.ts` (the
@@ -219,7 +222,7 @@ config change.
   OSM extract, the `land` the start page names). `REFERENCE_SITE`
   (`dresden`: its data is committed, `/wissen` describes it, the checks
   measure it), `siteById`, `isSiteId` and `siteFromArgs` (the CLI's first
-  argument) live in `index.ts` (ADR 0026, 0035)
+  argument) live in `index.ts` (ADR 0026, 0037)
 - `app/page.tsx` — the start page: a card per built city (its land-cover
   map, Land, area, viewpoints) and the way to `/wissen`;
   `app/[site]/page.tsx` — the viewer route, one per built site
@@ -238,7 +241,11 @@ config change.
   to the city mesh), `structures.py` (DOM1 − max(DGM, LoD2 roof) where
   OSM names it: chimneys, towers, masts, missing buildings, a landmark's
   roof relief), `landmarks.py` (Wikidata's notable buildings matched to
-  LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`, `lamps.py`,
+  LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`,
+  `roofs.py` (a LoD2 roof that misses DOM1 — the free-form roofs of
+  complex buildings, the 3 m placeholders of new ones — rebuilt as stepped
+  flat blocks the build puts in its place, `scripts/measured-roofs.ts`;
+  ADR 0036), `lamps.py`,
   `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py` +
   `bridge.py` (the deck and superstructure measured in the surface model,
   the fairway clearance, Wikidata) + `rail_osm.py` (rails, ballast and
@@ -249,7 +256,7 @@ config change.
   `tram.py`, `riverside.py`, `soundmarks.py` (the bell towers), `osm.py`);
   tests in `pipeline/tests/`. Run by
   `bun run fetch <site>` / `bun run bake <site>` (`scripts/pipeline.ts`, which hands
-  Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0035
+  Python the site as one JSON spec, `bake/spec.py`) — see ADR 0025, 0037
 - `scripts/` — the build step: `prepare-sites.ts` runs `prepare-data.ts
   <site>` for every site whose data is ready (or only the ids it is given),
   writes the index `public/data/sites.json` and prunes the folders of sites
@@ -272,7 +279,7 @@ config change.
   `dlm/`, `dop/` (derived), `provenance.json`. Dresden, Grimma, Hamburg,
   Leipzig, Meißen, München and Unna are committed (each un-ignored by name
   in `.gitignore`); a new site's folder stays ignored until the maintainer
-  un-ignores it (ADR 0035). No file is near GitHub's limits (the largest,
+  un-ignores it (ADR 0037). No file is near GitHub's limits (the largest,
   a LoD2 tile, is 16 MB), so no Git-LFS. `data/_raw/<provider>/` is
   **gitignored** bulk downloads, shared by the provider's sites (the
   Wikidata answers too: `wikidata/{bridges,landmarks}_<tile>.json`).
@@ -356,7 +363,7 @@ under `data/<site>/{dgm,cityjson}`: `prepare-data.ts` bakes terrain and
 buildings from them and the canopy/rail bakes read the DGM. Dresden's are
 committed (13–15 MB DGM per tile, as downloaded); the fetch step writes new
 ones compact (~6 MB). Committing another site's folder is the maintainer's
-call (ADR 0035). No Git-LFS. Derived per-tile artifacts
+call (ADR 0037). No Git-LFS. Derived per-tile artifacts
 (`data/<site>/dlm/*.png|json|geojson`, `data/<site>/dop/*.json`) are small;
 `prepare-data.ts` publishes them to `public/data/<site>/` at build. Pipeline notes:
 
@@ -375,7 +382,7 @@ call (ADR 0035). No Git-LFS. Derived per-tile artifacts
   A Land without an infrared DOP (Bavaria) gets a visible-band vegetation
   index (GLI) in place of the NDVI. `Provider.products` decides which
   steps run; the generated `docs/guide/*/sources-by-city.md` marks every
-  stand-in per city (ADR 0037). No per-site look switches: a look that
+  stand-in per city (ADR 0039). No per-site look switches: a look that
   differs between cities (facade material, haze depth, tram gauge) is
   derived from the city's data, not added to `Site`.
 - `landcover.py` bakes **only class ids** (4096² 8-bit PNG + legend); the
@@ -607,6 +614,22 @@ StrictMode remount. The e2e hook distinguishes `__poc.firstFrame` from
 only), and `?scene=lite&block=1` streams the whole site in lite to exercise
 the streaming headless.
 
+**Parts meet the ground by one set of rules** (ADR 0035,
+`lib/city/ground-join.ts`). The DGM1 rounds every step — kerb, quay wall,
+flight of steps, a bridge's abutment — into a 1–2 m ramp, so anything
+standing on it meets a ground whose edge is not where its own is. Feet go
+under by a row of `SINK` (never a new constant); a top's edge on the ground
+side ends at the ground (`meetGround`) or runs on until the ground reaches
+it (`reachLevel`); per-sample decisions are smoothed along the part
+(`farthestNear`; in the bakes a majority over a window, no run shorter than
+a minimum), never taken once per whole line. A builder returns `joins`
+(feet and edges, every metre along each span), and
+`scripts/ground-joins.test.ts` holds the baked parts' misses to budgets
+over the committed tiles — list a new baked part in `JOIN_PARTS`, test a
+runtime one with `checkJoins`, and say in its doc comment what happens
+where the ground beside it is higher and where it is lower.
+`bun scripts/ground-joins.ts <site>` prints the shares and the worst places.
+
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.
 
@@ -766,7 +789,7 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
 - Bringing back a second render path (WebGLRenderer, GLSL), or patching
   three's renderer internals: ADR 0027 decided against both
 - Committing raw bulk geodata, or switching on Git-LFS; committing another
-  site's `data/<site>/` (a size decision, ADR 0035)
+  site's `data/<site>/` (a size decision, ADR 0037)
 
 <!-- BEGIN:nextjs-agent-rules -->
 

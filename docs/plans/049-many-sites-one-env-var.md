@@ -1,4 +1,4 @@
-# Plan 037: Many sites — fetch → bake → build, one deployment with a route per site
+# Plan 049: Many sites — fetch → bake → build, one deployment with a route per site
 
 > Written and executed in one run (branch
 > `claude/multi-location-env-setup-w01c3g`). Continues
@@ -153,7 +153,7 @@ git-based host (phase 1, step 3).
 
 ### 7 — Docs and review
 
-ADR 0035 (provider table, per-site data, fetch/bake/build stages, commit
+ADR 0037 (provider table, per-site data, fetch/bake/build stages, commit
 policy); `docs/portability.md`, `docs/data-pipeline.md`, AGENTS.md,
 README, the guide's data-sources page (EN + DE), plan 017's row. Code
 reviews after phases 1–3 and at the end.
@@ -260,7 +260,7 @@ attractive start page to choose the city. Done:
   `wissen-hero.webp`, now published per site), the Land (new
   `Provider.land`), district, area and first viewpoints, the map's credit
   — and the cities not built in this deployment named below.
-- ADR 0035 records the decision (it supersedes ADR 0026's
+- ADR 0037 records the decision (it supersedes ADR 0026's
   one-site-per-build part).
 - **Checked:** with main's measured bridges, checked downloads and
   Wikidata re-baked for Leipzig, Grimma, Meißen, Unna, Hamburg and

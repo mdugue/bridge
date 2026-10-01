@@ -38,7 +38,9 @@ visual-variable codebook is in
   6 m of the OSM line, running medians along the wall, face just in front of
   the ramp foot + a coping cap back to where the ground reaches its level,
   per column — a cap ending at the median crest left the DGM's steep ramp
-  showing behind it as a row of jagged facets wherever the ramp ran wider).
+  showing behind it as a row of jagged facets wherever the ramp ran wider;
+  where it finds no shelf within 5 m it drops a back face to the ground,
+  and the foot reaches the lowest ground along the face — ADR 0035).
   The coarse 512² level keeps
   the grid and the conflation; a DGM with NoData keeps the grid for its fine
   level too ([ADR 0030](./adr/0030-terrain-tin-and-wall-snap.md)).
@@ -150,7 +152,7 @@ visual-variable codebook is in
   and amenity areas (as settlement, burned first because OSM nests the green
   inside it), buffered highways, waterways and rail. On Leipzig's centre
   tile 71 % of texels agree with the DLM raster — water 95 %, settlement
-  78 %, roads 55 % ([ADR 0035](./adr/0035-sites-providers-and-per-site-data.md)).
+  78 %, roads 55 % ([ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)).
 - **Meadow NDVI tint** (*Wiesenfärbung*) — on class-1 farmland/meadow only, the
   DOP greenness (`ndvi_<tile>.png`, LINEAR-filtered to low-pass the ~2 m raster)
   shifts the pastel sage lush deep-green↔dry hay. In the terrain's colour node
@@ -168,7 +170,9 @@ visual-variable codebook is in
   far side is ground (not water or railway). The terrain bake stands a
   **kerb stone** on them in the fine terrain glTF (`lib/city/kerbs.ts`,
   12 cm above the road, 24 cm wide, face toward the road, its top falling
-  to the pavement's level where the stone ends — a stone level across stood
+  to the pavement's level where the stone ends (a verge or bank below the
+  road too), densified where the ground bends between its 2.5 m columns,
+  its face's foot down to a gutter below the road (ADR 0035) — a stone level across stood
   a second step on the pavement side, whose smoothed DGM lies only a few
   centimetres above the road; `kerb-layer.ts`, casts shadow) — the DGM1 smooths the
   step away and the 2 m grid cannot hold it. In the fragment pass
@@ -182,7 +186,7 @@ visual-variable codebook is in
   kerb, the strip out to 12 cm · cot(elevation) is shaded — a shadow the
   shadow map cannot hold (7 cm texels spread by the soft PCF, less the depth
   bias). HUD *Bodendetail*.
-  Plan [023](./plans/023-ground-detail.md).
+  Plan [023](./plans/completed.md#023--the-ground-up-close-kerbs-paving-lawn-edges-urban-green--closed-2026-09-25-phases-13-and-5-built-rest-rejected-or-moved).
 - **Paving materials** (*Beläge*) — OSM `surface=*` on the highways (plus
   `sidewalk:*:surface` bands beside the roads, `footway:surface`, pedestrian
   squares, parking lots) → a 2048² two-byte raster per tile
@@ -324,7 +328,7 @@ visual-variable codebook is in
   `water-layer.ts`. Missing class raster → no splat, no water: the tile's
   ground falls back to the flat sage.
 - **Landing stages, groynes, ferries** (plan
-  [031](./plans/031-elbe-riverside.md)) — OSM `man_made=pier` (51 ways,
+  [031](./plans/completed.md#031--the-elbe-landing-stages-groynes-ferries--done-2026-09-25-look-unjudged-on-a-gpu--plan-019)) — OSM `man_made=pier` (51 ways,
   buffered by `width`, else 3 m, flat ends; 5 areas), `man_made=groyne`
   (1) and `route=ferry` ways (3: the Johannstadt ferry, two paddle-steamer
   routes) (ODbL) → `pipeline/bake/riverside.py` → `riverside_<tile>.geojson`
@@ -360,7 +364,7 @@ visual-variable codebook is in
 - **Streaming site (3D Tiles)** — `scripts/prepare-data.ts` bakes the site
   into an OGC 3D Tiles 1.1 tileset (`lib/city/tileset.ts`) under
   `public/data/<site>/`, one per built site, each streamed at its own route
-  (`/dresden`; `scripts/prepare-sites.ts`, ADR 0035): per site tile the
+  (`/dresden`; `scripts/prepare-sites.ts`, ADR 0037): per site tile the
   buildings (refine ADD, loaded whenever the tile is in view) over the two
   terrain levels (REPLACE). 3DTilesRendererJS loads and unloads by
   screen-space error (16 px) from the view camera **and the sun's shadow
@@ -461,8 +465,8 @@ visual-variable codebook is in
   to AdV with buildings (6) kept in the non-ground class, so the sheds'
   roofs are in the surface (`providers/by.py`, see *Hedges*). The rules
   were tuned on Dresden's flight alone.
-- **Structures beyond LoD2: columns** (plan 038,
-  [ADR 0036](./adr/0036-measured-and-named-additions.md)) — the chimneys,
+- **Structures beyond LoD2: columns** (plan 050,
+  [ADR 0038](./adr/0038-measured-and-named-additions.md)) — the chimneys,
   towers, masts, water towers, communications towers and lighthouses the
   LoD2 leaves out. `pipeline/bake/structures.py` reads DOM1, DGM1 and the
   burned LoD2 roofs over the tile and a 60 m margin at 1 m and takes
@@ -492,7 +496,7 @@ visual-variable codebook is in
   chimneys). → `data/<site>/dlm/structures_<tile>.geojson` (ODbL); a site
   without a surface model writes an empty file. Look unverified on a real
   GPU.
-- **Structures beyond LoD2: missing buildings** (plan 038) — the
+- **Structures beyond LoD2: missing buildings** (plan 050) — the
   buildings OSM maps and LoD2 does not carry yet (LoD2 is a year or more
   behind; the newest buildings of a city are the usual case): an OSM
   building outline ≥ 40 m² (not `roof`, `carport`, `construction`,
@@ -502,7 +506,7 @@ visual-variable codebook is in
   (the mass, not its antenna), flat roof in the slate palette, storey
   bands from that height, `source` = 2, `building` true. Same bake and
   build as the columns. 920 on the seven committed sites (Dresden 370).
-- **Landmark roof relief** (plan 038) — a landmark's roof form that LoD2
+- **Landmark roof relief** (plan 050) — a landmark's roof form that LoD2
   flattens: on the LoD2 objects of a Wikidata landmark (below) only,
   where DOM1 stands ≥ 3 m above the object's highest LoD2 roof on ≥ 60 m²
   (and ≥ 2 % of its footprint), the excess as a **height field**: per
@@ -538,10 +542,43 @@ visual-variable codebook is in
   wears the building's look and demolish takes it along; no footprint of
   its own. Not on ordinary roofs: there the excess is antennas, dormers,
   lift housings and trees. Thresholds tuned on synthetic tests and a
-  handful of real cases (plan 038's findings); a site whose `landmarks`
+  handful of real cases (plan 050's findings); a site whose `landmarks`
   step has not run has no relief (run `landmarks` before `structures`),
   and a relief without a `grid` (a file baked before the height field)
   builds nothing.
+- **Roofs rebuilt from DOM1** ([ADR 0036](./adr/0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md))
+  — a LoD2 roof that misses the surface model is drawn as stepped flat
+  blocks measured in it, inside the object's own footprint. The fault: the
+  2025 edition's `tdcFreeFormRoof` (10 305 objects) is, on a complex
+  building, often a handful of non-planar facets over the whole footprint —
+  the Westin Bellevue (`DESNATPU1000GHDs`) was three facets rising from 7 m
+  at the eaves to a 25 m peak, a tent over a flat-roofed slab, wings and
+  two courtyards; and buildings finished after the LoD2's roofs were
+  measured (2016 here) stand as 3 m placeholders (a block on the
+  Ferdinandplatz: 3 m, 19 m in the scan). `pipeline/bake/roofs.py`: each
+  building's roof burned at 1 m with its vertices' own heights (as the
+  loader draws it; cells under another object's higher roof are not its
+  own); a candidate when ≥ 150 m² and > 40 % of its cells (one inside the
+  edge, NDVI ≤ 0.3) stand > 2 m off DOM1. The blocks: DOM1 3 × 3-median
+  filtered over the footprint, cut into 1 m bands, pieces < 20 m² into the
+  neighbour closest in height, neighbours < 1.5 m apart merged, each
+  region at its median; polygonised, `coverage_simplify` 1 m, clipped to
+  the footprint. Kept only when they miss on ≤ half the LoD2's share and
+  ≤ 30 % (the hotel: 78 % → 3 %), not where the scan sees open ground on
+  > 15 % of the footprint (a block torn down since: the footprint is out
+  of date too), parts under 2 m dropped →
+  `data/<site>/dlm/roofs_<tile>.geojson` (Polygons with the object `id` and the
+  roof `z`, GeoSN). **889 of 49 936 objects, 3 146 parts** on Dresden's fifteen
+  tiles (0–132 a tile, the Altstadt most); the step runs on every site. `bakeCityMesh`
+  (`withMeasuredRoofs`, `scripts/measured-roofs.ts`) drops the object's
+  LoD2 triangles and stands each part as a prism (walls and roof, no
+  floor) from the object's lowest LoD2 vertex — same object id, so the
+  table row, picking, demolish, collision and minimap stay; eave and
+  storey rows follow the new shape. +8.4 % city-mesh triangles. Limits:
+  flat by construction (a pitched roof inside a rebuilt object becomes one
+  level). The sky-view and horizon bake (`skyview.py`) burns the rebuilt
+  tops in place of their objects' LoD2 surfaces, so the far shadows match
+  the mesh (`roofs` runs before `skyview`). Unverified on a real GPU (headless SwiftShader before/after only).
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
@@ -559,7 +596,7 @@ visual-variable codebook is in
   60 % into the pale clay in linear light, where they land on a washed,
   dusty brick. `lib/city/building-tint.ts` (at bake time, into the
   property table's `tint`), `visual-style.ts`.
-- **Facade context** (*Farbvariation*; 2026-10-01, ADR 0037) — the walls a
+- **Facade context** (*Farbvariation*; 2026-10-01, ADR 0039) — the walls a
   building without a mapped material wears: what its OSM neighbourhood is
   mapped as. `osm_buildings.py` `apply_contexts`: every OSM outline with a
   wall material votes — brick for brick; plaster, stone, concrete and wood
@@ -644,7 +681,7 @@ visual-variable codebook is in
   second source. Not yet judged on a real GPU — off if it reads as
   highlighting. Plan 027 phase 2.
 - **Mapped wall and roof colour, wall material** (*Farbvariation*,
-  *Dachfarbe*; plan 038) — OSM `building:colour`, `roof:colour` (a CSS name
+  *Dachfarbe*; plan 050) — OSM `building:colour`, `roof:colour` (a CSS name
   or hex) and `building:material` / `building:facade:material` /
   `facade:material` (normalised to glass, metal, brick, stone, concrete,
   wood, plaster) on the building and `building:part` outlines covering an
@@ -660,7 +697,7 @@ visual-variable codebook is in
   DOP colour > OSM `roof:colour` > palette. For a landmark Wikidata's
   material (P186) fills in where OSM names none. Counts per tile in
   `osmbuild_<tile>.json` (`meta.objects_look`).
-- **Glass and metal facades** (*Streiflicht*; plan 038) — the material's
+- **Glass and metal facades** (*Streiflicht*; plan 050) — the material's
   glass and metal set object flags (4, 8; a part takes its root's): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass catches a pale sky
@@ -668,7 +705,7 @@ visual-variable codebook is in
   night). No panes, no mullions, no texture — the window-grid veto holds
   (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
-- **Landmarks from Wikidata** (HUD *Erkunden* → *Wahrzeichen*; plan 038)
+- **Landmarks from Wikidata** (HUD *Erkunden* → *Wahrzeichen*; plan 050)
   — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
   subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;
   height P2048, material P186, building = subclass of Q41176; a box that
@@ -789,7 +826,7 @@ visual-variable codebook is in
   (`data/dresden/provenance.json`), so deciduous crowns are bare in the imagery and
   the index mostly separates evergreens and grass from everything else. A
   summer DOP would make the recentre less necessary and the meadow tint truer.
-- **Vegetation index from the visible bands** (GLI; 2026-10-01, ADR 0037)
+- **Vegetation index from the visible bands** (GLI; 2026-10-01, ADR 0039)
   — a DOP without an infrared band (Bavaria's open DOP is RGB only) gets
   the same `ndvi_<tile>.png` from its colours: the Green Leaf Index
   GLI = (2G − R − B) / (2G + R + B), mapped onto the NDVI's scale by
@@ -1176,7 +1213,7 @@ visual-variable codebook is in
   `lib/city/furniture.ts`). Not (yet): bicycle-parking *areas*, shelters
   mapped as areas, planters, traffic signs (OSM maps ~100 here) and
   street-name signs (almost none).
-- **Signs and fixtures** (plan [030](./plans/030-street-furniture-2.md)) —
+- **Signs and fixtures** (plan [030](./plans/completed.md#030--more-street-furniture-columns-signals-hydrants-clocks-stops--done-2026-09-25-look-unjudged-on-a-gpu--plan-019)) —
   the same bake and layer, eight more kinds (the counts below are the four
   first tiles', BBBike 2026-09-19; over the fifteen: 175 columns, 786
   signals, 24 hydrants and 1 482 sign plates, 20 + 3 clocks, 15 drinking
@@ -1278,7 +1315,7 @@ hand-wound to match its supplied normal (`pushTri`), so every material is
 z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — see
 🗃️ below.)*
 - **Rails, ballast and decks from OSM where there is no Basis-DLM**
-  (Hamburg, Berlin; 2026-10-01, ADR 0037) — `rail.py` `run_osm` writes the
+  (Hamburg, Berlin; 2026-10-01, ADR 0039) — `rail.py` `run_osm` writes the
   same four files from the site's extract (`pipeline/bake/rail_osm.py`).
   *Rails:* `railway=rail|light_rail|subway|narrow_gauge` (Hamburg's
   S-Bahn is `light_rail`, its U-Bahn `subway`; the trams stay the tram
@@ -1475,7 +1512,7 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   `osm.below_ground`) is skipped — Munich's U-Bahn platforms under the
   Marienplatz and the Odeonsplatz had been drawn at street level.
 
-- **Trams** (plan [024](./plans/024-tram-and-catenary.md)) —
+- **Trams** (plan [024](./plans/completed.md#024--trams-tracks-overhead-line-stops--done-2026-09-25-look-unjudged-on-a-gpu--plan-019)) —
   OSM `railway=tram` (ODbL; 401 ways, 59.6 km in the four first tiles —
   146.8 km of track drawn over the fifteen —, every one
   `gauge=1450`, `electrified=contact_line`) + `power=catenary_mast`
@@ -1619,7 +1656,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   (33412_5656, 33412_5658) on 2026-09-26. **Baked into the
   fine terrain glTF** as a `fences` node (`lib/city/fences.ts`,
   `scripts/bake-tiles.ts` `fenceMesh`, ADR 0029): **one low, calm band**
-  along the line on the fine TIN — a flat, double-sided quad per ≤ 2.5 m at
+  along the line on the fine TIN — a flat, double-sided quad per ≤ 2.5 m
+  (closer where the ground bends between, ADR 0035: a band bridging a dip
+  floated over it) at
   ¾ of the tagged height (0.4–1 m; a handrail only its top 15 cm) — cut
   `w` wide at each gate with a leaf in a lighter tone in the gap (a boom
   at the band's top for a lift gate, swing gate or cycle barrier); a closed
@@ -1703,7 +1742,9 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   *Wange* instead: a 3 m block topped at the bank's level, a 0.5 m stone
   coping along the steps and the rest in the built-up ground's tone, over
   the ground the burn lowered beside the flight, which had shown as a
-  ragged trench — into
+  ragged trench (its outer edge meeting the bank where it ends); a cheek
+  reaches the ground beside it, and a top landing over lower ground drops
+  a face to it (ADR 0035) — into
   the fine terrain glTF of the tile owning its middle (a `stairs` node,
   vertex colours); `stair-layer.ts` only gives it its material.
   **Why:** the DGM1 smooths a staircase into a bank (the flight beside the
@@ -1789,7 +1830,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   pooling in low ground, a term of the one `scene.fogNode` every material
   takes (`fog = false` opts out: the river mist); HUD *Talnebel*.
   `height-fog.ts`. **Depth from the site's relief** (2026-10-01, ADR
-  0037): the pool's fade height (`heightFalloff`) was Dresden's
+  0039): the pool's fade height (`heightFalloff`) was Dresden's
   Elbe-to-rim 28 m everywhere, which hazed flat Hamburg and Munich from
   the river to the rooftops. `prepare-data.ts` samples each tile's coarse
   ground on a 32 × 32 grid and writes the site's 2nd and 90th height
@@ -1814,7 +1855,7 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   lines on flat roads). No slope, no contour line. `terrain-layer.ts`.
 
 ### Sound
-Hidden and opt-in (plan [035](./plans/035-soundscape.md)): nothing below
+Hidden and opt-in (plan [035](./plans/completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action)): nothing below
 sounds, and no `AudioContext` exists, until the visitor presses **L** or
 turns on *Klang (experimentell)* (Erweitert tab); off at every load. All
 synthesized with WebAudio, the engine a dynamic import
@@ -1829,7 +1870,7 @@ removed, not tuned.
   inside the outline), its height, a size class (large ≥ 65 m, medium
   ≥ 40 m, none under 22 m). 20 towers over the fifteen tiles — the
   Frauenkirche 94 m, Kreuzkirche 90 m, Dreikönigskirche 86 m, Hofkirche
-  83 m, Martin-Luther-Kirche 81 m, Garnisonkirche 77 m, … — seven tiles
+  83 m, Martin-Luther-Kirche 81 m, Garnisonkirche 77 m, … — six tiles
   have none. Runtime: the full hour a **forward** change of the scene clock
   crosses (the last one of a long scrub, struck once the clock rests
   0.7 s; none going back or stepping a day) is struck 1–12 times by the
@@ -1938,18 +1979,22 @@ research that produced them):
     judge on a real GPU with the `--headed` harness: whether the far tier's
     pop at 650 m and the thinned forest read well, and whether a detail-0
     crown (20 tris) beyond ~1.5 km is worth a fourth tier.
-12. **Ground, the rest of plan [023](./plans/023-ground-detail.md)** — a
-    raised pavement (today the kerb stone stands on a pavement at road
-    level); DGM1 micro-relief as a
-    1 m normal texture over the 2 m mesh; shell-textured grass near the
-    camera (4–8 shells, meadow only, no shadow casting — judge the fill-rate
-    on a real GPU); parks, cemeteries and sports grounds split out of the
-    DLM's built-up class by object type (`sie02_f` `OBJART`/`FKT`, needs the
-    raw DLM); the laser-scan intensity (LSC) as a measured surface-material
-    map where OSM is silent.
+12. **Ground, what plan [023](./plans/completed.md#023--the-ground-up-close-kerbs-paving-lawn-edges-urban-green--closed-2026-09-25-phases-13-and-5-built-rest-rejected-or-moved) left** — parks,
+    cemeteries and sports grounds split out of the DLM's built-up class by
+    object type (`sie02_f` `OBJART`/`FKT`, needs the raw DLM); the laser-scan
+    intensity (LSC) as a measured surface-material map where OSM is silent
+    (both ranked in the [data-streams survey](./data-streams.md)).
+    An idea only, not planned: shell-textured grass near the camera (4–8
+    shells, meadow only, no shadow casting) — it runs against the calm,
+    nothing-finer-than-a-pixel look the maintainer has asked for twice
+    (🗃️ drawn fence panels, allotment bed bands); revisit only with a
+    real-GPU plate that stays calm. The raised pavement and DGM1
+    micro-relief are 🗃️ below.
 
-13. **The 2026-09-25 batch** — each with its own plan in
-    [plans/](./plans/README.md): trams with contact wire (024), trees by
+13. **The 2026-09-25 batch** — each planned in
+    [plans/](./plans/README.md), now condensed in
+    [completed.md](./plans/completed.md) with its looks in plan
+    [019](./plans/019-gpu-verification.md): trams with contact wire (024), trees by
     species and season (025 — built, GPU plates open), road markings (026), shop glow and
     heritage from OSM on the buildings (027: ✅ above; the era is 🗃️), allotments, orchards and
     vineyards (028), fences and gates (029: ✅ above), more street furniture (030),
@@ -1970,17 +2015,19 @@ research that produced them):
 |---|---|---|
 | **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
-| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 038: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. |
-| **Structures from the surface model alone** (plan 038: every tall gap between DOM1 and `max(DGM1, LoD2 roof)` as a column or block) | The gap is mostly not buildings: tree crowns, power pylons, and on the flight day the construction cranes — Leipzig's centre showed dozens of 50–95 m spikes with no mapped structure, Hamburg 90–98 m ones beside a 2023 building. | Only where OSM names the structure (`man_made=*`, a building outline) does the surface model measure it; a landmark's roof relief is the one gap drawn without a mapped outline, and only over its own LoD2 roof. |
-| **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0036](./adr/0036-measured-and-named-additions.md)). |
-| **Landmark roof relief as stacked slabs** (plan 038 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |
-| **A lathed column for every mapped tower** (plan 038 as first baked: `man_made=tower`, `lighthouse` and `water_tower` measured like masts and chimneys) | Where LoD2 has a roof over the mapped foot it draws the tower already; the column stood inside it and doubled it — Meißen's cathedral towers (81/83 m), Grimma's churches, 13 of 14 towers in Munich. | `BUILT_TOWERS` under a LoD2 roof are skipped; a mast or chimney on a roof is not in LoD2 and stays. |
+| **A raised pavement behind the kerb** (plan 023's leftover: lift the pavement a kerb's height above the road) | The DGM1 has no such step to lift, and ADR 0035 makes every part meet the ground at the ground's own level: the kerb's back now runs down to the pavement (`meetGround`), which took its ground-join misses from 32 % to 2 % (2026-10-01 audit). | Only with a measured kerb height per street (none of the sources carries it) and a terrain cut that ADR 0035's join check accepts. |
+| **DGM1 micro-relief as a normal texture** (plan 023 phase 7: a 1 m normal map over the "2 m mesh") | The fine level is a ±0.15 m TIN of the native DGM (ADR 0030), not a 2 m grid, and `terrainNormal` (`terrain-layer.ts`) deliberately pulls near-flat normals up: the DGM's ruts, survey wobble and 8-bit normals read as dirty flecks under a low sun. Kerbs are real geometry now. | Revisit only if a real-GPU plate shows the ground too flat — and then as a softer calm threshold, not more relief. |
+| **Procedural window grid** on facades | Reads as a modern office block, fights the historic LoD2 silhouette (user veto). | Faint storey banding is the only kept remnant. Re-affirmed by plan 050: a glass facade (OSM `building:material=glass`) gets a cool tint and a sky sheen, never panes, mullions or a texture. |
+| **Structures from the surface model alone** (plan 050: every tall gap between DOM1 and `max(DGM1, LoD2 roof)` as a column or block) | The gap is mostly not buildings: tree crowns, power pylons, and on the flight day the construction cranes — Leipzig's centre showed dozens of 50–95 m spikes with no mapped structure, Hamburg 90–98 m ones beside a 2023 building. | Only where OSM names the structure (`man_made=*`, a building outline) does the surface model measure it; a landmark's roof relief is the one gap drawn without a mapped outline, and only over its own LoD2 roof. |
+| **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0038](./adr/0038-measured-and-named-additions.md)). |
+| **Landmark roof relief as stacked slabs** (plan 050 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |
+| **A lathed column for every mapped tower** (plan 050 as first baked: `man_made=tower`, `lighthouse` and `water_tower` measured like masts and chimneys) | Where LoD2 has a roof over the mapped foot it draws the tower already; the column stood inside it and doubled it — Meißen's cathedral towers (81/83 m), Grimma's churches, 13 of 14 towers in Munich. | `BUILT_TOWERS` under a LoD2 roof are skipped; a mast or chimney on a roof is not in LoD2 and stays. |
 | **Every Basis-DLM rail at street level** (the rail layer before 2026-09-30) | The DLM files subways and S-Bahn trunk lines as ordinary railway lines: Munich's U-Bahn (23 km) and the S-Bahn trunk line (4.2 km) ran across the Marienplatz and the Odeonsplatz as broken track, and OSM's U-Bahn platforms lay on the squares above them. | A stretch within 2 m of a DLM tunnel (`BWF=1870`) for > 15 m is cut; OSM platforms and tram ways below ground are skipped. |
 | **A 6 m tunnel reach for the rail cut** (the first cut: a rail within 6 m of a DLM tunnel) | Munich Hauptbahnhof's surface tracks run straight over the S-Bahn tunnel, parallel and a few metres beside its axis: the wider reach cut them too. | The DLM draws a tunnel on its rail's own axis, so 2 m is enough; plus the 15 m overlap floor so a surface track crossing over a tunnel keeps its crossing. |
 | **Street bed for trams on the road class alone** (plan 024's rule) | A track through a pedestrian zone or a paved square (class `path`, built-up) got the gravel bed: Munich's trams by the Marienplatz read as broken track (≈ 13 km ballast in Munich). | Pavement is road, path or built-up; ballast in Munich ≈ 3 km. |
 | **Absolute notability floor for landmarks** (a fixed sitelink threshold) | Set where a metropolis's landmarks stand out, it left Unna with one. | A low floor (≥ 2 sitelinks), then a floor relative to the tile's most notable landmark (below). |
-| **A fixed count of landmarks per tile** (the most notable 12, plan 038 as first built) | On a dense old-town tile the count, not notability, decided: the second rank fell off the Altstadt tile behind the Frauenkirche, the Zwinger and the Semperoper, while a quiet tile listed everything with two sitelinks. | Those with ≥ 8 % of the tile's top sitelinks (≥ 2), 40 as a safety cap only (2026-10-01, ADR 0037). |
-| **Per-site facade material** (`Site.facades: "brick"` for Hamburg, plaster elsewhere) | One palette for a whole site is wrong inside it — Hamburg is clinker in the Speicherstadt and glass and plaster in HafenCity, Dresden has brick quarters too (246 mapped brick walls) — and every new city needed tuning by hand ([ADR 0037](./adr/0037-stand-ins-marked-per-city.md)). | Removed 2026-10-01: each building wears what its OSM neighbourhood is mapped as (✅ *Facade context*). A look that differs between cities is derived from data, not added to `Site`. |
+| **A fixed count of landmarks per tile** (the most notable 12, plan 050 as first built) | On a dense old-town tile the count, not notability, decided: the second rank fell off the Altstadt tile behind the Frauenkirche, the Zwinger and the Semperoper, while a quiet tile listed everything with two sitelinks. | Those with ≥ 8 % of the tile's top sitelinks (≥ 2), 40 as a safety cap only (2026-10-01, ADR 0039). |
+| **Per-site facade material** (`Site.facades: "brick"` for Hamburg, plaster elsewhere) | One palette for a whole site is wrong inside it — Hamburg is clinker in the Speicherstadt and glass and plaster in HafenCity, Dresden has brick quarters too (246 mapped brick walls) — and every new city needed tuning by hand ([ADR 0039](./adr/0039-stand-ins-marked-per-city.md)). | Removed 2026-10-01: each building wears what its OSM neighbourhood is mapped as (✅ *Facade context*). A look that differs between cities is derived from data, not added to `Site`. |
 | **One valley-haze depth for every site** (Dresden's 28 m Elbe-to-rim drop) | Tuned on Dresden's valley; on flat Hamburg and Munich the pool reached the rooftops and the whole city stood in haze. | The depth follows the site's ground relief (✅ *Height-term fog*), capped at Dresden's 28 m. |
 | **Rails, ballast and bridge decks from the Basis-DLM only** (until 2026-10-01) | Honest, but Hamburg and Berlin publish no open DLM: a city of bridges had no bridges and no track — the U3 viaduct, the Hauptbahnhof's approaches. | OSM's rail ways and bridge ways stand in, the deck heights still measured in DOM1 (✅ *Rails, ballast and decks from OSM*). |
 | **Raw OSM colours on facades** (`building:colour` used as given) | A mapped `red` or `#ff0000` is a signal colour in a pastel city. | Hue kept, saturation and lightness clamped into the clay's register. |

@@ -44,7 +44,7 @@ Each is written as its rectangle with `z` (the lowest ground under it: the
 ground under the rectangle and the DGM at its corners), `h` (the top above
 `z`, the median of the fitted plane) and, where the top tilts more than 8°,
 `hc`: the height above `z` at each of the ring's four corners (a pent roof).
-Measurement and the gate: docs/plans/034-dom-minus-lod2.md.
+Measurement and the gate: docs/plans/completed.md (plan 034).
 """
 
 from __future__ import annotations

@@ -44,7 +44,7 @@ is done by copying a Snapshot JSON, not by a server-side link.
 ## References
 
 - README.md ("no backend, no database, no accounts, nothing persisted";
-  since [ADR 0035](./0035-sites-providers-and-per-site-data.md) a start page
+  since [ADR 0037](./0037-sites-providers-and-per-site-data.md) a start page
   and one prerendered route per site rather than one route); AGENTS.md "When in doubt, ask before introducing a backend".
 - Audit rejections in [plans/README.md](../plans/README.md#rejected-kept-so-nobody-re-audits-them)
   (CSP headers, `.env.example`).

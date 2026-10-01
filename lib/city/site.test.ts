@@ -6,6 +6,7 @@ import {
   landcoverCredit,
   osmExtractUrl,
   siteAttribution,
+  siteCredit,
   overlook,
   siteTitle,
   spawnViewpoint,
@@ -156,4 +157,14 @@ test("overlook refuses a vantage that does not look down", () => {
       }
     )
   ).toThrow();
+});
+
+test("the short credit names every licensor and licence once", () => {
+  expect(siteCredit(SITES.dresden)).toBe(
+    "GeoSN, Landeshauptstadt Dresden (dl-de/by-2-0) · © OpenStreetMap (ODbL)"
+  );
+  expect(siteCredit(SITES.unna)).toBe(
+    "Geobasis NRW (dl-de/zero-2-0) · © OpenStreetMap (ODbL)"
+  );
+  expect(siteCredit(SITES.hamburg)).toContain("LGV");
 });

@@ -3,8 +3,8 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
 /**
  * Street-view-style canvas gestures via Pointer Events, for touch AND mouse:
  *  - one-pointer drag: look around ("grab the world")
- *  - two-finger pinch: zoom (FOV) — touch only
- *  - mouse wheel: zoom (FOV), one notch = one zoom step
+ *  - two-finger pinch: move forward (spread) or back (pinch) — touch only
+ *  - mouse wheel / trackpad pinch: the same; with Alt, zoom (FOV)
  *  - double-tap / double-click: travel to the tapped spot
  *  - pointer lock (immersive mode, opt-in via `lockPointer`): mouse motion
  *    is mouse-look; Esc exits natively. Clicks/drags are ignored meanwhile.
@@ -22,12 +22,32 @@ export interface TouchControlsCallbacks {
   /** current finger distance / distance at pinch start */
   onPinch: (ratio: number) => void;
   onPinchStart: () => void;
-  /** one wheel notch, as a pinch-style ratio: > 1 zooms in */
-  onWheel: (ratio: number) => void;
+  /**
+   * The wheel (or a trackpad pinch) as a dolly, in the pinch's units:
+   * ln(zoom ratio), > 0 moves forward
+   */
+  onWheelDolly: (amount: number) => void;
+  /** one Alt+wheel notch, as a pinch-style ratio: > 1 zooms in */
+  onWheelZoom: (ratio: number) => void;
 }
 
-/** FOV factor per wheel notch. */
+/** FOV factor per Alt+wheel notch. */
 const WHEEL_ZOOM_STEP = 1.05;
+/**
+ * px of wheel travel per dolly unit (ln ratio): a mouse notch (≈ 100 px)
+ * is a tenth of a pinch to twice the finger distance…
+ */
+const WHEEL_PX_PER_UNIT = 700;
+/**
+ * …and a trackpad pinch (a wheel event with ctrlKey, in browsers' small
+ * zoom deltas) about as quick as a pinch on glass.
+ */
+const TRACKPAD_PINCH_PX_PER_UNIT = 100;
+/** One wheel event never pushes further than this (a flung trackpad). */
+const MAX_WHEEL_UNITS = 0.5;
+/** px per line / page, for wheels that do not report pixels. */
+const LINE_PX = 16;
+const PAGE_PX = 800;
 
 /** Drags beyond this no longer count as a tap. */
 const TAP_SLOP_PX = 12;
@@ -163,7 +183,23 @@ export function attachTouchControls(
 
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
-    callbacks.onWheel(e.deltaY < 0 ? WHEEL_ZOOM_STEP : 1 / WHEEL_ZOOM_STEP);
+    if (e.deltaY === 0) {
+      return;
+    }
+    if (e.altKey) {
+      callbacks.onWheelZoom(
+        e.deltaY < 0 ? WHEEL_ZOOM_STEP : 1 / WHEEL_ZOOM_STEP
+      );
+      return;
+    }
+    const px =
+      e.deltaY *
+      (e.deltaMode === 1 ? LINE_PX : e.deltaMode === 2 ? PAGE_PX : 1);
+    const units =
+      -px / (e.ctrlKey ? TRACKPAD_PINCH_PX_PER_UNIT : WHEEL_PX_PER_UNIT);
+    callbacks.onWheelDolly(
+      Math.min(Math.max(units, -MAX_WHEEL_UNITS), MAX_WHEEL_UNITS)
+    );
   };
 
   // While locked, every mouse event targets the locked element and carries

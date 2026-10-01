@@ -11,6 +11,7 @@ import numpy as np
 import pyogrio.raw
 import rasterio
 import shapely
+import shapely.ops
 from PIL import Image
 from rasterio.transform import from_bounds
 
@@ -260,3 +261,85 @@ def write_geojson(
 def geometry_json(geom: shapely.Geometry, digits: int = 2) -> dict:
     mapped = shapely.geometry.mapping(geom)
     return {"type": mapped["type"], "coordinates": round_coords(mapped["coordinates"], digits)}
+
+
+# --- per-sample decisions along a line (ADR 0035) ------------------------------
+#
+# A property of a line feature that the ground under it decides (a tram
+# track's bed, …) is read per sample and smoothed along the line — never
+# decided once for the whole line (one bed per kilometre of track sent a
+# street track to ballast for the square under a third of it), never left
+# raw (a sawtooth of one-sample pieces).
+
+
+def smooth_labels(raw: list[str | None], half: int, order: tuple[str, ...]) -> list[str]:
+    """The majority label within `half` samples either side of each (ties
+    in `order`), ignoring None (no sample there); every label is in
+    `order`."""
+    out = []
+    for i in range(len(raw)):
+        near = [b for b in raw[max(0, i - half) : i + half + 1] if b is not None]
+        if not near:
+            near = [b for b in raw if b is not None]
+        out.append(max(order, key=lambda b: (near.count(b), -order.index(b))))
+    return out
+
+
+def absorb_short(labels: list[str], min_run: int) -> list[str]:
+    """Runs shorter than `min_run` samples take the label of the longer
+    neighbouring run, shortest first, until none is left (or one run)."""
+    labels = list(labels)
+    while True:
+        runs = []
+        i = 0
+        while i < len(labels):
+            j = i
+            while j + 1 < len(labels) and labels[j + 1] == labels[i]:
+                j += 1
+            runs.append((i, j))
+            i = j + 1
+        short = [r for r in runs if r[1] - r[0] + 1 < min_run]
+        if len(runs) == 1 or not short:
+            return labels
+        k = runs.index(min(short, key=lambda r: r[1] - r[0]))
+        prev = runs[k - 1] if k > 0 else None
+        nxt = runs[k + 1] if k + 1 < len(runs) else None
+        side = max((r for r in (prev, nxt) if r is not None), key=lambda r: r[1] - r[0])
+        label = labels[side[0]]
+        i0, i1 = runs[k]
+        for m in range(i0, i1 + 1):
+            labels[m] = label
+
+
+def label_line(
+    line: shapely.LineString,
+    sample,
+    *,
+    step: float,
+    window: float,
+    min_run: float,
+    order: tuple[str, ...],
+) -> list[tuple[shapely.LineString, str | None]]:
+    """The line cut where its label changes: [(piece, label)]. `sample(x, y)`
+    labels one point (None off the data); the labels are read every `step`
+    m, a majority over `window` m, no run shorter than `min_run` m, and the
+    cut falls halfway between two samples. All None: the whole line, None."""
+    n = max(int(line.length / step), 1)
+    raw = [sample(*line.interpolate(i / n, normalized=True).coords[0]) for i in range(n + 1)]
+    if all(b is None for b in raw):
+        return [(line, None)]
+    labels = smooth_labels(raw, max(int(window / step / 2), 1), order)
+    labels = absorb_short(labels, max(int(min_run / step), 1))
+    out = []
+    i = 0
+    while i < len(labels):
+        j = i
+        while j + 1 < len(labels) and labels[j + 1] == labels[i]:
+            j += 1
+        a = 0.0 if i == 0 else (i - 0.5) / n
+        b = 1.0 if j == len(labels) - 1 else (j + 0.5) / n
+        piece = shapely.ops.substring(line, a, b, normalized=True)
+        if piece.geom_type == "LineString" and piece.length > 0:
+            out.append((piece, labels[i]))
+        i = j + 1
+    return out

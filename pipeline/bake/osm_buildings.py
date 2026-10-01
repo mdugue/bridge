@@ -10,7 +10,7 @@ object table (like the DOP roof colours):
   floor (`level` without a 0) are left out.
 - `heritage`: an OSM building with `heritage=*` covering at least half
   the footprint.
-- `material`, `colour`, `roof_colour` (plan 038): what an OSM building or
+- `material`, `colour`, `roof_colour` (plan 050): what an OSM building or
   building part covering at least half the footprint says its walls are
   made of (`building:material`, `building:facade:material`,
   `facade:material`, normalised to glass, metal, brick, stone, concrete,

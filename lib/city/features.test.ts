@@ -15,6 +15,7 @@ import type {
   RailFeature,
   RiversideFeature,
   SoundmarkFeature,
+  MeasuredRoofFeature,
   SmallBuildingFeature,
   StructureFeature,
   StairFeature,
@@ -260,6 +261,21 @@ test.each(tiles)(
         expect(p?.r ?? 0).toBeGreaterThan(0);
         expect(p?.rt ?? 0).toBeGreaterThan(0);
       }
+    }
+  }
+);
+
+test.each(tiles)(
+  "%s: measured roofs are polygons of a LoD2 object at a height in range",
+  (tile, site) => {
+    const src = cityMeshSourceFiles(site, tile).measuredRoofs;
+    for (const f of loadSource<MeasuredRoofFeature>(src)) {
+      expect(f.geometry.type).toBe("Polygon");
+      expect(f.geometry.coordinates.every(isRing)).toBe(true);
+      expect(typeof f.properties?.id).toBe("string");
+      // absolute roof heights: Hamburg's harbour to Munich's towers
+      expect(f.properties?.z ?? -999).toBeGreaterThan(-20);
+      expect(f.properties?.z ?? 9999).toBeLessThan(1000);
     }
   }
 );

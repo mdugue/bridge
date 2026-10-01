@@ -26,6 +26,7 @@
  * The UV carries only the kind: `u` = the code's slot, `v` = the height
  * fraction (the shader's top edge and rooted foot).
  */
+import { followGround, type JoinPoint, joinsAlong, SINK } from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
 
@@ -72,7 +73,7 @@ export const FENCE_UV_CODES = 6;
 
 const SAMPLE_M = 2.5; // the longest quad along a line (m)
 const SIMPLIFY_M = 0.1; // line vertices this close to the chord are dropped (m)
-const SINK_M = 0.05; // bands reach this far into the ground (m)
+const SINK_M = SINK.band; // bands reach this far into the ground
 const BAND_SCALE = 0.75; // a band stands at this share of the tagged height...
 const BAND_MIN_M = 0.4; // ...and between these (m)
 const BAND_MAX_M = 1.0;
@@ -90,6 +91,8 @@ export function bandHeight(h: number): number {
 
 export interface FenceGeometryData {
   indices: number[];
+  /** where the bands stand on the ground (ADR 0035): their feet */
+  joins: JoinPoint[];
   /** world-frame (Y-up, recentered) normals, xyz per vertex */
   normals: number[];
   /** world-frame (Y-up, recentered) positions, xyz per vertex */
@@ -360,6 +363,8 @@ function nearBox(line: Point2[], p: Point2, margin: number): boolean {
 
 /** A sample along a piece: world XZ and the ground height. */
 interface Station {
+  /** EPSG point */
+  e: Point2;
   g: number;
   wx: number;
   wz: number;
@@ -396,7 +401,9 @@ function simplify(line: Point2[]): Point2[] {
   ];
 }
 
-/** Stations every ≤ SAMPLE_M along a piece; null where the ground is unknown. */
+/** Stations every ≤ SAMPLE_M along a piece, closer where the ground bends
+ *  between them (`followGround`: a band bridging a dip floated over it);
+ *  null where the ground is unknown. */
 function stationsOf(
   piece: Point2[],
   heightAt: HeightAt,
@@ -416,13 +423,13 @@ function stationsOf(
     }
   }
   pts.push(line.at(-1) ?? line[0]);
-  return pts.map((p) => {
+  return followGround(pts, heightAt).map((p) => {
     const g = heightAt(p[0], p[1]);
     if (g === null) {
       return null;
     }
     const w = epsgToWorld(p[0], p[1], offset);
-    return { g, wx: w.x, wz: w.z };
+    return { e: p, g, wx: w.x, wz: w.z };
   });
 }
 
@@ -452,6 +459,7 @@ class Builder {
     normals: [],
     uvs: [],
     indices: [],
+    joins: [],
   };
 
   private vertex(
@@ -485,6 +493,15 @@ class Builder {
     const v2 = this.vertex(b.wx, b.g + hi, b.wz, n, u, 1);
     const v3 = this.vertex(a.wx, a.g + hi, a.wz, n, u, 1);
     this.data.indices.push(v0, v1, v2, v0, v2, v3);
+    if (lo <= 0) {
+      this.data.joins.push(
+        ...joinsAlong(
+          "foot",
+          { x: a.e[0], y: a.e[1], z: a.g + lo },
+          { x: b.e[0], y: b.e[1], z: b.g + lo }
+        )
+      );
+    }
   }
 }
 

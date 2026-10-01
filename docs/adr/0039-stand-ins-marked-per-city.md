@@ -1,11 +1,11 @@
-# ADR 0037: Where a Land publishes less, a named stand-in — marked per city — and no per-site switches
+# ADR 0039: Where a Land publishes less, a named stand-in — marked per city — and no per-site switches
 
 - **Status:** accepted
 - **Date:** 2026-10
 
 ## Context
 
-[ADR 0035](./0035-sites-providers-and-per-site-data.md) made every step a
+[ADR 0037](./0037-sites-providers-and-per-site-data.md) made every step a
 per-tile pipeline step read from the site config, so a new city gets
 whatever its Land publishes. But the Länder publish different things
 openly, and a step whose source a Land lacked simply wrote an empty file:

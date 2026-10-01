@@ -53,12 +53,13 @@ lädt* oben im Bild (siehe
 | Mit der Maus ziehen | umsehen |
 | `W` `A` `S` `D` | gehen (oder fliegen) |
 | `Shift` | sprinten |
-| `F` | zwischen Gehen und Fliegen wechseln |
+| `F` | zwischen Gehen und Fliegen wechseln (abheben / landen) |
 | `Leertaste` / `Shift` (oder `E` / `Q`) | hoch / runter im Flug |
 | `1` – `9` | zum ersten bis neunten Aussichtspunkt gleiten |
-| Mausrad | zoomen (Blickwinkel enger oder weiter) |
-| Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin |
-| Klick auf die Minikarte | dorthin teleportieren |
+| Mausrad (oder Zwei-Finger-Geste auf dem Trackpad) | vor oder zurück |
+| `Alt` + Mausrad | zoomen (Blickwinkel enger oder weiter) |
+| Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
+| Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
@@ -70,11 +71,11 @@ lädt* oben im Bild (siehe
 | Joystick (unten links) | gehen |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
 | *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
-| *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln |
+| *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln (abheben / landen) |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
-| Doppeltippen auf den Boden | dorthin |
-| Zwei Finger zusammenziehen | zoomen |
+| Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
+| Zwei Finger auseinander / zusammen | vor / zurück: zu Fuß den Weg entlang, im Flug in Blickrichtung (je höher, desto weiter) |
 
 Beim Gehen bleibst du in Augenhöhe auf dem Gelände und stößt an Gebäuden
 und Mauern an. Auch im Flug stößt du an Fassaden, sinken kannst du nicht
@@ -83,7 +84,15 @@ hebt dich der Boden mit. In einem Gebäude oder unter der Erde landest du
 nie: Ein Doppelklick auf eine Fassade, ein Snapshot oder dein Standort in
 einem Haus setzt dich davor ab, in der Luft über das Dach, und ein
 Gleitflug steigt über das, was auf seinem Weg steht. Jede Eingabe bricht
-einen laufenden Gleitflug ab.
+einen laufenden Gleitflug zu einem Aussichtspunkt ab.
+
+Der Wechsel zwischen Gehen und Fliegen springt nicht, er gleitet: Beim
+Abheben steigst du auf rund 30 m über dem Boden und blickst leicht auf die
+Straße hinab; beim Landen sinkst du senkrecht auf den Boden unter dir (neben
+ein Gebäude, nicht auf sein Dach), und der Blick richtet sich wieder nach
+vorn, auch wenn du im Flug nach unten geschaut hast. Während des Landens
+oder eines Doppeltipp-Gleitflugs kannst du dich umsehen, ohne ihn
+abzubrechen. Im Flug wirst du umso schneller, je höher du bist.
 
 Unten rechts liegt die **Werkzeugleiste**; jeder Knopf trägt seinen Namen
 unter dem Symbol. Mit dem ⌄ darunter klappst du sie zu einem kleinen Knopf
@@ -129,7 +138,7 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 
 - **Minikarte** — das ganze Gebiet von oben, mit den Landnutzungsfarben,
   den Brücken und den Grundrissen der gerade geladenen Gebäude. Deine Position und
-  Blickrichtung sind eingezeichnet; ein Klick teleportiert.
+  Blickrichtung sind eingezeichnet; ein Klick gleitet dorthin.
 - **Gehen / Fliegen** — der Bewegungsmodus.
 - **Aussichtspunkte** — handverlesene Standpunkte, zu denen die Kamera
   gleitet (am Rechner auch mit den Tasten `1` – `9`):

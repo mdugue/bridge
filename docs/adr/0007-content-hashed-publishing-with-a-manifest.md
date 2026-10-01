@@ -1,6 +1,6 @@
 # ADR 0007: Content-hashed data files with a `manifest.json`
 
-- **Status:** accepted; since [ADR 0035](./0035-sites-providers-and-per-site-data.md)
+- **Status:** accepted; since [ADR 0037](./0037-sites-providers-and-per-site-data.md)
   one manifest per site, `public/data/<site>/manifest.json` (and the
   no-cache index `public/data/sites.json` beside them)
 - **Date:** 2026-09 (PR #28)

@@ -1,4 +1,4 @@
-"""Plan 038's pure parts: OSM looks, Wikidata materials and the fetch's
+"""Plan 050's pure parts: OSM looks, Wikidata materials and the fetch's
 quartering, the column and roof-relief measurements on a synthetic field."""
 
 import json
