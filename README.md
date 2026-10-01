@@ -98,16 +98,18 @@ Desktop:
 |---|---|
 | Drag | Look around |
 | `W` `A` `S` `D` | Move (`Shift` sprints) |
-| `F` | Toggle walk / fly |
+| `F` | Toggle walk / fly (an animated take-off / landing) |
 | `Space` / `Shift` | Up / down (fly mode) |
-| Scroll | Zoom (field of view) |
-| Double-click the ground | Travel there |
+| Scroll | Move forward / back |
+| `Alt` + scroll | Zoom (field of view) |
+| Double-click the ground | Glide there |
 | Click the minimap | Teleport there |
 | `R` | Demolish the building under the crosshair |
 | "Immersive mode" | Pointer lock (`Esc` exits) |
 
-Touch: drag to look, joystick to walk, pinch to zoom, double-tap the ground to
-travel, and the button in the corner opens the scene settings.
+Touch: drag to look, joystick to walk, pinch to move forward / back, double-tap
+the ground to glide there, and the button in the corner opens the scene
+settings.
 
 ## Architecture
 

@@ -15,7 +15,6 @@ import {
 import { uniform } from "three/tsl";
 import { fogRangeFor } from "@/lib/city/atmosphere";
 import { utmToLatLng } from "@/lib/city/crs";
-import { worldToEpsg } from "@/lib/city/ground-clamp";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
 import { createBootPhases } from "@/lib/city/boot-phases";
 import {
@@ -959,13 +958,15 @@ async function bootApp(
   const canvasControls = attachTouchControls(renderer.domElement, {
     onLook: pose.turn,
     onMouseLook: pose.look,
-    onPinchStart: pose.beginZoom,
-    onPinch: pose.zoomTo,
-    onWheel: pose.zoomBy,
+    onPinchStart: pose.beginPinch,
+    onPinch: pose.pinchTo,
+    onWheelDolly: pose.dolly,
+    onWheelZoom: pose.zoomBy,
     onDoubleTap: (ndcX, ndcY) => {
-      // Travel to the tapped spot on the terrain — or, when a building is
+      // Glide to the tapped spot on the terrain — or, when a building is
       // in front of it, to the foot of the building on this side (the
-      // pose sets a spot inside one out beside it).
+      // pose sets a spot inside one out beside it). In the air the glide
+      // goes part of the way along the line of sight (camera-pose.ts).
       tapRaycaster.setFromCamera(new Vector2(ndcX, ndcY), camera);
       tapRaycaster.far = 6000;
       const building = tapRaycaster.intersectObjects(
@@ -978,8 +979,7 @@ async function bootApp(
           ? (building?.point.clone().add(towardsCamera(building.point)) ?? null)
           : tapRaycaster.ray.at(t, new Vector3());
       if (hit) {
-        const epsg = worldToEpsg(hit.x, hit.z, offset);
-        pose.teleportTo(epsg.x, epsg.y);
+        pose.travelTo(hit);
       }
     },
   });

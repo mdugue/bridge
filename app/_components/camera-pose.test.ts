@@ -222,14 +222,10 @@ test("grab-look turns left when dragging right, mouse-look follows the mouse, bo
   expect(pose.getCameraState().pitchDeg).toBeCloseTo(-PITCH_LIMIT * RAD2DEG, 4);
 });
 
-test("pinch zoom is relative to the FOV at its start, wheel zoom to the current one, and both take the wheel", () => {
+test("Alt+wheel zoom is relative to the current FOV and takes the wheel", () => {
   const { camera, pose } = rig();
-  pose.beginZoom();
-  pose.zoomTo(1.25);
-  pose.zoomTo(1.1);
-  expect(camera.fov).toBeCloseTo(50, 10);
   pose.zoomBy(1.25);
-  expect(camera.fov).toBeCloseTo(40, 10);
+  expect(camera.fov).toBeCloseTo(44, 10);
 
   pose.flyToViewpoint(VIEW);
   pose.step(0.2);
@@ -239,6 +235,149 @@ test("pinch zoom is relative to the FOV at its start, wheel zoom to the current 
   settle(pose);
   expect(pose.getMode()).toBe("fly");
   expect(camera.fov).toBeCloseTo(midGlide / 1.1, 10);
+});
+
+test("a pinch walks forward and back along the ground on foot, eased, FOV untouched", () => {
+  const { camera, pose } = rig();
+  pose.beginPinch();
+  pose.pinchTo(1.5);
+  pose.pinchTo(2);
+  settle(pose);
+  // Facing north (−z): spreading to twice the distance walks ~10 m ahead.
+  expect(camera.position.z).toBeCloseTo(-14 * Math.log(2), 2);
+  expect(camera.position.x).toBeCloseTo(0, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 3);
+  expect(camera.fov).toBe(55);
+  // Pinching back to the start distance returns.
+  pose.pinchTo(1);
+  settle(pose);
+  expect(camera.position.z).toBeCloseTo(0, 2);
+});
+
+test("in the air a pinch flies along the view, further the higher, never into the ground", () => {
+  const { camera, pose } = rig();
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 200, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg: -45,
+    fov: 55,
+  });
+  pose.dolly(0.5);
+  settle(pose);
+  // 0.5 × 0.9 × 200 m = 90 m along a 45° view: as far down as ahead.
+  const ahead = -camera.position.z;
+  expect(ahead).toBeCloseTo(90 * Math.SQRT1_2, 1);
+  expect(GROUND + 200 - camera.position.y).toBeCloseTo(ahead, 1);
+  // Pinching on and on stops at eye height above the ground.
+  for (let i = 0; i < 20; i += 1) {
+    pose.dolly(0.5);
+    settle(pose);
+  }
+  expect(camera.position.y).toBeGreaterThanOrEqual(GROUND + EYE_HEIGHT - 1e-6);
+  expect(pose.getMode()).toBe("fly");
+});
+
+test("fly → walk glides down onto the ground and levels the view", () => {
+  const { camera, pose, modes } = rig();
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 20, y: GROUND + 150, z: -30 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 70,
+    pitchDeg: -60,
+    fov: 55,
+  });
+  pose.setMovementMode("walk");
+  // The HUD hears of the switch at once…
+  expect(modes.at(-1)).toBe("walk");
+  expect(pose.getMode()).toBe("walk");
+  // …but the camera has not dropped yet: it glides.
+  pose.step(1 / 60);
+  expect(camera.position.y).toBeGreaterThan(GROUND + 140);
+  let last = camera.position.y;
+  for (let i = 0; i < 300; i += 1) {
+    pose.step(1 / 60);
+    expect(camera.position.y).toBeLessThanOrEqual(last + 1e-9);
+    last = camera.position.y;
+  }
+  const s = pose.getCameraState();
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  expect(s.pos.x).toBeCloseTo(20, 6);
+  expect(s.pos.z).toBeCloseTo(-30, 6);
+  expect(s.headingDeg).toBeCloseTo(70, 4);
+  expect(s.pitchDeg).toBeCloseTo(0, 4);
+});
+
+test("a drag during the landing looks around without stopping it", () => {
+  const { camera, pose } = rig();
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 150, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg: -60,
+    fov: 55,
+  });
+  pose.setMovementMode("walk");
+  pose.step(0.3);
+  pose.turn(-200, 0);
+  const heading = pose.getCameraState().headingDeg;
+  settle(pose);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  expect(pose.getCameraState().headingDeg).toBeCloseTo(heading, 6);
+});
+
+test("walk → fly takes off to a vantage over the street, looking down onto it", () => {
+  const { camera, pose, modes } = rig();
+  pose.setMovementMode("fly");
+  expect(modes.at(-1)).toBe("fly");
+  pose.step(1 / 60);
+  expect(camera.position.y).toBeLessThan(GROUND + 10);
+  settle(pose);
+  expect(camera.position.y).toBeCloseTo(GROUND + 30, 6);
+  expect(pose.getCameraState().pitchDeg).toBeCloseTo(-12, 4);
+  // Already high enough: switching back and forth up there keeps the height.
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 300, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 0,
+    pitchDeg: 10,
+    fov: 55,
+  });
+  pose.setMovementMode("fly");
+  settle(pose);
+  expect(camera.position.y).toBeCloseTo(GROUND + 300, 6);
+  expect(pose.getCameraState().pitchDeg).toBeCloseTo(10, 4);
+});
+
+test("a double tap glides on foot to the spot; in the air part of the way along the line of sight", () => {
+  const { camera, pose } = rig();
+  pose.travelTo({ x: 0, y: GROUND, z: -80 });
+  pose.step(1 / 60);
+  // A glide, not a jump.
+  expect(camera.position.z).toBeGreaterThan(-5);
+  settle(pose);
+  expect(camera.position.z).toBeCloseTo(-80, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + EYE_HEIGHT, 6);
+  expect(pose.getMode()).toBe("walk");
+
+  pose.applyCameraState({
+    mode: "fly",
+    pos: { x: 0, y: GROUND + 100, z: 0 },
+    epsg: { x: 0, y: 0 },
+    headingDeg: 90,
+    pitchDeg: -45,
+    fov: 55,
+  });
+  pose.travelTo({ x: 100, y: GROUND, z: 0 });
+  settle(pose);
+  expect(camera.position.x).toBeCloseTo(60, 6);
+  expect(camera.position.y).toBeCloseTo(GROUND + 40, 6);
+  expect(pose.getCameraState().pitchDeg).toBeCloseTo(-45, 4);
+  expect(pose.getMode()).toBe("fly");
 });
 
 test("flyTo drops the camera at a world position in fly mode, facing the target", () => {

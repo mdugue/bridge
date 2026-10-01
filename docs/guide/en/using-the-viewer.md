@@ -30,11 +30,12 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Drag with the mouse | look around |
 | `W` `A` `S` `D` | walk (or fly) |
 | `Shift` | sprint |
-| `F` | switch between walking and flying |
+| `F` | switch between walking and flying (take off / land) |
 | `Space` / `Shift` (or `E` / `Q`) | up / down while flying |
 | `1` – `9` | glide to the first to ninth viewpoint |
-| Mouse wheel | zoom (narrows or widens the field of view) |
-| Double-click on the ground | travel there in a short glide |
+| Mouse wheel (or a two-finger trackpad gesture) | move forward or back |
+| `Alt` + mouse wheel | zoom (narrows or widens the field of view) |
+| Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | teleport there |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
 | `R` | demolish the building under the crosshair |
@@ -47,11 +48,11 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Joystick (bottom left) | walk |
 | *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
 | *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
-| *Fliegen* (toolbar) | switch between walking and flying |
+| *Fliegen* (toolbar) | switch between walking and flying (take off / land) |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
-| Double-tap on the ground | travel there |
-| Two-finger pinch | zoom |
+| Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
+| Two fingers apart / together | forward / back: on foot along the ground, flying along the view (the higher, the further) |
 
 While walking you are held at eye height on the terrain and collide with
 buildings and walls. Flying, you meet facades too, sinking stops at eye
@@ -59,7 +60,15 @@ height above the ground, and rising ground lifts you with it. You never
 end up inside a building or below the ground: a double click on a facade,
 a snapshot or your location inside a house sets you down in front of it,
 in the air over its roof, and a glide climbs over whatever stands on its
-way. Any input cancels a glide that is in progress.
+way. Any input cancels a glide to a viewpoint that is in progress.
+
+Switching between walking and flying glides instead of jumping: taking
+off rises to about 30 m above the ground, looking slightly down onto the
+street; landing sinks straight down onto the ground below you (beside a
+building, not on its roof), and the view levels out again, even if you
+were looking down while flying. During a landing or a double-tap glide you
+can look around without stopping it. Flying, the higher you are, the
+faster you go.
 
 Bottom right sits the **toolbar**; each button carries its name under the
 icon. The ⌄ below it folds it into one small button, which the browser
