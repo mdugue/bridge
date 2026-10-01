@@ -17,7 +17,13 @@
  */
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
-import { farthestNear, reachLevel, SINK } from "./ground-join";
+import {
+  farthestNear,
+  type JoinPoint,
+  joinsAlong,
+  reachLevel,
+  SINK,
+} from "./ground-join";
 import { type StepSnap, smoothSnaps, snapToStep } from "./wall-snap";
 
 export interface WallRibbon {
@@ -59,7 +65,11 @@ const MAX_H = 14; // clamp tall tags (m)
 /** A densified wall vertex with its world XZ and the base/top elevations;
  *  a snapped column also carries where its coping cap ends (`bx`, `bz`). */
 interface WallCol {
+  /** the EPSG point the cap's back edge ends at (a snapped column) */
+  back?: Point2;
   base: number;
+  /** the EPSG point the face stands at */
+  face: Point2;
   bx?: number;
   bz?: number;
   top: number;
@@ -97,7 +107,7 @@ function columnAt(
   // ground.
   const base = Math.max(top - MAX_H, Math.min(lowShelf, top - h)) - SINK.wall;
   const w = epsgToWorld(sx, sy, offset);
-  return { wx: w.x, wz: w.z, base, top };
+  return { face: [sx, sy], wx: w.x, wz: w.z, base, top };
 }
 
 /** How far behind the face the coping cap may reach to find the high
@@ -173,11 +183,15 @@ function snappedColumn(
   const [ex, ey] = e;
   const [px, py] = p;
   const faceAt = faceOf(step);
-  const face = epsgToWorld(ex + px * faceAt, ey + py * faceAt, offset);
-  const back = epsgToWorld(ex + px * backAt, ey + py * backAt, offset);
+  const faceE: Point2 = [ex + px * faceAt, ey + py * faceAt];
+  const backE: Point2 = [ex + px * backAt, ey + py * backAt];
+  const face = epsgToWorld(faceE[0], faceE[1], offset);
+  const back = epsgToWorld(backE[0], backE[1], offset);
   const base =
     Math.max(step.hi - MAX_H, Math.min(step.lo, step.hi - h)) - SINK.wall;
   return {
+    face: faceE,
+    back: backE,
     wx: face.x,
     wz: face.z,
     bx: back.x,
@@ -222,6 +236,26 @@ function pushCap(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   }
 }
 
+/** A quad's joins between two columns: the face's foot, and the cap's
+ *  back edge where both columns carry one. */
+function wallJoins(a: WallCol, b: WallCol): JoinPoint[] {
+  const out = joinsAlong(
+    "foot",
+    { x: a.face[0], y: a.face[1], z: a.base },
+    { x: b.face[0], y: b.face[1], z: b.base }
+  );
+  if (a.back && b.back) {
+    out.push(
+      ...joinsAlong(
+        "edge",
+        { x: a.back[0], y: a.back[1], z: a.top },
+        { x: b.back[0], y: b.back[1], z: b.top }
+      )
+    );
+  }
+  return out;
+}
+
 /** Pushes the two triangles of a vertical quad between two columns. */
 function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   let nx = -(b.wz - a.wz);
@@ -256,6 +290,9 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
 }
 
 export interface WallGeometryData {
+  /** where the walls meet the ground (ADR 0035): the face's foot, and the
+   *  back edge of a snapped wall's cap, which meets the high shelf */
+  joins: JoinPoint[];
   /** world-frame (Y-up, recentered) flat normals, xyz per vertex */
   normals: number[];
   /** world-frame (Y-up, recentered) positions, xyz per vertex, triangles */
@@ -321,11 +358,13 @@ export function wallGeometry(
 ): WallGeometryData | null {
   const positions: number[] = [];
   const normals: number[] = [];
+  const joins: JoinPoint[] = [];
   for (const wall of walls) {
     if (wall.coords.length < 2) {
       continue;
     }
     const cols = columnsOf(wall, heightAt, offset, opts);
+
     for (let i = 0; i < cols.length - 1; i++) {
       const c0 = cols[i];
       const c1 = cols[i + 1];
@@ -337,7 +376,8 @@ export function wallGeometry(
       }
       pushQuad(positions, normals, c0, c1);
       pushCap(positions, normals, c0, c1);
+      joins.push(...wallJoins(c0, c1));
     }
   }
-  return positions.length > 0 ? { positions, normals } : null;
+  return positions.length > 0 ? { positions, normals, joins } : null;
 }

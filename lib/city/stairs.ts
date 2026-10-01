@@ -32,7 +32,7 @@
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
-import { SINK } from "./ground-join";
+import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";
 import type { RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
@@ -74,6 +74,9 @@ const BANK_PROBE_M = 3.2;
 const WANGE_MIN_M = 0.4;
 /** A Wange stands at most this far above the tread (m). */
 const WANGE_MAX_M = 4;
+/** The top landing's edge is checked against the ground this far beyond
+ *  it (m): past the burn and its triangles. */
+const BEYOND_TOP_M = 2.5;
 /** The stone coping along the steps on a Wange's top (m); the rest is the
  *  ground's tone. */
 const COPING_M = 0.5;
@@ -420,6 +423,9 @@ export function raiseTerraces(input: TerraceRaiseInput): Float32Array {
 }
 
 export interface StairGeometryData {
+  /** where the flight meets the ground (ADR 0035): its cheeks' and
+   *  Wangen's feet, a Wange's outer top edge, the top landing's edge */
+  joins: JoinPoint[];
   /** per-vertex shade: 0 tread, 1 riser, 2 cheek */
   kinds: number[];
   /** world-frame (Y-up, recentered) flat normals, xyz per vertex */
@@ -528,8 +534,33 @@ function segmentSections(stair: StairLine, lengths: number[]): Section[][] {
 type Corner = [number, number, number];
 
 class StairWriter {
-  readonly data: StairGeometryData = { positions: [], normals: [], kinds: [] };
+  readonly data: StairGeometryData = {
+    positions: [],
+    normals: [],
+    kinds: [],
+    joins: [],
+  };
   constructor(private readonly offset: RecenterOffset) {}
+
+  /** A point where the flight meets the ground (ADR 0035). */
+  join(kind: JoinPoint["kind"], p: Point2, z: number): void {
+    this.data.joins.push({ kind, x: p[0], y: p[1], z });
+  }
+
+  /** A straight foot or edge where the flight meets the ground. */
+  span(
+    kind: JoinPoint["kind"],
+    a: [Point2, number],
+    b: [Point2, number]
+  ): void {
+    this.data.joins.push(
+      ...joinsAlong(
+        kind,
+        { x: a[0][0], y: a[0][1], z: a[1] },
+        { x: b[0][0], y: b[0][1], z: b[1] }
+      )
+    );
+  }
 
   /** A quad from four data-frame corners (x, y, elevation), counter-
    *  clockwise seen from its front, with one flat data-frame normal. */
@@ -670,6 +701,8 @@ function wange(
   const [ao, bo] = [at(a, half + WANGE_M), at(b, half + WANGE_M)];
   const n: [number, number] = [a.px * sd, a.py * sd]; // outward
   const bases: [number, number] = [base, base];
+  out.span("foot", [ao, base], [bo, base]);
+  out.span("edge", [ao, tops[0]], [bo, tops[1]]);
   // seen from the steps (normal −n) the left side runs a → b, the right b → a
   if (sd === 1) {
     side(out, ai, bi, bases, tops, [-n[0], -n[1]]);
@@ -740,6 +773,12 @@ export function stairGeometry(
   const walls = surround
     ? wallsNear(surround.walls ?? [], stair.coords, half + BANK_PROBE_M)
     : [];
+  // A cheek reaches the ground beside it, wherever that lies: below the
+  // bottom landing beside a raised flight, whose shoulder the burn dug down.
+  const footAt = (p: Point2) => {
+    const g = surround?.groundAt(p[0], p[1]) ?? null;
+    return g === null ? base : Math.min(base, g - SINK.stair);
+  };
   const wangeSide = (a: Section, b: Section, h: number, sd: 1 | -1) => {
     const ta = bankLevel(a, sd, half, h, surround, walls);
     const tb = bankLevel(b, sd, half, h, surround, walls);
@@ -764,10 +803,14 @@ export function stairGeometry(
       STAIR_TREAD
     );
     if (!wangeSide(a, b, h, 1)) {
-      cheek(out, bl, al, [base, base], h, [a.px, a.py]);
+      const feet: [number, number] = [footAt(bl), footAt(al)];
+      cheek(out, bl, al, feet, h, [a.px, a.py]);
+      out.span("foot", [bl, feet[0]], [al, feet[1]]);
     }
     if (!wangeSide(a, b, h, -1)) {
-      cheek(out, ar, br, [base, base], h, [-a.px, -a.py]);
+      const feet: [number, number] = [footAt(ar), footAt(br)];
+      cheek(out, ar, br, feet, h, [-a.px, -a.py]);
+      out.span("foot", [ar, feet[0]], [br, feet[1]]);
     }
   };
   for (const [j, sections] of segments.entries()) {
@@ -779,6 +822,16 @@ export function stairGeometry(
     if (next && end) {
       joint(out, end, next, half, tread(stepOf(end.s)), base);
     }
+  }
+  // The top landing's edge meets the ground beyond it: read past the burn's
+  // reach, where the ground is the terrain the flight climbs onto.
+  const last = segments.at(-1)?.at(-1);
+  if (last) {
+    out.join(
+      "edge",
+      [last.x + last.py * BEYOND_TOP_M, last.y - last.px * BEYOND_TOP_M],
+      tread(stair.n - 1)
+    );
   }
   // A riser at the front of every step, facing down the flight.
   const all = segments.flat();

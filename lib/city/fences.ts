@@ -26,7 +26,7 @@
  * The UV carries only the kind: `u` = the code's slot, `v` = the height
  * fraction (the shader's top edge and rooted foot).
  */
-import { SINK } from "./ground-join";
+import { type JoinPoint, joinsAlong, SINK } from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import type { Point2 } from "./polyline";
 
@@ -91,6 +91,8 @@ export function bandHeight(h: number): number {
 
 export interface FenceGeometryData {
   indices: number[];
+  /** where the bands stand on the ground (ADR 0035): their feet */
+  joins: JoinPoint[];
   /** world-frame (Y-up, recentered) normals, xyz per vertex */
   normals: number[];
   /** world-frame (Y-up, recentered) positions, xyz per vertex */
@@ -361,6 +363,8 @@ function nearBox(line: Point2[], p: Point2, margin: number): boolean {
 
 /** A sample along a piece: world XZ and the ground height. */
 interface Station {
+  /** EPSG point */
+  e: Point2;
   g: number;
   wx: number;
   wz: number;
@@ -423,7 +427,7 @@ function stationsOf(
       return null;
     }
     const w = epsgToWorld(p[0], p[1], offset);
-    return { g, wx: w.x, wz: w.z };
+    return { e: p, g, wx: w.x, wz: w.z };
   });
 }
 
@@ -453,6 +457,7 @@ class Builder {
     normals: [],
     uvs: [],
     indices: [],
+    joins: [],
   };
 
   private vertex(
@@ -486,6 +491,15 @@ class Builder {
     const v2 = this.vertex(b.wx, b.g + hi, b.wz, n, u, 1);
     const v3 = this.vertex(a.wx, a.g + hi, a.wz, n, u, 1);
     this.data.indices.push(v0, v1, v2, v0, v2, v3);
+    if (lo <= 0) {
+      this.data.joins.push(
+        ...joinsAlong(
+          "foot",
+          { x: a.e[0], y: a.e[1], z: a.g + lo },
+          { x: b.e[0], y: b.e[1], z: b.g + lo }
+        )
+      );
+    }
   }
 }
 

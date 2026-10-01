@@ -16,7 +16,7 @@
  * lies a few centimetres above the road there, not at the kerb's top, and
  * every kerb showed an edge toward the pavement as well as the road.
  */
-import { meetGround, SINK } from "./ground-join";
+import { type JoinPoint, joinsAlong, meetGround, SINK } from "./ground-join";
 import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
 import { type Point2, subdividePolyline } from "./polyline";
 
@@ -30,12 +30,17 @@ const SINK_M = SINK.kerb; // the foot reaches this far below the ground
 const LIFT_M = 0.01; // the back's top this far above the pavement (m): no z-fight
 
 export interface KerbGeometryData {
+  /** where the stones meet the ground (ADR 0035): both feet, and the back
+   *  edge of the top, which meets the pavement */
+  joins: JoinPoint[];
   normals: number[];
   /** world frame (x, elevation, z), recentered */
   positions: number[];
 }
 
 interface KerbCol {
+  /** the face's and the back's EPSG points */
+  at: { back: Point2; face: Point2 };
   back: { x: number; z: number };
   backFoot: number;
   face: { x: number; z: number };
@@ -70,6 +75,7 @@ function kerbCol(
   const n = epsgToWorld(x + rx, y + ry, offset);
   const top = Math.max(road + KERB_HEIGHT, walk + LIFT_M);
   return {
+    at: { face: [x, y], back: [bx, by] },
     face,
     back,
     n: { x: n.x - face.x, z: n.z - face.z },
@@ -123,6 +129,29 @@ function pushSpan(pos: number[], nrm: number[], a: KerbCol, b: KerbCol): void {
   pushTri(pos, nrm, nb, ba0, ba1, bb1);
 }
 
+/** A span's joins between two columns: its feet on either side, its
+ *  top's back edge, which meets the pavement. */
+function kerbJoins(a: KerbCol, b: KerbCol): JoinPoint[] {
+  const end = (c: KerbCol, side: "back" | "face", z: number) => ({
+    x: c.at[side][0],
+    y: c.at[side][1],
+    z,
+  });
+  return [
+    ...joinsAlong(
+      "foot",
+      end(a, "face", a.faceFoot),
+      end(b, "face", b.faceFoot)
+    ),
+    ...joinsAlong(
+      "foot",
+      end(a, "back", a.backFoot),
+      end(b, "back", b.backFoot)
+    ),
+    ...joinsAlong("edge", end(a, "back", a.backTop), end(b, "back", b.backTop)),
+  ];
+}
+
 /** Unit direction toward the road (left of the line) at each point. */
 function towardRoad(pts: Point2[]): Point2[] {
   return pts.map((_, i) => {
@@ -144,6 +173,7 @@ export function kerbGeometry(
 ): KerbGeometryData | null {
   const positions: number[] = [];
   const normals: number[] = [];
+  const joins: JoinPoint[] = [];
   for (const line of lines) {
     if (line.length < 2) {
       continue;
@@ -156,8 +186,9 @@ export function kerbGeometry(
       const b = cols[i + 1];
       if (a && b) {
         pushSpan(positions, normals, a, b);
+        joins.push(...kerbJoins(a, b));
       }
     }
   }
-  return positions.length > 0 ? { positions, normals } : null;
+  return positions.length > 0 ? { positions, normals, joins } : null;
 }

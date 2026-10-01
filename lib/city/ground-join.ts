@@ -56,8 +56,10 @@ export const SINK = {
 } as const;
 
 /** How far an edge may stand above the ground it meets (m) before it reads
- *  as a step: the fine TIN's own tolerance plus a little. */
-export const EDGE_TOLERANCE_M = 0.2;
+ *  as a step — measured on the very ground the part was built on (the
+ *  check reads the ground the builder read, so no TIN error enters): a
+ *  kerb's 12 cm reads, a hair against z-fighting does not. */
+export const EDGE_TOLERANCE_M = 0.05;
 
 /**
  * The height an edge of a part's top should end at where it meets the
@@ -164,6 +166,43 @@ export interface JoinPoint {
   x: number;
   y: number;
   z: number;
+}
+
+/** A point of a part in EPSG x, y and its elevation z. */
+export interface JoinEnd {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** How far apart joins are sampled along a part's foot or edge (m): the
+ *  ground between two of its columns is where a gap opens. */
+export const JOIN_EVERY_M = 1;
+
+/**
+ * The joins of one straight span of a part's foot or edge, from `a` to `b`
+ * (b excluded: the next span starts there), its height linear between
+ * them as the drawn quad's is — every JOIN_EVERY_M, so the check reads the
+ * ground between the part's columns, not only under them.
+ */
+export function joinsAlong(
+  kind: JoinPoint["kind"],
+  a: JoinEnd,
+  b: JoinEnd,
+  every = JOIN_EVERY_M
+): JoinPoint[] {
+  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / every));
+  const out: JoinPoint[] = [];
+  for (let k = 0; k < n; k++) {
+    const t = k / n;
+    out.push({
+      kind,
+      x: a.x + (b.x - a.x) * t,
+      y: a.y + (b.y - a.y) * t,
+      z: a.z + (b.z - a.z) * t,
+    });
+  }
+  return out;
 }
 
 /** A join that breaks its rule, and by how much (m, > 0). */
