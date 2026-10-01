@@ -482,6 +482,12 @@ main thread) out of the frames:
 - WebGPU has no 1-component 8/16-bit vertex formats (the feature id and roof
   flag are baked as FLOAT), and draws points 1 px wide (the lamp halos are
   sprites).
+- **WebGPU draws from at most eight vertex buffers** (the default limit;
+  three asks for no more), and every non-interleaved attribute is one —
+  `position` and `normal` included. A ninth makes the pipeline invalid and
+  the mesh simply does not draw, while WebGL2 (sixteen, the headless e2e's
+  backend) draws it: pack scalars into vec4s (`traffic-layer.ts`
+  `TRAFFIC_ATTRIBUTES`, its test holds the count).
 
 **Shadows.** `PCFShadowMap` is soft: three's `ShadowFilterNode` spreads a
 5-tap Vogel disk by `light.shadow.radius * texel`. Default `radius` is 1 ≈

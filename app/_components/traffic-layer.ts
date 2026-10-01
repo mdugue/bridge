@@ -37,7 +37,7 @@ import {
 import { glassColour, glassGrazing } from "./glass";
 import { mapWidenNode } from "./map-overlay";
 import { buildDeckTable, type DeckPoly, deckLift } from "./rail-layer";
-import type { F, Live, V3 } from "./shader-chunks";
+import type { F, Live, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -147,13 +147,17 @@ function trafficMaterial(): MeshBasicNodeMaterial {
       transparent: true,
       depthWrite: false,
     });
-    const along = attribute("trafficAlong", "float") as F;
-    const daily = attribute("trafficLoad", "float") as F;
-    const dtv = attribute("trafficDtv", "float") as F;
-    const lift = attribute("trafficLift", "float") as F;
-    const heavy = attribute("trafficHeavy", "float") as F;
-    const flows = attribute("trafficFlow", "float") as F;
-    const rise = attribute("trafficRise", "float") as F;
+    // Packed (`TRAFFIC_ATTRIBUTES`): WebGPU draws from at most eight
+    // vertex buffers, and every attribute is one.
+    const lane = attribute("trafficLane", "vec4") as V4;
+    const count = attribute("trafficCount", "vec3") as V3;
+    const along = lane.x;
+    const rise = lane.y;
+    const lift = lane.z;
+    const flows = lane.w;
+    const daily = count.x;
+    const dtv = count.y;
+    const heavy = count.z;
     const across = attribute("trafficAcross", "vec3") as V3;
     // The hour's size: each vertex moves along its own offset from the
     // section's line (wider from the air, too — the two directions of a
@@ -201,17 +205,31 @@ function trafficMaterial(): MeshBasicNodeMaterial {
   });
 }
 
+/**
+ * The bodies' vertex attributes beside `position` and `normal`, packed:
+ * WebGPU's default limit is eight vertex buffers a draw (three asks for
+ * no more), and each attribute is one — ten single floats drew nothing
+ * on a real GPU while WebGL2 (sixteen) drew them. Kept at or under six.
+ *
+ * - `trafficAcross` (vec3): the vertex's offset from the section's line
+ *   in the world frame (it widens about the line)
+ * - `trafficLane` (vec4): metres along the lane, the profile's rise 0..1,
+ *   metres over the feet, 1 where the lane flows
+ * - `trafficCount` (vec3): the daily load 0..1 on the colour scale, the
+ *   vehicles per day, the heavy share
+ */
+export const TRAFFIC_ATTRIBUTES = [
+  "trafficAcross",
+  "trafficLane",
+  "trafficCount",
+] as const;
+
 interface Body {
   across: number[];
-  along: number[];
-  dtv: number[];
-  flow: number[];
-  heavy: number[];
+  count: number[];
   index: number[];
-  lift: number[];
-  load: number[];
+  lane: number[];
   pos: number[];
-  rise: number[];
 }
 
 /** The height a body stands on at (x, y): the deck — or its approach ramp
@@ -301,15 +319,10 @@ function addLane(
       );
       const up = v * height * size;
       body.pos.push(w.x, ground - FOOT_SINK_M + up, w.z);
-      body.lift.push(up);
-      body.dtv.push(lane.dtv);
       // the same offset in the world frame (z = −y)
       body.across.push(right[0] * r, 0, -right[1] * r);
-      body.along.push(at);
-      body.rise.push(v);
-      body.load.push(lane.load);
-      body.heavy.push(lane.heavy);
-      body.flow.push(lane.flows ? 1 : 0);
+      body.lane.push(at, v, up, lane.flows ? 1 : 0);
+      body.count.push(lane.load, lane.dtv, lane.heavy);
     }
     if (prevOk) {
       for (let k = 0; k < ring - 1; k++) {
@@ -337,18 +350,7 @@ export function buildTraffic(
 ): Group {
   const group = new Group();
   group.name = "traffic";
-  const body: Body = {
-    across: [],
-    along: [],
-    dtv: [],
-    flow: [],
-    heavy: [],
-    index: [],
-    lift: [],
-    load: [],
-    pos: [],
-    rise: [],
-  };
+  const body: Body = { across: [], count: [], index: [], lane: [], pos: [] };
   const needsDecks = features.some((f) => f.properties?.br === 1);
   const decks = needsDecks ? buildDeckTable(bridges, ctx) : [];
   const open = openEnds(features, bounds);
@@ -364,13 +366,8 @@ export function buildTraffic(
   const geo = new BufferGeometry();
   geo.setAttribute("position", new Float32BufferAttribute(body.pos, 3));
   geo.setAttribute("trafficAcross", new Float32BufferAttribute(body.across, 3));
-  geo.setAttribute("trafficAlong", new Float32BufferAttribute(body.along, 1));
-  geo.setAttribute("trafficRise", new Float32BufferAttribute(body.rise, 1));
-  geo.setAttribute("trafficLoad", new Float32BufferAttribute(body.load, 1));
-  geo.setAttribute("trafficDtv", new Float32BufferAttribute(body.dtv, 1));
-  geo.setAttribute("trafficLift", new Float32BufferAttribute(body.lift, 1));
-  geo.setAttribute("trafficHeavy", new Float32BufferAttribute(body.heavy, 1));
-  geo.setAttribute("trafficFlow", new Float32BufferAttribute(body.flow, 1));
+  geo.setAttribute("trafficLane", new Float32BufferAttribute(body.lane, 4));
+  geo.setAttribute("trafficCount", new Float32BufferAttribute(body.count, 3));
   geo.setIndex(body.index);
   geo.computeVertexNormals();
   geo.computeBoundingSphere();

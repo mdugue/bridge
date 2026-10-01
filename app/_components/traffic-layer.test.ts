@@ -3,7 +3,7 @@ import { type Mesh, type MeshBasicNodeMaterial, Vector3 } from "three/webgpu";
 import type { TrafficFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { flowHeight } from "@/lib/city/traffic";
-import { buildTraffic } from "./traffic-layer";
+import { buildTraffic, TRAFFIC_ATTRIBUTES } from "./traffic-layer";
 
 const ctx: GroundContext = {
   offset: { cx: 0, cy: 0 },
@@ -36,19 +36,12 @@ test("a two-way street is two glass bodies on the ground, apart, as tall as thei
   );
   expect(mesh).not.toBeNull();
   const geo = mesh?.geometry;
-  for (const name of [
-    "normal",
-    "trafficAcross",
-    "trafficAlong",
-    "trafficRise",
-    "trafficLoad",
-    "trafficDtv",
-    "trafficLift",
-    "trafficHeavy",
-    "trafficFlow",
-  ]) {
+  for (const name of ["normal", ...TRAFFIC_ATTRIBUTES]) {
     expect(geo?.getAttribute(name)).toBeDefined();
   }
+  // WebGPU draws from at most eight vertex buffers (its default limit,
+  // which three asks for): ten single floats drew nothing on a real GPU
+  expect(Object.keys(geo?.attributes ?? {}).length).toBeLessThanOrEqual(8);
   // 51 cross-sections of 11 profile points, two lanes
   expect(geo?.getAttribute("position").count).toBe(2 * 51 * 11);
   geo?.computeBoundingBox();
@@ -59,10 +52,10 @@ test("a two-way street is two glass bodies on the ground, apart, as tall as thei
   expect(geo?.boundingBox?.min.z).toBeLessThan(-1);
   expect(geo?.boundingBox?.max.z).toBeGreaterThan(1);
   // each vertex knows its height over the feet: the hour scales it there
-  const lift = geo?.getAttribute("trafficLift");
+  const lane = geo?.getAttribute("trafficLane");
   const pos = geo?.getAttribute("position");
-  for (let i = 0; i < (lift?.count ?? 0); i += 37) {
-    expect((pos?.getY(i) ?? 0) - (lift?.getX(i) ?? 0)).toBeCloseTo(109.8, 4);
+  for (let i = 0; i < (lane?.count ?? 0); i += 37) {
+    expect((pos?.getY(i) ?? 0) - (lane?.getZ(i) ?? 0)).toBeCloseTo(109.8, 4);
   }
   const material = mesh?.material;
   expect(material?.positionNode).not.toBeNull();
@@ -74,12 +67,12 @@ test("a two-way street is two glass bodies on the ground, apart, as tall as thei
 test("the outside faces out: the crown's normals point up", () => {
   const mesh = bodies(buildTraffic([street({ t: 3000, f: 3000 })], [], ctx));
   const geo = mesh?.geometry;
-  const rise = geo?.getAttribute("trafficRise");
+  const lane = geo?.getAttribute("trafficLane");
   const normal = geo?.getAttribute("normal");
   const n = new Vector3();
   let crowns = 0;
-  for (let i = 0; i < (rise?.count ?? 0); i++) {
-    if ((rise?.getX(i) ?? 0) === 1) {
+  for (let i = 0; i < (lane?.count ?? 0); i++) {
+    if ((lane?.getY(i) ?? 0) === 1) {
       n.fromBufferAttribute(normal as never, i);
       expect(n.y).toBeGreaterThan(0.5);
       crowns++;
@@ -140,11 +133,11 @@ test("where the street runs on, the body stays full: no pinch at the joint", () 
     )
   );
   const pos = mesh?.geometry.getAttribute("position");
-  const rise = mesh?.geometry.getAttribute("trafficRise");
+  const lane = mesh?.geometry.getAttribute("trafficLane");
   // the crown over the joint (x = 100) stands at the full height
   let crownAtJoint = 0;
   for (let i = 0; i < (pos?.count ?? 0); i++) {
-    if (Math.abs((pos?.getX(i) ?? 0) - 100) < 0.01 && rise?.getX(i) === 1) {
+    if (Math.abs((pos?.getX(i) ?? 0) - 100) < 0.01 && lane?.getY(i) === 1) {
       crownAtJoint = Math.max(crownAtJoint, pos?.getY(i) ?? 0);
     }
   }
