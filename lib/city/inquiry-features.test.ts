@@ -1,0 +1,182 @@
+import { expect, test } from "bun:test";
+import type { TreeFactsFile } from "./features";
+import {
+  bridgeCard,
+  monumentCard,
+  structureLabel,
+  type TreeInquiry,
+  treeCard,
+  treeFactsAt,
+} from "./inquiry-features";
+import type { SiteProvenance } from "./provenance";
+
+const geosn = {
+  credit: "Quelle: GeoSN, dl-de/by-2-0",
+  licence: "dl-de/by-2-0",
+};
+const provenance: SiteProvenance = {
+  version: 1,
+  sources: {
+    lod2: { label: "3D-Stadtmodell LoD2", ...geosn },
+    lsc: { label: "Laserscan", ...geosn },
+    dgm: { label: "Digitales Geländemodell DGM1", ...geosn },
+    dom: { label: "Digitales Oberflächenmodell DOM1", ...geosn },
+    dop: { label: "Digitales Orthophoto", ...geosn },
+    dlm: { label: "Basis-DLM", ...geosn },
+    osm: {
+      label: "OpenStreetMap",
+      credit: "© OpenStreetMap-Mitwirkende",
+      licence: "ODbL",
+      stand: "2026-09-26",
+      stands: {
+        bridges: "2026-09-19",
+        fountains: "2026-09-19",
+        trees: "2026-09-26",
+      },
+    },
+    trees: {
+      label: "Stadtbaumkataster",
+      credit: "Landeshauptstadt Dresden, dl-de/by-2-0",
+      licence: "dl-de/by-2-0",
+      stand: "2026-10-01",
+    },
+    wikidata: {
+      label: "Wikidata",
+      credit: "CC0",
+      licence: "CC0",
+      stand: "2026-09-26",
+    },
+  },
+  tiles: {},
+};
+
+const file: TreeFactsFile = {
+  attribution: "Stadtbaumkataster © Landeshauptstadt Dresden (dl-de/by-2-0)",
+  count: 2,
+  names: [["Winter-Linde", "Tilia cordata"]],
+  places: ["Grunaer Straße"],
+  dates: ["2025-08-27"],
+  name: [0, -1],
+  place: [0, -1],
+  nr: [40, -1],
+  age: [16, -1],
+  date: [0, -1],
+  known: [1 | 4, 0],
+};
+
+const linde: TreeInquiry = {
+  kind: "tree",
+  tile: "t",
+  index: 0,
+  position: [412089.7, 5656000.4],
+  osm: false,
+  conifer: false,
+  genus: "Tilia",
+  height: 6,
+  crown: 2.4,
+  trunk: 9,
+};
+
+test("a register tree: species, place, the measured sizes only, its age", () => {
+  const card = treeCard(linde, treeFactsAt(file, 0), provenance);
+  expect(card.kicker).toBe("Stadtbaum");
+  expect(card.title).toBe("Winter-Linde");
+  expect(card.address).toBe("Grunaer Straße · Baum Nr. 40");
+  expect(card.facts).toEqual([
+    { label: "Art", value: "Tilia cordata" },
+    { label: "Höhe", value: "6 m" },
+    // the crown was filled in from the tile's statistics: no line
+    { label: "Stamm", value: "Ø 9 cm" },
+    { label: "Alter", value: "16 Jahre (Eintrag vom 27.08.2025)" },
+  ]);
+  expect(card.id).toBe("412089.7 5656000.4");
+  expect(card.idLabel).toBe("Lage");
+  expect(card.sources).toEqual([
+    "Art, Maße: Stadtbaumkataster · Stand 01.10.2026 · Landeshauptstadt Dresden, dl-de/by-2-0",
+  ]);
+});
+
+test("before its facts arrive a tree says its genus, nothing it cannot", () => {
+  const card = treeCard(linde, null, provenance);
+  expect(card.title).toBe("Tilia");
+  expect(card.facts).toEqual([]);
+  // an OSM tree with no genus is the kind of tree it is, credited to OSM
+  const osm = treeCard(
+    { ...linde, osm: true, genus: "", conifer: true },
+    treeFactsAt(file, 1),
+    provenance
+  );
+  expect(osm.kicker).toBe("Baum");
+  expect(osm.title).toBe("Nadelbaum");
+  expect(osm.sources).toEqual([
+    "Baum: OpenStreetMap · Stand 26.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+});
+
+test("a named fountain with a figure, its basin from OSM, its name official", () => {
+  const card = monumentCard(
+    {
+      kind: "monument",
+      tile: "t",
+      position: [412015, 5656853.7],
+      properties: {
+        kind: "fountain",
+        name: "Gänsedieb-Brunnen",
+        source: "dlm+osm",
+        style: "basin",
+        figure: true,
+        relief: { west: 0, north: 0, cols: 2, rows: 1, dm: [12, 31] },
+      },
+    },
+    provenance
+  );
+  expect(card.kicker).toBe("Brunnen");
+  expect(card.title).toBe("Gänsedieb-Brunnen");
+  expect(card.facts).toEqual([
+    { label: "Form", value: "Becken mit Wasserspiel" },
+    { label: "Skulptur", value: "im Becken" },
+    { label: "Höhe", value: "3,1 m" },
+  ]);
+  expect(card.sources).toEqual([
+    "Name: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+    "Becken: OpenStreetMap · Stand 19.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+    "Höhe gemessen: Digitales Oberflächenmodell DOM1 · Quelle: GeoSN, dl-de/by-2-0",
+  ]);
+});
+
+test("a bridge: name and deck from the DLM, structure and span from Wikidata", () => {
+  const card = bridgeCard(
+    {
+      kind: "bridge",
+      tile: "t",
+      length: 263.4,
+      position: [412700, 5656900],
+      properties: {
+        name: "Albertbrücke",
+        kind: "road",
+        structure: "arch",
+        wikidata: "Q315427",
+        span: 31.5,
+        clearance: 5.6,
+      },
+    },
+    provenance
+  );
+  expect(card.kicker).toBe("Straßenbrücke");
+  expect(card.title).toBe("Albertbrücke");
+  expect(card.facts).toEqual([
+    { label: "Tragwerk", value: "Bogen" },
+    { label: "Länge", value: "263,4 m" },
+    { label: "Hauptspannweite", value: "31,5 m" },
+    { label: "Durchfahrtshöhe", value: "5,6 m" },
+  ]);
+  expect(card.id).toBe("Q315427");
+  expect(card.idLabel).toBe("Wikidata");
+  expect(card.sources).toEqual([
+    "Name, Fläche, Deck im DOM1 gemessen: Basis-DLM · Quelle: GeoSN, dl-de/by-2-0",
+    "Tragwerk, Spannweite: Wikidata · Stand 26.09.2026 · CC0",
+    "Durchfahrtshöhe: OpenStreetMap · Stand 19.09.2026 · © OpenStreetMap-Mitwirkende, ODbL",
+  ]);
+  expect(structureLabel("beam;arch")).toBe("Balken · Bogen");
+  expect(structureLabel(null)).toBe("");
+});

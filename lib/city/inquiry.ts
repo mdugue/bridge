@@ -14,8 +14,29 @@ import {
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
 } from "./city-mesh";
+import {
+  type CardFact,
+  factLines,
+  GEOSN_CREDIT,
+  germanDates,
+  type InquiryCard,
+  metres,
+  osmSource,
+  squareMetres,
+  whole,
+} from "./card-lines";
+import {
+  bridgeCard,
+  type FeatureInquiry,
+  monumentCard,
+  type TreeFacts,
+  treeCard,
+} from "./inquiry-features";
 import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
+
+export type { CardFact, InquiryCard } from "./card-lines";
+export { germanDates, metres, squareMetres } from "./card-lines";
 
 /** One object of the asked building, as the scene read it. */
 export interface InquiryObject {
@@ -31,52 +52,21 @@ export interface InquiryObject {
   source: number;
 }
 
-/** What the scene hands the card: the picked object and its whole tree. */
-export interface Inquiry {
+/** What the scene hands the card for a building: the picked object and
+ *  its whole tree. */
+export interface BuildingInquiry {
+  kind: "building";
   picked: InquiryObject;
   /** every object of the picked object's building tree, the picked one too */
   tree: InquiryObject[];
   tile: string;
 }
 
-export interface CardFact {
-  label: string;
-  value: string;
-}
-
-export interface InquiryCard {
-  /** the address line(s), "" when OSM knows none */
-  address: string;
-  facts: CardFact[];
-  /** the join key, shown so it can be copied */
-  id: string;
-  /** a small line above the title: what kind of thing this is */
-  kicker: string;
-  /** one line per source the card quotes, with its edition and licence */
-  sources: string[];
-  title: string;
-}
+/** Whatever someone asked about (ADR 0037, plan 049 phase 4). */
+export type Inquiry = BuildingInquiry | FeatureInquiry;
 
 /** The AdV code for "nach Quellenlage nicht zu spezifizieren". */
 const UNSPECIFIED = "31001_9998";
-
-const decimal = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
-const whole = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
-
-/** "18,1 m" (heights to the decimetre). */
-export function metres(value: number): string {
-  return `${decimal.format(value)} m`;
-}
-
-/** "1.234 m²" (areas to the square metre). */
-export function squareMetres(value: number): string {
-  return `${whole.format(value)} m²`;
-}
-
-/** Every ISO date in a text as a German date ("2024-11-30" → "30.11.2024"). */
-export function germanDates(text: string): string {
-  return text.replace(/(\d{4})-(\d{2})-(\d{2})/g, "$3.$2.$1");
-}
 
 /** A Gebäudefunktion as words; "" for none or the unspecified code. */
 export function functionLabel(code: string): string {
@@ -126,7 +116,7 @@ function lod2Source(
   if (created) {
     parts.push(`Objekt exportiert ${germanDates(created)}`);
   }
-  parts.push(source?.credit ?? "Quelle: GeoSN, dl-de/by-2-0");
+  parts.push(source?.credit ?? GEOSN_CREDIT);
   return parts.join(" · ");
 }
 
@@ -141,7 +131,7 @@ function rebuiltSource(
     `Dach und Höhe: ${source?.label ?? "Digitales Oberflächenmodell DOM1"}`,
     stand ? `Befliegung ${germanDates(stand)}` : "",
     "das Stadtmodell verfehlt dieses Dach",
-    source?.credit ?? "Quelle: GeoSN, dl-de/by-2-0",
+    source?.credit ?? GEOSN_CREDIT,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -155,19 +145,7 @@ function scanSource(provenance: SiteProvenance | null, tile: string): string {
     source?.label ?? "Laserscan",
     stand ? `Befliegung ${germanDates(stand)}` : "",
     "nicht im amtlichen Stadtmodell",
-    source?.credit ?? "Quelle: GeoSN, dl-de/by-2-0",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-/** The OSM source line, naming what the card took from OSM. */
-function osmSource(provenance: SiteProvenance | null, what: string[]): string {
-  const source = provenance?.sources.osm;
-  return [
-    `${what.join(", ")}: ${source?.label ?? "OpenStreetMap"}`,
-    source?.stand ? `Stand ${germanDates(source.stand)}` : "",
-    `${source?.credit ?? "© OpenStreetMap-Mitwirkende"}, ${source?.licence ?? "ODbL"}`,
+    source?.credit ?? GEOSN_CREDIT,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -179,7 +157,7 @@ function osmSource(provenance: SiteProvenance | null, what: string[]): string {
  * (the union of the footprints, base to top: lib/city/object-facts.ts
  * `treeFacts`), else the highest part and the parts' sum.
  */
-function mergedFacts(inquiry: Inquiry) {
+function mergedFacts(inquiry: BuildingInquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);
   const pick = inquiry.picked.facts;
@@ -220,7 +198,7 @@ function cardFacts(
   use: string
 ): CardFact[] {
   const known = (v: number) => v !== NO_FACT && v > 0;
-  const lines: [string, string][] = [
+  return factLines([
     ["Nutzung", scan || use ? "" : "nicht angegeben"],
     ["Höhe", known(t.height) ? metres(t.height) : ""],
     ["Traufe", !scan && pick.eaveH > 0 ? metres(pick.eaveH) : ""],
@@ -230,15 +208,34 @@ function cardFacts(
     ["Gebäudeteile", t.parts > 1 ? whole.format(t.parts) : ""],
     ["Denkmal", t.heritage ? "Kulturdenkmal" : ""],
     ["Erdgeschoss", t.shop ? "Laden oder Gastronomie" : ""],
-  ];
-  return lines
-    .filter(([, value]) => value !== "")
-    .map(([label, value]) => ({ label, value }));
+  ]);
 }
 
-/** The card for one inquiry; `provenance` null until the manifest arrived. */
+/**
+ * The card for one inquiry; `provenance` null until the manifest arrived,
+ * `treeFacts` until a tree's tile's facts file has (lib/city/inquiry-
+ * features.ts).
+ */
 export function inquiryCard(
   inquiry: Inquiry,
+  provenance: SiteProvenance | null,
+  treeFacts: TreeFacts | null = null
+): InquiryCard {
+  switch (inquiry.kind) {
+    case "building":
+      return buildingCard(inquiry, provenance);
+    case "tree":
+      return treeCard(inquiry, treeFacts, provenance);
+    case "monument":
+      return monumentCard(inquiry, provenance);
+    case "bridge":
+      return bridgeCard(inquiry, provenance);
+  }
+}
+
+/** A building's card (LoD2, or a scan structure LoD2 lacks). */
+function buildingCard(
+  inquiry: BuildingInquiry,
   provenance: SiteProvenance | null
 ): InquiryCard {
   const pick = inquiry.picked;
@@ -266,7 +263,7 @@ export function inquiryCard(
     sources.push(rebuiltSource(provenance, inquiry.tile));
   }
   if (fromOsm.length > 0) {
-    sources.push(osmSource(provenance, fromOsm));
+    sources.push(osmSource(provenance, fromOsm, "buildings"));
   }
   return {
     kicker,
@@ -274,6 +271,7 @@ export function inquiryCard(
     address: t.address,
     facts,
     id: pick.facts.buildingId,
+    idLabel: "Kennung",
     sources,
   };
 }

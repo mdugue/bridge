@@ -45,6 +45,12 @@ const provenance: SiteProvenance = {
       credit: "Quelle: GeoSN, dl-de/by-2-0",
       licence: "dl-de/by-2-0",
     },
+    dlm: {
+      label: "Basis-DLM",
+      credit: "Quelle: GeoSN, dl-de/by-2-0",
+      licence: "dl-de/by-2-0",
+    },
+    wikidata: { label: "Wikidata", credit: "CC0", licence: "CC0" },
     lsc: {
       label: "Laserscan",
       credit: "Quelle: GeoSN, dl-de/by-2-0",
@@ -100,6 +106,7 @@ test("numbers, dates and codes read as German", () => {
 test("the Building's own tree facts win over its parts' (the bake's union)", () => {
   const card = inquiryCard(
     {
+      kind: "building",
       tile: "t",
       picked: object({ facts: facts({ height: 10, area: 300 }) }),
       tree: [
@@ -124,6 +131,7 @@ test("the Building's own tree facts win over its parts' (the bake's union)", () 
 test("a roof rebuilt from the surface model is said to be measured there", () => {
   const card = inquiryCard(
     {
+      kind: "building",
       tile: "t",
       picked: object({
         facts: facts({ roofType: MEASURED_ROOF, height: 19.2 }),
@@ -161,6 +169,7 @@ test("a named church: name as title, use above, every source quoted", () => {
     facts: facts({ height: 92.1, area: 150 }),
   });
   const inquiry: Inquiry = {
+    kind: "building",
     tile: "t",
     picked: part,
     tree: [object({ building: true, objectIndex: 2 }), part, tower],
@@ -187,7 +196,12 @@ test("a named church: name as title, use above, every source quoted", () => {
 
 test("an unspecified house says so and quotes no OSM it did not use", () => {
   const card = inquiryCard(
-    { tile: "t", picked: object({ facts: facts({ height: 12 }) }), tree: [] },
+    {
+      kind: "building",
+      tile: "t",
+      picked: object({ facts: facts({ height: 12 }) }),
+      tree: [],
+    },
     null
   );
   expect(card.title).toBe("Gebäude");
@@ -210,7 +224,7 @@ test("a shed from the laser scan is marked as not in the official model", () => 
     }),
   });
   const card = inquiryCard(
-    { tile: "t", picked: shed, tree: [shed] },
+    { kind: "building", tile: "t", picked: shed, tree: [shed] },
     provenance
   );
   expect(card.title).toBe("Kleinbau");

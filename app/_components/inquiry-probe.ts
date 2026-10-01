@@ -164,6 +164,7 @@ export function createInquiryProbe(deps: {
       facts: layer.facts(i),
     });
     return {
+      kind: "building",
       tile: layer.tile,
       picked: object(objectIndex),
       tree: tree.map(object),

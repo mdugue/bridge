@@ -32,6 +32,14 @@ test("every site tile has the editions its buildings and ground came from", () =
   expect(manifest.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(manifest.sources.osm.credit).toContain("OpenStreetMap");
   expect(manifest.sources.lod2.credit).toBe("Quelle: GeoSN, dl-de/by-2-0");
+  // every OSM product a card quotes has its own edition
+  for (const product of ["buildings", "bridges", "fountains", "trees"]) {
+    expect(
+      `${product}: ${manifest.sources.osm.stands?.[product as "trees"]}`
+    ).toMatch(/: \d{4}-\d{2}-\d{2}$/);
+  }
+  expect(manifest.sources.wikidata.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(manifest.sources.trees.stand).toBe("2026-10-01");
 });
 
 test("a LoD2 edition splits into the model year and its inputs' years", () => {

@@ -17,8 +17,13 @@ export type SourceKey =
   | "dgm"
   | "dom"
   | "dop"
+  | "dlm"
   | "osm"
-  | "trees";
+  | "trees"
+  | "wikidata";
+
+/** The OSM products the cards quote, each read from its own extract. */
+export type OsmProduct = "bridges" | "buildings" | "fountains" | "trees";
 
 export interface SourceInfo {
   /** the data's credit line, as its licence asks for it */
@@ -29,6 +34,8 @@ export interface SourceInfo {
   licence: string;
   /** site-wide edition where the source has one (the OSM extract's date) */
   stand?: string;
+  /** OSM: the edition of each product a card quotes, where it differs */
+  stands?: Partial<Record<OsmProduct, string>>;
 }
 
 /** A LoD2 model's edition, split: the model year and its inputs' years. */
@@ -52,7 +59,16 @@ export interface ProvenanceRecord {
   openstreetmap?: {
     bbbike?: { products?: Record<string, { dataAsOf?: string }> };
   };
+  wikidata?: { dataAsOf?: string };
 }
+
+/** The record's product behind each OSM product a card quotes. */
+const OSM_PRODUCTS: [OsmProduct, string][] = [
+  ["buildings", "osmBuildings"],
+  ["bridges", "bridges"],
+  ["fountains", "fountains"],
+  ["trees", "trees"],
+];
 
 const GEOSN = "Quelle: GeoSN, dl-de/by-2-0";
 const DL_DE = "dl-de/by-2-0";
@@ -71,6 +87,20 @@ export function leadingDate(text: string | undefined): string | undefined {
   return /^\d{4}-\d{2}-\d{2}/.exec(text ?? "")?.[0];
 }
 
+/** Each OSM product's edition the record states. */
+function osmStands(
+  products: Record<string, { dataAsOf?: string }> | undefined
+): Partial<Record<OsmProduct, string>> {
+  const stands: Partial<Record<OsmProduct, string>> = {};
+  for (const [product, name] of OSM_PRODUCTS) {
+    const stand = leadingDate(products?.[name]?.dataAsOf);
+    if (stand) {
+      stands[product] = stand;
+    }
+  }
+  return stands;
+}
+
 /**
  * The manifest for `tiles` from the provenance record. The OSM building
  * facts (shops, heritage, names, addresses, storeys) are the product the
@@ -80,9 +110,10 @@ export function siteProvenance(
   record: ProvenanceRecord,
   tiles: readonly string[]
 ): SiteProvenance {
-  const osmStand = leadingDate(
-    record.openstreetmap?.bbbike?.products?.osmBuildings?.dataAsOf
-  );
+  const products = record.openstreetmap?.bbbike?.products;
+  const osmStand = leadingDate(products?.osmBuildings?.dataAsOf);
+  const stands = osmStands(products);
+  const wikidataStand = leadingDate(record.wikidata?.dataAsOf);
   const treesStand = leadingDate(record.dresden?.Stadtbaumkataster?.retrieved);
   const sources: Record<SourceKey, SourceInfo> = {
     lod2: { label: "3D-Stadtmodell LoD2", credit: GEOSN, licence: DL_DE },
@@ -98,11 +129,20 @@ export function siteProvenance(
       licence: DL_DE,
     },
     dop: { label: "Digitales Orthophoto", credit: GEOSN, licence: DL_DE },
+    dlm: { label: "Basis-DLM", credit: GEOSN, licence: DL_DE },
     osm: {
       label: "OpenStreetMap",
       credit: "© OpenStreetMap-Mitwirkende",
       licence: "ODbL",
       ...(osmStand ? { stand: osmStand } : {}),
+      stands,
+    },
+    wikidata: {
+      // CC0 asks for no credit; the licence is the line's last word
+      label: "Wikidata",
+      credit: "CC0",
+      licence: "CC0",
+      ...(wikidataStand ? { stand: wikidataStand } : {}),
     },
     trees: {
       label: "Stadtbaumkataster",
