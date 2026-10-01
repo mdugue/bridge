@@ -63,6 +63,13 @@ Docs are only useful if they do not rot. Treat them as part of "done":
 >    in rendering.md and, if a user can see the difference, the guide's
 >    layer table (EN and DE) follow.
 
+> A change that **adds or reshapes a part that stands on the ground**
+> (a kerb, a wall, a deck, a shed, a bench …) follows
+> [ADR 0035](./adr/0035-parts-meet-the-ground.md): its feet and edges come
+> from `lib/city/ground-join.ts`, its builder reports its joins, and
+> `scripts/ground-joins.test.ts` (baked parts) or its own unit test
+> (runtime parts) checks them.
+
 > A change that **adds a dataset or edition** updates the guide's
 > [data-sources](./guide/en/data-sources.md) page (both languages: download
 > route, strengths and weaknesses, edition, licence) and
