@@ -799,6 +799,9 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   ("Quelle: GeoSN, dl-de/by-2-0"), OSM-derived layers ODbL ("© OpenStreetMap
   contributors"); both credits live in the HUD footer (`scene-sidebar.tsx`) and
   the OSM bakes write an `attribution` member. Keep them when you touch either.
+  A new source's licence and credit go into the guide's *Licences and
+  credits* table (both languages) and, for a new provider, into `NOTICE`:
+  the code is Apache-2.0, the data keep their own licences.
 
 ## When in doubt, ask before
 
