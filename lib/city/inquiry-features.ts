@@ -30,7 +30,7 @@ export interface TreeInquiry {
   conifer: boolean;
   /** the genus the bake keyed its season on ("" none) */
   genus: string;
-  /** the tile's facts file (ADR 0041), fetched with the question */
+  /** the tile's facts file (ADR 0042), fetched with the question */
   factsUrl?: string;
   /** its index in the tile's trees file */
   index: number;

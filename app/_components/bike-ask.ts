@@ -8,7 +8,7 @@ import { BIKE_FOOT_SINK_M, bikeColumns } from "./bike-layer";
 const PICK_MARGIN = 0.25;
 
 /**
- * The live bicycle counters as askable things (ADR 0041, the data layer
+ * The live bicycle counters as askable things (ADR 0042, the data layer
  * of ADR 0040): each counter's columns as drawn (`bikeColumns`), standing
  * on the ground under them; a counter whose ground has not streamed in is
  * not askable yet. Rebuilt from the counts the layer shows, so a ray

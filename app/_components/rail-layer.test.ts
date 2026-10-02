@@ -10,10 +10,9 @@ import {
   buildBallast,
   buildDeckTable,
   buildRail,
-  deckLift,
   type RailContext,
-  ringToWorld,
 } from "./rail-layer";
+import { deckLift, ringToWorld } from "@/lib/city/decks";
 
 const ctx: RailContext = {
   offset: { cx: 0, cy: 0 },
@@ -54,6 +53,48 @@ test("a Polygon ballast area builds a slab", () => {
   const mesh = buildBallast([polygon], ctx);
   expect(mesh).not.toBeNull();
   expect(triangleCount(mesh)).toBeGreaterThan(0);
+});
+
+test("a yard across an underpass follows the ground, not its corners", () => {
+  // the embankment at 117 m, a street at 111 m through it (x 40–60); the
+  // yard's outline has corners down in the street
+  const underpass: RailContext = {
+    offset: { cx: 0, cy: 0 },
+    heightAt: (x) => (x > 40 && x < 60 ? 111 : 117),
+  };
+  const yard: AreaFeature = {
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [0, 0],
+          [45, 0],
+          [55, 0],
+          [100, 0],
+          [100, 30],
+          [55, 30],
+          [45, 30],
+          [0, 30],
+          [0, 0],
+        ],
+      ],
+    },
+    properties: {},
+  };
+  const mesh = buildBallast([yard], underpass);
+  const pos = mesh?.geometry.getAttribute("position");
+  expect(pos?.count ?? 0).toBeGreaterThan(0);
+  let overStreet = 0;
+  for (let i = 0; pos && i < pos.count; i += 3) {
+    const xs = [0, 1, 2].map((k) => pos.getX(i + k));
+    const mx = (xs[0] + xs[1] + xs[2]) / 3;
+    const top = Math.max(...[0, 1, 2].map((k) => pos.getY(i + k)));
+    if (mx > 44 && mx < 56 && top > 113) {
+      overStreet++;
+    }
+  }
+  // no sheet stands over the street, closing the passage
+  expect(overStreet).toBe(0);
 });
 
 test("MultiPolygon ballast contributes every part", () => {
@@ -98,6 +139,43 @@ test("buildRail: empty inputs yield an empty group, a track and a platform each 
   for (const child of built.children) {
     expect(triangleCount(child as Mesh)).toBeGreaterThan(0);
   }
+});
+
+test("a track over the gap the DGM leaves beside a bridge spans it on a deck of its own", () => {
+  // an embankment at 117.5 with a 40 m gap down to the street at 111.5 —
+  // a bridge with no deck outline in the data
+  const gap: RailContext = {
+    offset: { cx: 0, cy: 0 },
+    heightAt: (x) => (x > 80 && x < 120 ? 111.5 : 117.5),
+  };
+  const track: RailFeature = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [200, 0],
+      ],
+    },
+    properties: { tracks: 1 },
+  };
+  const built = buildRail(
+    { rails: [track], bridges: [], ballast: [], platforms: [] },
+    gap
+  );
+  // the rails (built first: no bridges, no ballast) never dip into the gap
+  const rails = new Box3().setFromObject(built.children[0]);
+  expect(rails.min.y).toBeGreaterThan(117.5);
+  // and a deck stands under them, at their level, on piers down to the
+  // street
+  expect(built.children.length).toBeGreaterThan(1);
+  const deck = new Box3();
+  for (const c of built.children.slice(1)) {
+    deck.union(new Box3().setFromObject(c));
+  }
+  expect(deck.min.x).toBeLessThan(85);
+  expect(deck.max.x).toBeGreaterThan(115);
+  expect(deck.max.y).toBeGreaterThan(117.5);
+  expect(deck.min.y).toBeLessThan(111.5);
 });
 
 test("a null geometry is skipped, not thrown", () => {

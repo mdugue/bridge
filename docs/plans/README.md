@@ -93,7 +93,7 @@ history. Decisions that came out of plans are written up as
 **Direction since 2026-09-27: a digital twin with an aesthetic claim.**
 The maintainer set it and fixed two rules: the app stays **static where
 possible** (ADR 0001, amended), and **text appears only in a card, on
-demand** — the scene stays wordless (ADR 0041). Plans 052 (ask the city),
+demand** — the scene stays wordless (ADR 0042). Plans 052 (ask the city),
 050 (time and live sources) and 051 (scenarios) carry it; plan 019's GPU
 pass comes first for them too, since every new look is unjudged there.
 

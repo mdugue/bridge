@@ -24,7 +24,7 @@ function middle(coords: readonly (readonly number[])[]): [number, number] {
 }
 
 /**
- * A tile's counted traffic as one askable set (ADR 0041, the data layers
+ * A tile's counted traffic as one askable set (ADR 0042, the data layers
  * of ADR 0040): rays meet the flow bodies as built, and the vertex they
  * meet names its section (`userData.trafficSection`). Asked only while
  * the layer shows. The bodies get their BVH on the first question that

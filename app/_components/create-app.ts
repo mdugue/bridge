@@ -278,7 +278,7 @@ export interface CityWalkOptions {
   /** a manual look or move ended live mode (camera-pose.ts) */
   onFollowEnd?: () => void;
   /**
-   * What was asked last ("Befragen", ADR 0041): a click, a long press or
+   * What was asked last ("Befragen", ADR 0042): a click, a long press or
    * `I` at the crosshair; null when nothing stands there.
    */
   onInquiry?: (inquiry: Inquiry | null) => void;
@@ -1048,7 +1048,7 @@ async function bootApp(
   };
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
-  // Befragen (ADR 0041): a click asks, a long press on a touch screen,
+  // Befragen (ADR 0042): a click asks, a long press on a touch screen,
   // and I at the crosshair — there is no mode to switch on first.
   // What the outline goes around (selection-shape.ts): a building's own
   // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
@@ -1116,7 +1116,7 @@ async function bootApp(
       height: renderer.domElement.clientHeight || 1,
     }),
   });
-  // A tree's card fetches what the register says about it (ADR 0041).
+  // A tree's card fetches what the register says about it (ADR 0042).
   const treeFactsUrl = (tile: string) => {
     const file = extras.tiles.find((t) => t.id === tile)?.ask?.treeFacts;
     return file ? new URL(file, tilesetUrl).href : undefined;
@@ -1159,7 +1159,7 @@ async function bootApp(
         inquireAt({ x: ndcX, y: ndcY });
       }
     },
-    // A finger or a pen asks by holding still (the phone's way, ADR 0041).
+    // A finger or a pen asks by holding still (the phone's way, ADR 0042).
     onLongPress: (ndcX, ndcY) => {
       inquireAt({ x: ndcX, y: ndcY });
     },

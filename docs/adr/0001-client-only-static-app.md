@@ -38,7 +38,7 @@ is done by copying a Snapshot JSON, not by a server-side link.
 The maintainer set the project's direction to a digital twin with an
 aesthetic claim and relaxed this decision from "strictly static" to
 "static where possible". Everything the twin knows about the city stays
-baked into files ([ADR 0041](./0041-inquiry-cards-on-demand-facts-in-the-tileset.md));
+baked into files ([ADR 0042](./0042-inquiry-cards-on-demand-facts-in-the-tileset.md));
 live sources ([plan 053](../plans/053-time-and-live-sources.md)) are read
 from the browser where their APIs allow it (CORS), and a small, stateless
 proxy — no database, no accounts, no user data — is allowed only where a

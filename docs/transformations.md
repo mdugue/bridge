@@ -751,7 +751,7 @@ visual-variable codebook is in
 ### The twin: identity, facts and provenance (asked on demand)
 
 The scene says nothing on its own; asked (a click, a long press, `I` at
-the crosshair), it answers in a card ([ADR 0041](./adr/0041-inquiry-cards-on-demand-facts-in-the-tileset.md),
+the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md),
 [plan 052](./plans/052-queryable-twin.md)).
 
 - **Object identity and semantics in the tileset** — CityJSON attributes →
@@ -1466,8 +1466,17 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
 - **Ballast yards** — Basis-DLM `ver03_f` (railway AREA, `OBJART=42010`),
   **dissolved** with shapely `union_all(make_valid())` in the bake and clipped
   to the tile (~5 non-overlapping parts) → **one merged surface**, so dozens of
-  yard tracks can't z-fight. Per-vertex ground-clamp + `BALLAST_RAISE`, short edge
-  fascia, `polygonOffset`. The recoloured class-5 splat sits underneath so any gap
+  yard tracks can't z-fight. **Draped on the ground** (2026-10-01, ADR 0041,
+  `addDrapedArea`): the outline and its holes triangulated, each triangle split
+  in four while the ground at its edge midpoints and centre strays from its
+  plane by > 1 m (and always above 48 m), down to 6 m, every corner on the
+  ground + `BALLAST_RAISE`; the fascia (0.45 m) on the ground every 6 m; **left
+  out on the rail decks** (the tracks ride the deck). ~5·10⁴ triangles and
+  ~0.3 s a tile with a big yard (750 before). *(Clamped at the outline's corners alone, the
+  yard spanned whatever lay between them: across the underpass at Dresden's
+  Bahnhof Mitte its sheets sloped from the embankment down to the street
+  corners under the deck — the passage read as a closed wall, from the
+  tracks too.)* `polygonOffset`. The recoloured class-5 splat sits underneath so any gap
   reads as ballast, not seam.
 - **Steel rails** — Basis-DLM `ver03_l`, **heavy rail only** (`SPW=1000`; the
   DLM carries trams poorly — `SPW=3000`/`BKT=1201` — so they come from OSM,
@@ -1486,13 +1495,54 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   **snap-merged by shared endpoints** (1 m) in the bake (≈91→9 lines/tile); at
   runtime a polyline is **split into runs of valid ground** (never bridged across a
   NoData gap) and each track gets a thin rail pair (`±GAUGE/2`, count from `GLS`)
-  with a small web. Draped on terrain; **lifted onto a rail bridge's deck** (point-
-  in-deck test) so they ride the deck with no ballast stacked on top — at the
-  deck's height *there* (the per-vertex deck profile interpolated along the
-  deck's long axis; until plan 024 the deck's mean), from a lift table of
-  every deck kind that the tram layer shares. Railway
+  with a small web, on the **level its line runs on** (*Line levels* below):
+  the ground, a rail bridge's deck — riding it with no ballast stacked on
+  top, at the deck's height *there* (the per-vertex deck profile
+  interpolated along the deck's long axis; until plan 024 the deck's mean),
+  from a lift table of every deck kind that the tram layer shares — or a
+  span over a gap, on a deck of its own. Railway
   class recoloured dusty-mauve → **ballast warm-grey** (class 5 in
   `lib/city/landcover.ts`).
+- **Line levels** (2026-10-01, [ADR 0041](./adr/0041-line-levels-along-the-whole-line.md))
+  — which level a rail or tram line runs on is decided **along the whole
+  line**, never per sample (`lib/city/levels.ts`): the candidates per 4 m
+  (rail) or 2 m (tram) sample are the ground and every deck the line may
+  ride whose outline holds the point or runs within 2 m (a rail only rail
+  decks, a tram any); a Viterbi picks the path the line can drive — the
+  climb beyond its grade (rail 4 %, tram 8 %, 0.35 m slack) is the cost,
+  OSM's `bridge` tag a 4 m-of-jump preference between two levels as good.
+  Then a grade cone: a sample the line cannot get down to from either side
+  by ≥ 1 m is in a **gap** — a straight *span* between its rims (pushed out
+  over the gap's sloped sides), a deck within 1 m of it riding along,
+  ≤ 400 m; one it cannot get up to from either side is in a **fill** — a
+  straight *cut*, ≤ 120 m. The build step solves every line of the site
+  with **450 m of context** past each end of a tile's piece (the line that
+  runs on through that end in another piece, a switch's straightest branch;
+  `lib/city/line-levels.ts`, `scripts/line-levels.ts`) and publishes each
+  line's runs off the ground as `lv` in the rail and tram files (never
+  committed); a layer without them solves its own piece. Under a span the
+  layer draws a **span deck**: a slab as wide as the tracks + 0.9 m (a
+  tram's 1.6 m either side), its top in the deck colour, 1.1 m deep, a
+  pier every 26 m where it clears the ground by 2.5 m, drawn by the tile
+  owning its middle (`addSpanDeck`). Dresden: steps beyond the grade by
+  > 1 m in the drawn lines 230 → 18, Hamburg 330 → 62, Leipzig 41 → 17, Unna
+  20 → 0 (`bun scripts/line-levels.ts <site>`; the test holds Dresden to
+  20). What remains: deck ends above lower ground for good, and deck tops
+  DOM1 put 1.5–2 m off their embankment. *(Until then: lifted onto every
+  deck under a point — 🗃️ below.)*
+- **Passages under decks** (2026-10-01, ADR 0041) — a *cut* lying ≥ 30 %
+  under a drawn deck (any kind, within 2 m) opens the fill in the terrain
+  bake (`lib/city/passages.ts`, `shapeDgm`'s last pass, both levels): along
+  the line, half-width 2 m per track + 1.5 m, the ground lowered to the
+  line's level − 0.15 m, never raised, its sides where the DGM stood. Where
+  the DGM fills the ground under a bridge (Hamburg's keeps its bridges) the
+  track ran into a hill; a cut under no deck stays closed (a tunnel, a
+  station's cover, a road the bridge data lacks). Hamburg: 15 passages,
+  Munich 1, Dresden none (its tracks pass under their decks on open
+  ground). The fill under a deck that no line passes through stays as
+  measured — under Dresden's Bahnhof Mitte the raised third of the outline
+  is the abutment the DLM outline includes, and the passage beside it
+  reads closed from an oblique view.
 - **Bridge axis** — every deck is measured and drawn along a **centreline**
   (`bridge.py` `deck_axis`, `lib/city/bridge.ts` `axisFrame`): the DLM
   bridge line where there is one, clipped to the outline and run on to its
@@ -1548,9 +1598,9 @@ z-fought into ragged edges, fragmented, and stacked into "2-story" bridges — s
   sides and soffit 1.1 m deep. None where the deck runs on onto another
   deck, where most of the end finds no ground in reach (a deck over a
   street, a viaduct onto an embankment the DGM has), or where the end is
-  flush. The approaches join the lift table: a rail rides a rail deck's,
-  a tram track OSM does not put on the bridge rides one that stands less
-  than 1.5 m over the ground under it (not a street passing below).
+  flush. The approaches join the lift table: a line on the ground (*Line
+  levels* above) rides one that stands less than 1.5 m over the ground
+  under it (not a street passing below), a rail a rail deck's.
 - **Bridge superstructure** (*Oberbau*: truss, pylons, steel arch) — **DOM1**
   above the deck line, per half of the cross-section (the outline grown by
   3 m): the highest surface per station, a morphological **opening** (7 m:
@@ -2287,8 +2337,8 @@ research that produced them):
 |---|---|---|
 | **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
 | **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |
-| **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). Text now appears only on demand, in the inquiry card ([ADR 0041](./adr/0041-inquiry-cards-on-demand-facts-in-the-tileset.md)). |
-| **Every CityJSON attribute as a string column, part ids included** (plan 052's first cut) | +132 kB gzipped (+9.6 %) on the spawn tile's building glTF, 70 kB of it object ids: Saxon BuildingParts carry random `UUID_…` ids (41 bytes, incompressible) that no other dataset joins on. | The Building's `gml:id` for every object of its tree and ENUM columns for the code lists: +46 kB (+3.5 %) ([ADR 0041](./adr/0041-inquiry-cards-on-demand-facts-in-the-tileset.md)). The part UUIDs stay in the committed CityJSON. |
+| **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). Text now appears only on demand, in the inquiry card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md)). |
+| **Every CityJSON attribute as a string column, part ids included** (plan 052's first cut) | +132 kB gzipped (+9.6 %) on the spawn tile's building glTF, 70 kB of it object ids: Saxon BuildingParts carry random `UUID_…` ids (41 bytes, incompressible) that no other dataset joins on. | The Building's `gml:id` for every object of its tree and ENUM columns for the code lists: +46 kB (+3.5 %) ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md)). The part UUIDs stay in the committed CityJSON. |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **A raised pavement behind the kerb** (plan 023's leftover: lift the pavement a kerb's height above the road) | The DGM1 has no such step to lift, and ADR 0035 makes every part meet the ground at the ground's own level: the kerb's back now runs down to the pavement (`meetGround`), which took its ground-join misses from 32 % to 2 % (2026-10-01 audit). | Only with a measured kerb height per street (none of the sources carries it) and a terrain cut that ADR 0035's join check accepts. |
 | **DGM1 micro-relief as a normal texture** (plan 023 phase 7: a 1 m normal map over the "2 m mesh") | The fine level is a ±0.15 m TIN of the native DGM (ADR 0030), not a 2 m grid, and `terrainNormal` (`terrain-layer.ts`) deliberately pulls near-flat normals up: the DGM's ruts, survey wobble and 8-bit normals read as dirty flecks under a low sun. Kerbs are real geometry now. | Revisit only if a real-GPU plate shows the ground too flat — and then as a softer calm threshold, not more relief. |
@@ -2319,6 +2369,7 @@ research that produced them):
 | **`BatchedMesh` for buildings** | Already merged per tile; would break `objectid` picking/demolish and not cut draw calls. | Bottleneck is fill-rate, not draw calls. |
 | **Blender texture baking** | No UVs on the source geometry. | — |
 | **Orthophoto as the *only* tint source** | Leaves everything identical where imagery is flat; no facade info. | Hash carries variation; DOP augments roofs. |
+| **A line lifted onto every deck under it** (rails and trams until 2026-10-01: a point inside a rail deck's outline rode the deck, a tram on an OSM `bridge` way any deck) | A lower line passing under another's bridge jumped 7–8 m onto it and back (16 of 109 rail–deck crossings in Dresden; the flyovers north of Neustadt), and an upper line dropped into the DGM's gap wherever it ran longer than the deck's outline — 230 steps beyond the grade by > 1 m in Dresden. | The level is decided along the whole line within its grade (✅ *Line levels*, ADR 0041). |
 | **Per-line ballast ribbons** (rail v1: one ~9.6 m ribbon per `ver03_l` line) | 42+ overlapping coplanar ribbons in the yard z-fought into ragged/torn edges. | Replaced by the **dissolved `ver03_f` area** as one merged surface. |
 | **`ver06_l` centreline-buffered decks** (rail v1) | Buffered planks stacked deck-top + ballast + parapet-cap → "2-story" bridges, and one plank merged the parallel Marienbrücke spans. | Replaced by **`ver06_f` deck polygons** (one slab per real footprint); kept as the no-`ver06_f` portability fallback. |
 | **Per-tile rail layer** (rail v1) | Each tile's own `heightAt` returned null off-tile → tracks truncated at every seam. | Build on the **cross-tile `heightAt`** — once for the block until ADR 0024, now per fine terrain tile over every loaded terrain. |

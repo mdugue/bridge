@@ -1,6 +1,6 @@
 /**
  * The inquiry cards of the data layers (ADR 0040's layers, asked like the
- * rest of the twin, ADR 0041): a counted road section of the motor-traffic
+ * rest of the twin, ADR 0042): a counted road section of the motor-traffic
  * layer and a live bicycle counter. Each says what its source counted —
  * vehicles a day per direction, the heavy-goods share, the year and how it
  * was counted; bicycles in the last hour — and names the source; the

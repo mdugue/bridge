@@ -1,6 +1,6 @@
 /**
  * The inquiry card: what the viewer says about a building when someone asks
- * (the "Befragen" mode, ADR 0041). The scene picks an object and hands over
+ * (the "Befragen" mode, ADR 0042). The scene picks an object and hands over
  * its building tree's facts (lib/city/object-facts.ts); this module turns
  * them, with the provenance manifest, into the card's German lines — the
  * title, the facts, the identity and a source line for every fact shown.
@@ -63,7 +63,7 @@ export interface BuildingInquiry {
   tile: string;
 }
 
-/** Whatever someone asked about (ADR 0041, plan 052 phase 4). */
+/** Whatever someone asked about (ADR 0042, plan 052 phase 4). */
 export type Inquiry = BuildingInquiry | FeatureInquiry;
 
 /** The AdV code for "nach Quellenlage nicht zu spezifizieren". */

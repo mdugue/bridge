@@ -5,7 +5,7 @@
 > browser when its API allows it (CORS), fall back to a value baked at
 > build time, and propose a stateless proxy only when neither works (ask
 > the maintainer first). Every live value must *change the look*, not add
-> a dashboard: the scene stays wordless (ADR 0041). Nothing may block the
+> a dashboard: the scene stays wordless (ADR 0042). Nothing may block the
 > boot on a live source. Update the status row in `docs/plans/README.md`.
 
 ## Status

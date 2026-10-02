@@ -29,7 +29,7 @@ export type WallMaterial =
 
 /** What OSM knows about one CityObject. */
 export interface OsmBuildingFacts {
-  /** its address line, for the inquiry card (ADR 0041) */
+  /** its address line, for the inquiry card (ADR 0042) */
   addr?: string;
   /** walls, `#rrggbb` (OSM `building:colour`) */
   colour?: string;
@@ -65,7 +65,7 @@ export const OBJECT_FLAG_GLASS = 4;
 export const OBJECT_FLAG_METAL = 8;
 /** Part of one of the city's landmarks (Wikidata; column `flags`). */
 export const OBJECT_FLAG_LANDMARK = 16;
-/** The building someone is asking about (the inquiry card, ADR 0041): set
+/** The building someone is asking about (the inquiry card, ADR 0042): set
  *  in the packed texture at runtime only, never baked. */
 export const OBJECT_FLAG_ASKED = 32;
 
@@ -125,7 +125,7 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
-  /** identity and semantics, the table's fact columns (ADR 0041) */
+  /** identity and semantics, the table's fact columns (ADR 0042) */
   facts?: ObjectFacts;
   /** OBJECT_FLAG_* summed, from OSM (0 = none) */
   flags: number;

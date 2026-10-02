@@ -152,7 +152,7 @@ export type ContentExtras = CityExtras | TerrainExtras;
  */
 export type TileSoundFiles = Partial<Record<SoundKind, string>>;
 
-/** A tile's side files only the inquiry card fetches (ADR 0041): the
+/** A tile's side files only the inquiry card fetches (ADR 0042): the
  *  artifact table's `ask` column (lib/city/tile.ts). */
 export type TileAskFiles = Partial<Record<AskKind, string>>;
 

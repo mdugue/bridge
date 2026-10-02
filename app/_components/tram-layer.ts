@@ -35,6 +35,8 @@ import type {
   TramBed,
   TramFeature,
 } from "@/lib/city/features";
+import type { DeckPoly } from "@/lib/city/decks";
+import { LEVEL_STEP } from "@/lib/city/levels";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
 import { LANDCOVER_CLASSES, MEADOW_CLASS } from "@/lib/city/landcover";
 import type { Point2 } from "@/lib/city/polyline";
@@ -57,13 +59,14 @@ import {
   addRail,
   addRibbon,
   buildDeckTable,
+  addSpanDeck,
   COLORS,
-  type DeckPoly,
-  deckLift,
+  lineLevelsAt,
   type Mesh3,
   meshFrom,
   mesh3,
   type Pt,
+  spanRuns,
 } from "./rail-layer";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
@@ -97,8 +100,8 @@ import { sceneMaterial } from "./three-utils";
  * (tracks and spans reach past the tile edge); freed with the tile.
  */
 
-const SAMPLE_M = 2; // rails follow the TIN closely
-const WIRE_SAMPLE_M = 4;
+const SAMPLE_M = LEVEL_STEP.tram; // rails follow the TIN closely
+const WIRE_STRIDE = 2; // the contact wire at every other rail sample (4 m)
 const RAIL_HALF = 0.075; // rail-layer's drawn rail
 /** a street rail shows only the 2 cm it stands out of the road */
 const STREET_RAIL_WEB = 0.04;
@@ -263,62 +266,91 @@ interface TrackRun {
   pts: Pt[];
 }
 
-/** A track OSM does not put on the bridge still rides the approach up to
- *  its deck — not one passing under it, far below. */
-const APPROACH_RIDE_M = 1.5;
-
-/** The approach a track off the bridge rides at (x, z), or null. */
-function approachLift(
-  decks: DeckPoly[],
-  x: number,
-  z: number,
-  ground: number | null
-): number | null {
-  const lift = deckLift(decks, x, z, undefined, "ramps");
-  return lift !== null && ground !== null && lift - ground < APPROACH_RIDE_M
-    ? Math.max(lift, ground)
-    : null;
-}
-
+/**
+ * A track's rail top on the level its line runs on (rail-layer.ts
+ * `lineLevelsAt`, lib/city/levels.ts): the build step's runs where the
+ * track has them, else solved with what OSM says — a way on a bridge rides
+ * the deck, one off it the ground (and the approach ramps up to a deck).
+ * The track under a deck stays under it; the track over a gap the DGM
+ * leaves beside a bridge spans it, its deck drawn under it (`spans`).
+ */
 function trackRuns(
+  f: TramFeature,
   coords: Point2[],
   bed: TramBed,
-  onBridge: boolean,
   decks: DeckPoly[],
   ctx: GroundContext,
-  spacing: number
+  spans?: { stone: Mesh3; top: Mesh3 }
 ): TrackRun[] {
+  const onBridge = f.properties?.bridge === 1;
+  const dense = subdividePolyline(coords, SAMPLE_M);
+  const levels = lineLevelsAt(
+    dense,
+    "tram",
+    f.properties?.lv,
+    ctx,
+    decks,
+    onBridge ? "deck" : "ground"
+  );
   const runs: TrackRun[] = [];
   let run: TrackRun = { d: [], pts: [] };
   let d = 0;
-  let prev: Point2 | null = null;
-  for (const p of subdividePolyline(coords, spacing)) {
-    if (prev) {
-      d += Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+  const drawn: (Pt | null)[] = [];
+  dense.forEach((p, i) => {
+    if (i > 0) {
+      d += Math.hypot(p[0] - dense[i - 1][0], p[1] - dense[i - 1][1]);
     }
-    prev = p;
-    const w = epsgToWorld(p[0], p[1], ctx.offset);
-    const lift = onBridge
-      ? deckLift(decks, w.x, w.z)
-      : approachLift(decks, w.x, w.z, ctx.heightAt(p[0], p[1]));
-    const ground = lift === null ? ctx.heightAt(p[0], p[1]) : null;
-    if (lift !== null) {
-      run.pts.push({ x: w.x, y: lift + RAIL_TOP_ON_DECK_M, z: w.z });
-      run.d.push(d);
-    } else if (ground === null) {
+    const level = levels[i];
+    if (!level) {
+      drawn.push(null);
       if (run.pts.length >= 2) {
         runs.push(run);
       }
       run = { d: [], pts: [] };
-    } else {
-      run.pts.push({ x: w.x, y: ground + RAIL_TOP_M[bed], z: w.z });
-      run.d.push(d);
+      return;
     }
-  }
+    const w = epsgToWorld(p[0], p[1], ctx.offset);
+    const top =
+      level.mode === "ground" || level.mode === "cut"
+        ? RAIL_TOP_M[bed]
+        : RAIL_TOP_ON_DECK_M;
+    const pt = { x: w.x, y: level.y + top, z: w.z };
+    drawn.push(pt);
+    run.pts.push(pt);
+    run.d.push(d);
+  });
   if (run.pts.length >= 2) {
     runs.push(run);
   }
+  if (spans) {
+    for (const span of spanRuns(levels, drawn)) {
+      addSpanDeck(
+        spans.top,
+        spans.stone,
+        span
+          .filter((p): p is Pt => p !== null)
+          .map((p) => ({ ...p, y: p.y - RAIL_TOP_ON_DECK_M })),
+        SPAN_HALF_M,
+        ctx
+      );
+    }
+  }
   return runs;
+}
+
+/** Half a tram span's deck (m): the track and a shoulder either side. */
+const SPAN_HALF_M = 1.6;
+
+/** Every `stride`-th point of a run, its ends kept: the contact wire
+ *  needs no finer line than the rails'. */
+function thinned(run: TrackRun, stride: number): TrackRun {
+  const keep = run.pts.map(
+    (_, i) => i % stride === 0 || i === run.pts.length - 1
+  );
+  return {
+    d: run.d.filter((_, i) => keep[i]),
+    pts: run.pts.filter((_, i) => keep[i]),
+  };
 }
 
 interface TrackMeshes {
@@ -551,6 +583,9 @@ function buildTracks(
     grass: mesh3(),
     ballast: mesh3(),
   };
+  // a track's piece is its tile's alone (the bake cuts them at the edge):
+  // its spans' decks need no owner
+  const spans = { top: mesh3(), stone: mesh3() };
   for (const f of tracks) {
     if (f.geometry.type !== "LineString") {
       continue;
@@ -558,7 +593,8 @@ function buildTracks(
     const bed = f.properties?.bed ?? "street";
     const onBridge = f.properties?.bridge === 1;
     const coords = f.geometry.coordinates;
-    for (const run of trackRuns(coords, bed, onBridge, decks, ctx, SAMPLE_M)) {
+    const runs = trackRuns(f, coords, bed, decks, ctx, spans);
+    for (const run of runs) {
       addTrack(acc, run, onBridge ? "street" : bed, f.properties?.g);
     }
     let length = 0;
@@ -569,15 +605,8 @@ function buildTracks(
       );
     }
     const stations = wireStations(length, f.properties?.s ?? []);
-    for (const run of trackRuns(
-      coords,
-      bed,
-      onBridge,
-      decks,
-      ctx,
-      WIRE_SAMPLE_M
-    )) {
-      addContactWire(w, held, run, stations, ctx);
+    for (const run of runs) {
+      addContactWire(w, held, thinned(run, WIRE_STRIDE), stations, ctx);
     }
   }
   const parts: [Mesh3, number, number][] = [
@@ -595,6 +624,16 @@ function buildTracks(
     });
     if (m) {
       m.name = "tram-track";
+      meshes.push(m);
+    }
+  }
+  for (const [part, color] of [
+    [spans.top, COLORS.deckRoad],
+    [spans.stone, COLORS.deckStone],
+  ] as const) {
+    const m = meshFrom(part, color, { cast: true });
+    if (m) {
+      m.name = "tram-span";
       meshes.push(m);
     }
   }

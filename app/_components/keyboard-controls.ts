@@ -10,7 +10,7 @@ export interface KeyboardActions {
   cycleStyle: () => void;
   /** R — demolish the building under the crosshair */
   demolish: () => void;
-  /** I — asks what stands at the crosshair ("Befragen", ADR 0041) */
+  /** I — asks what stands at the crosshair ("Befragen", ADR 0042) */
   inquire: () => void;
   press: (code: string) => void;
   release: (code: string) => void;

@@ -36,7 +36,8 @@ import {
 } from "@/lib/city/traffic";
 import { glassColour, glassGrazing } from "./glass";
 import { mapWidenNode } from "./map-overlay";
-import { buildDeckTable, type DeckPoly, deckLift } from "./rail-layer";
+import { type DeckPoly, deckLift } from "@/lib/city/decks";
+import { buildDeckTable } from "./rail-layer";
 import type { F, Live, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 

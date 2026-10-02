@@ -371,7 +371,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     });
   }, [look]);
   const [mode, setMode] = useState<MovementMode>("walk");
-  // Befragen (ADR 0041): what was asked last, while its card is open.
+  // Befragen (ADR 0042): what was asked last, while its card is open.
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
   const closeInquiry = useCallback(() => {
@@ -699,7 +699,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
       {/* No text selection or callout over the scene: a long press asks a
-          building (ADR 0041), it must not also mark the HUD's text. */}
+          building (ADR 0042), it must not also mark the HUD's text. */}
       <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
         <div className="absolute inset-0" ref={mountRef} />
 

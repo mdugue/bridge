@@ -45,6 +45,8 @@ import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
 import type {
   CanopyFeature,
   FeatureCollection,
+  RailFeature,
+  TramFeature,
   MeasuredRoofFeature,
   SmallBuildingFeature,
   StructureFeature,
@@ -55,6 +57,8 @@ import {
   type ProvenanceRecord,
   siteProvenance,
 } from "../lib/city/provenance";
+import type { Passage } from "../lib/city/passages";
+import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
@@ -123,6 +127,12 @@ import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { bakeWissenHero } from "./bake-wissen-hero";
 import { type ColonyCrop, cropColonyRaster } from "./crop-raster";
 import { downsampleClassRaster } from "./downsample-raster";
+import {
+  levelInputs,
+  type SiteLevels,
+  siteLineLevels,
+  sitePassages,
+} from "./line-levels";
 import { writeMeshGlb } from "./tile-glb";
 import {
   fenceLines,
@@ -321,6 +331,54 @@ async function publishCanopy(tile: string, file: string): Promise<string> {
   return publish(file, bytes);
 }
 
+/** The levels of the site's rail and tram lines, solved over whole lines on
+ *  every tile's DGM (scripts/line-levels.ts): each tile's file publishes
+ *  with them. */
+const lineLevels = parse<SiteLevels>(
+  await cached(
+    `line-levels-${SITE.id}.json`,
+    cacheKey(levelInputs(SITE)),
+    async () => utf8(await siteLineLevels(SITE))
+  )
+);
+
+/** The passages the lines open through the fill under the decks
+ *  (lib/city/passages.ts): the terrain bake opens each in the tiles it
+ *  touches. */
+const passages = sitePassages(SITE, lineLevels);
+
+/** The passages that reach into a tile's extent. */
+function passagesIn(tile: string): Passage[] {
+  const [x0, y0, x1, y1] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  return passages.filter((p) =>
+    p.coords.some(
+      ([x, y]) =>
+        x >= x0 - p.half &&
+        x <= x1 + p.half &&
+        y >= y0 - p.half &&
+        y <= y1 + p.half
+    )
+  );
+}
+
+/**
+ * A tile's rail or tram file with each line's runs off the ground (`lv`,
+ * lib/city/levels.ts), so the layer draws it on the level its whole run
+ * says rather than deciding per sample.
+ */
+function publishLevels(tile: string, line: LevelLine, file: string): string {
+  const src = at(sideFileSource(SITE, file));
+  const runs = lineLevels[tile]?.[line] ?? {};
+  if (Object.keys(runs).length === 0) {
+    return publish(file, readFileSync(src));
+  }
+  const doc = readJson<FeatureCollection<RailFeature | TramFeature>>(src);
+  const features = (doc.features ?? []).map((f, i) =>
+    runs[i] ? { ...f, properties: { ...f.properties, lv: runs[i] } } : f
+  );
+  return publish(file, utf8({ ...doc, features }));
+}
+
 for (const tile of TILES) {
   const names: Published = {};
   const artifacts = Object.entries(tileArtifacts(tile)) as [
@@ -340,6 +398,13 @@ for (const tile of TILES) {
       existsSync(at(sideFileSource(SITE, artifact.file)))
     ) {
       names[kind] = await publishCanopy(tile, artifact.file);
+      continue;
+    }
+    if (
+      (kind === "rail" || kind === "tram") &&
+      existsSync(at(sideFileSource(SITE, artifact.file)))
+    ) {
+      names[kind] = publishLevels(tile, kind, artifact.file);
       continue;
     }
     if (artifact.bakedFrom) {
@@ -565,6 +630,7 @@ function shapedTerrain(
           size
         );
       const features = {
+        passages: passagesIn(tile),
         stairs: stairLines(SITE, tile),
         terraces: terraces(SITE, tile),
       };
@@ -703,7 +769,8 @@ async function bakeTerrain(
       ? { dressing: pickFiles(names, DRESSING_KINDS) }
       : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
-  const key = cacheKey(inputs, offset, described);
+  // the passages come from every tile's lines and decks (line-levels.ts)
+  const key = cacheKey(inputs, offset, described, passagesIn(tile));
   const meta = parse<{
     bounds: TerrainExtras["bounds"];
     ground?: number[];
@@ -713,7 +780,7 @@ async function bakeTerrain(
   }>(
     await cached(
       `${stem}.json`,
-      cacheKey(inputs, offset, described, "ground"),
+      cacheKey(inputs, offset, described, passagesIn(tile), "ground"),
       async () => {
         const m = await shapedTerrain(tile, level);
         return utf8({
@@ -803,7 +870,7 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 // --- 3. tilesets ------------------------------------------------------------------
 
 // Who publishes each source, and each tile's edition of it: the inquiry
-// card's "Quelle" lines (ADR 0041), from the hand-kept record.
+// card's "Quelle" lines (ADR 0042), from the hand-kept record.
 const provenanceFile = publish(
   PROVENANCE_FILE,
   utf8(

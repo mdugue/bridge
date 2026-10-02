@@ -89,7 +89,7 @@ export const SMALL_RASTER_PX = 512;
  * finds it — `dressing`: named in the fine terrain's dressing extras
  * (tile-stream.ts fetches it per tile); `sound`: named in the tileset's
  * tile list for the soundscape (plan 035); `ask`: named there for the
- * inquiry card (ADR 0041), fetched only when something is asked — and
+ * inquiry card (ADR 0042), fetched only when something is asked — and
  * `osm`: the file is derived
  * from OpenStreetMap, so its JSON carries the ODbL credit (checked over
  * every committed file by features.test.ts). The raster rows the terrain
@@ -203,7 +203,7 @@ const ARTIFACTS = {
   trees: { file: named("trees", "geojson"), dressing: true },
   // What the card says about those trees (species, location, age, the
   // measured sizes) — fetched with the first question about a tree on the
-  // tile (ADR 0041), never to draw.
+  // tile (ADR 0042), never to draw.
   treeFacts: { file: named("treefacts", "json"), ask: true },
   // Optional: the city's counted motor traffic per road section
   // (pipeline/bake/traffic.py); drawn only while its data layer is on.
