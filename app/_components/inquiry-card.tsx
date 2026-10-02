@@ -4,8 +4,10 @@ import { CheckIcon, CopyIcon, XIcon } from "lucide-react";
 import {
   type ElementType,
   type ReactNode,
+  type RefObject,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -180,6 +182,41 @@ function inquiryKey(inquiry: Inquiry): number {
 /** Folded: what and where; unfolded: three quarters of the screen. */
 const SHEET_SNAP_POINTS: DrawerSnapPoint[] = ["8.25rem", 0.75];
 
+/** How long a sheet waits for its measured fold before it slides in
+ *  anyway (frames). */
+const SHEET_ENTRANCE_FRAMES = 30;
+
+/**
+ * Holds a sheet below the screen until the drawer knows where its fold
+ * is. Base UI measures the popup only after its first frame and draws it
+ * fully unfolded meanwhile (the fold's offset falls back to 0), so a sheet
+ * opened in place flashed up to three quarters of the screen and slid
+ * down from there. Ready once the fold's offset is set and a frame has
+ * shown the sheet closed — the slide then starts at the bottom edge.
+ */
+function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let frames = 0;
+    let measured = false;
+    let id = requestAnimationFrame(function wait() {
+      frames++;
+      if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
+        setReady(true);
+        return;
+      }
+      const offset = ref.current?.style.getPropertyValue(
+        "--drawer-snap-point-offset"
+      );
+      measured = Number.parseFloat(offset ?? "") > 0;
+      id = requestAnimationFrame(wait);
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+  return [ref, ready];
+}
+
 /**
  * The card as a bottom sheet for thumbs — the shadcn Drawer (Base UI),
  * non-modal so the city stays live behind it and the next long press asks
@@ -201,6 +238,7 @@ function InquirySheet({
     SHEET_SNAP_POINTS[0]
   );
   const unfolded = snap === SHEET_SNAP_POINTS[1];
+  const [popup, entered] = useSheetEntrance();
   return (
     <Drawer
       disablePointerDismissal
@@ -217,7 +255,14 @@ function InquirySheet({
       snapPoint={snap}
       snapPoints={SHEET_SNAP_POINTS}
     >
-      <DrawerContent data-testid="inquiry-card" data-variant="sheet">
+      <DrawerContent
+        // closed, unanimated, until the fold is measured (useSheetEntrance)
+        className="not-data-[sheet-entered]:transform-(--closed-transform) not-data-[sheet-entered]:duration-0"
+        data-sheet-entered={entered ? "" : undefined}
+        data-testid="inquiry-card"
+        data-variant="sheet"
+        ref={popup}
+      >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
           <CardHeader
             card={card}
