@@ -36,7 +36,7 @@ import {
 } from "@/lib/city/tram-timetable";
 import { Instances, instancePosition } from "./instancing";
 import { mapWidenNode } from "./map-overlay";
-import { type DeckPoly, deckLift } from "./rail-layer";
+import { type DeckPoly, deckLift } from "@/lib/city/decks";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 

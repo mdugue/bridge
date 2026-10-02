@@ -221,7 +221,12 @@ config change.
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
   (the per-object table: packing, demolish, footprints; the LoD2 bridge
   slabs it leaves out), `bridge.ts` (ribs, pylons, the arch through a
-  measured rib, piers clear of the fairway), `tile.ts` (each
+  measured rib, piers clear of the fairway), `decks.ts` (the deck lift
+  table: which deck tops lie under a point), `levels.ts` +
+  `line-levels.ts` (which level a rail or tram line runs on — ground,
+  deck, span, cut — decided along the whole line within its grade, solved
+  by the build with each piece's context across tiles; ADR 0041),
+  `passages.ts` (a cut under a deck opened in the terrain), `tile.ts` (each
   tile's side artifacts), and `features.ts` — the GeoJSON shapes the bakes
   write, checked against every committed file by its test) with `bun test`
   units alongside
@@ -647,6 +652,18 @@ over the committed tiles — list a new baked part in `JOIN_PARTS`, test a
 runtime one with `checkJoins`, and say in its doc comment what happens
 where the ground beside it is higher and where it is lower.
 `bun scripts/ground-joins.ts <site>` prints the shares and the worst places.
+
+**Lines keep to a level they can drive** (ADR 0041, `lib/city/levels.ts`).
+A rail or tram line is never lifted onto whatever deck lies under a point:
+the build step (`scripts/line-levels.ts`, run by `prepare-data.ts`) solves
+each line's level along its whole run within its grade — the ground, a
+deck, a *span* over the gap the DGM leaves beside a bridge (the layer
+draws its deck), a *cut* through the fill under one (the terrain bake
+opens it under a drawn deck, `lib/city/passages.ts`) — and publishes it
+as `lv` in the rail and tram files. A new line layer takes its levels the
+same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
+holds the reference site's jumps to a budget, `bun scripts/line-levels.ts
+<site>` prints them.
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.

@@ -9,6 +9,7 @@
  * documented non-fatal load. Coordinates are in the site's CRS (EPSG:25832/25833), never recentered.
  * No THREE, no DOM.
  */
+import type { LevelRun } from "./levels";
 import type { Point2 } from "./polyline";
 
 export interface LineGeometry {
@@ -366,6 +367,9 @@ export interface TramFeature {
     g?: number;
     k: TramKind;
     layer?: number;
+    /** a track's runs off the ground (lib/city/levels.ts), added by the
+     *  build step (scripts/line-levels.ts), never committed */
+    lv?: LevelRun[];
     name?: string;
     s?: number[];
     x?: number[];
@@ -442,10 +446,16 @@ export interface TrafficFeature {
   } | null;
 }
 
-/** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). */
+/** Basis-DLM ver03_l railway centrelines (pipeline/bake/rail.py). `lv`
+ *  is added by the build step (scripts/line-levels.ts), never committed:
+ *  the line's runs off the ground (lib/city/levels.ts). */
 export interface RailFeature {
   geometry: LineGeometry;
-  properties: { electrified?: number; tracks?: number } | null;
+  properties: {
+    electrified?: number;
+    lv?: LevelRun[];
+    tracks?: number;
+  } | null;
 }
 
 /** Basis-DLM ver06_f bridge decks with the DGM/DOM1-derived deck heights. */

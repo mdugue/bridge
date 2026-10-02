@@ -34,8 +34,30 @@ import {
   ribProfile,
   ribRuns,
 } from "@/lib/city/bridge";
+import {
+  type DeckPoly,
+  deckPoly,
+  decksAt,
+  deckRing,
+  longAxis,
+  pointInRing,
+  type Ring2,
+  ringToWorld,
+} from "@/lib/city/decks";
 import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { subdividePolyline } from "@/lib/city/polyline";
+import { SINK } from "@/lib/city/ground-join";
+import {
+  type Level,
+  LEVEL_GRADE,
+  LEVEL_STEP,
+  type LevelLine,
+  type LevelRun,
+  lineLevels,
+  modeRuns,
+  runLevelAt,
+} from "@/lib/city/levels";
+import { DECK_REACH_M, RIDES } from "@/lib/city/line-levels";
+import { type Point2, subdividePolyline } from "@/lib/city/polyline";
 import { sceneMaterial } from "./three-utils";
 
 /**
@@ -102,7 +124,7 @@ export interface RailFeatures {
   rails: RailFeature[];
 }
 
-const SAMPLE_M = 4; // densify polylines to this spacing (m)
+const SAMPLE_M = LEVEL_STEP.rail; // densify polylines to this spacing (m)
 const BALLAST_RAISE = 0.18; // ballast crown above ground (m)
 const BALLAST_DROP = 0.45; // ballast shoulder depth at the edge (m)
 const RAIL_RAISE = BALLAST_RAISE + 0.16; // rail head above ground on terrain (m)
@@ -132,10 +154,6 @@ const PYLON_PIER_HALF = 1.3; // half-width of the river pier under a pylon (m)
 const HANGER_EVERY = 8; // a hanger or post every this many 2 m stations (16 m)
 const STAY_EVERY = 6; // a stay every this many 2 m stations (12 m)
 const END_EDGE_COS = 0.5; // a ring edge this far off the axis is an abutment end
-
-/** The heavy rails ride only rail decks (a road bridge over a railway is
- *  not what the train runs on). */
-const RAIL_DECKS = ["rail"] as const;
 
 export const COLORS = {
   ballast: 0x9a_8f_85, // warm grey-brown crushed stone
@@ -288,37 +306,6 @@ function material(color: number, opts: MatOpts = {}): MeshStandardNodeMaterial {
     }
     return m;
   });
-}
-
-export interface Ring2 {
-  cx: number;
-  cz: number;
-  pts: { x: number; z: number }[];
-}
-
-/** EPSG ring → world (x,z) ring (open: closing duplicate dropped) + centroid. */
-export function ringToWorld(
-  coords: [number, number][],
-  offset: { cx: number; cy: number }
-): Ring2 {
-  const open =
-    coords.length > 1 &&
-    coords[0][0] === coords.at(-1)?.[0] &&
-    coords[0][1] === coords.at(-1)?.[1]
-      ? coords.slice(0, -1)
-      : coords;
-  const pts = open.map(([ex, ey]) => {
-    const w = epsgToWorld(ex, ey, offset);
-    return { x: w.x, z: w.z };
-  });
-  let cx = 0;
-  let cz = 0;
-  for (const p of pts) {
-    cx += p.x;
-    cz += p.z;
-  }
-  const n = Math.max(pts.length, 1);
-  return { pts, cx: cx / n, cz: cz / n };
 }
 
 /**
@@ -532,126 +519,6 @@ export interface Pt {
   z: number;
 }
 
-/**
- * A bridge deck for lifting what rides on it: the heavy rails onto rail
- * decks, the trams (tram-layer.ts) onto any deck their OSM way says is a
- * bridge. `profile` is the deck height along the deck's long axis (the bake
- * ramps it between the abutments, rail.py `deck_profile`), so a point is
- * lifted onto the deck's height there, not onto its mean.
- */
-export interface DeckPoly {
-  /** long-axis origin and direction (unnormalised) */
-  a: { x: number; z: number };
-  ax: number;
-  az: number;
-  kind: string;
-  maxX: number;
-  maxZ: number;
-  minX: number;
-  minZ: number;
-  /** (t along the long axis, deck top) per ring vertex, sorted by t */
-  profile: { t: number; y: number }[];
-  /** an approach ramp from a deck end down to the ground, not a deck */
-  ramp?: boolean;
-  ring: { x: number; z: number }[];
-}
-
-function pointInRing(
-  ring: { x: number; z: number }[],
-  x: number,
-  z: number
-): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i].x;
-    const zi = ring[i].z;
-    const xj = ring[j].x;
-    const zj = ring[j].z;
-    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-/** The deck top along its long axis at axis position t (0..1), linear
- *  between the ring vertices' own heights. */
-function profileAt(profile: { t: number; y: number }[], t: number): number {
-  const first = profile[0];
-  const last = profile.at(-1) ?? first;
-  if (t <= first.t) {
-    return first.y;
-  }
-  if (t >= last.t) {
-    return last.y;
-  }
-  for (let i = 1; i < profile.length; i++) {
-    const b = profile[i];
-    if (t <= b.t) {
-      const a = profile[i - 1];
-      const f = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
-      return a.y + (b.y - a.y) * f;
-    }
-  }
-  return last.y;
-}
-
-/**
- * The deck Y to lift a point onto, or null off every deck. `kinds` limits
- * the decks considered (the heavy rails ride only rail decks).
- */
-export function deckLift(
-  decks: DeckPoly[],
-  x: number,
-  z: number,
-  kinds?: readonly string[],
-  which: "all" | "decks" | "ramps" = "all"
-): number | null {
-  for (const d of decks) {
-    if (x < d.minX || x > d.maxX || z < d.minZ || z > d.maxZ) {
-      continue;
-    }
-    if (kinds && !kinds.includes(d.kind)) {
-      continue;
-    }
-    if (which !== "all" && (d.ramp === true) !== (which === "ramps")) {
-      continue;
-    }
-    if (pointInRing(d.ring, x, z)) {
-      const l2 = d.ax * d.ax + d.az * d.az;
-      const t = l2 > 0 ? ((x - d.a.x) * d.ax + (z - d.a.z) * d.az) / l2 : 0;
-      return profileAt(d.profile, t);
-    }
-  }
-  return null;
-}
-
-/** One deck's lift entry from its world ring and per-vertex deck tops. */
-function deckPoly(
-  pts: { x: number; z: number }[],
-  topY: number[],
-  kind: string
-): DeckPoly {
-  const { a, b } = longAxis(pts);
-  const ax = b.x - a.x;
-  const az = b.z - a.z;
-  const l2 = ax * ax + az * az;
-  let minX = Number.POSITIVE_INFINITY;
-  let minZ = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxZ = Number.NEGATIVE_INFINITY;
-  const profile = pts.map((p, i) => {
-    minX = Math.min(minX, p.x);
-    minZ = Math.min(minZ, p.z);
-    maxX = Math.max(maxX, p.x);
-    maxZ = Math.max(maxZ, p.z);
-    const t = l2 > 0 ? ((p.x - a.x) * ax + (p.z - a.z) * az) / l2 : 0;
-    return { t, y: topY[i] };
-  });
-  profile.sort((p, q) => p.t - q.t);
-  return { a, ax, az, kind, minX, minZ, maxX, maxZ, profile, ring: pts };
-}
-
 /** A bridge's ring, per-vertex deck tops and properties from its baked
  *  feature, or null when it is no deck. */
 function deckOf(
@@ -662,15 +529,8 @@ function deckOf(
   topY: number[];
   props: ReturnType<typeof bridgeProps>;
 } | null {
-  if (f.geometry?.type !== "Polygon" || !f.geometry.coordinates[0]) {
-    return null;
-  }
-  const ring = ringToWorld(f.geometry.coordinates[0], offset);
-  const props = bridgeProps(f);
-  if (ring.pts.length < 3 || props.deck.length < ring.pts.length) {
-    return null;
-  }
-  return { ring, topY: props.deck.slice(0, ring.pts.length), props };
+  const d = deckRing(f, offset);
+  return d ? { ...d, props: bridgeProps(f) } : null;
 }
 
 /**
@@ -1803,32 +1663,6 @@ function addPierAt(
   addColumn(acc, w.x, w.z, ground, under, half);
 }
 
-/** The two farthest-apart ring vertices (the deck's abutment ends) + their span. */
-function longAxis(pts: { x: number; z: number }[]): {
-  a: { x: number; z: number };
-  b: { x: number; z: number };
-  span: number;
-} {
-  let ai = 0;
-  let bi = 1;
-  let bd = -1;
-  for (let i = 0; i < pts.length; i++) {
-    for (let j = i + 1; j < pts.length; j++) {
-      const d = (pts[i].x - pts[j].x) ** 2 + (pts[i].z - pts[j].z) ** 2;
-      if (d > bd) {
-        bd = d;
-        ai = i;
-        bi = j;
-      }
-    }
-  }
-  return {
-    a: pts[ai],
-    b: pts[bi],
-    span: Math.hypot(pts[bi].x - pts[ai].x, pts[bi].z - pts[ai].z),
-  };
-}
-
 /** Drops box piers from the deck underside to terrain along the deck's long axis,
  *  placed even over the river by interpolating ground between the abutments. */
 function addPiers(
@@ -2056,23 +1890,204 @@ function addMasonryPier(
   }
 }
 
+/** A draped area's triangle is split while the ground under it strays
+ *  from its plane by more than DRAPE_TOLERANCE_M (m), down to DRAPE_M:
+ *  the ground under a yard is not flat between its outline's corners. The
+ *  tolerance is coarse on purpose — the class raster paints the yard on
+ *  the ground under it anyway — so a tile's yards stay ~5·10⁴ triangles. */
+const DRAPE_M = 6;
+const DRAPE_TOLERANCE_M = 1;
+/** A triangle longer than this (m) is split whatever its probes say: four
+ *  probes can miss a passage under a deck. */
+const DRAPE_PROBE_M = 48;
+
+type XZ = { x: number; z: number };
+
+/** A ring's points, its edges split to at most `step` apart. */
+function densified(pts: readonly XZ[], step: number): XZ[] {
+  const out: XZ[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
+    for (let k = 0; k < n; k++) {
+      out.push({
+        x: a.x + ((b.x - a.x) * k) / n,
+        z: a.z + ((b.z - a.z) * k) / n,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * An area draped on the ground (+ `raise`): its outline and holes
+ * triangulated, each triangle split in four while the ground under it
+ * strays from its plane (`DRAPE_TOLERANCE_M`, down to `DRAPE_M`), each
+ * corner on the ground under it — then a fascia `drop` deep along the
+ * outline, its top on the ground every DRAPE_M. Triangles whose middle
+ * `skip`s (a rail deck: the tracks ride it, no ballast under them) are
+ * left out, and so is their fascia. (Draped at the outline's corners
+ * alone, a yard across an underpass spanned the passage with sloped
+ * sheets from the embankment down to the street — the passage read as
+ * closed.)
+ */
+function addDrapedArea(
+  acc: Mesh3,
+  rings: Ring2[],
+  raise: number,
+  drop: number,
+  ctx: RailContext,
+  skip: (x: number, z: number) => boolean
+): void {
+  const [outer, ...holes] = rings.map((r) => r.pts);
+  if (!outer || outer.length < 3) {
+    return;
+  }
+  const heights = new Map<number, number | null>();
+  const yAt = (x: number, z: number): number | null => {
+    // a 1/64 m lattice: shared corners and midpoints are sampled once
+    const key = Math.round(x * 64) * 2 ** 26 + Math.round(z * 64) + 2 ** 25;
+    let y = heights.get(key);
+    if (y === undefined) {
+      const e = worldToEpsg({ x, z }, ctx.offset);
+      const g = ctx.heightAt(e.x, e.y);
+      y = g === null ? null : g + raise;
+      heights.set(key, y);
+    }
+    return y;
+  };
+  const mid = (p: XZ, q: XZ): XZ => ({
+    x: (p.x + q.x) / 2,
+    z: (p.z + q.z) / 2,
+  });
+  const flat = (a: XZ, b: XZ, c: XZ): boolean => {
+    const ya = yAt(a.x, a.z);
+    const yb = yAt(b.x, b.z);
+    const yc = yAt(c.x, c.z);
+    if (ya === null || yb === null || yc === null) {
+      return true;
+    }
+    // the plane through the corners against the ground at the edge
+    // midpoints and the centre
+    const probes: [XZ, number][] = [
+      [mid(a, b), (ya + yb) / 2],
+      [mid(b, c), (yb + yc) / 2],
+      [mid(c, a), (yc + ya) / 2],
+      [
+        { x: (a.x + b.x + c.x) / 3, z: (a.z + b.z + c.z) / 3 },
+        (ya + yb + yc) / 3,
+      ],
+    ];
+    return probes.every(([p, plane]) => {
+      const y = yAt(p.x, p.z);
+      return y === null || Math.abs(y - plane) <= DRAPE_TOLERANCE_M;
+    });
+  };
+  const emit = (a: XZ, b: XZ, c: XZ) => {
+    if (skip((a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3)) {
+      return;
+    }
+    const ya = yAt(a.x, a.z);
+    const yb = yAt(b.x, b.z);
+    const yc = yAt(c.x, c.z);
+    if (ya !== null && yb !== null && yc !== null) {
+      pushTri(acc, a.x, ya, a.z, b.x, yb, b.z, c.x, yc, c.z, 0, 1, 0);
+    }
+  };
+  const drape = (a: XZ, b: XZ, c: XZ) => {
+    const longest = Math.max(
+      Math.hypot(b.x - a.x, b.z - a.z),
+      Math.hypot(c.x - b.x, c.z - b.z),
+      Math.hypot(a.x - c.x, a.z - c.z)
+    );
+    if (longest <= DRAPE_M || (longest <= DRAPE_PROBE_M && flat(a, b, c))) {
+      emit(a, b, c);
+      return;
+    }
+    const ab = mid(a, b);
+    const bc = mid(b, c);
+    const ca = mid(c, a);
+    drape(a, ab, ca);
+    drape(ab, b, bc);
+    drape(ca, bc, c);
+    drape(ab, bc, ca);
+  };
+  const all = [outer, ...holes].flat();
+  const tris = ShapeUtils.triangulateShape(
+    outer.map((p) => new Vector2(p.x, p.z)),
+    holes.map((h) => h.map((p) => new Vector2(p.x, p.z)))
+  );
+  for (const [ia, ib, ic] of tris) {
+    drape(all[ia], all[ib], all[ic]);
+  }
+  // the fascia along the outline and round the holes, facing out of the
+  // area, its top on the ground every DRAPE_M
+  for (const [k, raw] of [outer, ...holes].entries()) {
+    const ring = densified(raw, DRAPE_M);
+    const winding = (ringWinding(ring) * (k === 0 ? 1 : -1)) as 1 | -1;
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i];
+      const q = ring[(i + 1) % ring.length];
+      const yp = yAt(p.x, p.z);
+      const yq = yAt(q.x, q.z);
+      if (
+        yp === null ||
+        yq === null ||
+        skip((p.x + q.x) / 2, (p.z + q.z) / 2)
+      ) {
+        continue;
+      }
+      const [nx, nz] = outward(ring, i, winding);
+      quad(
+        acc,
+        [p.x, yp, p.z],
+        [q.x, yq, q.z],
+        [q.x, yq - drop, q.z],
+        [p.x, yp - drop, p.z],
+        [nx, 0, nz]
+      );
+    }
+  }
+}
+
+/** Every polygon of an area as its rings (outer first, then its holes). */
+function polygonsOf(
+  geometry: AreaFeature["geometry"] | null | undefined
+): [number, number][][][] {
+  if (geometry?.type === "Polygon") {
+    return geometry.coordinates.length > 0 ? [geometry.coordinates] : [];
+  }
+  if (geometry?.type === "MultiPolygon") {
+    return geometry.coordinates.filter((poly) => poly.length > 0);
+  }
+  return [];
+}
+
 /**
  * One merged ballast surface from the dissolved railway-area polygons
- * (Polygon or MultiPolygon — a yard dissolved into several parts). Exported
- * for tests.
+ * (Polygon or MultiPolygon — a yard dissolved into several parts), draped
+ * on the ground (`addDrapedArea`) and left out on the rail decks, where
+ * the tracks ride the deck. Exported for tests.
  */
 export function buildBallast(
   features: AreaFeature[],
-  ctx: RailContext
+  ctx: RailContext,
+  decks: DeckPoly[] = []
 ): Mesh | null {
   const acc = mesh3();
+  const onDeck = (x: number, z: number) =>
+    decksAt(decks, x, z, RIDES.rail, "decks").length > 0;
   for (const f of features) {
-    for (const outer of outerRings(f.geometry)) {
-      const ring = ringToWorld(outer, ctx.offset);
-      const topY = clampRing(ring, BALLAST_RAISE, ctx);
-      if (topY) {
-        addFootprint(acc, ring, topY, BALLAST_DROP);
-      }
+    for (const rings of polygonsOf(f.geometry)) {
+      addDrapedArea(
+        acc,
+        rings.map((r) => ringToWorld(r, ctx.offset)),
+        BALLAST_RAISE,
+        BALLAST_DROP,
+        ctx,
+        onDeck
+      );
     }
   }
   return meshFrom(acc, COLORS.ballast, {
@@ -2082,11 +2097,147 @@ export function buildBallast(
   });
 }
 
-/** Steel rails: one pair per track, draped on terrain / lifted onto rail decks. */
+/** A line on the ground rides an approach ramp up to its deck while the
+ *  ramp stays this close above the ground (m) — not one passing over it,
+ *  far above (a track under a deck's end). */
+const APPROACH_RIDE_M = 1.5;
+
+/**
+ * The level of every sample of a line (lib/city/levels.ts): the build
+ * step's runs (`lv`, scripts/line-levels.ts) where the feature has them,
+ * else solved over this piece alone. On the ground a sample still rides
+ * an approach ramp close above it; on a deck it rides the deck top
+ * nearest the run's line. Null where the ground is unknown and no level
+ * holds it (the line breaks there).
+ */
+export function lineLevelsAt(
+  pts: readonly Point2[],
+  line: LevelLine,
+  runs: readonly LevelRun[] | undefined,
+  ctx: GroundContext,
+  decks: DeckPoly[],
+  prefer?: "deck" | "ground"
+): (Level | null)[] {
+  const d: number[] = [];
+  const ground: (number | null)[] = [];
+  const under: number[][] = [];
+  const ramps: number[][] = [];
+  pts.forEach(([ex, ey], i) => {
+    d.push(
+      i === 0
+        ? 0
+        : d[i - 1] + Math.hypot(ex - pts[i - 1][0], ey - pts[i - 1][1])
+    );
+    ground.push(ctx.heightAt(ex, ey));
+    const w = epsgToWorld(ex, ey, ctx.offset);
+    under.push(decksAt(decks, w.x, w.z, RIDES[line], "decks", DECK_REACH_M));
+    ramps.push(decksAt(decks, w.x, w.z, RIDES[line], "ramps"));
+  });
+  const solved = runs
+    ? pts.map((_, i) => runLevelAt(runs, d, i))
+    : lineLevels(
+        pts.map((_, i) => ({ d: d[i], ground: ground[i], decks: under[i] })),
+        { grade: LEVEL_GRADE[line], prefer }
+      ).map((l) => (l?.mode === "ground" ? null : l));
+  return solved.map((level, i) => {
+    if (level?.mode === "deck") {
+      const near = under[i].reduce<number | null>(
+        (best, y) =>
+          best === null || Math.abs(y - level.y) < Math.abs(best - level.y)
+            ? y
+            : best,
+        null
+      );
+      return { mode: "deck", y: near ?? level.y };
+    }
+    if (level) {
+      return level;
+    }
+    const g = ground[i];
+    if (g === null) {
+      return null;
+    }
+    const ramp = ramps[i].find((y) => y - g < APPROACH_RIDE_M);
+    return ramp === undefined
+      ? { mode: "ground", y: g }
+      : { mode: "deck", y: Math.max(ramp, g) };
+  });
+}
+
+/** A span's deck reaches this far past its outermost track (m). */
+const SPAN_SHOULDER_M = 0.9;
+/** The tallest a span's deck stands above the ground before piers carry
+ *  it (m), and their spacing along it. */
+const SPAN_PIER_GAP_M = PIER_MIN_GAP;
+
+/**
+ * The deck under a span (lib/city/levels.ts "span": a gap in the DGM the
+ * line crosses where no baked deck is — a viaduct the outlines miss, a
+ * bridge longer than its outline): a slab `half` wide either side of the
+ * line, its top `top` metres under the line's level, the fascia and
+ * underside in stone, a pier every PIER_SPACING where it clears the
+ * ground. Drawn only where the slab is above the ground: a span a hand
+ * over its gap needs none.
+ */
+export function addSpanDeck(
+  top: Mesh3,
+  stone: Mesh3,
+  pts: readonly Pt[],
+  half: number,
+  ctx: GroundContext
+): void {
+  if (pts.length < 2) {
+    return;
+  }
+  const tan = tangentsXZ(pts as Pt[]);
+  const side = (sign: number) =>
+    pts.map((p, i) => ({
+      x: p.x - tan[i].y * half * sign,
+      z: p.z + tan[i].x * half * sign,
+    }));
+  const left = side(1);
+  const right = side(-1).reverse();
+  const ring = { pts: [...left, ...right], cx: 0, cz: 0 };
+  const topY = [...pts.map((p) => p.y), ...[...pts].reverse().map((p) => p.y)];
+  // the top in the deck's colour, the rest in stone
+  addFootprint(top, ring, topY, 0);
+  addFootprint(stone, ring, topY, DECK_DEPTH, true);
+  let run = 0;
+  let next = PIER_SPACING / 2;
+  for (let i = 1; i < pts.length; i++) {
+    run += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
+    if (run < next || i === pts.length - 1) {
+      continue;
+    }
+    next += PIER_SPACING;
+    const p = pts[i];
+    const e = worldToEpsg({ x: p.x, z: p.z }, ctx.offset);
+    const g = ctx.heightAt(e.x, e.y);
+    const under = p.y - DECK_DEPTH;
+    if (g !== null && under - g > SPAN_PIER_GAP_M) {
+      addColumn(stone, p.x, p.z, g - SINK.wall, under, PIER_HALF);
+    }
+  }
+}
+
+/** The spans of a line's levels as runs of points, each with its rims
+ *  (the samples either side, where the span meets the ground or a deck). */
+export function spanRuns<P>(
+  levels: readonly (Level | null)[],
+  pts: readonly P[]
+): P[][] {
+  return modeRuns(levels, "span").map(([a, b]) =>
+    pts.slice(Math.max(a - 1, 0), Math.min(b + 2, pts.length))
+  );
+}
+
+/** Steel rails: one pair per track, on the level their line runs on
+ *  (`lineLevelsAt`): the ground, a rail deck, a span (with its deck). */
 function buildRails(
   features: RailFeature[],
   ctx: RailContext,
-  decks: DeckPoly[]
+  decks: DeckPoly[],
+  spans: { stone: Mesh3; top: Mesh3 }
 ): Mesh | null {
   const acc = mesh3();
   for (const f of features) {
@@ -2095,7 +2246,17 @@ function buildRails(
     }
     const tracks = Math.min(Math.max(f.properties?.tracks ?? 1, 1), 3);
     const dense = subdividePolyline(f.geometry.coordinates, SAMPLE_M);
-    // Split into runs of points with valid ground (never bridge a NoData gap).
+    const levels = lineLevelsAt(dense, "rail", f.properties?.lv, ctx, decks);
+    const drawn = dense.map(([ex, ey], i): Pt | null => {
+      const level = levels[i];
+      if (!level) {
+        return null;
+      }
+      const w = epsgToWorld(ex, ey, ctx.offset);
+      const raise = level.mode === "deck" ? RAIL_DECK_RAISE : RAIL_RAISE;
+      return { x: w.x, y: level.y + raise, z: w.z };
+    });
+    // Split into runs of points with a level (never bridge a NoData gap).
     let run: Pt[] = [];
     const flush = () => {
       if (run.length >= 2) {
@@ -2107,19 +2268,33 @@ function buildRails(
       }
       run = [];
     };
-    for (const [ex, ey] of dense) {
-      const ground = ctx.heightAt(ex, ey);
-      const w = epsgToWorld(ex, ey, ctx.offset);
-      const lift = deckLift(decks, w.x, w.z, RAIL_DECKS);
-      if (lift !== null) {
-        run.push({ x: w.x, y: lift + RAIL_DECK_RAISE, z: w.z });
-      } else if (ground === null) {
-        flush();
+    for (const p of drawn) {
+      if (p) {
+        run.push(p);
       } else {
-        run.push({ x: w.x, y: ground + RAIL_RAISE, z: w.z });
+        flush();
       }
     }
     flush();
+    const half = ((tracks - 1) / 2) * TRACK_PITCH + GAUGE / 2 + SPAN_SHOULDER_M;
+    for (const span of spanRuns(levels, drawn)) {
+      // a line near a seam is in both tiles' files: the span's owner
+      // draws its deck
+      const pts = span.filter((p): p is Pt => p !== null);
+      const centre = pts[Math.floor(pts.length / 2)];
+      const e = centre
+        ? worldToEpsg({ x: centre.x, z: centre.z }, ctx.offset)
+        : null;
+      if (e && (!ctx.owns || ctx.owns(e.x, e.y))) {
+        addSpanDeck(
+          spans.top,
+          spans.stone,
+          pts.map((p) => ({ ...p, y: p.y - RAIL_RAISE + BALLAST_RAISE })),
+          half,
+          ctx
+        );
+      }
+    }
   }
   return meshFrom(acc, COLORS.rail, {
     cast: false,
@@ -2175,13 +2350,21 @@ export function buildRail(features: RailFeatures, ctx: RailContext): Group {
   if (bridgeMeshes.length > 0) {
     group.add(...bridgeMeshes);
   }
-  const ballast = buildBallast(features.ballast, ctx);
+  const ballast = buildBallast(features.ballast, ctx, decks);
   if (ballast) {
     group.add(ballast);
   }
-  const rails = buildRails(features.rails, ctx, decks);
+  const spans = { top: mesh3(), stone: mesh3() };
+  const rails = buildRails(features.rails, ctx, decks, spans);
   if (rails) {
     group.add(rails);
+  }
+  const spanTop = meshFrom(spans.top, COLORS.deckRail, { cast: true });
+  const spanStone = meshFrom(spans.stone, COLORS.deckStone, { cast: true });
+  for (const m of [spanTop, spanStone]) {
+    if (m) {
+      group.add(m);
+    }
   }
   const platforms = buildPlatforms(features.platforms, ctx);
   if (platforms) {

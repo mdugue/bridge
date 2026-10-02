@@ -50,6 +50,7 @@ each data → look transformation does and its status.
 | [0038](./0038-measured-and-named-additions.md) | Geometry beyond LoD2 only where a measurement (DOM1) and a name (OSM, Wikidata) agree; mapped attributes tint within the clay palette, never textures; landmarks from Wikidata, ranked per tile | accepted |
 | [0039](./0039-stand-ins-marked-per-city.md) | Where a Land publishes less, a named stand-in (OSM rails and decks, a visible-band vegetation index, a register table per city), marked per city in a generated source matrix; no per-site look switches — derived from the site's data | accepted |
 | [0040](./0040-data-layers-and-live-city-data.md) | Traffic is shown as switchable data layers (motor traffic baked per tile, bicycle counters read live from the city, trams by timetable), all off at start; the first runtime read from a server other than the site's own | accepted |
+| [0041](./0041-line-levels-along-the-whole-line.md) | A rail or tram line's level (ground, deck, span, cut) is decided along the whole line within its grade, solved by the build step with the line's context across tiles; a cut under a drawn deck opens a passage in the terrain | accepted |
 
 ## Format
 
