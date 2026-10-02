@@ -1,0 +1,35 @@
+City Walk
+Copyright 2026 Manuel Dugué
+
+The source code is licensed under the Apache License, Version 2.0
+(see LICENSE).
+
+The geodata are not. Everything under data/, and everything the build
+derives from it (public/data/, the tilesets), comes from third-party open
+data and stays under the licence of its source:
+
+  - State geodata (DGM1, DOM1, LoD2, Basis-DLM, DOP, laser scans), one
+    provider per Land (sites/providers.ts):
+      Quelle: GeoSN, dl-de/by-2-0
+      Freie und Hansestadt Hamburg, Landesbetrieb Geoinformation und
+        Vermessung (LGV), dl-de/by-2-0
+      Bayerische Vermessungsverwaltung – www.geodaten.bayern.de, CC BY 4.0
+      Geobasis NRW, dl-de/zero-2-0
+      Geoportal Berlin, dl-de/zero-2-0
+
+  - OpenStreetMap: © OpenStreetMap contributors, Open Database License
+    (ODbL) 1.0. The layers derived from it are databases under the ODbL,
+    share-alike included: a database derived from them stays under the
+    ODbL.
+
+  - Wikidata: CC0 1.0.
+
+  - The cities' and Länder's street-tree cadastres, traffic counts and
+    cycle counters: dl-de/by-2-0 or dl-de/zero-2-0, credited to the city
+    or Land that publishes them.
+
+  - GTFS timetable: DELFI e.V. via gtfs.de, CC BY 4.0.
+
+Every source with its licence and required credit is listed in
+docs/guide/en/data-sources.md, section "Licences and credits" (in German:
+docs/guide/de/data-sources.md, "Lizenzen und Quellenvermerke").

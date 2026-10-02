@@ -201,3 +201,14 @@ changing that hook means updating [`e2e/`](e2e).
   different location ([portability](docs/portability.md)), the
   [architecture decision records](docs/adr/README.md) and the
   [implementation plans and backlog](docs/plans/README.md).
+
+## Licence
+
+The code is licensed under the [Apache License 2.0](LICENSE). The geodata
+are not: `data/` and everything built from it stay under the licences of
+their sources — the survey offices' open-data licences (`dl-de/by-2-0`,
+`dl-de/zero-2-0`, CC BY 4.0), the ODbL for everything derived from
+OpenStreetMap (share-alike: a database derived from it stays under the
+ODbL), CC BY 4.0 for the timetable. [`NOTICE`](NOTICE) has the credits; the
+guide lists every source with its licence
+([Licences and credits](docs/guide/en/data-sources.md#licences-and-credits)).
