@@ -83,9 +83,19 @@ history. Decisions that came out of plans are written up as
 | 049 | Many sites: providers, per-site data, `bun run fetch <site>` → `bake` → build, eight sites with viewpoints; one deployment with a route per site (`/dresden`) and a start page to pick the city | **DONE** (2026-10-01) — Berlin's adapter untested; committing sites other than Dresden is the maintainer's call | [049-many-sites-one-env-var.md](./049-many-sites-one-env-var.md) |
 | 050 | Landmarks and what LoD2 leaves out: DOM1 gaps named by OSM (chimneys, towers, masts, missing buildings, a landmark's roof relief), OSM materials and colours in the clay palette, Wikidata landmarks in the HUD | **BUILT** (2026-09-28) — all three parts, baked on the seven committed sites: 386 columns, 920 missing buildings, 508 relief slabs on 74 landmark objects, 310 landmarks; the relief a measured height field since 2026-09-30 (re-bake `structures` everywhere), towers LoD2 draws no longer doubled; look unverified on a real GPU; since 2026-10-01 a tile's landmarks are those with ≥ 8 % of its top sitelinks (the *Dense tiles* item, plan 051) and the relief stands on the roof under each cell (Unna re-baked) | [050-landmarks-and-gaps.md](./050-landmarks-and-gaps.md) |
 | 051 | Stand-ins where a Land publishes less (OSM rails and decks without a DLM, a visible-band vegetation index without infrared, tree registers per city, Bavaria's laser scan), marked in a generated *Sources by city* page; looks derived from each city's data (facade context, valley-haze depth, tram gauge, landmarks per tile) instead of per-site switches | **BUILT** (2026-10-01) — Hamburg's 348 decks and 81 km of track, Hamburg's and Leipzig's registers, Munich's GLI baked; `osm-buildings`, `landmarks` and `structures` still to re-bake on most sites; Berlin not built; looks unverified on a real GPU | [051-stand-ins-and-derived-looks.md](./051-stand-ins-and-derived-looks.md) |
+| 052 | A queryable twin: object ids and semantics in the tileset, the provenance manifest, asking by a click or a long press, the card | **PARTIAL** — 1–3 built (2026-09-27; ten fact columns, +3.5 % per building tile; OSM names, addresses, storeys re-baked on fifteen tiles; a click asks (no mode since 2026-10-01); since 2026-09-28 a long press asks, taps are tolerant, a bottom sheet on touch); the hatch unjudged on a GPU; 4 built 2026-10-01 (trees with the register's facts, monuments, bridges; one screen-space outline for every kind); 4b–7 open (aim and ask, a link, a Datenstand panel, ingest-written provenance) | [052-queryable-twin.md](./052-queryable-twin.md) |
+| 053 | Time and live sources: the day plays, weather sets the mood, the Elbe follows its gauge | **TODO** — static where possible (ADR 0001 amended); CORS of each source to verify first | [053-time-and-live-sources.md](./053-time-and-live-sources.md) |
+| 054 | Scenarios in the scene's own hand: flood, sun hours, sight lines, a planned building | **TODO** — TSL terms on the terrain and clay graphs | [054-scenarios.md](./054-scenarios.md) |
 | — | Aesthetic and visual fine-tuning roadmap (ten items) | DONE except atmospheric motes | [completed.md](./completed.md#aesthetic-and-visual-fine-tuning-roadmap--done-except-motes) |
 
 ## Open work
+
+**Direction since 2026-09-27: a digital twin with an aesthetic claim.**
+The maintainer set it and fixed two rules: the app stays **static where
+possible** (ADR 0001, amended), and **text appears only in a card, on
+demand** — the scene stays wordless (ADR 0042). Plans 052 (ask the city),
+050 (time and live sources) and 051 (scenarios) carry it; plan 019's GPU
+pass comes first for them too, since every new look is unjudged there.
 
 Ordered by leverage. Everything here is vetted against the code; effort
 S/M/L.
@@ -412,7 +422,9 @@ the port (2026-09-26) made of it:
    (the ingest adapter writes `data/<site>/<tile>.provenance.json` from the
    values its checked downloads already know). `bun run fetch <site>
    [tile]` exists (plan 049), and `data/<site>/provenance.json` is the
-   hand-kept per-site version until then.
+   hand-kept per-site version until then. The client side is built: the
+   card's provenance manifest, derived from it at build time (plan 052
+   phase 2).
 7. **Offline repeat visits: a service worker over the tileset (S–M).**
    [ADR 0007](../adr/0007-content-hashed-publishing-with-a-manifest.md)
    already makes every `/data/*` file immutable and content-hashed, with

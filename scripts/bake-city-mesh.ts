@@ -45,6 +45,12 @@ import type {
   StructureFeature,
 } from "../lib/city/features";
 import { buildingFootprintPolys } from "../lib/city/minimap";
+import {
+  inheritedOsm,
+  lod2Facts,
+  scanFacts,
+  treeFacts,
+} from "../lib/city/object-facts";
 import { recenterOffset } from "../lib/city/recenter";
 import {
   SMALL_BUILDING_SINK,
@@ -178,6 +184,7 @@ export function appendScanStructures(
     const index = baked.objects.length;
     const id = scanStructureId(tile, f);
     const eave = Math.min(...corners.map((c) => c.h));
+    const footprint = corners.map((c): [number, number] => [cm(c.x), cm(c.y)]);
     positions.push(...box.positions);
     isRoof.push(...box.isRoof);
     objectIds.push(...box.isRoof.map(() => index));
@@ -194,7 +201,8 @@ export function appendScanStructures(
       tint: rgb(buildingTint(id)),
       roof: rgb(roofTint(id, { roofType: "1000" })),
       source: OBJECT_SOURCE_SCAN,
-      footprints: [corners.map((c): [number, number] => [cm(c.x), cm(c.y)])],
+      footprints: [footprint],
+      facts: scanFacts({ id, footprint, height: f.properties?.h }),
     });
   }
   const v = baked.vertices;
@@ -416,6 +424,17 @@ export function bakeCityMesh(
         "expected ETRS89/UTM (EPSG:25832 or 25833)."
     );
   }
+  const keys = Object.keys(doc.CityObjects);
+  // Footprints first: the loader rewrites the document it parses (a
+  // Solid's semantic `values` come back flattened), after which a Solid's
+  // GroundSurface can no longer be found — every BuildingPart and most
+  // Buildings lost their minimap footprint that way.
+  const footprintsOf = keys.map((id) =>
+    buildingFootprintPolys({
+      ...doc,
+      CityObjects: { [id]: doc.CityObjects[id] },
+    }).map((p) => p.pts.map(([x, y]): [number, number] => [cm(x), cm(y)]))
+  );
   const loader = new CityJSONLoader(new CityJSONParser());
   if (sharedMatrix) {
     loader.matrix = sharedMatrix;
@@ -423,7 +442,6 @@ export function bakeCityMesh(
   loader.load(doc);
   const matrix = loader.matrix;
   const offset = recenterOffset(matrix);
-  const keys = Object.keys(doc.CityObjects);
   const v = withMeasuredRoofs(
     collectVertices(loader.scene),
     keys,
@@ -445,6 +463,9 @@ export function bakeCityMesh(
     }
   }
 
+  // the objects drawn as their measured blocks (ADR 0036): their facts
+  // say so, not what the LoD2 roof said
+  const rebuilt = measuredRoofsById(measured ?? []);
   const objects: CityObjectRow[] = keys.map((id, index) => {
     const o = doc.CityObjects[id];
     const root = rootOf(doc, keys, index);
@@ -461,10 +482,7 @@ export function bakeCityMesh(
       typeof own.measuredHeight === "number" ? own.measuredHeight : total;
     const roofMin = roofMinZ.get(index);
     const look = inheritedLook(osmLut?.[id], osmLut?.[keys[root]]);
-    const footprints = buildingFootprintPolys({
-      ...doc,
-      CityObjects: { [id]: o },
-    }).map((p) => p.pts.map(([x, y]): [number, number] => [cm(x), cm(y)]));
+    const footprints = footprintsOf[index];
     return {
       building: o.type === "Building",
       root,
@@ -477,8 +495,43 @@ export function bakeCityMesh(
       tint: rgb(buildingTint(id, attrs, look.context ?? facades, look)),
       roof: rgb(roofColor(id, attrs, roofLut, look)),
       footprints,
+      facts: lod2Facts({
+        buildingId: keys[root],
+        own,
+        resolved: attrs,
+        osm: inheritedOsm(osmLut?.[id], osmLut?.[keys[root]]),
+        fallbackHeight: total,
+        footprints,
+        rebuilt: rebuilt.has(id),
+      }),
     };
   });
+
+  // A Building with parts answers for its whole tree (the inquiry card
+  // reads it): the union of the footprints, the tree's height.
+  const trees = new Map<number, number[]>();
+  objects.forEach((o, i) =>
+    trees.set(o.root, [...(trees.get(o.root) ?? []), i])
+  );
+  for (const [root, members] of trees) {
+    const facts = objects[root].facts;
+    if (members.length > 1 && facts) {
+      objects[root].facts = treeFacts(
+        facts,
+        // only what has geometry: a Building drawn by its parts has no
+        // base of its own
+        members
+          .filter((i) => minZ.has(i))
+          .map((i) => ({
+            baseZ: minZ.get(i) ?? 0,
+            topZ: maxZ.get(i) ?? 0,
+            footprints: footprintsOf[i],
+          })),
+        typeof doc.CityObjects[keys[root]].attributes?.measuredHeight ===
+          "number" && members.every((i) => !rebuilt.has(keys[i]))
+      );
+    }
+  }
 
   const baked = { epsg, matrix, objects, offset, vertices: v };
   if (scan) {

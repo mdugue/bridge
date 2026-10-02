@@ -169,6 +169,36 @@ export interface BikeLayer {
   set: (counters: BikeCounter[], now: Date) => void;
 }
 
+/** One direction's column: where it stands (the site's CRS) and how tall
+ *  it is over its feet (m). */
+export interface BikeColumn {
+  direction: number;
+  height: number;
+  radius: number;
+  x: number;
+  y: number;
+}
+
+/** A counter's columns as drawn: one right on the line, two either side
+ *  of it. The probe asks them by the same numbers (bike-ask.ts). */
+export function bikeColumns(c: BikeCounter): BikeColumn[] {
+  const [ax, ay] = acrossStreet(c.angleDeg);
+  return c.directions.map((d, i) => {
+    const side =
+      c.directions.length === 1 ? 0 : (i === 0 ? -1 : 1) * PAIR_HALF_M;
+    return {
+      direction: i,
+      height: bikeColumnHeight(d.count) + FOOT_SINK_M,
+      radius: COLUMN_RADIUS,
+      x: c.x + ax * side,
+      y: c.y + ay * side,
+    };
+  });
+}
+
+/** How deep a column's foot goes under the ground (m). */
+export const BIKE_FOOT_SINK_M = FOOT_SINK_M;
+
 export function createBikeLayer(ctx: GroundContext): BikeLayer {
   const group = new Group();
   group.name = "bike-counters";
@@ -204,16 +234,14 @@ export function createBikeLayer(ctx: GroundContext): BikeLayer {
         continue; // its ground has not streamed in yet
       }
       const stale = isStale(c, now);
-      const [ax, ay] = acrossStreet(c.angleDeg);
-      c.directions.forEach((d, i) => {
+      for (const column of bikeColumns(c)) {
         if (n >= CAPACITY) {
-          return;
+          break;
         }
-        // one column: right on the line; two: either side of it
-        const side =
-          c.directions.length === 1 ? 0 : (i === 0 ? -1 : 1) * PAIR_HALF_M;
-        const w = epsgToWorld(c.x + ax * side, c.y + ay * side, ctx.offset);
-        const h = bikeColumnHeight(d.count) + FOOT_SINK_M;
+        const i = column.direction;
+        const d = c.directions[i];
+        const w = epsgToWorld(column.x, column.y, ctx.offset);
+        const h = column.height;
         m.makeScale(1, h, 1).setPosition(w.x, ground - FOOT_SINK_M, w.z);
         columns.setMatrixAt(n, m);
         const r = POOL_RADIUS_M * (0.6 + 0.4 * Math.min(h / 20, 1));
@@ -225,7 +253,7 @@ export function createBikeLayer(ctx: GroundContext): BikeLayer {
         rates.setX(n, stale ? 0 : RING_SPEED * Math.sqrt(d.count));
         key.push(`${n}:${w.x.toFixed(1)}:${ground.toFixed(2)}:${h}:${stale}`);
         n++;
-      });
+      }
     }
     const next = key.join("|");
     if (next === placed) {

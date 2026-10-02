@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   attachTouchControls,
+  type PressTimer,
   type TouchControlsCallbacks,
 } from "./touch-controls";
 
@@ -40,6 +41,9 @@ function harness() {
     pinchStart: 0,
     pinch: [] as number[],
     doubleTap: [] as [number, number][],
+    tap: [] as [number, number][],
+    tapBy: [] as string[],
+    longPress: [] as [number, number][],
     wheel: [] as number[],
     zoom: [] as number[],
   };
@@ -53,8 +57,31 @@ function harness() {
     onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
     onWheelDolly: (amount) => calls.wheel.push(amount),
     onWheelZoom: (ratio) => calls.zoom.push(ratio),
+    onTap: (x, y, pointerType) => {
+      calls.tap.push([x, y]);
+      calls.tapBy.push(pointerType);
+    },
+    onLongPress: (x, y) => calls.longPress.push([x, y]),
   };
-  const { detach } = attachTouchControls(element, callbacks);
+  // The long press's timer, fired by hand: `elapse()` runs what is due.
+  let pending: (() => void) | null = null;
+  const timer: PressTimer = {
+    set: (fn) => {
+      pending = fn;
+      return fn;
+    },
+    clear: (handle) => {
+      if (pending === handle) {
+        pending = null;
+      }
+    },
+  };
+  const elapse = () => {
+    const fn = pending;
+    pending = null;
+    fn?.();
+  };
+  const { detach } = attachTouchControls(element, callbacks, timer);
   const fire = (type: string, e: FiredPointer) =>
     handlers.get(type)?.({
       pointerType: "touch",
@@ -85,7 +112,26 @@ function harness() {
     } as unknown as PointerEvent);
     return prevented;
   };
-  return { calls, detach, fire, lock, mouseMove, ownerDocument, wheel };
+  const contextMenu = () => {
+    let prevented = false;
+    handlers.get("contextmenu")?.({
+      preventDefault: () => {
+        prevented = true;
+      },
+    } as unknown as PointerEvent);
+    return prevented;
+  };
+  return {
+    calls,
+    contextMenu,
+    detach,
+    elapse,
+    fire,
+    lock,
+    mouseMove,
+    ownerDocument,
+    wheel,
+  };
 }
 
 test("a one-finger drag reports per-event deltas, not cumulative ones", () => {
@@ -144,6 +190,35 @@ test("two quick taps at the same spot fire one double tap in NDC", () => {
   const [ndcX, ndcY] = calls.doubleTap[0];
   expect(ndcX).toBeCloseTo(0, 10);
   expect(ndcY).toBeCloseTo(0, 10);
+  // each tap is a tap too (the inquiry mode asks on the first)
+  expect(calls.tap).toHaveLength(2);
+});
+
+test("a single tap reports its spot in NDC, y up", () => {
+  const { fire, calls } = harness();
+  fire("pointerdown", { pointerId: 1, clientX: 300, clientY: 200 });
+  fire("pointerup", {
+    pointerId: 1,
+    clientX: 300,
+    clientY: 200,
+    timeStamp: 10,
+  });
+  expect(calls.tap).toEqual([[0.5, 0.5]]);
+  expect(calls.tapBy).toEqual(["touch"]);
+  expect(calls.doubleTap).toEqual([]);
+});
+
+test("a click is a tap that says it came from the mouse (the desktop asks by it)", () => {
+  const { fire, calls } = harness();
+  const mouse = {
+    pointerId: 1,
+    clientX: 300,
+    clientY: 200,
+    pointerType: "mouse",
+  };
+  fire("pointerdown", mouse);
+  fire("pointerup", { ...mouse, timeStamp: 10 });
+  expect(calls.tapBy).toEqual(["mouse"]);
 });
 
 test("a drag is never a tap, so it cannot start a double tap", () => {
@@ -164,6 +239,7 @@ test("a drag is never a tap, so it cannot start a double tap", () => {
     timeStamp: 210,
   });
   expect(calls.doubleTap).toEqual([]);
+  expect(calls.tap).toHaveLength(1);
 });
 
 test("the wheel moves like a pinch: up = forward, proportional, capped, and the page never scrolls", () => {
@@ -230,4 +306,66 @@ test("detach removes every listener and releases the pointer lock", () => {
   expect(calls.mouseLook).toEqual([]);
   expect(calls.pinchStart).toBe(0);
   expect(calls.wheel).toEqual([]);
+});
+
+test("a finger held still is a long press, and its release is no tap", () => {
+  const { fire, calls, elapse, contextMenu } = harness();
+  fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });
+  // the browser's own long-press menu belongs to the gesture now
+  expect(contextMenu()).toBe(true);
+  elapse();
+  expect(calls.longPress).toEqual([[-0.5, 0.5]]);
+  fire("pointerup", {
+    pointerId: 1,
+    clientX: 100,
+    clientY: 200,
+    timeStamp: 100,
+  });
+  expect(calls.tap).toEqual([]);
+  expect(calls.doubleTap).toEqual([]);
+  // the next quick tap is a tap again
+  fire("pointerdown", {
+    pointerId: 2,
+    clientX: 100,
+    clientY: 200,
+    timeStamp: 1000,
+  });
+  fire("pointerup", {
+    pointerId: 2,
+    clientX: 100,
+    clientY: 200,
+    timeStamp: 1100,
+  });
+  expect(calls.tap).toHaveLength(1);
+});
+
+test("a mouse held still is no long press: the desktop asks by a click", () => {
+  const { fire, calls, elapse } = harness();
+  fire("pointerdown", {
+    pointerId: 1,
+    clientX: 100,
+    clientY: 200,
+    pointerType: "mouse",
+  });
+  elapse();
+  fire("pointermove", {
+    pointerId: 1,
+    clientX: 160,
+    clientY: 200,
+    pointerType: "mouse",
+  });
+  expect(calls.longPress).toEqual([]);
+  expect(calls.look).toHaveLength(1);
+});
+
+test("moving or a second finger cancels a long press", () => {
+  const { fire, calls, elapse } = harness();
+  fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });
+  fire("pointermove", { pointerId: 1, clientX: 140, clientY: 200 });
+  elapse();
+  fire("pointerup", { pointerId: 1, clientX: 140, clientY: 200 });
+  fire("pointerdown", { pointerId: 2, clientX: 100, clientY: 200 });
+  fire("pointerdown", { pointerId: 3, clientX: 200, clientY: 200 });
+  elapse();
+  expect(calls.longPress).toEqual([]);
 });

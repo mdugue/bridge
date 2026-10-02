@@ -43,9 +43,20 @@ import {
 } from "@/lib/city/site";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
+import type { Inquiry } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
 import { countBuildings, pickCityObject } from "./city-layer";
+import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
+import {
+  bridgeShape,
+  buildingShape,
+  solidShape,
+  standInDepth,
+  trafficTriangles,
+} from "./selection-shape";
+import type { OutlineSelection } from "./selection-outline";
+import { trafficMesh } from "./traffic-ask";
 import { createCityCollider } from "./collision";
 import type { CrashTrail } from "./crash-trail";
 import { createSeasonClock } from "./crown-season";
@@ -266,6 +277,11 @@ export interface CityWalkOptions {
   onBusy?: (busy: boolean) => void;
   /** a manual look or move ended live mode (camera-pose.ts) */
   onFollowEnd?: () => void;
+  /**
+   * What was asked last ("Befragen", ADR 0042): a click, a long press or
+   * `I` at the crosshair; null when nothing stands there.
+   */
+  onInquiry?: (inquiry: Inquiry | null) => void;
   onModeChange?: (mode: MovementMode) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
@@ -314,8 +330,18 @@ export interface CityWalkOptions {
 export interface CityWalkHandle {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
+  /** Removes the inquiry mark (the card was closed). */
+  clearInquiry: () => void;
   demolishAtCrosshair: () => void;
   dispose: () => void;
+  /**
+   * Asks what stands at a screen point (NDC; the crosshair when omitted),
+   * marks it and reports it through `onInquiry`; tests and QA call it.
+   */
+  inquireAt: (ndc?: { x: number; y: number }) => Inquiry | null;
+  /** The provenance manifest (lib/city/provenance.ts), when the tileset
+   *  names one: the inquiry card's source lines. */
+  provenanceUrl: string | null;
   /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
   enterImmersive: () => void;
   /**
@@ -1022,7 +1048,121 @@ async function bootApp(
   };
   const tapRaycaster = new Raycaster();
   tapRaycaster.firstHitOnly = true;
+  // Befragen (ADR 0042): a click asks, a long press on a touch screen,
+  // and I at the crosshair — there is no mode to switch on first.
+  // What the outline goes around (selection-shape.ts): a building's own
+  // triangles, a bridge's out of its tile's bridge meshes, a tree's or a
+  // monument's shape after its data.
+  const outline = (subject: OutlineSubject | null) => {
+    postStack.setSelection(outlineShape(subject));
+  };
+  const outlineShape = (
+    subject: OutlineSubject | null
+  ): OutlineSelection | null => {
+    if (!subject) {
+      return null;
+    }
+    if ("building" in subject) {
+      const positions = buildingShape(
+        subject.building.layer,
+        subject.building.objects
+      );
+      return { positions, reach: 0 };
+    }
+    const { target, solids } = subject.thing;
+    const first = solids[0];
+    if (target.kind === "bridge" && first && "slab" in first) {
+      // the fine level's dressing: the coarse one carries only flows
+      const rail = [...stream.dressings].find(
+        (d) => d.tile === target.tile && d.rail
+      )?.rail;
+      return { positions: bridgeShape(rail, first.slab), reach: 0 };
+    }
+    if (target.kind === "traffic") {
+      // the section as the layer draws it, grown with the hour — on the
+      // level that answered: a tile's fine and coarse terrain each carry
+      // the flows, and the hidden one hangs outside the scene
+      const flow = trafficMesh(
+        stream
+          .visibleDressings()
+          .find((d) => d.tile === target.tile && d.traffic)?.traffic
+      );
+      return flow
+        ? { flow, triangles: trafficTriangles(flow, target.index) }
+        : null;
+    }
+    // a stand-in: the scene's surface anywhere inside it is the thing; the
+    // counters' columns are glass, which writes no depth
+    return {
+      positions: solidShape(solids, target.kind === "tree" && target.conifer),
+      reach:
+        target.kind === "bikes"
+          ? Number.POSITIVE_INFINITY
+          : standInDepth(solids),
+    };
+  };
+  const probe = createInquiryProbe({
+    camera,
+    cities: () => stream.visibleCities(),
+    isLoaded: (layer) => stream.cities.has(layer),
+    groundAlong,
+    outline,
+    things: () => [
+      ...stream.visibleDressings().flatMap((d) => d.asks ?? []),
+      ...overlays.asks(),
+    ],
+    viewport: () => ({
+      width: renderer.domElement.clientWidth || 1,
+      height: renderer.domElement.clientHeight || 1,
+    }),
+  });
+  // A tree's card fetches what the register says about it (ADR 0042).
+  const treeFactsUrl = (tile: string) => {
+    const file = extras.tiles.find((t) => t.id === tile)?.ask?.treeFacts;
+    return file ? new URL(file, tilesetUrl).href : undefined;
+  };
+  // What the card needs beyond what was met: a tree's facts file, a data
+  // layer's credit (the site's) and, for a counted section, the hour.
+  const layerSources = opts.site.dataLayers;
+  const answered = (asked: Inquiry | null): Inquiry | null => {
+    switch (asked?.kind) {
+      case "tree": {
+        const factsUrl = treeFactsUrl(asked.tile);
+        return factsUrl ? { ...asked, factsUrl } : asked;
+      }
+      case "traffic":
+        return {
+          ...asked,
+          credit: layerSources?.traffic?.credit,
+          hour: overlays.trafficHour(),
+        };
+      case "bikes":
+        return { ...asked, credit: layerSources?.bikes?.credit };
+      case "building":
+      case "bridge":
+      case "monument":
+        return asked;
+      case undefined:
+        return null;
+    }
+  };
+  const inquireAt = (ndc?: { x: number; y: number }): Inquiry | null => {
+    const inquiry = answered(probe.ask(ndc));
+    opts.onInquiry?.(inquiry);
+    return inquiry;
+  };
   const canvasControls = attachTouchControls(renderer.domElement, {
+    // A click asks (a drag looks, a double click glides there); a finger's
+    // tap does not — on glass a tap is too easily a missed drag.
+    onTap: (ndcX, ndcY, pointerType) => {
+      if (pointerType === "mouse") {
+        inquireAt({ x: ndcX, y: ndcY });
+      }
+    },
+    // A finger or a pen asks by holding still (the phone's way, ADR 0042).
+    onLongPress: (ndcX, ndcY) => {
+      inquireAt({ x: ndcX, y: ndcY });
+    },
     onLook: pose.turn,
     onMouseLook: pose.look,
     onPinchStart: pose.beginPinch,
@@ -1161,6 +1301,11 @@ async function bootApp(
         releaseAll: pose.releaseAll,
         toggleMode: pose.toggleMode,
         demolish: demolishAtCrosshair,
+        // I asks at the crosshair: in pointer lock there is no pointer
+        // to click with.
+        inquire: () => {
+          inquireAt();
+        },
         cycleStyle: () =>
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
         viewpoint: (index) => {
@@ -1580,7 +1725,12 @@ async function bootApp(
 
   return {
     setSun,
+    clearInquiry: probe.clear,
     demolishAtCrosshair,
+    inquireAt,
+    provenanceUrl: extras.provenance
+      ? new URL(extras.provenance, tilesetUrl).href
+      : null,
     enterImmersive: canvasControls.lockPointer,
     flyTo: pose.flyTo,
     flyToViewpoint: pose.flyToViewpoint,

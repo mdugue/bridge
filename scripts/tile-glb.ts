@@ -21,12 +21,27 @@ import {
 import { quantize, reorder, weld } from "@gltf-transform/functions";
 import { MeshoptEncoder } from "meshoptimizer";
 
-/** A property table column: one value (SCALAR) or tuple (VEC3) per feature. */
+/**
+ * A property table column: one value (SCALAR), tuple (VEC3), string
+ * (STRING, "" for none) or code (ENUM: a code list's value, "" for none —
+ * written as UINT16 indices into an enum of the codes the tile uses) per
+ * feature. `noData` marks the value that means
+ * "unknown" in a numeric column; the schema carries it as the default too,
+ * so a reader resolving noData hands back the same marker instead of 0 (a
+ * real value: a flat roof's pitch).
+ */
 export type Column =
-  | { type: "SCALAR"; componentType: "FLOAT32"; values: Float32Array }
+  | {
+      type: "SCALAR";
+      componentType: "FLOAT32";
+      values: Float32Array;
+      noData?: number;
+    }
   | { type: "SCALAR"; componentType: "UINT8"; values: Uint8Array }
   | { type: "SCALAR"; componentType: "UINT32"; values: Uint32Array }
-  | { type: "VEC3"; componentType: "FLOAT32"; values: Float32Array };
+  | { type: "VEC3"; componentType: "FLOAT32"; values: Float32Array }
+  | { type: "STRING"; values: readonly string[] }
+  | { type: "ENUM"; values: readonly string[] };
 
 export interface PropertyTable {
   /** the class name in the embedded schema */
@@ -186,6 +201,68 @@ interface GltfJson {
 
 const pad = (n: number, to: number) => Math.ceil(n / to) * to;
 
+/** The enum name that stands for "no code" (the property's `noData`). */
+export const ENUM_NONE = "NONE";
+
+interface TableProperty {
+  stringOffsetType?: "UINT32";
+  stringOffsets?: number;
+  values: number;
+}
+
+interface SchemaProperty {
+  componentType?: string;
+  default?: number;
+  enumType?: string;
+  noData?: number | string;
+  type: string;
+}
+
+interface SchemaEnum {
+  values: { name: string; value: number }[];
+  valueType: "UINT16";
+}
+
+/** An ENUM column: the codes it uses (ENUM_NONE first, value 0) and one
+ *  UINT16 index per feature. */
+export function enumColumn(values: readonly string[]): {
+  enumDef: SchemaEnum;
+  indices: Uint16Array;
+} {
+  const codes = [...new Set(values.filter((v) => v !== ""))].sort();
+  if (codes.length >= 0xff_ff) {
+    throw new Error("enum column: more codes than UINT16 holds");
+  }
+  const index = new Map(codes.map((c, i) => [c, i + 1]));
+  return {
+    enumDef: {
+      valueType: "UINT16",
+      values: [
+        { name: ENUM_NONE, value: 0 },
+        ...codes.map((name, i) => ({ name, value: i + 1 })),
+      ],
+    },
+    indices: Uint16Array.from(values, (v) => index.get(v) ?? 0),
+  };
+}
+
+/** A STRING column as the extension stores it: the UTF-8 bytes of every
+ *  value back to back, and `count + 1` byte offsets into them. */
+export function stringColumn(values: readonly string[]): {
+  bytes: Uint8Array;
+  offsets: Uint32Array;
+} {
+  const encoder = new TextEncoder();
+  const encoded = values.map((v) => encoder.encode(v));
+  const offsets = new Uint32Array(values.length + 1);
+  encoded.forEach((e, i) => {
+    offsets[i + 1] = offsets[i] + e.length;
+  });
+  const bytes = new Uint8Array(offsets[values.length]);
+  encoded.forEach((e, i) => bytes.set(e, offsets[i]));
+  return { bytes, offsets };
+}
+
 /**
  * Appends a property table to a glb: its columns as buffer views at the end
  * of the BIN chunk (8-byte aligned, as the extension requires), the schema
@@ -221,25 +298,58 @@ export function addPropertyTable(
   const chunks: Uint8Array[] = [bin];
   let length = bin.length;
   const bufferViews = json.bufferViews ?? [];
-  const properties: Record<string, { values: number }> = {};
-  const schema: Record<string, { componentType: string; type: string }> = {};
-  for (const [name, column] of Object.entries(table.properties)) {
+  const properties: Record<string, TableProperty> = {};
+  const schema: Record<string, SchemaProperty> = {};
+  const enums: Record<string, SchemaEnum> = {};
+  /** appends one buffer view (8-byte aligned) and returns its index */
+  const append = (bytes: Uint8Array): number => {
     const offset = pad(length, 8);
-    chunks.push(new Uint8Array(offset - length));
-    const bytes = new Uint8Array(
-      column.values.buffer,
-      column.values.byteOffset,
-      column.values.byteLength
-    );
-    chunks.push(bytes);
+    chunks.push(new Uint8Array(offset - length), bytes);
     length = offset + bytes.length;
     bufferViews.push({
       buffer: bufferIndex,
       byteOffset: offset,
       byteLength: bytes.length,
     });
-    properties[name] = { values: bufferViews.length - 1 };
-    schema[name] = { type: column.type, componentType: column.componentType };
+    return bufferViews.length - 1;
+  };
+  for (const [name, column] of Object.entries(table.properties)) {
+    if (column.type === "ENUM") {
+      const { enumDef, indices } = enumColumn(column.values);
+      enums[name] = enumDef;
+      properties[name] = {
+        values: append(
+          new Uint8Array(indices.buffer, indices.byteOffset, indices.byteLength)
+        ),
+      };
+      schema[name] = { type: "ENUM", enumType: name, noData: ENUM_NONE };
+      continue;
+    }
+    if (column.type === "STRING") {
+      const { bytes, offsets } = stringColumn(column.values);
+      properties[name] = {
+        values: append(bytes),
+        stringOffsets: append(
+          new Uint8Array(offsets.buffer, offsets.byteOffset, offsets.byteLength)
+        ),
+        stringOffsetType: "UINT32",
+      };
+      schema[name] = { type: "STRING" };
+      continue;
+    }
+    const values = column.values;
+    properties[name] = {
+      values: append(
+        new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
+      ),
+    };
+    schema[name] = {
+      type: column.type,
+      componentType: column.componentType,
+      ...("noData" in column && column.noData !== undefined
+        ? { noData: column.noData, default: column.noData }
+        : {}),
+    };
   }
   const total = pad(length, 4);
   chunks.push(new Uint8Array(total - length));
@@ -251,6 +361,7 @@ export function addPropertyTable(
       schema: {
         id: "bridge",
         classes: { [table.className]: { properties: schema } },
+        ...(Object.keys(enums).length > 0 ? { enums } : {}),
       },
       propertyTables: [
         { class: table.className, count: table.count, properties },

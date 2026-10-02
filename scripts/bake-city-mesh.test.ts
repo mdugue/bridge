@@ -108,8 +108,65 @@ test("the OSM LUT flags objects by id: shop 1, heritage 2", () => {
   expect(baked.objects.map((o) => o.flags)).toEqual([0, 1, 3]);
   // ...and the glTF property table carries them as a UINT8 column.
   const flags = cityMesh(baked).input.table?.properties.flags;
-  expect(flags?.componentType).toBe("UINT8");
+  expect(flags).toMatchObject({ type: "SCALAR", componentType: "UINT8" });
   expect([...(flags?.values ?? [])]).toEqual([0, 1, 3]);
+});
+
+test("every object carries its identity and semantics as fact columns", () => {
+  const fx = fixture();
+  fx.CityObjects.house.attributes = {
+    ...fx.CityObjects.house.attributes,
+    creationDate: "2025-07-04T00:00:00Z",
+    Dachneigung: 0,
+    roofType: "1000",
+  };
+  const baked = bakeCityMesh("t", fx, undefined, null, {
+    shop: { name: "Kaufhaus", addr: "Prager Straße 1", levels: 4 },
+    house: { addr: "Hauptstraße 5" },
+  });
+  const [shop, part, house] = baked.objects.map((o) => o.facts);
+  // The part answers with its Building's id, use and OSM facts, and its
+  // own measured height and roof.
+  expect(part).toMatchObject({
+    buildingId: "shop",
+    function: "31001_2000",
+    roofType: "1000",
+    name: "Kaufhaus",
+    addr: "Prager Straße 1",
+    levels: 4,
+    height: 9,
+    area: 100,
+  });
+  // Footprints are read before the loader rewrites the document: a Solid
+  // part keeps its GroundSurface (the minimap once lost every part's).
+  expect(baked.objects[1].footprints).toHaveLength(1);
+  expect(baked.objects[2].footprints).toHaveLength(1);
+  // The geometry-less Building answers for its tree (its one part):
+  // the part's ground, base to top.
+  expect(shop).toMatchObject({ buildingId: "shop", height: 9, area: 100 });
+  // A flat roof's pitch 0 is a value, not "unknown"; dates lose the clock.
+  expect(house).toMatchObject({
+    buildingId: "house",
+    function: "31001_1000",
+    created: "2025-07-04",
+    roofPitch: 0,
+    height: 12,
+    addr: "Hauptstraße 5",
+    name: "",
+    levels: -1,
+  });
+  const table = cityMesh(baked).input.table?.properties;
+  // A part answers with its Building's id: the key other datasets know.
+  expect(table?.buildingId).toEqual({
+    type: "STRING",
+    values: ["shop", "shop", "house"],
+  });
+  expect(table?.function).toEqual({
+    type: "ENUM",
+    values: ["31001_2000", "31001_2000", "31001_1000"],
+  });
+  expect(table?.height).toMatchObject({ componentType: "FLOAT32", noData: -1 });
+  expect([...(table?.height.values ?? [])]).toEqual([9, 9, 12]);
 });
 
 test("a part carries its root Building's flags as well as its own", () => {
@@ -156,6 +213,8 @@ test("the scan's small structures join as their own buildings, source 1", () => 
   expect(shed.flags).toBe(0);
   expect(shed.glow).toBe(0);
   expect(shed.footprints[0].length).toBe(4);
+  expect(shed.facts).toMatchObject({ height: 2.5, area: 12, function: "" });
+  expect(shed.facts?.buildingId).toMatch(/^scan:t:/);
   // the box stands where the ring says, recentred on the spawn tile's offset
   const shedXs: number[] = [];
   const shedYs: number[] = [];

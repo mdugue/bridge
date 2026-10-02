@@ -24,7 +24,12 @@
  */
 import type { Landmark } from "./landmarks";
 import type { TerrainBounds } from "./terrain-geometry";
-import type { CoarseDressingKind, DressingKind, SoundKind } from "./tile";
+import type {
+  AskKind,
+  CoarseDressingKind,
+  DressingKind,
+  SoundKind,
+} from "./tile";
 
 /**
  * Whether a tile owns the point: west and south edges in, east and north
@@ -147,7 +152,13 @@ export type ContentExtras = CityExtras | TerrainExtras;
  */
 export type TileSoundFiles = Partial<Record<SoundKind, string>>;
 
+/** A tile's side files only the inquiry card fetches (ADR 0042): the
+ *  artifact table's `ask` column (lib/city/tile.ts). */
+export type TileAskFiles = Partial<Record<AskKind, string>>;
+
 export interface TilesetTileInfo {
+  /** the inquiry card's files, fetched when something is asked */
+  ask?: TileAskFiles;
   bounds: TerrainBounds;
   /**
    * minimap footprints per object: `[object][polygon][vertex] = [x, y]`.
@@ -176,6 +187,9 @@ export interface TilesetExtras {
   landmarks?: Landmark[];
   /** recenter offset: data-frame x = epsgX − cx, y = epsgY − cy */
   offset: { cx: number; cy: number };
+  /** the provenance manifest (lib/city/provenance.ts), relative to the
+   *  tileset; absent in a tileset baked before it */
+  provenance?: string;
   site: string;
   /** the site's tiles, the spawn tile first */
   tiles: TilesetTileInfo[];

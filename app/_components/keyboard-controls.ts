@@ -1,6 +1,7 @@
 /**
  * The keyboard adapter: turns key events into camera-pose calls and the
- * one-shot actions (demolish, walk/fly, the picture style, the numbered viewpoints). The event targets are injected so the adapter
+ * one-shot actions (demolish, walk/fly, the picture style, the inquiry
+ * mode, the numbered viewpoints). The event targets are injected so the adapter
  * runs against a fake document in unit tests.
  */
 
@@ -9,6 +10,8 @@ export interface KeyboardActions {
   cycleStyle: () => void;
   /** R — demolish the building under the crosshair */
   demolish: () => void;
+  /** I — asks what stands at the crosshair ("Befragen", ADR 0042) */
+  inquire: () => void;
   press: (code: string) => void;
   release: (code: string) => void;
   /** every held key is dropped: the window lost focus or was hidden */
@@ -27,7 +30,11 @@ export interface KeyboardTargets {
   window: Pick<Window, "addEventListener" | "removeEventListener">;
 }
 
-const ONE_SHOTS = new Map<string, "cycleStyle" | "demolish" | "toggleMode">([
+const ONE_SHOTS = new Map<
+  string,
+  "cycleStyle" | "demolish" | "inquire" | "toggleMode"
+>([
+  ["KeyI", "inquire"],
   ["KeyR", "demolish"],
   ["KeyF", "toggleMode"],
   ["KeyV", "cycleStyle"],

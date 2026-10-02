@@ -61,6 +61,8 @@ lädt* oben im Bild (siehe
 | Doppelklick auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
 | Klick auf die Minikarte | dorthin gleiten (zu Fuß landest du stehend, im Flug in gleicher Höhe) |
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren |
+| Klick auf ein Gebäude | es befragen: eine Karte sagt, was die Daten darüber wissen |
+| `I` | befragen, was unter dem Fadenkreuz steht (auch immersiv) |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
 | `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | immersiven Modus verlassen |
@@ -72,6 +74,7 @@ lädt* oben im Bild (siehe
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
 | *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
 | *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln (abheben / landen) |
+| Lange auf ein Gebäude drücken | es befragen |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
 | Doppeltippen auf den Boden | in einem kurzen Gleitflug dorthin; im Flug ein Stück darauf zu |
@@ -129,6 +132,71 @@ dem Höhenregler steigst oder sinkst du, ohne dass *Live* endet.
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
 *Steuerung* erreichbar.
+
+## Ein Gebäude befragen
+
+Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
+Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
+**langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
+fragt, was unter dem Fadenkreuz steht. Das Gebäude bekommt eine feine
+Bleistiftschraffur und eine Graphitlinie um seinen Umriss, und eine
+Karte öffnet sich. Ein Klick ins Leere
+schließt sie wieder. Ein kleines Haus musst du
+nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
+Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
+die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude
+ist und wo; nach oben wischen (oder *Angaben und Quellen* antippen)
+zeigt den Rest, nach unten wischen klappt es ein oder schließt es —
+Joystick und Werkzeugleiste treten so lange zur Seite, und die Stadt
+dahinter bleibt bedienbar. Langes Drücken markiert nie Text auf der
+Seite. Die Karte sagt nur, was die
+Daten wissen:
+
+- den **Namen** des Gebäudes (aus OpenStreetMap) oder seine amtliche
+  **Nutzung** (die ALKIS-Gebäudefunktion des Stadtmodells; bei den meisten
+  Häusern ist sie als *nicht zu spezifizieren* erfasst, und genau das sagt
+  die Karte),
+- seine **Adresse** (OpenStreetMap),
+- **Höhe** (gemessen), Traufe, **Dach**form und -neigung, Grundfläche, die
+  **Geschosse**, wo OpenStreetMap sie kennt, aus wie vielen Teilen das
+  Modell es zusammensetzt, ob es ein Kulturdenkmal ist oder im Erdgeschoss
+  ein Laden liegt,
+- seine **Kennung** im amtlichen Stadtmodell (zum Kopieren — andere
+  Datensätze kennen das Gebäude unter ihr),
+- und je zitiertem Datensatz eine **Quellenzeile** mit Stand und Lizenz:
+  beim Stadtmodell das Modelljahr, das Jahr, in dem die Dächer gemessen,
+  und das, in dem die Grundrisse erfasst wurden.
+
+Ein Schuppen oder Gartenhaus, das der Laserscan gefunden hat, das
+Stadtmodell aber nicht kennt, sagt das. Esc, × oder nach unten Wischen
+schließt die Karte und nimmt die Schraffur weg; die nächste Frage gilt dem
+nächsten Gebäude.
+Geschätzt wird nichts: Ein Gebäude ohne erfasste Geschosse hat einfach
+keine Geschosszeile.
+
+Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
+gefragt hast, umrahmt eine weiche Graphitlinie auf einem Hauch Papier —
+entlang seines Umrisses, so wie du ihn gerade siehst, gleich breit auf
+dem Bildschirm, ob nah oder fern. Ein
+**Straßenbaum** nennt seine Art (deutsch und botanisch), Straße und
+Nummer im Stadtbaumkataster, Höhe, Krone und Stamm, soweit das Kataster
+sie gemessen hat (was fehlt, bleibt weg, statt geschätzt zu werden), und
+das Alter, das es verzeichnet, mit dem Datum des Eintrags. Ein
+**Denkmal** nennt seinen amtlichen Namen, ein Brunnen die Form seines
+Beckens; eine **Brücke** ihren Namen, Tragwerk und Hauptspannweite (aus
+Wikidata, dessen Kennung du kopieren kannst), ihre Länge und die
+Durchfahrtshöhe für die Schifffahrt.
+
+Auch die **Verkehrsdaten** lassen sich befragen, solange ihre Ebene
+eingeschaltet ist. Ein **Verkehrsstrom** nennt seine Straße, die
+gezählten Fahrzeuge am Tag in beiden Richtungen und je Richtung (nach der
+Himmelsrichtung, in die sie fahren, mit dem Anteil des Schwerverkehrs),
+das Jahr und wie gezählt wurde — und wenn die Quelle beide Richtungen nur
+zusammen zählt, sagt die Karte das, statt eine Aufteilung zu erfinden.
+Dazu kommt ein Schätzwert für die eingestellte Uhrzeit, ausdrücklich als
+Schätzung nach einem typischen Tagesgang. Eine **Radzählstelle** nennt
+die Räder der letzten vollen Stunde je Richtung und wann sie gezählt
+wurden. Beide Karten nennen ihre Quelle mit Lizenz.
 
 ## Das Feld
 

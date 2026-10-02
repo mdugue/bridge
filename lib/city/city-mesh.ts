@@ -1,5 +1,6 @@
 import type { FacadeMaterial } from "./building-tint";
 import type { FootprintPoly } from "./minimap";
+import type { ObjectFacts } from "./object-facts";
 import type { CityJsonDocument } from "./types";
 
 /**
@@ -28,6 +29,8 @@ export type WallMaterial =
 
 /** What OSM knows about one CityObject. */
 export interface OsmBuildingFacts {
+  /** its address line, for the inquiry card (ADR 0042) */
+  addr?: string;
   /** walls, `#rrggbb` (OSM `building:colour`) */
   colour?: string;
   /** the walls its neighbourhood is mapped as, where they differ from the
@@ -36,7 +39,11 @@ export interface OsmBuildingFacts {
   heritage?: number;
   /** one of the city's landmarks (landmarks.py, Wikidata) */
   landmark?: number;
+  /** `building:levels`, for the inquiry card */
+  levels?: number;
   material?: WallMaterial;
+  /** the outline's `name`, for the inquiry card */
+  name?: string;
   /** roof, `#rrggbb` (OSM `roof:colour`) */
   roof_colour?: string;
   shop?: number;
@@ -58,6 +65,9 @@ export const OBJECT_FLAG_GLASS = 4;
 export const OBJECT_FLAG_METAL = 8;
 /** Part of one of the city's landmarks (Wikidata; column `flags`). */
 export const OBJECT_FLAG_LANDMARK = 16;
+/** The building someone is asking about (the inquiry card, ADR 0042): set
+ *  in the packed texture at runtime only, never baked. */
+export const OBJECT_FLAG_ASKED = 32;
 
 /** The `flags` value of one object: its OSM facts summed as bits. */
 export function objectFlags(entry?: OsmBuildingFacts): number {
@@ -115,6 +125,8 @@ export interface CityObjectRow {
   building: boolean;
   /** eave height above the base (m): lowest RoofSurface vertex, else the top */
   eaveH: number;
+  /** identity and semantics, the table's fact columns (ADR 0042) */
+  facts?: ObjectFacts;
   /** OBJECT_FLAG_* summed, from OSM (0 = none) */
   flags: number;
   /** GroundSurface footprints (EPSG), for the minimap */

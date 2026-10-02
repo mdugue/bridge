@@ -59,6 +59,8 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Double-click on the ground | travel there in a short glide; flying, glide part of the way towards it |
 | Click on the minimap | glide there (on foot you land standing; flying, at the same height) |
 | *Standort* (toolbar, bottom right) | teleport to where you really are |
+| Click on a building | ask it: a card says what the data knows about it |
+| `I` | ask what stands under the crosshair (immersive too) |
 | `R` | demolish the building under the crosshair |
 | `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier) |
 | `Esc` | leave immersive mode |
@@ -70,6 +72,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
 | *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
 | *Fliegen* (toolbar) | switch between walking and flying (take off / land) |
+| Long press on a building | ask it |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
 | Double-tap on the ground | travel there in a short glide; flying, glide part of the way towards it |
@@ -122,6 +125,64 @@ altitude slider climbs or sinks without ending *Live*.
 A floating bar shows the four essential controls until you dismiss it with
 *Verstanden*; the full table stays available in the panel under
 *Steuerung*.
+
+## Asking a building
+
+The city itself carries no text. Ask it instead: with a mouse, a
+**click** on a building; on a touch screen, a **long press** (hold a
+finger still for half a second); `I` asks what stands under the
+crosshair. The building gets a fine pencil hatch and a graphite line round its
+outline, and a card opens; a
+click on nothing closes it again. You need not hit a small house exactly:
+when nothing stands right under your finger, the building most of the
+ground around it belongs to answers. On a phone the card is a sheet at
+the bottom: folded it says what the building is and where; swipe it up
+(or tap *Angaben und Quellen*) for the rest, swipe it down to fold or
+close it — the joystick and the toolbar step aside while it is open, and
+the city stays live behind it. A long press never selects text on the
+page. The card says only
+what the data knows:
+
+- the building's **name** (from OpenStreetMap) or its official **use**
+  (the ALKIS building function of the city model; for most houses it is
+  recorded as *not specified*, and the card says exactly that),
+- its **address** (OpenStreetMap),
+- **height** (measured), eave, **roof** form and pitch, ground area, the
+  **storeys** where OpenStreetMap has them, how many parts the model
+  divides it into, whether it is a listed monument or has a shop on the
+  ground floor,
+- its **identifier** in the official city model (to copy — other datasets
+  know the building by it),
+- and one **source line** per dataset the card quotes, with its edition
+  and licence: for the city model the year of the model, the year its
+  roofs were measured and its footprints drawn.
+
+A shed or garden house the laser scan found but the city model lacks says
+so. Esc, × or a swipe down closes the card and removes the hatch; the
+next question asks the next building. Nothing is estimated: a building without mapped
+storeys simply has no storey line.
+
+Trees, monuments and fountains, and bridges answer the same way.
+Whatever you asked is framed by a soft graphite line on a hair of paper —
+along its outline as you see it now, the same width on screen near or
+far. A **street tree**
+says its species (German and botanical), its street and number in the
+city's tree register, the height, crown and trunk the register measured
+(a size the register lacks is left out, not guessed) and the age it
+records, with the date of that record. A **monument** says its official
+name and, for a fountain, the basin's form; a **bridge** its name, its
+structure and main span (from Wikidata, whose identifier you can copy),
+its length and the shipping clearance under it.
+
+The **traffic data** can be asked too, while its layer is on. A
+**traffic flow** says its street, the vehicles counted a day both ways
+and per direction (named by the compass point they head to, with the
+heavy-goods share), the year and how they were counted — and where the
+source counts both directions only together, the card says so rather
+than inventing a split. It adds an estimate for the time set, labelled
+as one, from a typical daily curve. A **bicycle counter** says the
+bicycles of the last full hour per direction and when they were counted.
+Both cards name their source and licence.
 
 ## The panel
 

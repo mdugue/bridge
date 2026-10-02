@@ -19,6 +19,7 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "Ziehen", action: "umsehen", primary: true },
   { key: "W A S D", action: "gehen", primary: true },
   { key: "F", action: "fliegen", primary: true },
+  { key: "Klick", action: "befragen", primary: true },
   { key: "2× Klick", action: "hingehen", primary: true },
   { key: "Shift", action: "sprinten · runter (Flug)" },
   { key: "Space / E", action: "hoch (Flug)" },
@@ -26,6 +27,7 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "1 – 9", action: "Aussichtspunkt" },
   { key: "Scroll", action: "vor / zurück" },
   { key: "Alt + Scroll", action: "zoomen" },
+  { key: "I", action: "befragen, was in der Mitte steht" },
   { key: "R", action: "abreißen" },
   { key: "V", action: "Bildstil wechseln" },
   { key: "Esc", action: "immersiv beenden" },
@@ -38,6 +40,7 @@ export const TOUCH_HINTS: readonly ControlHint[] = [
   { key: "2× Tippen", action: "hingehen", primary: true },
   { key: "2 Finger", action: "vor / zurück" },
   { key: "✈ Knopf", action: "abheben / landen" },
+  { key: "Lange drücken", action: "befragen", primary: true },
   { key: "Höhenregler", action: "steigen / sinken (Flug)" },
 ];
 

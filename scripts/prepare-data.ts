@@ -52,6 +52,11 @@ import type {
   StructureFeature,
 } from "../lib/city/features";
 import { cutWallGates } from "../lib/city/fences";
+import {
+  PROVENANCE_FILE,
+  type ProvenanceRecord,
+  siteProvenance,
+} from "../lib/city/provenance";
 import type { Passage } from "../lib/city/passages";
 import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
@@ -73,6 +78,7 @@ import {
   DRESSING_KINDS,
   pickFiles,
   SOUND_KINDS,
+  ASK_KINDS,
   type TileArtifact,
   type TileArtifactKind,
   dgmSourceFiles,
@@ -863,6 +869,18 @@ log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
 // --- 3. tilesets ------------------------------------------------------------------
 
+// Who publishes each source, and each tile's edition of it: the inquiry
+// card's "Quelle" lines (ADR 0042), from the hand-kept record.
+const provenanceFile = publish(
+  PROVENANCE_FILE,
+  utf8(
+    siteProvenance(
+      readJson<ProvenanceRecord>(at(`${siteDataDir(SITE)}/provenance.json`)),
+      baked.map((t) => t.id),
+      SITE
+    )
+  )
+);
 // The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
 const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
 const trams = existsSync(tramSource)
@@ -877,6 +895,7 @@ const extras: TilesetExtras = {
   epsg: frame.epsg,
   ...(groundHeights.length > 0 ? { ground: groundRelief(groundHeights) } : {}),
   offset,
+  provenance: provenanceFile,
   tiles: baked.map((t) => ({
     id: t.id,
     bounds: t.bounds,
@@ -884,6 +903,7 @@ const extras: TilesetExtras = {
     minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
     bridges: sideFiles.get(t.id)?.bridge,
     sound: pickFiles(sideFiles.get(t.id) ?? {}, SOUND_KINDS),
+    ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
   ...(trams ? { trams } : {}),
 };

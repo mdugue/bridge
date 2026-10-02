@@ -13,6 +13,7 @@ import {
 import {
   type CityObjectTable,
   countBuildings as countLiveBuildings,
+  OBJECT_FLAG_ASKED,
   doomedObjects,
   liveTriangles,
   OBJECT_TEXEL_BANDS,
@@ -20,6 +21,7 @@ import {
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
+import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
 import { textureBytes, trackTexture } from "./three-utils";
 import { createClayMaterial, type StyleResources } from "./visual-style";
 
@@ -35,6 +37,11 @@ export interface CityLayer {
   /** drops the object's building tree; true when anything changed */
   demolish: (objectIndex: number) => boolean;
   dispose: () => void;
+  /** what the twin knows about one object (read from the table on demand) */
+  facts: (objectIndex: number) => ObjectFacts;
+  /** marks the objects someone asks about (the clay's pencil hatch); an
+   *  empty set clears the mark */
+  mark: (objects: ReadonlySet<number>) => void;
   mesh: Mesh;
   table: CityObjectTable;
   tile: string;
@@ -45,10 +52,17 @@ export interface CityMesh extends Mesh {
   isCityObjectMesh?: boolean;
 }
 
-/** The property table as 3DTilesRendererJS exposes it (one row per id). */
+/** One property table as 3DTilesRendererJS exposes it. */
+interface PropertyTableLike {
+  count: number;
+  getPropertyValue: (name: string, id: number) => unknown;
+  /** the class's properties (a column the tile lacks is absent here) */
+  properties: Record<string, unknown>;
+}
+
+/** The glTF's EXT_structural_metadata as 3DTilesRendererJS exposes it. */
 interface StructuralMetadataLike {
-  getPropertyTableData: (table: number, id: number) => Record<string, unknown>;
-  tableAccessors: { count: number }[];
+  tableAccessors: PropertyTableLike[];
 }
 
 const xyz = (v: unknown): number[] => {
@@ -56,7 +70,11 @@ const xyz = (v: unknown): number[] => {
   return Array.isArray(p) ? p : [p.x ?? 0, p.y ?? 0, p.z ?? 0];
 };
 
-/** Reads the whole property table into typed columns. */
+/**
+ * Reads the style columns of the property table into typed columns. Column
+ * by column rather than row by row: a row read would decode every fact
+ * string of every object, which only the inquiry card ever needs.
+ */
 export function readObjectTable(
   metadata: StructuralMetadataLike,
   count: number
@@ -75,22 +93,75 @@ export function readObjectTable(
     storeyH: new Float32Array(count),
     tint: new Float32Array(count * 3),
   };
-  for (let i = 0; i < count; i++) {
-    const row = metadata.getPropertyTableData(0, i);
-    table.baseZ[i] = Number(row.baseZ);
-    table.building[i] = Number(row.building);
-    table.eaveH[i] = Number(row.eaveH);
-    table.flags[i] = Number(row.flags);
-    table.glow[i] = Number(row.glow);
-    table.roof.set(xyz(row.roof), i * 3);
-    table.root[i] = Number(row.root);
-    table.rough[i] = Number(row.rough);
-    // LoD2 (0) or the laser scan's small structures (1); absent before plan 034
-    table.source[i] = Number(row.source ?? 0);
-    table.storeyH[i] = Number(row.storeyH);
-    table.tint.set(xyz(row.tint), i * 3);
-  }
+  const accessor = metadata.tableAccessors[0];
+  const scalar = (
+    name: string,
+    out: Float32Array | Uint8Array | Uint32Array
+  ) => {
+    // absent columns stay 0 (`source` before plan 034: LoD2)
+    if (!(accessor && name in accessor.properties)) {
+      return;
+    }
+    for (let i = 0; i < count; i++) {
+      out[i] = Number(accessor.getPropertyValue(name, i));
+    }
+  };
+  const vec3 = (name: string, out: Float32Array) => {
+    for (let i = 0; i < count; i++) {
+      out.set(xyz(accessor?.getPropertyValue(name, i)), i * 3);
+    }
+  };
+  scalar("baseZ", table.baseZ);
+  scalar("building", table.building);
+  scalar("eaveH", table.eaveH);
+  scalar("flags", table.flags);
+  scalar("glow", table.glow);
+  scalar("root", table.root);
+  scalar("rough", table.rough);
+  scalar("source", table.source);
+  scalar("storeyH", table.storeyH);
+  vec3("roof", table.roof);
+  vec3("tint", table.tint);
   return table;
+}
+
+/** One object's facts from the tile's table (ADR 0042); a tile baked before
+ *  the fact columns answers with unknowns and its feature index. */
+function readObjectFacts(
+  metadata: StructuralMetadataLike,
+  objectIndex: number
+): ObjectFacts {
+  const accessor = metadata.tableAccessors[0];
+  return readFacts(
+    (column) =>
+      accessor && column in accessor.properties
+        ? accessor.getPropertyValue(column, objectIndex)
+        : undefined,
+    `#${objectIndex}`
+  );
+}
+
+/**
+ * Writes the asked flag into the packed table's flags texel (band 2, w):
+ * set on `marked`, cleared everywhere else. True when a texel changed.
+ */
+function markObjects(
+  texture: DataTexture,
+  table: CityObjectTable,
+  marked: ReadonlySet<number>
+): boolean {
+  const data = texture.image.data as Float32Array;
+  const band = OBJECT_TEXTURE_WIDTH * objectBandRows(table.count) * 4;
+  let changed = false;
+  for (let i = 0; i < table.count; i++) {
+    const want = table.flags[i] + (marked.has(i) ? OBJECT_FLAG_ASKED : 0);
+    const at = 2 * band + i * 4 + 3;
+    if (data[at] !== want) {
+      data[at] = want;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function objectTexture(table: CityObjectTable): {
@@ -193,23 +264,44 @@ export function dressCity(
       geometry.disposeBoundsTree();
       objects.texture.dispose();
     },
+    facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
+    mark: (marked) => {
+      if (markObjects(objects.texture, table, marked)) {
+        objects.texture.needsUpdate = true;
+      }
+    },
   };
   return layer;
 }
 
-// Hoisted: demolish picks happen on a key press, but there's no reason to
+// Hoisted: picks happen on a key press or a click, but there's no reason to
 // allocate per call. firstHitOnly stops the BVH walk at the nearest hit
 // instead of collecting and sorting every intersection along the ray.
 const pickRaycaster = new Raycaster();
 pickRaycaster.firstHitOnly = true;
 const SCREEN_CENTER = new Vector2(0, 0);
+const pickAt = new Vector2();
 
-/** Raycasts the screen center over `layers`: the nearest aimed object. */
+/**
+ * Raycasts over `layers` through a screen point (normalized device
+ * coordinates; the screen centre, the crosshair, by default): the nearest
+ * object hit and how far along the ray. `raycaster` is left set to the ray,
+ * so a caller can test the ground along it.
+ */
 export function pickCityObject(
   camera: Camera,
-  layers: readonly CityLayer[]
-): { layer: CityLayer; objectIndex: number } | null {
-  pickRaycaster.setFromCamera(SCREEN_CENTER, camera);
+  layers: readonly CityLayer[],
+  ndc?: { x: number; y: number }
+): {
+  distance: number;
+  layer: CityLayer;
+  objectIndex: number;
+  raycaster: Raycaster;
+} | null {
+  pickRaycaster.setFromCamera(
+    ndc ? pickAt.set(ndc.x, ndc.y) : SCREEN_CENTER,
+    camera
+  );
   const meshes: Object3D[] = layers.map((l) => l.mesh);
   const hit = pickRaycaster.intersectObjects(meshes, false)[0];
   const face = hit?.face;
@@ -218,7 +310,14 @@ export function pickCityObject(
     return null;
   }
   const ids = layer.mesh.geometry.getAttribute("featureId");
-  return ids ? { layer, objectIndex: ids.getX(face.a) } : null;
+  return ids
+    ? {
+        layer,
+        objectIndex: ids.getX(face.a),
+        distance: hit.distance,
+        raycaster: pickRaycaster,
+      }
+    : null;
 }
 
 export function countBuildings(layer: CityLayer): number {

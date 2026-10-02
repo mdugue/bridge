@@ -44,6 +44,9 @@ import {
   type TerrainExtras,
 } from "@/lib/city/tileset";
 import type { DressingKind } from "@/lib/city/tile";
+import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
+import { askSets, type AskSet } from "@/lib/city/ask-solids";
+import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
@@ -53,6 +56,7 @@ import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
 import { buildMonuments, type MonumentLayer } from "./monument-layer";
 import { buildRail } from "./rail-layer";
+import { bridgeAskSet } from "./bridge-ask";
 import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures, type SportFixtureLayer } from "./sport-fixtures";
 import {
@@ -79,6 +83,7 @@ import {
   trackedBytesOf,
 } from "./three-utils";
 import { buildTraffic } from "./traffic-layer";
+import { trafficAskSet } from "./traffic-ask";
 import { buildTram } from "./tram-layer";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import {
@@ -102,6 +107,9 @@ import { dressWalls } from "./wall-layer";
  * handle whose content comes and goes with it.
  */
 export interface TileDressing {
+  /** the trees, monuments and bridge decks the inquiry probe can ask
+   *  (lib/city/ask-items.ts; plan 052 phase 4): data, nothing drawn */
+  asks?: AskSet<FeatureInquiry>[];
   furniture?: Group;
   lamps?: LampControl;
   /** OSM hedges (low-vegetation-layer.ts): static, no per-frame work */
@@ -248,8 +256,9 @@ export const DRESSING_PARTS = {
   sport: (d) => d.sport?.group,
   vineyards: (d) => d.vineyards,
 } as const satisfies Record<
-  // every field but the id: a new part cannot be left out
-  Exclude<keyof TileDressing, "tile">,
+  // every field but the id and the askables (data): a new part cannot be
+  // left out
+  Exclude<keyof TileDressing, "asks" | "tile">,
   (d: TileDressing) => Object3D | undefined
 >;
 
@@ -457,18 +466,23 @@ async function buildCoarseDressing(
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
   ]);
+  const bands =
+    traffic.length > 0
+      ? buildTraffic(
+          traffic,
+          bridges,
+          { offset, heightAt: terrain.heightAt },
+          "coarse",
+          extent
+        )
+      : undefined;
+  // asked on the coarse bodies too: the tiles the fine level has not
+  // reached show only these
+  const set = trafficAskSet(bands, traffic, extras.tileId);
   return {
+    asks: set ? [set] : undefined,
     tile: extras.tileId,
-    traffic:
-      traffic.length > 0
-        ? buildTraffic(
-            traffic,
-            bridges,
-            { offset, heightAt: terrain.heightAt },
-            "coarse",
-            extent
-          )
-        : undefined,
+    traffic: bands,
   };
 }
 
@@ -629,6 +643,23 @@ async function buildDressing(
   // the seam samples the neighbour's ground past it.
   const riverside =
     river.length > 0 ? buildRiverside(river, ground) : undefined;
+  // What the probe can ask, sized as drawn: the trees on the tile's own
+  // ground (as the inventory stands them), decks only where this tile
+  // draws them.
+  const askCtx = {
+    ...ground,
+    tile,
+    treeHeightAt: terrain.heightAt,
+    owns: extent
+      ? (x: number, y: number) => ownsPoint(extent, x, y)
+      : undefined,
+  };
+  const bridgeSet = bridgeAskSet(rail, bridgeItems(bridges, askCtx));
+  const asks = [
+    ...treeSets(inventory, askCtx),
+    ...askSets(monumentItems(monuments, askCtx)),
+    ...(bridgeSet ? [bridgeSet] : []),
+  ];
   // Sections are cut at the tile edge by the bake; a bridge street rides
   // the decks of this tile's bridge file (which names a seam deck in both).
   const trafficBands =
@@ -641,7 +672,13 @@ async function buildDressing(
           ctx.tileBounds(tile) ?? terrain.bounds
         )
       : undefined;
+  // The counted sections are asked on their bodies, while the layer shows.
+  const trafficSet = trafficAskSet(trafficBands, traffic, tile);
+  if (trafficSet) {
+    asks.push(trafficSet);
+  }
   return {
+    asks,
     tile,
     tram,
     riverside,

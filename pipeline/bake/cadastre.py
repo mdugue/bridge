@@ -46,6 +46,13 @@ class Fields:
     trunk_circumference: str | None = None  # cm; read when no diameter is
     planted: str | None = None  # planting year (an int or a numeric string)
     felled: str | None = None  # a value here: the tree is gone
+    # for the inquiry card (ADR 0042; trees.py `cadastre_facts`): where the
+    # tree stands (a street or a park), its number there, its age in years
+    # and the date its record was last changed
+    place: str | None = None
+    number: str | None = None
+    age: str | None = None
+    recorded: str | None = None
     # the position as two properties in the tile's CRS; None: the geometry's
     # (first) point, which must then be in the tile's CRS
     position: tuple[str, str] | None = None
@@ -100,6 +107,10 @@ REGISTERS = {
             crown="kronendurchmesser_akt",
             trunk_diameter="stammdurchmesser_akt",
             position=("gis_x_utm", "gis_y_utm"),
+            place="name",
+            number="standort_nr",
+            age="jalter",
+            recorded="aend_dat",
         ),
         25833,
     ),

@@ -748,6 +748,126 @@ visual-variable codebook is in
 - **Roughness jitter** (*Materialstreuung*) — `hash(objectid)` → roughness
   clamped to [0.55, 1.0] (stays matte).
 
+### The twin: identity, facts and provenance (asked on demand)
+
+The scene says nothing on its own; asked (a click, a long press, `I` at
+the crosshair), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md),
+[plan 052](./plans/052-queryable-twin.md)).
+
+- **Object identity and semantics in the tileset** — CityJSON attributes →
+  ten columns of the building glTF's `EXT_structural_metadata` table
+  (`lib/city/object-facts.ts`, `scripts/bake-city-mesh.ts`): `buildingId`
+  (the Building's `gml:id`; a part carries its Building's — the Saxon parts'
+  `UUID_…` ids are dropped), `function` (ALKIS Gebäudefunktion, the root's
+  for a part), `roofType`, `created` (the object's export date, date only)
+  as ENUM columns of the codes a tile uses; `height` (`measuredHeight`,
+  else the model's top − base), `roofPitch` (`Dachneigung`), `area` (the
+  GroundSurface rings' area) as FLOAT32, noData −1. A scan structure
+  (plan 034) carries its key, height and area only. The code lists'
+  German labels: `lib/city/adv-codes.ts` (AdV CityGML profile). Spawn tile
+  +46 kB gzipped (+3.5 %). No look: read one row when asked. Found on the
+  way: the bake read the footprints after the CityJSON loader had
+  rewritten the document (a Solid's semantic values come back flattened),
+  so every Solid lost its GroundSurface — on the spawn tile 2 012 of 2 041
+  BuildingParts had no minimap footprint (and would have had no area);
+  the footprints are now read before the loader runs.
+- **Names, addresses and storeys** — OSM building outlines (`name`,
+  `addr:street` + `addr:housenumber`, `building:levels`) covering ≥ 50 %
+  of a LoD2 footprint (the one covering most), else the `addr:housenumber`
+  points on it (inside, or ≤ 3 m off the facade), grouped by street
+  (`pipeline/bake/osm_buildings.py` → `osmbuild_<tile>.json`, per object,
+  never handed to the root) → the `name`, `addr`, `levels` columns. Spawn
+  tile: 2 363 of 4 404 objects addressed, 444 named, 2 470 with storeys
+  (BBBike extract 2026-09-26). The card merges a building's parts.
+- **Provenance manifest** — `data/provenance.json` (hand-kept) →
+  `provenance.json` next to the tileset (`lib/city/provenance.ts`, at build
+  time): per source its label, credit and licence, per tile its edition
+  (LoD2 split into the model year and its inputs' years). The card's
+  source lines; fetched with the first question.
+- **The asked building** (no slider) — the picked object's building tree
+  (the set demolish takes) gets flag 32 in the packed object texture at
+  runtime; the clay lifts it 40 % towards paper white, adds a faint
+  paper light (brighter at night) and draws a pencil hatch: near, strokes
+  on the building every 0.9 m (up the facade at 45°, across the roof;
+  fwidth-constant); where those would crowd closer than a few pixels, 45°
+  strokes every 7 px in screen space instead, so the mark reads from the
+  air too. A first cut (0.45 m strokes, a flat graphite wash far off, a
+  35 % lift) was checked headless: the wash and the lift cancelled, and
+  from 100 m the building looked unchanged. Not in *Papier* (its override
+  material). **Not yet judged on a real GPU.**
+- **The inquiry card** (asked by a click, a long press on touch, or `I`
+  at the crosshair — no mode since 2026-10-01; the HUD's card surface, no
+  longer a warm paper sheet; a tap slightly off a small house still finds it — two rings of
+  rays vote; a bottom sheet on touch screens) — `lib/city/inquiry.ts` →
+  `inquiry-card.tsx`: the
+  OSM name or the ALKIS use as the title, the address, then only the facts
+  that are known (the Building's height — its tree's base to top unless
+  the survey measured it —, eave, roof form and pitch, the ground area
+  of its parts' union, overlaps counted once, mapped storeys, parts, *Kulturdenkmal*, a
+  shop on the ground floor), the `buildingId` to copy, and one source line
+  per source quoted, with edition and licence. Unspecified use (86 % of
+  the objects) is said as such, never guessed. A roof rebuilt from DOM1
+  (ADR 0036) is said to be measured there: no LoD2 form, pitch or
+  height, DOM1 as its source.
+- **Tree facts** (plan 052 phase 4) — the street-tree register's
+  `art_deutsch`, `art_botanisch`, `name` (the location), `standort_nr`,
+  `jalter` (age), `aend_dat` (the record's date) and which of height,
+  crown and trunk it measured rather than the bake filled in →
+  `treefacts_<tile>.json` (`pipeline/bake/trees.py`), columns aligned with
+  the trees file, names, places and dates as tables; an OSM tree its
+  tagged taxon, German name and sizes. ≈ 37 kB gzipped a tile, fetched
+  with the first question about a tree there, never to draw. The card:
+  species, location and tree number, measured sizes only, age with the
+  record's date.
+- **Asking trees, monuments, bridges** — `lib/city/ask-items.ts` builds
+  each tile's askable things from the features the dressing already has:
+  a tree's trunk and crown cylinders (as the inventory sizes them; packed
+  per 64 m cell), a monument's marker or measured form, a basin's prism;
+  bridges are met on their drawn meshes (`bridge-ask.ts`), the point
+  naming its deck. The card (`lib/city/inquiry-features.ts`): a
+  monument's official name (Basis-DLM), basin form (OSM), measured
+  height; a bridge's name and measured deck (Basis-DLM, DOM1), structure
+  and main span (Wikidata or OSM), clearance (OSM), keyed by its Wikidata
+  item.
+- **Asking the traffic layers** — while a data layer shows, its flows
+  and counters answer like the rest. A counted section is met on its
+  drawn glass bodies, on whichever terrain level shows them
+  (`traffic-ask.ts`; the bodies' BVH built on the first question that
+  reaches them), the vertex the ray meets names its
+  section (`userData.trafficSection`, a CPU-side table — WebGPU allows
+  eight vertex buffers and the bodies use them). A counter is met on its
+  columns as tall as they stand now (`bike-ask.ts`, cylinders from
+  `bikeColumns`). The cards (`lib/city/inquiry-traffic.ts`): a section's
+  vehicles a day both ways, per direction named by the compass point it
+  heads to with its heavy-goods share (where the source counted per
+  direction; an even split says so instead), the year and how it was
+  counted, the scene's hour as an estimate (≈ the day's count on the
+  typical curve, rounded to tens, the curve's source named) and the
+  layer's credit; a counter's bicycles in the last hour per direction,
+  when they were counted, and whether that is older than three hours.
+  The outline takes a section's own triangles, drawn with the layer's
+  own position node (grown with the hour, widened from the air); the
+  glass writes no depth, so its mask tests only what stands in front.
+  Trams are not asked yet.
+- **The outline** (no slider) — whatever is asked, building, tree,
+  monument, bridge, traffic flow or bicycle counter, gets one line along its silhouette as the camera
+  sees it now, not along its edges: the element's triangles (a
+  building's own out of its tile's mesh, a bridge's out of the tile's
+  bridge meshes within 12 m of its deck; a tree's crown ellipsoid — a
+  cone for a conifer — on its trunk, a monument's cylinder, a basin's
+  prism) are drawn into a mask where the scene pass's depth shows them
+  (a stand-in only where the scene's own surface lies inside it), the
+  mask is blurred at half resolution, and the band of the blur between
+  0.07 and 0.66 is the line: 4.5 CSS px of the hatch's graphite, on a
+  hair of its paper outside (0.012–0.07, 55 %), anti-aliased by its own
+  gradient. The blur rounds the corners and drops what is finer than
+  the line; its reach follows the device pixel ratio, so the width is
+  in screen pixels at any distance (`lib/city/outline.ts`,
+  `selection-outline.ts`, `selection-shape.ts`; over the finished frame,
+  before the output transform, so every picture style shows it). It
+  replaced the pencil loop (🗃️ below). **Not yet judged on a real
+  GPU.**
+
 ### Vegetation
 - **Cultivated land** (plan 028) — OSM `landuse=allotments|orchard|vineyard`
   (and `leisure=garden` plots inside a colony) → `pipeline/bake/cultivated.py`:
@@ -1965,7 +2085,9 @@ GPU**.
   its own colour from the air and past ~200 m, so the layer reads as glass
   up close and as a map from above; the bodies widen up to 5× from the
   air (`map-overlay.ts` `mapWidenNode`). A street without a count draws
-  nothing — no gap filling, no model.
+  nothing — no gap filling, no model. A click on a flow asks it (the
+  twin's card: its counts, directions, year, method, the hour's
+  estimate and the source).
 - **Bicycle counters, live** — the city's permanent counters (WFS
   `cls:L1781` "aktuelle Zählwerte", dl-de/by-2-0; 35 counters, the
   bicycles of the last full hour per direction) read **by the browser**
@@ -1978,7 +2100,7 @@ GPU**.
   the top a soft dome; rings of light rise through each at 0.18 m/s ×
   √count, and a soft pool of its colour lies on the ground around its
   foot; grey and still when the count is older than three hours. The sidebar lists the counts,
-  busiest first; a click flies there. The first runtime request to a
+  busiest first; a click flies there, a click on a column asks it. The first runtime request to a
   server other than the site's own ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)).
 - **Every site, its own sources** (`Site.dataLayers`, `sites/<id>.ts`):
   a site names the source of each layer it has, and the HUD offers only
@@ -2199,6 +2321,13 @@ research that produced them):
     run the columns with the scene's hour); the accidents with injury
     (Unfallatlas, the statistics offices, dl-de/by-2-0; pedestrian and
     cyclist involvement per point) as a fourth layer.
+15. **The twin, next** — ask trees, bridges and monuments too, a link
+    to an asked building, a *Datenstand* panel, the ingest writing the
+    provenance ([plan 052](./plans/052-queryable-twin.md) phases 4–7); the
+    day playing, weather as mood, the Elbe at its gauge
+    ([plan 053](./plans/053-time-and-live-sources.md)); flood, sun hours,
+    sight lines and a planned building as scenarios
+    ([plan 054](./plans/054-scenarios.md)).
 
 ---
 
@@ -2208,7 +2337,8 @@ research that produced them):
 |---|---|---|
 | **Pedestrian counts** (for the traffic data layers, 2026-10-01) | No open measured source for the site: the only pedestrian counter, hystreet.com's laser count on the Prager Straße, is commercial (access on request); the city's "Fußgängerquerung St. Petersburger Straße" is a *bicycle* counter. A density modelled from stops, shops and census cells would be a model drawn as if measured. | Revisit with an open counter network (Telraam sensors in the site, if any, through its API with a key). |
 | **Live tram positions** (GTFS-RT, the TLMS radio telegrams) | gtfs.de's realtime feed is one protobuf for all of Germany, too heavy for a browser to poll; TLMS (`wss://socket.tlm.solutions`) is a volunteer service whose coverage and uptime the viewer cannot vouch for. | The timetable runs instead (✅ *Trams by timetable*); delays could come from the VVO's departure monitor (`webapi.vvo-online.de/dm`, answers any origin) per stop — 📋. |
-| **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). |
+| **Street and square name lettering and the on-foot caption** (plan 032: OSM `highway` names, named squares and the DLM bridge names lettered on the ground from a per-tile Canvas-2D atlas, fading in from 25 m up; on foot, the nearest named street ≤ 25 m in a HUD pill; `pipeline/bake/names.py` → `names_<tile>.geojson`, `name-layer.ts`, `street-caption.tsx`, `lib/city/names.ts`) | Removed at the maintainer's request after review on a device (2026-09-26): the map look reads better without text. Bake, committed files, layer and caption all went. | The DLM bridge `name` stays in the bridge files. Revive only with a new look decision, from git history (`4b08993`). Text now appears only on demand, in the inquiry card ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md)). |
+| **Every CityJSON attribute as a string column, part ids included** (plan 052's first cut) | +132 kB gzipped (+9.6 %) on the spawn tile's building glTF, 70 kB of it object ids: Saxon BuildingParts carry random `UUID_…` ids (41 bytes, incompressible) that no other dataset joins on. | The Building's `gml:id` for every object of its tree and ENUM columns for the code lists: +46 kB (+3.5 %) ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md)). The part UUIDs stay in the committed CityJSON. |
 | **Drawn fence panels** (plan 029's first look: bars every 12.5 cm, a wire diamond mesh, pickets, posts every 2.5 m and a top rail, alpha-cut in the shader, a dithered veil far off, a dithered partial shadow through a custom depth material) | On a real phone "zu hart und kleinteilig", then "stärker stilisiert, mildere Farbwahl, Kleinteiligkeit führt zu Artefakten" (maintainer, 2026-09-25): dark iron and slate read as ink against the pastel scene, and every feature finer than a pixel — bars, mesh, posts, the dithered holes — aliased into moiré and shimmer, near and from the air. | A fence is one low band in one muted tone (✅ above): no holes, no dither, nothing finer than its own height. Revisit a pattern only with a real-GPU plate at walking height and from 150 m that stays calm. |
 | **A raised pavement behind the kerb** (plan 023's leftover: lift the pavement a kerb's height above the road) | The DGM1 has no such step to lift, and ADR 0035 makes every part meet the ground at the ground's own level: the kerb's back now runs down to the pavement (`meetGround`), which took its ground-join misses from 32 % to 2 % (2026-10-01 audit). | Only with a measured kerb height per street (none of the sources carries it) and a terrain cut that ADR 0035's join check accepts. |
 | **DGM1 micro-relief as a normal texture** (plan 023 phase 7: a 1 m normal map over the "2 m mesh") | The fine level is a ±0.15 m TIN of the native DGM (ADR 0030), not a 2 m grid, and `terrainNormal` (`terrain-layer.ts`) deliberately pulls near-flat normals up: the DGM's ruts, survey wobble and 8-bit normals read as dirty flecks under a low sun. Kerbs are real geometry now. | Revisit only if a real-GPU plate shows the ground too flat — and then as a softer calm threshold, not more relief. |
@@ -2233,7 +2363,8 @@ research that produced them):
 | **VSM shadows** | "Corduroy"/grid rings on large ground at grazing sun. | Use `PCFShadowMap` + radius instead. |
 | **Large `normalBias`** | Bright peter-panning contact strip. | Keep `normalBias=0`, small negative `bias`. |
 | **Bigger shadow frustum / 4096 map** | Coarser texels → fraying / cost without gain once radius softens. | Tight ~110 m frustum at 3072 + radius. |
-| **Sobel / deferred outlines** | Hard edges clash with the watercolor look. | — |
+| **Sobel / deferred outlines** | Hard edges clash with the watercolor look. | The asked element's outline (✅ *The outline*) is not one: a single soft silhouette of one element, on demand, never the scene's edges. |
+| **The pencil loop** (plan 052 phase 4's first mark: a wavering graphite stroke on a band of paper, once round and a little past, on the ground around an asked tree or monument and along a deck's parapets; `lib/city/pencil.ts`, `pencil-mark.ts`) | Maintainer review (2026-10-01): which element is selected should read more strongly. A ring on the ground says "here", not "this" — beside a crown among crowns, or along a deck seen from below, it did not name the element; and a building, hatched only, had no line at all. | Replaced by one screen-space outline for every kind (✅ *The outline*), in the same graphite and paper. |
 | **Selective bloom, quad leaf billboards** | No payoff yet for the cost. | Revisit only with a concrete need. |
 | **`BatchedMesh` for buildings** | Already merged per tile; would break `objectid` picking/demolish and not cut draw calls. | Bottleneck is fill-rate, not draw calls. |
 | **Blender texture baking** | No UVs on the source geometry. | — |

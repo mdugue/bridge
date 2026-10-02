@@ -250,6 +250,80 @@ test("city page serves the viewer shell", async ({ page }) => {
 });
 
 /**
+ * Hovers the camera over a mid-sized single-polygon building of the spawn
+ * tile and aims the crosshair down through its roof, then lets the pose
+ * reach a rendered frame (the crosshair ray is cast against the scene graph
+ * the render loop maintains).
+ */
+async function aimAtBuilding(page: Page): Promise<void> {
+  // The spawn tile's minimap footprints (one list of polygons per object,
+  // published next to its glTF): aim at a mid-sized single-polygon
+  // building whose bounding-box centre lies inside it — a perimeter block's
+  // centre is its courtyard, and the ray would hit the ground.
+  const footprints = (await (
+    await page.request.get(
+      await dataUrl(page, "footprints_33412_5656_2_sn.json")
+    )
+  ).json()) as [number, number][][][];
+  const inside = ([x, y]: number[], ring: [number, number][]) => {
+    let hit = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+        hit = !hit;
+      }
+    }
+    return hit;
+  };
+  const target = footprints
+    .filter((polys) => polys.length === 1)
+    .map(([ring]) => {
+      const xs = ring.map((p) => p[0]);
+      const ys = ring.map((p) => p[1]);
+      const [x0, y0, x1, y1] = [
+        Math.min(...xs),
+        Math.min(...ys),
+        Math.max(...xs),
+        Math.max(...ys),
+      ];
+      return {
+        ring,
+        centre: [(x0 + x1) / 2, (y0 + y1) / 2],
+        area: (x1 - x0) * (y1 - y0),
+      };
+    })
+    .find((b) => b.area > 300 && b.area < 3000 && inside(b.centre, b.ring));
+  expect(target).toBeDefined();
+  const [centreX, centreY] = target?.centre ?? [0, 0];
+  await page.evaluate(
+    ([easting, northing]) => {
+      const api = window.__poc?.handle;
+      if (!api) {
+        throw new Error("scene handle not published");
+      }
+      // Stand on the ground there to learn its height, then hover above.
+      api.teleportTo(easting, northing);
+      const ground = api.getCameraState().pos.y - 1.7;
+      // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
+      const x = easting - api.offset.cx;
+      const z = -(northing - api.offset.cy);
+      // Approach at an angle (not straight down: a view direction parallel
+      // to the camera's up vector makes lookAt degenerate) and aim the
+      // crosshair a few metres above the ground inside the footprint —
+      // through the roof.
+      api.flyTo({ x, y: ground + 150, z: z + 80 }, { x, y: ground + 4, z });
+    },
+    [centreX, centreY]
+  );
+  // Let the new pose reach a rendered frame before picking. flyTo refreshes
+  // the camera's own matrixWorld, but the crosshair ray is cast against the
+  // scene graph the render loop maintains; demolishing in the same tick as
+  // the fly has been seen to pick nothing on a loaded runner.
+  await waitForFrames(page, 1);
+}
+
+/**
  * The desktop viewer every test in the two desktop groups below reads: one
  * booted page per group. Booting is the single largest fixed cost in this
  * suite (~14 s at the full profile on four cores, ~4.5 s lite) and none of
@@ -810,52 +884,93 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expectNoErrors(errors);
   });
 
+  test("the inquiry card tells what the data knows, and where it comes from", async () => {
+    // Befragen (ADR 0042): a plain click asks — no mode first. It marks
+    // the building and opens the card with its identity, its facts and a
+    // source line per source; I asks again at the crosshair. Before
+    // demolish, which takes a building of the same kind away.
+    await aimAtBuilding(page);
+    const box = await page.locator("canvas[data-engine]").boundingBox();
+    await withFramesHeld(page, async () => {
+      // the crosshair's own spot: the dot over it must not take the click
+      await page.mouse.click(
+        (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        (box?.y ?? 0) + (box?.height ?? 0) / 2
+      );
+      const card = page.getByTestId("inquiry-card");
+      await expect(card).toBeVisible();
+      // The LoD2 Building's gml:id — the key every other dataset joins on.
+      await expect(card).toContainText(/DESNAT\w+/);
+      await expect(card).toContainText("Quelle: GeoSN, dl-de/by-2-0");
+      // the provenance manifest arrives with the first card: the edition
+      await expect(card).toContainText(/Modell \d{4}/);
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+      await page.keyboard.press("i");
+      await expect(card).toContainText(/DESNAT\w+/);
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+    });
+    expectNoErrors(errors);
+  });
+
+  test("a tree answers with what the city's register says about it", async () => {
+    // Plan 052 phase 4: a street tree of the register, asked from above
+    // and a little aside, answers with its species, where it stands and
+    // the register as its source — the facts file fetched with the
+    // question.
+    const trees = (await (
+      await page.request.get(
+        await dataUrl(page, "trees_33412_5656_2_sn.geojson")
+      )
+    ).json()) as {
+      features: {
+        geometry: { coordinates: [number, number] };
+        properties: { h: number; s?: string };
+      }[];
+    };
+    const tree = trees.features.find(
+      (f) => f.properties.s === undefined && f.properties.h > 14
+    );
+    expect(tree).toBeDefined();
+    const [east, north] = tree?.geometry.coordinates ?? [0, 0];
+    await page.evaluate(
+      ([e, n]) => {
+        const api = window.__poc?.handle;
+        if (!api) {
+          throw new Error("scene handle not published");
+        }
+        api.teleportTo(e, n);
+        const ground = api.getCameraState().pos.y - 1.7;
+        const x = e - api.offset.cx;
+        const z = -(n - api.offset.cy);
+        // from above and aside, at the crown: the ray meets the tree first
+        api.flyTo({ x, y: ground + 18, z: z + 22 }, { x, y: ground + 8, z });
+      },
+      [east, north]
+    );
+    await waitForFrames(page, 1);
+    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    expect(asked?.kind).toBe("tree");
+    await withFramesHeld(page, async () => {
+      const card = page.getByTestId("inquiry-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Stadtbaum");
+      await expect(card).toContainText("Lage");
+      // the facts file arrived: the source line names what it gave
+      await expect(card).toContainText(/Art.*: Stadtbaumkataster/);
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+    });
+    expectNoErrors(errors);
+  });
+
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
     // Runs after the read-only tests: a demolish rebuilds the tile's BVH and
     // the minimap's 2369 footprint polygons, and a main thread busy with that
     // makes Playwright's actionability checks on the minimap crawl.
-    // The spawn tile's minimap footprints (one list of polygons per object,
-    // published next to its glTF): aim at a mid-sized single-polygon
-    // building whose bounding-box centre lies inside it — a perimeter block's
-    // centre is its courtyard, and the ray would hit the ground.
-    const footprints = (await (
-      await page.request.get(
-        await dataUrl(page, "footprints_33412_5656_2_sn.json")
-      )
-    ).json()) as [number, number][][][];
-    const inside = ([x, y]: number[], ring: [number, number][]) => {
-      let hit = false;
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [xi, yi] = ring[i];
-        const [xj, yj] = ring[j];
-        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-          hit = !hit;
-        }
-      }
-      return hit;
-    };
-    const target = footprints
-      .filter((polys) => polys.length === 1)
-      .map(([ring]) => {
-        const xs = ring.map((p) => p[0]);
-        const ys = ring.map((p) => p[1]);
-        const [x0, y0, x1, y1] = [
-          Math.min(...xs),
-          Math.min(...ys),
-          Math.max(...xs),
-          Math.max(...ys),
-        ];
-        return {
-          ring,
-          centre: [(x0 + x1) / 2, (y0 + y1) / 2],
-          area: (x1 - x0) * (y1 - y0),
-        };
-      })
-      .find((b) => b.area > 300 && b.area < 3000 && inside(b.centre, b.ring));
-    expect(target).toBeDefined();
-    const [centreX, centreY] = target?.centre ?? [0, 0];
     const buildingsBefore = await page.evaluate(
       () => window.__poc?.stats?.buildingCount ?? 0
     );
@@ -863,31 +978,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const trianglesBefore = await page.evaluate(
       () => window.__poc?.stats?.layerStats.city.triangles ?? 0
     );
-    await page.evaluate(
-      ([easting, northing]) => {
-        const api = window.__poc?.handle;
-        if (!api) {
-          throw new Error("scene handle not published");
-        }
-        // Stand on the ground there to learn its height, then hover above.
-        api.teleportTo(easting, northing);
-        const ground = api.getCameraState().pos.y - 1.7;
-        // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
-        const x = easting - api.offset.cx;
-        const z = -(northing - api.offset.cy);
-        // Approach at an angle (not straight down: a view direction parallel
-        // to the camera's up vector makes lookAt degenerate) and aim the
-        // crosshair a few metres above the ground inside the footprint —
-        // through the roof.
-        api.flyTo({ x, y: ground + 150, z: z + 80 }, { x, y: ground + 4, z });
-      },
-      [centreX, centreY]
-    );
-    // Let the new pose reach a rendered frame before picking. flyTo refreshes
-    // the camera's own matrixWorld, but the crosshair ray is cast against the
-    // scene graph the render loop maintains; demolishing in the same tick as
-    // the fly has been seen to pick nothing on a loaded runner.
-    await waitForFrames(page, 1);
+    await aimAtBuilding(page);
     await page.evaluate(() => window.__poc?.handle?.demolishAtCrosshair());
     await page.waitForFunction(
       (before) => (window.__poc?.stats?.buildingCount ?? 0) < before,
@@ -1019,7 +1110,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     isMobile: true,
   });
 
-  test("touch UI: joystick, drawer, drag-look, double-tap travel", async ({
+  test("touch UI: joystick, drawer, drag-look, double-tap travel, long-press ask", async ({
     page,
   }) => {
     const errors = watchErrors(page);
@@ -1144,6 +1235,54 @@ test.describe("mobile", { tag: "@phone" }, () => {
       poseBefore,
       { timeout: slow(15_000) }
     );
+
+    // A long press asks the building under the finger, no mode needed
+    // (ADR 0042): aim the screen centre at a roof, hold a touch there until
+    // the answer comes — under software rendering the press timer fires
+    // late, so the release waits for it — and the answer is a bottom sheet
+    // that folds the joystick away.
+    await aimAtBuilding(page);
+    const hold = (type: "pointerdown" | "pointerup") =>
+      page.evaluate((event) => {
+        const canvas = document.querySelector("canvas[data-engine]");
+        if (!canvas) {
+          throw new Error("no WebGL canvas");
+        }
+        const rect = canvas.getBoundingClientRect();
+        canvas.dispatchEvent(
+          new PointerEvent(event, {
+            pointerId: 60,
+            pointerType: "touch",
+            isPrimary: true,
+            bubbles: true,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+          })
+        );
+      }, type);
+    await hold("pointerdown");
+    const sheet = page.getByTestId("inquiry-card");
+    await expect(sheet).toHaveAttribute("data-variant", "sheet", {
+      timeout: slow(30_000),
+    });
+    await hold("pointerup");
+    await withFramesHeld(page, async () => {
+      await expect(page.getByTestId("joystick")).toHaveCount(0);
+      // Folded: what it is; "Angaben und Quellen" unfolds the rest (the
+      // drawer's snap point, as a swipe up would).
+      const unfold = page.getByRole("button", { name: "Angaben und Quellen" });
+      await expect(unfold).toHaveAttribute("aria-expanded", "false");
+      await unfold.tap();
+      await expect(
+        page.getByRole("button", { name: "Angaben einklappen" })
+      ).toHaveAttribute("aria-expanded", "true");
+      await expect(sheet).toContainText("Kennung");
+      await expect(sheet).toContainText("Quelle: GeoSN");
+      // The drawer's own close: it slides away, then the card is gone.
+      await page.getByRole("button", { name: "Karte schließen" }).tap();
+      await expect(sheet).toHaveCount(0, { timeout: slow(10_000) });
+      await expect(page.getByTestId("joystick")).toBeVisible();
+    });
 
     // Drawer opens with the scene settings.
     await withFramesHeld(page, async () => {

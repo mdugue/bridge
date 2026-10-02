@@ -876,10 +876,17 @@ def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp
             (25, 25, {"shop": "clothes", "level": "1"}),  # upstairs: dropped
             (100, 190, {"shop": "kiosk"}),  # on no building
             *heritage,
+            # two address points on `shop`, in no particular order
+            (145, 145, {"addr:street": "Prager Straße", "addr:housenumber": "11"}),
+            (155, 145, {"addr:street": "Prager Straße", "addr:housenumber": "3"}),
         ],
     )
     outline = "".join(f'<nd ref="{i}"/>' for i in (15, 16, 17, 18, 15))
-    tags = '<tag k="building" v="yes"/><tag k="heritage" v="4"/>'
+    tags = (
+        '<tag k="building" v="yes"/><tag k="heritage" v="4"/><tag k="name" v="Altes Haus"/>'
+        '<tag k="addr:street" v="Am Markt"/><tag k="addr:housenumber" v="2"/>'
+        '<tag k="building:levels" v="3"/>'
+    )
     way = f'<way id="9" version="1">{outline}{tags}</way>'
     tile = _osm_tile(tmp_path, monkeypatch, nodes + way)
     _lod2_city(
@@ -890,12 +897,30 @@ def test_shops_on_the_ground_floor_and_listed_outlines_flag_the_lod2_objects(tmp
     doc = json.loads((tile.data / "dlm" / "osmbuild_t.json").read_text())
     assert doc["attribution"].startswith("©")
     assert doc["objects"] == {
-        "shop": {"shop": 1},
+        # the address points, numbers in natural order; never on the root
+        "shop": {"shop": 1, "addr": "Prager Straße 3, 11"},
         "shop-bldg": {"shop": 1},  # the part's root
         "other": {"shop": 1},
-        "old": {"heritage": 1},  # the outline covers all of it
+        # the outline covers all of it: listed, named, addressed, storeys
+        "old": {"heritage": 1, "name": "Altes Haus", "addr": "Am Markt 2", "levels": 3},
     }
     assert doc["meta"]["shop_points_placed"] == 2
+    assert doc["meta"]["objects_addressed"] == 2
+
+
+def test_address_lines_group_numbers_by_street_and_storeys_parse():
+    from bake.osm_buildings import address, address_line, levels_of
+
+    assert address('"addr:street"=>"Hauptstraße","addr:housenumber"=>"1a"') == ("Hauptstraße", "1a")
+    assert address('"addr:street"=>"Hauptstraße"') is None
+    line = address_line([("Hauptstraße", "10"), ("Am Markt", "2"), ("Hauptstraße", "9")])
+    assert line == "Hauptstraße 9, 10 · Am Markt 2"
+    assert levels_of('"building:levels"=>"4"') == 4
+    assert levels_of('"building:levels"=>"2,5"') == 2
+    assert levels_of('"building:levels"=>"many"') is None
+    assert levels_of('"building:levels"=>"inf"') is None
+    assert levels_of('"building:levels"=>"nan"') is None
+    assert levels_of(None) is None
 
 
 def test_only_ground_floor_levels_count_as_street_shops():
@@ -979,6 +1004,40 @@ def test_a_cadastre_tree_carries_its_genus_and_trunk():
     assert GENERA[props["gn"]] == "Acer rubrum"
     assert props["t"] == 41
     assert "s" not in props
+
+
+def test_tree_facts_follow_the_features_and_say_what_is_measured():
+    from bake.trees import osm_tree, parse_trees, tree_facts, tree_props
+
+    raw = {"features": [_cadastre_tree(1.0, 1.0, 12, None, "Tilia cordata", "Winter-Linde")]}
+    raw["features"][0]["properties"].update(
+        {
+            "name": "Grunaer  Straße",
+            "standort_nr": 40.0,
+            "jalter": "16                ",
+            "stammdurchmesser_akt": 20.0,
+            "aend_dat": "27.08.2025 08:54:17",
+        }
+    )
+    cadastre = parse_trees(raw, (0.0, 0.0, 10.0, 10.0), DRESDEN)[0]
+    osm = osm_tree(5.0, 5.0, '"species"=>"Acer platanoides","species:de"=>"Spitz-Ahorn"')
+    assert osm is not None
+    trees = [cadastre, osm, cadastre]
+    props = [tree_props(cadastre, 12.0, 7.0), tree_props(osm, 9.0, 5.0), {}]
+    facts = tree_facts(trees, props)
+    assert facts["names"] == [
+        ["Winter-Linde", "Tilia cordata"],
+        ["Spitz-Ahorn", "Acer platanoides"],
+    ]
+    assert facts["name"] == [0, 1, 0]
+    assert facts["places"] == ["Grunaer Straße"]
+    assert facts["place"] == [0, -1, 0]
+    assert facts["nr"] == [40, -1, 40]
+    assert facts["age"] == [16, -1, 16]
+    assert facts["dates"] == ["2025-08-27"]
+    assert facts["date"] == [0, -1, 0]
+    # height measured, crown filled in, trunk shown only where the feature has it
+    assert facts["known"] == [1 | 4, 0, 1]
 
 
 def test_the_genus_table_keys_the_autumn_not_just_the_genus():

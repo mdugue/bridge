@@ -24,6 +24,7 @@ import {
   modelWorldMatrix,
   normalize,
   positionWorld,
+  screenCoordinate,
   select,
   sin,
   smoothstep,
@@ -194,7 +195,13 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
       facadeMaterial(flags, wall)
     ),
-    colour: clayColour(d, tint, build, h, wall, flags),
+    colour: askedColour(
+      clayColour(d, tint, build, h, wall, flags),
+      h,
+      wall,
+      flags,
+      wn
+    ),
     // Himmelslicht: the courtyard's ground floor gets less of the sky.
     ao: createClaySky().ao(h, build.z, d.uSkyView),
     emissive: clayGlow(d, build, h, wall, flags, wn),
@@ -362,10 +369,54 @@ function clayGlow(
     .glass.mul(fres.mul(fres).mul(fres))
     .mul(d.uRim)
     .mul(float(1).sub(d.uNight.mul(0.7)));
+  // The asked building's paper light: faint by day, a glow after dark.
+  const askedLight = vec3(0.97, 0.9, 0.78).mul(
+    askedFlag(flags).mul(d.uNight.mul(0.08).add(0.06))
+  );
   return rim
     .add(glow)
     .add(vec3(1, 0.78, 0.45).mul(shopGlow.mul(0.4)))
-    .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)));
+    .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
+    .add(askedLight);
+}
+
+/** 1 on the building someone asked about (OBJECT_FLAG_ASKED, 32). */
+function askedFlag(flags: F): F {
+  return mod(floor(floor(flags.add(0.5)).div(32)), 2);
+}
+
+/**
+ * The building someone asks about (flag 32, OBJECT_FLAG_ASKED — set in the
+ * packed table at runtime by the inquiry probe, ADR 0042): lifted towards
+ * paper white (a faint paper light of its own in clayGlow, so it
+ * reads in shade too), and drawn over with a pencil hatch. Near, the
+ * strokes lie on the building — every 0.9 m, along the wall and up it (so
+ * they climb the facade at 45°), straight across the roof, fwidth-constant
+ * like the storey lines. Where they would crowd closer than a few pixels
+ * (far off, or from the air) the hatch hands over to strokes on the paper
+ * itself: 45° lines every 7 px in screen space, so the mark stays legible
+ * at any distance and never shimmers. No slider: it marks a choice, it is
+ * not part of the look. Branch-free (mixes, no select): fwidth needs
+ * uniform control flow, and the flag changes from building to building.
+ */
+function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
+  const asked = askedFlag(flags);
+  const along = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
+  const u = mix(
+    positionWorld.x.add(positionWorld.z),
+    dot(positionWorld.xz, along).add(h),
+    wall
+  ).div(0.9);
+  const w = max(fwidth(u), 1e-4);
+  const line = float(1).sub(min(abs(fract(u.sub(0.5)).sub(0.5)).div(w), 1));
+  const near = float(1).sub(smoothstep(0.3, 0.7, w));
+  const s = screenCoordinate.x.add(screenCoordinate.y).div(7);
+  const paper = float(1).sub(
+    min(abs(fract(s.sub(0.5)).sub(0.5)).mul(7 / 1.2), 1)
+  );
+  const ink = mix(paper.mul(0.55), line.mul(0.6), near).mul(asked);
+  const lifted = mix(col, vec3(0.97, 0.93, 0.85), asked.mul(0.4));
+  return mix(lifted, vec3(0.24, 0.22, 0.21), ink);
 }
 
 /**

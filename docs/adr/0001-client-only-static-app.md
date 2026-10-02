@@ -1,6 +1,6 @@
 # ADR 0001: Client-only static app — no backend, no database, no persistence
 
-- **Status:** accepted; the "four fixed tiles" below became fifteen streamed ones with [ADR 0024](./0024-site-streams-as-3d-tiles.md) — still static files, so the decision stands
+- **Status:** accepted, **relaxed 2026-09-27** to "static where possible" (see the amendment below); the "four fixed tiles" below became fifteen streamed ones with [ADR 0024](./0024-site-streams-as-3d-tiles.md) — still static files
 - **Date:** 2026-06 (initial commit), reaffirmed 2026-09
 
 ## Context
@@ -32,6 +32,18 @@ is done by copying a Snapshot JSON, not by a server-side link.
 - Shareable links, user-saved places and editing that survives a reload
   are out of scope until this ADR is superseded (see
   [plans/README.md](../plans/README.md) direction options 2 and 4).
+
+## Amendment (2026-09-27): static where possible
+
+The maintainer set the project's direction to a digital twin with an
+aesthetic claim and relaxed this decision from "strictly static" to
+"static where possible". Everything the twin knows about the city stays
+baked into files ([ADR 0042](./0042-inquiry-cards-on-demand-facts-in-the-tileset.md));
+live sources ([plan 053](../plans/053-time-and-live-sources.md)) are read
+from the browser where their APIs allow it (CORS), and a small, stateless
+proxy — no database, no accounts, no user data — is allowed only where a
+source offers no other way. Anything stateful (saved places, shared edits)
+still needs its own decision.
 
 ## Alternatives
 

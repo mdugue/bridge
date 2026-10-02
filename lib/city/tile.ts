@@ -88,12 +88,15 @@ export const SMALL_RASTER_PX = 512;
  * One row per side file. Besides its name, a row says where the viewer
  * finds it — `dressing`: named in the fine terrain's dressing extras
  * (tile-stream.ts fetches it per tile); `sound`: named in the tileset's
- * tile list for the soundscape (plan 035) — and `osm`: the file is derived
+ * tile list for the soundscape (plan 035); `ask`: named there for the
+ * inquiry card (ADR 0042), fetched only when something is asked — and
+ * `osm`: the file is derived
  * from OpenStreetMap, so its JSON carries the ODbL credit (checked over
  * every committed file by features.test.ts). The raster rows the terrain
  * reads are named by prepare-data.ts's terrain extras.
  */
 interface ArtifactSpec {
+  ask?: true;
   bakedFrom?: { file: (tile: string) => string; raster: number };
   dressing?: true;
   file: (tile: string) => string;
@@ -198,6 +201,10 @@ const ARTIFACTS = {
   // hedges and the laser-scan crowns outside the canopy mask
   // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
   trees: { file: named("trees", "geojson"), dressing: true },
+  // What the card says about those trees (species, location, age, the
+  // measured sizes) — fetched with the first question about a tree on the
+  // tile (ADR 0042), never to draw.
+  treeFacts: { file: named("treefacts", "json"), ask: true },
   // Optional: the city's counted motor traffic per road section
   // (pipeline/bake/traffic.py); drawn only while its data layer is on.
   traffic: { file: named("traffic", "geojson"), dressing: true },
@@ -207,7 +214,7 @@ const ARTIFACTS = {
 
 type Specs = typeof ARTIFACTS;
 export type TileArtifactKind = keyof Specs;
-type KindsWith<F extends "dressing" | "osm" | "sound"> = {
+type KindsWith<F extends "ask" | "dressing" | "osm" | "sound"> = {
   [K in TileArtifactKind]: Specs[K] extends Record<F, true> ? K : never;
 }[TileArtifactKind];
 /** The side files named in a fine terrain's dressing extras. */
@@ -215,7 +222,7 @@ export type DressingKind = KindsWith<"dressing">;
 /** The side files the soundscape fetches. */
 export type SoundKind = KindsWith<"sound">;
 
-const kindsWith = <F extends "dressing" | "osm" | "sound">(flag: F) =>
+const kindsWith = <F extends "ask" | "dressing" | "osm" | "sound">(flag: F) =>
   (Object.keys(ARTIFACTS) as TileArtifactKind[]).filter(
     (kind) => (ARTIFACTS[kind] as ArtifactSpec)[flag]
   ) as KindsWith<F>[];
@@ -233,6 +240,9 @@ export const COARSE_DRESSING_KINDS = [
 ] as const satisfies readonly DressingKind[];
 export type CoarseDressingKind = (typeof COARSE_DRESSING_KINDS)[number];
 export const SOUND_KINDS: readonly SoundKind[] = kindsWith("sound");
+/** The side files only the inquiry card fetches. */
+export type AskKind = KindsWith<"ask">;
+export const ASK_KINDS: readonly AskKind[] = kindsWith("ask");
 /** Side files derived from OSM (their JSON must carry the ODbL credit). */
 export const OSM_KINDS: readonly TileArtifactKind[] = kindsWith("osm");
 

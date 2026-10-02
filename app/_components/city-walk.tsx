@@ -30,6 +30,7 @@ import {
   type SkippedStages,
   type StageFractions,
 } from "@/lib/city/load-stages";
+import type { Inquiry } from "@/lib/city/inquiry";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
@@ -58,6 +59,7 @@ import {
 import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { InquiryCard } from "./inquiry-card";
 import { useLiveMode } from "./live-mode";
 import {
   LocateMessage,
@@ -188,12 +190,14 @@ function sceneTools({
  * The overlays that belong to the scene, not to the panel: the key hints, the
  * joystick and, opposite it, the toolbar (sceneTools) with — in fly mode —
  * the altitude stick above it. All of it
- * steps aside while the sidebar is open — on a phone the sidebar is a sheet,
+ * steps aside while the inquiry sheet covers the bottom (touch) and while
+ * the sidebar is open — on a phone the sidebar is a sheet,
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
 function SceneOverlays({
   coarse,
+  covered,
   live,
   locate,
   mode,
@@ -202,6 +206,8 @@ function SceneOverlays({
   onToggleMode,
 }: {
   coarse: boolean;
+  /** the inquiry sheet covers the bottom of the screen (touch) */
+  covered: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: MovementMode;
@@ -210,7 +216,7 @@ function SceneOverlays({
   onToggleMode: () => void;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
-  if (isMobile ? openMobile : state === "expanded") {
+  if (covered || (isMobile ? openMobile : state === "expanded")) {
     return null;
   }
   const flying = mode === "fly";
@@ -365,6 +371,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     });
   }, [look]);
   const [mode, setMode] = useState<MovementMode>("walk");
+  // Befragen (ADR 0042): what was asked last, while its card is open.
+  const [inquiry, setInquiry] = useState<Inquiry | null>(null);
+  const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
+  const closeInquiry = useCallback(() => {
+    handleRef.current?.clearInquiry();
+    setInquiry(null);
+  }, []);
   const [footprints, setFootprints] = useState<FootprintPoly[]>([]);
   const [bounds, setBounds] = useState<TerrainBounds | null>(null);
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | null>(
@@ -532,6 +545,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           setMode(m);
         }
       },
+      onInquiry: (asked) => {
+        if (!cancelled) {
+          setInquiry(asked);
+        }
+      },
       onPose: (pose) => {
         if (cancelled) {
           return;
@@ -560,6 +578,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         syncTime();
         setFootprints(h.getFootprints());
         setBounds(h.terrainBounds);
+        setProvenanceUrl(h.provenanceUrl);
         setLatLng(h.latLng);
         setLandcoverTiles(h.landcoverTiles);
         setLandmarks(h.landmarks);
@@ -599,6 +618,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       cancelled = true;
       aborter.abort();
       trail.end();
+      // The card belongs to the scene that marked its building: a route
+      // kept hidden (and shown again) boots a new scene without that mark.
+      setInquiry(null);
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
@@ -676,7 +698,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     >
       {/* Scene is full-bleed and never resized by the sidebar (which overlays
           it), so toggling the panel can't flash the canvas. */}
-      <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)]">
+      {/* No text selection or callout over the scene: a long press asks a
+          building (ADR 0042), it must not also mark the HUD's text. */}
+      <div className="absolute inset-0 overflow-hidden bg-[image:var(--hud-scrim)] select-none [-webkit-touch-callout:none]">
         <div className="absolute inset-0" ref={mountRef} />
 
         {veilUp && (
@@ -703,7 +727,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             {/* crosshair */}
             <div
               aria-hidden
-              className="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
+              className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
             />
 
             {/* The loading screen, at pill size. It retires itself once the
@@ -727,9 +751,18 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
             />
 
             {sound.on && <SoundGlyph onClick={sound.toggle} />}
+            {inquiry && (
+              <InquiryCard
+                inquiry={inquiry}
+                onClose={closeInquiry}
+                provenanceUrl={provenanceUrl}
+                sheet={coarse}
+              />
+            )}
             <SettingsToggle />
             <SceneOverlays
               coarse={coarse}
+              covered={coarse && inquiry !== null}
               live={live}
               locate={locate}
               mode={mode}

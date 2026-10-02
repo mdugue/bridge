@@ -186,6 +186,24 @@ config change.
     the math is `lib/city/geolocation.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
+  - the twin (ADR 0042): `inquiry-probe.ts` (what a click, a long press
+    or `I` at the crosshair asks, and the pencil-hatch mark) and
+    `inquiry-card.tsx` (the card — the only place the scene's facts become
+    text); the
+    facts are `lib/city/object-facts.ts` (bake and read), the card's lines
+    `lib/city/inquiry.ts` (buildings) and `inquiry-features.ts` (trees,
+    monuments, bridges; shared lines in `card-lines.ts`), the sources
+    `lib/city/provenance.ts`, the AdV code lists `lib/city/adv-codes.ts`;
+    the things that are not buildings are asked by rays against solids from
+    their data (`lib/city/ask-solids.ts`, `ask-items.ts`; bridges by their
+    meshes, `bridge-ask.ts`; the data layers' traffic flows by their glass,
+    `traffic-ask.ts`, and bicycle counters by their columns, `bike-ask.ts`,
+    their cards `lib/city/inquiry-traffic.ts`); every asked element is outlined along its
+    silhouette in screen pixels (`selection-outline.ts`, the post pass;
+    `selection-shape.ts`, its triangles; `lib/city/outline.ts`, the
+    numbers); a tree's facts are its tile's
+    `treefacts` file, fetched with the question (the artifact table's `ask`
+    column, `lib/city/tile.ts`)
   - sound: `soundscape-toggle.tsx` (the hidden soundscape's switch — the L
     key; no AudioContext before it) and `soundscape/` (`engine.ts`,
     `hearing.ts`, `voices.ts`: loaded by dynamic import on the first
@@ -220,7 +238,8 @@ config change.
   extras), `landcover.ts` (the classes and the one palette), `sport.ts`
   (the sports grounds' surfaces, line schemes and fixtures), `city-mesh.ts`
   (the per-object table: packing, demolish, footprints; the LoD2 bridge
-  slabs it leaves out), `bridge.ts` (ribs, pylons, the arch through a
+  slabs it leaves out), `object-facts.ts` (the table's fact columns: the
+  Building's `gml:id`, use, roof, height, OSM name/address/storeys), `bridge.ts` (ribs, pylons, the arch through a
   measured rib, piers clear of the fairway), `decks.ts` (the deck lift
   table: which deck tops lie under a point), `levels.ts` +
   `line-levels.ts` (which level a rail or tram line runs on — ground,

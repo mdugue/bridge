@@ -142,6 +142,22 @@ function liveRamp(dtv: F): { load: F; tint: V3 } {
   return { load, tint };
 }
 
+/**
+ * Where a body's vertex stands at the hour: each vertex moves along its
+ * own offset from the section's line (wider from the air, too — the two
+ * directions of a street stay apart) and its own height over the feet.
+ * The flows' material draws with it, and so does the asked section's
+ * outline (selection-outline.ts), so the line follows the body as drawn.
+ */
+export function trafficPositionNode(): V3 {
+  const lane = attribute("trafficLane", "vec4") as V4;
+  const across = attribute("trafficAcross", "vec3") as V3;
+  const grow = trafficNow.sqrt().clamp(GROW.min, GROW.max);
+  return positionLocal
+    .add(across.mul(mapWidenNode().mul(grow).sub(1)))
+    .add(vec3(0, lane.z.mul(grow.sub(1)), 0));
+}
+
 function trafficMaterial(): MeshBasicNodeMaterial {
   return sceneMaterial("traffic-glass", () => {
     const m = new MeshBasicNodeMaterial({
@@ -154,19 +170,11 @@ function trafficMaterial(): MeshBasicNodeMaterial {
     const count = attribute("trafficCount", "vec3") as V3;
     const along = lane.x;
     const rise = lane.y;
-    const lift = lane.z;
     const flows = lane.w;
     const daily = count.x;
     const dtv = count.y;
     const heavy = count.z;
-    const across = attribute("trafficAcross", "vec3") as V3;
-    // The hour's size: each vertex moves along its own offset from the
-    // section's line (wider from the air, too — the two directions of a
-    // street stay apart) and its own height over the feet.
-    const grow = trafficNow.sqrt().clamp(GROW.min, GROW.max);
-    m.positionNode = positionLocal
-      .add(across.mul(mapWidenNode().mul(grow).sub(1)))
-      .add(vec3(0, lift.mul(grow.sub(1)), 0));
+    m.positionNode = trafficPositionNode();
     const ramp = liveRamp(dtv);
     const tint = mix(
       ramp.tint,
@@ -231,6 +239,8 @@ interface Body {
   index: number[];
   lane: number[];
   pos: number[];
+  /** each vertex's section: its index in the tile's traffic file */
+  section: number[];
 }
 
 /** The height a body stands on at (x, y): the deck — or its approach ramp
@@ -286,6 +296,7 @@ function samples(
 
 function addLane(
   body: Body,
+  section: number,
   lane: TrafficLane,
   onBridge: boolean,
   decks: DeckPoly[],
@@ -324,6 +335,7 @@ function addLane(
       body.across.push(right[0] * r, 0, -right[1] * r);
       body.lane.push(at, v, up, lane.flows ? 1 : 0);
       body.count.push(lane.load, lane.dtv, lane.heavy);
+      body.section.push(section);
     }
     if (prevOk) {
       for (let k = 0; k < ring - 1; k++) {
@@ -351,14 +363,21 @@ export function buildTraffic(
 ): Group {
   const group = new Group();
   group.name = "traffic";
-  const body: Body = { across: [], count: [], index: [], lane: [], pos: [] };
+  const body: Body = {
+    across: [],
+    count: [],
+    index: [],
+    lane: [],
+    pos: [],
+    section: [],
+  };
   const needsDecks = features.some((f) => f.properties?.br === 1);
   const decks = needsDecks ? buildDeckTable(bridges, ctx) : [];
   const open = openEnds(features, bounds);
   for (const [i, f] of features.entries()) {
     const onBridge = f.properties?.br === 1;
     for (const lane of trafficLanes(f, open[i])) {
-      addLane(body, lane, onBridge, decks, ctx, detail);
+      addLane(body, i, lane, onBridge, decks, ctx, detail);
     }
   }
   if (body.index.length === 0) {
@@ -385,6 +404,9 @@ export function buildTraffic(
   // After the water sheet (renderOrder 3, like the ferry wakes): the
   // glass's copy of the frame then holds the river too.
   mesh.renderOrder = 4;
+  // Which section each vertex belongs to, for the probe (traffic-ask.ts):
+  // CPU-side only — a vertex attribute would be a ninth buffer.
+  mesh.userData.trafficSection = Uint32Array.from(body.section);
   group.add(mesh);
   return group;
 }
