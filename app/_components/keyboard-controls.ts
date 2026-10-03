@@ -69,10 +69,15 @@ export function attachKeyboardControls(
     if (e.repeat || isTextEntry(e.target)) {
       return;
     }
+    // macOS browsers send no keyup for a key released while ⌘ is down, so a
+    // ⌘ chord (⌘A, ⌘E, ⌘W) must not press a movement key it never releases.
+    if (e.metaKey) {
+      return;
+    }
     actions.press(e.code);
     // A chord belongs to the browser: Cmd/Ctrl+V pastes, Cmd+F finds, Cmd+R
     // reloads — none of them may also switch the style, fly or demolish.
-    if (e.ctrlKey || e.metaKey || e.altKey) {
+    if (e.ctrlKey || e.altKey) {
       return;
     }
     const shot = ONE_SHOTS.get(e.code);
@@ -89,6 +94,10 @@ export function attachKeyboardControls(
     // release lands in a text field the user clicked into meanwhile.
     // Releasing a key that was never pressed is a no-op.
     actions.release(e.code);
+    // A key held before ⌘ went down gets no keyup either (macOS).
+    if (e.code === "MetaLeft" || e.code === "MetaRight") {
+      actions.releaseAll();
+    }
   };
   // A keyup delivered to another window (Alt-Tab, a native dialog) would
   // leave the key held forever and the camera walking on its own.
