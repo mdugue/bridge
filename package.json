@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "dev": "bun scripts/prepare-sites.ts && next dev --experimental-https",
-    "build": "bun scripts/prepare-sites.ts && next build && bun scripts/sentry-release.ts",
+    "build": "bun scripts/prepare-sites.ts && next build && NODE_ENV=production bun scripts/sentry-release.ts",
     "start": "next start",
     "lint": "oxlint --max-warnings=0 && oxfmt --check",
     "typecheck": "tsc --noEmit",

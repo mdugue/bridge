@@ -18,7 +18,9 @@ import { reportBuild } from "../lib/city/crash-reports";
  * Skips, and says so, without SENTRY_AUTH_TOKEN, SENTRY_ORG and
  * SENTRY_PROJECT (an organisation token is enough) or without a release
  * (a local build). A failed request warns and never fails the build: a
- * missing release is worth a line in the log, not a deploy.
+ * missing release is worth a line in the log, not a deploy. `bun run
+ * build` runs it with NODE_ENV=production, so Bun reads the same
+ * `.env.production` that `next build` gave next.config.ts.
  */
 
 type Env = Record<string, string | undefined>;
@@ -42,7 +44,9 @@ export interface ReleasePlan {
 /**
  * The Sentry API a DSN belongs to: its region's (`o1.ingest.de.sentry.io`
  * → `https://de.sentry.io`), sentry.io's, or a self-hosted tracker's own
- * host; SENTRY_URL overrides it.
+ * host with the path it lives under (`https://k@host/sentry/3` →
+ * `https://host/sentry`, as `envelopeUrl` sends there); SENTRY_URL
+ * overrides it.
  */
 export function apiOrigin(dsn: string | null, override?: string): string {
   if (override) {
@@ -51,7 +55,7 @@ export function apiOrigin(dsn: string | null, override?: string): string {
   if (!dsn) {
     return "https://sentry.io";
   }
-  const { protocol, hostname, port } = new URL(dsn);
+  const { protocol, host, hostname, pathname } = new URL(dsn);
   const region = /\.ingest\.([a-z]+)\.sentry\.io$/.exec(hostname)?.[1];
   if (region) {
     return `https://${region}.sentry.io`;
@@ -59,7 +63,9 @@ export function apiOrigin(dsn: string | null, override?: string): string {
   if (hostname.endsWith("sentry.io")) {
     return "https://sentry.io";
   }
-  return `${protocol}//${hostname}${port ? `:${port}` : ""}`;
+  // The path before the project id.
+  const prefix = pathname.split("/").filter(Boolean).slice(0, -1);
+  return `${protocol}//${host}${prefix.map((part) => `/${part}`).join("")}`;
 }
 
 /** What to send, or why nothing is. */

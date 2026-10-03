@@ -3,6 +3,7 @@ import {
   createProblemGate,
   envelope,
   envelopeUrl,
+  firstSet,
   type Payload,
   PROBLEM_KINDS,
   problemReport,
@@ -10,17 +11,24 @@ import {
   sessionEnvelope,
   type SessionPayload,
   sessionUpdate,
+  summaryDue,
+  summaryMark,
   summaryReport,
   TUNNEL_PATH,
 } from "@/lib/city/crash-reports";
 import { offerAsCrash, type Trail } from "@/lib/city/crash-trail";
-import { previousTrail, type TrailListener } from "./crash-trail";
+import {
+  pageStillOpen,
+  previousTrail,
+  type TrailListener,
+} from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
 
 /**
  * The crash reports' browser side (what goes out, and why:
  * lib/city/crash-reports.ts, ADR 0043). Off unless the build has a DSN
- * (`NEXT_PUBLIC_SENTRY_DSN`), and off for a visitor whose browser sends
+ * (`NEXT_PUBLIC_SENTRY_DSN`, as `reportBuild` read it: next.config.ts
+ * inlines it), and off for a visitor whose browser sends
  * Global Privacy Control. Each report is a beacon to the site's own
  * origin (`TUNNEL_PATH`, forwarded to the tracker by next.config.ts): no
  * SDK, nothing loaded from the tracker, and a beacon outlives the page
@@ -30,10 +38,10 @@ import { recentlyRecovered } from "./gpu-recovery";
  * go and under which release; `crashReports.test()` sends one test event.
  */
 
-const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN ?? "";
-/** The build's release and environment (next.config.ts, `reportBuild`). */
-const RELEASE = orUndefined(process.env.CRASH_REPORTS_RELEASE);
-const ENVIRONMENT = orUndefined(process.env.CRASH_REPORTS_ENV) ?? "production";
+/** The build's DSN, release and environment (next.config.ts, `reportBuild`). */
+const DSN = firstSet(process.env.CRASH_REPORTS_DSN) ?? "";
+const RELEASE = firstSet(process.env.CRASH_REPORTS_RELEASE);
+const ENVIRONMENT = firstSet(process.env.CRASH_REPORTS_ENV) ?? "production";
 /** The start of the last previous record reported, so it goes out once. */
 const REPORTED_KEY = "crash-trail.reported";
 const TAG = "[crash-reports]";
@@ -48,10 +56,6 @@ declare global {
     /** Whether and where the reports go; `test()` sends a test event. */
     crashReports?: { status: string; test: () => void };
   }
-}
-
-function orUndefined(value: string | undefined): string | undefined {
-  return value === undefined || value === "" ? undefined : value;
 }
 
 /** Why this page sends no reports, or null when it does. */
@@ -99,13 +103,14 @@ const sendSession = (session: SessionPayload | null) => {
 
 /**
  * The previous page's record, once per record: its crash if it died in
- * use, its summary if it never sent one (a killed page cannot), and the
+ * use, the stretch no summary covered (a killed page sends none), and the
  * end of its session — `crashed`, or `exited` for a page that went to the
- * background and never came back.
+ * background and never came back. Not while that page is still open in
+ * another tab: its record only looks ended (crash-trail.ts).
  */
-function reportPrevious(ctx: ReportContext): void {
+async function reportPrevious(ctx: ReportContext): Promise<void> {
   const previous = previousTrail();
-  if (!previous) {
+  if (!previous || (await pageStillOpen(previous))) {
     return;
   }
   try {
@@ -121,7 +126,7 @@ function reportPrevious(ctx: ReportContext): void {
   if (crashed) {
     sendEvent(crashReport(previous, newId(), ctx));
   }
-  if (!previous.report?.summarized) {
+  if (summaryDue(previous)) {
     sendEvent(summaryReport(previous, newId(), ctx));
   }
   if (previous.report && !previous.report.ended) {
@@ -132,14 +137,18 @@ function reportPrevious(ctx: ReportContext): void {
 /** This page's record, for `crashReports.test()`. */
 let current: Trail | null = null;
 
-/** The page's session starts with its record. */
+/**
+ * The page's session starts with its record — and again when the page
+ * comes back from the back-forward cache, its old session having ended
+ * as it left (its summaries carry on where they were).
+ */
 function begin(trail: Trail, ctx: ReportContext): void {
   trail.report = {
     sid: newId(),
     release: ctx.release,
     environment: ctx.environment,
     problems: 0,
-    summarized: false,
+    sent: trail.report?.sent,
     ended: false,
   };
   current = trail;
@@ -150,7 +159,10 @@ function begin(trail: Trail, ctx: ReportContext): void {
 function listen(ctx: ReportContext): TrailListener {
   const admit = createProblemGate();
   return (event, trail) => {
-    if (event.kind === "start") {
+    if (
+      event.kind === "start" ||
+      (event.kind === "pageshow" && trail.report?.ended)
+    ) {
       begin(trail, ctx);
     }
     const report = trail.report;
@@ -163,11 +175,11 @@ function listen(ctx: ReportContext): TrailListener {
         sendEvent(problemReport(trail, event, newId(), ctx));
       }
     }
-    // The summary as the page goes out of view or away — on a phone,
+    // A summary each time the page goes out of view or away — on a phone,
     // "hidden" may be the last thing a page ever hears.
-    if (LEAVING.has(event.kind) && !report.summarized) {
-      report.summarized = true;
+    if (LEAVING.has(event.kind) && summaryDue(trail)) {
       sendEvent(summaryReport(trail, newId(), ctx));
+      report.sent = summaryMark(trail);
     }
     if (LEFT.has(event.kind) && !report.ended) {
       report.ended = true;
@@ -211,20 +223,27 @@ let started = false;
  * Starts this page's reports: the previous page's first (once per load —
  * StrictMode mounts the viewer twice in development), then a listener for
  * this page's trail (crash-trail.ts `startCrashTrail`), or null when the
- * reports are off.
+ * reports are off — or when anything in them fails: a report is never
+ * worth the viewer's boot.
  */
 export function startCrashReports(): TrailListener | null {
-  const ctx: ReportContext = {
-    origin: location.origin,
-    release: RELEASE,
-    environment: ENVIRONMENT,
-  };
-  if (!started) {
-    started = true;
-    announce(ctx);
-    if (crashReportsOn()) {
-      reportPrevious(ctx);
+  try {
+    const ctx: ReportContext = {
+      origin: location.origin,
+      release: RELEASE,
+      environment: ENVIRONMENT,
+    };
+    if (!started) {
+      started = true;
+      announce(ctx);
+      if (crashReportsOn()) {
+        reportPrevious(ctx).catch(() => {
+          // The previous page's report is lost; this page's are not.
+        });
+      }
     }
+    return crashReportsOn() ? listen(ctx) : null;
+  } catch {
+    return null;
   }
-  return crashReportsOn() ? listen(ctx) : null;
 }

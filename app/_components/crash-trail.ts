@@ -67,6 +67,82 @@ export function previousTrail(): Trail | null {
   }
 }
 
+/**
+ * The previous record may be a page still open in another tab: every tab
+ * writes the one record key, so a second viewer moves the first one's live
+ * record aside as if that page had gone. Each page therefore answers for
+ * its own record on a channel, and the next page asks before it treats a
+ * record as ended — a page that answers is not a crash.
+ */
+const CHANNEL = "crash-trail";
+interface LivenessMessage {
+  ask?: string;
+  open?: string;
+}
+
+/**
+ * Answers for the record that started at `startedAt` while the page lives;
+ * a page going into the back-forward cache closes its channel (an open one
+ * may keep a page out of that cache) and opens it again when restored.
+ * Returns the stop.
+ */
+function answerFor(startedAt: string): () => void {
+  if (typeof BroadcastChannel === "undefined") {
+    return () => {};
+  }
+  let channel: BroadcastChannel | null = null;
+  const open = () => {
+    channel = new BroadcastChannel(CHANNEL);
+    channel.onmessage = (event: MessageEvent) => {
+      if ((event.data as LivenessMessage | null)?.ask === startedAt) {
+        channel?.postMessage({ open: startedAt } satisfies LivenessMessage);
+      }
+    };
+  };
+  const close = () => {
+    channel?.close();
+    channel = null;
+  };
+  const onShow = (event: PageTransitionEvent) => {
+    if (event.persisted && !channel) {
+      open();
+    }
+  };
+  open();
+  addEventListener("pagehide", close);
+  addEventListener("pageshow", onShow);
+  return () => {
+    close();
+    removeEventListener("pagehide", close);
+    removeEventListener("pageshow", onShow);
+  };
+}
+
+/**
+ * Whether the page that wrote `trail` is still open (it answers within
+ * `waitMs`); false where no page can answer (no channel in this browser).
+ */
+export function pageStillOpen(trail: Trail, waitMs = 250): Promise<boolean> {
+  if (typeof BroadcastChannel === "undefined") {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    const channel = new BroadcastChannel(CHANNEL);
+    const done = (open: boolean) => {
+      clearTimeout(timer);
+      channel.close();
+      resolve(open);
+    };
+    const timer = setTimeout(() => done(false), waitMs);
+    channel.onmessage = (event: MessageEvent) => {
+      if ((event.data as LivenessMessage | null)?.open === trail.startedAt) {
+        done(true);
+      }
+    };
+    channel.postMessage({ ask: trail.startedAt } satisfies LivenessMessage);
+  });
+}
+
 /** Forgets the previous page's record (the HUD's card was dismissed). */
 export function dismissPreviousTrail(): void {
   try {
@@ -106,6 +182,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
     deviceMemoryGB: (navigator as Navigator & { deviceMemory?: number })
       .deviceMemory,
   });
+  const stopAnswering = answerFor(trail.startedAt);
   const write = () => {
     try {
       localStorage.setItem(CURRENT_KEY, JSON.stringify(trail));
@@ -195,6 +272,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
     end: () => {
       trail.state = "clean";
       note("end");
+      stopAnswering();
       removeEventListener("error", onError);
       removeEventListener("unhandledrejection", onRejection);
       document.removeEventListener("visibilitychange", onVisibility);

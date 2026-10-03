@@ -129,10 +129,24 @@ export interface TrailReport {
   environment: string;
   /** the problems noted: the session's error count */
   problems: number;
-  /** the page's summary went out */
-  summarized: boolean;
+  /**
+   * How far the page's summaries have covered it: a summary goes out each
+   * time the page leaves view, for the stretch since the last one.
+   */
+  sent?: SummaryMark;
   /** the session's last update (exited or crashed) went out */
   ended: boolean;
+}
+
+/** Where the last summary ended: its time and the stats' sums then. */
+export interface SummaryMark {
+  /** seconds since the record started */
+  t: number;
+  beats: number;
+  fpsSum: number;
+  fps: number[];
+  /** summaries sent so far */
+  count: number;
 }
 
 /** The event the HUD notes when the scene goes live (city-walk.tsx). */
@@ -280,7 +294,7 @@ export function offerAsCrash(
   return !(recovered && !drew);
 }
 
-const round = (n: number, digits = 0) => {
+export const round = (n: number, digits = 0) => {
   const f = 10 ** digits;
   return Math.round(n * f) / f;
 };

@@ -9,6 +9,8 @@ import {
   reportBuild,
   sessionEnvelope,
   sessionUpdate,
+  summaryDue,
+  summaryMark,
   summaryReport,
   TUNNEL_PATH,
   tunnelRewrites,
@@ -261,6 +263,42 @@ test("the site's own path forwards to the DSN's envelope endpoint", () => {
   expect(tunnelRewrites(null)).toEqual([]);
 });
 
+test("a page that comes back into view is summarised again, for the stretch since", () => {
+  const trail = page();
+  trail.report = {
+    sid: ID,
+    release: "bridge@abc",
+    environment: "production",
+    problems: 0,
+    ended: false,
+  };
+  expect(summaryDue(trail)).toBe(true);
+  expect(summaryReport(trail, ID, ctx).tags).toMatchObject({ stretch: "1" });
+  // It goes out of view: the summary covers the page so far …
+  trail.report.sent = summaryMark(trail);
+  expect(summaryDue(trail)).toBe(false);
+  // … it comes back and renders two more beats in view.
+  pushBeat(trail, beat(10, 12));
+  pushBeat(trail, beat(12, 40));
+  expect(summaryDue(trail)).toBe(true);
+  const start = Date.parse(trail.startedAt) / 1000;
+  const second = summaryReport(trail, ID, ctx);
+  expect(second).toMatchObject({
+    start_timestamp: start + 8,
+    timestamp: start + 12,
+    tags: { stretch: "2" },
+  });
+  // Only the new beats; the boot's milestones were in the first stretch.
+  expect(second.measurements).toEqual({
+    beats_in_view: { value: 2, unit: "none" },
+    fps_mean: { value: 26, unit: "none" },
+    fps_below_10: { value: 0, unit: "ratio" },
+    fps_below_20: { value: 0.5, unit: "ratio" },
+    fps_below_30: { value: 0.5, unit: "ratio" },
+    held_max: { value: 512, unit: "megabyte" },
+  });
+});
+
 test("a record is reported under the release its page ran, not this one's", () => {
   const trail = page();
   trail.report = {
@@ -268,7 +306,6 @@ test("a record is reported under the release its page ran, not this one's", () =
     release: "bridge@old",
     environment: "production",
     problems: 0,
-    summarized: false,
     ended: false,
   };
   expect(crashReport(trail, ID, ctx).release).toBe("bridge@old");
@@ -284,7 +321,6 @@ test("a session starts ok and ends crashed or exited, with its errors and length
     release: "bridge@abc",
     environment: "preview",
     problems: 2,
-    summarized: false,
     ended: false,
   };
   const attrs = {
@@ -321,7 +357,6 @@ test("a session update is its own kind of envelope item", () => {
     release: "bridge@abc",
     environment: "production",
     problems: 0,
-    summarized: false,
     ended: false,
   };
   const session = sessionUpdate(trail, "exited", ctx);

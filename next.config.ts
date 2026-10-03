@@ -1,14 +1,15 @@
 import type { NextConfig } from "next";
 import { reportBuild, tunnelRewrites } from "./lib/city/crash-reports";
 
-// The crash reports' build (ADR 0043): the release and environment the
-// page tags its reports with, derived once — scripts/sentry-release.ts
+// The crash reports' build (ADR 0043): the DSN, release and environment
+// the page reports with, derived once — scripts/sentry-release.ts
 // creates the release under the same name.
 const reports = reportBuild(process.env);
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
   env: {
+    CRASH_REPORTS_DSN: reports.dsn ?? "",
     CRASH_REPORTS_RELEASE: reports.release ?? "",
     CRASH_REPORTS_ENV: reports.environment,
   },

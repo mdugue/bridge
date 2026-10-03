@@ -40,23 +40,31 @@ The viewer sends four kinds of report, all built from the crash trail
    record iOS leaves around a recovery). Sent by the next load, once per
    record, as a fatal event grouped by renderer and how far the page got
    (`boot after <stage>`, `streaming`, `running`), with the trail's last
-   events and beats as breadcrumbs.
+   events and beats as breadcrumbs. Not while that page is still open in
+   another tab: every tab writes the one record key, so a second viewer
+   moves the first one's live record aside; each page answers for its own
+   record on a `BroadcastChannel` (`pageStillOpen`), and a record whose
+   page answers is neither reported nor offered.
 2. **A problem on this page** — an uncaught error or rejection, a lost
    device, a GPU error, a failed frame, a file that did not load, a
    failed boot: each kind and detail once (URLs and numbers out of the
    grouping), at most five a page.
-3. **The page's summary** — a transaction over the page's time with the
-   time to the first frame and to loaded, the mean frame rate and the
-   share of the time in view below 10, 20 and 30 fps, the most memory
-   held. Sent as the page is first hidden or left; a page that never got
-   to (a killed one) is summarised by the next load. The trail counts
-   the beats for it over the whole page (`TrailStats`), not only its last
-   twelve, and only beats in view after the first frame.
+3. **The page's summary** — a transaction each time the page leaves
+   view (hidden or left), for the stretch since the last one: the time to
+   the first frame and to loaded (in the stretch they fell in), the mean
+   frame rate and the share of the stretch in view below 10, 20 and 30
+   fps, the most memory held so far; tagged `stretch` (1 is the page's
+   first, so pages are counted at `stretch:1`). The stretch a page never
+   got to summarise (a killed one) is sent by the next load. The trail
+   counts the beats over the whole page (`TrailStats`), not only its last
+   twelve, and only beats in view after the first frame; the record
+   keeps where the last summary ended (`TrailReport.sent`).
 4. **The page's session** (Sentry's release health) — started `ok` with
    the page, ended `exited` when it is left, or `crashed` by the next
    load when it died in use (a page that went to the background and never
    came back ends `exited` there too); its error count is the problems
-   the page noted. The crash-free rate per release is the number to watch
+   the page noted. A page restored from the back-forward cache starts a
+   new session. The crash-free rate per release is the number to watch
    — and the one a fix should move.
 
 They go out in **Sentry's envelope protocol**, as a `sendBeacon` (a
@@ -69,7 +77,8 @@ forwards to the DSN's envelope endpoint (`tunnelRewrites`): content
 blockers (uBlock's lists, Brave's shields) drop requests to
 `*.ingest.sentry.io`, and a page on its own origin is not that.
 
-**Off unless the build has a DSN** (`NEXT_PUBLIC_SENTRY_DSN`), and off
+**Off unless the build has a DSN** (`NEXT_PUBLIC_SENTRY_DSN`, inlined by
+`next.config.ts` as `reportBuild` read it — trimmed and checked), and off
 for a visitor whose browser sends Global Privacy Control. Without a DSN the
 build is exactly what it was: CI, the e2e and every deploy without one
 send nothing. The console says once per load whether the reports are on,
@@ -87,7 +96,10 @@ to the Sentry organisation, so Sentry fetches the range since the last
 release itself — a deploy into the environment, and, in production, the
 finalize. It needs `SENTRY_AUTH_TOKEN` (an organisation token),
 `SENTRY_ORG` and `SENTRY_PROJECT` in the build's environment, skips with a
-line in the log without them, and never fails a build.
+line in the log without them, and never fails a build. It runs with
+`NODE_ENV=production`, so it reads the same `.env.production` as
+`next build`. Nothing in the reports may stop the viewer: their start
+returns nothing when anything in it throws.
 
 **What goes out** is what the trail holds and nothing else: the path
 without its query, the user agent, the screen and the device's memory,
@@ -110,7 +122,10 @@ organisation.
 - The crash card says the report is already on its way when reports are
   on; *Kopieren* stays for a deploy without a DSN and for `?trail=1`.
 - A crash is known only if the visitor comes back on the same browser —
-  the share of crashes we see is a floor, not a rate. The summaries are
+  the share of crashes we see is a floor, not a rate. With two viewer
+  tabs open, the one still running keeps writing the record key, so a
+  crash in the other can go unreported (never the reverse: a live tab is
+  never reported as a crash). The summaries are
   the denominator: pages per device and release, against the crashes.
 - The free tier counts events (crashes and problems) and spans (one per
   summary) separately; the problem cap keeps a GPU error that repeats per

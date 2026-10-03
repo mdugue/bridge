@@ -54,6 +54,10 @@ test("the API follows the DSN's region, or SENTRY_URL", () => {
   expect(apiOrigin("http://k@errors.example:9000/7")).toBe(
     "http://errors.example:9000"
   );
+  // A self-hosted tracker under a path: its API lives under it too.
+  expect(apiOrigin("https://k@example.org/sentry/3")).toBe(
+    "https://example.org/sentry"
+  );
   expect(apiOrigin(null, "https://glitchtip.example/")).toBe(
     "https://glitchtip.example"
   );

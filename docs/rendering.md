@@ -465,9 +465,11 @@ renderer and phase (`boot after <stage>`, `streaming`, `running`); the
 problems the viewer catches itself (a lost device, a GPU error, a failed
 frame or load) go out as they happen, and each page's numbers (first
 frame, loaded, mean fps, the share of time below 10/20/30 fps, the most
-memory held) as a transaction when it is hidden or left, and each page
-is a session (`ok` → `exited`, or `crashed` by the next load) for
-Sentry's crash-free rate per release. All of it is Sentry envelopes in
+memory held) as a transaction each time it leaves view, for the stretch
+since the last one, and each page is a session (`ok` → `exited`, or
+`crashed` by the next load) for Sentry's crash-free rate per release. A
+record whose page is still open in another tab is not a crash
+(`pageStillOpen`). All of it is Sentry envelopes in
 beacons (`lib/city/crash-reports.ts`), no SDK, to the site's own `/r/e`,
 which `next.config.ts` forwards to the tracker (blockers drop requests to
 Sentry's host). The release is `bridge@<commit>`, derived once
