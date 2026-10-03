@@ -135,6 +135,7 @@ export type LayerName =
   | "trams"
   | "city"
   | "fences"
+  | "kerbs"
   | "stairs"
   | "terrain"
   | "walls"
@@ -1223,6 +1224,7 @@ async function bootApp(
         ...dressingCensus(dressings, census),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
+        kerbs: census(terrains.map((t) => t.kerbs)),
         fences: census(terrains.map((t) => t.fences)),
         bikes: census([overlays.parts().bikes]),
         trams: census([overlays.parts().trams]),
