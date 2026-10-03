@@ -60,6 +60,7 @@ import {
 import type { Passage } from "../lib/city/passages";
 import type { LevelLine } from "../lib/city/levels";
 import { tileExtentOf } from "../lib/city/site";
+import { packPoints, pointOf } from "../lib/city/point-pack";
 import { treesOffStructures } from "../lib/city/small-buildings";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import {
@@ -181,10 +182,10 @@ const manifest: DataManifest = { version: 1, files: {} };
 const keep = new Set<string>([MANIFEST_FILE]);
 let published = 0;
 
-/** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz` keeps both). */
+/** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz`, `.pts.gz` keep both). */
 function hashedName(file: string, content: Uint8Array): string {
   const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
-  const ext = file.match(/(\.glb\.gz|\.[^.]+)$/u)?.[0] ?? "";
+  const ext = file.match(/(\.(?:glb|pts)\.gz|\.[^.]+)$/u)?.[0] ?? "";
   return `${basename(file, ext)}.${hash}${ext}`;
 }
 
@@ -314,21 +315,27 @@ async function publishColonies(
 async function publishCanopy(tile: string, file: string): Promise<string> {
   const src = at(sideFileSource(SITE, file));
   const sheds = at(cityMeshSourceFiles(SITE, tile).smallBuild);
-  const bytes = await cached(file, cacheKey([src, sheds]), () => {
-    const doc = readJson<FeatureCollection<CanopyFeature>>(src);
-    if (!existsSync(sheds)) {
-      return readFileSync(src);
+  // Packed, not GeoJSON (lib/city/point-pack.ts): the browser parsed up to
+  // 9.5 MB of it in one task. Relative to the tile's south-west corner, and
+  // pre-gzipped like the glTF (static hosts do not compress binary types).
+  const packed = file.replace(/\.geojson$/u, ".pts.gz");
+  const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  const stride = file.startsWith("canopyx_") ? 4 : 3;
+  const bytes = await cached(packed, cacheKey([src, sheds]), () => {
+    const trees =
+      readJson<FeatureCollection<CanopyFeature>>(src).features ?? [];
+    let features = trees;
+    if (existsSync(sheds)) {
+      const structures =
+        readJson<FeatureCollection<SmallBuildingFeature>>(sheds).features ?? [];
+      features = treesOffStructures(trees, structures);
+      log(
+        `${file}: ${trees.length - features.length} points in a scan structure dropped`
+      );
     }
-    const trees = doc.features ?? [];
-    const structures =
-      readJson<FeatureCollection<SmallBuildingFeature>>(sheds).features ?? [];
-    const features = treesOffStructures(trees, structures);
-    log(
-      `${file}: ${trees.length - features.length} points in a scan structure dropped`
-    );
-    return utf8({ ...doc, features });
+    return gz(packPoints(features.map(pointOf), [minX, minY], stride));
   });
-  return publish(file, bytes);
+  return publish(packed, bytes);
 }
 
 /** The levels of the site's rail and tram lines, solved over whole lines on
@@ -533,12 +540,13 @@ const offset = { cx: frame.cx, cy: frame.cy };
 
 /** Bun's libdeflate: at the same level about twice as fast as zlib here and
  *  a little smaller (the site's glTF: 3.0 s vs 6.5 s, 52.96 vs 53.13 MB). */
-const gz = (bytes: Uint8Array) =>
+function gz(bytes: Uint8Array): Uint8Array {
   // The glb writers build on plain ArrayBuffers; Bun's types only take those.
-  Bun.gzipSync(bytes as Uint8Array<ArrayBuffer>, {
+  return Bun.gzipSync(bytes as Uint8Array<ArrayBuffer>, {
     level: 9,
     library: "libdeflate",
   });
+}
 
 /** A tile's buildings: footprints JSON + glTF, both from one parse. */
 async function bakeCity(

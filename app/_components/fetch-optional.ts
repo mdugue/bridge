@@ -33,6 +33,37 @@ export async function fetchOptionalJson<T>(
   }
 }
 
+/**
+ * Fetches an optional binary artifact; null = feature off. Rethrows aborts.
+ * A pre-gzipped one (`.gz`) is inflated here — judged on the gzip magic, as
+ * the tiles' glTF is (tile-stream.ts): a host that serves `.gz` with
+ * `Content-Encoding: gzip` has the browser inflate it already.
+ */
+export async function fetchOptionalBinary(
+  url: string,
+  signal?: AbortSignal
+): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      return null;
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) {
+      return bytes.buffer;
+    }
+    const inflated = new Blob([bytes])
+      .stream()
+      .pipeThrough(new DecompressionStream("gzip"));
+    return await new Response(inflated).arrayBuffer();
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
 /** The `features` of an optional GeoJSON FeatureCollection, or []. */
 export async function fetchFeatures<T>(
   url: string | undefined,

@@ -35,6 +35,7 @@ import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import { onRelief } from "@/lib/city/monuments";
+import { pointFeatures, unpackPoints } from "@/lib/city/point-pack";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -50,7 +51,11 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
-import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
+import {
+  fetchFeatures,
+  fetchOptionalBinary,
+  fetchOptionalJson,
+} from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
@@ -512,6 +517,16 @@ async function buildDressing(
     const file = d[kind];
     return file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
   };
+  // The canopy points come packed (lib/city/point-pack.ts, prepare-data.ts):
+  // no parse, the same features for the vegetation. Not a pack = off.
+  const getPoints = async (
+    kind: "canopy" | "canopyx"
+  ): Promise<CanopyExtraFeature[]> => {
+    const file = d[kind];
+    const buffer = file ? await fetchOptionalBinary(url(file), signal) : null;
+    const points = buffer ? unpackPoints(buffer) : null;
+    return points ? (pointFeatures(points) as CanopyExtraFeature[]) : [];
+  };
   const {
     rows,
     canopy,
@@ -533,7 +548,7 @@ async function buildDressing(
     traffic,
   } = await allNamed({
     rows: get<VegRowFeature>("vegrows"),
-    canopy: get<CanopyFeature>("canopy"),
+    canopy: getPoints("canopy"),
     ndviAt: extras.ndvi
       ? loadNdviSampler(url(extras.ndvi), terrain.bounds, signal)
       : Promise.resolve(null),
@@ -552,7 +567,7 @@ async function buildDressing(
     // the street-tree cadastre (tree-inventory-layer.ts)
     inventory: get<TreeFeature>("trees"),
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
-    scanTrees: get<CanopyExtraFeature>("canopyx"),
+    scanTrees: getPoints("canopyx"),
     hedges: get<LowVegFeature>("lowveg"),
     // allotments, orchards, vineyards (cultivated-layer.ts)
     cultivated: get<CultivatedFeature>("cultivated"),

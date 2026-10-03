@@ -657,10 +657,10 @@ Measured 2026-09-25 on the current build (Dresden, gzipped wire sizes):
 | NDVI 1024² | 0.32–0.77 MB |
 | paving raster 2048² (fine level only) | 0.25–0.97 MB |
 | edge raster 2048² (fine level only) | 0.03–1.97 MB (the forest tiles are the bottom, the southern row the top) |
-| canopy GeoJSON | 0.04–0.53 MB (0.6–9.5 MB raw; the forest tiles 33414_5658 and 33416_5658 are the top) |
+| canopy, packed (`canopy_<t>.pts.gz`, `lib/city/point-pack.ts`: 12 bytes a point, x/y relative to the tile's south-west corner, pre-gzipped) | 0.03–0.40 MB (0.06–0.98 MB raw; the forest tiles 33414_5658 and 33416_5658 are the top). Until 2026-10-03 GeoJSON: 0.04–0.53 MB on the wire but 0.6–9.5 MB to parse in one task (≈ 96 ms in V8 for 33416_5658; unpacked into the same features now ≈ 13 ms) |
 | street furniture GeoJSON | up to 0.02 MB (0.19 MB raw; the forest tile 33416_5658 has seven pieces); with plan 030's signs and fixtures 0.01–0.03 MB (0.07–0.25 MB raw) on the four first tiles |
 | street-tree cadastre + OSM trees GeoJSON | 0.01–0.07 MB (0.1–0.9 MB raw; none on 33416_5658, all forest; the four first tiles with OSM trees 0.04–0.07 MB) |
-| scan trees GeoJSON | 0.03–0.09 MB (0.4–1.1 MB raw) |
+| scan trees, packed (`canopyx_<t>.pts.gz`, 16 bytes a point with the crown radius) | 0.02–0.07 MB (0.05–0.14 MB raw; GeoJSON until 2026-10-03, 0.4–1.1 MB raw) |
 | OSM hedges GeoJSON | ≤ 0.005 MB |
 | trams GeoJSON (the four first tiles) | 0.003–0.017 MB (0.01–0.09 MB raw) |
 | riverside GeoJSON (the four first tiles) | ≤ 0.004 MB (≤ 0.02 MB raw) |
