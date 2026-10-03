@@ -214,15 +214,21 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
     Elbe), Draufsichten auf *Frauenkirche*, *Brühlsche Terrasse*,
     *Albertplatz*, *Alaunpark* und *Zwinger & Semperoper*, ein tiefer Flug
     über die *Äußere Neustadt*, dazu *Carolabrücke* (über dem Fluss),
-    *Elbe-Panorama* (hoch über der Flussbiegung) und *Über den Dächern*
-    (ein tiefer Gleitflug über die Altstadtdächer);
+    *Elbe-Panorama* (hoch über der Flussbiegung), *Über den Dächern*
+    (ein tiefer Gleitflug über die Altstadtdächer), *Großer Garten* (über
+    dem Palais, dahinter der Palaisteich und die Baumkronen des Parks),
+    *Blaues Wunder* (über der Elbe, die Brücke spannt sich von Blasewitz
+    nach Loschwitz), *Waldschlößchenbrücke* (über den Elbwiesen,
+    flussabwärts die Türme der Altstadt) und *Hauptbahnhof* (von oben auf
+    die Bahnsteighallen, die Prager Straße führt zur Altstadt);
   - *auf Augenhöhe*: *Canaletto-Blick* (auf der Elbwiese, die Altstadt
     jenseits des Grases), *Elbufer* (am baumbestandenen Neustädter Ufer),
     *Am Japanischen Palais* (auf der Neustädter Elbwiese, wo Canaletto
-    malte) und *Neumarkt* (vor der Frauenkirche).
+    malte), *Neumarkt* (vor der Frauenkirche) und *Palais im Großen
+    Garten* (am Südende des Palaisteichs, jenseits des Wassers das barocke
+    Palais).
 
-  Der Große Garten liegt knapp südlich des Gebiets und hat deshalb noch
-  keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
+  Die letzte Karte, *Aktuelle Sicht merken*, merkt
   sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
   zurückspringt, mit einem ✕ zum Vergessen.
 - **Verkehrsdaten** — bis zu drei Datenebenen über der Stadt, jede mit
@@ -310,13 +316,13 @@ der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
 | | *Blattflimmern* | Böen drehen Blätter auf sonnigen Kronen auf die helle Unterseite |
 | | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
+| | *Multi-Tuft-Kronen (nah)* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City* und *Papier* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
-| | *Detaillierte Kronen* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 
 Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt

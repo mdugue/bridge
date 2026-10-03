@@ -1,7 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const PORT = Number(process.env.PORT ?? 3000);
-const baseURL = `http://localhost:${PORT}`;
+// `bun dev` serves HTTPS only (WebGPU on a phone over the LAN needs a secure
+// context), with a self-signed certificate; the production server is plain HTTP.
+const devServer = Boolean(process.env.E2E_DEV) && !process.env.CI;
+const baseURL = `${devServer ? "https" : "http"}://localhost:${PORT}`;
 
 /**
  * The viewer specs run against a PRODUCTION build by default, locally as well
@@ -9,8 +12,9 @@ const baseURL = `http://localhost:${PORT}`;
  * Turbopack, and React StrictMode double-mounts the viewer effect, so the dev
  * server boots the whole scene twice (the first instance is aborted, but only
  * after it has started fetching tiles). Set `E2E_DEV=1` to point the suite at
- * `bun dev` instead when iterating on a spec — or just leave `bun dev`
- * running, which `reuseExistingServer` picks up.
+ * `bun dev` (over HTTPS) instead when iterating on a spec; a `bun dev` left
+ * running is picked up by `reuseExistingServer` — with `E2E_DEV=1` too, since
+ * without it the suite expects the production server on plain HTTP.
  *
  * On CI the build is an explicit workflow step (it doubles as the build check),
  * so the web server only has to start.
@@ -56,6 +60,7 @@ export default defineConfig({
     : [["html", { open: "never" }]],
   use: {
     baseURL,
+    ignoreHTTPSErrors: devServer,
     // A first-attempt failure leaves something to look at (retries: 0 locally).
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
@@ -64,6 +69,7 @@ export default defineConfig({
   webServer: {
     command: serverCommand(),
     url: baseURL,
+    ignoreHTTPSErrors: devServer,
     reuseExistingServer: !process.env.CI,
     // A cold local production build has to fit in here too.
     timeout: 240_000,

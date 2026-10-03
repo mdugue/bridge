@@ -23,7 +23,7 @@ is done by copying a Snapshot JSON, not by a server-side link.
 
 ## Consequences
 
-- Hosting is any static host; the build (`bun build`) is the whole deploy.
+- Hosting is any static host; the build (`bun run build`) is the whole deploy.
 - Every feature must be expressible as "a file the client fetches" plus
   client code; the [data pipeline](../data-pipeline.md) exists to make that
   cheap.

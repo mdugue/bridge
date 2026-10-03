@@ -6,7 +6,7 @@
  */
 
 export interface KeyboardActions {
-  /** V — the next picture style (pastel → comic → noir → Sin City) */
+  /** V — the next picture style (pastel → comic → noir → Sin City → Papier) */
   cycleStyle: () => void;
   /** R — demolish the building under the crosshair */
   demolish: () => void;

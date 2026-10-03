@@ -175,7 +175,7 @@ visual-variable codebook is in
   its face's foot down to a gutter below the road (ADR 0035) — a stone level across stood
   a second step on the pavement side, whose smoothed DGM lies only a few
   centimetres above the road; `kerb-layer.ts`, casts shadow) — the DGM1 smooths the
-  step away and the 2 m grid cannot hold it. In the fragment pass
+  step away and no terrain mesh built from it can hold it. In the fragment pass
   (`ground-detail.ts`) the distance draws a pale stone band on the
   pavement side and a darker gutter on the road side (the coarse level's
   kerb), a lawn lip with a normal kink, the parking lanes and the paving
@@ -1918,8 +1918,8 @@ to the measured step instead (`lib/city/wall-snap.ts`, "Terrain TIN" above).
   the fine terrain glTF of the tile owning its middle (a `stairs` node,
   vertex colours); `stair-layer.ts` only gives it its material.
   **Why:** the DGM1 smooths a staircase into a bank (the flight beside the
-  Italienisches Dörfchen read as a grassy slope) and its ~2 m grid cannot
-  hold a 16 cm riser ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md)).
+  Italienisches Dörfchen read as a grassy slope), and a terrain built from
+  it cannot hold a 16 cm riser ([ADR 0028](./adr/0028-osm-stairs-as-geometry-over-a-lowered-terrain.md)).
   **Fallback:** no `.osm.pbf` → the step is skipped, the committed file stays;
   no file → no stairs, the terrain as before. Pure + unit-tested
   (`stairs.test.ts`, the bake end-to-end against a synthetic OSM extract in

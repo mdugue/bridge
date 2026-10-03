@@ -13,7 +13,7 @@ flowchart LR
   RAW -->|"bun run bake &lt;site&gt;<br/>pipeline/bake (Python, uv)"| DER["data/&lt;site&gt;/dlm · dop<br/>derived"]
   COM --> DER
   COM --> PUB
-  DER -->|"scripts/prepare-sites.ts → prepare-data.ts<br/>bun dev · bun build, every ready site"| PUB["public/data/&lt;site&gt;/<br/>3D Tiles tileset + manifest.json<br/>+ public/data/sites.json"]
+  DER -->|"scripts/prepare-sites.ts → prepare-data.ts<br/>bun dev · bun run build, every ready site"| PUB["public/data/&lt;site&gt;/<br/>3D Tiles tileset + manifest.json<br/>+ public/data/sites.json"]
   PUB -->|"3DTilesRendererJS<br/>tile-stream.ts, route /&lt;site&gt;"| APP["app/_components/*<br/>dressing"]
 ```
 
@@ -21,7 +21,7 @@ Two languages, three stages ([ADR 0025](./adr/0025-bakes-are-one-python-package.
 [ADR 0037](./adr/0037-sites-providers-and-per-site-data.md)): **Python**
 fetches (`bun run fetch <site>`) and bakes (`bun run bake <site>`) — by
 hand, per site; **TypeScript** turns every ready `data/<site>/` into the
-tileset the browser streams at `/<site>`, on every `bun dev` / `bun build`.
+tileset the browser streams at `/<site>`, on every `bun dev` / `bun run build`.
 
 ## Sites, providers and tiles
 
@@ -436,7 +436,7 @@ environment.
 ## Stage 2 — the build step (`scripts/prepare-data.ts`)
 
 `scripts/prepare-sites.ts` runs ahead of `next dev` and `next build`
-(`bun dev`, `bun build`). It picks every site whose data is ready (the
+(`bun dev`, `bun run build`). It picks every site whose data is ready (the
 `bun run site --all` report; or only the ids it is given,
 `bun scripts/prepare-sites.ts leipzig unna`), runs
 `bun scripts/prepare-data.ts <site>` for each — one process per site,
@@ -490,7 +490,7 @@ root                                   refine ADD
 ```
 
 The buildings load whenever the tile is in view. The terrain refines from
-512² to 1024² by screen-space error — at the renderer's 16 px target, 40 m
+the 512² grid to the fine TIN (±0.15 m) by screen-space error — at the renderer's 16 px target, 40 m
 switches at ≈ 1.2 km from the tile on a 1080p screen. Only L0 is
 *dressed*: vegetation, lamps, monuments, rails and the water and mist sheets
 are built when a fine terrain tile arrives and leave with it. The root's

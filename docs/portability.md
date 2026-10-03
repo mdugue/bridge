@@ -55,7 +55,7 @@ Meißen, München and Unna (ADR 0037).
 **Tile ids.** `tileIdOf` names a cell
 `<UTM zone><e km>_<n km>_2<tileSuffix>` — Saxony's scheme; Dresden keeps
 `33412_5656_2_sn`. Every tile is 2 km (`TILE_KM`): the rasters (4096²
-classes, 1024² terrain) and phone budgets are sized for it, and the fetch
+classes, the 512² coarse terrain) and phone budgets are sized for it, and the fetch
 step cuts other download grids to it. Ids are coordinates, so they are
 unique across sites.
 
@@ -129,12 +129,13 @@ the planned fallback. ✅ built · ❌ not built.
   (`nDOM = DOM1 − DGM1` texel by texel); the fetch resamples every
   provider's heights to that grid (`rasters.py`), so a coarser model reads
   as a blurrier one (Bavaria's DOM20 is averaged down, which is fine). The
-  terrain bake itself resamples the DGM to its 1024² / 512² grids.
+  terrain bake triangulates the fine level from that 1 m grid (a TIN within
+  ±0.15 m) and resamples the coarse one to 512².
 - An **RGB-only DOP** (no NIR band) gets a Green Leaf Index on the NDVI's
   scale from bands 1–3 (fitted on NRW's RGBI); the roof colours only need
   bands 1–3 anyway.
 - The raster edges are per tile, not per metre: a 4096² class raster and
-  1024² terrain over a 2 km tile, which is why every tile is 2 km.
+  a 512² coarse terrain over a 2 km tile, which is why every tile is 2 km.
 - **LoD1** buildings (boxes, no roof shape) have not been tried through the
   building bake.
 

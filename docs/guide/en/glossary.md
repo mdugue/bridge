@@ -187,7 +187,7 @@ usually glTF. The viewer reads it with the library 3DTilesRendererJS.
 
 **Tileset / streaming** — the index file `tileset.json` lists every tile's
 buildings and its terrain at two levels of detail, a coarse one (512²
-grid) and a detailed one (1024² grid) that replaces it when the camera
+grid) and a detailed one (a TIN, see below) that replaces it when the camera
 comes close. From it the viewer decides what to load: only what the
 camera can see, in detail near you, coarse far away; what you leave far
 behind can be dropped again.
@@ -195,6 +195,11 @@ behind can be dropped again.
 **Heightfield** — a regular grid of heights, such as the DGM1. The build
 step turns it into a ready-made terrain mesh; the browser no longer
 receives the grid itself.
+
+**TIN** — *triangulated irregular network*: a terrain mesh whose triangles
+are not laid on a regular grid — more triangles where the ground bends,
+few where it is flat. The detailed terrain level is a TIN of the DGM1 that
+stays within ±15 cm of it; the coarse level is a 512² grid.
 
 **Splatmap** — a texture that tells the ground shader which colour to use
 where. Here it is not downloaded: the browser paints it once per tile on
