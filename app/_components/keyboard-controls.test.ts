@@ -83,6 +83,16 @@ test("a browser chord (Cmd/Ctrl+V, +F, +R) fires no one-shot", () => {
   expect(calls.filter((c) => !c.startsWith("press:"))).toEqual([]);
 });
 
+test("a ⌘ chord never holds a movement key (macOS sends it no keyup)", () => {
+  const { fire, calls } = harness();
+  fire("keydown", { code: "KeyA", metaKey: true });
+  expect(calls).toEqual([]);
+  // W held first, then ⌘ pressed and released: W's keyup never comes
+  fire("keydown", { code: "KeyW" });
+  fire("keyup", { code: "MetaLeft" });
+  expect(calls).toContain("releaseAll");
+});
+
 test("auto-repeat never re-fires a one-shot", () => {
   const { fire, calls } = harness();
   fire("keydown", { code: "KeyR" });

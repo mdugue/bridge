@@ -135,6 +135,7 @@ export type LayerName =
   | "trams"
   | "city"
   | "fences"
+  | "kerbs"
   | "stairs"
   | "terrain"
   | "walls"
@@ -257,9 +258,14 @@ export interface CityWalkOptions {
    * The GPU is gone for good, or a frame threw and left three's renderer
    * in a state no later frame draws right (the render stopped): true when
    * the page recovers by itself (gpu-recovery.ts, a reload where the player
-   * stood); otherwise the HUD says the graphics failed.
+   * stood); otherwise the HUD says the graphics failed (`onFatal`).
    */
   onGpuLost?: () => boolean;
+  /**
+   * The render stopped after the first frame and the page did not recover
+   * by itself: the message is the whole story, not one layer's failure.
+   */
+  onFatal?: (message: string) => void;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
   onFps?: (fps: number) => void;
   /**
@@ -878,8 +884,28 @@ async function bootApp(
     }
   });
 
+  // The sun's shadow camera streams tiles (tile-stream.ts) only while the
+  // sun is up: by night it draws no shadow, and the tiles it kept loaded
+  // around the player were memory nothing showed — on a phone, memory the
+  // governor cannot free (a tile in use is never evicted).
+  let shadowStreams = true;
+  const streamShadowTiles = (on: boolean) => {
+    if (on === shadowStreams) {
+      return;
+    }
+    shadowStreams = on;
+    const shadow = sunRig.shadowCamera;
+    if (on) {
+      const size = shadowMapSizeFor(budget.profile, budget.tier);
+      stream.tiles.setCamera(shadow);
+      stream.tiles.setResolution(shadow, size, size);
+    } else {
+      stream.tiles.deleteCamera(shadow);
+    }
+  };
   const setSun = (date: Date): SunState => {
     const state = sunRig.update(date);
+    streamShadowTiles(state.aboveHorizon);
     currentNight = state.nightFactor;
     sunAltitude = state.altitudeDeg;
     sunToStyles?.(state.altitudeDeg);
@@ -938,7 +964,7 @@ async function bootApp(
     ground: { offset, heightAt },
     initialDate: opts.initialDate,
     onBikeCounts: opts.onBikeCounts,
-    onChange: () => emitStats(),
+    onChange: () => scheduleStats(),
     onTramStatus: opts.onTramStatus,
     onTrafficHour: opts.onTrafficHour,
     parent: scene,
@@ -1218,16 +1244,60 @@ async function bootApp(
         ...dressingCensus(dressings, census),
         walls: census(terrains.map((t) => t.walls)),
         stairs: census(terrains.map((t) => t.stairs)),
+        kerbs: census(terrains.map((t) => t.kerbs)),
         fences: census(terrains.map((t) => t.fences)),
         bikes: census([overlays.parts().bikes]),
         trams: census([overlays.parts().trams]),
       },
     });
   };
+  // A full stats pass walks the whole scene (geometry bytes and the layer
+  // census) and the HUD re-renders on it: the stream's bursts of events —
+  // about four per tile while the site streams — coalesce into one pass at
+  // most every 250 ms. A timer, not the render loop, so stats still arrive
+  // while the e2e holds the frames (`__poc.hold`).
+  let statsTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleStats = () => {
+    if (statsTimer !== null || disposed) {
+      return;
+    }
+    statsTimer = setTimeout(() => {
+      statsTimer = null;
+      if (!disposed) {
+        emitStats();
+      }
+    }, 250);
+  };
+  /** The stats now, for the moments that promise them (first frame, loaded). */
+  const flushStats = () => {
+    if (statsTimer !== null) {
+      clearTimeout(statsTimer);
+      statsTimer = null;
+    }
+    emitStats();
+  };
+  cleanups.push(() => {
+    if (statsTimer !== null) {
+      clearTimeout(statsTimer);
+    }
+  });
   // Every tile's building footprints for the minimap, independent of what
   // has streamed in (a few hundred KB for the site): the map shows the whole
-  // city from the start, and demolished buildings via `stream.demolished`.
+  // city once the player has it (they load after the handover, not against
+  // the spawn tile's glTF), and demolished buildings via `stream.demolished`.
   const footprints = new Map<string, [number, number][][][]>();
+  // The flattened list the minimap draws, rebuilt only when a file lands or
+  // a building goes (either drops it): the same array otherwise, so React
+  // bails out and the minimap does not repaint its static layer on every
+  // tile event.
+  let flattened: FootprintPoly[] | null = null;
+  const currentFootprints = (): FootprintPoly[] => {
+    flattened ??= [...footprints].flatMap(([tile, polys]) => {
+      const gone = stream.demolished.get(tile);
+      return footprintPolys(polys, (i) => !gone?.has(i));
+    });
+    return flattened;
+  };
   function loadFootprints(): void {
     for (const tile of extras.tiles) {
       fetchOptionalJson<[number, number][][][]>(
@@ -1237,14 +1307,13 @@ async function bootApp(
         .then((polys) => {
           if (polys && !disposed) {
             footprints.set(tile.id, polys);
-            emitStats();
+            flattened = null;
+            scheduleStats();
           }
         })
         .catch(() => undefined);
     }
   }
-
-  loadFootprints();
 
   // Everything that follows from the tile set changing: the ground, the
   // lamp heads, the fog floor, the shadows, the stats.
@@ -1272,7 +1341,7 @@ async function bootApp(
     overlays.streamChanged();
     postStack.sceneChanged();
     invalidateShadows();
-    emitStats();
+    scheduleStats();
     checkLoaded();
   };
 
@@ -1288,8 +1357,9 @@ async function bootApp(
       }
     });
     stream.demolished.set(picked.layer.tile, kept);
+    flattened = null;
     invalidateShadows();
-    emitStats();
+    scheduleStats();
   };
 
   cleanups.push(
@@ -1436,7 +1506,7 @@ async function bootApp(
   let frames = 0;
   // The render cannot go on: stop once, then recover (a reload where the
   // player stood, gpu-recovery.ts) or say so — before the first frame by
-  // failing the boot, since the HUD shows `onError` only once booted and
+  // failing the boot, since the HUD shows `onFatal` only once booted and
   // the stopped loop no longer streams the tiles the boot waits for.
   let stopped = false;
   const stopRendering = (message: string) => {
@@ -1458,7 +1528,7 @@ async function bootApp(
       bootFailure ??= new Error(failed);
       return;
     }
-    opts.onError?.(failed);
+    opts.onFatal?.(failed);
   };
   // A device the browser reports lost: three only stops drawing (silently,
   // every frame after it returns early), so the loop stops here too.
@@ -1527,7 +1597,7 @@ async function bootApp(
       updateFocus();
     }
     // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
-    // emit (which refreshes footprints and would re-flash the minimap).
+    // emit (a whole-scene walk; it also hands the HUD the footprints).
     if (timer.getElapsed() >= fpsDue) {
       fpsDue = timer.getElapsed() + 0.5;
       opts.onFps?.(fps);
@@ -1638,6 +1708,7 @@ async function bootApp(
   });
   firstFrameShown = true;
   onChange();
+  flushStats();
   // Tiles compile themselves before they show; this covers the rest of the
   // scene (sky, sun rig, lamp light pool), under the overlay instead of in
   // the first visible frame.
@@ -1690,12 +1761,21 @@ async function bootApp(
       dressingsQueued: stream.pendingDressings(),
       // Tried, not necessarily built: a dressing that failed, or whose tile
       // left before its turn, must not hold the scene short of "loaded".
-      spawnDressed: stream.dressingSettled(spawn.id),
+      spawnDressingTried: stream.dressingSettled(spawn.id),
+      // With the renderer idle, a fine level not loaded is one it does not
+      // want: tiles-load-end fires only at the end of an update() whose
+      // traversal requested nothing new (TilesRendererBase.update), so there
+      // is no idle gap between the coarse level landing and the fine one
+      // being asked for.
+      spawnFineLoaded: [...stream.terrains].some(
+        (t) => t.level === 0 && t.tile === spawn.id
+      ),
     });
     for (const { id, fraction, skipped } of step.stages) {
       stage(id, fraction, skipped);
     }
     if (step.loaded) {
+      flushStats();
       opts.trail?.note("loaded");
       worldPartial = false;
       applyFog();
@@ -1720,6 +1800,7 @@ async function bootApp(
     }
     stage("details", 0);
     openGate();
+    loadFootprints();
     checkLoaded();
   };
 
@@ -1785,11 +1866,7 @@ async function bootApp(
     setClimbInput: pose.setClimbInput,
     setMoveInput: pose.setMoveInput,
     startStreaming,
-    getFootprints: (): FootprintPoly[] =>
-      [...footprints].flatMap(([tile, polys]) => {
-        const gone = stream.demolished.get(tile);
-        return footprintPolys(polys, (i) => !gone?.has(i));
-      }),
+    getFootprints: currentFootprints,
     landmarks: extras.landmarks ?? [],
     landcoverTiles: extras.tiles.map((t) => ({
       src: new URL(t.minimap, tilesetUrl).href,

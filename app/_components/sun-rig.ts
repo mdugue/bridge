@@ -285,6 +285,12 @@ export function createSunRig(
       sun.shadow.needsUpdate = true;
       lastCentre.set(fx, fy, fz);
     }
+    // The shadow camera is also a streaming camera (create-app.ts): three
+    // updates it only while drawing the shadow, which an invisible sun (at
+    // night) never does — a stale frustum would keep its tiles loaded.
+    sun.updateMatrixWorld();
+    sun.target.updateMatrixWorld();
+    sun.shadow.updateMatrices(sun);
   };
 
   const follow = (position: Vector3, direction: Vector3, groundY: number) => {

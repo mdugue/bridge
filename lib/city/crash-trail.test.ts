@@ -1,8 +1,9 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   createTrail,
   endedInCrash,
   formatTrail,
+  offerAsCrash,
   parseTrail,
   pushBeat,
   pushEvent,
@@ -75,4 +76,51 @@ test("the text names the device, the events and the last beats", () => {
   expect(text).toContain("12.3s  device-lost  unknown");
   expect(text).toContain("gpu 180MB");
   expect(text).toContain("tiles 3/2");
+});
+
+describe("which previous record is offered as a crash", () => {
+  const died = (...kinds: string[]) => {
+    const trail = createTrail(setup);
+    kinds.forEach((kind, i) => pushEvent(trail, { t: i, kind }));
+    return trail;
+  };
+
+  test("a page that died in use", () => {
+    expect(offerAsCrash(died("renderer", "first frame"), false)).toBe(true);
+  });
+
+  test("not a page that reloaded itself to recover its GPU", () => {
+    const trail = died("first frame", "gpu lost", "reloading");
+    expect(offerAsCrash(trail, false)).toBe(false);
+    expect(offerAsCrash(trail, true)).toBe(false);
+    // the device-lost WebKit reports after the failed frame
+    pushEvent(trail, { t: 9, kind: "device-lost" });
+    expect(offerAsCrash(trail, true)).toBe(false);
+  });
+
+  test("a recovered page that drew long ago and then died is offered", () => {
+    const trail = died("renderer", "first frame");
+    for (let i = 0; i < TRAIL_EVENTS; i++) {
+      pushEvent(trail, { t: 2 + i, kind: "dressings" });
+    }
+    expect(trail.events.some((e) => e.kind === "first frame")).toBe(false);
+    expect(offerAsCrash(trail, true)).toBe(true);
+  });
+
+  test("after a recovery, not iOS's own navigation that never drew", () => {
+    expect(offerAsCrash(died("renderer"), true)).toBe(false);
+  });
+
+  test("a recovered page that drew and then died is offered", () => {
+    expect(offerAsCrash(died("renderer", "first frame", "error"), true)).toBe(
+      true
+    );
+  });
+
+  test("not a page that went to the background or left", () => {
+    const trail = died("first frame");
+    trail.state = "hidden";
+    expect(offerAsCrash(trail, false)).toBe(false);
+    expect(offerAsCrash(null, false)).toBe(false);
+  });
 });

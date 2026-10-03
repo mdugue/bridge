@@ -11,22 +11,18 @@ import { graphOf, setGraph, setSlots } from "./material-slots";
 import { createPipelineAnchors, layoutStub } from "./pipeline-anchors";
 import { sceneMaterial, retainSceneMaterials } from "./three-utils";
 
-/** What three keys a pipeline's geometry by (RenderObject.getGeometryCacheKey). */
-function layoutKey(object: { geometry: Mesh["geometry"] }): string {
-  const { geometry } = object;
-  return Object.keys(geometry.attributes)
-    .sort()
-    .map((name) => {
-      const a = geometry.attributes[name] as {
-        data?: { stride: number };
-        itemSize: number;
-        normalized: boolean;
-        offset?: number;
-      };
-      return `${name},${a.data?.stride ?? ""},${a.offset ?? ""},${a.itemSize},${a.normalized ? "n" : ""}`;
-    })
-    .join(";");
-}
+// reason: @types/three declares no RenderObject; reading three's own key
+// in a test (not patching it, ADR 0027) keeps this from drifting.
+// @ts-expect-error -- no type declarations for three's src modules
+import RenderObject from "three/src/renderers/common/RenderObject.js";
+
+/** What three keys a pipeline's geometry by: its own getGeometryCacheKey. */
+const layoutKey = (object: { geometry: Mesh["geometry"] }): string =>
+  (
+    RenderObject as {
+      prototype: { getGeometryCacheKey: (this: unknown) => string };
+    }
+  ).prototype.getGeometryCacheKey.call(object);
 
 test("a stub has the instanced layout of its set, in three vertices", () => {
   const set = new Instances(new BoxGeometry(), new MeshBasicNodeMaterial(), 50);

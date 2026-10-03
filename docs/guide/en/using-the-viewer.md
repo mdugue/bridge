@@ -200,15 +200,21 @@ The button in the corner opens a panel with three tabs.
     Elbe), views from above onto the *Frauenkirche*, the *Brühlsche
     Terrasse*, *Albertplatz*, *Alaunpark* and *Zwinger & Semperoper*, a
     low flight over the *Äußere Neustadt*, plus *Carolabrücke* (over the
-    river), *Elbe-Panorama* (high above the bend) and *Über den Dächern*
-    (a low glide over the old town roofs);
+    river), *Elbe-Panorama* (high above the bend), *Über den Dächern*
+    (a low glide over the old town roofs), *Großer Garten* (above the
+    Palais, the Palaisteich and the park's crowns behind it), *Blaues
+    Wunder* (over the Elbe, the bridge spanning from Blasewitz to
+    Loschwitz), *Waldschlößchenbrücke* (over the Elbe meadows, the old
+    town's towers downstream) and *Hauptbahnhof* (down onto the platform
+    halls, Prager Straße leading to the old town);
   - *at eye level*: *Canaletto-Blick* (on the Elbe meadow, the old town
     across the grass), *Elbufer* (the tree-lined Neustadt bank), *Am
-    Japanischen Palais* (on the Neustadt meadow where Canaletto painted)
-    and *Neumarkt* (in front of the Frauenkirche).
+    Japanischen Palais* (on the Neustadt meadow where Canaletto painted),
+    *Neumarkt* (in front of the Frauenkirche) and *Palais im Großen
+    Garten* (at the south end of the Palaisteich, the baroque Palais across
+    the water).
 
-  The Großer Garten lies just south of the area, so it has no viewpoint
-  yet. The last card, *Aktuelle Sicht merken*, remembers where you stand;
+  The last card, *Aktuelle Sicht merken*, remembers where you stand;
   it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
   forget it.
 - **Verkehrsdaten** ("traffic data") — up to three data layers over the
@@ -294,13 +300,13 @@ as you set it.
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
 | | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |
 | | *Windhelligkeit* | crowns brighten as they lean into a gust |
+| | *Multi-Tuft-Kronen (nah)* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City* and *Papier* |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
-| | *Detaillierte Kronen* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
 cannot resolve it in motion) and comes back when you stop.

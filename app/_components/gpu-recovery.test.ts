@@ -30,7 +30,7 @@ test("a lost GPU reloads where the player stood, and the next load puts it back 
   expect(recentlyRecovered(store, 121_000)).toBe(false);
 });
 
-test("twice in two minutes, then the message instead of a reload loop", () => {
+test("twice in ten minutes, then the message instead of a reload loop", () => {
   const store = memoryStore();
   let reloads = 0;
   const reload = () => {
@@ -40,8 +40,22 @@ test("twice in two minutes, then the message instead of a reload loop", () => {
   expect(recoverFromGpuLoss(null, store, reload, 30_000)).toBe(true);
   expect(recoverFromGpuLoss(null, store, reload, 60_000)).toBe(false);
   expect(reloads).toBe(2);
-  // once the first try is two minutes old, a reload is allowed again
-  expect(recoverFromGpuLoss(null, store, reload, 121_000)).toBe(true);
+  // once the first try is ten minutes old, a reload is allowed again
+  expect(recoverFromGpuLoss(null, store, reload, 599_000)).toBe(false);
+  expect(recoverFromGpuLoss(null, store, reload, 601_000)).toBe(true);
+});
+
+test("a phone that loses its GPU a minute after each boot does not reload forever", () => {
+  const store = memoryStore();
+  let reloads = 0;
+  const reload = () => {
+    reloads++;
+  };
+  // boot, stream back to the heavy view, lose the GPU again — every 70 s
+  expect(recoverFromGpuLoss(null, store, reload, 0)).toBe(true);
+  expect(recoverFromGpuLoss(null, store, reload, 70_000)).toBe(true);
+  expect(recoverFromGpuLoss(null, store, reload, 140_000)).toBe(false);
+  expect(reloads).toBe(2);
 });
 
 test("without storage it gives up rather than reloading blind", () => {

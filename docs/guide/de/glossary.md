@@ -200,7 +200,7 @@ selbst sind meist glTF. Der Viewer liest ihn mit der Bibliothek
 
 **Tileset / Streamen** — die Indexdatei `tileset.json` listet für jede
 Kachel die Gebäude und das Gelände in zwei Detailstufen, einer groben
-(512²-Raster) und einer detaillierten (1024²-Raster), die sie ersetzt,
+(512²-Raster) und einer detaillierten (ein TIN, siehe unten), die sie ersetzt,
 sobald die Kamera nahe kommt. Daraus entscheidet der Viewer, was er lädt:
 nur, was die Kamera sehen kann, nah detailliert, fern grob; was du weit
 hinter dir lässt, kann wieder entfallen.
@@ -208,6 +208,12 @@ hinter dir lässt, kann wieder entfallen.
 **Höhenfeld** — ein regelmäßiges Gitter von Höhen, etwa das DGM1. Der
 Build-Schritt macht daraus ein fertiges Geländenetz; der Browser bekommt
 das Gitter selbst nicht mehr.
+
+**TIN** — *Triangulated Irregular Network*, ein unregelmäßiges
+Dreiecksnetz: ein Geländenetz, dessen Dreiecke nicht auf einem festen
+Raster liegen — mehr Dreiecke, wo sich der Boden krümmt, wenige, wo er
+flach ist. Die detaillierte Geländestufe ist ein TIN des DGM1, das ihm auf
+±15 cm folgt; die grobe ist ein 512²-Raster.
 
 **Splatmap** — eine Textur, die dem Boden-Shader sagt, welche Farbe wo
 hingehört. Hier wird sie nicht heruntergeladen: Der Browser malt sie einmal

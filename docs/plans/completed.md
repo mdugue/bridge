@@ -1217,3 +1217,139 @@ audio files and no dependency.
 See the ledger's *Sound* section ([transformations.md](../transformations.md)),
 [rendering.md](../rendering.md) and plan 019 (the listening pass rides
 along with its phone session).
+
+## 037 — The commands agents run, and docs that say what the code does · DONE (2026-10-03)
+
+**Problem.** `AGENTS.md` told agents to run `bun build` (Bun's bundler) and
+a bare `bun test` (loads the Playwright specs); `E2E_DEV=1` assumed plain
+HTTP although `bun dev` serves HTTPS only since 2026-09-30; the city-walker
+skill still gave the phone tile cache as 120–180 MB (the value the code
+records as a bug); half the docs described the fine terrain as a 1024²
+grid (a ±0.15 m TIN since ADR 0030); the guide missed five viewpoints and
+named a crown switch the HUD does not have.
+
+**Outcome.** `bun run build` / `bun run test` everywhere, and a
+`bunfig.toml` that keeps a bare `bun test` out of `e2e/`
+(`pathIgnorePatterns` — Bun 1.4 honours it). Playwright derives the scheme
+from `E2E_DEV` and ignores the self-signed certificate. The TIN is
+described as one in README, rendering, data-pipeline, data-flow,
+portability, both glossaries (a new *TIN* entry) and both data-journeys.
+Two new tests in `lib/docs/`: the guides name every Dresden viewpoint and
+every look slider (`guide-labels.test.ts`), and every relative link in
+`docs/` and `AGENTS.md` resolves (`links.test.ts`, code spans ignored).
+Dependabot groups follow the stack (tsgolint with oxlint, 3d-tiles-renderer
+with three) and watch `pipeline/uv.lock`; CI runs e2e for `docs/` changes
+(`wissen.spec.ts` asserts docs text); the unit job uploads the lcov and
+lists the sources no test imports (`scripts/coverage-gaps.ts`: 42 files,
+≈ 12 600 lines, `create-app.ts` first).
+
+**Keep in mind.** A new viewpoint or slider fails `guide-labels.test.ts`
+until both guides name it. A condensed or renumbered plan fails
+`links.test.ts` until its links follow. If the dev server ever goes back
+to HTTP, revert the scheme switch in `playwright.config.ts`.
+
+## 038 — Five runtime fixes in the viewer's spine · DONE (2026-10-03)
+
+**Problem.** Five defects, three of them on phones: (1) the sun's shadow
+camera streams tiles but three updates it only while it renders the
+shadow, which an invisible sun never does — after dusk it pinned the tile
+under its last daytime frustum (the memory governor cannot evict a tile
+in use); (2) "loaded" waited for the spawn's dressing, which only its fine
+level carries — a jump away before that level loaded left fog capped and
+the pill at 99 % for good; (3) GPU recovery allowed two reloads per two
+minutes, so a phone that lost its GPU ≈ 70 s after each boot reloaded
+forever, and the next page hid every crash report for two minutes after
+a recovery; (4) a ⌘ chord left a movement key held (macOS sends no keyup
+under ⌘); (5) a jump or a glide with live mode on was pulled back by the
+GPS 1–3 s later.
+
+**Outcome.** (1) `reposition()` updates the shadow camera's matrices
+itself. (2) The boot machine takes `spawnDressingTried` and
+`spawnFineLoaded` and waits for the spawn's dressing only while its fine
+level is loaded (deviation: the decision lives in the pure machine, so the
+regression is unit-tested there). (3) Two reloads per ten minutes;
+`offerAsCrash` (`lib/city/crash-trail.ts`) drops only a page that reloaded
+itself and, after a recovery, a record that never drew — a recovered page
+that then died is offered; the "graphics failed" message has its own path
+to the HUD (`onFatal`), no longer under the layer-failure prefix. (4) A ⌘
+keydown presses nothing; releasing ⌘ releases every key. (5)
+`applyCameraState`, `teleportTo`, `flyTo` and `flyToViewpoint` end the
+follow; `placeAt` (the GPS fix itself) does not. Each fix has a test that
+fails without it.
+
+Review follow-ups (same day): by night the shadow camera is taken off the
+stream altogether (`streamShadowTiles`: it draws no shadow, so its tiles
+were memory for nothing); the crash trail keeps a `drew` flag beside its
+40-event ring, and any `reloading` note marks a recovery reload.
+
+**Keep in mind.** `__poc.ready` no longer guarantees the spawn is dressed
+when the camera left it before its fine level came (the specs start at
+the spawn). "Not coming" rests on `tiles-load-end` firing only at the end
+of an `update()` that requested nothing new (3DTilesRendererJS 0.5.3) —
+re-check that on an upgrade. Releasing ⌘ releases every held key, a key
+still held included (re-press it): macOS gives no keyup to tell them apart.
+
+## 041 — Tests where the regressions are · DONE (2026-10-03)
+
+**Outcome.** The tile cache's raster weighing moved into `RasterShares`
+(`app/_components/raster-shares.ts`, behaviour unchanged) with its tests;
+two tests pin the freeing of a load the renderer aborts after its compile
+and the keeping of one it records; `collision.test.ts` runs the building
+collider through a real three-mesh-bvh BVH (roof above from inside, none
+under a slab, top over a point, free / head-on / oblique steps, the knee
+ray, a moved building) — each guard checked to fail without its rule. The
+layer census counts kerbs; the e2e census asserts stairs, kerbs and the
+sports fixtures; a new e2e test stands the walker on the Canaletto meadow
+and checks its height against the committed DGM (± 0.5 m). Every inked
+picture style has its pens; the pipeline-anchor test reads three's own
+`getGeometryCacheKey`. `features.test.ts` gained plan 008's leftovers:
+every GeoJSON is a FeatureCollection, a baked canopy has trees, bridge
+kinds and rail track counts in range, roof colours `{ meta, roofs }`.
+
+**Keep in mind.** Tree rows stay allowed empty (Grimma's and Munich's
+outer tiles have none). A new dressing part or terrain node gets a census
+line and an e2e assertion in the same change. The collider tests are the
+spec of ADR 0032's ray rules.
+
+## 042 — Less main-thread churn while tiles stream · DONE (2026-10-03)
+
+**Problem.** Every tile event (≈ 4 per tile) ran a whole-scene stats pass
+and handed the HUD a freshly flattened list of every footprint of the site
+(≈ 40 000 polygons): the minimap repainted its static layer each time. The
+fifteen footprint files competed with the spawn tile's glTF; the viewer
+chunk waited for the manifest's round trip.
+
+**Outcome.** Stats coalesce into one pass at most every 250 ms (a timer,
+so they arrive while the e2e holds frames); the first frame and the
+loaded moment flush them. The footprint list is cached under a version a
+landing file or a demolish bumps — the same array otherwise, so React
+bails out and the minimap's effect does not re-run. The footprints load
+after the handover. The viewer chunk starts with the manifest (a second
+`import()` of the same module from an effect; the one inside `dynamic()`
+stays written out, Next matches its chunk by it).
+
+**Keep in mind.** Anything new that changes footprints (an undo of a
+demolish) bumps `footprintVersion`.
+
+## 044 — The canopy points packed, not GeoJSON · DONE (2026-10-03)
+
+**Problem.** The canopy and scan-tree points were the browser's biggest
+parse: up to 8.6 MB of GeoJSON a tile (81 269 features on 33416_5658), one
+`JSON.parse` of **96 ms** (V8, measured on the published file) that cannot
+be sliced, three objects per point.
+
+**Outcome.** `prepare-data.ts` publishes `canopy_<t>.pts.gz` and
+`canopyx_<t>.pts.gz` (`lib/city/point-pack.ts`: a 32-byte header, float32
+x/y relative to the tile's south-west corner — a tenth of a millimetre —
+then `h`, and `r` for the scan trees; pre-gzipped like the glTF since
+static hosts do not compress binary types). The dressing reads them with
+`fetchOptionalBinary` (the optional-artifact policy, inflated by the gzip
+magic) into the same features as before. 33416_5658: 0.40 MB on the wire
+(was ≈ 0.49 MB host-gzipped), **≈ 13 ms** to unpack into the features
+(V8), most of it the object creation. The committed GeoJSON stays the bake
+contract; a test packs a committed `canopyx` file and gets it back within
+a millimetre.
+
+**Keep in mind.** If the dressing still shows a long task here, hand the
+`Float32Array` to the vegetation instead of feature objects (phase 2), and
+pack the street-tree cadastre (`trees`) with a small column set.

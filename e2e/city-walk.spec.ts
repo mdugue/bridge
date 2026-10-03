@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
+import { EYE_HEIGHT } from "../lib/city/pose";
+import { tfwToBounds } from "../lib/city/tfw";
 
 /**
  * Inner waits scale with the machine. Without a GPU every frame is rendered in
@@ -444,6 +449,12 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // 277 fence lines and 145 gates (114 on a fence, 31 on a wall), baked
     // with the fine terrain
     expect(stats.fences.triangles).toBeGreaterThan(0);
+    // 140 OSM flights of steps, baked with the fine terrain
+    expect(stats.stairs.triangles).toBeGreaterThan(0);
+    // 213 kerb lines, baked with the fine terrain
+    expect(stats.kerbs.triangles).toBeGreaterThan(0);
+    // 30 sports grounds: 36 goals, posts and nets
+    expect(stats.sport.triangles).toBeGreaterThan(0);
     expectNoErrors(errors);
   });
 
@@ -484,6 +495,48 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // (north-up vs canvas-down) fails.
     expect(Math.abs((pose?.epsgX ?? 0) - expectedX)).toBeLessThan(50);
     expect(Math.abs((pose?.epsgY ?? 0) - expectedY)).toBeLessThan(50);
+    expectNoErrors(errors);
+  });
+
+  test("the walker stands at eye height over the DGM", async () => {
+    // Open, level meadow on the spawn tile (the Canaletto view's Elbwiese):
+    // no building, stair or deck lifts the camera here (ADR 0032), so its
+    // height is the measured ground plus the eye.
+    const at = { x: 412_060, y: 5_656_745 };
+    const state = await page.evaluate(({ x, y }) => {
+      const api = window.__poc?.handle;
+      // On foot (the spawn view is aerial): the teleport then stands there.
+      api?.setMovementMode("walk");
+      api?.teleportTo(x, y);
+      return api?.getCameraState();
+    }, at);
+    expect(state?.mode).toBe("walk");
+    const base = path.join(
+      __dirname,
+      "../data/dresden/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn"
+    );
+    const tif = readFileSync(`${base}.tif`);
+    const image = await (
+      await fromArrayBuffer(
+        tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength)
+      )
+    ).getImage();
+    const [w, h] = [image.getWidth(), image.getHeight()];
+    const [minX, minY, maxX, maxY] = tfwToBounds(
+      readFileSync(`${base}.tfw`, "utf8"),
+      w,
+      h
+    );
+    const col = Math.floor(((at.x - minX) / (maxX - minX)) * w);
+    const row = Math.floor(((maxY - at.y) / (maxY - minY)) * h);
+    const [dgm] = (await image.readRasters({
+      window: [col, row, col + 1, row + 1],
+      samples: [0],
+      interleave: true,
+    })) as unknown as number[];
+    expect(
+      Math.abs((state?.pos.y ?? 0) - EYE_HEIGHT - (dgm ?? 0))
+    ).toBeLessThan(0.5);
     expectNoErrors(errors);
   });
 

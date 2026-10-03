@@ -3,18 +3,16 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { formatTrail, type Trail } from "@/lib/city/crash-trail";
-import {
-  dismissPreviousTrail,
-  previousCrash,
-  previousTrail,
-} from "./crash-trail";
+import { formatTrail, offerAsCrash, type Trail } from "@/lib/city/crash-trail";
+import { dismissPreviousTrail, previousTrail } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
 
 /**
  * The previous page's crash trail (crash-trail.ts), offered as text to
- * copy: shown when that page died while in use — unless it was the GPU the
- * page already recovered from (gpu-recovery.ts) — or always with `?trail=1`.
+ * copy: shown when that page died while in use — unless it reloaded itself
+ * to recover a lost GPU, or this page follows a recovery and the record never
+ * reached a first frame (offerAsCrash, gpu-recovery.ts) — or always with
+ * `?trail=1`.
  * Mounted on the client only (the viewer has no server render), so local
  * storage is readable in the initializer.
  */
@@ -23,7 +21,8 @@ function initialTrail(): Trail | null {
   if (always) {
     return previousTrail();
   }
-  return recentlyRecovered() ? null : previousCrash();
+  const previous = previousTrail();
+  return offerAsCrash(previous, recentlyRecovered()) ? previous : null;
 }
 
 export function CrashReport() {

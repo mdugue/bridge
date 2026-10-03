@@ -37,7 +37,7 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
   gets glTF)
 - **Python in a uv environment** (`pipeline/`: numpy, rasterio, pyogrio,
   shapely, Pillow — GDAL ships inside the wheels) for the offline bakes
-- Playwright for e2e + the screenshot harness; `bun test` for the `lib/`,
+- Playwright for e2e + the screenshot harness; `bun run test` for the `lib/`,
   `app/_components/` and `scripts/` units
 - Deployed as a static client app; no database, no stateful API routes
 
@@ -48,12 +48,13 @@ bun install
 bun dev            # prepare-sites.ts (every ready site's geodata ->
                    # public/data/<site>/, + public/data/sites.json) then
                    # next dev
-bun build          # the same, then next build
+bun run build      # the same, then next build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
-bun test           # unit tests in lib/, app/_components/ and scripts/
+bun run test       # unit tests in lib/, app/_components/ and scripts/
+                   # (a bare `bun test` is Bun's runner: it loads e2e/ too)
 bun run site <site>   # where the site stands, tile by tile (--all: every
                    # site, with its size on disk)
 bun run fetch <site>  # download the site's data through its provider's
@@ -68,8 +69,8 @@ bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
                    # (Bun.WebView + Chrome; commit the SVGs with the change)
 bun run docs:matrix     # write docs/guide/{en,de}/sources-by-city.md from
                    # the site and provider configs (its test fails on drift)
-bun test:e2e       # playwright (e2e/) against a production build
-E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
+bun run test:e2e   # playwright (e2e/) against a production build
+E2E_DEV=1 bun run test:e2e   # ...against `bun dev` (HTTPS) instead, for spec iteration
 ```
 
 Linting and formatting are **oxlint + oxfmt** (`.oxlintrc.json`, `.oxfmtrc.json`)
@@ -597,7 +598,8 @@ The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
-streaming camera, so tiles that cast into the view stay loaded;
+streaming camera while the sun is up, so tiles that cast into the view stay
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`);
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 
 **Vegetation** is chunked into 250 m cells (one `Instances` set per cell) so

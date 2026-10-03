@@ -35,6 +35,7 @@ import { orchardTrees, vineRows } from "@/lib/city/cultivated";
 import type { LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import { onRelief } from "@/lib/city/monuments";
+import { pointFeatures, unpackPoints } from "@/lib/city/point-pack";
 import { type SportTable, sportFixtures } from "@/lib/city/sport";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
@@ -50,7 +51,13 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { type CityLayer, dressCity } from "./city-layer";
 import type { CrownWarmup } from "./crown-season";
 import { buildVineyards } from "./cultivated-layer";
-import { fetchFeatures, fetchOptionalJson } from "./fetch-optional";
+import {
+  fetchFeatures,
+  fetchOptionalBinary,
+  fetchOptionalJson,
+  gunzip,
+  isGzipped,
+} from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
 import { buildLowVegetation } from "./low-vegetation-layer";
@@ -73,6 +80,7 @@ import {
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
+import { RasterShares } from "./raster-shares";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
@@ -80,7 +88,6 @@ import {
   compileRepresentatives,
   disposeObject3D,
   estimateGeometryBytes,
-  trackedBytesOf,
 } from "./three-utils";
 import { buildTraffic } from "./traffic-layer";
 import { trafficAskSet } from "./traffic-ask";
@@ -198,9 +205,8 @@ interface Dressed {
 
 /**
  * The tiles' `.glb.gz` content is pre-gzipped (static hosts do not compress
- * binary types); inflate it natively before the loader sees it. Judged on the
- * gzip magic, not the URL alone: a host that serves `.gz` with
- * `Content-Encoding: gzip` has the browser inflate it already.
+ * binary types); inflate it natively before the loader sees it — unless the
+ * host already did (isGzipped, fetch-optional.ts).
  */
 class GzipContentPlugin {
   name = "BRIDGE_GZIP_CONTENT";
@@ -210,12 +216,7 @@ class GzipContentPlugin {
       return res;
     }
     const bytes = new Uint8Array(await res.arrayBuffer());
-    const body =
-      bytes[0] === 0x1f && bytes[1] === 0x8b
-        ? new Blob([bytes])
-            .stream()
-            .pipeThrough(new DecompressionStream("gzip"))
-        : bytes;
+    const body = isGzipped(bytes) ? gunzip(bytes) : bytes;
     return new Response(body, { status: res.status });
   }
 }
@@ -512,6 +513,16 @@ async function buildDressing(
     const file = d[kind];
     return file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
   };
+  // The canopy points come packed (lib/city/point-pack.ts, prepare-data.ts):
+  // no parse, the same features for the vegetation. Not a pack = off.
+  const getPoints = async (
+    kind: "canopy" | "canopyx"
+  ): Promise<CanopyExtraFeature[]> => {
+    const file = d[kind];
+    const buffer = file ? await fetchOptionalBinary(url(file), signal) : null;
+    const points = buffer ? unpackPoints(buffer) : null;
+    return points ? (pointFeatures(points) as CanopyExtraFeature[]) : [];
+  };
   const {
     rows,
     canopy,
@@ -533,7 +544,7 @@ async function buildDressing(
     traffic,
   } = await allNamed({
     rows: get<VegRowFeature>("vegrows"),
-    canopy: get<CanopyFeature>("canopy"),
+    canopy: getPoints("canopy"),
     ndviAt: extras.ndvi
       ? loadNdviSampler(url(extras.ndvi), terrain.bounds, signal)
       : Promise.resolve(null),
@@ -552,7 +563,7 @@ async function buildDressing(
     // the street-tree cadastre (tree-inventory-layer.ts)
     inventory: get<TreeFeature>("trees"),
     // laser-scan crowns outside the canopy mask (tiles with a laser scan)
-    scanTrees: get<CanopyExtraFeature>("canopyx"),
+    scanTrees: getPoints("canopyx"),
     hedges: get<LowVegFeature>("lowveg"),
     // allotments, orchards, vineyards (cultivated-layer.ts)
     cultivated: get<CultivatedFeature>("cultivated"),
@@ -737,14 +748,8 @@ export class DressingPlugin {
   private tiles: {
     recalculateBytesUsed: (tile?: object | null) => void;
   } | null = null;
-  /**
-   * The content roots whose terrain reads each raster: the two levels of a
-   * tile name the same class raster, splat, NDVI, sports grounds and light
-   * (shared-rasters.ts), and the cache weighs such a raster half by each —
-   * counted whole by both, a phone's cache was full at a fraction of what
-   * the GPU held.
-   */
-  private readonly rasterHolders = new Map<Texture, Set<Object3D>>();
+  /** the content roots whose terrain reads each raster (raster-shares.ts) */
+  private readonly rasterShares = new RasterShares<Object3D>();
   /** the tile a content root was loaded for (to reweigh it) */
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
@@ -806,38 +811,16 @@ export class DressingPlugin {
    */
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
     const dressed = scene ? this.dressed.get(scene) : undefined;
-    let rasters = 0;
-    for (const texture of dressed?.terrain?.rasters ?? []) {
-      const holders = this.rasterHolders.get(texture)?.size ?? 1;
-      rasters += trackedBytesOf(texture) / Math.max(holders, 1);
-    }
+    const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
     return rasters + (dressed?.dressingBytes ?? 0);
   }
 
   /** `scene`'s terrain takes up (or lets go of) its rasters; the other
    *  levels reading one of them now weigh a different share of it. */
   private holdRasters(scene: Object3D, rasters: Texture[], hold: boolean) {
-    const others = new Set<Object3D>();
-    for (const texture of rasters) {
-      let holders = this.rasterHolders.get(texture);
-      if (!holders) {
-        holders = new Set();
-        this.rasterHolders.set(texture, holders);
-      }
-      if (hold) {
-        holders.add(scene);
-      } else {
-        holders.delete(scene);
-      }
-      for (const other of holders) {
-        if (other !== scene) {
-          others.add(other);
-        }
-      }
-      if (holders.size === 0) {
-        this.rasterHolders.delete(texture);
-      }
-    }
+    const others = hold
+      ? this.rasterShares.hold(scene, rasters)
+      : this.rasterShares.release(scene, rasters);
     for (const other of others) {
       const tile = this.tileOf.get(other);
       if (tile) {

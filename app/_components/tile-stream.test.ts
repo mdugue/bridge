@@ -140,3 +140,50 @@ test("a tile that leaves while its compile runs is freed once the compile ends",
   await loading;
   expect(freed).toBe(true);
 });
+
+/** A plugin whose compiles resolve at once, and a content root with a mesh
+ *  whose geometry reports its own dispose. */
+function abortableLoad() {
+  const plugin = new DressingPlugin(
+    {
+      dressingGate: new Promise<void>(() => undefined),
+      compile: () => Promise.resolve(),
+      onChange: () => undefined,
+    } as unknown as TileStreamContext,
+    {
+      cities: new Set(),
+      terrains: new Set(),
+      dressings: new Set(),
+      demolished: new Map(),
+    }
+  );
+  const scene = new Object3D();
+  const mesh = new Mesh(new BoxGeometry(), new MeshBasicNodeMaterial());
+  scene.add(mesh);
+  const freed = { value: false };
+  mesh.geometry.addEventListener("dispose", () => {
+    freed.value = true;
+  });
+  return { freed, plugin, scene };
+}
+
+const nextTask = () => new Promise((resolve) => setTimeout(resolve, 1));
+
+test("a load the renderer aborts after its compile is freed: it frees only the textures", async () => {
+  const { freed, plugin, scene } = abortableLoad();
+  const tile: { engineData?: { scene?: Object3D } } = {};
+  await plugin.processTileModel(scene, tile);
+  expect(freed.value).toBe(false);
+  // the renderer never recorded the scene on the tile: it dropped the load
+  await nextTask();
+  expect(freed.value).toBe(true);
+});
+
+test("a load the renderer keeps is not freed", async () => {
+  const { freed, plugin, scene } = abortableLoad();
+  const tile: { engineData?: { scene?: Object3D } } = {};
+  await plugin.processTileModel(scene, tile);
+  tile.engineData = { scene };
+  await nextTask();
+  expect(freed.value).toBe(false);
+});
