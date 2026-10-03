@@ -139,17 +139,28 @@ async function call(
   return response.status === 204 ? null : response.json();
 }
 
-/** Whether Sentry knows the repository (its integration is connected). */
+/**
+ * Whether Sentry knows the repository (its integration is connected). A
+ * token that may not read the organisation's repositories gets the commit
+ * sent itself rather than no release.
+ */
 async function connected(plan: ReleasePlan): Promise<boolean> {
   if (!plan.repository) {
     return false;
   }
-  const repos = (await call(
-    plan,
-    "GET",
-    `/repos/?query=${encodeURIComponent(plan.repository)}`
-  )) as { name?: string }[];
-  return repos.some((repo) => repo.name === plan.repository);
+  try {
+    const repos = (await call(
+      plan,
+      "GET",
+      `/repos/?query=${encodeURIComponent(plan.repository)}`
+    )) as { name?: string }[];
+    return repos.some((repo) => repo.name === plan.repository);
+  } catch (error) {
+    say(
+      `could not read the connected repositories, sending the commit itself: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return false;
+  }
 }
 
 async function release(plan: ReleasePlan): Promise<void> {
