@@ -104,6 +104,13 @@ describe("the cut-out", () => {
     }
   });
 
+  test("a view near level (mid-glide) still gets a cut-out its size", () => {
+    // its upper rays miss the ground: the footprint collapses on the pivot
+    const v = { ...view("plan"), preset: "bird" as const, tiltDeg: 1 };
+    const cut = cutOutFromView(v, VIEWPORT);
+    expect(cut.halfRight).toBeCloseTo((0.5 * 1000) / 4, 6);
+  });
+
   test("its planes keep the inside and its corners lie on them", () => {
     const cut = cutOutFromView(view("iso", 45), VIEWPORT);
     expect(insideCutOut(cut, cut.centre)).toBe(true);

@@ -1832,7 +1832,9 @@ async function bootApp(
   };
   /** Sets the Ausschnitt to the middle of the view, or lifts it. */
   const setCutOut = (on: boolean) => {
-    const v = modelRig.view();
+    // where a glide (a preset switch, a turn) is heading: mid-way a view
+    // near level shows no ground to fit a square into
+    const v = modelRig.settledView();
     cuts.setCutOut(
       on && v ? cutOutFromView(v, viewportCss()) : null,
       siteGround.atWorld,

@@ -788,7 +788,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const hue = clamp(p.div(max(y, 1e-3)), 0, 1.25);
     const tint = mix(vec3(1), hue, mix(0.3, 1, lit));
     const wash = mix(0.8, 0.975, lit);
-    return mix(tint.mul(wash), sheet, sky);
+    // the near-black stays black: the Schnitt's poché, not a shade
+    const fill = float(1).sub(smoothstep(0.2, 0.28, y));
+    return mix(mix(tint.mul(wash), vec3(0.11), fill), sheet, sky);
   };
 
   // --- Schwarzplan: the figure black, the ground white. ---

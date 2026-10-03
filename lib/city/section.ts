@@ -182,7 +182,10 @@ export function cutOutFromView(
       hi = mid;
     }
   }
-  const half = Math.max(lo * CUT_SHARE, 10);
+  // a footprint that collapsed (a ray past the horizon) holds no square:
+  // the picture's half-width on the ground instead
+  const fallback = (view.metresPerPixel * viewport.width) / 4;
+  const half = lo > 1 ? lo * CUT_SHARE : fallback;
   return { centre: c, turnDeg: 0, halfRight: half, halfAhead: half };
 }
 
