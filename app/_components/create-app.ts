@@ -1690,7 +1690,10 @@ async function bootApp(
       dressingsQueued: stream.pendingDressings(),
       // Tried, not necessarily built: a dressing that failed, or whose tile
       // left before its turn, must not hold the scene short of "loaded".
-      spawnDressed: stream.dressingSettled(spawn.id),
+      spawnDressingTried: stream.dressingSettled(spawn.id),
+      spawnFineLoaded: [...stream.terrains].some(
+        (t) => t.level === 0 && t.tile === spawn.id
+      ),
     });
     for (const { id, fraction, skipped } of step.stages) {
       stage(id, fraction, skipped);
