@@ -6,7 +6,12 @@ import {
   envelopeUrl,
   PROBLEMS_PER_PAGE,
   problemReport,
+  reportBuild,
+  sessionEnvelope,
+  sessionUpdate,
   summaryReport,
+  TUNNEL_PATH,
+  tunnelRewrites,
 } from "./crash-reports";
 import { createTrail, pushBeat, pushEvent, type Trail } from "./crash-trail";
 
@@ -217,4 +222,117 @@ test("the summary is a transaction over the page with its numbers", () => {
     fps_below_30: { value: 2 / 3, unit: "ratio" },
     held_max: { value: 508, unit: "megabyte" },
   });
+});
+
+const DSN = "https://k3y@o1.ingest.de.sentry.io/42";
+const SHA = "3b74f39d6894e26a36f2b11c18f242c961dc3b69";
+
+test("the release is named once, from the build's commit", () => {
+  expect(
+    reportBuild({
+      NEXT_PUBLIC_SENTRY_DSN: DSN,
+      VERCEL_GIT_COMMIT_SHA: SHA,
+      VERCEL_ENV: "preview",
+      NODE_ENV: "production",
+    })
+  ).toEqual({ dsn: DSN, release: `bridge@${SHA}`, environment: "preview" });
+  // SENTRY_RELEASE and SENTRY_ENVIRONMENT win, as given.
+  expect(
+    reportBuild({
+      VERCEL_GIT_COMMIT_SHA: SHA,
+      SENTRY_RELEASE: "bridge@1.2.0",
+      SENTRY_ENVIRONMENT: "staging",
+      VERCEL_ENV: "preview",
+    })
+  ).toMatchObject({ release: "bridge@1.2.0", environment: "staging" });
+  // A local build: no commit, so no release; no DSN (or a broken one).
+  expect(
+    reportBuild({
+      NEXT_PUBLIC_SENTRY_DSN: " nonsense ",
+      NODE_ENV: "development",
+    })
+  ).toEqual({ dsn: null, release: undefined, environment: "development" });
+});
+
+test("the site's own path forwards to the DSN's envelope endpoint", () => {
+  expect(tunnelRewrites(DSN)).toEqual([
+    { source: TUNNEL_PATH, destination: envelopeUrl(DSN) ?? "" },
+  ]);
+  expect(tunnelRewrites(null)).toEqual([]);
+});
+
+test("a record is reported under the release its page ran, not this one's", () => {
+  const trail = page();
+  trail.report = {
+    sid: ID,
+    release: "bridge@old",
+    environment: "production",
+    problems: 0,
+    summarized: false,
+    ended: false,
+  };
+  expect(crashReport(trail, ID, ctx).release).toBe("bridge@old");
+  expect(summaryReport(trail, ID, ctx).release).toBe("bridge@old");
+});
+
+test("a session starts ok and ends crashed or exited, with its errors and length", () => {
+  const trail = page();
+  // A record from before the reports has no session to end.
+  expect(sessionUpdate(trail, "crashed", ctx)).toBeNull();
+  trail.report = {
+    sid: ID,
+    release: "bridge@abc",
+    environment: "preview",
+    problems: 2,
+    summarized: false,
+    ended: false,
+  };
+  const attrs = {
+    release: "bridge@abc",
+    environment: "preview",
+    user_agent: "Mozilla/5.0 (iPhone)",
+  };
+  expect(sessionUpdate(trail, "ok", ctx)).toEqual({
+    sid: ID,
+    init: true,
+    started: "2026-10-03T10:00:00.000Z",
+    timestamp: "2026-10-03T10:00:00.000Z",
+    status: "ok",
+    errors: 2,
+    duration: undefined,
+    attrs,
+  });
+  expect(sessionUpdate(trail, "crashed", ctx)).toMatchObject({
+    init: false,
+    timestamp: "2026-10-03T10:00:08.000Z",
+    status: "crashed",
+    duration: 8,
+  });
+  // No release, no session: release health counts per release.
+  trail.report.release = undefined;
+  expect(sessionUpdate(trail, "ok", { ...ctx, release: undefined })).toBeNull();
+});
+
+test("a session update is its own kind of envelope item", () => {
+  const sent = new Date("2026-10-03T10:01:00.000Z");
+  const trail = page();
+  trail.report = {
+    sid: ID,
+    release: "bridge@abc",
+    environment: "production",
+    problems: 0,
+    summarized: false,
+    ended: false,
+  };
+  const session = sessionUpdate(trail, "exited", ctx);
+  if (!session) {
+    throw new Error("expected a session");
+  }
+  const [header, item, payload] = sessionEnvelope(DSN, session, sent)
+    .trimEnd()
+    .split("\n")
+    .map((line) => JSON.parse(line) as unknown);
+  expect(header).toEqual({ dsn: DSN, sent_at: sent.toISOString() });
+  expect(item).toEqual({ type: "session" });
+  expect(payload).toEqual(JSON.parse(JSON.stringify(session)));
 });

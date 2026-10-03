@@ -50,8 +50,10 @@ still needs its own decision.
 "No analytics" has one exception: where the build has a DSN
 (`NEXT_PUBLIC_SENTRY_DSN`), the viewer reports its crashes, the problems
 it catches and a summary of each page (frame rates, memory, boot times)
-to an error tracker, built from the crash trail and sent as beacons — no
-SDK, no id, no cookie, no position
+to an error tracker, built from the crash trail and sent as beacons to the
+site's own origin, which a rewrite forwards to the tracker (a proxy in
+configuration, no server code) — no SDK, no user id, no cookie, no
+position
 ([ADR 0043](./0043-crash-and-page-reports-to-an-error-tracker.md)).
 Without a DSN nothing is sent. What the page keeps in local storage: the
 crash trail (this page's record and the previous one's, and which

@@ -1,7 +1,17 @@
 import type { NextConfig } from "next";
+import { reportBuild, tunnelRewrites } from "./lib/city/crash-reports";
+
+// The crash reports' build (ADR 0043): the release and environment the
+// page tags its reports with, derived once — scripts/sentry-release.ts
+// creates the release under the same name.
+const reports = reportBuild(process.env);
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  env: {
+    CRASH_REPORTS_RELEASE: reports.release ?? "",
+    CRASH_REPORTS_ENV: reports.environment,
+  },
   allowedDevOrigins: ["192.168.178.130"],
   // The sites' data is served as static files and never read on the server;
   // only its index (public/data/sites.json) is, at build time. Traced, the
@@ -36,6 +46,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, no-cache" }],
       },
     ]),
+  // The reports go to the site's own origin and on from here to the
+  // tracker (none without a DSN): a blocker that drops requests to the
+  // tracker's host lets them through.
+  rewrites: () => Promise.resolve(tunnelRewrites(reports.dsn)),
   redirects: () =>
     Promise.resolve([
       // The viewer lived at /city, then at the root route; the root is the

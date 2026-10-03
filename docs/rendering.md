@@ -465,13 +465,22 @@ renderer and phase (`boot after <stage>`, `streaming`, `running`); the
 problems the viewer catches itself (a lost device, a GPU error, a failed
 frame or load) go out as they happen, and each page's numbers (first
 frame, loaded, mean fps, the share of time below 10/20/30 fps, the most
-memory held) as a transaction when it is hidden or left. All of it is
-Sentry envelopes in beacons (`lib/city/crash-reports.ts`), no SDK. To
-set it up: a Sentry project (EU region, *Prevent Storing of IP
-Addresses* on), its DSN as `NEXT_PUBLIC_SENTRY_DSN` in the deploy's
-environment, a rebuild; Sentry's issues then show the crashes by phase
-and device, its trace and performance views the pages' numbers (op
-`page`, named by the path) per release and device.
+memory held) as a transaction when it is hidden or left, and each page
+is a session (`ok` → `exited`, or `crashed` by the next load) for
+Sentry's crash-free rate per release. All of it is Sentry envelopes in
+beacons (`lib/city/crash-reports.ts`), no SDK, to the site's own `/r/e`,
+which `next.config.ts` forwards to the tracker (blockers drop requests to
+Sentry's host). The release is `bridge@<commit>`, derived once
+(`reportBuild`) for the page and for `scripts/sentry-release.ts`, which
+creates it after the build with its commit and deploy. To set it up: a
+Sentry project (EU region, *Prevent Storing of IP Addresses* on), its DSN
+as `NEXT_PUBLIC_SENTRY_DSN` and an organisation token as
+`SENTRY_AUTH_TOKEN` with `SENTRY_ORG` and `SENTRY_PROJECT` in the
+deploy's environment (Preview too, to try it there), a rebuild; the
+console then says `[crash-reports] on → …`, and `crashReports.test()`
+sends a test event. Sentry's releases show the crash-free sessions, its
+issues the crashes by phase and device, its trace views the pages'
+numbers (op `page`, named by the path) per release and device.
 
 While the camera moves, DoF is dropped and restored after 250 ms of
 stillness (`lib/city/regression.ts`); the contact shadows stay on because

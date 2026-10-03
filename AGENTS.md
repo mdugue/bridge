@@ -123,9 +123,15 @@ config change.
     the next load offers them as text to copy, `?trail=1` always — the
     core is `lib/city/crash-trail.ts`), `crash-reports.ts` (where the
     build has a `NEXT_PUBLIC_SENTRY_DSN`: that crash, the problems the
-    viewer catches and each page's frame-rate and memory summary go to an
-    error tracker as Sentry envelopes in beacons, no SDK, no position —
-    built by `lib/city/crash-reports.ts`, ADR 0043)
+    viewer catches, each page's frame-rate and memory summary and its
+    session go to an error tracker as Sentry envelopes in beacons to
+    `/r/e`, which `next.config.ts` forwards — no SDK, no position; built
+    by `lib/city/crash-reports.ts`, whose `reportBuild` names the release
+    `bridge@<commit>` once for the page and for
+    `scripts/sentry-release.ts`, the build's last step; ADR 0043. The
+    Sentry agent skills `sentry-debug-issue`, `sentry-setup-releases` and
+    `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
+    the issues — never add the SDK they otherwise set up)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
@@ -313,6 +319,8 @@ config change.
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
   `downsample-raster.ts` (the 2048² and 512² class rasters), `bake-wissen-hero.ts`
   (the site's land-cover map, `site-map.webp`),
+  `sentry-release.ts` (after `next build`: the build's Sentry release,
+  its commit and deploy — a no-op without `SENTRY_AUTH_TOKEN`),
   `render-diagrams.ts`, `docs-matrix.ts` (`bun run docs:matrix`, the
   generated *Sources by city* pages)
 - `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
@@ -772,8 +780,9 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
   float would rotate the sun rather than fail. The Bun version comes from
   `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
-  `.mcp.json` pins **both** MCP servers (shadcn, next-devtools) to an exact
-  version rather than `@latest`. In Claude Code on the web,
+  `.mcp.json` pins the two npm MCP servers (shadcn, next-devtools) to an
+  exact version rather than `@latest` (Sentry's is hosted, a URL with no
+  version). In Claude Code on the web,
   `.claude/hooks/session-start.sh` (registered in `.claude/settings.json`)
   upgrades the container's older Bun to that pin and runs
   `bun install --frozen-lockfile`: `Bun.WebView` (`bun run docs:diagrams`)

@@ -370,7 +370,7 @@ Wo diese Seite dafür eingerichtet ist, geht dieses Protokoll auch von
 selbst an einen Fehlerdienst (Sentry), dazu Fehler, auf die der Viewer
 stößt, und zu jedem Besuch ein paar Zahlen darüber, wie er lief: wie lange
 bis zum ersten Bild und bis alles geladen war, die Bildrate, der meiste
-belegte Speicher. So werden die langsamen und die abstürzenden Telefone
+belegte Speicher und ob er normal oder mit einem Absturz endete. So werden die langsamen und die abstürzenden Telefone
 sichtbar. Ein Bericht enthält Browser- und Gerätetyp, die
 Bildschirmgröße, welche Stadt (ohne den Rest der Adresse) und diese Zahlen
 — nie deinen Standort oder wo in der Stadt du warst, keinen Namen und kein

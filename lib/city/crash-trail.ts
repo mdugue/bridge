@@ -106,8 +106,27 @@ export interface Trail {
    * ("first frame", "loaded") outlive the ring. Optional, as `stats`.
    */
   firsts?: Record<string, number>;
-  /** the page's summary has been reported (crash-reports) */
-  summarized?: boolean;
+  /** what the crash reports keep with the record (none without a DSN) */
+  report?: TrailReport;
+}
+
+/**
+ * The reports' part of a record (lib/city/crash-reports.ts): the page's
+ * session and its build, so that the next load can end that session and
+ * report the page under the release it ran, and what already went out.
+ */
+export interface TrailReport {
+  /** the session's id (release health) */
+  sid: string;
+  /** the build the page ran (`bridge@<commit>`), if it had one */
+  release?: string;
+  environment: string;
+  /** the problems noted: the session's error count */
+  problems: number;
+  /** the page's summary went out */
+  summarized: boolean;
+  /** the session's last update (exited or crashed) went out */
+  ended: boolean;
 }
 
 export type TrailSetup = Pick<

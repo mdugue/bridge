@@ -1,4 +1,4 @@
-# ADR 0043: Crashes and page summaries go to an error tracker, from the crash trail, only where a DSN is set
+# ADR 0043: Crashes, page summaries and sessions go to an error tracker, from the crash trail, only where a DSN is set
 
 - **Status:** accepted
 - **Date:** 2026-10-03
@@ -31,7 +31,7 @@ causes itself after a lost GPU.
 
 ## Decision
 
-The viewer sends three kinds of report, all built from the crash trail
+The viewer sends four kinds of report, all built from the crash trail
 (`lib/city/crash-reports.ts`, pure; sent by
 `app/_components/crash-reports.ts`):
 
@@ -52,28 +52,54 @@ The viewer sends three kinds of report, all built from the crash trail
    to (a killed one) is summarised by the next load. The trail counts
    the beats for it over the whole page (`TrailStats`), not only its last
    twelve, and only beats in view after the first frame.
+4. **The page's session** (Sentry's release health) — started `ok` with
+   the page, ended `exited` when it is left, or `crashed` by the next
+   load when it died in use (a page that went to the background and never
+   came back ends `exited` there too); its error count is the problems
+   the page noted. The crash-free rate per release is the number to watch
+   — and the one a fix should move.
 
 They go out in **Sentry's envelope protocol**, as a `sendBeacon` (a
 `fetch` with `keepalive` where a beacon is refused) — **no SDK**: nothing
 is loaded from the tracker, the bundle does not grow, and a beacon
 outlives the page that sends it. Any tracker that takes Sentry envelopes
-works (Sentry, GlitchTip, Bugsink, self-hosted or not).
+works (Sentry, GlitchTip, Bugsink, self-hosted or not). They go to the
+site's **own origin**, `/r/e`, which a rewrite in `next.config.ts`
+forwards to the DSN's envelope endpoint (`tunnelRewrites`): content
+blockers (uBlock's lists, Brave's shields) drop requests to
+`*.ingest.sentry.io`, and a page on its own origin is not that.
 
 **Off unless the build has a DSN** (`NEXT_PUBLIC_SENTRY_DSN`), and off
 for a visitor whose browser sends Global Privacy Control. Without a DSN the
 build is exactly what it was: CI, the e2e and every deploy without one
-send nothing. `NEXT_PUBLIC_SENTRY_RELEASE` (on Vercel the commit, without
-setting anything) names the build, so a fix's effect shows per release.
+send nothing. The console says once per load whether the reports are on,
+where they go and under which release; `crashReports.test()` sends one
+test event.
+
+**One release name, derived once** (`reportBuild` in
+`lib/city/crash-reports.ts`): `bridge@<commit>` from Vercel's
+`VERCEL_GIT_COMMIT_SHA` (`SENTRY_RELEASE` overrides it), the environment
+from `VERCEL_ENV` (`SENTRY_ENVIRONMENT` overrides it). `next.config.ts`
+inlines both into the page, and **`scripts/sentry-release.ts`**, the last
+step of `bun run build`, creates the release under the same name through
+Sentry's REST API: its commit — by ref when the repository is connected
+to the Sentry organisation, so Sentry fetches the range since the last
+release itself — a deploy into the environment, and, in production, the
+finalize. It needs `SENTRY_AUTH_TOKEN` (an organisation token),
+`SENTRY_ORG` and `SENTRY_PROJECT` in the build's environment, skips with a
+line in the log without them, and never fails a build.
 
 **What goes out** is what the trail holds and nothing else: the path
 without its query, the user agent, the screen and the device's memory,
 the renderer, the events and beats (frame rates, memory, tiles, style,
 walk or fly, the camera's height above the ground). No position — the
 trail never had one, and the guide's promise that the location never
-leaves the device stays true. No id, no cookie. The tracker sees the
-sender's IP address with every request: set the Sentry project to store
-none (*Security & Privacy → Prevent Storing of IP Addresses*)
-and pick the EU region when creating the organisation.
+leaves the device stays true. No user id — a session's id names one page
+load, never the visitor — and no cookie. Through the forwarding the
+tracker sees the host's address rather than the visitor's, but set the
+Sentry project to store none anyway (*Security & Privacy → Prevent
+Storing of IP Addresses*) and pick the EU region when creating the
+organisation.
 
 ## Consequences
 
@@ -91,7 +117,15 @@ and pick the EU region when creating the organisation.
   frame from spending a month's events.
 - A stack trace points into minified chunks: no source maps are uploaded.
   For a killed page there is no stack anyway; the beats before it are the
-  lead.
+  lead. Suspect commits therefore come only from the release's commits,
+  not from blame on a frame.
+- Sessions count only under a release: a build without a commit (a local
+  one) sends events but no sessions. In development, StrictMode's second
+  mount adds a short session of its own (`environment: development`).
+- The project carries Sentry's agent skills (`sentry-setup-releases`,
+  `sentry-debug-issue`, `sentry-create-alert` in `.agents/skills`) and its
+  hosted MCP server (`.mcp.json`) for working the issues; the SDK setup
+  skills are left out on purpose — there is no SDK here.
 
 ## Alternatives
 
@@ -102,6 +136,16 @@ and pick the EU region when creating the organisation.
   What it would add — symbolicated stacks, its own breadcrumbs — the trail
   already approximates. Revisit if uncaught errors, not kills, become the
   main problem.
+- **Sending to the tracker's host directly**: what the first version did;
+  blockers drop it, silently, for the very visitors on desktop most
+  likely to report a problem. The forwarding is a rewrite, not a route —
+  no code runs on the server.
+- **`sentry-cli` for the release** (`@sentry/cli`): it downloads a native
+  binary on install, which Bun runs only for a trusted dependency — on
+  every install, CI's included, for a step only Vercel's build needs.
+  Four REST calls do the same; `set-commits --auto` would need the git
+  history Vercel's build does not have, and the connected repository
+  gives Sentry the range anyway.
 - **Chrome's Reporting API** (`Reporting-Endpoints`, `crash` reports with
   reason `oom`): a useful second signal on Android, but it needs an
   endpoint that accepts `application/reports+json` (a forwarder: a server
@@ -117,9 +161,10 @@ and pick the EU region when creating the organisation.
 ## References
 
 - `lib/city/crash-reports.ts` (+ test), `lib/city/crash-trail.ts` (+ test:
-  `TrailStats`, `firsts`, `offerAsCrash`),
+  `TrailStats`, `firsts`, `offerAsCrash`, `TrailReport`),
   `app/_components/crash-reports.ts`, `app/_components/crash-trail.ts`,
-  `app/_components/crash-report.tsx`
+  `app/_components/crash-report.tsx`, `next.config.ts` (`env`,
+  `rewrites`), `scripts/sentry-release.ts` (+ test)
 - [ADR 0001](./0001-client-only-static-app.md) (amendment 2026-10-03),
   [plan 047](../plans/047-spike-report-a-problem.md),
   [plan 038](../plans/038-runtime-spine-fixes.md) step 3 (`offerAsCrash`)

@@ -350,7 +350,7 @@ Where this site is set up for it, that record also goes out on its own, to
 an error tracker (Sentry), together with errors the viewer runs into and,
 for every visit, a few numbers about how it ran: how long until the first
 picture and until everything had loaded, the frame rate, the most memory
-used. That is how the slow and the crashing phones become visible. A
+used, and whether it ended normally or in a crash. That is how the slow and the crashing phones become visible. A
 report holds the browser and device type, the screen size, which city
 (without the rest of the address) and these numbers — never your location
 or where in the city you were, no name and no cookie. If your browser

@@ -22,11 +22,21 @@ import {
  *   frame that threw, a file that did not load, a failed boot).
  * - the page's **summary**, a transaction: the time to the first frame and
  *   to loaded, the frame rates while in view, the most memory held.
+ * - the page's **session** (release health): started with the page, ended
+ *   `exited` as it is left — or `crashed`, by the next load, when it died
+ *   in use. Sentry's crash-free rate per release is these.
+ *
+ * Every report names the build it came from, `bridge@<commit>` (Sentry's
+ * release; the build creates it with its commit and deploy,
+ * scripts/sentry-release.ts), and goes to the site's own origin
+ * (`TUNNEL_PATH`, which next.config.ts forwards to the tracker): a
+ * blocker that drops requests to the tracker's host lets those through.
  *
  * What goes out is what the trail holds and nothing else: the path (no
  * query), the user agent, the screen and the device's memory, the
  * renderer, the events (`scrub`bed) and the beats — no position (the trail
- * has none), no id, no cookie. No DOM.
+ * has none), no user id (a session's id names the page, not the visitor),
+ * no cookie. No DOM.
  */
 
 /** The noted events that are problems worth a report of their own. */
@@ -45,11 +55,68 @@ export const PROBLEM_KINDS: ReadonlySet<string> = new Set([
 /** The most problems one page reports (a GPU error can repeat per frame). */
 export const PROBLEMS_PER_PAGE = 5;
 
-/** What the reports carry besides the trail. */
+/**
+ * The release names' prefix: a name is global to a Sentry organisation,
+ * so the commit alone could collide with another project's.
+ */
+export const RELEASE_PREFIX = "bridge@";
+
+/**
+ * Where the page sends its envelopes: a path on its own origin, which
+ * next.config.ts rewrites to the tracker's envelope endpoint
+ * (`tunnelRewrites`).
+ */
+export const TUNNEL_PATH = "/r/e";
+
+/** What a build knows about its reports, from its environment. */
+export interface ReportBuild {
+  /** the DSN, or null when none (or none that parses) is set */
+  dsn: string | null;
+  /** `bridge@<commit>`, or SENTRY_RELEASE as given; none in a local build */
+  release?: string;
+  /** production, preview (Vercel's) or development */
+  environment: string;
+}
+
+type Env = Record<string, string | undefined>;
+
+/** The first of these that is set (an empty variable is not). */
+const firstSet = (...values: (string | undefined)[]) =>
+  values.find((value) => value !== undefined && value.trim() !== "")?.trim();
+
+/**
+ * The one place the release name is derived — the page's tag (inlined by
+ * next.config.ts) and the release the build creates
+ * (scripts/sentry-release.ts) must be the same string, or Sentry shows a
+ * release with commits and no events beside one with events and no
+ * commits.
+ */
+export function reportBuild(env: Env): ReportBuild {
+  const dsn = firstSet(env.NEXT_PUBLIC_SENTRY_DSN) ?? "";
+  const commit = firstSet(env.VERCEL_GIT_COMMIT_SHA);
+  return {
+    dsn: envelopeUrl(dsn) ? dsn : null,
+    release:
+      firstSet(env.SENTRY_RELEASE) ??
+      (commit ? `${RELEASE_PREFIX}${commit}` : undefined),
+    environment:
+      firstSet(env.SENTRY_ENVIRONMENT, env.VERCEL_ENV, env.NODE_ENV) ??
+      "production",
+  };
+}
+
+/** The rewrite that forwards `TUNNEL_PATH` to the DSN's tracker. */
+export function tunnelRewrites(
+  dsn: string | null
+): { source: string; destination: string }[] {
+  const destination = dsn ? envelopeUrl(dsn) : null;
+  return destination ? [{ source: TUNNEL_PATH, destination }] : [];
+}
+
+/** What the reports carry besides the trail: this page's build. */
 export interface ReportContext {
   /** the page's origin, to make the trail's path a URL */
   origin: string;
-  /** the build (a commit), to tell a fix's effect */
   release?: string;
   environment: string;
 }
@@ -59,6 +126,23 @@ export interface Payload {
   event_id: string;
   type?: "transaction";
   [key: string]: unknown;
+}
+
+/** A session's states: ongoing, left, or died (release health). */
+export type SessionStatus = "ok" | "exited" | "crashed";
+
+/** One update of a session. */
+export interface SessionPayload {
+  sid: string;
+  /** the first update of the session */
+  init: boolean;
+  started: string;
+  timestamp: string;
+  status: SessionStatus;
+  errors: number;
+  /** seconds, once it has ended */
+  duration?: number;
+  attrs: { release: string; environment: string; user_agent: string };
 }
 
 /**
@@ -85,15 +169,31 @@ export function envelopeUrl(dsn: string): string | null {
   );
 }
 
-/** One payload as an envelope (header, item header, payload; one a line). */
+/** Header, item header and payload, one a line. */
+const lines = (...parts: object[]) =>
+  `${parts.map((v) => JSON.stringify(v)).join("\n")}\n`;
+
+/** An event or a transaction as an envelope. */
 export function envelope(dsn: string, payload: Payload, sentAt: Date): string {
   const header = {
     event_id: payload.event_id,
     dsn,
     sent_at: sentAt.toISOString(),
   };
-  const item = { type: payload.type ?? "event" };
-  return `${[header, item, payload].map((v) => JSON.stringify(v)).join("\n")}\n`;
+  return lines(header, { type: payload.type ?? "event" }, payload);
+}
+
+/** A session update as an envelope. */
+export function sessionEnvelope(
+  dsn: string,
+  session: SessionPayload,
+  sentAt: Date
+): string {
+  return lines(
+    { dsn, sent_at: sentAt.toISOString() },
+    { type: "session" },
+    session
+  );
 }
 
 /**
@@ -164,13 +264,23 @@ function path(trail: Trail): string {
 const asTag = (value: number | undefined) =>
   value === undefined ? undefined : String(value);
 
+/**
+ * The build a record's page ran: its own, kept with it — a crash reported
+ * by the next load may come from the release before — or, for a record
+ * from before the reports, this page's.
+ */
+function buildOf(trail: Trail, ctx: ReportContext) {
+  return trail.report
+    ? { release: trail.report.release, environment: trail.report.environment }
+    : { release: ctx.release, environment: ctx.environment };
+}
+
 /** What every report carries: where, on what, how far the page got. */
 function common(trail: Trail, ctx: ReportContext) {
   const last = trail.beats.at(-1);
   return {
     platform: "javascript",
-    release: ctx.release,
-    environment: ctx.environment,
+    ...buildOf(trail, ctx),
     // The user agent as a request header: Sentry reads browser, OS and
     // device from it.
     request: {
@@ -340,5 +450,35 @@ export function summaryReport(
     },
     measurements,
     spans: [],
+  };
+}
+
+/**
+ * A session update for the record's page, or null where it has no session
+ * (a record from before the reports) or no release to count it under.
+ * `ok` starts it; `exited` and `crashed` end it, and nothing follows them.
+ */
+export function sessionUpdate(
+  trail: Trail,
+  status: SessionStatus,
+  ctx: ReportContext
+): SessionPayload | null {
+  const report = trail.report;
+  const { release, environment } = buildOf(trail, ctx);
+  if (!(report && release)) {
+    return null;
+  }
+  const ended = status !== "ok";
+  return {
+    sid: report.sid,
+    init: !ended,
+    started: trail.startedAt,
+    timestamp: new Date(
+      at(trail, ended ? lastT(trail) : 0) * 1000
+    ).toISOString(),
+    status,
+    errors: report.problems,
+    duration: ended ? round(lastT(trail), 3) : undefined,
+    attrs: { release, environment, user_agent: trail.userAgent },
   };
 }
