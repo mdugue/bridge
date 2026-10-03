@@ -68,14 +68,14 @@ history. Decisions that came out of plans are written up as
 | 034 | Small structures from DOM − LoD2 (kiosks, sheds, carports), gated on a measurement | DONE (2026-09-26) — look in plan 019 | [completed.md](./completed.md#034--small-structures-from-dom--lod2--done-2026-09-26-look-unjudged-on-a-gpu--plan-019) |
 | 035 | A hidden, opt-in soundscape synthesised from the scene's data | DONE (2026-09-26) — unheard: the listening pass rides along with plan 019's phone session | [completed.md](./completed.md#035--a-hidden-soundscape--done-2026-09-26-unheard-the-listening-pass-is-a-maintainer-action) |
 | 036 | What the data streams carry that we do not use (OSM, LoD2, the city's WFS, Wikidata, GeoSN, DLM): a measured survey and a ranking | **REFERENCE** — moved to [docs/data-streams.md](../data-streams.md) on 2026-10-01 (a survey, not a plan); pick an item into its own plan | [data-streams.md](../data-streams.md) |
-| 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | **TODO** — P1, do first | [037-agent-commands-and-doc-drift.md](./037-agent-commands-and-doc-drift.md) |
-| 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | **TODO** — P1 | [038-runtime-spine-fixes.md](./038-runtime-spine-fixes.md) |
+| 037 | The commands agents run work (`bun run build`/`test`, E2E_DEV over HTTPS), the skill's phone cache numbers, "1024²" → TIN, guide viewpoints and sizes, codebook pointers, Dependabot/CI paths, lockfile header; a test pins the guide to the HUD | DONE (2026-10-03) — `bunfig.toml` keeps a bare `bun test` out of e2e; coverage gaps listed in CI; a docs link test besides the guide test | [completed.md](./completed.md#037--the-commands-agents-run-and-docs-that-say-what-the-code-does--done-2026-10-03) |
+| 038 | Runtime spine: the shadow camera follows by night (no pinned tile), "loaded" without a spawn dressing nobody builds, no GPU-recovery loop and the crash it hid, no stuck key after a ⌘ chord, a jump ends live mode | DONE (2026-10-03) — step 2's decision moved into the pure boot machine; the GPU failure has its own HUD path | [completed.md](./completed.md#038--five-runtime-fixes-in-the-viewers-spine--done-2026-10-03) |
 | 039 | Bridge approach ramps without zero normals, rails passing under a rail deck stay down, Papier keeps double-sided ribbons and bare crowns, Sin City rain that lasts | **TODO** — P1/P2; step 4 needs a GPU look | [039-geometry-and-style-fixes.md](./039-geometry-and-style-fixes.md) |
 | 040 | Bakes: step-major `bun run bake`, seam stair flights kept, atomic ingest + timeouts + https check, atomic `prepare-data` writes, the `/wissen` hero as tall as the site | **TODO** — P1/P2; the stairs then need a re-bake (maintainer) | [040-bake-pipeline-fixes.md](./040-bake-pipeline-fixes.md) |
-| 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | **TODO** — P2 | [041-test-net-for-lifetime-and-collision.md](./041-test-net-for-lifetime-and-collision.md) |
-| 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | **TODO** — P2 | [042-boot-and-stream-main-thread-waste.md](./042-boot-and-stream-main-thread-waste.md) |
-| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **TODO** — P2, measurement gate; after 041 | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
-| 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | **TODO** — P2, measurement gate | [044-tree-points-as-binary.md](./044-tree-points-as-binary.md) |
+| 041 | Test net: raster shares and the aborted-load free, the collider through a real BVH, census for stairs/sport/kerbs, eye height vs the DGM, pens per style, three's real geometry key | DONE (2026-10-03) — raster shares in their own module; tree rows left allowed empty (Grimma, Munich) | [completed.md](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) |
+| 042 | Main thread while streaming: stats coalesced, footprints only when they change (no minimap repaint per tile event), footprints after the handover, the viewer chunk fetched with the manifest | DONE (2026-10-03) — the first frame and "loaded" flush the coalesced stats | [completed.md](./completed.md#042--less-main-thread-churn-while-tiles-stream--done-2026-10-03) |
+| 043 | The city BVH in a worker (≈ 80 ms per tile on desktop today) | **BLOCKED** (2026-10-03) — gate passed (BVH median 75 ms a tile), the worker built and tested, but Next 16.3.7's Turbopack emits `new Worker(new URL(…))` as a raw asset; three options in the plan's findings | [043-city-bvh-off-the-main-thread.md](./043-city-bvh-off-the-main-thread.md) |
+| 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | DONE (2026-10-03) — 96 ms of JSON.parse → ≈ 13 ms to unpack on the biggest tile; published pre-gzipped (`.pts.gz`) | [completed.md](./completed.md#044--the-canopy-points-packed-not-geojson--done-2026-10-03) |
 | 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043 | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
 | 047 | Spike: "Problem melden" — the crash report with a destination, the view only on opt-in | **TODO** — spike; maintainer answers needed at its step 3 | [047-spike-report-a-problem.md](./047-spike-report-a-problem.md) |
@@ -100,10 +100,11 @@ pass comes first for them too, since every new look is unjudged there.
 Ordered by leverage. Everything here is vetted against the code; effort
 S/M/L.
 
-0. **Plans 037–048 (2026-10-01 audit) — before the items below.** Order:
-   037 (every executor runs its commands) → 038 → 040 → 039 → 041 → 042 →
-   043 / 044 (each behind a measurement gate) → 045 → 046 (moves only,
-   after 039 and 041–043, which edit the same files). The spikes 047 and
+0. **Plans 037–048 (2026-10-01 audit) — before the items below.** Done
+   2026-10-03 (picked for the phones: crashes and slowness): 037, 038,
+   041, 042, 044; 043 is BLOCKED on bundling a worker (its findings name
+   the options). Left, in order: 040 → 039 → 045 → 046 (moves only, after
+   039, which edits the same files). The spikes 047 and
    048 can go any time after 038. Plan 019 (item 1) stays the one that
    needs a GPU; 039 step 4 and 048 part B add to its checklist. Plan 022
    (the four tiles' re-bake) waits for 040 step 1. Plan 017 phase C was
@@ -186,8 +187,8 @@ S/M/L.
     `vegetation-layer.test.ts`, ≈ 90 % lines). Left: lamps and walls'
     runtime halves; `collision.ts`, the tile cache's weighing and the
     terrain's TIN-height glue (`terrain-layer.ts` `tinHeightAt`,
-    `waterGeometryOf`) — the first two in
-    [plan 041](./041-test-net-for-lifetime-and-collision.md), the last
+    `waterGeometryOf`) — the first two done by
+    [plan 041](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03), the last
     open. (`prepare-data`'s cache is content-keyed and tested since
     2026-09-26: `scripts/bake-sources.ts`.)
 17. **`dispose()` leaves stray textures to the GC (S).** Mostly closed:
@@ -372,8 +373,8 @@ the port (2026-09-26) made of it:
   counted. The renderer asks plugins through `calculateBytesUsed`, so the
   dressing plugin could report them. *Done (44c4111, fe1bee4):*
   `DressingPlugin.calculateBytesUsed` weighs the rasters (a raster two
-  levels share half each) and the dressing; tests in
-  [plan 041](./041-test-net-for-lifetime-and-collision.md).
+  levels share half each) and the dressing; tested since
+  [plan 041](./completed.md#041--tests-where-the-regressions-are--done-2026-10-03) (`raster-shares.ts`).
 - Demolish replaces the city mesh's index attribute (`city-layer.ts`)
   without disposing the old one. *Re-checked under the node renderer:*
   its `Geometries` also frees only the current index when a geometry is
@@ -443,8 +444,10 @@ the port (2026-09-26) made of it:
    instance, a Float32 RGB tint attribute, extra per-instance floats as
    named attributes). The cheaper interim is done (efae831: the builders
    run in separate tasks, `tile-stream.ts` `nextTask`); what is left is the
-   worker itself. Plans 043 (the city BVH) and 044 (the canopy as a packed
-   binary) take the two biggest single tasks off first.
+   worker itself. Plan 044 took the canopy's parse off (packed points,
+   2026-10-03); plan 043 (the city BVH) found that Turbopack does not
+   bundle a module worker — the same wall this option meets, so its
+   findings' options apply here too.
 9. **A bilingual HUD (M).** The page is `lang="de"` since 2026-09-26: the
    HUD, the spoken feedback and the `/wissen` landing are German, while
    the guide comes in both languages. About sixty HUD strings, picked by
@@ -657,3 +660,9 @@ not render it (no GPU, no WebGPU in Bun).
   [docs/data-streams.md](../data-streams.md) (a survey, not a plan); the
   new plans 037–045 refreshed against `main`; ledger 📋 #12 and two 🗃️
   rows (raised pavement, micro-relief) updated.
+- **2026-10-03**: asked which plans address the phone crashes and the
+  slowness, the maintainer had them executed in order: 037 (prerequisite)
+  → 038 → 041 (043's prerequisite) → 042 → 043 → 044. All but 043 built
+  and condensed into [completed.md](./completed.md); 043 stopped at its
+  bundling STOP condition (Turbopack copies a module worker as a raw
+  asset), its findings kept in the plan. Plan 047 is another agent's.

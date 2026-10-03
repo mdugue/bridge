@@ -505,6 +505,8 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     const at = { x: 412_060, y: 5_656_745 };
     const state = await page.evaluate(({ x, y }) => {
       const api = window.__poc?.handle;
+      // On foot (the spawn view is aerial): the teleport then stands there.
+      api?.setMovementMode("walk");
       api?.teleportTo(x, y);
       return api?.getCameraState();
     }, at);
