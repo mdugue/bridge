@@ -80,6 +80,14 @@ test("idle is not loaded while the spawn's fine level waits on its dressing", ()
   );
 });
 
+test("the details stay short of done while the spawn's fine level is still on its way", () => {
+  const boot = createBootPhases();
+  boot.startStreaming();
+  const step = boot.update(at({ dressingsQueued: 0, spawnFineLoaded: false }));
+  expect(step.loaded).toBe(false);
+  expect(fraction(step, "details")).toBeLessThan(1);
+});
+
 test("a spawn whose fine level never loaded does not hold the scene short of loaded", () => {
   const boot = createBootPhases();
   boot.startStreaming();

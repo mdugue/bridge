@@ -93,6 +93,18 @@ describe("which previous record is offered as a crash", () => {
     const trail = died("first frame", "gpu lost", "reloading");
     expect(offerAsCrash(trail, false)).toBe(false);
     expect(offerAsCrash(trail, true)).toBe(false);
+    // the device-lost WebKit reports after the failed frame
+    pushEvent(trail, { t: 9, kind: "device-lost" });
+    expect(offerAsCrash(trail, true)).toBe(false);
+  });
+
+  test("a recovered page that drew long ago and then died is offered", () => {
+    const trail = died("renderer", "first frame");
+    for (let i = 0; i < TRAIL_EVENTS; i++) {
+      pushEvent(trail, { t: 2 + i, kind: "dressings" });
+    }
+    expect(trail.events.some((e) => e.kind === "first frame")).toBe(false);
+    expect(offerAsCrash(trail, true)).toBe(true);
   });
 
   test("after a recovery, not iOS's own navigation that never drew", () => {

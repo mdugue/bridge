@@ -104,7 +104,9 @@ export function CityWalkClient({
 
 function SiteViewer({ base }: { base: string }) {
   useEffect(() => {
-    void loadViewer();
+    // A failed chunk load is next/dynamic's to report when it renders; this
+    // early start must not add an unhandled rejection of its own.
+    loadViewer().catch(() => undefined);
   }, []);
   const manifest = useDataManifest(base);
   // The render budget (profile, device tier, whether the rest of the site

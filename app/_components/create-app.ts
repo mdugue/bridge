@@ -1267,21 +1267,16 @@ async function bootApp(
   // the spawn tile's glTF), and demolished buildings via `stream.demolished`.
   const footprints = new Map<string, [number, number][][][]>();
   // The flattened list the minimap draws, rebuilt only when a file lands or
-  // a building goes: the same array otherwise, so React bails out and the
-  // minimap does not repaint its static layer on every tile event.
-  let footprintVersion = 0;
-  let flattened: { version: number; polys: FootprintPoly[] } | null = null;
+  // a building goes (either drops it): the same array otherwise, so React
+  // bails out and the minimap does not repaint its static layer on every
+  // tile event.
+  let flattened: FootprintPoly[] | null = null;
   const currentFootprints = (): FootprintPoly[] => {
-    if (flattened?.version !== footprintVersion) {
-      flattened = {
-        version: footprintVersion,
-        polys: [...footprints].flatMap(([tile, polys]) => {
-          const gone = stream.demolished.get(tile);
-          return footprintPolys(polys, (i) => !gone?.has(i));
-        }),
-      };
-    }
-    return flattened.polys;
+    flattened ??= [...footprints].flatMap(([tile, polys]) => {
+      const gone = stream.demolished.get(tile);
+      return footprintPolys(polys, (i) => !gone?.has(i));
+    });
+    return flattened;
   };
   function loadFootprints(): void {
     for (const tile of extras.tiles) {
@@ -1292,7 +1287,7 @@ async function bootApp(
         .then((polys) => {
           if (polys && !disposed) {
             footprints.set(tile.id, polys);
-            footprintVersion += 1;
+            flattened = null;
             scheduleStats();
           }
         })
@@ -1342,7 +1337,7 @@ async function bootApp(
       }
     });
     stream.demolished.set(picked.layer.tile, kept);
-    footprintVersion += 1;
+    flattened = null;
     invalidateShadows();
     scheduleStats();
   };
@@ -1491,7 +1486,7 @@ async function bootApp(
   let frames = 0;
   // The render cannot go on: stop once, then recover (a reload where the
   // player stood, gpu-recovery.ts) or say so — before the first frame by
-  // failing the boot, since the HUD shows `onError` only once booted and
+  // failing the boot, since the HUD shows `onFatal` only once booted and
   // the stopped loop no longer streams the tiles the boot waits for.
   let stopped = false;
   const stopRendering = (message: string) => {
@@ -1747,6 +1742,11 @@ async function bootApp(
       // Tried, not necessarily built: a dressing that failed, or whose tile
       // left before its turn, must not hold the scene short of "loaded".
       spawnDressingTried: stream.dressingSettled(spawn.id),
+      // With the renderer idle, a fine level not loaded is one it does not
+      // want: tiles-load-end fires only at the end of an update() whose
+      // traversal requested nothing new (TilesRendererBase.update), so there
+      // is no idle gap between the coarse level landing and the fine one
+      // being asked for.
       spawnFineLoaded: [...stream.terrains].some(
         (t) => t.level === 0 && t.tile === spawn.id
       ),

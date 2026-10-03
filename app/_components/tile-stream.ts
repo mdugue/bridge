@@ -55,6 +55,8 @@ import {
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
+  gunzip,
+  isGzipped,
 } from "./fetch-optional";
 import { buildFurniture } from "./furniture-layer";
 import { buildLamps, type LampControl } from "./lamp-layer";
@@ -203,9 +205,8 @@ interface Dressed {
 
 /**
  * The tiles' `.glb.gz` content is pre-gzipped (static hosts do not compress
- * binary types); inflate it natively before the loader sees it. Judged on the
- * gzip magic, not the URL alone: a host that serves `.gz` with
- * `Content-Encoding: gzip` has the browser inflate it already.
+ * binary types); inflate it natively before the loader sees it — unless the
+ * host already did (isGzipped, fetch-optional.ts).
  */
 class GzipContentPlugin {
   name = "BRIDGE_GZIP_CONTENT";
@@ -215,12 +216,7 @@ class GzipContentPlugin {
       return res;
     }
     const bytes = new Uint8Array(await res.arrayBuffer());
-    const body =
-      bytes[0] === 0x1f && bytes[1] === 0x8b
-        ? new Blob([bytes])
-            .stream()
-            .pipeThrough(new DecompressionStream("gzip"))
-        : bytes;
+    const body = isGzipped(bytes) ? gunzip(bytes) : bytes;
     return new Response(body, { status: res.status });
   }
 }
@@ -753,7 +749,7 @@ export class DressingPlugin {
     recalculateBytesUsed: (tile?: object | null) => void;
   } | null = null;
   /** the content roots whose terrain reads each raster (raster-shares.ts) */
-  private readonly rasterShares = new RasterShares();
+  private readonly rasterShares = new RasterShares<Object3D>();
   /** the tile a content root was loaded for (to reweigh it) */
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
@@ -826,7 +822,7 @@ export class DressingPlugin {
       ? this.rasterShares.hold(scene, rasters)
       : this.rasterShares.release(scene, rasters);
     for (const other of others) {
-      const tile = this.tileOf.get(other as Object3D);
+      const tile = this.tileOf.get(other);
       if (tile) {
         this.tiles?.recalculateBytesUsed(tile);
       }

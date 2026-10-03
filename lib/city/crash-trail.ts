@@ -72,9 +72,18 @@ export interface Trail {
   /** the device memory the browser reports (GB, Chromium only) */
   deviceMemoryGB?: number;
   state: TrailEnd;
+  /**
+   * The page reached its first frame — kept apart from the events, whose
+   * ring drops its oldest (a minute of streaming notes forty dressings);
+   * optional: older records lack it.
+   */
+  drew?: boolean;
   events: TrailEvent[];
   beats: TrailBeat[];
 }
+
+/** The event the HUD notes when the scene goes live (city-walk.tsx). */
+const FIRST_FRAME = "first frame";
 
 export type TrailSetup = Pick<
   Trail,
@@ -101,6 +110,9 @@ function pushRing<T>(ring: T[], entry: T, limit: number): void {
 }
 
 export function pushEvent(trail: Trail, event: TrailEvent): void {
+  if (event.kind === FIRST_FRAME) {
+    trail.drew = true;
+  }
   pushRing(trail.events, event, TRAIL_EVENTS);
 }
 
@@ -135,12 +147,13 @@ export function endedInCrash(trail: Trail | null): trail is Trail {
 
 /**
  * Whether the previous page's record should be offered as a crash. Not when
- * that page reloaded itself to recover a lost GPU (its last note says so:
- * the recovery already handled it), nor when this page follows a recovery
- * (`recovered`) and the record never reached its first frame — iOS may
- * interleave a navigation of its own that leaves a trail with nothing but
- * its start. A recovered page that then died is offered: that is the
- * report the recovery is there to make possible.
+ * that page reloaded itself to recover a lost GPU (it noted so — not
+ * necessarily last: WebKit's device-lost can arrive after the failed frame
+ * that started the reload — and the recovery already handled it), nor when
+ * this page follows a recovery (`recovered`) and the record never reached
+ * its first frame — iOS may interleave a navigation of its own that leaves
+ * a trail with nothing but its start. A recovered page that then died is
+ * offered: that is the report the recovery is there to make possible.
  */
 export function offerAsCrash(
   trail: Trail | null,
@@ -149,10 +162,12 @@ export function offerAsCrash(
   if (!endedInCrash(trail)) {
     return false;
   }
-  if (trail.events.at(-1)?.kind === "reloading") {
+  if (trail.events.some((e) => e.kind === "reloading")) {
     return false;
   }
-  return !(recovered && !trail.events.some((e) => e.kind === "first frame"));
+  const drew =
+    trail.drew === true || trail.events.some((e) => e.kind === FIRST_FRAME);
+  return !(recovered && !drew);
 }
 
 const round = (n: number, digits = 0) => {

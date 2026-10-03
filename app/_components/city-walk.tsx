@@ -445,6 +445,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       return;
     }
     let cancelled = false;
+    // The render stopped for good (onFatal): its message stays.
+    let fatal = false;
     let handle: CityWalkHandle | null = null;
     let veilTimer: ReturnType<typeof setTimeout> | undefined;
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
@@ -491,7 +493,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       onGpuLost: () =>
         !cancelled && recoverFromGpuLoss(recovery.current?.capture() ?? null),
       onError: (message) => {
-        if (cancelled) {
+        // After a fatal one the render has stopped: a tile still in flight
+        // failing must not replace "Bitte neu laden" with a layer's hole.
+        if (cancelled || fatal) {
           return;
         }
         // One tile (or one tile's dressing) failed after the first frame: it
@@ -503,6 +507,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       },
       onFatal: (message) => {
         if (!cancelled) {
+          fatal = true;
           setStreamError(message);
         }
       },

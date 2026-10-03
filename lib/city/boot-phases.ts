@@ -22,17 +22,25 @@ export interface BootInputs {
   spawnDressingTried: boolean;
   /**
    * the spawn tile's fine terrain level is loaded. Only that level carries
-   * a dressing, and it queues the dressing the moment it arrives; while it
-   * is not loaded nobody will dress the spawn, so waiting for it is wrong (a
-   * jump away before the fine level came — a GPU-recovery restore, an early
-   * locate, a minimap click — left the scene short of "loaded" for good).
+   * a dressing, and it queues the dressing the moment it arrives; once the
+   * renderer is idle without it nobody will dress the spawn, so waiting for
+   * it is wrong (a jump away before the fine level came — a GPU-recovery
+   * restore, an early locate, a minimap click — left the scene short of
+   * "loaded" for good).
    */
   spawnFineLoaded: boolean;
 }
 
-/** The spawn's dressing is no longer something to wait for. */
+/**
+ * The spawn's dressing is no longer something to wait for: tried, or its
+ * fine level is not coming. Not merely "not loaded yet": on a phone the
+ * fine level is often still on its way when the gate opens, and the details
+ * bar (which only moves forward) would read done before anything was built.
+ */
 function spawnSettled(inputs: BootInputs): boolean {
-  return inputs.spawnDressingTried || !inputs.spawnFineLoaded;
+  return (
+    inputs.spawnDressingTried || (!inputs.spawnFineLoaded && inputs.tilesIdle)
+  );
 }
 
 export interface StageReport {

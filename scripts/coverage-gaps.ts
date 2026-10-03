@@ -6,7 +6,7 @@
  * `bun run test:coverage`; prints a Markdown table (CI appends it to the
  * job summary). A report, not a gate.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
@@ -72,6 +72,12 @@ function sources(root: string): Source[] {
 }
 
 if (import.meta.main) {
-  const lcov = readFileSync(join(ROOT, "coverage", "lcov.info"), "utf8");
-  process.stdout.write(gapTable(coverageGaps(lcov, sources(ROOT))));
+  // CI runs this even when the tests failed (`if: always()`), possibly
+  // before Bun wrote the report: say so rather than fail a second time.
+  const report = join(ROOT, "coverage", "lcov.info");
+  process.stdout.write(
+    existsSync(report)
+      ? gapTable(coverageGaps(readFileSync(report, "utf8"), sources(ROOT)))
+      : "_No coverage report (the unit tests did not finish)._\n"
+  );
 }
