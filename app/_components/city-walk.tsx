@@ -499,7 +499,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         // finish on their own (a failed tile counts as done), so they are
         // not settled here. A failure before the first frame rejects the
         // boot instead.
-        setStreamError(message);
+        setStreamError(`Eine Schicht konnte nicht geladen werden: ${message}`);
+      },
+      onFatal: (message) => {
+        if (!cancelled) {
+          setStreamError(message);
+        }
       },
       onStats: (s) => {
         if (cancelled) {
@@ -739,7 +744,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 aria-live="polite"
                 className="pointer-events-none absolute top-15 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
               >
-                Eine Schicht konnte nicht geladen werden: {streamError}
+                {streamError}
               </output>
             )}
 

@@ -66,12 +66,6 @@ export function previousTrail(): Trail | null {
   }
 }
 
-/** The previous page's record if it died while in use. */
-export function previousCrash(): Trail | null {
-  const trail = previousTrail();
-  return endedInCrash(trail) ? trail : null;
-}
-
 /** Forgets the previous page's record (the HUD's card was dismissed). */
 export function dismissPreviousTrail(): void {
   try {

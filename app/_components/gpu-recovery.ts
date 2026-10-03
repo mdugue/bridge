@@ -4,13 +4,17 @@
  * is gone for good: three has no way back to a new one, so the only
  * recovery is a new page. The camera, the time and the look (the Snapshot
  * codec, lib/city/snapshot.ts) wait in session storage, and the next load
- * puts them back. At most twice in two minutes: a scene that loses its GPU
- * again at once shows the message instead of reloading in a loop.
+ * puts them back. At most twice in ten minutes: a scene that loses its GPU
+ * again — at once, or a minute later once it has streamed back to the view
+ * that ran it out of memory — shows the message instead of reloading in a
+ * loop.
  */
 
 const KEY = "gpu-recovery";
-const WINDOW_MS = 120_000;
+const WINDOW_MS = 600_000;
 const TRIES = 2;
+/** how long a page counts as following a recovery (recentlyRecovered) */
+const RECENT_MS = 120_000;
 
 type Store = Pick<Storage, "getItem" | "setItem">;
 
@@ -45,7 +49,7 @@ function read(store: Store): Stored {
 
 /**
  * Reloads the page with `snapshot` kept for the next load, unless it
- * already did twice in the last two minutes (or storage is unavailable):
+ * already did twice in the last ten minutes (or storage is unavailable):
  * then it returns false and the caller says the graphics failed.
  */
 export function recoverFromGpuLoss(
@@ -88,7 +92,7 @@ export function recentlyRecovered(
     return false;
   }
   try {
-    return read(store).tries.some((t) => now - t < WINDOW_MS);
+    return read(store).tries.some((t) => now - t < RECENT_MS);
   } catch {
     return false;
   }

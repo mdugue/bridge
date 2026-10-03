@@ -257,9 +257,14 @@ export interface CityWalkOptions {
    * The GPU is gone for good, or a frame threw and left three's renderer
    * in a state no later frame draws right (the render stopped): true when
    * the page recovers by itself (gpu-recovery.ts, a reload where the player
-   * stood); otherwise the HUD says the graphics failed.
+   * stood); otherwise the HUD says the graphics failed (`onFatal`).
    */
   onGpuLost?: () => boolean;
+  /**
+   * The render stopped after the first frame and the page did not recover
+   * by itself: the message is the whole story, not one layer's failure.
+   */
+  onFatal?: (message: string) => void;
   /** throttled (~2 Hz) smoothed FPS, decoupled from the heavier stats emit */
   onFps?: (fps: number) => void;
   /**
@@ -1458,7 +1463,7 @@ async function bootApp(
       bootFailure ??= new Error(failed);
       return;
     }
-    opts.onError?.(failed);
+    opts.onFatal?.(failed);
   };
   // A device the browser reports lost: three only stops drawing (silently,
   // every frame after it returns early), so the loop stops here too.

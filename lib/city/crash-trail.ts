@@ -133,6 +133,28 @@ export function endedInCrash(trail: Trail | null): trail is Trail {
   return trail?.state === "running";
 }
 
+/**
+ * Whether the previous page's record should be offered as a crash. Not when
+ * that page reloaded itself to recover a lost GPU (its last note says so:
+ * the recovery already handled it), nor when this page follows a recovery
+ * (`recovered`) and the record never reached its first frame — iOS may
+ * interleave a navigation of its own that leaves a trail with nothing but
+ * its start. A recovered page that then died is offered: that is the
+ * report the recovery is there to make possible.
+ */
+export function offerAsCrash(
+  trail: Trail | null,
+  recovered: boolean
+): trail is Trail {
+  if (!endedInCrash(trail)) {
+    return false;
+  }
+  if (trail.events.at(-1)?.kind === "reloading") {
+    return false;
+  }
+  return !(recovered && !trail.events.some((e) => e.kind === "first frame"));
+}
+
 const round = (n: number, digits = 0) => {
   const f = 10 ** digits;
   return Math.round(n * f) / f;
