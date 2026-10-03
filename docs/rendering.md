@@ -456,6 +456,23 @@ throws: three's render does not unwind (its call depth stays a level deep,
 or the shadow pass's override stays on), and no later frame draws right.
 Before the first frame the message fails the boot instead.
 
+**Crashes and slow pages are reported** where the build has a DSN
+(`NEXT_PUBLIC_SENTRY_DSN`, ADR 0043). A page the browser kills runs no
+handler, so the crash trail (`lib/city/crash-trail.ts`: events, a beat
+every 2 s, and the whole page's frame-rate buckets and memory peaks) is
+read by the next load, which sends it as a fatal event grouped by
+renderer and phase (`boot after <stage>`, `streaming`, `running`); the
+problems the viewer catches itself (a lost device, a GPU error, a failed
+frame or load) go out as they happen, and each page's numbers (first
+frame, loaded, mean fps, the share of time below 10/20/30 fps, the most
+memory held) as a transaction when it is hidden or left. All of it is
+Sentry envelopes in beacons (`lib/city/crash-reports.ts`), no SDK. To
+set it up: a Sentry project (EU region, *Prevent Storing of IP
+Addresses* on), its DSN as `NEXT_PUBLIC_SENTRY_DSN` in the deploy's
+environment, a rebuild; Sentry's issues then show the crashes by phase
+and device, its trace and performance views the pages' numbers (op
+`page`, named by the path) per release and device.
+
 While the camera moves, DoF is dropped and restored after 250 ms of
 stillness (`lib/city/regression.ts`); the contact shadows stay on because
 gating them made them blink on every step.

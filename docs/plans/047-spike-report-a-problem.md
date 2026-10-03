@@ -19,6 +19,12 @@
 - **Category**: direction
 - **Planned at**: commit `a28de75`, 2026-10-01
 
+> **2026-10-03:** [ADR 0043](../adr/0043-crash-and-page-reports-to-an-error-tracker.md)
+> sends the crash trail (never the view) to an error tracker on its own
+> where the build has a DSN, and the card says so. This spike's question
+> is now the **view on opt-in** and the destination for a deploy without
+> a DSN; `offerAsCrash` (plan 038 step 3) is in place.
+
 ## Why this matters
 
 The 2026-09-28…30 memory work was driven by iPhone crashes only the

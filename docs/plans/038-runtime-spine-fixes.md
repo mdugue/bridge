@@ -305,6 +305,10 @@ and one with `spawnSettled: false` is not (rename in existing tests too).
 
 ### Step 3: Recovery without a loop, and the crash it hides
 
+> **2026-10-03:** sub-steps 2 and 3 (`offerAsCrash`, the card using it)
+> landed with ADR 0043 — the crash reports use the same rule. Sub-steps 1
+> and 4 are still open.
+
 1. `gpu-recovery.ts`: `WINDOW_MS = 600_000` (ten minutes), keep `TRIES = 2`;
    update the file's header comment ("At most twice in ten minutes …") and
    the existing test "twice in two minutes…" to the new window (rename it).

@@ -9,6 +9,7 @@ import {
   pushEvent,
   type Trail,
   type TrailBeat,
+  type TrailEvent,
 } from "@/lib/city/crash-trail";
 
 /**
@@ -66,12 +67,6 @@ export function previousTrail(): Trail | null {
   }
 }
 
-/** The previous page's record if it died while in use. */
-export function previousCrash(): Trail | null {
-  const trail = previousTrail();
-  return endedInCrash(trail) ? trail : null;
-}
-
 /** Forgets the previous page's record (the HUD's card was dismissed). */
 export function dismissPreviousTrail(): void {
   try {
@@ -92,8 +87,14 @@ export interface CrashTrail {
   end: () => void;
 }
 
+/**
+ * Hears every event as it is noted (crash-reports.ts). It runs before the
+ * record is written, so what it marks on the trail is kept.
+ */
+export type TrailListener = (event: TrailEvent, trail: Trail) => void;
+
 /** Starts this page's record; the listeners go with `end`. */
-export function startCrashTrail(): CrashTrail {
+export function startCrashTrail(listener?: TrailListener): CrashTrail {
   rotate();
   const t0 = performance.now();
   const seconds = () => (performance.now() - t0) / 1000;
@@ -115,6 +116,11 @@ export function startCrashTrail(): CrashTrail {
   const note = (kind: string, detail?: string) => {
     const event = { t: seconds(), kind, detail: detail?.slice(0, 300) };
     pushEvent(trail, event);
+    try {
+      listener?.(event, trail);
+    } catch {
+      // A report that fails is no reason to lose the record.
+    }
     write();
     console.info(TAG, formatEvent(event));
   };

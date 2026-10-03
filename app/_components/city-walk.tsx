@@ -48,6 +48,7 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { AltitudeStick } from "./altitude-stick";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
+import { startCrashReports } from "./crash-reports";
 import { startCrashTrail } from "./crash-trail";
 import { recoverFromGpuLoss, takeRecoverySnapshot } from "./gpu-recovery";
 import { VEIL_HOLD_MS } from "./handover";
@@ -451,8 +452,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     const beginStreaming = () => handleRef.current?.startStreaming();
     const aborter = new AbortController();
     // This page's crash trail, from before the renderer exists: a page the
-    // browser kills leaves its last steps for the next load (crash-trail.ts).
-    const trail = startCrashTrail();
+    // browser kills leaves its last steps for the next load (crash-trail.ts),
+    // which reports them where the build has a DSN (crash-reports.ts).
+    const trail = startCrashTrail(startCrashReports() ?? undefined);
 
     createCityWalkApp({
       container,

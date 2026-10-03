@@ -121,7 +121,11 @@ config change.
     `crash-trail.ts` + `crash-report.tsx` (a page the browser kills leaves
     its boot stages, errors, lost device and heartbeats in local storage;
     the next load offers them as text to copy, `?trail=1` always — the
-    core is `lib/city/crash-trail.ts`)
+    core is `lib/city/crash-trail.ts`), `crash-reports.ts` (where the
+    build has a `NEXT_PUBLIC_SENTRY_DSN`: that crash, the problems the
+    viewer catches and each page's frame-rate and memory summary go to an
+    error tracker as Sentry envelopes in beacons, no SDK, no position —
+    built by `lib/city/crash-reports.ts`, ADR 0043)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,

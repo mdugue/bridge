@@ -114,8 +114,8 @@ einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
 Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
 Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
 sich mit dir dort, wo du stehst. Browser fragen dafür um Erlaubnis (iPhones auch für den
-Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
-dem er geschickt würde.
+Kompass); der Standort verlässt das Gerät nicht — auch nicht in einem
+Absturzbericht (siehe *Wenn es abstürzt*).
 
 *Live* erscheint, sobald dein Telefon Kompasswerte liefert (auf dem iPhone
 fragt es beim ersten Antippen um Erlaubnis; am Rechner ohne Kompass gibt es
@@ -357,6 +357,26 @@ der erst beim Klick etwas von Ko-fi lädt.
 - `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
   streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
+
+## Wenn es abstürzt
+
+Ein Telefon kann die Seite beenden, wenn die Stadt mehr Speicher braucht,
+als es ihr zugesteht; die Seite verschwindet dann einfach oder lädt neu.
+Beim nächsten Besuch sagt eine Karte, dass die letzte Sitzung unerwartet
+beendet wurde, und zeigt ihr Protokoll: was geladen war, die Bildrate und
+den Speicher ihrer letzten Sekunden.
+
+Wo diese Seite dafür eingerichtet ist, geht dieses Protokoll auch von
+selbst an einen Fehlerdienst (Sentry), dazu Fehler, auf die der Viewer
+stößt, und zu jedem Besuch ein paar Zahlen darüber, wie er lief: wie lange
+bis zum ersten Bild und bis alles geladen war, die Bildrate, der meiste
+belegte Speicher. So werden die langsamen und die abstürzenden Telefone
+sichtbar. Ein Bericht enthält Browser- und Gerätetyp, die
+Bildschirmgröße, welche Stadt (ohne den Rest der Adresse) und diese Zahlen
+— nie deinen Standort oder wo in der Stadt du warst, keinen Namen und kein
+Cookie. Sendet dein Browser *Global Privacy Control*, wird nichts
+geschickt. Ist kein Fehlerdienst eingerichtet, bietet die Karte das
+Protokoll stattdessen zum Kopieren an.
 
 ## Kleinigkeiten
 

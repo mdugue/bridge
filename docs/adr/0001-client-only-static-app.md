@@ -1,6 +1,6 @@
 # ADR 0001: Client-only static app — no backend, no database, no persistence
 
-- **Status:** accepted, **relaxed 2026-09-27** to "static where possible" (see the amendment below); the "four fixed tiles" below became fifteen streamed ones with [ADR 0024](./0024-site-streams-as-3d-tiles.md) — still static files
+- **Status:** accepted, **relaxed 2026-09-27** to "static where possible" (see the amendment below); crash and page reports to an error tracker where a DSN is set since 2026-10-03 ([ADR 0043](./0043-crash-and-page-reports-to-an-error-tracker.md)); the "four fixed tiles" below became fifteen streamed ones with [ADR 0024](./0024-site-streams-as-3d-tiles.md) — still static files
 - **Date:** 2026-06 (initial commit), reaffirmed 2026-09
 
 ## Context
@@ -44,6 +44,19 @@ from the browser where their APIs allow it (CORS), and a small, stateless
 proxy — no database, no accounts, no user data — is allowed only where a
 source offers no other way. Anything stateful (saved places, shared edits)
 still needs its own decision.
+
+## Amendment (2026-10-03): crash and page reports
+
+"No analytics" has one exception: where the build has a DSN
+(`NEXT_PUBLIC_SENTRY_DSN`), the viewer reports its crashes, the problems
+it catches and a summary of each page (frame rates, memory, boot times)
+to an error tracker, built from the crash trail and sent as beacons — no
+SDK, no id, no cookie, no position
+([ADR 0043](./0043-crash-and-page-reports-to-an-error-tracker.md)).
+Without a DSN nothing is sent. What the page keeps in local storage: the
+crash trail (this page's record and the previous one's, and which
+previous record was reported), the last picture style, the toolbar's
+fold, the dismissed control hints; in session storage the view a GPU recovery returns to.
 
 ## Alternatives
 

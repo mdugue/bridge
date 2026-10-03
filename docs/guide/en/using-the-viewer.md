@@ -108,8 +108,8 @@ says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
 jump there: its viewer opens with you standing where you are. Browsers ask for permission first
-(iPhones for the compass too); the location never leaves the device — there
-is no server to send it to.
+(iPhones for the compass too); the location never leaves the device — not
+even in a crash report (see *When it crashes*).
 
 *Live* appears as soon as your phone reports compass readings (an iPhone
 asks for permission on the first tap; a computer without a compass never
@@ -338,6 +338,24 @@ until it is clicked.
 - `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
   only the start tile, with coarse shadows. It exists for automated tests
   and is not how the scene is meant to look.
+
+## When it crashes
+
+A phone can end the page when the city takes more memory than it allows;
+the page then simply disappears or reloads. On the next visit a card says
+the last session ended unexpectedly and shows its record: what had loaded,
+the frame rate and the memory in its last seconds.
+
+Where this site is set up for it, that record also goes out on its own, to
+an error tracker (Sentry), together with errors the viewer runs into and,
+for every visit, a few numbers about how it ran: how long until the first
+picture and until everything had loaded, the frame rate, the most memory
+used. That is how the slow and the crashing phones become visible. A
+report holds the browser and device type, the screen size, which city
+(without the rest of the address) and these numbers — never your location
+or where in the city you were, no name and no cookie. If your browser
+sends *Global Privacy Control*, nothing is sent. Without the tracker set
+up, the card offers the record to copy instead.
 
 ## Small things
 
