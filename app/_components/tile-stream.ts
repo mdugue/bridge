@@ -73,6 +73,7 @@ import {
 } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
+import { RasterShares } from "./raster-shares";
 import { createSharedRasters, type SharedRasters } from "./shared-rasters";
 import { loadHorizonTexture, loadSkyViewTexture } from "./sky-light";
 import { dressStairs } from "./stair-layer";
@@ -80,7 +81,6 @@ import {
   compileRepresentatives,
   disposeObject3D,
   estimateGeometryBytes,
-  trackedBytesOf,
 } from "./three-utils";
 import { buildTraffic } from "./traffic-layer";
 import { trafficAskSet } from "./traffic-ask";
@@ -737,14 +737,8 @@ export class DressingPlugin {
   private tiles: {
     recalculateBytesUsed: (tile?: object | null) => void;
   } | null = null;
-  /**
-   * The content roots whose terrain reads each raster: the two levels of a
-   * tile name the same class raster, splat, NDVI, sports grounds and light
-   * (shared-rasters.ts), and the cache weighs such a raster half by each —
-   * counted whole by both, a phone's cache was full at a fraction of what
-   * the GPU held.
-   */
-  private readonly rasterHolders = new Map<Texture, Set<Object3D>>();
+  /** the content roots whose terrain reads each raster (raster-shares.ts) */
+  private readonly rasterShares = new RasterShares();
   /** the tile a content root was loaded for (to reweigh it) */
   private readonly tileOf = new WeakMap<Object3D, object>();
   /** the sky-view rasters a tile's terrain and buildings share */
@@ -806,40 +800,18 @@ export class DressingPlugin {
    */
   calculateBytesUsed(_tile: object, scene: Object3D | null): number {
     const dressed = scene ? this.dressed.get(scene) : undefined;
-    let rasters = 0;
-    for (const texture of dressed?.terrain?.rasters ?? []) {
-      const holders = this.rasterHolders.get(texture)?.size ?? 1;
-      rasters += trackedBytesOf(texture) / Math.max(holders, 1);
-    }
+    const rasters = this.rasterShares.bytesOf(dressed?.terrain?.rasters ?? []);
     return rasters + (dressed?.dressingBytes ?? 0);
   }
 
   /** `scene`'s terrain takes up (or lets go of) its rasters; the other
    *  levels reading one of them now weigh a different share of it. */
   private holdRasters(scene: Object3D, rasters: Texture[], hold: boolean) {
-    const others = new Set<Object3D>();
-    for (const texture of rasters) {
-      let holders = this.rasterHolders.get(texture);
-      if (!holders) {
-        holders = new Set();
-        this.rasterHolders.set(texture, holders);
-      }
-      if (hold) {
-        holders.add(scene);
-      } else {
-        holders.delete(scene);
-      }
-      for (const other of holders) {
-        if (other !== scene) {
-          others.add(other);
-        }
-      }
-      if (holders.size === 0) {
-        this.rasterHolders.delete(texture);
-      }
-    }
+    const others = hold
+      ? this.rasterShares.hold(scene, rasters)
+      : this.rasterShares.release(scene, rasters);
     for (const other of others) {
-      const tile = this.tileOf.get(other);
+      const tile = this.tileOf.get(other as Object3D);
       if (tile) {
         this.tiles?.recalculateBytesUsed(tile);
       }
