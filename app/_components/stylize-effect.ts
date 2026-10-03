@@ -1,9 +1,4 @@
-import {
-  Matrix3,
-  type PerspectiveCamera,
-  Vector2,
-  Vector3,
-} from "three/webgpu";
+import { Matrix3, Vector2, Vector3 } from "three/webgpu";
 import {
   abs,
   asin,
@@ -19,15 +14,14 @@ import {
   Fn,
   fract,
   fwidth,
+  getViewPosition,
   If,
   length,
   max,
   min,
   mix,
   normalize,
-  perspectiveDepthToViewZ,
   pow,
-  reference,
   select,
   smoothstep,
   step,
@@ -43,6 +37,7 @@ import type { DepthTexture } from "three/webgpu";
 import type { RenderStyleDef } from "@/lib/city/render-style";
 import type { SceneFog } from "./height-fog";
 import type { F, V2, V3, V4 } from "./shader-chunks";
+import type { ViewLens } from "./view-lens";
 
 /**
  * The picture styles' one pass (lib/city/render-style.ts): ink lines from
@@ -78,6 +73,9 @@ import type { F, V2, V3, V4 } from "./shader-chunks";
 
 /** The sky dome writes no depth (far = 6000). */
 const SKY_Z = 4000;
+/** A parallel view's background: the cleared depth (its geometry lies well
+ *  inside the depth range, which is linear there). */
+const SKY_DEPTH = 0.9999;
 /** Slope noise floor, relative to w0. */
 const CREASE_FLOOR = 0.0012;
 /** three's `EPSILON` (the effect template's HSL helpers used it). */
@@ -153,6 +151,18 @@ const PENS: Record<number, Pen> = {
     weight: [0.6, 1.7],
     lifts: 0.35,
     detail: 420,
+  },
+  // Strich: a technical pen — one weight (a CSS pixel), no wander, never
+  // lifted; every fold a line, as on a drawn plan.
+  5: {
+    sil: [0.01, 0.035],
+    creaseW: 0.9,
+    sway: 0,
+    tremor: 0,
+    misregister: [0, 0],
+    weight: [1, 1],
+    lifts: 0,
+    detail: 600,
   },
 };
 
@@ -262,7 +272,8 @@ const satFor = (chroma: F, lightness: F): F =>
 // --- the pass -------------------------------------------------------------
 
 export interface StylizeInputs {
-  camera: PerspectiveCamera;
+  /** what the passes know of the camera (view-lens.ts) */
+  lens: ViewLens;
   /** the scene pass's depth */
   depth: DepthTexture;
   /** the scene's fog: its range and colour, read live */
@@ -289,7 +300,10 @@ export interface Stylize {
 }
 
 export function createStylize(inputs: StylizeInputs): Stylize {
-  const { camera, fog, litAt } = inputs;
+  const { lens, fog, litAt } = inputs;
+  const camera = lens.camera;
+  const ortho = lens.ortho.greaterThan(0.5);
+  const inverseProjection = uniform(camera.projectionMatrixInverse);
   const mode = uniform(1);
   const ink = uniform(0.7);
   const dusk = uniform(0);
@@ -313,22 +327,30 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const fogFar = max(fog.far, fog.near.add(1));
 
   const viewDistance = (at: V2): F =>
-    perspectiveDepthToViewZ(
-      texture(inputs.depth, at).r,
-      reference("near", "float", camera),
-      reference("far", "float", camera)
-    ).negate();
+    lens.distance(texture(inputs.depth, at).r);
+  /** Is the pixel at `at` (whose distance is `z`) sky — the background? */
+  const isSky = (at: V2, z: F): F =>
+    select(ortho, step(SKY_DEPTH, texture(inputs.depth, at).r), step(SKY_Z, z));
+
+  /**
+   * What the stencil differences: in perspective w = 1/z, which is affine
+   * in screen space across a plane; in a parallel view z itself is. The
+   * relative jump divides by `norm`: w0 in perspective (Δz/z), the
+   * equivalent distance in a parallel view — so a step inks as it would
+   * seen from that far.
+   */
+  const metric = (z: F): F => select(ortho, z, float(1).div(max(z, 1e-3)));
 
   /** One axis of the stencil: (silhouette, crease) in 0..1. The caller
    *  widens the silhouette ramp with distance, so far away only big jumps
    *  (a building over the street) are inked, not every crown on a lawn. */
-  const edgeAxis = (at: V2, s: V2, w0: F, sil: V2): V2 => {
-    const wa = float(1).div(max(viewDistance(at.sub(s)), 1e-3));
-    const wb = float(1).div(max(viewDistance(at.add(s)), 1e-3));
+  const edgeAxis = (at: V2, s: V2, w0: F, norm: F, sil: V2): V2 => {
+    const wa = metric(viewDistance(at.sub(s)));
+    const wb = metric(viewDistance(at.add(s)));
     const lap = abs(wa.add(wb).sub(w0.mul(2)));
     const grad = max(abs(wb.sub(w0)), abs(w0.sub(wa)));
-    const jump = lap.div(w0);
-    const fold = lap.div(grad.add(w0.mul(CREASE_FLOOR)));
+    const jump = lap.div(norm);
+    const fold = lap.div(grad.add(norm.mul(CREASE_FLOOR)));
     const silhouette = smoothstep(sil.x, sil.y, jump);
     const crease = smoothstep(0.35, 0.8, fold).mul(
       smoothstep(0.0004, 0.0016, jump)
@@ -341,14 +363,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
    *  fractional radius rounds its two taps unevenly — on a grazing street
    *  that uneven second difference is as large as a fold, and whole
    *  patches inked over. */
-  const edgeStencil = (p: V2, r: F, w0: F, sil: V2): V2 => {
+  const edgeStencil = (p: V2, r: F, w0: F, norm: F, sil: V2): V2 => {
     const sx = vec2(texel.x, 0).mul(r);
     const sy = vec2(0, texel.y).mul(r);
     const sd = texel.mul(r);
     const sa = vec2(texel.x, texel.y.negate()).mul(r);
     return max(
-      max(edgeAxis(p, sx, w0, sil), edgeAxis(p, sy, w0, sil)),
-      max(edgeAxis(p, sd, w0, sil), edgeAxis(p, sa, w0, sil))
+      max(edgeAxis(p, sx, w0, norm, sil), edgeAxis(p, sy, w0, norm, sil)),
+      max(edgeAxis(p, sd, w0, norm, sil), edgeAxis(p, sa, w0, norm, sil))
     );
   };
 
@@ -375,7 +397,11 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     widthPx = select(
       hasDetail,
       widthPx.mul(
-        mix(1, 0.55, smoothstep(detail.mul(0.5), detail.mul(2.5), z0))
+        mix(
+          1,
+          0.55,
+          smoothstep(detail.mul(0.5), detail.mul(2.5), lens.fade(z0))
+        )
       ),
       widthPx
     );
@@ -392,15 +418,16 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const moved = at.add(offsetCss.mul(texel).mul(pixelScale));
     const p = floor(moved.mul(resolution)).add(0.5).mul(texel).toVar();
     const z = viewDistance(p);
-    const w0 = float(1).div(max(z, 1e-3)).toVar();
-    const zf = min(z0, z).toVar();
+    const w0 = metric(z).toVar();
+    const norm = select(ortho, lens.equivalent, w0).toVar();
+    const zf = lens.fade(min(z0, z)).toVar();
     // Detail falls away with distance: far off only the big jumps count.
     const far = select(hasDetail, zf.div(detail), 0);
     const sil = pen.sil.mul(far.add(1)).toVar();
     const r0 = floor(width);
     const e = mix(
-      edgeStencil(p, r0, w0, sil),
-      edgeStencil(p, r0.add(1), w0, sil),
+      edgeStencil(p, r0, w0, norm, sil),
+      edgeStencil(p, r0.add(1), w0, norm, sil),
       width.sub(r0)
     ).toVar();
     const creaseFade = select(
@@ -609,7 +636,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const skyRim = (at: V2): F => {
     const r = texel.mul(max(floor(pixelScale.mul(2).add(0.5)), 1));
     const p = floor(at.mul(resolution)).add(0.5).mul(texel);
-    const hit = (o: V2) => step(SKY_Z, viewDistance(p.add(o)));
+    const hit = (o: V2) => isSky(p.add(o), viewDistance(p.add(o)));
     return max(
       max(hit(vec2(r.x, 0)), hit(vec2(r.x.negate(), 0))),
       max(hit(vec2(0, r.y)), hit(vec2(0, r.y.negate())))
@@ -656,7 +683,12 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   };
 
   const sinCityRain = (at: V2, z: F): F => {
-    const ray = normalize(vec3(ndcOf(at).mul(projScale), -1));
+    // every ray of a parallel view runs the same way
+    const ray = select(
+      ortho,
+      vec3(0, 0, -1),
+      normalize(vec3(ndcOf(at).mul(projScale), -1))
+    );
     const dir = normalize(viewToWorld.mul(ray)).toVar();
     const pixelAngle = length(fwidth(dir)).toVar();
     const near = rainLayer(dir, 55, 1.5, 1.7, pixelAngle).mul(step(4, z));
@@ -741,18 +773,56 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     return mix(model, paper.mul(0.985), sky);
   };
 
+  // --- Strich: the white model and the plan's ground, in two washes. ---
+  //
+  // The scene arrives as Papier's card on the plan-coloured ground
+  // (paper-scene.ts, terrain-layer.ts). The light is laid out as on a
+  // drawn plan: sunlit is the sheet itself, everything in shade one light
+  // grey wash over the colour — no gradient, no photograph.
+  const strich = (p: V3, sky: F): V3 => {
+    const sheet = vec3(0.992, 0.99, 0.985);
+    const y = lumaOf(p).toVar();
+    const lit = aaStep(0.42, y).toVar();
+    // the surface's colour (its hue and chroma) without the light — in the
+    // shade mostly the sky's blue, so there only a trace of it is kept
+    const hue = clamp(p.div(max(y, 1e-3)), 0, 1.25);
+    const tint = mix(vec3(1), hue, mix(0.3, 1, lit));
+    const wash = mix(0.8, 0.975, lit);
+    // the near-black stays black: the Schnitt's poché, not a shade
+    const fill = float(1).sub(smoothstep(0.2, 0.28, y));
+    return mix(mix(tint.mul(wash), vec3(0.11), fill), sheet, sky);
+  };
+
+  // --- Schwarzplan: the figure black, the ground white. ---
+  //
+  // Only the buildings are drawn (unlit black) on the terrain's white
+  // (paper-scene.ts); the light the ground still carries — shade, contact
+  // shadows, the sky view — is cut away by one threshold.
+  const figure = (p: V3, sky: F): V3 => {
+    const ground = aaStep(0.16, lumaOf(p));
+    return mix(vec3(0.07), vec3(1), max(ground, sky));
+  };
+
   // An Fn: `If` builds into the current function's stack.
   const node = (input: V4): V4 =>
     Fn(() => {
       const at = uv().toVar();
       const z = viewDistance(at).toVar();
-      const sky = step(SKY_Z, z).toVar();
+      // what the far-field looks read (the equivalent distance in Modell)
+      const zFade = lens.fade(z).toVar();
+      const sky = isSky(at, z).toVar();
       const p = toPerceptual(input.rgb).toVar();
       // The surface's slope from the depth buffer (derivatives taken here, in
       // uniform control flow): up is 1 on flat ground, 0 on a wall;
       // roofSlope is 1 on a pitched roof only. The normal is turned to face
-      // the camera, whichever way the backend's screen y runs.
-      const viewPos = vec3(ndcOf(at).mul(projScale).mul(z), z.negate());
+      // the camera, whichever way the backend's screen y runs. The view
+      // position comes through the inverse projection: right for the
+      // perspective and the parallel camera (and its shear) alike.
+      const viewPos = getViewPosition(
+        at,
+        texture(inputs.depth, at).r,
+        inverseProjection
+      );
       const n0 = normalize(cross(dFdx(viewPos), dFdy(viewPos)));
       const normal = select(dot(n0, viewPos).greaterThan(0), n0.negate(), n0);
       const up = dot(normal, upView).toVar();
@@ -765,11 +835,25 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       const out = vec3(0).toVar();
       If(mode.lessThan(1.5), () => {
         out.assign(
-          mix(comic(p, at, z, sky), vec3(0.13, 0.1, 0.12), clamp(line, 0, 1))
+          mix(
+            comic(p, at, zFade, sky),
+            vec3(0.13, 0.1, 0.12),
+            clamp(line, 0, 1)
+          )
         );
       })
         .ElseIf(mode.lessThan(2.5), () => {
-          out.assign(mix(noir(p, at, z, sky), vec3(0.03), clamp(line, 0, 1)));
+          out.assign(
+            mix(noir(p, at, zFade, sky), vec3(0.03), clamp(line, 0, 1))
+          );
+        })
+        .ElseIf(mode.greaterThan(5.5), () => {
+          out.assign(figure(p, sky));
+        })
+        .ElseIf(mode.greaterThan(4.5), () => {
+          out.assign(
+            mix(strich(p, sky), vec3(0.11, 0.115, 0.13), clamp(line, 0, 1))
+          );
         })
         .ElseIf(mode.greaterThan(3.5), () => {
           out.assign(
@@ -781,8 +865,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
           );
         })
         .Else(() => {
-          const { col, white } = sincity(p, at, z, sky, roofSlope, up);
-          const rain = sinCityRain(at, z).toVar();
+          const { col, white } = sincity(p, at, zFade, sky, roofSlope, up);
+          const rain = sinCityRain(at, zFade).toVar();
           // On white, only the big silhouettes are inked — in solid black: a
           // half-weight stroke would be grey, and Sin City has no grey. On a
           // lit wall the rain barely shows.
@@ -837,8 +921,10 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       resolution.value.copy(size);
       // The view ray per uv and world up in view space, for the roof slope
       // and the rain's directions.
-      const tanHalf = Math.tan((camera.fov * Math.PI) / 360) / camera.zoom;
-      projScale.value.set(tanHalf * camera.aspect, tanHalf);
+      // From the projection itself (the lens's stand-in holds the active
+      // camera's): a perspective's tangents; unused in a parallel view.
+      const e = camera.projectionMatrix.elements;
+      projScale.value.set(1 / (e[0] || 1), 1 / (e[5] || 1));
       upView.value.set(0, 1, 0).transformDirection(camera.matrixWorldInverse);
       viewToWorld.value.setFromMatrix4(camera.matrixWorld);
     },

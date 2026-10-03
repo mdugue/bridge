@@ -1,5 +1,6 @@
 import {
   Box3,
+  type Camera,
   Color,
   Group,
   type Object3D,
@@ -31,9 +32,30 @@ import {
 } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { BikeCounter } from "@/lib/city/bike-counts";
-import { nextRenderStyle } from "@/lib/city/render-style";
+import {
+  nextRenderStyle,
+  RENDER_STYLE_BY_ID,
+  type RenderStyle,
+} from "@/lib/city/render-style";
 import { footprintPolys } from "@/lib/city/city-mesh";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
+import {
+  footprintCircle,
+  MODEL_PRESET_BY_ID,
+  MODEL_SCALE_MAX,
+  MODEL_SCALE_MAX_PHONE,
+  MODEL_SHADOW_MAX,
+  type ModelPresetId,
+  modelFootprint,
+} from "@/lib/city/model-view";
+import { SHADOW_MAX_RADIUS } from "@/lib/city/shadow-fit";
+import { cutOutFromView } from "@/lib/city/section";
+import {
+  type ExportTile,
+  exportScale,
+  exportTiles,
+} from "@/lib/city/image-export";
+import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import {
@@ -46,6 +68,15 @@ import { parseTilesetExtras, type TilesetExtras } from "@/lib/city/tileset";
 import type { Inquiry } from "@/lib/city/inquiry";
 import { valleyFalloff } from "@/lib/city/valley-fog";
 import { createCameraPose, type FollowAim } from "./camera-pose";
+import {
+  createModelRig,
+  type ModelHud,
+  type ModelRig,
+  type ViewMode,
+} from "./model-rig";
+import type { ModelCamera } from "./model-camera";
+import { createViewLens } from "./view-lens";
+import { setPickRay } from "./view-ray";
 import { countBuildings, pickCityObject } from "./city-layer";
 import { createInquiryProbe, type OutlineSubject } from "./inquiry-probe";
 import {
@@ -112,7 +143,12 @@ import {
   type SoundTile,
   soundTileOf,
 } from "@/lib/city/sound-entry";
-import { applyCityLook, createStyleResources } from "./visual-style";
+import {
+  applyCityLook,
+  createStyleResources,
+  setClaySection,
+} from "./visual-style";
+import { createModelCuts } from "./model-cuts";
 
 /**
  * Vertical FOV. 55° (~85° horizontal at 16:9) reads like a natural human
@@ -127,6 +163,10 @@ const SKY_COLOR = 0x9f_b6_cc;
 const TRAIL_BEAT_MS = 2000;
 /** How often the memory governor looks at the GPU memory held. */
 const GOVERN_MS = 1000;
+
+/** Modell's sheet: the picture style's paper (its first swatch). */
+const paperOf = (style: RenderStyle): Color =>
+  new Color(RENDER_STYLE_BY_ID[style].swatch[0]);
 
 /** The HUD census's layers: the content's own, and a dressing's parts
  *  (tile-stream.ts DRESSING_PARTS). */
@@ -288,7 +328,14 @@ export interface CityWalkOptions {
    * `I` at the crosshair; null when nothing stands there.
    */
   onInquiry?: (inquiry: Inquiry | null) => void;
-  onModeChange?: (mode: MovementMode) => void;
+  /** walk, fly or Modell (plan 055): at the start of a switch */
+  onModeChange?: (mode: ViewMode) => void;
+  /**
+   * Modell's view for the HUD (the scale bar, the north arrow, the
+   * projection cards, the minimap's footprint), throttled like the pose;
+   * null once Modell is left.
+   */
+  onModelView?: (view: ModelHud | null) => void;
   /** throttled (~10 Hz) player pose updates for the minimap */
   onPose?: (pose: PlayerPose) => void;
   /**
@@ -333,6 +380,12 @@ export interface CityWalkOptions {
  * drives. The look values are NOT here: they live in the look store passed in
  * through CityWalkOptions, which the scene subscribes to.
  */
+/** A captured frame and how many of its pixels make a CSS pixel. */
+export interface CapturedImage {
+  canvas: HTMLCanvasElement;
+  imagePxPerCssPx: number;
+}
+
 export interface CityWalkHandle {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
@@ -413,6 +466,31 @@ export interface CityWalkHandle {
   /** analog joystick input: x = strafe right, y = forward, both [-1, 1] */
   setMoveInput: (x: number, y: number) => void;
   setMovementMode: (mode: MovementMode) => void;
+  /** walk, fly or Modell — a switch into or out of Modell is a dolly zoom */
+  setViewMode: (mode: ViewMode) => void;
+  getViewMode: () => ViewMode;
+  /**
+   * Bild speichern (plan 055): the next frame as a canvas — a parallel
+   * view rendered larger than the canvas in tiles (lib/city/image-export.ts)
+   */
+  captureImage: () => Promise<CapturedImage>;
+  /** M: into Modell, or back to where it was entered from */
+  toggleModel: () => void;
+  /** Modell's Ausschnitt: the middle of the view as a model, or the whole city */
+  setCutOut: (on: boolean) => void;
+  /** Modell's view (plan 055): its projection, scale, turn and tilt */
+  setModelPreset: (preset: ModelPresetId) => void;
+  /** a scale denominator at 96 dpi (1 : n) */
+  setModelScale: (denominator: number) => void;
+  /** turns Modell's view by `deg` (the rotate buttons) */
+  turnModel: (deg: number) => void;
+  /** turns Modell's view to a compass heading (the north arrow: 0) */
+  turnModelTo: (deg: number) => void;
+  /** Vogelschau's tilt, degrees below the horizon */
+  setModelTilt: (deg: number) => void;
+  /** the Militärperspektive's heights: 1 = full, ⅔ … */
+  setModelShear: (k: number) => void;
+  getModelHud: () => ModelHud | null;
   /**
    * The aim (grid heading + pitch, degrees) the view eases towards while it
    * follows the phone; null stops following (camera-pose.ts).
@@ -639,13 +717,26 @@ async function bootApp(
     6000
   );
   scene.add(camera);
+  // What the post passes know of the camera drawing the frame (view-lens.ts),
+  // and that camera: walk/fly's, or Modell's parallel one (model-rig.ts,
+  // created with the pose below).
+  const lens = createViewLens();
+  let rig: ModelRig | null = null;
+  const activeCamera = (): Camera => rig?.current() ?? camera;
 
   // The data is Z-up (EPSG); rotate the parent group -90° about X so data Z
   // (elevation) becomes three.js Y (up) and FPS controls just work. The
   // tileset streams into it (its frame is the data frame).
   const world = new Group();
   world.rotation.x = -Math.PI / 2;
-  scene.add(world);
+  // Modell's Ausschnitt clips the city's group; the cut's own strips (the
+  // Schnitt's ground profile, the plinth) stand outside it (model-cuts.ts).
+  const cuts = createModelCuts();
+  cuts.group.add(world);
+  scene.add(cuts.group, ...cuts.objects);
+  // Counts the terrain's changes: the cuts' strips follow the ground.
+  let groundVersion = 0;
+  cleanups.push(() => cuts.dispose());
 
   // Abort checkpoint after each async step (fetches abort via the signal
   // themselves; parsing/meshing in between does not).
@@ -928,14 +1019,31 @@ async function bootApp(
   // spawn tile's edge; a tighter fog turns that edge into haze. The slider
   // value is kept and re-applied once the stream has settled.
   let fogAmount = opts.look.get().fogAmount;
+  let heightFogAmount = opts.look.get().heightFog;
   let worldPartial = extras.tiles.length > 1;
+  // The site's edge haze, kept to restore after Modell (which shows the
+  // site's edge as an edge).
+  const siteRect = sceneFog.siteRect.value.clone();
+  /**
+   * Modell's dolly zoom opens the haze as it backs away (the range grows
+   * faster than the distance), and the parallel view has none: far there
+   * means higher up the sheet, not further off (plan 055).
+   */
   const applyFog = () => {
     const range = fogRangeFor(fogAmount);
     const far = worldPartial
       ? Math.min(range.far, PARTIAL_WORLD_FOG_FAR)
       : range.far;
-    sceneFog.far.value = far;
-    sceneFog.near.value = Math.min(range.near, far * 0.6);
+    const blend = rig?.blend() ?? 0;
+    const open = 1 / Math.max(1 - blend, 0.002) ** 2;
+    sceneFog.far.value = far * open;
+    sceneFog.near.value = Math.min(range.near, far * 0.6) * open;
+    sceneFog.heightStrength.value = heightFogAmount * (1 - blend);
+    if (rig?.parallel()) {
+      sceneFog.siteRect.value.set(-1e9, -1e9, 1e9, 1e9);
+    } else {
+      sceneFog.siteRect.value.copy(siteRect);
+    }
   };
   applyFog();
 
@@ -944,6 +1052,8 @@ async function bootApp(
     renderer,
     scene,
     camera,
+    activeCamera,
+    lens,
     aoSamplesFor(budget.profile),
     sceneFog,
     warmPaperFor(budget.tier)
@@ -985,7 +1095,8 @@ async function bootApp(
       applyFog();
     },
     heightFog: (strength) => {
-      sceneFog.heightStrength.value = strength;
+      heightFogAmount = strength;
+      applyFog();
     },
     groundDetail: (strength) => {
       ground.groundDetail.value = strength;
@@ -1014,6 +1125,10 @@ async function bootApp(
     if (look.style !== lastStyle) {
       lastStyle = look.style;
       opts.trail?.note("style", look.style);
+      // Modell's paper is the style's sheet
+      if (rig?.parallel()) {
+        sunRig.setParallel(true, paperOf(look.style));
+      }
       // A picture style may draw its own crowns (style-dressing.ts), and the
       // crowns cast: the shadow map is redrawn with the new ones.
       invalidateShadows();
@@ -1044,6 +1159,11 @@ async function bootApp(
   );
   // Where the player stands and looks, walk/fly, the scenic glides — and the
   // one rule that any player input cancels a glide (camera-pose.ts).
+  let viewMode: ViewMode = "walk";
+  const modeChanged = (mode: ViewMode) => {
+    viewMode = mode;
+    opts.onModeChange?.(mode);
+  };
   const pose = createCameraPose(camera, {
     groundFloor: () => siteGround.floor() ?? 0,
     heightAt,
@@ -1051,9 +1171,81 @@ async function bootApp(
     resolveStep: collider.resolveStep,
     solids: collider,
     onFollowEnd: opts.onFollowEnd,
-    onModeChange: opts.onModeChange,
-    onPose: opts.onPose,
+    onModeChange: modeChanged,
+    onPose: (p) => {
+      if (!rig?.owns()) {
+        opts.onPose?.(p);
+      }
+    },
   });
+  // Modell (plan 055): the parallel camera and the dolly zooms in and out.
+  const viewportCss = () => ({
+    width: container.clientWidth,
+    height: container.clientHeight,
+  });
+  /** Which camera the tile renderer streams for, and what the frame looks like. */
+  const swapCamera = (parallel: boolean) => {
+    const { width, height } = viewportCss();
+    const model = (rig as ModelRig).camera;
+    if (parallel) {
+      stream.tiles.setCamera(model);
+      stream.tiles.setResolution(model, width, height);
+      stream.tiles.deleteCamera(camera);
+    } else {
+      stream.tiles.setCamera(camera);
+      stream.tiles.setResolution(camera, width, height);
+      stream.tiles.deleteCamera(model);
+    }
+    postStack.setModel(parallel);
+    sunRig.setParallel(parallel, paperOf(opts.look.get().style));
+    if (!parallel && cuts.cutOut()) {
+      // the Ausschnitt is a Modell thing: a walk sees the whole city
+      setCutOut(false);
+    }
+    applyFog();
+    invalidateShadows();
+    opts.trail?.note("camera", parallel ? "parallel" : "perspective");
+  };
+  rig = createModelRig({
+    camera,
+    pose,
+    groundAt: (x, z) => siteGround.underWorld(x, z),
+    groundAlong: (origin, direction, far) =>
+      siteGround.along(origin, direction, far),
+    viewport: viewportCss,
+    bounds: [
+      siteBounds[0] - offset.cx,
+      -(siteBounds[3] - offset.cy),
+      siteBounds[2] - offset.cx,
+      -(siteBounds[1] - offset.cy),
+    ],
+    maxScale:
+      budget.tier === "mobile" ? MODEL_SCALE_MAX_PHONE : MODEL_SCALE_MAX,
+    onSwap: swapCamera,
+    onModeChange: modeChanged,
+  });
+  const modelRig: ModelRig = rig;
+  /** world point of EPSG (x, y) on the ground */
+  const groundPoint = (epsgX: number, epsgY: number): Xyz => {
+    const w = epsgToWorld(epsgX, epsgY, offset);
+    return { x: w.x, y: siteGround.underWorld(w.x, w.z), z: w.z };
+  };
+  /** Where a vantage looks: its axis on the ground, else its own spot. */
+  const vantageTarget = (view: ViewpointGeometry): Xyz => {
+    const at = groundPoint(view.epsg.x, view.epsg.y);
+    const from = { x: at.x, y: at.y + view.aboveGround, z: at.z };
+    const h = (view.headingDeg * Math.PI) / 180;
+    const p = (view.pitchDeg * Math.PI) / 180;
+    const dir = {
+      x: Math.sin(h) * Math.cos(p),
+      y: Math.sin(p),
+      z: -Math.cos(h) * Math.cos(p),
+    };
+    const t = siteGround.along(from, dir, 3000);
+    return t === null
+      ? at
+      : { x: from.x + dir.x * t, y: from.y + dir.y * t, z: from.z + dir.z * t };
+  };
   // Spawn at the site's start vantage (on the spawn tile, so the boot's
   // wait for that tile holds); placed again once its terrain has landed
   // (below) — the height is above the ground, which is not there yet.
@@ -1128,7 +1320,7 @@ async function bootApp(
     };
   };
   const probe = createInquiryProbe({
-    camera,
+    camera: activeCamera,
     cities: () => stream.visibleCities(),
     isLoaded: (layer) => stream.cities.has(layer),
     groundAlong,
@@ -1177,6 +1369,21 @@ async function bootApp(
     opts.onInquiry?.(inquiry);
     return inquiry;
   };
+  /** Modell: centres the picture on the ground under a screen point. */
+  const centreAt = (ndcX: number, ndcY: number) => {
+    const reach = setPickRay(
+      tapRaycaster,
+      { x: ndcX, y: ndcY },
+      modelRig.current()
+    );
+    const t = groundAlong(tapRaycaster, reach);
+    if (t !== null) {
+      const p = tapRaycaster.ray.at(t, new Vector3());
+      modelRig.centreOn({ x: p.x, y: p.y, z: p.z });
+    }
+  };
+  // Modell's pinch zooms by the change since the last event.
+  let lastPinch = 1;
   const canvasControls = attachTouchControls(renderer.domElement, {
     // A click asks (a drag looks, a double click glides there); a finger's
     // tap does not — on glass a tap is too easily a missed drag.
@@ -1189,13 +1396,53 @@ async function bootApp(
     onLongPress: (ndcX, ndcY) => {
       inquireAt({ x: ndcX, y: ndcY });
     },
-    onLook: pose.turn,
-    onMouseLook: pose.look,
-    onPinchStart: pose.beginPinch,
-    onPinch: pose.pinchTo,
-    onWheelDolly: pose.dolly,
-    onWheelZoom: pose.zoomBy,
+    // In Modell a drag grabs the ground; on foot and in the air it looks.
+    onLook: (dx, dy) =>
+      modelRig.owns() ? modelRig.pan(dx, dy) : pose.turn(dx, dy),
+    onAltDrag: (dx, dy, shift) =>
+      modelRig.owns() ? modelRig.rotateDrag(dx, dy, shift) : pose.turn(dx, dy),
+    onDragEnd: () => modelRig.endDrag(),
+    onTwist: (radians) => {
+      if (modelRig.owns()) {
+        modelRig.twist(radians);
+      }
+    },
+    onTwoFingerPan: (dx, dy) => {
+      if (modelRig.owns()) {
+        modelRig.pan(dx, dy);
+      }
+    },
+    onMouseLook: (dx, dy) => {
+      if (!modelRig.owns()) {
+        pose.look(dx, dy);
+      }
+    },
+    onPinchStart: () => {
+      lastPinch = 1;
+      pose.beginPinch();
+    },
+    onPinch: (ratio, midX, midY) => {
+      if (modelRig.owns()) {
+        modelRig.zoomAt({ x: midX, y: midY }, ratio / lastPinch);
+        lastPinch = ratio;
+      } else {
+        pose.pinchTo(ratio);
+      }
+    },
+    onWheelDolly: (amount, ndcX, ndcY) =>
+      modelRig.owns()
+        ? modelRig.zoomAt({ x: ndcX, y: ndcY }, Math.exp(amount))
+        : pose.dolly(amount),
+    onWheelZoom: (ratio) => {
+      if (!modelRig.owns()) {
+        pose.zoomBy(ratio);
+      }
+    },
     onDoubleTap: (ndcX, ndcY) => {
+      if (modelRig.owns()) {
+        centreAt(ndcX, ndcY);
+        return;
+      }
       // Glide to the tapped spot on the terrain — or, when a building is
       // in front of it, to the foot of the building on this side (the
       // pose sets a spot inside one out beside it). In the air the glide
@@ -1332,6 +1579,11 @@ async function bootApp(
     }
     terrains = stream.visibleTerrains();
     siteGround.setSources(terrains);
+    groundVersion++;
+    const cut = cuts.cutOut();
+    if (cut) {
+      cuts.setCutOut(cut, siteGround.atWorld, groundVersion);
+    }
     for (const t of stream.terrains) {
       lowerGroundFloor(t.minElevation);
     }
@@ -1346,7 +1598,7 @@ async function bootApp(
   };
 
   const demolishAtCrosshair = () => {
-    const picked = pickCityObject(camera, stream.visibleCities());
+    const picked = pickCityObject(activeCamera(), stream.visibleCities());
     if (!picked?.layer.demolish(picked.objectIndex)) {
       return;
     }
@@ -1366,10 +1618,21 @@ async function bootApp(
     attachKeyboardControls(
       { document, window },
       {
-        press: pose.press,
-        release: pose.release,
-        releaseAll: pose.releaseAll,
-        toggleMode: pose.toggleMode,
+        // Modell takes the keys while it owns the frame (pan, turn, scale)
+        press: (code) =>
+          modelRig.owns() ? modelRig.press(code) : pose.press(code),
+        release: (code) => {
+          pose.release(code);
+          modelRig.release(code);
+        },
+        releaseAll: () => {
+          pose.releaseAll();
+          modelRig.releaseAll();
+        },
+        toggleMode: () =>
+          modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
+        toggleModel: () =>
+          modelRig.owns() ? modelRig.leave() : modelRig.enter(),
         demolish: demolishAtCrosshair,
         // I asks at the crosshair: in pointer lock there is no pointer
         // to click with.
@@ -1380,7 +1643,12 @@ async function bootApp(
           opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
         viewpoint: (index) => {
           const view = opts.site.viewpoints[index];
-          if (view) {
+          if (!view) {
+            return;
+          }
+          if (modelRig.owns()) {
+            modelRig.centreOn(vantageTarget(view));
+          } else {
             pose.flyToViewpoint(view);
           }
         },
@@ -1393,8 +1661,9 @@ async function bootApp(
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
     postStack.setSize();
+    modelRig.resize();
     stream.tiles.setResolution(
-      camera,
+      modelRig.parallel() ? modelRig.camera : camera,
       container.clientWidth,
       container.clientHeight
     );
@@ -1481,23 +1750,122 @@ async function bootApp(
   // sway (same clock as the water ripple). A tier change changes what casts
   // shadows, so it invalidates the map.
   const vegetationControls: VegetationControl[] = [];
-  const stepVegetation = (elapsed: number) => {
+  /** `eye`: where the tiers are measured from (Modell: above the pivot). */
+  const stepVegetation = (elapsed: number, eye: Vector3) => {
     vegetationControls.length = 0;
     let lodChanged = false;
     for (const d of stream.dressings) {
       if (d.vegetation) {
         vegetationControls.push(d.vegetation);
         d.vegetation.setTime(elapsed);
-        if (d.vegetation.updateLod(camera.position)) {
+        if (d.vegetation.updateLod(eye)) {
           lodChanged = true;
         }
       }
     }
-    if (updateVegetationLod(vegetationControls, camera.position)) {
+    if (updateVegetationLod(vegetationControls, eye)) {
       lodChanged = true;
     }
     if (lodChanged) {
       invalidateShadows();
+    }
+  };
+
+  /**
+   * Everything that follows where the frame looks: the shadow frustum, the
+   * map's marks, the lamp lights and the tree tiers — from the camera on
+   * foot and in the air; in Modell from the ground the picture shows and
+   * from above its pivot, as far up as the picture is equivalent to (so a
+   * tree at the top of the sheet is drawn as one at the bottom). Returns
+   * that equivalent distance in Modell, else null.
+   */
+  const eye = new Vector3();
+  const followView = (elapsed: number): number | null => {
+    const target = modelRig.owns() ? modelRig.targetView() : null;
+    if (!target) {
+      // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
+      camera.getWorldDirection(shadowViewDir);
+      const ground = groundUnderCamera();
+      sunRig.follow(camera.position, shadowViewDir, ground);
+      // The map's own marks (the ferry lines) show from the air.
+      setMapAltitude(camera.position.y - ground);
+      // Repoint the shared real lamp lights at the nearest heads.
+      lampLights.updateNearest(camera.position);
+      stepVegetation(elapsed, camera.position);
+      return null;
+    }
+    const foot = footprintCircle(modelFootprint(target, viewportCss()));
+    sunRig.followFootprint(
+      foot.x,
+      siteGround.underWorld(foot.x, foot.z),
+      foot.z,
+      foot.radius,
+      budget.tier === "mobile" ? SHADOW_MAX_RADIUS : MODEL_SHADOW_MAX
+    );
+    const equivalent = modelRig.equivalentDistance() ?? 600;
+    const { pivot } = target;
+    eye.set(pivot.x, pivot.y + equivalent, pivot.z);
+    setMapAltitude(equivalent);
+    lampLights.updateNearest(eye);
+    stepVegetation(elapsed, eye);
+    return equivalent;
+  };
+  /**
+   * Modell's cuts per frame: a Schnitt fills the buildings it opens
+   * (the clay's poché) and draws the ground's profile along the cut; off
+   * Modell, or in another view, neither.
+   */
+  const updateCuts = () => {
+    const v = modelRig.view();
+    const section = v !== null && MODEL_PRESET_BY_ID[v.preset].poche;
+    setClaySection(styleResources, section);
+    if (section) {
+      cuts.showSection(
+        v,
+        (v.metresPerPixel * viewportCss().width) / 2,
+        siteGround.atWorld,
+        groundVersion
+      );
+    } else {
+      cuts.hideSection();
+    }
+  };
+  /** Sets the Ausschnitt to the middle of the view, or lifts it. */
+  const setCutOut = (on: boolean) => {
+    // where a glide (a preset switch, a turn) is heading: mid-way a view
+    // near level shows no ground to fit a square into
+    const v = modelRig.settledView();
+    cuts.setCutOut(
+      on && v ? cutOutFromView(v, viewportCss()) : null,
+      siteGround.atWorld,
+      groundVersion
+    );
+    invalidateShadows();
+  };
+  /** Modell's pose for the minimap (the pivot, the turn) and its HUD. */
+  let modelHudShown = false;
+  const tickModel = () => {
+    const hud = modelRig.hud();
+    if (!hud) {
+      return;
+    }
+    modelHudShown = true;
+    opts.onModelView?.({ ...hud, cutOut: cuts.cutOut() !== null });
+    const epsg = worldToEpsg(hud.pivot.x, hud.pivot.z, offset);
+    opts.onPose?.({
+      epsgX: epsg.x,
+      epsgY: epsg.y,
+      heading: (hud.turnDeg * Math.PI) / 180,
+      footprint: hud.footprint.map((p) => {
+        const e = worldToEpsg(p.x, p.z, offset);
+        return [e.x, e.y] as const;
+      }),
+    });
+  };
+  const tickModelOff = () => {
+    if (modelHudShown) {
+      modelHudShown = false;
+      opts.onModelView?.(null);
     }
   };
 
@@ -1553,6 +1921,107 @@ async function bootApp(
     opts.trail?.note("frame failed", `${message} ${where}`);
     stopRendering(message);
   };
+  // Bild speichern: one tile per frame, read in the frame's own task right
+  // after its render (the canvas's picture is only readable until the task
+  // ends). One per frame because three's screen passes (SMAA, GTAO) render
+  // once per animation frame: a second render in the same frame would reuse
+  // the first one's antialiased picture.
+  let lastEquivalent = 600;
+  type CaptureRequest = {
+    resolve: (image: CapturedImage) => void;
+    reject: (error: unknown) => void;
+  };
+  const captureQueue: CaptureRequest[] = [];
+  let capture: {
+    request: CaptureRequest;
+    view: ModelCamera | PerspectiveCamera;
+    tiles: ExportTile[];
+    next: number;
+    fullW: number;
+    fullH: number;
+    w: number;
+    h: number;
+    out: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+    imagePxPerCssPx: number;
+  } | null = null;
+  const beginCapture = (request: CaptureRequest) => {
+    const view = activeCamera() as ModelCamera | PerspectiveCamera;
+    const { width: w, height: h } = renderer.domElement;
+    const scale = exportScale(
+      renderer.getPixelRatio(),
+      budget.tier,
+      modelRig.parallel(),
+      w * h
+    );
+    const fullW = Math.round(w * scale);
+    const fullH = Math.round(h * scale);
+    const out = document.createElement("canvas");
+    out.width = fullW;
+    out.height = fullH;
+    const ctx = out.getContext("2d");
+    if (!ctx) {
+      request.reject(new Error("2D canvas unsupported"));
+      return;
+    }
+    capture = {
+      request,
+      view,
+      tiles: exportTiles(fullW, fullH, w, h),
+      next: 0,
+      fullW,
+      fullH,
+      w,
+      h,
+      out,
+      ctx,
+      imagePxPerCssPx: renderer.getPixelRatio() * scale,
+    };
+  };
+  /** Before the render: the frustum slides over the larger picture. */
+  const aimCaptureTile = () => {
+    if (!capture && captureQueue.length > 0) {
+      beginCapture(captureQueue.shift() as CaptureRequest);
+    }
+    const c = capture;
+    if (!c || c.tiles.length < 2) {
+      return;
+    }
+    const t = c.tiles[c.next];
+    c.view.setViewOffset(c.fullW, c.fullH, t.offsetX, t.offsetY, c.w, c.h);
+  };
+  /** After the render: the tile's middle into the picture. */
+  const takeCaptureTile = () => {
+    const c = capture;
+    if (!c) {
+      return;
+    }
+    const t = c.tiles[c.next];
+    try {
+      c.ctx.drawImage(
+        renderer.domElement,
+        t.srcX,
+        t.srcY,
+        t.w,
+        t.h,
+        t.dstX,
+        t.dstY,
+        t.w,
+        t.h
+      );
+    } catch (error) {
+      c.next = c.tiles.length;
+      c.request.reject(error);
+    }
+    c.next++;
+    if (c.tiles.length > 1) {
+      c.view.clearViewOffset();
+    }
+    if (c.next >= c.tiles.length) {
+      capture = null;
+      c.request.resolve({ canvas: c.out, imagePxPerCssPx: c.imagePxPerCssPx });
+    }
+  };
   // (It resolves once the loop is installed: nothing to wait for.)
   void renderer.setAnimationLoop((time) => {
     // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
@@ -1566,25 +2035,34 @@ async function bootApp(
     if (dt > 0) {
       fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
     }
-    pose.step(dt);
+    // Modell owns the frame while it is on (and through its dolly zooms);
+    // an export in progress holds the view still.
+    const exporting = capture !== null || captureQueue.length > 0;
+    if (!(modelRig.owns() || exporting)) {
+      pose.step(dt);
+    }
+    if (!exporting) {
+      modelRig.step(dt);
+    }
+    if (modelRig.owns()) {
+      applyFog();
+    }
     updateRegression(dt);
     // What to stream, from where the cameras look now.
-    camera.updateMatrixWorld();
+    const view = activeCamera();
+    view.updateMatrixWorld();
     stream.tiles.update();
     // Advance every tile's water ripple and glitter (its sky tint is the
     // fog colour's node, in lockstep with the sun by construction).
     for (const t of terrains) {
       t.water?.update(elapsed);
     }
-    // Re-fit the shadow frustum to the camera (lib/city/shadow-fit.ts).
-    camera.getWorldDirection(shadowViewDir);
-    const ground = groundUnderCamera();
-    sunRig.follow(camera.position, shadowViewDir, ground);
-    // The map's own marks (the ferry lines) show from the air.
-    setMapAltitude(camera.position.y - ground);
-    // Repoint the shared real lamp lights at the nearest heads.
-    lampLights.updateNearest(camera.position);
-    stepVegetation(elapsed);
+    const equivalent = followView(elapsed);
+    lastEquivalent = equivalent ?? 600;
+    updateCuts();
+    aimCaptureTile();
+    // What the post passes know of the camera drawing this frame.
+    lens.update(view, lastEquivalent);
     // The fountains' jets and water shimmer (one shared uniform).
     setFountainTime(elapsed);
     // The data layers' light (one shared uniform; drawn only when on).
@@ -1593,8 +2071,13 @@ async function bootApp(
     overlays.step(performance.now());
     if (timer.getElapsed() >= tickDue) {
       tickDue = timer.getElapsed() + 0.1;
-      opts.onPose?.(pose.getPose());
-      updateFocus();
+      if (modelRig.owns()) {
+        tickModel();
+      } else {
+        tickModelOff();
+        opts.onPose?.(pose.getPose());
+        updateFocus();
+      }
     }
     // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
     // emit (a whole-scene walk; it also hands the HUD the footprints).
@@ -1613,6 +2096,7 @@ async function bootApp(
       onFrameFailed(error);
       return;
     }
+    takeCaptureTile();
     frames++;
     tickPocFrame(shadowRendered);
   });
@@ -1813,16 +2297,62 @@ async function bootApp(
       ? new URL(extras.provenance, tilesetUrl).href
       : null,
     enterImmersive: canvasControls.lockPointer,
-    flyTo: pose.flyTo,
-    flyToViewpoint: pose.flyToViewpoint,
+    flyTo: (position, lookAt) => {
+      modelRig.exitNow();
+      pose.flyTo(position, lookAt);
+    },
+    // In Modell a place is where the picture is centred (plan 055).
+    flyToViewpoint: (view) =>
+      modelRig.owns()
+        ? modelRig.centreOn(vantageTarget(view))
+        : pose.flyToViewpoint(view),
     captureViewpoint: pose.captureViewpoint,
-    placeAt: pose.placeAt,
-    teleportTo: pose.teleportTo,
-    glideToSpot: pose.glideToSpot,
+    placeAt: (view) =>
+      modelRig.owns()
+        ? modelRig.centreOn(groundPoint(view.epsg.x, view.epsg.y))
+        : pose.placeAt(view),
+    teleportTo: (x, y) =>
+      modelRig.owns()
+        ? modelRig.centreOn(groundPoint(x, y))
+        : pose.teleportTo(x, y),
+    glideToSpot: (x, y) =>
+      modelRig.owns()
+        ? modelRig.centreOn(groundPoint(x, y))
+        : pose.glideToSpot(x, y),
     getGlideTarget: pose.getGlideTarget,
-    getPose: pose.getPose,
-    getCameraState: pose.getCameraState,
-    applyCameraState: pose.applyCameraState,
+    getPose: () => {
+      const hud = modelRig.hud();
+      if (!hud) {
+        return pose.getPose();
+      }
+      const epsg = worldToEpsg(hud.pivot.x, hud.pivot.z, offset);
+      return {
+        epsgX: epsg.x,
+        epsgY: epsg.y,
+        heading: (hud.turnDeg * Math.PI) / 180,
+      };
+    },
+    // In Modell: the perspective pose it would leave to (what a reader
+    // without Modell shows), and the parallel view itself.
+    getCameraState: () => {
+      const model = modelRig.state();
+      const perspective = model ? modelRig.perspectiveState() : null;
+      if (!(model && perspective)) {
+        return pose.getCameraState();
+      }
+      const epsg = worldToEpsg(perspective.pos.x, perspective.pos.z, offset);
+      return { ...perspective, epsg: { x: epsg.x, y: epsg.y }, model };
+    },
+    applyCameraState: (state) => {
+      const { model, ...perspective } = state;
+      if (!model) {
+        modelRig.exitNow();
+      }
+      pose.applyCameraState(perspective);
+      if (model) {
+        modelRig.applyState(model);
+      }
+    },
     getRenderInfo: () => ({
       calls: renderer.info.render.drawCalls,
       triangles: renderer.info.render.triangles,
@@ -1860,7 +2390,32 @@ async function bootApp(
       hitDist: lastFocusHit?.dist ?? null,
       hitName: lastFocusHit?.name ?? null,
     }),
-    setMovementMode: pose.setMovementMode,
+    setMovementMode: (mode) =>
+      modelRig.owns() ? modelRig.leave(mode) : pose.setMovementMode(mode),
+    setViewMode: (mode) => {
+      if (mode === "model") {
+        modelRig.enter();
+      } else if (modelRig.owns()) {
+        modelRig.leave(mode);
+      } else {
+        pose.setMovementMode(mode);
+      }
+    },
+    getViewMode: () => viewMode,
+    setCutOut,
+    captureImage: () =>
+      new Promise<CapturedImage>((resolve, reject) => {
+        captureQueue.push({ resolve, reject });
+      }),
+    toggleModel: () => (modelRig.owns() ? modelRig.leave() : modelRig.enter()),
+    setModelPreset: (preset) =>
+      modelRig.owns() ? modelRig.setPreset(preset) : modelRig.enter(preset),
+    setModelScale: modelRig.setScale,
+    turnModel: modelRig.turnBy,
+    turnModelTo: modelRig.turnTo,
+    setModelTilt: modelRig.setTilt,
+    setModelShear: modelRig.setShear,
+    getModelHud: modelRig.hud,
     setFollowAim: pose.setFollowAim,
     setFollowPosition: pose.setFollowPosition,
     setClimbInput: pose.setClimbInput,
@@ -1876,17 +2431,25 @@ async function bootApp(
     latLng,
     terrainBounds: siteBounds,
     offset,
-    listen: (treeRadius) => ({
-      clock: timer.getElapsed(),
-      heightAboveGround: camera.position.y - groundUnderCamera(),
-      mode: pose.getMode(),
-      trees: treesWithin(
-        [...stream.dressings].flatMap((d) => d.vegetation?.chunks ?? []),
-        camera.position.x,
-        camera.position.z,
-        treeRadius
-      ),
-    }),
+    // In Modell the ear hangs over the pivot, as high as the picture is
+    // equivalent to: a model on a table hears the city from above.
+    listen: (treeRadius) => {
+      const target = modelRig.owns() ? modelRig.targetView() : null;
+      const at = target?.pivot ?? camera.position;
+      return {
+        clock: timer.getElapsed(),
+        heightAboveGround: target
+          ? (modelRig.equivalentDistance() ?? 600)
+          : camera.position.y - groundUnderCamera(),
+        mode: target ? "fly" : pose.getMode(),
+        trees: treesWithin(
+          [...stream.dressings].flatMap((d) => d.vegetation?.chunks ?? []),
+          at.x,
+          at.z,
+          treeRadius
+        ),
+      };
+    },
     soundTiles: extras.tiles.map((t) => soundTileOf(t, tilesetUrl)),
     dispose: () => {
       if (disposed) {

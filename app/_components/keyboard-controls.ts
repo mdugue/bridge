@@ -1,7 +1,7 @@
 /**
  * The keyboard adapter: turns key events into camera-pose calls and the
- * one-shot actions (demolish, walk/fly, the picture style, the inquiry
- * mode, the numbered viewpoints). The event targets are injected so the adapter
+ * one-shot actions (demolish, walk/fly, Modell, the picture style, the
+ * inquiry mode, the numbered viewpoints). The event targets are injected so the adapter
  * runs against a fake document in unit tests.
  */
 
@@ -16,8 +16,10 @@ export interface KeyboardActions {
   release: (code: string) => void;
   /** every held key is dropped: the window lost focus or was hidden */
   releaseAll: () => void;
-  /** F — walk <-> fly */
+  /** F — walk <-> fly (out of Modell: fly) */
   toggleMode: () => void;
+  /** M — into Modell, the parallel view (plan 055), and back */
+  toggleModel: () => void;
   /** 1–9 — glide to the site's n-th viewpoint (0-based index) */
   viewpoint: (index: number) => void;
 }
@@ -32,11 +34,12 @@ export interface KeyboardTargets {
 
 const ONE_SHOTS = new Map<
   string,
-  "cycleStyle" | "demolish" | "inquire" | "toggleMode"
+  "cycleStyle" | "demolish" | "inquire" | "toggleMode" | "toggleModel"
 >([
   ["KeyI", "inquire"],
   ["KeyR", "demolish"],
   ["KeyF", "toggleMode"],
+  ["KeyM", "toggleModel"],
   ["KeyV", "cycleStyle"],
 ]);
 

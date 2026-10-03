@@ -261,6 +261,45 @@ auf Handys gesenkt, um Füllrate zu sparen.
 Bildschirm nutzt; er zeichnet die Szene auf der CPU, langsam und ohne den
 echten Look.
 
+## Planzeichnung
+
+Die Ansichten des *Modells* (siehe [Bedienung](./using-the-viewer.md#modell-die-stadt-als-planzeichnung)).
+
+**Parallelprojektion / Axonometrie** — eine Zeichnung, deren Sehstrahlen
+alle parallel laufen: kein Fluchtpunkt, gleiche Längen bleiben überall im
+Bild gleich lang, und das Bild hat einen Maßstab. Axonometrien sind die
+Parallelprojektionen, die drei Seiten eines Baukörpers zeigen.
+
+**Isometrie** — die Axonometrie, die alle drei Achsen gleich verkürzt
+(× 0,816): 35,26° über dem Boden gesehen, 45° zum Baukörper gedreht,
+laufen die Kanten des Bodens auf dem Blatt unter 30° — daher
+„30°-Isometrie“.
+
+**Militärperspektive** — eine schiefe Axonometrie: der Grundriss
+unverzerrt und maßstäblich gezeichnet, gedreht (meist 30°/60° oder
+45°/45°), die Höhen senkrecht darüber, wahr oder auf zwei Drittel
+verkürzt.
+
+**Vogelschau** — hier eine parallele Ansicht von oben unter beliebiger
+Neigung.
+
+**Lageplan** — senkrecht von oben, Norden oben, maßstäblich.
+
+**Ansicht / Schnitt** — waagerechte Blicke auf eine Linie. Ein Schnitt
+schneidet dort und füllt, was der Schnitt öffnet (das **Poché**, hier
+schwarz), mit dem Gelände als Profil (*Geländeschnitt*).
+
+**Schwarzplan** — Gebäude schwarz auf Weiß, sonst nichts; die älteste
+Art, das Gefüge einer Stadt zu lesen.
+
+**Maßstab** — 1 : n heißt, eine Einheit auf dem Blatt ist n in der
+Wirklichkeit. Am Bildschirm rechnet der Viewer ein CSS-Pixel als 1/96
+Zoll (0,26 mm); das gespeicherte Bild nennt seinen Maßstab bei 300 dpi.
+
+**Verschattungsstudie** — dieselbe Ansicht zu festen Uhrzeiten an der
+Tagundnachtgleiche (21. März) und den Sonnenwenden (21. Juni,
+21. Dezember): wie viel Sonne ein Ort übers Jahr bekommt.
+
 ## Projekt
 
 **Bake** — jeder Offline- oder Build-Schritt, der eine schwere Eingabe in

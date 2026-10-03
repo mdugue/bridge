@@ -4,6 +4,7 @@ import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site } from "@/lib/city/site";
 import {
+  BoxIcon,
   LocateFixedIcon,
   NavigationIcon,
   PlaneIcon,
@@ -57,9 +58,9 @@ import {
   type CityWalkStats,
   createCityWalkApp,
 } from "./create-app";
-import type { MovementMode } from "./fps-movement";
 import { LoadScreen } from "./load-screen";
 import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { type ExportContext, saveImage, saveShadowStudy } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { useLiveMode } from "./live-mode";
 import {
@@ -69,6 +70,8 @@ import {
   useLocateMe,
 } from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
+import { ModelInstruments } from "./model-instruments";
+import type { ModelHud, ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
 import { overlook, type ViewpointGeometry } from "@/lib/city/site";
@@ -136,8 +139,8 @@ function SettingsToggle() {
 /**
  * The tools the floating toolbar offers here: "take me to where I am"
  * wherever the browser can locate the player (locate-button.tsx), live mode
- * while a compass is reporting (live-mode.ts), and on a touch screen walk/
- * fly, the F key's stand-in.
+ * while a compass is reporting (live-mode.ts), on a touch screen walk/
+ * fly, the F key's stand-in, and everywhere Modell (plan 055), the M key's.
  */
 function sceneTools({
   coarse,
@@ -145,15 +148,17 @@ function sceneTools({
   locate,
   mode,
   onToggleMode,
+  onToggleModel,
 }: {
   coarse: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
-  mode: MovementMode;
+  mode: ViewMode;
   onToggleMode: () => void;
+  onToggleModel: () => void;
 }): HudTool[] {
   const tools: HudTool[] = [];
-  if (locate.available) {
+  if (locate.available && mode !== "model") {
     tools.push({
       id: "locate",
       label: "Standort",
@@ -163,7 +168,7 @@ function sceneTools({
       title: "Zu meinem Standort springen, Blick in Telefonrichtung",
     });
   }
-  if (live.available) {
+  if (live.available && mode !== "model") {
     tools.push({
       id: "live",
       label: "Live",
@@ -184,6 +189,15 @@ function sceneTools({
       title: "Zwischen Gehen und Fliegen wechseln",
     });
   }
+  tools.push({
+    id: "model",
+    label: "Modell",
+    icon: BoxIcon,
+    pressed: mode === "model",
+    onClick: onToggleModel,
+    title:
+      "Modell: die Stadt in Parallelprojektion — Isometrie, Lageplan, Ansicht (M)",
+  });
   return tools;
 }
 
@@ -202,38 +216,78 @@ function SceneOverlays({
   live,
   locate,
   mode,
+  modelView,
   onClimb,
   onMove,
+  onNorth,
   onToggleMode,
+  onToggleModel,
+  onTurn,
 }: {
   coarse: boolean;
   /** the inquiry sheet covers the bottom of the screen (touch) */
   covered: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
-  mode: MovementMode;
+  mode: ViewMode;
+  /** Modell's view, while it is shown (plan 055) */
+  modelView: ModelHud | null;
   onClimb: (v: number) => void;
   onMove: (x: number, y: number) => void;
+  onNorth: () => void;
   onToggleMode: () => void;
+  onToggleModel: () => void;
+  onTurn: (deg: number) => void;
 }) {
   const { state, isMobile, openMobile } = useSidebar();
-  if (covered || (isMobile ? openMobile : state === "expanded")) {
+  const model = mode === "model";
+  if (covered || (isMobile && openMobile)) {
     return null;
+  }
+  // On a desktop the open panel floats at the right: Modell's instruments
+  // (bottom left) are its legend and stay; the walker's controls step
+  // aside as before.
+  if (!isMobile && state === "expanded") {
+    return model && modelView ? (
+      <div className="absolute bottom-6 left-5">
+        <ModelInstruments onNorth={onNorth} onTurn={onTurn} view={modelView} />
+      </div>
+    ) : null;
   }
   const flying = mode === "fly";
   return (
     <>
-      <ControlHintBar coarse={coarse} />
-      {/* Clear of the hint bar even when it wraps to two rows on a phone. */}
+      {/* keyed: Modell's bar is its own, dismissed on its own */}
+      <ControlHintBar coarse={coarse} key={mode} model={model} />
+      {/* Clear of the hint bar even when it wraps to two rows on a phone.
+          In Modell the joystick's place holds the instruments: the scale
+          bar and the north arrow between the two quarter turns. */}
       <div className="absolute bottom-24 left-5">
-        <VirtualJoystick onChange={onMove} />
+        {model ? (
+          modelView && (
+            <ModelInstruments
+              onNorth={onNorth}
+              onTurn={onTurn}
+              view={modelView}
+            />
+          )
+        ) : (
+          <VirtualJoystick onChange={onMove} />
+        )}
       </div>
       {/* Bottom-anchored with the toolbar last, so it stays put when fly
           mode brings the altitude stick in above it. */}
       <div className="absolute right-5 bottom-24 flex flex-col items-center gap-3">
         {flying && <AltitudeStick onChange={onClimb} />}
         <HudToolbar
-          tools={sceneTools({ coarse, live, locate, mode, onToggleMode })}
+          tools={sceneTools({
+            coarse,
+            live,
+            locate,
+            mode,
+            onToggleMode,
+            onToggleModel,
+          })}
         />
       </div>
     </>
@@ -371,7 +425,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       }
     });
   }, [look]);
-  const [mode, setMode] = useState<MovementMode>("walk");
+  const [mode, setMode] = useState<ViewMode>("walk");
+  // Modell's view while it is shown (plan 055): scale, turn, the instruments.
+  const [modelView, setModelView] = useState<ModelHud | null>(null);
   // Befragen (ADR 0042): what was asked last, while its card is open.
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [provenanceUrl, setProvenanceUrl] = useState<string | null>(null);
@@ -557,6 +613,12 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           setMode(m);
         }
       },
+      onModelView: (view) => {
+        if (!cancelled) {
+          // At the pose tick's rate, read by the instruments and the panel.
+          startTransition(() => setModelView(view));
+        }
+      },
       onInquiry: (asked) => {
         if (!cancelled) {
           setInquiry(asked);
@@ -684,6 +746,53 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
     setSnapshotMsg("Snapshot angewendet");
   };
 
+  // Bild speichern and the Verschattungsstudie (plan 055): one at a time.
+  // While one renders (a tile a frame) a veil covers the canvas, which
+  // shows the picture's pieces as they are taken.
+  const exporting = useRef(false);
+  const [exportVeil, setExportVeil] = useState(false);
+  const runExport = (
+    what: (h: CityWalkHandle, info: ExportContext) => Promise<void>,
+    busy: string,
+    done: string
+  ) => {
+    const h = handleRef.current;
+    if (!h || exporting.current) {
+      return;
+    }
+    exporting.current = true;
+    setExportVeil(true);
+    hud.say(busy, true);
+    what(h, {
+      site,
+      date: time.date,
+      model: h.getModelHud(),
+      style: look.get().style,
+    })
+      .then(
+        () => hud.say(done),
+        (err: unknown) =>
+          hud.say(
+            `Speichern fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`
+          )
+      )
+      .finally(() => {
+        exporting.current = false;
+        setExportVeil(false);
+      });
+  };
+  const exportImage = () =>
+    runExport(saveImage, "Bild wird gerendert …", "Bild gespeichert");
+  const exportStudy = () =>
+    runExport(
+      (h, info) =>
+        saveShadowStudy(h, info, (n, total) =>
+          hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
+        ),
+      "Verschattungsstudie wird gerendert …",
+      "Verschattungsstudie gespeichert"
+    );
+
   // The hidden soundscape (plan 035): off until L or the Erweitert switch.
   const sound = useSoundscape({
     date: time.date,
@@ -725,6 +834,14 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
 
         <CrashReport />
 
+        {exportVeil && (
+          <div
+            aria-hidden
+            className="absolute inset-0 z-10 bg-background/80 backdrop-blur-md"
+            data-testid="export-veil"
+          />
+        )}
+
         {status.phase === "error" && (
           <Alert className="absolute inset-x-8 top-8" variant="destructive">
             <AlertTitle>Der Stadt-Viewer konnte nicht starten</AlertTitle>
@@ -736,11 +853,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
 
         {booted && (
           <>
-            {/* crosshair */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
-            />
+            {/* crosshair — none on Modell's sheet, which has no eye */}
+            {mode !== "model" && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
+              />
+            )}
 
             {/* The loading screen, at pill size. It retires itself once the
                 last layer has landed and it has been readable for a moment. */}
@@ -778,13 +897,17 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
               live={live}
               locate={locate}
               mode={mode}
+              modelView={modelView}
               onClimb={(v) => handleRef.current?.setClimbInput(v)}
               onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+              onNorth={() => handleRef.current?.turnModelTo(0)}
               onToggleMode={() =>
                 handleRef.current?.setMovementMode(
                   mode === "fly" ? "walk" : "fly"
                 )
               }
+              onToggleModel={() => handleRef.current?.toggleModel()}
+              onTurn={(deg) => handleRef.current?.turnModel(deg)}
             />
           </>
         )}
@@ -827,8 +950,11 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
           look={lookValues}
           minutes={time.minutes}
           mode={mode}
+          modelView={modelView}
           onLook={look.set}
           onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
+          onExport={exportImage}
+          onStudy={exportStudy}
           onTab={setTab}
           onTeleport={(x, y) => handleRef.current?.glideToSpot(x, y)}
           rememberedView={rememberedView}

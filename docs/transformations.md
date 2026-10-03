@@ -2218,6 +2218,36 @@ removed, not tuned.
 
 ---
 
+### Planning views (Modell, plan 055 / ADR 0044)
+- **Schwarzplan** (picture style) — the LoD2 clay (`userData.figure`) drawn
+  with one unlit black, the terrain white (`paperGroundOn` = 3, its
+  contours off), everything else hidden for the frame; one threshold in
+  the stylize pass cuts the remaining light away (`paper-scene.ts`,
+  `stylize-effect.ts` mode 6). No new input.
+- **Strich** (picture style) — Papier's card on the ground's **plan
+  palette** (`paperGroundOn` = 2, `terrain-layer.ts` `paperGround`): the
+  painted class colour's grey lightened to a light neutral, green
+  (g > max(r, b) in the painted colour) a plan green, the splat's water a
+  plan blue, the paint grey; the pass keeps each surface's hue and lays
+  the light out as two washes under a one-pixel pen (mode 5).
+- **Geländeschnitt** — in a *Schnitt* the terrain's heights along the cut
+  line (`ground.ts` `atWorld`, every 3 CSS px, ≥ 0.5 m) → a poché strip
+  down below the picture (`lib/city/section.ts` `groundStrip`,
+  `model-cuts.ts`); unknown ground breaks the strip, never invented. The
+  clay is drawn two-sided with its back faces as poché
+  (`visual-style.ts` `setClaySection`).
+- **Ausschnitt plinth** — the cut-out's four edges sampled on the terrain
+  → poché walls down to 12 m below the lowest corner; the city clipped by
+  the square's planes (`ClippingGroup`). Buildings on the edge are cut,
+  not kept or dropped whole (that would need a per-object centroid).
+- **Shadow study sheet** — the sun (`suncalc`) at 9, 12, 15, 18 Uhr on
+  21.3., 21.6., 21.12. of the shown year, one capture each, as a 3 × 4
+  sheet with the legend (`image-export.ts`, `lib/city/image-export.ts`).
+- **The export's legend** — the scale from the view's metres per pixel
+  (printed at 300 dpi), the north arrow from its turn, the credits from
+  the site's attribution lines (`siteAttribution`) — drawn into the PNG,
+  never into the scene (ADR 0042).
+
 ## 🧪 Experimental
 
 - **DOP-lean caveat (recorded):** standard DOP has building lean (tall roofs

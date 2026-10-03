@@ -1018,6 +1018,67 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expectNoErrors(errors);
   });
 
+  test("Modell: M enters a parallel view that turns, keeps its snapshot and leaves", async () => {
+    // Plan 055: the dolly zoom ends in the parallel camera; Q turns by a
+    // quarter; the snapshot carries the Modell state; M glides back.
+    const before = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    await page.keyboard.press("KeyM");
+    await page.waitForFunction(
+      () => {
+        const h = window.__poc?.handle;
+        const hud = h?.getModelHud();
+        return h?.getViewMode() === "model" && hud && !hud.transitioning;
+      },
+      undefined,
+      { timeout: slow(90_000) }
+    );
+    await expect(page.getByTestId("scale-bar")).toBeVisible();
+    await expect(page.getByTestId("north-arrow")).toBeVisible();
+    const entered = await page.evaluate(() =>
+      window.__poc?.handle?.getModelHud()
+    );
+    expect(entered?.preset).toBe("iso");
+    // the isometry's tilt, its turn on a diagonal
+    expect(entered?.tiltDeg).toBeCloseTo(35.264, 2);
+    expect((((entered?.turnDeg ?? 0) % 90) + 90) % 90).toBeCloseTo(45, 3);
+    expect(entered?.scale).toBeGreaterThanOrEqual(250);
+
+    await page.keyboard.press("KeyQ");
+    await page.waitForFunction(
+      (turn) => {
+        const t = window.__poc?.handle?.getModelHud()?.turnDeg ?? turn;
+        return Math.abs((((t - turn + 90) % 360) + 360) % 360) < 0.5;
+      },
+      entered?.turnDeg ?? 0,
+      { timeout: slow(60_000) }
+    );
+    const snapshot = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(snapshot?.model?.preset).toBe("iso");
+    // the perspective pose Modell leaves to stays a valid walk/fly pose
+    expect(["walk", "fly"]).toContain(snapshot?.mode);
+
+    await page.keyboard.press("KeyM");
+    await page.waitForFunction(
+      () =>
+        window.__poc?.handle?.getViewMode() !== "model" &&
+        window.__poc?.handle?.getModelHud() === null,
+      undefined,
+      { timeout: slow(90_000) }
+    );
+    const after = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(after?.model).toBeUndefined();
+    // back where it was entered from (the pivot did not move)
+    expect(after?.pos.x).toBeCloseTo(before?.pos.x ?? 0, 0);
+    expect(after?.pos.z).toBeCloseTo(before?.pos.z ?? 0, 0);
+    expectNoErrors(errors);
+  });
+
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
@@ -1055,7 +1116,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
    * only move uniforms are batched together rather than spent one per frame.
    */
   test("post and shader controls survive real frames", async () => {
-    const CONTROL_STEPS = 10;
+    const CONTROL_STEPS = 12;
     for (let i = 0; i < CONTROL_STEPS; i++) {
       await page.evaluate((index) => {
         // Driven through the look store the sliders write to — one set() per
@@ -1109,6 +1170,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
           // Papier swaps every surface for one paper material for the frame
           // — its own programs (instanced, vertex-coloured, plain).
           () => look?.set({ style: "paper" }),
+          // Strich wears Papier's card on its own ground; the Schwarzplan
+          // draws the buildings with its own black and hides the rest.
+          () => look?.set({ style: "line" }),
+          () => look?.set({ style: "figure" }),
           () => look?.set({ style: "pastel", ink: 0.7 }),
         ];
         steps[index]?.();

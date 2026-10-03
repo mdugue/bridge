@@ -134,6 +134,36 @@ function drawFootprints(
   }
 }
 
+/**
+ * Modell's picture on the map (plan 055): the ground the view shows, as a
+ * frame — the plan view's sheet edge, an axonometry's rhombus.
+ */
+function drawPictureFrame(
+  ctx: CanvasRenderingContext2D,
+  corners: readonly (readonly [number, number])[],
+  bounds: TerrainBounds,
+  size: number
+): void {
+  if (corners.length < 3) {
+    return;
+  }
+  ctx.beginPath();
+  corners.forEach(([x, y], i) => {
+    const { px, py } = epsgToMapPx(x, y, bounds, size);
+    if (i === 0) {
+      ctx.moveTo(px, py);
+    } else {
+      ctx.lineTo(px, py);
+    }
+  });
+  ctx.closePath();
+  ctx.fillStyle = "rgba(37, 99, 235, 0.08)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(37, 99, 235, 0.7)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
 interface MinimapProps {
   bounds: TerrainBounds;
   /** manual DoF focus distance (m) to draw as a ring around the player; null = off */
@@ -305,6 +335,9 @@ export function Minimap({
     const ctx = setupCanvas(canvas, size, height);
     return subscribePose((pose) => {
       ctx.clearRect(0, 0, size, height);
+      if (pose.footprint) {
+        drawPictureFrame(ctx, pose.footprint, bounds, size);
+      }
       const { px, py } = epsgToMapPx(pose.epsgX, pose.epsgY, bounds, size);
       ctx.save();
       ctx.translate(px, py);

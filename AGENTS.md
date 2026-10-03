@@ -195,6 +195,18 @@ config change.
     labelled group) and
     `device-orientation.ts` (the one orientation-event adapter both use);
     the math is `lib/city/geolocation.ts`
+  - Modell (ADR 0044, plan 055 — the city in parallel projection, `M`):
+    `model-rig.ts` (owns the view while on: pan/zoom/turn/tilt, the
+    dolly zoom in and out, the presets), `model-camera.ts` (the ortho
+    camera, sheared for the Militärperspektive), `view-lens.ts` (what
+    every post pass reads of the camera drawing the frame), `view-ray.ts`
+    (pick rays for any camera), `model-cuts.ts` (the Schnitt's ground
+    profile, the Ausschnitt's clipping and plinth), `model-instruments.tsx`
+    (scale bar, north arrow), `projection-panel.tsx` (the sidebar's
+    *Projektion*), `image-export.ts` (*Bild speichern* and the
+    *Verschattungsstudie*: tiles, legend strip, download); the math is
+    `lib/city/model-view.ts`, `lib/city/section.ts`,
+    `lib/city/image-export.ts`
   - HUD widgets: `minimap.tsx`; `three-utils.ts` (dispose helpers,
     `sceneMaterial` for the scene-wide shared node materials)
   - the twin (ADR 0042): `inquiry-probe.ts` (what a click, a long press
@@ -697,6 +709,17 @@ as `lv` in the rail and tram files. A new line layer takes its levels the
 same way (`lineLevelsAt` in `rail-layer.ts`); `scripts/line-levels.test.ts`
 holds the reference site's jumps to a budget, `bun scripts/line-levels.ts
 <site>` prints them.
+
+**Modell reads the camera through a lens** (ADR 0044). A post pass never
+holds the real camera: it reads `view-lens.ts`'s stand-in (projection,
+matrices, `ortho`, `equivalent`), so the same pipeline draws the
+perspective and the parallel (and sheared) camera. A new pass that turns
+depth into distance goes through `lens.viewZ`/`lens.distance`, a new ray
+through `setPickRay`, a new distance-keyed look through the equivalent
+distance — reading `camera.fov` or `camera.position` directly is a bug in
+Modell. Screen passes built on `NodeUpdateType.FRAME` (SMAA, GTAO) render
+once per animation frame: anything that renders the frame twice in one
+(the export's tiles) must spread over frames.
 
 **Verify renders from oblique angles**, not head-on — a tree growing through a
 bridge or a misplaced layer is invisible looking straight down.

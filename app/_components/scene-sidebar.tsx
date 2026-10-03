@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import {
+  BoxIcon,
   Building2Icon,
   CalendarIcon,
   ChevronDownIcon,
@@ -13,6 +14,7 @@ import {
   FootprintsIcon,
   FullscreenIcon,
   HammerIcon,
+  ImageDownIcon,
   LandmarkIcon,
   type LucideIcon,
   PlaneIcon,
@@ -69,6 +71,7 @@ import {
   type LookValues,
 } from "@/lib/city/look-controls";
 import { type DataLayerKey, siteDataLayers } from "@/lib/city/data-layers";
+import { STUDY_DATES, STUDY_HOURS } from "@/lib/city/image-export";
 import { type Landmark, landmarkVantage } from "@/lib/city/landmarks";
 import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
 import {
@@ -81,9 +84,10 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
 import type { CityWalkHandle, CityWalkStats } from "./create-app";
 import { DataLayersPanel } from "./data-layers-panel";
-import type { MovementMode } from "./fps-movement";
 import { Minimap } from "./minimap";
-import { CONTROL_HINTS, TOUCH_HINTS } from "./control-hints";
+import { hintsFor } from "./control-hints";
+import type { ModelHud, ViewMode } from "./model-rig";
+import { ProjectionPanel } from "./projection-panel";
 import type { SoundscapeControl } from "./soundscape-toggle";
 import { type SceneTabId, SceneTabPanel, SceneTabs } from "./scene-tabs";
 import type { SunState } from "./sun-rig";
@@ -589,14 +593,14 @@ function Landmarks({
  * The key/action table — the full list the floating bar only shows the first
  * four of. Touch devices get the gestures instead: a phone has no W A S D.
  */
-function ControlTable({ coarse }: { coarse: boolean }) {
+function ControlTable({ coarse, model }: { coarse: boolean; model: boolean }) {
   return (
     <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
       <span className={SECTION_LABEL}>Steuerung</span>
       {/* One key/action pair per row: two side by side ran out of the
           sidebar on desktop and the phone sheet alike. */}
       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 text-xs">
-        {(coarse ? TOUCH_HINTS : CONTROL_HINTS).map((hint) => (
+        {hintsFor(coarse, model).map((hint) => (
           <Fragment key={hint.key}>
             <span className="inline-flex h-5 min-w-5 items-center justify-center whitespace-nowrap rounded-sm border bg-muted px-1.5 font-medium text-[10px] text-muted-foreground leading-none">
               {hint.key}
@@ -611,12 +615,104 @@ function ControlTable({ coarse }: { coarse: boolean }) {
   );
 }
 
+const STUDY_CHIP =
+  "h-6 rounded-full px-2 font-mono text-[10px] tabular-nums text-muted-foreground data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring";
+
+/**
+ * The shadow study's instants (plan 055): the equinox and the solstices
+ * of the shown year, and four hours — one click each, and the whole grid
+ * as one sheet.
+ */
+function ShadowStudy({
+  day,
+  minutes,
+  onStudy,
+  updateSun,
+}: {
+  day: Date;
+  minutes: number;
+  onStudy: () => void;
+  updateSun: (day: Date, minutes: number) => void;
+}) {
+  const dateKey = (d: { month: number; day: number }) => `${d.month}-${d.day}`;
+  const today = STUDY_DATES.find(
+    (d) => d.month === day.getMonth() && d.day === day.getDate()
+  );
+  return (
+    <div className="flex flex-col gap-1.5" data-testid="shadow-study">
+      <span className="font-medium text-xs">Verschattungsstudie</span>
+      <ToggleGroup
+        aria-label="Stichtag"
+        className="grid w-full grid-cols-3 gap-1"
+        onValueChange={(value: string[]) => {
+          const d = STUDY_DATES.find((s) => dateKey(s) === value[0]);
+          if (d) {
+            updateSun(new Date(day.getFullYear(), d.month, d.day), minutes);
+          }
+        }}
+        size="sm"
+        spacing={1}
+        value={today ? [dateKey(today)] : []}
+        variant="outline"
+      >
+        {STUDY_DATES.map((d) => (
+          <ToggleGroupItem
+            className={STUDY_CHIP}
+            key={dateKey(d)}
+            title={d.label}
+            value={dateKey(d)}
+          >
+            {`${d.day}.${d.month + 1}.`}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <ToggleGroup
+        aria-label="Uhrzeit"
+        className="grid w-full grid-cols-4 gap-1"
+        onValueChange={(value: string[]) => {
+          const hour = Number(value[0]);
+          if (hour) {
+            updateSun(day, hour * 60);
+          }
+        }}
+        size="sm"
+        spacing={1}
+        value={minutes % 60 === 0 ? [String(minutes / 60)] : []}
+        variant="outline"
+      >
+        {STUDY_HOURS.map((hour) => (
+          <ToggleGroupItem
+            className={STUDY_CHIP}
+            key={hour}
+            value={String(hour)}
+          >
+            {`${hour}:00`}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <button
+        className="flex min-h-8 items-center gap-2.5 rounded-lg border bg-background px-2.5 py-1.5 text-left font-medium text-xs hover:border-ring"
+        data-testid="export-study"
+        onClick={onStudy}
+        title="Dieselbe Ansicht um 9, 12, 15 und 18 Uhr am 21. März, 21. Juni und 21. Dezember — als ein Blatt"
+        type="button"
+      >
+        <ImageDownIcon className="size-3.5 shrink-0 opacity-70" />
+        <span className="flex-1 leading-snug">
+          Als Blatt speichern (3 Tage × 4 Uhrzeiten)
+        </span>
+      </button>
+    </div>
+  );
+}
+
 /** Sun and time: the date, the minute, and where the sun stands because of it. */
 function SunControls({
   day,
   latLng,
   minutes,
   onDefaultTime,
+  onStudy,
   sun,
   updateSun,
 }: {
@@ -624,6 +720,7 @@ function SunControls({
   latLng: { lat: number; lng: number } | null;
   minutes: number;
   onDefaultTime: () => void;
+  onStudy: () => void;
   sun: SunState | null;
   updateSun: (day: Date, minutes: number) => void;
 }) {
@@ -707,6 +804,12 @@ function SunControls({
           ? `Sonnenhöhe ${sun.altitudeDeg.toFixed(0)}°${sun.aboveHorizon ? "" : " · unter dem Horizont"}`
           : "Sonnenstand unbekannt"}
       </span>
+      <ShadowStudy
+        day={day}
+        minutes={minutes}
+        onStudy={onStudy}
+        updateSun={updateSun}
+      />
     </div>
   );
 }
@@ -755,8 +858,14 @@ export interface SceneSidebarProps {
   latLng: { lat: number; lng: number } | null;
   look: LookValues;
   minutes: number;
-  mode: MovementMode;
+  mode: ViewMode;
+  /** Modell's view while it is shown (plan 055) */
+  modelView: ModelHud | null;
   onDefaultTime: () => void;
+  /** Bild speichern: the picture with its legend (image-export.ts) */
+  onExport: () => void;
+  /** the Verschattungsstudie sheet (image-export.ts) */
+  onStudy: () => void;
   onLook: (patch: Partial<LookValues>) => void;
   onTab: (tab: SceneTabId) => void;
   onTeleport: (epsgX: number, epsgY: number) => void;
@@ -856,11 +965,11 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 segmented control as the tabs above, not an inverted slab. */}
             <div className="px-3 pb-3.5">
               <ToggleGroup
-                className="grid w-full grid-cols-2 gap-0.75 rounded-lg bg-muted p-0.75"
+                className="grid w-full grid-cols-3 gap-0.75 rounded-lg bg-muted p-0.75"
                 onValueChange={(value: string[]) => {
-                  const next = value[0] as MovementMode | undefined;
+                  const next = value[0] as ViewMode | undefined;
                   if (next) {
-                    handleRef.current?.setMovementMode(next);
+                    handleRef.current?.setViewMode(next);
                   }
                 }}
                 size="sm"
@@ -880,8 +989,28 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   <PlaneIcon data-icon="inline-start" />
                   Fliegen
                 </ToggleGroupItem>
+                <ToggleGroupItem
+                  className="h-7 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
+                  title="Die Stadt in Parallelprojektion, wie Städtebauer sie zeichnen (M)"
+                  value="model"
+                >
+                  <BoxIcon data-icon="inline-start" />
+                  Modell
+                </ToggleGroupItem>
               </ToggleGroup>
             </div>
+            {props.mode === "model" && props.modelView && (
+              <ProjectionPanel
+                onCutOut={(on) => handleRef.current?.setCutOut(on)}
+                onExport={props.onExport}
+                onPreset={(p) => handleRef.current?.setModelPreset(p)}
+                onScale={(d) => handleRef.current?.setModelScale(d)}
+                onShear={(k) => handleRef.current?.setModelShear(k)}
+                onTilt={(deg) => handleRef.current?.setModelTilt(deg)}
+                onTurnTo={(deg) => handleRef.current?.turnModelTo(deg)}
+                view={props.modelView}
+              />
+            )}
             {siteDataLayers(site.dataLayers).length > 0 && (
               <div className="flex flex-col gap-2 border-t px-4 pt-3 pb-3.5">
                 <span className={SECTION_LABEL}>Verkehrsdaten</span>
@@ -893,13 +1022,17 @@ export function SceneSidebar(props: SceneSidebarProps) {
                 />
               </div>
             )}
-            <ControlTable coarse={props.coarse} />
+            <ControlTable
+              coarse={props.coarse}
+              model={props.mode === "model"}
+            />
           </SceneTabPanel>
 
           <SceneTabPanel value="szene">
             <SunControls
               day={props.day}
               onDefaultTime={props.onDefaultTime}
+              onStudy={props.onStudy}
               latLng={props.latLng}
               minutes={props.minutes}
               sun={props.sun}
@@ -983,6 +1116,12 @@ export function SceneSidebar(props: SceneSidebarProps) {
                   icon={HammerIcon}
                   label="Gebäude unter dem Fadenkreuz abreißen"
                   onClick={() => handleRef.current?.demolishAtCrosshair()}
+                />
+                <ToolButton
+                  hint="PNG"
+                  icon={ImageDownIcon}
+                  label="Bild speichern — mit Quellen, im Modell mit Maßstab und Nordpfeil"
+                  onClick={props.onExport}
                 />
                 {!props.coarse && (
                   <ToolButton

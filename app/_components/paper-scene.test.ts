@@ -10,7 +10,7 @@ import {
   Scene,
 } from "three/webgpu";
 import { positionLocal, uniform, vec3 } from "three/tsl";
-import { createPaperScene, paperGroundOn } from "./paper-scene";
+import { createPaperScene, PAPER_GROUND, paperGroundOn } from "./paper-scene";
 
 function world() {
   const scene = new Scene();
@@ -100,4 +100,42 @@ test("only what wears the paper material is compiled for it", () => {
   expect(paper.drawsAsPaper(w.sprites)).toBe(false);
   // the ground draws itself as paper: its own program, not the override's
   expect(paper.drawsAsPaper(w.ground)).toBe(false);
+});
+
+test("Strich draws the white model on its own ground, on a white sheet", () => {
+  const w = world();
+  const paper = createPaperScene(w.scene, w.fog);
+  const restore = paper.begin("line");
+  expect(w.scene.overrideMaterial).toBeInstanceOf(MeshStandardNodeMaterial);
+  expect(paperGroundOn.value).toBe(PAPER_GROUND.line);
+  expect((w.scene.background as Color).getHex()).toBe(0xff_ff_ff);
+  expect(w.solid.visible).toBe(true);
+  expect(w.sheet.visible).toBe(false);
+  restore();
+  expect(paperGroundOn.value).toBe(0);
+});
+
+test("the Schwarzplan draws only the buildings, black, and the white ground", () => {
+  const w = world();
+  const clay = new MeshStandardNodeMaterial();
+  clay.userData.figure = true;
+  const building = new Mesh(new BoxGeometry(), clay);
+  w.scene.add(building);
+  const paper = createPaperScene(w.scene, w.fog);
+  const restore = paper.begin("figure");
+  const figure = w.scene.overrideMaterial as MeshBasicNodeMaterial;
+  expect(figure).toBeInstanceOf(MeshBasicNodeMaterial);
+  expect(figure.color.getHex()).toBeLessThan(0x20_20_20);
+  expect(paperGroundOn.value).toBe(PAPER_GROUND.figure);
+  // a tree, a wall, a bench: not in a figure-ground plan
+  expect(w.solid.visible).toBe(false);
+  expect(w.sheet.visible).toBe(false);
+  expect(w.sprites.visible).toBe(false);
+  expect(building.visible).toBe(true);
+  expect(w.ground.visible).toBe(true);
+  expect(paper.drawsAsPaper(building, "figure")).toBe(true);
+  expect(paper.drawsAsPaper(w.solid, "figure")).toBe(false);
+  restore();
+  expect(w.solid.visible).toBe(true);
+  expect(w.scene.overrideMaterial).toBeNull();
 });
