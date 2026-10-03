@@ -1277,9 +1277,17 @@ keydown presses nothing; releasing ⌘ releases every key. (5)
 follow; `placeAt` (the GPS fix itself) does not. Each fix has a test that
 fails without it.
 
+Review follow-ups (same day): by night the shadow camera is taken off the
+stream altogether (`streamShadowTiles`: it draws no shadow, so its tiles
+were memory for nothing); the crash trail keeps a `drew` flag beside its
+40-event ring, and any `reloading` note marks a recovery reload.
+
 **Keep in mind.** `__poc.ready` no longer guarantees the spawn is dressed
 when the camera left it before its fine level came (the specs start at
-the spawn).
+the spawn). "Not coming" rests on `tiles-load-end` firing only at the end
+of an `update()` that requested nothing new (3DTilesRendererJS 0.5.3) —
+re-check that on an upgrade. Releasing ⌘ releases every held key, a key
+still held included (re-press it): macOS gives no keyup to tell them apart.
 
 ## 041 — Tests where the regressions are · DONE (2026-10-03)
 
