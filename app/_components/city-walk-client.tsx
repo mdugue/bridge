@@ -33,10 +33,21 @@ function BootScreen() {
 // three.js needs a real browser (WebGPU or WebGL2, pointer lock) — never
 // prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
+// (The import stays written out inside dynamic(): Next matches the call to
+// its chunk by it.)
 const CityWalk = dynamic(() => import("./city-walk"), {
   ssr: false,
   loading: () => <BootScreen />,
 });
+
+/**
+ * The viewer chunk does not depend on the manifest: SiteViewer starts both
+ * at once — next/dynamic alone starts the import only once <CityWalk> first
+ * renders, after the manifest's round trip. The same module, so the same
+ * chunk. Called from an effect, never at module scope: this module renders
+ * on the server too, and three must not load there.
+ */
+const loadViewer = () => import("./city-walk");
 
 /**
  * The artifact manifest (logical → content-hashed file names, see
@@ -92,6 +103,9 @@ export function CityWalkClient({
 }
 
 function SiteViewer({ base }: { base: string }) {
+  useEffect(() => {
+    void loadViewer();
+  }, []);
   const manifest = useDataManifest(base);
   // The render budget (profile, device tier, whether the rest of the site
   // streams) is read from the page ONCE, here, and handed down; the scene
