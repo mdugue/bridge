@@ -78,7 +78,7 @@ history. Decisions that came out of plans are written up as
 | 044 | The canopy points as a packed binary instead of a 9.5 MB GeoJSON parsed in one task | DONE (2026-10-03) — 96 ms of JSON.parse → ≈ 13 ms to unpack on the biggest tile; published pre-gzipped (`.pts.gz`) | [completed.md](./completed.md#044--the-canopy-points-packed-not-geojson--done-2026-10-03) |
 | 045 | One source for the raster decoders (the stale `surfaceHeading`) and the Python class ids; one OSM number parser; the byte scales pinned across languages | **TODO** — P3; before plan 017 phase 4 | [045-one-source-for-decoders-and-class-ids.md](./045-one-source-for-decoders-and-class-ids.md) |
 | 046 | Moves only: `rail-layer.ts` into mesh kit / deck table / bridge, telemetry and picking out of `bootApp`, a home for the TSL helpers, the terrain↔water cycle, the dead-code sweep | **TODO** — P3; after 039, 041–043 | [046-split-the-god-modules-and-sweep.md](./046-split-the-god-modules-and-sweep.md) |
-| 047 | Spike: "Problem melden" — the crash report with a destination, the view only on opt-in | **TODO** — spike; maintainer answers needed at its step 3 | [047-spike-report-a-problem.md](./047-spike-report-a-problem.md) |
+| 047 | Spike: "Problem melden" — the crash report with a destination, the view only on opt-in | **TODO** — spike; maintainer answers needed at its step 3. Crashes now also go out on their own where a DSN is set (ADR 0043); what is left is the view on opt-in and a destination for deploys without a DSN | [047-spike-report-a-problem.md](./047-spike-report-a-problem.md) |
 | 048 | Spike: a view as a `?snap=` link; committed QA views for plan 019 | **TODO** — spike + small build | [048-spike-view-links-and-qa-views.md](./048-spike-view-links-and-qa-views.md) |
 | 049 | Many sites: providers, per-site data, `bun run fetch <site>` → `bake` → build, eight sites with viewpoints; one deployment with a route per site (`/dresden`) and a start page to pick the city | **DONE** (2026-10-01) — Berlin's adapter untested; committing sites other than Dresden is the maintainer's call | [049-many-sites-one-env-var.md](./049-many-sites-one-env-var.md) |
 | 050 | Landmarks and what LoD2 leaves out: DOM1 gaps named by OSM (chimneys, towers, masts, missing buildings, a landmark's roof relief), OSM materials and colours in the clay palette, Wikidata landmarks in the HUD | **BUILT** (2026-09-28) — all three parts, baked on the seven committed sites: 386 columns, 920 missing buildings, 508 relief slabs on 74 landmark objects, 310 landmarks; the relief a measured height field since 2026-09-30 (re-bake `structures` everywhere), towers LoD2 draws no longer doubled; look unverified on a real GPU; since 2026-10-01 a tile's landmarks are those with ≥ 8 % of its top sitelinks (the *Dense tiles* item, plan 051) and the relief stands on the roof under each cell (Unna re-baked) | [050-landmarks-and-gaps.md](./050-landmarks-and-gaps.md) |
@@ -307,8 +307,8 @@ S each unless noted):
   tile release (re-uploaded by the next frame — churn, not a bug);
   vegetation LOD re-plans and allocates every frame though only camera
   movement can change it.
-- **Docs:** the crash trail is undocumented in the guide and ADR 0001
-  (folded into spike 047); `cityjson-threejs-loader` 0.4.0 is unmaintained
+- **Docs:** the crash trail is in the guide (*When it crashes*) and ADR
+  0001's amendment since ADR 0043 (2026-10-03); `cityjson-threejs-loader` 0.4.0 is unmaintained
   (last release 2023) — on a three bump, a cold `prepare-data` is its
   canary; replace only when it breaks.
 

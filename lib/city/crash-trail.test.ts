@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createTrail,
   endedInCrash,
+  firstAt,
   formatTrail,
   offerAsCrash,
   parseTrail,
@@ -9,6 +10,7 @@ import {
   pushEvent,
   TRAIL_BEATS,
   TRAIL_EVENTS,
+  trailPhase,
 } from "./crash-trail";
 
 const setup = {
@@ -18,10 +20,10 @@ const setup = {
   screen: "393×852@3",
 };
 
-const beat = (t: number) => ({
+const beat = (t: number, fps = 30) => ({
   t,
   frames: t * 30,
-  fps: 30,
+  fps,
   gpuMB: 180.4,
   calls: 90,
   triangles: 1_200_000,
@@ -73,9 +75,59 @@ test("the text names the device, the events and the last beats", () => {
   pushBeat(trail, beat(14));
   const text = formatTrail(trail);
   expect(text).toContain("backend WebGPU");
+  expect(text).toContain("page 1 beats, mean 30fps");
   expect(text).toContain("12.3s  device-lost  unknown");
   expect(text).toContain("gpu 180MB");
   expect(text).toContain("tiles 3/2");
+});
+
+test("the page's stats count only the beats rendered in view", () => {
+  const trail = createTrail(setup);
+  pushBeat(trail, { ...beat(1, 0), frames: 0 }); // before the first frame
+  pushBeat(trail, beat(2, 8));
+  pushBeat(trail, { ...beat(3, 50), heldMB: 640, heapMB: 210 });
+  trail.state = "hidden";
+  pushBeat(trail, { ...beat(4, 0), heldMB: 900 }); // a paused loop
+  trail.state = "running";
+  pushBeat(trail, beat(5, 25));
+  expect(trail.stats).toEqual({
+    beats: 3,
+    fpsSum: 83,
+    fps: [1, 0, 1, 0, 1],
+    maxGpuMB: 180.4,
+    maxHeldMB: 640,
+    maxHeapMB: 210,
+  });
+  // The ring still holds every beat, for the report's last seconds.
+  expect(trail.beats).toHaveLength(5);
+});
+
+test("the boot's milestones outlive the event ring", () => {
+  const trail = createTrail(setup);
+  pushEvent(trail, { t: 3.5, kind: "first frame" });
+  for (let i = 0; i < TRAIL_EVENTS; i++) {
+    pushEvent(trail, { t: 4 + i, kind: "style" });
+  }
+  expect(trail.events.some((e) => e.kind === "first frame")).toBe(false);
+  expect(firstAt(trail, "first frame")).toBe(3.5);
+  expect(firstAt(trail, "style")).toBe(4);
+  // An older record without `firsts` still answers from its ring.
+  const older = createTrail(setup);
+  older.events.push({ t: 2, kind: "loaded" });
+  delete older.firsts;
+  expect(firstAt(older, "loaded")).toBe(2);
+});
+
+test("the phase says how far the page got", () => {
+  const trail = createTrail(setup);
+  expect(trailPhase(trail)).toBe("boot");
+  pushEvent(trail, { t: 1, kind: "stage buildings" });
+  pushEvent(trail, { t: 2, kind: "stage terrain" });
+  expect(trailPhase(trail)).toBe("boot after terrain");
+  pushEvent(trail, { t: 3, kind: "first frame" });
+  expect(trailPhase(trail)).toBe("streaming");
+  pushEvent(trail, { t: 9, kind: "loaded" });
+  expect(trailPhase(trail)).toBe("running");
 });
 
 describe("which previous record is offered as a crash", () => {

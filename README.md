@@ -81,6 +81,18 @@ that builds from git sees only what is committed — the seven cities above
 (`.gitignore` un-ignores each by name); un-ignore a new site's folder once
 you decide to ship it — it is roughly 20–90 MB per site, plain git, no LFS ([ADR 0037](docs/adr/0037-sites-providers-and-per-site-data.md)).
 
+**Crash and performance reports** are optional: set
+`NEXT_PUBLIC_SENTRY_DSN` (a Sentry project's DSN, or any tracker that takes
+Sentry envelopes) in the deploy's environment and rebuild. The viewer then
+reports pages the phone killed (from the next load), the errors it catches,
+each page's frame rate and memory and a session per page (crash-free rate
+per release) — no SDK, no position, no cookie, through the site's own
+origin ([ADR 0043](docs/adr/0043-crash-and-page-reports-to-an-error-tracker.md)).
+With `SENTRY_AUTH_TOKEN` (an organisation token), `SENTRY_ORG` and
+`SENTRY_PROJECT` there as well, the build creates its release,
+`bridge@<commit>`, with its commit and deploy. Without a DSN, nothing is
+sent.
+
 ## Data
 
 ```
