@@ -19,6 +19,24 @@
       "skillPath": "skills/modern-web-guidance/SKILL.md",
       "computedHash": "da9b9c833351f0575ca7482f3c8decc8e24b02b76dea71f138738283c701b4c5"
     },
+    "sentry-create-alert": {
+      "source": "getsentry/plugin-claude",
+      "sourceType": "github",
+      "skillPath": "skills/sentry-create-alert/SKILL.md",
+      "computedHash": "f79afca3f52e96374f3bcefb49c5e6f8834a77f6a664369f777f4e9ea9c0d492"
+    },
+    "sentry-debug-issue": {
+      "source": "getsentry/plugin-claude",
+      "sourceType": "github",
+      "skillPath": "skills/sentry-debug-issue/SKILL.md",
+      "computedHash": "7f3e7a30c90bac0977adb4400ddfd896ce21927c5f6365bda92e4a25ebc0a1cf"
+    },
+    "sentry-setup-releases": {
+      "source": "getsentry/plugin-claude",
+      "sourceType": "github",
+      "skillPath": "skills/sentry-setup-releases/SKILL.md",
+      "computedHash": "2c74a2ea7532ba28b75e576d2a6e1caa5afd1c8759c2e36a2db970c145960386"
+    },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",

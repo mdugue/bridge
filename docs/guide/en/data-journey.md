@@ -21,7 +21,7 @@ flowchart TB
   S1 -->|"download (manual or scripted)"| S2
   S2 -->|"bake (manual)"| S3
   S3 -->|"commit"| S4
-  S4 -->|"bun dev / bun build"| S5
+  S4 -->|"bun dev / bun run build"| S5
   S5 -->|"HTTP, cached forever"| S6
 ```
 
@@ -132,14 +132,16 @@ In total the repository carries about 400 MB of data for the fifteen tiles.
 
 ### Station 5 — the build step (`scripts/prepare-data.ts`)
 
-Every `bun dev` and `bun build` starts by running it — once for every city
+Every `bun dev` and `bun run build` starts by running it — once for every city
 whose data is on disk (`scripts/prepare-sites.ts` decides which), and it
 writes each city into a folder of its own, `public/data/dresden/`,
 `public/data/leipzig/`, … For each city it does three things:
 
 1. **Bakes the heavy inputs into a tileset.** For every tile, the terrain
-   GeoTIFF becomes two ready-made terrain meshes: a detailed one on a
-   1024 × 1024 grid and a coarse one on a 512 × 512 grid, with the tall
+   GeoTIFF becomes two ready-made terrain meshes: a detailed one, a
+   triangulated irregular network (TIN) that follows the 1 m elevation
+   model within ±15 cm — more triangles where the ground bends — and a
+   coarse one on a 512 × 512 grid, with the tall
    walls from OpenStreetMap sharpened in, the ground shaped under its
    stairs and the steps themselves built in, and a short skirt hanging from
    its edge so no gap shows at the seams between tiles. The CityJSON

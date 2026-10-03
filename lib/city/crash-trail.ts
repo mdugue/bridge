@@ -5,9 +5,11 @@
  * with it — runs no handler on the way out, so the viewer keeps a small
  * record of itself in local storage as it goes: what it runs on, a ring of
  * events (boot stages, style switches, errors, a lost device) and a ring
- * of heartbeats (frames, memory, what is loaded). A record that never
+ * of heartbeats (frames, memory, what is loaded), and the whole page in a
+ * few numbers the rings would lose (`stats`, `firsts`). A record that never
  * reached a clean end on the next load is the trace of a crash, and the
- * HUD offers it as text to copy. No THREE, no DOM.
+ * HUD offers it as text to copy (and, where a DSN is set, the viewer
+ * reports it: lib/city/crash-reports.ts). No THREE, no DOM.
  */
 
 /** Bumped when the stored shape changes; older records are dropped. */
@@ -52,6 +54,29 @@ export interface TrailBeat {
 }
 
 /**
+ * The upper bounds (fps) of the frame-rate buckets a page's beats are
+ * counted in; the last bucket is everything at or above the last bound.
+ */
+export const FPS_BUCKETS = [10, 20, 30, 45] as const;
+
+/**
+ * The whole page in numbers, where the rings keep only its end: every beat
+ * rendered in view (none before the first frame, none while hidden),
+ * counted by frame rate, and the most the page held.
+ */
+export interface TrailStats {
+  /** beats counted */
+  beats: number;
+  /** their frame rates summed (the mean is `fpsSum / beats`) */
+  fpsSum: number;
+  /** beats per frame-rate bucket: FPS_BUCKETS, then everything above */
+  fps: number[];
+  maxGpuMB: number;
+  maxHeldMB: number;
+  maxHeapMB?: number;
+}
+
+/**
  * How a record ended: "running" is how every record starts and what a
  * killed page leaves behind; "hidden" is a page that went to the
  * background (a kill there is the system reclaiming it, not a crash in
@@ -72,9 +97,60 @@ export interface Trail {
   /** the device memory the browser reports (GB, Chromium only) */
   deviceMemoryGB?: number;
   state: TrailEnd;
+  /**
+   * The page reached its first frame — kept apart from the events, whose
+   * ring drops its oldest (a minute of streaming notes forty dressings);
+   * optional: older records lack it.
+   */
+  drew?: boolean;
   events: TrailEvent[];
   beats: TrailBeat[];
+  /** the page in numbers (optional: older records lack it) */
+  stats?: TrailStats;
+  /**
+   * When each kind of event first happened (s): the boot's milestones
+   * ("first frame", "loaded") outlive the ring. Optional, as `stats`.
+   */
+  firsts?: Record<string, number>;
+  /** what the crash reports keep with the record (none without a DSN) */
+  report?: TrailReport;
 }
+
+/**
+ * The reports' part of a record (lib/city/crash-reports.ts): the page's
+ * session and its build, so that the next load can end that session and
+ * report the page under the release it ran, and what already went out.
+ */
+export interface TrailReport {
+  /** the session's id (release health) */
+  sid: string;
+  /** the build the page ran (`bridge@<commit>`), if it had one */
+  release?: string;
+  environment: string;
+  /** the problems noted: the session's error count */
+  problems: number;
+  /**
+   * How far the page's summaries have covered it: a summary goes out each
+   * time the page leaves view, for the stretch since the last one.
+   */
+  sent?: SummaryMark;
+  /** the session's last update (exited or crashed) went out */
+  ended: boolean;
+}
+
+/** Where the last summary ended: its time and the stats' sums then. */
+export interface SummaryMark {
+  /** seconds since the record started */
+  t: number;
+  beats: number;
+  fpsSum: number;
+  fps: number[];
+  /** summaries sent so far */
+  count: number;
+}
+
+/** The event the HUD notes when the scene goes live (city-walk.tsx). */
+const FIRST_FRAME = "first frame";
 
 export type TrailSetup = Pick<
   Trail,
@@ -88,8 +164,26 @@ export function createTrail(setup: TrailSetup): Trail {
     state: "running",
     events: [],
     beats: [],
+    stats: emptyStats(),
+    firsts: {},
     ...setup,
   };
+}
+
+function emptyStats(): TrailStats {
+  return {
+    beats: 0,
+    fpsSum: 0,
+    fps: FPS_BUCKETS.map(() => 0).concat(0),
+    maxGpuMB: 0,
+    maxHeldMB: 0,
+  };
+}
+
+/** The bucket of FPS_BUCKETS a frame rate falls in. */
+export function fpsBucket(fps: number): number {
+  const i = FPS_BUCKETS.findIndex((bound) => fps < bound);
+  return i < 0 ? FPS_BUCKETS.length : i;
 }
 
 /** Appends to a ring: the newest `limit` entries stay. */
@@ -101,11 +195,53 @@ function pushRing<T>(ring: T[], entry: T, limit: number): void {
 }
 
 export function pushEvent(trail: Trail, event: TrailEvent): void {
+  if (event.kind === FIRST_FRAME) {
+    trail.drew = true;
+  }
   pushRing(trail.events, event, TRAIL_EVENTS);
+  trail.firsts ??= {};
+  trail.firsts[event.kind] ??= event.t;
 }
 
+/**
+ * Appends a beat to the ring and, when the page rendered in view, counts
+ * it in the stats: a beat before the first frame measures the boot, one
+ * while hidden a paused loop — neither is the frame rate anybody saw.
+ */
 export function pushBeat(trail: Trail, beat: TrailBeat): void {
   pushRing(trail.beats, beat, TRAIL_BEATS);
+  if (beat.frames === 0 || trail.state === "hidden") {
+    return;
+  }
+  const stats = (trail.stats ??= emptyStats());
+  stats.beats += 1;
+  stats.fpsSum += beat.fps;
+  stats.fps[fpsBucket(beat.fps)] += 1;
+  stats.maxGpuMB = Math.max(stats.maxGpuMB, beat.gpuMB);
+  stats.maxHeldMB = Math.max(stats.maxHeldMB, beat.heldMB ?? 0);
+  if (beat.heapMB !== undefined) {
+    stats.maxHeapMB = Math.max(stats.maxHeapMB ?? 0, beat.heapMB);
+  }
+}
+
+/** When an event of `kind` first happened (s), or undefined. */
+export function firstAt(trail: Trail, kind: string): number | undefined {
+  return trail.firsts?.[kind] ?? trail.events.find((e) => e.kind === kind)?.t;
+}
+
+/**
+ * How far the page got: "running" once the site was loaded, "streaming"
+ * after the first frame, before it "boot" and the last boot stage done.
+ */
+export function trailPhase(trail: Trail): string {
+  if (firstAt(trail, "loaded") !== undefined) {
+    return "running";
+  }
+  if (firstAt(trail, FIRST_FRAME) !== undefined) {
+    return "streaming";
+  }
+  const stage = trail.events.findLast((e) => e.kind.startsWith("stage "));
+  return stage ? `boot after ${stage.kind.slice("stage ".length)}` : "boot";
 }
 
 /** A stored record, or null for anything that is not one of this version. */
@@ -133,7 +269,32 @@ export function endedInCrash(trail: Trail | null): trail is Trail {
   return trail?.state === "running";
 }
 
-const round = (n: number, digits = 0) => {
+/**
+ * Whether the previous page's record should be offered as a crash. Not when
+ * that page reloaded itself to recover a lost GPU (it noted so — not
+ * necessarily last: WebKit's device-lost can arrive after the failed frame
+ * that started the reload — and the recovery already handled it), nor when
+ * this page follows a recovery (`recovered`) and the record never reached
+ * its first frame — iOS may interleave a navigation of its own that leaves
+ * a trail with nothing but its start. A recovered page that then died is
+ * offered: that is the report the recovery is there to make possible.
+ */
+export function offerAsCrash(
+  trail: Trail | null,
+  recovered: boolean
+): trail is Trail {
+  if (!endedInCrash(trail)) {
+    return false;
+  }
+  if (trail.events.some((e) => e.kind === "reloading")) {
+    return false;
+  }
+  const drew =
+    trail.drew === true || trail.events.some((e) => e.kind === FIRST_FRAME);
+  return !(recovered && !drew);
+}
+
+export const round = (n: number, digits = 0) => {
   const f = 10 ** digits;
   return Math.round(n * f) / f;
 };
@@ -155,6 +316,26 @@ export function formatEvent(e: TrailEvent): string {
   return `${round(e.t, 1)}s  ${e.kind}${e.detail ? `  ${e.detail}` : ""}`;
 }
 
+/** The page's stats as one line of the report. */
+export function formatStats(stats: TrailStats): string {
+  if (stats.beats === 0) {
+    return "no frames in view";
+  }
+  const share = (n: number) => `${Math.round((n / stats.beats) * 100)}%`;
+  const buckets = stats.fps
+    .map((n, i) => {
+      const bound = FPS_BUCKETS[i];
+      return `${bound === undefined ? `≥${FPS_BUCKETS.at(-1)}` : `<${bound}`} ${share(n)}`;
+    })
+    .join(" ");
+  const heap =
+    stats.maxHeapMB === undefined ? "" : ` heap ${round(stats.maxHeapMB)}MB`;
+  return (
+    `${stats.beats} beats, mean ${round(stats.fpsSum / stats.beats)}fps (${buckets})` +
+    `  max held ${round(stats.maxHeldMB)}MB gpu ${round(stats.maxGpuMB)}MB${heap}`
+  );
+}
+
 /** The record as the plain text the HUD offers to copy. */
 export function formatTrail(trail: Trail): string {
   const lines = [
@@ -167,6 +348,7 @@ export function formatTrail(trail: Trail): string {
       (trail.deviceMemoryGB === undefined
         ? ""
         : ` · mem ${trail.deviceMemoryGB}GB`),
+    ...(trail.stats ? [`page ${formatStats(trail.stats)}`] : []),
     "",
     "events:",
     ...trail.events.map(formatEvent),

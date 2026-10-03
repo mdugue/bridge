@@ -37,7 +37,7 @@ React shell; React owns the HUD/controls, three.js owns the canvas.
   gets glTF)
 - **Python in a uv environment** (`pipeline/`: numpy, rasterio, pyogrio,
   shapely, Pillow — GDAL ships inside the wheels) for the offline bakes
-- Playwright for e2e + the screenshot harness; `bun test` for the `lib/`,
+- Playwright for e2e + the screenshot harness; `bun run test` for the `lib/`,
   `app/_components/` and `scripts/` units
 - Deployed as a static client app; no database, no stateful API routes
 
@@ -48,12 +48,13 @@ bun install
 bun dev            # prepare-sites.ts (every ready site's geodata ->
                    # public/data/<site>/, + public/data/sites.json) then
                    # next dev
-bun build          # the same, then next build
+bun run build      # the same, then next build
 bun run verify     # lint + typecheck + unit tests — the pre-push gate
 bun lint           # oxlint (rules, type-aware via tsgolint) + oxfmt --check
 bun typecheck      # tsc --noEmit (TypeScript 7, the native compiler — the
                    # same one `next build` type-checks with)
-bun test           # unit tests in lib/, app/_components/ and scripts/
+bun run test       # unit tests in lib/, app/_components/ and scripts/
+                   # (a bare `bun test` is Bun's runner: it loads e2e/ too)
 bun run site <site>   # where the site stands, tile by tile (--all: every
                    # site, with its size on disk)
 bun run fetch <site>  # download the site's data through its provider's
@@ -68,8 +69,8 @@ bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
                    # (Bun.WebView + Chrome; commit the SVGs with the change)
 bun run docs:matrix     # write docs/guide/{en,de}/sources-by-city.md from
                    # the site and provider configs (its test fails on drift)
-bun test:e2e       # playwright (e2e/) against a production build
-E2E_DEV=1 bun test:e2e   # ...against `bun dev` instead, for spec iteration
+bun run test:e2e   # playwright (e2e/) against a production build
+E2E_DEV=1 bun run test:e2e   # ...against `bun dev` (HTTPS) instead, for spec iteration
 ```
 
 Linting and formatting are **oxlint + oxfmt** (`.oxlintrc.json`, `.oxfmtrc.json`)
@@ -121,7 +122,17 @@ config change.
     `crash-trail.ts` + `crash-report.tsx` (a page the browser kills leaves
     its boot stages, errors, lost device and heartbeats in local storage;
     the next load offers them as text to copy, `?trail=1` always — the
-    core is `lib/city/crash-trail.ts`)
+    core is `lib/city/crash-trail.ts`), `crash-reports.ts` (where the
+    build has a `NEXT_PUBLIC_SENTRY_DSN`: that crash, the problems the
+    viewer catches, each page's frame-rate and memory summary and its
+    session go to an error tracker as Sentry envelopes in beacons to
+    `/r/e`, which `next.config.ts` forwards — no SDK, no position; built
+    by `lib/city/crash-reports.ts`, whose `reportBuild` names the release
+    `bridge@<commit>` once for the page and for
+    `scripts/sentry-release.ts`, the build's last step; ADR 0043. The
+    Sentry agent skills `sentry-debug-issue`, `sentry-setup-releases` and
+    `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
+    the issues — never add the SDK they otherwise set up)
   - layers: `terrain-layer.ts` (dresses a terrain tile), `landcover-splat.ts`
     (the GPU pass that paints the class raster with the palette),
     `water-layer.ts`, `vegetation-layer.ts` (+ `tree-inventory-layer.ts`,
@@ -309,6 +320,8 @@ config change.
   `pipeline.ts` (fetch/bake runner), `site-report.ts` (`bun run site`),
   `downsample-raster.ts` (the 2048² and 512² class rasters), `bake-wissen-hero.ts`
   (the site's land-cover map, `site-map.webp`),
+  `sentry-release.ts` (after `next build`: the build's Sentry release,
+  its commit and deploy — a no-op without `SENTRY_AUTH_TOKEN`),
   `render-diagrams.ts`, `docs-matrix.ts` (`bun run docs:matrix`, the
   generated *Sources by city* pages)
 - `data/<site>/` — the site's data: `dgm/`, `cityjson/` (build sources),
@@ -597,7 +610,8 @@ The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
-streaming camera, so tiles that cast into the view stay loaded;
+streaming camera while the sun is up, so tiles that cast into the view stay
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`);
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 
 **Vegetation** is chunked into 250 m cells (one `Instances` set per cell) so
@@ -768,8 +782,9 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   pinned exactly too — its 2.0 was a units/azimuth-origin break, so a silent
   float would rotate the sun rather than fail. The Bun version comes from
   `packageManager` in `package.json` (CI reads it via `bun-version-file`), and
-  `.mcp.json` pins **both** MCP servers (shadcn, next-devtools) to an exact
-  version rather than `@latest`. In Claude Code on the web,
+  `.mcp.json` pins the two npm MCP servers (shadcn, next-devtools) to an
+  exact version rather than `@latest` (Sentry's is hosted, a URL with no
+  version). In Claude Code on the web,
   `.claude/hooks/session-start.sh` (registered in `.claude/settings.json`)
   upgrades the container's older Bun to that pin and runs
   `bun install --frozen-lockfile`: `Bun.WebView` (`bun run docs:diagrams`)

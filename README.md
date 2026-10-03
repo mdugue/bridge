@@ -29,8 +29,12 @@ persisted.
 
 ```bash
 bun install
-bun dev     # prepares public/data, then serves http://localhost:3000
+bun dev     # prepares public/data, then serves https://localhost:3000
 ```
+
+The dev server speaks HTTPS only (WebGPU on a phone over the LAN needs a
+secure context); Next generates a self-signed certificate on the first run,
+so the browser asks once to accept it.
 
 The data of seven cities is committed, so that is all: the start page at
 `/` lists Dresden, Grimma, Hamburg, Leipzig, Meißen, München and Unna,
@@ -40,7 +44,7 @@ every site whose data is ready; that bakes the site's data into a 3D Tiles
 tileset in `public/data/<site>/` — terrain meshes at two levels of detail
 from the DGM GeoTIFFs, building meshes with a per-building attribute table
 from the CityJSON — and publishes everything under content-hashed names with
-a `manifest.json` (about 20 s on the first run, nothing on later ones; the
+a `manifest.json` (≈ 2 min cold for fifteen tiles, ≈ 1 s warm; the
 bake cache lives in `.cache/`). The index of the built sites,
 `public/data/sites.json`, is what the start page lists.
 
@@ -77,6 +81,18 @@ that builds from git sees only what is committed — the seven cities above
 (`.gitignore` un-ignores each by name); un-ignore a new site's folder once
 you decide to ship it — it is roughly 20–90 MB per site, plain git, no LFS ([ADR 0037](docs/adr/0037-sites-providers-and-per-site-data.md)).
 
+**Crash and performance reports** are optional: set
+`NEXT_PUBLIC_SENTRY_DSN` (a Sentry project's DSN, or any tracker that takes
+Sentry envelopes) in the deploy's environment and rebuild. The viewer then
+reports pages the phone killed (from the next load), the errors it catches,
+each page's frame rate and memory and a session per page (crash-free rate
+per release) — no SDK, no position, no cookie, through the site's own
+origin ([ADR 0043](docs/adr/0043-crash-and-page-reports-to-an-error-tracker.md)).
+With `SENTRY_AUTH_TOKEN` (an organisation token), `SENTRY_ORG` and
+`SENTRY_PROJECT` there as well, the build creates its release,
+`bridge@<commit>`, with its commit and deploy. Without a DSN, nothing is
+sent.
+
 ## Data
 
 ```
@@ -102,8 +118,10 @@ detailed near, coarse far, unloaded when out of view — and walking, collision
 and demolish work on every loaded tile.
 
 Neither the DGM1 GeoTIFF nor the CityJSON is served. `prepare-data.ts`
-resamples the DGM into terrain meshes (1024² and 512² grids, with retaining
-walls burned in as breaklines) and runs the CityJSON parser once at build
+turns the DGM into terrain meshes at two levels — the fine one an
+error-bounded TIN of the native 1 m DGM (±0.15 m) with retaining walls
+snapped to the measured step, the coarse one the DGM resampled to 512² with
+the walls burned in as breaklines — and runs the CityJSON parser once at build
 time; both are written as standard glTF (meshopt-compressed, quantised,
 buildings with an `EXT_mesh_features` / `EXT_structural_metadata` table) into
 a tileset ([`lib/city/tileset.ts`](lib/city/tileset.ts)). Every `/data` file

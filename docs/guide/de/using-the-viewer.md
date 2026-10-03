@@ -114,8 +114,8 @@ einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
 Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
 Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
 sich mit dir dort, wo du stehst. Browser fragen dafür um Erlaubnis (iPhones auch für den
-Kompass); der Standort verlässt das Gerät nicht — es gibt keinen Server,
-dem er geschickt würde.
+Kompass); der Standort verlässt das Gerät nicht — auch nicht in einem
+Absturzbericht (siehe *Wenn es abstürzt*).
 
 *Live* erscheint, sobald dein Telefon Kompasswerte liefert (auf dem iPhone
 fragt es beim ersten Antippen um Erlaubnis; am Rechner ohne Kompass gibt es
@@ -214,15 +214,21 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
     Elbe), Draufsichten auf *Frauenkirche*, *Brühlsche Terrasse*,
     *Albertplatz*, *Alaunpark* und *Zwinger & Semperoper*, ein tiefer Flug
     über die *Äußere Neustadt*, dazu *Carolabrücke* (über dem Fluss),
-    *Elbe-Panorama* (hoch über der Flussbiegung) und *Über den Dächern*
-    (ein tiefer Gleitflug über die Altstadtdächer);
+    *Elbe-Panorama* (hoch über der Flussbiegung), *Über den Dächern*
+    (ein tiefer Gleitflug über die Altstadtdächer), *Großer Garten* (über
+    dem Palais, dahinter der Palaisteich und die Baumkronen des Parks),
+    *Blaues Wunder* (über der Elbe, die Brücke spannt sich von Blasewitz
+    nach Loschwitz), *Waldschlößchenbrücke* (über den Elbwiesen,
+    flussabwärts die Türme der Altstadt) und *Hauptbahnhof* (von oben auf
+    die Bahnsteighallen, die Prager Straße führt zur Altstadt);
   - *auf Augenhöhe*: *Canaletto-Blick* (auf der Elbwiese, die Altstadt
     jenseits des Grases), *Elbufer* (am baumbestandenen Neustädter Ufer),
     *Am Japanischen Palais* (auf der Neustädter Elbwiese, wo Canaletto
-    malte) und *Neumarkt* (vor der Frauenkirche).
+    malte), *Neumarkt* (vor der Frauenkirche) und *Palais im Großen
+    Garten* (am Südende des Palaisteichs, jenseits des Wassers das barocke
+    Palais).
 
-  Der Große Garten liegt knapp südlich des Gebiets und hat deshalb noch
-  keinen Aussichtspunkt. Die letzte Karte, *Aktuelle Sicht merken*, merkt
+  Die letzte Karte, *Aktuelle Sicht merken*, merkt
   sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
   zurückspringt, mit einem ✕ zum Vergessen.
 - **Verkehrsdaten** — bis zu drei Datenebenen über der Stadt, jede mit
@@ -310,13 +316,13 @@ der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
 | | *Blattflimmern* | Böen drehen Blätter auf sonnigen Kronen auf die helle Unterseite |
 | | *Windhelligkeit* | Kronen hellen auf, wenn sie sich in eine Böe neigen |
+| | *Multi-Tuft-Kronen (nah)* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
 | | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City* und *Papier* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
-| | *Detaillierte Kronen* (Schalter) | reiche Mehrbüschel-Kronen nahe der Kamera; aus = die einfache Krone überall |
 
 Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
 abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
@@ -357,6 +363,26 @@ der erst beim Klick etwas von Ko-fi lädt.
 - `?scene=lite` hinter der Adresse der Stadt (`/dresden?scene=lite`)
   streamt nur die Startkachel, mit groben Schatten. Das ist für automatische Tests gedacht und nicht, wie
   die Szene aussehen soll.
+
+## Wenn es abstürzt
+
+Ein Telefon kann die Seite beenden, wenn die Stadt mehr Speicher braucht,
+als es ihr zugesteht; die Seite verschwindet dann einfach oder lädt neu.
+Beim nächsten Besuch sagt eine Karte, dass die letzte Sitzung unerwartet
+beendet wurde, und zeigt ihr Protokoll: was geladen war, die Bildrate und
+den Speicher ihrer letzten Sekunden.
+
+Wo diese Seite dafür eingerichtet ist, geht dieses Protokoll auch von
+selbst an einen Fehlerdienst (Sentry), dazu Fehler, auf die der Viewer
+stößt, und zu jedem Besuch ein paar Zahlen darüber, wie er lief: wie lange
+bis zum ersten Bild und bis alles geladen war, die Bildrate, der meiste
+belegte Speicher und ob er normal oder mit einem Absturz endete. So werden die langsamen und die abstürzenden Telefone
+sichtbar. Ein Bericht enthält Browser- und Gerätetyp, die
+Bildschirmgröße, welche Stadt (ohne den Rest der Adresse) und diese Zahlen
+— nie deinen Standort oder wo in der Stadt du warst, keinen Namen und kein
+Cookie. Sendet dein Browser *Global Privacy Control*, wird nichts
+geschickt. Ist kein Fehlerdienst eingerichtet, bietet die Karte das
+Protokoll stattdessen zum Kopieren an.
 
 ## Kleinigkeiten
 

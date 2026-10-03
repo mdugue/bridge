@@ -47,7 +47,8 @@ OGC 3D Tiles tileset (`lib/city/tileset.ts`): per site tile the buildings
 ADR 0030). Content is glTF (meshopt, quantised,
 pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
-camera, so casters outside the view stay loaded. A dressing plugin builds
+camera while the sun is up, so casters outside the view stay loaded (by
+night it is taken off the stream: it draws no shadow). A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
 heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
@@ -524,11 +525,13 @@ not sky.
   sun's daylight ramp (the GLSL gated them on a shadow-map sample 2 m
   toward the sun — not reachable from a node material, so a crown behind a
   building now glows too; judge on a GPU).
-- Phones keep only 120–180 MB of out-of-view tile content cached
-  (`tileCacheBytesFor`, `lruCache.min/maxBytesSize`): with the library's
-  0.3–0.4 GB default, a minimap jump from the start into the Heide kept the
-  start area loaded while the forest tiles arrived and Safari killed the
-  tab.
+- Phones cache **320–600 MB** of tile content (`tileCacheBytesFor` in
+  `app/_components/scene-profile.ts`, `lruCache.min/maxBytesSize`), weighed
+  as the GPU holds it (the dressing plugin's `calculateBytesUsed`), and
+  `max − min` must exceed the largest tile. The old 120–180 MB was broken:
+  a phone flying to the Alaunpark never loaded the ground there (the
+  library's 0.3–0.4 GB default before that kept the start area while the
+  Heide arrived). See `docs/rendering.md`, "GPU memory on a phone".
 - **Chunking:** placements are bucketed into 250 m cells, one instanced set per
   cell (shared geo/material), so off-screen cells frustum-cull from both the
   main and shadow pass. After `setMatrixAt` you **must**

@@ -26,8 +26,8 @@ own address (`/dresden`, `/leipzig`, …).
 
 Nothing is installed, nothing is stored about you, and no server computes
 the picture. Your browser downloads prepared files as you move — about
-4 MB for the tile you start on, up to about 17 MB if you visit every
-corner — and your own graphics card draws every frame, using a library
+6 MB for each tile in full detail, about 97 MB if you visit every corner of
+Dresden's fifteen tiles (95 MB on a phone) — and your own graphics card draws every frame, using a library
 called **three.js**.
 
 The look is deliberately not photo-realistic. It is a soft, pastel,

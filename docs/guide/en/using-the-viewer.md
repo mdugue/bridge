@@ -108,8 +108,8 @@ says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
 jump there: its viewer opens with you standing where you are. Browsers ask for permission first
-(iPhones for the compass too); the location never leaves the device — there
-is no server to send it to.
+(iPhones for the compass too); the location never leaves the device — not
+even in a crash report (see *When it crashes*).
 
 *Live* appears as soon as your phone reports compass readings (an iPhone
 asks for permission on the first tap; a computer without a compass never
@@ -200,15 +200,21 @@ The button in the corner opens a panel with three tabs.
     Elbe), views from above onto the *Frauenkirche*, the *Brühlsche
     Terrasse*, *Albertplatz*, *Alaunpark* and *Zwinger & Semperoper*, a
     low flight over the *Äußere Neustadt*, plus *Carolabrücke* (over the
-    river), *Elbe-Panorama* (high above the bend) and *Über den Dächern*
-    (a low glide over the old town roofs);
+    river), *Elbe-Panorama* (high above the bend), *Über den Dächern*
+    (a low glide over the old town roofs), *Großer Garten* (above the
+    Palais, the Palaisteich and the park's crowns behind it), *Blaues
+    Wunder* (over the Elbe, the bridge spanning from Blasewitz to
+    Loschwitz), *Waldschlößchenbrücke* (over the Elbe meadows, the old
+    town's towers downstream) and *Hauptbahnhof* (down onto the platform
+    halls, Prager Straße leading to the old town);
   - *at eye level*: *Canaletto-Blick* (on the Elbe meadow, the old town
     across the grass), *Elbufer* (the tree-lined Neustadt bank), *Am
-    Japanischen Palais* (on the Neustadt meadow where Canaletto painted)
-    and *Neumarkt* (in front of the Frauenkirche).
+    Japanischen Palais* (on the Neustadt meadow where Canaletto painted),
+    *Neumarkt* (in front of the Frauenkirche) and *Palais im Großen
+    Garten* (at the south end of the Palaisteich, the baroque Palais across
+    the water).
 
-  The Großer Garten lies just south of the area, so it has no viewpoint
-  yet. The last card, *Aktuelle Sicht merken*, remembers where you stand;
+  The last card, *Aktuelle Sicht merken*, remembers where you stand;
   it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
   forget it.
 - **Verkehrsdaten** ("traffic data") — up to three data layers over the
@@ -294,13 +300,13 @@ as you set it.
 | | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
 | | *Blattflimmern* | gusts flip leaves to their pale underside on sunlit crowns |
 | | *Windhelligkeit* | crowns brighten as they lean into a gust |
+| | *Multi-Tuft-Kronen (nah)* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City* and *Papier* |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
-| | *Detaillierte Kronen* (switch) | rich multi-tuft crowns near the camera; off = the cheap crown everywhere |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
 cannot resolve it in motion) and comes back when you stop.
@@ -338,6 +344,24 @@ until it is clicked.
 - `?scene=lite` after the city's address (`/dresden?scene=lite`) streams
   only the start tile, with coarse shadows. It exists for automated tests
   and is not how the scene is meant to look.
+
+## When it crashes
+
+A phone can end the page when the city takes more memory than it allows;
+the page then simply disappears or reloads. On the next visit a card says
+the last session ended unexpectedly and shows its record: what had loaded,
+the frame rate and the memory in its last seconds.
+
+Where this site is set up for it, that record also goes out on its own, to
+an error tracker (Sentry), together with errors the viewer runs into and,
+for every visit, a few numbers about how it ran: how long until the first
+picture and until everything had loaded, the frame rate, the most memory
+used, and whether it ended normally or in a crash. That is how the slow and the crashing phones become visible. A
+report holds the browser and device type, the screen size, which city
+(without the rest of the address) and these numbers — never your location
+or where in the city you were, no name and no cookie. If your browser
+sends *Global Privacy Control*, nothing is sent. Without the tracker set
+up, the card offers the record to copy instead.
 
 ## Small things
 

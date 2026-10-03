@@ -18,7 +18,9 @@
 - **Priority**: P3
 - **Effort**: M (steps 1–2), S (steps 3–5)
 - **Risk**: LOW (moves; the type-checker and the e2e census cover the wiring)
-- **Depends on**: 039, 041, 042, 043 merged first (same files)
+- **Depends on**: 039, 041, 042, 043 merged first (same files). 041 and
+  042 merged 2026-10-03; 043 is BLOCKED (no code landed), so it no longer
+  holds this plan up.
 - **Category**: tech-debt
 - **Planned at**: commit `a28de75`, 2026-10-01
 

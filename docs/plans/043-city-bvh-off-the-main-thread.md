@@ -231,3 +231,47 @@ in the status row. Remove the temporary instrumentation.
   through `buildBoundsTree` too (the index changes, so a new copy is needed).
 - three-mesh-bvh upgrades: re-check `MeshBVH.serialize`/`deserialize` and
   the `indirect` option.
+
+## Findings (2026-10-03, stopped at the bundling STOP condition)
+
+- **Step 1 gate passed.** The BVH build (`new MeshBVH`, the default the
+  viewer runs) over the fifteen published Dresden city tiles, in Bun on
+  this container's CPU: median **75 ms**, 38–116 ms for the 90–209 k
+  triangle tiles (desktop-class; a phone plausibly 3–5×). Measured on the
+  glTF as `prepare-data` publishes it (meshopt-decoded, quantised
+  positions), not in a browser.
+- **The worker itself worked.** A worker building in indirect mode,
+  answering with the serialized nodes (transferred), deserialized onto the
+  tile's geometry with `setIndex: false`: same first hits and feature ids
+  as a BVH built in place (a quantised int16 torus knot, 64 rays), a tile
+  that left or was demolished meanwhile kept no stale BVH. The main
+  thread's share: 0.2 ms to deserialize, plus the copies — 15 ms through
+  `getX`, ≈ 1 ms when the quantised array is copied as it is and read
+  `normalized` in the worker. The spawn tile's BVH has to be awaited
+  before `placeAt` (ADR 0032 places the camera through the collider).
+- **STOP: Turbopack does not bundle the worker.** `next build` (Next
+  16.3.7, Turbopack) emits `new Worker(new URL("./x.worker.ts",
+  import.meta.url))` as a *static asset*: the raw source is copied to
+  `/_next/static/media/x.worker.<hash>.ts`, so the browser would load
+  TypeScript with bare imports and the worker fails (the viewer would fall
+  back to the synchronous build every time). Reproduced in a minimal
+  two-file app: `.ts` and `.js` workers, with and without
+  `{ type: "module" }`, inside and outside a `try`/effect — always an
+  asset. (The binary has WorkerAssetReference/WorkerLoaderModule and the
+  config has `turbopackWorkerAssetPrefix`, so support may exist behind a
+  pattern or version not found here.)
+- The attempt (worker, client, tests, the raycast filters and the spawn
+  await) was reverted at the STOP, not committed.
+
+Options for the maintainer (each a design decision):
+
+1. **A worker bundle of our own**: `Bun.build` the worker (three +
+   three-mesh-bvh, ~100 KB) in `prepare-sites.ts`/`dev`/`build` into
+   `public/`, content-hashed, its name handed to the client (the site
+   index or the manifest). Keeps everything above; adds a build step.
+2. **A BVH baked at build time** per city tile in `prepare-data.ts`
+   (serialized indirect nodes as a side artifact): no worker, no main-thread
+   build at all, but ≈ 1–1.6 MB more per city tile to download and hold —
+   on a phone, against the memory budget this plan exists to protect.
+3. **Wait for Turbopack worker bundling** (or a Next upgrade that has it),
+   then apply the patch as is.

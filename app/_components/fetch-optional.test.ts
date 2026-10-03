@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   fetchFeatures,
   fetchFeaturesFrom,
+  fetchOptionalBinary,
   fetchOptionalJson,
 } from "./fetch-optional";
 
@@ -75,4 +76,30 @@ test("fetchFeatures unwraps the collection", async () => {
     Promise.resolve({ ok: true, json: () => ({ features: [1, 2] }) })
   );
   expect(await fetchFeatures<number>("/x")).toEqual([1, 2]);
+});
+
+test("a binary artifact comes back as bytes, a pre-gzipped one inflated", async () => {
+  const bytes = new Uint8Array([80, 84, 83, 49, 0, 1, 2, 3]);
+  // reason: a real Response, one per call, stands in for the network
+  globalThis.fetch = ((url: string) =>
+    Promise.resolve(
+      new Response(url.endsWith(".gz") ? Bun.gzipSync(bytes) : bytes.slice())
+    )) as unknown as typeof fetch;
+  const plain = await fetchOptionalBinary("/x.pts");
+  const inflated = await fetchOptionalBinary("/x.pts.gz");
+  expect(new Uint8Array(plain ?? new ArrayBuffer(0))).toEqual(bytes);
+  expect(new Uint8Array(inflated ?? new ArrayBuffer(0))).toEqual(bytes);
+});
+
+test("a missing binary artifact is off; an abort is rethrown", async () => {
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response(null, { status: 404 })
+    )) as unknown as typeof fetch;
+  expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
+  const abort = new DOMException("aborted", "AbortError");
+  globalThis.fetch = (() => Promise.reject(abort)) as unknown as typeof fetch;
+  // (bun-types declare `rejects` as void; see "an abort is rethrown")
+  // oxlint-disable-next-line typescript/await-thenable
+  await expect(fetchOptionalBinary("/x.pts.gz")).rejects.toBe(abort);
 });

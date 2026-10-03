@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "activity-card",
+      "name": "bridge",
       "dependencies": {
         "3d-tiles-renderer": "0.5.3",
         "@base-ui/react": "^1.8.0",

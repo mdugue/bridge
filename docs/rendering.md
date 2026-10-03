@@ -36,7 +36,7 @@ flowchart TB
   TER --> WALL["L0: walls node, baked on every tile's TIN<br/>sandstone ribbons snapped to the measured step"]
   TER --> FENCE["L0: fences node, baked on every tile's TIN<br/>one low band per line, cut at the gates"]
   TER --> DRESS["L0 only: the tile's dressing (Y-up)"]
-  DRESS --> VEG["vegetation<br/>instanced sets per 250 m cell<br/>trunk + crown (two LODs), hedges<br/>canopy + scan + cadastre trees share the meshes"]
+  DRESS --> VEG["vegetation<br/>instanced sets per 250 m cell<br/>trunk + crown (three tiers: far, mid, rich), hedges<br/>canopy + scan + cadastre trees share the meshes"]
   DRESS --> INV["cadastre silhouettes<br/>flame / cone / dome per 250 m cell"]
   DRESS --> LOW["OSM hedges<br/>clay block chains per 250 m cell"]
   DRESS --> LAMP["lamp posts, heads, sprites"]
@@ -86,12 +86,12 @@ is the codebook.
 |---|---|---|---|
 | Ground height + mesh density | fine level: an error-bounded TIN of the native 1 m DGM1 — vertices where the ground bends, within ±0.15 m everywhere; heights read from its triangles through a bucket index. Coarse level: the DGM resampled to 512², heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `scripts/bake-terrain-tin.ts`, `lib/city/terrain-tin.ts` (`TinIndex`), `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
 | Wall ribbon placement | earth-retaining walls snap to the step the fine TIN measures (face at the ramp foot, a coping cap back to where the ground reaches its level, per column); other walls on the OSM line | DGM1 + OSM walls | `lib/city/walls.ts`, `lib/city/wall-snap.ts` (at build) |
-| Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`TERRAIN_NORMAL`) |
+| Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`terrainNormal()`) |
 | Ground step at walls (coarse level only) | wall line + `kind` ∈ retaining/city/embankment/cliff, height ≥ 1.5 m, burned into the 512² grid at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
-| Contour lines | data-frame elevation (`DATA_POSITION`), 2 m minor / 10 m major; each set fades once its lines crowd closer than a few pixels, and on near-flat ground (< ~3 % grade) and under water, where the DGM's noise only drew squiggles | DGM1 | `terrain-layer.ts` (`CONTOUR_INK`) |
+| Contour lines | data-frame elevation (`dataPosition`, `shader-chunks.ts`), 2 m minor / 10 m major; each set fades once its lines crowd closer than a few pixels, and on near-flat ground (< ~3 % grade) and under water, where the DGM's noise only drew squiggles | DGM1 | `terrain-layer.ts` (`contourInk()`) |
 | Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat; the class PNG is decoded byte-exact by `lib/city/png-raster.ts`, never by the browser (WebKit colour-managed and dithered the ids into speckles) | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
 | Meadow lush ↔ dry | NDVI on class 1 only (`meadowNdvi`), read from a coarse mip (~10 m) so it drifts rather than flecks | DOP | `terrain-layer.ts` |
-| Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `GRASS_MOTTLE` / `GRASS_NORMAL` |
+| Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `terrain-layer.ts`: `grassMottle()` (colour), `terrainNormal(true)` (normal) |
 | Kerb stone | a 12 × 24 cm stone band on the kerb lines (the smoothed road edge), its face toward the road, its top falling to the pavement's level at the back (no second step on the pavement side), in the fine terrain glTF, casting | Basis-DLM (+ OSM islands) | `lib/city/kerbs.ts`, `kerb-layer.ts` |
 | Kerb shadow | the road strip out to 0.12 m · cot(sun elevation) across the kerb, when the sun stands behind it: −28 % | Basis-DLM + sun | `ground-detail.ts` (`sunDirection`) |
 | Kerb band | signed distance (m) to the road edge, baked and smoothed (`edges_<t>.png`; else the class texels box-smoothed): a pale band 0.25 m on the pavement side, a gutter 0.35 m on the road side; only where the far side is ground (classes 0–4, 6); fades out past ~0.5 m/px (*Bodendetail*) | Basis-DLM | `ground-detail.ts` |
@@ -136,7 +136,7 @@ is the codebook.
 | Tree gate | none on classes 5–8 | Basis-DLM | `pipeline/bake/canopy.py` |
 | Crown colour | NDVI 5×5 footprint max, recentred on the median; where the DOP has no near-IR (Munich) the GLI from its RGB, mapped onto the NDVI's scale | DOP | `crownColor` (+ hash sage fallback) |
 | Crown motion | wind sway (vertex), leaf flutter, sway-coupled brightness | — | (*Blattflimmern*, *Windhelligkeit*) |
-| Crown detail | three tiers per 250 m chunk, decided over the whole site each frame: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `updateVegetationLod` (*Detaillierte Kronen*) |
+| Crown detail | three tiers per 250 m chunk, decided over the whole site each frame: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `updateVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / weeping dome); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within 3 m | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance) and thins the shadow through the same discard in a custom depth material; evergreens constant, canopy/row trees a generic curve; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100` | Basis-DLM | `vegetation-layer.ts` |
@@ -389,7 +389,7 @@ renderer decides how much of the site is loaded (screen-space error target
 | Knob | full · desktop | full · mobile | lite (tests) |
 |---|---|---|---|
 | Tiles | the whole site streams (`tileset.json`) | same | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
-| Terrain grid | L0 1024² near, L1 512² beyond (≈1.2 km at 1080p) | same | same |
+| Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (≈1.2 km at 1080p) | same | same |
 | Shadow map | 3072² | 2048² | 512² |
 | Pixel ratio | ≤ 2 | ≤ 1.5 | 0.5 |
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere | L0 4096², L1 2048² |
@@ -455,6 +455,34 @@ minutes, then the message) instead of freezing. So does a frame that
 throws: three's render does not unwind (its call depth stays a level deep,
 or the shadow pass's override stays on), and no later frame draws right.
 Before the first frame the message fails the boot instead.
+
+**Crashes and slow pages are reported** where the build has a DSN
+(`NEXT_PUBLIC_SENTRY_DSN`, ADR 0043). A page the browser kills runs no
+handler, so the crash trail (`lib/city/crash-trail.ts`: events, a beat
+every 2 s, and the whole page's frame-rate buckets and memory peaks) is
+read by the next load, which sends it as a fatal event grouped by
+renderer and phase (`boot after <stage>`, `streaming`, `running`); the
+problems the viewer catches itself (a lost device, a GPU error, a failed
+frame or load) go out as they happen, and each page's numbers (first
+frame, loaded, mean fps, the share of time below 10/20/30 fps, the most
+memory held) as a transaction each time it leaves view, for the stretch
+since the last one, and each page is a session (`ok` → `exited`, or
+`crashed` by the next load) for Sentry's crash-free rate per release. A
+record whose page is still open in another tab is not a crash
+(`pageStillOpen`). All of it is Sentry envelopes in
+beacons (`lib/city/crash-reports.ts`), no SDK, to the site's own `/r/e`,
+which `next.config.ts` forwards to the tracker (blockers drop requests to
+Sentry's host). The release is `bridge@<commit>`, derived once
+(`reportBuild`) for the page and for `scripts/sentry-release.ts`, which
+creates it after the build with its commit and deploy. To set it up: a
+Sentry project (EU region, *Prevent Storing of IP Addresses* on), its DSN
+as `NEXT_PUBLIC_SENTRY_DSN` and an organisation token as
+`SENTRY_AUTH_TOKEN` with `SENTRY_ORG` and `SENTRY_PROJECT` in the
+deploy's environment (Preview too, to try it there), a rebuild; the
+console then says `[crash-reports] on → …`, and `crashReports.test()`
+sends a test event. Sentry's releases show the crash-free sessions, its
+issues the crashes by phase and device, its trace views the pages'
+numbers (op `page`, named by the path) per release and device.
 
 While the camera moves, DoF is dropped and restored after 250 ms of
 stillness (`lib/city/regression.ts`); the contact shadows stay on because

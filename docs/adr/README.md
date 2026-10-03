@@ -10,7 +10,7 @@ each data → look transformation does and its status.
 
 | # | Decision | Status |
 |---|---|---|
-| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024; a prerendered route per site: 0037); relaxed to "static where possible" 2026-09-27 |
+| [0001](./0001-client-only-static-app.md) | Client-only static app: no backend, no database, no persistence | accepted (tiles static, streamed: 0024; a prerendered route per site: 0037); relaxed to "static where possible" 2026-09-27; crash reports where a DSN is set: 0043 |
 | [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber | accepted |
 | [0003](./0003-bake-heavy-inputs-at-build-time.md) | Bake heavy inputs at build time; the browser decodes no raster and parses no CityJSON | accepted |
 | [0004](./0004-commit-derived-artifacts-not-raw-data.md) | Commit small derived artifacts, not raw bulk data; the DGM1 GeoTIFF is the one exception; no Git-LFS | accepted |
@@ -52,6 +52,7 @@ each data → look transformation does and its status.
 | [0040](./0040-data-layers-and-live-city-data.md) | Traffic is shown as switchable data layers (motor traffic baked per tile, bicycle counters read live from the city, trams by timetable), all off at start; the first runtime read from a server other than the site's own | accepted |
 | [0041](./0041-line-levels-along-the-whole-line.md) | A rail or tram line's level (ground, deck, span, cut) is decided along the whole line within its grade, solved by the build step with the line's context across tiles; a cut under a drawn deck opens a passage in the terrain | accepted |
 | [0042](./0042-inquiry-cards-on-demand-facts-in-the-tileset.md) | The twin answers on demand: identity, semantics and provenance ride in the tileset; text appears only in a card | accepted |
+| [0043](./0043-crash-and-page-reports-to-an-error-tracker.md) | Crashes (reported by the next load — a killed page runs no handler), caught problems and a summary per page go to an error tracker as Sentry envelopes in beacons, from the crash trail, no SDK, no position; only where the build has a DSN | accepted |
 
 ## Format
 

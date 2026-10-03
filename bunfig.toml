@@ -1,0 +1,8 @@
+[test]
+# A bare `bun test` would also load the Playwright specs in e2e/ and fail on
+# them; `bun run test` names the unit folders, this keeps the bare call sane.
+pathIgnorePatterns = ["e2e/**", "node_modules/**"]
+# `bun run test:coverage` writes coverage/lcov.info too; CI uploads it and
+# scripts/coverage-gaps.ts lists the sources no test imports at all.
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"

@@ -535,6 +535,24 @@ test("live mode walks the camera to each GPS fix, gliding near ones and jumping 
   expect(camera.position.z).toBeCloseTo(z, 1);
 });
 
+test("a jump or a glide ends live mode: the GPS does not pull the camera back", () => {
+  for (const jump of ["teleport", "viewpoint"] as const) {
+    let ended = 0;
+    const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });
+    pose.setFollowPosition({ x: OFFSET.cx + 5, y: OFFSET.cy });
+    pose.setFollowAim({ headingDeg: 0, pitchDeg: 0 });
+    if (jump === "teleport") {
+      pose.teleportTo(OFFSET.cx + 300, OFFSET.cy);
+    } else {
+      pose.flyToViewpoint(VIEW);
+    }
+    settle(pose);
+    expect(ended).toBe(1);
+    const there = jump === "teleport" ? 300 : VIEW.epsg.x - OFFSET.cx;
+    expect(Math.abs(camera.position.x - there)).toBeLessThan(0.5);
+  }
+});
+
 test("live mode and flying combine: the GPS moves the camera at its altitude, climbing keeps it live", () => {
   let ended = 0;
   const { camera, pose } = rig({ onFollowEnd: () => (ended += 1) });

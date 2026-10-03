@@ -674,8 +674,12 @@ export function createCameraPose(
         fov: camera.fov,
       };
     },
+    // A jump or a glide the player asked for ends live mode (endFollow):
+    // the GPS follow would otherwise ease the camera back 1–3 s later.
+    // placeAt is the one that puts the player at the GPS fix — not these.
     applyCameraState: (s) => {
       cancelGlide();
+      endFollow();
       // Fly first so the ground clamp doesn't yank an aerial pose down to eye
       // height before the frame even renders.
       settle(s.mode);
@@ -698,6 +702,7 @@ export function createCameraPose(
     },
     teleportTo: (epsgX, epsgY) => {
       cancelGlide();
+      endFollow();
       const w = epsgToWorld(epsgX, epsgY, offset);
       camera.position.set(w.x, groundAt(epsgX, epsgY) + EYE_HEIGHT, w.z);
       // Level the view (keep the compass heading, drop pitch/roll) — after
@@ -712,6 +717,7 @@ export function createCameraPose(
     },
     flyTo: (position, lookAt) => {
       cancelGlide();
+      endFollow();
       settle("fly");
       camera.position.set(position.x, position.y, position.z);
       camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
@@ -732,6 +738,7 @@ export function createCameraPose(
       };
     },
     flyToViewpoint: (viewpoint) => {
+      endFollow();
       // Fly during the glide so the ground clamp can't fight the vertical arc;
       // pendingMode restores walk (and snaps to the ground) once it settles.
       settle("fly");
