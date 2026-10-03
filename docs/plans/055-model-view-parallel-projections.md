@@ -20,7 +20,9 @@
   `?snap=` transport (a link to the same view); phase 5 meets plan 054
   phase 2 (sun hours)
 - **Planned at**: 2026-10-03, commit `0568c26`
-- **Status**: **IN PROGRESS** — decided 2026-10-03 (below); being built
+- **Status**: **DONE** — decided and built 2026-10-03 (below, *As built*);
+  still to judge on a real GPU: the scene's perspective-built specular and
+  halo branches, the water glitter in a parallel view, Strich's washes
 
 ## Decisions (2026-10-03, the maintainer)
 
