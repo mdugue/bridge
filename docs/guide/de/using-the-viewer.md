@@ -64,7 +64,8 @@ lädt* oben im Bild (siehe
 | Klick auf ein Gebäude | es befragen: eine Karte sagt, was die Daten darüber wissen |
 | `I` | befragen, was unter dem Fadenkreuz steht (auch immersiv) |
 | `R` | Gebäude unter dem Fadenkreuz abreißen |
-| `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier) |
+| `V` | zum nächsten Bildstil wechseln (Pastell → Comic → Film noir → Sin City → Papier → Strich → Schwarzplan) |
+| `M` | ins *Modell* wechseln, die Stadt in Parallelprojektion, und zurück (siehe [Modell](#modell-die-stadt-als-planzeichnung)) |
 | `Esc` | immersiven Modus verlassen |
 
 | Eingabe (Touch) | Wirkung |
@@ -74,6 +75,7 @@ lädt* oben im Bild (siehe
 | *Standort* (Werkzeugleiste unten rechts) | zu deinem echten Standort teleportieren, Blick in die Richtung, in die das Telefon zeigt |
 | *Live* (Werkzeugleiste, nur mit Kompass) | Blick und Position folgen dir und deinem Telefon — auch im Flug —, bis du es ausschaltest, ziehst oder den Joystick nimmst |
 | *Fliegen* (Werkzeugleiste) | zwischen Gehen und Fliegen wechseln (abheben / landen) |
+| *Modell* (Werkzeugleiste) | zur Stadt in Parallelprojektion wechseln und zurück |
 | Lange auf ein Gebäude drücken | es befragen |
 | ⌄ unter der Werkzeugleiste | die Leiste zu einem Knopf einklappen (⋮ klappt sie wieder auf) |
 | Höhenregler (über der Werkzeugleiste, nur im Flug) | nach oben schieben steigt, nach unten sinkt; loslassen hält die Höhe |
@@ -132,6 +134,74 @@ dem Höhenregler steigst oder sinkst du, ohne dass *Live* endet.
 Eine schwebende Leiste zeigt die vier wichtigsten Bedienungen, bis du sie
 mit *Verstanden* ausblendest; die vollständige Tabelle bleibt im Feld unter
 *Steuerung* erreichbar.
+
+## Modell: die Stadt als Planzeichnung
+
+`M`, *Modell* in der Werkzeugleiste oder *Modell* neben *Gehen* und
+*Fliegen* im Feld wechseln ins **Modell**: die Stadt in Parallelprojektion,
+so wie Städtebauer sie zeichnen. Die Ansicht fährt in einem kurzen
+Dolly-Zoom zurück und wird enger, bis die Perspektive verschwunden ist;
+`M` gleitet wieder dorthin zurück, wo du warst — oder, wenn du das Bild
+weit verschoben hast, in eine Ansicht aus der Luft über seiner Mitte.
+
+Eine Parallelprojektion hat einen Maßstab statt einer Entfernung: Gleiche
+Längen bleiben gleich lang, wo immer sie im Bild stehen, vorn wie hinten.
+Du bewegst das Blatt, nicht dich, und es bleibt parallel, was du auch
+tust — näher heran ändert nur den Maßstab:
+
+| Eingabe | Wirkung |
+|---|---|
+| Ziehen | das Bild verschieben (der Boden unter dem Zeiger bleibt unter ihm) |
+| Mausrad / zwei Finger auseinander oder zusammen | Maßstab, um den Zeiger |
+| `+` / `−` | eine Maßstabsstufe |
+| Rechts ziehen oder mit `Strg` ziehen / zwei Finger drehen | drehen; losgelassen rastet es auf die nächsten 15° |
+| `Shift` + rechts ziehen | neigen (die Ansicht wird zur *Vogelschau*) |
+| `Q` / `E`, ⟲ ⟳ | um 90° drehen |
+| `W` `A` `S` `D`, Pfeiltasten | das Bild verschieben |
+| Doppelklick / Doppeltippen | das Bild dort zentrieren |
+| `1` – `9`, Wahrzeichen, die Minikarte | das Bild auf diesen Ort zentrieren, Maßstab und Drehung bleiben |
+| Klick / lange drücken | befragen, wie immer |
+| `F` | das Modell in den Flug verlassen |
+
+Unten links, wo zu Fuß der Joystick sitzt, stehen die **Maßstabsleiste** —
+eine runde Länge in schwarzen und weißen Abschnitten, darunter der
+Maßstab („1 : 2 500 bei 96 dpi“: ein Bildschirmpixel als 0,26 mm
+gerechnet) — und der **Nordpfeil** zwischen zwei Vierteldrehungen; ein
+Klick auf den Pfeil dreht Norden nach oben. Die Minikarte zeichnet den
+Boden, den das Bild zeigt.
+
+Unter *Gehen · Fliegen · Modell* im Feld bietet **Projektion** die
+Ansichten an, jede Karte mit dem Würfel, den sie zeichnet:
+
+| Ansicht | Was sie ist |
+|---|---|
+| *Isometrie* | die 30°-Isometrie: 35,26° geneigt, alle drei Achsen gleich verkürzt (Längen entlang ihnen × 0,816), über Eck gedreht |
+| *Vogelschau* | parallel von oben, Neigung (Regler) und Drehung frei |
+| *Militär* | die Militärperspektive: der Grundriss unverzerrt und maßstäblich, die Höhen senkrecht darüber — mit 30°/60° oder 45°/45° zur Blattkante, Höhen × 1 oder × ⅔ |
+| *Lageplan* | senkrecht von oben, Norden oben |
+| *Ansicht* | waagerecht auf die Linie durch die Bildmitte; was davor steht, ist weggeschnitten |
+| *Schnitt* | dasselbe, mit schwarz gefüllt, was der Schnitt öffnet (Poché), und dem Gelände als Profil darunter |
+
+Darunter: der aktuelle Maßstab und die Stufen 1:500 … 1:10 000 (dazwischen
+zoomt es frei); *Ausschnitt mit Sockel*, der nur die Bildmitte behält und
+sie auf einen dunklen Sockel stellt, wie ein aus der Stadt geschnittenes
+Modell (*neu setzen* nimmt die aktuelle Mitte; er endet mit dem Modell);
+und *Bild speichern*.
+
+Jeder Bildstil geht im Modell; *Strich* und *Schwarzplan* sind dafür
+gemacht. Tiefenschärfe, die warm/kalt-Tiefenfärbung und die Vignette ruhen
+im Modell, der Entfernungsdunst öffnet sich, und der Himmel weicht dem
+Papier des Stils.
+
+**Bild speichern** (auch unter *Erweitert*) speichert die aktuelle Ansicht
+als PNG mit einem Legendenstreifen darunter: Nordpfeil, Maßstabsleiste,
+die Ansicht und der Maßstab, den das Bild im Druck bei 300 dpi hat, Datum
+und Uhrzeit und die Quellenvermerke der Daten (ihre Lizenzen verlangen
+sie). Im Modell wird das Bild größer als der Bildschirm gerendert — am
+Computer etwa drei Bildpixel je Bildschirmpunkt, am Telefon zwei, in
+Kacheln, mit einem Schleier über der Stadt für den Moment, den es dauert;
+beim Gehen und Fliegen ist es das Bild, wie du es siehst, mit den
+Quellenvermerken.
 
 ## Ein Gebäude befragen
 
@@ -207,7 +277,9 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 - **Minikarte** — das ganze Gebiet von oben, mit den Landnutzungsfarben,
   den Brücken und den Grundrissen der gerade geladenen Gebäude. Deine Position und
   Blickrichtung sind eingezeichnet; ein Klick gleitet dorthin.
-- **Gehen / Fliegen** — der Bewegungsmodus.
+- **Gehen / Fliegen / Modell** — gehen, fliegen oder die Stadt in
+  Parallelprojektion sehen ([Modell](#modell-die-stadt-als-planzeichnung));
+  im Modell folgt der Abschnitt **Projektion**.
 - **Aussichtspunkte** — handverlesene Standpunkte, zu denen die Kamera
   gleitet (am Rechner auch mit den Tasten `1` – `9`):
   - *aus der Luft*: *Altstadt-Silhouette* (der Startblick, tief über der
@@ -272,6 +344,13 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   Zeitpunkt berechnet; Schatten, Himmel, Nebelfarben und das Abendlicht in
   den Gebäuden folgen ihm. *Standardzeit* springt zurück auf 14:00, die
   Uhrzeit, auf die der Standard-Look abgestimmt ist.
+  Darunter die **Verschattungsstudie**: Chips für den 21. März, 21. Juni
+  und 21. Dezember des gezeigten Jahres und für 9, 12, 15 und 18 Uhr
+  setzen die Sonne mit einem Klick; *Als Blatt speichern* rendert die
+  aktuelle Ansicht zu allen zwölf Zeitpunkten und speichert sie als ein
+  Blatt — eine Zeile je Tag, eine Spalte je Uhrzeit — mit der Legende
+  darunter (im Modell mit Maßstabsleiste und Nordpfeil). Die Uhrzeiten
+  sind die Ortszeit deines Geräts.
 - **Darstellung** — ganz oben der **Bildstil**, darunter Regler in vier
   aufklappbaren Gruppen. Jeder Regler ist eine Prozentzahl; die
   Voreinstellungen sind der abgestimmte Look. *Zurücksetzen* stellt die
@@ -288,10 +367,12 @@ zuletzt gewählten Stil für den nächsten Besuch:
 | *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand; unter jeder Straßenlaterne ein weicher Lichtkegel — am Tag nur angedeutet, in der Dämmerung voll; wenn es dunkel wird, blendet die Kamera auf, statt alles schwarz werden zu lassen |
 | *Sin City* | harte Flächen in vier Tönen (Schwarz, fast Schwarz, fast Weiß, Weiß), die sich nach der Helligkeit der Umgebung richten, so bleibt auch eine dunkle Ansicht lesbar; Baumkronen und die Elbe werden schwarz, Wiesen bleiben hell, die Skyline und große Silhouetten stehen als weiße Kante gegen das Schwarz; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe |
 | *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder; Fahrbahnmarkierungen und Sportplatzlinien bleiben als zartes Grau, Wasser als etwas kühleres, tieferes Papier; Lichter und Nebelschleier fallen weg |
+| *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, der Schatten als eine hellgraue Lasur, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton |
+| *Schwarzplan* | die Gebäude schwarz, alles andere weiß — keine Bäume, keine Schatten, keine Linien; gemacht für den *Lageplan*, überall wählbar |
 
-In den grafischen Stilen *Comic* und *Sin City* ruht die Tiefenschärfe
-(ein unscharfer Hintergrund unter scharfen Linien wirkt wie ein Fehler);
-der Schalter bleibt, wie du ihn gesetzt hast.
+In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
+ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
+wirkt wie ein Fehler); der Schalter bleibt, wie du ihn gesetzt hast.
 
 | Gruppe | Regler | Was er tut |
 |---|---|---|
@@ -321,7 +402,7 @@ der Schalter bleibt, wie du ihn gesetzt hast.
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
 | | *Papierkorn* | das Papierkorn über dem ganzen Bild (in *Film noir* und *Sin City* laufendes Filmkorn) |
-| | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City* und *Papier* sind |
+| | *Tuschelinien* | wie kräftig die Umrisse in *Comic*, *Film noir*, *Sin City*, *Papier* und *Strich* sind |
 | | *Tiefenschärfe* (Schalter) | fotografische Tiefenschärfe; *Auto* fokussiert auf das Fadenkreuz, *Manuell* auf eine feste Entfernung |
 
 Solange sich die Kamera bewegt, ist die Tiefenschärfe-Unschärfe
@@ -332,7 +413,8 @@ zurück, sobald du stehst.
 
 - **Werkzeuge** — *Gebäude unter dem Fadenkreuz abreißen* entfernt das
   Gebäude, das du anschaust (wie `R`), auf jeder Kachel im Blick; das
-  lässt sich nicht rückgängig machen. *Immersiver Modus* fängt den
+  lässt sich nicht rückgängig machen. *Bild speichern* speichert die
+  Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und Uhrzeit,
   den Bildstil und jeden Regler als kleinen JSON-Text; einen solchen Text in das Feld

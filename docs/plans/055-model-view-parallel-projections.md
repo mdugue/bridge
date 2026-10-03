@@ -20,7 +20,62 @@
   `?snap=` transport (a link to the same view); phase 5 meets plan 054
   phase 2 (sun hours)
 - **Planned at**: 2026-10-03, commit `0568c26`
-- **Status**: **TODO** — proposal; phase 0 awaits the maintainer's go
+- **Status**: **IN PROGRESS** — decided 2026-10-03 (below); being built
+
+## Decisions (2026-10-03, the maintainer)
+
+- **Everything is in scope now**: the planner styles *Strich* and
+  *Schwarzplan*, the image export with scale bar, north arrow and credits,
+  and the shadow study (21.3. · 21.6. · 21.12.) are built with Modell,
+  not later.
+- **The scale bar carries its numbers.** It is HUD legend on the HUD's
+  glass; nothing is pinned into the scene (ADR 0042 holds).
+- ***Strich* and *Schwarzplan* are picture styles like the others**:
+  selectable in every mode (Gehen, Fliegen, Modell), `V` cycles through
+  them.
+- **A real parallel camera**, no long lens.
+- **Free roaming stays parallel.** In Modell the view pans, turns and
+  zooms freely and stays orthographic; Isometrie keeps its 35.26° tilt
+  while the turn is free (the 30° holds for the turned axes), Vogelschau
+  tilts too. "Flying through a street" stays a perspective thing: in a
+  parallel view coming nearer only changes the scale, and a view at eye
+  level is an Ansicht.
+
+## As built (2026-10-03)
+
+All five phases landed together ([ADR 0044](../adr/0044-modell-parallel-projections.md)).
+Where the build differs from the plan below, the build wins:
+
+- **One pipeline, not two.** The post passes read the active camera
+  through a stand-in (`view-lens.ts`); the parallel camera stands 20 km
+  back so the scene's perspective-built camera branches stay right
+  (*Rendering*). Phase 0's spike and its STOP were not needed: entering
+  Modell builds nothing.
+- **Esc stays the card's and the immersive mode's**; `M` alone leaves.
+- **The Schnitt cuts at the near plane**; the clay is drawn two-sided
+  while it shows (a second build of the clay's graph, made on the first
+  Schnitt) and its back faces are the poché. The paper styles' card is
+  one-sided, so in *Papier* and *Strich* a cut building is open.
+- **The Ausschnitt clips by planes, buildings included** (a
+  `ClippingGroup` around the city's group; its four planes are
+  uniforms): a building on the edge is cut, as a model cut from a city
+  model is. Keeping or dropping whole buildings by their centroid needs a
+  per-object centroid in the object table — not done. The cut-out is a
+  north-aligned square (a rhombus in the Isometrie), 80 % of the largest
+  the picture holds; it ends with Modell and is not in the snapshot. Its
+  first use builds the clipped programs in the frame (no compile ahead).
+  No plinth along the site's own edge.
+- **The export is tiled one tile per animation frame** (three's SMAA and
+  GTAO render once per frame), up to 4× the canvas and 25 MP; a
+  perspective frame is taken as it is. A veil covers the canvas while
+  the tiles are taken.
+- **The shadow study is one sheet of 3 dates × 4 hours** (21.3., 21.6.,
+  21.12. of the year shown; 9, 12, 15, 18 Uhr, the device's local time),
+  each panel a full capture, scaled to a sheet ≤ 6 000 px wide. The
+  date/hour chips sit in *Sonne & Zeit* in every mode.
+- **Strich and Schwarzplan** are picture styles in every mode (V cycles
+  through seven). The Schwarzplan hides everything but the clay and the
+  ground — trees, walls, furniture, bridges, rails.
 
 ## Why this matters
 
@@ -140,7 +195,7 @@ style can be used in it, and the style picker and `V` work unchanged.
 | R | demolish at the crosshair | demolish the **asked** building |
 | 1–9, landmark chips | glide to a viewpoint | **re-centre** the pivot on the viewpoint's spot, keep the view |
 | F | walk ↔ fly | leave Modell into Fliegen |
-| M / Esc | — | leave Modell (Esc only when no card is open) |
+| M | — | leave Modell (Esc stays the inquiry card's and the immersive mode's: one key, one meaning) |
 
 ### The HUD
 
@@ -272,9 +327,12 @@ Two ways, compared in phase 0:
   target, point 5 above), the depth helpers made camera-aware, and a
   frustum swap at the end of the transition.
 
-**Recommendation: B**, with A as the measured fallback for phones should
-the second set of builds cost a phone tab its memory (the reason
-`warmPaperFor` skips phones). The rest of this plan assumes B.
+**Decided: B** (the maintainer, 2026-10-03). As built it needs no second
+set of builds at all — see *Rendering* below: the post passes read the
+active camera through a stand-in (the *view lens*), and the scene's
+camera-keyed node branches are reused from their perspective builds,
+correct to within a fraction of a degree because the parallel camera
+stands `MODEL_STANDOFF` (20 km) back along the view.
 
 ### The rig — `lib/city/model-view.ts` (pure) + `app/_components/model-rig.ts`
 
@@ -311,20 +369,32 @@ the second set of builds cost a phone tab its memory (the reason
 - **Active camera.** `create-app.ts` keeps both cameras; the tile stream
   swaps `setCamera`/`deleteCamera` with the mode; the resize handler
   updates both.
-- **A Modell pipeline**, prebuilt like the DoF pair (never by swapping a
-  pipeline's output node): a scene pass on its own target with the ortho
-  camera, its own GTAO/stylize/outline nodes built for that camera. Built
-  and `compileAsync`-ed during the entering glide (desktop: warmed once
-  the scene is idle, like `warmStyles`); disposed on phones when Modell
-  is left, if the memory governor asks.
-- **Depth helpers.** One `viewZOf(depth, camera)` in `shader-chunks.ts`
-  decided at graph construction (perspective vs ortho) for AO smoothing,
-  grading, stylize, outline. Stylize's sky test becomes "depth = far";
-  its edge metric for ortho uses the absolute depth step over the pixel
-  size (metres per pixel) instead of 1/z; `projScale` comes from the
-  frustum, not `fov`.
-- **Pixel-floored widths** (tram wires) take a `metresPerPixel` uniform
-  under ortho.
+- **One pipeline, a view lens** (as built; the second pipeline planned
+  here was not needed). The post passes never hold the real camera: they
+  read a stand-in `PerspectiveCamera` (`view-lens.ts`) whose near, far,
+  projection and world matrices are copied from the camera drawing the
+  frame, every frame, plus two uniforms — `ortho` (which depth formula:
+  `orthographicDepthToViewZ` or `perspectiveDepthToViewZ`, a per-pixel
+  `select`, no rebuild) and `equivalent` (the distance a 55° perspective
+  camera would show the same picture from, for every far-field fade).
+  GTAO takes the lens as its camera (its uniforms reference the lens's
+  matrices). Builds are keyed by material and render context, not camera
+  (point 5 above), so the scene's build-time camera branches
+  (`positionViewDirection`, points' size attenuation) keep their
+  perspective builds; with the camera 20 km back along the view their
+  view vectors are within a fraction of a degree of the parallel ones.
+  Compiles (`PostStack.compile`) keep using the perspective camera.
+- **Depth helpers.** `lens.viewZ(depth)`, `lens.distance(depth)` and
+  `lens.fade(z)` for AO smoothing, grading, stylize and the outline.
+  Stylize's sky test in a parallel view is "depth ≥ 0.9999" (the cleared
+  depth); its edge metric differences z itself (affine on a plane under a
+  parallel projection) normalised by the equivalent distance instead of
+  1/z; the view position comes from the inverse projection
+  (`getViewPosition`), which is right for the shear too; `projScale`
+  comes from the projection matrix, not `fov`.
+- **Pixel-floored widths** (tram wires) read the projection: the w of
+  P·(0, 0, 1, 0) is 1 for a perspective and 0 for a parallel camera, so
+  the floor is `mix(1, depth, perspective) · 2 / (focalY · height)`.
 - **Scale instead of distance.** One `viewScale` the frame loop publishes
   (metres per pixel, plus an *equivalent altitude* = the height a 55°
   perspective camera would need for that scale) replaces
@@ -478,7 +548,7 @@ per preset and style.
 
 ## Docs to keep current
 
-ADR 0043 (a second camera kind: parallel projection as a camera mode,
+ADR 0044 (a second camera kind: parallel projection as a camera mode,
 not a style; the near plane as the section; the scale bar as HUD legend);
 `AGENTS.md` (where things live); `docs/rendering.md` (camera and post);
 the guide's *Bedienung / Using the viewer* in both languages and the

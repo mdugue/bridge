@@ -244,6 +244,44 @@ on phones to save fill-rate.
 **SwiftShader** — a software renderer used by the headless test browser;
 it draws the scene on the CPU, slowly and without the real look.
 
+## Planning drawings
+
+The views of *Modell* (see [Using the viewer](./using-the-viewer.md#modell-the-city-as-a-planner-draws-it)).
+
+**Parallel projection / axonometry** — a drawing whose lines of sight all
+run parallel: no vanishing point, equal lengths stay equal anywhere in the
+picture, and the picture has a scale. Axonometries are the parallel
+projections that show three sides of a block.
+
+**Isometrie (isometry)** — the axonometry that shortens all three axes
+alike (× 0.816): seen from 35.26° above the ground, turned 45° to the
+block, the ground's edges run at 30° on the sheet — hence "30°
+isometry".
+
+**Militärperspektive** — an oblique axonometry: the ground plan is drawn
+undistorted and to scale, turned (usually 30°/60° or 45°/45°), and the
+heights stand straight up over it, true or shortened to two thirds.
+
+**Vogelschau** — "bird's-eye view": here a parallel view from above at any
+tilt.
+
+**Lageplan** — the site plan: straight down, north up, to scale.
+
+**Ansicht / Schnitt** — the elevation and the section: level views onto a
+line. A section cuts there and fills what the cut opens (the **poché**,
+here black), with the ground drawn as a profile (*Geländeschnitt*).
+
+**Schwarzplan** — the figure-ground plan: buildings black on white,
+nothing else; the oldest way of reading a city's grain.
+
+**Maßstab (scale)** — 1 : n means one unit on the sheet is n in reality.
+On screen the viewer takes a CSS pixel as 1/96 inch (0.26 mm); the
+exported picture states its scale at 300 dpi.
+
+**Verschattungsstudie (shadow study)** — the same view at fixed hours on
+the equinox (21 March) and the solstices (21 June, 21 December): how much
+sun a place gets over the year.
+
 ## Project
 
 **Bake** — any offline or build-time step that turns a heavy input into a

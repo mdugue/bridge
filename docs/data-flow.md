@@ -77,6 +77,7 @@ flowchart LR
     CULT["Cultivated land<br/>allotment beds · orchard trees · vine rows"]
     MM["Minimap"]
     LIGHT["Light &amp; shadow"]
+    PLAN["Modell: planning views<br/>Schwarzplan · Schnitt profile · plinth · shadow study"]
   end
 
   %% terrain + ground clamp
@@ -201,6 +202,10 @@ flowchart LR
   DGM ==>|"sky-view factor · far horizon (with the LoD2 roofs,<br/>the rebuilt ones in their place)"| LIGHT
   CJ -. "roofs in the sky view and horizon" .-> LIGHT
   SUN -. "fog · sky · dusk gate" .-> DET
+  CJ ==>|"the clay as the figure (black)"| PLAN
+  DGM ==>|"ground profile along a cut · plinth walls"| PLAN
+  DLM -. "plan palette (Strich)" .-> PLAN
+  SUN -. "21.3. · 21.6. · 21.12. at fixed hours" .-> PLAN
 ```
 
 ## Feature-by-feature
