@@ -69,7 +69,31 @@ the HUD (ADR 0042); the scene stays wordless. No bake, no new data.
 Prototype plates of the Altstadt (rendered with a long-lens approximation
 of a parallel projection through a local hack, under SwiftShader — the
 composition is right, the light and anti-aliasing are not a GPU's) are in
-the PR that adds this plan. What the look rules are:
+the PR that adds this plan. The hack: the one perspective camera 40 km
+back at a ≈ 1° FOV, near/far around the scene, the distance fog off, the
+shadow fit and the vegetation LOD keyed to the target. What the plates
+showed beyond the composition:
+
+- **Papier and Comic drew nothing but paper** until the stylize pass's
+  depth was measured from ~1.2 km instead of 40 km: its sky test
+  (`SKY_Z` 4 000 m) took every pixel for sky. With that offset Papier is
+  a convincing Weißmodell; the Comic **ink lines are still missing** (the
+  1/z edge metric sees no jumps at that depth ratio) — the depth helpers
+  and the ortho edge metric below are needed, not optional.
+- **Depth grading tinted the whole sheet cool** (everything was "far");
+  with grading at 0 the Pastell plate reads like a model on a table.
+- **The vegetation appeared only after its dressing finished** — with
+  the LOD keyed to the camera 40 km away every chunk is "far"; keyed to
+  the target the trees look as on foot.
+- **The Ansicht works by the near plane alone**: the Neustadt in front of
+  a cut in the Elbe is gone and the Altstadt silhouette stands; the cut
+  through the ground shows as a band of smeared land-cover colour — the
+  ground profile of phase 3 replaces it.
+- **The Lageplan's shadows** (21 March, 10:00; frustum pinned on the
+  target at its 880 m cap) came out soft and blotchy under SwiftShader —
+  judge them on a GPU before tuning the footprint fit's texel size.
+
+What the look rules are:
 
 - **Paper, not sky.** A parallel view looking down has no horizon; where
   the site ends the model ends on the paper colour of the current style
