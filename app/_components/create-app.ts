@@ -884,8 +884,28 @@ async function bootApp(
     }
   });
 
+  // The sun's shadow camera streams tiles (tile-stream.ts) only while the
+  // sun is up: by night it draws no shadow, and the tiles it kept loaded
+  // around the player were memory nothing showed — on a phone, memory the
+  // governor cannot free (a tile in use is never evicted).
+  let shadowStreams = true;
+  const streamShadowTiles = (on: boolean) => {
+    if (on === shadowStreams) {
+      return;
+    }
+    shadowStreams = on;
+    const shadow = sunRig.shadowCamera;
+    if (on) {
+      const size = shadowMapSizeFor(budget.profile, budget.tier);
+      stream.tiles.setCamera(shadow);
+      stream.tiles.setResolution(shadow, size, size);
+    } else {
+      stream.tiles.deleteCamera(shadow);
+    }
+  };
   const setSun = (date: Date): SunState => {
     const state = sunRig.update(date);
+    streamShadowTiles(state.aboveHorizon);
     currentNight = state.nightFactor;
     sunAltitude = state.altitudeDeg;
     sunToStyles?.(state.altitudeDeg);

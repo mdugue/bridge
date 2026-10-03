@@ -598,7 +598,8 @@ The terrain has no BVH: ground rays march the height function
 (`lib/city/ground-ray.ts`) — the coarse grid's vertices, or the fine TIN's
 triangles through a bucket index (`lib/city/terrain-tin.ts` `TinIndex`). The glTF extras key is **`tileId`**: the
 renderer writes `userData.tile` itself and would overwrite ours. The sun's shadow camera is a second
-streaming camera, so tiles that cast into the view stay loaded;
+streaming camera while the sun is up, so tiles that cast into the view stay
+loaded (by night it streams nothing: `streamShadowTiles` in `create-app.ts`);
 `displayActiveTiles` keeps loaded tiles drawn while turning.
 
 **Vegetation** is chunked into 250 m cells (one `Instances` set per cell) so

@@ -47,7 +47,8 @@ OGC 3D Tiles tileset (`lib/city/tileset.ts`): per site tile the buildings
 ADR 0030). Content is glTF (meshopt, quantised,
 pre-gzipped `.glb.gz`). 3DTilesRendererJS loads and unloads it by
 screen-space error with an LRU cache; the sun's shadow camera is a second
-camera, so casters outside the view stay loaded. A dressing plugin builds
+camera while the sun is up, so casters outside the view stay loaded (by
+night it is taken off the stream: it draws no shadow). A dressing plugin builds
 what a tile carries in `processTileModel` and frees it in `disposeTile`; the
 heavy part (vegetation incl. the street-tree cadastre and the OSM hedges,
 lamps, rails on the fine terrain level; its walls
