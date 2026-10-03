@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   createTrail,
   endedInCrash,
@@ -130,25 +130,49 @@ test("the phase says how far the page got", () => {
   expect(trailPhase(trail)).toBe("running");
 });
 
-test("a crash is offered unless the page was reloading or is iOS's interleaved record", () => {
-  const crashed = (...kinds: string[]) => {
+describe("which previous record is offered as a crash", () => {
+  const died = (...kinds: string[]) => {
     const trail = createTrail(setup);
-    kinds.forEach((kind, t) => pushEvent(trail, { t, kind }));
+    kinds.forEach((kind, i) => pushEvent(trail, { t: i, kind }));
     return trail;
   };
-  // A plain crash, recovered or not.
-  expect(offerAsCrash(crashed("start", "first frame"), false)).toBe(true);
-  expect(offerAsCrash(crashed("start", "first frame"), true)).toBe(true);
-  // The page was on its way to a reload for a lost GPU.
-  expect(
-    offerAsCrash(crashed("start", "first frame", "reloading"), false)
-  ).toBe(false);
-  // After a recovery, a record that never reached its first frame.
-  expect(offerAsCrash(crashed("start"), true)).toBe(false);
-  expect(offerAsCrash(crashed("start"), false)).toBe(true);
-  // Not a crash at all.
-  const clean = crashed("start", "first frame");
-  clean.state = "clean";
-  expect(offerAsCrash(clean, false)).toBe(false);
-  expect(offerAsCrash(null, false)).toBe(false);
+
+  test("a page that died in use", () => {
+    expect(offerAsCrash(died("renderer", "first frame"), false)).toBe(true);
+  });
+
+  test("not a page that reloaded itself to recover its GPU", () => {
+    const trail = died("first frame", "gpu lost", "reloading");
+    expect(offerAsCrash(trail, false)).toBe(false);
+    expect(offerAsCrash(trail, true)).toBe(false);
+    // the device-lost WebKit reports after the failed frame
+    pushEvent(trail, { t: 9, kind: "device-lost" });
+    expect(offerAsCrash(trail, true)).toBe(false);
+  });
+
+  test("a recovered page that drew long ago and then died is offered", () => {
+    const trail = died("renderer", "first frame");
+    for (let i = 0; i < TRAIL_EVENTS; i++) {
+      pushEvent(trail, { t: 2 + i, kind: "dressings" });
+    }
+    expect(trail.events.some((e) => e.kind === "first frame")).toBe(false);
+    expect(offerAsCrash(trail, true)).toBe(true);
+  });
+
+  test("after a recovery, not iOS's own navigation that never drew", () => {
+    expect(offerAsCrash(died("renderer"), true)).toBe(false);
+  });
+
+  test("a recovered page that drew and then died is offered", () => {
+    expect(offerAsCrash(died("renderer", "first frame", "error"), true)).toBe(
+      true
+    );
+  });
+
+  test("not a page that went to the background or left", () => {
+    const trail = died("first frame");
+    trail.state = "hidden";
+    expect(offerAsCrash(trail, false)).toBe(false);
+    expect(offerAsCrash(null, false)).toBe(false);
+  });
 });

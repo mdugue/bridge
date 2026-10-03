@@ -33,6 +33,51 @@ export async function fetchOptionalJson<T>(
   }
 }
 
+/**
+ * Whether `bytes` are still gzipped. The pre-gzipped artifacts (`.glb.gz`,
+ * `.pts.gz`) are judged on the magic, not the URL: a host that serves `.gz`
+ * with `Content-Encoding: gzip` has the browser inflate them already.
+ */
+export function isGzipped(bytes: Uint8Array): boolean {
+  return bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+/** `bytes` inflated natively, as a stream. */
+export function gunzip(
+  bytes: Uint8Array<ArrayBuffer>
+): ReadableStream<Uint8Array> {
+  return new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+}
+
+/**
+ * Fetches an optional binary artifact; null = feature off. Rethrows aborts.
+ * A pre-gzipped one (`.gz`) is inflated here (isGzipped), as the tiles'
+ * glTF is (tile-stream.ts).
+ */
+export async function fetchOptionalBinary(
+  url: string,
+  signal?: AbortSignal
+): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      return null;
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (!isGzipped(bytes)) {
+      return bytes.buffer;
+    }
+    return await new Response(gunzip(bytes)).arrayBuffer();
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw err;
+    }
+    return null;
+  }
+}
+
 /** The `features` of an optional GeoJSON FeatureCollection, or []. */
 export async function fetchFeatures<T>(
   url: string | undefined,

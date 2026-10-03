@@ -50,7 +50,19 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
-      - run: bun run test
+      # Coverage as a report, not a gate: the lcov goes up as an artifact and
+      # the job summary lists the sources no test imports (Bun's report only
+      # names files some test loads).
+      - run: bun run test:coverage
+      - name: List the sources no unit test imports
+        if: always()
+        run: bun scripts/coverage-gaps.ts >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
 
   # The offline bakes (pipeline/, Python in its own uv environment): their
   # unit tests and ruff. The bakes themselves need the raw downloads and run
@@ -113,9 +125,10 @@ jobs:
         run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      # The e2e half is skipped on PRs that cannot affect it (docs, the
-      # offline pipeline, this workflow). scripts/, data/, sites/ and patches/
-      # do: the tileset the viewer streams is baked from them at build time.
+      # The e2e half is skipped on PRs that cannot affect it (the offline
+      # pipeline, this workflow). scripts/, data/, sites/ and patches/ do: the
+      # tileset the viewer streams is baked from them at build time. So does
+      # docs/: /wissen prerenders it and e2e/wissen.spec.ts asserts its text.
       # The build-check shard always runs and always builds, so the status check
       # stays green rather than "skipped" — which branch protection would
       # treat as never reported.
@@ -133,7 +146,7 @@ jobs:
           # It over-reports (changes that landed on main since the PR branched
           # count too), which errs towards running the suite.
           if git diff --name-only "$BASE_SHA" HEAD -- \
-              app components hooks lib e2e public types scripts data sites patches \
+              app components hooks lib e2e public types scripts data sites patches docs \
               playwright.config.ts next.config.ts tsconfig.json postcss.config.mjs \
               package.json bun.lock \
               | grep -q .; then

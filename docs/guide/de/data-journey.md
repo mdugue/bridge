@@ -22,7 +22,7 @@ flowchart TB
   S1 -->|"Download (manuell oder per Skript)"| S2
   S2 -->|"Bake (manuell)"| S3
   S3 -->|"Commit"| S4
-  S4 -->|"bun dev / bun build"| S5
+  S4 -->|"bun dev / bun run build"| S5
   S5 -->|"HTTP, dauerhaft gecacht"| S6
 ```
 
@@ -138,7 +138,7 @@ Insgesamt trägt das Repository etwa 400 MB Daten für die fünfzehn Kacheln.
 
 ### Station 5 — der Build-Schritt (`scripts/prepare-data.ts`)
 
-Jedes `bun dev` und `bun build` beginnt damit, dieses Skript auszuführen —
+Jedes `bun dev` und `bun run build` beginnt damit, dieses Skript auszuführen —
 einmal für jede Stadt, deren Daten auf der Platte liegen
 (`scripts/prepare-sites.ts` entscheidet, welche), und jede Stadt bekommt
 ihren eigenen Ordner, `public/data/dresden/`, `public/data/leipzig/`, …
@@ -146,8 +146,9 @@ Für jede Stadt tut es drei Dinge:
 
 1. **Backt die schweren Eingaben zu einem Tileset.** Für jede Kachel wird
    das Gelände-GeoTIFF zu zwei fertigen Geländenetzen: einem detaillierten
-   auf einem Raster von 1024 × 1024 Punkten und einem groben auf
-   512 × 512 – mit den hohen Mauern aus OpenStreetMap als scharfen Kanten,
+   als unregelmäßiges Dreiecksnetz (TIN), das dem 1-m-Höhenmodell auf
+   ±15 cm folgt – mehr Dreiecke, wo sich der Boden krümmt –, und einem
+   groben auf einem Raster von 512 × 512 Punkten – mit den hohen Mauern aus OpenStreetMap als scharfen Kanten,
    mit den Treppen samt passend geformtem Boden darunter und mit einer
    kurzen Schürze am Rand, damit an den Nahtstellen
    zwischen Kacheln keine Lücke sichtbar wird. Das CityJSON wird zu einem

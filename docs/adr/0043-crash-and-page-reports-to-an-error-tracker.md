@@ -167,6 +167,6 @@ organisation.
   `rewrites`), `scripts/sentry-release.ts` (+ test)
 - [ADR 0001](./0001-client-only-static-app.md) (amendment 2026-10-03),
   [plan 047](../plans/047-spike-report-a-problem.md),
-  [plan 038](../plans/038-runtime-spine-fixes.md) step 3 (`offerAsCrash`)
+  [plan 038](../plans/completed.md#038--five-runtime-fixes-in-the-viewers-spine--done-2026-10-03) step 3 (`offerAsCrash`, which the reports share with the card)
 - `docs/rendering.md`, "GPU memory on a phone"; the guide's *Using the
   viewer*, "Crash reports"

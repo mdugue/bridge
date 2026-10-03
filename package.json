@@ -81,7 +81,6 @@
     "cityjson-threejs-loader@0.4.0": "patches/cityjson-threejs-loader@0.4.0.patch"
   },
   "trustedDependencies": [
-    "sharp",
-    "unrs-resolver"
+    "sharp"
   ]
 }

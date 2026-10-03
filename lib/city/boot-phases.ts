@@ -19,7 +19,28 @@ export interface BootInputs {
   dressingsBuilt: number;
   dressingsQueued: number;
   /** the spawn tile's dressing was tried (built, failed or left) */
-  spawnDressed: boolean;
+  spawnDressingTried: boolean;
+  /**
+   * the spawn tile's fine terrain level is loaded. Only that level carries
+   * a dressing, and it queues the dressing the moment it arrives; once the
+   * renderer is idle without it nobody will dress the spawn, so waiting for
+   * it is wrong (a jump away before the fine level came — a GPU-recovery
+   * restore, an early locate, a minimap click — left the scene short of
+   * "loaded" for good).
+   */
+  spawnFineLoaded: boolean;
+}
+
+/**
+ * The spawn's dressing is no longer something to wait for: tried, or its
+ * fine level is not coming. Not merely "not loaded yet": on a phone the
+ * fine level is often still on its way when the gate opens, and the details
+ * bar (which only moves forward) would read done before anything was built.
+ */
+function spawnSettled(inputs: BootInputs): boolean {
+  return (
+    inputs.spawnDressingTried || (!inputs.spawnFineLoaded && inputs.tilesIdle)
+  );
 }
 
 export interface StageReport {
@@ -64,7 +85,7 @@ export function createBootPhases(): BootPhases {
     if (streaming) {
       const { dressingsBuilt: built, dressingsQueued: queued } = inputs;
       const now =
-        queued === 0 && inputs.spawnDressed
+        queued === 0 && spawnSettled(inputs)
           ? 1
           : Math.min(built / Math.max(built + queued, 1), 0.99);
       details = Math.max(details, now);
@@ -85,7 +106,7 @@ export function createBootPhases(): BootPhases {
       const idle = inputs.tilesIdle && inputs.dressingsQueued === 0;
       if (!loaded) {
         const stages = progress(inputs);
-        if (streaming && inputs.spawnDressed && idle) {
+        if (streaming && spawnSettled(inputs) && idle) {
           loaded = true;
           stages.push(
             { id: "surroundings", fraction: 1 },

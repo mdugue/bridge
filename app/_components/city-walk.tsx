@@ -446,6 +446,8 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       return;
     }
     let cancelled = false;
+    // The render stopped for good (onFatal): its message stays.
+    let fatal = false;
     let handle: CityWalkHandle | null = null;
     let veilTimer: ReturnType<typeof setTimeout> | undefined;
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
@@ -493,7 +495,9 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
       onGpuLost: () =>
         !cancelled && recoverFromGpuLoss(recovery.current?.capture() ?? null),
       onError: (message) => {
-        if (cancelled) {
+        // After a fatal one the render has stopped: a tile still in flight
+        // failing must not replace "Bitte neu laden" with a layer's hole.
+        if (cancelled || fatal) {
           return;
         }
         // One tile (or one tile's dressing) failed after the first frame: it
@@ -501,7 +505,13 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
         // finish on their own (a failed tile counts as done), so they are
         // not settled here. A failure before the first frame rejects the
         // boot instead.
-        setStreamError(message);
+        setStreamError(`Eine Schicht konnte nicht geladen werden: ${message}`);
+      },
+      onFatal: (message) => {
+        if (!cancelled) {
+          fatal = true;
+          setStreamError(message);
+        }
       },
       onStats: (s) => {
         if (cancelled) {
@@ -741,7 +751,7 @@ export default function CityWalk({ budget, tilesetUrl }: Props) {
                 aria-live="polite"
                 className="pointer-events-none absolute top-15 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-full bg-destructive/90 px-3 py-1 text-[11px] text-white"
               >
-                Eine Schicht konnte nicht geladen werden: {streamError}
+                {streamError}
               </output>
             )}
 

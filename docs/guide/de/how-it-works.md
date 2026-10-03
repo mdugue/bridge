@@ -28,8 +28,9 @@ Bereitstellung gebaut wurde, jede unter ihrer eigenen Adresse (`/dresden`,
 
 Nichts wird installiert, nichts über dich gespeichert, und kein Server
 berechnet das Bild. Dein Browser lädt vorbereitete Dateien, während du dich
-bewegst — etwa 4 MB für die Kachel, auf der du startest, bis zu etwa 17 MB,
-wenn du jede Ecke besuchst —, und deine eigene Grafikkarte zeichnet jedes
+bewegst — etwa 6 MB je Kachel in voller Detailstufe, etwa 97 MB, wenn du
+jede Ecke der fünfzehn Dresdner Kacheln besuchst (95 MB auf einem Handy) —,
+und deine eigene Grafikkarte zeichnet jedes
 Bild, mit Hilfe einer Bibliothek namens **three.js**.
 
 Der Look ist absichtlich nicht fotorealistisch. Es ist ein weiches,

@@ -10,12 +10,12 @@ import { recentlyRecovered } from "./gpu-recovery";
 
 /**
  * The previous page's crash trail (crash-trail.ts), offered as text to
- * copy: shown when that page died while in use (`offerAsCrash`: not on its
- * way to a reload for a lost GPU, gpu-recovery.ts) — or always with
+ * copy: shown when that page died while in use — unless it reloaded itself
+ * to recover a lost GPU, or this page follows a recovery and the record never
+ * reached a first frame (offerAsCrash, gpu-recovery.ts) — or always with
  * `?trail=1`. Where the build reports crashes (crash-reports.ts), the card
- * says the report already went out. Mounted on the client only (the
- * viewer has no server render), so local storage is readable in the
- * initializer.
+ * says the report already went out. Mounted on the client only (the viewer
+ * has no server render), so local storage is readable in the initializer.
  */
 function initialTrail(): Trail | null {
   const previous = previousTrail();

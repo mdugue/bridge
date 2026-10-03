@@ -182,3 +182,26 @@ test("the palette's fog colour lands in the scene fog's uniform", () => {
   sunRig.update(new Date("2026-06-21T10:00:00Z"));
   expect(fogColor.value.getHex()).not.toBe(0);
 });
+
+// The shadow camera is a streaming camera: a frustum left behind keeps its
+// tiles loaded. three updates it only while drawing the shadow, which an
+// invisible sun (at night) never does.
+for (const [when, date] of [
+  ["by night", "2026-12-21T23:00:00+01:00"],
+  ["by day", "2026-06-21T12:00:00+02:00"],
+] as const) {
+  test(`the shadow camera follows the player ${when}`, () => {
+    const { sunRig, sun } = rig();
+    sunRig.update(new Date(date));
+    expect(sun.visible).toBe(when === "by day");
+    walkTo(sunRig, 0, 0);
+    const before = new Vector3().setFromMatrixPosition(
+      sunRig.shadowCamera.matrixWorld
+    );
+    walkTo(sunRig, 800, 0);
+    const after = new Vector3().setFromMatrixPosition(
+      sunRig.shadowCamera.matrixWorld
+    );
+    expect(after.x - before.x).toBeGreaterThan(700);
+  });
+}

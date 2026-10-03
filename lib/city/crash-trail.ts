@@ -97,6 +97,12 @@ export interface Trail {
   /** the device memory the browser reports (GB, Chromium only) */
   deviceMemoryGB?: number;
   state: TrailEnd;
+  /**
+   * The page reached its first frame — kept apart from the events, whose
+   * ring drops its oldest (a minute of streaming notes forty dressings);
+   * optional: older records lack it.
+   */
+  drew?: boolean;
   events: TrailEvent[];
   beats: TrailBeat[];
   /** the page in numbers (optional: older records lack it) */
@@ -128,6 +134,9 @@ export interface TrailReport {
   /** the session's last update (exited or crashed) went out */
   ended: boolean;
 }
+
+/** The event the HUD notes when the scene goes live (city-walk.tsx). */
+const FIRST_FRAME = "first frame";
 
 export type TrailSetup = Pick<
   Trail,
@@ -172,6 +181,9 @@ function pushRing<T>(ring: T[], entry: T, limit: number): void {
 }
 
 export function pushEvent(trail: Trail, event: TrailEvent): void {
+  if (event.kind === FIRST_FRAME) {
+    trail.drew = true;
+  }
   pushRing(trail.events, event, TRAIL_EVENTS);
   trail.firsts ??= {};
   trail.firsts[event.kind] ??= event.t;
@@ -211,7 +223,7 @@ export function trailPhase(trail: Trail): string {
   if (firstAt(trail, "loaded") !== undefined) {
     return "running";
   }
-  if (firstAt(trail, "first frame") !== undefined) {
+  if (firstAt(trail, FIRST_FRAME) !== undefined) {
     return "streaming";
   }
   const stage = trail.events.findLast((e) => e.kind.startsWith("stage "));
@@ -244,20 +256,28 @@ export function endedInCrash(trail: Trail | null): trail is Trail {
 }
 
 /**
- * Whether the previous page's record is a crash to offer (and report): it
- * died in use, but not on its way to a reload for a lost GPU (that page
- * already said so), and not as the record iOS leaves when it interleaves
- * a navigation of its own with a recovery — a page that never reached its
- * first frame while `recovered` (gpu-recovery.ts `recentlyRecovered`).
+ * Whether the previous page's record should be offered as a crash. Not when
+ * that page reloaded itself to recover a lost GPU (it noted so — not
+ * necessarily last: WebKit's device-lost can arrive after the failed frame
+ * that started the reload — and the recovery already handled it), nor when
+ * this page follows a recovery (`recovered`) and the record never reached
+ * its first frame — iOS may interleave a navigation of its own that leaves
+ * a trail with nothing but its start. A recovered page that then died is
+ * offered: that is the report the recovery is there to make possible.
  */
 export function offerAsCrash(
   trail: Trail | null,
   recovered: boolean
 ): trail is Trail {
-  if (!endedInCrash(trail) || trail.events.at(-1)?.kind === "reloading") {
+  if (!endedInCrash(trail)) {
     return false;
   }
-  return !(recovered && firstAt(trail, "first frame") === undefined);
+  if (trail.events.some((e) => e.kind === "reloading")) {
+    return false;
+  }
+  const drew =
+    trail.drew === true || trail.events.some((e) => e.kind === FIRST_FRAME);
+  return !(recovered && !drew);
 }
 
 const round = (n: number, digits = 0) => {

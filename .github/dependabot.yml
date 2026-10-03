@@ -21,17 +21,17 @@ updates:
       shadcn:
         patterns: [shadcn, "@base-ui/*"]
       lint-and-format:
-        patterns: [oxlint, oxfmt]
-      # The three.js stack moves as one: postprocessing caps `three`, and
-      # n8ao / three-mesh-bvh / the CityJSON loader all peer on it, so a solo
-      # bump is either unmergeable or a silent version skew.
+        # oxlint declares a `>=` peer on oxlint-tsgolint: bump them together.
+        patterns: [oxlint, oxfmt, oxlint-tsgolint]
+      # The three.js stack moves as one: three-mesh-bvh, the CityJSON loader
+      # and 3d-tiles-renderer all peer on `three`, so a solo bump is a silent
+      # version skew.
       three:
         patterns:
           - three
           - "@types/three"
           - three-mesh-bvh
-          - postprocessing
-          - n8ao
+          - 3d-tiles-renderer
           - cityjson-threejs-loader
       types:
         patterns: ["@types/*"]
@@ -41,6 +41,14 @@ updates:
   # `packageManager` field, not from the setup-bun pin).
   - package-ecosystem: github-actions
     directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+
+  # pipeline/uv.lock — the offline bakes' Python environment.
+  - package-ecosystem: uv
+    directory: /pipeline
     schedule:
       interval: weekly
       day: monday

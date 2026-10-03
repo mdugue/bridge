@@ -7,7 +7,8 @@ const at = (over: Partial<BootInputs> = {}): BootInputs => ({
   loadProgress: 0.4,
   dressingsBuilt: 0,
   dressingsQueued: 3,
-  spawnDressed: false,
+  spawnDressingTried: false,
+  spawnFineLoaded: true,
   ...over,
 });
 
@@ -26,8 +27,9 @@ test("before the gate only the surroundings move, and never back", () => {
   expect(fraction(step, "details")).toBeUndefined();
   // idle and dressed, but the gate is shut: not loaded
   expect(
-    boot.update(at({ tilesIdle: true, dressingsQueued: 0, spawnDressed: true }))
-      .loaded
+    boot.update(
+      at({ tilesIdle: true, dressingsQueued: 0, spawnDressingTried: true })
+    ).loaded
   ).toBe(false);
 });
 
@@ -55,13 +57,45 @@ test("the progress bars stop short of full until the stream is really idle", () 
 test("loaded fires once, then only busy flips are reported", () => {
   const boot = createBootPhases();
   boot.startStreaming();
-  const idle = at({ tilesIdle: true, dressingsQueued: 0, spawnDressed: true });
+  const idle = at({
+    tilesIdle: true,
+    dressingsQueued: 0,
+    spawnDressingTried: true,
+  });
   const first = boot.update(idle);
   expect(first.loaded).toBe(true);
   expect(fraction(first, "details")).toBe(1);
   expect(boot.isLoaded).toBe(true);
   expect(boot.update(idle)).toEqual({ stages: [], loaded: false });
-  expect(boot.update(at({ spawnDressed: true })).busy).toBe(true);
-  expect(boot.update(at({ spawnDressed: true })).busy).toBeUndefined();
+  expect(boot.update(at({ spawnDressingTried: true })).busy).toBe(true);
+  expect(boot.update(at({ spawnDressingTried: true })).busy).toBeUndefined();
   expect(boot.update(idle).busy).toBe(false);
+});
+
+test("idle is not loaded while the spawn's fine level waits on its dressing", () => {
+  const boot = createBootPhases();
+  boot.startStreaming();
+  expect(boot.update(at({ tilesIdle: true, dressingsQueued: 0 })).loaded).toBe(
+    false
+  );
+});
+
+test("the details stay short of done while the spawn's fine level is still on its way", () => {
+  const boot = createBootPhases();
+  boot.startStreaming();
+  const step = boot.update(at({ dressingsQueued: 0, spawnFineLoaded: false }));
+  expect(step.loaded).toBe(false);
+  expect(fraction(step, "details")).toBeLessThan(1);
+});
+
+test("a spawn whose fine level never loaded does not hold the scene short of loaded", () => {
+  const boot = createBootPhases();
+  boot.startStreaming();
+  // The player jumped away before the spawn's fine terrain was requested:
+  // no dressing will ever be queued for it.
+  const step = boot.update(
+    at({ tilesIdle: true, dressingsQueued: 0, spawnFineLoaded: false })
+  );
+  expect(step.loaded).toBe(true);
+  expect(fraction(step, "details")).toBe(1);
 });

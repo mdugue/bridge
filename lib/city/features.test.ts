@@ -65,7 +65,10 @@ function load<F>({ path, required }: Source): F[] {
     expect(required).toBe(false);
     return [];
   }
-  const doc = JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F>;
+  const doc = JSON.parse(readFileSync(path, "utf8")) as FeatureCollection<F> & {
+    type?: string;
+  };
+  expect(doc.type).toBe("FeatureCollection");
   expect(Array.isArray(doc.features)).toBe(true);
   return doc.features ?? [];
 }
@@ -124,6 +127,25 @@ const tiles = SITES_BAKED.flatMap((site) =>
 
 test("Dresden's committed data is among the checked sites", () => {
   expect(cases.some(([tile]) => tile === "33412_5656_2_sn")).toBe(true);
+});
+
+// An empty canopy file is a bake that found no DOM1 and wrote nothing —
+// the tile would stand treeless. (Tree rows may be empty: Grimma's and
+// Munich's outer tiles have none mapped.)
+test.each(cases)("%s: a baked canopy has trees", (_, a) => {
+  if (existsSync(a.canopy.path)) {
+    expect(load<CanopyFeature>(a.canopy).length).toBeGreaterThan(0);
+  }
+});
+
+test.each(tiles)("%s: the roof colours are { meta, roofs }", (tile, site) => {
+  const path = join(ROOT, cityMeshSourceFiles(site, tile).roofColor);
+  if (!existsSync(path)) {
+    return;
+  }
+  const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  expect(typeof doc.meta).toBe("object");
+  expect(doc.roofs !== null && typeof doc.roofs === "object").toBe(true);
 });
 
 test.each(cases)("%s: tree rows are hedge/treerow LineStrings", (_, a) => {
@@ -360,9 +382,16 @@ test.each(cases)("%s: rails, bridges, ballast and platforms", (_, a) => {
   for (const f of load<RailFeature>(a.rail)) {
     expect(f.geometry.type).toBe("LineString");
     expect(isLine(f.geometry.coordinates)).toBe(true);
+    const tracks = f.properties?.tracks;
+    if (tracks !== undefined) {
+      expect(Number.isFinite(tracks) && tracks >= 1).toBe(true);
+    }
   }
   for (const f of load<BridgeFeature>(a.bridge)) {
     expect(f.geometry.type).toBe("Polygon");
+    if (f.properties?.kind !== undefined) {
+      expect(["rail", "road", "path", "other"]).toContain(f.properties.kind);
+    }
     const outer = f.geometry.coordinates[0];
     expect(isRing(outer)).toBe(true);
     // One deck height per outer-ring vertex, when the bake measured any.

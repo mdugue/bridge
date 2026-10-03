@@ -333,7 +333,7 @@ flowchart LR
 
   subgraph TS["scripts/prepare-data.ts — 3D Tiles tileset"]
     direction TB
-    tTER["terrain glTF<br/>L0 1024² · L1 512²"]
+    tTER["terrain glTF<br/>L0 TIN ±0.15 m · L1 512²"]
     tCITY["city glTF<br/>+ property table"]
     tSIDE["side files<br/>+ 2048² class raster"]
   end
