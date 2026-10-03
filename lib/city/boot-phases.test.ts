@@ -27,8 +27,9 @@ test("before the gate only the surroundings move, and never back", () => {
   expect(fraction(step, "details")).toBeUndefined();
   // idle and dressed, but the gate is shut: not loaded
   expect(
-    boot.update(at({ tilesIdle: true, dressingsQueued: 0, spawnDressingTried: true }))
-      .loaded
+    boot.update(
+      at({ tilesIdle: true, dressingsQueued: 0, spawnDressingTried: true })
+    ).loaded
   ).toBe(false);
 });
 
@@ -56,7 +57,11 @@ test("the progress bars stop short of full until the stream is really idle", () 
 test("loaded fires once, then only busy flips are reported", () => {
   const boot = createBootPhases();
   boot.startStreaming();
-  const idle = at({ tilesIdle: true, dressingsQueued: 0, spawnDressingTried: true });
+  const idle = at({
+    tilesIdle: true,
+    dressingsQueued: 0,
+    spawnDressingTried: true,
+  });
   const first = boot.update(idle);
   expect(first.loaded).toBe(true);
   expect(fraction(first, "details")).toBe(1);
