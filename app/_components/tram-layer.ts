@@ -19,6 +19,7 @@ import {
   length,
   materialOpacity,
   max,
+  mix,
   modelViewMatrix,
   modelWorldMatrixInverse,
   positionGeometry,
@@ -198,9 +199,13 @@ function wireFrame() {
   ) as V3;
   const depth = max(centre.z.negate(), 0.05) as F;
   // metres per pixel at this depth; projection[1][1] is the y row of the
-  // projection's second column
+  // projection's second column. A parallel projection (Modell) has the same
+  // pixel at every depth: its w row takes nothing from z (perspective −1).
   const focalY = cameraProjectionMatrix.mul(vec4(0, 1, 0, 0)).y;
-  const px = depth.mul(2).div(focalY.mul(viewportSize.y)) as F;
+  const perspective = cameraProjectionMatrix.mul(vec4(0, 0, 1, 0)).w.abs();
+  const px = mix(float(1), depth, perspective)
+    .mul(2)
+    .div(focalY.mul(viewportSize.y)) as F;
   const truePx = half.mul(2).div(px);
   const drawnHalf = max(half, px.mul(0.5 * WIRE_MIN_PX)) as F;
   const fade = smoothstep(WIRE_FADE.near, WIRE_FADE.far, depth);

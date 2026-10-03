@@ -198,3 +198,35 @@ test("decodeLook leaves absent keys out, so an older snapshot keeps the current 
   });
   expect(decodeLook(undefined)).toEqual({});
 });
+
+test("a Modell view round-trips with the camera, and is checked", () => {
+  const model = {
+    pivot: { x: 120, y: 112, z: -340 },
+    preset: "iso",
+    scale: 2500,
+    tiltDeg: 35.26,
+    turnDeg: 45,
+  };
+  const r = parseSnapshot(withCamera({ model }));
+  expect(r.ok).toBe(true);
+  if (r.ok) {
+    expect(r.snapshot.camera.model).toEqual(model as never);
+  }
+  expect(
+    reason(withCamera({ model: { ...model, preset: "fisheye" } }))
+  ).toMatch(/camera\.model\.preset/);
+  expect(reason(withCamera({ model: { ...model, scale: 0 } }))).toMatch(
+    /camera\.model\.scale/
+  );
+  expect(reason(withCamera({ model: { ...model, tiltDeg: 120 } }))).toMatch(
+    /camera\.model\.tiltDeg/
+  );
+  expect(
+    reason(withCamera({ model: { ...model, pivot: { x: 1, y: "2", z: 3 } } }))
+  ).toMatch(/camera\.model\.pivot\.y/);
+});
+
+test("a snapshot without a Modell view is the perspective one, as before", () => {
+  const r = parseSnapshot(JSON.stringify(valid));
+  expect(r.ok && r.snapshot.camera.model).toBe(undefined);
+});

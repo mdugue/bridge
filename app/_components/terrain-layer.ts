@@ -884,27 +884,54 @@ function splatColour(splat: SplatNodes): V3 {
     grassDetail.assign(col.detail);
     groundTilt.assign(g.tilt);
     const elevation = positionWorld.y;
-    const ink = contourInk(elevation).mul(
-      contourGate(inp, elevation, splat.colorTexture)
-    );
+    const ink = contourInk(elevation)
+      .mul(contourGate(inp, elevation, splat.colorTexture))
+      .mul(contourKept);
     return mix(baseCol, INK, ink);
   })();
 }
 
+/** The Schwarzplan's ground is a plain white sheet: no contours either. */
+const contourKept = select(paperGroundOn.greaterThan(2.5), 0, 1);
+
 /**
- * The Papier style's ground (paper-scene.ts): for its frames the terrain
- * keeps its own shader instead of wearing the paper material, because the
+ * The paper styles' ground (paper-scene.ts): for their frames the terrain
+ * keeps its own shader instead of wearing the swap's material, because the
  * paint on it — road markings, parking bays, sports lines — and the water's
- * extent exist only here. The ground turns to paper, the paint to a light
- * pencil grey and the water to a cool, slightly deeper paper; light, sky
- * view and contours stay the terrain's own. One shared uniform switches it
- * (`paperGroundOn`), so it is the same program in every style.
+ * extent exist only here. Papier: the ground turns to paper, the paint to a
+ * light pencil grey and the water to a cool, slightly deeper paper. Strich:
+ * the ground's own colours, muted and lightened into a plan's (green
+ * parks, blue water, near-white streets), the paint grey. The Schwarzplan:
+ * plain white. Light, sky view and contours stay the terrain's own. One
+ * shared uniform switches it (`paperGroundOn`), so it is the same program
+ * in every style.
  */
 function paperGround(col: GroundColour, waterCoverage: F): V3 {
-  const water = smoothstep(0.05, 0.5, waterCoverage);
+  const water = smoothstep(0.05, 0.5, waterCoverage).toVar();
+  const ink = clamp(col.paperInk, 0, 1).toVar();
   const paper = mix(PAPER_LINEAR, PAPER_WATER_LINEAR, water);
-  const papered = mix(paper, PAPER_PAINT_LINEAR, clamp(col.paperInk, 0, 1));
-  return select(paperGroundOn.greaterThan(0.5), papered, col.baseCol);
+  const papered = mix(paper, PAPER_PAINT_LINEAR, ink);
+  // a plan's palette: the paved and the built ground a light neutral, the
+  // green a plan's green (the painted ground's olive reads as sand once
+  // lightened), the water a plan's blue
+  const c = col.baseCol;
+  const grey = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  const green = smoothstep(0.015, 0.06, c.y.sub(max(c.x, c.z)));
+  const ground = mix(mix(vec3(grey), vec3(1), 0.62), PLAN_GREEN_LINEAR, green);
+  const plan = mix(
+    mix(ground, PLAN_WATER_LINEAR, water),
+    PLAN_PAINT_LINEAR,
+    ink.mul(0.6)
+  );
+  return select(
+    paperGroundOn.greaterThan(2.5),
+    vec3(1),
+    select(
+      paperGroundOn.greaterThan(1.5),
+      plan,
+      select(paperGroundOn.greaterThan(0.5), papered, col.baseCol)
+    )
+  );
 }
 
 /** Papier's tones, linear (paper-scene.ts's sheet). */
@@ -913,6 +940,10 @@ const PAPER_LINEAR = linearVec3(PAPER_HEX);
 // mid-grey to the paper itself, so these land as a faint cool grey.
 const PAPER_WATER_LINEAR = linearVec3(0x5a_61_6b);
 const PAPER_PAINT_LINEAR = linearVec3(0x60_60_66);
+/** Strich's green, water and paint (the plan palette's). */
+const PLAN_GREEN_LINEAR = linearVec3(0xc9_df_bd);
+const PLAN_WATER_LINEAR = linearVec3(0xb4_cd_e2);
+const PLAN_PAINT_LINEAR = linearVec3(0x9a_9c_a3);
 
 function linearVec3(hex: number): V3 {
   const c = new Color(hex);
@@ -922,11 +953,11 @@ function linearVec3(hex: number): V3 {
 /** The flat sage ground with its contour ink (no class raster). */
 function plainColour(): V3 {
   const ground = select(
-    paperGroundOn.greaterThan(0.5),
-    PAPER_LINEAR,
-    vec3(materialColor)
+    paperGroundOn.greaterThan(2.5),
+    vec3(1),
+    select(paperGroundOn.greaterThan(0.5), PAPER_LINEAR, vec3(materialColor))
   );
-  return mix(ground, INK, contourInk(positionWorld.y));
+  return mix(ground, INK, contourInk(positionWorld.y).mul(contourKept));
 }
 
 /**

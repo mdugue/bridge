@@ -32,6 +32,8 @@ export interface PlayerPose {
   epsgY: number;
   /** radians, 0 = north, clockwise positive (towards east) */
   heading: number;
+  /** Modell (plan 055): the ground the picture shows, EPSG corners */
+  footprint?: readonly (readonly [number, number])[];
 }
 
 /**
