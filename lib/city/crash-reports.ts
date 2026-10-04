@@ -40,7 +40,8 @@ import {
  * query), the user agent, the screen and the device's memory, the
  * renderer, the events (`scrub`bed) and the beats — no position (the trail
  * has none), no user id (a session's id names the page, not the visitor),
- * no cookie. No DOM.
+ * no IP address (`user.ip_address: null`: Sentry infers none), no cookie.
+ * No DOM.
  */
 
 /** The noted events that are problems worth a report of their own. */
@@ -294,6 +295,9 @@ function common(trail: Trail, ctx: ReportContext) {
       url: ctx.origin + path(trail),
       headers: { "User-Agent": trail.userAgent },
     },
+    // No address for the visitor: an explicit null keeps Sentry from
+    // inferring one from the request (/datenschutz says none is kept).
+    user: { ip_address: null },
     tags: {
       site: path(trail).split("/")[1] || "start",
       backend: trail.backend,

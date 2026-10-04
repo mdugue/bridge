@@ -1,6 +1,7 @@
 # ADR 0043: Crashes, page summaries and sessions go to an error tracker, from the crash trail, only where a DSN is set
 
-- **Status:** accepted
+- **Status:** accepted; a per-browser opt-out and the privacy page since
+  2026-10-04 ([ADR 0045](./0045-legal-pages-from-the-deployment.md))
 - **Date:** 2026-10-03
 
 ## Context
@@ -112,6 +113,19 @@ tracker sees the host's address rather than the visitor's, but set the
 Sentry project to store none anyway (*Security & Privacy → Prevent
 Storing of IP Addresses*) and pick the EU region when creating the
 organisation.
+
+## Amendment (2026-10-04): an opt-out, and the privacy page says it all
+
+The reports are described on the site's privacy page, `/datenschutz`
+([ADR 0045](./0045-legal-pages-from-the-deployment.md)), which names the
+tracker and its region from the build's DSN. A visitor can say no there:
+a switch keeps the choice in local storage
+(`app/_components/report-choice.ts`), and `crash-reports.ts` checks it
+before every report — not only at the start — so it holds at once in a
+tab already open; the console says `off: turned off in this browser`.
+Every event carries `user.ip_address: null`, so Sentry infers no address
+from the request. The privacy page promises that no address is stored:
+keep *Prevent Storing of IP Addresses* on in the Sentry project.
 
 ## Consequences
 

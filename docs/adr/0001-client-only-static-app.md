@@ -57,8 +57,11 @@ position
 ([ADR 0043](./0043-crash-and-page-reports-to-an-error-tracker.md)).
 Without a DSN nothing is sent. What the page keeps in local storage: the
 crash trail (this page's record and the previous one's, and which
-previous record was reported), the last picture style, the toolbar's
-fold, the dismissed control hints; in session storage the view a GPU recovery returns to.
+previous record was reported), the visitor's "no" to the reports
+([ADR 0045](./0045-legal-pages-from-the-deployment.md)), the last
+picture style, the toolbar's fold, the dismissed control hints; in
+session storage the view a GPU recovery returns to. The privacy page,
+`/datenschutz`, lists the same.
 
 ## Alternatives
 

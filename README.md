@@ -93,6 +93,15 @@ With `SENTRY_AUTH_TOKEN` (an organisation token), `SENTRY_ORG` and
 `bridge@<commit>`, with its commit and deploy. Without a DSN, nothing is
 sent.
 
+**Impressum and privacy policy** (`/impressum`, `/datenschutz`, German)
+name whoever runs the deployment, from its environment — never from the
+repository: set `IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS` (lines separated by
+newlines or commas) and `IMPRESSUM_EMAIL` (`IMPRESSUM_PHONE` optional) for
+the production build. Without them the pages say the operator is missing,
+and a production build on Vercel warns. The privacy page names the host
+(Vercel) and, from the DSN, where the reports go; visitors turn the
+reports off there ([ADR 0045](docs/adr/0045-legal-pages-from-the-deployment.md)).
+
 ## Data
 
 ```

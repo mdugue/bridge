@@ -86,6 +86,7 @@ import type { CityWalkHandle, CityWalkStats } from "./create-app";
 import { DataLayersPanel } from "./data-layers-panel";
 import { Minimap } from "./minimap";
 import { hintsFor } from "./control-hints";
+import { LegalLinks } from "./legal-links";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { ProjectionPanel } from "./projection-panel";
 import type { SoundscapeControl } from "./soundscape-toggle";
@@ -1290,6 +1291,7 @@ function SourcesFooter() {
           Unterstützen
         </Button>
       </div>
+      <LegalLinks className="pt-1.5" newTab />
     </Collapsible>
   );
 }

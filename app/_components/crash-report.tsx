@@ -85,9 +85,22 @@ export function CrashReport() {
           : "Bericht der letzten Sitzung"}
       </p>
       <p className="text-muted-foreground text-xs">
-        {reported && crashed
-          ? "Ein Bericht ohne Standort ist schon automatisch unterwegs — er hilft, den Absturz zu finden. Du kannst ihn hier auch kopieren."
-          : "Kopiere den Bericht und schick ihn weiter — er hilft, den Absturz zu finden."}
+        {reported && crashed ? (
+          <>
+            Ein Bericht ohne Standort ist schon automatisch unterwegs — er
+            hilft, den Absturz zu finden. Du kannst ihn hier auch kopieren.{" "}
+            <a
+              className="underline underline-offset-2 hover:text-foreground"
+              href="/datenschutz#fehlerberichte"
+              rel="noopener"
+              target="_blank"
+            >
+              Was er enthält und wie du die Berichte ausschaltest
+            </a>
+          </>
+        ) : (
+          "Kopiere den Bericht und schick ihn weiter — er hilft, den Absturz zu finden."
+        )}
       </p>
       <Textarea
         className="h-40 font-mono text-[10px] leading-tight"

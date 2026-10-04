@@ -163,6 +163,18 @@ test("no report names a place: not the tile, not a coordinate", () => {
   expect(sent).toContain("no ground at ######.##");
 });
 
+test("no report leaves Sentry an address to infer for the visitor", () => {
+  const trail = page();
+  const error = { t: 7, kind: "error", detail: "boom" };
+  for (const report of [
+    crashReport(trail, ID, ctx),
+    problemReport(trail, error, ID, ctx),
+    summaryReport(trail, ID, ctx),
+  ]) {
+    expect(report.user).toEqual({ ip_address: null });
+  }
+});
+
 test("a problem is grouped by its kind and its detail without URLs or numbers", () => {
   const trail = page();
   const a = problemReport(

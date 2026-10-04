@@ -461,10 +461,14 @@ bis zum ersten Bild und bis alles geladen war, die Bildrate, der meiste
 belegte Speicher und ob er normal oder mit einem Absturz endete. So werden die langsamen und die abstürzenden Telefone
 sichtbar. Ein Bericht enthält Browser- und Gerätetyp, die
 Bildschirmgröße, welche Stadt (ohne den Rest der Adresse) und diese Zahlen
-— nie deinen Standort oder wo in der Stadt du warst, keinen Namen und kein
-Cookie. Sendet dein Browser *Global Privacy Control*, wird nichts
-geschickt. Ist kein Fehlerdienst eingerichtet, bietet die Karte das
-Protokoll stattdessen zum Kopieren an.
+— nie deinen Standort oder wo in der Stadt du warst, keinen Namen, keine
+IP-Adresse und kein Cookie. Sendet dein Browser *Global Privacy Control*,
+wird nichts geschickt, und der Schalter auf der Datenschutzseite
+(*Datenschutz*, verlinkt am Fuß jeder Seite und der
+Seitenleiste) schaltet die Berichte für deinen Browser sofort aus. Dort
+steht auch, wer die Seite betreibt, wo die Berichte liegen und wie lange.
+Ist kein Fehlerdienst eingerichtet, bietet die Karte das Protokoll
+stattdessen zum Kopieren an.
 
 ## Kleinigkeiten
 

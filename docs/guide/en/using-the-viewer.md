@@ -438,9 +438,13 @@ picture and until everything had loaded, the frame rate, the most memory
 used, and whether it ended normally or in a crash. That is how the slow and the crashing phones become visible. A
 report holds the browser and device type, the screen size, which city
 (without the rest of the address) and these numbers — never your location
-or where in the city you were, no name and no cookie. If your browser
-sends *Global Privacy Control*, nothing is sent. Without the tracker set
-up, the card offers the record to copy instead.
+or where in the city you were, no name, no IP address and no cookie. If
+your browser sends *Global Privacy Control*, nothing is sent, and the
+switch on the privacy page (*Datenschutz*, linked at the
+foot of every page and of the sidebar) turns the reports off for your
+browser at once. That page also says who runs the site, where the reports
+are kept and for how long. Without the tracker set up, the card offers the
+record to copy instead.
 
 ## Small things
 

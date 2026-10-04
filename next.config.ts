@@ -1,10 +1,21 @@
 import type { NextConfig } from "next";
 import { reportBuild, tunnelRewrites } from "./lib/city/crash-reports";
+import { operatorFrom } from "./lib/legal";
 
 // The crash reports' build (ADR 0043): the DSN, release and environment
 // the page reports with, derived once — scripts/sentry-release.ts
 // creates the release under the same name.
 const reports = reportBuild(process.env);
+
+// The legal pages read their operator from the build's environment
+// (lib/legal.ts, ADR 0045): a production build without it would serve an
+// Impressum that names nobody, so its log says what to set.
+const { missing: impressumMissing } = operatorFrom(process.env);
+if (process.env.VERCEL_ENV === "production" && impressumMissing.length > 0) {
+  console.warn(
+    `⚠ /impressum names no operator — set ${impressumMissing.join(", ")} (ADR 0045)`
+  );
+}
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
