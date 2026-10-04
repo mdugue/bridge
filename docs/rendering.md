@@ -445,7 +445,7 @@ renderer decides how much of the site is loaded (screen-space error target
 | Land-cover rasters | L0 4096², L1 2048² | 2048² everywhere | L0 4096², L1 2048² |
 | GTAO samples | 16 | 16 | 8 |
 | Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB | 320–600 MB | 1.2–1.6 GB |
-| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB | steps at 480 / 560 MB | as desktop |
+| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5) | steps at 480 / 560 MB (a last one 10 s past 560) | as desktop |
 
 What one site tile costs (Dresden, as published; the `.glb.gz` are
 pre-gzipped glTF with meshopt compression and quantised positions):
@@ -493,7 +493,13 @@ a phone under that line:
   raises the tiles' error target (×2, ×4: coarser tiles in view) and lowers
   the cache's lower bound (tiles no longer in view leave sooner) — never its
   upper bound, at which the cache loads nothing, not even the coarser tiles
-  it now wants. It steps back only well below the line, after 10 s, and
+  it now wants. When the second step has held 10 s and the memory is still
+  past its line, a last one follows (×8, the fine terrain and its dressing
+  within about a quarter of a kilometre on a phone, an eighth of the cache's
+  lower bound): an iPhone in Comic sat at the second step with 690–760 MB
+  held for forty seconds before Safari took its GPU away (Sentry
+  CITY-WALK-3). It steps back only well below the line, after 10 s, one
+  step at a time, and
   not while the memory would cross the line again with what the step freed
   back (measured while it held; forgotten after two minutes) — a camera
   standing still used to give its fine tiles up and stream them back in

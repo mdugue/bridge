@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   createMemoryGovernor,
+  MEMORY_STEPS,
   type MemoryLimits,
   memoryLimitsFor,
 } from "./memory-governor";
@@ -27,6 +28,42 @@ test("the detail steps down at each line, and holds below it", () => {
 test("a jump past the hard line takes both steps at once", () => {
   const governor = createMemoryGovernor(LIMITS);
   expect(governor.update(700 * MB, 0)?.level).toBe(2);
+});
+
+test("level 2 that held with the memory still past its line takes the last step", () => {
+  const governor = createMemoryGovernor(LIMITS);
+  expect(governor.update(640 * MB, 0)?.level).toBe(2);
+  // still past the line, but level 2 has not held yet
+  expect(governor.update(700 * MB, 5000)).toBeNull();
+  expect(governor.update(760 * MB, 10_000)?.level).toBe(3);
+  expect(governor.step().errorScale).toBeGreaterThan(
+    MEMORY_STEPS[2].errorScale
+  );
+  expect(governor.step().minScale).toBeLessThan(MEMORY_STEPS[2].minScale);
+  // there is no further step
+  expect(governor.update(760 * MB, 30_000)).toBeNull();
+});
+
+test("level 2 that brought the memory under its line is not followed by the last", () => {
+  const governor = createMemoryGovernor(LIMITS);
+  governor.update(640 * MB, 0);
+  expect(governor.update(540 * MB, 10_000)).toBeNull();
+  expect(governor.update(550 * MB, 60_000)).toBeNull();
+  expect(governor.step().level).toBe(2);
+});
+
+test("the last step comes back one step at a time, well below the hard line", () => {
+  const governor = createMemoryGovernor(LIMITS);
+  governor.update(600 * MB, 0);
+  governor.update(600 * MB, 10_000);
+  // the last step frees 200 MB while it holds
+  governor.update(400 * MB, 15_000);
+  // under the hard line, but undoing the step would cross it again
+  expect(governor.update(400 * MB, 30_000)).toBeNull();
+  // on to a lighter view
+  expect(governor.update(250 * MB, 40_000)?.level).toBe(2);
+  expect(governor.update(250 * MB, 45_000)).toBeNull();
+  expect(governor.update(250 * MB, 50_000)?.level).toBe(1);
 });
 
 test("it steps back up only well below the line, and not at once", () => {
