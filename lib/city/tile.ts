@@ -232,7 +232,8 @@ export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
  * The side files the coarse terrain level is dressed with: only what must
  * show beyond the fine level's reach — the counted traffic (a data layer
  * read from the air, which stopped at every tile the fine level had not
- * reached yet) and the bridge decks it rides.
+ * reached yet) and the bridges, which it rides and which the coarse level
+ * draws (the buildings leave LoD2's bridge slabs out).
  */
 export const COARSE_DRESSING_KINDS = [
   "traffic",

@@ -1305,10 +1305,11 @@ async function bootApp(
     const { target, solids } = subject.thing;
     const first = solids[0];
     if (target.kind === "bridge" && first && "slab" in first) {
-      // the fine level's dressing: the coarse one carries only flows
-      const rail = [...stream.dressings].find(
-        (d) => d.tile === target.tile && d.rail
-      )?.rail;
+      // on the level that answered: a tile's fine and coarse terrain each
+      // carry its bridges, and the hidden one hangs outside the scene
+      const rail = stream
+        .visibleDressings()
+        .find((d) => d.tile === target.tile && d.rail)?.rail;
       return { positions: bridgeShape(rail, first.slab), reach: 0 };
     }
     if (target.kind === "traffic") {

@@ -44,7 +44,7 @@ import {
   ownsPoint,
   type TerrainExtras,
 } from "@/lib/city/tileset";
-import type { DressingKind } from "@/lib/city/tile";
+import { COARSE_DRESSING_KINDS, type DressingKind } from "@/lib/city/tile";
 import { bridgeItems, monumentItems, treeSets } from "@/lib/city/ask-items";
 import { askSets, type AskSet } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
@@ -451,20 +451,26 @@ const nextTask = () =>
   });
 
 /**
- * The coarse terrain level's dressing: only the counted traffic, built
- * coarser (traffic-layer.ts `TrafficDetail`) on the coarse ground it is
- * drawn over, so the flows reach every tile in view and not just the ones
- * the fine level has loaded.
+ * The coarse terrain level's dressing: what must not end where the fine
+ * level's reach does — the counted traffic, built coarser (traffic-layer.ts
+ * `TrafficDetail`) on the coarse ground it is drawn over, so the flows
+ * reach every tile in view and not just the ones the fine level has
+ * loaded; and the bridges (decks, piers, the measured steel, no rails):
+ * the LoD2 leaves them out of the buildings (city-mesh.ts), so without
+ * them every river crossing vanished past the fine level's reach — in the
+ * air beyond ≈1.2 km, and from 2.5 m/px on in a whole Modell picture.
  */
 async function buildCoarseDressing(
   terrain: TerrainLayer,
   extras: TerrainExtras,
-  offset: { cx: number; cy: number },
+  ctx: TileStreamContext,
   extent: TerrainBounds,
   url: (file: string) => string,
   signal?: AbortSignal
 ): Promise<TileDressing> {
+  const { offset } = ctx;
   const files = extras.coarse ?? {};
+  const tile = extras.tileId;
   const fetchKind = <T>(file: string | undefined): Features<T> =>
     file ? fetchFeatures<T>(url(file), signal) : Promise.resolve([]);
   const [traffic, bridges] = await Promise.all([
@@ -481,12 +487,38 @@ async function buildCoarseDressing(
           extent
         )
       : undefined;
+  // the same bridges as the fine level draws (its decks are measured, the
+  // piers stand on the ground in reach), the same owner per seam
+  const owns = (x: number, y: number) => ownsPoint(extent, x, y);
+  const ground = { offset, heightAt: ctx.heightAt };
+  const rail =
+    bridges.length > 0
+      ? buildRail(
+          { bridges, rails: [], ballast: [], platforms: [] },
+          { ...ground, owns }
+        )
+      : undefined;
   // asked on the coarse bodies too: the tiles the fine level has not
   // reached show only these
-  const set = trafficAskSet(bands, traffic, extras.tileId);
+  const flows = trafficAskSet(bands, traffic, tile);
+  const decks = rail
+    ? bridgeAskSet(
+        rail,
+        bridgeItems(bridges, {
+          ...ground,
+          tile,
+          treeHeightAt: terrain.heightAt,
+          owns,
+        })
+      )
+    : undefined;
+  const asks = [flows, decks].filter(
+    (a): a is AskSet<FeatureInquiry> => a !== undefined && a !== null
+  );
   return {
-    asks: set ? [set] : undefined,
-    tile: extras.tileId,
+    asks: asks.length > 0 ? asks : undefined,
+    rail: rail && rail.children.length > 0 ? rail : undefined,
+    tile,
     traffic: bands,
   };
 }
@@ -501,11 +533,11 @@ async function buildDressing(
   const d = extras.dressing;
   const tile = extras.tileId;
   if (!d) {
-    return extras.coarse?.traffic
+    return COARSE_DRESSING_KINDS.some((kind) => extras.coarse?.[kind])
       ? buildCoarseDressing(
           terrain,
           extras,
-          ctx.offset,
+          ctx,
           ctx.tileBounds(tile) ?? terrain.bounds,
           url,
           signal
