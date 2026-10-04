@@ -453,6 +453,37 @@ export function withPreset(view: ModelView, preset: ModelPresetId): ModelView {
   };
 }
 
+// --- trees by scale ---------------------------------------------------------
+
+/** Up to this scale every tree stands in the picture, as on foot. */
+export const MODEL_TREES_ALL = 5_000;
+/**
+ * From this scale on no single tree does: the vegetation is the ground's
+ * green — forest, meadow, urban green — as in an overview plan. Smaller
+ * than the scale where the fine terrain, which carries the trees, gives way
+ * to the coarse one (2.5 m/px, about 1 : 9 450 — `COARSE_TERRAIN_ERROR`
+ * over the tile renderer's error target), so no tree is still standing
+ * when its tile's level changes.
+ */
+export const MODEL_TREES_NONE = 9_000;
+
+/**
+ * The share of the trees a picture at 1 : `denominator` draws: a plan
+ * generalizes its trees by selection as its scale shrinks — every one up
+ * to MODEL_TREES_ALL, fewer and fewer (the small ones first, the crown
+ * shader picks) until MODEL_TREES_NONE, none beyond. Eased along the
+ * scale's logarithm, the way the wheel and the scale steps move it.
+ */
+export function treeShare(denominator: number): number {
+  const t = clamp(
+    Math.log(denominator / MODEL_TREES_ALL) /
+      Math.log(MODEL_TREES_NONE / MODEL_TREES_ALL),
+    0,
+    1
+  );
+  return 1 - t * t * (3 - 2 * t);
+}
+
 // --- footprint and shadows -------------------------------------------------
 
 /**

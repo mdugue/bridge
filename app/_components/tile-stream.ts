@@ -409,6 +409,10 @@ function buildTileVegetation(
       canopy.setTime(seconds);
       own.setTime(seconds);
     },
+    setTreeShare: (share) => {
+      canopy.setTreeShare(share);
+      own.setTreeShare(share);
+    },
     setSeason: (day) => {
       const a = canopy.setSeason(day);
       const b = own.setSeason(day);

@@ -13,6 +13,8 @@ import {
   MODEL_SCALE_MIN,
   MODEL_SHADOW_MAX,
   MODEL_SHADOW_MIN,
+  MODEL_TREES_ALL,
+  MODEL_TREES_NONE,
   type ModelPresetId,
   type ModelView,
   metresPerPixelOf,
@@ -28,12 +30,14 @@ import {
   screenOfPoint,
   snapTilt,
   snapTurn,
+  treeShare,
   twistedTurn,
   viewBetween,
   withPreset,
   zoomedAbout,
 } from "./model-view";
 import { DEG2RAD, directionOf } from "./pose";
+import { COARSE_TERRAIN_ERROR } from "./tileset";
 
 const VIEWPORT = { width: 1600, height: 900 };
 
@@ -251,6 +255,31 @@ describe("pan, zoom, turn and tilt", () => {
     expect(mid.shear).toBeGreaterThan(0);
     expect(mid.shear).toBeLessThan(1);
     expect(viewBetween(a, b, 1)).toEqual(b);
+  });
+});
+
+describe("trees by scale", () => {
+  test("every tree up to a site plan's scale, none in an overview, fewer between", () => {
+    expect(treeShare(MODEL_SCALE_MIN)).toBe(1);
+    expect(treeShare(MODEL_TREES_ALL)).toBe(1);
+    expect(treeShare(MODEL_TREES_NONE)).toBe(0);
+    expect(treeShare(MODEL_SCALE_MAX)).toBe(0);
+    let last = 1;
+    for (let s = MODEL_TREES_ALL; s <= MODEL_TREES_NONE; s *= 1.05) {
+      const share = treeShare(s);
+      expect(share).toBeLessThanOrEqual(last);
+      last = share;
+    }
+    const middle = treeShare(Math.sqrt(MODEL_TREES_ALL * MODEL_TREES_NONE));
+    expect(middle).toBeCloseTo(0.5, 6);
+  });
+
+  test("the trees are gone before their terrain level gives way", () => {
+    // the fine terrain (and its trees) leaves a parallel picture at this
+    // many metres per pixel: the coarse level's error over the tile
+    // renderer's error target (its default, 16 px)
+    const coarseFrom = COARSE_TERRAIN_ERROR / 16;
+    expect(metresPerPixelOf(MODEL_TREES_NONE)).toBeLessThan(coarseFrom);
   });
 });
 

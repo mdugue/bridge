@@ -21,6 +21,8 @@ import {
   float,
   floor,
   fract,
+  hash as hashNode,
+  instanceIndex,
   length,
   materialColor,
   max,
@@ -28,8 +30,10 @@ import {
   normalize,
   normalWorldGeometry,
   positionGeometry,
+  positionLocal,
   positionWorld,
   pow,
+  select,
   sin,
   smoothstep,
   uniform,
@@ -187,6 +191,8 @@ export interface VegetationControl {
   multiTuft: () => boolean;
   /** advance the wind-sway animation (call per frame with elapsed seconds) */
   setTime: (seconds: number) => void;
+  /** the share of the trees drawn (Modell's selection; 1 = all) */
+  setTreeShare: (share: number) => void;
   /**
    * Moves the crowns to `day` (days since 1 January; lib/city/tree-season.ts):
    * autumn colour and bare crowns. Called on a date change, never per frame;
@@ -663,6 +669,8 @@ export interface CrownUniforms {
   /** the wind-sway clock (s) */
   time: Live;
   translucency: Live;
+  /** the share of the trees drawn (Modell's selection, `crownKept`) */
+  treeShare: Live;
 }
 
 /** Fresh crown uniforms at the look table's defaults. */
@@ -674,6 +682,7 @@ function createCrownUniforms(): CrownUniforms {
     sunDirection: uniform(new Vector3(0, 1, 0)),
     time: uniform(0),
     translucency: uniform(LOOK_DEFAULTS.translucency),
+    treeShare: uniform(1),
   };
 }
 
@@ -787,6 +796,21 @@ function crownLight(
 }
 
 /**
+ * Whether the drawn crown is among Modell's selection (lib/city/model-view.ts
+ * `treeShare`): 1 while its rank is below the share, else 0 — and the
+ * material folds a 0 crown onto its own origin, a point that draws no
+ * triangle and casts no shadow. The rank is a stable hash of the instance,
+ * raised to the crown's size, so the small crowns go first and the same
+ * ones come back as the scale grows again. A share of 1 keeps every crown
+ * (the rank is below 1): off Modell nothing changes.
+ */
+function crownKept(share: Live): F {
+  const size = clamp(length(instanceColumn(0).xyz), 0.5, 3);
+  const rank = pow(hashNode(instanceIndex), size);
+  return select(rank.lessThan(share), float(1), float(0));
+}
+
+/**
  * Sage crown material with a backlit shimmer: when the sun is behind the
  * canopy the camera-facing leaves glow warm (crownLight). Shared by every
  * crown set of the scene, every tier (sceneCrowns). The uniforms are live:
@@ -810,8 +834,9 @@ export function buildCrownMaterial(
   m.name = bare ? "crown-bare" : "crown-leafy";
   m.userData.crownUniforms = u;
   const sway = crownSway(u.time);
-  m.positionNode = instancePosition(sway.local);
-  m.castShadowPositionNode = instancePosition();
+  const kept = crownKept(u.treeShare);
+  m.positionNode = instancePosition(sway.local.mul(kept));
+  m.castShadowPositionNode = instancePosition(positionLocal.mul(kept));
   const crownScale = varying(length(instanceColumn(0).xyz));
   const gust = varying(sway.gust);
   const tinted = materialColor.mul(instanceTint());
@@ -1305,6 +1330,9 @@ export function buildVegetation(
     multiTuft: () => multiTuft,
     setTime: (seconds) => {
       u.time.value = seconds;
+    },
+    setTreeShare: (share) => {
+      u.treeShare.value = share;
     },
     setSeason: (day) => applySeasons(seasons, day),
     // The chunks' tiers are updateVegetationLod's; the canopy keeps no other
