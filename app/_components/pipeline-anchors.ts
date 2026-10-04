@@ -192,7 +192,13 @@ export interface PipelineAnchors {
 
 export function createPipelineAnchors(
   /** compiles an object the way the frames draw it (PostStack) */
-  compile: (object: Object3D) => Promise<void>
+  compile: (object: Object3D) => Promise<void>,
+  /**
+   * Anchor a per-tile material too, as itself (its anchor goes when the
+   * tile disposes it): for a hold that lasts only while it is needed, as
+   * the Ausschnitt's (post-stack.ts `holdCut`), where every build matters.
+   */
+  every = false
 ): PipelineAnchors {
   const anchors = new Map<string, Object3D>();
   // the slot-less stand-ins, one per shared build
@@ -203,7 +209,7 @@ export function createPipelineAnchors(
     }
     const graph = graphOf(material);
     if (graph === undefined) {
-      return null;
+      return every ? material : null;
     }
     let stand = standIns.get(graph);
     if (!stand) {

@@ -94,3 +94,17 @@ test("a shared build is anchored once, through a stand-in without the tile's slo
   expect(standIn.userData.slots).toBeUndefined();
   anchors.dispose();
 });
+
+test("a hold of every build anchors a tile's own material too, as itself", async () => {
+  const compiled: Object3D[] = [];
+  const anchors = createPipelineAnchors((o) => {
+    compiled.push(o);
+    return Promise.resolve();
+  }, true);
+  const material = new MeshBasicNodeMaterial();
+  await anchors.anchor(new Mesh(new BoxGeometry(), material));
+  await anchors.anchor(new Mesh(new BoxGeometry(), material));
+  expect(compiled).toHaveLength(1);
+  expect((compiled[0] as Mesh).material).toBe(material);
+  anchors.dispose();
+});

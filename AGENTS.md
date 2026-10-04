@@ -536,6 +536,12 @@ main thread) out of the frames:
   drawable per material and attribute layout). The shadow pass's pipelines
   for new casters still compile in the frame that first draws them, and the
   WebGL2 backend compiles synchronously — measure before adding machinery.
+- **A `ClippingGroup` switch rebuilds everything under it.** three keeps
+  one render object per drawable for both sides and keys its build by the
+  clipping, freeing the side a switch leaves; a compile that does not walk
+  through the group builds the wrong side. Modell's Ausschnitt shows only
+  once `PostStack.holdCut` holds both sides (`aloneUnder`), and leaves its
+  shadows unclipped.
 - WebGPU has no 1-component 8/16-bit vertex formats (the feature id and roof
   flag are baked as FLOAT), and draws points 1 px wide (the lamp halos are
   sprites).
