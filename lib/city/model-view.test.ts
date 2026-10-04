@@ -28,6 +28,7 @@ import {
   screenOfPoint,
   snapTilt,
   snapTurn,
+  twistedTurn,
   viewBetween,
   withPreset,
   zoomedAbout,
@@ -206,6 +207,29 @@ describe("pan, zoom, turn and tilt", () => {
       metresPerPixelOf(MODEL_SCALE_MAX),
       9
     );
+  });
+
+  test("a two-finger twist turns the ground with the fingers", () => {
+    for (const preset of ["plan", "iso"] as const) {
+      const view = viewOf(preset, 30);
+      // a point east of the pivot, on its level
+      const spot = { x: view.pivot.x + 80, y: view.pivot.y, z: view.pivot.z };
+      const angleOf = (v: ModelView) => {
+        const p = pxOf(v, spot);
+        const c = pxOf(v, v.pivot);
+        // y up, so a larger angle is counter-clockwise on screen
+        return Math.atan2(c.y - p.y, p.x - c.x);
+      };
+      const twist = 0.2; // counter-clockwise on screen
+      const turned = { ...view, turnDeg: twistedTurn(view.turnDeg, twist) };
+      const moved = angleOf(turned) - angleOf(view);
+      expect(Math.sign(moved)).toBe(1);
+      if (preset === "plan") {
+        // seen from straight above the ground turns by exactly the twist
+        expect(moved).toBeCloseTo(twist, 6);
+      }
+    }
+    expect(twistedTurn(350, (20 * Math.PI) / 180)).toBeCloseTo(10, 9);
   });
 
   test("turns snap to their steps, tilts to the presets' angles", () => {

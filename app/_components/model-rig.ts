@@ -19,6 +19,7 @@ import {
   scaleOf,
   snapTilt,
   snapTurn,
+  twistedTurn,
   viewBetween,
   withPreset,
   wrapDeg,
@@ -659,7 +660,7 @@ export function createModelRig(opts: ModelRigOptions): ModelRig {
         return;
       }
       dragging = true;
-      setView({ ...view, turnDeg: wrapDeg(view.turnDeg - radians * RAD2DEG) });
+      setView({ ...view, turnDeg: twistedTurn(view.turnDeg, radians) });
     },
     endDrag: () => {
       if (!dragging || !view || phase.kind !== "model") {

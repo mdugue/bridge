@@ -404,6 +404,16 @@ export function snapTurn(
   return wrapDeg(offset + k * step);
 }
 
+/**
+ * The turn after a two-finger twist of `radians`, counter-clockwise on
+ * screen: the ground turns with the fingers, as a map under them does.
+ * Turning the view clockwise (a larger compass heading) turns the picture
+ * counter-clockwise, so the twist adds.
+ */
+export function twistedTurn(turnDeg: number, radians: number): number {
+  return wrapDeg(turnDeg + radians * RAD2DEG);
+}
+
 /** Degrees into [0, 360). */
 export function wrapDeg(deg: number): number {
   return ((deg % 360) + 360) % 360;
