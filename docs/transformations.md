@@ -737,7 +737,7 @@ visual-variable codebook is in
   night). No panes, no mullions, no texture — the window-grid veto holds
   (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
-- **Landmarks from Wikidata** (HUD *Erkunden* → *Wahrzeichen*; plan 050)
+- **Landmarks from Wikidata** (HUD *Erkunden* → *Orte*; plan 050)
   — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
   subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;
   height P2048, material P186, building = subclass of Q41176; a box that
@@ -756,8 +756,18 @@ visual-variable codebook is in
   objects (`OBJECT_FLAG_LANDMARK` = 16; no look of its own), gives them
   the Wikidata material where OSM names none (`withLandmarks` in
   `prepare-data.ts`), and writes the site's twelve most notable into the
-  tileset's `extras.landmarks` (`siteLandmarks`); the HUD lists them as
-  chips under the viewpoints, and a click glides to an aerial vantage from
+  tileset's `extras.landmarks` (`siteLandmarks`) — one per building drawn:
+  an item whose LoD2 objects a more notable one already holds is that
+  one (the Rüstkammer and the Staatliche Kunstsammlungen in the
+  Residenzschloss, the Galerie Neue Meister in the Albertinum), its name
+  kept in the host's `also` for the search. The HUD merges them with the
+  authored vantages into one list, *Orte* (`lib/city/places.ts`
+  `sitePlaces`): a landmark a vantage names — every word of one in the
+  other, German endings, fillers, the city's name and Wikidata's
+  brackets aside ("Zwinger" in "Zwinger & Semperoper", "Dresden
+  Hauptbahnhof" in "Hauptbahnhof") — or one within 60 m of where a
+  vantage looking down ≥ 20° looks is folded into that vantage, the rest
+  follow the vantages; a click on a landmark glides to an aerial vantage from
   the south-south-west (`landmarkVantage`: altitude clamp(h + 50, 60,
   300) m, pitch −22°, fov 55°). Examples: the Elbphilharmonie (41
   sitelinks, material glass), the Chilehaus (35) and St. Michaelis (27,
@@ -2275,6 +2285,20 @@ removed, not tuned.
 - **Shadow study sheet** — the sun (`suncalc`) at 9, 12, 15, 18 Uhr on
   21.3., 21.6., 21.12. of the shown year, one capture each, as a 3 × 4
   sheet with the legend (`image-export.ts`, `lib/city/image-export.ts`).
+- **Trees by scale** — Modell generalizes the trees by selection, as a
+  plan does: every tree up to 1 : 5 000 (`MODEL_TREES_ALL`), none from
+  1 : 9 000 (`MODEL_TREES_NONE`), the share between eased along the
+  scale's logarithm (`lib/city/model-view.ts` `treeShare`; in the dolly
+  zoom by its progress). The crown shader (`vegetation-layer.ts`
+  `crownKept`) keeps a crown while a stable hash of its instance, raised
+  to its size, is below the share — small crowns go first, the same ones
+  come back — and folds the others onto their origin (no triangle, no
+  shadow; one uniform for every crown set, the cadastre's and the
+  styles' siblings included). Past 1 : 9 000 the vegetation is the
+  ground's green (forest, meadow, urban green). Before, every tree went
+  at once where the fine terrain that carries them gave way to the
+  coarse one (2.5 m/px ≈ 1 : 9 450) — by day only outside the shadow
+  camera's frustum, which kept its fine tiles.
 - **The export's legend** — the scale from the view's metres per pixel
   (printed at 300 dpi), the north arrow from its turn, the credits from
   the site's attribution lines (`siteAttribution`) — drawn into the PNG,

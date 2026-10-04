@@ -171,7 +171,9 @@ chip. Every tile change re-renders the shadow map. The layers:
   Fresnel sky sheen (`visual-style.ts`: `osmColour`, `clayGlow`) — no
   panes, no textures (the window grid is vetoed). Landmarks (flag 16) come from Wikidata
   (`landmarks.py`, cached at fetch time), the site's twelve in the
-  tileset's `extras.landmarks` → the HUD's *Wahrzeichen* chips →
+  tileset's `extras.landmarks` (one per building drawn) → the HUD's
+  *Orte*, merged with the authored vantages (`lib/city/places.ts`: a
+  landmark a vantage names or looks at is folded into it) →
   `landmarkVantage`.
 - Modell (plan 055, ADR 0044; `M`): the city in parallel projection.
   `model-rig.ts` owns the view while it is on (pan / zoom about the
@@ -192,6 +194,12 @@ chip. Every tile change re-renders the shadow map. The layers:
   The planner styles *Strich* and *Schwarzplan* are rows of the style
   table and kinds of the paper swap (`paper-scene.ts`: `paper`, `line`,
   `figure`; the ground's `paperGroundOn` = 1, 2, 3).
+  Trees follow the scale (`treeShare`: all to 1 : 5 000, none from
+  1 : 9 000, the crown shader's `crownKept` folds the rest onto their
+  origin) — the fine terrain that carries them leaves the parallel
+  picture at 2.5 m/px, so anything else on the fine level vanishes there
+  at once; a two-finger twist turns the ground with the fingers
+  (`twistedTurn`).
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
   `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),

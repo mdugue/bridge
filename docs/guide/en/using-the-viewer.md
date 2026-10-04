@@ -147,12 +147,12 @@ only changes the scale:
 | Drag | move the picture (the ground under the pointer stays under it) |
 | Mouse wheel / two fingers apart or together | scale, about the pointer |
 | `+` / `−` | one step of the scale |
-| Right-drag or `Ctrl`-drag / two-finger twist | turn; on release it settles on the nearest 15° |
+| Right-drag or `Ctrl`-drag / two-finger twist | turn (under two fingers the ground turns with them); on release it settles on the nearest 15° |
 | `Shift` + right-drag | tilt (the view becomes *Vogelschau*) |
 | `Q` / `E`, ⟲ ⟳ | turn by 90° |
 | `W` `A` `S` `D`, arrow keys | move the picture |
 | Double-click / double-tap | centre the picture there |
-| `1` – `9`, landmarks, the minimap | centre the picture on that place, keeping scale and turn |
+| `1` – `9`, *Orte*, the minimap | centre the picture on that place, keeping scale and turn |
 | Click / long press | ask, as always |
 | `F` | leave Modell into flight |
 
@@ -179,6 +179,12 @@ free in between); *Ausschnitt mit Sockel* ("cut-out with plinth"), which
 keeps only the middle of the picture and stands it on a dark plinth, like
 a model cut from the city (*neu setzen* takes the current middle; it ends
 with Modell); and *Bild speichern*.
+
+**Trees follow the scale**, as on a drawn plan: up to 1 : 5 000 every
+tree stands in the picture; zooming further out thins them — the small
+ones first — until by 1 : 9 000 none is left and the vegetation is what
+the ground shows: woods, meadows and the green of parks and courtyards,
+as an overview plan draws it. Zooming back in brings the same trees back.
 
 Every picture style works in Modell; *Strich* and *Schwarzplan* are made
 for it. Depth of field, the warm/cool grade and the vignette rest while
@@ -264,9 +270,14 @@ The button in the corner opens a panel with three tabs.
 - **Gehen / Fliegen / Modell** — walk, fly, or see the city in parallel
   projection ([Modell](#modell-the-city-as-a-planner-draws-it)); in Modell
   the **Projektion** section follows.
-- **Aussichtspunkte** ("viewpoints") — hand-picked vantages the camera
-  glides to (on a keyboard also with `1` – `9`):
-  - *from the air*: *Altstadt-Silhouette* (the start view, low over the
+- **Orte** ("places") — where to go, as one list: the hand-picked
+  vantages and the city's landmarks together. The first six show; *Alle …
+  Orte zeigen* ("show all places") opens the rest with a search field
+  over every name. A row glides there (in Modell it centres the picture on
+  it); the icon says how you arrive — on foot, from the air, or at a
+  landmark — and on a keyboard the first nine also answer to `1` – `9`.
+  - *The vantages* come first, in the order they were chosen. In Dresden,
+    *from the air*: *Altstadt-Silhouette* (the start view, low over the
     Elbe), views from above onto the *Frauenkirche*, the *Brühlsche
     Terrasse*, *Albertplatz*, *Alaunpark* and *Zwinger & Semperoper*, a
     low flight over the *Äußere Neustadt*, plus *Carolabrücke* (over the
@@ -276,17 +287,28 @@ The button in the corner opens a panel with three tabs.
     Wunder* (over the Elbe, the bridge spanning from Blasewitz to
     Loschwitz), *Waldschlößchenbrücke* (over the Elbe meadows, the old
     town's towers downstream) and *Hauptbahnhof* (down onto the platform
-    halls, Prager Straße leading to the old town);
-  - *at eye level*: *Canaletto-Blick* (on the Elbe meadow, the old town
-    across the grass), *Elbufer* (the tree-lined Neustadt bank), *Am
-    Japanischen Palais* (on the Neustadt meadow where Canaletto painted),
-    *Neumarkt* (in front of the Frauenkirche) and *Palais im Großen
-    Garten* (at the south end of the Palaisteich, the baroque Palais across
-    the water).
+    halls, Prager Straße leading to the old town); *at eye level*:
+    *Canaletto-Blick* (on the Elbe meadow, the old town across the
+    grass), *Elbufer* (the tree-lined Neustadt bank), *Am Japanischen
+    Palais* (on the Neustadt meadow where Canaletto painted), *Neumarkt*
+    (in front of the Frauenkirche) and *Palais im Großen Garten* (at the
+    south end of the Palaisteich, the baroque Palais across the water).
+  - *The landmarks* follow: the city's best-known buildings and
+    structures, up to twelve — the Hofkirche and the Kreuzkirche in
+    Dresden, the Chilehaus and St. Michaelis in Hamburg. The list is not
+    hand-picked: it comes from Wikidata (the buildings with the most
+    Wikipedia articles, matched to the buildings the viewer draws), so
+    every city gets its own. A landmark a vantage already shows is not
+    listed twice — the Frauenkirche is the vantage *Frauenkirche*, the
+    Zwinger and the Semperoper are *Zwinger & Semperoper* (the search
+    finds them by their own names) — and an institution housed in a more
+    famous building is that building (the Rüstkammer is the
+    Residenzschloss). A landmark row glides up to a view from the
+    south-south-west, a little above it and higher the taller it is.
 
-  The last card, *Aktuelle Sicht merken*, remembers where you stand;
-  it then becomes *Gemerkte Sicht*, which jumps back there, with an ✕ to
-  forget it.
+  *Sicht merken* ("remember view") in the list's heading remembers where
+  you stand: *Gemerkte Sicht* then heads the list and jumps back there,
+  with an ✕ to forget it.
 - **Verkehrsdaten** ("traffic data") — up to three data layers over the
   city, each with its own switch, all off at start; a city shows only those
   it has open data for (see [Sources by city](./sources-by-city.md) and
@@ -308,16 +330,8 @@ The button in the corner opens a panel with three tabs.
 
   From the air the flows, columns and trails widen and thicken so they
   stay legible.
-- **Wahrzeichen** ("landmarks") — the city's best-known buildings and
-  structures, up to twelve, as small chips under the viewpoints: the
-  Frauenkirche in Dresden, the Elbphilharmonie, the Chilehaus and St.
-  Michaelis in Hamburg, the Lindenbrauerei in Unna. The list is not
-  hand-picked: it comes from
-  Wikidata (the buildings with the most Wikipedia articles, matched to
-  the buildings the viewer draws), so every city gets its own. A click
-  glides up to a view from the south-south-west, a little above the
-  landmark and higher the taller it is.
-- **Steuerung** — the full controls table.
+- **Steuerung** ("controls") — the full controls table, folded until you
+  open it (the bar over the scene shows the first few).
 
 ### Szene ("Scene")
 

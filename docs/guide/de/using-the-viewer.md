@@ -154,12 +154,12 @@ tust — näher heran ändert nur den Maßstab:
 | Ziehen | das Bild verschieben (der Boden unter dem Zeiger bleibt unter ihm) |
 | Mausrad / zwei Finger auseinander oder zusammen | Maßstab, um den Zeiger |
 | `+` / `−` | eine Maßstabsstufe |
-| Rechts ziehen oder mit `Strg` ziehen / zwei Finger drehen | drehen; losgelassen rastet es auf die nächsten 15° |
+| Rechts ziehen oder mit `Strg` ziehen / zwei Finger drehen | drehen (unter zwei Fingern dreht sich der Boden mit ihnen); losgelassen rastet es auf die nächsten 15° |
 | `Shift` + rechts ziehen | neigen (die Ansicht wird zur *Vogelschau*) |
 | `Q` / `E`, ⟲ ⟳ | um 90° drehen |
 | `W` `A` `S` `D`, Pfeiltasten | das Bild verschieben |
 | Doppelklick / Doppeltippen | das Bild dort zentrieren |
-| `1` – `9`, Wahrzeichen, die Minikarte | das Bild auf diesen Ort zentrieren, Maßstab und Drehung bleiben |
+| `1` – `9`, *Orte*, die Minikarte | das Bild auf diesen Ort zentrieren, Maßstab und Drehung bleiben |
 | Klick / lange drücken | befragen, wie immer |
 | `F` | das Modell in den Flug verlassen |
 
@@ -187,6 +187,13 @@ zoomt es frei); *Ausschnitt mit Sockel*, der nur die Bildmitte behält und
 sie auf einen dunklen Sockel stellt, wie ein aus der Stadt geschnittenes
 Modell (*neu setzen* nimmt die aktuelle Mitte; er endet mit dem Modell);
 und *Bild speichern*.
+
+**Die Bäume folgen dem Maßstab**, wie auf einem gezeichneten Plan: Bis
+1 : 5 000 steht jeder Baum im Bild; zoomst du weiter hinaus, werden es
+weniger — die kleinen zuerst —, bis bei 1 : 9 000 keiner mehr steht und
+das Grün das ist, was der Boden zeigt: Wald, Wiesen und das Grün der Parks
+und Höfe, wie es ein Übersichtsplan zeichnet. Zoomst du wieder hinein,
+kommen dieselben Bäume zurück.
 
 Jeder Bildstil geht im Modell; *Strich* und *Schwarzplan* sind dafür
 gemacht. Tiefenschärfe, die warm/kalt-Tiefenfärbung und die Vignette ruhen
@@ -280,29 +287,48 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 - **Gehen / Fliegen / Modell** — gehen, fliegen oder die Stadt in
   Parallelprojektion sehen ([Modell](#modell-die-stadt-als-planzeichnung));
   im Modell folgt der Abschnitt **Projektion**.
-- **Aussichtspunkte** — handverlesene Standpunkte, zu denen die Kamera
-  gleitet (am Rechner auch mit den Tasten `1` – `9`):
-  - *aus der Luft*: *Altstadt-Silhouette* (der Startblick, tief über der
-    Elbe), Draufsichten auf *Frauenkirche*, *Brühlsche Terrasse*,
-    *Albertplatz*, *Alaunpark* und *Zwinger & Semperoper*, ein tiefer Flug
-    über die *Äußere Neustadt*, dazu *Carolabrücke* (über dem Fluss),
-    *Elbe-Panorama* (hoch über der Flussbiegung), *Über den Dächern*
-    (ein tiefer Gleitflug über die Altstadtdächer), *Großer Garten* (über
-    dem Palais, dahinter der Palaisteich und die Baumkronen des Parks),
-    *Blaues Wunder* (über der Elbe, die Brücke spannt sich von Blasewitz
-    nach Loschwitz), *Waldschlößchenbrücke* (über den Elbwiesen,
-    flussabwärts die Türme der Altstadt) und *Hauptbahnhof* (von oben auf
-    die Bahnsteighallen, die Prager Straße führt zur Altstadt);
-  - *auf Augenhöhe*: *Canaletto-Blick* (auf der Elbwiese, die Altstadt
-    jenseits des Grases), *Elbufer* (am baumbestandenen Neustädter Ufer),
-    *Am Japanischen Palais* (auf der Neustädter Elbwiese, wo Canaletto
-    malte), *Neumarkt* (vor der Frauenkirche) und *Palais im Großen
-    Garten* (am Südende des Palaisteichs, jenseits des Wassers das barocke
-    Palais).
+- **Orte** — wohin es gehen kann, als eine Liste: die handverlesenen
+  Standpunkte und die Wahrzeichen der Stadt zusammen. Die ersten sechs
+  stehen da; *Alle … Orte zeigen* öffnet den Rest mit einem Suchfeld über
+  alle Namen. Eine Zeile gleitet dorthin (im Modell zentriert sie das Bild
+  darauf); das Symbol sagt, wie du ankommst — zu Fuß, aus der Luft oder an
+  einem Wahrzeichen —, und am Rechner erreichen die Tasten `1` – `9` die
+  ersten neun.
+  - *Die Standpunkte* stehen vorn, in der Reihenfolge, in der sie gewählt
+    sind. In Dresden *aus der Luft*: *Altstadt-Silhouette* (der
+    Startblick, tief über der Elbe), Draufsichten auf *Frauenkirche*,
+    *Brühlsche Terrasse*, *Albertplatz*, *Alaunpark* und *Zwinger &
+    Semperoper*, ein tiefer Flug über die *Äußere Neustadt*, dazu
+    *Carolabrücke* (über dem Fluss), *Elbe-Panorama* (hoch über der
+    Flussbiegung), *Über den Dächern* (ein tiefer Gleitflug über die
+    Altstadtdächer), *Großer Garten* (über dem Palais, dahinter der
+    Palaisteich und die Baumkronen des Parks), *Blaues Wunder* (über der
+    Elbe, die Brücke spannt sich von Blasewitz nach Loschwitz),
+    *Waldschlößchenbrücke* (über den Elbwiesen, flussabwärts die Türme der
+    Altstadt) und *Hauptbahnhof* (von oben auf die Bahnsteighallen, die
+    Prager Straße führt zur Altstadt); *auf Augenhöhe*: *Canaletto-Blick*
+    (auf der Elbwiese, die Altstadt jenseits des Grases), *Elbufer* (am
+    baumbestandenen Neustädter Ufer), *Am Japanischen Palais* (auf der
+    Neustädter Elbwiese, wo Canaletto malte), *Neumarkt* (vor der
+    Frauenkirche) und *Palais im Großen Garten* (am Südende des
+    Palaisteichs, jenseits des Wassers das barocke Palais).
+  - *Die Wahrzeichen* folgen: die bekanntesten Bauwerke der Stadt, bis zu
+    zwölf — die Hofkirche und die Kreuzkirche in Dresden, das Chilehaus
+    und St. Michaelis in Hamburg. Die Liste ist nicht von Hand gewählt:
+    Sie kommt aus Wikidata (die Bauwerke mit den meisten
+    Wikipedia-Artikeln, zugeordnet zu den Gebäuden, die der Viewer
+    zeichnet), so bekommt jede Stadt ihre eigene. Ein Wahrzeichen, das ein
+    Standpunkt schon zeigt, steht nicht doppelt da — die Frauenkirche ist
+    der Standpunkt *Frauenkirche*, Zwinger und Semperoper sind *Zwinger &
+    Semperoper* (die Suche findet sie unter ihrem eigenen Namen) —, und
+    eine Einrichtung im Gebäude eines bekannteren Wahrzeichens ist dieses
+    Wahrzeichen (die Rüstkammer ist das Residenzschloss). Eine
+    Wahrzeichen-Zeile gleitet zu einem Blick aus Süd-Südwest, etwas über
+    dem Bauwerk und umso höher, je höher es ist.
 
-  Die letzte Karte, *Aktuelle Sicht merken*, merkt
-  sich, wo du stehst; sie wird dann zu *Gemerkte Sicht*, die dorthin
-  zurückspringt, mit einem ✕ zum Vergessen.
+  *Sicht merken* in der Kopfzeile der Liste merkt sich, wo du stehst:
+  *Gemerkte Sicht* steht dann oben in der Liste und springt dorthin
+  zurück, mit einem ✕ zum Vergessen.
 - **Verkehrsdaten** — bis zu drei Datenebenen über der Stadt, jede mit
   eigenem Schalter, beim Start alle aus; eine Stadt zeigt nur die, für die
   es offene Daten gibt (siehe [Quellen nach Stadt](./sources-by-city.md) und
@@ -325,16 +351,8 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
 
   Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit
   sie lesbar bleiben.
-- **Wahrzeichen** — die bekanntesten Bauwerke der Stadt, bis zu zwölf,
-  als kleine Chips unter den Aussichtspunkten: die Frauenkirche in
-  Dresden, die Elbphilharmonie, das Chilehaus und St. Michaelis in
-  Hamburg, die Lindenbrauerei in Unna. Die Liste ist nicht von Hand
-  gewählt: Sie kommt aus
-  Wikidata (die Bauwerke mit den meisten Wikipedia-Artikeln, zugeordnet
-  zu den Gebäuden, die der Viewer zeichnet), so bekommt jede Stadt ihre
-  eigene. Ein Klick gleitet zu einem Blick aus Süd-Südwest, etwas über
-  dem Wahrzeichen und umso höher, je höher es ist.
-- **Steuerung** — die vollständige Tastentabelle.
+- **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
+  sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 
 ### Szene
 

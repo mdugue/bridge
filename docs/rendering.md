@@ -198,6 +198,7 @@ is the codebook.
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; remembered per browser | sun altitude (noir's dusk exposure) | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
 | Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow frustum fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
+| Modell's trees | every tree up to 1 : 5 000, fewer (the small crowns first) until none from 1 : 9 000 — the vegetation then the ground's green; a crown not kept is folded onto its origin in the vertex stage (no triangle, no shadow) | the view's scale; a per-instance hash and the crown's size | `lib/city/model-view.ts` `treeShare`, `vegetation-layer.ts` `crownKept` |
 | Schnitt | the near plane through the pivot; the clay drawn two-sided with its back faces near-black (the poché, `clayPoche`), the ground's profile along the cut as a poché strip from the terrain heights | the terrain heights | `visual-style.ts` `setClaySection`, `model-cuts.ts`, `lib/city/section.ts` |
 | Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: comic and Papier sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; faded by the scene's fog factor | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
@@ -412,6 +413,16 @@ Nothing is built for Modell.
   half-octave steps (110–1600 m; 880 m on phones); vegetation tiers, lamp
   lights, the map overlay and the soundscape read an eye over the pivot at
   the equivalent distance.
+- **Trees by scale.** The picture loads one terrain level across the
+  sheet (the tile renderer's error for a parallel camera is the
+  geometric error over the pixel size): fine below 2.5 m/px, coarse
+  above — and the trees ride on the fine level. Rather than let them go
+  all at once there, Modell thins them as a plan generalizes its trees,
+  from every one at 1 : 5 000 to none at 1 : 9 000 (`treeShare`), so
+  none is left standing when the level changes. One uniform on the
+  crown material (`treeShare`) drives every crown set; a crown not kept
+  collapses to its instance origin in the position node, so it costs no
+  fragment and no shadow, and the material keeps its early depth test.
 - **The dolly zoom.** Entering, the perspective camera backs away while
   its field of view closes to 2°, keeping the pivot's framing, and tilts to
   the view; the fog opens as it goes; at the end the parallel camera takes

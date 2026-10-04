@@ -65,6 +65,21 @@ eye above the pivot at the equivalent distance, the distance fog is
 open, the sky dome hidden and the background the style's paper. Depth
 of field, grading and the vignette are off.
 
+**Trees follow the scale, by selection** (2026-10-04). A parallel
+picture loads one terrain level across the whole sheet, and the trees
+ride on the fine one: past 2.5 m/px (about 1 : 9 450) they all went at
+once — by day not inside the shadow camera's frustum, which kept its
+fine tiles. A plan generalizes its trees instead: Modell draws every one
+up to 1 : 5 000 and thins them (the small crowns first, the same ones
+back on the way in) until none stands at 1 : 9 000, where the ground's
+green — forest, meadow, urban green — is the vegetation an overview plan
+shows (`treeShare`, the crown shader's `crownKept`). Keeping the fine
+level, and so the trees, for the whole series was weighed and lost: at
+1 : 10 000 a desktop picture covers 9–12 tiles, which a fine level's
+rasters do not fit in the tile cache. What else rides on the fine level
+and has to be gone, or carried by the coarse one, before 1 : 9 450 is
+the constraint this sets.
+
 **The legend is HUD and file, never scene.** The scale bar (with its
 numbers — the maintainer's call) and the north arrow are HUD glass, the
 minimap draws the picture's footprint; the export (`image-export.ts`)
