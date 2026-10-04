@@ -178,13 +178,17 @@ Beneath them: the current scale and the steps 1:500 … 1:10 000 (zoom is
 free in between); *Ausschnitt mit Sockel* ("cut-out with plinth"), which
 keeps only the middle of the picture and stands it on a dark plinth, like
 a model cut from the city (*neu setzen* takes the current middle; it ends
-with Modell); and *Bild speichern*.
+with Modell; the first time it says *Wird vorbereitet …* for a moment
+while the city's drawing is prepared for the cut, and the city keeps
+moving meanwhile — buildings just outside the cut still cast their
+shadows over its edge); and *Bild speichern*.
 
 **Trees follow the scale**, as on a drawn plan: up to 1 : 5 000 every
 tree stands in the picture; zooming further out thins them — the small
 ones first — until by 1 : 9 000 none is left and the vegetation is what
 the ground shows: woods, meadows and the green of parks and courtyards,
 as an overview plan draws it. Zooming back in brings the same trees back.
+The bridges stand at every scale.
 
 Every picture style works in Modell; *Strich* and *Schwarzplan* are made
 for it. Depth of field, the warm/cool grade and the vignette rest while

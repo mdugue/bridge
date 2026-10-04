@@ -2282,6 +2282,16 @@ removed, not tuned.
   → poché walls down to 12 m below the lowest corner; the city clipped by
   the square's planes (`ClippingGroup`). Buildings on the edge are cut,
   not kept or dropped whole (that would need a per-object centroid).
+  Switching the group switches every drawable's build (three keys it by
+  the clipping and keeps one render object for both sides), and frees
+  the one it leaves: built in the frame, that was the whole city's
+  programs at once, both ways — the picture froze, a phone's tab died. A
+  new cut now shows once its programs are compiled off the frames on
+  stand-ins, the clipped ones under the group and the plain ones they
+  come back to, and held while it shows (`post-stack.ts` `holdCut`); the
+  HUD says *Wird vorbereitet …* meanwhile. The shadow pass is not
+  clipped (no compile ahead reaches it): a building outside still casts
+  over the cut's edge.
 - **Shadow study sheet** — the sun (`suncalc`) at 9, 12, 15, 18 Uhr on
   21.3., 21.6., 21.12. of the shown year, one capture each, as a 3 × 4
   sheet with the legend (`image-export.ts`, `lib/city/image-export.ts`).
@@ -2299,6 +2309,13 @@ removed, not tuned.
   at once where the fine terrain that carries them gave way to the
   coarse one (2.5 m/px ≈ 1 : 9 450) — by day only outside the shadow
   camera's frustum, which kept its fine tiles.
+- **Bridges on both terrain levels** — the coarse level draws its tile's
+  bridges as the fine one does (`buildRail` with the decks alone: deck,
+  parapets, piers or arches, the measured steel; no rails), and they are
+  asked on it too. LoD2's bridge slabs are left out of the buildings, so
+  every river crossing used to vanish where the fine level's reach ended:
+  in the air beyond ≈ 1.2 km, and in Modell across the whole picture from
+  2.5 m/px on.
 - **The export's legend** — the scale from the view's metres per pixel
   (printed at 300 dpi), the north arrow from its turn, the credits from
   the site's attribution lines (`siteAttribution`) — drawn into the PNG,

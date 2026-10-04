@@ -185,15 +185,18 @@ Ansichten an, jede Karte mit dem Würfel, den sie zeichnet:
 Darunter: der aktuelle Maßstab und die Stufen 1:500 … 1:10 000 (dazwischen
 zoomt es frei); *Ausschnitt mit Sockel*, der nur die Bildmitte behält und
 sie auf einen dunklen Sockel stellt, wie ein aus der Stadt geschnittenes
-Modell (*neu setzen* nimmt die aktuelle Mitte; er endet mit dem Modell);
-und *Bild speichern*.
+Modell (*neu setzen* nimmt die aktuelle Mitte; er endet mit dem Modell;
+beim ersten Mal steht dort kurz *Wird vorbereitet …*, während die Stadt
+für den Schnitt vorbereitet wird, und sie bewegt sich dabei weiter —
+Gebäude knapp außerhalb werfen ihren Schatten noch über seinen Rand); und
+*Bild speichern*.
 
 **Die Bäume folgen dem Maßstab**, wie auf einem gezeichneten Plan: Bis
 1 : 5 000 steht jeder Baum im Bild; zoomst du weiter hinaus, werden es
 weniger — die kleinen zuerst —, bis bei 1 : 9 000 keiner mehr steht und
 das Grün das ist, was der Boden zeigt: Wald, Wiesen und das Grün der Parks
 und Höfe, wie es ein Übersichtsplan zeichnet. Zoomst du wieder hinein,
-kommen dieselben Bäume zurück.
+kommen dieselben Bäume zurück. Die Brücken stehen in jedem Maßstab.
 
 Jeder Bildstil geht im Modell; *Strich* und *Schwarzplan* sind dafür
 gemacht. Tiefenschärfe, die warm/kalt-Tiefenfärbung und die Vignette ruhen

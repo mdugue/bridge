@@ -188,7 +188,10 @@ chip. Every tile change re-renders the shadow map. The layers:
   camera: `view-ray.ts`. The Schnitt (`model-cuts.ts`,
   `visual-style.ts` `setClaySection`: the clay two-sided, back faces the
   poché, a ground-profile strip) and the Ausschnitt (a `ClippingGroup`
-  around `world`, a plinth). The export (`image-export.ts`) tiles the
+  around `world`, a plinth — shown only once `PostStack.holdCut` has
+  compiled and holds both sides of every build, since a switch of the
+  group rebuilds the city's programs in the frame; its shadows are not
+  clipped). The export (`image-export.ts`) tiles the
   frustum with `setViewOffset`, **one tile per animation frame** — SMAA
   and GTAO are `NodeUpdateType.FRAME` nodes and render once per frame.
   The planner styles *Strich* and *Schwarzplan* are rows of the style

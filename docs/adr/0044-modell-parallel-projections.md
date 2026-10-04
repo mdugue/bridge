@@ -78,7 +78,24 @@ level, and so the trees, for the whole series was weighed and lost: at
 1 : 10 000 a desktop picture covers 9–12 tiles, which a fine level's
 rasters do not fit in the tile cache. What else rides on the fine level
 and has to be gone, or carried by the coarse one, before 1 : 9 450 is
-the constraint this sets.
+the constraint this sets — the bridges were the first: they are drawn
+on the coarse level too.
+
+**The Ausschnitt shows once its programs are held** (2026-10-04).
+Switching a `ClippingGroup` switches the build of every drawable under
+it; three keeps one render object per drawable for both sides and frees
+the build a switch leaves. The first cut froze the picture while the
+whole city's programs built in one frame, and so did every switch after
+it, both ways — long enough on a phone for the tab to die. A cut now
+shows when both sides are compiled off the frames on stand-ins and held
+(`holdCut`), the HUD saying *Wird vorbereitet …* until then, and is let
+go a frame after it is lifted. The shadow pass stays unclipped — no
+compile ahead reaches it, and clipped it rebuilt every caster in the
+frame that showed the cut: a building outside casts over the cut's edge.
+Rejected: drawing the cut-out frames into a second render target (their
+own render context, both sides alive at once) — every post pass reads
+the scene target; and clipping always (a cut that moves only its
+planes) — every material in every mode would carry the clip.
 
 **The legend is HUD and file, never scene.** The scale bar (with its
 numbers — the maintainer's call) and the north arrow are HUD glass, the
