@@ -617,6 +617,19 @@ function traceRenderer(renderer: WebGPURenderer, trail: CrashTrail): void {
   };
 }
 
+/**
+ * What the renderer holds, by kind, for the crash trail's heartbeat: the
+ * counts, and the MB of the two kinds that weigh — so a report says
+ * whether geometry or rasters ran a phone out of GPU memory.
+ */
+function heldByKind(m: WebGPURenderer["info"]["memory"]): string {
+  const mb = (bytes: number) => Math.round(bytes / 1_048_576);
+  return (
+    `${m.attributes}a ${mb(m.attributesSize + m.indexAttributesSize)}MB ` +
+    `${m.textures}t ${mb(m.texturesSize)}MB ${m.programs}p ${m.uniformBuffers}u`
+  );
+}
+
 /** Reprojects the recenter point (the spawn tile's centre) for SunCalc. */
 function siteLatLng(
   site: Site,
@@ -2124,7 +2137,7 @@ async function bootApp(
         fps: rate,
         gpuMB: gpuBytes() / 1_048_576,
         heldMB: renderer.info.memory.total / 1_048_576,
-        held: `${renderer.info.memory.attributes}a ${renderer.info.memory.textures}t ${renderer.info.memory.programs}p ${renderer.info.memory.uniformBuffers}u`,
+        held: heldByKind(renderer.info.memory),
         calls: renderer.info.render.drawCalls,
         triangles: renderer.info.render.triangles,
         heapMB: heap ? heap.usedJSHeapSize / 1_048_576 : undefined,
@@ -2283,6 +2296,9 @@ async function bootApp(
       return;
     }
     stage("details", 0);
+    // Marks the trail: a page that dies from here on dies building the
+    // dressing, not in the frames before it.
+    opts.trail?.note("dressing gate");
     openGate();
     loadFootprints();
     checkLoaded();

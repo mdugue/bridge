@@ -18,6 +18,13 @@
  * its fine tiles up, streamed them back in and gave them up again, every
  * hold. Pure: the caller feeds it bytes and times.
  *
+ * Two lines, three steps. The last is taken when the second has held and
+ * the memory is still past the hard line: an iPhone in Comic sat at level
+ * 2 with 690–760 MB held for forty seconds — what stayed in view at ×4
+ * still weighed more than the line — and Safari took its GPU away. The last
+ * step brings the fine terrain (and the dressing it carries) in to about a
+ * quarter of a kilometre on a phone, and keeps next to nothing out of view.
+ *
  * The bytes are three's own count, and they run high on purpose: three
  * charges an interleaved buffer once per attribute view, so an instanced
  * set's matrices (instancing.ts: four column views) count four times, and
@@ -43,18 +50,28 @@ export interface MemoryLimits {
   retryMs: number;
 }
 
+type Level = 0 | 1 | 2 | 3;
+
 export interface MemoryStep {
-  level: 0 | 1 | 2;
+  level: Level;
   /** the tile renderer's error target, as a multiple of its own */
   errorScale: number;
   /** the tile cache's lower bound, as a fraction of its own */
   minScale: number;
 }
 
-export const MEMORY_STEPS: readonly [MemoryStep, MemoryStep, MemoryStep] = [
+export const MEMORY_STEPS: readonly [
+  MemoryStep,
+  MemoryStep,
+  MemoryStep,
+  MemoryStep,
+] = [
   { level: 0, errorScale: 1, minScale: 1 },
   { level: 1, errorScale: 2, minScale: 0.5 },
   { level: 2, errorScale: 4, minScale: 0.25 },
+  // Only after level 2 has held and not brought the memory under the hard
+  // line (see the module comment).
+  { level: 3, errorScale: 8, minScale: 0.125 },
 ];
 
 const MB = 1024 * 1024;
@@ -88,32 +105,38 @@ export interface MemoryGovernor {
   update: (held: number, now: number) => MemoryStep | null;
 }
 
-type Level = 0 | 1 | 2;
-
 export function createMemoryGovernor(limits: MemoryLimits): MemoryGovernor {
   let level: Level = 0;
   let since = Number.NEGATIVE_INFINITY;
   // Per level stepped down to: the memory held when the step was taken,
   // the least held while it settled (its hold), and when. Their difference
   // is what the step freed — what undoing it would bring back.
-  const taken = [0, 0, 0];
-  const settled = [0, 0, 0];
-  const takenAt = [0, 0, 0].map(() => Number.NEGATIVE_INFINITY);
+  const taken = [0, 0, 0, 0];
+  const settled = [0, 0, 0, 0];
+  const takenAt = [0, 0, 0, 0].map(() => Number.NEGATIVE_INFINITY);
   const freedBy = (l: Level, now: number) =>
     now - takenAt[l] < limits.retryMs ? Math.max(0, taken[l] - settled[l]) : 0;
-  const lineOf = (l: 1 | 2) => (l === 2 ? limits.hard : limits.soft);
+  // The line a level was taken past, and the one undoing it must stay
+  // under: the last step is taken at the hard line too.
+  const lineOf = (l: Exclude<Level, 0>) =>
+    l === 1 ? limits.soft : limits.hard;
   const target = (held: number, now: number): Level => {
+    const holding = now - since < limits.holdMs;
     if (held >= limits.hard) {
-      return 2;
+      if (level < 2) {
+        return 2;
+      }
+      // Level 2 has held, and the memory is still past its line.
+      return level === 2 && !holding ? 3 : level;
     }
     if (held >= limits.soft && level < 1) {
       return 1;
     }
-    if (level === 0 || now - since < limits.holdMs) {
+    if (level === 0 || holding) {
       return level;
     }
     if (held + freedBy(level, now) < lineOf(level) - limits.margin) {
-      return level === 2 ? 1 : 0;
+      return (level - 1) as Level;
     }
     return level;
   };

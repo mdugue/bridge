@@ -35,8 +35,8 @@ export interface TrailBeat {
   gpuMB: number;
   /**
    * What the renderer holds on the GPU (three's own count), MB, and its
-   * attributes/textures/programs/uniform buffers — optional: older records
-   * lack it.
+   * attributes and textures (each with its MB), programs and uniform
+   * buffers — optional: older records lack it.
    */
   heldMB?: number;
   held?: string;
