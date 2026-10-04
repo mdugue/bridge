@@ -33,6 +33,42 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "Esc", action: "immersiv beenden" },
 ];
 
+/** Modell's (plan 055): the picture is a sheet you move, not a view you turn. */
+export const MODEL_HINTS: readonly ControlHint[] = [
+  { key: "Ziehen", action: "verschieben", primary: true },
+  { key: "Scroll", action: "Maßstab", primary: true },
+  { key: "Q / E", action: "drehen", primary: true },
+  { key: "Klick", action: "befragen", primary: true },
+  { key: "M", action: "zurück", primary: true },
+  { key: "Rechts ziehen", action: "drehen" },
+  { key: "Shift + rechts ziehen", action: "neigen (Vogelschau)" },
+  { key: "W A S D", action: "verschieben" },
+  { key: "+ / −", action: "eine Maßstabsstufe" },
+  { key: "2× Klick", action: "in die Bildmitte" },
+  { key: "1 – 9", action: "Aussichtspunkt in die Mitte" },
+  { key: "F", action: "fliegen" },
+  { key: "V", action: "Bildstil wechseln" },
+];
+
+/** Modell on a touch screen. */
+export const MODEL_TOUCH_HINTS: readonly ControlHint[] = [
+  { key: "Ziehen", action: "verschieben", primary: true },
+  { key: "2 Finger", action: "Maßstab · drehen", primary: true },
+  { key: "Lange drücken", action: "befragen", primary: true },
+  { key: "2× Tippen", action: "in die Bildmitte" },
+];
+
+/** The hints for a pointer and a mode. */
+export function hintsFor(
+  coarse: boolean,
+  model: boolean
+): readonly ControlHint[] {
+  if (model) {
+    return coarse ? MODEL_TOUCH_HINTS : MODEL_HINTS;
+  }
+  return coarse ? TOUCH_HINTS : CONTROL_HINTS;
+}
+
 /** The touch equivalents, for coarse pointers. */
 export const TOUCH_HINTS: readonly ControlHint[] = [
   { key: "Ziehen", action: "umsehen", primary: true },
@@ -45,21 +81,23 @@ export const TOUCH_HINTS: readonly ControlHint[] = [
 ];
 
 const DISMISSED_KEY = "city-walk:hints-dismissed";
+/** Modell's own bar: it is new when Modell is first entered. */
+const MODEL_DISMISSED_KEY = "city-walk:model-hints-dismissed";
 /** Long enough to read as a fade, short enough not to linger. */
 const FADE_MS = 300;
 
-function wasDismissed(): boolean {
+function wasDismissed(key: string): boolean {
   try {
-    return localStorage.getItem(DISMISSED_KEY) === "1";
+    return localStorage.getItem(key) === "1";
   } catch {
     // Private mode / blocked storage: show the hints, the safe default.
     return false;
   }
 }
 
-function rememberDismissed(): void {
+function rememberDismissed(key: string): void {
   try {
-    localStorage.setItem(DISMISSED_KEY, "1");
+    localStorage.setItem(key, "1");
   } catch {
     // Nothing to do — they stay dismissed for this session either way.
   }
@@ -74,14 +112,22 @@ function rememberDismissed(): void {
  * divider (the snackbar convention), and it is remembered. Nothing is lost
  * either way: the full table lives in the sidebar under Steuerung.
  */
-export function ControlHintBar({ coarse }: { coarse: boolean }) {
+export function ControlHintBar({
+  coarse,
+  model = false,
+}: {
+  coarse: boolean;
+  /** Modell's hints (plan 055), dismissed on their own */
+  model?: boolean;
+}) {
+  const key = model ? MODEL_DISMISSED_KEY : DISMISSED_KEY;
   const [phase, setPhase] = useState<"gone" | "leaving" | "shown">(() =>
-    wasDismissed() ? "gone" : "shown"
+    wasDismissed(key) ? "gone" : "shown"
   );
   const dismiss = useCallback(() => {
     setPhase((prev) => (prev === "shown" ? "leaving" : prev));
-    rememberDismissed();
-  }, []);
+    rememberDismissed(key);
+  }, [key]);
 
   // Unmount once the fade has played, not before.
   useEffect(() => {
@@ -97,9 +143,7 @@ export function ControlHintBar({ coarse }: { coarse: boolean }) {
   }
   // The bar is the welcome, not the manual: only the primary hints, and on a
   // touch device that is three short ones.
-  const hints = (coarse ? TOUCH_HINTS : CONTROL_HINTS).filter(
-    (hint) => hint.primary
-  );
+  const hints = hintsFor(coarse, model).filter((hint) => hint.primary);
   return (
     <div className="pointer-events-none absolute inset-x-3 bottom-5 z-10 flex justify-center">
       <div

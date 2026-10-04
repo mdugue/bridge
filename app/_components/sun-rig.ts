@@ -25,6 +25,7 @@ import {
 } from "three/tsl";
 import type { UniformNode } from "three/webgpu";
 import { atmosphereAt } from "@/lib/city/atmosphere";
+import { fitModelShadow } from "@/lib/city/model-view";
 import {
   fitShadowRadius,
   SHADOW_BASE_RADIUS,
@@ -58,6 +59,24 @@ export interface SunRig {
    * and the altitude the half-size is derived from (lib/city/shadow-fit.ts).
    */
   follow: (position: Vector3, direction: Vector3, groundY: number) => void;
+  /**
+   * Re-fits the shadow frustum to the ground a parallel view shows (Modell,
+   * plan 055): centred on the footprint's circle at its ground height, its
+   * half-size in half-octave steps up to `max` (lib/city/model-view.ts).
+   */
+  followFootprint: (
+    x: number,
+    groundY: number,
+    z: number,
+    radius: number,
+    max: number
+  ) => void;
+  /**
+   * Modell's parallel view has no sky: the dome is hidden and the
+   * background is `paper` (the style's sheet); off, the sky and the
+   * palette's background come back.
+   */
+  setParallel: (on: boolean, paper?: Color) => void;
   /** Forces a one-off shadow-map re-render. The map is otherwise only redrawn
    * when the sun or frustum moves (autoUpdate is off), so scene-topology edits
    * (demolish, a tile landing or leaving) must call this or stale shadows linger. */
@@ -85,7 +104,7 @@ interface SkyDome {
   setSun: (direction: Vector3) => void;
 }
 
-function createSkyDome(scene: Scene): SkyDome {
+function createSkyDome(scene: Scene): SkyDome & { mesh: SkyMesh } {
   const sky = new SkyMesh();
   // Inside the camera far plane (6000) but beyond the fog end.
   sky.scale.setScalar(4500);
@@ -157,6 +176,7 @@ function createSkyDome(scene: Scene): SkyDome {
   })();
   scene.add(sky);
   return {
+    mesh: sky,
     setHaze: (colour) => {
       haze.value.set(colour);
     },
@@ -327,6 +347,48 @@ export function createSunRig(
     reposition();
   };
 
+  const followFootprint = (
+    x: number,
+    groundY: number,
+    z: number,
+    footRadius: number,
+    max: number
+  ) => {
+    const nextRadius = fitModelShadow(footRadius, radius, max);
+    if (
+      nextRadius === radius &&
+      Number.isFinite(lastCentre.x) &&
+      Math.hypot(x - lastCentre.x, groundY - lastCentre.y, z - lastCentre.z) <
+        deadZone
+    ) {
+      return;
+    }
+    if (nextRadius !== radius) {
+      resizeFrustum(nextRadius);
+      sun.shadow.needsUpdate = true;
+    }
+    focus.set(x, groundY, z);
+    reposition();
+  };
+
+  let parallel = false;
+  let palettePaper: Color | null = null;
+  let paletteBackground = 0;
+  const setParallel = (on: boolean, paper?: Color) => {
+    parallel = on;
+    sky.mesh.visible = !on;
+    if (on && paper) {
+      palettePaper = paper.clone();
+    }
+    if (scene.background instanceof Color) {
+      if (on && palettePaper) {
+        scene.background.copy(palettePaper);
+      } else {
+        scene.background.setHex(paletteBackground);
+      }
+    }
+  };
+
   const update = (date: Date): SunState => {
     const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
     dir.set(d.x, d.y, d.z);
@@ -351,7 +413,8 @@ export function createSunRig(
     const palette = atmosphereAt(altitudeDeg);
     fogColor.value.set(palette.fog);
     sky.setHaze(palette.fog);
-    if (scene.background instanceof Color) {
+    paletteBackground = new Color(palette.fog).getHex();
+    if (scene.background instanceof Color && !parallel) {
       scene.background.set(palette.fog);
     }
     hemisphere.color.set(palette.hemiSky);
@@ -367,6 +430,8 @@ export function createSunRig(
   return {
     update,
     follow,
+    followFootprint,
+    setParallel,
     invalidateShadow,
     // three only draws the map for a VISIBLE light: below the horizon the
     // flag stays raised (and is consumed at sunrise), so it is not "pending".

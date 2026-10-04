@@ -12,7 +12,21 @@
 /** A style's own tree crowns (style-dressing.ts), or null for the scene's. */
 export type CrownStyle = "comic" | "paper";
 
-export type RenderStyle = "comic" | "noir" | "paper" | "pastel" | "sincity";
+/**
+ * How a style swaps the scene's materials for its frames (paper-scene.ts):
+ * Papier's white card, Strich's white model on the plan-coloured ground,
+ * the Schwarzplan's black buildings on white with nothing else drawn.
+ */
+export type PaperKind = "figure" | "line" | "paper";
+
+export type RenderStyle =
+  | "comic"
+  | "figure"
+  | "line"
+  | "noir"
+  | "paper"
+  | "pastel"
+  | "sincity";
 
 export interface RenderStyleDef {
   /**
@@ -37,11 +51,12 @@ export interface RenderStyleDef {
   /** weight on the grain slider */
   grainWeight: number;
   /**
-   * Draw every surface with one white paper material under the real light
-   * (paper-scene.ts). Only the Papier style: its whole point is white
-   * surfaces with true shading, which no post pass can recover from colour.
+   * Draw every surface with one material under the real light
+   * (paper-scene.ts), or null for the scene's own. Papier and Strich: white
+   * surfaces with true shading, which no post pass can recover from
+   * colour; the Schwarzplan: the buildings black and nothing else.
    */
-  paperScene: boolean;
+  paperScene: PaperKind | null;
   /** stable id — persisted in snapshots, never rename */
   id: RenderStyle;
   /** weight on the ink slider (the outline strength) */
@@ -72,7 +87,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1,
     grainAnimated: false,
     allowDof: true,
-    paperScene: false,
+    paperScene: null,
     crowns: null,
     lampCones: false,
     vignette: { offset: 0.28, darkness: 0.5 },
@@ -90,7 +105,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1.2,
     grainAnimated: false,
     allowDof: false,
-    paperScene: false,
+    paperScene: null,
     crowns: "comic",
     lampCones: false,
     vignette: { offset: 0.35, darkness: 0.22 },
@@ -107,7 +122,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 1.6,
     grainAnimated: true,
     allowDof: true,
-    paperScene: false,
+    paperScene: null,
     crowns: null,
     lampCones: true,
     vignette: { offset: 0.12, darkness: 0.9 },
@@ -124,7 +139,7 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainWeight: 0.5,
     grainAnimated: true,
     allowDof: false,
-    paperScene: false,
+    paperScene: null,
     crowns: null,
     lampCones: false,
     vignette: { offset: 0.25, darkness: 0.55 },
@@ -143,11 +158,47 @@ export const RENDER_STYLES: readonly RenderStyleDef[] = [
     grainAnimated: false,
     // A shallow focus on a white model reads as a miniature — welcome here.
     allowDof: true,
-    paperScene: true,
+    paperScene: "paper",
     crowns: "paper",
     lampCones: false,
     vignette: { offset: 0.32, darkness: 0.28 },
     swatch: ["#f4f0e8", "#7a8092"],
+  },
+  {
+    id: "line",
+    label: "Strich",
+    description:
+      "Strichzeichnung wie im Plan: weißes Modell, gleich starke Linien, Schatten als hellgraue Lasur, das Gelände in Planfarben",
+    shaderMode: 5,
+    inkWeight: 1,
+    gradingWeight: 0,
+    // a clean sheet: barely a grain
+    grainWeight: 0.3,
+    grainAnimated: false,
+    allowDof: false,
+    paperScene: "line",
+    crowns: "paper",
+    lampCones: false,
+    vignette: { offset: 0.5, darkness: 0 },
+    swatch: ["#fbfaf7", "#2b2d33"],
+  },
+  {
+    id: "figure",
+    label: "Schwarzplan",
+    description:
+      "Die Gebäude schwarz, alles andere weiß — keine Bäume, keine Schatten; gemacht für den Lageplan",
+    shaderMode: 6,
+    // the figure is the drawing: no lines
+    inkWeight: 0,
+    gradingWeight: 0,
+    grainWeight: 0,
+    grainAnimated: false,
+    allowDof: false,
+    paperScene: "figure",
+    crowns: null,
+    lampCones: false,
+    vignette: { offset: 0.5, darkness: 0 },
+    swatch: ["#ffffff", "#111111"],
   },
 ];
 

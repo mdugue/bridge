@@ -3,8 +3,13 @@ import { isDoubleTap, type TapSample } from "@/lib/city/touch";
 /**
  * Street-view-style canvas gestures via Pointer Events, for touch AND mouse:
  *  - one-pointer drag: look around ("grab the world")
- *  - two-finger pinch: move forward (spread) or back (pinch) — touch only
- *  - mouse wheel / trackpad pinch: the same; with Alt, zoom (FOV)
+ *  - two-finger pinch: move forward (spread) or back (pinch) — touch only;
+ *    the fingers' midpoint comes along, and their twist (`onTwist`)
+ *  - a right-button drag, or Ctrl/⌘ + drag (`onAltDrag`, Shift held or not):
+ *    Modell turns (and tilts) by it; `onDragEnd` when it, or a two-finger
+ *    gesture, ends
+ *  - mouse wheel / trackpad pinch: the same; with Alt, zoom (FOV); the
+ *    pointer's NDC comes along (Modell zooms about it)
  *  - double-tap / double-click: travel to the tapped spot
  *  - a single tap / click: `onTap`, with the pointer's type (a click asks
  *    what is there; the first tap of a double one fires it too)
@@ -30,14 +35,23 @@ export interface TouchControlsCallbacks {
   onLook: (dxPx: number, dyPx: number) => void;
   /** pointer-locked mouse motion in CSS pixels */
   onMouseLook: (dxPx: number, dyPx: number) => void;
-  /** current finger distance / distance at pinch start */
-  onPinch: (ratio: number) => void;
+  /** current finger distance / distance at pinch start, and the fingers'
+   *  midpoint in NDC */
+  onPinch: (ratio: number, midNdcX: number, midNdcY: number) => void;
   onPinchStart: () => void;
+  /** two fingers turned by `radians` since the last event (counter-clockwise on screen) */
+  onTwist?: (radians: number) => void;
+  /** two fingers moved together by (dx, dy) CSS px since the last event */
+  onTwoFingerPan?: (dxPx: number, dyPx: number) => void;
+  /** a right-button (or Ctrl/⌘) drag: delta in CSS px, and whether Shift is held */
+  onAltDrag?: (dxPx: number, dyPx: number, shift: boolean) => void;
+  /** a right-button drag or a two-finger gesture ended */
+  onDragEnd?: () => void;
   /**
    * The wheel (or a trackpad pinch) as a dolly, in the pinch's units:
-   * ln(zoom ratio), > 0 moves forward
+   * ln(zoom ratio), > 0 moves forward; the pointer in NDC
    */
-  onWheelDolly: (amount: number) => void;
+  onWheelDolly: (amount: number, ndcX: number, ndcY: number) => void;
   /** one Alt+wheel notch, as a pinch-style ratio: > 1 zooms in */
   onWheelZoom: (ratio: number) => void;
 }
@@ -78,6 +92,8 @@ const WINDOW_TIMER: PressTimer = {
 };
 
 interface PointerState {
+  /** a right-button / Ctrl drag (`onAltDrag`), not a look */
+  alt: boolean;
   startTime: number;
   startX: number;
   startY: number;
@@ -98,6 +114,11 @@ export function attachTouchControls(
 ): TouchControls {
   const pointers = new Map<number, PointerState>();
   let pinchStartDistance = 0;
+  /** the two fingers' line's angle and midpoint at the last event */
+  let pairAngle = 0;
+  let pairMid = { x: 0, y: 0 };
+  /** a right-button drag just ended: its context menu is no menu */
+  let altEndedAt = Number.NEGATIVE_INFINITY;
   let dragged = false;
   let lastTap: TapSample | null = null;
   let pressTimer: unknown = null;
@@ -139,8 +160,29 @@ export function attachTouchControls(
     if (e.pointerType === "touch" || e.pointerType === "pen") {
       return true;
     }
-    // Mouse: primary button only, and never while pointer-locked (immersive).
-    return e.button === 0 && !locked();
+    // Mouse: primary button (and the secondary, where something turns by
+    // it), never while pointer-locked (immersive).
+    if (locked()) {
+      return false;
+    }
+    return (
+      e.button === 0 || (e.button === 2 && callbacks.onAltDrag !== undefined)
+    );
+  };
+
+  /** a right-button drag, or Ctrl/⌘ with the primary one (a Mac's one button) */
+  const isAltDrag = (e: PointerEvent): boolean =>
+    callbacks.onAltDrag !== undefined &&
+    e.pointerType === "mouse" &&
+    (e.button === 2 || e.ctrlKey || e.metaKey);
+
+  /** the two pointers' line: its angle and midpoint (client px) */
+  const pairOf = (): { angle: number; mid: { x: number; y: number } } => {
+    const [a, b] = [...pointers.values()];
+    return {
+      angle: Math.atan2(b.y - a.y, b.x - a.x),
+      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+    };
   };
 
   const pinchDistance = (): number => {
@@ -157,6 +199,9 @@ export function attachTouchControls(
   const syncPinchBaseline = () => {
     if (pointers.size === 2) {
       pinchStartDistance = pinchDistance();
+      const pair = pairOf();
+      pairAngle = pair.angle;
+      pairMid = pair.mid;
       callbacks.onPinchStart();
     } else {
       pinchStartDistance = 0;
@@ -173,6 +218,7 @@ export function attachTouchControls(
       // Synthetic events (tests) carry pointer ids unknown to the browser.
     }
     pointers.set(e.pointerId, {
+      alt: isAltDrag(e),
       startTime: e.timeStamp,
       startX: e.clientX,
       startY: e.clientY,
@@ -210,9 +256,28 @@ export function attachTouchControls(
       cancelPress();
     }
     if (pointers.size === 1) {
-      callbacks.onLook(dx, dy);
+      if (state.alt) {
+        callbacks.onAltDrag?.(dx, dy, e.shiftKey);
+      } else {
+        callbacks.onLook(dx, dy);
+      }
     } else if (pointers.size === 2 && pinchStartDistance > 0) {
-      callbacks.onPinch(pinchDistance() / pinchStartDistance);
+      const pair = pairOf();
+      const [midX, midY] = ndcOf(pair.mid.x, pair.mid.y);
+      callbacks.onPinch(pinchDistance() / pinchStartDistance, midX, midY);
+      // the twist, wrapped to the short way round
+      let turn = pair.angle - pairAngle;
+      turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+      if (turn !== 0) {
+        callbacks.onTwist?.(-turn);
+      }
+      const mx = pair.mid.x - pairMid.x;
+      const my = pair.mid.y - pairMid.y;
+      if (mx !== 0 || my !== 0) {
+        callbacks.onTwoFingerPan?.(mx, my);
+      }
+      pairAngle = pair.angle;
+      pairMid = pair.mid;
     }
   };
 
@@ -221,9 +286,21 @@ export function attachTouchControls(
     if (!state) {
       return;
     }
+    const wasPair = pointers.size === 2;
     pointers.delete(e.pointerId);
     syncPinchBaseline();
     cancelPress();
+    if (state.alt) {
+      altEndedAt = e.timeStamp;
+      callbacks.onDragEnd?.();
+      if (pointers.size === 0) {
+        dragged = false;
+      }
+      return;
+    }
+    if (wasPair) {
+      callbacks.onDragEnd?.();
+    }
     const isTap =
       !(dragged || longPressed) &&
       pointers.size === 0 &&
@@ -265,7 +342,8 @@ export function attachTouchControls(
     const units =
       -px / (e.ctrlKey ? TRACKPAD_PINCH_PX_PER_UNIT : WHEEL_PX_PER_UNIT);
     callbacks.onWheelDolly(
-      Math.min(Math.max(units, -MAX_WHEEL_UNITS), MAX_WHEEL_UNITS)
+      Math.min(Math.max(units, -MAX_WHEEL_UNITS), MAX_WHEEL_UNITS),
+      ...ndcOf(e.clientX, e.clientY)
     );
   };
 
@@ -280,7 +358,9 @@ export function attachTouchControls(
   // A held finger opens the browser's context menu (Android) or callout
   // (iOS) on the canvas: the long press owns that gesture.
   const onContextMenu = (e: Event) => {
-    if (pointers.size > 0 || longPressed) {
+    // (a right-button drag ends on the menu on Windows: it fires after the
+    // release)
+    if (pointers.size > 0 || longPressed || e.timeStamp - altEndedAt < 400) {
       e.preventDefault();
     }
   };

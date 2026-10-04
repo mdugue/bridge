@@ -62,7 +62,8 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | Click on a building | ask it: a card says what the data knows about it |
 | `I` | ask what stands under the crosshair (immersive too) |
 | `R` | demolish the building under the crosshair |
-| `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier) |
+| `V` | switch to the next picture style (Pastell → Comic → Film noir → Sin City → Papier → Strich → Schwarzplan) |
+| `M` | switch to *Modell*, the city in parallel projection, and back (see [Modell](#modell-the-city-as-a-planner-draws-it)) |
 | `Esc` | leave immersive mode |
 
 | Input (touch) | Does |
@@ -72,6 +73,7 @@ surroundings") hint shows at the top of the screen (see [how a visit unfolds](./
 | *Standort* (toolbar, bottom right) | teleport to where you really are, facing the way the phone points |
 | *Live* (toolbar, only with a compass) | view and position follow you and your phone — flying too — until you switch it off, drag or use the joystick |
 | *Fliegen* (toolbar) | switch between walking and flying (take off / land) |
+| *Modell* (toolbar) | switch to the city in parallel projection and back |
 | Long press on a building | ask it |
 | ⌄ under the toolbar | fold the toolbar into one button (⋮ opens it again) |
 | Altitude slider (above the toolbar, flying only) | push up to climb, down to sink; let go to hold the height |
@@ -125,6 +127,72 @@ altitude slider climbs or sinks without ending *Live*.
 A floating bar shows the four essential controls until you dismiss it with
 *Verstanden*; the full table stays available in the panel under
 *Steuerung*.
+
+## Modell: the city as a planner draws it
+
+`M`, *Modell* in the toolbar or *Modell* beside *Gehen* and *Fliegen* in
+the panel switch to **Modell**: the city in parallel projection, the way
+urban planners draw it. The view backs away and narrows in a short dolly
+zoom until the perspective is gone; `M` again glides back to where you
+were — or, if you have moved the picture far, to a view from the air over
+its middle.
+
+A parallel projection has a scale instead of a distance: equal lengths
+stay equal wherever they stand in the picture, near or far. You move the
+sheet, not yourself, and it stays parallel whatever you do — coming nearer
+only changes the scale:
+
+| Input | Does |
+|---|---|
+| Drag | move the picture (the ground under the pointer stays under it) |
+| Mouse wheel / two fingers apart or together | scale, about the pointer |
+| `+` / `−` | one step of the scale |
+| Right-drag or `Ctrl`-drag / two-finger twist | turn; on release it settles on the nearest 15° |
+| `Shift` + right-drag | tilt (the view becomes *Vogelschau*) |
+| `Q` / `E`, ⟲ ⟳ | turn by 90° |
+| `W` `A` `S` `D`, arrow keys | move the picture |
+| Double-click / double-tap | centre the picture there |
+| `1` – `9`, landmarks, the minimap | centre the picture on that place, keeping scale and turn |
+| Click / long press | ask, as always |
+| `F` | leave Modell into flight |
+
+Bottom left, where the joystick sits on foot, are the **scale bar** — a
+round length in black and white segments, with the scale under it
+("1 : 2 500 bei 96 dpi": a screen pixel taken as 0.26 mm) — and the
+**north arrow** between two quarter-turn buttons; a click on the arrow
+turns north up. The minimap draws the ground the picture shows.
+
+Under *Gehen · Fliegen · Modell* in the panel, **Projektion** offers the
+views, each card with the cube it draws:
+
+| View | What it is |
+|---|---|
+| *Isometrie* | the 30° isometry: tilted 35.26°, all three axes shortened alike (lengths along them × 0.816), turned to the diagonals |
+| *Vogelschau* | parallel from above at a free tilt (slider) and turn |
+| *Militär* | the Militärperspektive: the ground plan undistorted and to scale, heights standing straight up over it — at 30°/60° or 45°/45° to the sheet's edges, heights × 1 or × ⅔ |
+| *Lageplan* | straight down, north up |
+| *Ansicht* | level, onto the line through the middle of the picture; everything in front of it is cut away |
+| *Schnitt* | the same, with what the cut opens filled black (poché) and the ground drawn as a profile below it |
+
+Beneath them: the current scale and the steps 1:500 … 1:10 000 (zoom is
+free in between); *Ausschnitt mit Sockel* ("cut-out with plinth"), which
+keeps only the middle of the picture and stands it on a dark plinth, like
+a model cut from the city (*neu setzen* takes the current middle; it ends
+with Modell); and *Bild speichern*.
+
+Every picture style works in Modell; *Strich* and *Schwarzplan* are made
+for it. Depth of field, the warm/cool grade and the vignette rest while
+Modell is on, the distance haze opens, and the sky gives way to the
+style's paper.
+
+**Bild speichern** ("save picture", also under *Erweitert*) saves the
+current view as a PNG with a legend strip under it: north arrow, scale
+bar, the view and the scale the picture has when printed at 300 dpi, date
+and time, and the data sources' credits (their licences ask for them). In
+Modell the picture is rendered larger than the screen — on a computer
+about three image pixels per screen point, on a phone two, in tiles, with
+a veil over the city for the moment it takes; in Gehen and Fliegen it is
+the frame as you see it, with the credits.
 
 ## Asking a building
 
@@ -193,7 +261,9 @@ The button in the corner opens a panel with three tabs.
 - **Minimap** — the whole area from above, with the land-use colours, the
   bridges and the footprints of the buildings currently loaded. Your position and view
   direction are drawn on it; a click glides there.
-- **Gehen / Fliegen** — walk or fly.
+- **Gehen / Fliegen / Modell** — walk, fly, or see the city in parallel
+  projection ([Modell](#modell-the-city-as-a-planner-draws-it)); in Modell
+  the **Projektion** section follows.
 - **Aussichtspunkte** ("viewpoints") — hand-picked vantages the camera
   glides to (on a keyboard also with `1` – `9`):
   - *from the air*: *Altstadt-Silhouette* (the start view, low over the
@@ -256,6 +326,12 @@ The button in the corner opens a panel with three tabs.
   sun's position is computed for Dresden for the chosen instant; shadows,
   sky, fog colours and the dusk glow in buildings follow it. *Standardzeit*
   returns to 14:00, the time the default look is tuned for.
+  Below, the **Verschattungsstudie** ("shadow study"): chips for 21 March,
+  21 June and 21 December of the year shown and for 9, 12, 15 and 18
+  o'clock set the sun in one click; *Als Blatt speichern* renders the
+  current view at all twelve instants and saves them as one sheet — a row
+  per date, a column per hour — with the legend under it (in Modell with
+  scale bar and north arrow). The hours are your device's local time.
 - **Darstellung** ("look") — the **Bildstil** (picture style) on top, then
   sliders in four collapsible groups. Every slider is a percentage; the
   defaults are the tuned look. *Zurücksetzen* ("reset") returns the
@@ -272,10 +348,12 @@ next visit:
 | *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge; a soft light cone under every street lamp — only hinted at by day, full at dusk; as it gets dark the camera opens up instead of letting everything go black |
 | *Sin City* | hard areas in four tones (black, near-black, near-white, white) that follow the brightness around them, so even a dark view stays readable; crowns and the Elbe go black, meadows stay light, the skyline and big silhouettes stand as a white edge against the black; rain falls in front of the scene; only the red tiled roofs keep their colour |
 | *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra; road markings and sports lines stay as a faint grey, water as a cooler, deeper paper; lights and mist sheets drop out |
+| *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, the shade as one light grey wash, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card |
+| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white — no trees, no shadows, no lines; made for the *Lageplan*, usable everywhere |
 
-In the graphic styles *Comic* and *Sin City* the depth of field rests (a
-blurred background under crisp lines reads as a mistake); the switch stays
-as you set it.
+In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
+depth of field rests (a blurred background under crisp lines reads as a
+mistake); the switch stays as you set it.
 
 | Group | Slider | What it does |
 |---|---|---|
@@ -305,7 +383,7 @@ as you set it.
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
-| | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City* and *Papier* |
+| | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 | | *Tiefenschärfe* (switch) | photographic depth of field; *Auto* focuses on the crosshair, *Manuell* on a fixed distance |
 
 While the camera moves, the depth-of-field blur is switched off (the eye
@@ -315,7 +393,8 @@ cannot resolve it in motion) and comes back when you stop.
 
 - **Werkzeuge** — *Gebäude unter dem Fadenkreuz abreißen* demolishes the
   building you are looking at (same as `R`), on any tile in view; it is
-  not undoable. *Immersiver Modus* locks the mouse pointer
+  not undoable. *Bild speichern* saves the view as a PNG with its sources
+  (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
   the picture style and every slider as a small JSON text; paste such a text into the box and

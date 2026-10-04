@@ -3,6 +3,7 @@ import { type AskHit, type AskSet, nearestInSets } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import type { Inquiry, InquiryObject } from "@/lib/city/inquiry";
 import { type CityLayer, pickCityObject } from "./city-layer";
+import { setPickRay } from "./view-ray";
 
 /**
  * The scene side of the "Befragen" mode (ADR 0042): asks the city what
@@ -119,7 +120,8 @@ const FAR = 6000;
 const CENTRE = new Vector2(0, 0);
 
 export function createInquiryProbe(deps: {
-  camera: Camera;
+  /** the camera the frame is drawn with (Modell's parallel one, or walk/fly's) */
+  camera: () => Camera;
   /** the city layers on screen now */
   cities: () => readonly CityLayer[];
   /** whether a layer's tile is still loaded (shown or not) */
@@ -150,13 +152,17 @@ export function createInquiryProbe(deps: {
   const sample = (
     ndc: { x: number; y: number } | undefined
   ): PickSample<ProbeHit> | null => {
-    const picked = pickCityObject(deps.camera, deps.cities(), ndc);
-    ray.setFromCamera(ndc ? new Vector2(ndc.x, ndc.y) : CENTRE, deps.camera);
+    const camera = deps.camera();
+    const picked = pickCityObject(camera, deps.cities(), ndc);
+    const reach = Math.max(
+      setPickRay(ray, ndc ? new Vector2(ndc.x, ndc.y) : CENTRE, camera),
+      FAR
+    );
     const thing = nearestInSets(
       ray.ray.origin,
       ray.ray.direction,
       deps.things(),
-      picked?.distance ?? FAR
+      picked?.distance ?? reach
     );
     const distance = thing?.distance ?? picked?.distance;
     if (distance === undefined) {

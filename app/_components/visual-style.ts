@@ -1,5 +1,7 @@
 import {
   type DataTexture,
+  DoubleSide,
+  FrontSide,
   MeshStandardNodeMaterial,
   type Texture,
 } from "three/webgpu";
@@ -12,6 +14,7 @@ import {
   float,
   floor,
   fract,
+  frontFacing,
   fwidth,
   int,
   ivec2,
@@ -120,7 +123,18 @@ export interface StyleResources {
   materials: Set<MeshStandardNodeMaterial>;
   /** the current transparency, applied to materials created later too */
   transparency: number;
+  /** Modell's Schnitt is shown: the clay is drawn from both sides */
+  section: boolean;
 }
+
+/**
+ * The Schnitt's poché (plan 055): where the cut opens a building, its
+ * inside — the back faces, drawn while a Schnitt is shown — is filled
+ * near-black, as a drawn section fills the walls it cuts. One shared
+ * uniform; the clay's colour reads it on its back faces only.
+ */
+export const clayPoche = uniform(0);
+const POCHE = vec3(0.025, 0.024, 0.027);
 
 /**
  * Procedural facade detail on the opaque clay node material, keyed to each
@@ -195,12 +209,16 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
       clamp(float(1).add(d.uRough.mul(rough)), 0.55, 1),
       facadeMaterial(flags, wall)
     ),
-    colour: askedColour(
-      clayColour(d, tint, build, h, wall, flags),
-      h,
-      wall,
-      flags,
-      wn
+    colour: select(
+      clayPoche.greaterThan(0.5).and(frontFacing.not()),
+      POCHE,
+      askedColour(
+        clayColour(d, tint, build, h, wall, flags),
+        h,
+        wall,
+        flags,
+        wn
+      )
     ),
     // Himmelslicht: the courtyard's ground floor gets less of the sky.
     ao: createClaySky().ao(h, build.z, d.uSkyView),
@@ -445,6 +463,7 @@ export function createStyleResources(
     },
     materials: new Set(),
     transparency: LOOK_DEFAULTS.transparency,
+    section: false,
   };
 }
 
@@ -482,7 +501,9 @@ export function createClayMaterial(
     ...openSkySlots(),
   });
   clay.name = "clay";
-  applyTransparency(clay, resources.transparency);
+  // the figure of a figure-ground plan (the Schwarzplan, paper-scene.ts)
+  clay.userData.figure = true;
+  applyTransparency(clay, resources.transparency, resources.section);
   resources.materials.add(clay);
   clay.addEventListener("dispose", () => resources.materials.delete(clay));
   return clay;
@@ -515,15 +536,41 @@ export function setClaySkyView(
  * Crossing the on/off boundary without flagging needsUpdate leaves the stale
  * build running until something else happens to force a rebuild.
  */
-function applyTransparency(clay: MeshStandardNodeMaterial, t: number): void {
+function applyTransparency(
+  clay: MeshStandardNodeMaterial,
+  t: number,
+  section: boolean
+): void {
   const wasHashed = clay.alphaHash;
+  const wasSide = clay.side;
   clay.opacity = 1 - t;
   clay.alphaHash = t > 0;
   clay.transparent = false;
-  // The two builds of the one graph (material-slots.ts).
-  setGraph(clay, clay.alphaHash ? "clay|hashed" : "clay|solid");
-  if (clay.alphaHash !== wasHashed) {
+  clay.side = section ? DoubleSide : FrontSide;
+  // The builds of the one graph (material-slots.ts): solid or hashed, and
+  // two-sided while a Schnitt shows its poché.
+  setGraph(
+    clay,
+    `clay|${clay.alphaHash ? "hashed" : "solid"}${section ? "|double" : ""}`
+  );
+  if (clay.alphaHash !== wasHashed || clay.side !== wasSide) {
     clay.needsUpdate = true;
+  }
+}
+
+/**
+ * Modell's Schnitt on or off (plan 055): the clay drawn from both sides,
+ * so a cut building shows its inside, filled as poché. A second build of
+ * the clay's graph, made once on the first Schnitt.
+ */
+export function setClaySection(resources: StyleResources, on: boolean): void {
+  if (resources.section === on) {
+    return;
+  }
+  resources.section = on;
+  clayPoche.value = on ? 1 : 0;
+  for (const clay of resources.materials) {
+    applyTransparency(clay, resources.transparency, on);
   }
 }
 
@@ -533,7 +580,7 @@ export function setCityTransparency(
 ): void {
   resources.transparency = Math.min(Math.max(transparency, 0), 1);
   for (const clay of resources.materials) {
-    applyTransparency(clay, resources.transparency);
+    applyTransparency(clay, resources.transparency, resources.section);
   }
 }
 

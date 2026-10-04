@@ -173,6 +173,25 @@ chip. Every tile change re-renders the shadow map. The layers:
   (`landmarks.py`, cached at fetch time), the site's twelve in the
   tileset's `extras.landmarks` → the HUD's *Wahrzeichen* chips →
   `landmarkVantage`.
+- Modell (plan 055, ADR 0044; `M`): the city in parallel projection.
+  `model-rig.ts` owns the view while it is on (pan / zoom about the
+  pointer / turn / tilt, the presets, the dolly zoom in and out of the
+  perspective camera); `model-camera.ts` is three's ortho camera with a
+  shear for the Militärperspektive, 20 km back along the view; the pure
+  half is `lib/city/model-view.ts`. **The post passes never hold the real
+  camera**: `view-lens.ts` is a stand-in whose matrices are copied from
+  the camera drawing the frame, plus `ortho` (which depth→distance
+  formula, a per-pixel select) and `equivalent` (the distance a 55°
+  camera would show the picture from, for far-field fades). Rays for any
+  camera: `view-ray.ts`. The Schnitt (`model-cuts.ts`,
+  `visual-style.ts` `setClaySection`: the clay two-sided, back faces the
+  poché, a ground-profile strip) and the Ausschnitt (a `ClippingGroup`
+  around `world`, a plinth). The export (`image-export.ts`) tiles the
+  frustum with `setViewOffset`, **one tile per animation frame** — SMAA
+  and GTAO are `NodeUpdateType.FRAME` nodes and render once per frame.
+  The planner styles *Strich* and *Schwarzplan* are rows of the style
+  table and kinds of the paper swap (`paper-scene.ts`: `paper`, `line`,
+  `figure`; the ground's `paperGroundOn` = 1, 2, 3).
 - Sound (plan 035, hidden): `soundscape-toggle.tsx` (the L key; no
   AudioContext before it), `soundscape/` (`engine.ts`, `hearing.ts`,
   `voices.ts`; a dynamic import, sampled at the 10 Hz pose tick),

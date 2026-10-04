@@ -10,6 +10,7 @@ import {
   Raycaster,
   Vector2,
 } from "three/webgpu";
+import { setPickRay } from "./view-ray";
 import {
   type CityObjectTable,
   countBuildings as countLiveBuildings,
@@ -298,7 +299,9 @@ export function pickCityObject(
   objectIndex: number;
   raycaster: Raycaster;
 } | null {
-  pickRaycaster.setFromCamera(
+  // any camera, Modell's sheared parallel one too (view-ray.ts)
+  pickRaycaster.far = setPickRay(
+    pickRaycaster,
     ndc ? pickAt.set(ndc.x, ndc.y) : SCREEN_CENTER,
     camera
   );

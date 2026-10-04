@@ -2,12 +2,12 @@ import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
 import {
   type BufferAttribute,
   BufferGeometry,
+  type Camera,
   Float32BufferAttribute,
   HalfFloatType,
   LinearFilter,
   Mesh,
   MeshBasicNodeMaterial,
-  type PerspectiveCamera,
   RenderTarget,
   Scene,
   type DepthTexture,
@@ -22,9 +22,7 @@ import {
   max,
   mix,
   nodeObject,
-  perspectiveDepthToViewZ,
   positionView,
-  reference,
   screenUV,
   smoothstep,
   texture,
@@ -35,6 +33,7 @@ import {
 import { OUTLINE_BAND, OUTLINE_HALO, outlineSpread } from "@/lib/city/outline";
 import type { V4 } from "./shader-chunks";
 import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-layer";
+import type { ViewLens } from "./view-lens";
 
 /**
  * What the outline goes around: an element's triangles in world space
@@ -73,17 +72,14 @@ export interface SelectionOutline {
   /** what to outline, or null for nothing */
   set: (selection: OutlineSelection | null) => void;
   /** draws the mask after the scene pass (nothing when nothing is asked) */
-  renderMask: (renderer: WebGPURenderer, camera: PerspectiveCamera) => void;
+  renderMask: (renderer: WebGPURenderer, camera: Camera) => void;
   /** the frame with the outline over it */
   over: (colour: V4) => V4;
   /** follows the device pixel ratio (the width is in CSS px) */
   update: (pixelRatio: number) => void;
   setSize: (width: number, height: number) => void;
   /** builds the mask's program off the frame */
-  compile: (
-    renderer: WebGPURenderer,
-    camera: PerspectiveCamera
-  ) => Promise<void>;
+  compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
   dispose: () => void;
 }
 
@@ -97,7 +93,8 @@ const SEEN_SLACK_M = 0.6;
 const SEEN_SLACK_SHARE = 0.01;
 
 export function createSelectionOutline(deps: {
-  camera: PerspectiveCamera;
+  /** what the passes know of the camera (view-lens.ts) */
+  lens: ViewLens;
   /** the scene pass's depth */
   depthTexture: DepthTexture;
   height: number;
@@ -113,12 +110,13 @@ export function createSelectionOutline(deps: {
 
   // Seen where the scene's surface is not in front of it: the scene's
   // view depth at this pixel against the element's own.
-  const sceneZ = perspectiveDepthToViewZ(
-    texture(deps.depthTexture, screenUV).r,
-    reference("near", "float", deps.camera),
-    reference("far", "float", deps.camera)
-  );
-  const slack = sceneZ.negate().mul(SEEN_SLACK_SHARE).add(SEEN_SLACK_M);
+  const sceneZ = deps.lens.viewZ(texture(deps.depthTexture, screenUV).r);
+  // a share of the distance — in a parallel view, of the distance the
+  // picture is equivalent to (every surface is 20 km off the camera there)
+  const slack = deps.lens
+    .fade(sceneZ.negate())
+    .mul(SEEN_SLACK_SHARE)
+    .add(SEEN_SLACK_M);
   // how far the scene's surface lies behind the element's (view z falls
   // with depth): about 0 on its own triangles, up to `reach` in a stand-in
   const behind = positionView.z.sub(sceneZ);

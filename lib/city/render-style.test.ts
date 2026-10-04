@@ -28,14 +28,15 @@ test("the default style is the pastel one, and it costs no pass", () => {
   expect(pastel.grainWeight).toBe(1);
   expect(pastel.grainAnimated).toBe(false);
   expect(pastel.allowDof).toBe(true);
-  expect(pastel.paperScene).toBe(false);
+  expect(pastel.paperScene).toBeNull();
   expect(pastel.vignette).toEqual({ offset: 0.28, darkness: 0.5 });
 });
 
-test("every other style runs the pass and draws ink", () => {
+test("every other style runs the pass; all but the Schwarzplan draw ink", () => {
   for (const def of RENDER_STYLES.filter((d) => d.id !== "pastel")) {
     expect(def.shaderMode).toBeGreaterThan(0);
-    expect(def.inkWeight).toBeGreaterThan(0);
+    // the Schwarzplan's figure is the drawing: black on white, no lines
+    expect(def.inkWeight > 0).toBe(def.id !== "figure");
   }
 });
 
@@ -45,6 +46,7 @@ test("the styled scene dressing: Comic's and Papier's crowns, noir's lamp cones"
   ).toEqual([
     ["comic", "comic"],
     ["paper", "paper"],
+    ["line", "paper"],
   ]);
   expect(
     RENDER_STYLES.filter((def) => def.lampCones).map((def) => def.id)
@@ -53,15 +55,31 @@ test("the styled scene dressing: Comic's and Papier's crowns, noir's lamp cones"
   expect(RENDER_STYLE_BY_ID.pastel.lampCones).toBe(false);
 });
 
-test("only Papier swaps the scene's materials", () => {
+test("Papier, Strich and the Schwarzplan swap the scene's materials", () => {
   expect(
-    RENDER_STYLES.filter((def) => def.paperScene).map((def) => def.id)
-  ).toEqual(["paper"]);
+    RENDER_STYLES.filter((def) => def.paperScene).map((def) => [
+      def.id,
+      def.paperScene,
+    ])
+  ).toEqual([
+    ["paper", "paper"],
+    ["line", "line"],
+    ["figure", "figure"],
+  ]);
 });
 
 test("the monochrome styles take the colour grade out", () => {
   expect(RENDER_STYLE_BY_ID.noir.gradingWeight).toBe(0);
   expect(RENDER_STYLE_BY_ID.sincity.gradingWeight).toBe(0);
+});
+
+test("the planner styles draw a clean sheet: no grade, no vignette, no blur", () => {
+  for (const id of ["line", "figure"] as const) {
+    const def = RENDER_STYLE_BY_ID[id];
+    expect(def.gradingWeight).toBe(0);
+    expect(def.vignette.darkness).toBe(0);
+    expect(def.allowDof).toBe(false);
+  }
 });
 
 test("V cycles through every style in picker order and wraps", () => {

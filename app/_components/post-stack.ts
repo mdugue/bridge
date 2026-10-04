@@ -1,5 +1,6 @@
 import {
   type BufferGeometry,
+  type Camera,
   DepthTexture,
   HalfFloatType,
   type Node,
@@ -29,9 +30,7 @@ import {
   min,
   mix,
   nodeObject,
-  perspectiveDepthToViewZ,
   pow,
-  reference,
   renderOutput,
   rtt,
   screenCoordinate,
@@ -53,6 +52,7 @@ import {
   type PostLookKey,
 } from "@/lib/city/look-controls";
 import {
+  type PaperKind,
   RENDER_STYLE_BY_ID,
   type RenderStyleDef,
 } from "@/lib/city/render-style";
@@ -67,6 +67,7 @@ import type { F, Live, V2, V3, V4 } from "./shader-chunks";
 import { compileRepresentatives } from "./three-utils";
 import { createStyleDressing } from "./style-dressing";
 import { createStylize } from "./stylize-effect";
+import type { ViewLens } from "./view-lens";
 
 /** Initial focus distance before the first crosshair raycast lands. */
 const HYPERFOCAL_M = 600;
@@ -86,19 +87,17 @@ const HYPERFOCAL_M = 600;
 function aoSmoothed(
   raw: ReturnType<ReturnType<typeof ao>["getTextureNode"]>,
   depthTexture: DepthTexture,
-  camera: PerspectiveCamera
+  lens: ViewLens
 ) {
-  const near = reference("near", "float", camera);
-  const far = reference("far", "float", camera);
   const at = uv();
   // reason: textureSize's node type is not in the @types' vec2 overloads.
   const size = textureSize(raw, int(0)) as unknown as Node<"uvec2">;
   const texel = vec2(1).div(vec2(size));
-  const viewZ = (p: V2): F =>
-    perspectiveDepthToViewZ(texture(depthTexture, p).r, near, far).negate();
+  const viewZ = (p: V2): F => lens.distance(texture(depthTexture, p).r);
   const z0 = viewZ(at).toVar();
-  // what counts as the same surface: a few percent of the distance
-  const tolerance = z0.mul(0.04).add(0.15);
+  // what counts as the same surface: a few percent of the distance (in a
+  // parallel view, of the distance the picture is equivalent to)
+  const tolerance = lens.fade(z0).mul(0.04).add(0.15);
   let sum: F = float(0);
   let weights: F = float(0);
   for (let y = -2; y <= 2; y++) {
@@ -195,6 +194,12 @@ export interface PostStack {
   setRegressed: (on: boolean) => void;
   /** Follows the canvas (the scene target is drawing-buffer sized). */
   setSize: () => void;
+  /**
+   * Modell (plan 055): a parallel view draws without depth of field, depth
+   * grading and vignette — far means higher up the sheet there, and a haze
+   * or a dark corner reads as an error. The sliders keep their values.
+   */
+  setModel: (on: boolean) => void;
   /**
    * What to outline around the asked element, or null
    * (selection-outline.ts): drawn over every picture style, after the
@@ -333,7 +338,12 @@ const COMPILE_LANES = 4;
 export function createPostStack(
   renderer: WebGPURenderer,
   scene: Scene,
+  /** the perspective camera: tiles and styles compile against it */
   camera: PerspectiveCamera,
+  /** the camera the frame is drawn with (Modell's parallel one, or `camera`) */
+  active: () => Camera,
+  /** what the passes know of the active camera (view-lens.ts) */
+  lens: ViewLens,
   /** GTAO samples (scene-profile.ts `aoSamplesFor`) */
   aoSamples: number,
   /** the scene's fog (height-fog.ts): the styles read and paper it */
@@ -357,11 +367,7 @@ export function createPostStack(
   target.texture.name = "ScenePass";
   const colour = texture(target.texture);
   const depth = texture(depthTexture);
-  const viewZ = perspectiveDepthToViewZ(
-    depth.r,
-    reference("near", "float", camera),
-    reference("far", "float", camera)
-  );
+  const viewZ = lens.viewZ(depth.r);
 
   // Half resolution: contact occlusion is low-frequency by nature, and at a
   // quarter of the pixels the pass costs about what skipping it while moving
@@ -369,12 +375,12 @@ export function createPostStack(
   // rebuilds the pass's material: a construction-time setting.
   // reason: GTAONode takes null to reconstruct normals from depth; the
   // @types signature does not say so.
-  const aoPass = ao(depth, null as never, camera);
+  const aoPass = ao(depth, null as never, lens.camera);
   aoPass.resolutionScale = 0.5;
   aoPass.radius.value = AO_RADIUS_M;
   aoPass.thickness.value = AO_THICKNESS_M;
   aoPass.samples.value = aoSamples;
-  const aoTexture = aoSmoothed(aoPass.getTextureNode(), depthTexture, camera);
+  const aoTexture = aoSmoothed(aoPass.getTextureNode(), depthTexture, lens);
   const contact = uniform(LOOK_DEFAULTS.contact * AO_INTENSITY_MAX);
   const occlusion = pow(aoTexture.r, contact);
   const lit = vec4(colour.rgb.mul(occlusion), colour.a);
@@ -392,7 +398,7 @@ export function createPostStack(
   ) as unknown as V4;
 
   let style: RenderStyleDef = RENDER_STYLE_BY_ID[LOOK_DEFAULTS.style];
-  const stylize = createStylize({ camera, depth: depthTexture, fog, litAt });
+  const stylize = createStylize({ lens, depth: depthTexture, fog, litAt });
   const paperScene = createPaperScene(scene, fog.color);
   const styleDressing = createStyleDressing(scene);
 
@@ -417,7 +423,7 @@ export function createPostStack(
   // The asked element's outline: its own antialiasing (a smooth band of a
   // blurred mask), so after SMAA, and under the paper grain like the ink.
   const outline = createSelectionOutline({
-    camera,
+    lens,
     depthTexture,
     width: size.x,
     height: size.y,
@@ -460,9 +466,12 @@ export function createPostStack(
   // (RenderStyleDef.allowDof) without touching the switch.
   let dofWanted = LOOK_DEFAULTS.dof;
   let regressed = false;
+  let model = false;
   const pipeline = () => {
     const pair = style.shaderMode > 0 ? styled : pastel;
-    return dofWanted && style.allowDof && !regressed ? pair.dof : pair.plain;
+    return dofWanted && style.allowDof && !regressed && !model
+      ? pair.dof
+      : pair.plain;
   };
   // Pipelines that still have to build: a pipeline builds its graph on its
   // first render, so each is rendered once, one per frame, before the one
@@ -478,11 +487,12 @@ export function createPostStack(
     ink: LOOK_DEFAULTS.ink,
   };
   const applyStyleWeights = () => {
-    finishing.grading.value = raw.grading * style.gradingWeight;
+    finishing.grading.value = model ? 0 : raw.grading * style.gradingWeight;
     finishing.grain.value = Math.min(raw.grain * style.grainWeight, 2);
     finishing.film.value = style.grainAnimated ? 1 : 0;
-    finishing.vignetteOffset.value = style.vignette.offset;
-    finishing.vignetteDarkness.value = style.vignette.darkness;
+    // offset and darkness 0: the vignette's smoothstep is 1 everywhere
+    finishing.vignetteOffset.value = model ? 0 : style.vignette.offset;
+    finishing.vignetteDarkness.value = model ? 0 : style.vignette.darkness;
     stylize.setInk(raw.ink * style.inkWeight);
     stylize.setStyle(style);
   };
@@ -495,7 +505,7 @@ export function createPostStack(
   const updateFocus = () => {
     let d = manualDistance;
     if (focusMode === "auto") {
-      inView.copy(focusPoint).applyMatrix4(camera.matrixWorldInverse);
+      inView.copy(focusPoint).applyMatrix4(active().matrixWorldInverse);
       d = Math.max(1, -inView.z);
     }
     focusDistance.value = d;
@@ -550,17 +560,23 @@ export function createPostStack(
     await compileOne(object);
     await anchors.anchor(object);
   };
-  // The Papier programs of one drawable: compiled under the swap, which
-  // lasts for the synchronous half of the call only — where three makes
-  // the render object and reads the override's position node for its build.
-  const compilePaper = (object: Drawable): Promise<void> =>
-    paperScene.drawsAsPaper(object)
-      ? paperScene.swapped(object, () => compileOne(object))
-      : Promise.resolve();
+  // The swap's programs of one drawable (Papier's and Strich's card, the
+  // Schwarzplan's figure): compiled under the swap, which lasts for the
+  // synchronous half of the call only — where three makes the render
+  // object and reads the override's position node for its build.
+  const compileSwap =
+    (kind: PaperKind) =>
+    (object: Drawable): Promise<void> =>
+      paperScene.drawsAsPaper(object, kind)
+        ? paperScene.swapped(object, () => compileOne(object), kind)
+        : Promise.resolve();
+  const compilePaper = compileSwap("paper");
+  const compileFigure = compileSwap("figure");
   // Once is enough for a drawable and its material (a tile, then the whole
   // scene at boot, walks the same objects).
   const compiled = new WeakMap<Object3D, unknown>();
   const compiledPaper = new WeakMap<Object3D, unknown>();
+  const compiledFigure = new WeakMap<Object3D, unknown>();
   const gone = new WeakSet<BufferGeometry>();
   const onGone = (event: { target: BufferGeometry }) => gone.add(event.target);
   // Papier's programs are made once the styles are warmed (where
@@ -618,11 +634,9 @@ export function createPostStack(
       return;
     }
     paperWanted = true;
-    await compileAll(
-      compileRepresentatives([scene]),
-      compilePaper,
-      compiledPaper
-    );
+    const representatives = compileRepresentatives([scene]);
+    await compileAll(representatives, compilePaper, compiledPaper);
+    await compileAll(representatives, compileFigure, compiledFigure);
   };
 
   return {
@@ -630,12 +644,15 @@ export function createPostStack(
       await compileAll(drawablesOf(root), compileAnchored, compiled);
       // The override's build is keyed by the source's material and layout,
       // so one drawable of each is all Papier needs.
-      if (paperWanted || style.paperScene) {
-        await compileAll(
-          compileRepresentatives([root]),
-          compilePaper,
-          compiledPaper
-        );
+      const kind = style.paperScene;
+      if (paperWanted || kind) {
+        const representatives = compileRepresentatives([root]);
+        if (paperWanted || kind !== "figure") {
+          await compileAll(representatives, compilePaper, compiledPaper);
+        }
+        if (paperWanted || kind === "figure") {
+          await compileAll(representatives, compileFigure, compiledFigure);
+        }
       }
     },
     anchorCount: () => anchors.count(),
@@ -666,16 +683,19 @@ export function createPostStack(
               lampCones: style.lampCones,
             })
           : null;
-      const restore = style.paperScene ? paperScene.begin() : null;
+      const restore = style.paperScene
+        ? paperScene.begin(style.paperScene)
+        : null;
+      const view = active();
       try {
-        renderer.render(scene, camera);
+        renderer.render(scene, view);
       } finally {
         restore?.();
         dressed?.();
         renderer.setRenderTarget(previous);
       }
       outline.update(renderer.getPixelRatio());
-      outline.renderMask(renderer, camera);
+      outline.renderMask(renderer, view);
       const shown = pipeline();
       const warming = toWarm.shift();
       renderer.setRenderTarget(beforeAa);
@@ -701,6 +721,10 @@ export function createPostStack(
       outline.setSize(size.x, size.y);
     },
     setSelection: (selection) => outline.set(selection),
+    setModel: (on) => {
+      model = on;
+      applyStyleWeights();
+    },
     applyLook: (look) => {
       for (const key of Object.keys(rows) as PostLookKey[]) {
         rows[key](look[key]);

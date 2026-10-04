@@ -11,9 +11,26 @@ import {
   LOOK_CONTROLS,
   type LookValues,
 } from "./look-controls";
+import { isModelPreset, type ModelPresetId } from "./model-view";
 import { isRenderStyle, RENDER_STYLES, type RenderStyle } from "./render-style";
 
 export type MovementModeJson = "fly" | "walk";
+
+/**
+ * The Modell view (plan 055): a parallel camera's pivot (world, Y-up), its
+ * preset, turn, tilt and scale (the denominator at 96 dpi). Optional: a
+ * reader that predates it ignores it and shows the perspective pose the
+ * camera fields hold — the one Modell would leave to.
+ */
+export interface ModelStateJson {
+  pivot: { x: number; y: number; z: number };
+  preset: ModelPresetId;
+  scale: number;
+  /** world up onto screen up (Militärperspektive); absent = the preset's */
+  shear?: number;
+  tiltDeg: number;
+  turnDeg: number;
+}
 
 /** Camera pose as it round-trips through JSON (lib/city/pose.ts's CameraState IS this type). */
 export interface CameraStateJson {
@@ -22,6 +39,8 @@ export interface CameraStateJson {
   /** 0 = north, clockwise positive (east) */
   headingDeg: number;
   mode: MovementModeJson;
+  /** present while the view is Modell (a parallel projection) */
+  model?: ModelStateJson;
   /** + = looking up, - = looking down */
   pitchDeg: number;
   pos: { x: number; y: number; z: number };
@@ -76,6 +95,37 @@ function record(v: unknown, path: string): Record<string, unknown> {
   return v;
 }
 
+function checkModel(v: unknown): ModelStateJson {
+  const m = record(v, "camera.model");
+  const pivot = record(m.pivot, "camera.model.pivot");
+  if (!isModelPreset(m.preset)) {
+    throw new SnapshotError("camera.model.preset is not a known view");
+  }
+  const scale = finite(m.scale, "camera.model.scale");
+  if (scale <= 0) {
+    throw new SnapshotError("camera.model.scale must be positive");
+  }
+  const tiltDeg = finite(m.tiltDeg, "camera.model.tiltDeg");
+  if (tiltDeg < 0 || tiltDeg > 90) {
+    throw new SnapshotError("camera.model.tiltDeg must be between 0 and 90");
+  }
+  const model: ModelStateJson = {
+    pivot: {
+      x: finite(pivot.x, "camera.model.pivot.x"),
+      y: finite(pivot.y, "camera.model.pivot.y"),
+      z: finite(pivot.z, "camera.model.pivot.z"),
+    },
+    preset: m.preset,
+    scale,
+    tiltDeg,
+    turnDeg: finite(m.turnDeg, "camera.model.turnDeg"),
+  };
+  if (m.shear !== undefined) {
+    model.shear = finite(m.shear, "camera.model.shear");
+  }
+  return model;
+}
+
 function checkCamera(v: unknown): CameraStateJson {
   const c = record(v, "camera");
   const pos = record(c.pos, "camera.pos");
@@ -87,7 +137,7 @@ function checkCamera(v: unknown): CameraStateJson {
   if (c.mode !== "walk" && c.mode !== "fly") {
     throw new SnapshotError('camera.mode must be "walk" or "fly"');
   }
-  return {
+  const camera: CameraStateJson = {
     pos: {
       x: finite(pos.x, "camera.pos.x"),
       y: finite(pos.y, "camera.pos.y"),
@@ -102,6 +152,10 @@ function checkCamera(v: unknown): CameraStateJson {
     pitchDeg: finite(c.pitchDeg, "camera.pitchDeg"),
     mode: c.mode,
   };
+  if (c.model !== undefined) {
+    camera.model = checkModel(c.model);
+  }
+  return camera;
 }
 
 function checkDate(v: unknown): string {

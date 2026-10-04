@@ -1,6 +1,7 @@
 import {
   Color,
   type Material,
+  MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
   type Node,
   type Object3D,
@@ -20,6 +21,7 @@ import {
   uniform,
   vec3,
 } from "three/tsl";
+import type { PaperKind } from "@/lib/city/render-style";
 import { instanceTint } from "./instancing";
 import type { Live, V3 } from "./shader-chunks";
 
@@ -49,15 +51,28 @@ import type { Live, V3 } from "./shader-chunks";
 export const PAPER_HEX = 0xf4_f0_e8;
 const PAPER = new Color(PAPER_HEX);
 /**
- * On (1) for Papier's frames, read by the materials that draw themselves as
- * paper rather than wear the paper material — the terrain's
+ * Which paper the ground draws for this frame, read by the materials that
+ * draw themselves rather than wear the swap's material — the terrain's
  * (terrain-layer.ts), whose markings and water only it knows. Such a
- * material says so with `userData.paperOwn`. A uniform node: one shared
- * value, no extra program.
+ * material says so with `userData.paperOwn`. 0 = its own colours, then
+ * `PAPER_GROUND`'s values. A uniform node: one shared value, no extra
+ * program.
  */
 export const paperGroundOn: Live = uniform(0);
+/** `paperGroundOn`'s value per kind of swap. */
+export const PAPER_GROUND: Readonly<Record<PaperKind, number>> = {
+  paper: 1,
+  // Strich: the ground in muted plan colours
+  line: 2,
+  // the Schwarzplan: plain white
+  figure: 3,
+};
 /** The sky and the distance: a paper a shade greyer than the model. */
 const PAPER_SKY = new Color(0xe9_e6_df);
+/** Strich's and the Schwarzplan's sheet: white. */
+const SHEET_WHITE = new Color(0xff_ff_ff);
+/** The Schwarzplan's figure. */
+const FIGURE_BLACK = new Color(0x11_11_11);
 
 /**
  * A layer's own colour — vertex colours (stairs, furniture) or an instanced
@@ -98,6 +113,48 @@ function paperMaterial(): MeshStandardNodeMaterial {
     .mul(ownColour())
     .mul(vec3(0.012, 0.004, -0.014).mul(sheet).add(float(1)));
   return material;
+}
+
+/**
+ * The Schwarzplan's figure: one unlit black. three carries each drawn
+ * material's position node over, as for the paper.
+ */
+function figureMaterial(): MeshBasicNodeMaterial {
+  return new MeshBasicNodeMaterial({ color: FIGURE_BLACK });
+}
+
+/** The materials a mesh draws with. */
+function materialsOf(object: Object3D): Material[] {
+  const material = (object as Object3D & { material?: Material | Material[] })
+    .material;
+  if (!material) {
+    return [];
+  }
+  return Array.isArray(material) ? material : [material];
+}
+
+/**
+ * Objects the Schwarzplan does not draw at all: everything but the
+ * buildings (`userData.figure` on the clay) and the ground (which draws
+ * itself white) — trees, walls, furniture, bridges, rails, the sky.
+ */
+function hiddenInFigure(object: Object3D): boolean {
+  const o = object as Object3D & {
+    isLine?: boolean;
+    isMesh?: boolean;
+    isPoints?: boolean;
+    isSprite?: boolean;
+  };
+  if (o.isSprite || o.isPoints || o.isLine) {
+    return true;
+  }
+  if (!o.isMesh) {
+    return false;
+  }
+  const materials = materialsOf(object);
+  return !materials.some(
+    (m) => m.userData.figure === true || m.userData.paperOwn === true
+  );
 }
 
 /** Objects the paper material must not stand in for this frame. */
@@ -145,7 +202,7 @@ function paperOwnMaterials(object: Object3D): Material[] {
 
 export interface PaperScene {
   /** Swaps the scene to paper for one render; returns the restore. */
-  begin: () => () => void;
+  begin: (kind?: PaperKind) => () => void;
   dispose: () => void;
   /**
    * Runs `during` with the scene swapped to paper as `object` draws it,
@@ -159,12 +216,12 @@ export interface PaperScene {
    * call's synchronous half), which then saw no position node — an
    * instanced set built so drew every instance at its origin in Papier.
    */
-  swapped: <T>(object: Object3D, during: () => T) => T;
+  swapped: <T>(object: Object3D, during: () => T, kind?: PaperKind) => T;
   /**
-   * Whether the swap draws `object` with the paper material (not hidden
+   * Whether the swap draws `object` with the swap's material (not hidden
    * for the frame, and not a material that papers itself).
    */
-  drawsAsPaper: (object: Object3D) => boolean;
+  drawsAsPaper: (object: Object3D, kind?: PaperKind) => boolean;
   /** The scene's objects changed: the next frame re-reads what to hide. */
   sceneChanged: () => void;
 }
@@ -174,21 +231,38 @@ export function createPaperScene(
   /** the scene fog's colour (height-fog.ts), papered for the frame */
   fogColor: UniformNode<"color", Color>
 ): PaperScene {
-  const material = paperMaterial();
-  const background = PAPER_SKY.clone();
+  const card = paperMaterial();
+  const materials: Record<
+    PaperKind,
+    MeshBasicNodeMaterial | MeshStandardNodeMaterial
+  > = {
+    paper: card,
+    // Strich's white model is Papier's card (its builds too); its ground
+    // and its pass differ
+    line: card,
+    figure: figureMaterial(),
+  };
+  const skies: Record<PaperKind, Color> = {
+    paper: PAPER_SKY.clone(),
+    line: SHEET_WHITE.clone(),
+    figure: SHEET_WHITE.clone(),
+  };
   const savedFog = new Color();
   const hidden: Object3D[] = [];
-  // What the paper cannot stand in for, gathered once per scene change
-  // rather than walked for every frame. Their own visibility is read per
-  // frame: a hidden object is left alone, and so restored as it was.
-  let candidates: Object3D[] | null = null;
+  // What the swap does not draw, gathered once per scene change rather than
+  // walked for every frame. Their own visibility is read per frame: a
+  // hidden object is left alone, and so restored as it was.
+  let candidates: Record<"figure" | "paper", Object3D[]> | null = null;
   let ownPaper: Material[] = [];
   const gather = () => {
-    const found: Object3D[] = [];
+    const found = { paper: [] as Object3D[], figure: [] as Object3D[] };
     const own = new Set<Material>();
     scene.traverse((object) => {
       if (hiddenInPaper(object)) {
-        found.push(object);
+        found.paper.push(object);
+      }
+      if (hiddenInFigure(object)) {
+        found.figure.push(object);
       }
       for (const m of paperOwnMaterials(object)) {
         own.add(m);
@@ -198,18 +272,19 @@ export function createPaperScene(
     ownPaper = [...own];
     return found;
   };
-  const begin = () => {
+  const begin = (kind: PaperKind = "paper") => {
     const previousOverride = scene.overrideMaterial;
     const previousBackground = scene.background;
     savedFog.copy(fogColor.value);
-    fogColor.value.copy(PAPER_SKY);
-    scene.overrideMaterial = material;
-    scene.background = background;
-    const list = candidates ?? gather();
+    fogColor.value.copy(skies[kind]);
+    scene.overrideMaterial = materials[kind];
+    scene.background = skies[kind];
+    const lists = candidates ?? gather();
+    const list = kind === "figure" ? lists.figure : lists.paper;
     for (const m of ownPaper) {
       m.allowOverride = false;
     }
-    paperGroundOn.value = 1;
+    paperGroundOn.value = PAPER_GROUND[kind];
     hidden.length = 0;
     for (const object of list) {
       if (object.visible) {
@@ -233,8 +308,9 @@ export function createPaperScene(
   };
   return {
     begin,
-    swapped: (object, during) => {
-      const restore = begin();
+    swapped: (object, during, kind = "paper") => {
+      const restore = begin(kind);
+      const material = materials[kind];
       const own = positionNodeOf(object);
       const previous = material.positionNode;
       if (own) {
@@ -247,11 +323,16 @@ export function createPaperScene(
         restore();
       }
     },
-    drawsAsPaper: (object) =>
-      !hiddenInPaper(object) && paperOwnMaterials(object).length === 0,
+    drawsAsPaper: (object, kind = "paper") =>
+      !(kind === "figure" ? hiddenInFigure(object) : hiddenInPaper(object)) &&
+      paperOwnMaterials(object).length === 0,
     sceneChanged: () => {
       candidates = null;
     },
-    dispose: () => material.dispose(),
+    dispose: () => {
+      for (const m of new Set(Object.values(materials))) {
+        m.dispose();
+      }
+    },
   };
 }
