@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SITES } from "@/sites";
 import { builtSites } from "./_lib/built-sites";
 import { CityGrid } from "./_components/city-grid";
+import { LegalLinks } from "./_components/legal-links";
 import { SMALL_CAPS } from "./_lib/start-style";
 import "./start.css";
 
@@ -102,12 +103,15 @@ export default function StartPage() {
             Geodaten der Länder (u. a. dl-de/by-2-0) und © OpenStreetMap
             contributors (ODbL) – die Quellen jeder Stadt stehen im Viewer.
           </p>
-          <Link
-            className="underline underline-offset-2 hover:text-foreground"
-            href="/wissen"
-          >
-            Wie die Städte entstehen
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              className="underline underline-offset-2 hover:text-foreground"
+              href="/wissen"
+            >
+              Wie die Städte entstehen
+            </Link>
+            <LegalLinks />
+          </div>
         </div>
       </footer>
     </div>

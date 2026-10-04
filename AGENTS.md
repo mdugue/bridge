@@ -129,7 +129,8 @@ config change.
     `/r/e`, which `next.config.ts` forwards — no SDK, no position; built
     by `lib/city/crash-reports.ts`, whose `reportBuild` names the release
     `bridge@<commit>` once for the page and for
-    `scripts/sentry-release.ts`, the build's last step; ADR 0043. The
+    `scripts/sentry-release.ts`, the build's last step; ADR 0043; off in
+    a browser that said no on `/datenschutz`, ADR 0045. The
     Sentry agent skills `sentry-debug-issue`, `sentry-setup-releases` and
     `sentry-create-alert` and the Sentry MCP server in `.mcp.json` work
     the issues — never add the SDK they otherwise set up)
@@ -286,6 +287,12 @@ config change.
   redirects to `/dresden`); `app/_lib/built-sites.ts` reads
   `public/data/sites.json` at build time (falling back to the reference
   site); the index's shape is `lib/city/site-index.ts`
+- `app/(legal)/` — `/impressum` and `/datenschutz` (ADR 0045): MDX pages
+  (`impressum/page.mdx`, `datenschutz/page.mdx`) compiled by `@next/mdx`
+  (`mdx-components.tsx` at the root), linked from every footer and the
+  viewer's sidebar (`app/_components/legal-links.tsx`). `<ReportsChoice />`
+  in the privacy page is the reports' opt-out switch
+  (`reports-choice.tsx`, kept by `report-choice.ts`)
 - `pipeline/` — the offline pipeline, one Python package in a uv environment:
   the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
   per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
@@ -845,9 +852,10 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   and `BatchedMesh` on top).
 - `tsconfig.json`'s `allowJs: true` is **not** removable — `next build`
   rewrites the file to put it back, which would dirty the tree on every build.
-- **Markdown is excluded from oxfmt** (`.oxfmtrc.json`). It rewrites `*em*` to
-  `_em_` and, worse, strips the indent from continuation lines inside list
-  items, which detaches them from their bullet. Prose here stays hand-wrapped.
+- **Markdown and MDX are excluded from oxfmt** (`.oxfmtrc.json`). It rewrites
+  `*em*` to `_em_` and, worse, strips the indent from continuation lines
+  inside list items, which detaches them from their bullet; in MDX it also
+  turns a `{/* comment */}` into `{/_ … _/}`. Prose here stays hand-wrapped.
 - **No CSS linting any more.** biome checked `app/globals.css` (unknown at-rules,
   unknown units, descending specificity); oxlint does not lint CSS at all. oxfmt
   still *formats* it. Accepted knowingly — revisit if oxc ships CSS rules.
@@ -870,6 +878,11 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   future work gets an ADR in `docs/adr/`; a new dataset or edition updates the
   guide's data-sources page in **both** languages — see
   [docs/README.md](docs/README.md#keeping-these-docs-current).
+- **The privacy page is part of the code.** `/datenschutz`
+  (`app/(legal)/datenschutz/page.mdx`) describes what the site does with
+  a visitor's data. A new request to a third party (a live feed, a
+  font, an embed), a new field in a report, or a new key in the
+  browser's storage is not done until that page says so (ADR 0045).
 - **Attribution is part of the data.** GeoSN products are `dl-de/by-2-0`
   ("Quelle: GeoSN, dl-de/by-2-0"), OSM-derived layers ODbL ("© OpenStreetMap
   contributors"); both credits live in the HUD footer (`scene-sidebar.tsx`) and

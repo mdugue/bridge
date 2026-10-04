@@ -40,6 +40,7 @@ import {
  * query), the user agent, the screen and the device's memory, the
  * renderer, the events (`scrub`bed) and the beats — no position (the trail
  * has none), no user id (a session's id names the page, not the visitor),
+ * no IP address (`sdk.settings.infer_ip: "never"`: Sentry infers none),
  * no cookie. No DOM.
  */
 
@@ -71,6 +72,16 @@ export const RELEASE_PREFIX = "bridge@";
  * (`tunnelRewrites`).
  */
 export const TUNNEL_PATH = "/r/e";
+
+/**
+ * The sender, as Sentry's protocol names one: `infer_ip: "never"` is what
+ * keeps Relay from deriving the visitor's address from the request.
+ */
+export const SDK = {
+  name: "bridge.crash-reports",
+  version: "1.0.0",
+  settings: { infer_ip: "never" },
+} as const;
 
 /** What a build knows about its reports, from its environment. */
 export interface ReportBuild {
@@ -294,6 +305,11 @@ function common(trail: Trail, ctx: ReportContext) {
       url: ctx.origin + path(trail),
       headers: { "User-Agent": trail.userAgent },
     },
+    // No address for the visitor: without this, Sentry's ingestion infers
+    // one from the request for every `javascript` event that names none
+    // (and treats `ip_address: null` the same). /datenschutz says none is
+    // kept.
+    sdk: SDK,
     tags: {
       site: path(trail).split("/")[1] || "start",
       backend: trail.backend,

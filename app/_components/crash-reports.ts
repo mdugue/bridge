@@ -2,7 +2,6 @@ import {
   crashReport,
   createProblemGate,
   envelope,
-  envelopeUrl,
   firstSet,
   type Payload,
   PROBLEM_KINDS,
@@ -23,13 +22,20 @@ import {
   type TrailListener,
 } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
+import {
+  type ReportsState,
+  reportsDeclined,
+  reportsState,
+} from "./report-choice";
 
 /**
  * The crash reports' browser side (what goes out, and why:
  * lib/city/crash-reports.ts, ADR 0043). Off unless the build has a DSN
  * (`NEXT_PUBLIC_SENTRY_DSN`, as `reportBuild` read it: next.config.ts
- * inlines it), and off for a visitor whose browser sends
- * Global Privacy Control. Each report is a beacon to the site's own
+ * inlines it), off for a visitor whose browser sends Global Privacy
+ * Control, and off in a browser that said no on /datenschutz
+ * (report-choice.ts — checked before every report, so it holds at once in
+ * a tab already open; ADR 0045). Each report is a beacon to the site's own
  * origin (`TUNNEL_PATH`, forwarded to the tracker by next.config.ts): no
  * SDK, nothing loaded from the tracker, and a beacon outlives the page
  * that sends it.
@@ -58,14 +64,16 @@ declare global {
   }
 }
 
+const OFF_REASONS: Record<Exclude<ReportsState, "on">, string> = {
+  "no-dsn": "no DSN in this build",
+  gpc: "the browser sends Global Privacy Control",
+  declined: "turned off in this browser (/datenschutz)",
+};
+
 /** Why this page sends no reports, or null when it does. */
 function offReason(): string | null {
-  if (envelopeUrl(DSN) === null) {
-    return "no DSN in this build";
-  }
-  const gpc = (navigator as Navigator & { globalPrivacyControl?: boolean })
-    .globalPrivacyControl;
-  return gpc === true ? "the browser sends Global Privacy Control" : null;
+  const state = reportsState();
+  return state === "on" ? null : OFF_REASONS[state];
 }
 
 /** Whether this page sends reports (the crash card says so). */
@@ -79,6 +87,12 @@ const newId = () =>
   ).join("");
 
 function post(body: string): void {
+  // Said no since the page started (on /datenschutz, maybe in another
+  // tab): nothing goes out after a no — the session's end included, so
+  // Sentry closes that session itself.
+  if (reportsDeclined()) {
+    return;
+  }
   try {
     // A string goes as text/plain: no preflight, which a beacon cannot make.
     if (navigator.sendBeacon(TUNNEL_PATH, body)) {
@@ -199,8 +213,10 @@ function announce(ctx: ReportContext): void {
   window.crashReports = {
     status,
     test: () => {
-      if (off || !current) {
-        console.info(TAG, off ? `nothing sent: ${off}` : "no page yet");
+      // Asked now: the visitor may have said no since the page started.
+      const offNow = offReason();
+      if (offNow || !current) {
+        console.info(TAG, offNow ? `nothing sent: ${offNow}` : "no page yet");
         return;
       }
       const t = (Date.now() - Date.parse(current.startedAt)) / 1000;
