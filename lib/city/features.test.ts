@@ -300,6 +300,20 @@ test.each(tiles)(
       // absolute roof heights: Hamburg's harbour to Munich's towers
       expect(f.properties?.z ?? -999).toBeGreaterThan(-20);
       expect(f.properties?.z ?? 9999).toBeLessThan(1000);
+      const s = f.properties?.surface;
+      if (s) {
+        // a face: its grid whole, and wider than the outline it covers
+        expect(s.res).toBeGreaterThan(0);
+        expect(s.dz).toHaveLength(s.cols * s.rows);
+        expect(s.dz.every(Number.isInteger)).toBe(true);
+        const ring = f.geometry.coordinates[0];
+        for (const [x, y] of ring) {
+          expect(x).toBeGreaterThanOrEqual(s.x);
+          expect(x).toBeLessThanOrEqual(s.x + s.cols * s.res);
+          expect(y).toBeLessThanOrEqual(s.y);
+          expect(y).toBeGreaterThanOrEqual(s.y - s.rows * s.res);
+        }
+      }
     }
   }
 );

@@ -6,7 +6,7 @@
  * OSM flags (shop, heritage; a part carries its Building's too), the
  * demolish tree and the minimap footprints, then appends the small
  * structures the laser scan saw and LoD2 lacks (`appendScanStructures`).
- * An object whose LoD2 roof misses DOM1 wears its measured stepped blocks
+ * An object whose LoD2 roof misses DOM1 wears its measured parts
  * instead (`withMeasuredRoofs`, scripts/measured-roofs.ts).
  * Called by scripts/prepare-data.ts; no DOM.
  */
@@ -81,6 +81,9 @@ const rgb = (c: [number, number, number]): [number, number, number] => [
 export interface CityVertices {
   /** 1 on RoofSurface vertices, 0 elsewhere */
   isRoof: Float32Array<ArrayBuffer>;
+  /** per vertex, a normal to shade with in place of the triangle's flat
+   *  one (a measured face's, smoothed over it); NaN or absent: flat */
+  normals?: Float32Array<ArrayBuffer>;
   /** index into the object table */
   objectIds: Float32Array<ArrayBuffer>;
   /** recentered data-frame (Z-up) positions, 3 per vertex */
@@ -210,6 +213,7 @@ export function appendScanStructures(
     positions: concat(v.positions, positions),
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
+    ...flatNormalsAfter(v, positions.length),
   };
 }
 
@@ -288,6 +292,7 @@ export function appendGapStructures(
     positions: concat(v.positions, positions),
     objectIds: concat(v.objectIds, objectIds),
     isRoof: concat(v.isRoof, isRoof),
+    ...flatNormalsAfter(v, positions.length),
   };
 }
 
@@ -319,6 +324,20 @@ export const triangulateXY = (data: number[], holes: number[]): number[] => {
 export function scanStructureId(tile: string, f: SmallBuildingFeature): string {
   const [x, y] = f.geometry.coordinates[0]?.[0] ?? [0, 0];
   return `scan:${tile}:${x.toFixed(1)}:${y.toFixed(1)}`;
+}
+
+/** The stream's normals run on, flat (NaN), over `count` appended
+ *  coordinates; nothing when the stream carries none. */
+function flatNormalsAfter(
+  v: CityVertices,
+  count: number
+): Pick<CityVertices, "normals"> {
+  if (!v.normals) {
+    return {};
+  }
+  const normals = new Float32Array(v.normals.length + count).fill(Number.NaN);
+  normals.set(v.normals);
+  return { normals };
 }
 
 function concat(
@@ -368,6 +387,7 @@ export function withMeasuredRoofs(
   const positions: number[] = [];
   const objectIds: number[] = [];
   const isRoof: number[] = [];
+  const normals: number[] = [];
   for (const i of keep) {
     positions.push(
       v.positions[i * 3],
@@ -376,6 +396,7 @@ export function withMeasuredRoofs(
     );
     objectIds.push(v.objectIds[i]);
     isRoof.push(v.isRoof[i]);
+    normals.push(Number.NaN, Number.NaN, Number.NaN);
   }
   for (const [index, parts] of replaced) {
     const z = base.get(index);
@@ -386,11 +407,13 @@ export function withMeasuredRoofs(
     positions.push(...mesh.positions);
     isRoof.push(...mesh.isRoof);
     objectIds.push(...mesh.isRoof.map(() => index));
+    normals.push(...mesh.normals);
   }
   return {
     positions: Float32Array.from(positions),
     objectIds: Float32Array.from(objectIds),
     isRoof: Float32Array.from(isRoof),
+    normals: Float32Array.from(normals),
   };
 }
 
@@ -463,7 +486,7 @@ export function bakeCityMesh(
     }
   }
 
-  // the objects drawn as their measured blocks (ADR 0036): their facts
+  // the objects drawn as their measured parts (ADR 0036): their facts
   // say so, not what the LoD2 roof said
   const rebuilt = measuredRoofsById(measured ?? []);
   const objects: CityObjectRow[] = keys.map((id, index) => {
@@ -503,6 +526,7 @@ export function bakeCityMesh(
         fallbackHeight: total,
         footprints,
         rebuilt: rebuilt.has(id),
+        shaped: rebuilt.get(id)?.some((f) => f.properties?.surface) ?? false,
       }),
     };
   });

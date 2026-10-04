@@ -1,7 +1,7 @@
 # ADR 0036: A LoD2 roof that misses the surface model is rebuilt from it as stepped flat blocks
 
-- **Status:** accepted
-- **Date:** 2026-10
+- **Status:** accepted; what is drawn in the LoD2's place follows the scan's form since the update below
+- **Date:** 2026-10 (amended 2026-10-03: measured faces)
 
 ## Context
 
@@ -70,6 +70,68 @@ leaves the committed file alone.
   the lower part's is hidden inside the higher. Cutting walls to the
   exposed band would save triangles, not change the picture.
 
+## Update (2026-10-03): the rebuilt roof keeps the scan's form
+
+Flat by construction turned out to be the wrong half of the decision. The
+gate found the right buildings, but every roof it rebuilt became a flight
+of 1 m terraces wherever the scan was not flat: the Frauenkirche's stone
+dome (its LoD2 part sits ~5 m under the scan, so it misses on every cell)
+became four stacked drums, the Hauptbahnhof's arched train shed and its
+membrane bays a staircase of 52 ledges along the hall, the
+Schauspielhaus's hipped roofs contour lines. The same lesson as the
+landmark relief
+([ADR 0038](./0038-measured-and-named-additions.md), update of 2026-09-30):
+a contour model of a smooth shape reads as a stack of plates.
+
+- **Whether** a roof is rebuilt is decided as before, on the flat model
+  (every region at its median) — the hotel and the theatre still are —
+  with one exception: **a LoD2 roof whose form the scan confirms is kept,
+  even when its level is off.** It has a form (it rises ≥ 3 m), the scan
+  follows it (Pearson r ≥ 0.85), it misses on ≤ 20 % of the cells once
+  shifted by its median offset, and that offset is smaller than the form's
+  own height. The Frauenkirche's modelled dome (r 0.90, ~5.6 m under the
+  scan) is such a roof: the scan's 1 m cells on a steep curve are no
+  better a dome than the model's 162 facets. Five objects in Dresden keep
+  their LoD2 so, two in Leipzig, ten in Munich (whose surface model is the
+  coarser DOM20); a flat roof or a 3 m placeholder has no form to keep,
+  and a tent over a flat slab does not follow the scan.
+- **What** is drawn follows the scan's form. The scan over the footprint
+  is split into its **faces** — where it rises by more than 0.15 m per
+  metre (8.5°) over a patch at least 10 m across, the ridge or valley
+  between two slopes included, never a cell beside a step of more than
+  2 m (a face ends at a step, which stays a wall) — and the rest, cut into
+  levels as before. A face is drawn on its measured surface (the scan,
+  edge-preservingly smoothed twice), a level flat at its median; walls
+  stand where the parts meet and at the footprint. A strip a cell or two
+  wide (a step's blurred flank) joins the neighbour closest in height.
+- **How:** the bake writes a face's 1 m surface grid with the part
+  (`surface`, cm from its `z`), carried on past the face on its own plane
+  so the mesh does not bend at the outline; the build makes an
+  error-bounded TIN of it (Delatin, 0.25 m), triangulates its inner
+  vertices with the outline's points where the height along the outline
+  bends (Delaunay, the outline's edges enforced), and stands the walls on
+  those same points. The face shades with normals smoothed over it, not
+  across a crease of more than 30° (a ridge stays sharp): flat-shaded, the
+  TIN's irregular facets read as a crumpled sheet. The sky-view and
+  horizon bake burns the same surface.
+- **Cost:** 886 objects rebuilt on Dresden's fifteen tiles (2 956 parts,
+  94 of them faces — the halls, vaults and broad roofs); their triangles
+  stay at 215 k (the faces' TIN costs what the terraces it replaces did);
+  the roofs files of all seven committed sites grow from 6.1 to 9.1 MB (a
+  build input, not served).
+
+Rejected on the way: **faces from 5 m across** (the Bellevue's slab and
+the Schauspielhaus's narrow slopes came out as draped blankets: at that
+width the scan's metre of blur at each edge is a fifth of the face, and
+the levels it replaces were one or two); **every 1 m cell as two
+triangles** (+70 % city-mesh triangles on the Altstadt tile); **flat
+shading** (the TIN's facets crumpled the Hauptbahnhof's vaults); **a TIN
+cut by the outline's ear-clipping
+triangles** (the slivers multiplied the pieces fourfold); **steps inside
+a face** (Delatin traced every step edge with points — a face ends at a
+step instead); **planes per region** (a dome or a vault needs a plane per
+facet, and a region of 1 m bands is a ring, not a facet).
+
 ## Alternatives
 
 - **Re-triangulate the non-planar polygons** (constrained Delaunay, a
@@ -82,7 +144,8 @@ leaves the committed file alone.
 - **Planes per region** (pent and gable faces fitted to DOM1): better for
   pitched roofs, but the faults found are flat-roofed complexes; the
   stepped model already brings them from 40–100 % of cells off to at most
-  30 % (the hotel: 78 % → 3 %).
+  30 % (the hotel: 78 % → 3 %). (Superseded by the measured faces of the
+  update above: the faults were not all flat-roofed.)
 - **LoD1 from the scan everywhere:** throws away the LoD2's good roofs on
   the 98 % of objects it gets right.
 

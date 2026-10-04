@@ -287,8 +287,9 @@ config change.
   roof relief), `landmarks.py` (Wikidata's notable buildings matched to
   LoD2 objects; its fetch caches the SPARQL answer), `ndvi.py`, `roof_colour.py`,
   `roofs.py` (a LoD2 roof that misses DOM1 — the free-form roofs of
-  complex buildings, the 3 m placeholders of new ones — rebuilt as stepped
-  flat blocks the build puts in its place, `scripts/measured-roofs.ts`;
+  complex buildings, the 3 m placeholders of new ones — rebuilt in the
+  scan's form, flat levels and measured faces (pitched roofs, vaults,
+  domes), which the build puts in its place, `scripts/measured-roofs.ts`;
   ADR 0036), `lamps.py`,
   `monuments.py`, `furniture.py`, `walls.py`, `stairs.py`, `rail.py` +
   `bridge.py` (the deck and superstructure measured in the surface model,

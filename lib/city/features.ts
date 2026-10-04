@@ -294,14 +294,28 @@ export const STRUCTURE_KINDS = [
 ] as const;
 export type StructureKind = (typeof STRUCTURE_KINDS)[number];
 
-/** A LoD2 roof that misses DOM1, rebuilt as stepped flat blocks
- *  (pipeline/bake/roofs.py, GeoSN): one part of the object `id` (its LoD2
- *  CityObject key), its roof at `z` metres (absolute), outline and
- *  courtyards in plan. scripts/measured-roofs.ts stands each part from the
- *  object's LoD2 base. */
+/** A measured roof face's surface (pipeline/bake/roofs.py `surface`): the
+ *  heights in centimetres from its part's `z`, on a north-up grid of `res`
+ *  metre cells from its north-west corner (`x`, `y`), row by row from the
+ *  north; it reaches two cells past the part's outline. */
+export interface MeasuredSurface {
+  cols: number;
+  dz: number[];
+  res: number;
+  rows: number;
+  x: number;
+  y: number;
+}
+
+/** A LoD2 roof that misses DOM1, rebuilt in the shape the scan shows
+ *  (pipeline/bake/roofs.py, the provider's): one part of the object `id`
+ *  (its LoD2 CityObject key), outline and courtyards in plan, its roof at
+ *  `z` metres (absolute) — flat, or, for a face (a pitched roof, a vault, a
+ *  dome), its measured `surface` (`z` then its median).
+ *  scripts/measured-roofs.ts stands each part from the object's LoD2 base. */
 export interface MeasuredRoofFeature {
   geometry: PolygonGeometry;
-  properties: { id: string; z: number } | null;
+  properties: { id: string; surface?: MeasuredSurface; z: number } | null;
 }
 
 /** OSM retaining/city walls and cliffs (pipeline/bake/walls.py, ODbL): the

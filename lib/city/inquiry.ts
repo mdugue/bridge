@@ -33,7 +33,13 @@ import {
   treeCard,
 } from "./inquiry-features";
 import { bikeCard, trafficCard } from "./inquiry-traffic";
-import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
+import {
+  isMeasuredRoof,
+  MEASURED_ROOF,
+  MEASURED_SHAPE,
+  NO_FACT,
+  type ObjectFacts,
+} from "./object-facts";
 import { parseLod2Stand, type SiteProvenance } from "./provenance";
 
 export type { CardFact, InquiryCard } from "./card-lines";
@@ -81,6 +87,9 @@ export function functionLabel(code: string): string {
 export function roofLabel(code: string, pitch: number): string {
   if (code === MEASURED_ROOF) {
     return "flach, gestuft (gemessen)";
+  }
+  if (code === MEASURED_SHAPE) {
+    return "geformt wie gemessen";
   }
   const form = code ? (ROOF_TYPE[code] ?? `Dachform ${code}`) : "";
   const slope = pitch === NO_FACT ? "" : `${whole.format(pitch)}°`;
@@ -182,7 +191,7 @@ function mergedFacts(inquiry: BuildingInquiry) {
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
     heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
-    rebuilt: facts.some((f) => f.roofType === MEASURED_ROOF),
+    rebuilt: facts.some((f) => isMeasuredRoof(f.roofType)),
     shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
   };
 }

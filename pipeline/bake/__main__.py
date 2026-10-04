@@ -69,7 +69,7 @@ STEPS = {
     # The site's counted motor traffic (its source, cached by the fetch).
     "traffic": traffic.run,
     # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
-    # miss DOM1, rebuilt as stepped flat blocks (scripts/bake-city-mesh.ts).
+    # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
     # Committed inputs only (DGM + LoD2 + the rebuilt roofs): the sky-view
     # factor and far horizon.
