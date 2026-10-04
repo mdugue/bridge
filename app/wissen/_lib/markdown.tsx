@@ -5,7 +5,6 @@ import type { Element, Root as HastRoot } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { toString as hastText } from "hast-util-to-string";
 import type { Root as MdastRoot } from "mdast";
-import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import rehypeRaw from "rehype-raw";
@@ -17,6 +16,7 @@ import { unified } from "unified";
 import { visit } from "unist-util-visit";
 import { diagramKey } from "@/lib/docs/diagrams";
 import { type Lang, resolveHref } from "@/lib/docs/routes";
+import { DocLink, rehypeTableScroll } from "../../_lib/markdown-parts";
 import { Diagram } from "../_components/diagram";
 
 export interface TocEntry {
@@ -101,27 +101,6 @@ function rehypeLinks(file: string, pages: ReadonlySet<string>) {
   };
 }
 
-/**
- * Wide tables scroll inside their own box instead of widening the page. Not
- * typeset's `typeset-scroll`: that one sets tables to max-content, which
- * turns this repo's prose tables into single endless lines.
- */
-function rehypeTableScroll() {
-  return (tree: HastRoot) => {
-    visit(tree, "element", (node: Element, index, parent) => {
-      if (node.tagName !== "table" || !parent || index === undefined) {
-        return;
-      }
-      parent.children[index] = {
-        type: "element",
-        tagName: "div",
-        properties: { className: ["doc-table"] },
-        children: [node],
-      };
-    });
-  };
-}
-
 function tocOf(tree: HastRoot): TocEntry[] {
   const toc: TocEntry[] = [];
   visit(tree, "element", (node: Element) => {
@@ -137,18 +116,6 @@ function tocOf(tree: HastRoot): TocEntry[] {
     }
   });
   return toc;
-}
-
-function DocLink({ children, href = "", ...rest }: ComponentProps<"a">) {
-  return href.startsWith("/") ? (
-    <Link href={href} {...rest}>
-      {children}
-    </Link>
-  ) : (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  );
 }
 
 /** One docs file, rendered: Markdown → hast → React, on the server only. */

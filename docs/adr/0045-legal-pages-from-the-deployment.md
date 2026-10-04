@@ -27,8 +27,10 @@ did not have:
 next to their routes** (`app/(legal)/impressum/impressum.md`,
 `app/(legal)/datenschutz/datenschutz.md`) and rendered at build time by
 `app/(legal)/_lib/legal-doc.tsx` — the remark/rehype chain of the Wissen
-pages (`app/wissen/_lib/markdown.tsx`), without what only `docs/` needs.
-Links that start with `/` stay on the site. German, on the Wissen pages'
+pages (`app/wissen/_lib/markdown.tsx`) and its shared parts
+(`app/_lib/markdown-parts.tsx`: the link, the table box), without what
+only `docs/` needs; plain static pages, read at build time. Links that
+start with `/` stay on the site. German, on the Wissen pages'
 paper and type, linked from every page's footer (start page, `/wissen`,
 the legal pages themselves) and from the viewer's sidebar, where they open
 in a new tab so the walk stays (`app/_components/legal-links.tsx`). The
@@ -53,9 +55,13 @@ The visitor can object at any time: a switch on `/datenschutz`
 local storage (`app/_components/report-choice.ts`), which
 `crash-reports.ts` checks before **every** report, so it holds at once in
 a tab already open; Global Privacy Control still turns everything off. The
-switch also says when a build has no DSN. Every event now says
-`user.ip_address: null`, Sentry's documented way to infer no address
-from the request.
+switch also says when a build has no DSN. Without storage (blocked site
+data) the "no" holds for the tab, in memory — the reports run without
+storage too. Every event now names its sender with
+`sdk.settings.infer_ip: "never"`: Relay's legacy rule otherwise derives
+the address from the request for every `javascript` event that names
+none, and treats `user.ip_address: null` the same as `{{auto}}`
+(`relay-event-schema`, `AutoInferSetting`).
 
 ## Consequences
 
@@ -98,7 +104,8 @@ from the request.
   layout), `app/_components/legal-links.tsx`,
   `app/_components/reports-choice.tsx`, `app/_components/report-choice.ts`,
   `app/_components/crash-reports.ts` (`reportsState`),
-  `lib/city/crash-reports.ts` (`user.ip_address`), `e2e/legal.spec.ts`
+  `lib/city/crash-reports.ts` (`SDK`), `app/_lib/markdown-parts.tsx`,
+  `e2e/legal.spec.ts`
 - [ADR 0043](./0043-crash-and-page-reports-to-an-error-tracker.md)
   (amendment 2026-10-04), [ADR 0001](./0001-client-only-static-app.md)
 - The guide's *Using the viewer*, "Crash reports" (both languages)

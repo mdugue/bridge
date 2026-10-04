@@ -123,8 +123,9 @@ a switch keeps the choice in local storage
 (`app/_components/report-choice.ts`), and `crash-reports.ts` checks it
 before every report — not only at the start — so it holds at once in a
 tab already open; the console says `off: turned off in this browser`.
-Every event carries `user.ip_address: null`, so Sentry infers no address
-from the request. The privacy page promises that no address is stored:
+Every event carries `sdk.settings.infer_ip: "never"`, so Sentry infers no
+address from the request (without it, Relay's legacy rule infers one for
+every `javascript` event). The privacy page promises that no address is stored:
 keep *Prevent Storing of IP Addresses* on in the Sentry project.
 
 ## Consequences

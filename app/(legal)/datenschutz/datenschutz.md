@@ -91,7 +91,8 @@ Du kannst den Berichten jederzeit ohne Angabe von Gründen widersprechen: mit
 dem Schalter hier, der für diesen Browser sofort gilt, oder indem dein Browser
 Global Privacy Control sendet – dann wird nie etwas gesendet.
 
-<reports-choice></reports-choice>
+<reports-choice>
+</reports-choice>
 
 ## Was in deinem Browser bleibt
 

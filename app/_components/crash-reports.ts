@@ -2,7 +2,6 @@ import {
   crashReport,
   createProblemGate,
   envelope,
-  envelopeUrl,
   firstSet,
   type Payload,
   PROBLEM_KINDS,
@@ -23,7 +22,11 @@ import {
   type TrailListener,
 } from "./crash-trail";
 import { recentlyRecovered } from "./gpu-recovery";
-import { reportsDeclined } from "./report-choice";
+import {
+  type ReportsState,
+  reportsDeclined,
+  reportsState,
+} from "./report-choice";
 
 /**
  * The crash reports' browser side (what goes out, and why:
@@ -61,21 +64,6 @@ declare global {
   }
 }
 
-/** Whether this page sends reports, and if not, why. */
-export type ReportsState = "on" | "no-dsn" | "gpc" | "declined";
-
-export function reportsState(): ReportsState {
-  if (envelopeUrl(DSN) === null) {
-    return "no-dsn";
-  }
-  const gpc = (navigator as Navigator & { globalPrivacyControl?: boolean })
-    .globalPrivacyControl;
-  if (gpc === true) {
-    return "gpc";
-  }
-  return reportsDeclined() ? "declined" : "on";
-}
-
 const OFF_REASONS: Record<Exclude<ReportsState, "on">, string> = {
   "no-dsn": "no DSN in this build",
   gpc: "the browser sends Global Privacy Control",
@@ -99,7 +87,9 @@ const newId = () =>
   ).join("");
 
 function post(body: string): void {
-  // Said no since the page started (on /datenschutz, maybe in another tab).
+  // Said no since the page started (on /datenschutz, maybe in another
+  // tab): nothing goes out after a no — the session's end included, so
+  // Sentry closes that session itself.
   if (reportsDeclined()) {
     return;
   }
@@ -223,8 +213,10 @@ function announce(ctx: ReportContext): void {
   window.crashReports = {
     status,
     test: () => {
-      if (off || !current) {
-        console.info(TAG, off ? `nothing sent: ${off}` : "no page yet");
+      // Asked now: the visitor may have said no since the page started.
+      const offNow = offReason();
+      if (offNow || !current) {
+        console.info(TAG, offNow ? `nothing sent: ${offNow}` : "no page yet");
         return;
       }
       const t = (Date.now() - Date.parse(current.startedAt)) / 1000;

@@ -3,8 +3,11 @@
 import { useState, useSyncExternalStore } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { type ReportsState, reportsState } from "./crash-reports";
-import { setReportsDeclined } from "./report-choice";
+import {
+  type ReportsState,
+  reportsState,
+  setReportsDeclined,
+} from "./report-choice";
 
 /**
  * The privacy page's switch for the crash reports (report-choice.ts): on

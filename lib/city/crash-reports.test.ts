@@ -171,7 +171,13 @@ test("no report leaves Sentry an address to infer for the visitor", () => {
     problemReport(trail, error, ID, ctx),
     summaryReport(trail, ID, ctx),
   ]) {
-    expect(report.user).toEqual({ ip_address: null });
+    // Relay's legacy rule infers an address for a `javascript` event
+    // without one (and for `ip_address: null`); "never" turns it off.
+    expect(report).toMatchObject({
+      platform: "javascript",
+      sdk: { settings: { infer_ip: "never" } },
+    });
+    expect(report.user).toBeUndefined();
   }
 });
 

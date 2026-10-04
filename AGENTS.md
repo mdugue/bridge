@@ -290,7 +290,7 @@ config change.
 - `app/(legal)/` — `/impressum` and `/datenschutz` (ADR 0045): Markdown
   next to each route (`impressum/impressum.md`, `datenschutz/datenschutz.md`),
   rendered by `_lib/legal-doc.tsx` with the Wissen pages' remark/rehype
-  chain; linked from every footer and the viewer's sidebar
+  chain (the link and the table box shared in `app/_lib/markdown-parts.tsx`); linked from every footer and the viewer's sidebar
   (`app/_components/legal-links.tsx`). `<reports-choice></reports-choice>`
   in the Markdown is the reports' opt-out switch (`reports-choice.tsx`,
   kept by `report-choice.ts`)

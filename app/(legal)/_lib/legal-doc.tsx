@@ -2,8 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Root as HastRoot } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
-import Link from "next/link";
-import type { ComponentProps, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
@@ -12,48 +11,33 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { ReportsChoice } from "../../_components/reports-choice";
+import { DocLink, rehypeTableScroll } from "../../_lib/markdown-parts";
 
 /**
  * /impressum and /datenschutz are Markdown next to their routes
- * (`app/(legal)/<name>/<name>.md`, ADR 0045), rendered here at build time
- * with the same remark/rehype chain as the Wissen pages, minus what only
- * docs/ needs (diagrams, GitHub links, code highlighting). Links starting
- * with `/` stay on the site; `<reports-choice></reports-choice>` in the
- * Markdown is the privacy page's switch for the crash reports.
+ * (`app/(legal)/<name>/<name>.md`, ADR 0045), rendered here with the
+ * Wissen pages' remark/rehype chain and its shared parts
+ * (app/_lib/markdown-parts.tsx), minus what only docs/ needs (diagrams,
+ * links resolved to GitHub, code highlighting). Links starting with `/`
+ * stay on the site. The privacy page's switch for the crash reports is
+ * written as `<reports-choice>` and `</reports-choice>` on two lines — on
+ * one line it would be inline HTML, wrapped in a paragraph.
+ *
+ * Nothing here reads a request or the clock, so the pages prerender as
+ * plain static ones: the file is read at build time (and on every request
+ * in `bun dev`, where an edit shows on reload).
  */
 export type LegalDocName = "impressum" | "datenschutz";
 
-function LegalLink({ children, href = "", ...rest }: ComponentProps<"a">) {
-  if (href.startsWith("/")) {
-    return (
-      <Link href={href} {...rest}>
-        {children}
-      </Link>
-    );
-  }
-  const external = /^https?:/u.test(href) ? { rel: "noopener" } : {};
-  return (
-    <a href={href} {...external} {...rest}>
-      {children}
-    </a>
-  );
-}
-
-/**
- * One legal page, rendered once at build time. Cached because the
- * Markdown chain reads the clock on its way (Cache Components refuses that
- * in a prerender otherwise), and its output only changes with the file.
- */
 export async function LegalDoc({ name }: { name: LegalDocName }) {
-  "use cache";
-  // A static path keeps the trace to the two files.
   const file = path.join(process.cwd(), "app", "(legal)", name, `${name}.md`);
   const processor = unified()
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
-    .use(rehypeSlug);
+    .use(rehypeSlug)
+    .use(rehypeTableScroll);
   // As in app/wissen/_lib/markdown.tsx: the chain ends in hast.
   const run: unknown = await processor.run(
     processor.parse(readFileSync(file, "utf8"))
@@ -64,7 +48,7 @@ export async function LegalDoc({ name }: { name: LegalDocName }) {
     Fragment,
     jsx,
     jsxs,
-    components: { a: LegalLink, "reports-choice": ReportsChoice },
+    components: { a: DocLink, "reports-choice": ReportsChoice },
   });
   return rendered as ReactNode;
 }
