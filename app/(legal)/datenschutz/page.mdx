@@ -1,3 +1,14 @@
+import { ReportsChoice } from "../../_components/reports-choice";
+
+export const metadata = {
+  title: "Datenschutz — City Walk",
+  description:
+    "Welche Daten beim Besuch von City Walk anfallen, wohin sie gehen und wie du widersprichst.",
+  alternates: { canonical: "/datenschutz" },
+};
+
+{/* ADR 0045: a new request to a third party, report field or storage key is not done until this page says so. */}
+
 # Datenschutz&shy;erklärung
 
 Kurz gesagt:
@@ -91,8 +102,7 @@ Du kannst den Berichten jederzeit ohne Angabe von Gründen widersprechen: mit
 dem Schalter hier, der für diesen Browser sofort gilt, oder indem dein Browser
 Global Privacy Control sendet – dann wird nie etwas gesendet.
 
-<reports-choice>
-</reports-choice>
+<ReportsChoice />
 
 ## Was in deinem Browser bleibt
 

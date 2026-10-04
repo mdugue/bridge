@@ -81,7 +81,7 @@ Docs are only useful if they do not rot. Treat them as part of "done":
 > A change that **sends a visitor's data somewhere new** — a request from
 > the browser to a third party (a live feed, a font, an embed), a new field
 > in the crash reports, a new key in the browser's storage — updates the
-> site's privacy page, `app/(legal)/datenschutz/datenschutz.md`
+> site's privacy page, `app/(legal)/datenschutz/page.mdx`
 > ([ADR 0045](./adr/0045-legal-pages-from-the-deployment.md)).
 
 > A decision that **constrains future work** (a dependency, a format, a

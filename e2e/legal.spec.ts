@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * /impressum and /datenschutz (ADR 0045): Markdown next to their routes,
+ * /impressum and /datenschutz (ADR 0045): MDX pages,
  * reachable from the start page's footer and from each other.
  */
 test.describe("legal pages", () => {

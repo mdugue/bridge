@@ -94,7 +94,7 @@ With `SENTRY_AUTH_TOKEN` (an organisation token), `SENTRY_ORG` and
 sent.
 
 **Impressum and privacy policy** (`/impressum`, `/datenschutz`, German)
-are Markdown next to their routes, `app/(legal)/*/*.md`, and name this
+are MDX pages, `app/(legal)/*/page.mdx` (`@next/mdx`), and name this
 deployment's operator, host (Vercel) and tracker (Sentry, EU region) —
 a deployment of your own edits them. Visitors turn the reports off on
 the privacy page ([ADR 0045](docs/adr/0045-legal-pages-from-the-deployment.md)).
