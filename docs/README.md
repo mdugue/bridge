@@ -78,6 +78,12 @@ Docs are only useful if they do not rot. Treat them as part of "done":
 > route, strengths and weaknesses, edition, licence) and
 > [data-pipeline.md](./data-pipeline.md).
 
+> A change that **sends a visitor's data somewhere new** — a request from
+> the browser to a third party (a live feed, a font, an embed), a new field
+> in the crash reports, a new key in the browser's storage — updates the
+> site's privacy page, `app/(legal)/datenschutz/page.mdx`
+> ([ADR 0045](./adr/0045-legal-pages-from-the-deployment.md)).
+
 > A decision that **constrains future work** (a dependency, a format, a
 > rendering approach, a rejected alternative) gets an
 > [ADR](./adr/README.md). A rejected idea is worth as much as a shipped

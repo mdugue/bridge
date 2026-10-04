@@ -1,3 +1,4 @@
+import createMDX from "@next/mdx";
 import type { NextConfig } from "next";
 import { reportBuild, tunnelRewrites } from "./lib/city/crash-reports";
 
@@ -8,6 +9,8 @@ const reports = reportBuild(process.env);
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // The legal pages are MDX (app/(legal)/*/page.mdx, ADR 0045).
+  pageExtensions: ["ts", "tsx", "mdx"],
   env: {
     CRASH_REPORTS_DSN: reports.dsn ?? "",
     CRASH_REPORTS_RELEASE: reports.release ?? "",
@@ -59,4 +62,4 @@ const nextConfig: NextConfig = {
     ]),
 };
 
-export default nextConfig;
+export default createMDX()(nextConfig);
