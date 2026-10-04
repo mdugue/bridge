@@ -1,6 +1,7 @@
 /**
  * Minimal ambient typing for the untyped `delatin` package (bake-time only —
- * scripts/bake-terrain-tin.ts; nothing under app/ may import it). Greedy
+ * scripts/bake-terrain-tin.ts, scripts/measured-roofs.ts; nothing under
+ * app/ may import it). Greedy
  * Delaunay refinement of a regular height grid: vertices land on grid
  * points, `run(maxError)` inserts the worst-fitting grid point until every
  * grid point is within `maxError` of the mesh. https://github.com/mapbox/delatin

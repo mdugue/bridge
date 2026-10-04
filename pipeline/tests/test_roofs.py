@@ -7,7 +7,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from bake.common import Tile
-from bake.roofs import merge_regions, run
+from bake.roofs import form_holds, merge_regions, run
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
 BASE = 110.0
@@ -139,7 +139,66 @@ def test_regions_closer_than_the_merge_step_merge_a_storey_stays():
     h[:, 20:] = 5.0
     lab = np.zeros(h.shape, np.int64)
     lab[:, :10], lab[:, 10:20], lab[:, 20:] = 1, 2, 3
-    out = merge_regions(lab, h, small_cells=5)
+    out, faces = merge_regions(lab, h, small_cells=5)
     assert out.max() == 2
+    assert not faces.any()
     assert len(np.unique(out[:, :20])) == 1
     assert out[0, 0] != out[0, 25]
+
+
+def test_a_face_stays_a_face_a_flat_neighbour_its_level():
+    # a slope of 1 m bands (one face) beside a flat block at its foot
+    h = np.zeros((10, 30))
+    h[:, :20] = (np.arange(20) // 10)[None, :]
+    lab = np.zeros(h.shape, np.int64)
+    lab[:, :10], lab[:, 10:20], lab[:, 20:] = 1, 2, 3
+    faces = np.array([False, True, True, False])
+    out, merged = merge_regions(lab, h, small_cells=5, faces=faces)
+    # the two face pieces do not merge by height, nor the flat one into them
+    assert out.max() == 3
+    assert merged[out[0, 0]] and merged[out[0, 15]] and not merged[out[0, 25]]
+
+
+def _gable_dom():
+    """The scan: over the tent's footprint (x 20..60) a gable, eaves at
+    10 m, its ridge 5 m higher along x = 40; the flat roof at 10 m."""
+    dom = _dom()
+    rows = slice(SIZE - 60, SIZE - 20)
+    x = np.arange(20, 60) + 0.5
+    dom[rows, 20:60] = BASE + 15 - np.abs(x - 40) / 4
+    return dom
+
+
+def test_a_tent_over_a_gable_becomes_the_measured_gable(tmp_path):
+    tile = _tile(tmp_path, _gable_dom())
+    run(tile)
+    doc = json.loads((tile.data / "dlm" / "roofs_t.geojson").read_text())
+    parts = [f["properties"] for f in doc["features"] if f["properties"]["id"] == "tent"]
+    faces = [p for p in parts if "surface" in p]
+    # one face, not a flight of 1 m terraces
+    assert len(faces) == 1
+    face = faces[0]
+    s = face["surface"]
+    grid = face["z"] + np.asarray(s["dz"], float).reshape(s["rows"], s["cols"]) / 100
+    xs = s["x"] + (np.arange(s["cols"]) + 0.5) * s["res"]
+    ys = s["y"] - (np.arange(s["rows"]) + 0.5) * s["res"]
+    row = int(np.argmin(np.abs(ys - (Y0 + 40))))
+    for x in (24.5, 32.5, 40.5, 48.5, 55.5):
+        col = int(np.argmin(np.abs(xs - (X0 + x))))
+        assert abs(grid[row, col] - (BASE + 15 - abs(x - 40) / 4)) < 0.3
+
+
+def test_a_form_the_scan_follows_is_kept_a_wrong_one_or_a_placeholder_not():
+    x = np.tile(np.arange(40.0), 40)
+    gable = BASE + 10 + 6 - np.abs(x - 20) * 0.3  # a 6 m gable over 40 m
+    # its level 4 m off, the shape the same: the LoD2's form holds
+    assert form_holds(gable, gable + 4)
+    # the scan's noise does not change that
+    rng = np.random.default_rng(1)
+    assert form_holds(gable, gable + 4 + rng.normal(0, 0.3, gable.shape))
+    # a tent over a flat roof: the form is wrong
+    assert not form_holds(gable, np.full_like(gable, BASE + 14))
+    # a 3 m placeholder under a 19 m block: no form to keep
+    assert not form_holds(np.full_like(gable, BASE + 3), np.full_like(gable, BASE + 19))
+    # the same gable 9 m higher: another building on the footprint
+    assert not form_holds(gable, gable + 9)

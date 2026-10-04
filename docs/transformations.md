@@ -547,38 +547,70 @@ visual-variable codebook is in
   and a relief without a `grid` (a file baked before the height field)
   builds nothing.
 - **Roofs rebuilt from DOM1** ([ADR 0036](./adr/0036-lod2-roofs-that-miss-the-scan-are-rebuilt.md))
-  — a LoD2 roof that misses the surface model is drawn as stepped flat
-  blocks measured in it, inside the object's own footprint. The fault: the
+  — a LoD2 roof that misses the surface model is drawn in the form the
+  scan shows, inside the object's own footprint: flat levels where the
+  scan is flat, its measured surface where it slopes or curves (since
+  2026-10-03; first as stepped flat blocks only — 🗃️ below). The fault: the
   2025 edition's `tdcFreeFormRoof` (10 305 objects) is, on a complex
   building, often a handful of non-planar facets over the whole footprint —
   the Westin Bellevue (`DESNATPU1000GHDs`) was three facets rising from 7 m
-  at the eaves to a 25 m peak, a tent over a flat-roofed slab, wings and
-  two courtyards; and buildings finished after the LoD2's roofs were
+  at the eaves to a 25 m peak, a tent over a slab, wings and two
+  courtyards; and buildings finished after the LoD2's roofs were
   measured (2016 here) stand as 3 m placeholders (a block on the
   Ferdinandplatz: 3 m, 19 m in the scan). `pipeline/bake/roofs.py`: each
   building's roof burned at 1 m with its vertices' own heights (as the
   loader draws it; cells under another object's higher roof are not its
   own); a candidate when ≥ 150 m² and > 40 % of its cells (one inside the
-  edge, NDVI ≤ 0.3) stand > 2 m off DOM1. The blocks: DOM1 3 × 3-median
-  filtered over the footprint, cut into 1 m bands, pieces < 20 m² into the
-  neighbour closest in height, neighbours < 1.5 m apart merged, each
-  region at its median; polygonised, `coverage_simplify` 1 m, clipped to
-  the footprint. Kept only when they miss on ≤ half the LoD2's share and
-  ≤ 30 % (the hotel: 78 % → 3 %), not where the scan sees open ground on
-  > 15 % of the footprint (a block torn down since: the footprint is out
-  of date too), parts under 2 m dropped →
-  `data/<site>/dlm/roofs_<tile>.geojson` (Polygons with the object `id` and the
-  roof `z`, GeoSN). **889 of 49 936 objects, 3 146 parts** on Dresden's fifteen
-  tiles (0–132 a tile, the Altstadt most); the step runs on every site. `bakeCityMesh`
-  (`withMeasuredRoofs`, `scripts/measured-roofs.ts`) drops the object's
-  LoD2 triangles and stands each part as a prism (walls and roof, no
-  floor) from the object's lowest LoD2 vertex — same object id, so the
-  table row, picking, demolish, collision and minimap stay; eave and
-  storey rows follow the new shape. +8.4 % city-mesh triangles. Limits:
-  flat by construction (a pitched roof inside a rebuilt object becomes one
-  level). The sky-view and horizon bake (`skyview.py`) burns the rebuilt
-  tops in place of their objects' LoD2 surfaces, so the far shadows match
-  the mesh (`roofs` runs before `skyview`). Unverified on a real GPU (headless SwiftShader before/after only).
+  edge, NDVI ≤ 0.3) stand > 2 m off DOM1 — unless its form holds
+  (`form_holds`, 2026-10-03): it rises ≥ 3 m, the scan follows it
+  (Pearson r ≥ 0.85), it misses on ≤ 20 % once shifted by its median
+  offset, and that offset is under the form's own height; the
+  Frauenkirche's modelled dome (r 0.90, 5.6 m under the scan) is kept so.
+  **The decision** is made on the
+  flat model: DOM1 3 × 3-median filtered over the footprint, cut into 1 m
+  bands, pieces < 20 m² into the neighbour closest in height, neighbours
+  < 1.5 m apart merged, each region at its median; kept only when it
+  misses on ≤ half the LoD2's share and ≤ 30 % (the hotel: 78 % → 3 %),
+  not where the scan sees open ground on > 15 % of the footprint (a block
+  torn down since: the footprint is out of date too). **What is drawn:**
+  the same scan split into its *faces* first — cells rising > 0.15 m per
+  metre (8.5°) over a patch ≥ 10 m across (a disk-shaped opening: narrower,
+  the scan's metre of blur at each edge rounds a slope into a blanket — the
+  Westin Bellevue's slab did at 5 m — where its few levels read better), the 1–2
+  cells of a ridge or valley closed in, never a cell beside a step of
+  > 2 m between neighbours (`inclined_cells`, `step_cells`) — and the
+  rest banded and merged as above; faces never merge by height, a strip a
+  cell or two wide (a step's flank) joins the neighbour closest in height.
+  A face's surface is the scan on its face cells (pieces it took in filled
+  from them), smoothed twice by an edge-preserving Gaussian (σ 1 cell, 1 m
+  height σ); written as a 1 m grid in cm from the part's `z` (its median),
+  two cells past the outline and carried on there on the face's own local
+  plane. Polygonised, `coverage_simplify` 1 m, clipped to the footprint,
+  parts under 2 m dropped → `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
+  with the object `id`, the roof `z` and, for a face, its `surface`; the
+  provider's credit). **886 objects on Dresden's fifteen tiles, 2 956
+  parts, 94 of them faces** (0–129 objects a tile, the Altstadt most; the
+  objects of the flat-only bake less the five whose form holds); the step
+  runs on every site.
+  `bakeCityMesh` (`withMeasuredRoofs`, `scripts/measured-roofs.ts`) drops
+  the object's LoD2 triangles and stands each part from the object's
+  lowest LoD2 vertex — a flat part as a prism, a face as an error-bounded
+  TIN of its grid (Delatin, 0.25 m) whose inner vertices are triangulated
+  with the outline's points where the height along it bends (Delaunay,
+  the outline's edges enforced by splitting), its walls on those same
+  points, shading with normals smoothed over the face but not across a
+  crease of > 30° (a ridge stays sharp) — same object id, so the table row, picking, demolish, collision
+  and minimap stay; eave and storey rows follow the new shape, and the
+  card says *geformt wie gemessen* where a face is part of it
+  (`MEASURED_SHAPE`). The rebuilt objects' triangles: 215 k before and
+  after on the site (a face's TIN costs what its terraces did). The sky-view and horizon bake
+  (`skyview.py`) burns the rebuilt parts — flat tops, faces on their grid —
+  in place of their objects' LoD2 surfaces, so the far shadows match the
+  mesh (`roofs` runs before `skyview`). Limits: a face is the scan's,
+  smoothed: a sharp ridge reads rounded over a metre or two, a dormer or a
+  chimney is smoothed away; a face's TIN keeps its 0.25 m lumps, which the
+  smoothed shading hides more than it removes. Judged in headless
+  SwiftShader renders only (before/after), not on a real GPU.
 - **Ground-clamp** — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
   `lib/city/ground-clamp.ts`, `heightAt` in `create-app.ts`.
@@ -2346,6 +2378,7 @@ research that produced them):
 | **Structures from the surface model alone** (plan 050: every tall gap between DOM1 and `max(DGM1, LoD2 roof)` as a column or block) | The gap is mostly not buildings: tree crowns, power pylons, and on the flight day the construction cranes — Leipzig's centre showed dozens of 50–95 m spikes with no mapped structure, Hamburg 90–98 m ones beside a 2023 building. | Only where OSM names the structure (`man_made=*`, a building outline) does the surface model measure it; a landmark's roof relief is the one gap drawn without a mapped outline, and only over its own LoD2 roof. |
 | **Invented or imported landmark geometry** (hand-modelled landmarks per city, glTF models from 3D warehouses, a stock spire or dome by type) | Not repeatable for the next city, a licence per model, and a detailed model breaks the clay style next to LoD2 boxes. | Geometry beyond LoD2 comes only from a measurement confirmed by a name ([ADR 0038](./adr/0038-measured-and-named-additions.md)). |
 | **Landmark roof relief as stacked slabs** (plan 050 as first built: the excess over the highest LoD2 roof cut into ≥ 2 m bands, at most 8, each band's smoothed outline extruded as a flat slab — a contour model) | A spire LoD2 cuts short became a stepped pyramid (Unna's Stadtkirche: LoD2 stops at 137 m, the surface model at ≈ 178 m) and the Elbphilharmonie's crests a flight of terraces — the plan's own STOP ("reads as a stack of plates"); 508 slabs on 74 objects in the first bake. | Replaced by the measured height field on the 1 m grid, lightly smoothed, built as one surface with corner heights averaged (✅ *Landmark roof relief*). Still no invented smooth roof: every height is a surface-model cell. |
+| **Rebuilt roofs as stepped flat blocks only** (ADR 0036 as first built, 2026-10-01 → 2026-10-03: every region of 1 m height bands at its median, a prism each) | Right for the flat complexes the gate was made for, wrong for every roof it caught that is not flat: the Frauenkirche's dome (its LoD2 part ~5 m under the scan, so rebuilt) became four stacked drums, the Hauptbahnhof's arched train shed a staircase of 52 ledges, the Schauspielhaus's hipped roofs contour lines — the relief's lesson again ("a stack of plates"). | Replaced by the measured faces (✅ *Roofs rebuilt from DOM1*): the same objects, flat levels where the scan is flat, its surface where it slopes or curves. |
 | **A lathed column for every mapped tower** (plan 050 as first baked: `man_made=tower`, `lighthouse` and `water_tower` measured like masts and chimneys) | Where LoD2 has a roof over the mapped foot it draws the tower already; the column stood inside it and doubled it — Meißen's cathedral towers (81/83 m), Grimma's churches, 13 of 14 towers in Munich. | `BUILT_TOWERS` under a LoD2 roof are skipped; a mast or chimney on a roof is not in LoD2 and stays. |
 | **Every Basis-DLM rail at street level** (the rail layer before 2026-09-30) | The DLM files subways and S-Bahn trunk lines as ordinary railway lines: Munich's U-Bahn (23 km) and the S-Bahn trunk line (4.2 km) ran across the Marienplatz and the Odeonsplatz as broken track, and OSM's U-Bahn platforms lay on the squares above them. | A stretch within 2 m of a DLM tunnel (`BWF=1870`) for > 15 m is cut; OSM platforms and tram ways below ground are skipped. |
 | **A 6 m tunnel reach for the rail cut** (the first cut: a rail within 6 m of a DLM tunnel) | Munich Hauptbahnhof's surface tracks run straight over the S-Bahn tunnel, parallel and a few metres beside its axis: the wider reach cut them too. | The DLM draws a tunnel on its rail's own axis, so 2 m is enough; plus the 15 m overlap floor so a surface track crossing over a tunnel keeps its crossing. |

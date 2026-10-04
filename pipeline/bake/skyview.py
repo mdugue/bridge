@@ -6,8 +6,9 @@ long shadows the shadow map's 110 m frustum cuts off (plan 033, docs/plans/compl
 
 Height field: the DGM1 with every non-vertical LoD2 surface burned on top
 (max over its triangles, the plane of each surface evaluated per cell) —
-where a LoD2 roof misses DOM1 and roofs.py rebuilt it, the rebuilt flat
-blocks instead, as the city mesh draws them (ADR 0036).
+where a LoD2 roof misses DOM1 and roofs.py rebuilt it, the rebuilt parts
+instead (flat, or on their measured surface), as the city mesh draws them
+(ADR 0036).
 Trees are left out on purpose — they cast real shadows and have their own
 shading — and so is DOM1 itself (it reaches the field only through the
 committed rebuilt roofs): the bake is reproducible from the repository.
@@ -219,9 +220,30 @@ def _burn_chunk(out, idx, col, row, c0, r0, w, count, z) -> None:
     np.maximum.at(out, (rr[inside], cc[inside]), zz[inside])
 
 
+def face_triangles(poly: shapely.Geometry, surface: dict, z: float) -> np.ndarray:
+    """A measured face's surface (roofs.py `surface`) as (n, 3, 3)
+    triangles: two per square between four cell centres, where the square's
+    middle lies inside the part."""
+    res = surface["res"]
+    a = z + np.asarray(surface["dz"], np.float64).reshape(surface["rows"], surface["cols"]) / 100
+    xs = surface["x"] + (np.arange(surface["cols"]) + 0.5) * res
+    ys = surface["y"] - (np.arange(surface["rows"]) + 0.5) * res
+    mx, my = np.meshgrid((xs[:-1] + xs[1:]) / 2, (ys[:-1] + ys[1:]) / 2)
+    r, c = np.nonzero(shapely.contains_xy(poly, mx, my))
+    if not len(r):
+        return np.zeros((0, 3, 3))
+
+    def corner(dr, dc):
+        return np.column_stack([xs[c + dc], ys[r + dr], a[r + dr, c + dc]])
+
+    p00, p01, p10, p11 = corner(0, 0), corner(0, 1), corner(1, 0), corner(1, 1)
+    return np.concatenate([np.stack([p00, p01, p11], axis=1), np.stack([p00, p11, p10], axis=1)])
+
+
 def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:
     """The roofs rebuilt from DOM1 (roofs.py): the ids they replace and their
-    flat tops as (n, 3, 3) triangles. Missing file → none."""
+    tops as (n, 3, 3) triangles — a flat part at its `z`, a face on its
+    measured surface. Missing file → none."""
     if not path.exists():
         return set(), np.zeros((0, 3, 3))
     features = json.loads(path.read_text()).get("features", [])
@@ -230,6 +252,9 @@ def measured_triangles(path: Path) -> tuple[set[str], np.ndarray]:
     for f in features:
         z = f["properties"]["z"]
         poly = shapely.geometry.shape(f["geometry"])
+        if "surface" in f["properties"]:
+            tris.extend(face_triangles(poly, f["properties"]["surface"], z))
+            continue
         for t in shapely.get_parts(shapely.constrained_delaunay_triangles(poly)):
             xy = np.asarray(t.exterior.coords)[:3]
             tris.append(np.column_stack([xy, np.full(3, z)]))

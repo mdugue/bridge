@@ -10,7 +10,12 @@ import {
   roofLabel,
   squareMetres,
 } from "./inquiry";
-import { MEASURED_ROOF, NO_FACT, type ObjectFacts } from "./object-facts";
+import {
+  MEASURED_ROOF,
+  MEASURED_SHAPE,
+  NO_FACT,
+  type ObjectFacts,
+} from "./object-facts";
 import type { SiteProvenance } from "./provenance";
 
 const facts = (over: Partial<ObjectFacts> = {}): ObjectFacts => ({
@@ -146,6 +151,23 @@ test("a roof rebuilt from the surface model is said to be measured there", () =>
   });
   // the LoD2 line no longer claims the roof; the surface model's does
   expect(card.sources[0]).not.toContain("Dach gemessen");
+  expect(card.sources[1]).toStartWith("Dach und Höhe: DOM1");
+});
+
+test("a rebuilt roof with measured faces is said to be shaped as measured", () => {
+  const card = inquiryCard(
+    {
+      kind: "building",
+      tile: "t",
+      picked: object({ facts: facts({ roofType: MEASURED_SHAPE }) }),
+      tree: [],
+    },
+    provenance
+  );
+  expect(card.facts).toContainEqual({
+    label: "Dach",
+    value: "geformt wie gemessen",
+  });
   expect(card.sources[1]).toStartWith("Dach und Höhe: DOM1");
 });
 

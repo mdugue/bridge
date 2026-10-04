@@ -393,4 +393,8 @@ test("a measured roof replaces its object's LoD2 triangles, same row", () => {
   // the row follows the new shape: the eave is the lower block's roof
   expect(baked.objects[2].eaveH).toBeCloseTo(4, 2);
   expect(baked.objects).toHaveLength(lod2.objects.length);
+  // flat blocks and the kept LoD2 shade flat: the stream's normals run
+  // alongside its positions, all of them NaN
+  expect(v.normals).toHaveLength(v.positions.length);
+  expect([...(v.normals ?? [])].every(Number.isNaN)).toBe(true);
 });

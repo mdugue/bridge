@@ -149,6 +149,23 @@ function normalsOf(
   return geometry.getAttribute("normal").array as Float32Array;
 }
 
+/** The flat normals with every vertex `shading` gives one (not NaN) — a
+ *  measured roof face's, smoothed over it — taking that one instead. */
+function withShading(
+  flat: Float32Array,
+  shading: Float32Array | undefined
+): Float32Array {
+  if (!shading) {
+    return flat;
+  }
+  for (let i = 0; i < flat.length; i++) {
+    if (!Number.isNaN(shading[i])) {
+      flat[i] = shading[i];
+    }
+  }
+  return flat;
+}
+
 /**
  * A terrain mesh's normals from its SURFACE triangles alone. The skirt shares
  * the border vertices with the surface, and a 30 m vertical wall outweighs the
@@ -506,7 +523,7 @@ export function cityMesh(baked: BakedCityMesh): CityMesh {
     footprints: baked.objects.map((o) => o.footprints),
     input: {
       positions: v.positions,
-      normals: normalsOf(v.positions),
+      normals: withShading(normalsOf(v.positions), v.normals),
       attributes: { _FEATURE_ID_0: v.objectIds, _ROOF: v.isRoof },
       table,
       weld: true,

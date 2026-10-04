@@ -226,3 +226,31 @@ def test_a_rebuilt_roof_stands_in_for_its_lod2_object(tmp_path):
     field = Field((0, 0, 10, 10), 1.0)
     assert np.nanmin(burn_triangles(field, tris)) == 130.0
     assert measured_triangles(tmp_path / "missing.geojson")[0] == set()
+
+
+def test_a_rebuilt_face_burns_its_measured_surface(tmp_path):
+    from bake.skyview import measured_triangles
+
+    path = tmp_path / "roofs_t.geojson"
+    ring = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]
+    # a pent roof rising 1 m per metre east, on a grid two cells past it
+    dz = [[(c - 2) * 100 for c in range(14)] for _ in range(14)]
+    surface = {"x": -2, "y": 12, "res": 1, "cols": 14, "rows": 14, "dz": sum(dz, [])}
+    path.write_text(
+        json.dumps(
+            {
+                "features": [
+                    {
+                        "geometry": {"type": "Polygon", "coordinates": [ring]},
+                        "properties": {"id": "a", "z": 120.0, "surface": surface},
+                    }
+                ]
+            }
+        )
+    )
+    ids, tris = measured_triangles(path)
+    assert ids == {"a"}
+    burned = burn_triangles(Field((0, 0, 10, 10), 1.0), tris)
+    # the field's cell centres (x = col + 0.5) on the slope, 120 m at x = 0.5
+    for col in (1, 5, 8):
+        assert np.allclose(burned[1:-1, col], 120.0 + col, atol=1e-6)

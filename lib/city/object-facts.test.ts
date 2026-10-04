@@ -5,6 +5,7 @@ import {
   isoDate,
   lod2Facts,
   MEASURED_ROOF,
+  MEASURED_SHAPE,
   NO_FACT,
   readFacts,
   ringsArea,
@@ -188,4 +189,15 @@ test("a roof rebuilt from the surface model drops the LoD2's form, pitch, height
   expect(facts.roofType).toBe(MEASURED_ROOF);
   expect(facts.roofPitch).toBe(NO_FACT);
   expect(facts.height).toBe(19.2);
+  // part of it on the measured surface: its own code
+  const shaped = lod2Facts({
+    buildingId: "B",
+    fallbackHeight: 19.2,
+    footprints: [square],
+    own: { roofType: "5000" },
+    resolved: {},
+    rebuilt: true,
+    shaped: true,
+  });
+  expect(shaped.roofType).toBe(MEASURED_SHAPE);
 });
