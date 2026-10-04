@@ -118,7 +118,7 @@ organisation.
 
 The reports are described on the site's privacy page, `/datenschutz`
 ([ADR 0045](./0045-legal-pages-from-the-deployment.md)), which names the
-tracker and its region from the build's DSN. A visitor can say no there:
+tracker and its region. A visitor can say no there:
 a switch keeps the choice in local storage
 (`app/_components/report-choice.ts`), and `crash-reports.ts` checks it
 before every report — not only at the start — so it holds at once in a

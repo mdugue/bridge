@@ -1,0 +1,170 @@
+# Datenschutz&shy;erklärung
+
+Kurz gesagt:
+
+- City Walk hat keine Konten, setzt keine Cookies, zeigt keine Werbung und
+  verfolgt dich nicht über Seiten hinweg.
+- Wie bei jeder Website verarbeitet der Hoster beim Aufruf technische
+  Verbindungsdaten, darunter deine IP-Adresse.
+- Damit Abstürze und langsame Geräte auffallen, schickt der Viewer Fehler- und
+  Leistungsberichte – ohne Standort und ohne IP-Adresse. Du kannst sie
+  [unten ausschalten](#fehlerberichte).
+- Dein Standort verlässt dein Gerät nie.
+
+## Verantwortlich
+
+Verantwortlich für die Verarbeitung im Sinne der Datenschutz-Grundverordnung
+(DSGVO) ist:
+
+Manuel Dugué\
+Görlitzer Straße 23\
+01099 Dresden\
+Deutschland\
+E-Mail: [mail@manuel.fyi](mailto:mail@manuel.fyi)
+
+## Aufruf der Seite und Hosting
+
+Diese Seite wird von Vercel Inc., 440 N Barranca Avenue #4133, Covina,
+CA 91723, USA, ausgeliefert. Wenn du sie aufrufst, schickt dein Browser
+technisch notwendige Daten an Vercels Server: deine IP-Adresse, Datum und
+Uhrzeit, die aufgerufene Adresse, die zuvor besuchte Seite (Referrer), soweit
+dein Browser sie mitschickt, sowie Browser und Betriebssystem (User-Agent).
+Ohne sie lässt sich die Seite nicht ausliefern. Vercel verarbeitet sie, um die
+Seite auszuliefern und vor Missbrauch zu schützen, und hält sie dafür kurze
+Zeit in Protokollen vor. Ich lege keine eigenen Protokolle an und werte keine
+aus.
+
+Rechtsgrundlage ist mein berechtigtes Interesse an einer sicheren und
+zuverlässigen Auslieferung der Seite (Art. 6 Abs. 1 lit. f DSGVO). Vercel
+verarbeitet die Daten in meinem Auftrag (Art. 28 DSGVO). Dabei können Daten in
+die USA übermittelt werden; Vercel ist nach dem EU-US Data Privacy Framework
+zertifiziert, für das die EU-Kommission ein angemessenes Datenschutzniveau
+festgestellt hat (Art. 45 DSGVO).
+
+<h2 id="fehlerberichte">Fehler- und Leistungsberichte</h2>
+
+Der Viewer läuft auf sehr unterschiedlichen Geräten, und gerade auf Telefonen
+stürzt er manchmal ab oder ruckelt. Damit das auffällt und behoben werden
+kann, schickt er Berichte:
+
+- wenn der vorige Besuch abgestürzt ist (beim nächsten Besuch),
+- wenn ein Fehler auftritt (höchstens fünf je Besuch),
+- je Besuch eine Zusammenfassung, wie er lief: Zeit bis zum ersten Bild und
+  bis alles geladen war, Bildrate, belegter Speicher,
+- Beginn und Ende des Besuchs, normal oder mit Absturz.
+
+Ein Bericht enthält Browser, Betriebssystem und Gerätetyp (User-Agent),
+Bildschirmgröße und Pixeldichte, den ungefähren Arbeitsspeicher des Geräts,
+die Grafikschnittstelle (WebGPU oder WebGL2), die aufgerufene Seite ohne
+Parameter (etwa `/dresden`), den Verlauf des Besuchs (Ladeschritte,
+Fehlermeldungen, Bildrate, Speicher, geladene Kacheln, Bildstil, Gehen oder
+Fliegen, Höhe der Kamera über dem Boden), Zeitpunkte, eine zufällige Kennung
+des einzelnen Seitenaufrufs und die Version der Seite.
+
+Er enthält **nicht** deinen Standort oder wo in der Stadt du warst, keine
+IP-Adresse, keinen Namen, kein Cookie und keine Kennung, die dich bei einem
+späteren Besuch wiedererkennt.
+
+Damit ein Absturz auch dann gemeldet werden kann, wenn der Browser die Seite
+hart beendet, hält der Viewer den Verlauf des Besuchs im lokalen Speicher
+deines Browsers fest; der nächste Besuch schickt ihn und bietet ihn dir zum
+Kopieren an.
+
+Die Berichte gehen zuerst an diese Seite selbst (an die Adresse `/r/e`) und
+werden von dort über Vercel an Sentry weitergeleitet: Functional Software,
+Inc., 45 Fremont Street, 8th Floor, San Francisco, CA 94105, USA. Sentry
+verarbeitet sie in meinem Auftrag (Art. 28 DSGVO), speichert sie auf Servern
+in Deutschland und löscht sie spätestens nach 90 Tagen. Für Übermittlungen in
+die USA ist Sentry nach dem EU-US Data Privacy Framework zertifiziert (Art. 45
+DSGVO). Die Berichte enthalten keine IP-Adresse, und Sentry ist so
+eingestellt, dass es keine speichert.
+
+Rechtsgrundlage ist mein berechtigtes Interesse an einem Viewer, der auf
+möglichst vielen Geräten stabil läuft, und daran, Abstürze und Fehler zu
+finden und zu beheben (Art. 6 Abs. 1 lit. f DSGVO). Soweit dafür
+Informationen auf deinem Gerät gespeichert oder ausgelesen werden – der
+Verlauf im lokalen Speicher, die Angaben zu Gerät und Bildschirm –, ist das
+für den stabilen Betrieb des Viewers, den du aufgerufen hast, unbedingt
+erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG).
+
+Du kannst den Berichten jederzeit ohne Angabe von Gründen widersprechen: mit
+dem Schalter hier, der für diesen Browser sofort gilt, oder indem dein Browser
+Global Privacy Control sendet – dann wird nie etwas gesendet.
+
+<reports-choice></reports-choice>
+
+## Was in deinem Browser bleibt
+
+Diese Seite setzt keine Cookies. Im lokalen Speicher deines Browsers (Local
+Storage und Session Storage) legt sie nur ab, was ihre Funktionen brauchen,
+und liest es nur auf deinem Gerät:
+
+- den zuletzt gewählten Bildstil,
+- ob du die Bedienhinweise geschlossen und die Werkzeugleiste eingeklappt
+  hast,
+- den Verlauf des laufenden und des vorigen Besuchs (siehe
+  [Fehlerberichte](#fehlerberichte)),
+- deine Wahl zu den Fehlerberichten,
+- wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
+  schließt: die Stelle, an der du in der Stadt standest, und wann das war –
+  damit sie dich dorthin zurückbringt und nicht endlos neu lädt.
+
+Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG: Diese Einträge sind für die
+Funktionen, die du nutzt, unbedingt erforderlich. Du kannst sie jederzeit in
+den Einstellungen deines Browsers löschen.
+
+## Standort und Kompass
+
+Die Werkzeuge *Standort* und *Live* fragen nach deinem Standort und der
+Ausrichtung deines Telefons – erst, wenn du sie antippst, und nur mit deiner
+Erlaubnis im Browser (Art. 6 Abs. 1 lit. a DSGVO, § 25 Abs. 1 TDDDG). Beides
+wird nur in deinem Browser verwendet, um dich in die Stadt zu setzen, und nie
+an mich oder Dritte gesendet; auch die Fehlerberichte enthalten es nicht. Wie
+dein Browser den Standort bestimmt – manche fragen dafür einen Ortungsdienst
+ihres Herstellers –, liegt bei deinem Browser. Die Erlaubnis kannst du in
+seinen Einstellungen jederzeit widerrufen.
+
+## Live-Daten der Städte
+
+Die Datenebenen sind beim Start alle aus. Schaltest du in Dresden oder Hamburg
+*Radverkehr (live)* ein, holt dein Browser die aktuellen Zählwerte direkt bei
+der Stadt ab: in Dresden bei der Landeshauptstadt Dresden
+(`kommisdd.dresden.de`), in Hamburg bei der Freien und Hansestadt Hamburg,
+Landesbetrieb Geoinformation und Vermessung (`iot.hamburg.de`). Wie bei jedem
+Aufruf einer Website erhalten diese Stellen dabei deine IP-Adresse und Angaben
+zu deinem Browser; mich erreicht davon nichts. Es gelten die
+Datenschutzhinweise der jeweiligen Stadt. Rechtsgrundlage ist mein
+berechtigtes Interesse, die Ebene, die du eingeschaltet hast, mit aktuellen
+Zahlen zu zeigen (Art. 6 Abs. 1 lit. f DSGVO).
+
+## Schriften und Links
+
+Die Schriften liefert diese Seite selbst aus; es besteht keine Verbindung zu
+Google Fonts oder einem anderen Schriftdienst. Links zu anderen Angeboten –
+etwa *Unterstützen* (Ko-fi) oder GitHub – laden nichts, bevor du sie
+anklickst; danach gilt die Datenschutzerklärung des jeweiligen Anbieters.
+
+## Deine Rechte
+
+Du hast das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16),
+Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18) und
+Datenübertragbarkeit (Art. 20). Einer Verarbeitung auf Grundlage berechtigter
+Interessen kannst du aus Gründen, die sich aus deiner besonderen Situation
+ergeben, widersprechen (Art. 21) – den Fehlerberichten jederzeit und ohne
+Begründung mit dem Schalter oben. Eine Einwilligung kannst du jederzeit für
+die Zukunft widerrufen (Art. 7 Abs. 3). Schreib dafür an
+[mail@manuel.fyi](mailto:mail@manuel.fyi).
+
+Weil die Berichte keine Kennung enthalten, die auf dich verweist, kann ich
+einzelne Berichte in der Regel nicht dir zuordnen (Art. 11 DSGVO).
+
+Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren
+(Art. 77 DSGVO), etwa bei der deines Wohnorts; für mich zuständig ist die
+[Sächsische Datenschutz- und Transparenzbeauftragte](https://www.datenschutz.sachsen.de).
+
+Die Bereitstellung deiner Daten ist weder gesetzlich noch vertraglich
+vorgeschrieben; ohne die Verbindungsdaten lässt sich die Seite aber nicht
+ausliefern. Eine automatisierte Entscheidungsfindung oder ein Profiling
+findet nicht statt.
+
+<small>Stand: 4. Oktober 2026</small>

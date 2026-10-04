@@ -54,7 +54,7 @@ each data → look transformation does and its status.
 | [0042](./0042-inquiry-cards-on-demand-facts-in-the-tileset.md) | The twin answers on demand: identity, semantics and provenance ride in the tileset; text appears only in a card | accepted |
 | [0043](./0043-crash-and-page-reports-to-an-error-tracker.md) | Crashes (reported by the next load — a killed page runs no handler), caught problems and a summary per page go to an error tracker as Sentry envelopes in beacons, from the crash trail, no SDK, no position; only where the build has a DSN | accepted; an opt-out and the privacy page: 0045 |
 | [0044](./0044-modell-parallel-projections.md) | Modell: the city in parallel projection — a real (sheared) orthographic camera read by one post pipeline through a view lens; scale, not distance; the legend on the HUD and in the export, never in the scene; Strich and Schwarzplan as picture styles | accepted |
-| [0045](./0045-legal-pages-from-the-deployment.md) | Impressum and privacy policy as static pages of the deployment: the operator from the build's environment (never in git), the reports' recipient from its DSN; reports on by default with a per-browser opt-out checked before every report | accepted |
+| [0045](./0045-legal-pages-from-the-deployment.md) | Impressum and privacy policy as static Markdown pages next to their routes, rendered with the Wissen pages' remark/rehype chain; the privacy page describes what the code does; reports on by default with a per-browser opt-out checked before every report | accepted |
 
 ## Format
 

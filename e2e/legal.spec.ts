@@ -1,10 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * /impressum and /datenschutz (ADR 0045): reachable from the start page's
- * footer and from each other. What they name depends on the build's
- * environment (the operator, the DSN), so only their frame is checked
- * here; lib/legal.test.ts covers what the environment turns into.
+ * /impressum and /datenschutz (ADR 0045): Markdown next to their routes,
+ * reachable from the start page's footer and from each other.
  */
 test.describe("legal pages", () => {
   test("the start page links the Impressum and the privacy policy", async ({
@@ -17,6 +15,7 @@ test.describe("legal pages", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "Impressum"
     );
+    await expect(page.locator("article")).toContainText("Manuel Dugué");
     await page
       .getByRole("navigation", { name: "Rechtliches" })
       .getByRole("link", { name: "Datenschutz" })

@@ -1,4 +1,4 @@
-# ADR 0045: Impressum and privacy policy are pages of the deployment; the operator comes from its environment, the reports get an opt-out
+# ADR 0045: Impressum and privacy policy are Markdown pages of the site; the reports get an opt-out
 
 - **Status:** accepted
 - **Date:** 2026-10-04
@@ -21,57 +21,49 @@ did not have:
   *Standort* and *Live* (never sent), and the live bicycle counts, which
   the browser fetches from Dresden's and Hamburg's own services.
 
-The repository is public and Apache-2.0: whoever deploys it runs their
-own site, and the maintainer's postal address does not belong in git.
-
 ## Decision
 
-**Two static pages, `/impressum` and `/datenschutz`** (`app/(legal)/`), in
-German, on the Wissen pages' paper and type, linked from every page's
-footer (start page, `/wissen`, the legal pages themselves) and from the
-viewer's sidebar, where they open in a new tab so the walk stays
-(`app/_components/legal-links.tsx`). The crash card links the reports'
-section when it says a report went out.
+**Two static pages, `/impressum` and `/datenschutz`, written in Markdown
+next to their routes** (`app/(legal)/impressum/impressum.md`,
+`app/(legal)/datenschutz/datenschutz.md`) and rendered at build time by
+`app/(legal)/_lib/legal-doc.tsx` — the remark/rehype chain of the Wissen
+pages (`app/wissen/_lib/markdown.tsx`), without what only `docs/` needs.
+Links that start with `/` stay on the site. German, on the Wissen pages'
+paper and type, linked from every page's footer (start page, `/wissen`,
+the legal pages themselves) and from the viewer's sidebar, where they open
+in a new tab so the walk stays (`app/_components/legal-links.tsx`). The
+crash card links the reports' section when it says a report went out.
 
-**The operator comes from the build's environment** (`lib/legal.ts`):
-`IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS` (lines split by newline or comma),
-`IMPRESSUM_EMAIL`, optionally `IMPRESSUM_PHONE`. A build without them
-says on the page which are missing — it never shows a stranger's — and a
-production build on Vercel warns in its log (`next.config.ts`). It does
-not fail: a deploy that stops on a missing variable stops every other
-change too.
+**The operator's details are written into the Markdown**, as on the
+maintainer's own site (manuel.fyi): name, address, e-mail, VAT id.
 
-**The privacy page describes the build it is part of.** Where the reports
-go is read from the same DSN the page reports to (`reportBuild`): Sentry
-by its region (`*.ingest.de.sentry.io` is its EU region, data in Germany),
-any other tracker by its host, and without a DSN the section says nothing
-is sent. Everything else on the page describes the code; so **a new
-request to a third party, a new kind of data in a report, or a new entry
-in the browser's storage is not done until `/datenschutz` says so.**
+**The privacy page describes what the code does**, for this deployment:
+Vercel as the host, Sentry's EU region as where the reports are kept. So
+**a new request to a third party, a new kind of data in a report, or a new
+entry in the browser's storage is not done until `datenschutz.md` says
+so.**
 
 **The reports stay on by default, with an opt-out** — the legal basis is
 the legitimate interest in a viewer that runs on as many devices as
 possible (Art. 6 (1) f DSGVO), the device information and the trail in
 local storage counted as strictly necessary for it (§ 25 (2) 2 TDDDG).
 The visitor can object at any time: a switch on `/datenschutz`
-(`app/_components/reports-choice.tsx`) keeps a "no" in local storage
-(`app/_components/report-choice.ts`), which `crash-reports.ts` checks
-before **every** report, so it holds at once in a tab already open;
-Global Privacy Control still turns everything off. Every event now says
+(`app/_components/reports-choice.tsx`, written as
+`<reports-choice></reports-choice>` in the Markdown) keeps a "no" in
+local storage (`app/_components/report-choice.ts`), which
+`crash-reports.ts` checks before **every** report, so it holds at once in
+a tab already open; Global Privacy Control still turns everything off. The
+switch also says when a build has no DSN. Every event now says
 `user.ip_address: null`, Sentry's documented way to infer no address
 from the request.
 
 ## Consequences
 
-- Deploying needs the three variables (four with a phone) set on the
-  host (Vercel: Project → Settings → Environment Variables, for
-  Production); a fork names its own operator without touching the code.
+- Changing the operator, the host or the tracker's region means editing
+  the Markdown; a fork that deploys the code edits both files.
 - The Sentry project must keep *Prevent Storing of IP Addresses* on (ADR
   0043 asked for it; the page now promises it), and the policy's 90-day
-  retention is the longest of Sentry's plans — a self-hosted tracker with
-  a longer one needs the text changed.
-- The host is named in the text (Vercel). A deployment elsewhere must
-  change that section.
+  retention is the longest of Sentry's plans.
 - The legal pages are German only, as the viewer's interface is; the
   guide's crash-report section in both languages points to them.
 - The page is not legal advice. The § 25 TDDDG reading in particular —
@@ -88,20 +80,25 @@ from the request.
   is the very friction the viewer avoids. The opt-out is the same
   machinery with the default flipped: `reportsDeclined()` would become
   "not yet agreed", and the switch the question.
-- **The operator in the repository** (a `lib/brand.ts` constant): simpler,
-  but puts a postal address into git and into every fork.
-- **Failing the production build without an operator:** loud, but it
-  blocks every unrelated deploy until someone sets the variables.
+- **The operator from the build's environment** (`IMPRESSUM_*` variables,
+  the first version of this change): keeps the address out of git and
+  lets a fork name itself without an edit, but the address is public on
+  the site anyway, and a missing variable silently ships an Impressum
+  that names nobody. The maintainer chose the plain text.
+- **The pages as TSX, or as MDX** (`@next/mdx`): TSX buries the legal text
+  in markup; MDX adds a loader and its dependencies for two files. The
+  repository already renders Markdown with remark/rehype for `/wissen`.
 - **A generator or a hosted policy (an embedded third-party text):** the
   embed would load from a third party on the very page that promises not
   to; a static text describes this code exactly.
 
 ## References
 
-- `lib/legal.ts` (+ test), `app/(legal)/`, `app/_components/legal-links.tsx`,
+- `app/(legal)/` (the two Markdown files, `_lib/legal-doc.tsx`, the
+  layout), `app/_components/legal-links.tsx`,
   `app/_components/reports-choice.tsx`, `app/_components/report-choice.ts`,
   `app/_components/crash-reports.ts` (`reportsState`),
-  `lib/city/crash-reports.ts` (`user.ip_address`), `next.config.ts`
+  `lib/city/crash-reports.ts` (`user.ip_address`), `e2e/legal.spec.ts`
 - [ADR 0043](./0043-crash-and-page-reports-to-an-error-tracker.md)
   (amendment 2026-10-04), [ADR 0001](./0001-client-only-static-app.md)
 - The guide's *Using the viewer*, "Crash reports" (both languages)

@@ -287,13 +287,13 @@ config change.
   redirects to `/dresden`); `app/_lib/built-sites.ts` reads
   `public/data/sites.json` at build time (falling back to the reference
   site); the index's shape is `lib/city/site-index.ts`
-- `app/(legal)/` — `/impressum` and `/datenschutz` (ADR 0045), linked from
-  every footer and the viewer's sidebar (`app/_components/legal-links.tsx`).
-  The operator comes from the build's environment (`IMPRESSUM_NAME`,
-  `IMPRESSUM_ADDRESS`, `IMPRESSUM_EMAIL`, optional `IMPRESSUM_PHONE`; read
-  by `lib/legal.ts`) — never from the repository; where the reports go,
-  from the build's DSN. The reports' opt-out is the switch there
-  (`reports-choice.tsx`, kept by `report-choice.ts`)
+- `app/(legal)/` — `/impressum` and `/datenschutz` (ADR 0045): Markdown
+  next to each route (`impressum/impressum.md`, `datenschutz/datenschutz.md`),
+  rendered by `_lib/legal-doc.tsx` with the Wissen pages' remark/rehype
+  chain; linked from every footer and the viewer's sidebar
+  (`app/_components/legal-links.tsx`). `<reports-choice></reports-choice>`
+  in the Markdown is the reports' opt-out switch (`reports-choice.tsx`,
+  kept by `report-choice.ts`)
 - `pipeline/` — the offline pipeline, one Python package in a uv environment:
   the fetch (`bake/fetch.py`; `providers/{sn,nw,by,hh,be}.py` are the
   per-Land adapters; `rasters.py` mosaics/clips to our tiles, `citygml.py`
@@ -879,7 +879,7 @@ API changes. Confirm shader/behaviour claims against `node_modules/three/src`.
   guide's data-sources page in **both** languages — see
   [docs/README.md](docs/README.md#keeping-these-docs-current).
 - **The privacy page is part of the code.** `/datenschutz`
-  (`app/(legal)/datenschutz/page.tsx`) describes what the site does with
+  (`app/(legal)/datenschutz/datenschutz.md`) describes what the site does with
   a visitor's data. A new request to a third party (a live feed, a
   font, an embed), a new field in a report, or a new key in the
   browser's storage is not done until that page says so (ADR 0045).

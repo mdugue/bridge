@@ -94,13 +94,10 @@ With `SENTRY_AUTH_TOKEN` (an organisation token), `SENTRY_ORG` and
 sent.
 
 **Impressum and privacy policy** (`/impressum`, `/datenschutz`, German)
-name whoever runs the deployment, from its environment — never from the
-repository: set `IMPRESSUM_NAME`, `IMPRESSUM_ADDRESS` (lines separated by
-newlines or commas) and `IMPRESSUM_EMAIL` (`IMPRESSUM_PHONE` optional) for
-the production build. Without them the pages say the operator is missing,
-and a production build on Vercel warns. The privacy page names the host
-(Vercel) and, from the DSN, where the reports go; visitors turn the
-reports off there ([ADR 0045](docs/adr/0045-legal-pages-from-the-deployment.md)).
+are Markdown next to their routes, `app/(legal)/*/*.md`, and name this
+deployment's operator, host (Vercel) and tracker (Sentry, EU region) —
+a deployment of your own edits them. Visitors turn the reports off on
+the privacy page ([ADR 0045](docs/adr/0045-legal-pages-from-the-deployment.md)).
 
 ## Data
 
