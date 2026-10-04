@@ -24,7 +24,7 @@ export const CONTROL_HINTS: readonly ControlHint[] = [
   { key: "Shift", action: "sprinten · runter (Flug)" },
   { key: "Space / E", action: "hoch (Flug)" },
   { key: "Q", action: "runter (Flug)" },
-  { key: "1 – 9", action: "Aussichtspunkt" },
+  { key: "1 – 9", action: "zu den ersten Orten" },
   { key: "Scroll", action: "vor / zurück" },
   { key: "Alt + Scroll", action: "zoomen" },
   { key: "I", action: "befragen, was in der Mitte steht" },
@@ -45,7 +45,7 @@ export const MODEL_HINTS: readonly ControlHint[] = [
   { key: "W A S D", action: "verschieben" },
   { key: "+ / −", action: "eine Maßstabsstufe" },
   { key: "2× Klick", action: "in die Bildmitte" },
-  { key: "1 – 9", action: "Aussichtspunkt in die Mitte" },
+  { key: "1 – 9", action: "einen der ersten Orte in die Mitte" },
   { key: "F", action: "fliegen" },
   { key: "V", action: "Bildstil wechseln" },
 ];

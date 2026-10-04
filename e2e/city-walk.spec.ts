@@ -680,14 +680,26 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
 
   test("the sidebar tabs reach every group of controls", async () => {
     // The controls are no longer one long list: Erkunden holds the map and
-    // the vantages, Szene the sun and the look groups (each collapsed), and
+    // the places, Szene the sun and the look groups (each collapsed), and
     // Erweitert the tools and counters. A slider is only two taps away, and
     // this is what proves the three panels are actually wired.
     await withFramesHeld(page, async () => {
       await openSidebar(page);
-      await expect(page.getByText("Aussichtspunkte")).toBeVisible({
-        timeout: slow(30_000),
-      });
+      const places = page.getByRole("region", { name: "Orte" });
+      await expect(places).toBeVisible({ timeout: slow(30_000) });
+      // Vantages and landmarks are one list: the first few, the rest on
+      // demand, with a search over every name (the folded landmarks too).
+      const rows = places.locator("[data-place]");
+      await expect(rows).toHaveCount(6);
+      const more = places.getByRole("button", { name: /^Alle \d+ Orte/ });
+      await more.click();
+      await places
+        .getByRole("searchbox", { name: "Orte durchsuchen" })
+        .fill("semper");
+      await expect(rows).toHaveCount(1);
+      await expect(places.locator('[data-place="zwinger"]')).toBeVisible();
+      await places.getByRole("button", { name: "Weniger zeigen" }).click();
+      await expect(rows).toHaveCount(6);
 
       await page.getByRole("tab", { name: "Szene" }).click();
       await expect(page.getByText("Sonne & Zeit")).toBeVisible();
@@ -1407,7 +1419,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
       await page.getByRole("button", { name: "Szeneneinstellungen" }).tap();
       // The Erkunden tab is what a drawer opens on; the tabbed structure
       // itself is asserted on the desktop page, which is already booted.
-      await expect(page.getByText("Aussichtspunkte")).toBeVisible({
+      await expect(page.getByRole("region", { name: "Orte" })).toBeVisible({
         timeout: slow(30_000),
       });
     });
