@@ -156,6 +156,8 @@ const PYLON_PIER_HALF = 1.3; // half-width of the river pier under a pylon (m)
 const HANGER_EVERY = 8; // a hanger or post every this many 2 m stations (16 m)
 const STAY_EVERY = 6; // a stay every this many 2 m stations (12 m)
 const END_EDGE_COS = 0.5; // a ring edge this far off the axis is an abutment end
+const DECK_END_INSET = 3; // the deck's width is read this far in from its ends (m)
+const DECK_FRAME_STEP = 6; // a laid-out deck's top has no edge longer than this (m)
 
 export const COLORS = {
   ballast: 0x9a_8f_85, // warm grey-brown crushed stone
@@ -1112,12 +1114,53 @@ interface BridgeMeshes {
 }
 
 /**
+ * Splits the upward faces of `acc` from vertex `first` on — the deck's top
+ * and its approaches — at their longest edge until no edge is longer than
+ * `step` m. The triangulation of a curved deck joins vertices far apart
+ * along its arc (191 m on the Marienbrücke), and the frame, exact at each
+ * vertex, interpolates truly only over a short reach of a curved axis. A
+ * face is planar, so its pieces are too; the sides and the underside stay
+ * as they were.
+ */
+function splitDeckTop(acc: Mesh3, first: number, step: number): void {
+  const pos = acc.pos.splice(first * 3);
+  const nrm = acc.nrm.splice(first * 3);
+  const limit = step * step;
+  const d2 = (a: number[], b: number[]) =>
+    (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  const mid = (a: number[], b: number[]) => a.map((v, k) => (v + b[k]) / 2);
+  for (let t = 0; t < pos.length; t += 9) {
+    const n = nrm.slice(t, t + 3);
+    const corners = [0, 1, 2].map((k) => pos.slice(t + k * 3, t + k * 3 + 3));
+    const stack = [corners];
+    while (stack.length > 0) {
+      const tri = stack.pop() as number[][];
+      const lens = [d2(tri[0], tri[1]), d2(tri[1], tri[2]), d2(tri[2], tri[0])];
+      const longest = lens.indexOf(Math.max(...lens));
+      if (n[1] < 0.5 || lens[longest] <= limit) {
+        for (const c of tri) {
+          acc.pos.push(c[0], c[1], c[2]);
+          acc.nrm.push(n[0], n[1], n[2]);
+        }
+        continue;
+      }
+      // the winding stays: each half keeps the corners' order
+      const a = tri[longest];
+      const b = tri[(longest + 1) % 3];
+      const c = tri[(longest + 2) % 3];
+      const m = mid(a, b);
+      stack.push([a, m, c], [m, b, c]);
+    }
+  }
+}
+
+/**
  * The deck's frame on the top mesh's vertices from `first` on (its slab
  * and approaches): each vertex's station and offset on the axis and the
  * outline's edges there, which the deck's surface is laid out by
- * (bridge-surface.ts). Linear in the position along a straight axis, so it
- * interpolates truly across the slab's long triangles. Zeros without a
- * frame (an older file): the surface keeps its plain colour.
+ * (bridge-surface.ts). Exact at each vertex and, the top split short
+ * (`splitDeckTop`), true between them on a curved deck too. Zeros without
+ * a frame (an older file): the surface keeps its plain colour.
  */
 function addDeckFrame(
   top: Mesh3,
@@ -1125,13 +1168,21 @@ function addDeckFrame(
   frame: BridgeFrame | null
 ): void {
   top.deck ??= [];
+  // The edges a few metres in from the abutments: at an end the outline
+  // closes across the axis, and a corner there took a width of nothing —
+  // which the slab's long triangles then spread over the whole deck.
+  const ends = frame
+    ? [Math.min(...frame.ringS), Math.max(...frame.ringS)]
+    : [];
+  const inset = Math.min(DECK_END_INSET, (ends[1] - ends[0]) / 2);
   for (let v = first; v < top.pos.length / 3; v++) {
     if (!frame) {
       top.deck.push(0, 0, 0, 0);
       continue;
     }
     const { s, offset } = frame.project(top.pos[v * 3], top.pos[v * 3 + 2]);
-    const { left, right } = frame.edgesAt(s);
+    const inside = Math.min(Math.max(s, ends[0] + inset), ends[1] - inset);
+    const { left, right } = frame.edgesAt(inside);
     top.deck.push(s, offset, left, right);
   }
 }
@@ -1151,6 +1202,9 @@ function drawBridge(
   addFootprint(top, ring, topY, depth, true);
   for (const a of approaches(ring, topY, kind, frame?.ringS, ctx, out.decks)) {
     addApproach(top, out.stone, a, DECK_DEPTH);
+  }
+  if (frame) {
+    splitDeckTop(top, first, DECK_FRAME_STEP);
   }
   addDeckFrame(top, first, frame);
   // where a frame stands on the deck's edge it is the railing: a parapet

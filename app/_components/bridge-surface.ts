@@ -111,22 +111,24 @@ export const ashlar = Fn(
     const u = dot(p.xz, along);
     const row = floor(p.y.div(course));
     const ub = u.div(block).add(fract(row.mul(0.5)));
-    const fine = float(1).sub(smoothstep(0.025, 0.1, aa));
+    // the joints as soft lines while a course is a few pixels high, the
+    // blocks' shades while a block is
+    const fine = float(1).sub(smoothstep(0.06, 0.3, aa));
     const lines = max(
       joint(p.y, course, 0.02, aa),
       joint(ub.mul(block), block, 0.02, aa)
     ).mul(fine);
     const shade = gdHash(vec2(floor(ub), row))
       .sub(0.5)
-      .mul(0.09)
-      .mul(float(1).sub(smoothstep(0.2, 0.8, aa)));
+      .mul(0.14)
+      .mul(float(1).sub(smoothstep(0.4, 1.2, aa)));
     const mottle = gdNoise(p.xz.mul(0.12).add(p.y.mul(0.31)))
       .sub(0.5)
       .mul(0.14);
     return float(1)
       .add(shade.mul(upright))
       .add(mottle)
-      .sub(lines.mul(0.2).mul(upright));
+      .sub(lines.mul(0.22).mul(upright));
   },
   { p: "vec3", n: "vec3", aa: "float", return: "float" }
 );
