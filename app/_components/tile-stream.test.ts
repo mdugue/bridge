@@ -16,6 +16,7 @@ import {
   dressingParts,
   type TileDressing,
   type TileStreamContext,
+  takesOver,
 } from "./tile-stream";
 import type { VegetationControl } from "./vegetation-layer";
 
@@ -186,4 +187,27 @@ test("a load the renderer keeps is not freed", async () => {
   tile.engineData = { scene };
   await nextTask();
   expect(freed.value).toBe(false);
+});
+
+test("a level waits for its dressing only where it takes over from its tile's other level", () => {
+  const fine = { tileId: "33412_5656_2_sn", level: 0 as const };
+  const coarse = {
+    kind: "terrain" as const,
+    tileId: fine.tileId,
+    level: 1 as const,
+  };
+  // zooming in: the coarse level stands in until the fine one is dressed
+  expect(takesOver(fine, [coarse])).toBe(true);
+  // and out again
+  expect(takesOver({ ...coarse }, [{ ...coarse, level: 0 }])).toBe(true);
+  // nothing of the tile on screen: shown at once, dressed after
+  expect(takesOver(fine, [])).toBe(false);
+  expect(
+    takesOver(fine, [undefined, { kind: "city", tileId: fine.tileId }])
+  ).toBe(false);
+  // another tile's level, or the level itself (a reload)
+  expect(takesOver(fine, [{ ...coarse, tileId: "33410_5656_2_sn" }])).toBe(
+    false
+  );
+  expect(takesOver(fine, [{ ...coarse, level: 0 }])).toBe(false);
 });
